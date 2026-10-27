@@ -1,14 +1,24 @@
 /**
- * WasmServiceReplica — Raft-based replica for WASM service groups.
- * Extends RaftReplicaBase with session KV store, safety interval
- * broadcasts, persistent timers, and read routing.
+ * WasmServiceReplica — the WASM service group's replica on its raft-rs
+ * semantic operation port (design R4 §2(b)): session KV store over the
+ * consensus connection, safety interval broadcasts, persistent timers,
+ * read routing, and role/leader publication from the port's events.
  *
  * Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 5.1, 5.2, 5.3, 6.1, 6.2
  * @module wasm-service/wasm-service-replica
  */
 
-import {RaftReplicaBase} from '../raft/raft-replica-base.js';
-import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
+import {initializeWasmCreationContext} from './wasm-creation-opening.js';
+import {boundProposalAdmission, initializeServingState, isServing, publishesServicesRow,
+  servicesRowServiceType, servingRefusal} from './wasm-service-serving-state.js';
+import {EventEmitter} from 'node:events';
+import {AddressManager} from '../address/address-manager.js';
+import {LoggingService} from '../logging/logging-service.js';
+import {NodeService} from '../node/node-service.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../raft/raft-operation-port-constants.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {COLUMN, TABLES} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
@@ -18,36 +28,50 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
-import {SessionKVStore} from './session-kv-store.js';
 import {SafetyInterval} from './safety-interval.js';
 import {TimerManager} from './timer-manager.js';
+import {WasmWriterCompletion} from './wasm-writer-completion.js';
+import {WASM_WRITER_PROFILE, WRITER_STATUS, WRITER_REASON} from './wasm-writer-profile.js';
+import {canonicalWriterCommand, writerCommandFromDelivery} from './wasm-writer-codec.js';
 import {routeRead} from './read-router.js';
+import {
+  assertDurableDbPath,
+  assertFoundingReplicaSet,
+} from './wasm-service-consensus-port.js';
 import {
   WASM_SERVICE_SUBSYSTEM,
   WASM_SERVICE_LOG_MSG,
   WASM_SERVICE_ERROR_MSG,
   WASM_SERVICE_DEFAULT,
   WRITE_CONSISTENCY_MODE,
+  WASM_SERVICE_COMMAND_TYPE,
+  WASM_SERVICE_NO_FAILURE,
+  WASM_SERVICE_REPLICA_STATE,
+  WASM_SERVICE_SHUTDOWN_INTENT,
 } from './wasm-service-constants.js';
-
-const LOCAL_STR_STRING = 'string';
-
-// Entry type scalar values
-const ENTRY_TYPE_KV_SET = 'kv_set';
-const ENTRY_TYPE_KV_DELETE = 'kv_delete';
-const ENTRY_TYPE_KV_DELETE_SESSION = 'kv_delete_session';
-const ENTRY_TYPE_TIMER_STATE = 'timer_state';
+import {
+  initializeWasmServiceReplica,
+  isLiveWasmServiceReplica,
+  shutdownWasmServiceReplica,
+} from './wasm-service-replica-lifecycle.js';
+import {
+  admitWasmServiceCommand, wasmServiceCommandRefusalError,
+} from './wasm-service-committed-command-admission.js';
+import {
+  applyCommittedCommand,
+  encodeCommittedCommand,
+  proposalRefusedError,
+} from './wasm-service-committed-command-codec.js';
+import {
+  createWasmServiceLeaderNodeMutationHelper,
+  createWasmServiceRoleMutationHelper,
+} from './wasm-service-metadata-mutation-helpers.js';
 
 /**
  * Entry type constants for committed Raft log entries.
  * @enum {string}
  */
-const ENTRY_TYPE = Object.freeze({
-  KV_SET: ENTRY_TYPE_KV_SET,
-  KV_DELETE: ENTRY_TYPE_KV_DELETE,
-  KV_DELETE_SESSION: ENTRY_TYPE_KV_DELETE_SESSION,
-  TIMER_STATE: ENTRY_TYPE_TIMER_STATE,
-});
+const ENTRY_TYPE = WASM_SERVICE_COMMAND_TYPE;
 
 // Message operation scalar values
 const MESSAGE_OP_READ = 'read';
@@ -62,26 +86,13 @@ const MESSAGE_OP = Object.freeze({
   WRITE: MESSAGE_OP_WRITE,
 });
 
-const METADATA_FLUSH_RETRY_DELAY_MS = 250;
-
-const SQLITE_MEMORY_PATH = ':memory:';
-
-const FLUSH_REASON_NOT_OWNER = 'not-owner';
-const FLUSH_REASON_READY = 'ready';
-
-const METADATA_FLUSH_LOG_MSG = Object.freeze({
-  ROLE_RETRY_FAILED: 'WASM role update retry failed',
-  LEADER_RETRY_FAILED: 'WASM leader-node update retry failed',
-});
-
 /**
- * WasmServiceReplica extends RaftReplicaBase to provide a
- * Raft consensus group for WASM services. Each replica
- * maintains a local SQLite-backed KV store, participates
- * in safety interval broadcasts for strong reads, and
- * manages persistent timers on the leader.
+ * WasmServiceReplica: a WASM service group's replica on its raft-rs
+ * operation port. Each replica keeps its consensus record and session KV
+ * store in one durable file, participates in safety interval broadcasts for
+ * strong reads, and manages persistent timers on the leader.
  */
-class WasmServiceReplica extends RaftReplicaBase {
+class WasmServiceReplica extends EventEmitter {
   /**
    * @param {Object} options - Configuration options.
    * @param {string} options.replicaId - This replica's ID.
@@ -89,17 +100,50 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @param {Array<string>} options.replicaIds - All replica IDs.
    * @param {Object} options.transport - MessageRouter instance.
    * @param {string} options.serviceDefinitionId - Service def ID.
-   * @param {string} options.dbPath - Path to SQLite database.
+   * @param {string} options.dbPath - The replica's durable database file.
    * @param {number} [options.safetyIntervalMs] - Staleness bound.
    * @param {string} [options.readConsistency] - Read mode.
    * @param {string} [options.writeConsistency] - Write mode.
    */
   constructor(options = {}) {
-    super({
-      ...options,
-      entityType: SERVICE_TYPE.WASM_SERVICE,
-      subsystemName: WASM_SERVICE_SUBSYSTEM.REPLICA,
-    });
+    super();
+    assertDurableDbPath(options.dbPath);
+    if (!options.replicaId) {
+      throw new Error(WASM_SERVICE_ERROR_MSG.REPLICA_ID_REQUIRED);
+    }
+    assertFoundingReplicaSet(options.replicaId, options.replicaIds);
+    this.replicaId = options.replicaId;
+    this.nodeId = options.nodeId;
+    this.replicaIds = [...options.replicaIds];
+    this.transport = options.transport || null;
+    this.dbPath = options.dbPath;
+    initializeWasmCreationContext(this, options);
+    initializeServingState(this);
+    this.providedTimeSource = options.timeSource;
+    this.entityType = SERVICE_TYPE.WASM_SERVICE;
+    this.addressManager = AddressManager.getInstance();
+    this.unifiedAddress = this.addressManager.format(
+      this.nodeId, this.entityType, this.replicaId);
+    const loggingService = LoggingService.getInstance();
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(WASM_SERVICE_SUBSYSTEM.REPLICA) : console;
+    this.raft = null;
+    this.db = null;
+    this.kvStore = null;
+    this.role = RAFT_ROLE.FOLLOWER;
+    this.leaderId = null;
+    this.isLeader = false;
+    // The instance's lifecycle (WASM_SERVICE_REPLICA_STATE); the settlement
+    // of its in-flight start or shutdown is what a concurrent caller joins.
+    this.lifecycleState = WASM_SERVICE_REPLICA_STATE.CREATED;
+    this.lifecycleSettlement = null;
+    this.startupFailure = WASM_SERVICE_NO_FAILURE;
+    this.consensusCloseSettlement = null;
+    this.transportHandler = null;
+    this.creationReconciliation = null;
+    this.systemTableCache = options.systemTableCache ||
+      NodeService.getInstance().getSystemTableCache();
+    this.cdcIntegrationService = options.cdcIntegrationService || null;
 
     this.serviceDefinitionId = options.serviceDefinitionId;
     this.readConsistency = options.readConsistency ||
@@ -107,10 +151,9 @@ class WasmServiceReplica extends RaftReplicaBase {
     this.writeConsistency = options.writeConsistency ||
       WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY;
 
-    this.kvStore = new SessionKVStore(
-      options.dbPath || SQLITE_MEMORY_PATH,
-    );
     this.timerManager = new TimerManager(this);
+    this.writerState = null;
+    this.writerCompletion = new WasmWriterCompletion(this, options);
     this.safetyInterval = new SafetyInterval(
       options.safetyIntervalMs,
     );
@@ -121,12 +164,11 @@ class WasmServiceReplica extends RaftReplicaBase {
     this.roleUpdateWriter = options.roleUpdateWriter || null;
     this.leaderNodeUpdateWriter =
       options.leaderNodeUpdateWriter || null;
-    this.roleMutationTransport = this.createRoleMutationTransport();
-    this.leaderNodeMutationTransport = this.createLeaderNodeMutationTransport();
-    this.roleMutationHelper = this.createRoleMutationHelper();
+    this.roleMutationHelper = createWasmServiceRoleMutationHelper(this);
     this.pendingRoleUpdate = this.role;
     this.persistedRole = null;
-    this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
+    this.leaderNodeMutationHelper =
+      createWasmServiceLeaderNodeMutationHelper(this);
     this.pendingLeaderNodeUpdate = null;
     this.persistedLeaderNodeId = null;
     this.controlPlaneSystemTableGateway =
@@ -243,208 +285,89 @@ class WasmServiceReplica extends RaftReplicaBase {
     }
   }
 
-  createRoleMutationTransport() {
-    return {
-      updateSystemTableRow: async (_tableName, _whereClause, data, options = {}) =>
-        this.writeRoleUpdate(
-          data?.[COLUMN.RAFT_ROLE],
-          data?.[COLUMN.UPDATED_AT],
-          options,
-        ),
-    };
-  }
-
-  createLeaderNodeMutationTransport() {
-    return {
-      updateSystemTableRow: async (_tableName, _whereClause, data, options = {}) =>
-        this.writeLeaderNodeUpdate(
-          data?.[COLUMN.NODE_ID],
-          data?.[COLUMN.UPDATED_AT],
-          data?.[COLUMN.RAFT_ROLE],
-          options,
-        ),
-    };
-  }
-
-  createRoleMutationHelper() {
-    return new AuthoritativeRowMutationHelper({
-      tableName: SYSTEM_TABLE_NAME.SERVICES,
-      buildWhereClause: (_role, context = {}) => {
-        const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
-        const cachedRow = context.cachedRow;
-        if (typeof cachedRow?.[COLUMN.RAFT_ROLE] === LOCAL_STR_STRING &&
-          cachedRow[COLUMN.RAFT_ROLE].length > 0) {
-          whereClause[COLUMN.RAFT_ROLE] = cachedRow[COLUMN.RAFT_ROLE];
-        }
-        if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
-          whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
-        }
-        return whereClause;
-      },
-      buildUpdateData: (role, updatedAt) => ({
-        [COLUMN.RAFT_ROLE]: role,
-        [COLUMN.UPDATED_AT]: updatedAt,
-      }),
-      buildExpectedCacheFields: (role) => ({[COLUMN.RAFT_ROLE]: role}),
-      readRowFromCache: (systemTableCache) =>
-        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
-      readValueFromCache: (systemTableCache) =>
-        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId)?.[COLUMN.RAFT_ROLE] || null,
-      isWriteReady: () => this.isServicesLeaderAvailable(),
-      retryDelayMs: METADATA_FLUSH_RETRY_DELAY_MS,
-      systemTableCache: this.systemTableCache,
-      cdcIntegrationService: this.roleMutationTransport,
-      onAsyncError: (error, context = {}) => {
-        this.logger.warn(METADATA_FLUSH_LOG_MSG.ROLE_RETRY_FAILED, {
-          replicaId: this.replicaId,
-          role: context.value ?? this.pendingRoleUpdate,
-          error: error.message,
-        });
-      },
-    });
-  }
-
-  createLeaderNodeMutationHelper() {
-    return new AuthoritativeRowMutationHelper({
-      tableName: SYSTEM_TABLE_NAME.SERVICES,
-      buildWhereClause: (_leaderNodeId, context = {}) => {
-        const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
-        const cachedRow = context.cachedRow;
-        if (typeof cachedRow?.[COLUMN.NODE_ID] === LOCAL_STR_STRING &&
-          cachedRow[COLUMN.NODE_ID].length > 0) {
-          whereClause[COLUMN.NODE_ID] = cachedRow[COLUMN.NODE_ID];
-        }
-        if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
-          whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
-        }
-        return whereClause;
-      },
-      buildUpdateData: (leaderNodeId, updatedAt) => ({
-        [COLUMN.NODE_ID]: leaderNodeId,
-        [COLUMN.RAFT_ROLE]: this.role,
-        [COLUMN.UPDATED_AT]: updatedAt,
-      }),
-      buildExpectedCacheFields: (leaderNodeId) => ({
-        [COLUMN.NODE_ID]: leaderNodeId,
-        [COLUMN.RAFT_ROLE]: this.role,
-      }),
-      readRowFromCache: (systemTableCache) =>
-        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
-      readValueFromCache: (systemTableCache) =>
-        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId)?.[COLUMN.NODE_ID] || null,
-      prepareFlush: () => ({
-        skip: !this.isLeader,
-        clearPending: !this.isLeader,
-        reason: !this.isLeader ? FLUSH_REASON_NOT_OWNER : FLUSH_REASON_READY,
-      }),
-      isWriteReady: () => this.isServicesLeaderAvailable(),
-      retryDelayMs: METADATA_FLUSH_RETRY_DELAY_MS,
-      systemTableCache: this.systemTableCache,
-      cdcIntegrationService: this.leaderNodeMutationTransport,
-      onAsyncError: (error, context = {}) => {
-        this.logger.warn(METADATA_FLUSH_LOG_MSG.LEADER_RETRY_FAILED, {
-          replicaId: this.replicaId,
-          leaderNodeId: context.value ?? this.pendingLeaderNodeUpdate,
-          error: error.message,
-        });
-      },
-    });
-  }
-
   /**
-   * Called when a Raft entry is committed. Delegates to
-   * applyCommittedEntry and updates the safety interval
-   * local applied index.
-   *
-   * @param {Object} command - The committed command.
+   * @return {Object|null} The typed refusal of user work unless this instance
+   *   serves (wasm-service-serving-state.js): held, not READY, or stopping.
    */
-  onCommit(command) {
-    this.applyCommittedEntry(command);
-    if (command && command.index !== undefined) {
-      this.safetyInterval.updateLocalAppliedIndex(command.index);
-    }
+  heldCreationRefusal() {
+    return servingRefusal(this);
+  }
+
+  /** @return {boolean} The one serving fence: serving state AND READY. */
+  get serving() {
+    return isServing(this);
+  }
+
+  /** @return {boolean} Whether native opening is READY, independently of serving. */
+  get initialized() {
+    return this.lifecycleState === WASM_SERVICE_REPLICA_STATE.READY;
   }
 
   /**
-   * Apply a committed Raft log entry to the local state.
-   * Handles KV writes, deletes, session deletes, and timer
-   * state changes.
-   *
-   * @param {Object} entry - The committed entry.
-   * @return {{accepted: boolean, error: string|null}} Result.
+   * @return {boolean} Whether the replica holds live resources: its open is
+   *   in flight or done, and its shutdown has not begun.
    */
-  applyCommittedEntry(entry) {
-    if (!entry || !entry.type) {
-      return {accepted: true, error: null};
-    }
-
-    switch (entry.type) {
-    case ENTRY_TYPE.KV_SET: {
-      const result = this.kvStore.applySet(
-        entry.sessionId, entry.key, entry.value,
-      );
-      if (result.accepted) {
-        this.logger.debug(
-          WASM_SERVICE_LOG_MSG.KV_WRITE_APPLIED, {
-            replicaId: this.replicaId,
-            sessionId: entry.sessionId,
-            key: entry.key,
-          },
-        );
-      }
-      return result;
-    }
-    case ENTRY_TYPE.KV_DELETE: {
-      this.kvStore.applyDelete(entry.sessionId, entry.key);
-      this.logger.debug(
-        WASM_SERVICE_LOG_MSG.KV_DELETE_APPLIED, {
-          replicaId: this.replicaId,
-          sessionId: entry.sessionId,
-          key: entry.key,
-        },
-      );
-      return {accepted: true, error: null};
-    }
-    case ENTRY_TYPE.KV_DELETE_SESSION: {
-      this.kvStore.applyDeleteSession(entry.sessionId);
-      this.logger.debug(
-        WASM_SERVICE_LOG_MSG.SESSION_DELETED, {
-          replicaId: this.replicaId,
-          sessionId: entry.sessionId,
-        },
-      );
-      return {accepted: true, error: null};
-    }
-    case ENTRY_TYPE.TIMER_STATE: {
-      const val = typeof entry.value === 'string' ?
-        entry.value :
-        JSON.stringify(entry.value);
-      this.kvStore.applySet(
-        entry.sessionId || entry.key,
-        entry.key || entry.sessionId,
-        Buffer.from(val),
-      );
-      return {accepted: true, error: null};
-    }
-    default:
-      return {accepted: true, error: null};
-    }
+  get live() {
+    return isLiveWasmServiceReplica(this);
   }
 
   /**
-   * Handle an incoming service message. Routes reads via the
-   * read router and proposes writes through Raft.
+   * Open the replica on its operation port: its durable database, the
+   * session KV store over that connection (a committed write and its
+   * applied index are one transaction), the port, its lifecycle events,
+   * and its transport address. The instance is single-use: once its
+   * shutdown has begun, initialize is refused typed (REPLICA_RETIRED) and a
+   * successor is a new instance (wasm-service-replica-lifecycle.js).
+   * @return {Promise<void>}
+   */
+  initialize() {
+    return initializeWasmServiceReplica(this);
+  }
+
+  /**
+   * Apply one committed entry inside the transaction that advances the
+   * replica's applied state. A committed type the admission owner never
+   * admits fails the application rather than being skipped.
+   * @param {Object} committed - {command, index, term, effects}.
+   * @return {*} The KV store's answer.
+   */
+  applyCommittedEntry(committed) {
+    let result;
+    if (committed.command?.type === WASM_WRITER_PROFILE.type) {
+      const command = canonicalWriterCommand(committed.command);
+      // Install rollback publication before the application can throw.
+      this.writerCompletion.observeApplication(command, null, {
+        afterCommit: [], afterRollback: committed.effects.afterRollback,
+      });
+      result = this.writerState.apply(command, this.kvStore, committed.index, committed.term);
+      this.writerCompletion.observeApplication(command, result, {
+        afterCommit: committed.effects.afterCommit, afterRollback: [],
+      });
+    } else {
+      result = applyCommittedCommand(this.kvStore, committed);
+    }
+    committed.effects.afterCommit.push(() =>
+      this.safetyInterval.updateLocalAppliedIndex(committed.index));
+    return result;
+  }
+
+  /**
+   * Handle an incoming message: a semantic consensus envelope steps the
+   * port; reads route via the read router and writes propose through it.
    *
    * @param {Object} message - Incoming message.
    * @return {Promise<Object>} Response object.
    */
   async handleMessage(message) {
-    const raftResult = this.handleRaftPacket(message);
-    if (raftResult) {
-      return raftResult;
-    }
-
     const payload = message.payload || message;
+    if (isRaftRsTransportEnvelope(payload)) {
+      if (this.raft) {
+        await Promise.resolve(this.raft.step(payload));
+      }
+      return null;
+    }
+    const refusal = this.heldCreationRefusal();
+    if (refusal !== null) return refusal;
     const operation = payload.operation || payload.op;
 
     if (operation === MESSAGE_OP.READ) {
@@ -467,6 +390,8 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @private
    */
   _handleRead(payload) {
+    const refusal = this.heldCreationRefusal();
+    if (refusal !== null) return refusal;
     const decision = routeRead(
       this.readConsistency,
       this.isLeader,
@@ -505,6 +430,8 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @private
    */
   async _handleWrite(payload) {
+    const refusal = this.heldCreationRefusal();
+    if (refusal !== null) return refusal;
     if (!this.isLeader) {
       return {forwarded: true, leaderId: this.leaderId};
     }
@@ -517,37 +444,111 @@ class WasmServiceReplica extends RaftReplicaBase {
     };
 
     if (this.writeConsistency === WRITE_CONSISTENCY_MODE.ASYNC) {
-      this.proposeEntry(entry);
+      this.proposeEntry(entry).catch((error) => {
+        this.logger.warn(WASM_SERVICE_LOG_MSG.ASYNC_PROPOSAL_FAILED, {
+          replicaId: this.replicaId,
+          error: error.message,
+        });
+      });
       return {accepted: true, async: true};
     }
 
-    await this.proposeEntry(entry);
-    return {accepted: true, async: false};
+    let command;
+    try {
+      command = writerCommandFromDelivery(payload);
+    } catch {
+      return {status: WRITER_STATUS.REFUSED, reason: WRITER_REASON.INVALID, identity: null};
+    }
+    return this.writerCompletion.submit(command, payload.deadlineMs);
   }
 
   /**
-   * Propose an entry to the Raft log. Wraps the liferaft
-   * command method in a Promise. Used by TimerManager and
-   * write handling.
+   * Propose an entry through the replica's operation port: refused before
+   * propose when the admission owner does not admit its type; its value
+   * crosses the log as base64 text. Used by TimerManager and writes.
    *
    * @param {Object} entry - Entry to propose.
-   * @return {Promise<void>}
+   * @return {Promise<Object>} The port's CORE_OK answer.
    */
-  proposeEntry(entry) {
-    if (!this.raft) {
-      return Promise.reject(
-        new Error(WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY),
-      );
+  async proposeEntry(entry) {
+    if (this.consensusCreation === null && !this.serving) {
+      throw new Error(WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY);
     }
-    return new Promise((resolve, reject) => {
-      this.raftProvider.propose(this.raft, entry, (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
+    const admission = this.consensusCreation === null ?
+      admitWasmServiceCommand(entry) : boundProposalAdmission(this, entry);
+    if (!admission.admitted) {
+      throw wasmServiceCommandRefusalError(admission);
+    }
+    if (entry.type === WASM_WRITER_PROFILE.type) {
+      const decision = this.writerState.classify(canonicalWriterCommand(entry));
+      if (decision.status !== WRITER_STATUS.NEW) {
+        throw wasmServiceCommandRefusalError({reason: decision.reason, type: entry.type});
+      }
+    }
+    if (!this.raft) {
+      throw new Error(WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY);
+    }
+    const answer = await Promise.resolve(
+      this.raft.propose(encodeCommittedCommand(entry)));
+    if (answer?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+      throw proposalRefusedError(answer);
+    }
+    return answer;
+  }
+
+  /**
+   * Queue the replica's role for publication to its services row.
+   * @param {string} role - The role the port announced.
+   */
+  queueRoleUpdate(role) {
+    if (!publishesServicesRow(this)) return;
+    if (!role || role === this.persistedRole) {
+      return;
+    }
+    this.pendingRoleUpdate = role;
+    if (!this.cdcIntegrationService) {
+      return;
+    }
+    this.flushRoleUpdate().catch((error) => {
+      this.logger.warn(WASM_SERVICE_LOG_MSG.PERSIST_ROLE_FAILED, {
+        replicaId: this.replicaId,
+        role,
+        error: error.message,
       });
     });
+  }
+
+  /**
+   * Queue this node as the group's leader node for publication.
+   * @param {string} leaderNodeId - The leading node.
+   */
+  queueLeaderNodeUpdate(leaderNodeId) {
+    if (!publishesServicesRow(this)) return;
+    if (!leaderNodeId || leaderNodeId === this.persistedLeaderNodeId) {
+      return;
+    }
+    this.pendingLeaderNodeUpdate = leaderNodeId;
+    if (!this.cdcIntegrationService) {
+      return;
+    }
+    this.flushLeaderNodeUpdate().catch((error) => {
+      this.logger.warn(WASM_SERVICE_LOG_MSG.PERSIST_LEADER_FAILED, {
+        replicaId: this.replicaId,
+        leaderNodeId,
+        error: error.message,
+      });
+    });
+  }
+
+  /**
+   * The port's current term, or null when it reports none.
+   * @return {number|null}
+   */
+  resolveCurrentTermSafe() {
+    const status = this.raft?.readStatus();
+    const term = Number(status?.term);
+    return status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+      Number.isFinite(term) ? term : null;
   }
 
   /**
@@ -555,11 +556,20 @@ class WasmServiceReplica extends RaftReplicaBase {
    * Reconstructs timers and starts safety interval broadcasts.
    */
   onBecameLeader() {
+    if (!this.serving) return;
     this.logger.info(WASM_SERVICE_LOG_MSG.BECAME_LEADER, {
       replicaId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,
     });
+    this.applyLeaderEffects();
+  }
 
+  /**
+   * The leader's admission-independent effects: timer reconstruction and
+   * safety broadcasts. Run on a leader edge while serving, or once by the
+   * held -> serving edge of a bound replica that already leads.
+   */
+  applyLeaderEffects() {
     this.timerManager.reconstructTimers().then((count) => {
       this.logger.info(
         WASM_SERVICE_LOG_MSG.TIMER_RECONSTRUCTED, {
@@ -577,6 +587,7 @@ class WasmServiceReplica extends RaftReplicaBase {
    * Stops all timers and safety interval broadcasts.
    */
   onBecameFollower() {
+    this.writerCompletion.abort(WRITER_REASON.NOT_LEADER);
     this.logger.info(WASM_SERVICE_LOG_MSG.LOST_LEADERSHIP, {
       replicaId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,
@@ -592,6 +603,7 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @return {Promise<void>}
    */
   async flushRoleUpdate() {
+    if (!publishesServicesRow(this)) return;
     return this.roleMutationHelper.flush();
   }
 
@@ -601,6 +613,7 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @return {Promise<void>}
    */
   async flushLeaderNodeUpdate() {
+    if (!publishesServicesRow(this)) return;
     return this.leaderNodeMutationHelper.flush();
   }
 
@@ -634,7 +647,7 @@ class WasmServiceReplica extends RaftReplicaBase {
       tableName: TABLES.SERVICES,
       whereClause: {
         [COLUMN.SERVICE_ID]: this.replicaId,
-        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+        [COLUMN.SERVICE_TYPE]: servicesRowServiceType(this),
         [COLUMN.NODE_ID]: this.nodeId,
       },
       data: {
@@ -680,7 +693,7 @@ class WasmServiceReplica extends RaftReplicaBase {
       tableName: TABLES.SERVICES,
       whereClause: {
         [COLUMN.SERVICE_ID]: this.replicaId,
-        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+        [COLUMN.SERVICE_TYPE]: servicesRowServiceType(this),
         [COLUMN.NODE_ID]: this.nodeId,
       },
       data: {
@@ -713,7 +726,11 @@ class WasmServiceReplica extends RaftReplicaBase {
     this._stopSafetyBroadcasts();
     const intervalMs = this.safetyInterval.intervalMs;
     this._safetyBroadcastTimer = setInterval(() => {
-      const committedIndex = this.raftProvider.getCommittedIndex(this.raft);
+      const status = this.raft?.readStatus();
+      if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+        return;
+      }
+      const committedIndex = status.commitIndex;
       this.safetyInterval.broadcastState(
         committedIndex, Date.now(),
       );
@@ -738,27 +755,26 @@ class WasmServiceReplica extends RaftReplicaBase {
   }
 
   /**
-   * Shutdown the replica. Stops timers, broadcasts, and
-   * closes the KV store before calling the base shutdown.
+   * Shutdown the replica: stop timers and broadcasts, retire its exact
+   * transport handler, then release its port and database. The transition
+   * to STOPPING and the snapshot of the handler it retires happen at call,
+   * before any await (wasm-service-replica-lifecycle.js), so nothing a later
+   * call opens is retired or released here; a repeated shutdown joins the
+   * one in flight. The shutdown's intent is captured at the same fence: an
+   * orderly stop never retires the resource; RETIRE_RESOURCE writes the
+   * receiver-local tombstone before the database closes.
+   * @param {Object} [retirement] - {intent: WASM_SERVICE_SHUTDOWN_INTENT,
+   *   metadataRelease?: Promise} (orderly by default).
    * @return {Promise<void>}
    */
-  async shutdown() {
-    this.timerManager.stopAll();
-    this._stopSafetyBroadcasts();
-    this.roleMutationHelper.shutdown();
-    this.leaderNodeMutationHelper.shutdown();
-
-    if (this.kvStore) {
-      this.kvStore.close();
-      this.kvStore = null;
-    }
-
-    await super.shutdown();
-
-    this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_STOPPED, {
-      replicaId: this.replicaId,
-      serviceDefinitionId: this.serviceDefinitionId,
-    });
+  shutdown(retirement = {intent: WASM_SERVICE_SHUTDOWN_INTENT.ORDERLY_STOP}) {
+    return shutdownWasmServiceReplica(this, () => {
+      this.writerCompletion.abort(WRITER_REASON.SHUTDOWN);
+      this.timerManager.stopAll();
+      this._stopSafetyBroadcasts();
+      this.roleMutationHelper.shutdown();
+      this.leaderNodeMutationHelper.shutdown();
+    }, retirement);
   }
 }
 

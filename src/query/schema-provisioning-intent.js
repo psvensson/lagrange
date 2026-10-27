@@ -37,7 +37,7 @@ function normalizeColumn(column = {}) {
 
 function canonicalizeSchemaProvisioningIntent(ast = {}) {
   const namespace = SCHEMA_PROVISIONING_DEFAULT.NAMESPACE;
-  const tableName = String(ast.tableName || '').trim().toLowerCase();
+  const tableName = String(ast.tableName || '');
   const tableIdentityKey = `${namespace}.${tableName}`;
   const intent = sortObject({
     intentVersion: SCHEMA_PROVISIONING_INTENT_VERSION,

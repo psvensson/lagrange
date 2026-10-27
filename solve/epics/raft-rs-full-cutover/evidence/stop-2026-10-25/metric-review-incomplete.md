@@ -1,0 +1,20 @@
+# Metric M1 delta review — stopped by user
+
+Status: INCOMPLETE / PENDING INDEPENDENT REVIEW. No APPROVE or REVISE verdict is issued for the repair. User stop arrived during source inspection; no test window opened.
+
+Inspected candidate: 5485381b70d7c963f30e1468c5e8ca17d156f569, parent c95ec0abe2361c3c31a471f024442a330b6095e2. Author tree was observed clean at the start. Author handoff reports an 11-JavaScript delta digest c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a and final-freeze.json SHA256 414624f6df5f65f86b4f2af44c475888a1dfd4a0ba0842cc0954c6da26510763; these full bindings were read but not independently recomputed before stop.
+
+Isolated reviewer tree: /mnt/data/peter/projects/.worktrees/codex-metric-delta-review-20261025, detached at the candidate. No tracked modifications. Its only setup addition is the ignored node_modules symlink to /mnt/data/peter/projects/lagrange/node_modules. No author/integration tree was changed. The earlier c95 review, test failures and reviewer tree remain intact.
+
+Read: author HANDOFF.md/final-freeze.json, prior independent M1 rejection, current AGENTS -> rules -> router (revision 2026-10-26), Quest and applicable verification/test index guidance. Inspected the changed production scripts and added witnesses plus installed Madge/dependency-tree/precinct/filing-cabinet/resolve/resolve-dependency-path source. Ran npm run commands, source reads and worktree setup only. A mistyped docs/test/guidelines/INDEX.md read was corrected to test/guidelines/INDEX.md. No tests, probes, hooks, full metrics, native work, lab submissions, commits, pushes, seals or publication were launched.
+
+Partial source observations, not measured approval:
+- The repair removes the .cache snapshot exclusion and adds one dedicated actual-Madge adapter, recording content, path-kind/absence and realpath observations through precinct's read injection and resolve.sync filesystem hooks.
+- The report owner now binds the observed manifest with the payload digest, rechecks facts, and rejects old schema. Actual graph node/edge coverage and skipped-resolution coverage are checked. Supported JS/JSX CommonJS/ESM routes are distinguished from refused routes; a generic resolver branch is bound to an audited installed-source digest.
+- The adapter restores its captured cabinet export and resolver reference in finally, disables its cached wrapper, and refuses a second invocation after dependency-tree is cached. Source inspection of this lifecycle was underway; the new custody witnesses were not executed independently.
+
+Untested hypothesis to preserve, NOT a causal finding: installed resolve/lib/sync.js constructs default search roots from the home directory (including ~/.node_libraries). captureMetricInputs records NODE_PATH/NODE_OPTIONS and other runtime facts, but not HOME. The observed manifest records filesystem facts for the previous search context. A changed home-derived search context could therefore require invalidation independently of unchanged old-path facts. No reproduction, predecessor control, actual stale-consumer result, or severity determination was completed. Parent explicitly requested no further investigation after user stop.
+
+Unexecuted: independent source/manifest digest binding; original two omitted-input correction witnesses; resolver precedence/missing/package/symlink/generic/refusal cases; cleanup/cached-export tests; any HOME-context discriminator and controls; negative/scoped/partial output and exit-1 interactions; selective refresh/semantic identity checks; complete per-item checklist verdict; author broad/fast-path evidence validation. Author-reported 7 files/186 assertions and broad refresh remain author evidence, not this reviewer's execution.
+
+All reviewer-owned exec commands completed, including worktree creation and the read-only worktree listing. No live owned session or background process remains. No test/analyzer process ever started in this review. Scope ceiling is source inspection only. Prior c95 REVISE remains preserved; exact 5485381 independent review is pending. Root owns preservation and any future resumption.

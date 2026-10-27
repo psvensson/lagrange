@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-replication-restart-attempt-handoff",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The durable split or merge workflow record is the authorization owner for source-mirror START, and PartitionService owns exactly one physical worker for that authorization. The source installs an authorizing handle, records SNAPSHOT_STARTED against the current record, and begins snapshot work only after that record change accepts the exact workflow attempt, fence, and immutable execution payload. Concurrent exact STARTs join the same authorization and worker. A lost START answer after durable acceptance is confirmed from the record and continues the same logical attempt and fence instead of writing DEFERRED and re-registering; a truly unaccepted delivery may defer. Stale or different-payload STARTs cannot install work or borrow a prior acknowledgement. A newer attempt is admissible only after explicit predecessor quiescence, and recovery of an accepted START resumes the same attempt without fabricating predecessor progress.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/partition-replication-restart-attempt-handoff/evidence/receipt.json",
+      "requiredReceipts": [
+        "restart-attempt-owner-contract"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-source-mirror-owner",
+      "statement": "Repair the shared split/merge source-mirror START authorization interaction: the durable record decides authorization and PartitionService owns physical execution. Do not add an alternate executor, source-restart dependency, timeout change, or compatibility fallback."
+    },
+    {
+      "id": "attempt-and-fence-authorization",
+      "statement": "Physical-plan equality or a larger request number never authorizes START. The record change binds workflow identity, exact attempt and fence, and the immutable source/target execution payload stored by that attempt. Existing transport target identity remains the provisioning authority; this Quest does not create a second target-incarnation owner."
+    },
+    {
+      "id": "one-physical-execution",
+      "statement": "Two concurrent exact STARTs join one authorizing handle and one physical worker. An accepted worker is never relabelled for another attempt, fence, or payload; a genuine successor starts only after the predecessor is terminal and explicitly quiesced."
+    },
+    {
+      "id": "predecessor-and-delayed-ack-proof",
+      "statement": "The production-worker witness proves accepted answer loss stays on the same attempt, truly unaccepted delivery can defer, stale and different-payload requests are inert, accepted-then-crashed work recovers, concurrent redelivery starts once, and old asynchronous callbacks cannot report for a successor."
+    },
+    {
+      "id": "no-hysteresis-scope",
+      "statement": "Do not merge or repair split/merge hysteresis scheduling in this Quest; its deferred-slot coalescing defect is independently owned."
+    },
+    {
+      "id": "red-on-revert-no-ratchet",
+      "statement": "The production-path witness is red without the owner repair and green with it. No timeout, budget, or ratchet baseline is raised."
+    }
+  ],
+  "sealedAt": "125bb12e761ef48e7f7b5387540e524a8c6c1c80"
+}

@@ -34,33 +34,36 @@ watch -n 5 "curl -sS http://127.0.0.1:8081/api/admin/diagnostics/services | jq '
 }'"
 ```
 
-## 2. Open SQL control (Terminal B)
+## 2. Config writes (Terminal B)
 
-1. Run: `lagrange-admin localhost:8081`
-2. Press `6` for SQL view
-3. Run each SQL statement with `Ctrl+Enter`
+Configuration is written by its owner (`DynamicConfigService.set`, which
+validates the value against the key's definition) through the admin config
+operation. Raw `UPDATE config` statements are refused as client writes to a
+system table (`SYSTEM_TABLE_WRITE_REFUSED`).
+
+```bash
+cfg() {
+  curl -s -X PUT -H 'content-type: application/json' \
+    -d "{\"value\": $2, \"updatedBy\": \"diag-runbook\"}" \
+    "http://localhost:8081/api/admin/config/$1"; echo
+}
+```
+
+Each call answers `{"success":true,"outcome":"applied",...}`, or a typed
+refusal such as `CONFIG_VALUE_INVALID`. Values are typed JSON: `true`,
+`false`, numbers. Reads stay SQL (`lagrange-admin localhost:8081`, press `6`).
 
 ## 3. Baseline capture (10 minutes)
 
-```sql
-UPDATE config
-SET config_value = 'true', updated_by = 'diag-runbook',
-    updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
-WHERE config_key = 'logging.persistMetricsLogs';
-
-UPDATE config
-SET config_value = 'false', updated_by = 'diag-runbook',
-    updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
-WHERE config_key = 'raft.adaptiveTimingEnabled';
+```bash
+cfg logging.persistMetricsLogs true
+cfg raft.adaptiveTimingEnabled false
 ```
 
 ## 4. Isolate metrics logging persistence path (10 minutes)
 
-```sql
-UPDATE config
-SET config_value = 'false', updated_by = 'diag-runbook',
-    updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
-WHERE config_key = 'logging.persistMetricsLogs';
+```bash
+cfg logging.persistMetricsLogs false
 ```
 
 Signals that confirm this path is a contributor:
@@ -71,45 +74,27 @@ Signals that confirm this path is a contributor:
 
 ## 5. Enable adaptive raft timing with CPU-focused starter tuning
 
-```sql
-UPDATE config SET config_value='5000', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingSampleIntervalMs';
-UPDATE config SET config_value='2', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingPromoteSamples';
-UPDATE config SET config_value='8', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingDemoteSamples';
+```bash
+cfg raft.adaptiveTimingSampleIntervalMs 5000
+cfg raft.adaptiveTimingPromoteSamples 2
+cfg raft.adaptiveTimingDemoteSamples 8
 
-UPDATE config SET config_value='18', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingHighCpuPercent';
-UPDATE config SET config_value='10', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingLowCpuPercent';
-UPDATE config SET config_value='1500000', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingHighWriteBytesPerSec';
-UPDATE config SET config_value='1100000', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingLowWriteBytesPerSec';
-UPDATE config SET config_value='200000000', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingHighRssGrowthBytesPerMin';
-UPDATE config SET config_value='120000000', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingLowRssGrowthBytesPerMin';
+cfg raft.adaptiveTimingHighCpuPercent 18
+cfg raft.adaptiveTimingLowCpuPercent 10
+cfg raft.adaptiveTimingHighWriteBytesPerSec 1500000
+cfg raft.adaptiveTimingLowWriteBytesPerSec 1100000
+cfg raft.adaptiveTimingHighRssGrowthBytesPerMin 200000000
+cfg raft.adaptiveTimingLowRssGrowthBytesPerMin 120000000
 
-UPDATE config SET config_value='75', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingActiveHeartbeatIntervalMs';
-UPDATE config SET config_value='1200', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingActiveElectionTimeoutMinMs';
-UPDATE config SET config_value='3600', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingActiveElectionTimeoutMaxMs';
+cfg raft.adaptiveTimingActiveHeartbeatIntervalMs 75
+cfg raft.adaptiveTimingActiveElectionTimeoutMinMs 1200
+cfg raft.adaptiveTimingActiveElectionTimeoutMaxMs 3600
 
-UPDATE config SET config_value='300', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingIdleHeartbeatIntervalMs';
-UPDATE config SET config_value='5000', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingIdleElectionTimeoutMinMs';
-UPDATE config SET config_value='9000', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingIdleElectionTimeoutMaxMs';
+cfg raft.adaptiveTimingIdleHeartbeatIntervalMs 300
+cfg raft.adaptiveTimingIdleElectionTimeoutMinMs 5000
+cfg raft.adaptiveTimingIdleElectionTimeoutMaxMs 9000
 
-UPDATE config
-SET config_value = 'true', updated_by = 'diag-runbook',
-    updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
-WHERE config_key = 'raft.adaptiveTimingEnabled';
+cfg raft.adaptiveTimingEnabled true
 ```
 
 ## 6. Verify adaptive profile switching
@@ -133,16 +118,10 @@ Expected:
 
 ## 7. Rollback
 
-```sql
-UPDATE config SET config_value='false', updated_by='diag-runbook'
-WHERE config_key='raft.adaptiveTimingEnabled';
-UPDATE config SET config_value='true', updated_by='diag-runbook'
-WHERE config_key='logging.persistMetricsLogs';
-UPDATE config SET config_value='50', updated_by='diag-runbook'
-WHERE config_key='raft.heartbeatIntervalMs';
-UPDATE config SET config_value='1000', updated_by='diag-runbook'
-WHERE config_key='raft.electionTimeoutMinMs';
-UPDATE config SET config_value='3000', updated_by='diag-runbook'
-WHERE config_key='raft.electionTimeoutMaxMs';
+```bash
+cfg raft.adaptiveTimingEnabled false
+cfg logging.persistMetricsLogs true
+cfg raft.heartbeatIntervalMs 50
+cfg raft.electionTimeoutMinMs 1000
+cfg raft.electionTimeoutMaxMs 3000
 ```
-

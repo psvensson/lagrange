@@ -7,7 +7,7 @@ import {
 /**
  * Raft/formation-diagnostics interaction contract.
  *
- * LifeRaft owns protocol behavior and the commit scheduler owns apply behavior.
+ * The consensus runtime owns protocol behavior and the commit scheduler owns apply behavior.
  * This module owns only their mapping into exclusive formation-attribution
  * buckets. With no active attribution window, runFormationOwner invokes the
  * callback directly and preserves the participant's behavior.

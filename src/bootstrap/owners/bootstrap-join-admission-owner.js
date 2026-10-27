@@ -18,10 +18,7 @@ import {
   isMembershipOwnerRestartReentryOutcome,
 } from '../../control-plane/membership-lifecycle-controller.js';
 import {MessageGroupAssignment} from '../message-group-assignment.js';
-import {
-  BOOTSTRAP_ASSIGNMENT_STRATEGY,
-  BOOTSTRAP_PIPELINE_ERROR_CODE,
-} from '../bootstrap-constants.js';
+import {BOOTSTRAP_PIPELINE_ERROR_CODE} from '../bootstrap-constants.js';
 import {
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LOG_MSG,
@@ -33,8 +30,20 @@ import {
   classifyClusterIdMatch,
 } from '../cluster-identity-constants.js';
 import {getRemainingBudgetMs} from '../../control-plane/timeout-budget.js';
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 
-const BootstrapStrategy = BOOTSTRAP_ASSIGNMENT_STRATEGY;
+const JOIN_ADMISSION_SPENT_WAIT = Object.freeze({
+  RESERVATION_LOCK: Object.freeze({
+    wait: 'bootstrapRequestExecutionBudgetMs',
+    awaited: 'MOVE_REPLICA assignment reservation lock released by the previous holder',
+    LOCK_HELD: 'previous_reservation_still_held',
+  }),
+  EXECUTION_BUDGET: Object.freeze({
+    wait: 'bootstrapRequestExecutionBudgetMs',
+    awaited: 'bootstrap request assignment work within the seed execution budget',
+    STAGE: 'assignment_reservation',
+  }),
+});
 
 const REJOIN_TERMINAL_STATES = Object.freeze(new Set([
   NODE_STATE.STOPPED,
@@ -111,36 +120,8 @@ class BootstrapJoinAdmissionOwner {
       this.getBootstrapAuthoritativeTableRows(tableName);
   }
 
-  async expireMoveReplicaAssignmentReservations(options = {}) {
-    return this.delegates.expireMoveReplicaAssignmentReservations?.(options);
-  }
-
-  async getActiveMoveReplicaAssignmentReservations(options = {}) {
-    return this.delegates.getActiveMoveReplicaAssignmentReservations?.(
-      options,
-    ) || [];
-  }
-
   async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now()) {
     return this.delegates.getBlockingMoveReplicaBootstrapAdmissions?.(now) || [];
-  }
-
-  async getMoveReplicaBootstrapExclusionReservations(
-    now = Date.now(),
-    options = {},
-  ) {
-    return this.delegates.getMoveReplicaBootstrapExclusionReservations?.(
-      now,
-      options,
-    ) || [];
-  }
-
-  async reserveMoveReplicaAssignment(targetNodeId, assignment, options = {}) {
-    return this.delegates.reserveMoveReplicaAssignment?.(
-      targetNodeId,
-      assignment,
-      options,
-    );
   }
 
   getBootstrapAdmissionRetryAfterMs() {
@@ -163,7 +144,29 @@ class BootstrapJoinAdmissionOwner {
     if (this.hasRemainingBootstrapRequestExecutionBudget(timeoutBudget)) {
       return;
     }
+    this.reportJoinAdmissionBudgetSpent(
+      JOIN_ADMISSION_SPENT_WAIT.EXECUTION_BUDGET,
+      timeoutBudget,
+      {stage: JOIN_ADMISSION_SPENT_WAIT.EXECUTION_BUDGET.STAGE},
+    );
     throw this.createBootstrapRequestExecutionBudgetExhaustedError();
+  }
+
+  /**
+   * Report a spent bootstrap-request execution budget at a join-admission
+   * stage.
+   * @param {Object} spentWait - One JOIN_ADMISSION_SPENT_WAIT entry.
+   * @param {Object} timeoutBudget
+   * @param {Object} lastObserved
+   */
+  reportJoinAdmissionBudgetSpent(spentWait, timeoutBudget, lastObserved) {
+    reportWaitBoundSpent(this.getLogger(), {
+      wait: spentWait.wait,
+      awaited: spentWait.awaited,
+      boundMs: timeoutBudget.configuredBudgetMs,
+      startedAtMs: timeoutBudget.startedAtMs,
+      lastObserved,
+    });
   }
 
   createBootstrapRequestExecutionBudgetExhaustedError() {
@@ -460,30 +463,9 @@ class BootstrapJoinAdmissionOwner {
 
   determineMessageGroupAssignment(newNodeId, options = {}) {
     const messageGroups = this.getMessageGroups();
-    const excludedSourceNodeIds = new Set(
-      options.excludedSourceNodeIds instanceof Set ?
-        options.excludedSourceNodeIds :
-        [],
-    );
-
-    const seedNodeId = this.getSeedNodeId();
-    if (typeof seedNodeId === 'string' &&
-        seedNodeId.length > 0) {
-      for (const group of messageGroups) {
-        for (const replica of group?.replicas || []) {
-          const replicaNodeId = replica?.node_id;
-          if (!replicaNodeId || replicaNodeId === seedNodeId) {
-            continue;
-          }
-          excludedSourceNodeIds.add(replicaNodeId);
-        }
-      }
-    }
-
     this.getLogger().info(BOOTSTRAP_API_LOG_MSG.JOIN_ASSIGNMENT, {
       newNodeId,
       messageGroupCount: messageGroups.length,
-      excludedSourceNodeCount: excludedSourceNodeIds.size,
       messageGroups: messageGroups.map((group) => ({
         groupId: group.group_id,
         replicaCount: group.replicas?.length || 0,
@@ -506,8 +488,6 @@ class BootstrapJoinAdmissionOwner {
             membershipOwnerOutcome: options.membershipOwnerOutcome,
             startupMode: options.startupMode,
           }),
-        excludedReplicaIds: options.excludedReplicaIds,
-        excludedSourceNodeIds,
       },
     );
 
@@ -562,6 +542,11 @@ class BootstrapJoinAdmissionOwner {
         );
       if (lockWaitOutcome ===
           MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME.BUDGET_EXHAUSTED) {
+        this.reportJoinAdmissionBudgetSpent(
+          JOIN_ADMISSION_SPENT_WAIT.RESERVATION_LOCK,
+          options.timeoutBudget,
+          {lock: JOIN_ADMISSION_SPENT_WAIT.RESERVATION_LOCK.LOCK_HELD},
+        );
         throw this.createBootstrapRequestExecutionBudgetExhaustedError();
       }
       this.assertBootstrapRequestExecutionBudget(options.timeoutBudget);
@@ -587,43 +572,13 @@ class BootstrapJoinAdmissionOwner {
         return durableRejoinAssignment;
       }
 
-      await this.expireMoveReplicaAssignmentReservations(options);
-      const activeReservations =
-        await this.getActiveMoveReplicaAssignmentReservations(options);
-      const exclusionReservations =
-        await this.getMoveReplicaBootstrapExclusionReservations(
-          Date.now(),
-          options,
-        );
       this.assertBootstrapRequestExecutionBudget(options.timeoutBudget);
-      const excludedReplicaIds = new Set(
-        [...activeReservations, ...exclusionReservations]
-          .map((reservation) => reservation?.replicaId)
-          .filter((replicaId) =>
-            typeof replicaId === 'string' && replicaId.length > 0,
-          ),
-      );
-      const assignment = this.determineMessageGroupAssignment(newNodeId, {
-        excludedReplicaIds,
+      // No message-group replica is ever moved to a joiner (its raft id
+      // derives from its name): every joiner hosts its own group.
+      return this.determineMessageGroupAssignment(newNodeId, {
         startupMode: options.startupMode,
         membershipOwnerOutcome: options.membershipOwnerOutcome,
       });
-
-      if (assignment.strategy !== BootstrapStrategy.MOVE_REPLICA) {
-        return assignment;
-      }
-
-      this.assertBootstrapRequestExecutionBudget(options.timeoutBudget);
-      const reservation = await this.reserveMoveReplicaAssignment(
-        newNodeId,
-        assignment,
-        options,
-      );
-      return {
-        ...assignment,
-        assignmentId: reservation.assignmentId,
-        assignmentLeaseExpiresAt: reservation.leaseExpiresAt,
-      };
     }, options);
   }
 
@@ -644,41 +599,13 @@ class BootstrapJoinAdmissionOwner {
       startupMode: options.startupMode,
       membershipOwnerOutcome: options.membershipOwnerOutcome,
     });
-    if (
-      assignment?.strategy === BootstrapStrategy.MOVE_REPLICA ||
-      assignment?.reuseExistingGroup !== true
-    ) {
+    if (assignment?.reuseExistingGroup !== true) {
       return null;
     }
     return assignment;
   }
 
   augmentAssignmentWithPeerAddresses(assignment, messageGroups) {
-    if (assignment.strategy === BootstrapStrategy.MOVE_REPLICA) {
-      const group = messageGroups.find(
-        (candidate) => candidate.group_id === assignment.groupId,
-      );
-      const replicas = group?.replicas || [];
-      const peerAddresses = replicas.map((replica) =>
-        `${replica.node_id}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
-        `${ADDRESS.SEPARATOR}${replica.replica_id}`,
-      );
-
-      this.getLogger().info(BOOTSTRAP_API_LOG_MSG.JOIN_MOVABLE_REPLICA, {
-        groupId: assignment.groupId,
-        sourceNodeId: assignment.sourceNodeId,
-        replicaToMove: assignment.replicaToMove,
-        peerIds: assignment.existingPeerIds,
-        peerAddresses,
-        replicaAddresses: assignment.replicaAddresses,
-      });
-
-      return {
-        ...assignment,
-        peerAddresses,
-      };
-    }
-
     if (assignment.reuseExistingGroup === true) {
       const group = messageGroups.find(
         (candidate) => candidate.group_id === assignment.groupId,

@@ -494,7 +494,12 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       );
     });
 
-  await t.test('current priority placement retains learner readiness filtering',
+  // SUPERSEDED (owner decision 2026-10-04, voters-only census). Before: a
+  // promotable learner counted toward current priority spread, and the
+  // placement build read the learner node's readiness once more to decide
+  // promotability. A learner never counts now, so the partition shows its
+  // gap and no per-learner promotability read is made.
+  await t.test('current priority placement never counts a learner as a holder',
     async (t) => {
       const mockCache = createMockCache([
         {node_id: 'node-1', status: NodeStatus.ACTIVE},
@@ -574,16 +579,20 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         (partition) => partition.partitionId === 'replica_operations-p1',
       );
 
-      t.equal(
+      t.match(
         ledgerBlocker,
-        undefined,
-        'a promotable learner still counts toward current priority spread ' +
-          'when the canonical leader is present',
+        {readyDistinctNodeCount: 2, spreadGap: 1},
+        'a promotable learner does not count toward current priority spread',
+      );
+      t.equal(
+        ledgerBlocker?.exclusionReasonCounts?.raft_role_not_voter,
+        1,
+        'the learner row is excluded as a non-voter',
       );
       t.same(
         readinessCalls.sort(),
-        ['node-1', 'node-2', 'node-2', 'node-3'],
-        'only the learner receives the additional promotability read',
+        ['node-1', 'node-2', 'node-3'],
+        'no additional promotability read is made for the learner',
       );
     });
 

@@ -45,6 +45,40 @@ const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 const SERVICES = 'services';
 
 /**
+ * Let `turns` macrotask turns run (the handlers' setImmediate hops).
+ * @param {number} [turns=20]
+ * @return {Promise<void>}
+ */
+function nextTurns(turns = 20) {
+  let chain = Promise.resolve();
+  for (let turn = 0; turn < turns; turn += 1) {
+    chain = chain.then(() => new Promise((resolve) => setImmediate(resolve)));
+  }
+  return chain;
+}
+
+/**
+ * One replica's services row, hosted on the node `<replicaId>-node`.
+ * @param {string} partitionId
+ * @param {string} replicaId
+ * @param {string} status
+ * @return {Object}
+ */
+function partitionServiceRow(partitionId, replicaId, status) {
+  const nodeId = `${replicaId}-node`;
+  return {
+    service_id: replicaId,
+    replica_id: replicaId,
+    partition_id: partitionId,
+    node_id: nodeId,
+    service_type: 'partition',
+    status,
+    raft_role: 'follower',
+    address: `${nodeId}/partition/${replicaId}`,
+  };
+}
+
+/**
  * The durable lifecycle state of one replica of a group, read on an
  * independent read-only connection (null while no row exists).
  * @param {string} dbFile - The replica's database file.
@@ -128,6 +162,8 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     // authority; without it the owner refuses every lifecycle CAS.
     replicaIdentity: initialRow.replica_id,
     groupId: initialRow.group_id,
+    cleanupToken: initialRow.cleanup_token,
+    createAttemptToken: initialRow.create_attempt_token,
     createdAt: initialRow.created_at,
     durableVersionColumn: 'state_entered_at',
     durableVersion: initialRow.state_entered_at,
@@ -204,4 +240,9 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   };
 }
 
-export {createRemovalSourceHandler, durableLifecycleState};
+export {
+  createRemovalSourceHandler,
+  durableLifecycleState,
+  nextTurns,
+  partitionServiceRow,
+};

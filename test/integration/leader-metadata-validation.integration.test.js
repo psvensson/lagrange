@@ -29,7 +29,7 @@ import {
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {URL} from 'url';
-import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
@@ -303,7 +303,10 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
           systemTableCache: incompleteCache,
           messageRouter: bootstrapResult.messageRouter,
           epochManager: bootstrapResult.epochManager,
-          bootstrapService: bootstrapService,
+          bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+          runtimeOwner: bootstrapService.runtimeDependencyOwner,
+          assertOriginalSeedPublicAdmission: () =>
+            bootstrapService.assertOriginalSeedPublicAdmission(),
           authoritativeControlPlaneView: createIncompleteAuthoritativeView(
             realCache,
             maskOptions,
@@ -420,7 +423,10 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
           systemTableCache: incompleteCache,
           messageRouter: bootstrapResult.messageRouter,
           epochManager: bootstrapResult.epochManager,
-          bootstrapService: bootstrapService,
+          bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+          runtimeOwner: bootstrapService.runtimeDependencyOwner,
+          assertOriginalSeedPublicAdmission: () =>
+            bootstrapService.assertOriginalSeedPublicAdmission(),
         });
 
         await seedApi.initialize(0, {listen: false});
@@ -534,7 +540,10 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         systemTableCache: incompleteCache,
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService: bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
         authoritativeControlPlaneView: createIncompleteAuthoritativeView(
           realCache,
           maskOptions,
@@ -656,7 +665,10 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         systemTableCache: realCache,
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService: bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});

@@ -87,4 +87,4 @@ function createSeedPhaseOwners(service) {
   return Object.freeze(owners);
 }
 
-export {SEED_PHASE_OWNER, createSeedPhaseOwners};
+export {createSeedPhaseOwners};

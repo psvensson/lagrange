@@ -14,7 +14,6 @@ const CANONICAL_HUMAN_DOCUMENT_PATH =
 
 const IMPLEMENTATION_EVIDENCE_PATHS = Object.freeze({
   ociDriver: 'src/runtime/oci-container-driver.js',
-  ociCallback: 'src/query/callback/callback-runtime-driver-registry.js',
 });
 
 const CAPABILITY_STATE = Object.freeze({
@@ -40,8 +39,8 @@ const CLAIM_MARKER = Object.freeze({
 const IMPLEMENTATION_EVIDENCE_MARKER = Object.freeze({
   OCI_PREPARED_MAP: 'this._prepared = new Map()',
   OCI_RUNNING_SET: 'this._running = new Set()',
-  OCI_CALLBACK_FUTURE: 'Future: delegate to OCI runtime',
-  OCI_CALLBACK_ERROR: 'REGISTRY_OCI_CONTAINER_GATED',
+  OCI_FEATURE_GATE_DEFAULT: 'this._featureGateEnabled = false',
+  OCI_FEATURE_GATE_ERROR: 'FEATURE_GATE_DISABLED',
 });
 
 const CONTRACT_ERROR = Object.freeze({
@@ -67,8 +66,8 @@ const CONTRACT_ERROR = Object.freeze({
     'realContainerActivation must remain false until provider cutover',
   EVIDENCE_OCI_DRIVER:
     'OCI driver evidence no longer matches in-memory lifecycle scaffolding',
-  EVIDENCE_OCI_CALLBACK:
-    'OCI callback evidence no longer proves fail-closed unsupported invocation',
+  EVIDENCE_OCI_FEATURE_GATE:
+    'OCI driver evidence no longer proves fail-closed feature-gated activation',
 });
 
 const FORBIDDEN_PUBLIC_CLAIMS = Object.freeze([
@@ -151,11 +150,11 @@ function validateImplementationEvidence(evidence, problems) {
       evidence.ociDriver.includes(IMPLEMENTATION_EVIDENCE_MARKER.OCI_RUNNING_SET),
     CONTRACT_ERROR.EVIDENCE_OCI_DRIVER);
   addProblem(problems,
-    evidence.ociCallback.includes(
-      IMPLEMENTATION_EVIDENCE_MARKER.OCI_CALLBACK_FUTURE) &&
-      evidence.ociCallback.includes(
-        IMPLEMENTATION_EVIDENCE_MARKER.OCI_CALLBACK_ERROR),
-    CONTRACT_ERROR.EVIDENCE_OCI_CALLBACK);
+    evidence.ociDriver.includes(
+      IMPLEMENTATION_EVIDENCE_MARKER.OCI_FEATURE_GATE_DEFAULT) &&
+      evidence.ociDriver.includes(
+        IMPLEMENTATION_EVIDENCE_MARKER.OCI_FEATURE_GATE_ERROR),
+    CONTRACT_ERROR.EVIDENCE_OCI_FEATURE_GATE);
 }
 
 function evaluateServicePortabilityClaimsContract(input) {

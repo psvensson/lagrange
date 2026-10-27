@@ -222,6 +222,8 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
       await waitForLocalQueryTransportReadiness({
         messageRouter: this.messageRouter,
         sleep: (delayMs) => this.sleep(delayMs),
+        logger: this.logger,
+        scope: {nodeId: this.nodeId},
         onRetry: ({attempt, maxAttempts, delayMs, readiness}) => {
           this.logger.warn(
             BOOTSTRAP_CONTROL_PLANE_RUNTIME_LOG_MSG

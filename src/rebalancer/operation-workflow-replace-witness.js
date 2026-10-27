@@ -17,15 +17,15 @@ import {
   ReplaceWitnessDeliveryOutcome,
   ReplicaOperationField,
   ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
+  isCompletedReplicaOperationAnswer,
 } from './replica-operation-constants.js';
 import {
   PARTITION_REPLICA_MEMBERSHIP_STATE,
 } from '../partition/partition-replica-membership-constants.js';
 import {assertCanonicalRebalancerEntityIdentity} from
   './rebalancer-entity-identity.js';
-import {
-  classifyTransportDeliveryOutcome,
+import {deliveryTransportOf, deliveryAnswerOf,
+  classifyThrownDeliveryError,
   isDeferredTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
 } from '../transport/transport-semantic-outcome.js';
@@ -111,32 +111,33 @@ function replaceWitnessReadReplicaId(owner, operation, member) {
     .targetReplicaId;
 }
 
-function classifyReplaceWitnessResponse(response) {
-  if (isDeliveredTransportDeliveryOutcome(response) &&
-      response.noHandler !== true) {
-    return {outcome: ReplaceWitnessDeliveryOutcome.DELIVERED, response};
-  } else if (response.noHandler === true ||
-      isDeferredTransportDeliveryOutcome(response)) {
+function classifyReplaceWitnessResponse(delivery) {
+  const transport = deliveryTransportOf(delivery);
+  const answer = deliveryAnswerOf(delivery);
+  if (isDeliveredTransportDeliveryOutcome(transport)) {
+    return {outcome: ReplaceWitnessDeliveryOutcome.DELIVERED, response: answer};
+  } else if (transport.noHandler === true ||
+      isDeferredTransportDeliveryOutcome(transport)) {
     return {
       outcome: ReplaceWitnessDeliveryOutcome.DELIVERY_DEFERRED,
-      reason: response.reasonCode ||
+      reason: transport.reasonCode ||
         ReplaceWitnessDeliveryOutcome.DELIVERY_DEFERRED,
       deferRetry: true,
-      retryAfterMs: response.retryAfterMs,
+      retryAfterMs: transport.retryAfterMs,
     };
   } else {
     return {
       outcome: ReplaceWitnessDeliveryOutcome.DELIVERY_FAILED,
-      reason: response.reasonCode || response.error ||
+      reason: transport.reasonCode || transport.error ||
         ReplaceWitnessDeliveryOutcome.DELIVERY_FAILED,
       deferRetry: false,
-      retryAfterMs: response.retryAfterMs,
+      retryAfterMs: transport.retryAfterMs,
     };
   }
 }
 
 function classifyReplaceWitnessError(error) {
-  const response = classifyTransportDeliveryOutcome(error);
+  const response = classifyThrownDeliveryError(error);
   const deferred = isDeferredTransportDeliveryOutcome(response);
   return {
     outcome: deferred ? ReplaceWitnessDeliveryOutcome.DELIVERY_DEFERRED :
@@ -166,18 +167,15 @@ async function deliverToReplaceWitness(owner, operation, messageType,
   // an operation without a canonical one has no witness to address.
   const {replicaIds, readReplicaId, targetNodeId, handlerType} = destination;
   try {
-    const response = classifyTransportDeliveryOutcome(
-      await owner.messageRouter.deliver(
-        `${targetNodeId}/service/${handlerType}`,
-        buildReplaceWitnessRequest(operation, messageType, replicaIds,
-          readReplicaId),
-        {
-          targetNodeId,
-          deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
-        },
-      ),
-    );
-    return classifyReplaceWitnessResponse(response);
+    return classifyReplaceWitnessResponse(await owner.messageRouter.deliver(
+      `${targetNodeId}/service/${handlerType}`,
+      buildReplaceWitnessRequest(operation, messageType, replicaIds,
+        readReplicaId),
+      {
+        targetNodeId,
+        deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
+      },
+    ));
   } catch (error) {
     return classifyReplaceWitnessError(error);
   }
@@ -201,8 +199,7 @@ async function readReplaceWitnessMembership(owner, operation, member = null) {
     member);
   const {response, reason} = delivery;
   const membership = response?.[ReplicaOperationField.MEMBERSHIP];
-  if (response?.status !== ReplicaOperationResponseStatus.COMPLETED ||
-      !membership) {
+  if (!isCompletedReplicaOperationAnswer(response) || !membership) {
     return unavailableWitness(reason || response?.status || null, delivery);
   }
   const canonical = canonicalReplaceMembershipObservation(membership, {

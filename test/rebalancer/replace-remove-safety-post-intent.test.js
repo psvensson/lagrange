@@ -33,8 +33,7 @@ test('a FAIL-class remove-safety answer at a post-intent re-send withholds ' +
   'the effect and waits; it never writes FAILED', async (t) => {
   const world = await openReplaceWorld();
   try {
-    world.removeEffectAnswer = {acknowledged: true,
-      status: ReplicaOperationResponseStatus.INITIATED};
+    world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED};
     await driveToIntent(world);
     world.eventsSuppressed = true;
     t.equal(world.removeEffects.length, 1, 'setup: the first effect left');

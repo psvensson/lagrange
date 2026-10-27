@@ -62,7 +62,13 @@ const stringTrim = Function.call.bind(String.prototype.trim);
 const stringPadStart = Function.call.bind(String.prototype.padStart);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arraySome = Function.call.bind(Array.prototype.some);
+const stringSlice = Function.call.bind(String.prototype.slice);
 
+// The test census is every TEST_FILE_SUFFIX file under this directory;
+// nothing outside it is a test, whatever its name (evidence copies under
+// solve/ are data).
+const TEST_CENSUS_DIRECTORY = 'test/';
 const NODE_MODULES_DIRECTORY = 'node_modules';
 const UTF8_ENCODING = 'utf8';
 const NEWLINE_SEPARATOR = '\n';
@@ -75,13 +81,31 @@ const PATH_SEPARATOR = path.sep;
 const POSIX_SEPARATOR = '/';
 const COMMENT_PREFIX = '#';
 
+function isCensusExcludedEntry(name) {
+  return name === NODE_MODULES_DIRECTORY || stringStartsWith(name, HIDDEN_ENTRY_PREFIX);
+}
+
+/**
+ * Whether a repository-relative path is a member of the test census: a
+ * TEST_FILE_SUFFIX file under TEST_CENSUS_DIRECTORY, outside node_modules and
+ * hidden entries. collectTestFiles enumerates exactly these, so a consumer
+ * asks here instead of restating "ends in .test.js".
+ * @param {string} relativePath POSIX-separated, repository-relative
+ * @return {boolean}
+ */
+export function isTestCensusPath(relativePath) {
+  return stringStartsWith(relativePath, TEST_CENSUS_DIRECTORY) &&
+    stringEndsWith(relativePath, TEST_FILE_SUFFIX) &&
+    !arraySome(stringSplit(stringSlice(relativePath, TEST_CENSUS_DIRECTORY.length),
+      POSIX_SEPARATOR), isCensusExcludedEntry);
+}
+
 export function collectTestFiles(root) {
-  const testRoot = path.join(root, 'test');
+  const testRoot = path.join(root, TEST_CENSUS_DIRECTORY);
   const found = [];
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
-      if (entry.name === NODE_MODULES_DIRECTORY ||
-          stringStartsWith(entry.name, HIDDEN_ENTRY_PREFIX)) {
+      if (isCensusExcludedEntry(entry.name)) {
         continue;
       }
       const absolute = path.join(dir, entry.name);

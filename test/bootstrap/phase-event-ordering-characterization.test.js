@@ -10,7 +10,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {READINESS_CONVERGENCE_PHASE} from
   '../../src/bootstrap/pipeline/join-startup-plan.js';
@@ -28,8 +27,10 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {NUM} from '../../src/constants/index.js';
-import {installMinimumSeedBootstrapLifecycleFixture} from
+import {createOwnedVirginSeedBootstrapService,
+  installMinimumSeedBootstrapLifecycleFixture, VIRGIN_SEED_COMPOSE_REFERENCE_MS} from
   '../integration/helpers/cluster-test-helpers.js';
 
 // -- Suite-local fixture constants --
@@ -94,12 +95,19 @@ function initializeTestEnvironment() {
 // Seed bootstrap phase event ordering
 // ---------------------------------------------------------------------------
 
+// The seed tests in this file compose eight virgin seeds through the
+// production startup authorities. The file's budget is that count times the
+// measured per-seed reference, declared on the first seed test: the test
+// runner lifts the whole file's cap to the largest declaration it reads.
+const COMPOSED_SEED_COUNT = 8;
+
 test('Seed bootstrap - emits phase:start and phase:complete in correct order',
+  {timeout: COMPOSED_SEED_COUNT * scaleByMachineFactor(VIRGIN_SEED_COMPOSE_REFERENCE_MS)},
   async (t) => {
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      new BootstrapService({
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -170,7 +178,7 @@ test('Seed bootstrap - emits BOOTSTRAP_EVENT.PHASE_START/COMPLETE in correct ord
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      new BootstrapService({
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -234,7 +242,7 @@ test('Seed bootstrap - emits COMPLETE event after all phases', async (t) => {
   initializeTestEnvironment();
 
   const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-    new BootstrapService({
+    await createOwnedVirginSeedBootstrapService(t, {
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -299,7 +307,7 @@ test('Seed bootstrap - phase failure emits phase:failed and phaseFailed events',
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      new BootstrapService({
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -632,7 +640,11 @@ test('Join startup - phase failure emits phaseFailed event with error',
       'phases after failure should not emit any events');
   });
 
-test('Join startup - MOVE_REPLICA strategy emits joining_message_group phase',
+// W8 (identity-reuse safety fix, A3): a MOVE_REPLICA assignment - from a
+// seed that still moves message-group identities - is refused by the
+// joiner: no joining_message_group phase starts and the join fails closed
+// rather than skipping its message group. (This test once pinned the move.)
+test('Join startup - a MOVE_REPLICA assignment is refused, never executed',
   async (t) => {
     initializeTestEnvironment();
 
@@ -650,23 +662,21 @@ test('Join startup - MOVE_REPLICA strategy emits joining_message_group phase',
       phaseStarts.push(payload.phase);
     });
 
-    const result = await service.join();
-    t.equal(result.success, true, 'join should succeed');
-
-    // With MOVE_REPLICA, the message-group phase should be joining_message_group
-    const expectedOrder = [
-      JOINING_PHASE.CONTACTING_SEED,
-      JOINING_PHASE.CONNECTING_WEBSOCKET,
-      JOINING_PHASE.JOINING_MESSAGE_GROUP,
-      JOINING_PHASE.WAITING_LEADERSHIP,
-      JOINING_PHASE.QUERYING_STATE,
-      READINESS_CONVERGENCE_PHASE,
-    ];
-    t.same(
-      phaseStarts,
-      expectedOrder,
-      'MOVE_REPLICA strategy should emit joining_message_group phase',
-    );
+    let joinError = null;
+    let result = null;
+    try {
+      result = await service.join();
+    } catch (error) {
+      joinError = error;
+    }
+    t.notOk(result?.success === true, 'the join must not succeed');
+    t.match(String(joinError?.message ?? result?.error ?? ''),
+      /MOVE_REPLICA is not supported/,
+      'the refusal names the unsupported assignment');
+    t.notOk(phaseStarts.includes(JOINING_PHASE.JOINING_MESSAGE_GROUP),
+      'no moved replica is joined');
+    t.notOk(phaseStarts.includes(JOINING_PHASE.WAITING_LEADERSHIP),
+      'the join stops at the refused assignment');
   });
 
 // ---------------------------------------------------------------------------
@@ -678,7 +688,7 @@ test('Seed bootstrap - phase event payloads include phase and nodeId',
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      new BootstrapService({
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -811,7 +821,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-    new BootstrapService({
+    await createOwnedVirginSeedBootstrapService(t, {
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -914,7 +924,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-    new BootstrapService({
+    await createOwnedVirginSeedBootstrapService(t, {
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -1102,7 +1112,7 @@ async (t) => {
 
   // Collect seed payloads
   const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-    new BootstrapService({
+    await createOwnedVirginSeedBootstrapService(t, {
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,

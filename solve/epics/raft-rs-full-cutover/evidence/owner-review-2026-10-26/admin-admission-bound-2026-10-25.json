@@ -1,0 +1,33 @@
+{
+  "reviewer": "subagent:/root/fresh_seed_review",
+  "candidate": "a97f79c35b7e1f6428032493918e16e623339688",
+  "sourceManifestSha256": "9d4eae23a29bb78dfd775ef93e81fddf8354bbb42c772436f751647d5907f545",
+  "verdicts": {
+    "core": "REVISE: F-ADMIN-1, F-ADMIN-2",
+    "node": "prior APPROVE retained by exact source",
+    "scale": "APPROVE bounded 6a228ced9439af07216b492bb8fdbba5540c3671 delta",
+    "name": "APPROVE bounded a97f79c35b7e1f6428032493918e16e623339688 delta; separate TX1 follow-up pending"
+  },
+  "artifacts": {
+    "REVIEW.md": "92dcf378356170ed69ef4af11f71106e1d2b4c58f36aef90f7abbde509e58de9",
+    "core-authored.tap": "086f1dbe3ed9da78657e7386adcfafec959e9cd95dec67944fb2b52f4f5c3b8a",
+    "core-owner-outcome-red.tap": "e3e231f644acfc80a9bc544d7bcaf9c68015c8c6944eba8a7c31a0378076fc46",
+    "core-partition-readback-red.tap": "35c6d7fa6950a7abb03fc0ab9e223de931840629c8ed50409ac5bd28d98bed5b",
+    "evidence-hashes.json": "da2b41e0cd4751b69551074291a546576f219b5a937beb1efaac7e8837b26ac7",
+    "independent-admin-outcomes.test.js": "6fb4fe947387e2aa011aef8fd0a86621f3bdaeb87b6a7f2cc4d6a640f9945682",
+    "independent-partition-readback.test.js": "119216224205a0d015d5feeef3636dd65934a65203cab1dd7103ebfbe8ed2e45",
+    "name-author-create-sqlstate-red.log": "29dda698854cbe6c33721c812f37f84afc2929ecd526ec35c2412e3aed5de7be",
+    "name-author-handoff.md": "951028d49500e9a629f3174c248dcc2520f4e1c335794b86a2197dca1c2ce8a1",
+    "name-author-red.log": "a242d1c2f5d823c17743e29f945a6f1d22d8c87f1dd6d992fff1d14930fc094e",
+    "name-authored.tap": "d702140444fe2be7d1738df344ea0123aa36eb864144bddf91058a65e448546d",
+    "scale-author-handoff.md": "a6fb36a199026866ee3df3836cb725254b83028faf2e1c92076693955b9c54f2",
+    "scale-author-red.log": "62b34949018ed9a601c95baed3915c438c40c236ed16f874b7c7b94619b11498",
+    "scale-authored.tap": "9ae212fe5073230565f221de0461f73baf7ada46aa9343442c71021c64368385",
+    "snapshot-manifest.json": "9d4eae23a29bb78dfd775ef93e81fddf8354bbb42c772436f751647d5907f545"
+  },
+  "testSourceOriginalPaths": {
+    "independent-admin-outcomes.test.js": "test/admin/independent-admin-outcomes.test.js",
+    "independent-partition-readback.test.js": "test/distributed/harness/__tests__/independent-partition-readback.test.js"
+  },
+  "noFinalReleaseClaim": true
+}

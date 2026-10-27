@@ -28,6 +28,15 @@ const POLICY_LOG_MSG = Object.freeze({
   TABLE_POLICY_SHUTDOWN: 'TablePolicyService shutdown',
 });
 
+// Validation and mutation observation outcomes owned by table policy.
+// An unconfirmed outcome does not prove that no write occurred.
+const POLICY_ERROR_CODE = Object.freeze({
+  TABLE_ID_REQUIRED: 'TABLE_ID_REQUIRED',
+  POLICY_INVALID: 'TABLE_POLICY_INVALID',
+  OBSERVATION_CHANGED: 'TABLE_POLICY_MUTATION_OBSERVATION_CHANGED',
+  OUTCOME_UNCONFIRMED: 'TABLE_POLICY_MUTATION_OUTCOME_UNCONFIRMED',
+});
+
 const POLICY_ERROR_MSG = Object.freeze({
   SERVICE_ID_REQUIRED: 'serviceId is required',
   TABLE_ID_REQUIRED: 'tableId is required',
@@ -133,6 +142,7 @@ export {
   DEFAULT_TABLE_POLICY,
   MESSAGE_GROUP_POLICY_FIELD_TYPES,
   POLICY_DEFAULT,
+  POLICY_ERROR_CODE,
   POLICY_ERROR_MSG,
   POLICY_EVENT,
   POLICY_FIELD_TYPES,

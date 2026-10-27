@@ -122,15 +122,6 @@ class ControlPlaneReadinessParticipationBase {
       options.membershipPublicationDiagnosticsQueryTimeoutMs > 0 ?
         Math.floor(options.membershipPublicationDiagnosticsQueryTimeoutMs) :
         CONTROL_PLANE_READINESS_DEFAULT.MEMBERSHIP_PUBLICATION_DIAGNOSTICS_QUERY_TIMEOUT_MS;
-    this.membershipPublicationPlanningSnapshotRefreshTimeoutMs =
-      numberIsFinite(
-        options.membershipPublicationPlanningSnapshotRefreshTimeoutMs,
-      ) &&
-      options.membershipPublicationPlanningSnapshotRefreshTimeoutMs > 0 ?
-        Math.floor(
-          options.membershipPublicationPlanningSnapshotRefreshTimeoutMs,
-        ) :
-        MEMBERSHIP_PUBLICATION_PLANNING.REFRESH_TIMEOUT_MS;
     this.membershipPublicationPlanningActiveStaleGraceMs =
       numberIsFinite(
         options.membershipPublicationPlanningActiveStaleGraceMs,

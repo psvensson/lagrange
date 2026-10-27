@@ -3,7 +3,7 @@ scope: governance
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-24
 ---
 
 > **Canonical source.** Quest artifact ownership and tracked data. Reached
@@ -33,8 +33,10 @@ Large or binary evidence belongs in the existing evidence store. Use
 `node scripts/solve.js evidence add <path> --id <id>`; the command records the
 reference only after upload, re-download and hash verification. Follow the
 [`runbook`](solver-runbook.md#partial-clones-solve-v2-phase-1) for storage limits
-and explicit replacement authority. Do not rewrite earlier evidence or imply
-that an old run measured a new candidate.
+and explicit replacement authority; the size thresholds and the relocation of
+already committed evidence are in
+[Bulk Evidence Goes To The Store](#bulk-evidence-goes-to-the-store). Do not
+rewrite earlier evidence or imply that an old run measured a new candidate.
 
 ## One Current Summary
 
@@ -51,6 +53,51 @@ need a new epic solely for this summary.
 `probe` and `board` project the records on demand. Optional reports and caches
 are convenience views and cannot override their source records. Retired v1
 state/report paths and executor files do not define the current workflow.
+
+## Bulk Evidence Goes To The Store
+
+The tree keeps the evidence a reader needs to follow a quest: its receipts,
+oracles and other proof its sealed `doneWhen` requires, and its short
+reviewed documents (contracts, plans, designs, dossiers, reviews, handovers,
+manifests). Raw measurement output does not stay in git. Lab and controller
+logs, TAP streams, large JSON dumps, copied source trees and any archive
+belong in the `solve-evidence` store, referenced from the quest log by the
+evidence finding the store owner appends (sha256, size, asset name, URL).
+
+Route evidence through the store when any of these holds:
+
+- the file is an archive (`.tar.gz`, `.tgz`, `.tar`, `.gz`, `.zip`, `.7z`,
+  `.xz`, `.bz2`), whatever its size; the pre-commit binary guard refuses it;
+- a single evidence file is over 256 KiB;
+- a quest's `evidence/` directory would grow past 1 MiB.
+
+A single file is uploaded with
+`node scripts/solve.js evidence add <path> --id <quest>`. Evidence that is
+already committed, or a directory of raw output, is relocated as one bundle
+with `node scripts/solve.js evidence relocate --id <quest> --paths-file <list>
+--source-commit <sha>`: the listed paths are bundled with a `MANIFEST.json`
+(path, bytes, sha256, adding commit), uploaded through the same add path,
+downloaded again and verified member by member against the manifest and the
+blob at the source commit, recorded in an inventory and a verification
+record, and only then removed with `git rm`. It refuses quest records, quest
+logs, required proof artifacts and paths outside `solve/`, and removes
+nothing when any member fails. The inventory is where an old path is looked
+up: its shard names the bundle, the bundle's sha256 and its release URL.
+Historical documents that cite a relocated path stay as they are.
+
+Relocation records live in `solve/changes/evidence-relocation/<quest>/`,
+named by the record quest (`--record-to`, default the `--id` quest):
+`relocation-inventory.json` (the index), `relocation-inventory/<bundle>.json`
+(one shard per bundle) and `relocation-verification.json`. They never go in
+a quest's `evidence/`. A closed quest keeps only `quest.json`, `log.ndjson`
+and the artifacts its sealed `doneWhen` requires, so records written there
+would go off-shape as soon as the record quest closes; and the records are
+cross-cutting, mapping paths of many quests, so they belong with the other
+cross-cutting records under `solve/changes/`. That directory still counts
+toward the active-state budget, and the 1 MiB and binary rules still apply
+there. The location is one constant of the evidence owner
+(`RELOCATION.RECORDS_DIR` in `scripts/solve/evidence-store.js`), which the
+relocation acceptance checker also reads.
 
 ## Artifact Boundaries
 

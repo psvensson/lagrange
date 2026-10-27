@@ -1,3 +1,4 @@
+import {SERVICE_INSTANCE_LIMIT} from '../../constants/service-instance.js';
 import {createHash} from 'node:crypto';
 
 import {TABLES} from '../../constants/index.js';
@@ -591,6 +592,25 @@ function projectRevision(row) {
   });
 }
 
+function projectCreationRevision(row) {
+  const encoded = row.normalized_config;
+  if (typeof encoded !== 'string' ||
+      Buffer.byteLength(encoded) > SERVICE_INSTANCE_LIMIT.REQUEST_BYTES) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+      SERVICE_INSTALL_CATALOG_PATH.REVISION, SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
+  }
+  let config;
+  try {
+    config = JSON.parse(encoded);
+    if (!isPlainObject(config) || canonicalJson(config) !== encoded ||
+        sha256Json(encoded) !== row.config_digest) throw new Error();
+  } catch {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+      SERVICE_INSTALL_CATALOG_PATH.REVISION, SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
+  }
+  return deepFreeze({...projectRevision(row), config});
+}
+
 function assertInstallationRecord(row) {
   if (!row || !Object.values(SERVICE_INSTALL_DESIRED_STATE)
     .includes(row.desired_state) ||
@@ -662,6 +682,7 @@ export {
   projectBindableArtifact,
   projectPackage,
   projectRevision,
+  projectCreationRevision,
   requireEnum,
   requireDigest,
   requireEligiblePackageIds,

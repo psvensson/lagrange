@@ -90,8 +90,12 @@ product gaps, not documentation details.
 ## Data loading
 
 There is no supported PostgreSQL-to-Lagrange migration or change data capture
-(CDC) ingestion product surface today. Internal system-table CDC feeds
-Lagrange's own metadata caches; it is not an external database connector.
+(CDC) ingestion product surface today. External CDC consumption on user tables
+(`subscribeTable`, `subscribeTables`, and user-table streaming) is disabled and
+unsupported in the initial stable core (`CDC_EVENT_STREAM_DISABLED`, Decision D2).
+Internal replicated projection and message-group CDC obligations operate through
+the internal durable occurrence ledger and metadata caches; they are not an
+external database connector or subscription stream for client applications.
 Plan data movement explicitly.
 
 A controlled pilot normally needs:

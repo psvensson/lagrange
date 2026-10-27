@@ -11,6 +11,7 @@ import {
 import {
   readNodeRuntimeSuppliedTimeSource,
 } from '../node/node-runtime-local-authorities.js';
+import {getMessageGroupDbPath} from '../storage/data-directory-manager.js';
 
 function createBootstrapServiceSeedDelegateMethods() {
   return {
@@ -71,6 +72,12 @@ function composeSeedDelegates(bundles, options = {}) {
 function buildPhaseExecutionDelegates(service) {
   const self = service;
   return {
+    assertOriginalSeedAttempt: () => self.assertOriginalSeedAttempt(),
+    admitOriginalSeedReplica: (options) => self.admitOriginalSeedReplica(options),
+    assertOriginalSeedContinuation: (replicaId) => self.assertOriginalSeedContinuation(replicaId),
+    getOriginalSeedPreparation: () => self.originalAllocationPreparation,
+    getOriginalSeedFoundationTimestamp: () =>
+      self.originalAllocationPreparation.foundationTimestamp(),
     getNodeId: () => self.nodeId,
     getNodeAddress: () => self.nodeAddress,
     getAdvertisedNodeWsAddress: () =>
@@ -294,6 +301,10 @@ function buildPhaseExecutionDelegates(service) {
     waitForPartitionLeadership: (options) =>
       self.seedPartitionsPhase
         .waitForPartitionLeadership(options),
+    getRegistrationRequiredLeaderPartitionIds: () =>
+      self.seedRegistrationPhase
+        .getRequiredLeaderPartitionIds(),
+    isShuttingDown: () => self.isShuttingDown === true,
     stopUnifiedLifecycleOwners: () => {
       detachServiceInstallationReconcilerOwner(self);
       return self.seedInfrastructurePhase.stopUnifiedLifecycleOwners();
@@ -307,9 +318,9 @@ function buildPhaseExecutionDelegates(service) {
       self.nodeReadyRebalanceOwner.handleNodeReadyRebalanceTrigger(
         cdcEvent, prevRow,
       ),
-    propagatePartitionCDCEvent: (mgs, cdcEvent) =>
+    propagatePartitionCDCEvent: (mgs, cdcEvent, deliveryContext) =>
       self.seedRuntimeBridgeOwner
-        .propagatePartitionCDCEvent(mgs, cdcEvent),
+        .propagatePartitionCDCEvent(mgs, cdcEvent, deliveryContext),
     resolveCdcPropagationMessageGroup: (preferred) =>
       self.seedCacheHydrationPhase
         .resolveCdcPropagationMessageGroup(preferred),
@@ -335,6 +346,14 @@ function buildPhaseExecutionDelegates(service) {
       }
       return BOOTSTRAP_DEFAULT.partitionDbPath;
     },
+    // No in-memory default: a message-group replica's consensus record is
+    // durable, so an absent data directory is its MISSING_DB_PATH refusal.
+    // The layout is the one a joining node's replica is placed by.
+    resolveMessageGroupDbPath: (groupId, replicaId) =>
+      self.dataDirectoryManager?.isInitialized() ?
+        getMessageGroupDbPath(
+          self.dataDirectoryManager.getDataDir(), groupId, replicaId) :
+        null,
   };
 }
 
@@ -377,6 +396,10 @@ function buildCleanupDelegates(service) {
     // on the seed and the engine's executor was never marked shutting-down.
     getSqlQueryEngine: () => self.sqlQueryEngine,
     getCdcIntegrationService: () => self.cdcIntegrationService,
+    releaseSqlQueryEngine: (engine) => {
+      self.seedRuntimeBridgeOwner.releaseSqlQueryEngine(engine);
+      if (self.sqlQueryEngine === engine) self.sqlQueryEngine = null;
+    },
     // Cleanup must be able to stop every runtime driver (request/call
     // cell workers) before the runtime service handler clears its
     // replica bookkeeping; the per-replica stop path never runs at
@@ -393,7 +416,11 @@ function buildCleanupDelegates(service) {
     },
     setIsShuttingDown: (v) => {
       self.isShuttingDown = v;
+      if (v === true) self.revokeOriginalSeedAttempt();
     },
+    closeOriginalSeedAttempt: () => self.closeOriginalSeedAttempt(),
+    settleInfrastructureAcquisitions: () =>
+      self.seedInfrastructurePhase.settleAcquisitions(),
     setMessageRouter: (v) => {
       self.messageRouter = v;
     },

@@ -7,26 +7,19 @@
  *
  * *For any* sequence of operations on PartitionService,
  * operations using extracted modules SHALL produce equivalent results.
- * Transaction state SHALL be consistent between handler and service.
  * CDC events SHALL be generated identically.
  *
  * This property test verifies:
- * 1. Transaction operations (begin/commit/rollback) produce consistent state
- * 2. CDC event generation produces identical events
- * 3. Raft storage operations maintain consistency
+ * 1. CDC event generation produces identical events
+ * 2. Raft storage operations maintain consistency
  */
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import Database from 'better-sqlite3';
 import {EventEmitter} from 'events';
-import {PartitionTransactionHandler} from '../../src/partition/partition-transaction-handler.js';
 import {PartitionCDCGenerator} from '../../src/partition/partition-cdc-generator.js';
 import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
-import {
-  TRANSACTION_STATE,
-  TRANSACTION_ISOLATION_LEVEL,
-} from '../../src/transaction/transaction-constants.js';
 import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
@@ -68,17 +61,6 @@ const tableNameArb = fc.string({minLength: 1, maxLength: 15})
   .map((s) => `tbl_${s}`);
 
 /**
- * Generator for transaction operation data.
- */
-const operationDataArb = fc.record({
-  type: fc.constantFrom('INSERT', 'UPDATE', 'DELETE'),
-  data: fc.record({
-    id: fc.string({minLength: 1, maxLength: 10}).filter((s) => /^[a-z0-9]+$/i.test(s)),
-    value: fc.integer({min: 0, max: 1000}),
-  }),
-});
-
-/**
  * Generator for CDC entry data.
  */
 const cdcEntryArb = fc.record({
@@ -109,182 +91,6 @@ const raftEntryDataArb = fc.record({
 });
 
 test('Property 9: Extracted Module API Equivalence', async (t) => {
-  /**
-   * Property: Transaction handler begin() SHALL return consistent state
-   * indicating an active transaction with correct partition ID.
-   *
-   * Validates: Requirement 6.6 - Extracted modules maintain API compatibility.
-   */
-  t.test('transaction begin produces consistent state', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        partitionIdArb,
-        async (partitionId) => {
-          const db = new Database(':memory:');
-          let handler;
-
-          try {
-            handler = new PartitionTransactionHandler({
-              partitionId,
-              db,
-              logger: createMockLogger(),
-            });
-
-            // Begin transaction
-            const result = handler.begin();
-
-            // Verify result structure matches expected API
-            if (result.success !== true) return false;
-            if (result.operation !== PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION) {
-              return false;
-            }
-            if (result.partitionId !== partitionId) return false;
-            if (result.inTransaction !== true) return false;
-
-            // Verify internal state is consistent
-            if (handler.isActive() !== true) return false;
-            if (handler.getState() !== TRANSACTION_STATE.ACTIVE) return false;
-            if (handler.getIsolationLevel() !== TRANSACTION_ISOLATION_LEVEL.READ_COMMITTED) {
-              return false;
-            }
-
-            return true;
-          } finally {
-            if (handler && handler.isActive()) {
-              handler.forceRollback();
-            }
-            db.close();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('transaction begin produces consistent state');
-  });
-
-  /**
-   * Property: Transaction handler commit() SHALL return consistent state
-   * with operation count and duration, and clear transaction state.
-   *
-   * Validates: Requirement 6.6 - Extracted modules maintain API compatibility.
-   */
-  t.test('transaction commit produces consistent state', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        partitionIdArb,
-        fc.array(operationDataArb, {minLength: 0, maxLength: 5}),
-        async (partitionId, operations) => {
-          const db = new Database(':memory:');
-          let handler;
-
-          try {
-            handler = new PartitionTransactionHandler({
-              partitionId,
-              db,
-              logger: createMockLogger(),
-            });
-
-            // Begin and record operations
-            handler.begin();
-            for (const op of operations) {
-              handler.recordOperation(op);
-            }
-
-            // Commit transaction
-            const result = handler.commit();
-
-            // Verify result structure matches expected API
-            if (result.success !== true) return false;
-            if (result.operation !== PARTITION_SERVICE_OPERATION.COMMIT) return false;
-            if (result.partitionId !== partitionId) return false;
-            if (result.committed !== true) return false;
-            if (result.operationCount !== operations.length) return false;
-            if (typeof result.durationMs !== 'number') return false;
-            if (result.durationMs < 0) return false;
-
-            // Verify operations are returned
-            if (result.operations.length !== operations.length) return false;
-
-            // Verify internal state is cleared
-            if (handler.isActive() !== false) return false;
-            if (handler.getState() !== null) return false;
-            if (handler.getOperationCount() !== 0) return false;
-
-            return true;
-          } finally {
-            if (handler && handler.isActive()) {
-              handler.forceRollback();
-            }
-            db.close();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('transaction commit produces consistent state');
-  });
-
-  /**
-   * Property: Transaction handler rollback() SHALL revert state
-   * and return consistent result with operation count.
-   *
-   * Validates: Requirement 6.6 - Extracted modules maintain API compatibility.
-   */
-  t.test('transaction rollback produces consistent state', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        partitionIdArb,
-        fc.array(operationDataArb, {minLength: 0, maxLength: 5}),
-        async (partitionId, operations) => {
-          const db = new Database(':memory:');
-          let handler;
-
-          try {
-            handler = new PartitionTransactionHandler({
-              partitionId,
-              db,
-              logger: createMockLogger(),
-            });
-
-            // Begin and record operations
-            handler.begin();
-            for (const op of operations) {
-              handler.recordOperation(op);
-            }
-
-            // Rollback transaction
-            const result = handler.rollback();
-
-            // Verify result structure matches expected API
-            if (result.success !== true) return false;
-            if (result.operation !== PARTITION_SERVICE_OPERATION.ROLLBACK) return false;
-            if (result.partitionId !== partitionId) return false;
-            if (result.rolledBack !== true) return false;
-            if (result.operationCount !== operations.length) return false;
-            if (typeof result.durationMs !== 'number') return false;
-
-            // Verify internal state is cleared
-            if (handler.isActive() !== false) return false;
-            if (handler.getState() !== null) return false;
-            if (handler.getOperationCount() !== 0) return false;
-
-            return true;
-          } finally {
-            if (handler && handler.isActive()) {
-              handler.forceRollback();
-            }
-            db.close();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('transaction rollback produces consistent state');
-  });
-
   /**
    * Property: CDC generator SHALL produce events with correct operation type,
    * table name, and source information for any valid entry.
@@ -489,80 +295,6 @@ test('Property 9: Extracted Module API Equivalence', async (t) => {
     );
 
     t.pass('Raft storage truncation maintains consistency');
-  });
-
-  /**
-   * Property: Transaction handler operations sequence (begin -> operations ->
-   * commit/rollback) SHALL maintain consistent state throughout.
-   *
-   * Validates: Requirement 6.6 - Extracted modules maintain API compatibility.
-   */
-  t.test('transaction lifecycle maintains consistent state', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        partitionIdArb,
-        fc.array(operationDataArb, {minLength: 1, maxLength: 5}),
-        fc.boolean(),
-        async (partitionId, operations, shouldCommit) => {
-          const db = new Database(':memory:');
-          let handler;
-
-          try {
-            handler = new PartitionTransactionHandler({
-              partitionId,
-              db,
-              logger: createMockLogger(),
-            });
-
-            // Initial state - no transaction
-            if (handler.isActive()) return false;
-            if (handler.getOperationCount() !== 0) return false;
-
-            // Begin transaction
-            handler.begin();
-            if (!handler.isActive()) return false;
-            if (handler.getState() !== TRANSACTION_STATE.ACTIVE) return false;
-
-            // Record operations and verify count
-            for (let i = 0; i < operations.length; i++) {
-              handler.recordOperation(operations[i]);
-              if (handler.getOperationCount() !== i + 1) return false;
-            }
-
-            // Verify operations are retrievable
-            const recorded = handler.getOperations();
-            if (recorded.length !== operations.length) return false;
-
-            // Verify duration is tracked
-            const duration = handler.getDuration();
-            if (duration < 0) return false;
-
-            // Complete transaction
-            if (shouldCommit) {
-              const result = handler.commit();
-              if (!result.committed) return false;
-            } else {
-              const result = handler.rollback();
-              if (!result.rolledBack) return false;
-            }
-
-            // Verify state is cleared
-            if (handler.isActive()) return false;
-            if (handler.getOperationCount() !== 0) return false;
-
-            return true;
-          } finally {
-            if (handler && handler.isActive()) {
-              handler.forceRollback();
-            }
-            db.close();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('transaction lifecycle maintains consistent state');
   });
 
   /**

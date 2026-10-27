@@ -12,6 +12,8 @@ import {
   takeDeferredRetirements,
 } from './partition-service-raft-membership-administration.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {GROUP_RETIREMENT_REASON} from './group-retirement-evidence.js';
+import {isPeerRowStatusAdmissible} from '../rebalancer/replica-status.js';
 
 // The admission outcomes that leave a peer outside the configuration.
 const UNADMITTED_PEER_OUTCOMES = Object.freeze(new Set([
@@ -93,16 +95,38 @@ function resolvePeerAddressFromService(addressManager, serviceRow, replicaId) {
   return null;
 }
 
+// A row whose replica has not durably recorded that its port opened (a
+// CREATE_REPLICA target writes PENDING and CREATING before its open and
+// SYNCING, its prior-existence fact, after it): that replica steps nothing
+// until the fact is durable (verifier N3), so admitting it as a voter now
+// would count a voter that cannot answer - and, for the group that stores
+// the fact itself (the services partition), make the fact's own write wait
+// on that voter. It is admitted on the row change that records the fact.
+// Retiring rows never are. The rule is the one isPeerRowStatusAdmissible.
 function shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) {
   if (!replicaId || replicaId === partitionService.replicaId) {
     return true;
   }
-  const status = serviceRow.status || ReplicaStatus.ACTIVE;
-  return (
-    status === ReplicaStatus.FAILED ||
-    status === ReplicaStatus.REMOVING ||
-    status === ReplicaStatus.REMOVED
-  );
+  return !isPeerRowStatusAdmissible(serviceRow.status);
+}
+
+/**
+ * Whether the init loop may admit a bootstrap peer (F2): the same filter as
+ * the row-driven reconciliation, over the peer's services row when this
+ * node's cache holds one. A bootstrap peer with no row yet is admitted as
+ * before (the bootstrap membership names it); a PENDING/CREATING or retiring
+ * row is not, here or anywhere: it is admitted on the row change that records
+ * its fact.
+ * @param {Object} partitionService - The opening partition replica.
+ * @param {string} peerId - The bootstrap peer.
+ * @return {boolean}
+ */
+function isBootstrapPeerAdmissible(partitionService, peerId) {
+  const serviceRow = typeof partitionService.systemTableCache?.get ===
+    PARTITION_SERVICE_TYPE.FUNCTION ?
+    partitionService.systemTableCache.get(TABLES.SERVICES, peerId) : null;
+  return !serviceRow ||
+    !shouldSkipPeerServiceRow(partitionService, serviceRow, peerId);
 }
 
 function addressMatchesReplica(addressManager, address, replicaId) {
@@ -159,7 +183,14 @@ const EXPLICIT_PEER_RETIREMENT_STATUSES = Object.freeze(new Set([
   ReplicaStatus.REMOVED,
 ]));
 
+// A replica of a group retired as a unit (a verified group-retirement
+// REMOVE marks its REMOVING row so; owner decision 2026-10-04, amending F2)
+// leaves with its whole group: nobody proposes a conf change for it, so no
+// member is removed down to a last voter.
 function isExplicitPeerRetirement(operation, serviceRow) {
+  if (serviceRow?.trigger_reason === GROUP_RETIREMENT_REASON) {
+    return false;
+  }
   return (
     operation === PARTITION_SERVICE_LITERAL.DELETE ||
     EXPLICIT_PEER_RETIREMENT_STATUSES.has(serviceRow?.status)
@@ -423,6 +454,7 @@ function redriveAdmissionsOnMembershipChange(partitionService) {
 }
 
 export {
+  isBootstrapPeerAdmissible,
   reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
   retireRaftPeerFromAuthoritativeServiceChange,

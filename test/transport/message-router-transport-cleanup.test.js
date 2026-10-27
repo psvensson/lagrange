@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Verification tests for transport delivery path cleanup (Requirement 3).
  *
@@ -183,7 +184,8 @@ describe('MessageRouter transport cleanup verification', () => {
         const originalEnqueueOutbound = router.enqueueOutbound.bind(router);
         router.enqueueOutbound = async (nodeId, deliverFn, options) => {
           passedOptions = options;
-          return {acknowledged: true, data: 'ok'};
+          // A refused send settles at once; only the forwarded options matter.
+          return {acknowledged: false, error: 'stubbed send'};
         };
 
         const remoteNodeId = 'remote-node-1';
@@ -247,24 +249,22 @@ describe('MessageRouter transport cleanup verification', () => {
               await testRouter.initialize({startServer: true});
 
               const address = `${nodeId}/${entityType}/${entityId}`;
-              const handlerResponse = {acknowledged: true, echo: 'ok'};
+              const handlerResponse = {echo: 'ok'};
               testRouter.register(address, () => handlerResponse);
 
               // Capture what deliverLocal returns directly
               const directOutcome = await testRouter.deliverLocal(
                 address, 'direct-msg-id', payload, 'direct-corr',
               );
-              const directResult = directOutcome.result;
-
               // Capture what deliver() returns
               const deliverResult = await testRouter.deliver(
                 address, {...payload, messageId: 'deliver-msg-id'},
               );
 
-              // Both paths must produce acknowledged: true and preserve payload fields.
-              return directResult.acknowledged === true &&
-                     deliverResult.acknowledged === true &&
-                     directResult.echo === deliverResult.echo;
+              // Both paths acknowledge and carry the same handler answer.
+              return directOutcome.result.acknowledged === true &&
+                     isDeliveredTransportDeliveryOutcome(deliveryTransportOf(deliverResult)) &&
+                     directOutcome.answer.echo === deliverResult.answer.echo;
             } finally {
               await testRouter.shutdown();
             }
@@ -309,7 +309,8 @@ describe('MessageRouter transport cleanup verification', () => {
                 const deliverResult = await testRouter.deliver(
                   address, payload, {targetNodeId: remoteId},
                 );
-                deliverFailed = deliverResult?.acknowledged === false;
+                deliverFailed =
+                  !isDeliveredTransportDeliveryOutcome(deliveryTransportOf(deliverResult));
               } catch (_error) {
                 deliverFailed = true;
               }
@@ -320,7 +321,7 @@ describe('MessageRouter transport cleanup verification', () => {
                 const directOutcome = await testRouter.deliverRemote(
                   address, 'direct-id', payload, remoteId, 'direct-corr',
                 );
-                directFailed = directOutcome?.result?.acknowledged === false;
+                directFailed = !isDeliveredTransportDeliveryOutcome(directOutcome.result);
               } catch (_error) {
                 directFailed = true;
               }

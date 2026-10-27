@@ -28,6 +28,8 @@ import {
   createAdmittedSplitAdmissionService,
   createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
 
 
 const TABLE_PARTITION_METADATA_WAIT_TIMEOUT_DRIFT_MS = 1;
@@ -923,6 +925,7 @@ test('SQLQueryEngine - executeManagedSplit dispatches both child metadata writes
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache: cache,
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator: {
       storageAdmissionService: createAdmittedSplitAdmissionService(),
@@ -932,6 +935,12 @@ test('SQLQueryEngine - executeManagedSplit dispatches both child metadata writes
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow(tableName, row, options = {}) {
+        // Only partition rows are child metadata writes: the split's
+        // transaction row is now inserted once at BEGIN (TX1 seam B/S),
+        // where it was upserted before.
+        if (tableName !== TABLES.PARTITIONS) {
+          return {success: true};
+        }
         childInsertCalls.push({
           tableName,
           partitionId: row.partition_id,
@@ -1045,6 +1054,7 @@ test('SQLQueryEngine - executeManagedSplit provisions child partitions with ' +
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache: cache,
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     controlPlaneReadinessService: createProvisioningReadyService(() =>
       cache.getAll(TABLES.SERVICES).map((row) => ({
         node_id: row.node_id,
@@ -1161,6 +1171,7 @@ async (t) => {
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache: cache,
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     controlPlaneReadinessService: createProvisioningReadyService(cache),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator: {

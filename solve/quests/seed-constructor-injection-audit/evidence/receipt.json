@@ -1,0 +1,21 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "exact-constructor-injection-and-adversarial-reads",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/decision-boundary-seed-injection.test.js test/scripts/check-guideline-decision-boundaries.test.js",
+      "assertions": 309,
+      "sourceSha256": {
+        "scripts/check-guideline-decision-boundaries.js": "8ff3289cabcaa1b6c42f1a36c41dad90417a16f6434fe2d6484ce0aeddc2a32b",
+        "scripts/checks/decision-boundary-construction.js": "83ff890cba63ff24d1e6dbb2e6ea90666381040467fe9e279feb3d5281bf694e",
+        "scripts/checks/decision-boundary-seed-injection.js": "9210d3e2bee26f66c8c53de553fc3a94d440940094eb10eb9767665ff3b49512",
+        "test/scripts/decision-boundary-seed-injection.test.js": "b1755534126aa0d20bf46ee1ed2f9c1cede0b2394d8579ef89d08a4cec078acb"
+      },
+      "logSha256": "ba0735ca31a401de41d4d080346fcaa86b3fff676ee5804cd295ada4ebe39679",
+      "evidence": "test-output/seed-constructor-audit/fa12-final-tests.log",
+      "ceiling": "Implementation evidence answering F-A1/F-A2; independent delta review pending; no activation or consumption approval."
+    }
+  ]
+}

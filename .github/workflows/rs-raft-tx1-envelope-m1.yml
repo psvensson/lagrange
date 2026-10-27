@@ -1,0 +1,137 @@
+name: rs-raft-tx1-envelope-m1
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths: [.github/workflows/rs-raft-tx1-envelope-m1.yml]
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-tx1-envelope-m1-20261013
+  cancel-in-progress: false
+jobs:
+  exact-envelope-m1-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      EVIDENCE: test-output/tx1-envelope-m1-hosted
+      PROOF_BASE: 4c8f02e8e6d9da3520fa909885b9391ba6a442a0
+      LOCAL_CANDIDATE: f50a66a5e9a0f4937722aa1f39a6ee8c1986f092
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Recover verified Git candidate without changing existing production inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD:src)" = 34af50ee2245c8bd99b0f87e484beb6871d11c3c
+          test "$(git rev-parse HEAD:test)" = 759638a94e5ed9a0dcac89eba03ae9c68403361d
+          python3 - <<'PY'
+          import base64,hashlib,json,os,time,urllib.request
+          from pathlib import Path
+          out=Path(os.environ['EVIDENCE'])
+          specs=[('8393e5dca010fedb4c6dc371bc8fdf1cb88eee30',4096),('263baa47f274bcba61e84247c4c89735106fc626',4096),('787550e12fa206c0d16384293cff47ab23ec1fb2',4096),('2e4ce71ceaf967de813e2fa27a04f72a2163269e',3600)]
+          pieces=[]
+          for expected,size in specs:
+              request=urllib.request.Request('https://api.github.com/repos/psvensson/lagrange/git/blobs/'+expected,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'lagrange-exact-envelope-m1-proof'})
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(request,timeout=30) as response: result=json.load(response)
+                      break
+                  except Exception:
+                      if attempt==2: raise
+                      time.sleep(attempt+1)
+              data=base64.b64decode(result['content'])
+              assert len(data)==size and hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()==expected
+              pieces.append(data)
+          bundle=b''.join(pieces)
+          assert hashlib.sha256(bundle).hexdigest()=='e9a97836f09e9d77c2183d6f4236e759f58035f5b772f17b137d239ef278420b'
+          (out/'candidate.bundle').write_bytes(bundle)
+          (out/'bundle-custody.json').write_text(json.dumps({'chunks':specs,'sha256':hashlib.sha256(bundle).hexdigest(),'localCandidate':os.environ['LOCAL_CANDIDATE']},indent=2)+'\n')
+          PY
+          git bundle verify "$EVIDENCE/candidate.bundle" > "$EVIDENCE/bundle-verify.log" 2>&1
+          git fetch "$EVIDENCE/candidate.bundle" HEAD
+          test "$(git rev-parse FETCH_HEAD)" = "$LOCAL_CANDIDATE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git merge --no-ff --no-edit "$LOCAL_CANDIDATE" -m 'WIP TX1: preserve exact envelope and M1 candidate on existing review branch'
+          test "$(git rev-parse HEAD:src)" = 9ec2119cb275f5b54bad15a3fadeb4196a3d061e
+          test "$(git rev-parse HEAD:test)" = dff9d0d1e574e1f006e44b4260e11378fd851bdd
+          git rev-parse HEAD > "$EVIDENCE/hosted-candidate.txt"
+          npm ci > "$EVIDENCE/install.log" 2>&1
+          node --version > "$EVIDENCE/node-version.txt"
+          test -z "$(git status --porcelain)"
+      - name: Measure identical envelope controls and all selected TX1 and M1 cases
+        id: measure
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/quest-evidence/measure-tx1-envelope-m1-20261013.py > "$EVIDENCE/driver.log" 2>&1
+          STATUS=$?
+          printf '%s\n' "$STATUS" > "$EVIDENCE/driver.exit"
+          tail -100 "$EVIDENCE/driver.log"
+          exit "$STATUS"
+      - name: Preserve source and every measured outcome without approving or merging main
+        if: steps.measure.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse HEAD:src)" = 9ec2119cb275f5b54bad15a3fadeb4196a3d061e
+          DEST="solve/quests/replicated-transaction-decision-and-apply/evidence/envelope-m1-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp "$EVIDENCE/summary.json" "$DEST/summary.json"
+          tar -czf "$DEST/raw-evidence.tar.gz" -C "$EVIDENCE" .
+          (cd "$DEST" && sha256sum summary.json raw-evidence.tar.gz > SHA256SUMS)
+          git add -- "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP TX1: retain envelope source controls and real M1 persistence with remaining reds'
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$EVIDENCE/published-sha.txt"
+      - name: Retain partial attempts and exact final working state
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE"
+          git status --porcelain > "$EVIDENCE/final-working-status.txt"
+          git rev-parse HEAD > "$EVIDENCE/final-head.txt"
+          git diff -- src | gzip -n > "$EVIDENCE/uncommitted-source.patch.gz"
+          (cd "$EVIDENCE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-tx1-envelope-m1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/tx1-envelope-m1-hosted/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep remaining behavioral, timing and global static failures visible
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ['EVIDENCE'])/'summary.json'
+          assert p.is_file(), 'measurement incomplete'
+          s=json.loads(p.read_text())
+          assert s['allRunGatesPassed'], 'focused proof is not complete acceptance: remaining gates are RED'
+          PY

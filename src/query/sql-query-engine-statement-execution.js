@@ -1,3 +1,4 @@
+import {resolveClientStatementRefusal} from './sql-statement-ingress.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   SQLQueryEngineServiceLifecycleExecution,
@@ -6,12 +7,19 @@ import {RUNTIME_ACCESS_POLICY_DECISION} from
   '../control-plane/owners/runtime-access-policy-owner.js';
 import {
   enforceApplicationDatabaseExplainPolicy,
-  enforceApplicationDatabaseStatementPolicy,
 } from './application-database-statement-policy.js';
+import {
+  STATEMENT_ADMISSION,
+  admitParsedStatement,
+  withSessionTransactionState,
+} from './sql-query-engine-statement-admission.js';
+import {
+  readAffectedRowCount,
+  withExecutedStatementType,
+} from './application-database-result.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_WRITE_ACTIVITY = 'write_activity';
 const LOCAL_NUM_ONE_HUNDRED = 100;
 const LOCAL_STR_QUERY_ADMISSION_DEFERRED = 'query_admission_deferred';
@@ -22,15 +30,7 @@ const LOCAL_STR_QUERY_PLANE_READ = 'query-plane:read';
 const LOCAL_STR_UNKNOWN = 'unknown';
 
 const {
-  ADAPTER_ERROR_MSG,
-  BudgetEnforcer,
-  CancellationToken,
-  DEFAULT_CODE_VERSION,
-  DEFAULT_SNAPSHOT_MODE,
-  EXECUTION_MODE,
   EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
-  ExecutionContext,
-  LineageTracker,
   METRICS_LOG_TAG,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
@@ -44,209 +44,56 @@ const {
   SQLParser,
   WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS,
   buildPressureAdmissionFailure,
-  executePlan,
-  executeStage,
-  parseCallbackModuleArtifact,
   reorderParams,
 } = SQL_QUERY_ENGINE_SHARED;
 
+// Typed parser refusals (statement count, unsupported statement form,
+// malformed transaction control) keep their own code; every other parse
+// failure is a syntax error.
+const TYPED_PARSE_FAILURE_CODES = new Set([
+  QUERY_ERROR_CODE.EMPTY_STATEMENT,
+  QUERY_ERROR_CODE.MULTIPLE_STATEMENTS_UNSUPPORTED,
+  QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+  QUERY_ERROR_CODE.TRANSACTION_CONTROL_SYNTAX_ERROR,
+]);
+
+function resolveParseFailureCode(parseError) {
+  return TYPED_PARSE_FAILURE_CODES.has(parseError?.code) ?
+    parseError.code :
+    QUERY_ERROR_CODE.SYNTAX_ERROR;
+}
+
+const COUNTED_WRITE_TYPES = new Set([
+  QUERY_AST_TYPE.INSERT,
+  QUERY_AST_TYPE.UPDATE,
+  QUERY_AST_TYPE.DELETE,
+]);
+
+const PRESSURE_WRITE_AST_TYPES = new Set([
+  QUERY_AST_TYPE.INSERT,
+  QUERY_AST_TYPE.UPDATE,
+  QUERY_AST_TYPE.DELETE,
+  QUERY_AST_TYPE.CREATE_TABLE,
+  QUERY_AST_TYPE.ALTER_TABLE,
+]);
+
+/**
+ * The row count the query-lifecycle metric records: a write's
+ * engine-reported affected-row count (null when it has none; never logged as
+ * zero rows), else the number of rows returned.
+ * @param {Object} result - SqlCore result.
+ * @param {string} statementType - The executed statement kind.
+ * @return {?number}
+ */
+function resolveLoggedRowCount(result, statementType) {
+  if (COUNTED_WRITE_TYPES.has(statementType)) {
+    return readAffectedRowCount(result);
+  }
+  return Array.isArray(result?.rows) ? result.rows.length : null;
+}
+
 class SQLQueryEngineStatementExecution extends
   SQLQueryEngineServiceLifecycleExecution {
-  async ensureWasmCallbackModuleLoaded(sqlRequest, wasmExecutor) {
-    const callbackModuleRef = sqlRequest.callbackModuleRef;
-    const moduleMirror = wasmExecutor.moduleMirror || null;
-    if (!moduleMirror || typeof moduleMirror.getModule !== LOCAL_STR_FUNCTION) {
-      throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_MODULE_MIRROR_REQUIRED);
-    }
-
-    const existing = moduleMirror.getModule(callbackModuleRef);
-    if (existing) {
-      return;
-    }
-
-    const sessionId = sqlRequest.sessionId || QUERY_SESSION.DEFAULT;
-    const codeRow = await this.lookupCallbackCodeRow(
-      callbackModuleRef,
-      sessionId,
-    );
-    if (!codeRow) {
-      throw new Error(
-        `${ADAPTER_ERROR_MSG.NATIVE_CALLBACK_MODULE_NOT_FOUND}: ` +
-          callbackModuleRef,
-      );
-    }
-    const codeBlob = codeRow.code_blob;
-    if (typeof codeBlob !== LOCAL_STR_STRING || !codeBlob.trim()) {
-      throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_SOURCE_INVALID);
-    }
-
-    const parsedArtifact = parseCallbackModuleArtifact(codeBlob);
-    if (!parsedArtifact.source || typeof parsedArtifact.source !== LOCAL_STR_STRING) {
-      throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_SOURCE_INVALID);
-    }
-
-    const compiledExports = this.compileCallbackModuleSource(
-      parsedArtifact.source,
-      ADAPTER_ERROR_MSG.WASM_CALLBACK_COMPILE_FAILED,
-    );
-
-    const manifestRow = await this.resolveLatestModuleManifestRow(
-      callbackModuleRef,
-      sessionId,
-    );
-    const runExport =
-      manifestRow?.run_export ||
-      parsedArtifact.runExport ||
-      sqlRequest.callbackExport;
-    const manifest = this.buildWasmCallbackManifest(
-      manifestRow,
-      runExport,
-      callbackModuleRef,
-    );
-    const rawHandler = compiledExports ?
-      compiledExports[manifest.runExport] :
-      null;
-    if (typeof rawHandler !== LOCAL_STR_FUNCTION) {
-      throw new Error(
-        `${ADAPTER_ERROR_MSG.WASM_CALLBACK_EXPORT_NOT_FOUND}: ` +
-          manifest.runExport,
-      );
-    }
-
-    const moduleEntry = {
-      version: String(codeRow.version ?? DEFAULT_CODE_VERSION),
-      wasmBytes: Buffer.from(parsedArtifact.wasmBytes),
-      manifest,
-      exports: compiledExports,
-    };
-
-    if (typeof moduleMirror.setModule === LOCAL_STR_FUNCTION) {
-      await moduleMirror.setModule(callbackModuleRef, moduleEntry);
-      return;
-    }
-    if (
-      moduleMirror.localCache &&
-      typeof moduleMirror.localCache.set === LOCAL_STR_FUNCTION
-    ) {
-      moduleMirror.localCache.set(callbackModuleRef, {
-        ...moduleEntry,
-        updatedAt: Date.now(),
-      });
-      return;
-    }
-
-    throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_MODULE_MIRROR_REQUIRED);
-  }
-
-  /**
-   * Build or reuse an execution context for stage/plan dispatch.
-   *
-   * @param {Readonly<Object>} sqlRequest - Canonical SqlRequest object.
-   * @return {ExecutionContext} Execution context instance.
-   * @private
-   */
-  createRequestExecutionContext(sqlRequest) {
-    if (sqlRequest.executionContext) {
-      return sqlRequest.executionContext;
-    }
-
-    const sessionId = sqlRequest.sessionId || QUERY_SESSION.DEFAULT;
-    const budgetEnforcer =
-      sqlRequest.budgetEnforcer || new BudgetEnforcer(sqlRequest.budgets || {});
-    const cancellationToken =
-      sqlRequest.cancellationToken || new CancellationToken();
-    const lineageTracker =
-      sqlRequest.lineageTracker ||
-      new LineageTracker(`${sessionId}-${Date.now()}`);
-
-    return new ExecutionContext({
-      session: sessionId,
-      snapshot: sqlRequest.snapshot || {mode: DEFAULT_SNAPSHOT_MODE},
-      budgetEnforcer,
-      cancellationToken,
-      lineageTracker,
-      queryExecutor: async (query, params) =>
-        this.executeQuery(query, params, {sessionId}),
-      resultStream: sqlRequest.resultStream,
-      exchangeManager: sqlRequest.exchangeManager,
-      dedupeRegistry: sqlRequest.dedupeRegistry,
-      planDiagnostics: sqlRequest.planDiagnostics || null,
-    });
-  }
-
-  /**
-   * Execute a stage-mode SqlRequest via the shared stage executor.
-   *
-   * @param {Readonly<Object>} sqlRequest - Canonical SqlRequest object.
-   * @return {Promise<Object>} Stage execution result.
-   * @private
-   */
-  async executeStageRequest(sqlRequest) {
-    if (typeof sqlRequest.handler !== LOCAL_STR_FUNCTION) {
-      throw new Error(ADAPTER_ERROR_MSG.STAGE_HANDLER_REQUIRED);
-    }
-
-    const executionContext = this.createRequestExecutionContext(sqlRequest);
-    const cancellationToken =
-      sqlRequest.cancellationToken || executionContext.getCancellationToken();
-    const stageOptions = sqlRequest.options || null;
-    const stageResults = await executeStage({
-      query: sqlRequest.statement,
-      params: sqlRequest.parameters,
-      handler: sqlRequest.handler,
-      opts: stageOptions,
-      queryExecutor: async (query, params) =>
-        this.executeQuery(query, params, {
-          sessionId: sqlRequest.sessionId,
-        }),
-      cancellationToken,
-      executionContext,
-    });
-
-    return {
-      success: true,
-      executionMode: EXECUTION_MODE.STAGE,
-      results: stageResults,
-    };
-  }
-
-  /**
-   * Execute a plan-mode SqlRequest via the shared plan executor.
-   *
-   * @param {Readonly<Object>} sqlRequest - Canonical SqlRequest object.
-   * @return {Promise<Object>} Plan execution result.
-   * @private
-   */
-  async executePlanRequest(sqlRequest) {
-    const plan = sqlRequest.plan || sqlRequest.hints?.plan || null;
-    if (!plan || typeof plan !== LOCAL_STR_OBJECT) {
-      throw new Error(ADAPTER_ERROR_MSG.PLAN_OBJECT_REQUIRED);
-    }
-
-    const executionContext = this.createRequestExecutionContext(sqlRequest);
-    const cancellationToken =
-      sqlRequest.cancellationToken || executionContext.getCancellationToken();
-    const planOptions = sqlRequest.options || null;
-    const planResult = await executePlan({
-      plan,
-      params: sqlRequest.parameters,
-      handler: sqlRequest.handler,
-      opts: planOptions,
-      queryExecutor: async (query, params) =>
-        this.executeQuery(query, params, {
-          sessionId: sqlRequest.sessionId,
-        }),
-      cancellationToken,
-      executionContext,
-    });
-
-    return {
-      success: true,
-      executionMode: EXECUTION_MODE.PLAN,
-      result: planResult,
-    };
-  }
-
   /**
    * Track write activity for managed split diagnostics and request local
    * evaluation only for partitions this node actually owns.
@@ -392,17 +239,22 @@ class SQLQueryEngineStatementExecution extends
       return {
         success: false,
         error: parseError.message,
-        errorCode: QUERY_ERROR_CODE.SYNTAX_ERROR,
+        errorCode: resolveParseFailureCode(parseError),
       };
     }
 
     const parseEndMs = Date.now();
     cancellationToken?.throwIfCancelled?.();
 
-    const applicationStatementDecision =
-      enforceApplicationDatabaseStatementPolicy(ast, options);
-    if (applicationStatementDecision.allowed !== true) {
-      return applicationStatementDecision.failure;
+    const clientStatementRefusal = resolveClientStatementRefusal(ast,
+      options);
+    if (clientStatementRefusal !== null) {
+      return clientStatementRefusal;
+    }
+    const admission = admitParsedStatement(this.transactionCoordinator,
+      sessionId, ast, options.expectedTransactionId);
+    if (admission.state === STATEMENT_ADMISSION.REFUSED) {
+      return admission.failure;
     }
 
     try {
@@ -475,13 +327,20 @@ class SQLQueryEngineStatementExecution extends
         break;
 
       case QUERY_AST_TYPE.BEGIN_TRANSACTION:
-        return this.handleBeginTransaction(sessionId);
+        return withExecutedStatementType(
+          await this.handleAdmittedBegin(sessionId, options),
+          ast.type,
+        );
 
       case QUERY_AST_TYPE.COMMIT:
-        return this.handleCommit(sessionId);
-
       case QUERY_AST_TYPE.ROLLBACK:
-        return this.handleRollback(sessionId);
+        return withExecutedStatementType(withSessionTransactionState(
+          ast.type === QUERY_AST_TYPE.COMMIT ?
+            await this.handleCommit(sessionId, options) :
+            await this.handleRollback(sessionId, options),
+          this.transactionCoordinator,
+          sessionId,
+        ), ast.type);
 
       default:
         throw new Error(
@@ -498,7 +357,7 @@ class SQLQueryEngineStatementExecution extends
           executionDurationMs: queryEndMs - parseEndMs,
           totalDurationMs: queryEndMs - queryStartMs,
           partitionCount: result?.partitions?.length ?? 0,
-          rowCount: result?.count ?? result?.changes ?? 0,
+          rowCount: resolveLoggedRowCount(result, ast.type),
           success: result?.success ?? false,
         });
       } catch (_metricsErr) {
@@ -506,7 +365,10 @@ class SQLQueryEngineStatementExecution extends
       }
 
       // Strip partition details from results (Requirement 20.10)
-      return this.tableCreationService.stripPartitionDetails(result);
+      return withExecutedStatementType(
+        this.tableCreationService.stripPartitionDetails(result),
+        ast.type,
+      );
     } catch (error) {
       const queryEndMs = Date.now();
       try {
@@ -573,21 +435,13 @@ class SQLQueryEngineStatementExecution extends
 
   evaluateQueryIngressPressure(ast, options = {}) {
     const astType = ast?.type || null;
-    const writeStatement =
-      astType === QUERY_AST_TYPE.INSERT ||
-      astType === QUERY_AST_TYPE.UPDATE ||
-      astType === QUERY_AST_TYPE.DELETE ||
-      astType === QUERY_AST_TYPE.CREATE_TABLE ||
-      astType === QUERY_AST_TYPE.ALTER_TABLE;
+    const writeStatement = PRESSURE_WRITE_AST_TYPES.has(astType);
+    const statementKey = String(astType || LOCAL_STR_UNKNOWN).toLowerCase();
     return this.getPressureGovernor().evaluate({
-      workClass:
-        options?.workClass ||
-        (writeStatement ?
-          PRESSURE_WORK_CLASS.INTERACTIVE :
-          PRESSURE_WORK_CLASS.INTERACTIVE),
+      workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
       resourceKeys: [
         writeStatement ? LOCAL_STR_QUERY_PLANE_WRITE : LOCAL_STR_QUERY_PLANE_READ,
-        `query-plane:statement:${String(astType || LOCAL_STR_UNKNOWN).toLowerCase()}`,
+        `query-plane:statement:${statementKey}`,
       ],
     });
   }
@@ -640,7 +494,7 @@ class SQLQueryEngineStatementExecution extends
       return {
         success: false,
         error: error.message,
-        errorCode: QUERY_ERROR_CODE.SYNTAX_ERROR,
+        errorCode: resolveParseFailureCode(error),
       };
     }
 
@@ -660,7 +514,7 @@ class SQLQueryEngineStatementExecution extends
       };
     }
 
-    return {
+    return withExecutedStatementType({
       success: true,
       operation: QUERY_OPERATION.EXPLAIN_DISTRIBUTED,
       rows: [
@@ -676,7 +530,7 @@ class SQLQueryEngineStatementExecution extends
       ],
       distributedPlan,
       distributedDiagnostics: distributedPlan.diagnostics,
-    };
+    }, QUERY_OPERATION.EXPLAIN_DISTRIBUTED);
   }
 
   /**

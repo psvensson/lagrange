@@ -11,10 +11,20 @@
 
 import {TABLES} from '../constants/tables.js';
 import {
+  PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
+} from './partition-committed-statement-outcome-constants.js';
+import {
+  committedStatementEntryKey,
+  readCommittedStatementOutcome,
+} from './partition-committed-statement-outcome.js';
+import {
   readPartitionAppliedIndex,
   readPartitionCommittedCommands,
 } from './partition-committed-log.js';
-import {PARTITION_SERVICE_OPERATION} from './partition-service-constants.js';
+import {
+  PARTITION_COMMITTED_COMMAND_OUTCOME,
+  PARTITION_SERVICE_OPERATION,
+} from './partition-service-constants.js';
 
 /**
  * Resolve the current Raft log barrier index for a snapshot about to be
@@ -107,6 +117,17 @@ const MIRRORABLE_LOG_OPERATION_TYPES = Object.freeze(new Set([
  * @param {number|null} watermarkIndex - Persisted replay watermark.
  * @return {Array<Object>}
  */
+function isAppliedStatementAtLogIndex(service, command, logIndex) {
+  const entryKey = committedStatementEntryKey(command);
+  if (!entryKey) {
+    return false;
+  }
+  const recorded = readCommittedStatementOutcome(service, entryKey);
+  return recorded.state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED &&
+    recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED &&
+    recorded.logIndex === logIndex;
+}
+
 function loadDurableDeltasBehindWatermark(service, watermarkIndex) {
   if (!Number.isSafeInteger(watermarkIndex) || watermarkIndex < 1) {
     return [];
@@ -119,7 +140,8 @@ function loadDurableDeltasBehindWatermark(service, watermarkIndex) {
     const logIndex = Number(entry.index);
     const command = entry.command;
     if (logIndex <= watermarkIndex ||
-      !MIRRORABLE_LOG_OPERATION_TYPES.has(command?.type)) {
+      !MIRRORABLE_LOG_OPERATION_TYPES.has(command?.type) ||
+      !isAppliedStatementAtLogIndex(service, command, logIndex)) {
       continue;
     }
     deltas.push({...command, logIndex});

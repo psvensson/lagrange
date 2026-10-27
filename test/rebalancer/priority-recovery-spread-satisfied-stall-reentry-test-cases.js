@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 // Quest operation-workflow-drain-redrive, acceptance #1 (mask-pinning baseline):
 // a durably STALLED, locally-owned REPLACE in its REMOVE-dispatch phase (ACTIVE)
 // that is over target gets classified spread_satisfied_in_flight, and the EXISTING
@@ -196,7 +197,9 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: TEST_DELIVERY_STATUS_INITIATED,
+          });
         },
       },
       tablePolicyService: {

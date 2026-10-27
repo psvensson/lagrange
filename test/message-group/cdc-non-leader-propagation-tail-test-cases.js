@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -11,28 +12,39 @@ import {
 import {
   TRANSPORT_ERROR_MSG,
 } from '../../src/constants/transport.js';
-import LifeRaft from '@markwylde/liferaft';
-import {
-  MessageGroupService,
-} from '../../src/message-group/message-group-service.js';
+import {RaftRole} from '../../src/message-group/message-group-service.js';
 import {
   MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {registerCdcNonLeaderPropagationTailMoreTests} from './cdc-non-leader-propagation-tail-more-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {
+  ControllableConsensusPort,
+} from '../test-helpers/controllable-consensus-port.js';
+import {
+  createControllableMessageGroupService,
+  seedConsensusPeersFromPeerAddresses,
+} from './message-group-service-test-support.js';
 
 let testPortCounter = 27200;
 const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
 
 
-function seedLiveRaftPeersFromPeerAddresses(service) {
-  if (!service?.raft || !Array.isArray(service.peerAddresses)) {
-    return;
-  }
-  service.raft.nodes = service.peerAddresses
-    .filter((address) => typeof address === 'string' && address.length > 0)
-    .map((address) => ({address}));
+
+function routerCleanup(router, getMessageGroup) {
+  let shutdownCalled = false;
+  return async () => {
+    if (shutdownCalled) return;
+    shutdownCalled = true;
+    const mg = getMessageGroup();
+    try {
+      if (mg && mg.raft) await mg.shutdown();
+    } catch (_error) {
+      // Preserve best-effort group teardown; always close the router.
+    }
+    await router.shutdown();
+  };
 }
 
 export function registerCdcNonLeaderPropagationTailTests({
@@ -48,28 +60,17 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-strict-stale-ready',
           replicaId: 'mg-strict-stale-ready-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-strict-stale-ready-r1',
@@ -81,13 +82,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.isLeader = false;
         mg.role = 'follower';
         mg.leaderId = null;
-        if (mg.raft) {
-          Object.defineProperty(mg.raft, 'state', {
-            value: LifeRaft.FOLLOWER,
-            writable: true,
-            configurable: true,
-          });
-        }
+        consensus.role = RaftRole.FOLLOWER;
 
         const now = Date.now();
         mg.systemTableCache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
@@ -141,7 +136,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         const forwardedPayloads = [];
         router.deliver = async (address, payload, options) => {
           forwardedPayloads.push({address, payload, options});
-          return {acknowledged: true, success: true};
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(
@@ -181,28 +176,17 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-retry-exhausted',
           replicaId: 'mg-retry-exhausted-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = ['mg-retry-exhausted-r1', 'mg-retry-exhausted-r2'];
         await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
@@ -211,7 +195,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.role = 'follower';
         mg.leaderId = 'mg-retry-exhausted-r2';
         mg.peerAddresses = ['remote-node/message-group/mg-retry-exhausted-r2'];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryInitialDelayMs = 20;
         mg.retryBackoffMultiplier = 1;
         mg.retryMaxAttempts = 2;
@@ -249,28 +233,17 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-nonleader-no-local-apply',
           replicaId: 'mg-nonleader-no-local-apply-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-nonleader-no-local-apply-r1',
@@ -282,7 +255,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.role = 'follower';
         mg.leaderId = 'mg-nonleader-no-local-apply-r2';
         mg.peerAddresses = ['remote-node/message-group/mg-nonleader-no-local-apply-r2'];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryInitialDelayMs = 20;
         mg.retryBackoffMultiplier = 1;
         mg.retryMaxAttempts = 1;
@@ -325,28 +298,17 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-retry-past-budget',
           replicaId: 'mg-retry-past-budget-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = ['mg-retry-past-budget-r1', 'mg-retry-past-budget-r2'];
         await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
@@ -361,7 +323,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         let deliverCount = 0;
         router.deliver = async (_address, _payload, _options) => {
           deliverCount += 1;
-          return {acknowledged: true, success: true};
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await t.rejects(
@@ -391,28 +353,17 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-no-handler',
           replicaId: 'mg-no-handler-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = ['mg-no-handler-r1', 'mg-no-handler-r2'];
         await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
@@ -421,17 +372,15 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.role = 'follower';
         mg.leaderId = 'mg-no-handler-r2';
         mg.peerAddresses = ['remote-node/message-group/mg-no-handler-r2'];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryMaxAttempts = 1;
 
         let deliverAttempts = 0;
         router.deliver = async () => {
           deliverAttempts += 1;
-          return {
-            acknowledged: true,
-            noHandler: true,
+          return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
             error: 'No handler for address: remote-node/message-group/mg-no-handler-r2',
-          };
+          });
         };
 
         await t.rejects(
@@ -461,21 +410,10 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
+
+      const consensus = new ControllableConsensusPort();
       try {
         const groupId = 'mg-forward-topology-repair';
         const staleReplicaId = `${groupId}-r2`;
@@ -485,7 +423,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         const nowMs = Date.now();
         const authoritativeReadCalls = [];
 
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId,
           replicaId: `${groupId}-r1`,
           nodeId,
@@ -561,7 +499,7 @@ export function registerCdcNonLeaderPropagationTailTests({
               };
             },
           },
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           `${groupId}-r1`,
@@ -578,13 +516,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.retryBackoffMultiplier = 1;
         mg.forwardTargetSuppressionMs = 1000;
         mg.computeCdcForwardRetryDelayMs = () => 0;
-        if (mg.raft) {
-          Object.defineProperty(mg.raft, 'state', {
-            value: LifeRaft.FOLLOWER,
-            writable: true,
-            configurable: true,
-          });
-        }
+        consensus.role = RaftRole.FOLLOWER;
 
         const cache = NodeService.getInstance().getSystemTableCache();
         cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
@@ -614,17 +546,13 @@ export function registerCdcNonLeaderPropagationTailTests({
         router.deliver = async (address) => {
           attempts.push(address);
           if (address === staleAddress) {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               success: true,
               error: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-            };
+            });
           }
           if (address === freshAddress) {
-            return {
-              acknowledged: true,
-              success: true,
-            };
+            return buildDeliveryEnvelope({acknowledged: true}, {success: true});
           }
           throw new Error(`unexpected forward target ${address}`);
         };
@@ -688,28 +616,17 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-forward-suppress',
           replicaId: 'mg-forward-suppress-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-forward-suppress-r1',
@@ -723,7 +640,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.peerAddresses = [
           'remote-node/message-group/mg-forward-suppress-r2',
         ];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryMaxAttempts = 2;
         mg.retryInitialDelayMs = 10;
         mg.retryBackoffMultiplier = 1;
@@ -732,16 +649,11 @@ export function registerCdcNonLeaderPropagationTailTests({
         router.deliver = async (address) => {
           deliverAttempts += 1;
           if (deliverAttempts === 1) {
-            return {
-              acknowledged: true,
-              noHandler: true,
+            return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
               error: `No handler for address: ${address}`,
-            };
+            });
           }
-          return {
-            acknowledged: true,
-            success: true,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(
@@ -772,29 +684,18 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-no-connection-suppress',
           replicaId: 'mg-no-connection-suppress-r1',
           nodeId,
           transport: router,
           now: () => nowMs,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-no-connection-suppress-r1',
@@ -810,7 +711,7 @@ export function registerCdcNonLeaderPropagationTailTests({
           'remote-node-2/message-group/mg-no-connection-suppress-r2',
           'remote-node-3/message-group/mg-no-connection-suppress-r3',
         ];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryMaxAttempts = 1;
         mg.forwardTargetSuppressionMs = 1000;
 
@@ -819,15 +720,10 @@ export function registerCdcNonLeaderPropagationTailTests({
           attempts.push(address);
           if (address ===
             'remote-node-2/message-group/mg-no-connection-suppress-r2') {
-            return {
-              acknowledged: false,
-              error: 'No connection to node remote-node-2',
-            };
+            return buildDeliveryEnvelope(
+              {acknowledged: false, error: 'No connection to node remote-node-2'});
           }
-          return {
-            acknowledged: true,
-            success: true,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(
@@ -892,29 +788,18 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-timeout-suppress',
           replicaId: 'mg-timeout-suppress-r1',
           nodeId,
           transport: router,
           now: () => nowMs,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-timeout-suppress-r1',
@@ -930,7 +815,7 @@ export function registerCdcNonLeaderPropagationTailTests({
           'remote-node-2/message-group/mg-timeout-suppress-r2',
           'remote-node-3/message-group/mg-timeout-suppress-r3',
         ];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryMaxAttempts = 1;
         mg.forwardTargetSuppressionMs = 1000;
 
@@ -938,16 +823,10 @@ export function registerCdcNonLeaderPropagationTailTests({
         router.deliver = async (address) => {
           attempts.push(address);
           if (address === 'remote-node-2/message-group/mg-timeout-suppress-r2') {
-            return {
-              acknowledged: false,
-              success: true,
-              error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
-            };
+            return buildDeliveryEnvelope(
+              {acknowledged: false, error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT});
           }
-          return {
-            acknowledged: true,
-            success: true,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(

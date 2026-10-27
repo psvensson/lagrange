@@ -3,6 +3,7 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -160,7 +161,7 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
       const replicaId = 'mg-join-r1';
       const unifiedAddress = `${this.nodeId}/message-group/${replicaId}`;
       // The replica's exact handler identity (activation checks identity).
-      const transportHandler = async () => ({acknowledged: true});
+      const transportHandler = async () => (null);
       this.messageGroupServices.set(replicaId, {
         groupId: 'mg-1',
         unifiedAddress,
@@ -304,12 +305,11 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   };
   service.phaseConnectWebSocket = async () => {
     service.messageRouter = {
-      deliver: async () => ({acknowledged: true}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
     };
     service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
   };
   service.phaseCreateSelfHostedMessageGroup = async () => {};
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.initializeReplicaHandler = () => {};
   service.initializeMessageGroupServiceHandler = () => {};
@@ -495,7 +495,7 @@ async (t) => {
     systemTableSnapshots: {},
   };
   service.messageRouter = {
-    deliver: async () => ({acknowledged: true, success: true}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
   };
   service.rebalanceCoordinator = {
     controlPlaneReadinessService: null,
@@ -577,7 +577,7 @@ test('NodeJoiningService - activates message-group rows after membership write',
     };
     service.phaseConnectWebSocket = async () => {
       service.messageRouter = {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       };
     };
     service.phaseCreateSelfHostedMessageGroup = async () => {
@@ -588,7 +588,6 @@ test('NodeJoiningService - activates message-group rows after membership write',
         getLeaderId: () => 'mg-1-r0',
       });
     };
-    service.phaseJoinExistingMessageGroup = async () => {};
     service.phaseWaitForLeadership = async () => {};
     service.createCdcIntegrationService = () => {
       service.cdcIntegrationService = {
@@ -686,7 +685,7 @@ test('NodeJoiningService - resumes same join session without replaying ' +
   service.phaseConnectWebSocket = async () => {
     phaseCalls.push('connect');
     service.messageRouter = {
-      deliver: async () => ({acknowledged: true}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
     };
     service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
   };
@@ -699,7 +698,6 @@ test('NodeJoiningService - resumes same join session without replaying ' +
       getLeaderId: () => 'mg-1-r0',
     });
   };
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {
     phaseCalls.push('leadership');
   };
@@ -848,7 +846,7 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
     service.phaseConnectWebSocket = async () => {
       phaseCalls.push('connect');
       service.messageRouter = {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       };
       service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
     };
@@ -861,7 +859,6 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
         getLeaderId: () => 'mg-1-r0',
       });
     };
-    service.phaseJoinExistingMessageGroup = async () => {};
     service.phaseWaitForLeadership = async () => {
       phaseCalls.push('leadership');
     };
@@ -984,7 +981,7 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
   };
   service.phaseConnectWebSocket = async () => {
     service.messageRouter = {
-      deliver: async () => ({acknowledged: true}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       setExternalAdmissionEnabled() {},
     };
   };
@@ -995,7 +992,6 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
       completeJoinConvergence() {},
     });
   };
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.initializeJoinInfrastructure = async () => {
     calls.infrastructure += 1;
@@ -1254,7 +1250,7 @@ test(
     };
     service.phaseConnectWebSocket = async () => {
       service.messageRouter = {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         isRegistered: (address) =>
           address === 'joining-node-join-gate-1/message-group/mg-join-r1',
       };
@@ -1268,7 +1264,6 @@ test(
         getLeaderId: () => 'mg-join-r1',
       });
     };
-    service.phaseJoinExistingMessageGroup = async () => {};
     service.phaseWaitForLeadership = async () => {};
     service.initializeReplicaHandler = () => {};
     service.initializeMessageGroupServiceHandler = () => {

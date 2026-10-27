@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
@@ -335,10 +336,9 @@ function createObservedProgressCoordinator({
     messageRouter: {
       async deliver(target, request) {
         dispatchedMessages.push({target, request});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: TEST_REPLICA_OPERATION_INITIATED_STATUS,
-        };
+        });
       },
     },
     tablePolicyService: {

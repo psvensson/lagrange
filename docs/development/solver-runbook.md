@@ -21,7 +21,8 @@ node scripts/solve.js land  --id <id>       # guards, tests, commits; never push
 ```
 
 `evidence add <path> --id <id>` uploads a file too large for git and records it
-only after re-download and re-hash; `board` lists open epics and quests.
+only after re-download and re-hash (`evidence relocate` moves already committed
+bulk evidence the same way, see below); `board` lists open epics and quests.
 Consult the generated reference for supported operations. Older frontier,
 strategy-rung, `run`/`step` and generic executor instructions are retired.
 
@@ -326,3 +327,25 @@ would change every SHA the quest records cite (`draftedAtCommit`, `sealedAt`,
 
 Upload evidence with `node scripts/solve.js evidence add <path> --id <id>`;
 the record is written only after the asset is downloaded again and re-hashed.
+
+Bulk evidence that is already committed (lab logs, TAP, large JSON dumps,
+archives; the threshold is in
+[`quest-artifacts.md`](quest-artifacts.md#bulk-evidence-goes-to-the-store))
+leaves the tree as one verified bundle per quest:
+
+```sh
+node scripts/solve.js evidence relocate --id <quest> --paths-file <list> \
+  --source-commit <pushed sha> [--record-to <quest>] [--label <name>] --dry-run
+node scripts/solve.js evidence relocate --id <quest> --paths-file <list> \
+  --source-commit <pushed sha> [--record-to <quest>] [--label <name>]
+```
+
+The dry run prints the plan (files, bytes, bundle name) and touches nothing.
+The real run uploads through `evidence add` (no overwrite; a closed quest
+takes no entry, so name an open `--id`), downloads the bundle again, hashes
+every member against its manifest and the blob at the source commit, writes
+the inventory shard and the verification record to
+`solve/changes/evidence-relocation/<record-to quest>/` (never under a quest's
+`evidence/`, so closing the record quest keeps it on shape), and stages the
+removals with `git rm`. Commit them, records included, with the hooks
+running; the inventory maps each old path to its bundle.

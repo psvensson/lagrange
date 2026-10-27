@@ -15,8 +15,6 @@ test('createSqlRequest - creates frozen request with defaults', (t) => {
   t.equal(req.sessionId, 'default');
   t.same(req.parameters, []);
   t.equal(req.executionMode, EXECUTION_MODE.SQL_STATEMENT);
-  t.equal(req.callbackModuleRef, null);
-  t.equal(req.callbackExport, null);
   t.equal(req.hints, null);
   t.ok(Object.isFrozen(req));
   t.ok(Object.isFrozen(req.budgets));
@@ -89,28 +87,6 @@ test('createSqlRequest - rejects tenant and security-context mismatch', (t) => {
       roles: ['service-operator'],
     },
   }), /security context/iu);
-  t.end();
-});
-
-test('createSqlRequest - partition_callback requires module ref', (t) => {
-  t.throws(() => {
-    createSqlRequest({
-      statement: 'SELECT * FROM orders',
-      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-      callbackExport: 'run_batch',
-    });
-  }, /callbackModuleRef is required/);
-  t.end();
-});
-
-test('createSqlRequest - partition_callback requires export', (t) => {
-  t.throws(() => {
-    createSqlRequest({
-      statement: 'SELECT * FROM orders',
-      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-      callbackModuleRef: 'mod-1',
-    });
-  }, /callbackExport is required/);
   t.end();
 });
 

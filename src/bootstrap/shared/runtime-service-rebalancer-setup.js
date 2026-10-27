@@ -43,6 +43,17 @@ import {
   isDeploymentBindingCellSourceKind,
 } from '../../control-plane/owners/deployment-binding-contract.js';
 const SUBSYSTEM_NAME = 'runtime-service-rebalancer-owner';
+const REFRESH_TRIGGER_TABLES = new Set([
+  SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
+  SYSTEM_TABLE_NAME.SERVICE_BINDINGS,
+  SYSTEM_TABLE_NAME.SERVICES,
+  SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+]);
+const WAKE_REBALANCER_TRIGGER_TABLES = new Set([
+  SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
+  SYSTEM_TABLE_NAME.CALL_ACTIVATION_LEASES,
+  SYSTEM_TABLE_NAME.SERVICE_PARTITION_ACCESS,
+]);
 const RUNTIME_SERVICE_REBALANCER_OWNER_NAME = 'RuntimeServiceRebalancerOwner';
 const TYPEOF_STRING = 'string';
 const SINK_WIRING_RETRY_INTERVAL_MS = 5000;
@@ -133,13 +144,10 @@ class RuntimeServiceRebalancerOwner {
     // rebalancer is level-triggered at once instead of waiting out its
     // periodic cadence.
     this._cacheChangeListener = (tableName) => {
-      if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS ||
-          tableName === SYSTEM_TABLE_NAME.SERVICE_BINDINGS ||
-          tableName === SYSTEM_TABLE_NAME.SERVICES ||
-          tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+      if (REFRESH_TRIGGER_TABLES.has(tableName)) {
         this.refresh();
       }
-      if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS) {
+      if (WAKE_REBALANCER_TRIGGER_TABLES.has(tableName)) {
         this._wakeOwnedRebalancers();
       }
     };

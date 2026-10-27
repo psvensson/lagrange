@@ -1,5 +1,4 @@
 import {
-  STARTUP_WORKFLOW_ERROR,
   StartupWorkflowStore,
 } from './startup-workflow-store.js';
 
@@ -116,9 +115,7 @@ class SeedStartupSessionStore {
 
 export {
   SEED_STARTUP_CHECKPOINT,
-  SEED_STARTUP_CHECKPOINT_SEQUENCE,
   SEED_STARTUP_SESSION_ID,
   SEED_STARTUP_SESSION_PHASE,
-  STARTUP_WORKFLOW_ERROR,
   SeedStartupSessionStore,
 };

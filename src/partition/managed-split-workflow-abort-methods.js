@@ -1,8 +1,11 @@
 import {
   MANAGED_SPLIT_LOG_MSG,
-  PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
+import {
+  abortChange,
+  refusedStepAs,
+} from './managed-workflow-record-changes.js';
 import {
   PRE_CUTOVER_SPLIT_STATES,
   SPLIT_OWNER_STEP_LANE_SUFFIX,
@@ -90,7 +93,7 @@ class ManagedSplitWorkflowAbortMethods {
         this.buildSplitAbortStepResult(workflowId, ackStatus, currentWorkflow, {
           ownership: await this.renewSplitWorkflowOwnership(workflowId),
         }),
-    });
+    }).catch(refusedStepAs(SPLIT_ABORT_OUTCOME.REFUSED_POST_CUTOVER));
 
     if (abortOutcome !== SPLIT_ABORT_OUTCOME.ABORTED) {
       return abortOutcome === SPLIT_ABORT_OUTCOME.ALREADY_ABORTED;
@@ -139,18 +142,14 @@ class ManagedSplitWorkflowAbortMethods {
       reason: PARTITION_TRANSITION_STATE.FAILED,
       fenceToken: options.ownership?.fenceToken,
       ownerId: options.ownership?.ownerId,
-      updates: {
-        status: PARTITION_TRANSITION_STATE.FAILED,
-        metadata: {
-          ...(currentWorkflow.metadata || {}),
-          [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
-            classification: LOCAL_STR_SPLIT_SOURCE_EXECUTION_FAILURE,
-            message: ackStatus,
-            failedAt: new Date(this.now()).toISOString(),
-            retryable: true,
-          },
-        },
-      },
+      // Re-checked on the record at the change's turn: FAILED already is
+      // unchanged; a cutover that landed first refuses the abort.
+      change: abortChange(PRE_CUTOVER_SPLIT_STATES, {
+        classification: LOCAL_STR_SPLIT_SOURCE_EXECUTION_FAILURE,
+        message: ackStatus,
+        failedAt: new Date(this.now()).toISOString(),
+        retryable: true,
+      }),
       result: SPLIT_ABORT_OUTCOME.ABORTED,
     };
   }

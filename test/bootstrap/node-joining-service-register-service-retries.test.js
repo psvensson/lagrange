@@ -22,9 +22,6 @@ import {
 import {
 } from '../../src/bootstrap/join-session-store.js';
 import {
-  BOOTSTRAP_API_DEFAULT,
-} from '../../src/bootstrap/bootstrap-api-constants.js';
-import {
 } from '../../src/control-plane/membership-lifecycle-controller.js';
 import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -38,11 +35,7 @@ import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
-import {
-  SERVICE_STATUS,
-  NUM,
-  TIME_MS,
-} from '../../src/constants/index.js';
+import {SERVICE_STATUS} from '../../src/constants/index.js';
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
@@ -50,419 +43,11 @@ const QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION =
   'preferControlPlaneUpsert';
 const QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET =
   'create-self-hosted join metadata service registration';
-const ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE =
-  'ASSIGNMENT_TOKEN_UNKNOWN';
 const TEST_SHORTCUT_RETRY_AFTER_MS = 125;
 const TEST_TERMINAL_SHORTCUT_ERROR_CODE =
   'SHORTCUT_VALIDATION_FAILED';
 const TEST_SHORTCUT_NON_SUCCESS_ERROR_PATTERN =
   /shortcut returned non-success/;
-
-test('NodeJoiningService - retries register-service on assignment token unknown',
-  async (t) => {
-    initializeTestEnvironment();
-
-    let attempts = 0;
-    const registerPayloads = [];
-    const retryDelays = [];
-    const warnEvents = [];
-    const service = new NodeJoiningService({
-      bootIncarnation: 1,
-      nodeId: '550e8400-e29b-41d4-a716-446655440107',
-      nodeAddress: 'ws://localhost:9090',
-      seedNodeAddress: 'http://localhost:8080',
-      config: {
-        httpTimeoutMs: 1000,
-        leadershipWaitTimeoutMs: 200,
-        leadershipWaitInitialDelayMs: 10,
-        leadershipWaitMaxDelayMs: 10,
-        leadershipWaitBackoffMultiplier: 2,
-        leadershipWaitJitterRatio: 0,
-      },
-      sleep: async (delayMs) => {
-        retryDelays.push(delayMs);
-      },
-      httpPost: async (url, payload) => {
-        if (!url.endsWith('/register-service')) {
-          throw new Error('unexpected URL in register-service retry test');
-        }
-        registerPayloads.push(payload);
-        attempts += 1;
-        if (attempts === 1) {
-          const error = new Error(
-            'HTTP 409: {"success":false,"error":"assignment token unknown",' +
-            `"code":"${ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE}"}`,
-          );
-          error.statusCode = 409;
-          error.responseJson = {
-            success: false,
-            error: 'assignment token unknown',
-            code: ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
-          };
-          throw error;
-        }
-        return {success: true};
-      },
-    });
-    service.bootstrapResponse = {
-      messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
-        groupId: 'mg-1',
-        replicaToMove: 'mg-1-r2',
-        assignmentId: 'assignment-1',
-      },
-    };
-    service.logger = {
-      debug() {},
-      info() {},
-      warn(message, details) {
-        warnEvents.push({message, details});
-      },
-      error() {},
-    };
-
-    await service.registerMessageGroupService(
-      'mg-1',
-      'mg-1-r2',
-      {getRole: () => 'leader'},
-    );
-
-    t.equal(
-      attempts,
-      2,
-      'should retry register-service once after assignment token miss',
-    );
-    t.equal(
-      registerPayloads[0]?.assignment_id,
-      'assignment-1',
-      'first register attempt should carry the MOVE_REPLICA assignment token',
-    );
-    t.equal(
-      registerPayloads[1]?.assignment_id,
-      'assignment-1',
-      'retry should preserve the same MOVE_REPLICA assignment token',
-    );
-    t.same(retryDelays, [10], 'should apply configured retry delay before retry');
-    const retryEvent = warnEvents.find((event) =>
-      event.details &&
-      event.details.lastCode === ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
-    );
-    t.ok(retryEvent, 'should emit retry warning for assignment token miss');
-  });
-
-test('NodeJoiningService - surfaces repeated assignment token unknown for outer retryable resume',
-  async (t) => {
-    initializeTestEnvironment();
-
-    let attempts = 0;
-    const registerPayloads = [];
-    const retryDelays = [];
-    const warnEvents = [];
-    const service = new NodeJoiningService({
-      bootIncarnation: 1,
-      nodeId: '550e8400-e29b-41d4-a716-44665544010a',
-      nodeAddress: 'ws://localhost:9090',
-      seedNodeAddress: 'http://localhost:8080',
-      config: {
-        httpTimeoutMs: 1000,
-        leadershipWaitTimeoutMs: 200,
-        leadershipWaitInitialDelayMs: 10,
-        leadershipWaitMaxDelayMs: 10,
-        leadershipWaitBackoffMultiplier: 2,
-        leadershipWaitJitterRatio: 0,
-      },
-      sleep: async (delayMs) => {
-        retryDelays.push(delayMs);
-      },
-      httpPost: async (url, payload) => {
-        if (!url.endsWith('/register-service')) {
-          throw new Error('unexpected URL in stale assignment token retry test');
-        }
-        registerPayloads.push(payload);
-        attempts += 1;
-        const error = new Error(
-          'HTTP 409: {"success":false,"error":"assignment token unknown",' +
-          `"code":"${ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE}"}`,
-        );
-        error.statusCode = 409;
-        error.responseJson = {
-          success: false,
-          error: 'assignment token unknown',
-          code: ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
-        };
-        throw error;
-      },
-    });
-    service.bootstrapResponse = {
-      messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
-        groupId: 'mg-1',
-        replicaToMove: 'mg-1-r2',
-        assignmentId: 'assignment-1',
-      },
-    };
-    service.logger = {
-      debug() {},
-      info() {},
-      warn(message, details) {
-        warnEvents.push({message, details});
-      },
-      error() {},
-    };
-
-    const error = await t.rejects(
-      service.registerMessageGroupService(
-        'mg-1',
-        'mg-1-r2',
-        {getRole: () => 'leader'},
-      ),
-      'repeated stale assignment tokens should surface as retryable join failure',
-    );
-
-    t.equal(
-      attempts,
-      2,
-      'should stop local register-service retries after one bounded assignment-token retry',
-    );
-    t.same(
-      registerPayloads.map((payload) => payload?.assignment_id),
-      ['assignment-1', 'assignment-1'],
-      'bounded retries should preserve the original MOVE_REPLICA assignment token',
-    );
-    t.same(
-      retryDelays,
-      [10],
-      'should only spend one bounded delay before surfacing the stale token',
-    );
-    t.equal(
-      error?.deferRetry,
-      true,
-      'stale assignment token exhaustion should remain retryable for outer auto-resume',
-    );
-    t.equal(
-      error?.code,
-      ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
-      'surfaced retryable error should preserve the assignment token code',
-    );
-    const retryEvents = warnEvents.filter((event) =>
-      event.details &&
-      event.details.lastCode === ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
-    );
-    t.equal(
-      retryEvents.length,
-      1,
-      'should emit exactly one in-call retry warning before surfacing for outer resume',
-    );
-  });
-
-test('NodeJoiningService - includes assignment_id on MOVE_REPLICA register-service',
-  async (t) => {
-    initializeTestEnvironment();
-
-    let capturedPayload = null;
-    const service = new NodeJoiningService({
-      bootIncarnation: 1,
-      nodeId: '550e8400-e29b-41d4-a716-446655440105',
-      nodeAddress: 'ws://localhost:9090',
-      seedNodeAddress: 'http://localhost:8080',
-      httpPost: async (_url, payload) => {
-        capturedPayload = payload;
-        return {success: true};
-      },
-    });
-    service.bootstrapResponse = {
-      messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
-        groupId: 'mg-1',
-        replicaToMove: 'mg-1-r0',
-        assignmentId: '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce5',
-      },
-    };
-
-    await service.registerMessageGroupService(
-      'mg-1',
-      'mg-1-r0',
-      {getRole: () => 'leader'},
-    );
-
-    t.ok(capturedPayload, 'register-service payload should be captured');
-    t.equal(
-      capturedPayload.assignment_id,
-      '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce5',
-      'MOVE_REPLICA register-service should include assignment_id token',
-    );
-  });
-
-test('NodeJoiningService - MOVE_REPLICA register-service keeps progress-path ' +
-  'request timeout', async (t) => {
-  initializeTestEnvironment();
-
-  const TEST_RETRY_TIMEOUT_MULTIPLIER = 3;
-  const TEST_CONFIGURED_TIMEOUT_MS = 2025;
-  const TEST_RETRY_DELAY_MS = 10;
-  const TEST_RETRY_TIMEOUT_MS =
-    TEST_CONFIGURED_TIMEOUT_MS * TEST_RETRY_TIMEOUT_MULTIPLIER;
-  const TEST_ASSIGNMENT_ID = '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce6';
-  const TEST_NODE_ID = '550e8400-e29b-41d4-a716-44665544010b';
-  const TEST_NODE_ADDRESS = 'ws://localhost:9090';
-  const TEST_SEED_ADDRESS = 'http://localhost:8080';
-  const TEST_GROUP_ID = 'mg-1';
-  const TEST_REPLICA_ID = 'mg-1-r0';
-
-  let attempts = 0;
-  const observedTimeoutMs = [];
-  const retryDelays = [];
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-    config: {
-      httpTimeoutMs: TEST_CONFIGURED_TIMEOUT_MS,
-      leadershipWaitTimeoutMs: TEST_RETRY_TIMEOUT_MS,
-      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
-      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
-      leadershipWaitBackoffMultiplier: 1,
-      leadershipWaitJitterRatio: 0,
-    },
-    sleep: async (delayMs) => {
-      retryDelays.push(delayMs);
-    },
-    httpPost: async (url, _payload, options = {}) => {
-      if (!url.endsWith('/register-service')) {
-        throw new Error('unexpected URL in MOVE_REPLICA register-service test');
-      }
-      const timeoutMs = Number.isFinite(options?.timeoutMs) ?
-        options.timeoutMs :
-        TEST_CONFIGURED_TIMEOUT_MS;
-      observedTimeoutMs.push(timeoutMs);
-      attempts += 1;
-      if (attempts === 1) {
-        throw new Error('Request timeout after ' + timeoutMs + 'ms');
-      }
-      return {success: true};
-    },
-  });
-  service.bootstrapResponse = {
-    messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
-      groupId: TEST_GROUP_ID,
-      replicaToMove: TEST_REPLICA_ID,
-      assignmentId: TEST_ASSIGNMENT_ID,
-    },
-  };
-
-  await service.registerMessageGroupService(
-    TEST_GROUP_ID,
-    TEST_REPLICA_ID,
-    {getRole: () => 'leader'},
-  );
-
-  t.equal(
-    attempts,
-    2,
-    'MOVE_REPLICA register-service timeout should remain retryable',
-  );
-  t.same(
-    observedTimeoutMs,
-    [
-      TEST_CONFIGURED_TIMEOUT_MS,
-      TEST_CONFIGURED_TIMEOUT_MS,
-    ],
-    'MOVE_REPLICA register-service attempts should keep the configured HTTP timeout',
-  );
-  t.same(
-    retryDelays,
-    [TEST_RETRY_DELAY_MS],
-    'register-service attempts should keep the canonical retry delay',
-  );
-});
-
-test('NodeJoiningService - MOVE_REPLICA register-service caps long request ' +
-  'timeout', async (t) => {
-  initializeTestEnvironment();
-
-  const TEST_CONFIGURED_TIMEOUT_MS = NUM.THIRTY_THOUSAND;
-  const TEST_MOVE_REPLICA_REGISTER_TIMEOUT_MS =
-    BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_WRITE_RETRY_TIMEOUT_MS +
-    BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS +
-    TIME_MS.SECOND * NUM.FIVE;
-  const TEST_RETRY_DELAY_MS = NUM.TEN;
-  const TEST_ASSIGNMENT_ID = '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce7';
-  const TEST_NODE_ID = '550e8400-e29b-41d4-a716-44665544010c';
-  const TEST_NODE_ADDRESS = 'ws://localhost:9090';
-  const TEST_SEED_ADDRESS = 'http://localhost:8080';
-  const TEST_GROUP_ID = 'mg-1';
-  const TEST_REPLICA_ID = 'mg-1-r0';
-
-  let attempts = 0;
-  const observedTimeoutMs = [];
-  const retryDelays = [];
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-    config: {
-      httpTimeoutMs: TEST_CONFIGURED_TIMEOUT_MS,
-      leadershipWaitTimeoutMs: TEST_CONFIGURED_TIMEOUT_MS,
-      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
-      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
-      leadershipWaitBackoffMultiplier: 1,
-      leadershipWaitJitterRatio: 0,
-    },
-    sleep: async (delayMs) => {
-      retryDelays.push(delayMs);
-    },
-    httpPost: async (url, _payload, options = {}) => {
-      if (!url.endsWith('/register-service')) {
-        throw new Error('unexpected URL in MOVE_REPLICA register-service test');
-      }
-      const timeoutMs = Number.isFinite(options?.timeoutMs) ?
-        options.timeoutMs :
-        TEST_CONFIGURED_TIMEOUT_MS;
-      observedTimeoutMs.push(timeoutMs);
-      attempts += 1;
-      if (attempts === 1) {
-        throw new Error('Request timeout after ' + timeoutMs + 'ms');
-      }
-      return {success: true};
-    },
-  });
-  service.bootstrapResponse = {
-    messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
-      groupId: TEST_GROUP_ID,
-      replicaToMove: TEST_REPLICA_ID,
-      assignmentId: TEST_ASSIGNMENT_ID,
-    },
-  };
-
-  await service.registerMessageGroupService(
-    TEST_GROUP_ID,
-    TEST_REPLICA_ID,
-    {getRole: () => 'leader'},
-  );
-
-  t.equal(
-    attempts,
-    2,
-    'MOVE_REPLICA register-service timeout should remain retryable',
-  );
-  t.same(
-    observedTimeoutMs,
-    [
-      TEST_MOVE_REPLICA_REGISTER_TIMEOUT_MS,
-      TEST_MOVE_REPLICA_REGISTER_TIMEOUT_MS,
-    ],
-    'long MOVE_REPLICA register-service attempts should use the bounded probe timeout',
-  );
-  t.same(
-    retryDelays,
-    [TEST_RETRY_DELAY_MS],
-    'bounded register-service attempts should keep the canonical retry delay',
-  );
-});
 
 test('NodeJoiningService - bypasses HTTP register-service for local seed self-registration',
   async (t) => {
@@ -702,85 +287,6 @@ test('NodeJoiningService - query-state shortcut keeps terminal ' +
   );
 });
 
-test('NodeJoiningService - MOVE_REPLICA seed registration preserves ' +
-  'assignment publication when the query-state shortcut is requested', async (t) => {
-  initializeTestEnvironment();
-
-  const TEST_NODE_ID = 'join-node-move-replica-upsert';
-  const TEST_NODE_ADDRESS = 'ws://localhost:9090';
-  const TEST_SEED_ADDRESS = 'http://localhost:8080';
-  const TEST_GROUP_ID = 'mg-1';
-  const TEST_REPLICA_ID = 'mg-1-r0';
-  const TEST_ASSIGNMENT_ID = '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce7';
-  // A join registration is a birth under D1: the row is born STOPPED and its
-  // activation is the later handler-bound CAS, not this write.
-  const TEST_REQUESTED_STATUS = SERVICE_STATUS.STOPPED;
-  let httpCalls = 0;
-  let httpPayload = null;
-  const upsertCalls = [];
-  const seededRows = [];
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-    httpPost: async (_url, payload) => {
-      httpCalls += 1;
-      httpPayload = payload;
-      return {success: true};
-    },
-  });
-  service.seedNodeId = 'seed-node-1';
-  service.bootstrapResponse = {
-    messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
-      groupId: TEST_GROUP_ID,
-      replicaToMove: TEST_REPLICA_ID,
-      assignmentId: TEST_ASSIGNMENT_ID,
-    },
-  };
-  service.upsertJoinServiceRowWithRetry = async (row, options) => {
-    upsertCalls.push({row, options});
-    return {success: true};
-  };
-  service.seedJoinTimeCacheRow = (tableName, row) => {
-    seededRows.push({tableName, row});
-  };
-
-  await service.registerMessageGroupService(
-    TEST_GROUP_ID,
-    TEST_REPLICA_ID,
-    {getRole: () => 'leader'},
-    {
-      status: TEST_REQUESTED_STATUS,
-      [QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION]: true,
-    },
-  );
-
-  t.equal(
-    httpCalls,
-    1,
-    'MOVE_REPLICA registration should remain owned by seed HTTP',
-  );
-  t.equal(
-    upsertCalls.length,
-    0,
-    'the query-state shortcut must not replace MOVE_REPLICA seed admission',
-  );
-  t.equal(
-    httpPayload?.assignment_id,
-    TEST_ASSIGNMENT_ID,
-    'seed registration should preserve the MOVE_REPLICA assignment token',
-  );
-  t.equal(
-    httpPayload?.status,
-    TEST_REQUESTED_STATUS,
-    'seed registration should preserve the requested service status',
-  );
-  t.equal(seededRows.length, 0,
-    'the seed-owned registration path should not pre-seed query-state cache rows');
-});
-
 test('NodeJoiningService - fails fast on unauthorized replica owner conflict at startup',
   async (t) => {
     initializeTestEnvironment();
@@ -793,7 +299,7 @@ test('NodeJoiningService - fails fast on unauthorized replica owner conflict at 
     });
     service.bootstrapResponse = {
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: 'MOVE_REPLICA',
         groupId: 'mg-1',
         replicaToMove: 'mg-1-r1',
         sourceNodeId: 'seed-node-1',
@@ -821,9 +327,13 @@ test('NodeJoiningService - fails fast on unauthorized replica owner conflict at 
     );
   });
 
+// W8 (identity-reuse safety fix, A3): no assignment authorizes starting a
+// message-group replica another node owns - not even a MOVE_REPLICA
+// assignment with a token from a seed that still moves message-group
+// identities; this test once pinned that takeover.
 test(
-  'NodeJoiningService - allows replica startup when MOVE_REPLICA assignment token ' +
-    'authorizes ownership transfer',
+  'NodeJoiningService - refuses replica startup even when an old-style ' +
+    'MOVE_REPLICA assignment token names the replica',
   async (t) => {
     initializeTestEnvironment();
 
@@ -835,7 +345,7 @@ test(
     });
     service.bootstrapResponse = {
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: 'MOVE_REPLICA',
         groupId: 'mg-1',
         replicaToMove: 'mg-1-r1',
         sourceNodeId: 'seed-node-1',
@@ -857,9 +367,10 @@ test(
       address: 'seed-node-1/message-group/mg-1-r1',
     });
 
-    t.doesNotThrow(
+    t.throws(
       () => service.assertReplicaStartupOwnership('mg-1-r1'),
-      'authorized MOVE_REPLICA assignment should permit startup handoff',
+      /replica_owner_conflict/i,
+      'a moved message-group identity is never started on a joiner',
     );
   },
 );

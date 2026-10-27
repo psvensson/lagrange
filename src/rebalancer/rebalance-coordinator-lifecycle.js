@@ -22,6 +22,25 @@ const LOCAL_STR_CDCGROUPPROPAGATIONSERVICE = 'cdcGroupPropagationService';
 const LOCAL_STR_BOOTSTRAPREADINESSSTATE = 'bootstrapReadinessState';
 const LOCAL_STR_STARTUPRECOVERYCOORDINATOR = 'startupRecoveryCoordinator';
 const LOCAL_STR_CONTROLPLANEREADINESSSERVICE = 'controlPlaneReadinessService';
+const FAILED_CREATE_CLEANUP_RELEASE_RECOVERY_OWNER =
+  'failed_create_cleanup_release';
+
+function startFailedCreateCleanupReleaseRecovery(coordinator) {
+  const recovery = coordinator.workflowOwner
+    ?.recoverFailedCreateCleanupReleaseDebt?.({
+      onQueryFailure(error) {
+        coordinator.logQueryOperationsFailure(error, {
+          recoveryOwner: FAILED_CREATE_CLEANUP_RELEASE_RECOVERY_OWNER,
+        });
+      },
+    });
+  // The authoritative query error is logged while the joined/fenced recovery
+  // lane is still held. This catch only consumes that already-owned rejection;
+  // it must never perform teardown-visible logging or schedule another owner.
+  if (recovery && typeof recovery.catch === LOCAL_STR_FUNCTION) {
+    void recovery.catch(() => {});
+  }
+}
 
 // Option keys whose sync is a plain same-named property assignment, split
 // around the bootstrapReadinessState branch to preserve assignment order:
@@ -332,6 +351,10 @@ class RebalanceCoordinatorLifecycle {
       options.repository ||
       new ReplicaOperationRepository({
         nodeId: this.nodeId,
+        // The membership owner claim is bound to this process's issued boot
+        // incarnation, the one the router carries and the nodes row publishes.
+        membershipOwnerBootIncarnation:
+          options.bootIncarnation ?? this.messageRouter?.bootIncarnation ?? null,
         systemTableCache: this.systemTableCache,
         cdcIntegrationService: this.cdcIntegrationService,
         controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
@@ -371,8 +394,8 @@ class RebalanceCoordinatorLifecycle {
         isInitialized: () => this.initialized,
         releaseReservationForOperation: (op) =>
           this.releaseReservationForOperation(op),
-        ensureReservationForOperation: (op) =>
-          this.ensureReservationForOperation(op),
+        ensureReservationForOperation: (op, reservationOptions) =>
+          this.ensureReservationForOperation(op, reservationOptions),
         hasStorageReservationSupport: () =>
           this.hasStorageReservationSupport(),
         getCurrentPublishedMembershipEpoch: () =>
@@ -603,6 +626,7 @@ class RebalanceCoordinatorLifecycle {
     }
 
     this.initialized = true;
+    startFailedCreateCleanupReleaseRecovery(this);
   }
 
   /**
@@ -666,6 +690,7 @@ class RebalanceCoordinatorLifecycle {
       this.timeoutCheckInFlight = true;
       void this.checkTimeouts()
         .then(() => this.reconcileOrphanedOperations())
+        .then(() => this.reconcileMessageGroupMembershipDebt())
         .catch((error) => {
           this.logQueryOperationsFailure(error);
         })

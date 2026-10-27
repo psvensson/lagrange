@@ -13,6 +13,11 @@ const ACTIVE_GATE_READINESS_MODE_STARTUP = 'startup';
 export const ACTIVE_GATE_CLOSURE_RECORD_ID_PRIORITY_SPREAD = 'CL-003';
 export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD =
   'publication_converged_priority_spread_pending';
+// A closure state runtimes recorded before the owner decision of 2026-10-04
+// deleted it (the closure overriding a stale durable summary). New runtimes
+// never emit it; replay and failure bundles classify it in old artifacts.
+export const LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION =
+  'closure_satisfied_stale_publication';
 export const ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_SNAPSHOT_TIMEOUT = 'CL-004';
 export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_TIMEOUT =
   'startup_active_snapshot_timeout';

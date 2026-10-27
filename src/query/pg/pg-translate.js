@@ -7,6 +7,7 @@
  */
 
 import {EXPR_TYPE} from '../parser-constants.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from '../query-constants.js';
 import {PG_TRANSLATE_ERROR, PG_EXPR_TYPE} from './pg-compat-constants.js';
 import {resolveAffinity} from './pg-type-affinity.js';
 
@@ -118,8 +119,8 @@ function translateIlike(expr, convertExprFn) {
 
 /**
  * Translates ON CONFLICT clause on an INSERT AST.
- * DO NOTHING → orIgnore=true, DO UPDATE → orReplace=true.
- * Mutates the insertAst in place by setting orIgnore/orReplace flags.
+ * DO NOTHING → orIgnore=true; DO UPDATE / REPLACE throws UNSUPPORTED_SQL_FEATURE.
+ * Mutates the insertAst in place by setting orIgnore flag.
  *
  * node-sql-parser PG mode produces:
  *   { keyword: 'on', action: { keyword: 'do', expr: { type, value } } }
@@ -144,7 +145,9 @@ function translateOnConflict(insertAst, onConflict) {
     action === ON_CONFLICT_ACTION.UPDATE ||
     action === ON_CONFLICT_ACTION.REPLACE
   ) {
-    insertAst.orReplace = true;
+    const error = new Error(QUERY_ERROR_MSG.ON_CONFLICT_DO_UPDATE_UNSUPPORTED);
+    error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+    throw error;
   }
 }
 

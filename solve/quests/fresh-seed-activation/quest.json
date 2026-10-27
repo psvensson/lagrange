@@ -1,0 +1,62 @@
+{
+  "schema": "solve-quest/2",
+  "id": "fresh-seed-activation",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A legitimately admitted fresh seed completes protected activation, durably transfers its original registration and cluster-identity rights, and reaches normal service through the supported startup path.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/fresh-seed-activation/evidence/receipt.json",
+      "requiredReceipts": [
+        "protected-activation-admitted-openings-only",
+        "original-rights-durable-monotonic-transfer",
+        "public-admission-closed-until-handoff",
+        "public-write-and-read-served",
+        "same-data-restart-served-or-typed-hold",
+        "retained-partial-uncertain-cold-states-keep-hold",
+        "independent-verification-and-applicable-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "owner-decision-2-2026-10-26",
+      "statement": "Child of raft-rs-full-cutover by owner decision 2 of 2026-10-26 (solve/epics/raft-rs-full-cutover/evidence/owner-review-2026-10-26/OWNER-REVIEW-2026-10-26.md). Not an amendment of retained-seed-original-handoff: that sealed Quest ends HANDOFF_COMPLETE_SERVING_DEFERRED by design and this Quest neither restates, widens nor satisfies its claim or receipts."
+    },
+    {
+      "id": "live-issuer-only-for-admitted-openings",
+      "statement": "Only the live original issuer (preparation opening mode LIVE_ISSUER, set by prepare() in this process) may start elections, and only for openings admitted under its exact allocation. The decision replaces the unconditional throw in assertOriginalSeedContinuation (src/bootstrap/seed-original-allocation-startup.js) with one decision of the preparation owner keyed on its mode; COLD_RECOVERY, a null mode and any other state keep the hold exactly as today."
+    },
+    {
+      "id": "monotonic-durable-right-consumption",
+      "statement": "Registration consumes each original SERVICES birth right and the anchor's reserved cluster-identity right UNUSED -> SUBMITTED durably before its single submission, and SUBMITTED -> TRANSFERRED only after an exact authoritative committed same-value read. A missing answer, timeout or absence never resets a right or re-arms the INSERT. The rights-transition writer is transitionOriginalRight or its owner-defined successor; WHERE it lives is decided by the lifecycle-owner correction Q3 with the Q4 census witness, and this Quest consumes that decision rather than re-deriving it."
+    },
+    {
+      "id": "public-admission-after-handoff",
+      "statement": "Public admission (BootstrapAPI readiness, the transport WebSocket listener and external transport admission) opens only after every declared right is TRANSFERRED; internal activation is narrowly authorized and grants no public effect. One startup admission decision is consumed by the existing ingress owners; no listener, ready snapshot or completed phase grants it."
+    },
+    {
+      "id": "protections-preserved",
+      "statement": "Retained, partial, uncertain and cold mid-handoff states keep their protections: the retained classification hold, the directory-custody refusal, the authority refusal, native entry only by the exact opening, and COLD_RECOVERY never silently authorized. No fixture, default or double in src supplies an owner. Existing sealed witnesses (seed-original-attempt-lifetime, raft-rs-original-*, retained-seed-original-handoff) are not weakened."
+    },
+    {
+      "id": "restart-obligation-visible",
+      "statement": "The restart on the same durable data is measured and reported as served or as an owner-named typed hold. This Quest makes no recovery claim: two-start, retained-handoff and cold mid-handoff obligations remain with retained-seed-original-handoff and the final cutover acceptance. Reports distinguish harness defects resolved, startup assertions still blocked by a hold, and fresh-seed acceptance demonstrated."
+    },
+    {
+      "id": "proof-and-review",
+      "statement": "Proof is the witness test/bootstrap/fresh-seed-activation.integration.test.js through actual startLagrangeRuntime in genuinely new child processes, consuming owner fixtures only, recorded into the receipt by a quest-evidence writer on canonical lab execution with retries 0. Source changes need an independent approving verification newer than the last attempt. No deadline, assertion, baseline or ratchet relaxation."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "retry-loops",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "owner-interaction"
+  ],
+  "sealedAt": "a51f4992965d4a1ec94bb7c3b1824795887be129"
+}

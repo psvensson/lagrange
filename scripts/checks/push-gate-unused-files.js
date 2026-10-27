@@ -19,9 +19,11 @@
  * and epic - reaches it. It prints the count of tracked scripts outside that closure
  * (the script-reachability-cull probe, target 0); `--list` prints them first.
  */
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+
+import {execGit} from './git-invocation.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayForEach = Function.call.bind(Array.prototype.forEach);
@@ -62,7 +64,7 @@ const SCRIPT_MENTION = /scripts\/[\w./-]+?\.(?:js|sh|mjs)\b/gu;
 const RELATIVE_PATH_LITERAL = /['"](\.{1,2}\/[^'"\s]+)['"]/gu;
 
 function trackedPaths() {
-  const out = execFileSync('git', ['ls-files', '-z'], {encoding: TEXT_ENCODING});
+  const out = execGit(['ls-files', '-z'], {encoding: TEXT_ENCODING});
   return new Set(arrayFilter(stringSplit(out, NUL), Boolean));
 }
 

@@ -1,0 +1,153 @@
+{
+  "schema": "mg-delivery-user-handover-preservation-receipt/v1",
+  "verified_at": "2026-10-24T06:45:45.822697+00:00",
+  "branch": "work/mg-delivery-resume-r2-20261023",
+  "base_commit": "1e2fcc2da391ab72883132a22fbfbde39b2313f7",
+  "canonical_source_commit": "947107b63d54025d41253ae3414faf3af790ff88",
+  "remote_source_ref_readback": "947107b63d54025d41253ae3414faf3af790ff88",
+  "source_commit_tree": "87c15352c9be5c3851bd89f00fb65b62e8c5401c",
+  "source_subtree": "5dcc352fe5c279215d33a9d6b7e97173cace3d10",
+  "test_subtree": "9c1df949093858a711142563dc203844366e092e",
+  "source_commit_changed_files_verified": 20,
+  "verified_files": [
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/MANIFEST-mg-delivery-user-handover-2026-10-24.json",
+      "bytes": 6478,
+      "sha256": "c9dc53b69050e6d34b066fdbf68ceb6e3111cd268abd94a484f87883127875b5",
+      "git_blob_sha": "e604fabefa2b9fb7d4b9085a80d30eb89c2b2992"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-foreground-boundary-resume-r2-2026-10-23.md",
+      "bytes": 8469,
+      "sha256": "2859ccb9fef7a6997ad23d2f8e78df2692a1481ec3612b40dde273882589ef10",
+      "git_blob_sha": "51eac2913c0d38bf0f46d2947fb37581da3b2dd8"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-receiver-admission-predecessor-resume-r2-2026-10-23.md",
+      "bytes": 13367,
+      "sha256": "026dc0ff0d086265c94058db45fa0631b777e8e6481585581049ce0880544bcf",
+      "git_blob_sha": "30be9d3cf922af9615ea6ebded1b538b77dfe68c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-receiver-admission-predecessor-resume-r2b-2026-10-23.md",
+      "bytes": 6960,
+      "sha256": "d77c08d0f2ecd66fbbd1abc4bd1c581a66e10bc41319e622dfcc50d3e098f5a3",
+      "git_blob_sha": "af60c4587c0fe5cdee324941fb4c0696101fc79a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-static-foreground-source-resume-r2-2026-10-23.md",
+      "bytes": 10064,
+      "sha256": "e864b5c7573b0a428bbb225fb34340bcb78fa066fa66dd25143a9cf4196681c9",
+      "git_blob_sha": "9d23177d42c4ee2f3e6b2ff99bcd61550346647e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/fleet-request.json",
+      "bytes": 593,
+      "sha256": "7a92b375cc4f415af2182aee895d40dbb10837a286a2528e84ec1c0308087627",
+      "git_blob_sha": "7b282262514425338f93f3f79986f53a52c18b3c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/ping-request.json",
+      "bytes": 580,
+      "sha256": "772512c31f0d0d3746f0051a5830793fcd9e1fd8ba18907594df021c57650eb1",
+      "git_blob_sha": "45c2e03de07c076f12f074436f7ccef4e79915da"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/preflight-submission-reconciliation-2026-10-24.json",
+      "bytes": 1734,
+      "sha256": "67d68f44b988b1fb52bb55f6d4a9315053e3f79ba0256d3399214b83c31558f1",
+      "git_blob_sha": "13bbd4fbf529f882d748a35b874bf6ab40d77a6a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/run-lab-request.py",
+      "bytes": 513,
+      "sha256": "dad8d81399a57eb5bc65b17172c8cfa812a69de4650b89a9c71bfaf5f16be45e",
+      "git_blob_sha": "059fe188c3c152c4b7997d68af16dcf1e36821a5"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/static-foreground-receipt.json",
+      "bytes": 10255,
+      "sha256": "a976ace0dac40616b3fb5609d14904112fca47519321c5170561a63c4c27d086",
+      "git_blob_sha": "4771895c90c6eb0ae3e7e951d16494a1274c2a28"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/log.ndjson",
+      "bytes": 65608,
+      "sha256": "5940600af415e5f0a8a3b640b13156fff4e49e5b49c3e9ae273afcd6629dc536",
+      "git_blob_sha": "093f6176f4b0924c24db4628c3119ecaa2b56236"
+    },
+    {
+      "path": "src/partition/partition-cdc-obligation-delivery.js",
+      "bytes": 27695,
+      "sha256": "e75b632711407fe62a0a988db8289f92b92d75c7dcfb48a19725f4bf93b53e5b",
+      "git_blob_sha": "0c78fc428c48f7c79b7f3fc014e089fdbf88694f"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "bytes": 28087,
+      "sha256": "c01fd917454bcb9b2e66453c646628cea36f1b22943cedc1feeb65d690ccf4bc",
+      "git_blob_sha": "95037e63b073648e2cd21fd6dbd2f9fc6108e82f"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-foreground-retry.js",
+      "bytes": 1535,
+      "sha256": "664f0d4e8d71eb68f291850c7e808ff7ccd6a42443a2fd3f36653bf2addd6712",
+      "git_blob_sha": "ef28609ef621828f65f5d92a73aadddcd9d394df"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-retry-wait-report.js",
+      "bytes": 5095,
+      "sha256": "e40e7b51b0e642035f698c33e08e9738e277a268606ea36e8bf6fabefd47ae93",
+      "git_blob_sha": "39e6a32c0d7557f9bd109b9ba9f04e76196ada77"
+    },
+    {
+      "path": "src/transport/message-router-ack-delivery.js",
+      "bytes": 7241,
+      "sha256": "cafcf8d5c232b7ef2bde63df07755ca20970a4488f9030bf3228b72b555f65e2",
+      "git_blob_sha": "97a45d70b6f710f942f332957b7cdf7225f4a88d"
+    },
+    {
+      "path": "src/transport/message-router-delivery-lifetime.js",
+      "bytes": 8885,
+      "sha256": "4040ac08be6f4dc085f2d5fcab7c9677c9581c7c6eb0f1a4b9ed8f2f95947b4b",
+      "git_blob_sha": "9994d02a73b771ef7027e13351993ab82e3ab8c3"
+    },
+    {
+      "path": "test/message-group/message-group-cdc-receiver-admission.test.js",
+      "bytes": 17006,
+      "sha256": "697d8f40301fc87ad410b22ddb3464244b44b027b70d15c73debd2861fdc6072",
+      "git_blob_sha": "124e3e16240184e32138372dd4f6869196ecc35c"
+    },
+    {
+      "path": "test/message-group/message-group-native-provisional-route.test.js",
+      "bytes": 24331,
+      "sha256": "43cd093c6a10a69a49c7795f8a137f481fd1723f47f85b7544c4296312b3b751",
+      "git_blob_sha": "5d4c41d199d5ccf4d488fb2337c7fa780732dcf9"
+    },
+    {
+      "path": "test/topology/cdc-group-propagation-foreground-boundary.test.js",
+      "bytes": 12802,
+      "sha256": "22e431a614636d34a8903b963608ca5245370046668b4825ae9661e1cce5e123",
+      "git_blob_sha": "dc172116ba72e74737163826097bef14fdaff994"
+    }
+  ],
+  "local_prepublication_commit": "92bc965165b631ba70cc6898dad36acb649a2318",
+  "local_prepublication_commit_raw": "tree 87c15352c9be5c3851bd89f00fb65b62e8c5401c\nparent 1e2fcc2da391ab72883132a22fbfbde39b2313f7\nauthor Codex <codex@openai.com> 1792824094 -0600\ncommitter Codex <codex@openai.com> 1792824094 -0600\n\nwip: preserve reviewed rs-raft delivery R2 and unmeasured witnesses [skip ci]\n\nUser requested all current changes committed and pushed with a handover.\nPreserve six source files, three test files, exact independent reviews,\nscoped static receipts, the request-builder wrapper and preflight evidence.\n\nThe corrected C1 predecessor witness is source-reviewed but unexecuted.\nC1 production correction and C2 test/source correction remain unfinished.\nCanonical metadata and final composed static/runtime validation are pending.\n\nUse documented LAGRANGE_SKIP_PRECOMMIT=1 for non-main WIP preservation.\nThe staged binary-evidence guard and whitespace check passed separately.\nThis commit does not close the Quest or authorize merge/publication.\n",
+  "local_and_canonical_source_tree_identical": true,
+  "publication_method": "Authenticated GitHub app: create exact Git tree, create commit on existing base, create new non-main branch; fetched back through Git and compared every changed blob.",
+  "shell_push_attempt": {
+    "exit_code": 128,
+    "error": "fatal: could not read Username for 'https://github.com': No such device or address"
+  },
+  "preservation_checks": {
+    "staged_whitespace_exit": 0,
+    "initial_sandbox_binary_guard": "Failed to launch Git child inspection: spawnSync git EPERM; no guard pass claimed for that attempt.",
+    "same_binary_guard_with_authorized_escalation_exit": 0,
+    "binary_archives_committed": false,
+    "manifest_verified_against_committed_blobs": true
+  },
+  "scope": "User-requested WIP preservation. Runtime, canonical metadata and final composed statics remain unexecuted. No Quest closure, merge or publication approval.",
+  "preflight_status_file": "mg-delivery-resume-r2-2026-10-23/preflight-submission-reconciliation-2026-10-24.json",
+  "source_and_test_bytes_frozen": true,
+  "handover_will_be_documentation_only_child": true
+}

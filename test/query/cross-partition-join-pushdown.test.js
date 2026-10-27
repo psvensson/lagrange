@@ -11,6 +11,7 @@
  * join (SQL applies WHERE after the join).
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -74,7 +75,7 @@ function buildJoinCluster(partitionSpec) {
   const messageRouter = {
     async deliver(address, message) {
       if (message.type !== 'QUERY') {
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       }
       const partitionId = address.split('/')[2];
       const db = partitionDbs.get(partitionId);
@@ -85,13 +86,12 @@ function buildJoinCluster(partitionSpec) {
         params: message.params || [],
         rowCount: rows.length,
       });
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows,
         count: rows.length,
         partitionId,
-      };
+      });
     },
   };
 

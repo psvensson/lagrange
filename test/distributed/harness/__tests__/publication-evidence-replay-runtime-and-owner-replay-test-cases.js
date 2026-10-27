@@ -124,9 +124,7 @@ export function registerPublicationEvidenceReplayRuntimeAndOwnerTests(context) {
     REPLAY_TEST_123850Z_WORKFLOW_STEP_PENDING,
     REPLAY_TEST_123850Z_WORKFLOW_STEP_TIMEOUT_MS,
     REPLAY_TEST_123850Z_WORKFLOW_TIMEOUT_BOUNDARY,
-    REPLAY_TEST_CLOSURE_RECORD_ID,
-    REPLAY_TEST_CLOSURE_WITNESS_CLASS,
-    REPLAY_TEST_CLOSURE_WITNESS_STATE,
+    REPLAY_TEST_NON_PENDING_CLOSURE_WITNESS_STATE,
     REPLAY_TEST_COMPARISON_LABEL_PATTERN,
     REPLAY_TEST_DURABLE_BLOCKED_PARTITION_ID,
     REPLAY_TEST_ENCODING,
@@ -182,26 +180,30 @@ export function registerPublicationEvidenceReplayRuntimeAndOwnerTests(context) {
       REPLAY_TEST_DURABLE_BLOCKED_PARTITION_ID,
     ]);
     assert.deepEqual(replaySummary.comparison.replayedBlockedPartitionIds, []);
+    // SUPERSEDED (owner decision 2026-10-04, "delete the second
+    // authority"). Before: replaying these old artifact rows through the
+    // runtime produced the stale-publication closure witness (CL-003, its
+    // witness class, refresh required). The runtime closure now has two
+    // states and names no record: the replay classifies the replayed witness
+    // as the one non-pending state, and the durable-stale/replayed-satisfied
+    // drift above - the census refresh the publisher writes - is unchanged.
     assert.equal(
       replaySummary.replayedPublication.closureWitness.state,
-      REPLAY_TEST_CLOSURE_WITNESS_STATE,
+      REPLAY_TEST_NON_PENDING_CLOSURE_WITNESS_STATE,
     );
     assert.equal(
-      replaySummary.replayedPublication.closureWitness.closureRecordId,
-      REPLAY_TEST_CLOSURE_RECORD_ID,
-    );
-    assert.equal(
-      replaySummary.replayedPublication.closureWitness.closureWitnessClass,
-      REPLAY_TEST_CLOSURE_WITNESS_CLASS,
+      replaySummary.replayedPublication.closureWitness.closureRecordId ?? null,
+      null,
+      'the replayed runtime witness names no closure record',
     );
     assert.equal(
       replaySummary.comparison.closureWitnessClassification,
       PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION
-        .REFRESH_REQUIRED,
+        .SATISFIED_FRESH,
     );
     assert.equal(
       replaySummary.comparison.closureWitnessPublicationRefreshRequired,
-      true,
+      false,
     );
     assert.equal(
       replaySummary.rowCounts.services,

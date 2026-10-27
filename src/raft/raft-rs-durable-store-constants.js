@@ -3,10 +3,9 @@
 // It lives in the replica's OWN SQLite database - the same file and the same
 // connection the replica already uses - so that the configuration state and
 // its applied progress can be one transaction with the rest of the replica's
-// durable state. It does NOT reuse liferaft's `_raft_log` and `_raft_state`:
-// those tables carry liferaft's own entry shape, and this quest never
-// migrates a liferaft log nor changes liferaft's behaviour. Two backends,
-// two records, one database.
+// durable state. It does NOT reuse the retired `_raft_log` and `_raft_state`
+// tables: those carry a different entry shape and are never migrated; a
+// database that still holds them fails closed at partition initialization.
 //
 // Every sixty-four-bit Raft value crosses this boundary as a decimal string
 // and is bound as a BigInt. Nothing passes through a JavaScript Number.
@@ -60,7 +59,8 @@ const RAFT_RS_SQL = Object.freeze({
       learners_next TEXT NOT NULL,
       auto_leave INTEGER NOT NULL,
       bootstrap_index INTEGER,
-      admission_index INTEGER
+      admission_index INTEGER,
+      membership_generation_index INTEGER NOT NULL DEFAULT 0
     )
   `,
   CREATE_SNAPSHOT_TABLE: `
@@ -73,12 +73,17 @@ const RAFT_RS_SQL = Object.freeze({
       learners TEXT NOT NULL,
       voters_outgoing TEXT NOT NULL,
       learners_next TEXT NOT NULL,
-      auto_leave INTEGER NOT NULL
+      auto_leave INTEGER NOT NULL,
+      membership_generation_index INTEGER
     )
   `,
   DELETE_LOG_FROM: `
     DELETE FROM ${RAFT_RS_TABLE.LOG}
     WHERE group_id = ? AND log_index >= ?
+  `,
+  DELETE_LOG_UP_TO: `
+    DELETE FROM ${RAFT_RS_TABLE.LOG}
+    WHERE group_id = ? AND log_index <= ?
   `,
   INSERT_LOG_ENTRY: `
     INSERT OR REPLACE INTO ${RAFT_RS_TABLE.LOG}
@@ -89,6 +94,17 @@ const RAFT_RS_SQL = Object.freeze({
     SELECT log_index, term, entry_type, data
     FROM ${RAFT_RS_TABLE.LOG}
     WHERE group_id = ?
+    ORDER BY log_index ASC
+  `,
+  SELECT_LOG_ENTRY_AT: `
+    SELECT log_index, term, entry_type, data
+    FROM ${RAFT_RS_TABLE.LOG}
+    WHERE group_id = ? AND log_index = ?
+  `,
+  SELECT_LOG_ENTRIES_UP_TO: `
+    SELECT log_index, term, entry_type, data
+    FROM ${RAFT_RS_TABLE.LOG}
+    WHERE group_id = ? AND log_index <= ?
     ORDER BY log_index ASC
   `,
   // The applied proposals of one group: NORMAL entries that carry a
@@ -121,6 +137,21 @@ const RAFT_RS_SQL = Object.freeze({
     FROM sqlite_master
     WHERE type = 'table' AND name = '${RAFT_RS_TABLE.APPLIED_STATE}'
   `,
+  COUNT_SNAPSHOT_TABLE: `
+    SELECT COUNT(*) AS present
+    FROM sqlite_master
+    WHERE type = 'table' AND name = '${RAFT_RS_TABLE.SNAPSHOT}'
+  `,
+  SELECT_SNAPSHOT_DATA: `
+    SELECT data
+    FROM ${RAFT_RS_TABLE.SNAPSHOT}
+    WHERE group_id = ?
+  `,
+  SELECT_SNAPSHOT_INDEX: `
+    SELECT snapshot_index
+    FROM ${RAFT_RS_TABLE.SNAPSHOT}
+    WHERE group_id = ?
+  `,
   UPSERT_HARD_STATE: `
     INSERT INTO ${RAFT_RS_TABLE.HARD_STATE}
       (group_id, term, vote, commit_index)
@@ -145,19 +176,21 @@ const RAFT_RS_SQL = Object.freeze({
   UPSERT_APPLIED_STATE: `
     INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE}
       (group_id, applied_index, voters, learners, voters_outgoing,
-       learners_next, auto_leave)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+       learners_next, auto_leave, membership_generation_index)
+    VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, 0))
     ON CONFLICT(group_id) DO UPDATE SET
       applied_index = excluded.applied_index,
       voters = excluded.voters,
       learners = excluded.learners,
       voters_outgoing = excluded.voters_outgoing,
       learners_next = excluded.learners_next,
-      auto_leave = excluded.auto_leave
+      auto_leave = excluded.auto_leave,
+      membership_generation_index = COALESCE(?, membership_generation_index)
   `,
   SELECT_APPLIED_STATE: `
     SELECT applied_index, voters, learners, voters_outgoing, learners_next,
-           auto_leave, bootstrap_index, admission_index
+           auto_leave, bootstrap_index, admission_index,
+           membership_generation_index
     FROM ${RAFT_RS_TABLE.APPLIED_STATE}
     WHERE group_id = ?
   `,
@@ -170,8 +203,9 @@ const RAFT_RS_SQL = Object.freeze({
   UPSERT_BOOTSTRAP_APPLIED_STATE: `
     INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE}
       (group_id, applied_index, voters, learners, voters_outgoing,
-       learners_next, auto_leave, bootstrap_index, admission_index)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       learners_next, auto_leave, bootstrap_index, admission_index,
+       membership_generation_index)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(group_id) DO UPDATE SET
       applied_index = excluded.applied_index,
       voters = excluded.voters,
@@ -180,12 +214,23 @@ const RAFT_RS_SQL = Object.freeze({
       learners_next = excluded.learners_next,
       auto_leave = excluded.auto_leave,
       bootstrap_index = excluded.bootstrap_index,
-      admission_index = excluded.admission_index
+      admission_index = excluded.admission_index,
+      membership_generation_index = excluded.membership_generation_index
   `,
   // The applied-state table's columns, asked of the schema: a record written
   // before the participation gate lacks the gate's columns.
   SELECT_APPLIED_STATE_COLUMNS:
     `SELECT name FROM pragma_table_info('${RAFT_RS_TABLE.APPLIED_STATE}')`,
+  SELECT_SNAPSHOT_COLUMNS:
+    `SELECT name FROM pragma_table_info('${RAFT_RS_TABLE.SNAPSHOT}')`,
+  ADD_APPLIED_MEMBERSHIP_GENERATION: `
+    ALTER TABLE ${RAFT_RS_TABLE.APPLIED_STATE}
+    ADD COLUMN membership_generation_index INTEGER NOT NULL DEFAULT 0
+  `,
+  ADD_SNAPSHOT_MEMBERSHIP_GENERATION: `
+    ALTER TABLE ${RAFT_RS_TABLE.SNAPSHOT}
+    ADD COLUMN membership_generation_index INTEGER
+  `,
   UPDATE_ADMISSION_INDEX: `
     UPDATE ${RAFT_RS_TABLE.APPLIED_STATE}
     SET admission_index = ?
@@ -194,8 +239,9 @@ const RAFT_RS_SQL = Object.freeze({
   UPSERT_SNAPSHOT: `
     INSERT INTO ${RAFT_RS_TABLE.SNAPSHOT}
       (group_id, snapshot_index, snapshot_term, data, voters, learners,
-       voters_outgoing, learners_next, auto_leave)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       voters_outgoing, learners_next, auto_leave,
+       membership_generation_index)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(group_id) DO UPDATE SET
       snapshot_index = excluded.snapshot_index,
       snapshot_term = excluded.snapshot_term,
@@ -204,11 +250,13 @@ const RAFT_RS_SQL = Object.freeze({
       learners = excluded.learners,
       voters_outgoing = excluded.voters_outgoing,
       learners_next = excluded.learners_next,
-      auto_leave = excluded.auto_leave
+      auto_leave = excluded.auto_leave,
+      membership_generation_index = excluded.membership_generation_index
   `,
   SELECT_SNAPSHOT: `
     SELECT snapshot_index, snapshot_term, data, voters, learners,
-           voters_outgoing, learners_next, auto_leave
+           voters_outgoing, learners_next, auto_leave,
+           membership_generation_index
     FROM ${RAFT_RS_TABLE.SNAPSHOT}
     WHERE group_id = ?
   `,
@@ -241,6 +289,29 @@ const RAFT_RS_PERSISTENCE_ADMISSION = Object.freeze({
   USER_TRANSACTION_OPEN: 'user-transaction-open',
 });
 
+// How durably one store transaction commits (owner decision O4, 2026-10-05,
+// "option 2"). The replica database runs journal_mode WAL with synchronous
+// NORMAL: a NORMAL commit survives a process crash but not a power loss or
+// an OS crash, because SQLite does not sync the WAL on commit. What raft-rs
+// requires on disk before the Ready's messages leave (`Ready::must_sync`:
+// a changed term or vote, appended entries, a snapshot) commits SYNCED: the
+// connection is raised to synchronous FULL for that one transaction, so
+// SQLite fsyncs the WAL as part of COMMIT, and set back afterwards. Every
+// other transaction keeps the connection's own setting.
+const RAFT_RS_COMMIT_DURABILITY = Object.freeze({
+  SYNCED: 'synced',
+  CONNECTION_DEFAULT: 'connection-default',
+});
+// SQLite's own levels and pragma text for the durable commit. A level is a
+// number SQLite returned (0 OFF, 1 NORMAL, 2 FULL, 3 EXTRA); FULL and above
+// sync the WAL on every commit in WAL mode.
+const RAFT_RS_SYNCHRONOUS_PRAGMA = Object.freeze({
+  READ: 'synchronous',
+  FULL_LEVEL: 2,
+  SET_FULL: 'synchronous = FULL',
+  setLevel: (level) => `synchronous = ${Number(level)}`,
+});
+
 // Whether a durable record's schema carries the participation gate.
 const RAFT_RS_RECORD_COMPATIBILITY = Object.freeze({
   COMPATIBLE: 'compatible',
@@ -251,9 +322,42 @@ const RAFT_RS_RECORD_COMPATIBILITY = Object.freeze({
 });
 const RAFT_RS_PARTICIPATION_GATE_COLUMNS = Object.freeze([
   'bootstrap_index', 'admission_index']);
+const RAFT_RS_MEMBERSHIP_GENERATION_COLUMN = 'membership_generation_index';
 
 const RAFT_RS_STORE_ERROR_CODE = Object.freeze({
   USER_TRANSACTION_OPEN: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN',
+  DURABLE_COMMIT_INSIDE_TRANSACTION:
+    'RAFT_RS_STORE_DURABLE_COMMIT_INSIDE_TRANSACTION',
+  RETAINED_HISTORY_INVALID: 'RAFT_RS_RETAINED_HISTORY_INVALID',
+  RETAINED_HISTORY_UNAVAILABLE: 'RAFT_RS_RETAINED_HISTORY_UNAVAILABLE',
+});
+
+// Observation, never application or opening permission. Snapshot coverage
+// requires the checkpoint/application owner to supply the missing prefix.
+const RAFT_RS_RETAINED_HISTORY_COVERAGE = Object.freeze({
+  COMPLETE: 'complete',
+  SNAPSHOT_PREFIX: 'snapshot-prefix',
+});
+const RAFT_RS_RETAINED_ENTRY_PHASE = Object.freeze({
+  APPLIED: 'applied',
+  COMMITTED_PENDING: 'committed-pending',
+  LOCAL_UNCOMMITTED: 'local-uncommitted',
+});
+const RAFT_RS_RETAINED_ENTRY_KIND = Object.freeze({
+  NOOP: 'noop',
+  COMMAND: 'command',
+  CONFIGURATION: 'configuration',
+});
+const RAFT_RS_RETAINED_HISTORY_REASON = Object.freeze({
+  OBSERVATION: 'retained native record could not be read',
+  APPLIED_ROW: 'retained native record has no required applied row',
+  INTEGER: 'retained native record has an invalid exact integer',
+  CONFIGURATION: 'retained native record has an invalid configuration',
+  FRONTIER: 'retained native frontiers contradict each other',
+  TERM: 'retained native terms contradict each other',
+  GAP: 'retained native suffix has a gap',
+  ENTRY_TYPE: 'retained native record has an unknown entry type',
+  PAYLOAD: 'retained native record has invalid payload bytes',
 });
 
 const RAFT_RS_ZERO_INDEX = '0';
@@ -268,20 +372,31 @@ const RAFT_RS_STORE_ERROR_MSG = Object.freeze({
   USER_TRANSACTION_OPEN:
     'the rs-raft store refuses to write while its connection is inside a ' +
     'transaction the store did not open',
+  DURABLE_COMMIT_INSIDE_TRANSACTION:
+    'a durable rs-raft commit must be its own transaction: SQLite cannot ' +
+    'raise the synchronous level inside an open one, and an enclosing ' +
+    'commit would not be synced',
 });
 
 export {
   RAFT_RS_BOOLEAN_COLUMN,
+  RAFT_RS_COMMIT_DURABILITY,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_MEMBERSHIP_GENERATION_COLUMN,
   RAFT_RS_PARTICIPATION_GATE_COLUMNS,
   RAFT_RS_PERSISTENCE_ADMISSION,
   RAFT_RS_RECORD_COMPATIBILITY,
   RAFT_RS_RECORD_TABLES,
+  RAFT_RS_RETAINED_ENTRY_KIND,
+  RAFT_RS_RETAINED_ENTRY_PHASE,
+  RAFT_RS_RETAINED_HISTORY_COVERAGE,
+  RAFT_RS_RETAINED_HISTORY_REASON,
   RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
   RAFT_RS_STORE_ERROR_CODE,
   RAFT_RS_STORE_ERROR_MSG,
+  RAFT_RS_SYNCHRONOUS_PRAGMA,
   RAFT_RS_TABLE,
   RAFT_RS_ZERO_INDEX,
 };

@@ -22,6 +22,7 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
+import {spawnGit} from './checks/git-invocation.js';
 import {createSnapshotWorktree, removeWorktree} from './session-worktree.js';
 
 const DEFAULT_ENCODING = 'utf8';
@@ -112,7 +113,7 @@ function runTap(worktreePath, testFile) {
 
 function refHasPath(root, ref, relPath) {
   // Confirm a BLOB (file) at the ref, not a tree — `cat-file -e` returns 0 for directories too.
-  const result = spawnSync('git', ['-C', root, 'cat-file', '-t', `${ref}:${relPath}`],
+  const result = spawnGit(['-C', root, 'cat-file', '-t', `${ref}:${relPath}`],
     {encoding: DEFAULT_ENCODING});
   return result.status === 0 && result.stdout.trim() === 'blob';
 }
@@ -127,7 +128,7 @@ function revertSrcInWorktree(root, worktreePath, srcPaths, baseRef) {
     const existed = fs.existsSync(abs);
     saved.push({rel, existed, content: existed ? fs.readFileSync(abs) : null});
     if (refHasPath(root, baseRef, rel)) {
-      spawnSync('git', ['-C', worktreePath, 'checkout', baseRef, '--', rel], {encoding: DEFAULT_ENCODING});
+      spawnGit(['-C', worktreePath, 'checkout', baseRef, '--', rel], {encoding: DEFAULT_ENCODING});
     } else if (existed) {
       fs.rmSync(abs, {force: true});
     }
@@ -218,7 +219,7 @@ function main(argv = process.argv, root = process.cwd()) {
   }
   // A base that does not resolve to a commit would silently no-op every checkout and
   // masquerade as revert-noop; fail loudly instead.
-  const baseResolves = spawnSync('git', ['-C', root, ...GIT_REV_PARSE_VERIFY_ARGS,
+  const baseResolves = spawnGit(['-C', root, ...GIT_REV_PARSE_VERIFY_ARGS,
     `${args.base}${COMMIT_PEEL_SUFFIX}`], {encoding: DEFAULT_ENCODING}).status === 0;
   if (!baseResolves) {
     process.stderr.write(`--base does not resolve to a commit: ${args.base}\n`);

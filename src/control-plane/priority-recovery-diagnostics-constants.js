@@ -97,8 +97,6 @@ const PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON = Object.freeze({
   PLANNER_READY: 'planner_ready',
   REPLACE_REMOVE_DISPATCH_PHASE_ON_ELIGIBLE_TARGET:
     'replace_remove_dispatch_phase_on_eligible_target',
-  OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE:
-    'operational_target_visible_on_eligible_node',
   ACTIVE_OPERATION_STILL_BLOCKS_SPREAD:
     'active_operation_still_blocks_spread',
   UNSATISFIED: 'unsatisfied',

@@ -1,0 +1,36 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-participant-release-applied-position-barrier",
+  "status": "fail",
+  "base": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e",
+  "generatedAt": "2026-10-13T19:01:50.026673+00:00",
+  "receipts": [
+    {
+      "id": "actual-rejected-census-and-owner",
+      "passed": false,
+      "detail": "Initial red seal; implementation and revised complete release proof absent. Predecessor trace identifies rejected tuple but does not certify this new transition."
+    },
+    {
+      "id": "engaged-real-owner-regression",
+      "passed": false,
+      "detail": "Initial red seal; implementation and revised complete release proof absent. Predecessor trace identifies rejected tuple but does not certify this new transition."
+    },
+    {
+      "id": "fresh-seed-startup-at-existing-bounds",
+      "passed": false,
+      "detail": "Initial red seal; implementation and revised complete release proof absent. Predecessor trace identifies rejected tuple but does not certify this new transition."
+    },
+    {
+      "id": "recovery-and-interaction-preserved",
+      "passed": false,
+      "detail": "Initial red seal; implementation and revised complete release proof absent. Predecessor trace identifies rejected tuple but does not certify this new transition."
+    },
+    {
+      "id": "independent-review-and-static-gates",
+      "passed": false,
+      "detail": "Initial red seal; implementation and revised complete release proof absent. Predecessor trace identifies rejected tuple but does not certify this new transition."
+    }
+  ],
+  "predecessor": "seed-participant-release-native-startup-census",
+  "evidenceLimit": "No source repair, startup success, static/corpus or main approval."
+}

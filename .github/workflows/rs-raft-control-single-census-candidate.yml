@@ -1,0 +1,95 @@
+# Source-only WIP and exact regression evidence for control post-PAUSE census.
+# Focused gates are not an independent landing or rs-raft merge acceptance.
+name: rs-raft-control-single-census-candidate
+on:
+  push:
+    branches: [continue/rs-raft-control-pause-census-20261014]
+    paths:
+      - .github/workflows/rs-raft-control-single-census-candidate.yml
+      - src/node/replica-handler-participant-cutover.js
+      - test/partition/participant-release-protocol.test.js
+      - test/shards/impact-graph-seal.json
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-control-single-census-candidate
+  cancel-in-progress: false
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact locked dependency install
+        run: npm ci
+      - name: Capture all focused source-bound outcomes, preserve red
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/control-single-census-candidate
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          failed=0
+          npx eslint src/node/replica-handler-participant-cutover.js \
+            test/partition/participant-release-protocol.test.js \
+            > "$OUT/scoped-lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/scoped-lint.status"
+          if test "$lint" -ne 0; then
+            cat "$OUT/scoped-lint.log"
+            failed=1
+          fi
+          for t in \
+            audit:no-legacy-consensus-references \
+            audit:owner-boundary-segments; do
+            name="${t//:/-}"
+            npm run -s "$t" > "$OUT/$name.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$name.status"
+            echo "$t status=$rc"
+            if test "$rc" -ne 0; then failed=1; tail -n 25 "$OUT/$name.log"; fi
+          done
+          for file in \
+            test/partition/participant-release-protocol.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js \
+            test/partition/participant-release-native-application-order.test.js \
+            test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js; do
+            name="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$name.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$name.status"
+            echo "$file status=$rc"
+            tail -n 15 "$OUT/$name.log"
+            if test "$rc" -ne 0; then failed=1; fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$name.full.tap"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve source and every test outcome
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-single-census-focused-${{ github.sha }}
+          path: test-output/control-single-census-candidate/
+          retention-days: 14
+          if-no-files-found: warn

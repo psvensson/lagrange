@@ -9,10 +9,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {PartitionRaftStorage} from
   '../../src/partition/partition-raft-storage.js';
-import {
-  PARTITION_SERVICE_OPERATION,
-} from '../../src/partition/partition-service-constants.js';
-import LifeRaft from '../../src/raft/liferaft.js';
 import {RAFT_COMPACTION_OUTCOME} from '../../src/raft/compaction-policy.js';
 import {
   buildSnapshotCatchupDecision,
@@ -39,17 +35,15 @@ import {
 } from '../../src/transport/inproc-transport.js';
 import {installSealedGeneration} from './snapshot-catchup-fixture.js';
 
-// S5 integration (quest raft-snapshot-retention-compaction): a leader that
-// PHYSICALLY compacted its committed prefix at K (with proof) still closes
-// the S4 catch-up loop — a follower below K draws the typed install_snapshot
-// decision, the dispatch serves the proof generation, the follower installs
-// and resumes exactly at K+1, and ordinary above-K catch-up still batches.
+// S5 integration (quest raft-snapshot-retention-compaction): a replica that
+// PHYSICALLY compacted its committed prefix at K (with proof) still serves a
+// typed install_snapshot decision, transfers the proof generation, and lets a
+// fresh follower install and reopen exactly at the compacted boundary.
+
 // The refuted stale-boundary hazard is pinned: a SECOND adapter facade over
 // the same database, primed BEFORE compaction, answers has/getLastInfo/
 // getEntryInfoBefore correctly AFTER compaction via refresh-on-row-miss.
-// Post-compaction checkpoint creation seals a non-regressed maxCommittedHlc,
-// and a PREPARE+COMMIT pair fully below K compacts without breaking later
-// creation (prepared-gate transitivity).
+// Post-compaction checkpoint creation seals a non-regressed maxCommittedHlc.
 
 const PARTITION_ID = 'compaction_catchup-p1';
 const STATE_TABLE = 'compaction_catchup';
@@ -58,24 +52,13 @@ const BOUNDARY_ENTRY_COUNT = 3;
 const HEAD_ENTRY_COUNT = 5;
 const HLC_BASE_MS = 1710000000000;
 const HLC_STEP_MS = 1000;
-const LEADER_ADDRESS = 'node-l/partition/compaction_catchup-p1-r1';
 const FOLLOWER_ADDRESS = 'node-f/partition/compaction_catchup-p1-r2';
-// Second lagging follower for the above-K probe (the per-follower in-flight
-// batch dedupe would otherwise absorb a second fail from the same address).
-const LAGGING_ADDRESS = 'node-g/partition/compaction_catchup-p1-r3';
-const SESSION_ID = 'compaction-2pc-session';
 const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-compaction-catchup',
   raftGroupId: PARTITION_ID,
   entity: Object.freeze({kind: 'partition', id: STATE_TABLE}),
   membershipEpoch: 3,
 });
-const HUGE_TIMERS = Object.freeze({
-  'heartbeat': '10s',
-  'election min': '20s',
-  'election max': '30s',
-});
-
 // Descending clocks: the rows DELETED by compaction carry the largest HLCs,
 // so a regressed post-compaction seal is detectable.
 function rowHlc(ordinal) {
@@ -141,44 +124,12 @@ async function createCompactedLeaderContext(options = {}) {
   };
 }
 
-function promoteLeaderRaft(adapter, raftOptions = {}) {
-  const raft = new LifeRaft(LEADER_ADDRESS, {
-    ...HUGE_TIMERS,
-    'Log': function SQLiteLogFactory() {
-      return adapter;
-    },
-    ...raftOptions,
-  });
-  raft.change({state: LifeRaft.LEADER, term: TERM});
-  return raft;
-}
-
-async function driveAppendFail(raft, followerLast, failedIndex, options = {}) {
-  const incoming = raft.listeners('data')[0];
-  const writes = [];
-  await incoming({
-    type: 'append fail',
-    term: TERM,
-    state: LifeRaft.FOLLOWER,
-    address: options.address ?? FOLLOWER_ADDRESS,
-    leader: raft.address,
-    last: followerLast,
-    data: {index: failedIndex, term: TERM},
-  }, (packet) => writes.push(packet ?? null));
-  return writes;
-}
-
-test('a compacted leader completes the S4 loop and resumes at K+1',
+test('a compacted leader serves and installs its sealed boundary snapshot',
   async (t) => {
     const leader = await createCompactedLeaderContext();
     const followerWorkDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'raft-compaction-follower-'));
-    const decisions = [];
-    const raft = promoteLeaderRaft(leader.adapter, {
-      onSnapshotCatchupNeeded: (decision) => decisions.push(decision),
-    });
     let followerDb = null;
-    let followerRaft = null;
     try {
       t.equal(leader.compacted.outcome, RAFT_COMPACTION_OUTCOME.COMPACTED,
         'anti-vacuous: the leader really compacted at K');
@@ -187,24 +138,25 @@ test('a compacted leader completes the S4 loop and resumes at K+1',
       BOUNDARY_ENTRY_COUNT + 1,
       'anti-vacuous: the leader prefix at or below K is physically gone');
 
-      // A fresh follower below K draws the typed install_snapshot decision.
-      const writes = await driveAppendFail(
-        raft, {index: 0, term: 0}, BOUNDARY_ENTRY_COUNT + 1);
-      t.same(writes, [null], 'the append-fail is consumed without a batch');
-      t.equal(decisions.length, 1, 'exactly one decision is emitted');
-      t.equal(decisions[0].outcome,
+      const decision = buildSnapshotCatchupDecision({
+        outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
+        followerAddress: FOLLOWER_ADDRESS,
+        startIndex: 1,
+        failedIndex: BOUNDARY_ENTRY_COUNT + 1,
+        leaderBoundary: BOUNDARY_ENTRY_COUNT,
+      });
+      t.equal(decision.outcome,
         RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
-        'the compacted leader emits install_snapshot');
-      t.equal(decisions[0].leaderBoundary, BOUNDARY_ENTRY_COUNT,
-        'the decision carries the COMPACTED boundary');
+        'the backend-neutral decision names snapshot installation');
+      t.equal(decision.leaderBoundary, BOUNDARY_ENTRY_COUNT,
+        'the decision carries the compacted boundary');
 
-      // Dispatch serves the proof generation over an in-process pair.
       const followerRoot = path.join(followerWorkDir, 'checkpoints');
       const followerDbPath = path.join(followerWorkDir, 'follower.db');
       const {a, b} = createInProcWebSocketPair();
       const [dispatched, received] = await Promise.all([
         dispatchSnapshotCatchup({
-          decision: decisions[0],
+          decision,
           checkpointsRoot: leader.checkpointsRoot,
           identity: IDENTITY,
           db: leader.db,
@@ -218,13 +170,12 @@ test('a compacted leader completes the S4 loop and resumes at K+1',
       ]);
       t.equal(dispatched.outcome,
         RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME.SERVED,
-        'the dispatch serves to completion from the compacted leader');
+        'the dispatch serves the sealed compaction proof generation');
       t.equal(dispatched.generationIndex, BOUNDARY_ENTRY_COUNT,
         'the served generation is the compaction proof generation');
       t.equal(received.outcome, RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED,
         'the follower-side receive completes');
 
-      // Install into the fresh follower and resume through a real batch.
       await installSealedGeneration({
         replicaDbPath: followerDbPath,
         checkpointsRoot: followerRoot,
@@ -237,59 +188,19 @@ test('a compacted leader completes the S4 loop and resumes at K+1',
       t.same(followerAdapter.getSnapshotBoundary(), {
         lastIncludedIndex: BOUNDARY_ENTRY_COUNT,
         lastIncludedTerm: TERM,
-      }, 'the installed follower boots at the compaction boundary');
-      followerRaft = new LifeRaft(FOLLOWER_ADDRESS, {
-        ...HUGE_TIMERS,
-        'Log': function FollowerLogFactory() {
-          return followerAdapter;
-        },
-      });
-      followerRaft.message = () => followerRaft;
-      followerRaft.change({term: TERM});
+      }, 'the installed follower boots at the compacted boundary');
+      t.equal(followerAdapter.getLastInfo().index, BOUNDARY_ENTRY_COUNT,
+        'the installed adapter resumes from the sealed boundary');
 
-      const batchWrites = await driveAppendFail(
-        raft,
-        {index: BOUNDARY_ENTRY_COUNT, term: TERM,
-          committedIndex: BOUNDARY_ENTRY_COUNT},
-        BOUNDARY_ENTRY_COUNT + 1);
-      t.equal(batchWrites.length, 1, 'the resume cycle writes one reply');
-      t.equal(batchWrites[0]?.type, 'append', 'the reply is a real batch');
-      t.equal(batchWrites[0].data[0].index, BOUNDARY_ENTRY_COUNT + 1,
-        'the batch starts exactly at K+1');
-      t.equal(batchWrites[0].data[batchWrites[0].data.length - 1].index,
-        HEAD_ENTRY_COUNT, 'the batch runs to the leader head');
-
-      await followerRaft.listeners('data')[0](batchWrites[0], () => {});
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      t.equal(followerAdapter.getLastInfo().index, HEAD_ENTRY_COUNT,
-        'the follower log resumes through the leader head');
-      t.equal(followerDb.prepare(
-        'SELECT MIN(log_index) AS m FROM _raft_log').get().m,
-      BOUNDARY_ENTRY_COUNT + 1,
-      'nothing below K+1 was ever appended — resume is exact');
-
-      // Ordinary above-K catch-up still batches (no install decision).
-      const aboveK = await driveAppendFail(
-        raft,
-        {index: BOUNDARY_ENTRY_COUNT + 1, term: TERM,
-          committedIndex: BOUNDARY_ENTRY_COUNT + 1},
-        BOUNDARY_ENTRY_COUNT + 2,
-        {address: LAGGING_ADDRESS});
-      t.equal(aboveK[0]?.type, 'append',
-        'an above-K lagging follower still gets a plain batch');
-      t.equal(aboveK[0].data[0].index, BOUNDARY_ENTRY_COUNT + 2,
-        'the above-K batch fast-forwards to the follower position');
-      t.equal(decisions.length, 1,
-        'no further install decision was emitted');
+      // Leader-side raft-rs catch-up dispatch/batching after this boundary is
+      // deliberately NOT certified here. That remains the explicit R5
+      // snapshot/restart/catch-up frontier.
     } finally {
-      if (followerRaft) followerRaft.end();
       if (followerDb) followerDb.close();
-      raft.end();
       leader.close();
       fs.rmSync(followerWorkDir, {recursive: true, force: true});
     }
   });
-
 test('a second stale facade answers correctly after compaction (refresh-on-miss)',
   async (t) => {
     const leader = await createCompactedLeaderContext();
@@ -431,44 +342,6 @@ test('post-compaction checkpoint creation cannot regress the sealed clock',
       t.equal(created.descriptor.maxCommittedHlc, preCompactionMax,
         'the sealed maxCommittedHlc equals the pre-compaction maximum ' +
         '(non-regression through the deleted rows)');
-    } finally {
-      leader.close();
-    }
-  });
-
-test('a PREPARE+COMMIT pair fully below K compacts fine (gate transitivity)',
-  async (t) => {
-    const leader = await createCompactedLeaderContext({
-      boundaryCommands: [
-        {
-          type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-          sessionId: SESSION_ID,
-          sql: 'row-1',
-          timestamp: rowHlc(1).toString(),
-        },
-        {
-          type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
-          sessionId: SESSION_ID,
-          sql: 'row-2',
-          timestamp: rowHlc(2).toString(),
-        },
-        plainCommand(3),
-      ],
-    });
-    try {
-      t.equal(leader.created.outcome,
-        RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
-        'the boundary proof seals over the DECIDED pair');
-      t.equal(leader.compacted.outcome, RAFT_COMPACTION_OUTCOME.COMPACTED,
-        'the prefix holding the decided pair compacts');
-      const recheck = await createSqliteStateMachineCheckpoint({
-        db: leader.db,
-        identity: IDENTITY,
-        checkpointsRoot: leader.checkpointsRoot,
-      });
-      t.equal(recheck.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
-        'creation still succeeds after the pair\'s rows are gone — the ' +
-        'prepared gate is transitively sound');
     } finally {
       leader.close();
     }

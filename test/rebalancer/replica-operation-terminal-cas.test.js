@@ -245,6 +245,42 @@ test(
 );
 
 test(
+  'ambiguous CREATE terminal settlement is one CAS on terminal and absent admission',
+  async (t) => {
+    const {repository, mutations} = createTerminalCasHarness();
+    const operation = repository.rowToOperation(makeRow({
+      completed_at: null,
+      workflow_step: WORKFLOW_STEP.SENDING,
+      create_admission_state: null,
+    }));
+    const projectedOperation = {
+      ...operation,
+      workflowStep: WORKFLOW_STEP.FAILED,
+      status: ReplicaStatus.FAILED,
+      updatedAt: TEST_TERMINAL_AT_MS,
+      completedAt: TEST_TERMINAL_AT_MS,
+      errorMessage: 'lost CREATE response',
+    };
+
+    const persisted = await repository.persistOperationUpdate(
+      projectedOperation,
+      {
+        terminalTransition: true,
+        requireCreateAdmissionAbsent: true,
+        confirmPersistence: false,
+      },
+    );
+
+    t.equal(persisted, true, 'the terminal-first arm commits');
+    t.equal(mutations.length, 1, 'one authoritative mutation is issued');
+    t.equal(mutations[0].whereClause.completed_at, null,
+      'the mutation retains the first-terminal-wins guard');
+    t.equal(mutations[0].whereClause.create_admission_state, null,
+      'the same mutation requires CREATE admission to remain absent');
+  },
+);
+
+test(
   'the raw-SQL fallback terminal statement guards on completed_at IS NULL in both SQL blocks',
   async (t) => {
     t.ok(

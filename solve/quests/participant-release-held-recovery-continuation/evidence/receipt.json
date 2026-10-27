@@ -1,0 +1,59 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "participant-release-held-recovery-continuation",
+  "status": "pass",
+  "generatedAt": "2026-10-13T16:09:23.133943+00:00",
+  "baselineHead": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "stage": "Integrated composition and bounded recovery evidence approved; inherited static and seed startup remain HOLD",
+  "candidate": "6c27b10b6f3c8093f4baab149f20b6a79524aecf",
+  "sourceControl": "57d4d8c265ac486697bb06c62177a34dc8e60d86",
+  "pairedResult": "integrated-paired-result-v2.json",
+  "pairedResultSha256": "b94091f379883f4c4062d563d9374761b927250dbeb455559420b9b1a193873f",
+  "historicalBaseline": "receipt-passive-baseline-v1.json",
+  "receipts": [
+    {
+      "id": "deferred-healed-group-recovers-without-external-actuation",
+      "passed": true,
+      "reason": "Immutable integrated candidate6c27b10b passes the unchanged passive deferred native witness in1171.841226ms. Same-host exact two-source-file control57d4d8c2 fails the original10000ms healthy bound at10163.887684ms with zero post-heal reconstruction and empty consensus. The existing owners alone supply progress."
+    },
+    {
+      "id": "typed-held-status-retains-one-bounded-owner-wake",
+      "passed": true,
+      "reason": "Focused15-case owner witness on carinas-windows proves one retained shared timer, fixed1000ms owner cadence, before-boundary refusal, full30s observation/report bounds, no retryAfterMs access, held/unavailable precedence, coalescing and max4. Native companion engages actual storage failure and runtime reconstruction. Host-owned not-before and canonical held classifier remain the only authority."
+    },
+    {
+      "id": "healthy-nonheld-service-remains-event-driven",
+      "passed": true,
+      "reason": "Focused exact candidate proves ordinary followers and candidates have no periodic debt. Null/malformed/uninitialized observations are typed and event-driven. First current leader short-circuits ordered observations; stale services do not remain release authority."
+    },
+    {
+      "id": "canonical-release-authority-and-durable-replay-preserved",
+      "passed": true,
+      "reason": "Candidate native and15 surrounding regression files preserve real APPLICATION/SQLITE_FULL durability refusal, paused write/no-new-log, exact healed replay, sibling isolation and current canonical release. Lifecycle tests pair live and wrong-release-ID OPEN controls with actual handler/service shutdown and replacement refusal. Scope is the declared recovery interaction, not whole transaction/snapshot custody."
+    },
+    {
+      "id": "single-flight-replacement-shutdown-and-regression-cone-preserved",
+      "passed": true,
+      "reason": "Integrated recovery behavior passes17/17files219runner assertions on five locked hosts, and the two primary same-host source-only controls retain the intended native/focused behavioral failures. Separate historical lifetime negatives remain correctly attributed. Whole gates remain RED: existing fresh-create local_retry_loop, two dependency cycles, unused1451>1416, complexity1777>1755, test clone lines26415>26369. The two added startup files remain seed-release red, so the19-file run totals17green2red277assertions. Independent composition approval is bounded; no static waiver, Quest land, corpus, startup closure or main approval follows.",
+      "verifiedOnComposedLineage": "03d5f1c384c8ab27a2af21308f90a5859c5e9dda"
+    }
+  ],
+  "claimCeiling": "This mutable receipt projects measured evidence. It does not supersede the sealed Quest, explicit design corrections or append-only log; source approval and all landing/publication gates remain independent.",
+  "independentReview": {
+    "file": "integrated-composition-evidence-review-v2.md",
+    "sha256": "036531736266015180a6c4ff985e92145541bd55b2ccecd8d22f88a4ea2b98b2",
+    "verifier": "subagent:/root/tx1_deletion_design_vet",
+    "verdict": "approve bounded composition content and recovery preservation; static/startup/whole closure HOLD"
+  },
+  "historicalStandaloneReceipt": "receipt-standalone-approved-v3.json",
+  "compositionEvidence": {
+    "files": 19,
+    "passed": 17,
+    "failed": 2,
+    "runnerAssertions": 277,
+    "recoveryFiles": 17,
+    "recoveryAssertions": 219,
+    "sourceControlFiles": 2,
+    "sourceControlAssertions": 35
+  }
+}

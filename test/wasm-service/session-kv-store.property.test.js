@@ -11,6 +11,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
+import Database from 'better-sqlite3';
 import {SessionKVStore} from '../../src/wasm-service/session-kv-store.js';
 
 /** Generates a non-empty string suitable for session IDs. */
@@ -38,7 +39,7 @@ test(
             keyArb,
             bytesArb,
             (sessionId, key, bytes) => {
-              const store = new SessionKVStore(':memory:');
+              const store = new SessionKVStore(new Database(':memory:'));
               try {
                 const value = Buffer.from(bytes);
                 store.applySet(sessionId, key, value);
@@ -75,7 +76,7 @@ test(
               {minLength: 1, maxLength: 5},
             ),
             (sessionId, entries) => {
-              const store = new SessionKVStore(':memory:');
+              const store = new SessionKVStore(new Database(':memory:'));
               try {
                 // Deduplicate keys — last write wins
                 const expected = new Map();
@@ -152,7 +153,7 @@ test(
             limitArb,
             limitArb,
             (sessionId, key, bytes, sessionLimit, serviceLimit) => {
-              const store = new SessionKVStore(':memory:');
+              const store = new SessionKVStore(new Database(':memory:'));
               try {
                 store.setLimits(sessionLimit, serviceLimit);
                 const value = Buffer.from(bytes);
@@ -203,7 +204,7 @@ test(
             ),
             limitArb,
             (sessionId, entries, sessionLimit) => {
-              const store = new SessionKVStore(':memory:');
+              const store = new SessionKVStore(new Database(':memory:'));
               try {
                 // Service limit high so only session limit matters
                 const highServiceLimit = 100000;
@@ -264,7 +265,7 @@ test(
             ),
             limitArb,
             (entries, serviceLimit) => {
-              const store = new SessionKVStore(':memory:');
+              const store = new SessionKVStore(new Database(':memory:'));
               try {
                 // Session limit high so only service limit matters
                 const highSessionLimit = 100000;
@@ -334,7 +335,7 @@ test(
             keyArb,
             valueBytesArb,
             (sessionId, key, bytes) => {
-              const store = new SessionKVStore(':memory:');
+              const store = new SessionKVStore(new Database(':memory:'));
               try {
                 const value = Buffer.from(bytes);
                 // Set both limits to a small value that the

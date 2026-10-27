@@ -1,8 +1,8 @@
 /**
  * ReplicaHandler - Handles replica operations on target node.
  *
- * Simplified from ReplicaLifecycleManager - only handles execution,
- * not tracking (that's the coordinator's job).
+ * It only executes replica operations on this node; tracking them is the
+ * operation workflow coordinator's job.
  *
  * This file owns the public ReplicaHandler class: construction and the
  * composition of the responsibility-scoped method mixins (lifecycle,
@@ -13,6 +13,8 @@
  * Requirements: 10.2, 3.1
  */
 import {EventEmitter} from 'events';
+import {assignReplicaHandlerGroupRetiredTombstoneMethods} from
+  './replica-handler-group-retired-tombstone-methods.js';
 import fs from 'fs';
 import path from 'path';
 import {AddressManager} from '../address/address-manager.js';
@@ -31,6 +33,9 @@ import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {TrackedServiceRegistry} from './replica-handler-membership-relay.js';
+import {createParticipantReleaseRecovery} from './replica-handler-release-recovery.js';
+import {createParticipantReleaseAuthorizationOwner} from
+  './participant-release-authorization-owner.js';
 import {assignReplicaHandlerMembershipMethods} from
   './replica-handler-membership-methods.js';
 import {assignReplicaHandlerCommittedMembershipMethods} from
@@ -55,6 +60,10 @@ import {
 } from './replica-state-machine.js';
 import {ReplicaCleanupTombstoneOwner} from
   './replica-cleanup-tombstone-owner.js';
+import {ReplicaCreateAdmissionOwner} from
+  './replica-create-admission-owner.js';
+import {ReplicaCreateAdmissionRecoveryRearmOwner} from
+  './replica-create-admission-recovery-rearm-owner.js';
 import {assignReplicaHandlerLifecycleMethods} from './replica-handler-lifecycle-methods.js';
 import {assignReplicaHandlerCreateMethods} from './replica-handler-create-methods.js';
 import {
@@ -64,6 +73,9 @@ import {assignReplicaHandlerProgressMethods} from './replica-handler-progress-me
 import {
   assignReplicaHandlerRemoveRequestMethods,
 } from './replica-handler-remove-request-methods.js';
+import {
+  assignReplicaHandlerGroupRetirementRequestMethods,
+} from './replica-handler-group-retirement-request-methods.js';
 import {assignReplicaHandlerLeaderHandoffMethods} from './replica-handler-leader-handoff-methods.js';
 import {assignReplicaHandlerStatusMethods} from './replica-handler-status-methods.js';
 import {assignReplicaHandlerVoterReadinessMethods} from './replica-handler-voter-readiness-methods.js';
@@ -108,6 +120,7 @@ class ReplicaHandler extends EventEmitter {
       options.controlPlaneSystemTableGateway || null;
     this.partitionServiceRowOwner = null;
     this.replicaCleanupTombstoneOwner = null;
+    this.replicaCreateAdmissionOwner = null;
     this.messageRouter = options.messageRouter || null;
     this.rpcClient = options.rpcClient || null;
     this.createPartitionService = options.createPartitionService || null;
@@ -136,6 +149,10 @@ class ReplicaHandler extends EventEmitter {
         controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
         systemTableCache: this.systemTableCache,
       });
+    this.timeSource = options.timeSource || this.replicaStateMachine?.timeSource ||
+      Object.freeze({now: Date.now,
+        setTimeout: (callback, delay) => setTimeout(callback, delay),
+        clearTimeout: (handle) => clearTimeout(handle)});
     // Track live service references by replica_id (needed for shutdown,
     // voter-readiness); the registry also relays each tracked service's
     // consensus observations to the REPLACE owner (design S5.2).
@@ -150,8 +167,14 @@ class ReplicaHandler extends EventEmitter {
     // Track in-progress operations by operationId
     this.inProgressOperations = new Map();
     this.operationTasks = new Set();
+    // Exact unreleased objects, not a second active/routable replica registry.
+    this.pendingRuntimeShutdowns = new Map();
     this.shuttingDown = false;
     this.shutdownPromise = null;
+    this.replicaCreateAdmissionRecoveryBarrier = null;
+    this.replicaCreateAdmissionRecoveryTask = null;
+    this.replicaCreateAdmissionRecoveryRearmOwner =
+      new ReplicaCreateAdmissionRecoveryRearmOwner();
     this.hydratedMetadataByPartitionId = new Map();
     // Executor outcome emitter - replaces direct replica_operations writes.
     // The coordinator subscribes to outcomes via this emitter (Task 3.2).
@@ -176,6 +199,9 @@ class ReplicaHandler extends EventEmitter {
     });
     this.creationProgressByReplica = new Map();
     this.initialized = false;
+    this.participantReleaseAuthorizationOwner =
+      createParticipantReleaseAuthorizationOwner(this);
+    this.participantReleaseRecovery = createParticipantReleaseRecovery(this);
   }
 }
 
@@ -183,6 +209,7 @@ assignReplicaHandlerLifecycleMethods(ReplicaHandler);
 assignReplicaHandlerProgressMethods(ReplicaHandler);
 assignReplicaHandlerCreateStatusMethods(ReplicaHandler);
 assignReplicaHandlerCreateMethods(ReplicaHandler);
+assignReplicaHandlerGroupRetirementRequestMethods(ReplicaHandler);
 assignReplicaHandlerRemoveRequestMethods(ReplicaHandler);
 assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler);
 assignReplicaHandlerStatusMethods(ReplicaHandler);
@@ -190,6 +217,7 @@ assignReplicaHandlerMembershipMethods(ReplicaHandler);
 assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler);
 assignReplicaHandlerVoterReadinessMethods(ReplicaHandler);
 assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler);
+assignReplicaHandlerGroupRetiredTombstoneMethods(ReplicaHandler);
 assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   AddressManager,
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
@@ -198,6 +226,7 @@ assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   PARTITION_METADATA_MISSING_PREFIX,
   PartitionServiceRowOwner,
   ReplicaCleanupTombstoneOwner,
+  ReplicaCreateAdmissionOwner,
   REPLICA_HANDLER_ADDRESS,
   REPLICA_HANDLER_ERRNO,
   REPLICA_HANDLER_ERROR_MSG,

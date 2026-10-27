@@ -178,6 +178,37 @@ The current distributed call path reads user tables and coordinates a result;
 it does not write user tables. A request handler can separately use declared
 write capabilities, with its own side-effect and idempotency responsibilities.
 
+## SQL write outcomes
+
+A SQL `INSERT`, `UPDATE` or `DELETE` (over PostgreSQL wire, the admin
+WebSocket or the embedded application database) is proposed to its
+partition's Raft group under one entry identity. When the serving replica
+cannot say what became of a proposal it accepted (a leader change, a runtime
+replacement, or an answer lost after delivery), the statement's outcome is
+unknown: it may still commit.
+
+| Case | What the client sees |
+| --- | --- |
+| Refused before proposal (no leader, backpressure) | An immediate typed refusal; nothing was proposed; unchanged |
+| Outcome unknown, then resolved within the budget | The statement's original result, applied once; a replay of an applied entry answers its first affected-row count |
+| Outcome still unknown when the budget is spent | A typed failure `partition_write_outcome_unknown` carrying the entry id and the wait spent; the write may have applied |
+
+While the outcome is unknown the executor delivers the statement again under
+the same entry identity, never as a new write. Deliveries back off
+exponentially from `query.leaderRetryDelayMs` (50 ms) to 2 s: about 20
+deliveries in 30 s. The budget is the statement's own deadline when the
+caller passes one (the PostgreSQL wire statement wall-time budget, or
+`timeoutMs`); otherwise it is `query.timeoutMs` (30 s). A statement that ends
+unknown therefore returns at its deadline, not immediately: in that case
+failure latency is up to the budget.
+
+A statement that ended unknown can be re-issued safely only under the same
+idempotency key with the same statement and parameters: the replay is
+answered with the original result. Re-issuing it as a new statement can apply
+it twice. The PostgreSQL wire and embedded application database surfaces do
+not yet accept a caller idempotency key, so a client of those surfaces must
+read the affected rows back to learn the outcome before it writes again.
+
 ## Movement
 
 Partition split, replica movement, Binding replacement, and Cell replacement

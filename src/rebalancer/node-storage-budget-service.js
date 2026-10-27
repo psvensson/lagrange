@@ -255,10 +255,10 @@ class NodeStorageBudgetService {
       row: budgetRow,
       bootIncarnation: budgetRow[COLUMN.BOOT_INCARNATION],
       observe: () => readAuthoritativeNodeRow(gateway, nodeId),
-      insert: (row) => gateway.insertSystemTableRow(TABLES.NODES, row,
-        writeOptions),
-      advance: (whereClause, row) => gateway.updateSystemTableRow(
-        TABLES.NODES, whereClause, row, writeOptions),
+      insert: (row, identity) => gateway.insertSystemTableRow(TABLES.NODES,
+        row, {...writeOptions, ...identity}),
+      advance: (whereClause, row, identity) => gateway.updateSystemTableRow(
+        TABLES.NODES, whereClause, row, {...writeOptions, ...identity}),
     });
     if (registration.outcome === NODE_REGISTRATION_OUTCOME.REFUSED_STALE) {
       throw buildSupersededRegistrationError(nodeId,

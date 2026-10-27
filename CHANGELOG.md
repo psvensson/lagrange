@@ -10,12 +10,13 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
-## [0.2.6] — 2026-09-30
+## [0.2.6] — 2026-10-27
 
 Consensus cutover to the Rust `raft-rs` core through the WASM operation
-port, with the replica-lifecycle durable-generation repair that final
-verification required (quest `replica-lifecycle-durable-generation`, epic
-`raft-rs-full-cutover`):
+port, with full partition snapshot compaction and follower reconstruction,
+replicated two-phase transaction decision and participant apply, fresh-identity
+message-group membership replacement, cold retained-seed handoff, and
+systematic deterministic replicated SQL admission (epic `raft-rs-full-cutover`):
 
 - Every node boot reserves a durable, monotonic boot incarnation from one
   owner per data directory before any lifecycle side effect; legacy
@@ -31,10 +32,41 @@ verification required (quest `replica-lifecycle-durable-generation`, epic
   delayed READY work from a superseded incarnation can no longer mutate a
   successor's rows; bootstrap-snapshot addressing only breaks the initial
   connection circularity and never out-ranks an authoritative NODES row.
+- Automatic `raft-rs` partition snapshot creation, retention sweep, committed
+  log compaction (`_raft_rs_snapshot` / `_raft_rs_log`), interrupted compaction
+  retry across leadership changes, pending-log byte growth trigger, and
+  follower snapshot catch-up reconstruction.
+- Replicated transaction coordinator decision persistence, participant staging
+  and deterministic apply (`TX1`), and fresh-identity message-group learner
+  admission, caught-up promotion, replacement, and source removal (`FreshMG`).
+- Cold retained-seed continuation and handoff across restarts, system-table
+  client ingress refusal at both engine and partition boundaries, and
+  deterministic replicated SQL write and schema-default admission across
+  date/time, version, randomness, connection-state, and user-defined functions.
 - One replica lifecycle owner per live node incarnation across join
   retries, with timers on the node's canonical time source.
 - The vendored `raft-rs` WASM binding ships in the Docker image and the
   packaged runtime.
+
+### Removed
+- Intentional public-API removal (alpha single-path mandate, owner decision
+  2026-10-26). These exports of the package root (`lagrange-server`,
+  `src/public-api.js`) were retired implementations with no production
+  constructor; `MessageRouter` is the one transport and `ReplicaHandler` with
+  `ReplicaStateMachine` is the one replica lifecycle path. No replacement
+  export is provided:
+  - Transport (from `src/transport/index.js`): `WebSocketTransport`, its
+    `ConnectionState`, `WebSocketTransportProvider`, `WS_PROVIDER_SUBSYSTEM`,
+    `WS_PROVIDER_LOG_MSG`, `WS_PROVIDER_ERROR_MSG`, `TransportProvider`,
+    `TransportRegistry`, `REGISTRY_SUBSYSTEM`, `REGISTRY_LOG_MSG`,
+    `REGISTRY_ERROR_MSG`, `ConnectionPool`, `POOL_SUBSYSTEM`,
+    `POOL_LOG_MSG`, `POOL_ERROR_MSG`. `MessageRouter`,
+    `RouterConnectionState`, `RouterMessageType` and `RPCClient` remain.
+  - Replica lifecycle (from `src/node/index.js`): `ReplicaLifecycleManager`,
+    `LifecycleReplicaStatus`, `VALID_STATUS_TRANSITIONS`,
+    `LifecycleMessageType`, `AckStatus`.
+- The unexported `RouterMessageHandler` module (a dead duplicate of the
+  router's inbound dispatch, imported by no module).
 
 ## [0.2.5] — 2026-09-13
 

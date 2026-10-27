@@ -1,0 +1,32 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "lineage-evidence-relocation--seed-participant-release-native-startup-census-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "6f7bd69f95801303cb0cce22c6a634e95425d45f8820a5a278c85adc95c86ee4",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/lineage-evidence-relocation--seed-participant-release-native-startup-census-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/seed-participant-release-native-startup-census/",
+  "files": [
+    ["checkpoint-hold.md","f0c3fa57ecab8d9d76dffc5e8f5d92ed6217aa63644c9a81c390373baa1f75e4",4708],
+    ["evidence/receipt-initial-v1.json","6b4b11db80093a07ec34a6b9368873e217eb66c14052bc6e13d1a65a6f96b201",1865],
+    ["evidence/startup-source-ordering-diagnosis-v2.md","47856e8203986009f6bc6b0972efde316c32b3aaa7e4a9e74742bd20db126ef2",7860],
+    ["evidence/startup-source-ordering-diagnosis-v3.md","efc7f3b88ecb72e085e311c80be38012842c60471cb44aaa37d77b23a1d19cf1",10951],
+    ["evidence/startup-trace-independent-review-v2.md","d1696350d799dd9ef7176b7ea0c7b4c9791bf88a748e6a4d78f14e0ca5a4ec5d",7378],
+    ["evidence/startup-trace-result-v2.json","edba934bf2ef4a4da7b63d9a039936ddf437b461141ca812456dcd9a19a9fc45",3792],
+    ["evidence/startup-trace-v2-adam-laptop.raw.err","e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",0],
+    ["evidence/startup-trace-v2-adam-laptop.raw.log","eb176ba7d1943c68d4940538b3ed69e20b72be8803114742ad02acd5841fe4ca",132227],
+    ["evidence/startup-trace-v2-adam-laptop.status.json","3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",36],
+    ["evidence/startup-trace-v2-fleet.json","a79cfc4ce373b7bb2d2d2e3ea05b4725d9b999a0a8228f98cf9d9d1adf802347",12696],
+    ["evidence/startup-trace-v2-input.json","aa35e09d356f8b5251e3581c038f739022a260321073812bf6acf5d6adeb096d",650],
+    ["evidence/startup-trace-v2-lab.log","a7f3313d5994582d6ff25004d75e078c51ee9859ad378a4d32e3000acd91e3ee",132986],
+    ["evidence/startup-trace-v2-result.json","1662e66404ea0b4cfce8bbaab30e0dcb927a8d68c1044c32ca5b614d2278e246",62],
+    ["evidence/startup-trace-v2-test-results.ndjson","b2a88412b24a73a538df9dd19225444cfb0990ae54a7a95c1c1fa02c03b2dbd2",266],
+    ["evidence/trace-excerpt-records-v2.json","1e32813bbb75263db4e7c39c3c5360a6500dfe3e2c33c0ebe64671d80ee3fe17",203492],
+    ["evidence/trace-input-v2.json","5d9cd76cc93bd20a0e39ee4196bd0f7a992861dcec8ea5e11e25fac61af72cf4",653],
+    ["evidence/trace-preflight-v1.md","31b8437a76b03595106f1a9795e809f513058c4fbb02001a7fbd02a95761218c",4959],
+    ["evidence/trace-preflight-v2.md","7b256f3b706ae00313346a9c605e9e2545179f973dda270a9ef063835b0fc269",4290],
+    ["evidence/trace-v1-hashes.json","c6324580ad988decd646e1325f855d0242f1b8d4e192e95d78a236abbda03496",366],
+    ["evidence/trace-v1.diff","91a2097ee428a36204f81c9cf2a8d91efa4257d99379021f9742d07991282113",11183],
+    ["evidence/trace-v2-hashes.json","b42eec580e6e5679678edce508a53518cac74f851df612aa2f4c217fe7e0fac5",366],
+    ["evidence/trace-v2.diff","f3a6a4e2ff07938b3f0e94b19dc8d3a4ef04f3c8bbff3b8c30cd1ac69368257e",18292]
+  ]
+}

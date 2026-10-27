@@ -1,0 +1,646 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "fresh-graph-stale-report-discriminator",
+      "passed": true
+    },
+    {
+      "id": "canonical-provenance-and-selective-refresh",
+      "passed": true
+    },
+    {
+      "id": "producer-seals-and-negative-matrix",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-gates",
+      "passed": true
+    }
+  ],
+  "authorEvidence": {
+    "base": "ddc34a6a6272a94415b989d33ad79968426aac71",
+    "discriminator": {
+      "producer": "actual check-complexity.js",
+      "consumer": "actual collectLiveInputs after canonical import-graph refresh",
+      "before": 0,
+      "staleAfterFreshGraph": 0,
+      "actuallyMeasured": 1,
+      "sourceMtimeRestored": true
+    },
+    "census": {
+      "producers": [
+        "check-complexity.js",
+        "check-cognitive-complexity.js",
+        "check-circular-dependencies.js",
+        "check-duplication.js"
+      ],
+      "reports": [
+        "complexity",
+        "cognitive",
+        "cycles",
+        "duplicationSource",
+        "duplicationTest"
+      ],
+      "consumers": [
+        "generate-global-owner-debt-inventory.js",
+        "checks/write-complexity-ratchet-closure-oracle.js"
+      ]
+    },
+    "history": [
+      {
+        "commit": "f9f9fb797d4662223641b360346822f60d3c1fe8",
+        "finding": "PG-wire verification: fresh import graph admitted prior jscpd-test report at 316d18ac3; cached statistics differed by one line and fourteen tokens."
+      },
+      {
+        "commit": "b8a51c1e8cbaff17c626895ef4165870b2fd643f",
+        "finding": "Shared node_modules jscpd cache broke worktree determinism; cache remains disabled."
+      },
+      {
+        "commit": "954caf5543025997daf5485fb0790ff2041856b4",
+        "finding": "A completed measurement with ratchet exit 1 must remain usable; current provenance distinguishes it from a crash without valid output."
+      }
+    ],
+    "primaryResearch": [
+      {
+        "url": "https://bazel.build/remote/caching",
+        "application": "Bind declared action inputs, tool implementation and output contents; do not use report timestamps."
+      },
+      {
+        "url": "https://docs.gradle.org/current/userguide/build_cache_concepts.html",
+        "application": "Include implementation and configuration identity; retain relocatable relative path identity and matching-input cache hits."
+      }
+    ],
+    "contract": {
+      "owner": "scripts/metric-report-provenance.js",
+      "inputs": "All bytes under measured target roots plus scripts and root configuration; only canonical generated graph/test-classification outputs excluded. Installed package closure content and dependency resolution, Node executable/version/options/environment, scope, report path and regeneration command are bound.",
+      "completion": "Capture before measurement and compare again before atomic report publication. Report content digest excludes only its own provenance and nondeterministic jscpd detectionDate.",
+      "reuse": "Unsealed, damaged, scoped, stale or incompatible reports cannot satisfy a full consumer. Inventory refreshes each stale report only and verifies the produced seal, including exit 1. Oracle validates the same owner result.",
+      "selection": "Metric selection and thresholds remain with existing tools; no duplicate analyzer, protocol gate, baseline increase, or compatibility branch.",
+      "inventory": "Committed inventory identities hash only validated semantic payloads; local cache provenance is deliberately excluded so installed-runtime differences cannot make deterministic inventories host-dependent. Source changes and metric configuration payload changes still change identity."
+    },
+    "limitations": [
+      "Independent review pending. Broad metric refresh and real-repository matching-input fast path passed; normal-hook checkpoint is being prepared.",
+      "Source/tool/configuration must remain quiescent during measurement; pre/post byte snapshots detect observed mutation, not an intervening mutate-and-restore cycle.",
+      "Conservative script/root-configuration hashing may refresh more reports than a minimal dependency graph would. Matching inputs avoid checker execution.",
+      "Author focused evidence is not Quest landing, full-corpus acceptance or publication."
+    ],
+    "logs": [
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/red-confirmed.log",
+        "sha256": "df9193e2baeb02565c1c6d766bb5e89524825b38a185c8deea364a5cfe9fbef7",
+        "bytes": 151
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/inputs.log",
+        "sha256": "2818cb5ad7b69a1e6419991af6dc7a492bffcfe1630bd3c426d92cb905dc7ff2",
+        "bytes": 1110
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/provenance.log",
+        "sha256": "182e6af4986a7f62760587f8e358bca3cbe9a509be021dc11ef75c2aaa68416c",
+        "bytes": 7537
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/inventory-existing.log",
+        "sha256": "97fcb5093e4e35eed643f5c6a58ce4b2e74c9c56077b8adcabbe5002a1a93c9d",
+        "bytes": 1505
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/ratchet-existing.log",
+        "sha256": "586acb7df8c81229f08386209caf0bfff9d21560448f022312df97edadedb6bd",
+        "bytes": 848
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/complexity-scoped.log",
+        "sha256": "b1aa9e2149998fd9ef2c1918abe2d0df9d5a973bc4fe2d987a0f38bb8cc48578",
+        "bytes": 146
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/cognitive-scoped.log",
+        "sha256": "d7bc7bbf6c487764877195187cba79a9e04818d770753b224777ad4016d5ea62",
+        "bytes": 176
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/eslint.log",
+        "sha256": "b1f9deb49eb39d2abb389b2bb16b1e81146e02eb2e5c73fa155e96a7d59e0279",
+        "bytes": 278
+      }
+    ],
+    "focusedProof": {
+      "provenanceAssertions": 30,
+      "inputIdentityAssertions": 14,
+      "existingInventoryAssertions": 19,
+      "existingRatchetCases": 4,
+      "newOwnerScopedCyclomatic": 0,
+      "newOwnerScopedCognitive": 0
+    },
+    "staticChecks": [
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-0.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exitCode": 0
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-1.log",
+        "sha256": "279f2db212c0b5889b95ab2ce17c5391b8bb90a2e4fe134ecb781a1731d4ed76",
+        "exitCode": 0
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-2.log",
+        "sha256": "d7c7c383fd4edf21fc8e46e6631999262d6657bb55fdc038fe586eb9d0476387",
+        "exitCode": 0
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-3.log",
+        "sha256": "818e9f3f3dcb4e736117fd7a81a13c46ed77f804b51472820e5c61b89d6673c1",
+        "exitCode": 0
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-4.log",
+        "sha256": "417d12dfe287803740c4204fdab3557ceffbcfeffe20d8ebcc2eae9131446bec",
+        "exitCode": 0
+      }
+    ],
+    "broadEvidence": {
+      "normalGeneratorExitCode": 0,
+      "complexityCount": 1765,
+      "complexityBaseline": 1755,
+      "cognitiveCount": 150,
+      "cognitiveBaseline": 150,
+      "cycleGroups": 0,
+      "duplicationSource": [
+        44,
+        1383
+      ],
+      "duplicationTest": [
+        654,
+        24609
+      ],
+      "fastPath": {
+        "exitCode": 0,
+        "elapsedSeconds": 3.132935228990391,
+        "before": {
+          "test-output/analysis/complexity-src-test.json": {
+            "sha256": "825a3eb41c6193391746a471820be75bde3edbb35c4efe95ca4111ff81d822c0",
+            "inode": 224434265,
+            "bytes": 418731
+          },
+          "test-output/analysis/cognitive-complexity-src-scripts.json": {
+            "sha256": "d9b1d84d24670c386890ee156f52a0237406891e5a2d3965d8027b7f17331f5e",
+            "inode": 224434266,
+            "bytes": 36361
+          },
+          "test-output/analysis/madge-circular-src-scripts-test.json": {
+            "sha256": "1d242c1293ada8ba52ab264cfc32b0dacb82f056ee781e219a66d8b92b9f0da8",
+            "inode": 224434267,
+            "bytes": 1776
+          },
+          "test-output/analysis/jscpd-src-scripts/jscpd-report.json": {
+            "sha256": "a2f23e5dc5d722543299e10cd343f98cd89ac73c6982e19623fa8d33f4527aac",
+            "inode": 224535717,
+            "bytes": 908548
+          },
+          "test-output/analysis/jscpd-test/jscpd-report.json": {
+            "sha256": "e5cc830fb4bd576958d80dcd36651743179c71a1ce17c74c23995f33876202c3",
+            "inode": 224535719,
+            "bytes": 2499088
+          },
+          "solve/changes/global-owner-debt-inventory/inventory.json": {
+            "sha256": "572c8276b5fa22ae38fc1de0a19a1ef2e4e099d2ed6727c426594d5ff5c88881",
+            "inode": 224408943,
+            "bytes": 132764
+          }
+        },
+        "after": {
+          "test-output/analysis/complexity-src-test.json": {
+            "sha256": "825a3eb41c6193391746a471820be75bde3edbb35c4efe95ca4111ff81d822c0",
+            "inode": 224434265,
+            "bytes": 418731
+          },
+          "test-output/analysis/cognitive-complexity-src-scripts.json": {
+            "sha256": "d9b1d84d24670c386890ee156f52a0237406891e5a2d3965d8027b7f17331f5e",
+            "inode": 224434266,
+            "bytes": 36361
+          },
+          "test-output/analysis/madge-circular-src-scripts-test.json": {
+            "sha256": "1d242c1293ada8ba52ab264cfc32b0dacb82f056ee781e219a66d8b92b9f0da8",
+            "inode": 224434267,
+            "bytes": 1776
+          },
+          "test-output/analysis/jscpd-src-scripts/jscpd-report.json": {
+            "sha256": "a2f23e5dc5d722543299e10cd343f98cd89ac73c6982e19623fa8d33f4527aac",
+            "inode": 224535717,
+            "bytes": 908548
+          },
+          "test-output/analysis/jscpd-test/jscpd-report.json": {
+            "sha256": "e5cc830fb4bd576958d80dcd36651743179c71a1ce17c74c23995f33876202c3",
+            "inode": 224535719,
+            "bytes": 2499088
+          },
+          "solve/changes/global-owner-debt-inventory/inventory.json": {
+            "sha256": "572c8276b5fa22ae38fc1de0a19a1ef2e4e099d2ed6727c426594d5ff5c88881",
+            "inode": 224408943,
+            "bytes": 132764
+          }
+        },
+        "reportsUnchanged": true,
+        "inventoryBytesUnchanged": true
+      },
+      "sourceDigest": "084f0f7f63fc82d945a4a9f8690867ee36544600ea24cd7ad20cdabbc97d5323",
+      "proofCeiling": "Inherited whole-repository complexity ratchet remains red. Full-corpus, independent approval, Quest landing and publication remain unexecuted."
+    }
+  },
+  "currentReview": {
+    "verdict": "REVISE",
+    "candidate": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+    "required": "M1 actual analyzer dependency/resolution input closure",
+    "report": "/tmp/codex-rs-raft-20261025/metric-review/REVIEW.md",
+    "sha256": "191d6c18a86c389252f2de63e14593cc879be83a563c255b38b5b83a24a51b23",
+    "status": "author repair pending; prior positive and broad evidence retained without full-input acceptance"
+  },
+  "revisionM1": {
+    "base": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+    "status": "author repair and actual project audit/cache proofs complete; source frozen awaiting independent delta review",
+    "review": {
+      "verdict": "REVISE",
+      "candidate": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+      "required": "M1 actual analyzer dependency/resolution input closure",
+      "report": "/tmp/codex-rs-raft-20261025/metric-review/REVIEW.md",
+      "sha256": "191d6c18a86c389252f2de63e14593cc879be83a563c255b38b5b83a24a51b23",
+      "status": "author repair pending; prior positive and broad evidence retained without full-input acceptance"
+    },
+    "reproducer": {
+      "before": "m1-before.log: 24 leaves,20 pass,4 intended freshness failures",
+      "after": "both hidden and outside-root actual producer/consumer cases measure0 before,1 after source-only mutation and fresh graph; prior seal invalidates",
+      "predecessor": "exact ddc controls replayed and retained separately; historical Git-dependent controls not added to the permanent test corpus"
+    },
+    "ownerContract": {
+      "source": "precinct.paperwork documented fileSystem read injection",
+      "resolution": "actual filing-cabinet export loaded before dependency-tree; actual resolve.sync documented filesystem hooks; no fs/Node ambient interposition",
+      "routeAdmission": "Actual cabinet-reported CommonJS/ESM for .js/.jsx with hooked resolve; audited pure generic implementation bound by source hash. AMD/TS/configured/unknown routes refuse to seal.",
+      "closure": "Require every actual graph node/edge and skipped resolution to be covered by observed source/resolution operations. Replay actual positive/negative path-kind, realpath and read-content facts; no parser or resolver is duplicated.",
+      "custody": "Conflicting repeated observations fail. Exact tool exports are restored on success/failure. Already-loaded dependency-tree is rejected. Disabled captured wrapper delegates to the original analyzer. Payload digest also binds complete analyzer input manifest.",
+      "hiddenSources": "Root snapshots now include .cache; actual jscpd dot:true witness proves this is also a duplication input, not merely a cycle-test patch."
+    },
+    "installedAnalyzer": [
+      {
+        "name": "madge",
+        "version": "8.0.0",
+        "entry": "/mnt/data/peter/projects/lagrange/node_modules/madge/lib/api.js",
+        "entrySha256": "ac4fd47e6d92c3ea2fdc76222cd92349271e1650db22f006e017c970927b6fec"
+      },
+      {
+        "name": "dependency-tree",
+        "version": "11.4.0",
+        "entry": "/mnt/data/peter/projects/lagrange/node_modules/dependency-tree/index.js",
+        "entrySha256": "d1d8f2914397270feb6578758614a09c02383e1667375182feefd9d6df8607ae"
+      },
+      {
+        "name": "precinct",
+        "version": "12.2.1",
+        "entry": "/mnt/data/peter/projects/lagrange/node_modules/precinct/index.js",
+        "entrySha256": "204e2ef3c531d5c464ce625046576aa32782cdd38b05bf406dd132e8ac420298"
+      },
+      {
+        "name": "filing-cabinet",
+        "version": "5.2.0",
+        "entry": "/mnt/data/peter/projects/lagrange/node_modules/filing-cabinet/index.js",
+        "entrySha256": "a64ef41f518dd2248a39687b0be0c35ad00b52bca71e3ec3a1e411942b6a63b3"
+      },
+      {
+        "name": "resolve",
+        "version": "1.22.11",
+        "entry": "/mnt/data/peter/projects/lagrange/node_modules/resolve/index.js",
+        "entrySha256": "4952fa49a809ad740f6d9b6a1c1e9a9c93777f37b03efd253291ff68753a56b8"
+      },
+      {
+        "name": "resolve-dependency-path",
+        "version": "4.0.1",
+        "entry": "/mnt/data/peter/projects/lagrange/node_modules/resolve-dependency-path/index.js",
+        "entrySha256": "7f605777614c14f9a4d1b4aa92039a1c0332e1b1c80ba7e8b58f4b7763f32108"
+      }
+    ],
+    "primarySourceInspiration": {
+      "url": "https://esbuild.github.io/plugins/#on-resolve-results",
+      "finding": "Resolution dependency sets include failed existence checks and directory facts, not just successful imports."
+    },
+    "focused": {
+      "files": 7,
+      "passed": 7,
+      "runnerAssertions": 186,
+      "maxFileMs": 23365,
+      "timeoutChanges": false,
+      "sourceFunctionMetrics": {
+        "base": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+        "changedOrNew": 62,
+        "aboveCyclomatic12OrCognitive20": 0
+      }
+    },
+    "limits": [
+      "Measured on this controller: canonical seven-file matrix and actual full-repository metric producers; the complete runtime corpus was not executed.",
+      "Supported observer contract is coupled to installed Madge/dependency-tree/precinct/cabinet/resolve APIs. Pure generic resolver source hash is explicit; unknown resolver implementations require a new audited binding.",
+      "Resolution facts bind the physical root because ancestor lookup context can change on relocation. Local cache provenance remains excluded from semantic committed inventory identities.",
+      "Pre/post mutation detection assumes quiescent source/tools/configuration; mutate-and-restore races and hostile in-process replacement of analyzer/module exports are not certified.",
+      "No full-corpus, Quest landing, main merge or publication acceptance. Independent REVISE remains blocking until applicable delta approval."
+    ],
+    "evidence": [
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/m1-before.log",
+        "bytes": 12463,
+        "sha256": "13a0cd21339cb64ec4c82fbd1aa9bd9d256931f2745dc87592e5400a78208ddc"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/m1-second.log",
+        "bytes": 3840,
+        "sha256": "f60586584fee0cfc7f019006758b6ed99210d23f00297f492ff498b11f69c30c"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/predecessor-controls-author.log",
+        "bytes": 2430,
+        "sha256": "19a44b4adee0ffadf3e97b37bfdf1291d0e49bddb3d0f38465b37891378967ca"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/focused-bounded-routes.log",
+        "bytes": 692,
+        "sha256": "cbfbaec02ddc9f42da1f3c9597fa45e7843f2cdec569bf58bce81d54e64d3a24"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/function-metrics.json",
+        "bytes": 68754,
+        "sha256": "ec1039c5be4605babdc1788993be37499cb1ef262a2cce9ad22a3c2c05868d50"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/installed-analyzer-identities.json",
+        "bytes": 1401,
+        "sha256": "5dc84555d1c7b1ceab5c4aab39947f165d261912bb85f95f4b2e4960c778504f"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/resolution-first.log",
+        "bytes": 3641,
+        "sha256": "81c33d23a97ec20af996de9e608d83f4cf488cccfe36ead98af08a3c7656a26c"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/custody-first.log",
+        "bytes": 2016,
+        "sha256": "096b2ac09bac8a47890b3cc446b459096c34f41812361470b14b23815ccb4d7d"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/duplication-hidden.log",
+        "bytes": 578,
+        "sha256": "5a1f1539b17f565e14cf5710000638aadd0f7e6b620226e51d08f46c74a268a1"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/broad-refresh.log",
+        "bytes": 7573,
+        "sha256": "0fbdb947ade6635cf8c6da83aa1e481871e668157a259de8f41987f18a2b5417"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/broad-refresh.json",
+        "bytes": 279,
+        "sha256": "a806a0f0d3b0fab65f519dc6fe05cb073ac25f2b71603b0f679c55f290190532"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/project-route-coverage.json",
+        "bytes": 5508,
+        "sha256": "924499c2b60dfbb81524ae73e2a17e48a840e3d7c38e8c98c5d1b7e586939b36"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/fast-path.log",
+        "bytes": 250,
+        "sha256": "174489810d74aba300ffcd1384f1c697bda1647d31c98a5eb80d4dcf3d1878a0"
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-revision/fast-path.json",
+        "bytes": 2737,
+        "sha256": "894b2dbfd1e3910c6f146b9e1394fa63ae4f82c75e91e5187eeaa7853b2e0b04"
+      }
+    ],
+    "broadRefresh": {
+      "base": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+      "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+      "command": "node scripts/generate-global-owner-debt-inventory.js --refresh",
+      "exitCode": 0,
+      "elapsedSeconds": 165.32138469896745
+    },
+    "projectRouteCoverage": {
+      "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+      "cycles": 0,
+      "facts": 11485,
+      "operations": {
+        "kind": 5925,
+        "content": 5560
+      },
+      "pathKinds": {
+        "file": 5589,
+        "directory": 38,
+        "absent": 298
+      },
+      "uniqueReads": 5560,
+      "readsOutsideEntryRootsAndNodeModules": [
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/js-request-binding-deployment/js-request-binding-example-contract.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/request-binding-deployment/request-binding-example-contract.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/request-binding-deployment/request-binding-example-node.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/request-binding-deployment/run-request-binding-deployment.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/affinity-demo-evidence.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/affinity-demo-live-report.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/affinity-demo-preload-gate.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/affinity-demo-report-error.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/affinity-demo-schema-admission-history.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/affinity-demo-schema-stability-window.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/cluster-harness.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/download-movielens.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/evidence-exact-plain-data.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/formation-verdict.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/gcp-cluster-provider.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/host-scheduling-evidence.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/lagrange-loader.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movie-ranking.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movielens-capacity-runtime-adapters.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movielens-grouped-reduce-matrix-dataset.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movielens-public-request-evidence-artifacts.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movielens-public-request-evidence-schema.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movielens-public-request-failure-evidence.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movielens-public-request-live-observation-validator.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movielens-public-request-workload-adapter.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movielens-public-request-workload-contract.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/movielens-public-request-workload-dataset.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/postgres-baseline-session.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/run-affinity-demo.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/run-comparison.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/run-formation-probe.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/run-movielens-public-request-workload.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-data-affinity/run-postgres-baseline.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/examples/service-portability/run-database-portability.js",
+        "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/package.json"
+      ],
+      "reportSha256": "f196627601b8e87d64ec68e7c13e170f99de0bb943107b732de8bb408ba62a3b",
+      "schema": "metric-report-provenance-v2",
+      "ceiling": "Actual whole-repository Madge producer completed all graph/resolution coverage and supported-route checks; this is analyzer coverage, not full-corpus runtime acceptance."
+    },
+    "fastPath": {
+      "exitCode": 0,
+      "elapsedSeconds": 2.0857613389380276,
+      "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+      "before": {
+        "complexity": {
+          "path": "test-output/analysis/complexity-src-test.json",
+          "bytes": 418731,
+          "ino": 224434280,
+          "sha256": "7c9709f9272d3121bfaeb28749a35fcf7c01c0673cea4379c294dd24ecce86bd"
+        },
+        "cognitive": {
+          "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
+          "bytes": 36361,
+          "ino": 224434265,
+          "sha256": "a6b5d35f355dc2169ddc06fb44f830bda8a496584a30fac927f041e25b49623b"
+        },
+        "cycles": {
+          "path": "test-output/analysis/madge-circular-src-scripts-test.json",
+          "bytes": 4280553,
+          "ino": 224434266,
+          "sha256": "f196627601b8e87d64ec68e7c13e170f99de0bb943107b732de8bb408ba62a3b"
+        },
+        "duplicationSource": {
+          "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+          "bytes": 909277,
+          "ino": 224565573,
+          "sha256": "be1eb61c8252c1944740a47b9b645d4bbb35c9a0e55543f95bf69afe659ab490"
+        },
+        "duplicationTest": {
+          "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+          "bytes": 2500210,
+          "ino": 224535717,
+          "sha256": "89d5cddeb4bf8f8be3c844ce7b5c9d6d06c275e97142f04416b53dd5455aff05"
+        }
+      },
+      "after": {
+        "complexity": {
+          "path": "test-output/analysis/complexity-src-test.json",
+          "bytes": 418731,
+          "ino": 224434280,
+          "sha256": "7c9709f9272d3121bfaeb28749a35fcf7c01c0673cea4379c294dd24ecce86bd"
+        },
+        "cognitive": {
+          "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
+          "bytes": 36361,
+          "ino": 224434265,
+          "sha256": "a6b5d35f355dc2169ddc06fb44f830bda8a496584a30fac927f041e25b49623b"
+        },
+        "cycles": {
+          "path": "test-output/analysis/madge-circular-src-scripts-test.json",
+          "bytes": 4280553,
+          "ino": 224434266,
+          "sha256": "f196627601b8e87d64ec68e7c13e170f99de0bb943107b732de8bb408ba62a3b"
+        },
+        "duplicationSource": {
+          "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+          "bytes": 909277,
+          "ino": 224565573,
+          "sha256": "be1eb61c8252c1944740a47b9b645d4bbb35c9a0e55543f95bf69afe659ab490"
+        },
+        "duplicationTest": {
+          "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+          "bytes": 2500210,
+          "ino": 224535717,
+          "sha256": "89d5cddeb4bf8f8be3c844ce7b5c9d6d06c275e97142f04416b53dd5455aff05"
+        }
+      },
+      "allFiveReportBytesAndInodesUnchanged": true,
+      "inventoryBefore": "a53d6b560500f4b04fa47f284644b9bb69a36ecf699c5c569dba3e13fd02e47a",
+      "inventoryAfter": "a53d6b560500f4b04fa47f284644b9bb69a36ecf699c5c569dba3e13fd02e47a",
+      "inventoryBytesUnchanged": true
+    },
+    "metrics": {
+      "complexity": {
+        "observed": 1765,
+        "baseline": 1755,
+        "status": "inherited red unchanged from exact c95"
+      },
+      "cognitive": {
+        "observed": 150,
+        "baseline": 150
+      },
+      "cycles": 0,
+      "duplicationSource": {
+        "clones": 44,
+        "lines": 1383
+      },
+      "duplicationTest": {
+        "clones": 654,
+        "lines": 24609
+      },
+      "baselineChanges": false
+    },
+    "sourceFreeze": {
+      "base": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+      "worktree": "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025",
+      "source": [
+        {
+          "path": "scripts/check-circular-dependencies.js",
+          "bytes": 2527,
+          "sha256": "2c74eb487bc1e2d66cfc33d788ddd1a2e525780eaa3d80b81b116913765ef28c"
+        },
+        {
+          "path": "scripts/metric-cycle-analyzer.js",
+          "bytes": 6012,
+          "sha256": "905c91ad7e1dab688a02e5eac936d7e2565b9d3ebb75c1d08e19decd7182ff70"
+        },
+        {
+          "path": "scripts/metric-cycle-input-facts.js",
+          "bytes": 3663,
+          "sha256": "f9548a761a51f716951c481269334db5713b4661b8f45b5cd89704d4c17f0e1a"
+        },
+        {
+          "path": "scripts/metric-report-constants.js",
+          "bytes": 2017,
+          "sha256": "3a07fb8b231ab1bc1c7cd3cb47e60517cdce6440691bc52eccc69d6dad4fc423"
+        },
+        {
+          "path": "scripts/metric-report-inputs.js",
+          "bytes": 5131,
+          "sha256": "a90579739a5dd635cd92ed703af5653990a82e6138bee4611b4d4c3d8a5d3543"
+        },
+        {
+          "path": "scripts/metric-report-provenance.js",
+          "bytes": 3740,
+          "sha256": "c893a4fbbf0a68c61c391a41ef8bfe0a1bc38e92240a2155a4d1b01a4fb1b133"
+        },
+        {
+          "path": "test/scripts/metric-cycle-custody.test.js",
+          "bytes": 4067,
+          "sha256": "aeb82adb54eec75b789b8fee13733222ba6bb998a3df59b2a02ba45999a3222e"
+        },
+        {
+          "path": "test/scripts/metric-cycle-resolution.test.js",
+          "bytes": 5574,
+          "sha256": "0b44ddabccd3959ef53be420e03243795ab5850e00361dfc9867eace435928cc"
+        },
+        {
+          "path": "test/scripts/metric-duplication-inputs.test.js",
+          "bytes": 1531,
+          "sha256": "1ad4eaa9c13df350a68e8909f1df2e7c6a3e6e850d9930b41b5258086ad6cf1a"
+        },
+        {
+          "path": "test/scripts/metric-report-fixture.js",
+          "bytes": 2829,
+          "sha256": "6275d668c0028f87176e5da0fb1c270d9f60b2f91ad9e222c6ef17d44e65c731"
+        },
+        {
+          "path": "test/scripts/metric-report-inputs.test.js",
+          "bytes": 5972,
+          "sha256": "229a7fc99cc8769f00c492ae405c97fec7caeb60fbfdfc88396cd5f0a55eeb89"
+        }
+      ],
+      "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+      "sourceStatus": "frozen pending broad window; no owned process running",
+      "pending": [
+        "real-project route coverage",
+        "broad refresh and matching-input fast-path",
+        "normal-hook WIP checkpoint",
+        "independent delta review"
+      ]
+    }
+  }
+}

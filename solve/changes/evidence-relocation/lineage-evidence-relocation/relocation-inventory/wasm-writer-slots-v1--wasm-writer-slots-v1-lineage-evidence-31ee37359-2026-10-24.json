@@ -1,0 +1,23 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "wasm-writer-slots-v1--wasm-writer-slots-v1-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "5759801d62494ffbf096fb65848bf01996479e422383c6f9bd7611e0f78450ec",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/wasm-writer-slots-v1--wasm-writer-slots-v1-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/wasm-writer-slots-v1/evidence/",
+  "files": [
+    ["archive-local-verification.json","c97e8e7e73707b4114b383dccef3610ba7e8d58cbfb7fa05b93dde772eed751b",299],
+    ["checkpoint-identities.json","f71f8d986c13e053d5954b710982325f0800c48877924be54d0cd8d87eb4dea3",9002],
+    ["design-review-v1.md","356d88acbf32ddc152a233eb8b81192855c269cb6c5ed83aa010dba14fbe80d6",12353],
+    ["design-review-v2.md","c25ddb71ae0be3efd81784e35e5c5cc9f7ea11133eb350b4eefd11fb0d2c9cc6",10125],
+    ["final-cross-review.md","b7a0b7c61eeb3e896e26272466bcd3d0dec47c9ca2c2b916b78737324ababa16",10531],
+    ["init-recreation-counterexample-review.md","f71d35275085d9d8baf908c2a05a3713b05bff919f02087e00f1b4c0d558071a",5955],
+    ["native-v1-pre-run-review.md","91bfe1b3ce167315843b626eaa978ca97b4c26971aab9b8fc7157af7c45b4964",10858],
+    ["ownership-seams.md","9de33ac3f316f00895cca2dd64ef205447c9dc4265a89fb4dd5b3f94ef7f528c",11923],
+    ["publication-receipt.json","5eccab4a3965a318749ada0022d7686b784ad1c52fc49afc8cff680fa79b0f30",1127],
+    ["recreation-first.tap","f14476a5a5e0f648f8bfcbd02d0365fa8145f2ba2ee20fbdd262fe6624470b22",37934],
+    ["recreation-pre-run-review.md","4015252593fd09fe2501d66957f665d9f27493572aab11f30c0928f33be3ee1f",8427],
+    ["recreation-request.json","0b3b3d0a5630fa76aa318a32a1e81313c654fe446de52b7dff04c3f52cb90f18",1306],
+    ["recreation-summary.json","7bbcb7b004f407135391fb8b33afcfa3213bea4f969cdb0d27a935e9ad1da167",527]
+  ]
+}

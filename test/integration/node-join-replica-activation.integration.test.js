@@ -16,7 +16,6 @@ import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import LifeRaft from '../../src/raft/liferaft.js';
 import {URL} from 'url';
 import {
   createVirginSeedBootstrapService,
@@ -149,35 +148,6 @@ async function quiesceControlPlaneWriters(nodes, drainMs = 250) {
   await new Promise((resolve) => setTimeout(resolve, drainMs));
 }
 
-/**
- * Run a teardown body with raft commit/apply rejections absorbed.
- * raft.end() does not drain the in-flight commit/apply tail before the
- * replica's SQLite log closes, so a commit landing in that shutdown window
- * rejects with "Raft commit/apply slice made no durable progress"
- * (src/raft/liferaft-commit-scheduler.js) on a promise no caller observes,
- * which tap reports as an unhandled rejection. All test assertions are
- * complete before teardown runs; the absorb window is scoped to the given
- * body and restored afterwards, so it only keeps that known shutdown race
- * from failing an already-finished test.
- * @param {Function} teardownBody - Async teardown body to run.
- * @return {Promise<void>}
- */
-async function withRaftCommitRejectionsAbsorbed(teardownBody) {
-  const originalCommitEntries = LifeRaft.prototype.commitEntries;
-  LifeRaft.prototype.commitEntries = function(entries) {
-    const result = originalCommitEntries.call(this, entries);
-    if (typeof result?.catch === 'function') {
-      return result.catch(() => undefined);
-    }
-    return result;
-  };
-  try {
-    await teardownBody();
-  } finally {
-    LifeRaft.prototype.commitEntries = originalCommitEntries;
-  }
-}
-
 test('Node join replica activation', {timeout: 180000}, async (t) => {
   t.beforeEach(() => {
     // Keep rebalance activity quiet in join-focused integration checks.
@@ -259,7 +229,10 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
         systemTableCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService: bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});
@@ -365,22 +338,20 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       // CLEANUP
       // =========================================================================
       await quiesceControlPlaneWriters([joiningService, bootstrapService]);
-      await withRaftCommitRejectionsAbsorbed(async () => {
-        if (joiningService) {
-          await joiningService.cleanup().catch((err) => t.comment(String(err)));
-        }
-        if (seedApi) {
-          await seedApi.shutdown().catch((err) => t.comment(String(err)));
-        }
-        if (bootstrapService && bootstrapService.shutdown) {
-          await bootstrapService.shutdown().catch((err) => t.comment(String(err)));
-        }
+      if (joiningService) {
+        await joiningService.cleanup().catch((err) => t.comment(String(err)));
+      }
+      if (seedApi) {
+        await seedApi.shutdown().catch((err) => t.comment(String(err)));
+      }
+      if (bootstrapService && bootstrapService.shutdown) {
+        await bootstrapService.shutdown().catch((err) => t.comment(String(err)));
+      }
 
-        // Shutdown message routers
-        if (bootstrapResult?.messageRouter) {
-          await bootstrapResult.messageRouter.shutdown().catch((err) => t.comment(String(err)));
-        }
-      });
+      // Shutdown message routers
+      if (bootstrapResult?.messageRouter) {
+        await bootstrapResult.messageRouter.shutdown().catch((err) => t.comment(String(err)));
+      }
     }
   });
 
@@ -412,7 +383,10 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
         systemTableCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService: bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});
@@ -765,7 +739,10 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
         systemTableCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService: bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});
@@ -870,23 +847,21 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       await quiesceControlPlaneWriters(
         [joiningService3, joiningService2, bootstrapService],
       );
-      await withRaftCommitRejectionsAbsorbed(async () => {
-        if (joiningService3) {
-          await joiningService3.cleanup().catch((err) => t.comment(String(err)));
-        }
-        if (joiningService2) {
-          await joiningService2.cleanup().catch((err) => t.comment(String(err)));
-        }
-        if (seedApi) {
-          await seedApi.shutdown().catch((err) => t.comment(String(err)));
-        }
-        if (bootstrapService && bootstrapService.shutdown) {
-          await bootstrapService.shutdown().catch((err) => t.comment(String(err)));
-        }
-        if (bootstrapResult?.messageRouter) {
-          await bootstrapResult.messageRouter.shutdown().catch((err) => t.comment(String(err)));
-        }
-      });
+      if (joiningService3) {
+        await joiningService3.cleanup().catch((err) => t.comment(String(err)));
+      }
+      if (joiningService2) {
+        await joiningService2.cleanup().catch((err) => t.comment(String(err)));
+      }
+      if (seedApi) {
+        await seedApi.shutdown().catch((err) => t.comment(String(err)));
+      }
+      if (bootstrapService && bootstrapService.shutdown) {
+        await bootstrapService.shutdown().catch((err) => t.comment(String(err)));
+      }
+      if (bootstrapResult?.messageRouter) {
+        await bootstrapResult.messageRouter.shutdown().catch((err) => t.comment(String(err)));
+      }
     }
   });
 });

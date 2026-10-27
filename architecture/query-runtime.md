@@ -1,27 +1,23 @@
 # Query Runtime Architecture
 
-How queries and compute callbacks execute once they reach the cluster: the
-programmatic runtime, service replica query bridge, execution-mode dispatch,
-partition-callback execution, the distributed movement primitives, and
-resource guardrails.
+How queries and distributed stage/plan primitives execute once they reach the
+cluster: the programmatic runtime, service replica query bridge,
+execution-mode dispatch, the distributed movement primitives, and resource
+guardrails.
 
 This is the execution layer beneath the ingress surfaces — SQL arrives via
 [postgres-wire.md](postgres-wire.md) or the admin API and runs against
 partitions placed by [rebalance.md](rebalance.md). The components named here
 are catalogued in [runtime-components.md](runtime-components.md).
 
-The `runtime.run`, `ctx.call`, `WasmCallAdapter`, and `partition_callback`
-sections below describe the active **legacy distributed-query callback
-surface** — a pre-Binding mechanism retained for internal use and study. They
-are not the supported Artifact / Binding / Cell installation path. Current
-externally installed WASI components use Binding-derived runtime-service
-Cells, and the public successor to partition-local callback execution is the
-call Binding path (`CALL BINDING $1` → per-partition `run` on the
-partition-host nodes → coordinated `reduce`); see
+Externally installed WASI components use Binding-derived runtime-service
+Cells, and partition-local WASI execution uses the call Binding path
+(`CALL BINDING $1` → per-partition `run` on the partition-host nodes →
+coordinated `reduce`); see
 [Service Deployment Guide](../docs/service-deployment-guide.md) and
 [Minimal Deployment Surface](minimal-deployment-surface.md).
 
-### Distributed Movement Primitives (Legacy Callback)
+### Distributed Movement Primitives
 Cross-partition data movement is restricted to three explicit primitives,
 preventing accidental N+1 chatter:
 
@@ -33,9 +29,9 @@ preventing accidental N+1 chatter:
   small dataset replication with hard size cap
 - **ctx.out(value)** — final output emission into result stream budgets
 
-### Programmatic Runtime v0 (Active Legacy Callback API)
-Programmatic distributed execution is implemented and active on the legacy
-callback surface:
+### Programmatic Runtime v0
+Programmatic distributed execution is implemented for internal stage/plan
+pipelines:
 
 - `runtime.run(async (ctx) => { ... }, opts?)` — injects session, snapshot, and
   budget defaults (`src/query/runtime-runner.js`)
@@ -82,101 +78,52 @@ Ownership boundaries:
 - Drivers and lifecycle modules are consumers only — they call the executor
   but do not own query routing, caching, or partition resolution.
 
-This is distinct from the legacy `ctx.call()` in `ExecutionContext`:
-- legacy `ctx.call()` is request-scoped, budget-bounded, and supports
-  iterator/stage/plan modes for user functions inside `runtime.run()`.
+This is distinct from `ctx.call()` in `ExecutionContext`:
+- `ctx.call()` is request-scoped, budget-bounded, and supports
+  iterator/stage/plan modes for functions inside `runtime.run()`.
 - `replicaContext.queryExecutor` is service-scoped, long-lived, and provides
   raw SQL execution for service replica internals.
 - Both route through `SQLQueryEngine.executeQuery()` — one query path, no
   duplication.
 
+### Logical table names and client DML
+
+Logical catalog names preserve the case returned by the SQL parser. `Logs` and
+`logs` are distinct names: routing selects a logical partition before SQLite
+interprets identifiers inside that partition's database. Table creation and its
+durable provisioning identity retain that spelling across restart. Runtime
+access grants compare the same exact case; ASCII uppercase letters are accepted
+in grant table identifiers as well as lowercase letters. No case alias is added.
+
+The system-table predicate owns reserved names, including the existing optional
+`global.` namespace representation. User CREATE rejects an exact reserved name
+before recording a schema job and again when provisioning or resuming a job,
+independently of catalog-cache presence. Bootstrap owns those tables.
+
+Client SQL admission covers `INSERT`, `UPDATE`, `DELETE` (including their
+supported replacement forms), `ALTER TABLE`, and `DROP TABLE`. It refuses
+exact-case system-table targets at engine entry (`SQL_STATEMENT`, `STAGE`, and
+`PLAN` execution modes) and preserves client origin through forwarding to
+partition execution; migration and partition schema-mutation boundaries likewise
+refuse `ALTER TABLE`, `DROP TABLE`, and DDL on exact-case system tables, and
+parallel-reduce runtime configuration rejects exact-case system tables for
+coordination and result tables. Reads remain available; supported administrative
+changes use their semantic owners. User `CREATE TABLE` rejects exact reserved
+system-table names via its creation invariant (`SYSTEM_TABLE_NAME_RESERVED`).
+
 ### Execution-Mode Dispatch (Active)
 `SqlCore.executeRequest(SqlRequest)` is the single owner for execution-mode
-dispatch. All three adapters produce frozen `SqlRequest` objects and delegate:
+dispatch. All adapters produce frozen `SqlRequest` objects and delegate:
 
 - `InternalSqlAdapter` -> `SqlRequest(executionMode: sql_statement)`
 - `PostgresWireAdapter` -> `SqlRequest(executionMode: sql_statement)`
-- legacy `WasmCallAdapter` -> `SqlRequest(executionMode: partition_callback)`
 
 No adapter owns dispatch logic. `executeRequest` switches on `executionMode`
 with dedicated branches:
 
 - `sql_statement` -> `executeQuery` (standard SQL planning and execution)
-- `partition_callback` -> `PartitionCallbackDispatcher` -> `CallbackExecutionHost`
-  (partition resolution, batch construction, per-partition callback invocation)
-- Plan-object modes -> plan pipeline (`reduceByKey` / `useBroadcast`)
-
-`partition_callback` is a first-class execution mode with its own dispatch
-path. It is never aliased to or folded into `sql_statement` execution.
-
-### Partition Callback Runtime Bridge (Active Legacy Callback API)
-`partition_callback` execution follows a dedicated pipeline from SqlCore
-through to callback invocation:
-
-```
-WasmCallAdapter (DB.call)
-      │
-      ▼
-SqlRequest(executionMode: partition_callback)
-      │
-      ▼
-SqlCore.executeRequest
-      │
-      ▼
-PartitionCallbackDispatcher
-├── Resolve target partitions from callback select query
-├── Construct per-partition row batches
-└── Delegate to CallbackExecutionHost
-      │
-      ▼
-CallbackExecutionHost (single invocation surface)
-├── Select runtime driver via CallbackRuntimeDriverRegistry
-├── Invoke callback per partition batch
-├── Enforce budget/cancellation before and after each batch
-├── Attach lineage IDs and consult dedupe registry on retries
-└── Return structured per-partition batch results
-      │
-      ▼
-CallbackContext (bounded primitives)
-├── lookup, emit, broadcast, out
-├── Nested-call guardrails (same policy as stage runtime)
-└── Budget/telemetry enforcement
-```
-
-Key ownership rules:
-- `PartitionCallbackDispatcher` owns partition resolution and batch planning
-  for callback requests
-- `CallbackExecutionHost` is the single callback invocation surface; no
-  parallel callback executor path exists
-- `CallbackRuntimeDriverRegistry` maps `runtime_kind` to callback drivers
-  (kernel-internal, `wasm_component`, gated `oci_container`)
-- Callback contexts expose the same bounded primitives and nested-call
-  guardrails as stage runtime contexts
-- Budget enforcement, cancellation propagation, lineage dedupe, and telemetry
-  are uniform across `sql_statement`, `partition_callback`, and plan-object
-  execution modes
-
-#### Unified Runtime Cross-Reference
-
-Callback runtime selection reuses the unified runtime ownership model defined
-in this document:
-
-- `CallbackRuntimeDriverRegistry` uses the same `RUNTIME_KIND` enum
-  (kernel-internal, `wasm_component`, `oci_container`) as `Runtime_Driver_Registry`
-- `CALLBACK_RUNTIME_KIND` is an alias for `RUNTIME_KIND` (same object reference)
-- No parallel lifecycle owner exists for callback execution —
-  `CallbackExecutionHost` has only `execute()`, not prepare/start/stop/health
-- Unknown callback runtime kinds fail closed with typed errors, matching the
-  no-fallback contract of `Runtime_Driver_Registry`
-- `oci_container` is excluded from `SUPPORTED_RUNTIME_KINDS` in the callback
-  host until the feature gate is lifted
-
-See the "Runtime_Driver_Registry" and "Service_Runtime_Lifecycle" sections in
-[`runtime-lifecycle.md`](runtime-lifecycle.md) and
-[`runtime-components.md`](runtime-components.md) for the unified runtime
-ownership model, and their "Runtime Anti-Patterns (Forbidden)" material for the
-no-fallback and no-parallel-lifecycle invariants that apply equally to
-callback execution.
+- `stage` / `plan` modes -> distributed stage/plan pipeline (`reduceByKey` /
+  `useBroadcast`)
 
 ### Exchange and ReduceByKey Semantics (Active)
 - `exchangeBy: 'key'` routes same keys to the same destination partition
@@ -197,18 +144,6 @@ Chooses movement strategy for joins and distributed work:
 
 User hints can override the default, validated against guardrails. Strategy
 decisions are exposed in EXPLAIN and query telemetry.
-
-### Callback Stage Executor
-Runs WASM callbacks in batch/stage mode (not per-row RPC). Groups rows by
-partition and invokes the callback once per partition batch. Supports:
-
-- Lineage ID attachment for retry safety
-- Dedupe on retry via lineage ID + stage ID
-- Cooperative cancellation and timeout propagation via CancellationToken
-
-For `partition_callback` execution mode, `CallbackExecutionHost` replaces
-ad-hoc callback wiring with a single invocation contract that reuses
-runtime-driver ownership for callback dispatch.
 
 ### Resource Guardrails
 Per-query and per-stage budgets enforced by `BudgetEnforcer`:

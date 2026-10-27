@@ -2,6 +2,7 @@
  * Durable-rejoin coverage for the final SQL runtime recovery handoff.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -71,7 +72,7 @@ test(DURABLE_REJOIN_FINAL_HANDOFF_TEST.name, async (t) => {
   service.seedNodeId = DURABLE_REJOIN_FINAL_HANDOFF_TEST.seedNodeId;
   service.bootstrapResponse = {systemTableSnapshots: {}};
   service.messageRouter = {
-    deliver: async () => ({acknowledged: true, success: true}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
   };
   service.rebalanceCoordinator = {controlPlaneReadinessService: null};
   service.messageGroupServices = new Map([

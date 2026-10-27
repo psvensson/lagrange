@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -15,7 +16,8 @@ import {
 } from './sql-query-engine-test-support.js';
 import {createControllablePartitionService} from
   '../partition/partition-service-test-support.js';
-import {ERRORS} from '../../src/constants/errors.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -102,6 +104,8 @@ function createRatingsPartition(replicaId, replicaIds) {
     tableName: 'ratings',
     replicaId,
     replicaIds,
+    nodeId: 'test-node',
+    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     peerAddresses: replicaIds.map(
       (candidateId) => `test-node/partition/${candidateId}`,
     ),
@@ -122,6 +126,8 @@ function createCounterPartition(replicaId, replicaIds) {
     tableName: 'counters',
     replicaId,
     replicaIds,
+    nodeId: 'test-node',
+    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     peerAddresses: replicaIds.map(
       (candidateId) => `test-node/partition/${candidateId}`,
     ),
@@ -137,13 +143,17 @@ function createCounterPartition(replicaId, replicaIds) {
 
 // The stale leader proposed the write before it was demoted, so its outcome
 // is not known there: in a real group the proposal may still commit through
-// the new leader. The executor, which holds only the answer's text, answers
-// its client that unknown outcome once and never sends the statement again
-// under a fresh entryId (quest raft-rs-single-path-partition-cutover, F-aj
-// after verification round 6).
+// the new leader. Superseded expectation (owner ruling, R6-B): the executor
+// used to answer its client that unknown outcome after one delivery, and the
+// caller's re-drive then minted a fresh entry. The answer now carries its
+// typed code and entryId, and the executor - the one re-delivery owner -
+// sends the write again only under that same entryId, so in a real group
+// the new leader answers it from its outcome row or applies it for the first
+// time: once. (Here the two replicas share no log, so the live leader
+// applies it, once, under that entryId.)
 test(
   'one client write proposed by a stale leader that is then demoted is ' +
-  'answered its unknown outcome once, never re-sent',
+  're-delivered only under its one entryId and applied once',
   async (t) => {
     const replicaIds = ['ratings-r1', 'ratings-r2', 'ratings-r3'];
     const staleLeader = createRatingsPartition(replicaIds[0], replicaIds);
@@ -154,20 +164,23 @@ test(
     staleLeader.role = 'leader';
     staleLeader.isLeader = true;
     staleLeader.leaderId = staleLeader.replicaId;
-    staleLeader.controllableProvider.setRole(RAFT_ROLE.LEADER);
-    staleLeader.controllableProvider.setProposeHandler(async () => {});
+    staleLeader.controllablePort.setRole(RAFT_ROLE.LEADER);
+    await resumeFixtureParticipantAdmission(staleLeader);
+    staleLeader.controllablePort.setProposeHandler(async () => {});
 
     currentLeader.role = 'leader';
     currentLeader.isLeader = true;
     currentLeader.leaderId = currentLeader.replicaId;
-    currentLeader.controllableProvider.setRole(RAFT_ROLE.LEADER);
-    currentLeader.controllableProvider.setProposeHandler(async (entry) => {
-      currentLeader.controllableProvider.commit(entry);
+    currentLeader.controllablePort.setRole(RAFT_ROLE.LEADER);
+    currentLeader.controllablePort.setProposeHandler(async (entry) => {
+      currentLeader.controllablePort.commit(entry);
     });
+    await resumeFixtureParticipantAdmission(currentLeader);
 
     const staleAddress = 'node-stale/partition/ratings-r1';
     const currentAddress = 'node-current/partition/ratings-r2';
     const deliveries = [];
+    const deliveredEntryIds = [];
     const servicesByAddress = new Map([
       [staleAddress, staleLeader],
       [currentAddress, currentLeader],
@@ -202,13 +215,14 @@ test(
     const messageRouter = {
       async deliver(address, message) {
         deliveries.push(address);
+        deliveredEntryIds.push(message.entryId);
         const service = servicesByAddress.get(address);
         const response = service.handleRemoteQuery(message);
         if (address === staleAddress) {
           await Promise.resolve();
-          staleLeader.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
+          staleLeader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
         }
-        return response;
+        return buildDeliveryEnvelope({acknowledged: true}, await response);
       },
     };
     const executor = new QueryExecutor({messageRouter, systemCache});
@@ -234,17 +248,15 @@ test(
     );
 
     t.equal(clientSubmissions, 1, 'the logical write is submitted once');
-    t.equal(result.success, false,
-      'the client is not told the write succeeded');
-    t.ok(
-      String(result.error).includes(ERRORS.WRITE_OUTCOME_UNKNOWN),
-      `the client is told its outcome is unknown (${result.error})`,
-    );
-    t.same(
-      deliveries,
-      [staleAddress],
-      'the statement is not sent again without its entryId',
-    );
+    t.equal(result.success, true,
+      `the client is told the write applied (${result.error})`);
+    t.equal(deliveries[0], staleAddress, 'setup: first sent to the stale ' +
+      'leader');
+    t.ok(deliveries.length >= 2, 'the unknown outcome was re-delivered');
+    t.equal(new Set(deliveredEntryIds).size, 1,
+      'every delivery carried the write\'s one entryId');
+    t.equal(typeof deliveredEntryIds[0], 'string',
+      'minted once by the executor for a caller that gave none');
     t.equal(
       staleLeader.db
         .prepare('SELECT COUNT(*) AS count FROM ratings')
@@ -258,8 +270,8 @@ test(
         .prepare('SELECT COUNT(*) AS count FROM ratings')
         .get()
         .count,
-      0,
-      'the live leader was not handed a second copy under a fresh entryId',
+      1,
+      'the live leader applied it once, under that entryId',
     );
 
     await staleLeader.shutdown();
@@ -293,11 +305,10 @@ test(
       messageRouter: {
         async deliver() {
           deliveries += 1;
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: false,
             error: 'No leader available for write operation',
-          };
+          });
         },
       },
     });
@@ -351,7 +362,7 @@ test(
       messageRouter: {
         async deliver() {
           deliveries += 1;
-          return {acknowledged: true, success: true, rows: []};
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       },
     });
@@ -416,10 +427,11 @@ test(
     leader.role = 'leader';
     leader.isLeader = true;
     leader.leaderId = leader.replicaId;
-    leader.controllableProvider.setRole(RAFT_ROLE.LEADER);
-    leader.controllableProvider.setProposeHandler(async (entry) => {
-      leader.controllableProvider.commit(entry);
+    leader.controllablePort.setRole(RAFT_ROLE.LEADER);
+    leader.controllablePort.setProposeHandler(async (entry) => {
+      leader.controllablePort.commit(entry);
     });
+    await resumeFixtureParticipantAdmission(leader);
 
     const address = 'node-leader/partition/counters-r1';
     const deliveredEntryIds = [];
@@ -446,13 +458,10 @@ test(
         deliveredEntryIds.push(message.entryId || null);
         const response = await leader.handleRemoteQuery(message);
         if (deliveries === 1) {
-          return {
-            acknowledged: false,
-            success: false,
-            error: 'Message timeout after committed response loss',
-          };
+          return buildDeliveryEnvelope(
+            {acknowledged: false, error: 'Message timeout after committed response loss'});
         }
-        return response;
+        return buildDeliveryEnvelope({acknowledged: true}, await response);
       },
     };
     const executor = new QueryExecutor({messageRouter, systemCache});

@@ -56,21 +56,17 @@ import {
 import {createSeedQuerySurface} from
   '../../integration/helpers/seed-query-surface.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../../test-helpers/participant-transaction-fixture.js';
+import {createParticipantReleaseDeliveryTrace, emitParticipantReleaseDeliveryTrace} from
+  '../../test-helpers/participant-release-delivery-trace.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const PARTITION_SERVICE_MODULE = 'src/partition/partition-service.js';
-const LEGACY_FILE_PREFIX = 'liferaft';
+const RETIRED_FILE_PREFIX = ['life', 'raft'].join('');
 const TEMP_PREFIX = 'raft-rs-single-path-';
 const DB_FILE = 'partition.sqlite';
-// Inputs a caller passes. The legacy name is what an operator configuration
-// could still say; it is a request, not an expectation, and its owner module
-// does not survive the cutover, so it is spelled here rather than imported.
-// Every other partition is built the way production builds one: with no
-// backend selection at all, so the durable-log and restart witnesses are red
-// today for the same reason the seed is (the default is the legacy backend)
-// and green only when production construction alone yields rs-raft.
-const LEGACY_BACKEND_NAME = 'liferaft';
 const PRODUCTION_SELECTION = Object.freeze({});
 const RS_ONLY_STATUS_FIELDS = Object.freeze(['confState', 'runtimeGeneration']);
 const TABLE_NAME = 'cutover_rows';
@@ -129,6 +125,7 @@ function partitionOptions(partitionId, dbPath, selection = {}) {
     replicaId: `${partitionId}-r1`,
     replicaIds: [`${partitionId}-r1`],
     nodeId: 'cutover-node',
+    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     dbPath,
     schema: {
       columns: [
@@ -219,6 +216,7 @@ function durableLogs(dbPath, groupId) {
 }
 
 async function writeRows(service) {
+  await resumeFixtureParticipantAdmission(service);
   const results = [];
   for (const [index, row] of WRITES.entries()) {
     results.push(await service.applyWrite({
@@ -268,6 +266,66 @@ function systemPartitionServices(bootstrapResult, bootstrapService) {
     .filter((service) => systemTables.has(service.tableName));
 }
 
+async function bootstrapWithParticipantTrace(bootstrapService, participantTrace) {
+  let bootstrapResult = null;
+  let bootstrapFailure = null;
+  const diagnosticFailures = [];
+  try {
+    bootstrapResult = await bootstrapService.bootstrap();
+  } catch (error) {
+    bootstrapFailure = error;
+  }
+  try {
+    participantTrace.restore();
+  } catch (error) {
+    diagnosticFailures.push(error);
+  }
+  try {
+    emitParticipantReleaseDeliveryTrace(participantTrace);
+  } catch (error) {
+    diagnosticFailures.push(error);
+  }
+  if (diagnosticFailures.length > 0) {
+    const failure = new AggregateError([
+      ...(bootstrapFailure === null ? [] : [bootstrapFailure]),
+      ...diagnosticFailures,
+    ], 'bootstrap/diagnostic failures retained: ' +
+      `success=${bootstrapResult?.success} error=${String(bootstrapResult?.error)} ` +
+      `diagnostics=${diagnosticFailures.map((error) => String(error)).join('; ')}`);
+    return {result: bootstrapResult, failure};
+  }
+  return {result: bootstrapResult, failure: bootstrapFailure};
+}
+
+async function cleanSeedAttempt({bootstrapService, bootstrapResult, seedApi, dataDir,
+  seedFailure}) {
+  const cleanupFailures = [];
+  try {
+    await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
+  } catch (error) {
+    cleanupFailures.push(error);
+  }
+  try {
+    await cleanupTestEnvironment();
+  } catch (error) {
+    cleanupFailures.push(error);
+  }
+  // Failed shutdown retains the physical directory for custody/inspection.
+  if (cleanupFailures.length === 0 && typeof dataDir === 'string' && dataDir.length > 0) {
+    try {
+      fs.rmSync(dataDir, {recursive: true, force: true});
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  }
+  if (cleanupFailures.length > 0) {
+    throw new AggregateError([
+      ...(seedFailure === null ? [] : [seedFailure]), ...cleanupFailures,
+    ], 'seed assertion/cleanup failures retained');
+  }
+  if (seedFailure !== null) throw seedFailure;
+}
+
 test('seed bootstraps and serves a write on rs-raft by default',
   {timeout: SEED_TEST_TIMEOUT_MS}, async () => {
     initializeTestEnvironment({
@@ -277,10 +335,12 @@ test('seed bootstraps and serves a write on rs-raft by default',
         stabilizationPeriodMs: 10000,
       },
     });
+    const participantTrace = createParticipantReleaseDeliveryTrace();
     const seedNodeId = '550e8400-e29b-41d4-a716-446655449961';
     const seedWsPort = getUniquePort();
     const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
+      routerFactory: participantTrace.routerFactory,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
@@ -295,8 +355,11 @@ test('seed bootstraps and serves a write on rs-raft by default',
       ConfigurationManager.getInstance().get(CONFIG_KEY.STORAGE_DATA_DIR);
     let bootstrapResult = null;
     let seedApi = null;
+    let seedFailure = null;
     try {
-      bootstrapResult = await bootstrapService.bootstrap();
+      const bootstrap = await bootstrapWithParticipantTrace(bootstrapService, participantTrace);
+      bootstrapResult = bootstrap.result;
+      if (bootstrap.failure !== null) throw bootstrap.failure;
       assert.equal(bootstrapResult.success, true,
         'the seed bootstraps through production construction');
 
@@ -350,16 +413,13 @@ test('seed bootstraps and serves a write on rs-raft by default',
         (selected.rows ?? []).map(({id, payload}) => ({id, payload})),
         [{id: SEED_ROW.id, payload: SEED_ROW.payload}],
         'the acknowledged INSERT selects back');
-    } finally {
-      await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
-      await cleanupTestEnvironment();
-      if (typeof dataDir === 'string' && dataDir.length > 0) {
-        fs.rmSync(dataDir, {recursive: true, force: true});
-      }
+    } catch (error) {
+      seedFailure = error;
     }
+    await cleanSeedAttempt({bootstrapService, bootstrapResult, seedApi, dataDir, seedFailure});
   });
 
-test('omitted selection cannot reach the legacy backend',
+test('omitted selection cannot reach the retired backend',
   {timeout: PARTITION_TEST_TIMEOUT_MS}, async () => {
     quietEnvironment();
     const {directory, dbPath} = tempDbPath();
@@ -379,59 +439,21 @@ test('omitted selection cannot reach the legacy backend',
     // Both facts are measured before either is asserted, so a red names both.
     const closure = relativeImportClosure(PARTITION_SERVICE_MODULE);
     const legacy = [...closure.keys()]
-      .filter((file) => path.basename(file).startsWith(LEGACY_FILE_PREFIX))
+      .filter((file) => path.basename(file).startsWith(RETIRED_FILE_PREFIX))
       .sort()
       .map((file) =>
         `${file} (imported by ${[...closure.get(file)].sort().join(', ')})`);
     assert.deepEqual({
       rsRuntimeFieldsMissingFromStatus: missing,
-      legacyModulesReachedFromPartitionService: legacy,
+      retiredModulesReachedFromPartitionService: legacy,
     }, {
       rsRuntimeFieldsMissingFromStatus: [],
-      legacyModulesReachedFromPartitionService: [],
+      retiredModulesReachedFromPartitionService: [],
     }, 'a partition constructed with no backend selection runs on the ' +
       'rs-raft runtime owner (its readStatus carried ' +
       `${JSON.stringify(observedStatusKeys)}) and ` +
-      `${PARTITION_SERVICE_MODULE} statically reaches no legacy backend ` +
+      `${PARTITION_SERVICE_MODULE} statically reaches no retired backend ` +
       `module (it reaches: ${legacy.join('; ') || 'none'})`);
-  });
-
-test('explicit legacy selection is a typed refusal',
-  {timeout: PARTITION_TEST_TIMEOUT_MS}, async () => {
-    quietEnvironment();
-    const {directory, dbPath} = tempDbPath();
-    let service = null;
-    let refusal = null;
-    try {
-      try {
-        service = new PartitionService(withFoundingStamp(partitionOptions('explicit-legacy',
-          dbPath, {raftBackend: LEGACY_BACKEND_NAME})));
-        await service.initialize();
-      } catch (error) {
-        refusal = error;
-      }
-      // Refusal shape: an Error carrying a non-empty string `code` (or
-      // `reason`) whose message names the requested backend and says it is
-      // refused or retired. The constant's name is the owner's to choose.
-      assert.ok(refusal instanceof Error,
-        `naming ${JSON.stringify(LEGACY_BACKEND_NAME)} constructed and ` +
-        'initialized a partition; its port readStatus carried ' +
-        `${JSON.stringify(statusKeys(service))}`);
-      const typed = refusal.code ?? refusal.reason;
-      assert.equal(typeof typed === 'string' && typed.length > 0, true,
-        `the refusal is typed (code/reason): ${refusal.stack}`);
-      assert.ok(refusal.message.includes(LEGACY_BACKEND_NAME),
-        `the refusal names the backend: ${refusal.message}`);
-      assert.match(refusal.message, /refus|retir/iu,
-        'the refusal says the backend is refused or retired');
-      assert.equal(service?.raft === undefined || service?.raft === null ||
-        missingRsFields(service).length === 0, true,
-      'no legacy port came up');
-    } finally {
-      await shutdownQuietly(service);
-      fs.rmSync(directory, {recursive: true, force: true});
-      resetEnvironment();
-    }
   });
 
 test('the write path has one durable log',

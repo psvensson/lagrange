@@ -22,7 +22,11 @@ import {SERVICE_TYPE} from '../constants/index.js';
 import {
   REPLICA_CLEANUP_ACQUIRE_OUTCOME,
 } from './replica-cleanup-tombstone-owner.js';
+import {REPLICA_CLEANUP_AUTHORITY_KIND} from
+  './replica-cleanup-constants.js';
 import {replicaStorageArtifactsAbsent} from './replica-storage-artifacts.js';
+import {isFailedCreateRemoveToken} from
+  '../rebalancer/failed-create-cleanup-token.js';
 
 const LOCAL_DB_EXT_LENGTH = '.db'.length;
 const QUARANTINED_SUFFIX = '.quarantined';
@@ -141,6 +145,15 @@ async function resolveSweepCleanupAuthority(owner, startupAuthorities,
 async function completeSweepCleanup(owner, authority, fs, dbPath) {
   if (!replicaStorageArtifactsAbsent(fs, dbPath)) return false;
   if (!await owner.requireCurrent(authority)) return false;
+  if (isFailedCreateRemoveToken(authority.ownerToken)) {
+    const completed = authority.kind ===
+      REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE ?
+      authority : await owner.markComplete(authority, {artifactsAbsent: true});
+    if (!completed || !await owner.isReceiptOperationTerminal(completed)) {
+      return completed || false;
+    }
+    return owner.release(completed, {artifactsAbsent: true});
+  }
   return owner.release(authority, {artifactsAbsent: true});
 }
 
@@ -221,13 +234,21 @@ async function sweepRemovedReplicaCleanupDebt(
       if (!authority || !await owner.requireCurrent(authority)) {
         throw new Error(`Cleanup ownership unavailable for ${replicaId}`);
       }
-      await handler.cleanupReplicaResources(
-        partitionId,
-        replicaId,
-        authority,
-      );
+      if (authority.kind !== REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE) {
+        await handler.cleanupReplicaResources(
+          partitionId,
+          replicaId,
+          authority,
+        );
+      }
       const dbPath = path.join(partitionsDir, key);
-      if (!await completeSweepCleanup(owner, authority, fs, dbPath)) {
+      const completion = await completeSweepCleanup(
+        owner,
+        authority,
+        fs,
+        dbPath,
+      );
+      if (completion !== true) {
         throw new Error(`Cleanup completion deferred for ${replicaId}`);
       }
       deleted += 1;

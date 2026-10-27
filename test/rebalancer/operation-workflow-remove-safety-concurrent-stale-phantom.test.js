@@ -17,6 +17,7 @@
 //     in-flight) must STILL block — the fix must not relax genuine concurrency
 //     safety.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -74,7 +75,7 @@ function buildCoordinatorWithConcurrentOp(concurrentOp) {
     nodeId: 'seed-node',
     enableTimeouts: false,
     messageRouter: {
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
       getConnectionState: () => 'connected',
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,

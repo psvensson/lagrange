@@ -1,0 +1,29 @@
+{
+  "schema": "solve-quest/2",
+  "id": "startup-obsolete-bootstraporexit-and-characterization-cleanup-20261026",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Remove the unused BootstrapService.bootstrapOrExit static method and its obsolete BOOTSTRAP_EXIT_FAILED log constant and test/doc references (G4), and align test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js with the actual seed startup listener ordering (F-L1).",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/startup-obsolete-bootstraporexit-and-characterization-cleanup-20261026/evidence/receipt.json",
+      "requiredReceipts": [
+        "bootstraporexit-retired",
+        "seed-startup-characterization-aligned",
+        "targeted-test-cone-and-independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "retire-bootstrap-or-exit",
+      "statement": "Delete BootstrapService.bootstrapOrExit and BootstrapLog.BOOTSTRAP_EXIT_FAILED, remove the obsolete bootstrapOrExit call from test/bootstrap/join-resume-replica-lifecycle-owner.test.js, and update architecture/bootstrap.md."
+    },
+    {
+      "id": "align-seed-startup-characterization",
+      "statement": "Update test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js so seed startup characterization reflects actual startSeedNode ordering (bootstrap -> runtime hydration -> startWebSocketServer -> bootstrapAPI.initialize) while join retains bootstrapAPI.initialize before join."
+    }
+  ],
+  "sealedAt": "74242b9596f62968ec6cece5eca48c1de20a930a"
+}

@@ -1,0 +1,186 @@
+name: rs-raft-load-recovery
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths:
+      - .github/workflows/rs-raft-load-recovery.yml
+      - test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js
+      - test/raft/raft-rs-backend/runtime-load-recovery-child.js
+      - solve/quests/replicated-transaction-decision-and-apply/evidence/runtime-load-recovery-20261012/recovery-load-order.patch
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-load-recovery-20261012
+  cancel-in-progress: false
+jobs:
+  native-proof:
+    if: github.ref == 'refs/heads/resume/rs-raft-runtime-recovery-20261012'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      BASE: 4151a3ab4cf3859651507d2f575a49754deb8f61
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      QUEST: replicated-transaction-decision-and-apply
+      TEST: test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js
+      SUBJECT: src/raft/raft-rs-runtime-owner.js
+      EVIDENCE: test-output/runtime-load-proof
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Bind untouched baseline and install locked dependencies
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "HEAD:$SUBJECT")" = 54fe5ceed1a390cfacbdcdc20f7b4778937cce07
+          git diff --exit-code "$BASE" -- src
+          mkdir -p "$EVIDENCE"
+          npm ci > "$EVIDENCE/install.log" 2>&1
+          npm run -s test:metadata:refresh > "$EVIDENCE/metadata-baseline.log" 2>&1
+          node --check "$TEST"
+          node --check test/raft/raft-rs-backend/runtime-load-recovery-child.js
+          node scripts/solve.js note --id "$QUEST" --attempt 'WIP native loader/runtime recovery witness: two real operation-port groups with SQLite WAL and actual vendored raft-rs. Baseline and source-order correction are measured separately. No independent approval or landing.' --json > "$EVIDENCE/attempt-baseline.json"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json "solve/quests/$QUEST/log.ndjson"
+          if ! git diff --cached --quiet; then
+            LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: bind native recovery witness metadata and attempt (not landed)'
+          fi
+          git rev-parse HEAD > "$EVIDENCE/baseline-sha.txt"
+          git diff --exit-code "$BASE" -- src
+      - name: Measure original source without retries
+        run: |
+          set -uo pipefail
+          set +e
+          npm run -s test:file -- "$TEST" > "$EVIDENCE/baseline.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/baseline-exit.txt"
+          test ! -d test-output/runtime-load-native || mv test-output/runtime-load-native "$EVIDENCE/baseline-cases"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/baseline-tap"
+          tail -60 "$EVIDENCE/baseline.log"
+      - name: Commit only the previously inspected ordering correction as WIP
+        id: candidate
+        run: |
+          set -euo pipefail
+          PATCH="solve/quests/$QUEST/evidence/runtime-load-recovery-20261012/recovery-load-order.patch"
+          git apply --check "$PATCH"
+          git apply "$PATCH"
+          test "$(git diff --name-only -- src)" = "$SUBJECT"
+          test "$(git diff --numstat -- "$SUBJECT" | cut -f1,2)" = "$(printf '1\t1')"
+          node --check "$SUBJECT"
+          node scripts/solve.js note --id "$QUEST" --attempt 'WIP source correction: shared runtime becomes HEALTHY only after ensureCore succeeds. Loading refusal retains shared reconstruction for every group. Native proof and independent review remain outstanding at commit time.' --json > "$EVIDENCE/attempt-candidate.json"
+          npm run -s test:metadata:refresh > "$EVIDENCE/metadata-candidate.log" 2>&1
+          git add -- "$SUBJECT" test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json "solve/quests/$QUEST/log.ndjson"
+          git diff --cached --check
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: preserve shared recovery after native load refusal (unreviewed)'
+          CANDIDATE="$(git rev-parse HEAD)"
+          echo "sha=$CANDIDATE" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$CANDIDATE" > "$EVIDENCE/candidate-sha.txt"
+          git diff "$BASE" HEAD -- "$SUBJECT" > "$EVIDENCE/source.patch"
+          sha256sum "$SUBJECT" src/raft/raft-rs-binding-owner.js "$TEST" test/raft/raft-rs-backend/runtime-load-recovery-child.js > "$EVIDENCE/candidate-sources.sha256"
+      - name: Measure exact candidate
+        run: |
+          set -uo pipefail
+          set +e
+          npm run -s test:file -- "$TEST" > "$EVIDENCE/candidate.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/candidate-exit.txt"
+          test ! -d test-output/runtime-load-native || mv test-output/runtime-load-native "$EVIDENCE/candidate-cases"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/candidate-tap"
+          tail -60 "$EVIDENCE/candidate.log"
+      - name: Revert only source ordering and retain the discriminating result
+        run: |
+          set -uo pipefail
+          set +e
+          trap 'git show "$(cat "$EVIDENCE/candidate-sha.txt"):$SUBJECT" > "$SUBJECT"' EXIT
+          git show "$BASE:$SUBJECT" > "$SUBJECT"
+          npm run -s test:file -- "$TEST" > "$EVIDENCE/revert.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/revert-exit.txt"
+          test ! -d test-output/runtime-load-native || mv test-output/runtime-load-native "$EVIDENCE/revert-cases"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/revert-tap"
+          tail -60 "$EVIDENCE/revert.log"
+      - name: Existing operation-port regression cone on restored candidate
+        run: |
+          set -uo pipefail
+          set +e
+          git diff --exit-code -- "$SUBJECT" || exit "$?"
+          npm run -s test:file -- test/raft/raft-rs-backend/operation-port-ready-recovery.test.js test/raft/raft-rs-backend/operation-port-throw-containment.test.js test/raft/raft-rs-backend/operation-port-provenance.test.js > "$EVIDENCE/existing.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/existing-exit.txt"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/existing-tap"
+          tail -60 "$EVIDENCE/existing.log"
+      - name: Derive proof result from engaged native cases, not exit codes alone
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['EVIDENCE'])
+          result = {'scope': 'two single-voter production operation-port groups, real raft-rs and SQLite; injected core-boundary trap', 'independentApproval': False, 'releaseCertification': False, 'candidate': (root/'candidate-sha.txt').read_text().strip(), 'checks': {}}
+          for phase in ('baseline', 'candidate', 'revert'):
+              statuses = []
+              for scenario in ('control', 'missing-glue', 'changed-glue', 'repeated-refusal'):
+                  p = root / (phase+'-cases') / (scenario+'.json')
+                  data = json.loads(p.read_text()) if p.exists() else {}
+                  lines = [x for x in (data.get('stdout') or '').splitlines() if x.startswith('NATIVE_RECOVERY ')]
+                  receipt = json.loads(lines[-1].removeprefix('NATIVE_RECOVERY ')) if lines else {}
+                  expected = 0 if phase == 'candidate' or scenario == 'control' else 1
+                  checks = data.get('status') == expected and data.get('signal') is None and data.get('error') is None and receipt.get('traps') == 1 and receipt.get('artifactsRestored') is True
+                  if expected == 0: checks = checks and receipt.get('phase') == 'complete' and receipt.get('groupsRestored') == 2
+                  else: checks = checks and receipt.get('phase') == 'recover-from-other-group'
+                  statuses.append(bool(checks))
+                  result['checks'][phase+':'+scenario] = bool(checks)
+              result['checks'][phase+':runner'] = (root/(phase+'-exit.txt')).read_text().strip() == ('0' if phase == 'candidate' else '1')
+          result['checks']['existing-regressions'] = (root/'existing-exit.txt').read_text().strip() == '0'
+          result['passed'] = all(result['checks'].values())
+          (root/'summary.json').write_text(json.dumps(result, indent=2)+'\n')
+          print(json.dumps(result, indent=2))
+          PY
+      - name: Preserve WIP source and native evidence without merging
+        if: always() && steps.candidate.outputs.sha != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CANDIDATE='${{ steps.candidate.outputs.sha }}'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          git diff --exit-code -- src
+          DEST="solve/quests/$QUEST/evidence/runtime-load-native-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$DEST"
+          mkdir -p "$DEST"
+          cp "$EVIDENCE"/*.txt "$EVIDENCE"/*.json "$EVIDENCE"/*.sha256 "$EVIDENCE"/*.patch "$DEST"/
+          for PHASE in baseline candidate revert; do
+            test ! -d "$EVIDENCE/$PHASE-cases" || cp -a "$EVIDENCE/$PHASE-cases" "$DEST/"
+          done
+          for PHASE in baseline candidate revert existing; do
+            test ! -f "$EVIDENCE/$PHASE.log" || cp "$EVIDENCE/$PHASE.log" "$DEST/$PHASE.log.txt"
+          done
+          git add -- "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: retain native load-recovery results, not independent approval'
+          REMOTE="$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)"
+          test "$REMOTE" = "$GITHUB_SHA"
+          git -c credential.helper='!gh auth git-credential' push origin "HEAD:refs/heads/$BRANCH"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$EVIDENCE/published-sha.txt"
+      - name: Retain all output and source, including failed attempts
+        if: always()
+        run: |
+          mkdir -p "$EVIDENCE"
+          git status --porcelain > "$EVIDENCE/final-status.txt"
+          cp "$SUBJECT" "$EVIDENCE/raft-rs-runtime-owner.js"
+          find "$EVIDENCE" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-native-load-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/runtime-load-proof/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Native result remains failing unless every required check engaged
+        if: always()
+        run: python3 -c 'import json,os; from pathlib import Path; p=Path(os.environ["EVIDENCE"])/"summary.json"; assert p.exists() and json.loads(p.read_text())["passed"], "native proof incomplete or failed; see retained evidence"'

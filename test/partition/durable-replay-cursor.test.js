@@ -25,6 +25,10 @@ import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {buildGenerationOriginCommand} from
+  '../../src/partition/partition-participant-transaction-bytes.js';
+import {PARTICIPANT_TRANSACTION_COMMAND} from
+  '../../src/partition/partition-participant-transaction-constants.js';
 import {
   buildReplayCursorCheckpoint,
   loadDurableDeltasBehindWatermark,
@@ -37,6 +41,10 @@ import {
 import {
   PartitionService,
 } from '../../src/partition/partition-service.js';
+import {
+  startMergeReplicationHandleForService,
+  startSplitReplicationHandleForService,
+} from '../../src/partition/partition-service-source-replication-start-methods.js';
 import {
   MERGE_ACK_CHECKPOINT_FIELD,
 } from '../../src/partition/merge-ack-constants.js';
@@ -75,6 +83,14 @@ function buildSplitRawMetadata(overrides = {}) {
 
 function buildLogger() {
   return {info() {}, warn() {}, error() {}, debug() {}};
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((settle) => {
+    resolve = settle;
+  });
+  return {promise, resolve};
 }
 
 const SOURCE_TABLE = 'users';
@@ -245,22 +261,35 @@ test('reconstruction seeds the catch-up queue from the durable Raft ' +
     sql: `DELETE FROM ${SOURCE_TABLE} WHERE id = ?`,
     params: ['a'],
   };
+  const replayedOrigin = buildGenerationOriginCommand(FIXTURE_PARTITION_ID, {
+    timestamp: 'durable-replay-origin',
+    proposedBy: `${FIXTURE_PARTITION_ID}-r1`,
+    proposedAt: 1,
+  });
   const source = await restartedSource([
     insertCommand('a'),
     insertCommand('b'),
     // The barrier: covered by the snapshot, never replayed.
     insertCommand('c'),
-    // Non-write control entries are filtered out of the mirror replay.
-    {
-      type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-      sessionId: 'session-control',
-      epoch: 1,
-      writeSet: [`${SOURCE_TABLE}:z`],
-    },
+    // A valid current committed control is applied after the watermark but
+    // never enters the SQL delta queue.
+    replayedOrigin,
     deleteCommand,
   ]);
   try {
-    const [, second, third, , fifth] = source.committed;
+    const [, second, third, fourth] = source.committed;
+    const durable = readCommittedIndependently(
+      source.dbPath, FIXTURE_PARTITION_ID);
+    const origins = durable.committed.filter((entry) =>
+      entry.command.type ===
+        PARTICIPANT_TRANSACTION_COMMAND.GENERATION_ORIGIN);
+    assert.equal(origins.length, 2,
+      'the admission origin and proposed replay are both committed and applied');
+    assert.equal(origins[1].command.entryId, replayedOrigin.entryId);
+    assert.ok(origins[1].index > third.index && origins[1].index < fourth.index,
+      'the applied current control sits behind the watermark before the SQL delta');
+    assert.ok(durable.appliedIndex >= origins[1].index,
+      'the durable applied cursor covers the replayed current control');
     const checkpoint = buildReplayCursorCheckpoint(
       SPLIT_ACK_CHECKPOINT_FIELD, second.index, third.index);
     const metadata = normalizeSplitTransitionMetadataForService(
@@ -281,12 +310,12 @@ test('reconstruction seeds the catch-up queue from the durable Raft ' +
     assert.ok(handle, 'execution handle must reconstruct');
     assert.deepEqual(
       handle.pendingEntries.map((entry) => entry.logIndex),
-      [fifth.index],
+      [fourth.index],
       'deltas behind the watermark must replay from the log in order',
     );
     assert.deepEqual(
       handle.pendingEntries.map((entry) => entry.sql),
-      [fifth.command.sql],
+      [fourth.command.sql],
     );
     assert.equal(handle.snapshotBarrierIndex, second.index);
     assert.equal(handle.replayWatermarkIndex, third.index);
@@ -324,6 +353,107 @@ test('loadDurableDeltasBehindWatermark stamps each delta with its ' +
   }
 });
 
+test('accepted recovery refreshes writes committed while START waits and ' +
+  'never re-runs a completed snapshot', async () => {
+  for (const scenario of [
+    {family: 'split', phase: PARTITION_TRANSITION_STATE.SPLIT_CATCHUP},
+    {family: 'split', phase: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
+    {family: 'merge', phase: PARTITION_TRANSITION_STATE.MERGE_CATCHUP},
+    {family: 'merge', phase: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE},
+  ]) {
+    const source = await restartedSource([insertCommand('barrier')]);
+    try {
+      await source.restarted.raft.campaign();
+      source.restarted.role = RAFT_ROLE.LEADER;
+      const watermark = source.committed[0].index;
+      const authorizationEntered = deferred();
+      const authorizationGate = deferred();
+      const replayed = [];
+      let snapshots = 0;
+      const isSplit = scenario.family === 'split';
+      const handle = {
+        metadata: isSplit ? {
+          workflowId: `${scenario.family}-${scenario.phase}`,
+          workflowAttempt: 1,
+          workflowFenceToken: 1,
+          sourcePartitionId: FIXTURE_PARTITION_ID,
+          targetPartitionIds: [...FIXTURE_TARGET_IDS],
+          targetPartitionVersion: 2,
+          primaryKeyColumn: 'id',
+          splitKey: 'm',
+        } : {
+          workflowId: `${scenario.family}-${scenario.phase}`,
+          workflowAttempt: 1,
+          workflowFenceToken: 1,
+          sourcePartitionIds: [FIXTURE_PARTITION_ID, 'users-p2'],
+          targetPartitionId: 'users-merged',
+          targetPartitionVersion: 2,
+          primaryKeyColumn: 'id',
+        },
+        phase: scenario.phase,
+        pendingEntries: [],
+        flushPromise: null,
+        snapshotBarrierIndex: watermark,
+        replayWatermarkIndex: watermark,
+      };
+      Object.assign(source.restarted, {
+        splitReplication: isSplit ? handle : null,
+        mergeReplication: isSplit ? null : handle,
+        openSplitSnapshotDatabase() {
+          snapshots += 1;
+          return {close() {}};
+        },
+        replaySplitEntry: async (entry) => replayed.push(entry),
+        replayMergeEntry: async (entry) => replayed.push(entry),
+        waitForMergeCutoverActivation: async () => {},
+        emitSplitSourceAck: async (_metadata, status) => {
+          if (status === 'snapshot_started') {
+            authorizationEntered.resolve();
+            await authorizationGate.promise;
+          }
+          return {result: status === 'catchup_ready' ? 'duplicate' : 'accepted',
+            splitCutoverApplied: status === 'catchup_ready',
+            splitSourceRetired: status === 'cleanup_completed'};
+        },
+        emitMergeSourceAck: async (_metadata, status) => {
+          if (status === 'snapshot_started') {
+            authorizationEntered.resolve();
+            await authorizationGate.promise;
+          }
+          return {result: status === 'catchup_ready' ? 'duplicate' : 'accepted',
+            mergeCutoverApplied: status === 'catchup_ready'};
+        },
+      });
+
+      const start = isSplit ?
+        startSplitReplicationHandleForService(source.restarted, handle) :
+        startMergeReplicationHandleForService(source.restarted, handle);
+      await authorizationEntered.promise;
+      const duringAuthorization = insertCommand(
+        `${scenario.family}-${scenario.phase}`);
+      await source.restarted.raft.propose(duringAuthorization);
+      assert.equal(handle.pendingEntries.length, 0,
+        `${scenario.family} ${scenario.phase}: unauthorized after-write ` +
+        'cannot enter the volatile queue');
+      authorizationGate.resolve();
+      const response = await start;
+      assert.equal(response.success, true,
+        `${scenario.family} ${scenario.phase}: durable START is accepted`);
+      await (isSplit ? source.restarted.splitReplicationRun :
+        source.restarted.mergeReplicationRun);
+      assert.equal(snapshots, 0,
+        `${scenario.family} ${scenario.phase}: recovery does not regress ` +
+        'to snapshot backfill');
+      assert.deepEqual(replayed.map((entry) => entry.entryId),
+        [duringAuthorization.entryId],
+        `${scenario.family} ${scenario.phase}: the authorization window is ` +
+        'recovered from the committed source log');
+    } finally {
+      await source.dispose();
+    }
+  }
+});
+
 // ── Receipt 3: bounded delta queue ──────────────────────────────────
 
 test('the split mirror delta queue is bounded: at capacity the write ' +
@@ -340,6 +470,10 @@ test('the split mirror delta queue is bounded: at capacity the write ' +
       ),
       flushPromise: null,
       lastError: null,
+      authorized: true,
+      quiescing: false,
+      quiesced: false,
+      activities: new Set(),
     },
     cloneSplitEntry: proto.cloneSplitEntry,
     enqueueSplitDeltaBounded: proto.enqueueSplitDeltaBounded,
@@ -416,6 +550,9 @@ test('leader activation on a restarted source resumes the split ' +
         workerCalls.push(this.splitReplication?.phase || null);
         return Promise.resolve();
       },
+      emitSplitSourceAck() {
+        return Promise.resolve({result: 'accepted'});
+      },
     });
 
     const resumed = await proto.startOrResumeSplitReplicationFromDurable
@@ -466,13 +603,13 @@ test('leader-owned activation invokes mirror worker resumption: ' +
   const {readFileSync} = await import('node:fs');
   const source = readFileSync(
     new URL(
-      '../../src/partition/partition-service-core-base.js',
+      '../../src/partition/partition-service-leader-activation-methods.js',
       import.meta.url,
     ),
     'utf8',
   );
   const activationSection = source.slice(
-    source.indexOf('PREPARED_STATE_RECONSTRUCTED'),
+    source.indexOf('scheduleLeaderOwnedActivation'),
   );
   assert.ok(
     activationSection.includes('resumeDurableMirrorReplicationWorkers'),

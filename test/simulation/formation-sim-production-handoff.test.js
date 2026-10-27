@@ -65,7 +65,7 @@ async function seedThroughHandoff() {
   const environment = createProductionSimNodeEnvironment({
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT, scenario,
   });
-  const host = createProductionSeedSimHost(environment,
+  const host = await createProductionSeedSimHost(environment,
     {bootIncarnation: await reserveSimulatedBootIncarnation()});
   await runOnSimulationGenerationRoot(GENERATION, () =>
     runOnExecutionNode(NODE_ID, () => host.phaseInfrastructure()));
@@ -184,8 +184,8 @@ test('D-4. the complete artifacts repeat, in and under load', async () => {
   // the host transcript's boundaries in the same causal order, the network
   // transcript structurally equal modulo consensus timing, formation reached
   // within the calibrated bound - and no longer asserts at which virtual
-  // instant anything happens. When O2 is funded, restore the exact
-  // hostTranscript, networkTranscript and nowMs assertions.
+  // instant anything happens. O2 was closed on 2026-10-04 without seeding
+  // (no fork of the consensus crate), so this narrowing is permanent.
   const formationBoundMs = loadCalibration(REPO_ROOT).formationWindowMs;
   const assertFormationBound = (run, label) => {
     assert.ok(run.formationCompleteAtMs > 0 &&
@@ -208,22 +208,24 @@ test('D-4. the complete artifacts repeat, in and under load', async () => {
   };
   const first = await runSeedHandoffScenario();
   assertFormationBound(first, 'on run 1');
-  // The normalisation keeps its teeth: moving a non-timer event is a
-  // difference, moving or dropping a timer fire is not.
+  // The normalisation keeps its teeth: a non-timer event is a structural
+  // difference, moving or dropping a timer fire is not. Retired since
+  // 7fa4d79ae: the fenced single-node seed dials no socket during bootstrap,
+  // so its network transcript carries adapter-timer fires and no link frames.
   const lines = first.networkTranscript.split('\n');
   const nonTimer = lines.findIndex((line) =>
     !line.includes(' fired:adapter-timer:'));
   const timer = lines.findIndex((line) =>
     line.includes(' fired:adapter-timer:'));
-  assert.ok(nonTimer >= 0 && timer >= 0,
-    'the transcript carries both timer fires and other events');
+  assert.ok(nonTimer === -1 && timer >= 0,
+    'the fenced seed transcript carries adapter-timer fires and no link frames');
   const mutated = (index, replacement) => lines
     .map((line, at) => at === index ? replacement : line).join('\n');
   assert.notEqual(
-    networkTranscriptStructure(mutated(nonTimer,
-      `${lines[nonTimer].split(' ')[0]} delivered:mutant_event:node-0->node-0`)),
+    networkTranscriptStructure(
+      `0 delivered:mutant_event:node-0->node-0\n${first.networkTranscript}`),
     networkTranscriptStructure(first.networkTranscript),
-    'a changed non-timer event is a structural difference');
+    'an added non-timer event is a structural difference');
   assert.equal(
     networkTranscriptStructure(mutated(timer, '')
       .split('\n').filter(Boolean).join('\n')),

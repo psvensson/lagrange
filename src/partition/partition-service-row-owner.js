@@ -23,7 +23,7 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {isCleanupTombstoneRow} from
   '../node/replica-cleanup-tombstone-owner.js';
-import {mintServiceRowCreatedAt} from
+import {isExactServiceRowBirth, mintServiceRowCreatedAt} from
   '../node/service-row-incarnation.js';
 
 
@@ -125,17 +125,8 @@ async function observePartitionRegistration(systemTableWriter, replicaId) {
 }
 
 function rowsMatchPartitionRegistration(observed, expected) {
-  const fields = [
-    COLUMN.SERVICE_ID,
-    COLUMN.SERVICE_TYPE,
-    COLUMN.PARTITION_ID,
-    COLUMN.NODE_ID,
-    COLUMN.REPLICA_ID,
-    COLUMN.ADDRESS,
-    COLUMN.STATUS,
-  ];
-  return Number.isSafeInteger(observed?.[COLUMN.CREATED_AT]) &&
-    fields.every((field) => observed?.[field] === expected[field]);
+  return isExactServiceRowBirth(observed, expected) &&
+    observed[COLUMN.STATUS] === expected[COLUMN.STATUS];
 }
 
 async function resolvePartitionRegistration(systemTableWriter, row,
@@ -201,7 +192,8 @@ class PartitionServiceRowOwner {
       replicaId,
     );
 
-    const createdAt = mintServiceRowCreatedAt(timestamp);
+    const createdAt = options.originalRegistration?.birth.created_at ??
+      mintServiceRowCreatedAt(timestamp);
     return {
       service_id: replicaId,
       service_type: SERVICE_TYPE.PARTITION,
@@ -212,6 +204,8 @@ class PartitionServiceRowOwner {
       raft_role: resolvePartitionRaftRole(service),
       status,
       address,
+      cleanup_token: null,
+      create_attempt_token: null,
       created_at: createdAt,
       // Registration stamps the canonical lifecycle generation, so every
       // later lifecycle CAS is fenced by it rather than by updated_at.
@@ -288,7 +282,16 @@ class PartitionServiceRowOwner {
     const row = Object.freeze(PartitionServiceRowOwner.buildServiceRow({
       ...options,
       timestamp: options.timestamp ?? this.now(),
+      extraFields: {...options.extraFields, ...options.originalRegistration?.birth},
     }));
+
+    if (options.originalRegistration) {
+      const registered = await options.originalRegistration.publish(row, (value) =>
+        this.systemTableWriter.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, value,
+          {...this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
+            allowCoalescing: false}));
+      return sealPartitionRegistrationEvidence(registered);
+    }
 
     let insertResult;
     let insertError = null;

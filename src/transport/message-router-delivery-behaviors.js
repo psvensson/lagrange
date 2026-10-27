@@ -1,4 +1,14 @@
+import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
+  from './message-router-delivery-lifetime.js';
+export {sendMessage} from './message-router-ack-delivery.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {deliveryTransportOf,
+  buildDeliveryEnvelope,
+  buildHandlerFailedError,
+  classifyThrownDeliveryError,
+  isDeliveredTransportDeliveryOutcome,
+  isSupersededTransportDeliveryOutcome,
+} from './transport-semantic-outcome.js';
 
 const {
   ConnectionState,
@@ -9,14 +19,10 @@ const {
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
   ROUTER_NO_CONNECTION_ERROR_CODE,
   RouterMessageType,
-  TRANSPORT_ERROR_MSG,
-  TRANSPORT_EVENT,
   TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_NUM,
-  TRANSPORT_TYPEOF,
   WebSocket,
   buildQueueWaitSummary,
   isRaftTransportPayload,
@@ -27,42 +33,25 @@ const {
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
-function deliveryAbortReason(signal) {
-  return signal?.reason instanceof Error ?
-    signal.reason :
-    new Error(ROUTER_ERROR_MSG.SHUTDOWN);
+// The handler answered. The acknowledgement is the router's own fact and the
+// answer travels beside it, never merged into it, so no answer field can
+// change a transport fact (design D4). The local answer is verbatim: no
+// property evaluation, copy or encoding. Remote answers have already passed
+// through the wire owner's serialization; that boundary owns its failures.
+function answeredDelivery(messageId, correlationId, answer, queueWaitMs) {
+  return {
+    result: {messageId, correlationId, acknowledged: true},
+    answer: answer ?? null,
+    queueWaitMs,
+  };
 }
 
-function assertDeliveryOpen(signal) {
-  if (signal?.aborted) throw deliveryAbortReason(signal);
-}
-
-function awaitDeliveryWithCancellation(deliveryPromise, signal) {
-  if (!signal) return deliveryPromise;
-  if (signal.aborted) {
-    return Promise.reject(deliveryAbortReason(signal));
-  }
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const complete = (settle, value) => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
-      settle(value);
-    };
-    function onAbort() {
-      return complete(reject, deliveryAbortReason(signal));
-    }
-    signal.addEventListener(
-      TRANSPORT_EVENT.ABORT,
-      onAbort,
-      {once: true},
-    );
-    Promise.resolve(deliveryPromise).then(
-      (value) => complete(resolve, value),
-      (error) => complete(reject, error),
-    );
-  });
+function handlerFailedDelivery(messageId, correlationId, error, queueWaitMs) {
+  return {
+    result: {...classifyThrownDeliveryError(buildHandlerFailedError(error?.message)),
+      messageId, correlationId},
+    queueWaitMs,
+  };
 }
 
 export async function deliverLocal(
@@ -71,128 +60,60 @@ export async function deliverLocal(
   messageId,
   payload,
   correlationId,
-) {
-  const handler = router.handlers.get(targetAddress);
-  if (!handler) {
-    return router.deliverRemote(
-      targetAddress,
-      messageId,
-      payload,
-      router.nodeId,
-      correlationId,
-    );
-  }
-  const envelope = {
-    messageId,
-    sourceAddress: ROUTER_ADDRESS.buildSourceAddress(router.nodeId),
-    sourceNodeId: router.nodeId,
-    targetAddress,
-    payload,
-    timestamp: router.timeSource.now(),
-  };
-  try {
-    const result = await Promise.resolve(handler(envelope));
-    return {
-      result: {
-        messageId,
-        correlationId,
-        acknowledged: true,
-        ...(result && typeof result === TRANSPORT_TYPEOF.OBJECT ?
-          (() => {
-            const {
-              acknowledged: _ack,
-              type: handlerType,
-              ...rest
-            } = result;
-            const merged = {
-              ...rest,
-            };
-            if (handlerType) {
-              merged.responseType = handlerType;
-            }
-            return merged;
-          })() :
-          {}),
-      },
-      queueWaitMs: TRANSPORT_NUM.ZERO,
-    };
-  } catch (error) {
-    return {
-      result: {
-        messageId,
-        correlationId,
-        acknowledged: false,
-        error: error.message,
-      },
-      queueWaitMs: TRANSPORT_NUM.ZERO,
-    };
-  }
-}
-
-export async function deliver(
-  router,
-  targetAddress,
-  message,
   options = {},
 ) {
-  const deliverStartMs = router.timeSource.now();
-  assertDeliveryOpen(options.signal);
-  if (!router.initialized) {
-    await router.initialize();
-  }
-  assertDeliveryOpen(options.signal);
-  const deliveryTimeoutMs =
-    Number.isFinite(options.timeoutMs) &&
-    options.timeoutMs > TRANSPORT_NUM.ZERO ?
-      Math.floor(options.timeoutMs) :
-      router.messageTimeoutMs;
-  const messageId = message.messageId || uuidv4();
-  const correlationId = message.correlationId || messageId;
-  const requestId = resolveRequestIdFromMessage(message);
-  const operationId = resolveOperationIdFromMessage(message);
-  const deliverySource = resolveDeliverySource(
-    targetAddress,
-    message,
-    options,
-  );
-  router.messageCount += TRANSPORT_NUM.ONE;
-  let targetNodeId = options.targetNodeId;
-  if (!targetNodeId) {
-    const parsed = router.parseAddress(targetAddress);
-    if (parsed.nodeId) {
-      targetNodeId = parsed.nodeId;
+  return withDeliveryLifetime(router, options, async (options) => {
+    assertDeliveryOpen(options);
+    const handler = router.handlers.get(targetAddress);
+    if (!handler) {
+      return router.deliverRemote(
+        targetAddress,
+        messageId,
+        payload,
+        router.nodeId,
+        correlationId,
+        options,
+      );
     }
-  }
-  if (!targetNodeId && router.resolveServiceNode) {
-    targetNodeId = router.resolveServiceNode(targetAddress);
-  }
-  if (!targetNodeId) {
-    throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(targetAddress));
-  }
-  const deliveryOutcome = await awaitDeliveryWithCancellation(
-    router.resolveDeliveryOutcome(
-      targetAddress,
-      message,
+    const {context} = options.deliveryLifetime;
+    const localDelivery = Object.freeze({
+      remainingMs: options.deliveryLifetime.remainingMs,
+      assertCurrent: () => assertDeliveryOpen(options),
+      ...(context === undefined ? {} : {deliveryContext: context}),
+    });
+    const envelope = {
       messageId,
-      targetNodeId,
-      correlationId,
-      {
-        ...options,
-        deliverySource,
-        timeoutMs: deliveryTimeoutMs,
-      },
-    ),
-    options.signal,
-  );
-  const normalizedOutcome = normalizeDeliveryOutcome(deliveryOutcome);
-  const result = normalizedOutcome.result;
-  const queueWaitMs = normalizedOutcome.queueWaitMs;
+      sourceAddress: ROUTER_ADDRESS.buildSourceAddress(router.nodeId),
+      sourceNodeId: router.nodeId,
+      targetAddress,
+      payload: options.deliveryLifetime.prepareMessage(payload),
+      timestamp: options.deliveryLifetime.clock.now(),
+    };
+    const delivery = router.connectionAuthorityOwner?.captureLocalDelivery() ?? null;
+    assertDeliveryOpen(options);
+    let result;
+    try {
+      result = await Promise.resolve(handler(envelope, delivery, localDelivery));
+    } catch (error) {
+      // Only the handler's own throw is a handler failure; the delivery
+      // lifetime's refusals stay the router's (decision D1).
+      return handlerFailedDelivery(messageId, correlationId, error, TRANSPORT_NUM.ZERO);
+    }
+    assertDeliveryOpen(options);
+    return answeredDelivery(messageId, correlationId, result, TRANSPORT_NUM.ZERO);
+  });
+}
+
+function recordDeliveryMetric(router, {
+  targetNodeId, messageId, correlationId, requestId, operationId, result,
+  queueWaitMs, deliverStartMs, clock,
+}) {
   try {
     const queue = router.outboundQueues.get(targetNodeId);
     const queueDepth = queue ? queue.pending.length : TRANSPORT_NUM.ZERO;
     const queueWaitSummary = buildQueueWaitSummary(queue);
-    const durationMs = router.timeSource.now() - deliverStartMs;
-    const acknowledged = result?.acknowledged === true;
+    const durationMs = clock.now() - deliverStartMs;
+    const acknowledged = isDeliveredTransportDeliveryOutcome(result);
     const trigger = router.getDeliverMetricTrigger(
       targetNodeId,
       durationMs,
@@ -223,7 +144,87 @@ export async function deliver(
   } catch (_metricsErr) {
     void _metricsErr;
   }
-  return result;
+}
+
+export async function deliver(
+  router,
+  targetAddress,
+  message,
+  options = {},
+) {
+  const messageId = message.messageId || uuidv4();
+  const correlationId = message.correlationId || messageId;
+  let targetNodeId = options.targetNodeId;
+  return withDeliveryLifetime(router, options, async (options) => {
+    const deliverStartMs = options.deliveryLifetime.clock.now();
+    assertDeliveryOpen(options);
+    if (!router.initialized) {
+      await router.initialize();
+    }
+    assertDeliveryOpen(options);
+    const deliveryTimeoutMs = options.deliveryLifetime.remainingMs();
+    const requestId = resolveRequestIdFromMessage(message);
+    const operationId = resolveOperationIdFromMessage(message);
+    const deliverySource = resolveDeliverySource(
+      targetAddress,
+      message,
+      options,
+    );
+    router.messageCount += TRANSPORT_NUM.ONE;
+    if (!targetNodeId) {
+      const parsed = router.parseAddress(targetAddress);
+      if (parsed.nodeId) {
+        targetNodeId = parsed.nodeId;
+      }
+    }
+    if (!targetNodeId && router.resolveServiceNode) {
+      targetNodeId = router.resolveServiceNode(targetAddress);
+    }
+    if (!targetNodeId) {
+      throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(targetAddress));
+    }
+    const deliveryOutcome = await router.resolveDeliveryOutcome(
+      targetAddress,
+      message,
+      messageId,
+      targetNodeId,
+      correlationId,
+      {
+        ...options,
+        deliverySource,
+        timeoutMs: deliveryTimeoutMs,
+      },
+    );
+    assertDeliveryOpen(options);
+    const normalizedOutcome = normalizeDeliveryOutcome(deliveryOutcome);
+    // The identity of THIS delivery is the router's own (finding F-D).
+    const delivered = buildDeliveryEnvelope(
+      normalizedOutcome.result,
+      normalizedOutcome.answer,
+      {messageId, correlationId},
+    );
+    recordDeliveryMetric(router, {
+      targetNodeId, messageId, correlationId, requestId, operationId,
+      result: deliveryTransportOf(delivered), queueWaitMs: normalizedOutcome.queueWaitMs,
+      deliverStartMs, clock: options.deliveryLifetime.clock,
+    });
+    return delivered;
+  }, (error, lifetime) => {
+    if (lifetime.ownsShutdown(error)) {
+      return buildDeliveryEnvelope({
+        messageId, correlationId, acknowledged: false, error: error.message,
+      });
+    }
+    return buildDeliveryEnvelope(router.buildDeferredDeliveryFailure(
+      messageId, correlationId, error.message, {
+        errorCode: error.code,
+        recoverableBeforeSend: error.recoverableBeforeSend === true,
+        retryAfterMs: router.resolveReconnectRetryAfterMs(
+          router.nodeConnections.get(targetNodeId) || null,
+        ),
+      },
+    ));
+  });
 }
 
 export function tryDeliverRaftDirect(
@@ -232,7 +233,9 @@ export function tryDeliverRaftDirect(
   messageId,
   payload,
   targetNodeId,
+  options = {},
 ) {
+  assertDeliveryOpen(options);
   if (!isRaftTransportPayload(payload)) {
     return null;
   }
@@ -260,12 +263,10 @@ export function tryDeliverRaftDirect(
     targetNodeId,
   });
   try {
-    connection.ws.send(JSON.stringify(message));
-    return {
-      messageId,
-      acknowledged: true,
-      direct: true,
-    };
+    const encoded = JSON.stringify(message);
+    assertDeliveryOpen(options);
+    connection.ws.send(encoded);
+    return {messageId, acknowledged: true};
   } catch (_sendError) {
     return null;
   }
@@ -280,201 +281,210 @@ export async function deliverRemote(
   correlationId,
   options = {},
 ) {
-  const directRaftDelivery = router.tryDeliverRaftDirect(
-    targetAddress,
-    messageId,
-    payload,
-    targetNodeId,
-  );
-  if (directRaftDelivery) {
-    return directRaftDelivery;
-  }
-  const deliveryTimeoutMs =
-    Number.isFinite(options.timeoutMs) &&
-    options.timeoutMs > TRANSPORT_NUM.ZERO ?
-      Math.floor(options.timeoutMs) :
-      router.messageTimeoutMs;
-  const reconnectInProgress = router.buildReconnectInProgressFailure(
-    targetNodeId,
-    messageId,
-    correlationId,
-  );
-  if (reconnectInProgress) {
-    return {
-      result: reconnectInProgress,
-      queueWaitMs: TRANSPORT_NUM.ZERO,
-    };
-  }
-  const responsePromise = router.registerPendingResponse(messageId, targetNodeId, {
-    deliverySource: resolveDeliverySource(targetAddress, payload, options),
-    responseContext: options.responseContext,
-    signal: options.signal,
-  });
-  let earlyResponseError = null;
-  responsePromise.catch((error) => {
-    earlyResponseError = error;
-  });
-  let ackResult;
-  let queueWaitMs = TRANSPORT_NUM.ZERO;
-  try {
-    const ackOutcome = await router.enqueueOutbound(
-      targetNodeId,
-      () => {
-        const connection = router.nodeConnections.get(targetNodeId);
-        const reconnectInProgress = router.buildReconnectInProgressFailure(
-          targetNodeId,
-          messageId,
-          correlationId,
-        );
-        if (reconnectInProgress) {
-          return reconnectInProgress;
-        }
-        if (
-          (!connection || connection.state !== ConnectionState.CONNECTED) &&
-          !router.isShuttingDown
-        ) {
-          const reconnectAddress =
-            router.resolveReconnectAddresses(targetNodeId)[TRANSPORT_NUM.ZERO] ||
-            null;
-          if (reconnectAddress) {
-            return router.tryDeliverAfterReconnect(
-              reconnectAddress,
-              targetAddress,
-              messageId,
-              payload,
-              targetNodeId,
-              correlationId,
-              deliveryTimeoutMs,
-            );
-          }
-        }
-        if (!connection || connection.state !== ConnectionState.CONNECTED) {
-          router.logger.warn(ROUTER_LOG_MSG.NO_TARGET_CONNECTION, {
-            messageId,
-            targetAddress,
-            targetNodeId,
-            localNodeId: router.nodeId,
-            connectionExists: !!connection,
-            connectionState: connection?.state,
-            availableConnections: Array.from(router.nodeConnections.keys()),
-          });
-          return router.buildDeferredDeliveryFailure(
-            messageId,
-            correlationId,
-            ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
-            {
-              errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
-              retryAfterMs: router.reconnectIntervalMs,
-            },
-          );
-        }
-        return router.sendMessage(
-          connection,
-          targetAddress,
-          messageId,
-          payload,
-          targetNodeId,
-          correlationId,
-          deliveryTimeoutMs,
-        );
-      },
-      {
-        deliveryPriority: options.deliveryPriority,
-        deliverySource: options.deliverySource,
-        replacePendingKey: options.replacePendingKey,
-        targetAddress,
-        message: payload,
-      },
-    );
-    const normalizedAckOutcome = normalizeDeliveryOutcome(ackOutcome);
-    ackResult = normalizedAckOutcome.result;
-    queueWaitMs = normalizedAckOutcome.queueWaitMs;
-  } catch (error) {
-    const deferredFailure = await router.resolveRecoverableDeliveryError({
-      error,
-      targetNodeId,
+  return withDeliveryLifetime(router, options, async (options) => {
+    assertDeliveryOpen(options);
+    const directRaftDelivery = router.tryDeliverRaftDirect(
       targetAddress,
       messageId,
       payload,
+      targetNodeId,
+      options,
+    );
+    if (directRaftDelivery) {
+      return directRaftDelivery;
+    }
+    const deliveryTimeoutMs = options.deliveryLifetime.remainingMs();
+    const reconnectInProgress = router.buildReconnectInProgressFailure(
+      targetNodeId,
+      messageId,
       correlationId,
-      deliveryTimeoutMs,
-    });
-    if (deferredFailure) {
-      router.cancelPendingResponse(messageId, {
-        ignoreLateResponse: true,
-        retiredReason: RETIRED_PENDING_RESPONSE_REASON.DEFERRED_DELIVERY,
-      });
+    );
+    if (reconnectInProgress) {
       return {
-        result: deferredFailure,
+        result: reconnectInProgress,
         queueWaitMs: TRANSPORT_NUM.ZERO,
       };
     }
-    router.cancelPendingResponse(messageId, {
-      ignoreLateResponse: true,
-      retiredReason: RETIRED_PENDING_RESPONSE_REASON.CANCELLED,
+    const responsePromise = router.registerPendingResponse(messageId, targetNodeId, {
+      deliverySource: resolveDeliverySource(targetAddress, payload, options),
+      responseContext: options.responseContext,
+      signal: options.signal,
+      deliveryLifetime: options.deliveryLifetime,
     });
-    if (error?.code === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE) {
-      return {
-        result: router.buildDeferredDeliveryFailure(
-          messageId,
-          correlationId,
-          error.message,
-          {
-            errorCode: error.code,
-            retryAfterMs: router.reconnectIntervalMs,
-          },
-        ),
-        queueWaitMs: TRANSPORT_NUM.ZERO,
-      };
+    const pending = router.pendingResponses.get(messageId);
+    const cancelResponse = (retiredReason) => router.cancelPendingResponse(messageId, {
+      expectedPending: pending,
+      ignoreLateResponse: true,
+      retiredReason,
+    });
+    responsePromise.catch(() => {});
+    const complete = (ackResult, queueWaitMs) => completeRemoteDelivery(router, {
+      ackResult, queueWaitMs, responsePromise, pending, cancelResponse,
+      messageId, correlationId, options,
+    });
+    let ackResult;
+    let queueWaitMs = TRANSPORT_NUM.ZERO;
+    try {
+      const ackOutcome = await router.enqueueOutbound(
+        targetNodeId,
+        () => {
+          assertDeliveryOpen(options);
+          const connection = router.nodeConnections.get(targetNodeId);
+          const reconnectInProgress = router.buildReconnectInProgressFailure(
+            targetNodeId,
+            messageId,
+            correlationId,
+          );
+          if (reconnectInProgress) {
+            return reconnectInProgress;
+          }
+          if (
+            (!connection || connection.state !== ConnectionState.CONNECTED) &&
+            !router.isShuttingDown
+          ) {
+            const reconnectAddress =
+              router.resolveReconnectAddresses(targetNodeId)[TRANSPORT_NUM.ZERO] ||
+              null;
+            if (reconnectAddress) {
+              return router.tryDeliverAfterReconnect(
+                reconnectAddress,
+                targetAddress,
+                messageId,
+                payload,
+                targetNodeId,
+                correlationId,
+                remainingDeliveryMs(options, deliveryTimeoutMs),
+                options,
+              );
+            }
+          }
+          if (!connection || connection.state !== ConnectionState.CONNECTED) {
+            router.logger.warn(ROUTER_LOG_MSG.NO_TARGET_CONNECTION, {
+              messageId,
+              targetAddress,
+              targetNodeId,
+              localNodeId: router.nodeId,
+              connectionExists: !!connection,
+              connectionState: connection?.state,
+              availableConnections: Array.from(router.nodeConnections.keys()),
+            });
+            return router.buildDeferredDeliveryFailure(
+              messageId,
+              correlationId,
+              ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
+              {
+                errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
+                retryAfterMs: router.reconnectIntervalMs,
+              },
+            );
+          }
+          return router.sendMessage(
+            connection,
+            targetAddress,
+            messageId,
+            payload,
+            targetNodeId,
+            correlationId,
+            remainingDeliveryMs(options, deliveryTimeoutMs),
+            options,
+          );
+        },
+        {
+          deliveryPriority: options.deliveryPriority,
+          deliverySource: options.deliverySource,
+          replacePendingKey: options.replacePendingKey,
+          targetAddress,
+          message: payload,
+          signal: options.signal,
+          deliveryLifetime: options.deliveryLifetime,
+        },
+      );
+      assertDeliveryOpen(options);
+      const normalizedAckOutcome = normalizeDeliveryOutcome(ackOutcome);
+      ackResult = normalizedAckOutcome.result;
+      queueWaitMs = normalizedAckOutcome.queueWaitMs;
+    } catch (error) {
+      let deferredFailure;
+      try {
+        assertDeliveryOpen(options);
+        deferredFailure = await router.resolveRecoverableDeliveryError({
+          error, targetNodeId, targetAddress, messageId, payload, correlationId,
+          deliveryTimeoutMs, options,
+        });
+        assertDeliveryOpen(options);
+      } catch (recoveryError) {
+        cancelResponse(RETIRED_PENDING_RESPONSE_REASON.CANCELLED);
+        throw recoveryError;
+      }
+      if (deferredFailure?.acknowledged === true) {
+        // The existing recovery attempt sent the request. Its ACK leaves the
+        // original application response waiter and deadline in custody.
+        return complete(deferredFailure, TRANSPORT_NUM.ZERO);
+      }
+      cancelResponse(deferredFailure ? RETIRED_PENDING_RESPONSE_REASON.DEFERRED_DELIVERY :
+        RETIRED_PENDING_RESPONSE_REASON.CANCELLED);
+      if (deferredFailure) {
+        return {result: deferredFailure, queueWaitMs: TRANSPORT_NUM.ZERO};
+      }
+      if (error?.code === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE) {
+        return {
+          result: router.buildDeferredDeliveryFailure(
+            messageId,
+            correlationId,
+            error.message,
+            {
+              errorCode: error.code,
+              retryAfterMs: router.reconnectIntervalMs,
+            },
+          ),
+          queueWaitMs: TRANSPORT_NUM.ZERO,
+        };
+      }
+      throw error;
     }
-    throw error;
-  }
-  if (!ackResult?.acknowledged) {
-    router.cancelPendingResponse(messageId, {
-      ignoreLateResponse: true,
-      retiredReason: RETIRED_PENDING_RESPONSE_REASON.ACK_REJECTED,
-    });
+    return complete(ackResult, queueWaitMs);
+  });
+}
+
+async function completeRemoteDelivery(router, {
+  ackResult, queueWaitMs, responsePromise, pending, cancelResponse,
+  messageId, correlationId, options,
+}) {
+  ackResult = normalizeDeliveryOutcome(ackResult).result;
+  if (!isDeliveredTransportDeliveryOutcome(ackResult)) {
+    cancelResponse(RETIRED_PENDING_RESPONSE_REASON.ACK_REJECTED);
     return {
       result: ackResult,
       queueWaitMs,
     };
   }
-  if (router.hasInlineAckPayload(ackResult)) {
-    router.cancelPendingResponse(messageId, {
-      ignoreLateResponse: true,
-      retiredReason: RETIRED_PENDING_RESPONSE_REASON.INLINE_ACK,
-    });
+  if (isSupersededTransportDeliveryOutcome(ackResult)) {
+    // Replaced in the queue before it was sent: no request left, so no
+    // answer will come (decision D3).
+    cancelResponse(RETIRED_PENDING_RESPONSE_REASON.SUPERSEDED);
     return {
       result: ackResult,
       queueWaitMs,
     };
   }
-  router.armPendingResponseTimeout(messageId, deliveryTimeoutMs);
+  router.armPendingResponseTimeout(
+    messageId, options.deliveryLifetime.remainingMs(), pending,
+  );
+  let serviceResult;
   try {
-    if (earlyResponseError) {
-      throw earlyResponseError;
-    }
-    const serviceResult = await responsePromise;
-    return {
-      result: {
-        messageId,
-        correlationId,
-        acknowledged: true,
-        ...router.normalizeServiceResponseResult(serviceResult),
-      },
-      queueWaitMs,
-    };
+    serviceResult = await responsePromise;
+    assertDeliveryOpen(options);
   } catch (error) {
+    // No answer arrived after the ACK: the waiter's failure is the outcome,
+    // through the owner's thrown-error conversion so its router code survives
+    // (a connection closed after the ACK is the router's deferral, never
+    // DELIVERED; a remote handler throw is handler_failed, finding F-A).
     return {
-      result: {
-        messageId,
-        correlationId,
-        acknowledged: true,
-        error: error.message,
-      },
+      result: {...classifyThrownDeliveryError(error), messageId, correlationId},
       queueWaitMs,
     };
   }
+  return answeredDelivery(messageId, correlationId, serviceResult, queueWaitMs);
 }
 
 export async function resolveRecoverableDeliveryError(
@@ -487,8 +497,10 @@ export async function resolveRecoverableDeliveryError(
     payload,
     correlationId,
     deliveryTimeoutMs = null,
+    options,
   },
 ) {
+  assertDeliveryOpen(options);
   if (!error || router.isShuttingDown) {
     return null;
   }
@@ -520,7 +532,8 @@ export async function resolveRecoverableDeliveryError(
           payload,
           targetNodeId,
           correlationId,
-          deliveryTimeoutMs,
+          remainingDeliveryMs(options, deliveryTimeoutMs),
+          options,
         );
       } catch (reconnectError) {
         return router.buildDeferredDeliveryFailure(
@@ -531,6 +544,7 @@ export async function resolveRecoverableDeliveryError(
           {
             errorCode:
               reconnectError?.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+            recoverableBeforeSend: reconnectError?.recoverableBeforeSend === true,
             retryAfterMs: Number.isFinite(reconnectError?.retryAfterMs) ?
               reconnectError.retryAfterMs :
               retryAfterMs,
@@ -549,108 +563,12 @@ export async function resolveRecoverableDeliveryError(
       error.message,
       {
         errorCode: error.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+        recoverableBeforeSend: error.recoverableBeforeSend === true,
         retryAfterMs,
       },
     );
   }
   return null;
-}
-
-export function sendMessage(
-  router,
-  connection,
-  targetAddress,
-  messageId,
-  payload,
-  targetNodeId,
-  correlationId,
-  timeoutMs = null,
-) {
-  return new Promise((resolve, reject) => {
-    const message = {
-      type: RouterMessageType.SERVICE_MESSAGE,
-      messageId,
-      targetAddress,
-      sourceAddress: ROUTER_ADDRESS.buildSourceAddress(router.nodeId),
-      sourceNodeId: router.nodeId,
-      payload,
-      timestamp: router.timeSource.now(),
-    };
-    const deliveryTimeoutMs =
-      Number.isFinite(timeoutMs) && timeoutMs > TRANSPORT_NUM.ZERO ?
-        Math.floor(timeoutMs) :
-        router.messageTimeoutMs;
-    const failBeforeSend = () => {
-      const activeConnection = router.nodeConnections.get(targetNodeId) ||
-        connection;
-      const retryAfterMs =
-        router.resolveReconnectRetryAfterMs(activeConnection);
-      if (
-        activeConnection &&
-        activeConnection.isIncoming !== true &&
-        activeConnection.isSelfConnection !== true
-      ) {
-        const staleWs = activeConnection.ws;
-        router.handleConnectionClose(targetNodeId, activeConnection.connectionId);
-        try {
-          if (typeof staleWs?.terminate === TRANSPORT_TYPEOF.FUNCTION) {
-            staleWs.terminate();
-          } else if (typeof staleWs?.close === TRANSPORT_TYPEOF.FUNCTION) {
-            staleWs.close();
-          }
-        } catch (_closeErr) {
-          void _closeErr;
-        }
-      }
-      reject(
-        router.buildConnectionClosedError(targetNodeId, {
-          beforeSend: true,
-          retryAfterMs,
-        }),
-      );
-    };
-    if (!connection?.ws || connection.ws.readyState !== WebSocket.OPEN) {
-      failBeforeSend();
-      return;
-    }
-    const timeout = router.timeSource.setTimeout(() => {
-      router.pendingMessages.delete(messageId);
-      const recoveryOwner = router.quarantineConnectionAfterAckTimeout(
-        targetNodeId,
-        connection,
-        messageId,
-        targetAddress,
-      );
-      resolve(
-        router.buildDeferredDeliveryFailure(
-          messageId,
-          correlationId,
-          TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
-          {
-            errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-            retryAfterMs: router.resolveReconnectRetryAfterMs(
-              recoveryOwner || connection,
-            ),
-          },
-        ),
-      );
-    }, deliveryTimeoutMs);
-    router.pendingMessages.set(messageId, {
-      messageId,
-      resolve,
-      reject,
-      timeout,
-      sentAt: router.timeSource.now(),
-      targetNodeId,
-    });
-    try {
-      connection.ws.send(JSON.stringify(message));
-    } catch (_sendError) {
-      router.timeSource.clearTimeout(timeout);
-      router.pendingMessages.delete(messageId);
-      failBeforeSend();
-    }
-  });
 }
 
 export function sendRaw(router, ws, message) {

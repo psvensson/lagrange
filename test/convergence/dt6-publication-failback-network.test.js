@@ -1,9 +1,7 @@
 import t from 'tap';
-import LifeRaft from '../../src/raft/liferaft.js';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
-import {connectRaftCluster, driveNetwork} from
-  '../distributed/harness/raft-network-host.js';
-import {SeededRandomSource} from '../../src/random/random-source.js';
+import {connectRaftRsNetwork} from
+  '../test-helpers/raft-rs-network-host.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from
@@ -44,50 +42,41 @@ import {
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const EXPECTED = Object.freeze([...IDS]);
-function clusterOptions(seed) {
-  return (id) => ({
-    'election min': '100 ms',
-    'election max': '200 ms',
-    'heartbeat': '30 ms',
-    'write': (_packet, callback) => {
-      if (typeof callback === 'function') {
-        callback(null);
-      }
-    },
-    'randomSource': new SeededRandomSource({seed: seed * IDS.length + IDS.indexOf(id)}),
-  });
-}
+const CONSENSUS_PARTITION_ID = 'publication-failback-p1';
 
-function leaderOf(rafts) {
-  return IDS.find((id) => rafts.get(id).state === LifeRaft.LEADER) || null;
+function leaderOf(consensus) {
+  return IDS.find((id) => consensus.isLeader(id)) || null;
 }
 
 // Host the REAL owner-membership publication driver on one node, against a shared published-row
 // store. The planning snapshot is real: the published set counts for this node ONLY if the store
 // was committed at this node's raft term (else it is stale for this term -> the real deficit
 // computation reports the full membership missing -> the driver drives the reconcile).
-function hostPublisher(net, raft, nodeId, store) {
+function hostPublisher(net, consensus, nodeId, store) {
   const counters = {commits: 0, rejectedStaleWrites: 0};
   const coordinator = createMembershipPublicationOwnerDriverHost({
     nodeId,
     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
     cdcIntegrationService: {
       canWriteSystemTableLocally: (table) =>
-        table === TABLES.CONTROL_PLANE_PUBLICATIONS && raft.state === LifeRaft.LEADER,
+        table === TABLES.CONTROL_PLANE_PUBLICATIONS &&
+        consensus.isLeader(nodeId),
     },
     ownerMembershipReconcileInFlight: false,
     assertSingleMembershipPartition: () => {},
     readPublicationPlanningSnapshot: async () => {
-      const publishedForMyTerm = store.committedEpoch === raft.term ? store.published : [];
+      const term = consensus.term(nodeId);
+      const publishedForMyTerm = store.committedEpoch === term ?
+        store.published : [];
       return {
         nodeRows: EXPECTED.map((id) => ({node_id: id, status: 'active'})),
         readinessByNodeId: Object.fromEntries(EXPECTED.map((id) => [id, {ready: true}])),
         latestPublishedPublicationRow: {
-          publicationEpoch: raft.term,
+          publicationEpoch: term,
           publishedActiveNodeIds: publishedForMyTerm,
         },
         latestPublicationRow: {
-          publicationEpoch: raft.term,
+          publicationEpoch: term,
           publishedActiveNodeIds: publishedForMyTerm,
           status: MEMBERSHIP_PUBLICATION_STATUS.OPEN,
         },
@@ -97,22 +86,23 @@ function hostPublisher(net, raft, nodeId, store) {
     // still at its old term) cannot commit; the current-term leader materialises a REAL
     // published row and commits it to the shared store.
     reconcileActiveGateMembershipPublication: async () => {
-      if (raft.term < store.committedEpoch) {
+      const term = consensus.term(nodeId);
+      if (term < store.committedEpoch) {
         counters.rejectedStaleWrites += 1;
         return;
       }
       const row = buildMembershipPublicationRow({
         candidate: {
-          publicationEpoch: raft.term,
+          publicationEpoch: term,
           publishedActiveNodeIds: EXPECTED,
-          publisherNodeId: raft.address,
+          publisherNodeId: nodeId,
           requiredAckNodeIds: EXPECTED,
           acknowledgedNodeIds: EXPECTED,
         },
         status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
         nowMs: net.now(),
       });
-      store.committedEpoch = raft.term;
+      store.committedEpoch = term;
       store.published = row.published_active_node_ids;
       store.lastRow = row;
       counters.commits += 1;
@@ -129,16 +119,24 @@ function hostPublisher(net, raft, nodeId, store) {
   return {coordinator, counters};
 }
 
+const PHASE_B_DEADLINE_MS = 4000;
+const PHASE_SETTLE_MS = 500;
+
 async function runPublicationFailback(seed) {
   const store = {committedEpoch: 0, published: [], lastRow: null};
   const net = createVirtualNetwork();
-  const rafts = connectRaftCluster(net, IDS, clusterOptions(seed));
-  const pubs = new Map(IDS.map((id) => [id, hostPublisher(net, rafts.get(id), id, store)]));
+  const consensus = connectRaftRsNetwork(net, IDS, {
+    partitionId: CONSENSUS_PARTITION_ID,
+    seed,
+  });
+  consensus.start();
+  const pubs = new Map(IDS.map((id) =>
+    [id, hostPublisher(net, consensus, id, store)]));
 
   // Phase A — the elected leader publishes membership for its term.
-  await driveNetwork(net, {untilMs: 400, stepMs: 5});
-  const leaderA = leaderOf(rafts);
-  const termA = rafts.get(leaderA).term;
+  await consensus.runUntil(400, {stepMs: 5});
+  const leaderA = leaderOf(consensus);
+  const termA = consensus.term(leaderA);
   const afterElection = {
     store: {...store},
     leaderCommits: pubs.get(leaderA).counters.commits,
@@ -152,13 +150,20 @@ async function runPublicationFailback(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await driveNetwork(net, {untilMs: 1000, stepMs: 5});
-  const leaderB = followers.find((id) => rafts.get(id).state === LifeRaft.LEADER) || null;
-  const termB = leaderB ? rafts.get(leaderB).term : null;
+  // Under check_quorum each follower ignores pre-votes for its own election
+  // timeout after A's last heartbeat (its leader lease), so the migration
+  // is awaited as an event, not at a fixed instant.
+  const newLeaderPublished = () => followers.some((id) =>
+    consensus.isLeader(id) && store.committedEpoch === consensus.term(id));
+  await consensus.runUntilTrue(newLeaderPublished,
+    {deadlineMs: PHASE_B_DEADLINE_MS, stepMs: 5});
+  await consensus.runUntil(net.now() + PHASE_SETTLE_MS, {stepMs: 5});
+  const leaderB = followers.find((id) => consensus.isLeader(id)) || null;
+  const termB = leaderB ? consensus.term(leaderB) : null;
   const afterPartition = {
     store: {...store},
     newLeaderCommits: leaderB ? pubs.get(leaderB).counters.commits : 0,
-    oldLeaderRejected: pubs.get(leaderA).counters.rejectedStaleWrites,
+    oldLeaderStillLeads: consensus.isLeader(leaderA),
     oldLeaderCommits: pubs.get(leaderA).counters.commits,
   };
 
@@ -166,16 +171,19 @@ async function runPublicationFailback(seed) {
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await driveNetwork(net, {untilMs: 1500, stepMs: 5});
-  const afterHeal = {store: {...store}, oldLeaderState: rafts.get(leaderA).state};
+  await consensus.runUntil(net.now() + PHASE_SETTLE_MS, {stepMs: 5});
+  const afterHeal = {
+    store: {...store},
+    oldLeaderIsLeader: consensus.isLeader(leaderA),
+  };
 
   assertMembershipPublicationOwnerDriverHostsHealthy(
     [...pubs.values()].map(({coordinator}) => coordinator),
   );
   IDS.forEach((id) => {
     pubs.get(id).coordinator.stopOwnerMembershipDriver();
-    rafts.get(id).end();
   });
+  consensus.dispose();
   return {leaderA, termA, leaderB, termB, afterElection, afterPartition, afterHeal};
 }
 
@@ -206,9 +214,11 @@ t.test('Phase B: after a migration the NEW leader re-publishes for its term (CL-
     'the new leader detected the stale epoch and RE-PUBLISHED — the fail-back');
   t.equal(m.afterPartition.store.committedEpoch, m.termB,
     'the published epoch advanced to the new leader\'s term');
-  t.ok(m.afterPartition.oldLeaderRejected > 0,
-    'the partitioned old leader kept trying to publish but its stale-term writes were rejected ' +
-    '(the stuck isolated owner that cannot commit)');
+  // check_quorum: the isolated old leader hears no quorum for an election
+  // timeout and steps down, so it stops acting as owner (any write it still
+  // tried before that was rejected at its stale term).
+  t.equal(m.afterPartition.oldLeaderStillLeads, false,
+    'the partitioned old leader stepped down (check_quorum): no stuck isolated owner');
   t.equal(m.afterPartition.oldLeaderCommits, m.afterElection.leaderCommits,
     'the partitioned old leader committed nothing further (frozen at its phase-A publication)');
 });
@@ -219,34 +229,44 @@ t.test('Phase C: heal leaves the migrated epoch stable and the old leader steppe
     t.equal(m.afterHeal.store.committedEpoch, m.termB,
       'the published epoch stays at the migrated leader\'s term after heal');
     t.same(m.afterHeal.store.published, EXPECTED, 'the published set remains the full membership');
-    t.not(m.afterHeal.oldLeaderState, LifeRaft.LEADER,
+    t.equal(m.afterHeal.oldLeaderIsLeader, false,
       'the old leader stepped down (no split-brain publisher)');
   });
 
 t.test('the publication fail-back is deterministic and holds across seeds', async (t) => {
   const a = await runPublicationFailback(5);
   const b = await runPublicationFailback(5);
+  // Same seed: the first election is seed-determined (no lease held); the failover winner and
+  // its exact term are drawn by raft-rs's own randomness under check_quorum (owner 2026-10-05:
+  // narrow the tests, no crate fork), so per run only their shape is asserted.
   t.same(
-    {leaderA: a.leaderA, termA: a.termA, leaderB: a.leaderB, termB: a.termB,
-      epochA: a.afterElection.store.committedEpoch, epochB: a.afterPartition.store.committedEpoch},
-    {leaderA: b.leaderA, termA: b.termA, leaderB: b.leaderB, termB: b.termB,
-      epochA: b.afterElection.store.committedEpoch, epochB: b.afterPartition.store.committedEpoch},
-    'same seed -> identical election, migration, and publication fail-back',
+    {leaderA: a.leaderA, termA: a.termA, epochA: a.afterElection.store.committedEpoch},
+    {leaderA: b.leaderA, termA: b.termA, epochA: b.afterElection.store.committedEpoch},
+    'same seed -> identical first election and publication',
   );
+  for (const [name, m] of [['run a', a], ['run b', b]]) {
+    t.ok(IDS.filter((id) => id !== m.leaderA).includes(m.leaderB),
+      `${name}: the failover leader is one of the first leader's followers`);
+    t.ok(m.termB > m.termA, `${name}: the failover term is above the first term`);
+    t.equal(m.afterPartition.store.committedEpoch, m.termB,
+      `${name}: the fail-back epoch is the failover leader's term`);
+  }
 
   const survivors = new Set();
   for (let seed = 0; seed < 10; seed += 1) {
     const m = await runPublicationFailback(seed);
     // Phase A converged at the elected leader's term; Phase B re-published at a higher term
-    // (the fail-back); the old leader was a stuck owner; heal is stable.
+    // (the fail-back); the old leader stepped down under check_quorum; heal is
+    // stable.
     t.ok(m.afterElection.store.committedEpoch === m.termA &&
       m.afterElection.store.published.length === EXPECTED.length,
     `seed ${seed}: leader A published its term's epoch`);
     t.ok(m.termB > m.termA && m.afterPartition.store.committedEpoch === m.termB &&
       m.afterPartition.newLeaderCommits > 0,
     `seed ${seed}: the new leader re-published for its term (fail-back)`);
-    t.ok(m.afterPartition.oldLeaderRejected > 0,
-      `seed ${seed}: the partitioned old leader could not commit (stuck owner)`);
+    t.ok(!m.afterPartition.oldLeaderStillLeads &&
+      m.afterPartition.oldLeaderCommits === m.afterElection.leaderCommits,
+    `seed ${seed}: the partitioned old leader stepped down and committed nothing`);
     t.equal(m.afterHeal.store.committedEpoch, m.termB,
       `seed ${seed}: the migrated epoch is stable after heal`);
     survivors.add(m.leaderB);

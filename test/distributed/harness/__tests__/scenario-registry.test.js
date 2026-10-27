@@ -52,8 +52,8 @@ const EXPECTED_LOCAL_THREE_NODE_EXECUTION_GATE_IDS = [
   'stale-publication-durable-truth-ahead',
 ];
 
-test('scenario-registry tracks the canonical 25-scenario matrix', (t) => {
-  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 25);
+test('scenario-registry tracks the canonical 24-scenario matrix', (t) => {
+  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 24);
   t.end();
 });
 
@@ -89,12 +89,11 @@ test('scenario-registry normalizes config basenames from paths', (t) => {
 test('scenario-registry lists canonical entries for a specific config', (t) => {
   const entries = listCanonicalScenarioEntries('local-three-node.json');
 
-  assert.equal(entries.length, 11);
+  assert.equal(entries.length, 10);
   assert.deepEqual(
     entries.map((entry) => entry.name),
     [
       'admin-query-smoke',
-      'examples-catalog',
       'network-partition-split-brain',
       'node-failure-rebalance',
       'public-path-multinode-baseline',
@@ -115,7 +114,6 @@ test('scenario-registry selects canonical scenarios in matrix order', (t) => {
     {name: 'rolling-restart', path: '/tmp/rolling-restart.js'},
     {name: 'admin-query-smoke', path: '/tmp/admin-query-smoke.js'},
     {name: 'slow-follower-under-load', path: '/tmp/slow-follower.js'},
-    {name: 'examples-catalog', path: '/tmp/examples-catalog.js'},
   ];
 
   const selected = selectCanonicalScenariosForConfig(
@@ -127,7 +125,6 @@ test('scenario-registry selects canonical scenarios in matrix order', (t) => {
     selected.map((scenario) => scenario.name),
     [
       'admin-query-smoke',
-      'examples-catalog',
       'rolling-restart',
       'write-ack-visibility',
     ],
@@ -138,7 +135,7 @@ test('scenario-registry selects canonical scenarios in matrix order', (t) => {
 test('scenario-registry formats canonical scenario matrix lines', (t) => {
   const lines = formatCanonicalScenarioMatrixLines();
 
-  assert.equal(lines.length, 25);
+  assert.equal(lines.length, 24);
   assert.equal(lines[0], 'local-three-node.json|admin-query-smoke');
   assert.equal(
     lines[lines.length - 1],

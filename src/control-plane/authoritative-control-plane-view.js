@@ -44,7 +44,7 @@ const AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE = Object.freeze({
 });
 
 const AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY = 'local_leader';
-const AUTHORITATIVE_CONTROL_PLANE_DEFAULT_QUERY_TIMEOUT_MS = 1500;
+const AUTHORITATIVE_CONTROL_PLANE_DEFAULT_QUERY_TIMEOUT_MS = 1500; // ends-on: the authoritative control-plane query answers
 
 function normalizeReadSource(source) {
   const normalized = String(source || '');

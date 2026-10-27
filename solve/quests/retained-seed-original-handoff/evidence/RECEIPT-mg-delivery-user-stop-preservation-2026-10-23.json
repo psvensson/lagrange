@@ -1,0 +1,118 @@
+{
+  "recordedAt": "2026-10-23T13:16:56.728649+00:00",
+  "purpose": "User-requested stopped WIP source and evidence preservation, not acceptance",
+  "sourceCommit": "681da1dc1beb5728a52ee5d223113b71b423156b",
+  "sourceParent": "21cfd917d8ceb2f0c1435cade117c0c44a91a03a",
+  "remoteSourceRef": "refs/heads/work/mg-source-occurrence-delivery-20261023",
+  "remoteSourceHeadVerified": "681da1dc1beb5728a52ee5d223113b71b423156b",
+  "sourceTree": "13d5692a896a65dac09291c1bc67158d504a26f1",
+  "testTree": "8876990478aa139596cbb2c2c4973ff60377c3b8",
+  "verifiedCommittedPaths": 269,
+  "implementationStopped": true,
+  "agents": [
+    "mg_delivery_design: interrupted",
+    "retained_effects_review: interrupted",
+    "retained_effects_tests: interrupted"
+  ],
+  "correctedRuntimeJobSubmitted": false,
+  "commitMode": "Documented LAGRANGE_SKIP_PRECOMMIT=1 non-main WIP preservation. Known failed static checks and stale metadata retained; no green gate claim. Binary guard passed separately.",
+  "pushMode": "Normal non-main preservation hook; no force or amend",
+  "remoteEvidenceArchive": {
+    "sha256": "c0eb799e1651a8feb0a3f4d349ed5d25d88ca83432ebe38348115167ee0656c6",
+    "bytes": 732117,
+    "asset": "retained-seed-original-handoff--mg-delivery-candidate-drafts-preservation-20261023-1304.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/retained-seed-original-handoff--mg-delivery-candidate-drafts-preservation-20261023-1304.tar.gz"
+  },
+  "movedLocalArchiveCopies": [
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-delivery-root-source-r1-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-delivery-root-source-r1-20261023.tar.gz",
+      "sha256": "c9aebc1fe4a7143aa7510578930d701f1abe5d6c255fa63f5449feb6c58f388a"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-root-selection-topology-r2-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-root-selection-topology-r2-20261023.tar.gz",
+      "sha256": "dd7d7362e4da2ef811ce8ae160f5c7fa79bd84337882538d678ae928b6010455"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-custody-r1-r6-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-native-custody-r1-r6-20261023.tar.gz",
+      "sha256": "01a0232f712a149e1db06cb67690a0b75786ead015925cc8e8d06cb22f96e808"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-delivery-transport-r2-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-delivery-transport-r2-20261023.tar.gz",
+      "sha256": "a2ee17023ba8e22b96084ab45c7d9a277876a0d18c26348cdcd4ae087d18afc9"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-f3-forwarding-frozen-r3-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-f3-forwarding-frozen-r3-20261023.tar.gz",
+      "sha256": "41ab076455fdce4e6e8ecd6bdc7e81aa73b4f335bef531727e8a7f8d037b97c3"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-complete-vector-r4-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-complete-vector-r4-20261023.tar.gz",
+      "sha256": "2cd9423ed53a7a1710de9d6717bf218beee262a0b39d92e97c69684bc151af67"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-currentness-witnesses-r1-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-currentness-witnesses-r1-20261023.tar.gz",
+      "sha256": "26cbae6465ac20563a9a84f5d171529ab6bfbbcecc5c69dd52637f9d8f785843"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-currentness-witnesses-r2-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-currentness-witnesses-r2-20261023.tar.gz",
+      "sha256": "b1d5ba6ecc0ecf571fbe39954ac025723dfcabbe5925d9deb99af4a23d49d617"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-fixture-candidate-r3-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-native-fixture-candidate-r3-20261023.tar.gz",
+      "sha256": "f1d1cbee48e381bdd24bf5fe14bcb573ff95abdc12d73b8bdb6c3b4d92935d9d"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-fixture-candidate-r4-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-native-fixture-candidate-r4-20261023.tar.gz",
+      "sha256": "b380b8631b72878ace854e24f90705375807a798523b6779d5fc5edca7c82ad1"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-mixed-vector-r2-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-native-mixed-vector-r2-20261023.tar.gz",
+      "sha256": "92d0fc6f9eec8302d0e3aabb8b6705b1096ba674190eb24efb2b95bd00a25ec9"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-transport-owner-static-r3-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-transport-owner-static-r3-20261023.tar.gz",
+      "sha256": "8f07d65e616d8ef13929c39d486d1de8603c178d026529f0877aa62b6a2d3855"
+    },
+    {
+      "formerPath": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-invocation-notification-witness-r2-20261023.tar.gz",
+      "localArchiveCopy": "/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/mg-invocation-notification-witness-r2-20261023.tar.gz",
+      "sha256": "ecba893ed6b7923bc9c142075acaa98a3d342d89353a5efd90c10e9482012d2a"
+    }
+  ],
+  "receiptArtifacts": [
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-preservation-2026-10-23/mg-delivery-stop-staged-manifest-2026-10-23.json",
+      "sha256": "f167126f66431c1780e262913fbe9e94e00834d32325eaa0ea3534140ccb754a",
+      "bytes": 68917
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-preservation-2026-10-23/mg-delivery-stop-commit-2026-10-23.log",
+      "sha256": "7ff419322e3d65619d46056c7ef2ada0b53f4044fb5b8a0dfa2d0c2cf59cfd8f",
+      "bytes": 32512
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-preservation-2026-10-23/mg-delivery-stop-push-2026-10-23.log",
+      "sha256": "4f01c3bd3aa7fdf2639336bb4597b8be9d7ea1a6139c88ee60a97eb11ca54acf",
+      "bytes": 594
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-preservation-2026-10-23/mg-delivery-stop-remote-heads-2026-10-23.txt",
+      "sha256": "00486f35c67e563c43c1a1684fefa33db20b8c8e22c676d8b512b846c8676f7d",
+      "bytes": 365
+    }
+  ],
+  "untouchedIntegrationHead": "48f3eb8c040cdcb4e1354c163243fae1bc4271e0",
+  "observerHead": "6a7e70674b109ef0e6d17ea33b32a4de16f3c0a9",
+  "failedBaselineEvidenceHead": "8a9b186d7bf4c8709855db95335a44254d0740d2"
+}

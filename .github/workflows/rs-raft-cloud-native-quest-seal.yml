@@ -1,0 +1,55 @@
+# One-shot canonical Quest red seal and non-main WIP preservation.
+name: rs-raft-native-inbound-quest-seal
+on:
+  push:
+    branches: [continue/rs-raft-cloud-native-v14-core-stage-diagnostic-20261014]
+    paths:
+      - .github/workflows/rs-raft-cloud-native-quest-seal.yml
+permissions:
+  contents: write
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked Solver dependencies
+        run: npm ci
+      - name: Canonical red seal, no code execution or gate bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          INPUT="$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$INPUT"
+          node scripts/solve.js start --id rs-raft-admitted-inbound-liveness
+          node scripts/solve.js probe --id rs-raft-admitted-inbound-liveness
+          git diff --check
+          git add -- solve/quests/rs-raft-admitted-inbound-liveness/quest.json solve/quests/rs-raft-admitted-inbound-liveness/log.ndjson
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: seal measured red admitted inbound lifetime Quest'
+          git fetch --no-tags origin refs/heads/continue/rs-raft-cloud-native-v14-core-stage-diagnostic-20261014
+          test "$(git rev-parse FETCH_HEAD)" = "$INPUT" || {
+            echo 'Concurrent branch movement; preservation only, refusing push'
+            exit 1
+          }
+          git push origin HEAD:refs/heads/continue/rs-raft-cloud-native-v14-core-stage-diagnostic-20261014
+      - name: Preserve seal evidence even on refusal
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-native-inbound-quest-seal-${{ github.sha }}
+          path: |
+            solve/quests/rs-raft-admitted-inbound-liveness/quest.json
+            solve/quests/rs-raft-admitted-inbound-liveness/log.ndjson
+            solve/quests/rs-raft-admitted-inbound-liveness/evidence/receipt.json
+          retention-days: 10
+          if-no-files-found: warn

@@ -12,6 +12,7 @@ const APPLICATION_DATABASE_ERROR_CODE = Object.freeze({
   TRANSACTION_CLOSED: 'TRANSACTION_CLOSED',
   TRANSACTION_CONTROL_RESERVED: 'TRANSACTION_CONTROL_RESERVED',
   TRANSACTION_NESTED: 'TRANSACTION_NESTED',
+  TRANSACTION_OUTCOME_UNKNOWN: 'TRANSACTION_OUTCOME_UNKNOWN',
 });
 
 const APPLICATION_DATABASE_ERROR_MSG = Object.freeze({
@@ -34,6 +35,8 @@ const APPLICATION_DATABASE_ERROR_MSG = Object.freeze({
   TRANSACTION_CONTROL_RESERVED:
     'Transaction-control SQL is reserved for transaction(callback)',
   TRANSACTION_NESTED: 'Nested application database transactions are not supported',
+  TRANSACTION_OUTCOME_UNKNOWN: 'the transaction\'s outcome is unknown; ' +
+    'some changes may have been committed',
 });
 
 const APPLICATION_DATABASE_LIMIT = Object.freeze({
@@ -42,6 +45,7 @@ const APPLICATION_DATABASE_LIMIT = Object.freeze({
   SQL_LENGTH: 1024 * 1024,
   STRING_BIND_LENGTH: 16 * 1024 * 1024,
   BYTE_BIND_LENGTH: 64 * 1024 * 1024,
+  // ends-on: the embedded runtime finishes shutting down
   STOP_TIMEOUT_MS: 30000,
 });
 

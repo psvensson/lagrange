@@ -1,0 +1,51 @@
+# Frozen red for seed cohort intent multiplicity; no production modifications.
+name: rs-raft-seed-cohort-first-red
+on:
+  push:
+    branches: [continue/rs-raft-seed-cohort-once-20261014]
+    paths: [.github/workflows/rs-raft-seed-cohort-first-red.yml]
+permissions:
+  contents: read
+jobs:
+  falsifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact deps
+        run: npm ci
+      - name: Require named source failure with full actual registry and route
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-seed-cohort-red
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          sha256sum test/bootstrap/seed-release-once-per-cohort.test.js > "$OUT/test-sha256.txt"
+          node --test test/bootstrap/seed-release-once-per-cohort.test.js > "$OUT/baseline.tap" 2>&1
+          status=$?
+          printf '%s\n' "$status" > "$OUT/baseline.status"
+          tail -n 55 "$OUT/baseline.tap"
+          test "$status" -ne 0 || exit 1
+          grep -F 'the seed starts one full-cohort RELEASE for each distinct partition in order' "$OUT/baseline.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/baseline.tap" || exit 1
+          grep -F 'actual:' "$OUT/baseline.tap" || exit 1
+          grep -F 'expected:' "$OUT/baseline.tap" || exit 1
+          echo 'Engaged old source duplicate intent failure, unchanged deadlines and tests'
+      - name: Archive original red TAP and identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-cohort-red-${{ github.sha }}
+          path: test-output/rs-raft-seed-cohort-red/
+          retention-days: 14
+          if-no-files-found: warn

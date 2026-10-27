@@ -403,7 +403,17 @@ export function formatThermalOutcome({outcome, reading, attempts, poll}) {
 export {HEADROOM, SKIP_ENV as THERMAL_SKIP_ENV, THERMAL_REFUSAL, THERMAL_REFUSAL_EXIT,
   THERMAL_REFUSAL_LINE};
 
+// It takes no argument: anything given is refused, never waited on.
+const USAGE_LINE = 'usage: node scripts/checks/wait-for-thermal-headroom.js ' +
+  `(no arguments; ${SKIP_ENV}=1 skips)`;
+const CLI_USAGE_EXIT = 2;
+
 function main() {
+  if (process.argv.length > 2) {
+    process.stderr.write(`unknown argument ${process.argv[2]}${NEWLINE}${USAGE_LINE}${NEWLINE}`);
+    process.exitCode = CLI_USAGE_EXIT;
+    return;
+  }
   const result = waitForThermalHeadroom({
     log: (line) => process.stdout.write(`${line}${NEWLINE}`),
   });

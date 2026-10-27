@@ -1,0 +1,37 @@
+name: rs-raft-continuation-workspace
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths: [.github/workflows/rs-raft-continuation-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  pinned-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 3ea4dd5053c5f60682cfc7bdcabfa32e0472682d
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Export tracked source only; no code execution or source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 3ea4dd5053c5f60682cfc7bdcabfa32e0472682d
+          OUT="$RUNNER_TEMP/lagrange-pinned-source"
+          mkdir -p "$OUT"
+          git archive --format=tar HEAD | gzip -n > "$OUT/source.tar.gz"
+          git rev-parse HEAD > "$OUT/input-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree-sha.txt"
+          git cat-file commit HEAD > "$OUT/commit-object.txt"
+          git ls-tree -r HEAD > "$OUT/tracked-blobs.txt"
+          sha256sum "$OUT/source.tar.gz" > "$OUT/SHA256SUMS"
+          test -z "$(git status --porcelain)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-continuation-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/lagrange-pinned-source/
+          retention-days: 7
+          if-no-files-found: error

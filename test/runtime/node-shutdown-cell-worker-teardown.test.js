@@ -158,7 +158,8 @@ test('lifecycle shutdown is exhaustive: one failing driver does not ' +
   const healthy = new TeardownAwareDriver('wasm_component');
   const lifecycle = buildLifecycleWithDrivers([failing, healthy]);
 
-  await lifecycle.shutdown({logger: SILENT_LOGGER});
+  await assert.rejects(lifecycle.shutdown({logger: SILENT_LOGGER}), (error) =>
+    error instanceof AggregateError && error.errors.some((cause) => cause.message === 'boom'));
 
   t.equal(failing.shutdownCalls, 1, 'failing driver attempted');
   t.equal(healthy.shutdownCalls, 1,

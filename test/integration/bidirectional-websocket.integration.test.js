@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Integration test for bidirectional WebSocket communication.
  *
@@ -107,7 +108,6 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
         const message = envelope.payload || envelope;
         receivedMessages.push(message);
         return {
-          acknowledged: true,
           request_id: message.request_id,
           status: 'initiated',
           replica_id: message.replica_id,
@@ -149,9 +149,9 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
         },
       );
 
-      t.ok(result.acknowledged, 'message should be acknowledged');
-      t.equal(result.request_id, 'bidir-test-001', 'should have correct request_id');
-      t.equal(result.status, 'initiated', 'should have status initiated');
+      t.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), 'message should be acknowledged');
+      t.equal(result.answer.request_id, 'bidir-test-001', 'should have correct request_id');
+      t.equal(result.answer.status, 'initiated', 'should have status initiated');
 
       // Verify message was received
       t.equal(receivedMessages.length, 1, 'joining node should receive one message');
@@ -206,7 +206,6 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
         const message = envelope.payload || envelope;
         receivedMessages.push(message);
         return {
-          acknowledged: true,
           request_id: message.request_id,
           status: 'initiated',
           replica_id: message.replica_id,
@@ -240,9 +239,9 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
         },
       );
 
-      t.ok(result.acknowledged, 'message should be acknowledged');
-      t.equal(result.request_id, 'mgt-test-001', 'should have correct request_id');
-      t.equal(result.status, 'initiated', 'should have status initiated');
+      t.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), 'message should be acknowledged');
+      t.equal(result.answer.request_id, 'mgt-test-001', 'should have correct request_id');
+      t.equal(result.answer.status, 'initiated', 'should have status initiated');
 
       t.equal(receivedMessages.length, 1, 'joining node should receive one message');
     } finally {

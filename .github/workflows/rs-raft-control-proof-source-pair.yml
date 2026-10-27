@@ -1,0 +1,80 @@
+# One-host, same-test-byte differential. This is not independent merge approval.
+name: rs-raft-control-proof-source-pair
+on:
+  push:
+    branches: [continue/rs-raft-seed-control-proof-amortization-20261014]
+    paths:
+      - .github/workflows/rs-raft-control-proof-source-pair.yml
+      - src/node/replica-handler-participant-cutover.js
+      - test/partition/participant-release-protocol.test.js
+permissions:
+  contents: read
+jobs:
+  pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 19
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Same-host original and candidate with identical engaged test bytes
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          BASE=9103c83181a9b8816f2759167ac6eff0189d6fbb
+          CASE='already-current control cohort proves release with fewer original route calls'
+          TEST=test/partition/participant-release-protocol.test.js
+          OUT=test-output/rs-raft-control-source-pair
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse "$BASE^{tree}" > "$OUT/old-tree.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          OLD="$RUNNER_TEMP/control-proof-old"
+          git worktree add --detach "$OLD" "$BASE" > "$OUT/worktree.log" 2>&1 || exit 1
+          cp "$TEST" "$OLD/$TEST" || exit 1
+          cmp "$TEST" "$OLD/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test.sha256"
+          (cd "$OLD" && sha256sum "$TEST") > "$OUT/old-test.sha256"
+          git diff --name-only "$BASE" HEAD -- src > "$OUT/production-paths.txt"
+          cat "$OUT/production-paths.txt"
+          test "$(wc -l < "$OUT/production-paths.txt")" -eq 1 || exit 1
+          grep -Fx src/node/replica-handler-participant-cutover.js "$OUT/production-paths.txt" || exit 1
+          npm ci > "$OUT/candidate-install.log" 2>&1
+          c=$?
+          (cd "$OLD" && npm ci) > "$OUT/old-install.log" 2>&1
+          o=$?
+          test "$c" = 0 && test "$o" = 0 || exit 1
+          (cd "$OLD" && node --test --test-name-pattern="$CASE" "$TEST") \
+            > "$OUT/old.tap" 2>&1
+          red=$?
+          node --test --test-name-pattern="$CASE" "$TEST" > "$OUT/candidate.tap" 2>&1
+          green=$?
+          printf '%s\n' "$red" > "$OUT/old.status"
+          printf '%s\n' "$green" > "$OUT/candidate.status"
+          echo "same-host control proof old=$BASE red=$red head=$GITHUB_SHA candidate=$green"
+          tail -n 48 "$OUT/old.tap"
+          tail -n 34 "$OUT/candidate.tap"
+          test "$red" -ne 0 || exit 1
+          grep -F 'the already-current authoritative control owner must not replay' "$OUT/old.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/old.tap" || exit 1
+          grep -F 'actual: false' "$OUT/old.tap" || exit 1
+          grep -F 'expected: true' "$OUT/old.tap" || exit 1
+          test "$green" -eq 0 || exit 1
+          grep -F "ok 1 - $CASE" "$OUT/candidate.tap" || exit 1
+      - name: Retain source-only negative and candidate TAP without omission
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-source-pair-${{ github.sha }}
+          path: test-output/rs-raft-control-source-pair/
+          retention-days: 14
+          if-no-files-found: warn

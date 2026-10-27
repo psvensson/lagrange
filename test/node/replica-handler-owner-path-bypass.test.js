@@ -23,11 +23,6 @@ import path from 'path';
 import os from 'os';
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  ReplicaHandler as ProductionReplicaHandler,
-} from '../../src/node/replica-handler.js';
-import {scenarioStampingReplicaHandler} from
-  './replica-handler-bootstrap-stamps.js';
-import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
@@ -58,10 +53,8 @@ import {
 } from '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
-
-// Lifecycle scenarios: every create carries the committed-membership stamp
-// its scenario's creator would have produced (owner decision O1).
-const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
+import {OwnerPathReplicaHandler as ReplicaHandler} from
+  './replica-handler-owner-path-admission-fixture.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_PARTITION_ID = 'partition-1';
@@ -947,6 +940,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         });
         const cache = createSeededCache({partitionId});
         const cdcService = createMockCDCService(cache);
+        let failShutdown = Boolean(failureCase.shutdownThrows);
         const handler = new ReplicaHandler({
           nodeId: TEST_NODE_ID,
           systemTableCache: cache,
@@ -967,7 +961,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
                 }
                 this.isShutdown = true;
                 timeline.push('runtime-fenced');
-                if (failureCase.shutdownThrows) {
+                if (failShutdown) {
                   throw new Error('injected post-fence cleanup failure');
                 }
               },
@@ -1015,6 +1009,40 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
           ReplicaOperationResponseStatus.INITIATED,
           `${failureCase.label} create reaches the real async owner path`,
         );
+        if (failureCase.shutdownThrows) {
+          await new Promise((resolve) => setImmediate(resolve));
+          await Promise.allSettled([...handler.operationTasks]);
+          await partitionService.checkLearnerPromotion();
+          t.same(
+            timeline,
+            ['runtime-fenced'],
+            `${failureCase.label} fences runtime and withholds failure ` +
+              'publication while cleanup is pending',
+          );
+          t.equal(
+            handler.pendingRuntimeShutdowns.has(partitionService),
+            true,
+            `${failureCase.label} retains failed runtime in ` +
+              'pendingRuntimeShutdowns',
+          );
+          t.equal(
+            promotionCount,
+            0,
+            `${failureCase.label} failed learner cannot promote after failure`,
+          );
+          t.equal(
+            emittedOutcomes.some(
+              (outcome) =>
+                outcome.outcomeType ===
+                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+            ),
+            false,
+            `${failureCase.label} does not publish FAILED before cleanup settles`,
+          );
+          failShutdown = false;
+          await handler.shutdown();
+          continue;
+        }
         await failed;
         await partitionService.checkLearnerPromotion();
 
@@ -1050,6 +1078,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
           handler.replicaStateMachine = new ReplicaStateMachine({
             nodeId: TEST_NODE_ID,
             cdcIntegrationService: cdcService,
+            controlPlaneSystemTableGateway:
+              handler.controlPlaneSystemTableGateway,
             systemTableCache: cache,
           });
           handler.localReplicas.clear();
@@ -1058,28 +1088,24 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
             null,
             'redrive can reconstruct participant lifecycle after restart',
           );
+          // K3 (verify-identity-5): this learner reached SYNCING - it was
+          // released and may have voted or acked - before it FAILED, so the
+          // re-drive never reuses its replica id (a lost disk would reopen
+          // it empty): refused typed and terminal; the FAILED-target cleanup
+          // removes it and a re-plan mints a fresh id.
           const redriveSettled = new Promise((resolve) => {
             const onOutcome = (outcome) => {
-              if (
-                outcome.operationId !== operationId ||
-                ![
-                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
-                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
-                ].includes(outcome.outcomeType)
-              ) {
+              if (outcome.operationId !== operationId ||
+                  outcome.outcomeType !==
+                    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED) {
                 return;
               }
               emitter.off(OUTCOME_EVENT_NAME, onOutcome);
-              resolve(
-                outcome.outcomeType ===
-                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE ?
-                  'created' :
-                  'failed',
-              );
+              resolve(outcome);
             };
             emitter.on(OUTCOME_EVENT_NAME, onOutcome);
           });
-          const redriveResponse = await handler.handleMessage(buildEnvelope(
+          await handler.handleMessage(buildEnvelope(
             ReplicaOperationMessageType.CREATE_REPLICA,
             {
               operationId,
@@ -1088,32 +1114,13 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
               replicaId,
             },
           ));
-          t.equal(
-            redriveResponse.status,
-            ReplicaOperationResponseStatus.INITIATED,
-            'the durable owner can re-dispatch the same retryable CREATE',
-          );
-          t.equal(
-            await redriveSettled,
-            'created',
-            'the retryable CREATE redrive reaches success from participant ' +
-              'lifecycle state',
-          );
-          t.equal(
-            factoryCount,
-            2,
-            'redrive creates exactly one clean replacement runtime',
-          );
-          t.equal(
-            maxLiveRuntimeCount,
-            1,
-            'redrive never overlaps the failed and replacement runtimes',
-          );
-          t.equal(
-            handler.getTrackedService(replicaId),
-            partitionService,
-            'successful redrive tracks only the replacement runtime',
-          );
+          const refused = await redriveSettled;
+          t.equal(refused.errorCode, 'REPLICA_OPENED_IDENTITY_RESTART_REFUSED',
+            'the re-drive of an opened identity is refused typed');
+          t.notOk(refused.deferRetry, 'the refusal is terminal');
+          t.equal(factoryCount, 1, 'the re-drive opens no runtime');
+          t.equal(handler.getTrackedService(replicaId), null,
+            'nothing is tracked for the refused identity');
         }
 
         await handler.shutdown();
@@ -1128,11 +1135,21 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
     async (t) => {
       const emitter = new ExecutorOutcomeEmitter({logger: console});
       const emittedOutcomes = [];
+      const lifecycleAtFailure = [];
       emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
         emittedOutcomes.push(outcome);
       });
 
       const cache = createSeededCache();
+      emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
+        if (outcome.outcomeType ===
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED) {
+          lifecycleAtFailure.push(cache.get(
+            SYSTEM_TABLE_NAME.SERVICES,
+            TEST_REPLICA_ID,
+          )?.status || null);
+        }
+      });
       const cdcService = createMockCDCService(cache);
 
       // Factory that throws to simulate creation failure.
@@ -1179,6 +1196,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         failOutcomes[0].errorMessage,
         'failure outcome must carry errorMessage',
       );
+      t.same(lifecycleAtFailure, [ReplicaStatus.FAILED],
+        'the terminal outcome is emitted only after durable FAILED is visible');
 
       // Verify no CDC operation touched replica_operations.
       const replicaOpsWrites = cdcService.operations.filter(
@@ -1244,6 +1263,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       handler.replicaStateMachine = new ReplicaStateMachine({
         nodeId: TEST_NODE_ID,
         cdcIntegrationService: cdcService,
+        controlPlaneSystemTableGateway:
+          handler.controlPlaneSystemTableGateway,
         systemTableCache: cache,
       });
       handler.localReplicas.clear();

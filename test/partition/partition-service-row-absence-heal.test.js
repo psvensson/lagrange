@@ -81,10 +81,14 @@ test('PartitionServiceRowOwner - concurrent rowless creation has one ' +
   const harness = createInsertOnlyHarness();
   const firstOwner = createOwner(harness.writer, 100);
   const concurrentOwner = createOwner(harness.writer, 100);
+  const birthOptions = {
+    ...REPLICA_OPTIONS,
+    extraFields: {created_at: 100, state_entered_at: 100, updated_at: 100},
+  };
 
   const [firstEvidence, concurrentEvidence] = await Promise.all([
-    firstOwner.registerReplica(REPLICA_OPTIONS),
-    concurrentOwner.registerReplica(REPLICA_OPTIONS),
+    firstOwner.registerReplica(birthOptions),
+    concurrentOwner.registerReplica(birthOptions),
   ]);
 
   t.equal(harness.inserts.length, 2,

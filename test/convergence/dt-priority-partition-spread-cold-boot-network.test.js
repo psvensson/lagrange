@@ -1,13 +1,11 @@
 import t from 'tap';
 
-import LifeRaft from '../../src/raft/liferaft.js';
 import {
   createVirtualNetwork,
 } from '../distributed/harness/virtual-network.js';
 import {
-  connectRaftCluster,
-  driveNetwork,
-} from '../distributed/harness/raft-network-host.js';
+  connectRaftRsNetwork,
+} from '../test-helpers/raft-rs-network-host.js';
 import {
   buildDerivedPriorityPartitionSummary,
   PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
@@ -49,16 +47,9 @@ const TARGET_REPLICA_COUNT = 3;
 const ELECTION_DRIVE_MS = 200;
 const ADDRESS_PORT = 9000;
 
-// Keep election timers dormant so the test drives candidacy explicitly;
-// min==max removes RNG from the cohort (dt6-raft-election-network precedent).
-const DORMANT = Object.freeze({
-  'election min': '100000 ms',
-  'election max': '100000 ms',
-  'heartbeat': '100000 ms',
-  'write': (_packet, callback) => {
-    if (typeof callback === 'function') callback(null);
-  },
-});
+const RAFT_TEST_PARTITION_ID = 'priority-spread-election-p1';
+const DORMANT_ELECTION_MIN_MS = 100_000;
+const RAFT_TEST_SEED = 0;
 
 function partitionIdFor(tableId) {
   return `${tableId}-p1`;
@@ -158,15 +149,20 @@ t.test(
     'production census at 3 distinct nodes for every priority partition',
   async (t) => {
     const net = createVirtualNetwork();
-    const rafts = connectRaftCluster(net, NODE_IDS, () => ({...DORMANT}));
-    t.teardown(() => rafts.forEach((raft) => raft.end()));
+    const consensus = connectRaftRsNetwork(net, NODE_IDS, {
+      partitionId: RAFT_TEST_PARTITION_ID,
+      seed: RAFT_TEST_SEED,
+      electionMinMs: DORMANT_ELECTION_MIN_MS,
+    });
+    t.teardown(() => consensus.dispose());
+    consensus.start();
 
-    rafts.get(SEED_NODE_ID).promote();
-    await driveNetwork(net, {untilMs: ELECTION_DRIVE_MS});
+    consensus.campaign(SEED_NODE_ID);
+    await consensus.runUntil(ELECTION_DRIVE_MS);
     t.equal(
-      rafts.get(SEED_NODE_ID).state,
-      LifeRaft.LEADER,
-      'the cold cohort elected a real leader over the virtual network',
+      consensus.isLeader(SEED_NODE_ID),
+      true,
+      'the cold cohort elected a real raft-rs leader over the virtual network',
     );
 
     const rows = buildColdBootRows();

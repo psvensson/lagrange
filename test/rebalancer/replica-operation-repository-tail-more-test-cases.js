@@ -17,7 +17,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
   SYSTEM_TABLE_NAME,
   OperationType,
   ReplicaOperationRepository,
-  PARTITION_SERVICE_ERROR_MSG,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
   createTestCoordinator,
 }) {
   const TEST_REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS = 15000;
@@ -25,6 +25,13 @@ export function registerReplicaOperationRepositoryTailMoreTests({
   'owner_persisted_transition_authoritative_operation_visibility_retryable_failure';
   const TEST_RETRYABLE_CONFIRMATION_ERROR = 'Message timeout';
   const TEST_RETRYABLE_CONFIRMATION_RETRY_AFTER_MS = 250;
+  const retryablePartitionWrite = () => ({
+    success: false,
+    error: ERRORS.WRITE_CUTOVER_PAUSED,
+    failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED,
+    deferRetry: true,
+    retryAfterMs: TEST_RETRYABLE_CONFIRMATION_RETRY_AFTER_MS,
+  });
 
   test('persistOperationUpdate accepts retryable mutation failures when one authoritative proof confirms the updated row', async (t) => {
     let readCalls = 0;
@@ -352,9 +359,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
     'buildOperationPersistError marks retryable workflow participant lookup ' +
     'failures for deferred retry',
     async (t) => {
-      const repo = createTestRepository({
-        random: () => 0,
-      });
+      const repo = createTestRepository();
 
       const error = repo.buildOperationPersistError({
         success: false,
@@ -819,23 +824,19 @@ export function registerReplicaOperationRepositoryTailMoreTests({
 
   test(
     'executeOperationMutationWithRetry preserves explicit sessions and ' +
-    'adds jitter for partition contention',
+    'the canonical delay for typed route retries',
     async (t) => {
       let attempts = 0;
       const observedSessions = [];
       const observedWaits = [];
       const explicitSessionId = 'explicit-transition-session';
       const repo = createTestRepository({
-        random: () => 1,
         controlPlaneSystemTableGateway: {
           executeQuery: async (_sql, _params, options = {}) => {
             attempts += 1;
             observedSessions.push(options.sessionId || null);
             if (attempts === 1) {
-              return {
-                success: false,
-                error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-              };
+              return retryablePartitionWrite();
             }
             return {success: true, changes: 1};
           },
@@ -854,16 +855,16 @@ export function registerReplicaOperationRepositoryTailMoreTests({
         },
       );
 
-      t.equal(result.success, true, 'partition contention should still recover on retry');
+      t.equal(result.success, true, 'typed route failure should recover on retry');
       t.same(
         observedSessions,
         [explicitSessionId, explicitSessionId],
-        'explicit transition sessions must stay stable across contention retries',
+        'explicit transition sessions must stay stable across route retries',
       );
-      t.equal(observedWaits.length, 1, 'contention should wait once before retrying');
-      t.ok(
-        observedWaits[0] > 250,
-        'partition contention retries should add jitter instead of retrying in lockstep',
+      t.same(
+        observedWaits,
+        [TEST_RETRYABLE_CONFIRMATION_RETRY_AFTER_MS],
+        'the typed retry-after delay should be used exactly once',
       );
     },
   );
@@ -913,21 +914,17 @@ export function registerReplicaOperationRepositoryTailMoreTests({
 
   test(
     'executeOperationMutationWithRetry rotates implicit sessions on ' +
-    'partition contention retries',
+    'typed route retries',
     async (t) => {
       let attempts = 0;
       const observedSessions = [];
       const repo = createTestRepository({
-        random: () => 0,
         controlPlaneSystemTableGateway: {
           executeQuery: async (_sql, _params, options = {}) => {
             attempts += 1;
             observedSessions.push(options.sessionId || null);
             if (attempts === 1) {
-              return {
-                success: false,
-                error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-              };
+              return retryablePartitionWrite();
             }
             return {success: true, changes: 1};
           },
@@ -944,13 +941,13 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       t.equal(
         result.success,
         true,
-        'repository-generated sessions should still recover after partition contention',
+        'repository-generated sessions should recover after a typed route failure',
       );
-      t.equal(attempts, 2, 'partition contention should trigger one retry');
+      t.equal(attempts, 2, 'typed route failure should trigger one retry');
       t.not(
         observedSessions[0],
         observedSessions[1],
-        'implicit owner-mutation retries should rotate the generated session after partition contention',
+        'implicit owner-mutation route retries should rotate the generated session',
       );
     },
   );
@@ -1053,10 +1050,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
           attempts += 1;
           observedTimeoutBudgets.push(options.timeoutBudget || null);
           nowMs += 450;
-          return {
-            success: false,
-            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-          };
+          return retryablePartitionWrite();
         },
       },
     });
@@ -1088,8 +1082,8 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       );
       t.equal(
         result.error,
-        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-        'the original contention boundary should surface instead of a later timeout-shaped miss',
+        ERRORS.WRITE_CUTOVER_PAUSED,
+        'the original typed refusal should surface instead of a later timeout-shaped miss',
       );
       t.equal(
         attempts,
@@ -1118,10 +1112,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
         executeQuery: async () => {
           attempts += 1;
           nowMs += 5000;
-          return {
-            success: false,
-            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-          };
+          return retryablePartitionWrite();
         },
       },
     });
@@ -1144,8 +1135,8 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       );
       t.equal(
         result.error,
-        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-        'the original contention boundary should be returned after the local retry timeout expires',
+        ERRORS.WRITE_CUTOVER_PAUSED,
+        'the original typed refusal should be returned after the local retry timeout expires',
       );
       t.equal(
         attempts,
@@ -1205,7 +1196,10 @@ export function registerReplicaOperationRepositoryTailMoreTests({
     const coordinator = createTestCoordinator();
     try {
       const move = {
-        type: OperationType.ADD,
+        // This test isolates the coordinator-to-repository read facade. Use a
+        // non-storage-increasing operation so the reduced repository fixture
+        // does not pretend it durably owns storage_reservations.
+        type: OperationType.REMOVE,
         partitionId: TEST_PARTITION_ID,
         entityType: TEST_ENTITY_TYPE,
         entityId: TEST_PARTITION_ID,

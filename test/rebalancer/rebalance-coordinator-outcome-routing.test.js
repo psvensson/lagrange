@@ -14,6 +14,7 @@
  * as the canonical owner path for executor outcomes.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -148,6 +149,29 @@ function createTestCoordinator(options = {}) {
     return originalRunExclusive(ownerKey, factory);
   };
   const executeQuery = async (sql, params) => {
+    if (sql.includes('FROM storage_reservations') && operation) {
+      const now = Date.now();
+      return {
+        success: true,
+        rows: [{
+          reservation_id: `res-${operation.operationId}`,
+          operation_id: operation.operationId,
+          entity_type: operation.entityType,
+          entity_id: operation.entityId,
+          partition_id: operation.partitionId,
+          target_node_id: operation.targetNodeId,
+          estimated_bytes: 1,
+          amplification_factor: 1,
+          status: 'active',
+          reason_code: operation.type === 'REPLACE' ?
+            'replace_replica' : 'add_replica',
+          created_at: now,
+          updated_at: now,
+          expires_at: now + 300000,
+          released_at: null,
+        }],
+      };
+    }
     // SELECT by operation_id
     if (sql.includes('WHERE operation_id') && operation) {
       const opId = params?.[0];
@@ -223,7 +247,7 @@ function createTestCoordinator(options = {}) {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine: {
@@ -250,6 +274,8 @@ function createTestCoordinator(options = {}) {
     clearTimeoutFn,
     enableTimeouts: false,
   });
+  coordinator.workflowOwner.recoverFailedCreateCleanupReleaseDebt =
+    async () => 0;
   coordinator.initialize();
 
   return {coordinator, emitter, ownerKeys};
@@ -465,10 +491,9 @@ test('Executor outcome routing through owner-key reconcile path',
         coordinator.messageRouter = {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.INITIATED,
-            };
+            });
           },
         };
         // The witness replica's answers (quest replace-source-removal-owner): the
@@ -554,10 +579,9 @@ test('Executor outcome routing through owner-key reconcile path',
         coordinator.messageRouter = {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.INITIATED,
-            };
+            });
           },
         };
         // The witness replica's answers (quest replace-source-removal-owner): the
@@ -974,7 +998,7 @@ test('Executor outcome routing through owner-key reconcile path',
         coordinator.messageRouter = {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         };
         // The witness replica's answers (quest replace-source-removal-owner): the
@@ -1385,10 +1409,9 @@ test('Executor outcome routing through owner-key reconcile path',
         coordinator.messageRouter = {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.INITIATED,
-            };
+            });
           },
         };
         // The witness replica's answers (quest replace-source-removal-owner): the
@@ -1525,10 +1548,9 @@ async (t) => {
   coordinator.messageRouter = {
     async deliver(target, payload, options) {
       deliveries.push({target, payload, options});
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.IN_PROGRESS,
-      };
+      });
     },
   };
   // The witness replica's answers (quest replace-source-removal-owner): the
@@ -1590,11 +1612,10 @@ async (t) => {
   coordinator.messageRouter = {
     async deliver(target, payload, options) {
       deliveries.push({target, payload, options});
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.IN_PROGRESS,
         [ReplicaOperationField.REPLICA_STATUS]: ReplicaStatus.SYNCING,
-      };
+      });
     },
   };
   // The witness replica's answers (quest replace-source-removal-owner): the
@@ -1657,10 +1678,9 @@ async (t) => {
   coordinator.messageRouter = {
     async deliver(target, payload, options) {
       deliveries.push({target, payload, options});
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.IN_PROGRESS,
-      };
+      });
     },
   };
   // The witness replica's answers (quest replace-source-removal-owner): the

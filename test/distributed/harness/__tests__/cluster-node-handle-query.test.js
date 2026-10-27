@@ -41,6 +41,46 @@ const TEST_RESET_LANE_ROW = Object.freeze({ok: 1});
 const TEST_FIRST_CONNECTION_COUNT = 1;
 const TEST_QUERY_RESULT_COUNT = 1;
 
+async function withTestAdminWebSocketNode(onConnection, options, callback) {
+  const server = new WebSocketServer({
+    host: TEST_ADMIN_HOST,
+    port: TEST_ADMIN_PORT_ANY,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === 'object', 'server should expose listen address');
+  server.on('connection', (socket, request) => {
+    socket.send(JSON.stringify({
+      type: TEST_CACHE_DUMP_MESSAGE_TYPE,
+      data: TEST_EMPTY_CACHE_DUMP,
+    }));
+    onConnection(socket, request);
+  });
+
+  const node = new NodeHandle(
+    TEST_NODE_ID,
+    TEST_CONTAINER_ID,
+    TEST_ADMIN_HOST,
+    NODE_ROLES.SEED,
+    {getContainerLogs: async () => ''},
+    address.port,
+    options,
+  );
+
+  try {
+    await callback(node);
+  } finally {
+    node.closeQueryConnection();
+    await new Promise((resolve, reject) => {
+      server.close((err) => err ? reject(err) : resolve());
+    });
+  }
+}
+
 test('Unit: NodeHandle reads process memory from the node diagnostics owner',
   async () => {
     const capturedAt = 123456;
@@ -109,389 +149,112 @@ test('Unit: NodeHandle reads process memory from the node diagnostics owner',
  * **Validates: Requirements 2.3**
  */
 test('Unit: NodeHandle.query sends queryId and ignores initial cache dump', async () => {
-  const server = new WebSocketServer({
-    host: '127.0.0.1',
-    port: 0,
-  });
-  await new Promise((resolve, reject) => {
-    server.once('listening', resolve);
-    server.once('error', reject);
-  });
-
-  const address = server.address();
-  assert.ok(address && typeof address === 'object', 'server should expose listen address');
-  const adminApiPort = address.port;
-
   let capturedQuery = null;
-  server.on('connection', (socket) => {
-    socket.send(JSON.stringify({
-      type: 'cache_dump',
-      data: {},
-    }));
-    socket.once('message', (data) => {
-      capturedQuery = JSON.parse(data.toString());
-      socket.send(JSON.stringify({
-        type: 'query_result',
-        queryId: capturedQuery.queryId,
-        results: [{node_id: 'node-1', status: 'active'}],
-        count: 1,
-      }));
-    });
-  });
-
-  const node = new NodeHandle(
-    'node-1',
-    'container-1',
-    '127.0.0.1',
-    NODE_ROLES.SEED,
-    {getContainerLogs: async () => ''},
-    adminApiPort,
-  );
-
-  try {
-    const result = await node.query(
-      'SELECT * FROM nodes WHERE node_id = \'node-1\'',
-    );
-    assert.strictEqual(capturedQuery.type, 'query', 'should send query message');
-    assert.ok(capturedQuery.queryId, 'should include queryId');
-    assert.deepStrictEqual(
-      result.rows,
-      [{node_id: 'node-1', status: 'active'}],
-      'should return rows from query_result message',
-    );
-  } finally {
-    node.closeQueryConnection();
-    await new Promise((resolve, reject) => {
-      server.close((err) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
+  await withTestAdminWebSocketNode(
+    (socket) => {
+      socket.once('message', (data) => {
+        capturedQuery = JSON.parse(data.toString());
+        socket.send(JSON.stringify({
+          type: 'query_result',
+          queryId: capturedQuery.queryId,
+          results: [{node_id: 'node-1', status: 'active'}],
+          count: 1,
+        }));
       });
-    });
-  }
+    },
+    {},
+    async (node) => {
+      const result = await node.query(
+        'SELECT * FROM nodes WHERE node_id = \'node-1\'',
+      );
+      assert.strictEqual(capturedQuery.type, 'query', 'should send query message');
+      assert.ok(capturedQuery.queryId, 'should include queryId');
+      assert.deepStrictEqual(
+        result.rows,
+        [{node_id: 'node-1', status: 'active'}],
+        'should return rows from query_result message',
+      );
+    },
+  );
 });
 
 test('Unit: NodeHandle.query uses injected default admin timeout', async () => {
-  const server = new WebSocketServer({
-    host: '127.0.0.1',
-    port: 0,
-  });
-  await new Promise((resolve, reject) => {
-    server.once('listening', resolve);
-    server.once('error', reject);
-  });
-
-  const address = server.address();
-  assert.ok(address && typeof address === 'object', 'server should expose listen address');
-  const adminApiPort = address.port;
-
   let capturedQuery = null;
-  server.on('connection', (socket) => {
-    socket.send(JSON.stringify({
-      type: 'cache_dump',
-      data: {},
-    }));
-    socket.once('message', (data) => {
-      capturedQuery = JSON.parse(data.toString());
-      socket.send(JSON.stringify({
-        type: 'query_result',
-        queryId: capturedQuery.queryId,
-        results: [{ok: 1}],
-        count: 1,
-      }));
-    });
-  });
-
-  const node = new NodeHandle(
-    'node-1',
-    'container-1',
-    '127.0.0.1',
-    NODE_ROLES.SEED,
-    {getContainerLogs: async () => ''},
-    adminApiPort,
-    {adminQueryTimeoutMs: 4321},
-  );
-
-  try {
-    await node.query('SELECT 1');
-    assert.strictEqual(
-      capturedQuery.timeoutMs,
-      4321,
-      'query() should inherit the injected default admin timeout',
-    );
-  } finally {
-    node.closeQueryConnection();
-    await new Promise((resolve, reject) => {
-      server.close((err) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
-  }
-});
-
-test('Unit: NodeHandle.queryWithTimeout opens lane-tagged admin stream sockets',
-  async () => {
-    const server = new WebSocketServer({
-      host: '127.0.0.1',
-      port: 0,
-    });
-    await new Promise((resolve, reject) => {
-      server.once('listening', resolve);
-      server.once('error', reject);
-    });
-
-    const address = server.address();
-    assert.ok(address && typeof address === 'object',
-      'server should expose listen address');
-    const adminApiPort = address.port;
-
-    let observedRequestUrl = null;
-    server.on('connection', (socket, request) => {
-      observedRequestUrl = request?.url || null;
-      socket.send(JSON.stringify({
-        type: 'cache_dump',
-        data: {},
-      }));
+  await withTestAdminWebSocketNode(
+    (socket) => {
       socket.once('message', (data) => {
-        const parsed = JSON.parse(data.toString());
+        capturedQuery = JSON.parse(data.toString());
         socket.send(JSON.stringify({
           type: 'query_result',
-          queryId: parsed.queryId,
+          queryId: capturedQuery.queryId,
           results: [{ok: 1}],
           count: 1,
         }));
       });
-    });
-
-    const node = new NodeHandle(
-      'node-1',
-      'container-1',
-      '127.0.0.1',
-      NODE_ROLES.SEED,
-      {getContainerLogs: async () => ''},
-      adminApiPort,
-    );
-
-    try {
-      const result = await node.queryWithTimeout('SELECT 1', [], {
-        lane: 'load',
-      });
-      assert.deepStrictEqual(result.rows, [{ok: 1}]);
-      assert.ok(
-        typeof observedRequestUrl === 'string' &&
-        observedRequestUrl.includes('/api/admin/stream?lane=load'),
-        'lane-tagged admin stream URL should include load lane query parameter',
+    },
+    {adminQueryTimeoutMs: 4321},
+    async (node) => {
+      await node.query('SELECT 1');
+      assert.strictEqual(
+        capturedQuery.timeoutMs,
+        4321,
+        'query() should inherit the injected default admin timeout',
       );
-    } finally {
-      node.closeQueryConnection();
-      await new Promise((resolve, reject) => {
-        server.close((err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve();
+    },
+  );
+});
+
+test('Unit: NodeHandle.queryWithTimeout opens lane-tagged admin stream sockets',
+  async () => {
+    let observedRequestUrl = null;
+    await withTestAdminWebSocketNode(
+      (socket, request) => {
+        observedRequestUrl = request?.url || null;
+        socket.once('message', (data) => {
+          const parsed = JSON.parse(data.toString());
+          socket.send(JSON.stringify({
+            type: 'query_result',
+            queryId: parsed.queryId,
+            results: [{ok: 1}],
+            count: 1,
+          }));
         });
-      });
-    }
+      },
+      {},
+      async (node) => {
+        const result = await node.queryWithTimeout('SELECT 1', [], {
+          lane: 'load',
+        });
+        assert.deepStrictEqual(result.rows, [{ok: 1}]);
+        assert.ok(
+          typeof observedRequestUrl === 'string' &&
+          observedRequestUrl.includes('/api/admin/stream?lane=load'),
+          'lane-tagged admin stream URL should include load lane query parameter',
+        );
+      },
+    );
   });
 
 test('Unit: NodeHandle.queryWithTimeout preserves structured visibility ' +
   'metadata from admin stream successes',
 async () => {
   const successReasonCode = 'publication_epoch_pending';
-  const server = new WebSocketServer({
-    host: '127.0.0.1',
-    port: 0,
-  });
-  await new Promise((resolve, reject) => {
-    server.once('listening', resolve);
-    server.once('error', reject);
-  });
-
-  const address = server.address();
-  assert.ok(address && typeof address === 'object',
-    'server should expose listen address');
-  const adminApiPort = address.port;
-
-  server.on('connection', (socket) => {
-    socket.send(JSON.stringify({
-      type: 'cache_dump',
-      data: {},
-    }));
-    socket.once('message', (data) => {
-      const parsed = JSON.parse(data.toString());
-      socket.send(JSON.stringify({
-        type: 'query_result',
-        queryId: parsed.queryId,
-        results: [{table_id: 'tbl-1'}],
-        count: 1,
-        outcome: 'deferred',
-        visibilityState: 'pending_visibility',
-        contractState: 'pending',
-        nextAction: 'wait',
-        authoritativeVisibilityConfirmed: true,
-        reasonCode: successReasonCode,
-        reasonCodes: [successReasonCode],
-        failedDimensions: ['publishedConvergencePending'],
-        runtimeAuthority: {
-          state: 'establishing',
-          visibility: {
-            state: 'pending_publication',
-          },
-        },
-      }));
-    });
-  });
-
-  const node = new NodeHandle(
-    'node-1',
-    'container-1',
-    '127.0.0.1',
-    NODE_ROLES.SEED,
-    {getContainerLogs: async () => ''},
-    adminApiPort,
-  );
-
-  try {
-    const result = await node.queryWithTimeout('SELECT * FROM tables');
-    assert.deepStrictEqual(result.rows, [{table_id: 'tbl-1'}]);
-    assert.strictEqual(result.outcome, 'deferred');
-    assert.strictEqual(result.visibilityState, 'pending_visibility');
-    assert.strictEqual(result.contractState, 'pending');
-    assert.strictEqual(result.nextAction, 'wait');
-    assert.strictEqual(result.authoritativeVisibilityConfirmed, true);
-    assert.strictEqual(result.reasonCode, successReasonCode);
-    assert.deepStrictEqual(result.reasonCodes, [successReasonCode]);
-    assert.deepStrictEqual(
-      result.failedDimensions,
-      ['publishedConvergencePending'],
-    );
-    assert.strictEqual(result.runtimeAuthority?.state, 'establishing');
-  } finally {
-    node.closeQueryConnection();
-    await new Promise((resolve, reject) => {
-      server.close((err) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
-  }
-});
-
-test('Unit: NodeHandle.queryWithTimeout preserves admin stream errorCode',
-  async () => {
-    const server = new WebSocketServer({
-      host: '127.0.0.1',
-      port: 0,
-    });
-    await new Promise((resolve, reject) => {
-      server.once('listening', resolve);
-      server.once('error', reject);
-    });
-
-    const address = server.address();
-    assert.ok(address && typeof address === 'object',
-      'server should expose listen address');
-    const adminApiPort = address.port;
-
-    server.on('connection', (socket) => {
-      socket.send(JSON.stringify({
-        type: 'cache_dump',
-        data: {},
-      }));
+  await withTestAdminWebSocketNode(
+    (socket) => {
       socket.once('message', (data) => {
         const parsed = JSON.parse(data.toString());
         socket.send(JSON.stringify({
           type: 'query_result',
           queryId: parsed.queryId,
-          error: 'routing not ready',
-          errorCode: 'ROUTING_NOT_READY',
-          hint: 'retry on healthy node',
-        }));
-      });
-    });
-
-    const node = new NodeHandle(
-      'node-1',
-      'container-1',
-      '127.0.0.1',
-      NODE_ROLES.SEED,
-      {getContainerLogs: async () => ''},
-      adminApiPort,
-    );
-
-    try {
-      await assert.rejects(
-        node.queryWithTimeout('SELECT 1'),
-        (error) => {
-          assert.strictEqual(error.code, 'routing_not_ready');
-          assert.strictEqual(error.hint, 'retry on healthy node');
-          assert.match(String(error.message), /routing not ready/i);
-          return true;
-        },
-      );
-    } finally {
-      node.closeQueryConnection();
-      await new Promise((resolve, reject) => {
-        server.close((err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve();
-        });
-      });
-    }
-  });
-
-test('Unit: NodeHandle.queryWithTimeout preserves retry metadata from admin stream',
-  async () => {
-    const deferredReasonCode = 'publication_epoch_pending';
-    const server = new WebSocketServer({
-      host: '127.0.0.1',
-      port: 0,
-    });
-    await new Promise((resolve, reject) => {
-      server.once('listening', resolve);
-      server.once('error', reject);
-    });
-
-    const address = server.address();
-    assert.ok(address && typeof address === 'object',
-      'server should expose listen address');
-    const adminApiPort = address.port;
-
-    server.on('connection', (socket) => {
-      socket.send(JSON.stringify({
-        type: 'cache_dump',
-        data: {},
-      }));
-      socket.once('message', (data) => {
-        const parsed = JSON.parse(data.toString());
-        socket.send(JSON.stringify({
-          type: 'query_result',
-          queryId: parsed.queryId,
-          error: 'Distributed operation failed due to participant failures',
-          errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
-          deferRetry: true,
-          retryAfterMs: 275,
+          results: [{table_id: 'tbl-1'}],
+          count: 1,
           outcome: 'deferred',
           visibilityState: 'pending_visibility',
-          contractState: 'deferred',
-          nextAction: 'retry',
+          contractState: 'pending',
+          nextAction: 'wait',
           authoritativeVisibilityConfirmed: true,
-          reasonCode: deferredReasonCode,
-          reasonCodes: [deferredReasonCode],
+          reasonCode: successReasonCode,
+          reasonCodes: [successReasonCode],
           failedDimensions: ['publishedConvergencePending'],
           runtimeAuthority: {
             state: 'establishing',
@@ -501,54 +264,116 @@ test('Unit: NodeHandle.queryWithTimeout preserves retry metadata from admin stre
           },
         }));
       });
-    });
-
-    const node = new NodeHandle(
-      'node-1',
-      'container-1',
-      '127.0.0.1',
-      NODE_ROLES.SEED,
-      {getContainerLogs: async () => ''},
-      adminApiPort,
-    );
-
-    try {
-      await assert.rejects(
-        node.queryWithTimeout('SELECT 1'),
-        (error) => {
-          assert.strictEqual(
-            error.code,
-            'distributed_participant_failure',
-          );
-          assert.strictEqual(error.deferRetry, true);
-          assert.strictEqual(error.retryAfterMs, 275);
-          assert.strictEqual(error.outcome, 'deferred');
-          assert.strictEqual(error.visibilityState, 'pending_visibility');
-          assert.strictEqual(error.contractState, 'deferred');
-          assert.strictEqual(error.nextAction, 'retry');
-          assert.strictEqual(error.authoritativeVisibilityConfirmed, true);
-          assert.strictEqual(error.reasonCode, deferredReasonCode);
-          assert.deepStrictEqual(error.reasonCodes, [deferredReasonCode]);
-          assert.deepStrictEqual(
-            error.failedDimensions,
-            ['publishedConvergencePending'],
-          );
-          assert.strictEqual(error.runtimeAuthority?.state, 'establishing');
-          return true;
-        },
+    },
+    {},
+    async (node) => {
+      const result = await node.queryWithTimeout('SELECT * FROM tables');
+      assert.deepStrictEqual(result.rows, [{table_id: 'tbl-1'}]);
+      assert.strictEqual(result.outcome, 'deferred');
+      assert.strictEqual(result.visibilityState, 'pending_visibility');
+      assert.strictEqual(result.contractState, 'pending');
+      assert.strictEqual(result.nextAction, 'wait');
+      assert.strictEqual(result.authoritativeVisibilityConfirmed, true);
+      assert.strictEqual(result.reasonCode, successReasonCode);
+      assert.deepStrictEqual(result.reasonCodes, [successReasonCode]);
+      assert.deepStrictEqual(
+        result.failedDimensions,
+        ['publishedConvergencePending'],
       );
-    } finally {
-      node.closeQueryConnection();
-      await new Promise((resolve, reject) => {
-        server.close((err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve();
+      assert.strictEqual(result.runtimeAuthority?.state, 'establishing');
+    },
+  );
+});
+
+test('Unit: NodeHandle.queryWithTimeout preserves admin stream errorCode',
+  async () => {
+    await withTestAdminWebSocketNode(
+      (socket) => {
+        socket.once('message', (data) => {
+          const parsed = JSON.parse(data.toString());
+          socket.send(JSON.stringify({
+            type: 'query_result',
+            queryId: parsed.queryId,
+            error: 'routing not ready',
+            errorCode: 'ROUTING_NOT_READY',
+            hint: 'retry on healthy node',
+          }));
         });
-      });
-    }
+      },
+      {},
+      async (node) => {
+        await assert.rejects(
+          node.queryWithTimeout('SELECT 1'),
+          (error) => {
+            assert.strictEqual(error.code, 'routing_not_ready');
+            assert.strictEqual(error.hint, 'retry on healthy node');
+            assert.match(String(error.message), /routing not ready/i);
+            return true;
+          },
+        );
+      },
+    );
+  });
+
+test('Unit: NodeHandle.queryWithTimeout preserves retry metadata from admin stream',
+  async () => {
+    const deferredReasonCode = 'publication_epoch_pending';
+    await withTestAdminWebSocketNode(
+      (socket) => {
+        socket.once('message', (data) => {
+          const parsed = JSON.parse(data.toString());
+          socket.send(JSON.stringify({
+            type: 'query_result',
+            queryId: parsed.queryId,
+            error: 'Distributed operation failed due to participant failures',
+            errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+            deferRetry: true,
+            retryAfterMs: 275,
+            outcome: 'deferred',
+            visibilityState: 'pending_visibility',
+            contractState: 'deferred',
+            nextAction: 'retry',
+            authoritativeVisibilityConfirmed: true,
+            reasonCode: deferredReasonCode,
+            reasonCodes: [deferredReasonCode],
+            failedDimensions: ['publishedConvergencePending'],
+            runtimeAuthority: {
+              state: 'establishing',
+              visibility: {
+                state: 'pending_publication',
+              },
+            },
+          }));
+        });
+      },
+      {},
+      async (node) => {
+        await assert.rejects(
+          node.queryWithTimeout('SELECT 1'),
+          (error) => {
+            assert.strictEqual(
+              error.code,
+              'distributed_participant_failure',
+            );
+            assert.strictEqual(error.deferRetry, true);
+            assert.strictEqual(error.retryAfterMs, 275);
+            assert.strictEqual(error.outcome, 'deferred');
+            assert.strictEqual(error.visibilityState, 'pending_visibility');
+            assert.strictEqual(error.contractState, 'deferred');
+            assert.strictEqual(error.nextAction, 'retry');
+            assert.strictEqual(error.authoritativeVisibilityConfirmed, true);
+            assert.strictEqual(error.reasonCode, deferredReasonCode);
+            assert.deepStrictEqual(error.reasonCodes, [deferredReasonCode]);
+            assert.deepStrictEqual(
+              error.failedDimensions,
+              ['publishedConvergencePending'],
+            );
+            assert.strictEqual(error.runtimeAuthority?.state, 'establishing');
+            return true;
+          },
+        );
+      },
+    );
   });
 
 test('Unit: NodeHandle.queryWithTimeout captures timeout query trace entries',
@@ -736,90 +561,6 @@ test(TEST_RESET_LANE_SOCKET_TEST_NAME, async () => {
     });
   }
 });
-
-test('Unit: NodeHandle.partitionCallback sends callback envelope and returns hostResult',
-  async () => {
-    const server = new WebSocketServer({
-      host: '127.0.0.1',
-      port: 0,
-    });
-    await new Promise((resolve, reject) => {
-      server.once('listening', resolve);
-      server.once('error', reject);
-    });
-
-    const address = server.address();
-    assert.ok(address && typeof address === 'object',
-      'server should expose listen address');
-    const adminApiPort = address.port;
-
-    let capturedMessage = null;
-    server.on('connection', (socket) => {
-      socket.send(JSON.stringify({
-        type: 'cache_dump',
-        data: {},
-      }));
-      socket.once('message', (data) => {
-        capturedMessage = JSON.parse(data.toString());
-        socket.send(JSON.stringify({
-          type: 'query_result',
-          queryId: capturedMessage.queryId,
-          operation: 'partition_callback',
-          results: [],
-          hostResult: {
-            state: 'completed',
-            processedPartitions: 3,
-            failedPartitions: 0,
-            totalRows: 7,
-          },
-          callbackModuleRef: capturedMessage.callbackModuleRef,
-          callbackExport: capturedMessage.callbackExport,
-        }));
-      });
-    });
-
-    const node = new NodeHandle(
-      'node-1',
-      'container-1',
-      '127.0.0.1',
-      NODE_ROLES.SEED,
-      {getContainerLogs: async () => ''},
-      adminApiPort,
-    );
-
-    try {
-      const result = await node.partitionCallback({
-        statement: 'SELECT * FROM nodes',
-        parameters: [],
-        callbackModuleRef: 'mod-1',
-        callbackExport: 'run',
-        runtimeKind: 'wasm_component',
-      });
-      assert.strictEqual(capturedMessage.type, 'partition_callback');
-      assert.strictEqual(capturedMessage.statement, 'SELECT * FROM nodes');
-      assert.strictEqual(capturedMessage.callbackModuleRef, 'mod-1');
-      assert.strictEqual(capturedMessage.callbackExport, 'run');
-      assert.strictEqual(capturedMessage.runtimeKind, 'wasm_component');
-      assert.equal(result.operation, 'partition_callback');
-      assert.deepStrictEqual(result.hostResult, {
-        state: 'completed',
-        processedPartitions: 3,
-        failedPartitions: 0,
-        totalRows: 7,
-      });
-    } finally {
-      node.closeQueryConnection();
-      await new Promise((resolve, reject) => {
-        server.close((err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve();
-        });
-      });
-    }
-  });
 
 test('Unit: NodeHandle.query reuses one Admin API connection', async () => {
   const server = new WebSocketServer({

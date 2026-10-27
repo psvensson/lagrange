@@ -3,8 +3,15 @@
 import fs from 'node:fs';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {
+  SCENARIO_OUTCOME,
+  scenarioOutcomeOf,
+} from '../test/distributed/harness/scenario-outcome.js';
 
 const CLASS_CORRUPT = 'CORRUPT';
+// Not run: the config's host topology could not carry the claim. Neither a
+// cluster verdict nor healthy - classified before anything else.
+const CLASS_REFUSED = 'REFUSED';
 const CLASS_NODE_EXIT = 'NODE_EXIT';
 const CLASS_ORACLE_BLIND = 'ORACLE_BLIND';
 const CLASS_CONVERGED = 'CONVERGED';
@@ -143,7 +150,9 @@ export function classifyStatGateScenario(scenario = {}) {
   const passed = normalizePassed(scenario);
 
   let classification = CLASS_SLOW;
-  if (hardBreaches > 0) {
+  if (scenarioOutcomeOf(scenario) === SCENARIO_OUTCOME.REFUSED) {
+    classification = CLASS_REFUSED;
+  } else if (hardBreaches > 0) {
     classification = CLASS_CORRUPT;
   } else if (oracleBlindClassification === 'unexpected_node_exit') {
     classification = CLASS_NODE_EXIT;

@@ -1,0 +1,106 @@
+{
+  "scope": "Sixteen author/history refs verified remotely after atomic preservation push. Integration executable checkpoint9311c883d and the subsequent handover-only commit use work/mg-delivery-resume-r2-20261023; its final remote SHA is reported separately to avoid a self-referential commit hash.",
+  "authorRefs": [
+    {
+      "branch": "work/codex-admin-node-cas-20261025",
+      "sha": "e701ca2b35b9f682dcd051997d521fe3134bfc89",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-admin-owner-outcomes-20261025",
+      "sha": "930abb048f2d04db5bdb47bea20fc2ce7c450a17",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-admission-callers-20261025",
+      "sha": "a97f79c35b7e1f6428032493918e16e623339688",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-cdc-d1-admission-20261025",
+      "sha": "714eee75a648520a79f0468fc63d55b0ed0a8048",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-cdc-d1-repair-20261025",
+      "sha": "fa85052324778a07cf0067fbfb7bd9cb1ef3028f",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-coordinator-table-identity-20261025",
+      "sha": "c582aa545068cf182754da98028812912d628bf0",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-fresh-seed-activation-20261025",
+      "sha": "814c81628d1e2c15c9cd605654f28760fdb19305",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-local-construction-audit-20261025",
+      "sha": "edfcd02b6aee218d8ca7467fd37e22fbc8317e20",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-metric-provenance-20261025",
+      "sha": "5485381b70d7c963f30e1468c5e8ca17d156f569",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-pgwire-scale-20261025",
+      "sha": "6a228ced9439af07216b492bb8fdbba5540c3671",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-router-envelope-q6-20261025",
+      "sha": "ba3fb3bdf771132c6913de401d2bf90071ec28b9",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-seed-constructor-audit-20261025",
+      "sha": "7b3a60abaa9982c3a177ca98f7fee9c17487c8c6",
+      "remoteVerified": true,
+      "scope": "historical rejected audit; not an integration candidate"
+    },
+    {
+      "branch": "work/codex-seed-harness-repair-20261025",
+      "sha": "69d125051628ee5630f7ac7d7ddf7c961f057136",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-seed-listener-failure-preserved-20261025",
+      "sha": "cce9fc2db611dcc829e23220b80df6a63633472c",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-tx1-composition-20261025",
+      "sha": "bc8a68193cae6d198f355124322b84ce9668d923",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    },
+    {
+      "branch": "work/codex-tx1-discovery-isolation-20261025",
+      "sha": "5ad35a427b70822fbf6d056abbe57d0675d644df",
+      "remoteVerified": true,
+      "scope": "preservation only; acceptance is recorded separately in handover"
+    }
+  ],
+  "patchOnly": [
+    "marker-hook-blocked.patch",
+    "partition-readback-hook-blocked.patch",
+    "superseded-listener-snapshot.patch"
+  ]
+}

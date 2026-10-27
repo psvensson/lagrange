@@ -6,12 +6,13 @@
  */
 
 import assert from 'node:assert/strict';
+import {LOG_MARKER_STATE} from
+  '../../../src/control-plane/owners/log-diagnostic-marker-contract.js';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 import {
   resolveWriteAckVisibilityScenarioConfig,
 } from '../harness/scenario-config.js';
 
-const LOG_LEVEL = 'info';
 const LOG_TABLE = 'logs';
 const CONVERGENCE_SETTLE_TIMEOUT_MS = 120000;
 const ZERO = 0;
@@ -131,21 +132,41 @@ async function waitForVisibilityOnReachableNodes(
 }
 
 /**
- * Build INSERT SQL for the logs table.
- * @param {string} logId
- * @param {number} now
- * @param {string} writerId
- * @return {string}
+ * Append a bounded diagnostic marker through the log owner and return its logId.
+ * @param {Object} writerNode
+ * @param {string} markerId
+ * @return {Promise<string>}
  */
-function buildInsertSql(logId, now, writerId) {
-  return 'INSERT INTO ' + LOG_TABLE + ' ' +
-    '(log_id, timestamp, level, node_id, message, created_at) VALUES (' +
-    '\'' + escapeSql(logId) + '\', ' +
-    now + ', ' +
-    '\'' + LOG_LEVEL + '\', ' +
-    '\'' + escapeSql(writerId) + '\', ' +
-    '\'' + escapeSql('visibility-' + logId) + '\', ' +
-    now + ')';
+async function appendVisibilityMarker(writerNode, markerId) {
+  assert.equal(
+    typeof writerNode?.appendDiagnosticMarker,
+    'function',
+    'Writer node must expose appendDiagnosticMarker',
+  );
+  const answer = await writerNode.appendDiagnosticMarker({
+    markerId,
+    message: 'visibility-' + markerId,
+  });
+  assert.equal(
+    answer?.success,
+    true,
+    'Diagnostic marker write must succeed',
+  );
+  assert.equal(
+    answer?.markerState,
+    LOG_MARKER_STATE.RECORDED,
+    'Diagnostic marker must report recorded state',
+  );
+  assert.equal(
+    typeof answer?.logId,
+    'string',
+    'Recorded diagnostic marker must return logId',
+  );
+  assert.ok(
+    answer.logId.length > ZERO,
+    'Recorded diagnostic marker logId must be non-empty',
+  );
+  return answer.logId;
 }
 
 /**
@@ -186,10 +207,8 @@ async function run(cluster, options = {}) {
   const runId = Date.now();
 
   for (let i = 0; i < writeCount; i++) {
-    const now = Date.now();
-    const logId = 'ack-vis-' + runId + '-' + i;
-    const insertSql = buildInsertSql(logId, now, writerNode.id);
-    await writerNode.query(insertSql);
+    const markerId = 'ack-vis-' + runId + '-' + i;
+    const logId = await appendVisibilityMarker(writerNode, markerId);
 
     const visibility = await waitForVisibilityOnReachableNodes(
       logId,
@@ -199,6 +218,7 @@ async function run(cluster, options = {}) {
     );
     maxPropagationMs = Math.max(maxPropagationMs, visibility.elapsedMs);
     propagationSamples.push({
+      markerId,
       logId,
       elapsedMs: visibility.elapsedMs,
       reachableNodeCount: visibility.reachableNodeCount,

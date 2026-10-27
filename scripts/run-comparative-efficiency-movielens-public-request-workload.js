@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import {createHash} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -30,6 +29,7 @@ import {
   runMovielensPublicRequestWorkloadLive,
   unobservedWorkloadTeardown,
 } from '../examples/service-data-affinity/run-movielens-public-request-workload.js';
+import {execGit} from './checks/git-invocation.js';
 
 const SCENARIO =
   'comparative-efficiency-movielens-public-request-workload';
@@ -43,7 +43,6 @@ const MAXIMUM_POSTGRES_LOG_BYTES = 4 * 1_024 * 1_024;
 const MAXIMUM_SOURCE_PATHS = 32;
 const RETAINED_POSTGRES_LOG_COUNT = 3;
 const EXCLUSIVE_CREATE_FLAG = 'wx';
-const GIT_EXECUTABLE = 'git';
 const LIVE_INTEGRATION_FIDELITY = 'live-integration';
 const SOURCE_PATH_LIMIT_ERROR =
   'retained source path count exceeds the evidence cap';
@@ -209,7 +208,7 @@ function buildScenarioReport(
 }
 
 function gitValue(...args) {
-  return execFileSync(GIT_EXECUTABLE, args, {
+  return execGit(args, {
     encoding: TEXT_ENCODING,
   }).trim();
 }

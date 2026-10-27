@@ -1,0 +1,188 @@
+{
+  "base": "f6c3698be77043ddd19e3a2a923a6d0ac6d2a9a9",
+  "executedCheckpoint": "688c75e0a5db943985f8ff2a93e5355560ac1aa1",
+  "scope": "User STOP; no new production source; WIP preservation not acceptance",
+  "manifestSelfExcluded": true,
+  "files": [
+    {
+      "path": "solve/quests/wasm-creation-genesis/CONTRACT-R2.md",
+      "bytes": 16597,
+      "sha256": "f086f2edb4126221be2834f8d15b688e836472286d8f3da544aa8e1d5f6e6224",
+      "gitBlob": "ad288e5d7874298dbce59b9eb50ed225f677c46c"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/CONTRACT.md",
+      "bytes": 16454,
+      "sha256": "c633673f6acad0fb72364cca98507e7d19c823c6541308fdd897114f03c17a63",
+      "gitBlob": "f17936010f1daffae1ecbd2213557fa9902b39e8"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/HANDOFF-INTERFACES.md",
+      "bytes": 7515,
+      "sha256": "73ce46f2cb6828d5a07fa5e7811152929314de9be97f777af2b1d62524470cea",
+      "gitBlob": "4f524b9893e2091d506036a43a582a5af26aa30b"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/HANDOVER.md",
+      "bytes": 10092,
+      "sha256": "866eb2c3923a73e238136cdf58b34fac6efe584e82e796d1b299174f80ce49a3",
+      "gitBlob": "8f699db21bf27e5022b8d80969a75fae13ce04d4"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/INTERFACE-AND-TEST-PRE-RUN-REVIEW.md",
+      "bytes": 10543,
+      "sha256": "62c68fa8b419dc0dca8ce3a05ae1b3c0c6142e5c264fe32017f1642dc1089183",
+      "gitBlob": "1d0e84454e1e3a2cdb40ab00e375ca6dbdb94bca"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/PRE-SOURCE-INDEPENDENT-REVIEW-R2.md",
+      "bytes": 12897,
+      "sha256": "ff54df0a0084eaae776a1f5b0a5ed507b5acbfc61c8476e3b55c21b5b37c62d1",
+      "gitBlob": "345074ffc4d9ea3c98a9f10304827d70538f0a6b"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/PRE-SOURCE-INDEPENDENT-REVIEW.md",
+      "bytes": 20857,
+      "sha256": "51d16024b5206982b20d18456e5965f06d27addb1ec04afe37d887e0783b055e",
+      "gitBlob": "eae681f697ba6406765bf89b929457fba1317ce2"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/TEST-PLAN.md",
+      "bytes": 4994,
+      "sha256": "4dd2f339e4cf78b1451789596581a86e420e5bb12bc14136675dfe8833b6d04d",
+      "gitBlob": "ba2c01fcda452d02e5ac6cfe1f44a0aaa3de22f6"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/WASM-NATIVE-FIXTURE-PLAN.md",
+      "bytes": 12742,
+      "sha256": "5607934004f97a0ca105dd5ce4b98419b2e7f733682544587f28b37228b1967a",
+      "gitBlob": "0a8827719aa912396ab7d7735f79a615797e9e25"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/process-custody-first/01/discovery.json",
+      "bytes": 10775,
+      "sha256": "e8bb24bfab5828274a36013ce487d238351903f6f28d109017767cbd2599dcf1",
+      "gitBlob": "644bc348b6b3b4972ef0bbc25e120149b2c74aaa"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/process-custody-first/01/exit-code.txt",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "gitBlob": "d00491fd7e5bb6fa28c517a0bb32b8b506539d4d"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/process-custody-first/01/plan.json",
+      "bytes": 590,
+      "sha256": "f118912da5b5f6fb81fb58b74fdae276123b27490dc732a438bda94111cefcfc",
+      "gitBlob": "f79875ddda8c665915a58d9fa64e2a4e65820c9e"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/process-custody-first/01/raw.tap",
+      "bytes": 4290,
+      "sha256": "2f0feed8d2a59ff002fe2944e5172dd8ccd77024e74d78b19f95ade0097f21f0",
+      "gitBlob": "208b77c40c9cde94df19df062413649bc5021a6b"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/process-custody-first/01/run.log",
+      "bytes": 6627,
+      "sha256": "c03f6ab05e00db09bc86e85ce2e7b6162775825fffd10c2f277a20493416435d",
+      "gitBlob": "7ed53f59e59d11f5449363f8e591ee8154005be2"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/process-custody-first/request.json",
+      "bytes": 1312,
+      "sha256": "302eae51368faff432e95866e6327a0b1a77db941936f6a80c2f8bc80279d7c4",
+      "gitBlob": "a11a8fc851b30c2e333e59683a4ee3594a675af0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/process-custody-first/summary.json",
+      "bytes": 525,
+      "sha256": "19d5753279a07fbe08287bc2e9b11061cb28e08bb7c497e135592769cba93796",
+      "gitBlob": "15c03707b169f30340507a9a6fb003ed359ec824"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/receipt.json",
+      "bytes": 1837,
+      "sha256": "99a9c6a59f384e7510fd4918d8fc0a07ac722c7570fc032eaab1f4468578aca2",
+      "gitBlob": "21ea619c917a2482187b21e5349f860499f91bbe"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/log.ndjson",
+      "bytes": 2966,
+      "sha256": "e210886e68bd747b6b3f5c33b0b30298ef91b28183ee3ec1307d8515e214e0f3",
+      "gitBlob": "fc682595a6f709eab89978da983c6673490eed88"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/proposed-interfaces.md",
+      "bytes": 4440,
+      "sha256": "071fe7b5a04d91c60f1d66cfc36aec4583c6ad5a8749a01e22fc234fff65ffa0",
+      "gitBlob": "64d22e6d9344b5a9d6fb2dde7792e233113f6959"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/quest.json",
+      "bytes": 1807,
+      "sha256": "8abb6047248e56341a1f9d703a79f9725dae8323b42722d3acd782ee78b72944",
+      "gitBlob": "ccab5631cf7b471e704de3e79021563f6c8697ef"
+    },
+    {
+      "path": "test/control-plane/service-instance-creation-cas.test.js",
+      "bytes": 13227,
+      "sha256": "4d9e4904b472429b5359adcb22353392855c1d6a461b6b1924b4c28ea92054cd",
+      "gitBlob": "56a221d8e2d10d957aeb4c04013a7ae97efdff62"
+    },
+    {
+      "path": "test/control-plane/service-instance-creation-sqlite-fixture.js",
+      "bytes": 6421,
+      "sha256": "7a3b69a318e90a09c9d65b95a50956992422ec3e4abb8a6bb54c1d5c7c956a59",
+      "gitBlob": "0a65d02e42c1e4dbf3d895a33d14c6c99e4ec311"
+    },
+    {
+      "path": "test/entrypoint/creation-recovery-process-custody.test.js",
+      "bytes": 5964,
+      "sha256": "0c74a25cb936900d1357f7a3745d3c3860a43e74df02b21b860c512921c00a54",
+      "gitBlob": "980fe4ce9d7a5a09c689ec780a8aae8ad8a94443"
+    },
+    {
+      "path": "test/entrypoint/startup-failed-cleanup-process-custody.test.js",
+      "bytes": 4705,
+      "sha256": "be58a8d6f5c9df3f1c101a64b50c282818f38990b29aba78102af2333e2baf92",
+      "gitBlob": "0edcf28b11ea7ac6978f0e207422d621fb6cf3ad"
+    },
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "bytes": 452,
+      "sha256": "b4b6879f1d52722a44060489619ce39f42e10d21fd3300b73344577e075e9f25",
+      "gitBlob": "e230e33f0710790be9b86bb01fff18448d558e6e"
+    },
+    {
+      "path": "test/shards/primary-classes.json",
+      "bytes": 175197,
+      "sha256": "d548480d138d20b28eeab39535063c094e963c6ce60920eb375fd1aa959538cb",
+      "gitBlob": "7895063f52e271e9d3f0c3f92d56f60834703ec8"
+    },
+    {
+      "path": "test/shards/resource-classes.json",
+      "bytes": 183140,
+      "sha256": "f24e595e849640d349f3fe81ea83145db20e410090819a509d78427c999422ec",
+      "gitBlob": "d8722c4c55525d4ab6f23cabeb8c7ab70feb6476"
+    },
+    {
+      "path": "test/shards/subsystem-classes.json",
+      "bytes": 754724,
+      "sha256": "e8515f6e48d9dc782e703d8c2f1d0be952b8b73837fefe5908aacf76490884ad",
+      "gitBlob": "213575c7e304343ddebdae9761af038bf8e6307c"
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-bound-native-fixture.js",
+      "bytes": 17568,
+      "sha256": "0ca22fc4d2f3def38ce87445d61eb4213f0a66498c83744d6d88526bece4ffcb",
+      "gitBlob": "e88bac020a12da7411e41940cc7ab90e8f3050f2"
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-bound-native.test.js",
+      "bytes": 4550,
+      "sha256": "8cd62bd27739803eb264188f9baa8ac2f8265ba03ce8d82e0028ee3795154590",
+      "gitBlob": "4d0240829783d2a7cd9b29b725f635ea02887f7e"
+    }
+  ]
+}

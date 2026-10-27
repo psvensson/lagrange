@@ -26,6 +26,8 @@ import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {COLUMN} from '../../src/constants/index.js';
+import {controlPlaneWriteIdentity} from
+  '../../src/control-plane/control-plane-write-identity.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {PRESSURE_WORK_CLASS} from
@@ -372,6 +374,10 @@ async (t) => {
         queryTimeoutMs: service.resolveHeartbeatWriteQueryTimeoutMs(),
         skipCacheWait: true,
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        // The endpoint authority names the logical write (its birth at this
+        // incarnation), so a re-drive after an unknown outcome is one entry.
+        writeIdentity: controlPlaneWriteIdentity('endpoint',
+          `ep-${TEST_NODE_ID}-ws`, TEST_BOOT_INCARNATION, 'birth'),
       },
       'endpoint upserts should reuse the same coalesced deferred write contract',
     );

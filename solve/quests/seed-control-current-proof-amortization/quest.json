@@ -1,0 +1,55 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-control-current-proof-amortization",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "An already durably released SQL_TRANSACTIONS control partition must not need full PAUSE/ENABLE/origin-publication/final-census work each time an independent fresh-seed cohort asks for a CURRENT control fact. The canonical control cutover owner shall revalidate the actual committed current member cohort with an ordered, bounded, fail-closed idempotent admission proof, and run the existing full retirement path whenever that current proof cannot be established.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-control-current-proof-amortization/evidence/receipt.json",
+      "requiredReceipts": [
+        "original-causal-cost-measurement",
+        "engaged-source-only-idempotent-control-negative",
+        "correct-current-member-authority-and-fence",
+        "unchanged-seed-1000-5000-ms-and-transaction-integration",
+        "independent-static-distributed-composed-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-existing-cutover-owner",
+      "statement": "Implement only inside the existing replica-handler-participant-cutover and canonical release predicates/handler. No seed-level caching, duplicated control success classifier, transport bypass, second scheduler or authority ledger. Dependent cohorts still call releaseControlOwnerFirst both before PAUSE and after final census; no previous CUT_OVER reply is reused as permission."
+    },
+    {
+      "id": "quiescent-current-proof",
+      "statement": "Do not accept a mutable OPEN snapshot as proof without a canonical barrier. Acquire the same per-replica PAUSE within the *current* committed SQL_TRANSACTIONS cohort before fresh inspection; preserve paused admission while evaluating generation, term, membership, build, work, topology, origin, schema enforcement and full current member census. Resume only via the existing exact identity-checked RESUME owner. New member, leadership change, stale generation, schema drift, pending query transaction or unprovable admission refuses/falls back, never succeeds by stale read."
+    },
+    {
+      "id": "full-fallback",
+      "statement": "When fresh source is not already a clean durable post-cutover cohort, run the existing full release path, including origin enable/observe, query settlement, dirty REOPEN and leadership handoff. Reuse releaseCensusDefect and readParticipantReleaseFacts, not a weakened duplicate permission predicate. Avoid partially reopening closed members on a failed guard; leave closed and return typed refusal when recovery is needed."
+    },
+    {
+      "id": "timers-and-shared-deadline",
+      "statement": "Use the exact incoming original release deadline throughout, including every guard/inspection/repair/fallback and client timeout; no separate timer, pause budget renewal, retries beyond existing policy, or increase of original 1000/5000ms seed test allowance. A healthy expired overall deadline is a genuine regression."
+    },
+    {
+      "id": "census-and-negative",
+      "statement": "Exact serial per-cohort timing input db5f17dea023116dee4aebf09dd1bb21a63ce27d, Actions 38525995295, observed 542 completed original-router deliveries, 22 SQL_TRANSACTIONS RELEASEs with 25.72ms median in-flight and 629.68ms union pending within ~1000ms critical interval, 11 dependent RELEASEs with 89.46ms median, no tracer capture errors or drops. These are wall-time in-flight observations, not exclusive CPU attribution. Falsify repeated already-clean FULL control path with identical current-owner tests on source-only old candidate."
+    },
+    {
+      "id": "composition",
+      "statement": "The 45-wide concurrency experiment was red and is rejected: width8 completed17/45 at1017ms; width45 completed2/45 at1752ms on same hosted VM (38525302263). Optimize canonical control work, then remeasure safe bounded independent concurrency only after current fenced owner correctness. Full TX1/TX2/FreshMG/CDC/seed-loss, exact zero-legacy, locked same-host baseline, corpus/static/independent review required before landing."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "concurrency-serialization",
+    "admission-gating",
+    "formation-circularity",
+    "harness-fidelity",
+    "retry-loops"
+  ],
+  "sealedAt": "68c88fcfdc0bd7e60cff543e295e3ffd15d172a4"
+}

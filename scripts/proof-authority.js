@@ -23,9 +23,9 @@
  * receipts merely because they once passed.
  */
 
-import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
+import {spawnGit} from './checks/git-invocation.js';
 import {computeReleaseProofIdentity} from './release-proof-identity.js';
 
 import {
@@ -41,7 +41,6 @@ const PROOF_ID = /^[a-z0-9][a-z0-9._-]*$/u;
 const ZERO_SHA = '0'.repeat(40);
 const EMPTY_TEXT = '';
 
-const GIT_BINARY = 'git';
 const GIT_STATUS_UNKNOWN = 'unknown';
 const GIT_FLAG_DELETE = '-d';
 const GIT_COMMAND_UPDATE_REF = 'update-ref';
@@ -191,7 +190,7 @@ function receiptTagName(proofId, sha) {
 }
 
 function runGit(args, {cwd = process.cwd(), input = undefined} = {}) {
-  return spawnSync(GIT_BINARY, args, {
+  return spawnGit(args, {
     cwd,
     encoding: SPAWN_ENCODING_UTF8,
     input,

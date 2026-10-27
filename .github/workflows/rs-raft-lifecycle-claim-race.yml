@@ -1,0 +1,89 @@
+name: rs-raft-lifecycle-claim-race
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths:
+      - .github/workflows/rs-raft-lifecycle-claim-race.yml
+      - src/node/replica-handler-create-methods.js
+      - src/partition/partition-service-core-base.js
+      - src/partition/partition-service-raft-init-base.js
+      - src/partition/partition-service-lifecycle-methods.js
+      - src/partition/partition-consensus-port-opening.js
+      - src/message-group/message-group-service-state.js
+      - src/message-group/message-group-service-raft-lifecycle.js
+      - src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js
+      - test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js
+permissions:
+  contents: read
+jobs:
+  exact-race-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OUT: test-output/lifecycle-claim-race
+      TEST: test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked dependencies and bind candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse 733da50e2bb5a70f1fbef0779a966012a150f74e > "$OUT/baseline-sha.txt"
+          npm ci > "$OUT/install.log" 2>&1
+      - name: Parent source must fail the unchanged race witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$RUNNER_TEMP/claim-race-baseline"
+          git worktree add --detach "$BASE" 733da50e2bb5a70f1fbef0779a966012a150f74e
+          cp "$TEST" "$BASE/$TEST"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$BASE/node_modules"
+          set +e
+          (cd "$BASE" && npm run -s test:file -- "$TEST") > "$OUT/baseline.log" 2>&1
+          CODE=$?
+          set -e
+          printf '%s\n' "$CODE" > "$OUT/baseline-exit.txt"
+          test "$CODE" -ne 0
+          git worktree remove --force "$BASE"
+      - name: Candidate race witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run -s test:file -- "$TEST" > "$OUT/candidate.log" 2>&1
+      - name: Existing lifecycle and cleanup cone
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run -s test:file --             test/node/replica-runtime-cleanup-custody.integration.test.js             test/raft/raft-rs-backend/startup-cleanup.integration.test.js             test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js             test/raft/raft-rs-backend/runtime-opening-history.integration.test.js             test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js             test/raft/raft-rs-backend/partition-construction-seam.test.js             test/message-group/message-group-service-lifecycle-and-ledger.test.js             test/wasm-service/wasm-service-lifecycle.test.js             test/wasm-service/wasm-service-replica.test.js             > "$OUT/wider.log" 2>&1
+      - name: Focused static checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node_modules/.bin/eslint             src/node/replica-handler-create-methods.js             src/partition/partition-service-core-base.js             src/partition/partition-service-raft-init-base.js             src/partition/partition-service-lifecycle-methods.js             src/message-group/message-group-service-state.js             src/message-group/message-group-service-raft-lifecycle.js             src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js             "$TEST" > "$OUT/eslint.log" 2>&1
+          node --input-type=module -e "import {auditRaftRsOperationBoundary} from './scripts/checks/raft-rs-operation-boundary-audit.js'; const v=auditRaftRsOperationBoundary({root:process.cwd()}); console.log(JSON.stringify(v,null,2)); process.exitCode=v.length?1:0;" > "$OUT/boundary.json"
+          git diff --check HEAD^ HEAD > "$OUT/whitespace.log"
+      - name: Record result
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$OUT"
+          git status --porcelain > "$OUT/status.txt"
+          sha256sum "$TEST" > "$OUT/test.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-lifecycle-claim-race-${{ github.run_id }}
+          path: test-output/lifecycle-claim-race/
+          retention-days: 30
+          if-no-files-found: error

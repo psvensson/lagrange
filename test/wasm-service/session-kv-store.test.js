@@ -1,5 +1,6 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
 import {
   SessionKVStore,
   KV_TABLE_NAME,
@@ -14,7 +15,7 @@ describe('SessionKVStore', () => {
   let store;
 
   beforeEach(() => {
-    store = new SessionKVStore(':memory:');
+    store = new SessionKVStore(new Database(':memory:'));
   });
 
   afterEach(() => {

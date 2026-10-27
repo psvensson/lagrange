@@ -1,3 +1,4 @@
+import {resolveTestMachineFactor} from '../../scripts/test-machine-factor.js';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 
@@ -23,8 +24,6 @@ const ATTRIBUTION_SOURCE = Object.freeze({
 });
 const LEASE_WAIT_MSG_PREFIX =
   'Waiting for transitional cluster membership to settle';
-const MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
-const DEFAULT_MACHINE_FACTOR = 1;
 // Seed unexplained blocked time allowed inside the formation window on the
 // reference box; scaled by LAGRANGE_TEST_MACHINE_FACTOR like every other
 // hardware-relative budget. A quarter of the window blocked is the point at
@@ -118,9 +117,7 @@ function harvestAttribution(entries, window) {
 }
 
 function resolveFormationSeedBudget(environment = process.env) {
-  const parsed = Number(environment?.[MACHINE_FACTOR_ENV]);
-  const machineFactor = Number.isFinite(parsed) && parsed > 0 ?
-    parsed : DEFAULT_MACHINE_FACTOR;
+  const machineFactor = resolveTestMachineFactor(environment);
   return Object.freeze({
     machineFactor,
     maxBlockedMs: BASE_MAX_BLOCKED_MS * machineFactor,

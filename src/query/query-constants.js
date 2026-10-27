@@ -58,13 +58,48 @@ const QUERY_ERROR_CODE = Object.freeze({
   TRANSACTION_PARTICIPANTS_FROZEN: 'TRANSACTION_PARTICIPANTS_FROZEN',
   TRANSACTION_RECOVERY_INCOMPLETE: 'TRANSACTION_RECOVERY_INCOMPLETE',
   TRANSACTION_STATE_PERSIST_FAILED: 'TRANSACTION_STATE_PERSIST_FAILED',
+  // An engine that cannot persist transaction state refuses an explicit
+  // BEGIN and a multi-partition statement before any participant work
+  // (TX1 seam S4b); DIRECT_AUTOCOMMIT statements never reach the
+  // coordinator.
+  TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE:
+    'TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE',
+  // The insert-once decision of a transaction is already recorded (TX1 seam
+  // C): the writer that finds it reads the recorded decision and follows it.
+  TRANSACTION_DECISION_RECORDED: 'TRANSACTION_DECISION_RECORDED',
+  // Neither this coordinator's decision nor the one recorded first could be
+  // established: nothing was fanned out, and recovery resolves it.
+  TRANSACTION_DECISION_IN_DOUBT: 'TRANSACTION_DECISION_IN_DOUBT',
+  // A participant refused the PREPARE durably because a committed write
+  // applied on its partition between the transaction's BEGIN and its PREPARE
+  // (TX1 design 3.2, limit L5): the transaction rolled back.
+  TRANSACTION_CONFLICT: 'TRANSACTION_CONFLICT',
+  // A ROLLBACK asked of a transaction whose COMMIT is already decided: the
+  // decision stands and recovery completes it.
+  TRANSACTION_COMMIT_DECIDED: 'TRANSACTION_COMMIT_DECIDED',
   PRIMARY_KEY_REQUIRED: 'PRIMARY_KEY_REQUIRED',
   TABLE_EXISTS: 'TABLE_EXISTS',
+  SYSTEM_TABLE_NAME_RESERVED: 'SYSTEM_TABLE_NAME_RESERVED',
   TABLE_PARTITION_PROVISIONING_RETRYABLE:
     'TABLE_PARTITION_PROVISIONING_RETRYABLE',
   DISTRIBUTED_PARTICIPANT_FAILURE: 'DISTRIBUTED_PARTICIPANT_FAILURE',
   RUNTIME_ACCESS_DENIED: 'RUNTIME_ACCESS_DENIED',
+  // A client-originated INSERT/UPDATE/DELETE on a system table (or a client
+  // write whose target cannot be resolved): system tables are written only
+  // by their owners. Nothing executes.
+  SYSTEM_TABLE_WRITE_REFUSED: 'SYSTEM_TABLE_WRITE_REFUSED',
   SYNTAX_ERROR: 'SYNTAX_ERROR',
+  // A query text holding more than one statement is refused whole (nothing
+  // executes); an empty query text (only whitespace, `;` or comments) holds
+  // no statement at all.
+  MULTIPLE_STATEMENTS_UNSUPPORTED: 'MULTIPLE_STATEMENTS_UNSUPPORTED',
+  EMPTY_STATEMENT: 'EMPTY_STATEMENT',
+  // A statement form the engine cannot execute as written (INSERT ...
+  // SELECT, RETURNING): refused, never run as a different statement.
+  UNSUPPORTED_SQL_FEATURE: 'UNSUPPORTED_SQL_FEATURE',
+  // A text that begins with a transaction keyword and is not one whole
+  // transaction-control statement (`BEGIN\nINSERT ...`): nothing executes.
+  TRANSACTION_CONTROL_SYNTAX_ERROR: 'TRANSACTION_CONTROL_SYNTAX_ERROR',
   TIMEOUT: 'TIMEOUT',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   // Write-path epoch fencing: the routed write carried an
@@ -78,7 +113,15 @@ const QUERY_ERROR_CODE = Object.freeze({
 });
 
 const QUERY_ERROR_MSG = Object.freeze({
+  SYSTEM_TABLE_NAME_RESERVED:
+    'System table names are reserved for their bootstrap owners',
+  SYSTEM_TABLE_WRITE_REFUSED:
+    'System tables are written only by their owners; ' +
+    'client SQL may not insert, update or delete them',
   UNSUPPORTED_STATEMENT_PREFIX: 'Unsupported statement type: ',
+  MULTIPLE_STATEMENTS_UNSUPPORTED:
+    'multiple statements in one query are not supported; ' +
+    'send them separately',
   TABLE_NOT_FOUND_PREFIX: 'Table not found: ',
   QUERY_TIMEOUT: 'Query timeout',
   QUERY_TIMED_OUT: 'Query timed out',
@@ -92,12 +135,47 @@ const QUERY_ERROR_MSG = Object.freeze({
   NO_TRANSACTION_COMMIT: 'No active transaction to commit',
   NO_TRANSACTION_ROLLBACK: 'No active transaction to rollback',
   NO_ACTIVE_TRANSACTION: 'No active transaction',
+  EXPECTED_TRANSACTION_NOT_HELD_PREFIX: 'transaction ',
+  EXPECTED_TRANSACTION_NOT_HELD_SUFFIX:
+    ' is no longer active on the server (it was rolled back, e.g. its ' +
+    'transaction budget expired); the statement was not executed',
+  INSERT_SELECT_UNSUPPORTED: 'INSERT ... SELECT is not supported',
+  RETURNING_UNSUPPORTED: 'RETURNING is not supported',
+  NON_LITERAL_DEFAULT_UNSUPPORTED:
+    'Non-literal or nondeterministic column DEFAULT expressions are not ' +
+    'supported in replicated schema definitions; use a constant literal DEFAULT',
+  ON_CONFLICT_DO_UPDATE_UNSUPPORTED:
+    'INSERT ... ON CONFLICT DO UPDATE is not supported; use ON CONFLICT DO NOTHING or a separate UPDATE',
+  TRANSACTION_MODE_UNSUPPORTED_PREFIX: 'transaction mode ',
+  TRANSACTION_MODE_UNSUPPORTED_SUFFIX:
+    ' is not supported (the engine does not provide or enforce it; only ' +
+    'READ WRITE is accepted); nothing was executed',
+  TRANSACTION_CONTROL_SYNTAX_ERROR:
+    'syntax error: a transaction-control statement must be the whole ' +
+    'statement (BEGIN | START TRANSACTION [READ WRITE], COMMIT | END | ' +
+    'ROLLBACK | ABORT [WORK | TRANSACTION]); nothing was executed',
   TRANSACTION_PARTICIPANTS_FROZEN:
     'Transaction participant set is frozen',
   TRANSACTION_RECOVERY_INCOMPLETE:
     'Transaction recovery state is incomplete or incompatible',
   TRANSACTION_STATE_PERSIST_FAILED:
     'Distributed transaction state persistence failed',
+  TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE:
+    'Distributed transaction state cannot be persisted by this engine; ' +
+    'the transaction was not started',
+  TRANSACTION_DECISION_RECORDED:
+    'Distributed transaction decision is already recorded',
+  TRANSACTION_DECISION_IN_DOUBT:
+    'Distributed transaction decision could not be established; its ' +
+    'outcome is decided by recovery',
+  TRANSACTION_CONFLICT:
+    'Transaction conflict: a committed write applied on a participant ' +
+    'partition after the transaction began; the transaction rolled back',
+  TRANSACTION_COMMIT_DECIDED:
+    'Transaction COMMIT is already decided; it cannot be rolled back',
+  PARTICIPANT_ANSWER_UNTYPED:
+    'Participant answered without the typed outcome the transaction ' +
+    'protocol requires',
   COMMIT_FAILED: 'Commit failed',
   ROLLBACK_FAILED: 'Rollback failed',
   PREPARE_FAILED: 'Prepare failed',
@@ -188,6 +266,11 @@ const QUERY_LOG_MSG = Object.freeze({
   ROUTING_INSERT: 'Routing INSERT to partitions',
   ROUTING_UPDATE: 'Routing UPDATE to partitions',
   ROUTING_DELETE: 'Routing DELETE to partitions',
+  STATEMENT_CONFLICT_RETRY:
+    'Statement-autocommit attempt retried after a definitive participant ' +
+    'conflict',
+  STATEMENT_CONFLICT_RETRY_STOPPED:
+    'Statement-autocommit conflict answered: its retry bound is spent',
   BEGIN_TRANSACTION: 'BEGIN TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
@@ -395,19 +478,23 @@ const QUERY_CONFIG_KEY = Object.freeze({
 });
 
 const QUERY_DEFAULTS = Object.freeze({
+  // ends-on: a partition delivery succeeds or the rows come back
   QUERY_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
   LEADER_RETRY_DELAY_MS: NUM.FIVE * NUM.TEN,
   READ_RETRY_ATTEMPTS: NUM.THREE,
   NO_SERVICE_WARN_THROTTLE_MS: TIME_MS.SECOND * NUM.FIVE,
   CONTROL_PLANE_NO_HANDLER_ADDRESS_QUARANTINE_MS:
     TIME_MS.SECOND * NUM.TEN * NUM.THREE,
+  // ends-on: the new table partition is provisioned and routable
   TABLE_CREATE_PROVISION_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
   TABLE_CREATE_PROVISION_POLL_INTERVAL_MS: NUM.FIVE * NUM.TEN,
+  // ends-on: enough target nodes admit the required replicas
   TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS: TIME_MS.SECOND,
 
   COORDINATOR_MAX_PARALLEL_PARTITIONS: NUM.THOUSAND,
   COORDINATOR_MAX_CONCURRENT_CONNECTIONS: NUM.THOUSAND * NUM.TEN,
   COORDINATOR_MAX_RESULT_BUFFER_BYTES: NUM.BYTES_PER_MIB * NUM.BYTES_PER_KIB,
+  // ends-on: every partition result of the fan-out chunk arrives
   COORDINATOR_QUERY_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
   COORDINATOR_STRAGGLER_THRESHOLD_MULTIPLIER: 2,
   COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS: NUM.TEN * NUM.TEN,

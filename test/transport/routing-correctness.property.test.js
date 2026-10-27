@@ -16,6 +16,8 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
+  '../../src/transport/transport-semantic-outcome.js';
 
 // Initialize configuration and logging for tests (module level)
 ConfigurationManager.resetInstance();
@@ -79,7 +81,7 @@ test('Property 4: Routing Correctness', async (t) => {
                 address: envelope.targetAddress,
                 payload: envelope.payload,
               });
-              return {acknowledged: true, handlerId: targetAddress};
+              return {handlerId: targetAddress};
             });
 
             // Deliver message via self-connection
@@ -88,8 +90,8 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Verify handler was invoked with correct message
-            return result.acknowledged === true &&
-                   result.handlerId === targetAddress &&
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.handlerId === targetAddress &&
                    receivedMessages.length === 1 &&
                    receivedMessages[0].address === targetAddress &&
                    receivedMessages[0].payload.type === messagePayload.type &&
@@ -147,12 +149,12 @@ test('Property 4: Routing Correctness', async (t) => {
             // Register two handlers
             router.register(address1, (envelope) => {
               handler1Calls.push(envelope.targetAddress);
-              return {acknowledged: true, handler: 'handler1'};
+              return {handler: 'handler1'};
             });
 
             router.register(address2, (envelope) => {
               handler2Calls.push(envelope.targetAddress);
-              return {acknowledged: true, handler: 'handler2'};
+              return {handler: 'handler2'};
             });
 
             // Deliver to address1
@@ -161,8 +163,8 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Only handler1 should be called
-            return result.acknowledged === true &&
-                   result.handler === 'handler1' &&
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.handler === 'handler1' &&
                    handler1Calls.length === 1 &&
                    handler2Calls.length === 0;
           } catch (_error) {
@@ -212,7 +214,6 @@ test('Property 4: Routing Correctness', async (t) => {
             // Register handler that returns specific response
             router.register(targetAddress, () => {
               return {
-                acknowledged: true,
                 data: responseData.responseData,
                 code: responseData.responseCode,
               };
@@ -224,9 +225,9 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Verify response fields are in result
-            return result.acknowledged === true &&
-                   result.data === responseData.responseData &&
-                   result.code === responseData.responseCode;
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.data === responseData.responseData &&
+                   result.answer.code === responseData.responseCode;
           } catch (_error) {
             await router.shutdown();
             return false;
@@ -273,8 +274,10 @@ test('Property 4: Routing Correctness', async (t) => {
 
             await router.shutdown();
 
-            // Should be acknowledged but with noHandler flag
-            return result.acknowledged === true && result.noHandler === true;
+            // The target router's frame-level no-handler fact: FAILED/no_handler.
+            return result.transport.noHandler === true &&
+              result.transport.reasonCode ===
+                TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER;
           } catch (_error) {
             await router.shutdown();
             return false;
@@ -326,8 +329,8 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Should not be acknowledged and should have error
-            return result.acknowledged === false &&
-                   result.error === errorMessage;
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false &&
+                   result.transport.error === errorMessage;
           } catch (_error) {
             await router.shutdown();
             // The deliver itself might throw if the error propagates
@@ -372,7 +375,7 @@ test('Property 4: Routing Correctness', async (t) => {
             // Register async handler
             router.register(targetAddress, async () => {
               await Promise.resolve();
-              return {acknowledged: true, asyncResult: asyncData};
+              return {asyncResult: asyncData};
             });
 
             // Deliver message
@@ -381,8 +384,8 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Verify async result is returned
-            return result.acknowledged === true &&
-                   result.asyncResult === asyncData;
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.asyncResult === asyncData;
           } catch (_error) {
             await router.shutdown();
             return false;

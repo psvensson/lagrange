@@ -5,6 +5,7 @@
  * Requirements: stability under missing-service conditions
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 
@@ -97,7 +98,7 @@ test('executeOnPartition throttles NO_SERVICE warnings for reads', async (t) => 
   };
 
   const executor = new QueryExecutor({
-    messageRouter: {deliver: async () => ({acknowledged: false})},
+    messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: false}))},
     systemCache: createEmptySystemCache(),
   });
   executor.logger = mockLogger;

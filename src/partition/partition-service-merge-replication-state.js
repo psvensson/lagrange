@@ -2,6 +2,7 @@ import {TABLES} from '../constants/index.js';
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
+  workflowAttemptOf,
 } from './partition-constants.js';
 import {
   MERGE_ACK_CHECKPOINT_FIELD,
@@ -115,6 +116,8 @@ function normalizeMergeTransitionMetadataForService(service, rawMetadata) {
     ) ?
       metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN] :
       null,
+    // The workflow attempt it was started under (mirrors the split source).
+    workflowAttempt: workflowAttemptOf(metadata),
     // The durable replay cursor persisted with the transition (mirrors
     // the split source): a resumed worker replays deltas from the Raft
     // log behind the watermark instead of the volatile queue.

@@ -3,8 +3,13 @@ import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
-import {retireReplicaTransportHandler} from
-  '../node/replica-transport-handler-identity.js';
+import {
+  reportReplicaHandlerRetirement,
+  requireReplicaHandlerRetirement,
+  retireReplicaTransportHandler,
+} from '../node/replica-transport-handler-identity.js';
+import {endReplicaLeadershipTenure} from '../raft/replica-leadership-state.js';
+import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -14,7 +19,9 @@ const {
   PARTITION_SERVICE_TYPE,
 } = PARTITION_SERVICE_SHARED;
 
-function closePartitionConsensusResources(service) {
+const CONSTRUCTOR_METHOD = 'constructor';
+
+async function closePartitionConsensusResources(service) {
   if (service.learnerPromotionTimer) {
     clearTimeout(service.learnerPromotionTimer);
     service.learnerPromotionTimer = null;
@@ -27,9 +34,12 @@ function closePartitionConsensusResources(service) {
     service.systemTableCache.offCacheChange(
       service.systemTableCacheChangeListener);
   }
-  if (service.raft) {
-    service.raft.close();
-    service.raft = null;
+  const port = service.raft;
+  if (port) {
+    assertRaftOperationSucceeded(await port.close());
+    if (service.raft === port) {
+      service.raft = null;
+    }
   }
 }
 
@@ -49,9 +59,9 @@ function clearPartitionLifecycleListeners(service) {
 }
 
 // Retire this replica's exact transport handler through its lifecycle owner
-// (owner decision N2).
+// (owner decision N2); a refused retirement is surfaced, never discarded.
 async function retirePartitionTransportHandler(service) {
-  await retireReplicaTransportHandler({
+  const outcome = await retireReplicaTransportHandler({
     transport: service.transport,
     address: service.unifiedAddress,
     handler: service.transportHandler,
@@ -59,6 +69,11 @@ async function retirePartitionTransportHandler(service) {
     lane: service.resolveHandlerRetirementLane?.() ||
       service.replicaStateMachine,
   });
+  reportReplicaHandlerRetirement(service.logger, {
+    address: service.unifiedAddress,
+    replicaId: service.replicaId,
+  }, outcome);
+  requireReplicaHandlerRetirement(outcome);
 }
 
 function closePartitionPersistenceResources(service) {
@@ -141,59 +156,85 @@ class PartitionServiceLifecycleMethods {
    * Shutdown the partition service.
    * @return {Promise<void>}
    */
-  async shutdown() {
-    this.isShutdown = true;
-    this.leaderActivationGate.shutdown();
-    this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
-    });
-    // A tenure claim must not outlive its replica (see
-    // clearLocalCanonicalLeaderClaimOnTeardown).
-    this.clearLocalCanonicalLeaderClaimOnTeardown?.();
-    closePartitionConsensusResources(this);
-    this.stopPeriodicSizeUpdates();
-    this.stopPreparedStateHoldTimeoutSweep();
-    this.roleMutationHelper.shutdown();
-    this.leaderNodeMutationHelper.shutdown();
-    clearPartitionLifecycleListeners(this);
-    this.releaseMetadataPublicationReadinessListener = null;
-    this._metadataPublicationReadinessState = null;
-    // Every pending write is released with the write kernel's typed answer:
-    // one handed to consensus may still commit, so its outcome is not known
-    // here; one never handed to it was not proposed.
-    this.releasePendingCommittedWrites((pending) =>
-      buildReleasedPendingWriteAnswer(pending, this.partitionId,
-        {cause: PARTITION_WRITE_RELEASE_CAUSE.SHUTDOWN}));
-    await this.quiesceRebalancing();
-    if (this.pendingCDCEventDeliveries.size > 0) {
-      await Promise.allSettled([...this.pendingCDCEventDeliveries]);
-      this.pendingCDCEventDeliveries.clear();
+  shutdown() {
+    if (this.shutdownSettlement) {
+      return this.shutdownSettlement;
     }
-    await retirePartitionTransportHandler(this);
-    closePartitionPersistenceResources(this);
+    this.isShutdown = true;
     this.initialized = false;
-    this.cdcSubscribers.clear();
-    this.cdcSubscriberWrappers.clear();
-    this.cdcSubscriberStates.clear();
-    this.cdcSubscriptionEpoch = 0;
-    this.cdcEventSequenceNumber = 0;
-    this.cdcBufferReplayDelayMs =
-      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-    this.cdcReplayBufferGrowthCount = 0;
-    this.cdcReplayRetryDepth = 0;
-    this.pendingCDCEventDeliveries.clear();
-    this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
+    const {promise, resolve, reject} = Promise.withResolvers();
+    this.shutdownSettlement = promise;
+    const release = async () => {
+      this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+      });
+      const initialization = this.initializationSettlement;
+      if (initialization && this.initializationOwnsCleanup !== true) {
+        await Promise.allSettled([initialization]);
+      }
+      this.initialized = false;
+      this.leaderActivationGate.shutdown();
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+      });
+      // A tenure claim must not outlive its replica (see
+      // clearLocalCanonicalLeaderClaimOnTeardown).
+      this.clearLocalCanonicalLeaderClaimOnTeardown?.();
+      // No reader continues a closed replica's leadership.
+      endReplicaLeadershipTenure(this);
+      await closePartitionConsensusResources(this);
+      this.stopPeriodicSizeUpdates();
+      this.stopPreparedStateHoldTimeoutSweep();
+      this.roleMutationHelper.shutdown();
+      this.leaderNodeMutationHelper.shutdown();
+      clearPartitionLifecycleListeners(this);
+      this.releaseMetadataPublicationReadinessListener = null;
+      this._metadataPublicationReadinessState = null;
+      // Every pending write is released with the write kernel's typed answer:
+      // one handed to consensus may still commit, so its outcome is not known
+      // here; one never handed to it was not proposed.
+      this.releasePendingCommittedWrites((pending) =>
+        buildReleasedPendingWriteAnswer(pending, this.partitionId,
+          {cause: PARTITION_WRITE_RELEASE_CAUSE.SHUTDOWN}));
+      await this.quiesceRebalancing();
+      if (this.pendingCDCEventDeliveries.size > 0) {
+        await Promise.allSettled([...this.pendingCDCEventDeliveries]);
+        this.pendingCDCEventDeliveries.clear();
+      }
+      await retirePartitionTransportHandler(this);
+      closePartitionPersistenceResources(this);
+      this.cdcSubscribers.clear();
+      this.cdcSubscriberWrappers.clear();
+      this.cdcSubscriberStates.clear();
+      this.cdcSubscriptionEpoch = 0;
+      this.cdcEventSequenceNumber = 0;
+      this.cdcBufferReplayDelayMs =
+        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+      this.cdcReplayBufferGrowthCount = 0;
+      this.cdcReplayRetryDepth = 0;
+      this.pendingCDCEventDeliveries.clear();
+      this.startupFailure = null;
+      this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+      });
+    };
+    release().then(resolve, (error) => {
+      if (this.shutdownSettlement === promise) {
+        this.shutdownSettlement = null;
+      }
+      reject(error);
     });
+    return promise;
   }
 }
 
 function createPartitionServiceLifecycleMethods() {
   const methods = {};
   for (const name of Object.getOwnPropertyNames(PartitionServiceLifecycleMethods.prototype)) {
-    if (name !== 'constructor') {
+    if (name !== CONSTRUCTOR_METHOD) {
       methods[name] = PartitionServiceLifecycleMethods.prototype[name];
     }
   }

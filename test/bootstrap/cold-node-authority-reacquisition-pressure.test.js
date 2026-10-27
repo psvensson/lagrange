@@ -554,7 +554,7 @@ test(
           seedNodeWsAddress: DURABLE_PEER_B_WS_ADDRESS,
           startupAuthority: CANONICAL_STARTUP_AUTHORITY,
           messageGroupAssignment: {
-            strategy: AssignmentStrategy.MOVE_REPLICA,
+            strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
             groupId: MOVE_REPLICA_GROUP_ID,
             replicaToMove: MOVE_REPLICA_REPLICA_ID,
             assignmentId: MOVE_REPLICA_ASSIGNMENT_ID,

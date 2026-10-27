@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {TABLES} from '../../src/constants/index.js';
 
@@ -63,35 +64,35 @@ export function registerQueryExecutorDeferredControlPlaneWriteTests({test}) {
         if (address === leaderAddress) {
           leaderAttempts += 1;
           if (leaderAttempts === 1) {
-            return {
-              acknowledged: true,
-              success: false,
-              error: 'Connection to node leader-node closed',
-              errorCode: 'ROUTER_CONNECTION_CLOSED',
-              deferRetry: true,
-              retryAfterMs: 250,
-            };
+            return buildDeliveryEnvelope(
+              {
+                acknowledged: true,
+                errorCode: 'ROUTER_CONNECTION_CLOSED',
+                deferRetry: true,
+                retryAfterMs: 250,
+              },
+              {
+                success: false,
+                error: 'Connection to node leader-node closed',
+              });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             changes: 1,
             rows: [],
-          };
+          });
         }
         if (address === fallbackAddress) {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             changes: 1,
             rows: [],
-          };
+          });
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'unexpected fallback delivery',
-        };
+        });
       },
     };
 
@@ -178,27 +179,28 @@ export function registerQueryExecutorDeferredControlPlaneWriteTests({test}) {
         if (address === leaderAddress) {
           leaderAttempts += 1;
           if (leaderAttempts === 1) {
-            return {
-              acknowledged: true,
-              success: false,
-              error: 'Connection to node leader-node closed',
-              errorCode: 'ROUTER_CONNECTION_CLOSED',
-              deferRetry: true,
-              retryAfterMs: 250,
-            };
+            return buildDeliveryEnvelope(
+              {
+                acknowledged: true,
+                errorCode: 'ROUTER_CONNECTION_CLOSED',
+                deferRetry: true,
+                retryAfterMs: 250,
+              },
+              {
+                success: false,
+                error: 'Connection to node leader-node closed',
+              });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             changes: 1,
             rows: [],
-          };
+          });
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'unexpected fallback delivery',
-        };
+        });
       },
     };
 
@@ -279,14 +281,17 @@ export function registerQueryExecutorDeferredControlPlaneWriteTests({test}) {
     const messageRouter = {
       async deliver(address) {
         deliveries.push(address);
-        return {
-          acknowledged: true,
-          success: false,
-          error: 'Connection to node leader-node closed',
-          errorCode: 'ROUTER_CONNECTION_CLOSED',
-          deferRetry: true,
-          retryAfterMs: 250,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: true,
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+            deferRetry: true,
+            retryAfterMs: 250,
+          },
+          {
+            success: false,
+            error: 'Connection to node leader-node closed',
+          });
       },
     };
 

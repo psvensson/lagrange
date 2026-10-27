@@ -170,6 +170,50 @@ class DataDirectoryManager {
     this.ensureDirectoryExists(partitionDir);
   }
 
+  /** Describe the exact local WASM file. This is identity, never serving permission.
+   * @param {string} serviceId - Instance-qualified group from the identity owner.
+   * @param {string} replicaId - Canonical physical peer.
+   * @return {Object} Local path/device/inode; filesystem errors remain observable.
+   */
+  getWasmServiceFileIdentity(serviceId, replicaId) {
+    const file = fs.realpathSync(this.getWasmServiceDbPath(serviceId, replicaId));
+    const stat = fs.statSync(file, {bigint: true});
+    return {path: file, device: String(stat.dev), inode: String(stat.ino)};
+  }
+
+  /**
+   * Get the durable consensus database path of a WASM service replica: one
+   * file per replica, owned by this data directory.
+   * Pattern: {data-dir}/wasm-services/{service-id}/{replica-id}.db
+   * @param {string} serviceId - Service ID (the consensus group).
+   * @param {string} replicaId - Replica ID.
+   * @return {string} The database file path.
+   */
+  getWasmServiceDbPath(serviceId, replicaId) {
+    if (!serviceId || !replicaId) {
+      throw new Error(STORAGE_ERROR_MSG.MISSING_WASM_SERVICE_REPLICA_ID);
+    }
+    return path.join(
+      this.getDataDir(),
+      STORAGE_DEFAULT.WASM_SERVICES_DIRNAME,
+      serviceId,
+      `${replicaId}${STORAGE_DEFAULT.DB_EXT}`,
+    );
+  }
+
+  /**
+   * Ensure the directory of a WASM service's replica databases exists.
+   * @param {string} serviceId - Service ID.
+   */
+  ensureWasmServiceDirExists(serviceId) {
+    if (!serviceId) {
+      throw new Error(STORAGE_ERROR_MSG.MISSING_WASM_SERVICE_REPLICA_ID);
+    }
+    this.ensureDirectoryExists(path.join(
+      this.getDataDir(), STORAGE_DEFAULT.WASM_SERVICES_DIRNAME, serviceId,
+    ));
+  }
+
   /**
    * Check if the manager has been initialized.
    * @return {boolean} True if initialized.
@@ -200,4 +244,26 @@ function getPartitionDbPath(dataDir, partitionId, replicaId) {
   );
 }
 
-export {DataDirectoryManager, getPartitionDbPath};
+/**
+ * Get the durable consensus database path of a message-group replica: one
+ * file per replica, as a partition replica has. Seed and joining nodes place
+ * their replicas by this one layout.
+ * Pattern: {data-dir}/message-groups/{group-id}/{replica-id}.db
+ * @param {string} dataDir - Base data directory.
+ * @param {string} groupId - Message group ID.
+ * @param {string} replicaId - Replica ID.
+ * @return {string} The database file path.
+ */
+function getMessageGroupDbPath(dataDir, groupId, replicaId) {
+  if (!dataDir || !groupId || !replicaId) {
+    throw new Error(STORAGE_ERROR_MSG.MISSING_MESSAGE_GROUP_REPLICA_ID);
+  }
+  return path.join(
+    dataDir,
+    STORAGE_DEFAULT.MESSAGE_GROUPS_DIRNAME,
+    groupId,
+    `${replicaId}${STORAGE_DEFAULT.DB_EXT}`,
+  );
+}
+
+export {DataDirectoryManager, getMessageGroupDbPath, getPartitionDbPath};

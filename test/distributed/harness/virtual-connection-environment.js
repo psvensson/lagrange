@@ -61,9 +61,14 @@ class VirtualLinkSocket extends EventEmitter {
     this.readyState = SOCKET_STATE.OPEN;
     queueMicrotaskFn(() => this.emit(TRANSPORT_EVENT.OPEN));
   }
-  send(data) {
-    if (this.readyState !== SOCKET_STATE.OPEN) return;
+  send(data, options, callback) {
+    const completed = typeof options === 'function' ? options : callback;
+    if (this.readyState !== SOCKET_STATE.OPEN) {
+      completed?.(new Error('Virtual link socket is not open'));
+      return;
+    }
     this._link.transmit(this._endId, data);
+    completed?.();
   }
   close() {
     this.terminate();

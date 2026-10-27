@@ -3,6 +3,7 @@
  * Task 6.1: expected to fail until message-group operation routing is wired.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -26,6 +27,7 @@ import {
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
 
 function initEnv() {
@@ -277,7 +279,7 @@ test('Message-group operation routing integration', async (t) => {
         messageRouter: {
           deliver: async (target, payload) => {
             deliveries.push({target, payload});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         tablePolicyService: {
@@ -336,43 +338,44 @@ test('Message-group operation routing integration', async (t) => {
     async (t) => {
       const queries = [];
       const trackedOperations = new Map();
+      const executeQuery = async (sql, params) => {
+        queries.push({sql, params});
+        if (sql.includes('INSERT INTO replica_operations')) {
+          const [
+            operationId, type, partitionId, replicaId, targetClaimKey,
+            sourceNodeId, targetNodeId, status, workflowStep, createdAt,
+            updatedAt, completedAt, errorMessage, stepsHistory, entityType,
+            entityId,
+          ] = params;
+          trackedOperations.set(operationId, {
+            operation_id: operationId,
+            type,
+            partition_id: partitionId,
+            replica_id: replicaId,
+            target_claim_key: targetClaimKey,
+            source_node_id: sourceNodeId,
+            target_node_id: targetNodeId,
+            status,
+            workflow_step: workflowStep,
+            created_at: createdAt,
+            updated_at: updatedAt,
+            completed_at: completedAt,
+            error_message: errorMessage,
+            steps_history: stepsHistory,
+            entity_type: entityType,
+            entity_id: entityId,
+          });
+          return {success: true, changes: 1};
+        }
+        if (sql.includes('SELECT') && sql.includes('operation_id = ?')) {
+          const [operationId] = params;
+          const row = trackedOperations.get(operationId);
+          return {success: true, rows: row ? [row] : []};
+        }
+        return {success: true, rows: []};
+      };
       const sqlQueryEngine = {
-        executeQuery: async (sql, params) => {
-          queries.push({sql, params});
-          if (sql.includes('INSERT INTO replica_operations')) {
-            const [
-              operationId, type, partitionId, replicaId, targetClaimKey,
-              sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-              updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-              entityId,
-            ] = params;
-            trackedOperations.set(operationId, {
-              operation_id: operationId,
-              type,
-              partition_id: partitionId,
-              replica_id: replicaId,
-              target_claim_key: targetClaimKey,
-              source_node_id: sourceNodeId,
-              target_node_id: targetNodeId,
-              status,
-              workflow_step: workflowStep,
-              created_at: createdAt,
-              updated_at: updatedAt,
-              completed_at: completedAt,
-              error_message: errorMessage,
-              steps_history: stepsHistory,
-              entity_type: entityType,
-              entity_id: entityId,
-            });
-            return {success: true, changes: 1};
-          }
-          if (sql.includes('SELECT') && sql.includes('operation_id = ?')) {
-            const [operationId] = params;
-            const row = trackedOperations.get(operationId);
-            return {success: true, rows: row ? [row] : []};
-          }
-          return {success: true, rows: []};
-        },
+        executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
       };
       const coordinator = new RebalanceCoordinator({
         nodeId: 'node-1',
@@ -416,7 +419,9 @@ test('Message-group operation routing integration', async (t) => {
           updateSystemTableRow: async () => ({success: true}),
         },
         messageRouter: {
-          deliver: async () => ({acknowledged: true, status: 'initiated'}),
+          deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+            status: 'initiated',
+          })),
         },
         controlPlaneSystemTableGateway: {
           readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
@@ -517,7 +522,9 @@ test('Message-group operation routing integration', async (t) => {
           updateSystemTableRow: async () => ({success: true}),
         },
         messageRouter: {
-          deliver: async () => ({acknowledged: true, status: 'initiated'}),
+          deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+            status: 'initiated',
+          })),
         },
         tablePolicyService: {
           getPolicyForPartition: () => ({}),

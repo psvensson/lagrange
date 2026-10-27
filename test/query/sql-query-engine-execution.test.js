@@ -4,6 +4,7 @@
  * Requirements: 6.1, 6.2, 6.3, 6.4, 15.1, 15.2, 15.3, 15.4, 20.6, 20.7
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {CancellationToken} from
@@ -51,6 +52,10 @@ import {
   createMockMessageRouter,
   createMockSystemCache,
 } from './sql-query-engine-test-support.js';
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 
 test('SQLQueryEngine preserves canonical result and deadline budgets for ' +
   'SELECT execution', async (t) => {
@@ -615,9 +620,12 @@ test('SQLQueryEngine - routes INSERT to multiple partitions', async (t) => {
     ],
   );
 
+  // A multi-partition statement is a STATEMENT_AUTOCOMMIT transaction: its
+  // engine persists transaction state (TX1 seam S4b).
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const result = await engine.executeQuery(
@@ -631,48 +639,46 @@ test('SQLQueryEngine - routes INSERT to multiple partitions', async (t) => {
   mockPartitionData.clear();
 });
 
-test('SQLQueryEngine - merges RETURNING rows for distributed INSERT', async (t) => {
-  const cache = createMockSystemCache(
-    [{table_name: 'users', primaryKey: 'id'}],
-    [
-      {partition_id: 'p1', table_name: 'users', partition_key_start: null, partition_key_end: 'm'},
-      {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
-    ],
-  );
-  const returningRouter = {
-    deliver: async (address, message) => {
-      const partitionId = address.split('/')[2];
-      if (message.type !== 'QUERY') {
-        return {acknowledged: true, success: true};
-      }
-      if (!message.sql.startsWith('INSERT')) {
-        return {acknowledged: true, success: true, rows: [], changes: 0};
-      }
-      const rows = partitionId === 'p1' ?
-        [{id: 'alice'}] :
-        [{id: 'zack'}];
-      return {
-        acknowledged: true,
-        success: true,
-        rows,
-        changes: 1,
-      };
-    },
-  };
-  const engine = new SQLQueryEngine({
-    systemCache: cache,
-    messageRouter: returningRouter,
+// RETURNING is refused before any partition is written: the partition
+// write path answers counts, not rows, so the clause would otherwise
+// return nothing (superseded: the merge of mock-router RETURNING rows this
+// test witnessed has no real producer; the coordinator's own row merge stays
+// witnessed in distributed-write-coordinator.test.js).
+test('SQLQueryEngine - refuses INSERT ... RETURNING before any write',
+  async (t) => {
+    const cache = createMockSystemCache(
+      [{table_name: 'users', primaryKey: 'id'}],
+      [
+        {partition_id: 'p1', table_name: 'users', partition_key_start: null, partition_key_end: 'm'},
+        {partition_id: 'p2', table_name: 'users', partition_key_start: 'm', partition_key_end: null},
+      ],
+    );
+    const delivered = [];
+    const recordingRouter = {
+      deliver: async (address, message) => {
+        if (message.type === 'QUERY') delivered.push(message.sql);
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [],
+          changes: 1,
+        });
+      },
+    };
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: recordingRouter,
+    });
+
+    const result = await engine.executeQuery(
+      'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\'), ' +
+      '(\'zack\', \'Zack\') RETURNING id',
+    );
+
+    t.equal(result.success, false);
+    t.equal(result.errorCode, 'UNSUPPORTED_SQL_FEATURE');
+    t.equal(result.error, 'RETURNING is not supported');
+    t.same(delivered, [], 'no partition write was delivered');
   });
-
-  const result = await engine.executeQuery(
-    'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\'), ' +
-    '(\'zack\', \'Zack\') RETURNING id',
-  );
-
-  t.equal(result.success, true);
-  t.equal(result.affectedRows, 2);
-  t.same(result.rows.map((row) => row.id).sort(), ['alice', 'zack']);
-});
 
 test('SQLQueryEngine - surfaces partial failure for distributed UPDATE', async (t) => {
   const cache = createMockSystemCache(
@@ -686,37 +692,36 @@ test('SQLQueryEngine - surfaces partial failure for distributed UPDATE', async (
     deliver: async (address, message) => {
       const partitionId = address.split('/')[2];
       if (message.type !== 'QUERY') {
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true},
+          answerParticipantTransactionRequest(message));
       }
       if (partitionId === 'p2') {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'partition unavailable',
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [{id: 'alice'}],
         changes: 1,
-      };
+      });
     },
   };
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: failingRouter,
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const result = await engine.executeQuery(
-    'UPDATE users SET status = \'active\' WHERE age > 18 RETURNING id',
+    'UPDATE users SET status = \'active\' WHERE age > 18',
   );
 
   t.equal(result.success, false);
   t.equal(result.errorCode, 'DISTRIBUTED_PARTICIPANT_FAILURE');
   t.same(result.failedPartitions, ['p2']);
   t.equal(result.affectedRows, 1);
-  t.same(result.rows, [{id: 'alice'}]);
 });
 
 test('SQLQueryEngine - executes UPDATE with key filter', async (t) => {
@@ -766,6 +771,7 @@ test('SQLQueryEngine - executes UPDATE on all partitions without key filter', as
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const result = await engine.executeQuery(
@@ -824,9 +830,11 @@ test('SQLQueryEngine - returns error for non-existent table', async (t) => {
 test('SQLQueryEngine - handles transaction statements', async (t) => {
   const cache = createMockSystemCache([], []);
 
+  // An explicit BEGIN persists transaction state first (TX1 seam S4b).
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const beginResult = await engine.executeQuery('BEGIN TRANSACTION');
@@ -1082,10 +1090,18 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
       ],
     );
 
+    // The mirrored write has two participants: a STATEMENT_AUTOCOMMIT
+    // transaction whose engine persists its state and whose participants
+    // answer the transaction protocol (TX1 seam S4b, design 2.2).
     const engine = new SQLQueryEngine({
       systemCache: cache,
+      controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
       messageRouter: {
         async deliver(address, message) {
+          if (message.type === 'TRANSACTION') {
+            return buildDeliveryEnvelope({acknowledged: true},
+              answerParticipantTransactionRequest(message));
+          }
           if (message.type === 'QUERY' &&
               /^\s*(INSERT|UPDATE|DELETE)/i.test(message.sql || '')) {
             deliveredWrites.push({
@@ -1093,12 +1109,11 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
               splitMirrorOrigin: message.splitMirrorOrigin || null,
             });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: [],
             changes: 1,
-          };
+          });
         },
       },
     });
@@ -1132,8 +1147,11 @@ test('SQLQueryEngine - recovers and replays distributed transactions from system
       transaction_id: 'tx-recovery-1',
       session_id: 'recovery-session',
       status: 'PREPARED',
+      transaction_epoch: 1,
+      timeout_deadline: 10000,
       transaction_mode: TRANSACTION_MODE.EXPLICIT,
       participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
+      participant_set_text: '[["tx-recovery-1:p1","p1"]]',
       commit_mode: COMMIT_MODE.TWO_PHASE_COMMIT,
       frozen_participant_count: 1,
       created_at: 1,
@@ -1173,9 +1191,17 @@ test('SQLQueryEngine - recovers and replays distributed transactions from system
       return originalGetAll(type);
     };
 
+    // The durable rows behind the cache snapshot: recovery records the
+    // transaction's decision insert-once on its own row before any fanout
+    // (TX1 seam C), so its engine persists transaction state.
+    const gateway = createTransactionPersistenceGateway();
+    transactionRows.forEach((row) => gateway.seed(TABLES.SQL_TRANSACTIONS, row));
+    participantRows.forEach((row) =>
+      gateway.seed(TABLES.SQL_TRANSACTION_PARTICIPANTS, row));
     const engine = new SQLQueryEngine({
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
+      controlPlaneSystemTableGateway: gateway,
     });
 
     const replay = await engine.waitForDistributedTransactionRecoveryReplay();

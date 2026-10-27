@@ -302,6 +302,5 @@ export {
   CDC_PROPAGATION_DELIVERY_PRIORITY,
   CDC_PROPAGATION_DELIVERY_STATE,
   buildCriticalVisibilityCdcPropagationDeliverySource,
-  buildCriticalVisibilityCdcPropagationReplacePendingKey,
   resolveCdcPropagationDeliveryProfile,
 };

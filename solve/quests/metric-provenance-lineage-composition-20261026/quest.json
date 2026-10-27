@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "metric-provenance-lineage-composition-20261026",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Compose the independently approved actual-read and effective-home metric-report provenance owner onto the runner/native lineage, retaining one canonical analyzer provenance and the changed-context cache refusal while preserving Q6, CDC D2 and Node24 child-output behavior.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/metric-provenance-lineage-composition-20261026/evidence/receipt.json",
+      "requiredReceipts": [
+        "approved-source-hashes-and-owner-merge",
+        "official-seven-file-cone",
+        "effective-home-negative-control-and-unchanged-reuse",
+        "independent-composition-review-and-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-metric-owner",
+      "statement": "Bring all producer and consumer changes from the approved c95ec0a/5485381/0e6923b metric lineage, retaining actual analyzer content reads, negative path probes and effective homedir input. No second resolver, fallback schema, TTL, broader invalidation, ratchet increase, or weakened false-success detection."
+    },
+    {
+      "id": "preserve-existing-runtime",
+      "statement": "No production distributed runtime, Q6 or CDC D2 source may be overwritten. The merge preflight reports no semantic conflicts. Generated test and owner-debt inventories must be rebuilt by their existing generators after the canonical Git merge drivers keep the current placeholders."
+    },
+    {
+      "id": "proof-fidelity",
+      "statement": "The prior 7-file/186-assertion author result and twelve-check independent HOME experiment are historical, not new composition proofs. Record exact-commit official suite, meaningful failure classification and separate release gate limits."
+    }
+  ],
+  "sealedAt": "7aee1d55c8c9cf6e80f17920dcadab7c2d91dd28"
+}

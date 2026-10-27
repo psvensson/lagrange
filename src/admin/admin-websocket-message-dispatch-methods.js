@@ -136,10 +136,6 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
         this.handleDispatchableAdminMessage(clientInfo, message);
         break;
 
-      case MessageType.PARTITION_CALLBACK:
-        this.handleDispatchableAdminMessage(clientInfo, message);
-        break;
-
       case MessageType.REFRESH:
         this.handleDispatchableAdminMessage(clientInfo, message);
         break;
@@ -314,7 +310,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
         principal: envelope.principal || null,
       });
 
-      const deliveryPayload = dispatchResult.delivery?.payload || {};
+      const deliveryPayload = dispatchResult.answer?.payload || {};
       const operation = dispatchResult.envelope.operation;
 
       if (operation === ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP) {

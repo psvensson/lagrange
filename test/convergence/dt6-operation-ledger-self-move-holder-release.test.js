@@ -41,19 +41,14 @@ const HEAD_DISPATCH_RETRY_DELAY_MS = 250;
 const HEAD_PENDING_TIMEOUT_MS = 30_000;
 const HEAD_INCOMPLETE_READ_BACKOFF_FLOOR_MS = 250;
 const HEAD_INCOMPLETE_READ_BACKOFF_CEILING_MS = 5_000;
-// operation-workflow-transition-orchestration.js
-// buildPriorityDispatchClaimRetryableError (the run's claim message).
-const CLAIM_PRESSURE_MESSAGE_FRAGMENT = 'control_plane_pressure_degraded';
 // operation-workflow-dispatch-ledger-self-move-gate.js
 // OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT members.
 const ENGAGEMENT_ENGAGED = 'engaged';
 const ENGAGEMENT_HELD_BY_OTHER = 'held_by_other';
 // rebalance-coordinator-ledger-interlock-hold-state.js hold phases and the
-// operation-ledger-hold-policy.js hold action a terminal holder resolves to.
+// operation-ledger-hold-policy.js hold phases.
 const HOLD_PHASE_NONE = 'none';
 const HOLD_PHASE_ENGAGED = 'engaged';
-const HOLD_ACTION_RELEASE = 'release';
-const SINGLE_READ = 1;
 const SINGLE_ATTEMPT = 1;
 const NO_READS = 0;
 const NO_PARKS = 0;
@@ -105,24 +100,27 @@ function assertDrainSettledPredecessor(m) {
   );
 }
 
-function assertStaleClaimRetainedPredecessor(m) {
+function assertStaleTerminalClaimRefusedBeforeHold(m) {
   const staleClaim = m.extras.staleClaim;
   assert.ok(
     staleClaim !== null &&
       staleClaim.atMs === STALE_CLAIM_REDRIVE_AT_MS &&
-      String(staleClaim.error).includes(CLAIM_PRESSURE_MESSAGE_FRAGMENT) &&
+      staleClaim.skipReason ===
+        OPERATION_WORKFLOW_OWNER_SHARED.OPERATION_WORKFLOW_OWNER_REASON
+          .OPERATION_NOT_DISPATCHABLE &&
       staleClaim.row?.step === WORKFLOW_STEP.FAILED &&
-      staleClaim.holderAfter.operationId !== null,
-    'the predecessor\'s stale claim attempt engaged the target\'s hold and ' +
-      'was refused against its FAILED row with the run\'s message, the ' +
-      `holder id retained (${JSON.stringify(staleClaim)})`,
+      staleClaim.holderBefore.operationId === null &&
+      staleClaim.holderAfter.operationId === null,
+    'the predecessor\'s stale claim attempt observed its authoritative ' +
+      'FAILED row and was refused before it could install the target hold ' +
+      `(${JSON.stringify(staleClaim)})`,
   );
-  return staleClaim.holderAfter.operationId;
+  return m.selfMove.operationId;
 }
 
 function assertPredecessorFailedBeforeSuccessor(m) {
   assertDrainSettledPredecessor(m);
-  const predecessorId = assertStaleClaimRetainedPredecessor(m);
+  const predecessorId = assertStaleTerminalClaimRefusedBeforeHold(m);
   const successor = m.extras.successor;
   assert.ok(
     successor.createdAtMs === SUCCESSOR_PLANNED_AT_MS &&
@@ -135,18 +133,17 @@ function assertPredecessorFailedBeforeSuccessor(m) {
 }
 
 test(
-  'engagement-resolves-stale-holder-through-lifecycle-read: the successor\'s ' +
-    'first engagement on the dispatching node resolves the retained ' +
-    'drain-failed holder through exactly one lifecycle read (RELEASE) and ' +
-    'engages',
+  'terminal-stale-dispatch-is-refused-before-hold: the drain-failed ' +
+    'predecessor installs no hold and the successor engages directly without ' +
+    'a lifecycle release read',
   async () => {
     const m = await runFailedHolderDoesNotStarveSuccessorScenario();
-    const predecessorId = assertPredecessorFailedBeforeSuccessor(m);
+    assertPredecessorFailedBeforeSuccessor(m);
     const first = successorEngagements(m)[FIRST_INDEX];
     assert.ok(
-      first !== undefined && first.holderBefore.operationId === predecessorId,
-      'the successor reached the engagement point while the drain-failed ' +
-        `predecessor was the retained holder (${JSON.stringify(first)})`,
+      first !== undefined && first.holderBefore.operationId === null,
+      'the successor reached the engagement point with no hold left by the ' +
+        `terminal stale predecessor (${JSON.stringify(first)})`,
     );
     assert.equal(
       first.engagement,
@@ -155,10 +152,10 @@ test(
         `held_by_other (${JSON.stringify(first)})`,
     );
     assert.deepEqual(
-      first.interlockReads.map((read) => [read.operationId, read.action]),
-      [[predecessorId, HOLD_ACTION_RELEASE]],
-      'the engagement resolved the holder through exactly one lifecycle ' +
-        `read of the holder that released it (${JSON.stringify(first)})`,
+      first.interlockReads,
+      [],
+      'the successor did not need a lifecycle release read because the stale ' +
+        `terminal dispatch never installed a hold (${JSON.stringify(first)})`,
     );
     assert.deepEqual(
       first.holderAfter,
@@ -169,8 +166,8 @@ test(
     );
     assert.equal(
       m.extras.interlockReads.length,
-      SINGLE_READ,
-      'the dispatching node issued no lifecycle read beyond that one ' +
+      NO_READS,
+      'the dispatching node issued no holder lifecycle reads ' +
         `(${JSON.stringify(m.extras.interlockReads)})`,
     );
   },

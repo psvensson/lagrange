@@ -1,0 +1,18 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "partition-deferred-evaluation-obligation-scheduler",
+  "status": "pass",
+  "testFileDigests": {
+    "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js": "58a75faa16d0f5394afa103836de8c04ccdab89ecb3b173644275665e1301514"
+  },
+  "generatedAt": "2026-10-06T05:30:26.259Z",
+  "receipts": [
+    {
+      "id": "due-obligations-retained-and-dispatched",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/partition-deferred-evaluation-obligation-scheduler.test.js",
+      "detail": "both arrival orders, duplicates, equal deadlines, shutdown, and the idle-merge plus managed-split-retry interaction pass through the production deferred scheduler and requestEvaluation owner",
+      "testFile": "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js"
+    }
+  ]
+}

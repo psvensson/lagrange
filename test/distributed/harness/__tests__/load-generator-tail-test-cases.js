@@ -992,7 +992,7 @@ export function registerLoadGeneratorTailTests({
       await run.waitComplete();
       const acknowledgedWrites = run.getAcknowledgedWrites();
       assert.ok(acknowledgedWrites, 'acknowledged writes should be exposed');
-      assert.strictEqual(acknowledgedWrites.tableName, 'logs');
+      assert.strictEqual(acknowledgedWrites.tableName, 'user_load_logs');
       assert.strictEqual(acknowledgedWrites.idColumn, 'log_id');
       assert.strictEqual(acknowledgedWrites.ids.length, 3);
       acknowledgedWrites.ids.forEach((id) => {

@@ -1,5 +1,5 @@
 // The seed teardown completes when the latency topology stops while a
-// partition's CDC delivery waits in the propagation service's batch window.
+// partition's CDC delivery is held inside the propagation service.
 //
 // Witnessed on the rs-raft cutover (fresh-join-via-non-seed-node teardown
 // hang): the seed cleanup stops the latency topology (and with it the CDC
@@ -14,8 +14,11 @@
 // (SeedRuntimeBridgeOwner.propagatePartitionCDCEvent) into a real
 // CDCGroupPropagationService; the teardown steps are the seed cleanup's own,
 // in its order (LatencyTopologySetup.stop, then ReplicaHandler.shutdown).
-// The batch window is the service's own option, held open so stop() lands
-// inside it; settlement is observed by turns, never by a clock.
+// Since 4151a3ab4 the partition's CDC is a durable obligation: its delivery
+// is a durable propagation wave, the service's one propagation path. The hold
+// is the wave's own retry delay between attempts (the service's sleep, which
+// stop() owns), entered because the target's answer is the CDC outcome
+// owner's typed unknown; settlement is observed by turns, never by a clock.
 
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
@@ -27,6 +30,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
 import {LATENCY_PROPAGATION_MODE} from
   '../../src/topology/latency-topology-constants.js';
 import {CDCGroupPropagationService} from
@@ -38,18 +42,22 @@ import {SeedRuntimeBridgeOwner} from
 import {
   createGroupRow,
   createMessageGroupServiceRow,
+  createDurableSourceMessageGroupService,
   createMessageRouter,
-  createSourceMessageGroupService,
   createTopologyCache,
   setupConfig,
 } from '../topology/cdc-group-propagation-service-harness.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 const NODE_ID = 'seed-node';
 const REPLICA_ID = 'replica_operations-p1-r1';
 const SETTLE_TURN_LIMIT = 2000;
-// Longer than the whole test: the batch window stays open until stop().
-const HELD_BATCH_WINDOW_MS = 3600000;
+// The wave's retry delay: inside the delivery budget, so the wave waits in
+// it, and longer than the observation, so stop() lands inside it.
+const HELD_RETRY_DELAY_MS = 1000;
+const SOURCE_GROUP_ID = 'g-1';
 const SCHEMA = Object.freeze({
   columns: [
     {name: 'operation_id', type: 'TEXT', primaryKey: true},
@@ -98,9 +106,9 @@ function startPropagationService() {
       services: [createMessageGroupServiceRow('mg-node-b', 'node-b',
         'node-b/message-group/mg-node-b', RAFT_ROLE.LEADER, 'mg-node-b')],
     }),
-    messageRouter: createMessageRouter([{acknowledged: true}]),
+    messageRouter: createMessageRouter([unknownCdcAcceptance()]),
     latencyTreeService: {getRoutingOrder: () => ['g-1', 'g-2']},
-    immediateBatchDelayMs: HELD_BATCH_WINDOW_MS,
+    deliveryRetryDelayMs: HELD_RETRY_DELAY_MS,
   });
   service.initialize();
   service.start();
@@ -108,7 +116,7 @@ function startPropagationService() {
 }
 
 test('the seed teardown completes when the latency topology stops inside a ' +
-  'partition CDC delivery\'s batch window', async () => {
+  'partition CDC delivery\'s propagation wave', async () => {
   const propagation = startPropagationService();
   const topology = {cdcGroupPropagationService: propagation};
   const bridge = new SeedRuntimeBridgeOwner({
@@ -123,11 +131,14 @@ test('the seed teardown completes when the latency topology stops inside a ' +
     nodeId: NODE_ID,
     dbPath: ':memory:',
     schema: SCHEMA,
+    systemTableCache: new SystemTableCache(),
   }));
   await partition.initialize();
-  const sourceMessageGroup = createSourceMessageGroupService();
+  await resumeFixtureParticipantAdmission(partition);
+  const sourceMessageGroup = createDurableSourceMessageGroupService(SOURCE_GROUP_ID);
   await partition.subscribeToCDCWithHandshake(
-    (cdcEvent) => bridge.propagatePartitionCDCEvent(sourceMessageGroup, cdcEvent),
+    (cdcEvent, deliveryContext) => bridge.propagatePartitionCDCEvent(
+      sourceMessageGroup, cdcEvent, deliveryContext),
     {subscriberId: 'seed-hydration'});
   const handler = new ReplicaHandler({
     nodeId: NODE_ID,
@@ -146,16 +157,21 @@ test('the seed teardown completes when the latency topology stops inside a ' +
   });
 
   // A rebalancer completion commits on the seed's partition; its CDC
-  // delivery waits in the propagation service's batch window.
+  // delivery's propagation wave waits in its retry delay.
   await partition.insertData('replica_operations',
     {operation_id: 'op-1', status: 'COMPLETED'});
   for (let turn = 0; turn < SETTLE_TURN_LIMIT &&
-    propagation.immediateBatchEntriesByKey.size === 0; turn += 1) {
+    propagation.retrySleepReleases.size === 0; turn += 1) {
     await yieldTurns(1);
   }
-  assert.equal(propagation.immediateBatchEntriesByKey.size, 1,
-    'the partition\'s CDC delivery waits in the batch window');
-  assert.equal(partition.pendingCDCEventDeliveries.size, 1,
+  assert.equal(propagation.retrySleepReleases.size, 1,
+    'the partition\'s CDC delivery waits in the propagation wave\'s retry delay');
+  assert.notEqual(propagation.activeDurablePropagation, null,
+    'the durable propagation wave is in flight');
+  assert.equal(sourceMessageGroup.batches.length, 1,
+    'the wave applied the event on the source group once');
+  // The drive and its invocation's cleanup are both tracked (was: exactly one pending batch-window delivery).
+  assert.ok(partition.pendingCDCEventDeliveries.size > 0,
     'the partition tracks it as a pending delivery');
 
   // The seed cleanup's order: the latency topology stops, then the replica
@@ -169,7 +185,9 @@ test('the seed teardown completes when the latency topology stops inside a ' +
     'settled when the propagation service stopped');
   assert.equal(partition.pendingCDCEventDeliveries.size, 0,
     'no CDC delivery is left pending on the partition');
-  assert.equal(propagation.immediateBatchTimers.size, 0,
-    'no batch timer is left armed');
+  assert.equal(propagation.activeDurablePropagation, null,
+    'no propagation wave is left in flight');
+  assert.equal(propagation.retrySleepReleases.size, 0,
+    'no retry delay is left held');
   await shutdown.done;
 });

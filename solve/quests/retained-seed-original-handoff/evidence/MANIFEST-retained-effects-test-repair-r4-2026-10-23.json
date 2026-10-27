@@ -1,0 +1,13 @@
+{
+  "test/bootstrap/cluster-identity-mint.test.js": "87cabef4a05dd2702ecd3663c79bd252eb021e978e1939f7aede705ca18b2413",
+  "test/bootstrap/replication-policy-structural-census.js": "1538c93bd1d0a2c3aa4c9f3d61ac8306f1e444f93436641f60150f8cae1d70ae",
+  "test/bootstrap/replication-target-authority.test.js": "21fe353b4b1d8f12e0569e31fb904c7862247fbb621638385d4535e2dce79d02",
+  "test/bootstrap/seed-phase-continuation-fixture.js": "2ac8f5de3c74ee2fd912faf246443bceee78aac010b59c907a96537d438e12e6",
+  "test/bootstrap/seed-registration-election-scheduling.test.js": "fbc4d5ce4d28921215e286f09edd5301404d25bf68be76e877691cb6d05ae873",
+  "test/bootstrap/seed-registration-phase.test.js": "d3e479f7aa74ef41745cd6d153392889582783ecac74c99e77a7887ead89b955",
+  "test/bootstrap/seed-retained-effects-fixture.js": "104d69db98e14d504d4bdfc8bb7f952464adcad08a86d93f70cdf5623ae6f4b2",
+  "test/bootstrap/seed-retained-effects.integration.test.js": "35e84ee88211321a5ad0c93aee2f8c8d66756acf1200437a8a07db9168662ef9",
+  "test/bootstrap/seed-retained-effects.test.js": "75113227262b6b420363ef371baf2b06e9bc252026f388bba4356921eb7d69c2",
+  "test/integration/managed-split-admission-reliability.integration.test.js": "b30ad98ff832a40917dfe19d7827d5c2fd4c055228fbe6898faadba08c2b0f47",
+  "test/node/replica-lifecycle-durable-generation.test.js": "86b8f92b249f447d79280c4d97cbe4ec4cc78f861265dbcaff94f867abe76335"
+}

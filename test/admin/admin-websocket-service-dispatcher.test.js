@@ -19,8 +19,8 @@ describe('AdminWebSocketAPI service-dispatch integration', () => {
             dispatched.push({envelope, context});
             return {
               envelope,
-              delivery: {
-                acknowledged: true,
+              answer: {
+
                 payload: {
                   results: [{ok: true}],
                 },
@@ -71,8 +71,8 @@ describe('AdminWebSocketAPI service-dispatch integration', () => {
       serviceDispatcher: {
         dispatch: async (envelope, _context) => ({
           envelope,
-          delivery: {
-            acknowledged: true,
+          answer: {
+
             payload: {
               cacheDump: {
                 services: [{service_id: 'svc-1'}],

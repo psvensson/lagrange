@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "failed-create-target-authoritative-cleanup",
+  "status": "pass",
+  "generatedAt": "2026-10-06T14:20:00+02:00",
+  "receipts": [
+    {
+      "id": "authoritative-active-vs-failed-paired-cleanup",
+      "passed": true,
+      "command": "node test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+      "detail": "46/46 assertions pass. One production coordinator/repository route retains authoritative ACTIVE, cleans only exact authoritative FAILED, rejects newer FAILED evidence, records/consumes the real REPLACE target generation, and re-drives terminal cleanup release through transport recovery."
+    },
+    {
+      "id": "failed-generation-cannot-cross-create-retry",
+      "passed": true,
+      "command": "node test/node/replica-failed-create-cleanup-generation.test.js",
+      "detail": "37/37 assertions pass. Cleanup refuses both a queued stale token after FAILED to CREATING replay and a retry interleaved after authoritative read/install but before transition capture; the newer CREATING generation survives."
+    },
+    {
+      "id": "admission-observation-cannot-race-activation",
+      "passed": true,
+      "command": "node test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+      "detail": "The production operation-owner lane pauses after SYNCING observation, permits target activation and operation completion, then proves stale failOperation cannot overwrite the completed workflow."
+    },
+    {
+      "id": "failed-lifecycle-precedes-terminal-outcome",
+      "passed": true,
+      "command": "node test/node/replica-handler-owner-path-bypass.test.js",
+      "detail": "69/69 assertions pass. Handler create failure emits its terminal executor outcome only after the authoritative lifecycle owner confirms durable FAILED; unresolved persistence retains retry debt without a terminal outcome."
+    },
+    {
+      "id": "unavailable-and-absent-never-authorize-cleanup",
+      "passed": true,
+      "command": "node test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+      "detail": "The typed cleanup decision rejects unavailable and absent lifecycle observations. Post-release redelivery accepts authoritative absence only with exact durable REMOVE terminal proof and a second absence read; a newer CREATING row refuses."
+    },
+    {
+      "id": "owner-interaction-and-recovery-replay",
+      "passed": true,
+      "command": "node test/rebalancer/replica-operation-repository.test.js && node test/node/replica-lifecycle-durable-generation.test.js && node test/node/replica-failed-create-cleanup-generation.test.js",
+      "detail": "323/323 repository, 162/162 durable lifecycle, and 37/37 cleanup-generation assertions pass. Durable operation-step CAS, lifecycle serialization, exact-generation removal, lost-ACK redrive, fresh-handler REMOVING/cleanup_complete recovery, coordinator restart reconstruction, and stale local projection refusal are exercised through their production owners."
+    },
+    {
+      "id": "controlled-negative-old-shortcuts",
+      "passed": true,
+      "command": "isolated detached worktree at 79d16909296d88397fb277da95138a23c37f3dd9; overlay the source scope listed under solve/epics/raft-rs-full-cutover/quest-records/failed-create-target-authoritative-cleanup/controlled-negative/source-paths.txt; apply its restore-pre-fix-shortcuts.patch; run the two focused suites",
+      "detail": "Fingerprint-bound treatment restores both historical shortcuts in production source. The paired terminal suite turns red 6/46, including tokenless projected-FAILED cleanup and stale-generation terminalization, while the independent lifecycle suite remains 37/37 as a scope control. Expected-negative samples are archived outside the positive population under solve/epics/raft-rs-full-cutover/quest-records/failed-create-target-authoritative-cleanup/controlled-negative/manifest.json."
+    }
+  ]
+}

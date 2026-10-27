@@ -11,6 +11,8 @@ import {
 import {
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {ensureSqlTransactionParticipantsTableColumns} from
+  './partition-coordinator-table-columns.js';
 
 const {
   PARTITION_SERVICE_COLUMN,
@@ -19,6 +21,56 @@ const {
   PARTITION_SERVICE_SQL_FRAGMENT,
   SYSTEM_TABLE_NAME,
 } = PARTITION_SERVICE_SHARED;
+
+const PARTITION_TABLE_OBSERVATION = Object.freeze({
+  COMPLETE: 'complete', UNAVAILABLE: 'unavailable', CONTRARY: 'contrary',
+});
+const IDEMPOTENT_SQL = ' IF NOT EXISTS';
+const SCHEMA_OBJECTS_SQL =
+  'SELECT type, name, sql FROM sqlite_schema WHERE tbl_name = ? ORDER BY type, name';
+
+// Read the original physical creator's shape, even when the table has no
+// rows. This does not call its open/migration functions. Exact owned CREATE
+// bytes also exclude added CHECK/FK/STRICT constraints invisible in rows.
+// SQLite's schema record omits IF NOT EXISTS from these producer statements.
+function readPartitionServiceTableSchemaIn(db, schema) {
+  const objects = db.prepare(SCHEMA_OBJECTS_SQL).all(schema.tableName);
+  const table = objects.find(({type}) => type === 'table');
+  // A reserved application name occupied by a view is readable contrary
+  // schema, even if evaluating that view (including table_info) would fail.
+  if (objects.some((object) => object.name === schema.tableName && object !== table)) {
+    return {objects, state: PARTITION_TABLE_OBSERVATION.CONTRARY};
+  } else {
+    return readPartitionTableDefinitionIn(db, schema, objects, table);
+  }
+}
+
+function readPartitionTableDefinitionIn(db, schema, objects, table) {
+  const columns = db.prepare(`PRAGMA table_info(${quoteSqliteIdentifier(schema.tableName)})`).all();
+  const missingColumns = schema.columns.filter(({name}) =>
+    !columns.some((column) => column.name === name)).map(({name}) => name);
+  const observation = {columns, objects, missingColumns};
+  const expectedIndexes = generateCreateIndexSQL(schema).map((sql) =>
+    sql.replace(IDEMPOTENT_SQL, ''));
+  const indexes = objects.filter(({type, sql}) => type === 'index' && sql !== null);
+  // Only the SQL transaction origin owner installs a trigger. Its exact
+  // contents/position are assessed by that owner in the same caller snapshot.
+  const triggers = objects.filter(({type}) => type === 'trigger');
+  if (!table || missingColumns.length > 0) {
+    return {...observation, state: PARTITION_TABLE_OBSERVATION.UNAVAILABLE};
+  } else if (columns.length !== schema.columns.length ||
+      table.sql !== partitionServiceTableSql(schema.tableName, schema)) {
+    return {...observation, state: PARTITION_TABLE_OBSERVATION.CONTRARY};
+  } else if (indexes.some(({sql}) => !expectedIndexes.includes(sql))) {
+    return {...observation, state: PARTITION_TABLE_OBSERVATION.CONTRARY};
+  } else if (indexes.length !== expectedIndexes.length) {
+    return {...observation, state: PARTITION_TABLE_OBSERVATION.UNAVAILABLE};
+  } else if (schema.tableName !== SYSTEM_TABLE_NAME.SQL_TRANSACTIONS && triggers.length > 0) {
+    return {...observation, state: PARTITION_TABLE_OBSERVATION.CONTRARY};
+  } else {
+    return {...observation, state: PARTITION_TABLE_OBSERVATION.COMPLETE};
+  }
+}
 
 function quoteSqliteIdentifier(identifier) {
   return PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE +
@@ -137,17 +189,44 @@ function ensureEndpointTableColumns(service) {
     {tableName: service.tableName, partitionId: service.partitionId});
 }
 
+const SINGLE_QUOTED_SQL_LITERAL_PATTERN = /^'(?:[^']|'')*'$/u;
+const NUMERIC_SQL_LITERAL_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)$/u;
+const NULL_SQL_LITERAL_PATTERN = /^NULL$/iu;
+const UNSUPPORTED_DEFAULT_CODE = 'UNSUPPORTED_SQL_FEATURE';
+const UNSUPPORTED_DEFAULT_MSG =
+  'Non-literal or nondeterministic column DEFAULT is not supported in partition schema';
+
+function isLiteralPartitionDefault(defaultValue) {
+  if (typeof defaultValue === 'number') {
+    return Number.isFinite(defaultValue);
+  }
+  if (typeof defaultValue === 'boolean' || typeof defaultValue === 'bigint') {
+    return true;
+  }
+  return typeof defaultValue === 'string' && (
+    SINGLE_QUOTED_SQL_LITERAL_PATTERN.test(defaultValue) ||
+    NUMERIC_SQL_LITERAL_PATTERN.test(defaultValue) ||
+    NULL_SQL_LITERAL_PATTERN.test(defaultValue)
+  );
+}
+
+function requireLiteralPartitionDefault(defaultValue) {
+  if (isLiteralPartitionDefault(defaultValue)) {
+    return defaultValue;
+  }
+  const error = new Error(UNSUPPORTED_DEFAULT_MSG);
+  error.code = UNSUPPORTED_DEFAULT_CODE;
+  throw error;
+}
+
 /**
  * Create the partition's state table from its schema, apply the system-table
  * column upgrades, and create the schema's indexes (verbatim behavior of the
  * former PartitionServiceRaftInitBase.createTable body).
  * @param {Object} service the partition service (open db, schema, logger)
  */
-function createPartitionServiceTable(service) {
-  if (!service.schema || !service.schema.columns) {
-    return;
-  }
-  const columns = service.schema.columns
+function partitionServiceTableSql(tableName, schema) {
+  const columns = schema.columns
     .map((col) => {
       let def = `${col.name} ${col.type}`;
       if (col.primaryKey) {
@@ -156,15 +235,24 @@ function createPartitionServiceTable(service) {
       if (col.notNull) {
         def += PARTITION_SERVICE_SQL_FRAGMENT.NOT_NULL;
       }
-      if (col.defaultValue !== void 0) {
-        def += ` DEFAULT ${col.defaultValue}`;
+      if (col.defaultValue !== void 0 && col.defaultValue !== null) {
+        def += ` DEFAULT ${requireLiteralPartitionDefault(col.defaultValue)}`;
       }
       return def;
     })
     .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
   const sql =
-    'CREATE TABLE IF NOT EXISTS ' +
-    `${quoteSqliteIdentifier(service.tableName)} (${columns})`;
+    'CREATE TABLE ' +
+    `${quoteSqliteIdentifier(tableName)} (${columns})`;
+  return sql;
+}
+
+function createPartitionServiceTable(service) {
+  if (!service.schema || !service.schema.columns) {
+    return;
+  }
+  const sql = partitionServiceTableSql(service.tableName, service.schema)
+    .replace('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS ');
   service.db.exec(sql);
   ensureNodesTableColumns(service);
   ensureEndpointTableColumns(service);
@@ -173,6 +261,8 @@ function createPartitionServiceTable(service) {
   service.ensureMessageGroupsTableColumns();
   service.ensurePartitionsTableColumns();
   service.ensureSqlTransactionsTableColumns();
+  // The coordinator's retained PREPARE evidence (TX1 seam E).
+  ensureSqlTransactionParticipantsTableColumns(service);
   service.ensureReplicaOperationsTableColumns();
   const indexSchema =
     service.tableName === SYSTEM_TABLE_NAME.WASM_OPERATIONS ?
@@ -187,4 +277,5 @@ function createPartitionServiceTable(service) {
   });
 }
 
-export {createPartitionServiceTable};
+export {createPartitionServiceTable, readPartitionServiceTableSchemaIn,
+  PARTITION_TABLE_OBSERVATION};

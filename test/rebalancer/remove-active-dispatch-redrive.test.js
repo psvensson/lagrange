@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED as SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {createTestCoordinator} from './test-helpers.js';
@@ -109,12 +110,11 @@ function createRemoveCoordinator({
     messageRouter: {
       async deliver(target, payload) {
         deliveries.push({target, payload});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: payload.type === ReplicaOperationMessageType.REMOVE_REPLICA ?
             removeResponseStatus :
             ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
       getConnectionState: () => 'connected',
       pingNode: async () => true,

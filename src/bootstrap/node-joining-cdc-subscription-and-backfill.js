@@ -1,5 +1,6 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {NodeJoiningMessageGroupRuntimeDelegation} from './node-joining-message-group-runtime-delegation.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   CACHE_HYDRATION_TABLES,
@@ -22,6 +23,17 @@ const {
   assertCritical,
   buildControlPlaneWorkloadProfile,
 } = NODE_JOINING_SERVICE_SHARED;
+
+const CDC_SUBSCRIPTION_SPENT_WAIT = Object.freeze({
+  TIMEOUT: Object.freeze({
+    wait: 'CDC_REESTABLISHMENT.TIMEOUT_MS',
+    awaited: 'join CDC listeners registered for every cache-sync event type',
+  }),
+  RETRIES: Object.freeze({
+    wait: 'CDC_REESTABLISHMENT.MAX_RETRIES',
+    awaited: 'join CDC listeners registered for every cache-sync event type',
+  }),
+});
 
 class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRuntimeDelegation {
   /**
@@ -263,20 +275,17 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
       });
     }, diagnosticIntervalMs); // Bounded retry loop for CDC subscription establishment
     let subscribed = false;
+    const spentObservation = {attempts: 0, budgetSpentAtAttempt: null, lastError: null};
     try {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         const elapsedMs = this.now() - startMs;
         const remainingBudgetMs = timeoutMs - elapsedMs; // Respect overall timeout budget (§1.9)
         if (remainingBudgetMs <= 0) {
-          this.logger.warn(JOINING_LOG_MSG.CDC_REESTABLISHMENT_TIMEOUT, {
-            nodeId: this.nodeId,
-            tables: systemTables,
-            attempt,
-            maxRetries,
-            elapsedMs,
-          });
+          // Spent budget: reported once below as wait_bound_spent.
+          spentObservation.budgetSpentAtAttempt = attempt;
           break;
         }
+        spentObservation.attempts = attempt + 1;
         try {
           for (const eventType of eventTypes) {
             this.cdcIntegrationService.on(eventType, cdcEventHandler);
@@ -312,6 +321,7 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
               cdcEventHandler,
             );
           }
+          spentObservation.lastError = error.message;
           const currentElapsedMs = this.now() - startMs;
           const currentRemainingMs = timeoutMs - currentElapsedMs;
           this.logger.warn(JOINING_LOG_MSG.CDC_SUBSCRIPTION_RETRY, {
@@ -338,11 +348,12 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
     }
     if (!subscribed) {
       // All retries exhausted or timeout expired
-      this.logger.warn(JOINING_LOG_MSG.CDC_SUBSCRIPTION_RETRY_EXHAUSTED, {
-        nodeId: this.nodeId,
+      this.reportCdcSubscriptionSpent({
+        ...spentObservation,
         tables: systemTables,
-        elapsedMs: this.now() - startMs,
         maxRetries,
+        timeoutMs,
+        elapsedMs: this.now() - startMs,
         subscriptionStatus: finalStatus,
       });
     }
@@ -355,6 +366,32 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
     // exhausted — partial progress is better than blocking
     // indefinitely. Task 6.4 gates readiness on full status.
     this.cdcSubscriptionsActive = true;
+  }
+  /**
+   * Report the spent CDC subscription wait: the time budget when it cut the
+   * loop short, otherwise the exhausted retry count.
+   * @param {Object} spent
+   * @private
+   */
+  reportCdcSubscriptionSpent(spent) {
+    const budgetSpent = spent.budgetSpentAtAttempt !== null;
+    const spentWait = budgetSpent ?
+      CDC_SUBSCRIPTION_SPENT_WAIT.TIMEOUT :
+      CDC_SUBSCRIPTION_SPENT_WAIT.RETRIES;
+    reportWaitBoundSpent(this.logger, {
+      ...spentWait,
+      boundMs: spent.timeoutMs,
+      elapsedMs: spent.elapsedMs,
+      lastObserved: {
+        attempts: spent.attempts,
+        maxRetries: spent.maxRetries,
+        budgetSpentAtAttempt: spent.budgetSpentAtAttempt,
+        lastError: spent.lastError,
+        tables: spent.tables,
+        subscriptionStatus: spent.subscriptionStatus,
+      },
+      scope: {nodeId: this.nodeId},
+    });
   }
   /**
    * Determine whether one CDC event affects peer mesh-connectivity authority.

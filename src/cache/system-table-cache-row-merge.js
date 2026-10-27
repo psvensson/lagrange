@@ -40,33 +40,19 @@ function isStaleForExistingRecord(tableName, existing, incoming) {
   // equal-`updated_at` ties resolve deterministically and identically on every replica.
   const existingHlc = getRecordHlc(existing);
   const incomingHlc = getRecordHlc(incoming);
-  if (existingHlc && incomingHlc) {
-    const order = incomingHlc.compare(existingHlc);
-    if (order < 0) {
-      return true;
-    }
-    if (order > 0) {
-      return false;
-    }
-    return tableName === TABLES.NODES &&
-      isNodeHeartbeatWatermarkRegression(existing, incoming);
+  const hlcOrder = existingHlc && incomingHlc ?
+    incomingHlc.compare(existingHlc) : 0;
+  if (hlcOrder !== 0) {
+    return hlcOrder < 0;
   }
 
   const existingTimestamp = getRecordTimestamp(existing);
   const incomingTimestamp = getRecordTimestamp(incoming);
 
-  if (!Number.isFinite(existingTimestamp) ||
-      !Number.isFinite(incomingTimestamp)) {
-    return tableName === TABLES.NODES &&
-      isNodeHeartbeatWatermarkRegression(existing, incoming);
-  }
-
-  if (incomingTimestamp < existingTimestamp) {
-    return true;
-  }
-
-  if (incomingTimestamp > existingTimestamp) {
-    return false;
+  if (Number.isFinite(existingTimestamp) &&
+      Number.isFinite(incomingTimestamp) &&
+      incomingTimestamp !== existingTimestamp) {
+    return incomingTimestamp < existingTimestamp;
   }
 
   return tableName === TABLES.NODES &&
@@ -145,7 +131,10 @@ function cloneFieldValue(value) {
   return deepClone(value);
 }
 
-function shouldBackfillMissingField(existingValue, incomingValue) {
+function shouldBackfillMissingField(field, existingValue, incomingValue) {
+  if (field === COLUMN.UPDATED_AT_HLC) {
+    return false;
+  }
   const existingMissing = existingValue === null ||
     typeof existingValue === 'undefined';
   const incomingPresent = incomingValue !== null &&
@@ -164,26 +153,20 @@ function shouldBackfillMissingField(existingValue, incomingValue) {
  * @param {Object} incoming
  * @return {{applied: boolean, record: Object, advancedFields: string[]}}
  */
-function buildStaleServiceLifecycleAdvance(tableName, existing, incoming) {
-  const record = deepClone(existing);
-  if (tableName !== TABLES.SERVICES) {
-    return {
-      applied: false,
-      record,
-      advancedFields: NO_ADVANCED_SERVICE_LIFECYCLE_FIELDS,
-    };
-  }
+function canAdvanceServiceLifecycle(tableName, existing, incoming) {
   const existingStateEnteredAt = Number(existing?.state_entered_at);
   const incomingStateEnteredAt = Number(incoming?.state_entered_at);
-  if (
-    typeof incoming?.status !== 'string' ||
-    incoming.status.length === 0 ||
-    !Number.isFinite(incomingStateEnteredAt) ||
-    (
-      Number.isFinite(existingStateEnteredAt) &&
-      incomingStateEnteredAt <= existingStateEnteredAt
-    )
-  ) {
+  return tableName === TABLES.SERVICES &&
+    typeof incoming?.status === 'string' &&
+    incoming.status.length > 0 &&
+    Number.isFinite(incomingStateEnteredAt) &&
+    (!Number.isFinite(existingStateEnteredAt) ||
+      incomingStateEnteredAt > existingStateEnteredAt);
+}
+
+function buildStaleServiceLifecycleAdvance(tableName, existing, incoming) {
+  const record = deepClone(existing);
+  if (!canAdvanceServiceLifecycle(tableName, existing, incoming)) {
     return {
       applied: false,
       record,
@@ -242,7 +225,7 @@ function applyStaleRowBackfill(
   const backfilledFields = [...lifecycleAdvance.advancedFields];
 
   for (const [field, incomingValue] of Object.entries(incoming)) {
-    if (shouldBackfillMissingField(merged[field], incomingValue)) {
+    if (shouldBackfillMissingField(field, merged[field], incomingValue)) {
       merged[field] = cloneFieldValue(incomingValue);
       backfilledFields.push(field);
     }

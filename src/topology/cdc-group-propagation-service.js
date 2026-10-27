@@ -6,17 +6,13 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {NUM} from '../constants/index.js';
+import {hasDurableCdcEvents, unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
+import {isCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
+import {propagateDurableCdcEvent} from './cdc-group-propagation-durable-delivery.js';
 import {
   LATENCY_PROPAGATION_MODE,
   LATENCY_TOPOLOGY_CONFIG_KEY,
 } from './latency-topology-constants.js';
-import {
-  buildGroupedContext,
-  buildSafeTargets,
-  resolveKnownMessageGroupIds,
-  resolveSourceMessageGroupId,
-} from './cdc-group-propagation-routing.js';
 import {
   defineCDCGroupPropagationDeliveryMethods,
 } from './cdc-group-propagation-delivery-methods.js';
@@ -25,21 +21,15 @@ import {
 } from './cdc-group-propagation-lifecycle-methods.js';
 import {
   CDC_GROUP_PUBLICATION_MODE,
+  CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
-  CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PROPAGATION_LOG_MSG,
   CDC_GROUP_PROPAGATION_REASON,
   CDC_GROUP_PROPAGATION_RETRY,
   CDC_GROUP_PROPAGATION_STATE,
-  CDC_GROUP_PROPAGATION_STRATEGY,
-  CDC_GROUP_PROPAGATION_STATUS,
   CDC_GROUP_PROPAGATION_SUBSYSTEM,
 } from './cdc-group-propagation-constants.js';
-const CDC_GROUP_PROPAGATION_MESSAGE = Object.freeze({STATUS_DELIVERED: 'delivered'});
-const MESSAGE_GROUP_REPLICA_SUFFIX = '-r';
 const PUBLICATION_TRANSITION_HISTORY_LIMIT = 10;
-const IMMEDIATE_BATCH_DELAY_MS = NUM.TEN;
-const IMMEDIATE_BATCH_MAX_EVENTS = NUM.SIXTY_FOUR;
 class CDCGroupPropagationService extends EventEmitter {
   /**
    * @param {Object} options
@@ -55,7 +45,6 @@ class CDCGroupPropagationService extends EventEmitter {
     this.messageRouter = options.messageRouter || null;
     this.latencyTreeService = options.latencyTreeService || null;
     this.nowFn = options.nowFn || Date.now;
-    this.lastSkippedFanoutSignature = '';
     this.config = ConfigurationManager.getInstance();
     this.propagationMode =
       this.config.get(LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE) ===
@@ -67,11 +56,11 @@ class CDCGroupPropagationService extends EventEmitter {
       loggingService.forSubsystem(CDC_GROUP_PROPAGATION_SUBSYSTEM) :
       console;
     this.state = CDC_GROUP_PROPAGATION_STATE.CREATED;
+    this.activeDurablePropagation = null;
+    this.durablePropagationLifetime = Object.freeze({});
     this.stats = {
       groupedCount: 0,
       safeCount: 0,
-      fallbackCount: 0,
-      groupedDeliveryFailureCount: 0,
       lastStrategy: null,
       lastMode: null,
       lastFallbackReason: null,
@@ -81,10 +70,6 @@ class CDCGroupPropagationService extends EventEmitter {
     this.deliveryRetryMaxAttempts = this.resolvePositiveInteger(
       options.deliveryRetryMaxAttempts,
       CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS,
-    );
-    this.backgroundRetryMaxAttempts = this.resolvePositiveInteger(
-      options.backgroundRetryMaxAttempts,
-      CDC_GROUP_PROPAGATION_RETRY.BACKGROUND_MAX_ATTEMPTS,
     );
     this.deliveryRetryDelayMs = this.resolvePositiveInteger(
       options.deliveryRetryDelayMs,
@@ -98,19 +83,7 @@ class CDCGroupPropagationService extends EventEmitter {
       options.deliveryRetryMaxDelayMs,
       CDC_GROUP_PROPAGATION_RETRY.MAX_DELAY_MS,
     );
-    this.backgroundRetryTimers = new Set();
-    this.backgroundRetryEntriesByKey = new Map();
-    this.immediateBatchTimers = new Set();
-    this.immediateBatchEntriesByKey = new Map();
     this.retrySleepReleases = new Set();
-    this.immediateBatchDelayMs = this.resolvePositiveInteger(
-      options.immediateBatchDelayMs,
-      IMMEDIATE_BATCH_DELAY_MS,
-    );
-    this.immediateBatchMaxEvents = this.resolvePositiveInteger(
-      options.immediateBatchMaxEvents,
-      IMMEDIATE_BATCH_MAX_EVENTS,
-    );
     this.publicationModeDiagnostics = this.freezePublicationModeDiagnostics({
       currentMode:
         this.propagationMode === LATENCY_PROPAGATION_MODE.GROUPED ?
@@ -128,6 +101,8 @@ class CDCGroupPropagationService extends EventEmitter {
    * Initialize dependencies.
    * @param {Object} options
    */ initialize(options = {}) {
+    this.activeDurablePropagation?.context.retire();
+    this.durablePropagationLifetime = Object.freeze({});
     if (options.nodeId) {
       this.nodeId = options.nodeId;
     }
@@ -164,6 +139,7 @@ class CDCGroupPropagationService extends EventEmitter {
    */ start() {
     this.ensureInitialized();
     this.refreshConfig();
+    this.durablePropagationLifetime = Object.freeze({});
     this.state = CDC_GROUP_PROPAGATION_STATE.RUNNING;
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STARTED, {
       nodeId: this.nodeId,
@@ -174,390 +150,56 @@ class CDCGroupPropagationService extends EventEmitter {
    * Stop propagation lifecycle.
    */ stop() {
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
-    this.clearBackgroundRetryTimers();
-    this.clearImmediateBatchTimers();
+    this.activeDurablePropagation?.context.retire();
     for (const releaseSleep of [...this.retrySleepReleases]) {
       releaseSleep();
     }
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }
   /**
-   * Propagate one CDC event through grouped mode or safe mode.
-   * @param {Object} options
-   * @param {string} options.tableName
-   * @param {string} options.operation
-   * @param {Object} options.data
-   * @param {Object} options.sourceMessageGroupService
+   * Propagate one durable partition CDC event through the durable wave
+   * (cdc-group-propagation-durable-delivery.js), grouped or safe by config.
+   * @param {Object} options - The durable event, its delivery invocation
+   *   (`deliveryContext`) and the source message group.
    * @return {Promise<Object>}
    */ async propagateCDCEvent(options = {}) {
     this.ensureInitialized();
-    const tableName = options.tableName;
-    const operation = options.operation;
-    const data = options.data;
-    const sourceMessageGroupService = options.sourceMessageGroupService;
     this.assertPropagationRequest(options);
     // A stopped service proposes nothing on the source group and delivers
-    // nothing: it answers every target stopped.
+    // nothing: its answer is the CDC outcome owner's typed unknown.
     if (this.isPropagationStopped()) {
-      return this.buildStoppedPropagationResult(sourceMessageGroupService);
+      return {...unknownCdcAcceptance(),
+        reason: CDC_GROUP_PROPAGATION_DELIVERY_ERROR.PROPAGATION_STOPPED};
     }
-    this.refreshConfig();
-    if (this.propagationMode !== LATENCY_PROPAGATION_MODE.GROUPED) {
-      this.setPublicationMode(
-        CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
-        CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
-      );
-      return this.propagateSafe({
-        tableName,
-        operation,
-        data,
-        sourceMessageGroupService,
-        fallbackReason: CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
-      });
-    }
-    const groupedContext = buildGroupedContext({
-      nodeId: this.nodeId,
-      systemTableCache: this.systemTableCache,
-      messageRouter: this.messageRouter,
-      latencyTreeService: this.latencyTreeService,
-    });
-    if (groupedContext.fallbackReason) {
-      this.setPublicationMode(
-        CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
-        groupedContext.fallbackReason,
-      );
-      return this.propagateSafe({
-        tableName,
-        operation,
-        data,
-        sourceMessageGroupService,
-        fallbackReason: groupedContext.fallbackReason,
-      });
-    }
-    await sourceMessageGroupService.applyCDCEvent(tableName, operation, data);
-    const groupedDeliveryFailures = await this.deliverToTargetsWithRetry({
-      tableName,
-      operation,
-      data,
-      sourceGroupId: groupedContext.sourceGroupId,
-      targets: groupedContext.targets,
-    });
-    const groupedFailureCount = groupedDeliveryFailures.length;
-    const fallbackRecovery =
-      groupedFailureCount > 0 ?
-        await this.recoverGroupedDeliveryFailuresWithSafeFanout({
-          tableName,
-          operation,
-          data,
-          sourceGroupId: groupedContext.sourceGroupId,
-          deliveryFailures: groupedDeliveryFailures,
-        }) :
-        {deliveryFailures: groupedDeliveryFailures, fallbackUsed: false};
-    const deliveryFailures = fallbackRecovery.deliveryFailures;
-    const fallbackUsed = fallbackRecovery.fallbackUsed === true;
-    const timestamp = this.now();
-    this.stats.groupedCount += 1;
-    this.stats.lastStrategy = CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR;
-    this.stats.lastMode = CDC_GROUP_PROPAGATION_STATUS.GROUPED;
-    this.stats.lastFallbackReason = fallbackUsed ?
-      CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE :
-      null;
-    this.stats.lastPropagationAt = timestamp;
-    this.stats.lastTargetGroupCount = groupedContext.targets.length;
-    if (groupedFailureCount > 0) {
-      this.stats.groupedDeliveryFailureCount += groupedFailureCount;
-      this.setPublicationMode(
-        CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
-        CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
-      );
-      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.GROUPED_DELIVERY_FAILED, {
-        nodeId: this.nodeId,
-        tableName,
-        operation,
-        failureCount: groupedFailureCount,
-        recoveredCount: groupedFailureCount - deliveryFailures.length,
-        unresolvedCount: deliveryFailures.length,
-      });
-    } else {
-      this.setPublicationMode(
-        CDC_GROUP_PUBLICATION_MODE.GROUPED,
-        CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_RECOVERED,
-      );
-    }
-    const result = {
-      success: deliveryFailures.length === 0,
-      strategy: CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR,
-      mode: CDC_GROUP_PROPAGATION_STATUS.GROUPED,
-      status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
-      sourceGroupId: groupedContext.sourceGroupId,
-      targetGroupCount: groupedContext.targets.length,
-      deliveryFailures,
-      fallbackReason: fallbackUsed ? CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE : null,
-      fallbackStrategy: fallbackUsed ? CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT : null,
-      timestamp,
-    };
-    this.emit(CDC_GROUP_PROPAGATION_EVENT.PROPAGATED, result);
-    this.logger.debug(CDC_GROUP_PROPAGATION_LOG_MSG.PROPAGATED_GROUPED, {
-      nodeId: this.nodeId,
-      tableName,
-      operation,
-      strategy: CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR,
-      sourceGroupId: groupedContext.sourceGroupId,
-      targetGroupCount: groupedContext.targets.length,
-      deliveryFailureCount: deliveryFailures.length,
-    });
-    return result;
-  }
-  /**
-   * Make the fan-out's silent drop class observable (CL-014): when message
-   * groups are KNOWN to the cache but excluded from the resolved targets
-   * (not yet ACTIVE-with-address), every event sent meanwhile is lost to
-   * those groups with no replay. Transition-logged: one warn per change of
-   * the skipped-group set, not per event.
-   * @param {Array<Object>} targets - Resolved fan-out targets.
-   * @param {string|null} sourceGroupId
-   * @param {string} tableName - Table of the triggering event (context).
-   * @return {void}
-   * @private
-   */
-  recordSkippedFanoutGroups(targets, sourceGroupId, tableName) {
-    const knownGroupIds = resolveKnownMessageGroupIds({
-      systemTableCache: this.systemTableCache,
-      messageGroupReplicaSuffix: MESSAGE_GROUP_REPLICA_SUFFIX,
-    });
-    const targetGroupIds = new Set(
-      (targets || []).map((target) => target.groupId),
-    );
-    const skippedGroupIds = [...knownGroupIds]
-      .filter(
-        (groupId) =>
-          groupId !== sourceGroupId && !targetGroupIds.has(groupId),
-      )
-      .sort();
-    const signature = skippedGroupIds.join(',');
-    if (signature === this.lastSkippedFanoutSignature) {
-      return;
-    }
-    this.lastSkippedFanoutSignature = signature;
-    if (skippedGroupIds.length === 0) {
-      return;
-    }
-    this.logger.warn(
-      CDC_GROUP_PROPAGATION_LOG_MSG.FANOUT_SKIPPING_KNOWN_GROUPS,
-      {
-        nodeId: this.nodeId,
-        tableName,
-        skippedGroupIds,
-        targetGroupCount: targetGroupIds.size,
-      },
-    );
+    return propagateDurableCdcEvent(this, options);
   }
 
   /**
-   * The caller's contract: a source message group and a complete payload.
+   * The caller's contract: a durable partition event with its delivery
+   * invocation, and a source message group with the surface the durable wave
+   * reads (its group, consensus port and commit lifetime, the strict forward
+   * retry hint, and the batch apply answered with the committed receipt).
    * @param {Object} options
    * @private
    */
   assertPropagationRequest(options) {
-    const sourceMessageGroupService = options.sourceMessageGroupService;
+    const source = options.sourceMessageGroupService;
     assertCritical(
-      sourceMessageGroupService &&
-        typeof sourceMessageGroupService.applyCDCEvent === 'function',
+      source && typeof source.groupId === 'string' && source.groupId.length > 0 &&
+        source.raft && typeof source.raft === 'object' &&
+        source.cdcCommitLifetime && typeof source.cdcCommitLifetime === 'object' &&
+        typeof source.resolveStrictCdcForwardRetryAfterMs === 'function' &&
+        typeof source.applyCDCBatch === 'function',
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE,
     );
     assertCritical(
       options.tableName && options.operation && options.data,
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD,
     );
-  }
-  /**
-   * The stopped answer of propagateCDCEvent: nothing was applied or
-   * delivered, and every safe-fanout target is answered stopped.
-   * @param {Object} sourceMessageGroupService
-   * @return {Object}
-   * @private
-   */
-  buildStoppedPropagationResult(sourceMessageGroupService) {
-    const sourceGroupId = resolveSourceMessageGroupId(sourceMessageGroupService);
-    const targets = buildSafeTargets({
-      sourceGroupId,
-      systemTableCache: this.systemTableCache,
-      messageGroupReplicaSuffix: MESSAGE_GROUP_REPLICA_SUFFIX,
-    });
-    return {
-      success: false,
-      strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
-      mode: CDC_GROUP_PROPAGATION_STATUS.SAFE,
-      // The owner's one result status, carried by its failure results too;
-      // "stopped" is said per target (PROPAGATION_STOPPED), nowhere else.
-      status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
-      sourceGroupId,
-      targetGroupCount: targets.length,
-      deliveryFailures: this.buildStoppedFailures(targets),
-      timestamp: this.now(),
-    };
-  }
-  /**
-   * Apply canonical safe propagation path.
-   * @param {Object} options
-   * @return {Promise<Object>}
-   * @private
-   */ async propagateSafe(options) {
-    await options.sourceMessageGroupService.applyCDCEvent(
-      options.tableName,
-      options.operation,
-      options.data,
+    assertCritical(
+      hasDurableCdcEvents([options]) && isCdcDeliveryInvocation(options.deliveryContext),
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_DURABLE_EVENT,
     );
-    const sourceGroupId = resolveSourceMessageGroupId(options.sourceMessageGroupService);
-    const safeTargets = buildSafeTargets({
-      sourceGroupId,
-      systemTableCache: this.systemTableCache,
-      messageGroupReplicaSuffix: MESSAGE_GROUP_REPLICA_SUFFIX,
-    });
-    this.recordSkippedFanoutGroups(safeTargets, sourceGroupId, options.tableName);
-    const deliveryFailures = await this.deliverToTargetsWithRetry({
-      tableName: options.tableName,
-      operation: options.operation,
-      data: options.data,
-      sourceGroupId,
-      targets: safeTargets,
-    });
-    const timestamp = this.now();
-    this.stats.safeCount += 1;
-    this.stats.lastStrategy = CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT;
-    this.stats.lastMode = CDC_GROUP_PROPAGATION_STATUS.SAFE;
-    this.stats.lastFallbackReason = options.fallbackReason || null;
-    this.stats.lastPropagationAt = timestamp;
-    this.stats.lastTargetGroupCount = safeTargets.length;
-    if (options.fallbackReason) {
-      this.recordSafeFallback(options.fallbackReason, {
-        tableName: options.tableName,
-        operation: options.operation,
-      });
-    }
-    this.logger.debug(CDC_GROUP_PROPAGATION_LOG_MSG.PROPAGATED_SAFE, {
-      nodeId: this.nodeId,
-      tableName: options.tableName,
-      operation: options.operation,
-      strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
-    });
-    return {
-      success: deliveryFailures.length === 0,
-      strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
-      mode: CDC_GROUP_PROPAGATION_STATUS.SAFE,
-      status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
-      sourceGroupId,
-      targetGroupCount: safeTargets.length,
-      deliveryFailures,
-      fallbackReason: options.fallbackReason || null,
-      timestamp,
-    };
-  }
-  /**
-   * Re-drive grouped delivery misses through the conservative direct-fanout
-   * path so control-plane metadata converges under coordinator instability.
-   * @param {Object} options
-   * @return {Promise<{deliveryFailures:Array<Object>, fallbackUsed:boolean}>}
-   * @private
-   */ async recoverGroupedDeliveryFailuresWithSafeFanout(options) {
-    const originalFailures = Array.isArray(options.deliveryFailures) ?
-      options.deliveryFailures :
-      [];
-    let deliveryFailures = originalFailures;
-    let fallbackUsed = false;
-    if (originalFailures.length > 0) {
-      const failedGroupIds = new Set();
-      const unresolvedFailures = [];
-      for (const failure of originalFailures) {
-        const groupId = failure?.targetGroupId;
-        if (typeof groupId === 'string' && groupId.length > 0) {
-          failedGroupIds.add(groupId);
-          continue;
-        }
-        unresolvedFailures.push(failure);
-      }
-      if (failedGroupIds.size > 0) {
-        const safeTargets = buildSafeTargets({
-          sourceGroupId: options.sourceGroupId,
-          systemTableCache: this.systemTableCache,
-          messageGroupReplicaSuffix: MESSAGE_GROUP_REPLICA_SUFFIX,
-        }).filter((target) => failedGroupIds.has(target.groupId));
-        if (safeTargets.length > 0) {
-          this.recordSafeFallback(CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE, {
-            tableName: options.tableName,
-            operation: options.operation,
-            failedGroupCount: failedGroupIds.size,
-          });
-          const recoveredFailures = await this.deliverToTargetsWithRetry({
-            tableName: options.tableName,
-            operation: options.operation,
-            data: options.data,
-            sourceGroupId: options.sourceGroupId,
-            targets: safeTargets,
-            allowDeferToExistingRetry: false,
-          });
-          const failuresByKey = new Map();
-          let unkeyedCounter = 0;
-          const targetedGroupIds = new Set(safeTargets.map((target) => target.groupId));
-          for (const failure of unresolvedFailures) {
-            failuresByKey.set(`unkeyed-${unkeyedCounter++}`, failure);
-          }
-          for (const failure of originalFailures) {
-            const groupId = failure?.targetGroupId;
-            if (
-              typeof groupId === 'string' &&
-              groupId.length > 0 &&
-              !targetedGroupIds.has(groupId)
-            ) {
-              failuresByKey.set(groupId, failure);
-            }
-          }
-          for (const failure of recoveredFailures) {
-            const groupId = failure?.targetGroupId;
-            if (typeof groupId === 'string' && groupId.length > 0) {
-              failuresByKey.set(groupId, failure);
-            } else {
-              failuresByKey.set(`recovered-unkeyed-${unkeyedCounter++}`, failure);
-            }
-          }
-          deliveryFailures = [...failuresByKey.values()];
-          fallbackUsed = true;
-        }
-      }
-    }
-    return this.buildGroupedDeliveryRecoveryResult(deliveryFailures, fallbackUsed);
-  }
-  buildGroupedDeliveryRecoveryResult(deliveryFailures, fallbackUsed) {
-    return {deliveryFailures, fallbackUsed};
-  }
-  /**
-   * Emit diagnostics for one direct-fanout fallback decision.
-   * @param {string} reason
-   * @param {Object} context
-   * @private
-   */ recordSafeFallback(reason, context = {}) {
-    this.stats.fallbackCount += 1;
-    this.emit(CDC_GROUP_PROPAGATION_EVENT.SAFE_FALLBACK, {
-      reason,
-      tableName: context.tableName,
-      operation: context.operation,
-    });
-    const fallbackLogContext = {
-      nodeId: this.nodeId,
-      tableName: context.tableName,
-      operation: context.operation,
-      strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
-      reason,
-    };
-    if (Number.isInteger(context.failedGroupCount) && context.failedGroupCount > 0) {
-      fallbackLogContext.failedGroupCount = context.failedGroupCount;
-    }
-
-    if (reason === CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE) {
-      this.logger.debug(CDC_GROUP_PROPAGATION_LOG_MSG.SAFE_FALLBACK, fallbackLogContext);
-      return;
-    }
-    this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.SAFE_FALLBACK, fallbackLogContext);
   }
 
   /**

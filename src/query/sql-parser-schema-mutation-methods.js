@@ -1,11 +1,48 @@
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
 
 const LOCAL_STR_COLUMN_REF = 'column_ref';
 const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_RENAME = 'rename';
 const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_UNARY_EXPR = 'unary_expr';
 const LOCAL_STR_VALUE = 'value';
 const STAR_VALUE = '*';
+const LITERAL_DEFAULT_TYPES = new Set([
+  LOCAL_STR_NUMBER,
+  'single_quote_string',
+  LOCAL_STR_STRING,
+  'bool',
+  'null',
+]);
+const UNARY_NUMERIC_OPERATORS = new Set(['+', '-']);
+
+function isSignedNumberDefaultNode(valueNode) {
+  return valueNode?.type === LOCAL_STR_UNARY_EXPR &&
+    UNARY_NUMERIC_OPERATORS.has(valueNode.operator) &&
+    valueNode.expr?.type === LOCAL_STR_NUMBER &&
+    typeof valueNode.expr.value === LOCAL_STR_NUMBER;
+}
+
+function throwNonLiteralDefaultError() {
+  const error = new Error(QUERY_ERROR_MSG.NON_LITERAL_DEFAULT_UNSUPPORTED);
+  error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+  throw error;
+}
+
+function convertLiteralDefaultValueNode(parser, valueNode) {
+  if (isSignedNumberDefaultNode(valueNode)) {
+    const numeric = valueNode.operator === '-' ?
+      -valueNode.expr.value :
+      valueNode.expr.value;
+    return {type: EXPR_TYPE.LITERAL, value: numeric};
+  }
+  if (!LITERAL_DEFAULT_TYPES.has(valueNode?.type)) {
+    throwNonLiteralDefaultError();
+  }
+  return parser.convertValue(valueNode);
+}
 
 function resolveFirstAlterExpression(ast) {
   const expressions = Array.isArray(ast?.expr) ? ast.expr : [];
@@ -64,10 +101,15 @@ const sqlParserSchemaMutationMethods = {
     if (isReturningStar(columns)) {
       return STAR_VALUE;
     }
-    const names = columns
-      .map(resolveReturningColumnName)
-      .filter((name) => typeof name === LOCAL_STR_STRING);
-    return names.length > 0 ? names : null;
+    const names = columns.map(resolveReturningColumnName);
+    if (names.some((name) => typeof name !== LOCAL_STR_STRING)) {
+      // A RETURNING expression this AST cannot carry: refused, never
+      // dropped (a dropped clause would read as no RETURNING at all).
+      const error = new Error(QUERY_ERROR_MSG.RETURNING_UNSUPPORTED);
+      error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+      throw error;
+    }
+    return names;
   },
 
   convertAlter(ast) {
@@ -99,21 +141,19 @@ const sqlParserSchemaMutationMethods = {
     return columnRef?.column?.expr?.value || null;
   },
 
-  convertAlterDefaultValue(defaultNode) {
+  convertColumnDefaultLiteral(defaultNode) {
     if (!Object.prototype.hasOwnProperty.call(
       defaultNode || {},
       LOCAL_STR_VALUE,
     )) {
       return null;
     }
-    const converted = this.convertValue(defaultNode.value);
-    if (
-      converted?.type === EXPR_TYPE.LITERAL &&
-      Object.prototype.hasOwnProperty.call(converted, LOCAL_STR_VALUE)
-    ) {
-      return converted.value;
-    }
-    return converted;
+    return convertLiteralDefaultValueNode(this, defaultNode.value);
+  },
+
+  convertAlterDefaultValue(defaultNode) {
+    const converted = this.convertColumnDefaultLiteral(defaultNode);
+    return converted ? converted.value : null;
   },
 };
 

@@ -22,17 +22,19 @@
 // pending), and H1 + self (an identity removed and re-added: the target's
 // replay passes through a configuration in which it is the sole voter).
 
+import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {DELIVERED_TO_PEER, PartitionNodeCluster} from './partition-node-cluster.js';
+import {coreTrappingAppend} from './core-trap-envelope.js';
 import {
-  bindingWireNumbers,
   durableAppliedState,
   durableHardState,
   durableLog,
   foldAt,
   logFold,
+  oracleCommittedStamp,
   reservedIdentities,
 } from './committed-membership-oracles.js';
 import {
@@ -42,11 +44,10 @@ import {
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {
-  COMMITTED_MEMBERSHIP_STAMP_KIND,
   PARTICIPATION_GATE,
 } from '../../../src/raft/raft-committed-membership-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RealTimeSource} from '../../../src/time/time-source.js';
 import {
   REPLACE_COMPLETION_VERDICT,
@@ -69,10 +70,7 @@ const SETTLE_ROUNDS = 600;
 const ELECTION_ROUNDS = 200;
 const TARGET = 'gate-t';
 const LEADER_ROLE = 'leader';
-const WIRE = bindingWireNumbers();
-const TRAPPING_COMMIT = '999999';
 const FOREIGN_PEER_OFFSET = 1000;
-const REARM_BOUND_MS = 1000;
 
 // Envelopes to the target carry at most `cap.value` of the log and of the
 // commit index: a transport that delivers a prefix (H6, H1) or that lets the
@@ -107,7 +105,7 @@ function createCluster(founders, {rewriteToTarget = null,
       }
       cluster.replica(TARGET).inbox.push({...packet,
         message: rewriteToTarget(packet.message)});
-      return null;
+      return DELIVERED_TO_PEER;
     },
   });
   return cluster;
@@ -176,31 +174,16 @@ function genesisPeerIds(cluster, founders) {
 // The COMMITTED stamp a correct leader answers, built from the oracles.
 function oracleStamp(cluster, leader, genesis) {
   const dbFile = cluster.replica(leader).dbFile;
-  const applied = durableAppliedState(dbFile, PARTITION_ID);
-  const voters = foldAt(logFold(dbFile, PARTITION_ID, genesis),
-    applied.appliedIndex).voters;
-  assert.deepEqual(voters, applied.voters,
+  const stamp = oracleCommittedStamp(dbFile, PARTITION_ID, genesis, leader);
+  assert.deepEqual(stamp.voters, durableAppliedState(dbFile, PARTITION_ID).voters,
     'setup: the leader applied configuration is the fold at its index');
-  const reserved = reservedIdentities(dbFile);
-  return {
-    kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
-    voters,
-    votersOutgoing: [],
-    learners: [],
-    appliedIndex: applied.appliedIndex,
-    commitIndex: applied.appliedIndex,
-    term: 1,
-    leaderId: leader,
-    gateOpen: true,
-    identities: Object.fromEntries(voters.map((peerId) =>
-      [peerId, reserved.get(peerId)])),
-  };
+  return stamp;
 }
 
 function addTarget(cluster, stamp) {
   const hints = [...Object.values(stamp.identities), TARGET];
   return cluster.addReplica(TARGET, hints,
-    {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
+    {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
 }
 
 function targetDurable(cluster) {
@@ -299,8 +282,9 @@ test('T4 (H6, |D|=2): a target below its gate on the silent-skew prefix ' +
 });
 
 test('T4 (commit lag): a caught-up target between j and its own AddNode ' +
-  'does not lead, and its gate opens - re-arming the scheduling asked for ' +
-  'while closed - in the drain that applies the AddNode', () => {
+  'does not lead, and its gate opens in the drain that applies the ' +
+  'AddNode; the scheduling asked for while closed ticks it from the start ' +
+  '(a learner core never campaigns)', () => {
   const cap = {value: Number.POSITIVE_INFINITY};
   const intervals = [];
   const recording = new RealTimeSource();
@@ -359,11 +343,12 @@ test('T4 (commit lag): a caught-up target between j and its own AddNode ' +
     const lagging = targetDurable(cluster);
     assert.equal(lagging.hard?.term, before.hard?.term,
       'O-d: its term is unchanged between j and its AddNode');
-    assert.equal(asked.reason, PARTICIPATION_GATE.GATE_CLOSED,
-      'scheduling asked for below the gate was refused typed');
+    assert.equal(asked.reason, 'scheduling-started',
+      'scheduling asked for below the gate arms the tick timer at once');
     assert.equal(opened.length, 0, 'the gate is still closed');
 
-    assert.equal(intervals.length, 0, 'no tick timer while closed');
+    assert.equal(intervals.length, 1,
+      'the tick timer runs while closed: the gated core keeps its time');
     cap.value = Number.POSITIVE_INFINITY;
     assert.ok(settle(cluster, () => opened.length > 0, founders),
       'the gate opens once the target applies its AddNode');
@@ -372,11 +357,8 @@ test('T4 (commit lag): a caught-up target between j and its own AddNode ' +
       'the admission index is the applied AddNode of the target');
     assert.ok(event.appliedIndex >= admission);
     assert.equal(intervalsBefore, 1,
-      'the requested scheduling was re-armed in the emission of GATE_OPENED ' +
-        '(the same drain)');
-    assert.equal(intervals.length, 1, 'armed once');
-    assert.ok(intervals[0].at - opened[0].at < REARM_BOUND_MS,
-      're-armed within one drain (< 1 s)');
+      'the timer armed while closed is the one that keeps running');
+    assert.equal(intervals.length, 1, 'armed once, never re-armed');
     assert.equal(targetDurable(cluster).applied.admissionIndex, admission,
       'the admission index is durable');
   } finally {
@@ -384,23 +366,17 @@ test('T4 (commit lag): a caught-up target between j and its own AddNode ' +
   }
 });
 
-// Traps the shared core through one port: a heartbeat whose commit lies
-// beyond any log, driven by a tick of that replica.
+// Traps the shared core through one port (core-trap-envelope.js), driven by
+// a tick of that replica.
 function trapCoreThrough(cluster, replicaId) {
   const status = cluster.node(replicaId).readStatus();
-  cluster.node(replicaId).step({
+  cluster.node(replicaId).step(coreTrappingAppend({
+    dbFile: cluster.replica(replicaId).dbFile,
     groupId: PARTITION_ID,
-    to: status.peerId,
-    message: {
-      from: String(Number(status.peerId) + FOREIGN_PEER_OFFSET),
-      to: status.peerId,
-      msgType: WIRE.messageType.MsgHeartbeat,
-      term: String(Number(status.term) + 1),
-      logTerm: '0',
-      index: '0',
-      commit: TRAPPING_COMMIT,
-    },
-  });
+    status,
+    from: String(Number(status.peerId) + FOREIGN_PEER_OFFSET),
+    term: String(Number(status.term) + 1),
+  }));
   const originalConsoleError = console.error;
   try {
     console.error = () => undefined;
@@ -444,8 +420,12 @@ function formH1TransientTarget(cluster, cap) {
     targetDurable(cluster).applied.appliedIndex === transient, ['h1-b']),
   'setup: the target applied up to the removal of b');
   assert.deepEqual(targetDurable(cluster).applied.voters,
-    [cluster.raftPeerIdOf(TARGET)],
-    'setup: the target view is the transient sole-voter configuration');
+    stamp.voters,
+    'setup: the target view at the former transient index is C_j - the ' +
+      'configuration entries at or below j are folded into its bootstrap, ' +
+      'so no transient sole-voter view exists');
+  assert.ok(targetDurable(cluster).applied.learners.includes(
+    cluster.raftPeerIdOf(TARGET)), 'setup: the target is a learner of C_j');
   return {transient, stamp};
 }
 
@@ -552,20 +532,19 @@ function replaceOwnerReadingThrough(cluster, sourceReplicaId) {
     getCachedCriticalReplicaRows: () => [...cluster.replicas.keys()].map(
       (replicaId) => ({replica_id: replicaId, node_id: `${replicaId}-node`})),
     messageRouter: {
-      deliver: async (_target, payload) => ({
-        acknowledged: true,
+      deliver: async (_target, payload) => (buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.COMPLETED,
         [ReplicaOperationField.MEMBERSHIP]: await readPartitionReplicaMembership(
           serviceOf(payload[ReplicaOperationField.REPLICA_ID]),
           sourceReplicaId),
-      }),
+      })),
     },
   };
 }
 
-test('B12: R-1a waits on a witness below its gate that transiently shows ' +
-  'a committed voter absent, and retires only once the gate is open',
-async () => {
+test('B12: R-1a waits on a witness below its gate (whose view, folded at ' +
+  'C_j, no longer transiently shows a committed voter absent), and ' +
+  'retires only once the gate is open', async () => {
   const cap = {value: Number.POSITIVE_INFINITY};
   const cluster = createCluster(['h1-a'],
     {rewriteToTarget: cappedDelivery(cap)});
@@ -579,8 +558,9 @@ async () => {
     const targetView = await readPartitionReplicaMembership({
       raft: cluster.node(TARGET), replicaId: TARGET, partitionId: PARTITION_ID,
       replicaIds: [], raftTimingConfig: null}, 'h1-b');
-    assert.equal(targetView.state, PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
-      'setup: the below-gate witness shows the committed voter b absent');
+    assert.equal(targetView.state, PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER,
+      'setup: the below-gate witness holds C_j, so the committed voter b is ' +
+        'not transiently absent');
     assert.equal(targetView.gateOpen, false,
       'setup: the witness observation carries its closed gate');
     const below = await decideReplaceCompletion(owner, operation);

@@ -7,13 +7,11 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  COLUMN,
   ENDPOINT_STATUS,
   TABLES,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {TransportRegistry} from '../../src/transport/transport-registry.js';
 import {resolveNodeWebSocketAddressResult} from
   '../../src/transport/node-address-resolution.js';
 import {LeaseService} from '../../src/control-plane/lease-service.js';
@@ -177,17 +175,12 @@ test('a stale G1 endpoint row cannot route when NODES says G2', async (t) => {
     registeredNodeRow(NODE_ID, G2));
   cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
     nodeEndpoint(G1, 'ws://g1-host:8082'));
-  const registry = new TransportRegistry(cache);
-  t.same(registry.getEndpointsForNode(NODE_ID), [],
-    'the delivery owner offers no G1 endpoint to G2 traffic');
   t.equal(resolveNodeWebSocketAddressResult({targetNodeId: NODE_ID,
     systemTableCache: cache}).state, 'unavailable',
   'address resolution does not resolve the G1 address for G2');
 
   cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'UPDATE',
     nodeEndpoint(G2, 'ws://g2-host:8082', {updated_at: 2}));
-  t.equal(registry.getEndpointsForNode(NODE_ID)[0]?.[COLUMN.ADDRESS],
-    'ws://g2-host:8082', 'the G2 endpoint is current and routable');
   t.equal(resolveNodeWebSocketAddressResult({targetNodeId: NODE_ID,
     systemTableCache: cache}).address, 'ws://g2-host:8082',
   'address resolution resolves the G2 address');

@@ -1,3 +1,6 @@
+import {closeMessageGroupConsensus} from './message-group-consensus-port.js';
+import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
+
 const MESSAGE_GROUP_SERVICE_CACHE_AND_LIFECYCLE_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
@@ -119,9 +122,7 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
         role: this.role,
         isLeader: this.isLeader,
         leaderId: this.leaderId,
-        term: this.raft ?
-          this.raftProvider.getCurrentTerm(this.raft) :
-          this.operationLedger.currentTerm,
+        term: this.getCurrentTerm(),
         logLength: this.operationLedger.getLogLength(),
         pendingMessages: this.pendingMessages.size,
         acknowledgedMessages: this.acknowledgedMessages.size,
@@ -142,51 +143,68 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
      * Shutdown the message group service.
      * @return {Promise<void>}
      */
-    async shutdown() {
-      this.logger.info(
-        MESSAGE_GROUP_SERVICE_LITERAL.SHUTTING_DOWN_MESSAGE_GROUP_SERVICE,
-        {
+    shutdown() {
+      if (this.shutdownSettlement) {
+        return this.shutdownSettlement;
+      }
+      this.isShutdown = true;
+      this.initialized = false;
+      retireCdcCommitWaiters(this);
+      const {promise, resolve, reject} = Promise.withResolvers();
+      this.shutdownSettlement = promise;
+      const release = async () => {
+        const initialization = this.initializationSettlement;
+        if (initialization) {
+          await Promise.allSettled([initialization]);
+        }
+        this.initialized = false;
+        this.logger.info(
+          MESSAGE_GROUP_SERVICE_LITERAL.SHUTTING_DOWN_MESSAGE_GROUP_SERVICE,
+          {
+            groupId: this.groupId,
+            replicaId: this.replicaId,
+          },
+        );
+        this.leaderActivationGate.shutdown();
+        this.peerReconciliationScheduled = false;
+        if (
+          this.systemTableCache &&
+          typeof this.systemTableCache.offCacheChange === 'function' &&
+          this.systemTableCacheChangeListener
+        ) {
+          this.systemTableCache.offCacheChange(
+            this.systemTableCacheChangeListener,
+          );
+        }
+        await closeMessageGroupConsensus(this);
+        if (
+          typeof this.releaseMetadataPublicationReadinessListener ===
+          'function'
+        ) {
+          this.releaseMetadataPublicationReadinessListener();
+        }
+        this.releaseMetadataPublicationReadinessListener = null;
+        this._metadataPublicationReadinessState = null;
+        this.roleMutationHelper.shutdown();
+        this.leaderNodeMutationHelper.shutdown();
+        await this.quiesceRebalancing();
+        this.cdcHandler.shutdown();
+        this.pendingMessages.clear();
+        this.messageCallbacks.clear();
+        this.applicationMessageCompletionHandlers.clear();
+        this.startupFailure = null;
+        this.emit(MESSAGE_GROUP_SERVICE_LITERAL.SHUTDOWN, {
           groupId: this.groupId,
           replicaId: this.replicaId,
-        },
-      );
-      this.leaderActivationGate.shutdown();
-      this.peerReconciliationScheduled = false;
-      if (
-        this.systemTableCache &&
-        typeof this.systemTableCache.offCacheChange === 'function' &&
-        this.systemTableCacheChangeListener
-      ) {
-        this.systemTableCache.offCacheChange(
-          this.systemTableCacheChangeListener,
-        );
-      }
-      if (this.raftRuntime) {
-        await this.raftRuntime.shutdown();
-        this.raftRuntime = null;
-      }
-      this.raft = null;
-      this.joinSuppressedHeartbeat = null;
-      if (
-        typeof this.releaseMetadataPublicationReadinessListener ===
-        'function'
-      ) {
-        this.releaseMetadataPublicationReadinessListener();
-      }
-      this.releaseMetadataPublicationReadinessListener = null;
-      this._metadataPublicationReadinessState = null;
-      this.roleMutationHelper.shutdown();
-      this.leaderNodeMutationHelper.shutdown();
-      await this.quiesceRebalancing();
-      this.cdcHandler.shutdown();
-      this.initialized = false;
-      this.pendingMessages.clear();
-      this.messageCallbacks.clear();
-      this.applicationMessageCompletionHandlers.clear();
-      this.emit(MESSAGE_GROUP_SERVICE_LITERAL.SHUTDOWN, {
-        groupId: this.groupId,
-        replicaId: this.replicaId,
+        });
+      };
+      release().then(resolve, (error) => {
+        if (this.shutdownSettlement === promise) {
+          this.shutdownSettlement = null;
+        }
+        reject(error);
       });
+      return promise;
     }
   }
 

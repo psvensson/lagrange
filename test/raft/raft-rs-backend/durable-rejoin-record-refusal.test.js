@@ -39,8 +39,9 @@ import {RUNTIME_PHASE, RUNTIME_REASON} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
-  '../../../src/partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
+import {consensusInitRefusedError, isConsensusInitRefusal} from
+  '../../../src/raft/raft-operation-port.js';
 import {RAFT_RS_TABLE} from
   '../../../src/raft/raft-rs-durable-store-constants.js';
 import {SERVICE_TYPE, TABLES} from '../../../src/constants/index.js';
@@ -112,8 +113,7 @@ async () => {
     const plan = rejoinPlan(harness.directory);
     const {service, refused} = await openFromPlan(harness, plan);
     assert.ok(refused, 'the rejoin is refused, never bootstrapped from rows');
-    assert.equal(refused.code,
-      PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED);
+    assert.ok(isConsensusInitRefusal(refused, ENTITY_TYPE.PARTITION));
     assert.equal(refused.consensus?.outcome,
       RAFT_OPERATION_OUTCOME.CORE_REFUSED);
     assert.equal(refused.consensus?.reason,
@@ -170,11 +170,12 @@ test('T5: a rejoin with a durable record restores its own configuration, ' +
 
 test('T5: the rejoin skips a replica refused for holding no record and ' +
   'still aborts on any other restore failure', async () => {
-  const missing = Object.assign(new Error('refused'), {
-    code: PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
-    consensus: {reason: COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING,
-      phase: RUNTIME_PHASE.DURABLE_RECORD_READ},
-  });
+  const missingAnswer = Object.freeze({
+    reason: COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING,
+    phase: RUNTIME_PHASE.DURABLE_RECORD_READ});
+  const missing = consensusInitRefusedError({domain: ENTITY_TYPE.PARTITION,
+    identity: {groupId: PARTITION_ID, replicaId: 'o4-missing'},
+    answer: missingAnswer});
   const warned = [];
   const context = {
     nodeId: REJOINER[1],
@@ -203,6 +204,18 @@ test('T5: the rejoin skips a replica refused for holding no record and ' +
   await assert.rejects(ensure.call(context, [
     {replicaId: 'o4-other', partitionId: PARTITION_ID}]), /disk on fire/,
   'any other restore failure still aborts the rejoin');
+  // O4 is the partition rejoin's: the same answer refused in another domain
+  // is not a partition replica holding no record, and aborts the rejoin.
+  const foreign = consensusInitRefusedError({domain: ENTITY_TYPE.MESSAGE_GROUP,
+    identity: {groupId: PARTITION_ID, replicaId: 'o4-foreign'},
+    answer: missingAnswer});
+  context.createJoinPartitionReplica = async () => {
+    throw foreign;
+  };
+  await assert.rejects(ensure.call(context, [
+    {replicaId: 'o4-foreign', partitionId: PARTITION_ID}]),
+  (error) => error === foreign,
+  'a refusal of another domain is not the partition O4 skip');
 });
 
 // C2 (lead review, owner decision O3): an rs-raft record written before the
@@ -251,8 +264,7 @@ async () => {
     const {refused} = await openFromPlan(harness, rejoinPlan(
       harness.directory));
     assert.ok(refused, 'the pre-gate record is not opened');
-    assert.equal(refused.code,
-      PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED);
+    assert.ok(isConsensusInitRefusal(refused, ENTITY_TYPE.PARTITION));
     assert.equal(typeof RUNTIME_REASON.DURABLE_RECORD_INCOMPATIBLE, 'string',
       'the runtime owner names the incompatible record');
     assert.equal(refused.consensus?.reason,

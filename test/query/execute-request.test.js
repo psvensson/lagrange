@@ -4,13 +4,13 @@
  * Requirements: 1.1, 13.1
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {createSqlRequest} from '../../src/query/sql-request.js';
 import {
   EXECUTION_MODE,
   ADAPTER_ERROR_MSG,
-  CALLBACK_RUNTIME_KIND,
 } from '../../src/query/sql-adapter-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createRuntimeStartupWiring} from
@@ -23,80 +23,12 @@ config.initialize();
 
 function createMockMessageRouter() {
   return {
-    deliver: async function(_address, message) {
-      const sql = String(message?.sql || '').toLowerCase();
-      const functionRef = Array.isArray(message?.params) ?
-        message.params[0] :
-        null;
-      if (sql.includes('from code')) {
-        if (functionRef === 'mod-wasm') {
-          const wasmSource = '\'use strict\';\n' +
-            'module.exports.run_batch = async function runBatch(ctx, batch) {\n' +
-            '  const callFn = ctx.call || ' +
-            '(ctx.callbackContext && ctx.callbackContext.call);\n' +
-            '  if (typeof callFn === \'function\') {\n' +
-            '    await callFn(\'SELECT * FROM users WHERE id = 1 LIMIT 1\');\n' +
-            '  }\n' +
-            '  return (batch.rows || []).map((row) => ({...row, wasmLoaded: true}));\n' +
-            '};\n';
-          const artifact = JSON.stringify({
-            format: 'js_wasm_component_v1',
-            source: wasmSource,
-            wasmBytesBase64: Buffer.from(wasmSource, 'utf8').toString('base64'),
-            runExport: 'run_batch',
-            exports: ['run_batch'],
-          });
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [{
-              function_id: 'mod-wasm',
-              function_name: 'mod-wasm',
-              version: 1,
-              code_blob: artifact,
-            }],
-            changes: 0,
-          };
-        }
-        return {
-          acknowledged: true,
-          success: true,
-          rows: [{
-            function_id: 'mod-1',
-            function_name: 'mod-1',
-            code_blob: '\'use strict\';\n' +
-              'module.exports.run_batch = async function runBatch(_ctx, batch) {\n' +
-              '  return (batch.rows || []).map((row) => ({...row, nativeLoaded: true}));\n' +
-              '};\n',
-          }],
-          changes: 0,
-        };
-      }
-      if (sql.includes('from module_manifests')) {
-        return {
-          acknowledged: true,
-          success: true,
-          rows: [{
-            namespace: 'examples',
-            name: functionRef || 'mod-wasm',
-            version: '1.0.0',
-            digest: 'sha256:' + '1'.repeat(64),
-            exports: '["run_batch"]',
-            dependencies: '[]',
-            capabilities: '[]',
-            source_reference: '/tmp/mod-wasm/index.js',
-            artifact_pointer: functionRef || 'mod-wasm',
-            run_export: 'run_batch',
-          }],
-          changes: 0,
-        };
-      }
-      return {
-        acknowledged: true,
+    deliver: async function(_address, _message) {
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [{id: 1, name: 'Alice'}],
         changes: 0,
-      };
+      });
     },
   };
 }
@@ -106,18 +38,6 @@ function createMockSystemCache() {
     {
       partition_id: 'p1',
       table_name: 'users',
-      partition_key_start: null,
-      partition_key_end: null,
-    },
-    {
-      partition_id: 'code-p1',
-      table_name: 'code',
-      partition_key_start: null,
-      partition_key_end: null,
-    },
-    {
-      partition_id: 'module-manifests-p1',
-      table_name: 'module_manifests',
       partition_key_start: null,
       partition_key_end: null,
     },
@@ -132,36 +52,12 @@ function createMockSystemCache() {
       address: 'test-node/partition/p1',
       status: 'active',
     },
-    {
-      service_id: 'code-p1',
-      service_type: 'partition',
-      partition_id: 'code-p1',
-      node_id: 'test-node',
-      raft_role: 'leader',
-      address: 'test-node/partition/code-p1',
-      status: 'active',
-    },
-    {
-      service_id: 'module-manifests-p1',
-      service_type: 'partition',
-      partition_id: 'module-manifests-p1',
-      node_id: 'test-node',
-      raft_role: 'leader',
-      address: 'test-node/partition/module-manifests-p1',
-      status: 'active',
-    },
   ];
   return {
     get: function(type, _key) {
       if (type === 'tables') {
         if (_key === 'users') {
           return {table_name: 'users', primaryKey: 'id'};
-        }
-        if (_key === 'code') {
-          return {table_name: 'code', primaryKey: 'function_id'};
-        }
-        if (_key === 'module_manifests') {
-          return {table_name: 'module_manifests', primaryKey: 'artifact_pointer'};
         }
       }
       return null;
@@ -189,13 +85,6 @@ function createEngine() {
     runtimeDriverRegistry: runtimeWiring.runtimeDriverRegistry,
     serviceRuntimeLifecycle: runtimeWiring.serviceRuntimeLifecycle,
     wasmExecutor,
-  });
-}
-
-function createEngineWithoutRuntime() {
-  return new SQLQueryEngine({
-    systemCache: createMockSystemCache(),
-    messageRouter: createMockMessageRouter(),
   });
 }
 
@@ -250,176 +139,6 @@ test('executeRequest - passes sessionId through for SQL_STATEMENT',
 
     const result = await engine.executeRequest(req);
     t.equal(result.success, true);
-  });
-
-// --- PARTITION_CALLBACK mode ---
-
-test('executeRequest - dispatches PARTITION_CALLBACK to dedicated path',
-  async (t) => {
-    const engine = createEngine();
-    const req = createSqlRequest({
-      statement: 'SELECT * FROM users',
-      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-      callbackModuleRef: 'mod-1',
-      callbackExport: 'run_batch',
-      runtimeKind: CALLBACK_RUNTIME_KIND.NATIVE_JS,
-    });
-
-    const result = await engine.executeRequest(req);
-    t.equal(result.success, true);
-    t.equal(result.executionMode, EXECUTION_MODE.PARTITION_CALLBACK);
-    t.equal(result.callbackModuleRef, 'mod-1');
-    t.equal(result.callbackExport, 'run_batch');
-    t.equal(result.hostResult.state, 'completed');
-  });
-
-test('executeRequest - native_js partition callback loads handler from code table',
-  async (t) => {
-    const engine = createEngine();
-    const req = createSqlRequest({
-      statement: 'SELECT * FROM users',
-      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-      callbackModuleRef: 'mod-1',
-      callbackExport: 'run_batch',
-      runtimeKind: CALLBACK_RUNTIME_KIND.NATIVE_JS,
-    });
-
-    const result = await engine.executeRequest(req);
-    t.equal(result.hostResult.state, 'completed');
-    t.equal(result.hostResult.failedPartitions, 0);
-    t.equal(result.hostResult.totalRows, 1);
-    t.same(result.hostResult.partitionResults[0].rows, [
-      {id: 1, name: 'Alice', nativeLoaded: true},
-    ]);
-  });
-
-test('executeRequest - wasm_component partition callback loads module artifact',
-  async (t) => {
-    const engine = createEngine();
-    const req = createSqlRequest({
-      statement: 'SELECT * FROM users',
-      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-      callbackModuleRef: 'mod-wasm',
-      callbackExport: 'run_batch',
-      runtimeKind: CALLBACK_RUNTIME_KIND.WASM_COMPONENT,
-    });
-
-    const result = await engine.executeRequest(req);
-    t.equal(result.hostResult.state, 'completed');
-    t.equal(result.hostResult.failedPartitions, 0);
-    t.equal(result.hostResult.totalRows, 1);
-    t.same(result.hostResult.partitionResults[0].rows, [
-      {id: 1, name: 'Alice', wasmLoaded: true},
-    ]);
-  });
-
-test('executeRequest - PARTITION_CALLBACK returns different shape ' +
-  'than SQL_STATEMENT', async (t) => {
-  const engine = createEngine();
-
-  const stmtReq = createSqlRequest({
-    statement: 'SELECT * FROM users',
-    executionMode: EXECUTION_MODE.SQL_STATEMENT,
-  });
-  const cbReq = createSqlRequest({
-    statement: 'SELECT * FROM users',
-    executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-    callbackModuleRef: 'mod-1',
-    callbackExport: 'run_batch',
-    runtimeKind: CALLBACK_RUNTIME_KIND.NATIVE_JS,
-  });
-
-  const stmtResult = await engine.executeRequest(stmtReq);
-  const cbResult = await engine.executeRequest(cbReq);
-
-  // SQL_STATEMENT result does not carry callback metadata
-  t.equal(stmtResult.callbackModuleRef, undefined);
-  t.equal(stmtResult.callbackExport, undefined);
-  t.equal(stmtResult.executionMode, undefined);
-
-  // PARTITION_CALLBACK result carries callback metadata
-  t.equal(cbResult.callbackModuleRef, 'mod-1');
-  t.equal(cbResult.callbackExport, 'run_batch');
-  t.equal(cbResult.executionMode, EXECUTION_MODE.PARTITION_CALLBACK);
-});
-
-test('executeRequest - PARTITION_CALLBACK rejects missing ' +
-  'callbackModuleRef', async (t) => {
-  const engine = createEngine();
-
-  // Build a request-shaped object with missing callbackModuleRef
-  const fakeReq = Object.freeze({
-    tenantId: 'system',
-    sessionId: 'default',
-    statement: 'SELECT * FROM users',
-    parameters: [],
-    executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-    callbackModuleRef: null,
-    callbackExport: 'run_batch',
-    runtimeKind: CALLBACK_RUNTIME_KIND.NATIVE_JS,
-    budgets: Object.freeze({}),
-    hints: null,
-  });
-
-  try {
-    await engine.executeRequest(fakeReq);
-    t.fail('should have thrown');
-  } catch (err) {
-    t.equal(
-      err.message,
-      ADAPTER_ERROR_MSG.PARTITION_CALLBACK_MISSING_FIELDS,
-    );
-  }
-});
-
-test('executeRequest - PARTITION_CALLBACK rejects missing ' +
-  'callbackExport', async (t) => {
-  const engine = createEngine();
-
-  const fakeReq = Object.freeze({
-    tenantId: 'system',
-    sessionId: 'default',
-    statement: 'SELECT * FROM users',
-    parameters: [],
-    executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-    callbackModuleRef: 'mod-1',
-    callbackExport: null,
-    runtimeKind: CALLBACK_RUNTIME_KIND.NATIVE_JS,
-    budgets: Object.freeze({}),
-    hints: null,
-  });
-
-  try {
-    await engine.executeRequest(fakeReq);
-    t.fail('should have thrown');
-  } catch (err) {
-    t.equal(
-      err.message,
-      ADAPTER_ERROR_MSG.PARTITION_CALLBACK_MISSING_FIELDS,
-    );
-  }
-});
-
-test('executeRequest - PARTITION_CALLBACK fails closed without runtime ownership',
-  async (t) => {
-    const engine = createEngineWithoutRuntime();
-    const req = createSqlRequest({
-      statement: 'SELECT * FROM users',
-      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-      callbackModuleRef: 'mod-1',
-      callbackExport: 'run_batch',
-      runtimeKind: CALLBACK_RUNTIME_KIND.NATIVE_JS,
-    });
-
-    try {
-      await engine.executeRequest(req);
-      t.fail('should have thrown');
-    } catch (err) {
-      t.equal(
-        err.message,
-        ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED,
-      );
-    }
   });
 
 // --- STAGE mode ---
@@ -504,8 +223,6 @@ test('executeRequest - throws for unknown execution mode', async (t) => {
     statement: 'SELECT 1',
     parameters: [],
     executionMode: 'unknown_mode',
-    callbackModuleRef: null,
-    callbackExport: null,
     budgets: Object.freeze({}),
     hints: null,
   });

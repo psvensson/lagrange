@@ -1,0 +1,23 @@
+[
+  {
+    "patch": "marker-hook-blocked.patch",
+    "base": "6a228ced9439af07216b492bb8fdbba5540c3671",
+    "originalIndexTree": "ca8691da88767a41f51841e9708bdc6fbb297e8d",
+    "restoredIndexTree": "ca8691da88767a41f51841e9708bdc6fbb297e8d",
+    "exact": true
+  },
+  {
+    "patch": "partition-readback-hook-blocked.patch",
+    "base": "a97f79c35b7e1f6428032493918e16e623339688",
+    "originalIndexTree": "2cae3124f76c41e05f30c3f473aef797f5c52372",
+    "restoredIndexTree": "2cae3124f76c41e05f30c3f473aef797f5c52372",
+    "exact": true
+  },
+  {
+    "patch": "superseded-listener-snapshot.patch",
+    "base": "af8a0381be10bebbb3daf78bd331f7aa3fcacbbf",
+    "originalIndexTree": "a7dda18517533bc6147b35fade4aba2cff245f28",
+    "restoredIndexTree": "a7dda18517533bc6147b35fade4aba2cff245f28",
+    "exact": true
+  }
+]

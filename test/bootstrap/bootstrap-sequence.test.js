@@ -30,6 +30,7 @@ import {ControlPlaneSetup} from
 import {
   createVirginSeedBootstrapService,
   EMPTY_REPLICA_STATE_MACHINE_HANDLE,
+  installMinimumSeedBootstrapLifecycleFixture,
 } from '../integration/helpers/cluster-test-helpers.js';
 import {
   FIXTURE_ENDPOINT_INCARNATION,
@@ -107,6 +108,8 @@ function getRandomPort() {
 }
 
 function disablePostPartitionBootstrapWork(bootstrap) {
+  bootstrap.seedPartitionsPhase.waitForPartitionLeadership =
+    NOOP_ASYNC;
   bootstrap.seedRegistrationPhase.phaseRegistration = NOOP_ASYNC;
   bootstrap.seedCacheHydrationPhase.phaseCacheHydration = NOOP_ASYNC;
   bootstrap.initializeReplicaStateMachine = () => {
@@ -134,6 +137,7 @@ function disablePostPartitionBootstrapWork(bootstrap) {
   bootstrap.activateControlPlaneBackgroundWriters = NOOP_SYNC;
   bootstrap.activateDistributedTransactionRecovery = NOOP_SYNC;
   bootstrap.startLatencyTopologyLifecycle = NOOP_SYNC;
+  bootstrap.assertOriginalSeedPublicAdmission = NOOP_SYNC;
   bootstrap.openExternalTransportAdmission = NOOP_SYNC;
 }
 
@@ -344,7 +348,7 @@ test('Bootstrap sequence - server starts before services', async (t) => {
   const wsPort = getRandomPort();
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     bootIncarnation: 1,
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,
@@ -365,6 +369,7 @@ test('Bootstrap sequence - server starts before services', async (t) => {
 
   try {
     const result = await bootstrap.bootstrap();
+    await bootstrap.startWebSocketServer();
 
     t.equal(result.success, true, 'bootstrap should succeed');
     t.ok(result.messageRouter, 'should have messageRouter');
@@ -418,12 +423,13 @@ test('BootstrapService - activates message-group rows after seed registration',
     initializeTestEnvironment();
 
     const order = [];
-    const bootstrap = new BootstrapService({
-      bootIncarnation: 1,
-      nodeId: 'bootstrap-activate-node',
-      nodeAddress: 'ws://localhost:12001',
-      wsPort: 12001,
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      await createVirginSeedBootstrapService({
+        bootIncarnation: 1,
+        nodeId: 'bootstrap-activate-node',
+        nodeAddress: 'ws://localhost:12001',
+        wsPort: 12001,
+      }));
 
     bootstrap.seedInfrastructurePhase.phaseInfrastructure =
       async () => {
@@ -513,21 +519,22 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
     initializeTestEnvironment();
 
     const order = [];
-    const bootstrap = new BootstrapService({
-      bootIncarnation: 1,
-      nodeId: 'bootstrap-local-admin-node',
-      nodeAddress: 'ws://localhost:12002',
-      wsPort: 12002,
-      onLocalAdminRuntimeReady: async ({owner, systemTableCache, messageRouter}) => {
-        order.push('local-admin-runtime');
-        t.equal(owner, bootstrap,
-          'callback should receive the active bootstrap owner');
-        t.same(systemTableCache, bootstrap.systemTableCache,
-          'callback should receive the current system cache');
-        t.same(messageRouter, bootstrap.messageRouter,
-          'callback should receive the current message router');
-      },
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      await createVirginSeedBootstrapService({
+        bootIncarnation: 1,
+        nodeId: 'bootstrap-local-admin-node',
+        nodeAddress: 'ws://localhost:12002',
+        wsPort: 12002,
+        onLocalAdminRuntimeReady: async ({owner, systemTableCache, messageRouter}) => {
+          order.push('local-admin-runtime');
+          t.equal(owner, bootstrap,
+            'callback should receive the active bootstrap owner');
+          t.same(systemTableCache, bootstrap.systemTableCache,
+            'callback should receive the current system cache');
+          t.same(messageRouter, bootstrap.messageRouter,
+            'callback should receive the current message router');
+        },
+      }));
 
     bootstrap.systemTableCache = {cache: true};
     bootstrap.messageRouter = {router: true};
@@ -585,7 +592,7 @@ test('Bootstrap sequence - self-connection established before services', async (
   const wsPort = getRandomPort();
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     bootIncarnation: 1,
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,
@@ -600,22 +607,22 @@ test('Bootstrap sequence - self-connection established before services', async (
 
   let selfConnectionBeforeServices = false;
 
-  // Check self-connection status when message_groups phase starts
+  // Check local router readiness when message_groups phase starts
   bootstrap.on('phaseStart', ({phase}) => {
     if (phase === 'message_groups') {
-      // At this point, infrastructure phase is complete
-      // Self-connection should already be established
-      selfConnectionBeforeServices = bootstrap.messageRouter &&
-        bootstrap.messageRouter.hasSelfConnection();
+      selfConnectionBeforeServices = Boolean(bootstrap.messageRouter);
     }
   });
 
   try {
     const result = await bootstrap.bootstrap();
+    await bootstrap.startWebSocketServer();
 
     t.equal(result.success, true, 'bootstrap should succeed');
     t.ok(selfConnectionBeforeServices,
       'self-connection should be established before services are created');
+    t.ok(result.messageRouter.hasSelfConnection(),
+      'self-connection should be active after WebSocket server starts');
   } finally {
     await bootstrap.shutdown();
   }
@@ -641,6 +648,7 @@ test('Bootstrap sequence - services created after self-connection', async (t) =>
 
   try {
     const result = await bootstrap.bootstrap();
+    await bootstrap.startWebSocketServer();
 
     t.equal(result.success, true, 'bootstrap should succeed');
 
@@ -661,14 +669,14 @@ test('Bootstrap sequence - without wsPort fails (no server)', async (t) => {
 
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     bootIncarnation: 1,
     nodeId,
     nodeAddress: 'ws://localhost:8080',
     // No wsPort - server won't start, leadership can't be established
     // System requires WebSocket-based communication for all messages (even local)
     // per system guidelines: "All nodes will have at least one replica of a message
-    // group (liferaft) which will always be used for any communication (even local)"
+    // group which will always be used for any communication (even local)"
     config: {
       leadershipWaitTimeoutMs: 100, // Short timeout since it will fail
       leadershipWaitInitialDelayMs: 10,

@@ -107,16 +107,6 @@ async function buildRollingRestartLoadPlan(cluster, scenarioOptions, {
   preLoadReadinessStableWindowMs,
   preLoadReadinessTimeoutMs,
 }) {
-  if (!supportsBenchmarkLoadAdmissionPlanning(cluster)) {
-    return {
-      benchmarkAdmissionEnabled: false,
-      effectiveLoadOpsPerSec: loadOpsPerSec,
-      tableName: null,
-      workloadProfile: null,
-      loadNodePlan: buildStaticLoadNodePlan(clusterNodes),
-    };
-  }
-
   const requestedTableName =
     typeof scenarioOptions.tableName === 'string' &&
     scenarioOptions.tableName.length > ZERO ?
@@ -129,6 +119,15 @@ async function buildRollingRestartLoadPlan(cluster, scenarioOptions, {
       explicitTableName: requestedTableName.length > ZERO,
     },
   );
+  if (!supportsBenchmarkLoadAdmissionPlanning(cluster)) {
+    return {
+      benchmarkAdmissionEnabled: false,
+      effectiveLoadOpsPerSec: loadOpsPerSec,
+      tableName: effectiveLoadTableName,
+      workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+      loadNodePlan: buildStaticLoadNodePlan(clusterNodes),
+    };
+  }
   const seedNode = resolveSeedNodeQueryHandle(clusterNodes[ZERO]);
   assert.ok(
     seedNode,
@@ -548,12 +547,8 @@ async function run(cluster, options = {}) {
     duration: loadDuration,
     queryTimeoutMs,
     trackAcknowledgedWrites: true,
-    ...(rollingRestartLoadPlan.benchmarkAdmissionEnabled ?
-      {
-        tableName: rollingRestartLoadPlan.tableName,
-        workloadProfile: rollingRestartLoadPlan.workloadProfile,
-      } :
-      {}),
+    tableName: rollingRestartLoadPlan.tableName,
+    workloadProfile: rollingRestartLoadPlan.workloadProfile,
   });
   let loadRunCompleted = false;
 

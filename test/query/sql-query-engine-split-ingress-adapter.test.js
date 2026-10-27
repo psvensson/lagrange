@@ -9,6 +9,7 @@
  * Design: §3, Phase 3
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -163,9 +164,12 @@ test('executeManagedSplit propagates workflow owner errors without fallback',
 // 4. Callback injection: helpers are injected, not independent owners
 // ---------------------------------------------------------------------------
 
-test('split helper methods are injected into ManagedSplitWorkflow as ' +
-  'callbacks, not independent state owners', (t) => {
-  const cache = createMockSystemCache(
+/**
+ * Create a single-partition users cache for split workflow tests.
+ * @return {object}
+ */
+function createSingleUsersSplitCache() {
+  return createMockSystemCache(
     [{
       table_id: 'tbl-users',
       table_name: 'users',
@@ -185,11 +189,16 @@ test('split helper methods are injected into ManagedSplitWorkflow as ' +
       leader_node_id: 'node-a',
     }],
   );
+}
+
+test('split helper methods are injected into ManagedSplitWorkflow as ' +
+  'callbacks, not independent state owners', (t) => {
+  const cache = createSingleUsersSplitCache();
 
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache: cache,
-    messageRouter: {deliver: async () => ({acknowledged: true})},
+    messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},
     partitionSplitMergeManager: {
       async splitPartition() {
         return {
@@ -246,30 +255,11 @@ test('split helper methods are injected into ManagedSplitWorkflow as ' +
 
 test('split source routability helper uses control-plane recovery eligibility ' +
   'dimension for owner-path convergence', (t) => {
-  const cache = createMockSystemCache(
-    [{
-      table_id: 'tbl-users',
-      table_name: 'users',
-      partition_key: 'id',
-      active_partition_version: 1,
-      partition_transition_state: null,
-      partition_transition_metadata: null,
-    }],
-    [{
-      partition_id: 'users-p1',
-      table_id: 'tbl-users',
-      table_name: 'users',
-      partition_key_start: null,
-      partition_key_end: null,
-      partition_version: 1,
-      replica_count: 1,
-      leader_node_id: 'node-a',
-    }],
-  );
+  const cache = createSingleUsersSplitCache();
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache: cache,
-    messageRouter: {deliver: async () => ({acknowledged: true})},
+    messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},
   });
   const observedCalls = [];
   engine.queryExecutor = {

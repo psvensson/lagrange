@@ -96,6 +96,7 @@ function buildNodeHandle(nodeId, role, allNodeIds, queryImpl) {
     id: String(nodeId),
     role,
     query: queryImpl,
+    updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
     queryWithTimeout: async function(sql, params = [], _options = {}) {
       const statement = String(sql);
       if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
@@ -208,14 +209,11 @@ function createBenchmarkCluster(options = {}) {
           }],
         };
       }
-      if (statement.includes('SELECT partition_id FROM partitions WHERE table_name')) {
+      if (statement.includes('FROM partitions WHERE table_name')) {
         throw new Error(seedMetadataError);
       }
-      if (statement.includes('SELECT partition_id FROM partitions WHERE table_id')) {
+      if (statement.includes('FROM partitions WHERE table_id')) {
         throw new Error(seedMetadataError);
-      }
-      if (statement.startsWith('UPDATE partitions SET table_name')) {
-        return {rows: [], changes: 1};
       }
       if (statement === 'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
         return {rows: [{count: 0}]};
@@ -244,14 +242,23 @@ function createBenchmarkCluster(options = {}) {
         }],
       };
     }
-    if (statement.includes('SELECT partition_id FROM partitions WHERE table_name')) {
-      return {rows: [{partition_id: 'p1'}]};
+    if (statement.includes('FROM partitions WHERE table_name')) {
+      return {
+        rows: [{
+          partition_id: 'p1',
+          table_id: 'tbl-benchmark',
+          table_name: 'benchmark_events',
+        }],
+      };
     }
-    if (statement.includes('SELECT partition_id FROM partitions WHERE table_id')) {
-      return {rows: [{partition_id: 'p1'}]};
-    }
-    if (statement.startsWith('UPDATE partitions SET table_name')) {
-      return {rows: [], changes: 1};
+    if (statement.includes('FROM partitions WHERE table_id')) {
+      return {
+        rows: [{
+          partition_id: 'p1',
+          table_id: 'tbl-benchmark',
+          table_name: 'benchmark_events',
+        }],
+      };
     }
     if (statement === 'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
       return {rows: [{count: 0}]};

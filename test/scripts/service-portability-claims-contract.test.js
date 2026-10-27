@@ -97,11 +97,11 @@ tap.test('OCI invocation support cannot be claimed before provider cutover',
 tap.test('OCI implementation drift requires capability-contract update',
   (t) => {
     const result = evaluateMutation((input) => {
-      input.evidence.ociCallback = input.evidence.ociCallback
-        .replaceAll('REGISTRY_OCI_CONTAINER_GATED', 'OCI_READY');
+      input.evidence.ociDriver = input.evidence.ociDriver
+        .replaceAll('FEATURE_GATE_DISABLED', 'OCI_READY');
     });
     t.equal(result.valid, false);
     t.equal(result.problems.length, 1);
-    t.match(result.problems[0], /unsupported invocation/iu);
+    t.match(result.problems[0], /fail-closed/iu);
     t.end();
   });

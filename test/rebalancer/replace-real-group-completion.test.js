@@ -88,18 +88,28 @@ const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'rebalance-coordinator-owner-facade.js': 1,
   'operation-workflow-replace-owner.js': 1,
   'operation-workflow-dispatch-response-reconcile.js': 2,
+  // M2: a refused failure of a partition ADD whose target is live completes
+  // it (never a REPLACE: its post-intent refusal completes nothing).
+  'operation-workflow-transition-persistence.js': 1,
 });
 const FAIL_OPERATION_CALLER_FILES = Object.freeze([
+  // Lost CREATE responses settle only through the same failure owner, with
+  // an admission-absent CAS. The P1'/AN3 cells below keep REPLACE's durable
+  // source-removal boundary authoritative for this additional caller.
+  'operation-workflow-ambiguous-create-delivery.js',
   'operation-workflow-dispatch-epoch-gate.js',
   'operation-workflow-dispatch-response-reconcile.js',
   'operation-workflow-executor-outcome-reconcile-methods.js',
+  'operation-workflow-owner-execution-lane.js',
   'operation-workflow-recovery-drain.js',
   'operation-workflow-recovery-observation.js',
   'operation-workflow-recovery-status-reconcile.js',
   'operation-workflow-replace-owner.js',
   'operation-workflow-stopping-starvation.js',
-  'rebalance-coordinator-owner-facade.js',
 ]);
+const FAILURE_FACADE_FILE = 'rebalance-coordinator-owner-facade.js';
+const FAILURE_LANE_FILE = 'operation-workflow-owner-execution-lane.js';
+const FAILURE_SINK_FILE = 'operation-workflow-transition-persistence.js';
 
 function countMatches(source, pattern) {
   return (source.match(pattern) || []).length;
@@ -120,6 +130,40 @@ function censusOf(pattern) {
   return census;
 }
 
+function failureOwnerViolations(sourceByFile) {
+  const definitions = [];
+  for (const [fileName, source] of sourceByFile) {
+    const count = countMatches(source, /async failOperation\(/gu);
+    for (let index = 0; index < count; index += 1) {
+      definitions.push(fileName);
+    }
+  }
+  const facade = sourceByFile.get(FAILURE_FACADE_FILE) || '';
+  const lane = sourceByFile.get(FAILURE_LANE_FILE) || '';
+  const violations = [];
+  if (definitions.length !== 2 ||
+      !definitions.includes(FAILURE_FACADE_FILE) ||
+      !definitions.includes(FAILURE_SINK_FILE)) {
+    violations.push('failure_owner_sink_census');
+  }
+  if (!facade.includes('this.workflowOwner.runOperationOwnerAction(') ||
+      !facade.includes('OPERATION_OWNER_ACTION.FAIL')) {
+    violations.push('failure_facade_route');
+  }
+  if (!lane.includes('action === OPERATION_OWNER_ACTION.FAIL') ||
+      !lane.includes('return this.failOperation(')) {
+    violations.push('failure_internal_sink_route');
+  }
+  return violations;
+}
+
+function failureOwnerSources() {
+  return new Map(fs.readdirSync(REBALANCER_DIRECTORY)
+    .filter((entry) => entry.endsWith('.js'))
+    .map((entry) => [entry,
+      fs.readFileSync(path.join(REBALANCER_DIRECTORY, entry), 'utf8')]));
+}
+
 test('P1 census: the terminal edges of the code are the ones with cells',
   async (t) => {
     t.same(censusOf(/terminalTransition: true/gu), TERMINAL_PERSIST_SITES,
@@ -128,6 +172,8 @@ test('P1 census: the terminal edges of the code are the ones with cells',
       'the completeOperation callers');
     t.same(Object.keys(censusOf(/\.failOperation\(/gu)).sort(),
       [...FAIL_OPERATION_CALLER_FILES].sort(), 'the failOperation callers');
+    t.same(failureOwnerViolations(failureOwnerSources()), [],
+      'external failure enters through facade FAIL and one internal sink');
     t.same([...OPERATION_TERMINAL_WORKFLOW_STEPS_BY_TYPE.get(
       OperationType.REPLACE)].sort(),
     [WORKFLOW_STEP.FAILED, WORKFLOW_STEP.REMOVED].sort(),
@@ -135,6 +181,22 @@ test('P1 census: the terminal edges of the code are the ones with cells',
     t.same(Object.values(REPLACE_COMPLETION_VERDICT).sort(), [
       'source_retired', 'still_voter', 'unavailable', 'witness_below_gate',
     ], 'the four completion verdicts each have a cell');
+  });
+
+test('P1 failure owner census rejects facade bypass and a second sink',
+  async (t) => {
+    const bypass = failureOwnerSources();
+    bypass.set(FAILURE_FACADE_FILE, bypass.get(FAILURE_FACADE_FILE).replace(
+      'this.workflowOwner.runOperationOwnerAction(',
+      'this.workflowOwner.failOperation(',
+    ));
+    t.ok(failureOwnerViolations(bypass).includes('failure_facade_route'));
+
+    const secondSink = failureOwnerSources();
+    secondSink.set(FAILURE_LANE_FILE,
+      `${secondSink.get(FAILURE_LANE_FILE)}\nasync failOperation() {}\n`);
+    t.ok(failureOwnerViolations(secondSink)
+      .includes('failure_owner_sink_census'));
   });
 
 function assertRemovedWritesAbsent(t, world, label) {

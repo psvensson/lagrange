@@ -7,7 +7,7 @@
  * Property 3: SERVICE_RESPONSE correlation and completeness
  *
  * *For any* SERVICE_MESSAGE whose handler completes (either
- * successfully or with an error), the RouterMessageHandler SHALL
+ * successfully or with an error), the MessageRouter SHALL
  * send exactly one SERVICE_RESPONSE message with the same messageId
  * as the original SERVICE_MESSAGE, containing either the handler
  * result or the error message.
@@ -15,9 +15,16 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {RouterMessageHandler} from
-  '../../src/transport/router-message-handler.js';
 import {ROUTER_MESSAGE_TYPE} from '../../src/constants/transport.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+
+ConfigurationManager.resetInstance();
+LoggingService.resetInstance();
+ConfigurationManager.getInstance().initialize({node: {id: 'local-node'}});
+LoggingService.getInstance().initialize({level: 'error'});
 
 /**
  * Arbitrary for a target address string in the format
@@ -111,7 +118,7 @@ function buildServiceMessage(
 }
 
 /**
- * Create a RouterMessageHandler with a mock sendRaw that captures
+ * Create a MessageRouter with a mock sendRaw that captures
  * all sent messages, and a handler that produces the given outcome.
  * @param {string} targetAddress - Address to register handler for.
  * @param {Object} outcome - Handler outcome (success or error).
@@ -119,7 +126,6 @@ function buildServiceMessage(
  */
 function createHandlerWithOutcome(targetAddress, outcome) {
   const sentMessages = [];
-  const handlers = new Map();
 
   const handler = (_envelope) => {
     if (outcome.type === 'error') {
@@ -128,25 +134,18 @@ function createHandlerWithOutcome(targetAddress, outcome) {
     return outcome.result;
   };
 
-  handlers.set(targetAddress, handler);
-
   const sendRaw = (_ws, msg) => {
     sentMessages.push(msg);
   };
 
-  const messageHandler = new RouterMessageHandler({
-    logger: {debug: () => {}, warn: () => {}, error: () => {}},
-    handlers,
-    pendingMessages: new Map(),
-    pendingPings: new Map(),
-    nodeConnections: new Map(),
-    nodeId: 'local-node',
-    sendRaw,
-    emit: () => {},
-    getJoinRequestHandler: () => null,
-    getJoinCompleteHandler: () => null,
-    onServiceResponse: () => {},
-  });
+  // The real MessageRouter inbound dispatch, with only its socket write
+  // captured: the router is never initialized, so it opens no server.
+  const messageHandler = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'local-node'});
+  messageHandler.logger = {debug: () => {}, warn: () => {}, error: () => {},
+    info: () => {}};
+  messageHandler.sendRaw = sendRaw;
+  messageHandler.register(targetAddress, handler);
 
   const mockWs = {send: () => {}};
 
@@ -186,8 +185,7 @@ test('Property 3: SERVICE_RESPONSE correlation and completeness',
               messageHandler.handleServiceMessage(mockWs, message);
 
               // Allow async handler + response to settle
-              await Promise.resolve();
-              await Promise.resolve();
+              await new Promise((resolve) => setImmediate(resolve));
 
               // Filter to SERVICE_RESPONSE messages only
               const responses = sentMessages.filter(
@@ -257,8 +255,7 @@ test('Property 3: SERVICE_RESPONSE correlation and completeness',
               messageHandler.handleServiceMessage(mockWs, message);
 
               // Allow async handler + error catch to settle
-              await Promise.resolve();
-              await Promise.resolve();
+              await new Promise((resolve) => setImmediate(resolve));
 
               // Filter to SERVICE_RESPONSE messages only
               const responses = sentMessages.filter(
@@ -324,8 +321,7 @@ test('Property 3: SERVICE_RESPONSE correlation and completeness',
               messageHandler.handleServiceMessage(mockWs, message);
 
               // Allow async handler + response to settle
-              await Promise.resolve();
-              await Promise.resolve();
+              await new Promise((resolve) => setImmediate(resolve));
 
               // Filter to SERVICE_RESPONSE messages only
               const responses = sentMessages.filter(

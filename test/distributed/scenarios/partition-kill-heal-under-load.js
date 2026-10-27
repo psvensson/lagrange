@@ -9,6 +9,10 @@
 import assert from 'node:assert/strict';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 import {resolvePartitionKillHealUnderLoadScenarioConfig} from '../harness/scenario-config.js';
+import {
+  provisionUserLoadTable,
+  recordAndVerifyDiagnosticMarker,
+} from './user-load-table-and-marker-helpers.js';
 
 const MIN_NODE_COUNT = 3;
 const ZERO = 0;
@@ -59,6 +63,7 @@ async function run(cluster, options = {}) {
   const {
     loadOpsPerSec,
     loadDuration,
+    tableName,
     preFaultDelayMs,
     partitionHoldMs,
     postKillDelayMs,
@@ -90,14 +95,22 @@ async function run(cluster, options = {}) {
   assert.ok(groupB.length > ZERO, 'groupB must be non-empty');
   const seedPartitionGroup = groupA.includes(seedNode.id) ? groupA : groupB;
 
+  const provisionedTable = await provisionUserLoadTable(cluster, {
+    tableName,
+  });
+
   const loadRun = cluster.startLoad({
     nodes: resolveLoadNodes(),
     nodeResolver: resolveLoadNodes,
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
+    tableName: provisionedTable.tableName,
   });
 
   await sleep(preFaultDelayMs);
+  const preFaultMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'partition-kill-heal-under-load-pre-fault',
+  });
   await cluster.partitionNetwork(groupA, groupB);
   setAvailableLoadNodeIds(availableLoadNodeIds, seedPartitionGroup);
   await sleep(partitionHoldMs);
@@ -146,10 +159,24 @@ async function run(cluster, options = {}) {
 
   await cluster.waitForConsistencyConvergence();
 
+  const survivingNodes = nodes.filter(
+    (node) => String(node.id) !== String(victimId),
+  );
+  const diagnosticMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'partition-kill-heal-under-load-post-heal',
+    nodes: survivingNodes,
+  });
+
   return {
     groupA,
     groupB,
     killedNodeId: victimId,
+    tableName: provisionedTable.tableName,
+    diagnosticMarker,
+    diagnosticMarkers: {
+      preFault: preFaultMarker,
+      postHeal: diagnosticMarker,
+    },
     loadMetrics: metrics,
     successRate,
     convergenceTiming: convergence,

@@ -15,7 +15,7 @@
 import {LoggingService} from '../logging/logging-service.js';
 import {
   CDC_EVENT_BUFFER_CAPACITY,
-  CDC_EVENT_SLIDING_WINDOW_CAPACITY,
+  CDC_EVENT_IDENTITY,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {
@@ -24,8 +24,12 @@ import {
 import {
   isTableInternalCachePropagationEnabled,
 } from '../cache/cdc-table-policy.js';
+import {serializeJsonData} from '../utils/canonical-json-data.js';
+import {PARTITION_CDC_OBLIGATION_EVENT_FIELD} from './partition-cdc-obligation-constants.js';
 
 const BUFFER_SUBSYSTEM = 'CDCEventBuffer';
+const objectHasOwn = Object.hasOwn;
+const objectAssign = Object.assign;
 
 /**
  * Build a deduplication identity string for a CDC event.
@@ -35,6 +39,15 @@ const BUFFER_SUBSYSTEM = 'CDCEventBuffer';
  * @return {string} Identity string for deduplication.
  */
 function buildEventIdentity(cdcEvent) {
+  if (objectHasOwn(cdcEvent, PARTITION_CDC_OBLIGATION_EVENT_FIELD.EVENT_KEY)) {
+    if (typeof cdcEvent.eventKey !== 'string' || cdcEvent.eventKey.length === 0 ||
+        typeof cdcEvent.sourcePartition !== 'string' || cdcEvent.sourcePartition.length === 0) {
+      throw objectAssign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+        {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+    }
+    return serializeJsonData([CDC_EVENT_IDENTITY.DURABLE_TAG,
+      cdcEvent.sourcePartition, cdcEvent.eventKey]);
+  }
   const pkField = getSystemCachePrimaryKeyFieldOrFallback(
     cdcEvent.tableName,
   );
@@ -50,6 +63,9 @@ function buildEventIdentity(cdcEvent) {
  * @return {string|null} Coalescing identity or null.
  */
 function buildInternalCoalescingIdentity(cdcEvent) {
+  if (objectHasOwn(cdcEvent, PARTITION_CDC_OBLIGATION_EVENT_FIELD.EVENT_KEY)) {
+    return null;
+  }
   if (!isTableInternalCachePropagationEnabled(cdcEvent?.tableName)) {
     return null;
   }
@@ -59,7 +75,7 @@ function buildInternalCoalescingIdentity(cdcEvent) {
   );
 
   if (!cdcEvent?.data ||
-      !Object.prototype.hasOwnProperty.call(cdcEvent.data, pkField)) {
+      !objectHasOwn(cdcEvent.data, pkField)) {
     return null;
   }
 
@@ -79,15 +95,11 @@ class CDCEventBuffer {
    */
   constructor(options = {}) {
     this.capacity = options.capacity || CDC_EVENT_BUFFER_CAPACITY;
-    this.slidingWindowCapacity = options.slidingWindowCapacity ||
-      CDC_EVENT_SLIDING_WINDOW_CAPACITY;
     const loggingService = LoggingService.getInstance();
     this.logger = options.logger ||
       (loggingService.isInitialized() ?
         loggingService.forSubsystem(BUFFER_SUBSYSTEM) : console);
     this.events = [];
-    this.recentEvents = [];
-    this.recentEventsHead = 0;
   }
 
   /**
@@ -141,6 +153,7 @@ class CDCEventBuffer {
     this.events = [];
 
     let replayedCount = 0;
+    const retained = [];
     for (let index = 0; index < eventsToReplay.length; index++) {
       const cdcEvent = eventsToReplay[index];
       const identity = buildEventIdentity(cdcEvent);
@@ -149,16 +162,22 @@ class CDCEventBuffer {
       }
       seen.add(identity);
       try {
-        await subscriber(cdcEvent);
+        // Explicit false means accepted provisionally. Retain it while
+        // allowing later metadata to reach the same bounded replay pass.
+        if (await subscriber(cdcEvent) === false) {
+          retained.push(cdcEvent);
+          continue;
+        }
         replayedCount++;
       } catch (error) {
         // Preserve the failed event and any remaining tail for the next replay.
         // This prevents silent CDC loss when a subscriber fails transiently.
         seen.delete(identity);
-        this.events = eventsToReplay.slice(index).concat(this.events);
+        this.events = retained.concat(eventsToReplay.slice(index), this.events);
         throw error;
       }
     }
+    this.events = retained.concat(this.events);
     return replayedCount;
   }
 
@@ -177,58 +196,10 @@ class CDCEventBuffer {
   }
 
   /**
-   * Clear all buffered events and the sliding window.
+   * Clear all buffered events.
    */
   clear() {
     this.events = [];
-    this.clearRecentEvents();
-  }
-
-  /**
-   * Record a successfully delivered CDC event in the bounded sliding
-   * window. Uses a circular array: pushes when not full, overwrites
-   * the oldest entry and advances the head pointer when full.
-   *
-   * @param {Object} cdcEvent - CDC event to record.
-   */
-  recordDelivered(cdcEvent) {
-    if (this.recentEvents.length < this.slidingWindowCapacity) {
-      this.recentEvents.push(cdcEvent);
-    } else {
-      this.recentEvents[this.recentEventsHead] = cdcEvent;
-      this.recentEventsHead =
-        (this.recentEventsHead + 1) % this.slidingWindowCapacity;
-    }
-  }
-
-  /**
-   * Return a copy of the sliding window contents in insertion order.
-   *
-   * @return {Array<Object>} recent events in delivery order.
-   */
-  getRecentEvents() {
-    if (this.recentEvents.length < this.slidingWindowCapacity) {
-      return this.recentEvents.slice();
-    }
-    return [
-      ...this.recentEvents.slice(this.recentEventsHead),
-      ...this.recentEvents.slice(0, this.recentEventsHead),
-    ];
-  }
-
-  /**
-   * @return {number} number of events in the sliding window.
-   */
-  recentEventsSize() {
-    return this.recentEvents.length;
-  }
-
-  /**
-   * Reset the sliding window to empty state.
-   */
-  clearRecentEvents() {
-    this.recentEvents = [];
-    this.recentEventsHead = 0;
   }
 }
 

@@ -1,0 +1,46 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "contract-approved",
+      "passed": false,
+      "reason": "New creation-to-genesis interaction not implemented or verified; original recreation RED retained. No new semantic execution claimed."
+    },
+    {
+      "id": "creation-native",
+      "passed": false,
+      "reason": "New creation-to-genesis interaction not implemented or verified; original recreation RED retained. No new semantic execution claimed."
+    },
+    {
+      "id": "recreation-mutation",
+      "passed": false,
+      "reason": "New creation-to-genesis interaction not implemented or verified; original recreation RED retained. No new semantic execution claimed."
+    },
+    {
+      "id": "async-custody",
+      "passed": false,
+      "reason": "New creation-to-genesis interaction not implemented or verified; original recreation RED retained. No new semantic execution claimed."
+    },
+    {
+      "id": "process-recovery",
+      "passed": false,
+      "reason": "New creation-to-genesis interaction not implemented or verified; original recreation RED retained. No new semantic execution claimed."
+    },
+    {
+      "id": "writer-completion",
+      "passed": false,
+      "reason": "New creation-to-genesis interaction not implemented or verified; original recreation RED retained. No new semantic execution claimed."
+    },
+    {
+      "id": "static-cone",
+      "passed": false,
+      "reason": "New creation-to-genesis interaction not implemented or verified; original recreation RED retained. No new semantic execution claimed."
+    },
+    {
+      "id": "independent-final-review",
+      "passed": false,
+      "reason": "New creation-to-genesis interaction not implemented or verified; original recreation RED retained. No new semantic execution claimed."
+    }
+  ]
+}

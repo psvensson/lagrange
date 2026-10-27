@@ -108,6 +108,8 @@ class WorkflowStepRunner {
     }
 
     if (stepResult.nextStep && stepResult.reason) {
+      // A coordinator over a durable record takes the step's change of the
+      // record (stepResult.change); a plain coordinator its updates.
       await this.workflowCoordinator.transitionStep(
         workflowId,
         {
@@ -117,17 +119,15 @@ class WorkflowStepRunner {
           fenceToken: stepResult.fenceToken,
           ownerId: stepResult.ownerId,
         },
-        stepResult.updates || {},
+        stepResult.change || stepResult.updates || {},
       );
       return;
     }
 
-    if (stepResult.updates &&
-        typeof stepResult.updates === 'object') {
-      await this.workflowCoordinator.updateWorkflow(
-        workflowId,
-        stepResult.updates,
-      );
+    const change = stepResult.change || stepResult.updates;
+    if (change && (typeof change === 'object' ||
+        typeof change === 'function')) {
+      await this.workflowCoordinator.updateWorkflow(workflowId, change);
     }
   }
 }

@@ -13,6 +13,8 @@
 
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
+import {LOG_MARKER_STATE} from
+  '../../../../src/control-plane/owners/log-diagnostic-marker-contract.js';
 import {
   analyzeMemoryLeakSamples,
 } from '../memory-leak-analyzer.js';
@@ -21,6 +23,9 @@ import {
 } from '../../run.js';
 import {run} from '../../scenarios/sustained-write-throughput.js';
 
+const SELECT_LOG_ID_REGEX = /WHERE log_id = '([^']+)'/;
+const regexExec = Function.call.bind(RegExp.prototype.exec);
+const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const MIN_SAMPLES_PER_NODE = 30;
@@ -64,8 +69,42 @@ describe('memory-soak enforcement oracle', () => {
   it('sustained-write-throughput honors configured warmup-plus-analysis duration',
     async () => {
       const calls = [];
+      const recordedMarkers = new Set();
+      let provisionedTable = null;
       const cluster = {
         _config: {load: {defaultDuration: '1800s'}},
+        getNodes: () => [{
+          id: 'seed-1',
+          role: 'seed',
+          appendDiagnosticMarker: async ({markerId}) => {
+            const logId = `log-${markerId}`;
+            recordedMarkers.add(logId);
+            return {
+              success: true,
+              markerState: LOG_MARKER_STATE.RECORDED,
+              markerId,
+              logId,
+              nodeId: 'seed-1',
+            };
+          },
+          query: async (sql) => {
+            if (stringStartsWith(sql, 'CREATE TABLE IF NOT EXISTS user_load_logs')) {
+              provisionedTable = 'user_load_logs';
+              return {rows: []};
+            }
+            if (stringIncludes(sql, 'FROM partitions WHERE table_name = \'user_load_logs\'')) {
+              return provisionedTable === 'user_load_logs' ?
+                {rows: [{partition_id: 'user_load_logs-p1'}]} :
+                {rows: []};
+            }
+            const match = regexExec(SELECT_LOG_ID_REGEX, sql);
+            const logId = match ? match[1] : null;
+            if (logId && recordedMarkers.has(logId)) {
+              return {rows: [{log_id: logId}]};
+            }
+            return {rows: []};
+          },
+        }],
         startLoad: (options) => {
           calls.push(options);
           return {
@@ -82,6 +121,7 @@ describe('memory-soak enforcement oracle', () => {
       };
       await run(cluster);
       assert.equal(calls[0].duration, '1800s');
+      assert.equal(calls[0].tableName, 'user_load_logs');
     });
 
   it('every node analyzed:true with >=30 samples, no insufficient-* reason, no leak',

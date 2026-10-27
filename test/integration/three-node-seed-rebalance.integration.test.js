@@ -32,7 +32,7 @@ import {
   createMockStorageAdmissionService,
   createMockStoragePressureBehavior,
 } from './rebalancer-integration-doubles.js';
-import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 const TEST_TIMEOUT_MS = 120000;
 // Reference budgets, calibrated on the reference machine and pinned by
@@ -278,7 +278,10 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
           systemTableCache,
           messageRouter: bootstrapResult.messageRouter,
           epochManager: bootstrapResult.epochManager,
-          bootstrapService,
+          bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+          runtimeOwner: bootstrapService.runtimeDependencyOwner,
+          assertOriginalSeedPublicAdmission: () =>
+            bootstrapService.assertOriginalSeedPublicAdmission(),
         });
         await withTimeout(
           () => seedApi.initialize(0, {listen: false}),

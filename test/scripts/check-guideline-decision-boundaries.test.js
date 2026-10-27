@@ -1,9 +1,23 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  DECISION_BASELINE_FILE_URL,
   FILE_CLASS,
+  TIMER_ONLY_BASELINE_CEILING,
+  VIOLATION_KIND,
+  buildDecisionBoundaryViolationIdentity,
+  checkTimerOnlyBaselineCeiling,
   classifyFilePath,
+  collectDecisionBoundaryViolations,
   collectDecisionBoundaryViolationsFromSource,
+  collectDecisionBoundaryViolationsWithBaseline,
+  collectNamedWaitConstants,
+  collectRefutedDeadClaims,
+  withoutUnbaselinableWaitAllowances,
 } from '../../scripts/check-guideline-decision-boundaries.js';
+import {applyCountBaseline} from '../../scripts/guideline-check-shared.js';
 
 test('classifyFilePath recognizes runtime and test files', async (t) => {
   t.equal(
@@ -268,4 +282,861 @@ test('detects local retry loops using setTimeout/setInterval or loops', async (t
     '/repo/src/runtime/runner.js',
   );
   t.equal(compliantTimeout.filter((v) => v.kind === 'local_retry_loop').length, 0);
+});
+
+// Named waits declare their ending event (owner rule 2026-10-04). The rule
+// lives inside this guideline audit; these witnesses pin its four refusals,
+// the one-way baseline, and that the governed set is derived from src/.
+
+const WAIT_RULE_FILE = '/repo/src/runtime/waits.js';
+
+function waitKinds(source, filePath = WAIT_RULE_FILE) {
+  return collectDecisionBoundaryViolationsFromSource(source, filePath)
+    .filter((violation) => violation.kind.startsWith('wait_constant'))
+    .map((violation) => [violation.functionName, violation.kind]);
+}
+
+test('a named wait constant without an ends-on declaration fails', async (t) => {
+  t.same(waitKinds('const VOTER_READY_TIMEOUT_MS = 60000;\n'), [
+    ['VOTER_READY_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ]);
+  t.same(waitKinds('// a comment that declares nothing\n' +
+    'export const EXIT_BACKSTOP_MS = 30000;\n'), [
+    ['EXIT_BACKSTOP_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ]);
+  t.same(waitKinds('const DEFAULT_DEADLINE_MS = 1; // ends-on:\n'), [
+    ['DEFAULT_DEADLINE_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ], 'an empty declaration is no declaration');
+});
+
+test('a wait whose only exit is the timer fails', async (t) => {
+  t.same(waitKinds('const X_TIMEOUT_MS = 5; // ends-on: timer\n'), [
+    ['X_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY],
+  ]);
+});
+
+test('a declared wait or an enumerated non-wait kind passes', async (t) => {
+  t.same(waitKinds([
+    '// ends-on: the voter reports ready',
+    'const VOTER_READY_TIMEOUT_MS = 60000;',
+    '// Multi-line note above.',
+    '// ends-on: the replica leaves the consensus group',
+    'export const EXIT_BACKSTOP_MS = 30000;',
+    'const A_DEADLINE_MS =',
+    '  5; // not this line',
+    'const B_TIMEOUT_MIN_MS = 1; // ends-on: n/a clamp',
+    'const C_TIMEOUT_LOOKBACK_MS = 1; // ends-on: n/a lookback',
+    'const NOT_A_WAIT_MS = 1;',
+    'const TIMEOUTS = {X_TIMEOUT_MS: \'config.xTimeoutMs\'};',
+  ].join('\n')), [
+    ['A_DEADLINE_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ], 'only the undeclared one fails; non-matching names are not governed');
+  t.same(waitKinds('const A_DEADLINE_MS = // ends-on: the reply arrives\n  5;\n'),
+    [], 'a declaration on the first line of a multi-line const passes');
+  t.same(waitKinds('const Y_TIMEOUT_MS = 1; // ends-on: n/a whatever\n'), [
+    ['Y_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND],
+  ], 'a non-wait kind outside the enumeration fails');
+  t.same(waitKinds('const Z_TIMEOUT_MS = 1;\n', '/repo/scripts/tool.js'), [],
+    'the rule governs src/ only');
+});
+
+test('object-member bounds are governed like named constants', async (t) => {
+  t.same(waitKinds([
+    'export const REPLICA_HANDLER_DEFAULT = Object.freeze({',
+    '  // ends-on: the voter reports ready',
+    '  SYNC_TIMEOUT_MS: TIME_MS.MINUTE,',
+    '  REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS: TIME_MS.SECOND * 30,',
+    '  NESTED: {',
+    '    MOVE_TIMEOUT_MS: 5000, // ends-on: the move operation completes',
+    '    STEP_DEADLINE_MS: 5000,',
+    '  },',
+    '});',
+    'const PLAIN = {',
+    '  QUERY_TIMEOUT_MS: 30000,',
+    '  PING_TIMEOUT_MS: 1, // ends-on: n/a clamp',
+    '};',
+  ].join('\n')), [
+    ['REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS',
+      VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['REPLICA_HANDLER_DEFAULT.NESTED.STEP_DEADLINE_MS',
+      VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['PLAIN.QUERY_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ], 'Object.freeze, plain and nested members; the comment above or on the ' +
+    'member line declares it');
+  t.same(waitKinds([
+    'const NAMES = Object.freeze({',
+    '  QUERY_TIMEOUT_MS: \'query.timeoutMs\',',
+    '  TIMEOUT: \'timeout\',',
+    '  ALIAS_TIMEOUT_MS: OTHER_DEFAULT.RPC_TIMEOUT_MS,',
+    '  OTHER_TIMEOUT_MS,',
+    '  CACHE_WAIT_TIMEOUT: (key) => `wait ${key}`,',
+    '  SHARD_DEADLINE: \'passed before \' + \'admission\',',
+    '});',
+  ].join('\n')), [],
+  'key names, codes, aliases of a governed name and message builders are ' +
+    'not bounds');
+});
+
+test('the declaration holes are closed', async (t) => {
+  t.same(waitKinds('const A_TIMEOUT_MS = 1; // ends-on: n/a\n'), [
+    ['A_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND],
+  ], 'a bare n/a names no kind');
+  for (const timer of ['Timer', 'the timer', 'its timer', 'THE TIMER fires']) {
+    t.same(waitKinds(`const A_TIMEOUT_MS = 1; // ends-on: ${timer}\n`), [
+      ['A_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY],
+    ], `"${timer}" is the timer`);
+  }
+  for (const vague of ['x', 'reply arrives', '. . .']) {
+    t.same(waitKinds(`const A_TIMEOUT_MS = 1; // ends-on: ${vague}\n`), [
+      ['A_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_EVENT_UNNAMED],
+    ], `"${vague}" names no event`);
+  }
+  t.same(waitKinds('let LET_TIMEOUT_MS = 1;\nvar VAR_DEADLINE_MS = 1;\n'), [
+    ['LET_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['VAR_DEADLINE_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ], 'let and var declarations are governed');
+  t.same(waitKinds([
+    'const CONNECT_TIMEOUT = 5000;',
+    'const EXIT_BACKSTOP = TIME_MS.SECOND * 30;',
+    'const CAUSE_TIMEOUT = \'timeout\';',
+    'const ERROR_TIMEOUT = OTHER_CAUSE_TIMEOUT;',
+    'const MEMBERS = {RPC_TIMEOUT: 5000};',
+  ].join('\n')), [
+    ['CONNECT_TIMEOUT', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['EXIT_BACKSTOP', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['MEMBERS.RPC_TIMEOUT', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ], 'a *_TIMEOUT name without _MS is governed when it holds a bound');
+});
+
+test('the timebox, dead and misnamed non-wait kinds pass; skip is not one',
+  async (t) => {
+    t.same(waitKinds([
+      '// ends-on: n/a timebox (the designed exit of a best-effort step)',
+      'const STEP_TIMEOUT_MS = 3000;',
+      'const UNUSED_TIMEOUT_MS = 1; // ends-on: n/a dead',
+      'const N_TIMEOUT_MS = 1; // ends-on: N/A clamp',
+      'const L = {SQL_QUERY_TIMEOUT_MS: 100}; ' +
+        '// ends-on: n/a misnamed (a SQL preview length, not a time)',
+    ].join('\n')), []);
+    for (const bare of ['n/a misnamed', 'n/a misnamed (a length)']) {
+      t.same(waitKinds(`const M_TIMEOUT_MS = 1; // ends-on: ${bare}\n`), [
+        ['M_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_MISNAMED_UNJUSTIFIED],
+      ], `"${bare}" does not say what the value is`);
+    }
+    t.same(waitKinds('const S_TIMEOUT_MS = 1; // ends-on: n/a skip\n'), [
+      ['S_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND],
+    ], 'skip is not a non-wait kind: a 1 ms delivery is still a wait');
+  });
+
+async function loadWaitBaselineEntries() {
+  const baseline = JSON.parse(
+    await fs.readFile(DECISION_BASELINE_FILE_URL, 'utf8'));
+  return baseline.violations.filter((violation) =>
+    violation.kind.startsWith('wait_constant'));
+}
+
+test('timer-only constants pass only through the baseline', async (t) => {
+  const violations = collectDecisionBoundaryViolationsFromSource(
+    'const OLD_TIMEOUT_MS = 5; // ends-on: timer\n' +
+    'const NEW_TIMEOUT_MS = 5; // ends-on: timer\n',
+    WAIT_RULE_FILE,
+  );
+  const baselined = violations.filter((violation) =>
+    violation.functionName === 'OLD_TIMEOUT_MS');
+  const allowances = new Map(baselined.map((violation) =>
+    [buildDecisionBoundaryViolationIdentity(violation), 1]));
+  const report = applyCountBaseline(
+    {totalViolationCount: violations.length, violations},
+    allowances,
+    buildDecisionBoundaryViolationIdentity,
+  );
+  t.same(report.violations.map((violation) => violation.functionName),
+    ['NEW_TIMEOUT_MS'], 'an unbaselined timer-only wait still fails');
+});
+
+test('the shared baseline admits only timer-only waits', async (t) => {
+  const violations = collectDecisionBoundaryViolationsFromSource(
+    'const OLD_TIMEOUT_MS = 5; // ends-on: timer\n' +
+    'const UNDECLARED_TIMEOUT_MS = 5;\n' +
+    'const KIND_TIMEOUT_MS = 5; // ends-on: n/a\n' +
+    'const VAGUE_TIMEOUT_MS = 5; // ends-on: x\n',
+    WAIT_RULE_FILE,
+  );
+  const allowances = new Map(violations.map((violation) =>
+    [buildDecisionBoundaryViolationIdentity(violation), 1]));
+  const report = applyCountBaseline(
+    {totalViolationCount: violations.length, violations},
+    withoutUnbaselinableWaitAllowances(allowances),
+    buildDecisionBoundaryViolationIdentity,
+  );
+  t.same(report.violations.map((violation) => violation.functionName),
+    ['UNDECLARED_TIMEOUT_MS', 'KIND_TIMEOUT_MS', 'VAGUE_TIMEOUT_MS'],
+    'an undeclared, unknown-kind or unnamed-event entry is no allowance');
+});
+
+// One-way: the baseline may only shrink (the ceiling is the audit's own,
+// TIMER_ONLY_BASELINE_CEILING). Only timer-only waits may enter the shared
+// decision-boundary baseline: an undeclared wait, an unknown non-wait kind or
+// an unnamed event can never be baselined.
+
+test('the timer-only baseline cannot grow and holds no stale entry',
+  async (t) => {
+    const entries = await loadWaitBaselineEntries();
+    t.same(entries
+      .filter((entry) => entry.kind !== VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY)
+      .map((entry) => `${entry.filePath}:${entry.functionName}`), [],
+    'only timer-only waits are baselined');
+    t.ok(entries.length <= TIMER_ONLY_BASELINE_CEILING,
+      `timer-only baseline ${entries.length} <= ${TIMER_ONLY_BASELINE_CEILING}`);
+    for (const entry of entries) {
+      const source = await fs.readFile(entry.filePath, 'utf8');
+      const live = collectNamedWaitConstants(source, entry.filePath)
+        .filter((constant) => constant.name === entry.functionName &&
+          constant.kind === VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY);
+      t.equal(live.length, 1,
+        `${entry.functionName} is still timer-only in ${entry.filePath}; ` +
+        'a fixed one leaves the baseline');
+    }
+  });
+
+async function listSourceFiles(directory) {
+  const entries = await fs.readdir(directory, {withFileTypes: true});
+  const files = [];
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listSourceFiles(entryPath));
+    } else if (entry.name.endsWith('.js')) {
+      files.push(entryPath);
+    }
+  }
+  return files;
+}
+
+test('the governed set is derived from src/, and every member is declared',
+  async (t) => {
+    const textScan = /\b(?:const|let|var)\s+((?:[A-Z0-9]+_)*(?:TIMEOUT|BACKSTOP|DEADLINE)(?:_[A-Z0-9]+)*_MS)\b/gu;
+    const fromText = new Set();
+    const fromAudit = new Set();
+    const undeclared = [];
+    let memberCount = 0;
+    for (const filePath of await listSourceFiles('src')) {
+      const source = await fs.readFile(filePath, 'utf8');
+      for (const match of source.matchAll(textScan)) {
+        fromText.add(`${filePath}:${match[1]}`);
+      }
+      if (!/(?:TIMEOUT|BACKSTOP|DEADLINE)/u.test(source)) {
+        continue;
+      }
+      for (const constant of collectNamedWaitConstants(source, filePath)) {
+        if (constant.member) {
+          memberCount += 1;
+        } else if (constant.name.endsWith('_MS')) {
+          fromAudit.add(`${filePath}:${constant.name}`);
+        }
+        if (constant.kind !== VIOLATION_KIND.WAIT_CONSTANT_DECLARED &&
+            constant.kind !== VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY) {
+          undeclared.push(`${filePath}:${constant.name}`);
+        }
+      }
+    }
+    t.ok(fromAudit.size > 0, `the audit derives ${fromAudit.size} constants`);
+    t.ok(memberCount > 50, `the audit derives ${memberCount} object members`);
+    t.same([...fromAudit].sort(), [...fromText].sort(),
+      'the audit set equals an independent text scan of src/');
+    t.same(undeclared, [], 'every named wait in src/ declares its end');
+  });
+
+test('a timer expiry named anywhere in the event is the timer', async (t) => {
+  for (const timer of [
+    'when the timer fires',
+    'on timer expiry the step is cut',
+    'the request timeout elapses first',
+    'the deadline expires before any reply',
+  ]) {
+    t.same(waitKinds(`const A_TIMEOUT_MS = 1; // ends-on: ${timer}\n`), [
+      ['A_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY],
+    ], `"${timer}" is the timer`);
+  }
+  for (const event of [
+    'the heartbeat timer delivers a fresh lease',
+    'the peer acknowledges the deadline request',
+  ]) {
+    t.same(waitKinds(`const A_TIMEOUT_MS = 1; // ends-on: ${event}\n`), [],
+      `"${event}" names another timer-driven subject`);
+  }
+});
+
+async function writeReferenceFixture(files) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dead-claims-'));
+  const sourceRoot = path.join(root, 'src');
+  await fs.mkdir(sourceRoot, {recursive: true});
+  for (const [name, text] of Object.entries(files)) {
+    await fs.writeFile(path.join(sourceRoot, name), text);
+  }
+  return sourceRoot;
+}
+
+const DEAD_CLAIM_CONSTANTS = [
+  'export const OWNER = Object.freeze({',
+  '  // ends-on: n/a dead (nothing reads it)',
+  '  UNREAD_TIMEOUT_MS: 1,',
+  '  // ends-on: n/a dead (claimed dead, read by reader.js)',
+  '  READ_TIMEOUT_MS: 1,',
+  '  NESTED: {',
+  '    // ends-on: n/a dead (claimed dead, read through a computed key)',
+  '    KEYED_TIMEOUT_MS: 1,',
+  '  },',
+  '});',
+  'export const ESCAPES = {',
+  '  // ends-on: n/a dead (claimed dead, read after the object escapes)',
+  '  ESCAPED_TIMEOUT_MS: 1,',
+  '};',
+  '// ends-on: n/a dead (claimed dead, read below)',
+  'const LOCAL_DEADLINE_MS = 1;',
+  'export const twice = LOCAL_DEADLINE_MS * 2;',
+].join('\n');
+
+const DEAD_CLAIM_READER = [
+  'import {OWNER, ESCAPES} from \'./constants.js\';',
+  'const FIELD = \'KEYED_TIMEOUT_MS\';',
+  'export const read = OWNER.READ_TIMEOUT_MS;',
+  'export const keyed = OWNER.NESTED[FIELD];',
+  'const bag = {ESCAPES};',
+  'export const escaped = bag.ESCAPES.ESCAPED_TIMEOUT_MS;',
+  'export const unrelated = {UNREAD_TIMEOUT_MS: 5}.UNREAD_TIMEOUT_MS;',
+].join('\n');
+
+test('an n/a dead claim is checked against every reference in src/',
+  async (t) => {
+    const sourceRoot = await writeReferenceFixture({
+      'constants.js': DEAD_CLAIM_CONSTANTS,
+      'reader.js': DEAD_CLAIM_READER,
+    });
+    const report = await collectDecisionBoundaryViolations(
+      [path.join(sourceRoot, 'constants.js')],
+      {referenceRoots: [sourceRoot]},
+    );
+    t.same(report.violations
+      .filter((violation) => violation.kind.startsWith('wait_constant'))
+      .map((violation) => [violation.functionName, violation.kind]), [
+      ['OWNER.READ_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED],
+      ['OWNER.NESTED.KEYED_TIMEOUT_MS',
+        VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED],
+      ['ESCAPES.ESCAPED_TIMEOUT_MS',
+        VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED],
+      ['LOCAL_DEADLINE_MS', VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED],
+    ], 'a direct, computed, escaped or declarator read refutes the claim; ' +
+      'a same-named key on an unrelated object does not');
+    await fs.rm(path.dirname(sourceRoot), {recursive: true, force: true});
+  });
+
+const CONSTRUCTION_FIXTURE_PATH = '/repo/src/runtime/dependency-assembly.js';
+const RENAMED_CONSTRUCTION_SOURCE = [
+  'export class DependencyAssembly {',
+  '  assemble() {',
+  '    if (this.queryHandle !== null) return this.queryHandle;',
+  '    const supplied = new SQLAccessor({',
+  '      systemCache: this.delegates.getSystemTableCache(),',
+  '      clock: this.delegates.getClock(),',
+  '    });',
+  '    this.queryHandle = supplied;',
+  '    this.delegates.setQueryHandle(supplied);',
+  '    this.consumer.setQueryHandle(supplied);',
+  '    return supplied;',
+  '  }',
+  '}',
+].join('\n');
+
+function mixedFindingsFor(source, filePath = CONSTRUCTION_FIXTURE_PATH,
+  functionName = 'assemble') {
+  return collectDecisionBoundaryViolationsFromSource(source, filePath)
+    .filter((finding) => finding.kind === VIOLATION_KIND.MIXED_CACHE_AND_SQL &&
+      finding.functionName === functionName);
+}
+
+test('mixed-source audit distinguishes the actual seed bridge acquisition from a query',
+  async (t) => {
+    const filePath = 'src/bootstrap/owners/seed-runtime-bridge-owner.js';
+    const source = await fs.readFile(filePath, 'utf8');
+    const publication = '    this.sqlQueryEngine = engine;';
+    t.equal(source.split(publication).length, 2,
+      'the real acquisition has one exact engine publication site');
+    t.match(source, /acquireSqlQueryEngine\(\)\s*\{/u,
+      'the named real owner is present in the parsed source');
+    t.same(mixedFindingsFor(source, filePath, 'acquireSqlQueryEngine'), [],
+      'constructing and publishing the dependency is not a mixed truth read');
+
+    const withReads = source.replace(publication, [
+      publication,
+      '    d.getSystemTableCache().get("key");',
+      '    engine.query("SELECT 1");',
+    ].join('\n'));
+    t.equal(mixedFindingsFor(withReads, filePath, 'acquireSqlQueryEngine').length, 1,
+      'real read operations added to that same source owner remain detected');
+  });
+
+test('mixed-source audit recognizes equivalent renamed construction and publication',
+  async (t) => {
+    t.same(mixedFindingsFor(RENAMED_CONSTRUCTION_SOURCE), [],
+      'owner, method, handle and constructor names do not need an allowlist');
+    const withReads = RENAMED_CONSTRUCTION_SOURCE.replace(
+      '    return supplied;',
+      '    return this.delegates.getSystemTableCache().get("key") ?? ' +
+        'supplied.query("SELECT 1");');
+    t.equal(mixedFindingsFor(withReads).length, 1,
+      'publication does not exempt later use of the engine as an authority');
+  });
+
+test('mixed-source audit does not mistake type names and property labels for reads',
+  async (t) => {
+    t.same(mixedFindingsFor([
+      'export function assemble() {',
+      '  return new SQLQueryEngine({cache: "a label", queryMode: "a label"});',
+      '}',
+    ].join('\n')), []);
+  });
+
+const MIXED_READ_CONSTRUCTION_CASES = Object.freeze([
+  {
+    name: 'actual reads inside constructor arguments',
+    body: 'return new Consumer({row: cache.get("key") ?? db.query("SELECT 1")});',
+  },
+  {
+    name: 'actual reads inside a publication argument',
+    body: 'owner.setSqlQueryEngine(cache.get("key") ?? db.query("SELECT 1"));',
+  },
+  {
+    name: 'reads in a constructor computed key',
+    body: 'return new Consumer({[cache.get("key")]: db.query("SELECT 1")});',
+  },
+  {
+    name: 'reads selecting a constructor',
+    body: 'return new constructors[cache.get("key") ?? db.query("SELECT 1")]();',
+  },
+  {
+    name: 'a query used as the constructor factory',
+    body: 'return new (db.query("SELECT 1"))(cache.get("key"));',
+  },
+  {
+    name: 'optional and computed read calls',
+    body: 'return cache?.["get"]?.("key") ?? db?.["query"]?.("SELECT 1");',
+  },
+  {
+    name: 'reads inside a callback passed to a constructor',
+    body: 'return new Consumer({load: () => cache.get("key") ?? db.query("SELECT 1")});',
+  },
+  {
+    name: 'reads inside a callback passed to a publication call',
+    body: 'owner.setSqlQueryEngine(() => cache.get("key") ?? db.query("SELECT 1"));',
+  },
+  {
+    name: 'computed publication receiver selection',
+    body: [
+      'const engine = new SQLQueryEngine({cache});',
+      'owner[cache.get("key") ?? db.query("SELECT 1")](engine);',
+    ].join('\n'),
+  },
+  {
+    name: 'a query nested in publication of a constructed engine',
+    body: [
+      'const engine = new SQLQueryEngine({cache});',
+      'this.sqlQueryEngine = engine;',
+      'owner.setSqlQueryEngine(engine.query(cache.get("key")));',
+    ].join('\n'),
+  },
+  {
+    name: 'read-through access on the constructed handle',
+    body: [
+      'const sqlEngine = new Engine({cache});',
+      'this.sqlEngine = sqlEngine;',
+      'owner.setSqlEngine(sqlEngine);',
+      'return cache.get("key") ?? sqlEngine.rows.current;',
+    ].join('\n'),
+  },
+  {
+    name: 'reads through local aliases',
+    body: [
+      'const left = cache;',
+      'const right = db;',
+      'return left.get("key") ?? right.get("key");',
+    ].join('\n'),
+  },
+  {
+    name: 'reads through an alias of a constructed handle',
+    body: [
+      'const sqlEngine = new Engine({cache});',
+      'const alias = sqlEngine;',
+      'return cache.get("key") ?? alias.read("key");',
+    ].join('\n'),
+  },
+  {
+    name: 'reads through a destructured method',
+    body: [
+      'const sqlEngine = new Engine({cache});',
+      'const {read: fetch} = sqlEngine;',
+      'return cache.get("key") ?? fetch("key");',
+    ].join('\n'),
+  },
+  {
+    name: 'a shadowed construction binding is not the captured handle',
+    body: [
+      'const sqlEngine = new Engine({cache});',
+      'const read = (sqlEngine) => cache.get("key") ?? sqlEngine.read("key");',
+      'return read(otherOwner);',
+    ].join('\n'),
+  },
+  {
+    name: 'a reassigned binding remains unclassified authority evidence',
+    body: [
+      'let sqlEngine = new Engine({cache});',
+      'sqlEngine = authoritativeRow;',
+      'return cache.get("key") ?? sqlEngine;',
+    ].join('\n'),
+  },
+  {
+    name: 'an overwritten publication field is not a proven dependency',
+    body: [
+      'const engine = new SQLQueryEngine({cache});',
+      'this.sqlQueryEngine = engine;',
+      'this.sqlQueryEngine = authoritativeRow;',
+      'return cache.get("key") ?? this.sqlQueryEngine;',
+    ].join('\n'),
+  },
+  {
+    name: 'raw cache and SQL row values are still conservative evidence',
+    body: 'return cachedRow ?? sqlRow;',
+  },
+]);
+
+for (const fixture of MIXED_READ_CONSTRUCTION_CASES) {
+  test(`mixed-source audit keeps ${fixture.name}`, async (t) => {
+    const source = `export function assemble() {\n${fixture.body}\n}`;
+    t.equal(mixedFindingsFor(source).length, 1,
+      'construction-looking syntax must not erase actual or unclassified read evidence');
+  });
+}
+
+test('mixed-source audit does not treat a getter-bearing publication field as passive',
+  async (t) => {
+    const source = [
+      'export class GetterBackedAssembly {',
+      '  get sqlEngine() { return db.query("SELECT 1"); }',
+      '  set sqlEngine(value) { this.saved = value; }',
+      '  assemble() {',
+      '    if (this.sqlEngine !== null) return this.sqlEngine;',
+      '    const engine = new Engine({cache: cache.get("key")});',
+      '    this.sqlEngine = engine;',
+      '    owner.setSqlEngine(engine);',
+      '    return engine;',
+      '  }',
+      '}',
+    ].join('\n');
+    t.equal(mixedFindingsFor(source).length, 1,
+      'the known accessor prevents treating the identity guard as a plain handle read');
+  });
+
+test('mixed-source audit retains delegated fallback policy outside construction', async (t) => {
+  const source = [
+    'export function assemble() {',
+    '  const options = {cacheFallbackPredicate: (row) => row.id === "key"};',
+    '  return db.query("SELECT 1", options);',
+    '}',
+  ].join('\n');
+  t.equal(mixedFindingsFor(source).length, 1,
+    'a nonconstructor policy key remains conservative evidence at a delegated read boundary');
+});
+
+test('the live removal backstop cannot be declared dead', async (t) => {
+  const filePath = 'src/node/replica-handler-constants.js';
+  const source = (await fs.readFile(filePath, 'utf8')).replace(
+    /\n(\s*)REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS:/u,
+    '\n$1// ends-on: n/a dead (a false claim)\n$1' +
+      'REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS:',
+  );
+  const claims = collectNamedWaitConstants(source, filePath).filter(
+    (constant) =>
+      constant.name === 'REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS');
+  t.equal(claims.length, 1, 'the false claim is read');
+  t.same((await collectRefutedDeadClaims(claims, ['src']))
+    .map((violation) => violation.kind),
+  [VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED], 'src/ refutes it');
+});
+
+test('the audit itself refuses a timer-only baseline above its ceiling',
+  async (t) => {
+    const allowance = (name) => [buildDecisionBoundaryViolationIdentity({
+      filePath: 'src/x.js',
+      functionName: name,
+      kind: VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY,
+    }), 1];
+    const atCeiling = new Map(Array.from(
+      {length: TIMER_ONLY_BASELINE_CEILING},
+      (_, index) => allowance(`T${index}_TIMEOUT_MS`)));
+    t.same(checkTimerOnlyBaselineCeiling(atCeiling), [], 'at the ceiling');
+    const above = new Map([...atCeiling, allowance('GROWN_TIMEOUT_MS')]);
+    t.same(checkTimerOnlyBaselineCeiling(above)
+      .map((violation) => violation.kind),
+    [VIOLATION_KIND.WAIT_CONSTANT_BASELINE_CEILING], 'one above it is red');
+    t.equal(TIMER_ONLY_BASELINE_CEILING, 2,
+      'the ceiling holds exactly the two cold-reconnect constants');
+    const sourceRoot = await writeReferenceFixture({'empty.js': '\n'});
+    const baselinePath = path.join(path.dirname(sourceRoot), 'baseline.json');
+    await fs.writeFile(baselinePath, JSON.stringify({
+      version: 1,
+      violations: [...above.keys()].map((identity) => {
+        const [filePath, functionName, kind] = JSON.parse(identity);
+        return {filePath, functionName, kind};
+      }),
+    }));
+    const report = await collectDecisionBoundaryViolationsWithBaseline(
+      [sourceRoot],
+      {baselineFileUrl: baselinePath, referenceRoots: [sourceRoot]},
+    );
+    t.same(report.violations.map((violation) => violation.kind),
+      [VIOLATION_KIND.WAIT_CONSTANT_BASELINE_CEILING],
+      'the baselined audit run itself is red');
+    await fs.rm(path.dirname(sourceRoot), {recursive: true, force: true});
+  });
+
+function emptyStateFindings(source, functionName) {
+  return collectDecisionBoundaryViolationsFromSource(source,
+    '/repo/src/runtime/cleanup-evidence.js').filter((finding) =>
+    finding.kind === VIOLATION_KIND.RAW_NULL_OR_EMPTY_STATE &&
+    finding.functionName === functionName);
+}
+
+const CAUGHT_EXCEPTION_COLLECTION = [
+  'export async function releaseResources() {',
+  '  try { await open(); } catch (primary) {',
+  '    const failureRecords = [];',
+  '    try { await closeFirst(); } catch (first) { failureRecords.push(first); }',
+  '    try { await closeSecond(); } catch (second) { failureRecords.push(second); }',
+  '    if (failureRecords.length > 0) {',
+  '      throw retainPrimary(primary, new AggregateError(failureRecords, MESSAGE));',
+  '    }',
+  '    throw primary;',
+  '  }',
+  '}',
+].join('\n');
+
+test('raw-state audit recognizes the actual message-group caught-exception collection',
+  async (t) => {
+    const source = await fs.readFile(
+      'src/bootstrap/shared/message-group-transport-handler.js', 'utf8');
+    t.equal(source.split('const failures = [];').length, 2,
+      'the actual owner still uses its original exception accumulator');
+    t.same(emptyStateFindings(source, 'initializeRegisteredMessageGroup'), [],
+      'caught cleanup exceptions are data; the retained map owns cleanup state');
+    const escaping = source.replace('const failures = [];',
+      'const failures = []; publish({outcome: failures});');
+    t.equal(emptyStateFindings(escaping, 'initializeRegisteredMessageGroup').length, 1,
+      'the same owner cannot publish that vector as runtime state');
+  });
+
+test('raw-state audit recognizes exception collection by complete uses, not names',
+  async (t) => {
+    t.same(emptyStateFindings(CAUGHT_EXCEPTION_COLLECTION, 'releaseResources'), []);
+    const renamed = CAUGHT_EXCEPTION_COLLECTION.replaceAll(
+      'failureRecords', 'outcomeExceptions');
+    t.same(emptyStateFindings(renamed, 'releaseResources'), [],
+      'a different semantic-looking name has the same non-state role');
+  });
+
+const EXCEPTION_COLLECTION_ESCAPES = [
+  ['published semantic state', 'publish({status: failureRecords});'],
+  ['unknown consumer', 'consume(failureRecords);'],
+  ['alias', 'const saved = failureRecords; consume(saved);'],
+  ['deferred closure', 'const read = () => failureRecords; consume(read);'],
+  ['shadowed binding', 'const read = (failureRecords) => failureRecords; consume(read);'],
+  ['length mutation', 'failureRecords.length = 0;'],
+  ['different collection mutation', 'failureRecords.splice(0);'],
+  ['nonexception insertion', 'failureRecords.push(computeStatus());'],
+  ['derived state decision', 'if (failureRecords.length > 0) { publish({state: FAILED}); }'],
+  ['computed access', 'consume(failureRecords[0]);'],
+  ['shadowed aggregate constructor', 'const AggregateError = consume;'],
+];
+
+for (const [name, injected] of EXCEPTION_COLLECTION_ESCAPES) {
+  test(`raw-state audit keeps exception-looking arrays with ${name}`, async (t) => {
+    const source = CAUGHT_EXCEPTION_COLLECTION.replace(
+      '    if (failureRecords.length > 0) {',
+      `    ${injected}\n    if (failureRecords.length > 0) {`);
+    t.equal(emptyStateFindings(source, 'releaseResources').length, 1,
+      'an unsupported use invalidates the complete accumulator proof');
+  });
+}
+
+test('raw-state audit retains mutable and returned empty semantic outcomes',
+  async (t) => {
+    const mutable = CAUGHT_EXCEPTION_COLLECTION.replace(
+      'const failureRecords = [];', 'let failureRecords = [];');
+    t.equal(emptyStateFindings(mutable, 'releaseResources').length, 1,
+      'a mutable binding has no immutable accumulator proof');
+    const returned = CAUGHT_EXCEPTION_COLLECTION.replace(
+      '    throw primary;', '    return {outcome: failureRecords};');
+    t.equal(emptyStateFindings(returned, 'releaseResources').length, 1,
+      'returning the vector as an outcome keeps the declaration finding');
+    t.equal(emptyStateFindings(
+      'function decide() { const failureState = []; return failureState; }',
+      'decide').length, 1);
+    t.equal(emptyStateFindings(
+      'function decide() { return {outcome: []}; }', 'decide').length, 1);
+  });
+
+test('raw-state audit requires unchanged caught values and an immediate aggregate throw',
+  async (t) => {
+    const mutatedException = CAUGHT_EXCEPTION_COLLECTION.replace(
+      'failureRecords.push(first);', 'first = computeStatus(); failureRecords.push(first);');
+    t.equal(emptyStateFindings(mutatedException, 'releaseResources').length, 1,
+      'an assigned catch parameter no longer proves a caught exception');
+    const deferredThrow = CAUGHT_EXCEPTION_COLLECTION.replace(
+      'throw retainPrimary(primary, new AggregateError(failureRecords, MESSAGE));',
+      'defer(() => { throw new AggregateError(failureRecords, MESSAGE); });');
+    t.equal(emptyStateFindings(deferredThrow, 'releaseResources').length, 1,
+      'a throw in a deferred callback does not settle the current exception');
+  });
+
+const LOCAL_FORWARDING_POSITIVES = Object.freeze([
+  'return new Consumer({cache, db});',
+  'return new Consumer({left: deps.cache, right: deps.sqlEngine, path: options.dbPath});',
+  'return new constructors.Consumer({left: deps?.cache, right: deps?.sqlEngine});',
+  'const left = cache; const right = db; return new Consumer({left, right});',
+  'const cacheHandle = deps.cache; const sqlHandle = deps.sqlEngine; ' +
+    'const left = cacheHandle; const right = sqlHandle; return new Consumer({left, right});',
+  'const sqlHandle = deps.sqlEngine; return new Consumer({cache: obtainCache(), sqlHandle});',
+]);
+
+for (const body of LOCAL_FORWARDING_POSITIVES) {
+  test(`local constructor forwarding: ${body}`, async (t) => {
+    t.same(mixedFindingsFor(`export function assemble() { ${body} }`), [],
+      'reference forwarding does not claim either source is decision truth');
+  });
+}
+
+const LOCAL_FORWARDING_NEGATIVES = Object.freeze([
+  'const left = cache; const right = db; return new Consumer({left: 0, right: 0});',
+  'const left = cache; const right = db; return new Consumer({a: deps.left, b: deps.right});',
+  'const Left = cache; const Right = db; new Left(); new Right();',
+  'const left = cache; const right = db; return new Consumer({});',
+  'return new Consumer({value: cache ?? db});',
+  'return new Consumer({value: cache ? db : other});',
+  'return new Consumer({value: cache === db});',
+  'return new Consumer({value: cache + db});',
+  'return new Consumer({value: [cache, db]});',
+  'return new Consumer({value: {cache, db}});',
+  'return new Consumer({...cache, ...db});',
+  'return new Consumer({[cache]: db});',
+  'return new constructors[selected]({cache, db});',
+  'return new Consumer({left: deps[cache], right: deps[db]});',
+  'return new Consumer({left: cache.get(), right: db.query()});',
+  'return new Consumer({left: cache?.get?.(), right: db?.query?.()});',
+  'return new Consumer({left: cache[operation](), right: db[operation]()});',
+  'return new Consumer({read: () => cache ?? db});',
+  'return new Consumer({get row() { return cache ?? db; }});',
+  'const left = cache; const right = db; observe(left, right); ' +
+    'return new Consumer({left, right});',
+  'const left = cache; const right = db; ' +
+    'return new Consumer({left, right, value: left.get() ?? right.query()});',
+  'const left = cache; const right = db; ' +
+    'return new Consumer({left, right, read: () => left ?? right});',
+  'const left = cache; const right = db; if (left === right) return other; ' +
+    'return new Consumer({left, right});',
+  'const left = cache; const right = db; return new Consumer({left, right}) || left || right;',
+  'let left = cache; let right = db; left = other; right = other; ' +
+    'return new Consumer({left, right});',
+  'const left = cache; const right = db; left.value = other; right.value = other; ' +
+    'return new Consumer({left, right});',
+  'const left = cache; const right = db; ' +
+    '{ const left = other; const right = other; use(left, right); } ' +
+    'return new Consumer({left, right});',
+  'const {cache: left, db: right} = deps; return new Consumer({left, right});',
+  'const left = cache; const right = db; ' +
+    'return new Consumer({left, right, alias: unknown(left, right)});',
+]);
+
+for (const body of LOCAL_FORWARDING_NEGATIVES) {
+  test(`local constructor active or unclassified use: ${body}`, async (t) => {
+    t.equal(mixedFindingsFor(`export function assemble() { ${body} }`).length, 1,
+      'only individual proven forwarding references can become passive');
+  });
+}
+
+test('actual seed constructor is local forwarding, not transitive provider purity', async (t) => {
+  const filePath = 'src/bootstrap/phases/seed-partitions-phase.js';
+  const source = await fs.readFile(filePath, 'utf8');
+  const method = 'createBootstrapPartitionReplica';
+  t.same(mixedFindingsFor(source, filePath, method), [],
+    'unchanged real method forwards handles and path without SQL truth use');
+  const renamed = source.replaceAll('PartitionService', 'Consumer')
+    .replaceAll('createBootstrapPartitionReplica', 'assemble')
+    .replaceAll('getSystemTableCache', 'obtainCache')
+    .replaceAll('sqlQueryEngine', 'dbHandle');
+  t.same(mixedFindingsFor(renamed), [], 'equivalent names do not grant authority');
+  const anchor = '      await partition.initialize();';
+  t.equal(source.split(anchor).length, 2, 'one actual operation insertion point');
+  for (const read of [
+    'd.getSystemTableCache().get("key"); cdcIntegrationService.sqlQueryEngine.query("SELECT 1");',
+    'const left = d.getSystemTableCache(); const right = cdcIntegrationService.sqlQueryEngine; ' +
+      'observe(left, right);',
+    'const {get: readCache} = d.getSystemTableCache(); ' +
+      'const {query: readSql} = cdcIntegrationService.sqlQueryEngine; ' +
+      'readCache("key") ?? readSql("SELECT 1");',
+    'return cachedRow ?? sqlRow;',
+    'new Consumer({left: cache.get("key"), right: db.query("SELECT 1")});',
+    'unknown(cache, db);',
+  ]) {
+    const changed = source.replace(anchor, `${read}\n${anchor}`);
+    t.equal(mixedFindingsFor(changed, filePath, method).length, 1,
+      `active or unclassified local evidence in same method: ${read}`);
+  }
+});
+
+test('opaque provider effects remain audited at their own local operation', async (t) => {
+  const source = [
+    'export function assemble() {',
+    '  return new Consumer({cache: providers.obtainCache(), engine: providers.sqlEngine});',
+    '}',
+    'export function obtainCache() { return cache.get("key") ?? db.query("SELECT 1"); }',
+  ].join('\n');
+  t.same(mixedFindingsFor(source), [], 'caller does not claim transitive purity');
+  t.equal(mixedFindingsFor(source, CONSTRUCTION_FIXTURE_PATH, 'obtainCache').length, 1,
+    'provider mixed truth use is still classified at its own body');
+});
+
+const ADDITIONAL_FORWARDING_OWNERS = Object.freeze([
+  {
+    path: 'src/migration/migration-composition.js',
+    method: 'createMigrationWorkflowOwners',
+    anchor: '  const migrationCoordinator = new MigrationCoordinator({',
+    read: '  options.systemTableCache.get("key"); options.sqlCore.query("SELECT 1");',
+  },
+  {
+    path: 'src/live-query/live-query-manager.js',
+    method: 'registerLiveQuery',
+    anchor: '    const clientId = client.id || client.clientId;',
+    read: '    this.systemCache.get("key"); this.sqlQueryEngine.query("SELECT 1");',
+  },
+]);
+
+for (const fixture of ADDITIONAL_FORWARDING_OWNERS) {
+  test(`local forwarding in actual ${fixture.method}`, async (t) => {
+    const source = await fs.readFile(fixture.path, 'utf8');
+    t.equal(source.split(fixture.anchor).length, 2, 'one real owner insertion site');
+    t.same(mixedFindingsFor(source, fixture.path, fixture.method), [],
+      'raw dependency forwarding is the only removed mixed evidence');
+    const active = source.replace(fixture.anchor, `${fixture.read}\n${fixture.anchor}`);
+    t.equal(mixedFindingsFor(active, fixture.path, fixture.method).length, 1,
+      'actual cache and SQL reads in the same owner remain visible');
+  });
+}
+
+test('filesystem collector uses the same local policy without provider context', async (t) => {
+  const file = 'src/bootstrap/phases/seed-partitions-phase.js';
+  const report = await collectDecisionBoundaryViolations([file]);
+  t.equal(report.scannedFileCount, 1, 'actual caller file is scanned');
+  t.same(report.violations.filter((finding) =>
+    finding.kind === VIOLATION_KIND.MIXED_CACHE_AND_SQL &&
+    finding.functionName === 'createBootstrapPartitionReplica'), [],
+  'ordinary collector and pure-source checker share one local policy');
 });

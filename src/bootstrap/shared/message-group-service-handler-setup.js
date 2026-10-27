@@ -5,6 +5,8 @@
 import {LoggingService} from '../../logging/logging-service.js';
 import {MessageGroupServiceHandler} from
   '../../node/message-group-service-handler.js';
+import {createMessageGroupLearnerJoinCapability} from
+  '../../message-group/message-group-learner-join.js';
 import {DependencyError} from '../bootstrap-errors.js';
 
 const MESSAGE_GROUP_HANDLER_SETUP_SUBSYSTEM =
@@ -28,6 +30,23 @@ const ERROR_MSG = Object.freeze({
   STOP_REQUIRED: 'stopMessageGroupReplica',
 });
 
+/**
+ * The handler's learner-CREATE dependencies, composed from a learner-join
+ * host when one is supplied.
+ * @param {Object} parts - {messageGroupLearnerJoinHost,
+ *   replicaOperationRepository, ownerIncarnation}.
+ * @return {Object} Handler options (none without a host).
+ */
+function learnerCreateComposition(parts) {
+  if (!parts.messageGroupLearnerJoinHost) return {};
+  return {
+    joinMessageGroupReplicaAsLearner: createMessageGroupLearnerJoinCapability(
+      parts.messageGroupLearnerJoinHost),
+    replicaOperationRepository: parts.replicaOperationRepository,
+    ownerIncarnation: parts.ownerIncarnation,
+  };
+}
+
 class MessageGroupServiceHandlerSetup {
   static create(options) {
     const {
@@ -41,6 +60,9 @@ class MessageGroupServiceHandlerSetup {
       resolveLocalMessageGroupReplica,
       rpcClient,
       executorOutcomeEmitter,
+      messageGroupLearnerJoinHost,
+      replicaOperationRepository,
+      ownerIncarnation,
     } = options;
 
     if (!nodeId) {
@@ -103,6 +125,12 @@ class MessageGroupServiceHandlerSetup {
       stopMessageGroupReplica,
       resolveLocalMessageGroupReplica,
       executorOutcomeEmitter,
+      // The learner CREATE path (FreshMG 6.B): composed only from a
+      // learner-join host, never from createMessageGroupReplica (a lone
+      // founder). No production root passes a host yet, so a learner CREATE
+      // stays refused (capability unavailable) until the routes are wired.
+      ...learnerCreateComposition({messageGroupLearnerJoinHost,
+        replicaOperationRepository, ownerIncarnation}),
     });
 
     messageGroupServiceHandler.initialize();

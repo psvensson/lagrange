@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-opening-history",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Every production consensus opening distinguishes a never-opened lifecycle allocation from an established native history. Initial native bootstrap and the exact-incarnation establishment witness commit atomically before participation or port publication; intact records restore, while an established or unknown history with an absent native record refuses before native entry. Host prior-existence and identity-record participation fences remain independent requirements. No service-specific history oracle or second lifecycle store is added.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replica-opening-history/evidence/receipt.json",
+      "requiredReceipts": [
+        "established-history-loss-refused-before-native-entry",
+        "never-opened-retry-remains-admitted",
+        "bootstrap-record-and-history-witness-atomic",
+        "legacy-unknown-cannot-authorize-genesis",
+        "intact-cold-process-reopen-and-lost-history-refusal",
+        "host-prior-existence-and-participation-fences-preserved",
+        "current-impact-and-regression-proof"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owners",
+      "statement": "The lifecycle owner writes the local history fact in its existing row; the runtime/store own bootstrap transaction ordering and the participation gate owns opening refusal. No new durable store or fallback."
+    },
+    {
+      "id": "crash-and-refusal",
+      "statement": "Crash before establishment permits a genuine never-opened retry; crash after its durable commit never permits fresh genesis after native row loss. NULL legacy history is unknown, never a fresh grant."
+    },
+    {
+      "id": "no-deadline-change",
+      "statement": "No election, lease, caller, transport, recovery or seed deadline changes. The operator 10x rule applies only to observed test execution cost."
+    },
+    {
+      "id": "review-before-land",
+      "statement": "Independent review and all required gates are required before landing. WIP branch preservation is not approval."
+    }
+  ],
+  "sealedAt": "316e5fcdab102ddc562433139d73b3df62748590"
+}

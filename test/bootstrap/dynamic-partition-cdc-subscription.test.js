@@ -159,17 +159,15 @@ async function withCapturedReplicaFactory(
           return {
             subscriberId: options.subscriberId || 'sub-1',
             subscriptionEpoch: 1,
-            catchup: {
-              mode: 'none',
-              bufferedEventsReplayed: 0,
-            },
           };
         };
 
     ReplicaHandlerSetup.create = ({createPartitionService}) => {
       capturedCreatePartitionService = createPartitionService;
       return {
-        replicaHandler: {},
+        replicaHandler: {
+          initialize() {},
+        },
         replicaStateMachine: {
           registerReplicaSnapshot() {
             return true;
@@ -440,10 +438,6 @@ test('NodeJoiningService can defer priority CDC handshake behind replica lifecyc
           return {
             subscriberId: options.subscriberId || 'sub-1',
             subscriptionEpoch: 1,
-            catchup: {
-              mode: 'none',
-              bufferedEventsReplayed: 0,
-            },
           };
         },
     });

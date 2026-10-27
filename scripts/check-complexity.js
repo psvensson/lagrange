@@ -9,11 +9,13 @@
  * are refactored. Update BASELINE_COUNT when violations are fixed.
  */
 
+import {METRIC_REPORTS} from './metric-report-constants.js';
+import {beginMetricMeasurement, finishMetricMeasurement} from './metric-report-provenance.js';
+
 import {LegacyESLint} from 'eslint/use-at-your-own-risk';
 
 import {
   collectRuleViolations,
-  writeJsonReport,
 } from './metric-check-helpers.js';
 
 
@@ -75,15 +77,66 @@ const TARGET_THRESHOLD = 12;
 // split into named node predicates).
 // 2026-09-30: tightened 1796 -> 1795 on the checker's hint (the boot
 // lifecycle components no longer branch on a missing incarnation).
-const BASELINE_COUNT = 1795;
+// 2026-10-03: tightened 1795 -> 1773 on the checker's hint after the
+// origin/main ec63fbb00 merge and the native-append inference deletion.
+// 2026-10-04: tightened 1773 -> 1770 on the checker's hint after the
+// origin/main d60c30921 merge (consensus-cutover closeout tree).
+// 2026-10-04: tightened 1770 -> 1765 on the checker's hint after the
+// message-group MOVE_REPLICA selection and execution were deleted.
+// 2026-10-04: tightened 1765 -> 1764 on the checker's hint (the convergence
+// snapshot classifier's voter checks moved into convergence-voter-targets).
+// 2026-10-04 (quest/one-spread-authority): tightened 1770 -> 1767 on the
+// checker's hint after the one-spread-authority deletion (closure synthesis,
+// D9 ranking, D3 latch).
+// 2026-10-05: merge of quest/one-spread-authority keeps the lower value,
+// then tightened 1764 -> 1761 on the checker's hint for the merged tree.
+// 2026-10-05 (quest/pgwire-dml-row-counts): tightened 1761 -> 1760 on the
+// checker's hint (the PG-wire mapper's three `changes ?? rowCount ?? 0`
+// fallbacks became one call to the result-count owner).
+// 2026-10-05 (quest/group-retirement-as-a-unit): tightened 1770 -> 1769 on
+// the checker's hint (the group-retired tombstone record's text fields go
+// through one helper).
+// 2026-10-05: tightened 1769 -> 1768 on the checker's hint (the record
+// store's change functions and the split decoder extracted helpers).
+// 2026-10-05: tightened 1768 -> 1767 on the checker's hint (round 7: the
+// record store's turn and the SQLite witness world extracted helpers).
+// 2026-10-05: merge of quest/group-retirement-as-a-unit keeps the lower
+// value, then tightened 1760 -> 1757 on the checker's hint for the merged
+// tree (the merge persistence's same-owner re-sync left with the record
+// store redesign).
+// 2026-10-07: the composed identity admission extraction tightened the
+// combined bound from 1757 to 1756; the START owner extraction and removal
+// of its legacy inline handler tighten the combined bound from 1756 to 1755.
+// 2026-10-26: tightened 1755 -> 1751 on the checker's hint after composing
+// the admin admission chain and deleting NodeLifecycleService and the
+// obsolete benchmark partition repair/by-name paths.
+// 2026-10-26: tightened 1751 -> 1750 on the checker's hint after extracting
+// pre-kill marker and survivor owner-diagnostics helpers in
+// node-failure-rebalance.js.
+// 2026-10-26 (D4 window deletion): tightened 1750 -> 1749 on the checker's
+// hint after deleting the sliding-window replay and handshake catch-up in
+// partition-cdc-delivery.js.
+// 2026-10-26 (pkg-main-reconcile): tightened 1749 -> 1747 on the checker's
+// hint after refactoring W7 route witness, ControllableConsensusPort,
+// coordinator settlement command, and raft-rs operation port.
+// 2026-10-27 (retained-seed-original-handoff): tightened 1747 -> 1744 on the
+// checker's hint after splitting #validateMemberOpening in
+// raft-rs-original-allocation-preparation.js and CDC occurrence witness helpers.
+// 2026-10-27 (sql-ingress-hardening): tightened 1744 -> 1742 on the checker's
+// hint after extracting STAGE/PLAN dispatch helpers in
+// sql-query-engine-request-dispatch.js and remote write/DDL helpers.
+// 2026-10-27 (sn1-tx1-freshmg-composition): tightened 1742 -> 1739 on the
+// checker's hint after composing SN1 snapshot/compaction, TX1 admission, and
+// FreshMG source-removal fence.
+const BASELINE_COUNT = 1739;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
 const LOCAL_STR_TEST_GITKEEP = 'test/.gitkeep';
 const LOCAL_STR_COMPLEXITY = 'complexity';
 const LOCAL_STR_ERROR = 'error';
-const DEFAULT_LINT_TARGETS = ['src/', 'test/'];
-const REPORT_RELATIVE_PATH = 'test-output/analysis/complexity-src-test.json';
+const DEFAULT_LINT_TARGETS = METRIC_REPORTS.complexity.targets;
+const REPORT_RELATIVE_PATH = METRIC_REPORTS.complexity.reportPath;
 const SCOPED_REPORT_RELATIVE_PATH =
   'test-output/analysis/complexity-scoped.json';
 const PRINT_LIMIT = 40;
@@ -131,12 +184,15 @@ const eslint = new LegacyESLint({
   useEslintrc: false,
   overrideConfig: ESLINT_OVERRIDE_CONFIG,
 });
+const measurement = beginMetricMeasurement('complexity', {
+  targets: lintTargets, reportPath: reportRelativePath,
+});
 const results = await eslint.lintFiles(lintTargets);
 const violations = collectRuleViolations(results, LOCAL_STR_COMPLEXITY);
 
 const count = violations.length;
 
-writeJsonReport(reportRelativePath, {
+finishMetricMeasurement(measurement, {
   targetThreshold: TARGET_THRESHOLD,
   baselineCount: BASELINE_COUNT,
   scoped,

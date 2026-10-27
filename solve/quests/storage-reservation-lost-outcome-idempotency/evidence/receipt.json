@@ -1,0 +1,57 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "storage-reservation-lost-outcome-idempotency",
+  "status": "pass",
+  "generatedAt": "2026-10-06T19:23:44.049Z",
+  "testFileDigests": {
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": "4753b4788ef7de7a074e98fa663b7a7b5caf4664d34e87f5629001fe94fa3bf6",
+    "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js": "b1527cf20635822c44316ebe5da982c5352a3d75f35336746b94edb0c2d41c04",
+    "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/corrected-manifest.json": "9beb1ac4cc3fe3c9f3d8baa8eadb90fa3fcee9832652cd10341ca00dcd02d685",
+    "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/controlled-negative/manifest.json": "12549f3fecbd8f100010ab7d35872ccbb8ffbfc8b8745c14b5b666752104dc2a",
+    "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/final-broad-manifest.json": "64a43ab39398130e04f96b788dec476b96de075942a19c80170f5ad46850f38e"
+  },
+  "receipts": [
+    {
+      "id": "lost-answer-adopts-one-durable-hold",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+      "detail": "Final broad local census passes 47/47 files and 3671 assertions; the exact normal-hook carrier 24dcf2abb is byte-identical across 36 listed source, test, script, registry, and generated paths and passes the owner witness 100/100 on locked Adam. The base controlled negative remains 28/71 with 43 failures including UNIQUE reservation_id.",
+      "testFile": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js"
+    },
+    {
+      "id": "exact-live-operation-and-reservation-binding",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+      "detail": "Fresh INSERT authority uses the confirmed changes>0 row plus a later exact operation observation; a terminal winner releases that exact ACTIVE row without creation stats/events. Zero or ambiguous INSERT still validates both authoritative reservation and operation rows. Exact deterministic reservation, immutable identity, concurrency, and membership epoch binding pass.",
+      "testFile": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js"
+    },
+    {
+      "id": "terminal-and-conflicting-authority-refused",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+      "detail": "Confirmed absent, unavailable, post-read terminal, post-insert terminal, immutable operation mismatch, reservation mismatch, RELEASED, and EXPIRED cases fail closed; the proven post-insert terminal race transitions the exact hold to RELEASED.",
+      "testFile": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js"
+    },
+    {
+      "id": "live-operation-expiry-semantics-preserved",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+      "detail": "An exact ACTIVE hold remains adoptable past expires_at while its exact operation remains live; its durable admission-time estimate is retained.",
+      "testFile": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js"
+    },
+    {
+      "id": "single-existing-deadline-preserved",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js test/rebalancer/replica-operation-repository-owner-clock-waits.test.js",
+      "detail": "Insert, reservation reconciliation, post-insert authority, cleanup, and operation revalidation share one existing operation mutation budget. Injected TimeSource proof bounds read retries to a tighter 125ms enclosing budget with no reset to the independent 1s local bound.",
+      "testFile": "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js"
+    },
+    {
+      "id": "owner-interaction-registered",
+      "passed": true,
+      "command": "npm run audit:impact-contracts",
+      "detail": "The authoritative adoption contract and operation/retry coupled pair cover the lifecycle, adoption, repository, shared INSERT, and exact witness owners.",
+      "testFile": "test/shards/impact-contracts.json"
+    }
+  ]
+}

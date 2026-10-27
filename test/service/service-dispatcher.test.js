@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {ServiceDispatcher} from '../../src/service/service-dispatcher.js';
@@ -36,7 +37,8 @@ describe('ServiceDispatcher', () => {
     const messageRouter = {
       deliver: async (targetAddress, message, options) => {
         delivered.push({targetAddress, message, options});
-        return {acknowledged: true, messageId: 'router-msg-1'};
+        return buildDeliveryEnvelope({acknowledged: true, messageId: 'router-msg-1'},
+          {processed: true});
       },
     };
 
@@ -58,7 +60,8 @@ describe('ServiceDispatcher', () => {
     assert.equal(delivered[0].targetAddress, 'node-a/service/svc-1');
     assert.equal(delivered[0].options.targetNodeId, 'node-a');
     assert.equal(delivered[0].options.traceId, 'trace-1');
-    assert.equal(result.delivery.acknowledged, true);
+    assert.deepEqual(result.answer, {processed: true},
+      'the dispatcher hands back the delivered handler answer');
     const metrics = dispatcher.getMetrics();
     assert.equal(metrics.dispatchTotal, 1);
     assert.equal(metrics.dispatchSuccess, 1);
@@ -68,7 +71,7 @@ describe('ServiceDispatcher', () => {
   it('fails closed on invalid non-canonical envelopes', async () => {
     const dispatcher = new ServiceDispatcher({
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       },
       leaderResolver: async () => ({
         targetAddress: 'node-a/service/svc-1',
@@ -92,7 +95,7 @@ describe('ServiceDispatcher', () => {
       messageRouter: {
         deliver: async (_targetAddress, _message, _options) => {
           calls.push('deliver');
-          return {acknowledged: true};
+          return buildDeliveryEnvelope({acknowledged: true});
         },
       },
       leaderResolver: async (_envelope, _context) => {
@@ -116,7 +119,7 @@ describe('ServiceDispatcher', () => {
   it('throws when leader resolver does not return targetAddress', async () => {
     const dispatcher = new ServiceDispatcher({
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       },
       leaderResolver: async () => ({}),
       authenticate: authenticateAlways,
@@ -132,7 +135,7 @@ describe('ServiceDispatcher', () => {
   it('throws when delivery is not acknowledged', async () => {
     const dispatcher = new ServiceDispatcher({
       messageRouter: {
-        deliver: async () => ({acknowledged: false, error: 'no route'}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: false, error: 'no route'})),
       },
       leaderResolver: async () => ({targetAddress: 'node-a/service/svc-1'}),
       authenticate: authenticateAlways,
@@ -145,14 +148,11 @@ describe('ServiceDispatcher', () => {
     );
   });
 
-  it('treats acknowledged no-handler deliveries as rejected', async () => {
+  it('treats no-handler deliveries as rejected', async () => {
     const dispatcher = new ServiceDispatcher({
       messageRouter: {
-        deliver: async () => ({
-          acknowledged: true,
-          noHandler: true,
-          error: NO_HANDLER_DELIVERY_ERROR,
-        }),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: false, noHandler: true,
+          error: NO_HANDLER_DELIVERY_ERROR})),
       },
       leaderResolver: async () => ({targetAddress: 'node-a/service/svc-1'}),
       authenticate: authenticateAlways,
@@ -168,7 +168,7 @@ describe('ServiceDispatcher', () => {
   it('fails closed when authenticate rejects', async () => {
     const dispatcher = new ServiceDispatcher({
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       },
       leaderResolver: async () => ({targetAddress: 'node-a/service/svc-1'}),
       authenticate: async () => {
@@ -194,7 +194,7 @@ describe('ServiceDispatcher', () => {
   it('fails closed when authorize rejects', async () => {
     const dispatcher = new ServiceDispatcher({
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       },
       leaderResolver: async () => ({targetAddress: 'node-a/service/svc-1'}),
       authenticate: authenticateAlways,
@@ -221,7 +221,7 @@ describe('ServiceDispatcher', () => {
     assert.throws(
       () => new ServiceDispatcher({
         messageRouter: {
-          deliver: async () => ({acknowledged: true}),
+          deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         },
         leaderResolver: async () => ({targetAddress: 'node-a/service/svc-1'}),
         authorize: authorizeAlways,
@@ -232,7 +232,7 @@ describe('ServiceDispatcher', () => {
     assert.throws(
       () => new ServiceDispatcher({
         messageRouter: {
-          deliver: async () => ({acknowledged: true}),
+          deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         },
         leaderResolver: async () => ({targetAddress: 'node-a/service/svc-1'}),
         authenticate: authenticateAlways,

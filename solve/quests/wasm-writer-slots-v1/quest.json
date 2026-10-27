@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "wasm-writer-slots-v1",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Implement the selected v1 bounded writer-slot WASM strong-write request/application/result/lifecycle protocol. Atomic application outcome publication, caller-retained sequence/generation identity, acknowledged retirement and explicit owner recycling; preserve original witnesses and runtime. No main merge or full release certification.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/wasm-writer-slots-v1/evidence/receipt.json",
+      "requiredReceipts": [
+        "contract-reviewed",
+        "native-v1-completion",
+        "semantic-source-negative",
+        "sequence-replay-recycle",
+        "lifecycle-rollback-resources",
+        "current-format-recovery",
+        "affected-cone",
+        "independent-final-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "No runtime drain/propose changes, MG repair, timer expansion, timeout increases, ratchet relaxation, main merge or release successor activation."
+    },
+    {
+      "id": "owner-contract-first",
+      "statement": "Independent content-bound schema/transition/profile review before source. New v1 companion explicitly supersedes input profile; original witness and fixture remain unchanged."
+    },
+    {
+      "id": "proof",
+      "statement": "Locked native first results and completion-only source-negative retain identical v1 tests. Current-format recovery limits and shared snapshot dependency explicit."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating",
+    "concurrency-serialization",
+    "recovery-replay",
+    "retry-loops",
+    "transport-delivery",
+    "harness-fidelity"
+  ],
+  "sealedAt": "cdcb9c95f4bdb90e709ed4d20058b51cb193625f"
+}

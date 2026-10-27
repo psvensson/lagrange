@@ -17,10 +17,6 @@ function sleep(delayMs) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
-function normalizeNonEmptyString(value, fallback) {
-  return typeof value === 'string' && value.length > ZERO ? value : fallback;
-}
-
 function normalizeFiniteNumber(value, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
@@ -516,6 +512,32 @@ function buildVisibilityFailure(result, timing) {
   return error;
 }
 
+function resolveAcknowledgedWriteQueryContext(acknowledgedWrites, ids) {
+  const tableName = typeof acknowledgedWrites?.tableName === 'string' ?
+    stringTrim(acknowledgedWrites.tableName) :
+    '';
+  const idColumn = typeof acknowledgedWrites?.idColumn === 'string' ?
+    stringTrim(acknowledgedWrites.idColumn) :
+    '';
+  if (ids.length > ZERO) {
+    if (tableName.length === ZERO || tableName === 'logs') {
+      throw new Error(
+        'Acknowledged-write visibility requires an explicit non-logs tableName',
+      );
+    }
+    if (idColumn.length === ZERO) {
+      throw new Error(
+        'Acknowledged-write visibility requires an explicit idColumn',
+      );
+    }
+  }
+  return {
+    ids,
+    tableName,
+    idColumn,
+  };
+}
+
 async function assertAcknowledgedWritesVisibleOnReachableNodes(
   acknowledgedWrites,
   nodes,
@@ -524,17 +546,10 @@ async function assertAcknowledgedWritesVisibleOnReachableNodes(
   const ids = normalizeAcknowledgedWriteIds(acknowledgedWrites);
   const reachableNodes = await getReachableNodes(nodes);
   const timing = resolveVisibilityOptions(options);
-  const queryContext = {
+  const queryContext = resolveAcknowledgedWriteQueryContext(
+    acknowledgedWrites,
     ids,
-    tableName: normalizeNonEmptyString(
-      acknowledgedWrites?.tableName,
-      'logs',
-    ),
-    idColumn: normalizeNonEmptyString(
-      acknowledgedWrites?.idColumn,
-      'log_id',
-    ),
-  };
+  );
   const nodeObservations = ids.length === ZERO ? [] : await Promise.all(
     arrayMap(reachableNodes, (node) =>
       inspectNodeVisibility(node, queryContext, timing)),

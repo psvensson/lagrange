@@ -2,6 +2,7 @@
  * RebalanceCoordinator critical REMOVE safety checks.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   withOwnerReadPlanningEvidence,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
@@ -119,7 +120,7 @@ test('RebalanceCoordinator - blocks REMOVE that drops critical voter quorum', as
     messageRouter: {
       deliver: async () => {
         deliveries.push('deliver');
-        return {acknowledged: true, status: 'completed'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
       },
       getConnectionState: () => 'connected',
       pingNode: async () => true,
@@ -192,7 +193,7 @@ test('RebalanceCoordinator - logs quorum safety block as warning, not error', as
     nodeId: 'seed-node',
     enableTimeouts: false,
     messageRouter: {
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
       getConnectionState: () => 'connected',
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
@@ -333,14 +334,13 @@ test('RebalanceCoordinator - normalizes object error payloads for safety-blocked
       nodeId: 'seed-node',
       enableTimeouts: false,
       messageRouter: {
-        deliver: async () => ({
-          acknowledged: true,
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
           status: 'failed',
           error: {
             message:
               'Critical partition custom-p1 would drop voter-ready replicas below minimum (2/3)',
           },
-        }),
+        })),
         getConnectionState: () => 'connected',
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
@@ -422,14 +422,13 @@ test('RebalanceCoordinator - normalizes errorMessage payloads for safety-blocked
       nodeId: 'seed-node',
       enableTimeouts: false,
       messageRouter: {
-        deliver: async () => ({
-          acknowledged: true,
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
           status: 'failed',
           error: {
             errorMessage:
               'Critical partition custom-p1 would drop voter-ready replicas below minimum (2/3)',
           },
-        }),
+        })),
         getConnectionState: () => 'connected',
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
@@ -513,7 +512,7 @@ test('RebalanceCoordinator - allows REMOVE when projected quorum remains safe', 
     messageRouter: {
       deliver: async () => {
         deliveries.push('deliver');
-        return {acknowledged: true, status: 'completed'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
       },
       getConnectionState: () => 'connected',
       pingNode: async () => true,
@@ -585,7 +584,7 @@ test('RebalanceCoordinator - defers REPLACE remove until replacement is voter-re
       messageRouter: {
         deliver: async () => {
           deliveries.push('deliver');
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -699,7 +698,7 @@ test('RebalanceCoordinator - defers over-replicated REMOVE until quorum is voter
       messageRouter: {
         deliver: async () => {
           deliveries.push('deliver');
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -953,7 +952,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
       messageRouter: {
         deliver: async () => {
           deliveries.push('deliver');
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,

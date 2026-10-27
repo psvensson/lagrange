@@ -159,7 +159,7 @@ test('in-memory and control-plane partitions are typed refusals',
   });
 
 test('ENGAGEMENT: the 1s prepared-state-hold sweep ticks the cadence on a ' +
-  'real service, and a leader tick is the typed unavailability', async (t) => {
+  'real service, and a leader tick below threshold seals nothing', async (t) => {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cadence-sweep-'));
   const dbPath = path.join(workDir, 'partition', 'replica.db');
   fs.mkdirSync(path.dirname(dbPath), {recursive: true});
@@ -201,14 +201,21 @@ test('ENGAGEMENT: the 1s prepared-state-hold sweep ticks the cadence on a ' +
     t.equal(followerTick.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.NOT_LEADER,
       'the follower tick holds the role gate');
     service.role = RAFT_ROLE.LEADER;
+    service.sizeBytes = 512 * 1024 * 1024;
     const leaderTick = await service.runSnapshotCadenceTick(Date.now());
     t.equal(leaderTick.outcome,
-      RAFT_SNAPSHOT_CADENCE_OUTCOME.COMMITTED_LOG_UNSUPPORTED,
-      'a leader tick states the unavailability');
+      RAFT_SNAPSHOT_CADENCE_OUTCOME.BELOW_THRESHOLD,
+      'a leader tick with no pending applied entries is below threshold');
+    t.equal(leaderTick.checkpointedIndex, 0,
+      'below-threshold tick reports checkpointedIndex');
+    t.equal(leaderTick.compactedIndex, 0,
+      'below-threshold tick reports compactedIndex');
+    t.equal(leaderTick.pendingLogBytes, 0,
+      'below-threshold tick reports pendingLogBytes');
     await new Promise((resolve) =>
       setTimeout(resolve, SWEEP_INTERVAL_MS * 4));
     t.same(listCheckpointGenerations(resolveReplicaCheckpointsRoot(dbPath)),
-      [], 'the sweep-driven leader ticks seal no generation');
+      [], 'the sweep-driven leader ticks seal no generation below threshold');
   } finally {
     if (service && !service.isShutdown) {
       await service.shutdown();

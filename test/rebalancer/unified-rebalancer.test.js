@@ -4,6 +4,7 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
@@ -77,6 +78,9 @@ import {
 import {
   registerUnifiedRebalancerBudgetArbitrationCleanupTests,
 } from './unified-rebalancer-budget-arbitration-cleanup-test-cases.js';
+import {
+  registerUnifiedRebalancerBudgetQueryGatewayTests,
+} from './unified-rebalancer-budget-query-gateway-test-cases.js';
 const BACKPRESSURE_PENDING_COUNT = 2;
 const BACKPRESSURE_MAX_PENDING = 2;
 const PRIORITY_RECOVERY_PUBLICATION_EPOCH = 7;
@@ -272,7 +276,7 @@ function createMockMessageRouter(
   return {
     getConnectionState: () => connectionState,
     getConnectedNodes: () => [...connectedNodes],
-    deliver: async () => ({acknowledged: true, status: 'completed'}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     pingNode: async () => true,
     isOutboundQueueAvailable: () => true,
   };
@@ -588,3 +592,4 @@ registerUnifiedRebalancerPriorityFollowupCreationTests(unifiedRebalancerTestCont
 registerUnifiedRebalancerSurrogateFollowupSynthesisTests(unifiedRebalancerTestContext);
 registerUnifiedRebalancerClosureWitnessFollowupTests(unifiedRebalancerTestContext);
 registerUnifiedRebalancerBudgetArbitrationCleanupTests(unifiedRebalancerTestContext);
+registerUnifiedRebalancerBudgetQueryGatewayTests(unifiedRebalancerTestContext);

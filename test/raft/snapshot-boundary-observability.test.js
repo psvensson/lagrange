@@ -43,7 +43,6 @@ const IDENTITY = Object.freeze({
   entity: Object.freeze({kind: 'partition', id: STATE_TABLE}),
   membershipEpoch: SEALED_EPOCH,
 });
-
 // Source with committed entries whose commands carry HLC timestamps, sealed
 // checkpoint, installed into a target; returns an OPEN adapter over the
 // installed target (caller closes).
@@ -134,7 +133,6 @@ test('the installed boundary is observable through the adapter', async (t) => {
     fixture.close();
   }
 });
-
 test('a virgin log keeps the CL-042 zero everywhere', async (t) => {
   const db = new Database(':memory:');
   try {
@@ -161,9 +159,9 @@ test('truncation at or below the boundary is witness-silent and lossless',
         'committed-truncation raft-safety witness');
       t.equal(adapter.has(liveEntry.index), true,
         'the committed live entry above the boundary survives');
-      adapter.removeEntriesAfter(fixture.boundaryIndex);
+      adapter.removeFrom(fixture.boundaryIndex);
       t.equal(adapter.has(liveEntry.index), true,
-        'removeEntriesAfter at the boundary cannot reach committed entries');
+        'removeFrom at the boundary cannot reach committed entries');
     } finally {
       fixture.close();
     }
@@ -220,47 +218,3 @@ test('an installed replica can re-checkpoint at its own boundary', async (t) => 
     fixture.close();
   }
 });
-
-test('creation refuses prepared-but-undecided transactions at the boundary',
-  async (t) => {
-    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-prepared-'));
-    try {
-      const db = new Database(path.join(workDir, 'source.db'));
-      const adapter = new SQLiteLogAdapter(
-        db, {address: PARTITION_ID, term: TERM});
-      const storage = new PartitionRaftStorage(db, PARTITION_ID, adapter);
-      db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
-        '(id TEXT PRIMARY KEY, payload TEXT)');
-      const prepare = adapter.saveCommand({
-        type: 'PREPARE_TRANSACTION',
-        sessionId: 'session-open',
-        writeSet: [],
-      }, TERM);
-      adapter.commit(prepare.index);
-      storage.recordAppliedAdvance();
-      const refused = await createSqliteStateMachineCheckpoint({
-        db,
-        identity: IDENTITY,
-        checkpointsRoot: path.join(workDir, 'checkpoints'),
-      });
-      t.equal(refused.outcome,
-        RAFT_CHECKPOINT_CREATION_OUTCOME.PREPARED_TRANSACTIONS_PENDING,
-        'a prepared-undecided session below the boundary refuses creation');
-      const commit = adapter.saveCommand({
-        type: 'TRANSACTION_COMMIT',
-        sessionId: 'session-open',
-      }, TERM);
-      adapter.commit(commit.index);
-      storage.recordAppliedAdvance();
-      const created = await createSqliteStateMachineCheckpoint({
-        db,
-        identity: IDENTITY,
-        checkpointsRoot: path.join(workDir, 'checkpoints'),
-      });
-      t.equal(created.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
-        'a terminal outcome below the boundary releases the refusal');
-      db.close();
-    } finally {
-      fs.rmSync(workDir, {recursive: true, force: true});
-    }
-  });

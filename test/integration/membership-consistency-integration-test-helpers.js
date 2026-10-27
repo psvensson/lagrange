@@ -30,7 +30,7 @@ import {isControlPlanePublicationsWriteLeader} from
 import {
   initializeTestEnvironment as initTestEnv,
 } from './helpers/cluster-test-helpers.js';
-import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 async function shutdownOrFail(t, promise, label) {

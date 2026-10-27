@@ -19,27 +19,24 @@ import {test} from 'node:test';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {
   durableAppliedState,
-  foldAt,
-  logFold,
-  reservedIdentities,
+  oracleCommittedStamp,
 } from './committed-membership-oracles.js';
 import {ConfigurationManager} from
   '../../../src/config/configuration-manager.js';
 import {LoggingService} from '../../../src/logging/logging-service.js';
 import {PartitionService} from '../../../src/partition/partition-service.js';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
-  '../../../src/partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
+import {isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
 import {
   COMMITTED_MEMBERSHIP_REFUSAL,
   COMMITTED_MEMBERSHIP_STAMP_DEFECT,
-  COMMITTED_MEMBERSHIP_STAMP_KIND,
 } from '../../../src/raft/raft-committed-membership-constants.js';
 import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 
 const PARTITION_ID = 'v1a-seed';
 const FOUNDER = 'v1a-seed-a';
@@ -54,28 +51,6 @@ const MISSING_STAMP = Object.freeze({
 
 function leads(cluster, replicaId) {
   return cluster.leaderReplicaId() === replicaId;
-}
-
-// The COMMITTED stamp a correct leader answers, folded from its durable log.
-function oracleStamp(cluster, leader, genesisPeerIds) {
-  const dbFile = cluster.replica(leader).dbFile;
-  const applied = durableAppliedState(dbFile, PARTITION_ID);
-  const voters = foldAt(logFold(dbFile, PARTITION_ID, genesisPeerIds),
-    applied.appliedIndex).voters;
-  const reserved = reservedIdentities(dbFile);
-  return {
-    kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
-    voters,
-    votersOutgoing: [],
-    learners: [],
-    appliedIndex: applied.appliedIndex,
-    commitIndex: applied.appliedIndex,
-    term: 1,
-    leaderId: leader,
-    gateOpen: true,
-    identities: Object.fromEntries(voters.map((peerId) =>
-      [peerId, reserved.get(peerId)])),
-  };
 }
 
 function consensusOf(error) {
@@ -94,8 +69,9 @@ test('V1a: a founder rebuilt with no stamp and no record is refused typed, ' +
         .appliedIndex > 0, {rounds: ROUNDS}), 'setup: the founder leads');
     const genesis = [String(cluster.raftPeerIdOf(FOUNDER))];
     cluster.addReplica(JOINER, [FOUNDER, JOINER],
-      {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-        oracleStamp(cluster, FOUNDER, genesis)});
+      {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+        oracleCommittedStamp(cluster.replica(FOUNDER).dbFile, PARTITION_ID,
+          genesis, FOUNDER)});
     const joinerPeerId = String(cluster.raftPeerIdOf(JOINER));
     const joinerHoldsBoth = () => {
       const applied = durableAppliedState(cluster.replica(JOINER).dbFile,
@@ -126,7 +102,7 @@ test('V1a: a founder rebuilt with no stamp and no record is refused typed, ' +
     let refusal = null;
     try {
       opened = cluster.buildReplica(FOUNDER, [FOUNDER],
-        {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: undefined});
+        {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: undefined});
     } catch (error) {
       refusal = error;
     }
@@ -165,8 +141,7 @@ test('V1a: a partition service built without a bootstrap membership cannot ' +
   });
   try {
     await assert.rejects(service.initialize(), (error) => {
-      assert.equal(error.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED);
+      assert.ok(isConsensusInitRefusal(error, ENTITY_TYPE.PARTITION));
       assert.deepEqual(consensusOf(error), MISSING_STAMP);
       return true;
     });

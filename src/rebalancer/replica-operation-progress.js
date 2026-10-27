@@ -24,6 +24,11 @@ const ReplicaStatus = {
   REMOVED: 'removed',
   /** Operation failed */
   FAILED: 'failed',
+  /**
+   * A retained bound creation not yet serving or projected (design
+   * ACTIVATION-DISCOVERY-DESIGN-20261017 RV2.2): peer-excluded, never a row.
+   */
+  HELD: 'held',
 };
 
 /**
@@ -361,6 +366,8 @@ const OPERATION_METADATA_KEY = Object.freeze({
   // Decoded, evaluated and stamped by
   // spread-cure-transition-authorization.js.
   CURE_TRANSITION_AUTHORIZATION: 'cureTransitionAuthorization',
+  FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION:
+    'failedCreateTargetLifecyclePrecondition',
 });
 
 function quoteSqlValue(value) {

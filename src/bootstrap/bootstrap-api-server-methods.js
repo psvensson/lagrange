@@ -22,6 +22,15 @@ const REQUEST_CELL_HTTP_METHODS = Object.freeze([
   'PUT',
 ]);
 const REQUEST_CELL_HTTP_ROUTES = Object.freeze(['/', '/*']);
+const COMPLETE_PHASE = 'complete';
+const FUNCTION_TYPE = 'function';
+
+async function ensureInProcessSeedTransportReady(adapter) {
+  if (adapter?.phase === COMPLETE_PHASE &&
+      typeof adapter?.startWebSocketServer === FUNCTION_TYPE) {
+    await adapter.startWebSocketServer();
+  }
+}
 
 const bootstrapApiServerMethods = {
   /**
@@ -62,6 +71,7 @@ const bootstrapApiServerMethods = {
         }
       }
     } else {
+      await ensureInProcessSeedTransportReady(this.bootstrapStartupAdapter);
       await this.fastify.ready();
     }
     this.initialized = true;

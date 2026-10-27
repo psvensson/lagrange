@@ -1,8 +1,8 @@
 /**
  * Message Group Service - peer-address resolution and authoritative cache
  * reconciliation triggering. Resolves unified peer addresses from the services
- * cache, live raft peers, and bootstrap hints, and schedules raft peer
- * reconciliation in response to cache changes.
+ * cache, the replica's consensus configuration, and bootstrap hints, and
+ * schedules raft peer reconciliation in response to cache changes.
  * Requirements: 1.1, 1.4, 9.1
  */
 import {
@@ -40,8 +40,9 @@ function assignPeerResolution(serviceClass) {
     },
     /**
      * Build a unified address for a peer replica.
-     * Looks up the address from the authoritative cache first, then live raft
-     * peers, and only uses bootstrap hints when a caller explicitly opts in.
+     * Looks up the address from the authoritative cache first, then the
+     * address this replica's consensus configuration places the peer at, and
+     * only uses bootstrap hints when a caller explicitly opts in.
      * Uses AddressManager for consistent address formatting and validation.
      * Requirements: 1.1, 1.4, 9.1
      * @param {string} peerId - Peer replica ID.
@@ -49,6 +50,9 @@ function assignPeerResolution(serviceClass) {
      * @param {boolean} [options.allowBootstrapHints=false] - Permit
      * bootstrap-time peer hints when authoritative runtime location has not
      * converged yet.
+     * @param {boolean} [options.consensusResolution=false] - The consensus
+     * runtime itself is resolving the address (it reads no status: the
+     * runtime resolves addresses while it computes one).
      * @return {string} Unified address for the peer.
      */
     buildPeerAddress(peerId, options = {}) {
@@ -78,7 +82,8 @@ function assignPeerResolution(serviceClass) {
         this.bootstrapHintFallbackLogged.delete(peerId);
         return cachedAddress;
       }
-      const livePeerAddress = this.resolveLivePeerAddressFromRaftNodes(peerId);
+      const livePeerAddress = options.consensusResolution === true ?
+        null : this.resolveLivePeerAddressFromConsensus(peerId);
       if (livePeerAddress) {
         return livePeerAddress;
       }
@@ -120,71 +125,6 @@ function assignPeerResolution(serviceClass) {
         }
       }
       return null;
-    },
-    /**
-     * Resolve an authoritative join candidate without failing closed when the
-     * local replica has no remote same-id peer yet.
-     * @param {string} peerId
-     * @return {string|null}
-     * @private
-     */
-    resolveOptionalRaftJoinPeerAddress(peerId) {
-      const cachedAddress = this.resolvePeerAddressFromCache(peerId);
-      if (cachedAddress) {
-        this.bootstrapHintFallbackLogged.delete(peerId);
-        return cachedAddress;
-      }
-      const livePeerAddress = this.resolveLivePeerAddressFromRaftNodes(peerId);
-      if (livePeerAddress) {
-        return livePeerAddress;
-      }
-      const hintedAddress = this.resolvePeerAddressFromHints(peerId);
-      if (hintedAddress) {
-        this.logBootstrapHintFallback(peerId, hintedAddress);
-        return hintedAddress;
-      }
-      return null;
-    },
-    /**
-     * Resolve one canonical join decision for the shared raft runtime owner.
-     * @param {string} peerId
-     * @return {{address: string|null, shouldJoin: boolean}}
-     * @private
-     */
-    resolveRaftJoinTarget(peerId) {
-      const optionalPeerAddress =
-        this.resolveOptionalRaftJoinPeerAddress(peerId);
-      if (peerId === this.replicaId && !optionalPeerAddress) {
-        return {
-          address: null,
-          shouldJoin: false,
-        };
-      }
-      const peerAddress =
-        optionalPeerAddress ||
-        this.buildPeerAddress(peerId, {allowBootstrapHints: true});
-      return {
-        address: peerAddress,
-        shouldJoin: this.shouldJoinRaftPeer(peerId, peerAddress),
-      };
-    },
-    /**
-     * Build one shared peer-address resolver surface for the canonical raft owner.
-     * @return {{resolve: Function}}
-     * @private
-     */
-    createRaftPeerAddressResolver() {
-      return {
-        resolve: (peerId) => {
-          return this.buildPeerAddress(peerId, {allowBootstrapHints: true});
-        },
-        resolveJoinTarget: (peerId) => {
-          return this.resolveRaftJoinTarget(peerId);
-        },
-      };
-    },
-    shouldJoinRaftPeer(peerId, peerAddress) {
-      return !this.isLocalForwardTarget(peerId, peerAddress);
     },
     /**
      * Resolve peer address from the services cache.

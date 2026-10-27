@@ -2,10 +2,10 @@ import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
 } from '../../../src/control-plane/publication-recovery-gate.js';
 import {
-  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
-} from '../../../src/control-plane/priority-recovery-snapshot.js';
+  ACTIVE_GATE_CLOSURE_RECORD_ID_PRIORITY_SPREAD,
+  ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
+  LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
+} from './active-gate-closure-classification.js';
 
 const PUBLICATION_EVIDENCE_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_EVIDENCE_ZERO = 0;
@@ -134,10 +134,9 @@ function shouldClearStaleActiveGatePrioritySpreadClosure({
   prioritySpreadSatisfied = null,
   snapshotCoverageComplete = false,
 } = {}) {
-  return closureRecordId === PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD &&
+  return closureRecordId === ACTIVE_GATE_CLOSURE_RECORD_ID_PRIORITY_SPREAD &&
     closureWitnessClass ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
-        .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING &&
+      ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD &&
     normalizeDistinctStringArray(gateReasons).length ===
       PUBLICATION_EVIDENCE_ZERO &&
     prioritySpreadSatisfied === true &&
@@ -276,13 +275,12 @@ function hasStaleGenericPublicationEpochClosure({
     );
   const stalePublicationClosure =
     closureState ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION ||
+      LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION ||
     (
       closureRecordId ===
-        PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD &&
+        ACTIVE_GATE_CLOSURE_RECORD_ID_PRIORITY_SPREAD &&
       closureWitnessClass ===
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
-          .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING
+        ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD
     );
   return stalePublicationClosure === true &&
     publicationStatus === PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED &&

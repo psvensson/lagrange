@@ -76,8 +76,8 @@ async function subscribeToHydrationCDC({
           ),
         buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
           d.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-        propagatePartitionCDCEvent: (messageGroupService, cdcEvent) =>
-          d.propagatePartitionCDCEvent(messageGroupService, cdcEvent),
+        propagatePartitionCDCEvent: (messageGroupService, cdcEvent, deliveryContext) =>
+          d.propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext),
         beforePropagation: async (cdcEvent) => {
           const cdcData = cdcEvent?.data &&
             typeof cdcEvent.data === 'object' ?
@@ -117,9 +117,6 @@ async function subscribeToHydrationCDC({
           replicaId,
           subscriberId: handshake.subscriberId,
           subscriptionEpoch: handshake.subscriptionEpoch,
-          catchupMode: handshake.catchup.mode,
-          bufferedEventsReplayed:
-            handshake.catchup.bufferedEventsReplayed,
         });
     }
 

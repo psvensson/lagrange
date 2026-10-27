@@ -1,0 +1,1 @@
+solve/quests/public-binding-two-partition-harness/evidence/receipt.json: pass (5/5 receipts passing)

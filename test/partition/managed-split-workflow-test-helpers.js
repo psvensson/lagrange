@@ -9,6 +9,7 @@ import {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_OPERATION_TYPE,
 } from '../../src/rebalancer/storage-admission-constants.js';
+import {tablesColumnOf} from './tables-row-defaults.js';
 
 function createAdmissionResult(overrides = {}) {
   return {
@@ -85,7 +86,7 @@ function buildWorkflow(options = {}) {
         // conditional update would match zero rows.
         const matchesWhere = (row) => Object.entries(whereClause || {})
           .every(([column, expected]) => {
-            const actual = row?.[column];
+            const actual = tablesColumnOf(row, column);
             if (expected === null || expected === undefined) {
               return actual === null || actual === undefined;
             }
@@ -193,6 +194,14 @@ function buildWorkflow(options = {}) {
       options.listTablePartitionRows || (() => []),
     listPartitionServiceRows:
       options.listPartitionServiceRows || (() => []),
+    // The group leader's committed configuration (production: the
+    // committed-membership read): here, the replicas the test's own rows
+    // declare for the group. No rows: membership unavailable.
+    readCommittedGroupMembers: options.readCommittedGroupMembers ||
+      (async (partitionId) => ((options.listPartitionServiceRows ||
+        (() => []))(partitionId) || []).map((row) =>
+        String(row?.replica_id ?? row?.replicaId ?? ''))
+        .filter((id) => id.length > 0)),
     deliverReplicaRemoval:
       options.deliverReplicaRemoval || (async () => null),
     // Cutover readiness evidence: by default every child's canonical
@@ -208,6 +217,9 @@ function buildWorkflow(options = {}) {
     logger: options.logger || {info() {}, error() {}, warn() {}},
     now: options.now || (() => 1000),
     transactionCoordinator,
+    groupRetirementScheduler: options.groupRetirementScheduler,
+    groupRetirementLeaseScheduler: options.groupRetirementLeaseScheduler,
+    workflowLeaseMs: options.workflowLeaseMs,
   });
 
   // Expose the durable row so tests can drive the ownership claim

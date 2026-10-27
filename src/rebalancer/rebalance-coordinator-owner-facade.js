@@ -1,9 +1,13 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from
+  './operation-workflow-owner-shared.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   classifySystemPartition,
 } = REBALANCE_COORDINATOR_SHARED;
+const {OPERATION_OWNER_ACTION} = OPERATION_WORKFLOW_OWNER_SHARED;
+const OPERATION_FAILURE_OWNER_BOUNDARY = 'operation_failure';
 
 class RebalanceCoordinatorOwnerFacade {
   /**
@@ -129,6 +133,10 @@ class RebalanceCoordinatorOwnerFacade {
       params,
       options,
     );
+  }
+
+  createOperationMutationTimeoutBudget(timeoutBudget = null) {
+    return this.repository.createOperationMutationTimeoutBudget(timeoutBudget);
   }
 
   /**
@@ -401,7 +409,19 @@ class RebalanceCoordinatorOwnerFacade {
    *   ({committed, disposition}).
    */
   async failOperation(operation, errorMessage, options = {}) {
-    return this.workflowOwner.failOperation(operation, errorMessage, options);
+    return this.workflowOwner.runOperationOwnerAction(
+      OPERATION_OWNER_ACTION.FAIL,
+      operation,
+      {
+        boundary: OPERATION_FAILURE_OWNER_BOUNDARY,
+        errorMessage,
+        failureOptions: options,
+      },
+    );
+  }
+
+  async decideFailedCreateTargetCleanup(operation) {
+    return this.workflowOwner.decideFailedCreateTargetCleanup(operation);
   }
 
   /**

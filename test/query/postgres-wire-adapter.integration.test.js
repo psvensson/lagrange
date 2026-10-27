@@ -9,12 +9,19 @@
  * Requirements: 3.1, 3.2, 3.4
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {PG_SESSION_STATE} from
   '../../src/query/pg/postgres-wire-adapter.js';
 import {createTestPostgresWireAdapter} from
   '../helpers/pgwire-auth-handler.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+// Engines persist transaction state (TX1 seam S4b) and their partitions
+// answer the participant transaction protocol.
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   QUERY_ERROR_CODE,
@@ -42,17 +49,19 @@ function createMockMessageRouter() {
 
       if (message.type === 'QUERY') {
         const data = partitionStore.get(replicaId) || [];
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: data,
           changes: 0,
-        };
+        });
       }
+      // A participant answers the transaction protocol (TX1 design 2.2): a
+      // PREPARE names its state and digest, a COMMIT its outcome.
       if (message.type === 'TRANSACTION') {
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true},
+          answerParticipantTransactionRequest(message));
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
   };
 }
@@ -128,6 +137,7 @@ function createAdapterWithEngine(opts = {}) {
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const adapter = createTestPostgresWireAdapter({

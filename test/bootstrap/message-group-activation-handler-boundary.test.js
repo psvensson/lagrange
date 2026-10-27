@@ -20,11 +20,21 @@ import {MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR} from
   '../../src/message-group/message-group-service-row-owner.js';
 import {activateMessageGroupServiceRows} from
   '../../src/bootstrap/shared/message-group-service-activation.js';
-import {retireMessageGroupTransportHandler} from
-  '../../src/bootstrap/shared/message-group-transport-handler.js';
+import {SeedCleanupHandler} from
+  '../../src/bootstrap/phases/seed-cleanup-handler.js';
+import {
+  initializeRegisteredMessageGroup,
+  messageGroupCreationAlreadySettled,
+  retireMessageGroupTransportHandler,
+} from '../../src/bootstrap/shared/message-group-transport-handler.js';
+import {REPLICA_HANDLER_RETIREMENT_OUTCOME} from
+  '../../src/node/replica-transport-handler-identity.js';
 import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {consensusInitRefusedError} from '../../src/raft/raft-operation-port.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/addresses.js';
 import {
   createGatedServicesRow,
   createMessageGroupReplicaRuntime,
@@ -77,7 +87,7 @@ function createWorld(initialRow = registeredRow(), options = {}) {
   const service = createService(router, stateMachine,
     options.register !== false);
   if (options.register === false) {
-    service.transportHandler = () => ({acknowledged: true});
+    service.transportHandler = () => (null);
   }
   const durable = createGatedServicesRow(initialRow, {
     atCas: () => router.getRegisteredHandler(ADDRESS) ===
@@ -99,6 +109,115 @@ function createWorld(initialRow = registeredRow(), options = {}) {
     {messageGroup, messageRouter: router, address: ADDRESS,
       replicaId: REPLICA_ID});
   return {router, stateMachine, service, durable, activate, retire};
+}
+
+test('MG retirement refuses completion without exact handler identity API',
+  async (t) => {
+    const address = ADDRESS;
+    const handler = () => {};
+    const registered = new Map([[address, handler]]);
+    const errors = [];
+    const router = {
+      register(key, value) {
+        registered.set(key, value);
+      },
+      unregister(key) {
+        registered.delete(key);
+      },
+      // Deliberately no getRegisteredHandler or unregisterExact.
+    };
+    const messageGroup = {
+      transportHandler: handler,
+      logger: {error(message, evidence) {
+        errors.push({message, evidence});
+      }},
+    };
+    await t.rejects(
+      retireMessageGroupTransportHandler({messageGroup, messageRouter: router,
+        address, replicaId: REPLICA_ID}),
+      {code: REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY},
+      'logging a refused identity retirement must not settle teardown');
+    t.equal(registered.get(address), handler,
+      'the handler was retained rather than removed unsafely by address');
+    t.equal(errors.length, 1, 'the same owner reports the typed refusal');
+    t.equal(errors[0].evidence.replicaId, REPLICA_ID);
+  });
+
+for (const failRetirement of [false, true]) {
+  test('MG creation failure ' +
+    (failRetirement ? 'retains unretired handler under host custody' :
+      'retires registered handler before returning the primary refusal'),
+  async (t) => {
+    const primary = consensusInitRefusedError({domain: ENTITY_TYPE.MESSAGE_GROUP,
+      identity: {groupId: 'refused-group', replicaId: REPLICA_ID},
+      answer: Object.freeze({outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+        phase: 'native-initialization'})});
+    const registered = new Map();
+    const address = ADDRESS;
+    const handler = () => {};
+    const router = {
+      register(key, callback) {
+        registered.set(key, callback);
+      },
+      ...(failRetirement ? {} : {
+        getRegisteredHandler(key) {
+          return registered.get(key) || null;
+        },
+        unregisterExact(key, callback) {
+          if (registered.get(key) !== callback) return false;
+          registered.delete(key);
+          return true;
+        },
+      }),
+    };
+    router.register(address, handler);
+    const services = new Map();
+    let closes = 0;
+    const service = {
+      transportHandler: handler,
+      logger: {error() {}},
+      initialized: false,
+      isShutdown: false,
+      async initialize() {
+        throw primary;
+      },
+      async shutdown() {
+        closes += 1;
+        this.isShutdown = true;
+      },
+    };
+    let observed = null;
+    try {
+      await initializeRegisteredMessageGroup({
+        messageGroup: service, messageGroupServices: services,
+        messageRouter: router, address, replicaId: REPLICA_ID,
+      });
+    } catch (error) {
+      observed = error;
+    }
+    t.ok(observed, 'initialization refusal must propagate');
+    if (failRetirement) {
+      t.equal(observed.cause, primary,
+        'the original startup refusal remains the primary error');
+    } else {
+      t.equal(observed, primary,
+        'successful cleanup propagates the same error object');
+    }
+    t.equal(closes, 1, 'the exact failed runtime receives shutdown');
+    if (failRetirement) {
+      t.equal(services.get(REPLICA_ID), service,
+        'failed cleanup is reachable through the existing host map');
+      t.equal(registered.get(address), handler,
+        'identity refusal never removes the callback by address');
+      t.throws(() => messageGroupCreationAlreadySettled(services, REPLICA_ID),
+        {code: 'MESSAGE_GROUP_CREATE_CLEANUP_REQUIRED'},
+        'a cleanup-debt object must not masquerade as CREATED');
+    } else {
+      t.equal(services.has(REPLICA_ID), false,
+        'completed cleanup never publishes a failed service');
+      t.equal(registered.has(address), false);
+    }
+  });
 }
 
 test('MG N2 (1): the exact generation handler is registered -> ACTIVE',
@@ -203,7 +322,7 @@ test('MG N2 (4b): retirement does not wait for unrelated lifecycle work in ' +
 test('MG N2 (5): a different generation handler under the same replica id ' +
   'does not satisfy activation', async (t) => {
   const world = createWorld(registeredRow(), {register: false});
-  world.router.register(ADDRESS, () => ({acknowledged: true}));
+  world.router.register(ADDRESS, () => (null));
   await t.rejects(world.activate(), /replica handler registration/u,
     'presence at the address is not this generation\'s handler');
   t.equal(world.durable.casCalls.length, 0);
@@ -258,22 +377,23 @@ async (t) => {
     'src/partition']) {
     walk(join(root, directory));
   }
-  // Remaining raw removals are not replica handlers: node-level service
-  // handlers (fixed addresses) and the shared exact-identity retirement
-  // itself. Seed cleanup is not a handler-removal authority (Removal-7): the
-  // exact retirement in partition.shutdown() is the one path.
+  // The one remaining raw removal is the shared exact-identity retirement
+  // itself: node-level service handlers retire through it too (one handler
+  // identity policy, findings F2/F4). Seed cleanup is not a handler-removal
+  // authority (Removal-7): the exact retirement in partition.shutdown() is
+  // the one path.
   t.same(removalSites.sort(), [
-    'src/node/message-group-service-handler.js',
-    'src/node/replica-handler-runtime-methods.js',
     'src/node/replica-transport-handler-identity.js',
-    'src/node/runtime-service-handler.js',
   ]);
   t.notMatch(read('src/bootstrap/phases/seed-cleanup-handler.js'),
-    /ENTITY_TYPE\.MESSAGE_GROUP/u,
-    'seed cleanup formats no message-group address for a raw removal');
+    /\bunregister(Exact)?(\?\.)?\(/u,
+    'seed cleanup performs no raw handler removal');
+  // The handler retires exactly the callback it registered at its own fixed
+  // address (registered-learner-read contract): a successor registration at
+  // the same address survives an old handler's retirement.
   t.match(read('src/node/message-group-service-handler.js'),
-    /MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS\.HANDLER_ID\}`;\s+if \(isFunction\(messageRouter\.unregister\)\) \{\s+messageRouter\.unregister\(handlerAddress\);/u,
-    'the node-level service handler removes only its own fixed address');
+    /MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS\.HANDLER_ID\}`;[\s\S]{0,800}?retireNodeTransportHandler\(this\.logger, \{transport: messageRouter,\s+address: handlerAddress, handler: registration\}\);/u,
+    'the node-level service handler removes only its own fixed address, and only its own callback');
   const retirements = {
     'src/bootstrap/phases/create-message-group-replica-lifecycle.js':
       /await retireMessageGroupTransportHandler\(\{/gu,
@@ -283,16 +403,29 @@ async (t) => {
       /await retireMessageGroupTransportHandler\(\{/gu,
     'src/bootstrap/join-cleanup-handler.js':
       /await retireMessageGroupTransportHandlers\(\{/gu,
-    'src/bootstrap/phases/seed-cleanup-handler.js':
-      /await retireMessageGroupTransportHandlers\(\{/gu,
-  };
-  const expectedCounts = {
-    'src/bootstrap/phases/seed-cleanup-handler.js': 2,
   };
   for (const [path, pattern] of Object.entries(retirements)) {
-    t.equal((read(path).match(pattern) || []).length,
-      expectedCounts[path] || 1, `${path} retires through the owner helper`);
+    t.equal((read(path).match(pattern) || []).length, 1,
+      `${path} retires through the owner helper`);
   }
+  // Both seed cleanup entries share exact-object release. Formatting its
+  // canonical address is not removal authority: the captured object still
+  // crosses the singular exact-handler owner after successful shutdown.
+  const seedCleanup = SeedCleanupHandler.prototype;
+  for (const method of ['_cleanupMessageGroups', 'cleanup']) {
+    t.match(seedCleanup[method].toString(),
+      /await this\.shutdownMessageGroupServices\(logger\);/u,
+      `${method} awaits the shared message-group cleanup path`);
+  }
+  t.match(seedCleanup.shutdownMessageGroupServices.toString(),
+    /const messageRouter = d\.getMessageRouter\(\);[\s\S]*const nodeId = d\.getNodeId\(\);[\s\S]*await this\.shutdownServiceMap\(\{/u,
+    'the shared path captures router and node before awaiting release');
+  t.match(seedCleanup.shutdownMessageGroupServices.toString(),
+    /afterShutdown: async \(replicaId, messageGroup\) => \{[\s\S]*await retireMessageGroupTransportHandler\(\{\s*messageGroup,\s*messageRouter,[\s\S]*replicaId,\s*\}\);/u,
+    'retirement uses the captured released object and its exact identity');
+  t.match(seedCleanup.shutdownServiceMap.toString(),
+    /await service\.shutdown\(\);[\s\S]*await options\.afterShutdown\?\.\(replicaId, service\);[\s\S]*if \(options\.services\.get\(replicaId\) === service\) \{\s*options\.services\.delete\(replicaId\);/u,
+    'native shutdown and exact retirement precede conditional map discharge');
   for (const path of [
     'src/bootstrap/phases/create-message-group-replica-lifecycle.js',
     'src/bootstrap/phases/seed-message-groups-phase.js',

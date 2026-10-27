@@ -18,11 +18,6 @@ import {readSeedStartupStorageAdmission} from './bootstrap/seed-startup-storage-
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
 import {NodeService} from './node/node-service.js';
 import {
-  ensureLiferaftProviderForRuntime,
-  getProcessRaftProvider,
-} from './raft/raft-provider-control.js';
-import {RAFT_PROVIDER_LOG_MSG} from './raft/raft-provider-control-constants.js';
-import {
   ENTRYPOINT_ERROR_MSG,
   ENTRYPOINT_LOG_MSG,
   ENTRYPOINT_RUNTIME_VALUE,
@@ -62,6 +57,7 @@ import {resolveNodeJoiningConfig} from './entrypoint-runtime-join-config.js';
 import {
   acquireStartupOwner,
   createStartupAcquisitionLedger,
+  runStartupWithCleanup,
 } from
   './entrypoint-startup-acquisition-ledger.js';
 import {
@@ -187,7 +183,7 @@ async function startJoinNode(options) {
     replicaHandler: nodeJoiningService.replicaHandler,
     [METADATA_KEY]: null,
     bootstrapStartupAdapter: nodeJoiningService,
-    bootstrapService: null,
+
     epochManager: nodeJoiningService.epochManager,
     messageRouter: nodeJoiningService.messageRouter,
     readinessState: joinReadinessState,
@@ -319,6 +315,9 @@ async function startJoinNode(options) {
       owner: nodeJoiningService.runtimeDependencyOwner,
       messageRouter: joinResult.messageRouter,
       partitionServices: joinResult.partitionServices,
+      dynamicConfigWiring: joinDynamicConfigWiring,
+      membershipLifecycleController,
+      bootstrapAPI,
     }),
     assertActive: () => throwIfStartupAborted(options.signal),
     register: (runtime) => options.cleanupLedger.defer(() =>
@@ -428,14 +427,19 @@ async function startSeedNode(options) {
     nodeAddress: seedNodeHttpAddress,
     advertisedNodeWsAddress,
     dataDirectoryManager,
+    dataDirectoryProcessOwner: options.dataDirectoryProcessOwner,
+    startupAbortSignal: options.signal,
     wsPort: wsPort,
     rolloutControls,
     clusterIncarnationFence,
     readinessState,
     bootIncarnation,
     startupServicesAdmission,
+    membershipOwnerOutcome: options.membershipOwnerOutcome,
   });
   options.cleanupLedger.defer(() => bootstrapService.shutdown());
+  await awaitStartupAcquisition(
+    bootstrapService.prepareOriginalSeedAttempt(), options.signal);
 
   const bootstrapAPI = new BootstrapAPI({
     seedNodeId: nodeId,
@@ -446,7 +450,7 @@ async function startSeedNode(options) {
     partitionServices: bootstrapService.partitionServices,
     replicaHandler: bootstrapService.replicaHandler,
     [METADATA_KEY]: bootstrapService[METADATA_KEY],
-    bootstrapService: bootstrapService,
+    assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
     epochManager: bootstrapService.epochManager,
     messageRouter: bootstrapService.messageRouter,
     readinessState,
@@ -459,7 +463,8 @@ async function startSeedNode(options) {
   });
 
   options.cleanupLedger.defer(() => bootstrapAPI.shutdown());
-  await awaitStartupAcquisition(bootstrapAPI.initialize(), options.signal);
+  bootstrapService.seedRuntimeBridgeOwner.attachBootstrapTopologySnapshotOwner(
+    bootstrapAPI.bootstrapTopologySnapshotOwner);
 
   const bootstrapResult = await awaitStartupAcquisition(
     bootstrapService.bootstrap(),
@@ -470,9 +475,9 @@ async function startSeedNode(options) {
     mainLogger.error(ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED, {
       error: bootstrapResult.error,
     });
-    throw new Error(bootstrapResult.error || ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED);
+    throw bootstrapResult.cause ||
+      new Error(bootstrapResult.error || ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED);
   }
-
   let seedLogsPersistence = null;
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.BOOTSTRAP_COMPLETED, {
@@ -495,18 +500,14 @@ async function startSeedNode(options) {
       null,
   });
 
-  try {
-    await awaitStartupAcquisition(
-      bootstrapService.startWebSocketServer(),
-      options.signal,
-    );
-    mainLogger.info(ENTRYPOINT_LOG_MSG.WS_STARTED);
-  } catch (wsError) {
-    throwIfStartupAborted(options.signal);
-    mainLogger.warn(ENTRYPOINT_LOG_MSG.WS_START_FAILED, {
-      error: wsError.message,
-    });
-  }
+  await awaitStartupAcquisition(
+    bootstrapService.startWebSocketServer(),
+    options.signal,
+  );
+  mainLogger.info(ENTRYPOINT_LOG_MSG.WS_STARTED);
+  // Public HTTP admission follows the actual transport listen acquisition.
+  // A rejected listener preserves its original error through startup cleanup.
+  await awaitStartupAcquisition(bootstrapAPI.initialize(), options.signal);
 
   const seedSqlRuntime = await acquireStartupOwner({
     acquire: () => createSqlRuntimeComposition({
@@ -560,6 +561,8 @@ async function startSeedNode(options) {
       owner: bootstrapService.runtimeDependencyOwner,
       messageRouter: bootstrapResult.messageRouter,
       partitionServices: bootstrapResult.partitionServices,
+      dynamicConfigWiring: seedDynamicConfigWiring,
+      bootstrapAPI,
     }),
     assertActive: () => throwIfStartupAborted(options.signal),
     register: (runtime) => options.cleanupLedger.defer(() =>
@@ -683,16 +686,6 @@ async function logBootProvenance(options) {
   }
 }
 
-async function runStartupWithCleanup(cleanupLedger, startup) {
-  try {
-    const runtime = await startup();
-    cleanupLedger.release();
-    return runtime;
-  } catch (error) {
-    await cleanupLedger.unwind().catch(() => undefined);
-    throw error;
-  }
-}
 async function acquireLagrangeRuntime(options, cleanupLedger) {
   const environment = options.environment;
   const cliArgs = options.cliArgs;
@@ -714,11 +707,6 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
     config,
     environment,
   );
-  const selectedRaftProvider = getProcessRaftProvider(environment);
-  mainLogger.info(RAFT_PROVIDER_LOG_MSG.SELECTED, {
-    provider: selectedRaftProvider,
-  });
-  ensureLiferaftProviderForRuntime(environment);
   await startFormationAttributionWindow({environment, logger: mainLogger});
 
   configLogger.debug(ENTRYPOINT_RUNTIME_VALUE.CONFIGURATION_LOADED, {
@@ -729,7 +717,9 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   dataDirectoryManager.initialize();
   const dataDirectoryProcessOwner = acquireDataDirectoryProcessOwner(
     dataDirectoryManager.getDataDir());
-  cleanupLedger.defer(() => dataDirectoryProcessOwner.release());
+  cleanupLedger.defer(() => dataDirectoryProcessOwner.release(), {
+    requiresSuccessfulCleanup: true,
+  });
 
   const hlcClock = new HLCClockService(config.get(CONFIG_KEY.NODE_ID), {
     maxDrift: config.get(CONFIG_KEY.HLC_MAX_DRIFT_MS),
@@ -746,7 +736,7 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
     dataDirectoryProcessOwner.release();
     return reportDryRunCompletion({logger: mainLogger,
       nodeId: config.get(CONFIG_KEY.NODE_ID),
-      dataDir: dataDirectoryManager.getDataDir(), provider: selectedRaftProvider});
+      dataDir: dataDirectoryManager.getDataDir()});
   }
 
   const startupJoinDecision = await awaitStartupAcquisition(resolveStartupJoinDecision({
@@ -775,7 +765,8 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
     });
   } else {
     runtime = await startSeedNode({cleanupLedger, config, mainLogger,
-      dataDirectoryManager, rolloutControls, env: environment,
+      dataDirectoryManager, dataDirectoryProcessOwner, rolloutControls, env: environment,
+      membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
       signal: options.signal});
   }
   return bindDataDirectoryProcessOwner(runtime, dataDirectoryProcessOwner);

@@ -21,6 +21,7 @@
 // expectation is the owners' (the classifier, the kernel, the partition's
 // defaults) or read from the replicas' own databases.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -33,6 +34,11 @@ import {formAdmittedGroup} from
   '../partition/partition-admitted-group-fixture.js';
 import {createControllablePartitionService} from
   '../partition/partition-service-test-support.js';
+import {
+  resumeFixtureParticipantAdmission,
+  resumeFixtureParticipantGroupAdmission,
+} from '../test-helpers/participant-transaction-fixture.js';
+import {driveNativeR2Election} from './unknown-outcome-surface-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {ERRORS} from '../../src/constants/errors.js';
@@ -43,6 +49,8 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
+import {PARTITION_SETTLED_REPLAY} from
+  '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
   '../../src/partition/proposal-queue-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -171,9 +179,11 @@ test('B7 / F-am: the SQL engine never records a partition write released ' +
     ...tableOptions(), partitionId, replicaId, replicaIds: [replicaId],
     nodeId, dbPath: path.join(directory, 'partition.sqlite'),
     timeSource: clock,
+    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
   });
   try {
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     // The partition answers the routed write when its own clock passes its
     // pending-commit deadline (its proposal is accepted, never committed).
     const engine = new SQLQueryEngine({
@@ -185,7 +195,7 @@ test('B7 / F-am: the SQL engine never records a partition write released ' +
           const answer = partition.handleRemoteQuery(message);
           await new Promise((resolve) => setImmediate(resolve));
           clock.advance(PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS);
-          return answer;
+          return buildDeliveryEnvelope({acknowledged: true}, await answer);
         },
       },
       cdcIntegrationService: {
@@ -238,6 +248,30 @@ test('B7 / F-am: the SQL engine never records a partition write released ' +
   }
 });
 
+function pinFixtureParticipantAdmission(service) {
+  const rawRaft = service.raft;
+  const readStatus = rawRaft.readStatus.bind(rawRaft);
+  const admittedStatus = readStatus();
+  let useAdmittedStatusOnce = false;
+  service.raft = Object.create(rawRaft, {
+    readStatus: {
+      value(...args) {
+        if (useAdmittedStatusOnce) {
+          useAdmittedStatusOnce = false;
+          return admittedStatus;
+        }
+        return readStatus(...args);
+      },
+    },
+  });
+  const answerSettledWrite = service.answerSettledWrite.bind(service);
+  service.answerSettledWrite = (...args) => {
+    const settled = answerSettledWrite(...args);
+    useAdmittedStatusOnce = settled === undefined;
+    return settled;
+  };
+}
+
 // The r5-g2-dup shape. r1 leads and proposes A; its appends reach r2 only
 // and no follower's answer reaches r1, so A is on r1's and r2's logs,
 // uncommitted. r2 comes to lead (it holds A, so r3 votes for it) and commits
@@ -255,6 +289,10 @@ async function withPartitionedLeader(body) {
     partitionId, members, tempPrefix: TEMP_PREFIX,
     serviceOptions: tableOptions(), budgetMs: GROUP_BUDGET_MS,
   });
+  await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
+  for (const service of group.services) {
+    pinFixtureParticipantAdmission(service);
+  }
   const [r1] = group.services;
   const network = r1.transport;
   const deliver = network.deliver;
@@ -262,7 +300,7 @@ async function withPartitionedLeader(body) {
   network.deliver = (address, envelope, ...rest) => {
     const packet = envelope?.payload ?? envelope;
     return blocked.has(`${packet?.from}>${packet?.to}`) ?
-      Promise.resolve({acknowledged: true}) :
+      Promise.resolve(buildDeliveryEnvelope({acknowledged: true})) :
       deliver.call(network, address, envelope, ...rest);
   };
   try {
@@ -294,10 +332,15 @@ function logLength(dbPath, groupId) {
   }
 }
 
-test('F-aj: the query executor answers an unknown outcome to its client ' +
-  'once and never sends the statement again without its entryId; a ' +
-  'router holding the code re-proposes it only under its entryId, ' +
-  'idempotently', {timeout: TEST_TIMEOUT_MS}, async () => {
+// Superseded expectation (owner ruling, R6-B): the executor used to answer
+// the unknown outcome to its client after ONE delivery - and the caller's
+// re-drive then minted a fresh entry. The executor is now the one owner that
+// re-delivers an unknown outcome, and only under the write's one entryId, so
+// its client ends with the original result, the write applied exactly once.
+test('F-aj: the query executor re-delivers an unknown outcome under the ' +
+  'write\'s one entryId until it is settled - its client gets the original ' +
+  'result, applied once; a router holding the code re-proposes it only ' +
+  'under its entryId, idempotently', {timeout: TEST_TIMEOUT_MS}, async () => {
   await withPartitionedLeader(async ({services, members, partitionId,
     dbFileOf, addressOf, waitFor, blocked}) => {
     const [r1, r2] = services;
@@ -330,9 +373,10 @@ test('F-aj: the query executor answers an unknown outcome to its client ' +
           role: index === 0 ? 'leader' : 'follower'}))}),
       messageRouter: {
         async deliver(address, message) {
-          sent.push(address);
-          return services[members.findIndex((member) =>
-            addressOf(member) === address)].handleRemoteQuery(message);
+          sent.push({address, entryId: message.entryId});
+          return buildDeliveryEnvelope({acknowledged: true},
+            await services[members.findIndex((member) =>
+              addressOf(member) === address)].handleRemoteQuery(message));
         },
       },
     });
@@ -351,7 +395,8 @@ test('F-aj: the query executor answers an unknown outcome to its client ' +
       logLength(dbFileOf(members[1]), partitionId) >
       logLength(dbFileOf(members[2]), partitionId) + 1), true,
     'setup: both proposals reached r2 and not r3');
-    await r2.raft.campaign();
+    blocked.add(`${p1}>${p2}`);
+    await driveNativeR2Election(services);
     assert.equal(await waitFor(() => r2.raft.readStatus().role ===
       RAFT_ROLE.LEADER), true, 'setup: r2 leads');
     assert.equal(await waitFor(() => values('row-0')[1] === 'v+' &&
@@ -365,13 +410,21 @@ test('F-aj: the query executor answers an unknown outcome to its client ' +
       true, `setup: the replicas converged on A (${values('row-0')})`);
     await sleep(SETTLE_MS);
     assert.deepEqual(values('row-0'), ['v+', 'v+', 'v+'],
-      'A applied once on every replica: the executor did not send it again');
-    assert.deepEqual(sent, [addressOf(members[0])],
-      'the executor sent the statement once');
-    assert.equal(answered.success, false, 'its client is not told it ' +
-      'succeeded');
-    assert.ok(String(answered.error).includes(ERRORS.WRITE_OUTCOME_UNKNOWN),
-      `its client is told the outcome is unknown (${answered.error})`);
+      'A applied once on every replica: its re-deliveries were the same entry');
+    assert.equal(sent[0].address, addressOf(members[0]),
+      'setup: A was first sent to r1');
+    assert.ok(sent.length >= 2, 'the executor re-delivered the unknown ' +
+      `outcome (${JSON.stringify(sent)})`);
+    assert.equal(new Set(sent.map((delivery) => delivery.entryId)).size, 1,
+      `every delivery carried A's one entryId (${JSON.stringify(sent)})`);
+    assert.equal(typeof sent[0].entryId, 'string',
+      'an entryId minted once by the executor for a caller that gave none');
+    assert.equal(answered.success, true, 'its client is told the write ' +
+      `applied (${JSON.stringify(answered.error ?? null)})`);
+    assert.equal(answered.changes, 1, 'with its original result: the one row ' +
+      'A updated');
+    assert.ok(!String(answered.error ?? '').includes(
+      ERRORS.WRITE_OUTCOME_UNKNOWN), 'never the unknown outcome');
 
     const {PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
       isReroutableWriteFailureCode} = partitionWriteKernel;
@@ -386,8 +439,10 @@ test('F-aj: the query executor answers an unknown outcome to its client ' +
     const rerouted = await append(leader, 'row-1', held.entryId);
     assert.equal(rerouted.success, true, 'the re-proposal under B\'s entryId ' +
       `is answered (${JSON.stringify(rerouted)})`);
-    assert.equal(rerouted.idempotentReplay, true,
+    assert.equal(rerouted.settledReplay,
+      PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
       'from B\'s durable outcome row');
+    assert.equal(rerouted.changes, 1, 'with the row B updated');
     assert.equal(await waitFor(() => values('row-1').every((value) =>
       value === 'v+')), true, 'B applied once on every replica ' +
       `(${values('row-1')})`);

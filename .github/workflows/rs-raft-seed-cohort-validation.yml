@@ -1,0 +1,109 @@
+# Source-only same-host seed intent negative and real original startup bodies.
+# This is WIP proof, not cutover or independent review.
+name: rs-raft-seed-cohort-validation
+on:
+  push:
+    branches: [continue/rs-raft-seed-cohort-once-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-cohort-validation.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - test/bootstrap/seed-release-once-per-cohort.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-seed-cohort-validation
+  cancel-in-progress: false
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact candidate/negative same-host, then unchanged original startup tests
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT="$GITHUB_WORKSPACE/test-output/rs-raft-seed-cohort-validation"
+          mkdir -p "$OUT"
+          BASE=434ecac89db106df8475a0f13015c11279bc0c04
+          TEST=test/bootstrap/seed-release-once-per-cohort.test.js
+          printf '%s\n' "$GITHUB_SHA" > "$OUT/candidate-sha.txt"
+          printf '%s\n' "$BASE" > "$OUT/negative-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$BASE^{tree}" > "$OUT/negative-tree.txt"
+          git diff --name-only "$BASE" "$GITHUB_SHA" -- src > "$OUT/changed-src-paths.txt"
+          cat "$OUT/changed-src-paths.txt"
+          test "$(wc -l < "$OUT/changed-src-paths.txt")" = 1 || exit 1
+          grep -Fx 'src/bootstrap/bootstrap-service-seed-workflow.js' "$OUT/changed-src-paths.txt" || exit 1
+          NEG="$RUNNER_TEMP/rs-raft-seed-cohort-negative"
+          git worktree add --detach "$NEG" "$BASE" > "$OUT/negative-worktree.log" 2>&1 || exit 1
+          cmp "$TEST" "$NEG/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test-sha256.txt"
+          (cd "$NEG" && sha256sum "$TEST") > "$OUT/negative-test-sha256.txt"
+          npm ci > "$OUT/candidate-install.log" 2>&1
+          candidateInstall=$?
+          (cd "$NEG" && npm ci) > "$OUT/negative-install.log" 2>&1
+          negativeInstall=$?
+          printf '%s\n' "$candidateInstall" > "$OUT/candidate-install.status"
+          printf '%s\n' "$negativeInstall" > "$OUT/negative-install.status"
+          if test "$candidateInstall" -ne 0 || test "$negativeInstall" -ne 0; then
+            echo 'Not a semantic test: failed locked installation'
+            exit 1
+          fi
+          (cd "$NEG" && node --test "$TEST") > "$OUT/old-source.tap" 2>&1
+          old=$?
+          node --test "$TEST" > "$OUT/candidate.tap" 2>&1
+          new=$?
+          printf '%s\n' "$old" > "$OUT/old-source.status"
+          printf '%s\n' "$new" > "$OUT/candidate.status"
+          echo "same-host old=$BASE exit=$old candidate=$GITHUB_SHA exit=$new"
+          tail -n 32 "$OUT/old-source.tap"
+          tail -n 29 "$OUT/candidate.tap"
+          test "$old" -ne 0 || exit 1
+          grep -F 'the seed starts one full-cohort RELEASE for each distinct partition in order' "$OUT/old-source.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/old-source.tap" || exit 1
+          test "$new" -eq 0 || exit 1
+          grep -F 'ok 1 - seed issues one serialized real partition release intent' "$OUT/candidate.tap" || exit 1
+          npx eslint src/bootstrap/bootstrap-service-seed-workflow.js "$TEST" \
+            > "$OUT/scoped-lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/scoped-lint.status"
+          failed=0
+          if test "$lint" -ne 0; then
+            failed=1; tail -n 30 "$OUT/scoped-lint.log"
+          fi
+          for f in \
+            test/integration/message-group-membership-claim-cache.integration.test.js \
+            test/bootstrap/node-bootstrap-consistency.property.test.js; do
+            slug="${f##*/}"
+            npm run -s test:file -- "$f" > "$OUT/$slug.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$slug.status"
+            echo "original real startup $f status=$status"
+            tail -n 28 "$OUT/$slug.log" | cut -c 1-260
+            if test "$status" -ne 0; then failed=1; fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$slug.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "$OUT/$slug.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve original red/green and full source bound logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-cohort-validation-${{ github.sha }}
+          path: test-output/rs-raft-seed-cohort-validation/
+          retention-days: 14
+          if-no-files-found: warn

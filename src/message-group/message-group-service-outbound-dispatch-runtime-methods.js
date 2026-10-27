@@ -1,6 +1,51 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
+import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
+import {buildDeliveryEnvelope, classifyThrownDeliveryError, deliveryTransportOf,
+  isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
+
 const MESSAGE_GROUP_SERVICE_OUTBOUND_DISPATCH_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
+const DIRECT_DELIVERY_RETRY_WAIT = Object.freeze({
+  wait: 'MESSAGE_GROUP_RETRY_MAX_ATTEMPTS (direct delivery)',
+  awaited: 'acknowledged direct transport delivery to the target service',
+});
+
+/**
+ * Direct delivery spent its attempt budget without an acknowledgement:
+ * one wait_bound_spent ERROR with the last failure. The caller then falls
+ * back to the raft-persisted path or throws, unchanged.
+ * @param {Object} service - The message-group replica.
+ * @param {Object} messageEnvelope - The envelope (id, targetService,
+ *   attempts, createdAt).
+ * @param {number} maxAttempts - The attempt budget spent.
+ * @param {Error|null} lastError - The last attempt's failure.
+ * @return {void}
+ */
+function reportDirectDeliveryExhausted(
+  service, messageEnvelope, maxAttempts, lastError) {
+  reportWaitBoundSpent(service.logger, {
+    ...DIRECT_DELIVERY_RETRY_WAIT,
+    boundMs: null,
+    elapsedMs: Number.isFinite(messageEnvelope.createdAt) ?
+      service.now() - messageEnvelope.createdAt : null,
+    lastObserved: {
+      maxAttempts,
+      envelopeAttempts: messageEnvelope.attempts,
+      lastError: lastError?.message ?? null,
+      lastErrorCode: lastError?.code ?? null,
+      deferRetry: lastError?.deferRetry === true,
+    },
+    scope: {
+      groupId: service.groupId ?? null,
+      replicaId: service.replicaId ?? null,
+      messageId: messageEnvelope.id,
+      targetService: messageEnvelope.targetService,
+    },
+  });
+}
 
 function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
   const {
@@ -9,10 +54,9 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
     MESSAGE_GROUP_SERVICE_LITERAL,
     MessageStatus,
     QUERY_MESSAGE_TYPE,
-    buildDeferredDeliveryError,
+    buildDirectDeliveryError,
     normalizeMessageDeliveryMode,
     resolveTransportDeliveryOptions,
-    shouldDeferImmediateDeliveryRetry,
     uuidv4,
   } = deps;
 
@@ -74,7 +118,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           deliveryPromise,
           persistPromise,
         ]);
-        if (deliveryResult.delivered) {
+        if (isDeliveredTransportDeliveryOutcome(deliveryTransportOf(deliveryResult))) {
           // Direct delivery succeeded
           messageEnvelope.status = MessageStatus.DELIVERED;
           this.logger.debug(
@@ -84,17 +128,13 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
               targetService,
             },
           );
-          // Spread the transport result directly - ACK structure is flat
-          const {
-            delivered: _d,
-            attempt: _a,
-            ...transportResult
-          } = deliveryResult;
+          // MG's own record carries the router's delivery envelope; it never
+          // spreads the transport outcome or the answer into itself.
           return {
             messageId,
             status: MessageStatus.DELIVERED,
             deliveryType: MESSAGE_GROUP_SERVICE_LITERAL.DIRECT,
-            ...transportResult,
+            delivery: deliveryResult,
           };
         }
         this.logger.debug(
@@ -150,6 +190,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
         );
       }
       let lastError = null;
+      let lastDelivery = null;
       const maxAttempts =
         Number.isInteger(options?.maxAttempts) && options.maxAttempts > 0 ?
           options.maxAttempts :
@@ -179,7 +220,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
               sourceReplica: this.replicaId,
             },
           );
-          const result = await this.transport.deliver(
+          const delivery = await this.transport.deliver(
             targetService,
             {
               messageId,
@@ -189,32 +230,18 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
             },
             deliveryOptions,
           );
-          if (result && result.acknowledged) {
-            // Spread transport result directly - ACK structure is flat
-            return {
-              delivered: true,
-              attempt: attempt + 1,
-              ...result,
-            };
+          // The transport outcome decides; MG does not interpret the answer.
+          const outcome = deliveryTransportOf(delivery);
+          if (isDeliveredTransportDeliveryOutcome(outcome)) {
+            return delivery;
           }
-          if (shouldDeferImmediateDeliveryRetry(result)) {
-            return {
-              delivered: false,
-              attempt: attempt + 1,
-              error:
-                result?.error ||
-                MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_DEFERRED,
-              deferRetry: true,
-              retryAfterMs: result.retryAfterMs,
-              errorCode: result?.errorCode || null,
-            };
-          }
-          lastError = new Error(
-            result?.error ||
-              MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_NOT_ACKNOWLEDGED,
-          );
+          if (isDeferredTransportDeliveryOutcome(outcome)) return delivery;
+          lastDelivery = delivery;
+          lastError = buildDirectDeliveryError(delivery,
+            MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_NOT_ACKNOWLEDGED);
         } catch (error) {
           lastError = error;
+          lastDelivery = buildDeliveryEnvelope(classifyThrownDeliveryError(error));
           this.logger.debug(
             MESSAGE_GROUP_SERVICE_LITERAL.DELIVERY_ATTEMPT_FAILED,
             {
@@ -226,26 +253,9 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           );
         }
       }
-      if (lastError?.deferRetry === true) {
-        return {
-          delivered: false,
-          error:
-            lastError.message ||
-            MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_DEFERRED,
-          deferRetry: true,
-          retryAfterMs: Number.isFinite(lastError.retryAfterMs) ?
-            Math.max(0, Math.floor(lastError.retryAfterMs)) :
-            0,
-          errorCode:
-            typeof lastError.code === 'string' ? lastError.code : null,
-        };
-      }
-      return {
-        delivered: false,
-        error:
-          lastError?.message ||
-          MESSAGE_GROUP_SERVICE_LITERAL.MAX_RETRIES_EXCEEDED,
-      };
+      reportDirectDeliveryExhausted(
+        this, messageEnvelope, maxAttempts, lastError);
+      return lastDelivery;
     }
     /**
      * Determine whether payload should use fast non-durable query delivery.
@@ -315,23 +325,18 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
             transportDeliveryOptions: options?.transportDeliveryOptions || null,
           },
         );
-        if (!deliveryResult.delivered) {
-          throw shouldDeferImmediateDeliveryRetry(deliveryResult) ?
-            buildDeferredDeliveryError(deliveryResult) :
-            new Error(deliveryResult.error || failureDescription);
+        if (!isDeliveredTransportDeliveryOutcome(deliveryTransportOf(deliveryResult))) {
+          // Only this direct-only invocation has exactly one transport attempt
+          // and no parallel durable admission. Its outcome remains intact.
+          throw buildDirectDeliveryError(deliveryResult, failureDescription);
         }
         messageEnvelope.status = MessageStatus.DELIVERED;
         this.pendingMessages.delete(messageId);
-        const {
-          delivered: _d,
-          attempt: _a,
-          ...transportResult
-        } = deliveryResult;
         return {
           messageId,
           status: MessageStatus.DELIVERED,
           deliveryType: MESSAGE_GROUP_SERVICE_LITERAL.DIRECT,
-          ...transportResult,
+          delivery: deliveryResult,
         };
       } catch (error) {
         const logLevel = error?.deferRetry === true ? 'debug' : 'error';
@@ -353,41 +358,31 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
       }
     }
     /**
-     * Persist message to Raft log.
-     * Uses liferaft's command method for log replication.
+     * Persist message to the group's consensus log through this replica's
+     * port while it leads.
      * Note: Does not wait for commit - fire and forget for performance.
      * @param {Object} messageEnvelope - Message envelope.
      * @return {Promise<Object>} Persistence result.
      * @private
      */
     async persistToRaftLog(messageEnvelope) {
-      const entry = this.operationLedger.appendEntry({
-        type: 'MESSAGE',
+      const command = {
+        type: MESSAGE_GROUP_COMMAND_TYPE.MESSAGE,
         message: messageEnvelope,
-      });
-      // Only use the live raft owner for command ingress.
-      const isOperationalRaftLeader = this.isCurrentRaftLeader();
-      if (isOperationalRaftLeader) {
-        // Fire and forget - don't wait for commit
-        // The command will be replicated via heartbeats
-        this.raftProvider.propose(
-          this.raft,
-          {
-            type: MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE,
-            message: messageEnvelope,
-          },
-          (err) => {
-            if (err) {
-              this.logger.debug(
-                MESSAGE_GROUP_SERVICE_LITERAL.RAFT_COMMAND_FAILED,
-                {
-                  messageId: messageEnvelope.id,
-                  error: err.message,
-                },
-              );
-            }
-          },
-        );
+      };
+      const entry = this.operationLedger.appendEntry({...command});
+      if (this.isCurrentRaftLeader()) {
+        // Fire and forget - don't wait for commit; the committed entry
+        // reaches every replica through its committed-entry application.
+        proposeMessageGroupCommand(this, command).catch((error) => {
+          this.logger.debug(
+            MESSAGE_GROUP_SERVICE_LITERAL.RAFT_COMMAND_FAILED,
+            {
+              messageId: messageEnvelope.id,
+              error: error.message,
+            },
+          );
+        });
       }
       return {
         success: true,

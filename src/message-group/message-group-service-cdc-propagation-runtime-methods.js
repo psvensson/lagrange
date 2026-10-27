@@ -1,16 +1,61 @@
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {CDC_DELIVERY_REMAINING_MS, createCdcDeliveryBudget} from '../cdc/cdc-delivery-budget.js';
+import {captureCdcForwardOptions, captureCdcForwardRequest} from
+  './message-group-forwarding-owner-native-delivery-methods.js';
+import {appendOwnArrayValue, copyArrayByIndex} from '../utils/canonical-json-data.js';
+
+const arrayIsArray = Array.isArray;
+
+async function handleDurableLatencyCdcMessage(service, runtimeDeps, messageId, request,
+  batch, localDelivery, startedAtMs) {
+  // This receiver owns a distinct clock domain. Capture the wire duration at
+  // handler entry, before any application await. Only the shallow wrapper
+  // copy, its durable classification and forward context precede the owner's
+  // queue reservation; capture, ingress decision and delivery are all its own.
+  const {payload, incoming, context} = request;
+  const budget = createCdcDeliveryBudget(service,
+    {...localDelivery, receivedRemainingMs: payload[CDC_DELIVERY_REMAINING_MS]}, startedAtMs);
+  const answer = await service.applyCDCBatch(incoming, {...context, ...budget,
+    skipSubscriptionCheck: true, replayOnly: payload.replayOnly === true});
+  budget.assertCurrent();
+  // Optional wrapper metadata comes from the shallow wrapper copy and its
+  // dense, already classified member count; it never overrides the answer.
+  // The answer is the owner's full semantic answer (including any
+  // contradictory field the canonical CDC validator must refuse); the router
+  // carries its receipt beside it, never in it.
+  return {messageId,
+    status: batch ? runtimeDeps.MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED :
+      runtimeDeps.MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
+    ...(batch ? {eventCount: incoming.length} :
+      {tableName: payload.tableName, operation: payload.operation}),
+    ...answer,
+  };
+}
+
+function latencyCdcAnswer(messageId, status, metadata, answer) {
+  return {messageId, status, ...metadata, ...answer};
+}
+
 async function handleLatencyCdcPropagationMessage(
   service,
   runtimeDeps,
   messageId,
   payload,
+  localDelivery,
 ) {
+  const startedAtMs = service.timeSource.now();
+  const request = captureCdcForwardRequest(service, payload, false);
+  payload = request.payload;
+  if (request.durable) {
+    return handleDurableLatencyCdcMessage(
+      service, runtimeDeps, messageId, request, false, localDelivery, startedAtMs);
+  }
   const {
     CDC_FORWARD_MAX_RELAY_DEPTH,
     MESSAGE_GROUP_APPLICATION_ERROR_MSG,
     MESSAGE_GROUP_APPLICATION_STATUS,
     MESSAGE_GROUP_CDC_ERROR_MSG,
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
-    buildLatencyCdcPropagationResult,
     normalizeCauseId,
   } = runtimeDeps;
   const tableName = payload.tableName;
@@ -50,10 +95,9 @@ async function handleLatencyCdcPropagationMessage(
       if (
         ingressDecision.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER
       ) {
-        return buildLatencyCdcPropagationResult({
+        return {
           messageId,
           status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-          acknowledged: true,
           success: false,
           error:
             ingressDecision.reason ||
@@ -66,13 +110,14 @@ async function handleLatencyCdcPropagationMessage(
             service.resolveStrictCdcForwardRetryAfterMs(),
           tableName,
           operation,
-        });
+        };
       }
       if (
         ingressDecision.action ===
         MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL
       ) {
         const applyOptions = {
+          ...copyCdcEventMetadata(payload),
           skipSubscriptionCheck: true,
           relayDepth,
         };
@@ -85,48 +130,34 @@ async function handleLatencyCdcPropagationMessage(
         if (replayOnly) {
           applyOptions.replayOnly = true;
         }
-        await service.applyCDCEvent(tableName, operation, data, applyOptions);
-        return buildLatencyCdcPropagationResult({
-          messageId,
-          status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-          acknowledged: true,
-          tableName,
-          operation,
-        });
+        const answer = await service.applyCDCEvent(tableName, operation, data, applyOptions);
+        return latencyCdcAnswer(messageId,
+          MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED, {tableName, operation}, answer);
       }
     }
     if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
       throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
     }
-    await service.forwardCDCEventToLeader(tableName, operation, data, {
+    const answer = await service.forwardCDCEventToLeader(tableName, operation, data, {
+      ...copyCdcEventMetadata(payload),
       timestamp: eventTimestamp || undefined,
-      relayDepth: relayDepth + 1,
+      relayDepth,
       causeId,
       replayOnly,
     });
-    return buildLatencyCdcPropagationResult({
-      messageId,
-      status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-      acknowledged: true,
-      tableName,
-      operation,
-    });
+    return latencyCdcAnswer(messageId,
+      MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED, {tableName, operation}, answer);
   }
-  const applyOptions = {skipSubscriptionCheck: true};
+  const applyOptions = {...copyCdcEventMetadata(payload), skipSubscriptionCheck: true};
   if (eventTimestamp) {
     applyOptions.timestamp = eventTimestamp;
   }
   if (causeId) {
     applyOptions.causeId = causeId;
   }
-  await service.applyCDCEvent(tableName, operation, data, applyOptions);
-  return buildLatencyCdcPropagationResult({
-    messageId,
-    status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-    acknowledged: true,
-    tableName,
-    operation,
-  });
+  const answer = await service.applyCDCEvent(tableName, operation, data, applyOptions);
+  return latencyCdcAnswer(messageId,
+    MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED, {tableName, operation}, answer);
 }
 
 async function handleLatencyCdcPropagationBatchMessage(
@@ -134,14 +165,21 @@ async function handleLatencyCdcPropagationBatchMessage(
   runtimeDeps,
   messageId,
   payload,
+  localDelivery,
 ) {
+  const startedAtMs = service.timeSource.now();
+  const request = captureCdcForwardRequest(service, payload, true);
+  payload = request.payload;
+  if (request.durable) {
+    return handleDurableLatencyCdcMessage(service, runtimeDeps, messageId, request,
+      true, localDelivery, startedAtMs);
+  }
   const {
     CDC_FORWARD_MAX_RELAY_DEPTH,
     MESSAGE_GROUP_APPLICATION_ERROR_MSG,
     MESSAGE_GROUP_APPLICATION_STATUS,
     MESSAGE_GROUP_CDC_ERROR_MSG,
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
-    buildLatencyCdcPropagationResult,
   } = runtimeDeps;
   const events = Array.isArray(payload.events) ? payload.events : [];
   const replayOnly = payload?.replayOnly === true;
@@ -175,11 +213,10 @@ async function handleLatencyCdcPropagationBatchMessage(
       if (
         ingressDecision.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER
       ) {
-        return buildLatencyCdcPropagationResult({
+        return {
           messageId,
           status:
             MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-          acknowledged: true,
           success: false,
           error:
             ingressDecision.reason ||
@@ -191,57 +228,45 @@ async function handleLatencyCdcPropagationBatchMessage(
             ingressDecision.strictForwardRetryAfterMs :
             service.resolveStrictCdcForwardRetryAfterMs(),
           eventCount: events.length,
-        });
+        };
       }
       if (
         ingressDecision.action ===
         MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL
       ) {
-        await service.applyCDCBatch(events, {
+        const answer = await service.applyCDCBatch(events, {
           skipSubscriptionCheck: true,
           replayOnly,
           relayDepth,
         });
-        return buildLatencyCdcPropagationResult({
-          messageId,
-          status:
-            MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-          acknowledged: true,
-          eventCount: events.length,
-        });
+        return latencyCdcAnswer(messageId,
+          MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED, {eventCount: events.length}, answer);
       }
     }
     if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
       throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
     }
-    await service.forwardCDCBatchToLeader(events, {
-      relayDepth: relayDepth + 1,
+    const answer = await service.forwardCDCBatchToLeader(events, {
+      relayDepth,
       replayOnly,
     });
-    return buildLatencyCdcPropagationResult({
-      messageId,
-      status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-      acknowledged: true,
-      eventCount: events.length,
-    });
+    return latencyCdcAnswer(messageId,
+      MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED, {eventCount: events.length}, answer);
   }
-  await service.applyCDCBatch(events, {skipSubscriptionCheck: true});
-  return {
-    messageId,
-    status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-    acknowledged: true,
-    eventCount: events.length,
-  };
+  const answer = await service.applyCDCBatch(events, {skipSubscriptionCheck: true});
+  return latencyCdcAnswer(messageId,
+    MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED, {eventCount: events.length}, answer);
 }
 
 async function applyCDCEvent(service, tableName, operation, data, options = {}) {
+  options = captureCdcForwardOptions(service, options);
   return service.applyCDCBatch(
     [
       {
         tableName,
         operation,
         data,
-        ...options,
+        ...copyCdcEventMetadata(options),
       },
     ],
     options,
@@ -250,28 +275,38 @@ async function applyCDCEvent(service, tableName, operation, data, options = {}) 
 
 function normalizeCDCBatchEvents(service, runtimeDeps, events, options = {}) {
   const {normalizeCauseId} = runtimeDeps;
-  return (Array.isArray(events) ? events : [])
-    .filter((event) => event?.tableName && event?.operation && event?.data)
-    .map((event) => {
-      const timestamp =
-        typeof event.timestamp === 'string' &&
-        event.timestamp.length > 0 ?
-          event.timestamp :
-          typeof options.timestamp === 'string' &&
-              options.timestamp.length > 0 ?
-            options.timestamp :
-            service.hlcClock.now().toString();
-      const causeId = normalizeCauseId(event.causeId ?? options.causeId);
-      return {
-        tableName: event.tableName,
-        operation: event.operation,
-        data: event.data,
-        timestamp,
-        causeId,
-        replayOnly:
-          event.replayOnly === true || options.replayOnly === true,
-      };
-    });
+  const source = arrayIsArray(events) ? events : [];
+  const length = source.length;
+  const filteredEvents = [];
+  // Preserve the owner's filter-then-map order without invoking caller array
+  // methods, an iterator or a replaced constructor/species hook.
+  for (let index = 0; index < length; index += 1) {
+    if (!(index in source)) continue;
+    const event = source[index];
+    if (event?.tableName && event?.operation && event?.data) {
+      appendOwnArrayValue(filteredEvents, event);
+    }
+  }
+  return copyArrayByIndex(filteredEvents, (event) => {
+    const timestamp =
+      typeof event.timestamp === 'string' &&
+      event.timestamp.length > 0 ?
+        event.timestamp :
+        typeof options.timestamp === 'string' &&
+            options.timestamp.length > 0 ?
+          options.timestamp :
+          service.hlcClock.now().toString();
+    const causeId = normalizeCauseId(event.causeId ?? options.causeId);
+    return {
+      tableName: event.tableName,
+      operation: event.operation,
+      data: event.data,
+      timestamp,
+      causeId,
+      replayOnly:
+        event.replayOnly === true || options.replayOnly === true,
+    };
+  });
 }
 
 function emitCDCAppliedEvents(service, runtimeDeps, events, logIndex = null) {

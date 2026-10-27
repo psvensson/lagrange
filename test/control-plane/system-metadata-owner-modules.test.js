@@ -1,5 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {TABLES} from '../../src/constants/index.js';
+import {ERRORS, TABLES} from '../../src/constants/index.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -273,7 +276,7 @@ test('System metadata owners route typed read and mutation methods through the g
           whereClause,
           options,
         });
-        return {success: true};
+        return {success: true, outcome: 'applied', affectedRows: 1};
       },
     };
 
@@ -288,7 +291,8 @@ test('System metadata owners route typed read and mutation methods through the g
         // No generic NODES upsert (D-7): registration is monotonic.
         upsertMethod: null,
         updateMethod: 'updateNode',
-        deleteMethod: 'removeNode',
+        deleteMethod: 'removeTerminalNode',
+        deleteObservation: {bootIncarnation: 1, status: 'stopped'},
         row: {node_id: 'node-1'},
       },
       {
@@ -381,7 +385,7 @@ test('System metadata owners route typed read and mutation methods through the g
           'SERVICES authority is INSERT-only and exposes no generic upsert');
       }
       await owner[ownerSpec.updateMethod](ownerSpec.key, {status: 'active'});
-      await owner[ownerSpec.deleteMethod](ownerSpec.key);
+      await owner[ownerSpec.deleteMethod](ownerSpec.key, ownerSpec.deleteObservation);
 
       const mutationOffset = ownerSpec.upsertMethod ? 0 : -1;
 
@@ -505,7 +509,10 @@ test('System metadata owners retry transient mutation failures and apply ' +
         if (upsertCallCount === 1) {
           return {
             success: false,
-            error: 'Transaction already active on this partition',
+            error: ERRORS.WRITE_CUTOVER_PAUSED,
+            failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED,
+            deferRetry: true,
+            retryAfterMs: 1,
           };
         }
         return {success: true};
@@ -523,7 +530,7 @@ test('System metadata owners retry transient mutation failures and apply ' +
   });
 
   t.equal(result.success, true,
-    'upsert should recover after one retryable mutation failure');
+    'upsert should recover after one typed retryable mutation failure');
   t.equal(upsertCallCount, 2,
     'owner writes should retry transient control-plane mutation failures');
   t.equal(
@@ -586,3 +593,45 @@ test('System metadata owners throw typed errors when mutation retries still fail
       );
     }
   });
+
+test('A system metadata owner write whose retry budget is spent names its ' +
+  'owner and table in the wait_bound_spent ERROR', async (t) => {
+  const owner = new NodesOwner({
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow() {
+        return {
+          success: false,
+          error: 'Query execution failed',
+          errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+          retryAfterMs: 250,
+          deferRetry: true,
+        };
+      },
+    },
+    controlPlaneWriteRetrySleep: async () => {},
+    controlPlaneWriteRetryTimeoutMs: 0,
+  });
+  // The owner has no logger of its own: the reporter writes through the
+  // process LoggingService.
+  const logging = LoggingService.getInstance();
+  const originalError = logging.error;
+  const spent = [];
+  logging.error = (message, context) => {
+    if (context?.event === 'wait_bound_spent') {
+      spent.push(context);
+    }
+  };
+  try {
+    await t.rejects(owner.updateNode('node-1', {status: 'active'}),
+      /Query execution failed/, 'the write still fails as before');
+  } finally {
+    logging.error = originalError;
+  }
+  t.equal(spent.length, 1, 'exactly one wait_bound_spent ERROR');
+  t.equal(spent[0].wait, 'controlPlaneWriteRetryTimeoutMs');
+  t.same(spent[0].scope, {
+    ownerName: 'nodes-owner',
+    tableName: TABLES.NODES,
+    operation: 'update',
+  }, 'scope names the owner, its table and the operation');
+});

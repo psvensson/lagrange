@@ -1,0 +1,76 @@
+# WIP real startup pressure at original budgets; old 1000ms red is NOT
+# accepted as fixed until original entire claim/cache body passes.
+name: rs-raft-control-proof-startup
+on:
+  push:
+    branches: [continue/rs-raft-seed-control-proof-amortization-20261014]
+    paths: [.github/workflows/rs-raft-control-proof-startup.yml]
+permissions:
+  contents: read
+jobs:
+  startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 29
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact locked dependencies
+        run: npm ci
+      - name: Original unmodified 1000ms and 5000ms startup bodies
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-control-proof-startup
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          fail=0
+          for f in \
+            test/integration/message-group-membership-claim-cache.integration.test.js \
+            test/bootstrap/node-bootstrap-consistency.property.test.js; do
+            n="${f##*/}"
+            sha256sum "$f" > "$OUT/$n.original-test-sha256.txt"
+            npm run -s test:file -- "$f" > "$OUT/$n.run.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$n.status"
+            echo "$f original test status=$status"
+            grep -E 'Seed participant release failed|test-files total|ok test/' "$OUT/$n.run.log" | tail -n 12 | cut -c 1-1000 || true
+            test "$status" -eq 0 || fail=1
+            if test -f ".tap/test-results/$f.tap"; then
+              cp ".tap/test-results/$f.tap" "$OUT/$n.full.tap"
+              sha256sum "$OUT/$n.full.tap" > "$OUT/$n.full.sha256"
+              if test "$n" = 'message-group-membership-claim-cache.integration.test.js'; then
+                node scripts/quest-evidence/summarize-seed-release-trace.mjs \
+                  "$OUT/$n.full.tap" "$OUT/$n.release-census.json" \
+                  > "$OUT/$n.summary.json" 2> "$OUT/$n.summary-error.log"
+                c=$?
+                printf '%s\n' "$c" > "$OUT/$n.census.status"
+                if test "$c" -eq 0; then cat "$OUT/$n.summary.json"; else
+                  cat "$OUT/$n.summary-error.log"; fail=1; fi
+              fi
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$n.canonical"
+              find test-output/reports -maxdepth 1 -name '*.ndjson' -type f \
+                -exec cp {} "$OUT/$n.canonical/" \;
+            fi
+          done
+          exit "$fail"
+      - name: Preserve original raw and canonical TAP of any red
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-proof-startup-${{ github.sha }}
+          path: test-output/rs-raft-control-proof-startup/
+          retention-days: 14
+          if-no-files-found: warn

@@ -1,0 +1,247 @@
+// How a message-group replica runs on its raft-rs semantic operation port
+// (design R3): the durable replica database that holds its consensus record,
+// the request that states the group's own requirements, the typed startup
+// refusal of a port its runtime owner refused, a lone replica's leadership,
+// the replica's own committed configuration, and the release of both
+// handles. The port's runtime owner makes every Raft decision; nothing here
+// reproduces one.
+
+import {
+  assertConsensusNotHeldAtOpen,
+  assertRaftOperationSucceeded,
+  consensusInitRefusedError,
+  consensusOpeningFailure,
+} from '../raft/raft-operation-port.js';
+import {ENTITY_TYPE} from '../constants/addresses.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import Database from 'better-sqlite3';
+import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
+import {
+  COMMITTED_MEMBERSHIP_READ_PURPOSE,
+  COMMITTED_MEMBERSHIP_REFUSAL,
+} from '../raft/raft-committed-membership-constants.js';
+import {durableRecordBootstrap, genesisStamp} from
+  '../raft/raft-committed-membership-stamp.js';
+import {
+  RAFT_OPERATION,
+  RAFT_OPERATION_OUTCOME,
+} from '../raft/raft-operation-port-constants.js';
+import {
+  RAFT_OPERATION_PORT_REQUEST,
+  hostedConsensusSubstrate,
+} from '../raft/raft-operation-port-request.js';
+import {committedMembershipRefusal} from
+  '../raft/raft-rs-committed-membership-read.js';
+import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
+import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
+
+// The replica's opening: the message-group domain, for its group. Its typed
+// startup refusal is the port's one refusal - the runtime owner refused to
+// open the group, the port opened it held by its host failure, or a lone
+// replica's campaign was refused.
+function messageGroupConsensusOpening(service) {
+  return {domain: ENTITY_TYPE.MESSAGE_GROUP,
+    identity: {groupId: service.groupId, replicaId: service.replicaId}};
+}
+
+/**
+ * Whether the replica opens without scheduling its own ticks: elections are
+ * deferred until every replica of the group is registered, or the replica
+ * joins an existing group and takes part only once its join converged.
+ * @param {Object} service - The message-group replica.
+ * @return {boolean} True when the port must not schedule at open.
+ */
+function shouldDeferConsensusScheduling(service) {
+  return service.deferElection === true ||
+    service.isJoiningExistingGroup === true ||
+    service.deferElectionUntilJoinConvergence === true;
+}
+
+/**
+ * The address of a replica identity. Status-free by construction: the
+ * runtime resolves addresses while it computes a status, so this never reads
+ * one.
+ * @param {Object} service - The message-group replica.
+ * @param {string} replicaIdentity - The identity to place.
+ * @return {string} Its unified address.
+ */
+function resolveConsensusPeerAddress(service, replicaIdentity) {
+  if (replicaIdentity === service.replicaId) {
+    return service.unifiedAddress;
+  }
+  return service.buildPeerAddress(replicaIdentity, {
+    allowBootstrapHints: true,
+    consensusResolution: true,
+  });
+}
+
+/**
+ * The group's own requirements, stated once (the port request boundary).
+ * @param {Object} service - The message-group replica.
+ * @return {Object} Its RAFT_OPERATION_PORT_REQUEST.
+ */
+function messageGroupConsensusRequest(service, cdcCommitLifetime) {
+  return {
+    [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: service.groupId,
+    [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: service.replicaId,
+    [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: service.unifiedAddress,
+    [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: service.replicaIds,
+    // The founders a replica without a durable record opens from; a
+    // replica with one reopens from that record alone. A replica handed its
+    // own bootstrap (a fresh learner: its installed image only) opens from it.
+    [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+      service.bootstrapMembership ?? (
+        service.identityExisted === true ?
+          durableRecordBootstrap() :
+          genesisStamp(service.replicaIds)
+      ),
+    // A replica that joins an existing group under that stamp holds no
+    // founder's history: with no record it is refused (O4).
+    [RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP]:
+      service.isJoiningExistingGroup === true,
+    // The seed's durable services row proves this founder opened before
+    // (the open-time rule): without its record it is refused reseed-required.
+    [RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED]:
+      service.identityExisted === true,
+    // A first opening whose services row is not yet durable steps nothing
+    // until that write is confirmed (the partition create's identity record).
+    ...(service.identityRecorded === null ? {} : {
+      [RAFT_OPERATION_PORT_REQUEST.IDENTITY_RECORDED]:
+        service.identityRecorded,
+    }),
+    [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: service.db,
+    [RAFT_OPERATION_PORT_REQUEST.TIMING]: service.raftTimingConfig,
+    [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(service),
+    [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]:
+      shouldDeferConsensusScheduling(service),
+    [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: (peerAddress, envelope) =>
+      service.transport.deliver(
+        peerAddress,
+        envelope,
+        resolveRaftTransportDeliveryOptions({
+          ...envelope,
+          targetAddress: peerAddress,
+        }),
+      ),
+    [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (replicaIdentity) =>
+      resolveConsensusPeerAddress(service, replicaIdentity),
+    // Runs inside the transaction that also advances the applied state.
+    [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
+      service.applyCommittedEntry(committed, cdcCommitLifetime),
+  };
+}
+
+/**
+ * Open the replica's durable database (creating its group directory, as a
+ * partition replica creates its own) and its operation port over it. A
+ * port the runtime owner refused, or one that opened its group held by its
+ * host failure, is the replica's typed startup refusal; the caller releases
+ * what was acquired.
+ * @param {Object} service - The message-group replica.
+ * @return {Object} The port, also held as service.raft.
+ */
+function openMessageGroupConsensusPort(service) {
+  retireCdcCommitWaiters(service);
+  fs.mkdirSync(path.dirname(service.dbPath), {recursive: true});
+  service.db = new Database(service.dbPath);
+  service.db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
+  service.db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
+  service.cdcCommitLifetime = Object.freeze({});
+  try {
+    service.raft = service.createOperationPort(
+      messageGroupConsensusRequest(service, service.cdcCommitLifetime));
+  } catch (error) {
+    throw consensusOpeningFailure(error, messageGroupConsensusOpening(service));
+  }
+  assertConsensusNotHeldAtOpen(service.raft.readStatus(),
+    messageGroupConsensusOpening(service));
+  return service.raft;
+}
+
+/**
+ * A lone replica leads its own group: it campaigns once through its port,
+ * and a refused campaign is a group that can never serve a write, so it is
+ * the typed startup refusal. Below its participation gate it campaigns
+ * nothing; its scheduling is armed for the gate's opening instead.
+ * @param {Object} service - The message-group replica.
+ * @return {Promise<void>}
+ */
+async function leadLoneMessageGroup(service) {
+  if (service.raft.readStatus()?.gateOpen === false) {
+    service.raft.startScheduling();
+    return;
+  }
+  const campaign = await service.raft.campaign();
+  if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    throw consensusInitRefusedError({...messageGroupConsensusOpening(service),
+      answer: campaign});
+  }
+}
+
+/**
+ * This replica's own committed configuration, read through its port's one
+ * committed-membership read: by default a witness read (what this replica
+ * applied, whether it leads or not); the BOOTSTRAP purpose asks a replica
+ * that leads for the configuration a new learner joins (the native owner
+ * refuses it anywhere but on the leader, for a joint configuration and for
+ * an unreserved identity).
+ * @param {Object} service - The message-group replica ({raft}).
+ * @param {string} [purpose] - A COMMITTED_MEMBERSHIP_READ_PURPOSE.
+ * @return {Object} The port's frozen COMMITTED or REFUSED answer.
+ */
+function readMessageGroupCommittedMembership(service,
+  purpose = COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS) {
+  const read = service.raft?.[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP];
+  if (typeof read !== 'function') {
+    return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.NOT_HOSTED);
+  }
+  return read({purpose});
+}
+
+/**
+ * Release the port, then the database it ran over.
+ * @param {Object} service - The message-group replica.
+ * @return {Promise<void>}
+ */
+function closeMessageGroupConsensus(service) {
+  retireCdcCommitWaiters(service);
+  service.cdcCommitLifetime = null;
+  if (service.consensusCloseSettlement) {
+    return service.consensusCloseSettlement;
+  }
+  // Install the in-flight identity before a close callback can re-enter.
+  const {promise, resolve, reject} = Promise.withResolvers();
+  service.consensusCloseSettlement = promise;
+  const port = service.raft;
+  const db = service.db;
+  const release = async () => {
+    if (port) {
+      assertRaftOperationSucceeded(await port.close());
+    }
+    if (service.raft === port) {
+      service.raft = null;
+    }
+    if (db?.open) {
+      db.close();
+    }
+    if (service.db === db) {
+      service.db = null;
+    }
+  };
+  release().then(() => {
+    service.consensusCloseSettlement = null;
+    resolve();
+  }, (error) => {
+    service.consensusCloseSettlement = null;
+    reject(error);
+  });
+  return promise;
+}
+
+export {
+  closeMessageGroupConsensus,
+  leadLoneMessageGroup,
+  openMessageGroupConsensusPort,
+  readMessageGroupCommittedMembership,
+};

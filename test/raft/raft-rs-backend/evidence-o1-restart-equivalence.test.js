@@ -53,8 +53,8 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {durableRecordBootstrap} from
   '../../../src/raft/raft-committed-membership-stamp.js';
 import {
@@ -184,7 +184,7 @@ function applyRestartClass(cluster, restartClass, stamp) {
   const bootstrap = restartClass === RESTART_CLASS.PROCESS_RESTART ?
     durableRecordBootstrap() : stamp;
   return restartWith(cluster, TARGET,
-    {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: bootstrap});
+    {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: bootstrap});
 }
 
 function logShape(cluster, replicaId) {
@@ -210,7 +210,7 @@ for (const {point, restartClass} of CELLS) {
         if (restartClass === RESTART_CLASS.PROCESS_RESTART) {
           assert.throws(() => cluster.addReplica(TARGET,
             [...Object.values(stamp.identities), TARGET],
-            {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+            {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
               durableRecordBootstrap()}), (error) => {
             assert.equal(error.consensus?.outcome,
               RAFT_OPERATION_OUTCOME.CORE_REFUSED);
@@ -309,14 +309,25 @@ test('M4 (pre-gate record): a record whose schema predates the gate is ' +
     'setup: the pre-gate DDL is the production DDL minus the gate columns');
     db.exec(`ALTER TABLE ${RAFT_RS_TABLE.APPLIED_STATE} RENAME TO gated`);
     db.exec(preGate);
-    db.exec(`INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE} SELECT group_id, ` +
-      'applied_index, voters, learners, voters_outgoing, learners_next, ' +
-      'auto_leave FROM gated');
+    // Preserve every non-gate field of the actual schema, including later
+    // membership-generation additions. Only gate-column absence is varied.
+    const columns = db.pragma(`table_info(${RAFT_RS_TABLE.APPLIED_STATE})`)
+      .map((row) => row.name);
+    const selectedColumns = columns.map((column) =>
+      `"${column.replaceAll('"', '""')}"`).join(', ');
+    const previous = db.prepare(`SELECT ${selectedColumns} FROM gated ` +
+      'ORDER BY group_id').all();
+    assert.ok(previous.length > 0, 'setup: actual durable records must be copied');
+    db.exec(`INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE} (${selectedColumns}) ` +
+      `SELECT ${selectedColumns} FROM gated`);
+    assert.deepEqual(db.prepare(`SELECT ${selectedColumns} FROM ` +
+      `${RAFT_RS_TABLE.APPLIED_STATE} ORDER BY group_id`).all(), previous,
+    'setup: all non-gate durable values survive the pre-gate reconstruction');
     db.exec('DROP TABLE gated');
     db.close();
-    const hints = replica.request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS];
+    const hints = replica.request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS];
     assert.throws(() => cluster.buildReplica(TARGET, hints,
-      {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+      {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
         durableRecordBootstrap()}), (error) => {
       assert.equal(error.consensus?.reason,
         RUNTIME_REASON.DURABLE_RECORD_INCOMPATIBLE, 'typed INCOMPATIBLE');
@@ -352,8 +363,10 @@ test('M4 (H1 + self): a runtime reconstruction at the transient sole-voter ' +
     commitVoterChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, target);
     const targetPeerId = peerIdIn(cluster, target, target);
     const aSelf = admissionIndexOf(cluster, leader, targetPeerId, j);
-    // The transient index: the removal of b, where the target's replayed
-    // view over {b, t} is {t} alone.
+    // The transient index: the removal of b, where a replay of the history
+    // over {b, t} would be {t} alone. Configuration entries at or below j
+    // are folded into the bootstrap (C_j, the target a learner), so the
+    // target's view there is C_j itself.
     const transient = changeIndices.find((index) =>
       committedAt(cluster, leader, [...stamp.voters, targetPeerId], index)
         .voters.length === 1);
@@ -364,7 +377,7 @@ test('M4 (H1 + self): a runtime reconstruction at the transient sole-voter ' +
       durableOf(cluster, target).applied.appliedIndex === transient,
     [leader]), 'setup: the target replays to the transient index');
     assert.deepEqual(durableOf(cluster, target).applied.voters,
-      [targetPeerId], 'setup: the target view is the sole-voter one');
+      stamp.voters, 'setup: the target view is C_j, not a sole-voter one');
     const before = termAndVote(durableOf(cluster, target).hard);
     const trapped = trapSharedCore(cluster, target);
     assert.equal(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL,

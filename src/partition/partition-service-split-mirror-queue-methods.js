@@ -1,8 +1,24 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
+  GROUP_RETIREMENT_KIND,
+  retiringSourceStatus,
+} from './group-retirement-evidence.js';
+import {SPLIT_ACK_STATUS} from './split-ack-constants.js';
+import {
   findDurableMirrorTransitionForService,
   resolveSnapshotBarrierIndex,
 } from './partition-mirror-replay-cursor.js';
+import {
+  beginSourceReplicationActivityForService,
+  finishSourceReplicationActivityForService,
+  startSplitReplicationHandleForService,
+} from './partition-service-source-replication-start-methods.js';
+
+function withRetiringSourceStatus(normalized, source) {
+  return normalized && source.retiring ?
+    {...normalized, retiringSourceStatus: source.participantStatus} :
+    normalized;
+}
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -10,6 +26,7 @@ const {
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_TRANSITION_STATE,
   RaftRole,
+  PARTITION_SPLIT_MIRROR_ORIGIN,
 } = PARTITION_SERVICE_SHARED;
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -24,6 +41,31 @@ const LOCAL_STR_CONSTRUCTOR = 'constructor';
  * flushers await the SAME drain instead of returning early.
  */
 class PartitionServiceSplitMirrorQueueMethods {
+  async handleSplitReplicationAfterWrite(entry) {
+    const handle = this.splitReplication;
+    if (!handle?.metadata ||
+        this.partitionId !== handle.metadata.sourcePartitionId ||
+        handle.quiescing || handle.quiesced || handle.authorized !== true) {
+      return;
+    }
+    const activity = beginSourceReplicationActivityForService(this, handle);
+    if (!activity) return;
+    try {
+      if (entry.splitMirrorOrigin === PARTITION_SPLIT_MIRROR_ORIGIN.TARGET) {
+        return;
+      }
+      if (handle.phase === PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING ||
+          handle.phase === PARTITION_TRANSITION_STATE.SPLIT_CATCHUP) {
+        this.enqueueSplitDeltaBounded(handle, entry);
+      } else if (handle.phase ===
+          PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) {
+        await this.mirrorCutoverActiveSplitWrite(entry, handle);
+      }
+    } finally {
+      finishSourceReplicationActivityForService(this, handle, activity);
+    }
+  }
+
   /**
    * Seed the durable replay cursor on an active split handle from the
    * source partition's Raft log: every entry up to and including the
@@ -115,10 +157,26 @@ class PartitionServiceSplitMirrorQueueMethods {
       ],
       matchesSource: (metadata) =>
         metadata.sourcePartitionId === this.partitionId,
-      normalizeMetadata: (rawMetadata) =>
+      normalizeMetadata: (rawMetadata) => withRetiringSourceStatus(
         this.normalizeSplitTransitionMetadata(rawMetadata),
+        retiringSourceStatus(GROUP_RETIREMENT_KIND.SPLIT_SOURCE, rawMetadata,
+          this.partitionId)),
     });
     if (!transition) {
+      return false;
+    }
+    // A source that already finished mirroring is ending with its group
+    // (group-retirement-evidence.js): nothing of it resumes. Its leader only
+    // re-delivers the finished acknowledgement, so the workflow owner of
+    // this node resumes an unfinished dissolution from the durable record
+    // (the DISSOLUTION_FAILED -> CLEANUP_COMPLETED edge, or a duplicate
+    // CLEANUP_COMPLETED after an owner restart mid-dissolution).
+    if (transition.metadata.retiringSourceStatus) {
+      if (transition.metadata.retiringSourceStatus !==
+          SPLIT_ACK_STATUS.SOURCE_DISSOLVED) {
+        await this.emitSplitSourceAck(transition.metadata,
+          SPLIT_ACK_STATUS.CLEANUP_COMPLETED);
+      }
       return false;
     }
     const reconstructed = this.reconstructSplitExecutionState({
@@ -128,19 +186,9 @@ class PartitionServiceSplitMirrorQueueMethods {
     if (!reconstructed) {
       return false;
     }
-    this.splitReplicationRun = this.runSplitReplicationWorkflow().catch(
-      (error) => {
-        if (this.splitReplication) {
-          this.splitReplication.lastError = error.message;
-          this.splitReplication.phase = PARTITION_TRANSITION_STATE.FAILED;
-        }
-        this.logger.error(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_FAILED, {
-          partitionId: this.partitionId,
-          error: error.message,
-        });
-      },
-    );
-    return true;
+    const response = await startSplitReplicationHandleForService(
+      this, reconstructed);
+    return response.success === true;
   }
 
   /**

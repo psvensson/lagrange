@@ -4,7 +4,6 @@
 // receipts - and change on any other byte.
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,13 +16,14 @@ import {
 import {
   VERSION_AUTHORITIES, computeReleaseProofIdentity,
 } from '../../scripts/release-proof-identity.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const RC_VERSION = '0.9.0-rc.2';
 const RELEASE_VERSION = '0.9.0';
 const LOGIC_FILE = 'src/logic.js';
 
 function git(cwd, ...args) {
-  return execFileSync('git', args, {cwd, encoding: 'utf8'}).trim();
+  return execGit(args, {cwd, encoding: 'utf8'}).trim();
 }
 
 function write(root, relativePath, content) {
@@ -166,7 +166,7 @@ function recordLegacyReceipt(source, sha) {
     producer: {kind: 'test-fixture', id: 'legacy-run'},
   });
   assert.equal(receipt.identity, undefined, 'a legacy receipt carries no identity');
-  const objectSha = execFileSync('git', ['mktag'], {
+  const objectSha = execGit(['mktag'], {
     cwd: source, encoding: 'utf8',
     input: buildTagBody({proofId: PROOF.RELEASE_FULL, sha, receipt,
       now: Date.parse('2026-09-11T18:00:00.000Z')}),

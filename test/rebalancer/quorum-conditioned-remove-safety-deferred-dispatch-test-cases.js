@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
   test,
   ConfigurationManager,
@@ -50,7 +51,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
         messageRouter: {
           deliver: async () => {
             deliveries.push('deliver');
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -188,7 +189,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
       messageRouter: {
         deliver: async () => {
           deliveries.push('deliver');
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -316,7 +317,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
         messageRouter: {
           deliver: async () => {
             deliveries.push('deliver');
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,

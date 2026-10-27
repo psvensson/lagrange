@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
   registerCase,
   dependencies,
@@ -86,6 +87,17 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     createCoordinator,
   } = dependencies;
 
+
+  // This interaction records the dispatched request and returns the owner's
+  // initiated answer through the canonical delivery envelope.
+  const initiatedRouter = (deliveries) => ({
+    async deliver(target, payload, options) {
+      deliveries.push({target, payload, options});
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        status: TEST_DELIVERY_STATUS_INITIATED,
+      });
+    },
+  });
   registerCase(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
     const deliveries = [];
     const updateOptions = [];
@@ -182,12 +194,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           };
         },
       },
-      messageRouter: {
-        async deliver(target, payload, options) {
-          deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
-        },
-      },
+      messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
           return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
@@ -347,7 +354,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           timestamp: staleCreatingUpdatedAt - TEST_STEP_HISTORY_LAG_MS,
         },
       ]);
-
       const coordinator = createCoordinator({
         nodeId: TEST_TARGET_NODE_ID,
         transactionCoordinator: buildTransactionCoordinator(),
@@ -367,7 +373,9 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              status: TEST_DELIVERY_STATUS_INITIATED,
+            });
           },
         },
         tablePolicyService: {
@@ -475,9 +483,22 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           timestamp: nowMs - TEST_STEP_HISTORY_LAG_MS,
         },
       ]);
+      const sqlQueryEngine = {
+        async executeQuery(sql) {
+          if (String(sql).includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+            return {
+              success: true,
+              rows: [{...operationRow}],
+              affectedRows: 1,
+            };
+          }
+          return {success: true, rows: [], affectedRows: 0};
+        },
+      };
 
       const coordinator = createCoordinator({
         nodeId: TEST_TARGET_NODE_ID,
+        sqlQueryEngine,
         transactionCoordinator: buildTransactionCoordinator(),
         systemTableCache: {
           get() {
@@ -496,13 +517,14 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         messageRouter: {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {
-              acknowledged: false,
-              error: 'Connection to node node-target closed',
-              errorCode: 'ROUTER_CONNECTION_CLOSED',
-              deferRetry: true,
-              retryAfterMs: TEST_RETRY_AFTER_MS,
-            };
+            return buildDeliveryEnvelope(
+              {
+                acknowledged: false,
+                error: 'Connection to node node-target closed',
+                errorCode: 'ROUTER_CONNECTION_CLOSED',
+                deferRetry: true,
+                retryAfterMs: TEST_RETRY_AFTER_MS,
+              });
           },
         },
         tablePolicyService: {
@@ -544,6 +566,24 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           deferredTimers[0]?.delayMs,
           TEST_RETRY_AFTER_MS,
           'dispatch retry should preserve the router reconnect retry-after',
+        );
+        const staleSending = {...operation};
+        operationRow.status = 'failed';
+        operationRow.workflow_step = WORKFLOW_STEP.FAILED;
+        operationRow.completed_at = nowMs + 1;
+        const terminalFirst =
+          await coordinator.workflowOwner.executeOperationInternal(
+            staleSending,
+          );
+        t.equal(
+          terminalFirst?.skipped,
+          true,
+          'authoritative terminal settlement refuses a stale SENDING retry',
+        );
+        t.equal(
+          deliveries.length,
+          1,
+          'terminal-first authority reaches no second physical CREATE',
         );
       } finally {
         await coordinator.shutdown();
@@ -662,12 +702,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           };
         },
       },
-      messageRouter: {
-        async deliver(target, payload, options) {
-          deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
-        },
-      },
+      messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
           return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
@@ -843,12 +878,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           };
         },
       },
-      messageRouter: {
-        async deliver(target, payload, options) {
-          deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
-        },
-      },
+      messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
           return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
@@ -1053,12 +1083,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           };
         },
       },
-      messageRouter: {
-        async deliver(target, payload, options) {
-          deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
-        },
-      },
+      messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
           return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
@@ -1217,12 +1242,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
             };
           },
         },
-        messageRouter: {
-          async deliver(target, payload, options) {
-            deliveries.push({target, payload, options});
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
-          },
-        },
+        messageRouter: initiatedRouter(deliveries),
         tablePolicyService: {
           async getPolicyForPartition() {
             return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
@@ -1389,12 +1409,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           };
         },
       },
-      messageRouter: {
-        async deliver(target, payload, options) {
-          deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
-        },
-      },
+      messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
           return {minReplicaCount: TEST_MIN_REPLICA_COUNT};

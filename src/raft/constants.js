@@ -10,22 +10,9 @@ import {
   isCriticalTransportControlPlanePartition,
 } from
   '../bootstrap/system-partition-classification.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
 
 const LOCAL_STR_STRING = 'string';
-
-const RAFT_PACKET_TYPE = Object.freeze({
-  VOTE: 'vote',
-  VOTED: 'voted',
-  APPEND: 'append',
-  APPEND_ACK: 'append ack',
-  APPEND_FAIL: 'append fail',
-  EXEC: 'exec',
-  APPENDED: 'appended',
-  ERROR: 'error',
-});
-
-const RAFT_PACKET_TYPES = new Set(Object.values(RAFT_PACKET_TYPE));
 
 const RAFT_ROLE = Object.freeze({
   FOLLOWER: 'follower',
@@ -74,11 +61,11 @@ const RAFT_MESSAGE_GROUP_ADDRESS_TOKEN = '/message-group/';
 
 const RAFT_TRANSPORT_DELIVERY_SOURCE = Object.freeze({
   APPEND_ENTRIES: 'raft:append:entries',
-  HEARTBEAT_APPEND: 'raft:append:heartbeat',
+  HEARTBEAT: 'raft:heartbeat',
 });
 
 const RAFT_TRANSPORT_REPLACE_PENDING_KEY_PREFIX = Object.freeze({
-  HEARTBEAT_APPEND: 'raft:append:heartbeat',
+  HEARTBEAT: 'raft:heartbeat',
 });
 
 const RAFT_TRANSPORT_DELIVERY_SOURCE_SEPARATOR = ':';
@@ -125,50 +112,18 @@ function resolveExplicitTargetPartitionId(packet = null) {
 }
 
 function resolvePriorityControlPlanePartitionId(packet = null) {
-  const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
-  if (explicitTargetPartitionId) {
-    return isCriticalTransportControlPlanePartition({
-      partitionId: explicitTargetPartitionId,
-    }) ?
-      explicitTargetPartitionId :
-      null;
-  }
-  const senderPartitionId = extractPartitionIdFromUnifiedAddress(packet?.address);
-  if (!senderPartitionId) {
-    return null;
-  }
-  return isCriticalTransportControlPlanePartition({partitionId: senderPartitionId}) ?
-    senderPartitionId :
+  const partitionId = resolveExplicitTargetPartitionId(packet);
+  return partitionId &&
+    isCriticalTransportControlPlanePartition({partitionId}) ?
+    partitionId :
     null;
 }
 
 function resolvePriorityControlPlaneReadinessPartitionId(packet = null) {
-  const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
-  if (explicitTargetPartitionId) {
-    return classifySystemPartition({
-      partitionId: explicitTargetPartitionId,
-    }).priorityControlPlane ?
-      explicitTargetPartitionId :
-      null;
-  }
-  const senderPartitionId = extractPartitionIdFromUnifiedAddress(packet?.address);
-  if (!senderPartitionId) {
-    return null;
-  }
-  return classifySystemPartition({partitionId: senderPartitionId})
-    .priorityControlPlane ?
-    senderPartitionId :
-    null;
-}
-
-function resolveNormalizedTargetReplicaStatus(packet = null) {
-  const targetReplicaStatus = packet?.targetReplicaStatus;
-  if (typeof targetReplicaStatus !== LOCAL_STR_STRING) {
-    return null;
-  }
-  const normalizedTargetReplicaStatus = targetReplicaStatus.trim().toLowerCase();
-  return normalizedTargetReplicaStatus.length > 0 ?
-    normalizedTargetReplicaStatus :
+  const partitionId = resolveExplicitTargetPartitionId(packet);
+  return partitionId &&
+    classifySystemPartition({partitionId}).priorityControlPlane ?
+    partitionId :
     null;
 }
 
@@ -185,36 +140,48 @@ function resolveNormalizedTargetAddress(packet = null) {
   return null;
 }
 
-function isRaftHeartbeatAppendPacket(packet = null) {
-  const packetType = typeof packet?.type === 'string' ?
-    packet.type.toLowerCase() :
-    null;
-  if (packetType !== RAFT_PACKET_TYPE.APPEND) {
-    return false;
-  }
-  return !Array.isArray(packet?.data) || packet.data.length === 0;
+function raftRsMessageTypeOf(envelope = null) {
+  const msgType = envelope?.message?.msgType;
+  return Number.isInteger(msgType) ? msgType : null;
 }
 
-function buildHeartbeatAppendReplacePendingKey(packet = null) {
-  const targetAddress = resolveNormalizedTargetAddress(packet);
+function raftRsEntriesOf(envelope = null) {
+  return Array.isArray(envelope?.message?.entries) ?
+    envelope.message.entries :
+    [];
+}
+
+function isRaftHeartbeatEnvelope(envelope = null) {
+  return raftRsMessageTypeOf(envelope) === RAFT_RS_MESSAGE_TYPE.HEARTBEAT;
+}
+
+function isRaftBulkReplicationEnvelope(envelope = null) {
+  const msgType = raftRsMessageTypeOf(envelope);
+  return msgType === RAFT_RS_MESSAGE_TYPE.SNAPSHOT ||
+    (msgType === RAFT_RS_MESSAGE_TYPE.APPEND &&
+      raftRsEntriesOf(envelope).length > 0);
+}
+
+function buildHeartbeatReplacePendingKey(envelope = null) {
+  const targetAddress = resolveNormalizedTargetAddress(envelope);
   if (!targetAddress) {
-    return RAFT_TRANSPORT_REPLACE_PENDING_KEY_PREFIX.HEARTBEAT_APPEND;
+    return RAFT_TRANSPORT_REPLACE_PENDING_KEY_PREFIX.HEARTBEAT;
   }
-  return `${RAFT_TRANSPORT_REPLACE_PENDING_KEY_PREFIX.HEARTBEAT_APPEND}:${targetAddress}`;
+  return `${RAFT_TRANSPORT_REPLACE_PENDING_KEY_PREFIX.HEARTBEAT}:${targetAddress}`;
 }
 
-function buildHeartbeatAppendDeliveryOptions(baseOptions, packet = null) {
+function buildHeartbeatDeliveryOptions(baseOptions, envelope = null) {
   return Object.freeze({
     ...baseOptions,
-    deliverySource: RAFT_TRANSPORT_DELIVERY_SOURCE.HEARTBEAT_APPEND,
-    replacePendingKey: buildHeartbeatAppendReplacePendingKey(packet),
+    deliverySource: RAFT_TRANSPORT_DELIVERY_SOURCE.HEARTBEAT,
+    replacePendingKey: buildHeartbeatReplacePendingKey(envelope),
   });
 }
 
-function buildAppendEntriesDeliverySource(packet = null) {
-  const targetAddress = resolveNormalizedTargetAddress(packet);
-  const partitionId = resolveExplicitTargetPartitionId(packet) ||
-    resolvePriorityControlPlanePartitionId(packet);
+function buildAppendEntriesDeliverySource(envelope = null) {
+  const targetAddress = resolveNormalizedTargetAddress(envelope);
+  const partitionId = resolveExplicitTargetPartitionId(envelope) ||
+    resolvePriorityControlPlanePartitionId(envelope);
   const sourceTarget =
     targetAddress ||
     partitionId ||
@@ -225,153 +192,130 @@ function buildAppendEntriesDeliverySource(packet = null) {
   ].join(RAFT_TRANSPORT_DELIVERY_SOURCE_SEPARATOR);
 }
 
-function buildAppendEntriesDeliveryOptions(baseOptions, packet = null) {
+function buildAppendEntriesDeliveryOptions(baseOptions, envelope = null) {
   return Object.freeze({
     ...baseOptions,
-    deliverySource: buildAppendEntriesDeliverySource(packet),
+    deliverySource: buildAppendEntriesDeliverySource(envelope),
   });
 }
 
-function isBackgroundControlPlaneAppendPartition(packet = null) {
-  const partitionId = resolveExplicitTargetPartitionId(packet) ||
-    resolvePriorityControlPlanePartitionId(packet);
+function isBackgroundControlPlaneAppendPartition(envelope = null) {
+  const partitionId = resolveExplicitTargetPartitionId(envelope) ||
+    resolvePriorityControlPlanePartitionId(envelope);
   return partitionId !== null &&
     RAFT_TRANSPORT_BACKGROUND_APPEND_PARTITION_IDS.has(partitionId);
 }
 
-function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet = null) {
-  const packetType = typeof packet?.type === 'string' ?
-    packet.type.toLowerCase() :
-    null;
-  if (packetType !== RAFT_PACKET_TYPE.APPEND) {
-    return false;
-  }
-  if (!Array.isArray(packet?.data) || packet.data.length === 0) {
-    return false;
-  }
-  return resolveNormalizedTargetReplicaStatus(packet) === ReplicaStatus.SYNCING ||
-    isBackgroundControlPlaneAppendPartition(packet);
-}
-
-function isPriorityControlPlaneReadinessControlPacket(
-  packet = null,
-  packetType = null,
+function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(
+  envelope = null,
 ) {
-  if (!resolvePriorityControlPlaneReadinessPartitionId(packet)) {
-    return false;
-  }
-  if (packetType === RAFT_PACKET_TYPE.APPEND_FAIL) {
-    return false;
-  }
-  if (
-    packetType === RAFT_PACKET_TYPE.APPEND &&
-    Array.isArray(packet?.data) &&
-    packet.data.length > 0
-  ) {
-    return false;
-  }
-  return packetType === RAFT_PACKET_TYPE.VOTE ||
-    packetType === RAFT_PACKET_TYPE.VOTED ||
-    packetType === RAFT_PACKET_TYPE.APPEND ||
-    packetType === RAFT_PACKET_TYPE.APPENDED;
+  return raftRsMessageTypeOf(envelope) === RAFT_RS_MESSAGE_TYPE.APPEND &&
+    raftRsEntriesOf(envelope).length > 0 &&
+    isBackgroundControlPlaneAppendPartition(envelope);
 }
 
-function isMessageGroupTargetAddress(packet = null) {
-  const targetAddress = resolveNormalizedTargetAddress(packet);
+function isPriorityControlPlaneReadinessControlEnvelope(envelope = null) {
+  return resolvePriorityControlPlaneReadinessPartitionId(envelope) !== null &&
+    raftRsMessageTypeOf(envelope) !== null &&
+    !isRaftBulkReplicationEnvelope(envelope);
+}
+
+function isMessageGroupTargetAddress(envelope = null) {
+  const targetAddress = resolveNormalizedTargetAddress(envelope);
   return (
     typeof targetAddress === LOCAL_STR_STRING &&
     targetAddress.includes(RAFT_MESSAGE_GROUP_ADDRESS_TOKEN)
   );
 }
 
-// Break-point (a): the query message-group ingress readiness gate (routingReady)
-// only flips once the group's Raft consensus converges (leader elected, member
-// reachable). Those consensus CONTROL messages otherwise ride the CRITICAL lane
-// and are starved by the priority-recovery dispatch storm that saturates the
-// shared outbound queue. Routing the message-group control plane (votes,
-// vote/append responses, heartbeats — everything except bulk data-bearing
-// append replication) onto the protected READINESS lane reserves headroom so
-// the group can converge and ingress readiness can flip even under critical
-// saturation, without letting bulk replication consume the small reserve.
-function resolveMessageGroupReadinessDeliveryOptions(packet, packetType) {
-  const hasAppendEntries = packetType === RAFT_PACKET_TYPE.APPEND &&
-    Array.isArray(packet?.data) &&
-    packet.data.length > 0;
-  if (hasAppendEntries) {
+// Message-group and priority-control-plane consensus control traffic unblocks
+// readiness and therefore uses the protected READINESS lane. Bulk replication
+// never consumes that reserve.
+function resolveMessageGroupReadinessDeliveryOptions(envelope) {
+  if (isRaftBulkReplicationEnvelope(envelope)) {
     return null;
   }
-  if (isRaftHeartbeatAppendPacket(packet)) {
-    return buildHeartbeatAppendDeliveryOptions(
+  if (isRaftHeartbeatEnvelope(envelope)) {
+    return buildHeartbeatDeliveryOptions(
       RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS,
-      packet,
+      envelope,
     );
   }
   return RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS;
 }
 
-function resolveRaftTransportDeliveryOptions(packet = null) {
-  const packetType = typeof packet?.type === 'string' ?
-    packet.type.toLowerCase() :
-    null;
-  if (isMessageGroupTargetAddress(packet)) {
-    const messageGroupReadinessOptions =
-      resolveMessageGroupReadinessDeliveryOptions(packet, packetType);
-    if (messageGroupReadinessOptions) {
-      return messageGroupReadinessOptions;
+function resolveRaftTransportDeliveryOptions(envelope = null) {
+  if (isMessageGroupTargetAddress(envelope)) {
+    const readiness = resolveMessageGroupReadinessDeliveryOptions(envelope);
+    if (readiness) {
+      return readiness;
     }
   }
-  const isHeartbeatAppendPacket = isRaftHeartbeatAppendPacket(packet);
-  const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
-  // Priority control-plane consensus packets unblock readiness and must be able
-  // to use the same protected queue reserve as message-group control traffic.
-  if (isPriorityControlPlaneReadinessControlPacket(packet, packetType)) {
-    if (isHeartbeatAppendPacket) {
-      return buildHeartbeatAppendDeliveryOptions(
+
+  const heartbeat = isRaftHeartbeatEnvelope(envelope);
+  const bulkReplication = isRaftBulkReplicationEnvelope(envelope);
+  const messageType = raftRsMessageTypeOf(envelope);
+  const explicitTargetPartitionId =
+    resolveExplicitTargetPartitionId(envelope);
+
+  if (isPriorityControlPlaneReadinessControlEnvelope(envelope)) {
+    return heartbeat ?
+      buildHeartbeatDeliveryOptions(
         RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS,
-        packet,
-      );
-    }
-    return RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS;
+        envelope,
+      ) :
+      RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS;
   }
-  if (resolvePriorityControlPlanePartitionId(packet)) {
-    if (shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet)) {
-      return buildAppendEntriesDeliveryOptions(
-        RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
-        packet,
-      );
+
+  if (resolvePriorityControlPlanePartitionId(envelope)) {
+    if (shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(envelope) ||
+        messageType === RAFT_RS_MESSAGE_TYPE.SNAPSHOT) {
+      return messageType === RAFT_RS_MESSAGE_TYPE.APPEND ?
+        buildAppendEntriesDeliveryOptions(
+          RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+          envelope,
+        ) :
+        RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS;
     }
-    if (isHeartbeatAppendPacket) {
-      return buildHeartbeatAppendDeliveryOptions(
+    if (heartbeat) {
+      return buildHeartbeatDeliveryOptions(
         RAFT_TRANSPORT_DELIVERY_OPTIONS,
-        packet,
+        envelope,
       );
     }
     return RAFT_TRANSPORT_DELIVERY_OPTIONS;
   }
-  const hasAppendEntries = packetType === RAFT_PACKET_TYPE.APPEND &&
-    Array.isArray(packet?.data) &&
-    packet.data.length > 0;
-  if (isHeartbeatAppendPacket) {
-    return buildHeartbeatAppendDeliveryOptions(
+
+  if (heartbeat) {
+    return buildHeartbeatDeliveryOptions(
       RAFT_TRANSPORT_DELIVERY_OPTIONS,
-      packet,
+      envelope,
     );
   }
-  if (explicitTargetPartitionId) {
-    return hasAppendEntries || packetType === RAFT_PACKET_TYPE.APPEND_FAIL ?
-      RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS :
-      RAFT_TRANSPORT_DELIVERY_OPTIONS;
+
+  if (explicitTargetPartitionId && bulkReplication) {
+    return messageType === RAFT_RS_MESSAGE_TYPE.APPEND ?
+      buildAppendEntriesDeliveryOptions(
+        RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+        envelope,
+      ) :
+      RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS;
   }
-  if (hasAppendEntries || packetType === RAFT_PACKET_TYPE.APPEND_FAIL) {
-    return RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS;
+
+  if (bulkReplication) {
+    return messageType === RAFT_RS_MESSAGE_TYPE.APPEND ?
+      buildAppendEntriesDeliveryOptions(
+        RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+        envelope,
+      ) :
+      RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS;
   }
+
   return RAFT_TRANSPORT_DELIVERY_OPTIONS;
 }
 
 export {
   RAFT_ELECTION_TIMING,
-  RAFT_PACKET_TYPE,
-  RAFT_PACKET_TYPES,
   RAFT_EVENT,
   RAFT_ROLE,
   RAFT_ERROR_NAME,

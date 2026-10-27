@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerQuorumConditionedRemoveSafetyTailReplacementElection} from './quorum-conditioned-remove-safety-tail-replacement-election.js';
 import {
   withOwnerReadPlanningEvidence,
@@ -42,7 +43,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
         messageRouter: {
           deliver: async () => {
             deliveries.push('deliver');
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -230,7 +231,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
         messageRouter: {
           deliver: async (target, payload, options) => {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -447,7 +448,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
         messageRouter: {
           deliver: async (target, payload, options) => {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -679,7 +680,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
         messageRouter: {
           deliver: async (target, payload, options) => {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -898,7 +899,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
         messageRouter: {
           deliver: async (target, payload, options) => {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -1056,7 +1057,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
         messageRouter: {
           deliver: async (target, payload, options) => {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,

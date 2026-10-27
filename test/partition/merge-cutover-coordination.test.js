@@ -416,8 +416,12 @@ test('merge cutover - acks recover the workflow from the durable ' +
 test('merge cutover - 3-partition table: the non-participating sibling ' +
     'is carried into the target epoch and stays routable (D1 guard)',
 async (t) => {
+  // The table row's committed partition count is its three partitions.
   const fixture = await startMergedFixture(t, {
     partitionInfos: createThreePartitionInfos(),
+    durableTableRow: {table_id: 'tbl-users', table_name: 'users',
+      partition_key: 'id', active_partition_version: 1, partition_count: 3,
+      partition_transition_state: null, partition_transition_metadata: null},
   });
   for (const partitionId of [
     FIXTURE_LEFT_PARTITION_ID,
@@ -619,6 +623,9 @@ test('merge terminal - after full completion the transition clears and a ' +
     state: 'NORMAL',
   };
 
+  // The later splits that produced them recorded the table's live
+  // partition count (the merged target and the two new partitions).
+  fixture.durableTableRow.partition_count = 3;
   const secondResult = await fixture.workflow.execute({
     leftPartitionId: secondLeftId,
     rightPartitionId: secondRightId,
@@ -674,6 +681,17 @@ async (t) => {
     insertCalls,
     deleteCalls,
     cdcIntegrationService,
+    // One replica row per partition (the merged target included): this
+    // merge PROVISIONED its target (its durable mark is 'dispatched'), so
+    // the target has members to retire - a provisioned target whose members
+    // cannot be read is never deleted (fail-closed). A target aborted
+    // before its first create is retired on its 'none' mark instead
+    // (group-retirement-provisioning-mark.test.js).
+    listPartitionServiceRows: (partitionId) => [{
+      partition_id: partitionId,
+      replica_id: `${partitionId}-r1`,
+      node_id: 'node-a',
+    }],
   });
   const result = await fixture.workflow.execute({
     leftPartitionId: FIXTURE_LEFT_PARTITION_ID,
@@ -706,8 +724,11 @@ async (t) => {
   holdCatchupWrite = false;
 
   // A fails while B's cutover write is in flight; the abort enqueues
-  // behind it on the FIFO owner lane.
-  await fixture.workflow.acknowledgeMergeSourceParticipant(
+  // behind it on the FIFO owner lane. The failure ack's own record write
+  // queues behind the in-flight write of the same owner (one owner's record
+  // writes run in order, managed-workflow-record-store.js), so it settles
+  // once that write is released.
+  const failureAckPromise = fixture.workflow.acknowledgeMergeSourceParticipant(
     result.workflowId,
     buildSourceAck(
       FIXTURE_LEFT_PARTITION_ID,
@@ -715,8 +736,10 @@ async (t) => {
       r1FenceToken,
     ),
   );
+  await new Promise((resolve) => setImmediate(resolve));
 
   releaseHeldWrite();
+  await failureAckPromise;
   const cutoverAckResult = await cutoverAckPromise;
   await fixture.workflow.settleMergeOwnerLaneForWorkflow(result.workflowId);
 
@@ -768,7 +791,7 @@ test('merge dissolution - a failed dissolution is re-attemptable: a ' +
         return {status: 'error', error: 'hosting node unreachable'};
       }
       replicaRemovalCalls.push(request);
-      return {status: 'initiated'};
+      return {status: 'completed'};
     },
   });
   const ladder = [
@@ -825,7 +848,19 @@ test('merge dissolution - a failed dissolution is re-attemptable: a ' +
 test('merge abort - an abort racing a retry execute() still lands: the ' +
     'retry window is refused, durable FAILED persists (no wedge), and a ' +
     'settled retry is viable (R2 guard)', async (t) => {
-  const fixture = await startMergedFixture(t);
+  const fixture = await startMergedFixture(t, {
+    // One replica row per partition (the merged target included): this
+    // merge PROVISIONED its target (its durable mark is 'dispatched'), so
+    // the target has members to retire - a provisioned target whose members
+    // cannot be read is never deleted (fail-closed). A target aborted
+    // before its first create is retired on its 'none' mark instead
+    // (group-retirement-provisioning-mark.test.js).
+    listPartitionServiceRows: (partitionId) => [{
+      partition_id: partitionId,
+      replica_id: `${partitionId}-r1`,
+      node_id: 'node-a',
+    }],
+  });
 
   // Source failure: the abort is fire-and-forget on the FIFO owner lane.
   await ackSourceThroughGraph(

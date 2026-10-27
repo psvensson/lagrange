@@ -12,6 +12,7 @@ const THREADING_CONFIG_KEY = Object.freeze({
 const THREADING_DEFAULT = Object.freeze({
   MIN_THREADS: 2,
   MAX_THREADS: os.cpus().length,
+  // ends-on: n/a ttl (an idle worker's lifetime)
   IDLE_TIMEOUT_MS: 30000,
 });
 

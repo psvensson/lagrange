@@ -3,6 +3,16 @@ import {STRING} from '../constants/strings.js';
 import {TABLES} from '../constants/tables.js';
 import {TIME_MS} from '../constants/time.js';
 import {RAFT_ELECTION_TIMING} from '../raft/constants.js';
+import {
+  PARTITION_SERVICE_CREATE_ADMISSION_COLUMN,
+  PARTITION_SERVICE_CREATE_ADMISSION_COLUMN_SQL,
+  PARTITION_SERVICE_CREATE_ADMISSION_LOG_MSG,
+} from './partition-service-create-admission-migration-constants.js';
+import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
+  './partition-participant-transaction-constants.js';
+import {PARTITION_CDC_COMMAND_TYPES} from
+  './partition-cdc-obligation-constants.js';
+import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   MEMORY_DB_PATH: ':memory:',
@@ -11,10 +21,13 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   SIZE_UPDATE_INTERVAL_MS: TIME_MS.MINUTE,
   MANAGED_SPLIT_WRITE_ACTIVITY_DEBOUNCE_MS: TIME_MS.SECOND * NUM.FIVE,
   MERGE_CUTOVER_WAIT_INTERVAL_MS: 200,
+  // ends-on: the merge cutover becomes visible locally, or the merge is aborted
   MERGE_CUTOVER_WAIT_TIMEOUT_MS: TIME_MS.MINUTE * NUM.TWO,
+  // ends-on: the partition size write is accepted
   SIZE_PERSIST_RETRY_TIMEOUT_MS: TIME_MS.SECOND,
   SIZE_PERSIST_RETRY_BASE_DELAY_MS: 50,
   SIZE_PERSIST_RETRY_MAX_DELAY_MS: 250,
+  // ends-on: the proposed write is committed and applied
   PENDING_REQUEST_TIMEOUT_MS: TIME_MS.SECOND * 30,
   // Interim split/merge mirror delta queue bound: the durable replay
   // source is the Raft log, so the in-memory queue only ever holds
@@ -36,7 +49,6 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   // timeout (never bounded below it); the next check is armed from
   // completion, so a timeout never stacks with the cadence.
   LEARNER_PROMOTION_WAKE_DELAY_MS: NUM.ZERO,
-  MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
   // A sessionless write the consensus port defers because a user session
   // holds the partition's connection is proposed again (from this delay,
@@ -46,14 +58,6 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   USER_TRANSACTION_WRITE_RETRY_INTERVAL_MS: NUM.TEN,
   USER_TRANSACTION_WRITE_RETRY_MAX_DELAY_MS: NUM.HUNDRED,
   USER_TRANSACTION_WRITE_DEFER_BUDGET_MS: TIME_MS.SECOND * NUM.TWO,
-});
-// Where a prepared session's state lives. No PREPARE marker is proposed while
-// a session stages on the partition's connection (consensus persistence
-// never runs inside a user transaction), so a prepared session is local to
-// this replica: its open SQLite transaction and memory, lost on restart.
-// Replicating the prepared write set is the replicated-transaction owner's.
-const PARTITION_TRANSACTION_PREPARED_STATE = Object.freeze({
-  LOCAL_STAGING: 'local-staging',
 });
 const PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON = Object.freeze({
   INITIAL_DELAY: 'initial_delay',
@@ -78,30 +82,8 @@ const PARTITION_SERVICE_SQL = Object.freeze({
         value TEXT
       )
     `,
-  CREATE_TRANSACTION_OUTCOME_TABLE: `
-      CREATE TABLE IF NOT EXISTS _transaction_outcomes (
-        session_id TEXT NOT NULL,
-        transaction_epoch INTEGER NOT NULL,
-        outcome TEXT NOT NULL,
-        updated_at INTEGER NOT NULL,
-        PRIMARY KEY (session_id, transaction_epoch)
-      )
-    `,
   SELECT_RAFT_STATE_VALUE: 'SELECT value FROM _raft_state WHERE key = ?',
-  SELECT_TRANSACTION_OUTCOME:
-    'SELECT outcome FROM _transaction_outcomes ' +
-    'WHERE session_id = ? AND transaction_epoch = ?',
-  UPSERT_TRANSACTION_OUTCOME:
-    'INSERT INTO _transaction_outcomes ' +
-    '(session_id, outcome, transaction_epoch, updated_at) VALUES (?, ?, ?, ?) ' +
-    'ON CONFLICT(session_id, transaction_epoch) DO UPDATE SET ' +
-    'outcome = excluded.outcome, ' +
-    'updated_at = excluded.updated_at',
   UPSERT_RAFT_STATE: 'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
-  BEGIN_IMMEDIATE: 'BEGIN IMMEDIATE',
-  SAVEPOINT_PREPARE: 'SAVEPOINT prepare_transaction',
-  COMMIT: 'COMMIT',
-  ROLLBACK: 'ROLLBACK',
   UPDATE_SERVICE_RAFT_ROLE:
     `UPDATE ${TABLES.SERVICES} SET raft_role = ?, updated_at = ? ` +
     'WHERE (service_id = ?)',
@@ -131,6 +113,7 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   SYSTEM_TABLE_WRITE: 'SYSTEM_TABLE_WRITE',
   QUERY: 'QUERY',
   TRANSACTION: 'TRANSACTION',
+  COORDINATOR_SETTLEMENT: COORDINATOR_SETTLEMENT_TYPE,
   START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
   START_MERGE_REPLICATION: 'START_MERGE_REPLICATION',
   LEARNER_PROMOTION_PROOF: 'LEARNER_PROMOTION_PROOF',
@@ -148,17 +131,13 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   UPSERT: 'UPSERT',
   QUERY: 'QUERY',
   MIGRATION_ALTER_TABLE: 'MIGRATION_ALTER_TABLE',
-  BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
-  PREPARE_TRANSACTION: 'PREPARE_TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
-  TRANSACTION_COMMIT: 'TRANSACTION_COMMIT',
   TRANSACTION_OUTCOME: 'TRANSACTION_OUTCOME',
 });
 
-// The committed command types the application executes as SQL, the
-// transaction markers (session-bound: TRANSACTION_COMMIT records the session's
-// outcome, PREPARE_TRANSACTION and ROLLBACK are recorded in the log only), and
+// The committed command types the application executes as SQL, the participant
+// transaction commands, the CDC delivery owner's CDC_DELIVERED, and
 // every type it recognises. Anything else is UNRECOGNISED. Frozen arrays:
 // membership is asked of the admission owner, which decides before consensus
 // what may be proposed (partition-committed-command-admission.js).
@@ -171,26 +150,30 @@ const PARTITION_COMMITTED_SQL_COMMAND_TYPES = Object.freeze([
   PARTITION_SERVICE_OPERATION.QUERY,
   PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE,
 ]);
-const PARTITION_COMMITTED_MARKER_COMMAND_TYPES = Object.freeze([
-  PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
-  PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-  PARTITION_SERVICE_OPERATION.ROLLBACK,
-]);
 const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
   ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
-  ...PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
+  ...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+  ...PARTITION_CDC_COMMAND_TYPES,
+  COORDINATOR_SETTLEMENT_TYPE,
 ]);
 
 // The reason a group's host failure names when a committed entry carries a
-// command type the application does not recognise (a bug or version skew:
-// the admission owner never proposes one). The application fails closed.
+// command type the application does not recognise, or an SQL command without
+// an entryId (a bug or version skew: the admission owner never proposes one,
+// every proposer builds its entry with an entryId). The application fails
+// closed.
 const PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON = Object.freeze({
   COMMAND_UNKNOWN: 'committed-command-unknown',
+  ENTRY_ID_MISSING: 'committed-command-entry-id-missing',
 });
 
 // What the committed-entry application did with one committed command (R07):
 // a failed statement is a deterministic outcome that consumes the entry; an
 // unknown command type fails the application closed, never a silent no-op.
+// ENTRY_ID_MISSING_REFUSED: a committed SQL command without an entryId fails
+// the application closed exactly as an unknown type does (its statement
+// never runs: the entryId is the one key of its outcome row and its CDC
+// obligation).
 const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   APPLIED: 'applied',
   REPLAYED: 'replayed',
@@ -198,29 +181,21 @@ const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   STATEMENT_FAILED: 'statement_failed',
   STATEMENT_ENVIRONMENT_FAILED: 'statement_environment_failed',
   UNRECOGNISED: 'unrecognised',
+  ENTRY_ID_MISSING_REFUSED: 'entry_id_missing_refused',
+  RESERVED_REFUSED: 'reserved_refused',
 });
 
 // The typed error codes of the committed-entry application and of partition
 // consensus construction.
 const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
   UNRECOGNISED: 'partition_committed_command_unrecognised',
+  ENTRY_ID_MISSING: 'partition_committed_command_entry_id_missing',
   STATEMENT_ENVIRONMENT_FAILED:
     'partition_committed_statement_environment_failed',
   STATEMENT_MISSING: 'partition_write_statement_missing',
   // The admission owner's refusals before consensus.
   COMMAND_TYPE_UNKNOWN: 'partition_write_command_type_unknown',
-  MARKER_NOT_ADMISSIBLE: 'partition_write_marker_not_admissible',
-  SESSION_MISSING: 'partition_write_session_missing',
   ENTRY_ID_INVALID: 'partition_write_entry_id_invalid',
-});
-
-const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
-  BACKEND_SELECTION_REFUSED: 'partition_consensus_backend_selection_refused',
-  // Its consensus port refused the partition at initialization - a port that
-  // opened its group held (its durable record unreadable), whatever the
-  // replica count, or a lone replica's refused campaign - so initialization
-  // fails closed with this outcome, naming the port's phase (R11).
-  CONSENSUS_INIT_REFUSED: 'partition_consensus_init_refused',
 });
 
 const PARTITION_SERVICE_ROLE = Object.freeze({
@@ -246,14 +221,12 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
   KEY_RANGE_CHANGED: 'keyRangeChanged',
   SIZE_UPDATED: 'sizeUpdated',
   CDC_EVENT: 'cdcEvent',
-  CDC_CATCHUP_STARTED: 'cdcCatchupStarted',
-  CDC_CATCHUP_COMPLETED: 'cdcCatchupCompleted',
+  SHUTDOWN_STARTED: 'shutdownStarted',
   SHUTDOWN: 'shutdown',
   CONSENSUS_OBSERVED: 'consensusObserved',
 });
 
 const PARTITION_SERVICE_REASON = Object.freeze({
-  COMMIT: 'commit',
   LEADER_CHANGE: 'leader change',
   TERM_CHANGE: 'term change',
 });
@@ -265,14 +238,13 @@ const PARTITION_SERVICE_ADDRESS = Object.freeze({
 });
 
 const PARTITION_SERVICE_DB = Object.freeze({
-  PRAGMA_JOURNAL_MODE: 'journal_mode = WAL',
-  PRAGMA_SYNCHRONOUS: 'synchronous = NORMAL',
   PRAGMA_PAGE_COUNT: 'page_count',
   PRAGMA_PAGE_SIZE: 'page_size',
   PRAGMA_SIMPLE: 'simple',
 });
 
 const PARTITION_SERVICE_COLUMN = Object.freeze({
+  ...PARTITION_SERVICE_CREATE_ADMISSION_COLUMN,
   CLEANUP_TOKEN: 'cleanup_token',
   BOOT_INCARNATION: 'boot_incarnation',
   CONNECTION_STATE: 'connection_state',
@@ -290,12 +262,14 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
   PENDING_PARTITION_VERSION: 'pending_partition_version',
   PARTITION_TRANSITION_STATE: 'partition_transition_state',
   PARTITION_TRANSITION_METADATA: 'partition_transition_metadata',
+  PARTITION_TRANSITION_GENERATION: 'partition_transition_generation',
   PARTITION_VERSION: 'partition_version',
   TARGET_CLAIM_KEY: 'target_claim_key',
   MEMBERSHIP_PUBLICATION_EPOCH: 'membership_publication_epoch',
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
+  ...PARTITION_SERVICE_CREATE_ADMISSION_COLUMN_SQL,
   ADD_CLEANUP_TOKEN: 'ADD COLUMN cleanup_token TEXT',
   ADD_BOOT_INCARNATION:
     'ADD COLUMN boot_incarnation INTEGER NOT NULL DEFAULT 0',
@@ -329,6 +303,10 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'ADD COLUMN partition_transition_state TEXT',
   ADD_PARTITION_TRANSITION_METADATA:
     'ADD COLUMN partition_transition_metadata TEXT',
+  // The workflow record generation (managed-workflow-record-store.js):
+  // existing rows read 0, the first record write moves them to 1.
+  ADD_PARTITION_TRANSITION_GENERATION:
+    'ADD COLUMN partition_transition_generation INTEGER NOT NULL DEFAULT 0',
   ADD_PARTITION_VERSION:
     'ADD COLUMN partition_version INTEGER NOT NULL DEFAULT 1',
   ADD_TARGET_CLAIM_KEY:
@@ -338,14 +316,6 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
   BACKFILL_CONNECTION_STATE_FROM_LEGACY_WS:
     'SET connection_state = ws_connection_state ' +
     'WHERE ws_connection_state IS NOT NULL',
-});
-
-const PARTITION_SERVICE_LIFERAFT_TIMER = Object.freeze({
-  HEARTBEAT: 'heartbeat',
-  ELECTION_MIN: 'election min',
-  ELECTION_MAX: 'election max',
-  LOG: 'Log',
-  HEARTBEAT_ELECTION: 'heartbeat, election',
 });
 
 const PARTITION_SERVICE_STATUS = Object.freeze({
@@ -363,11 +333,6 @@ const PARTITION_SERVICE_TYPE = Object.freeze({
 const PARTITION_SERVICE_CDC = Object.freeze({
   HANDSHAKE_STATUS_OK: 'ok',
   HANDSHAKE_STATUS_ALREADY_SUBSCRIBED: 'already_subscribed',
-  CATCHUP_MODE_NONE: 'none',
-  CATCHUP_MODE_BACKFILL: 'backfill',
-  CATCHUP_MODE_SLIDING_WINDOW: 'sliding_window',
-  STREAM_MODE_CATCHUP: 'catchup',
-  STREAM_MODE_STEADY: 'steady',
   SUBSCRIBER_ID_PREFIX: 'cdc-subscriber',
   REPLAY_REASON_BUFFERED_REMAINING: 'buffered_events_remaining',
 });
@@ -381,6 +346,7 @@ const PARTITION_SERVICE_INIT_STAGE = Object.freeze({
 });
 
 const PARTITION_SERVICE_LOG_MSG = Object.freeze({
+  ...PARTITION_SERVICE_CREATE_ADMISSION_LOG_MSG,
   INITIALIZING: 'Initializing partition service',
   CREATED_PARTITION_DIR: 'Created partition directory',
   DEFERRING_ELECTION_START: 'Deferring election start',
@@ -405,25 +371,16 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Learner promotion wake coalesced into the in-flight check',
   LEARNER_PROMOTION_ROW_REASSERTED:
     'Learner promotion re-asserted the durable services row',
-  LEADER_DURABILITY_UNFIT:
-    'Replica local durability is unfit for leadership: writes are not ' +
-    'reaching durable storage (stuck transaction or commit/durable ' +
-    'divergence); shedding leadership if a viable successor exists',
-  LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK:
-    'Durability-unfit leader demoted WITHOUT a provable successor: the ' +
-    'bounded fallback expired with no follower ack inside the viability ' +
-    'window. Holding the seat forever starves the very ack evidence the ' +
-    'viability probe needs (self-sustaining unfit-leader deadlock); ' +
-    'demotion opens the role-gated stuck-transaction heal',
   LEADER_DURABILITY_RECOVERED:
     'Replica local durability recovered; leadership fitness restored',
   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
-  CLEARED_LIFERAFT_TIMERS: 'Cleared liferaft timers for deferred election',
+  STOPPED_SCHEDULING_FOR_DEFERRED_ELECTION:
+    'Stopped consensus scheduling for deferred election',
   COMMITTED_PREFIX_DIVERGENCE:
     'Raft committed-prefix term divergence detected: local committed entry ' +
     'conflicts with the leader and truncation is impossible by design; ' +
     'routed to the leader catch-up/repair path (surfaced once per conflict)',
-  BECAME_LEADER: 'Became leader (liferaft)',
+  BECAME_LEADER: 'Became leader',
   RAFT_TRANSITION_EVIDENCE: 'Raft leadership transition evidence',
   LEADER_CHANGED: 'Leader changed',
   JOINING_PEER_ADDRESS: 'Joining peer with fully qualified address',
@@ -434,7 +391,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Built peer address from the current live Raft leader',
   PEER_RETIRED_FROM_AUTHORITATIVE_SERVICE_CHANGE:
     'Retired Raft peer from authoritative service change',
-  RAFT_PEER_ADMISSION: 'Raft peer admission',
   PEER_ADDRESS_FROM_NODE: 'Built peer address using local nodeId',
   SINGLE_REPLICA_LEADER: 'Single replica - becoming leader immediately',
   INITIALIZED: 'Partition service initialized',
@@ -469,15 +425,16 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Added partition_transition_state column to tables table',
   ADDED_PARTITION_TRANSITION_METADATA:
     'Added partition_transition_metadata column to tables table',
+  ADDED_PARTITION_TRANSITION_GENERATION:
+    'Added partition_transition_generation column to tables table',
   ADDED_PARTITIONS_TABLE_NAME: 'Added table_name column to partitions table',
   ADDED_PARTITION_VERSION: 'Added partition_version column to partitions table',
   ADDED_REPLICA_OPERATIONS_TARGET_CLAIM_KEY:
     'Added target_claim_key column to replica_operations table',
   ADDED_REPLICA_OPERATIONS_MEMBERSHIP_PUBLICATION_EPOCH:
     'Added membership_publication_epoch column to replica_operations table',
-  RECEIVED_RAFT_PACKET: 'Received Raft packet',
-  SENDING_RAFT_RESPONSE: 'Sending Raft response',
-  FAILED_RAFT_RESPONSE: 'Failed to send Raft response',
+  ADDED_REPLICA_OPERATIONS_MESSAGE_GROUP_MEMBERSHIP_COLUMN:
+    'Added message-group membership column to replica_operations table',
   UNKNOWN_MESSAGE_TYPE: 'Unknown application message type',
   HANDLING_SYSTEM_TABLE_WRITE: 'Handling system table write from remote node',
   HANDLING_REMOTE_QUERY: 'Handling remote query',
@@ -521,22 +478,13 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   MERGE_REPLICATION_WRITE_RETAINED_AFTER_FAILURE:
     'Partition merge mirror FAILED; acknowledged write retained in the ' +
     'undelivered queue instead of being dropped',
+  COMMITTED_WRITE_SIDE_EFFECT_FAILED:
+    'Committed write side effect failed after its commit; the write is ' +
+    'answered as committed',
+  WRITE_OUTCOME_UNKNOWN_CAUSE:
+    'Write answered with an unknown outcome; its cause stays on this replica',
   REDIRECTING_WRITE_TO_LEADER: 'Redirecting write to leader',
   APPLYING_COMMITTED_ENTRY: 'Applying committed entry',
-  TRANSACTION_COMMIT_APPLIED: 'Transaction commit entry applied',
-  BEGINNING_TRANSACTION: 'Beginning transaction',
-  PREPARING_TRANSACTION: 'Preparing transaction',
-  PREPARED_STATE_RECONSTRUCTED: 'Prepared transaction state reconstructed',
-  PREPARED_STATE_HOLD_TIMEOUT: 'Prepared transaction state hold timeout',
-  ACTIVE_TRANSACTION_HOLD_TIMEOUT:
-    'Active transaction held beyond its legal window; rolled back ' +
-    '(orphaned participant hold — run-23 zombie class)',
-  STUCK_TRANSACTION_HEAL_DEFERRED:
-    'Stuck transaction heal deferred: rolling back on a leader/candidate ' +
-    'would re-mint acked raft indices; waiting for durability-fitness ' +
-    'demotion',
-  COMMITTING_TRANSACTION: 'Committing transaction',
-  ROLLING_BACK_TRANSACTION: 'Rolling back transaction',
   EXECUTING_QUERY: 'Executing query',
   APPLY_WRITE_CALLED: 'applyWrite called',
   GENERATE_CDC_EVENT_CALLED: 'generateCDCEvent called',
@@ -560,8 +508,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   CDC_SUBSCRIBER_REMOVED: 'CDC subscriber removed',
   CDC_SUBSCRIPTION_HANDSHAKE_ACK:
     'CDC subscription handshake acknowledged',
-  CDC_CATCHUP_STARTED: 'CDC catch-up replay started',
-  CDC_CATCHUP_COMPLETED: 'CDC catch-up replay completed',
   PARTITION_SIZE_UPDATED: 'Partition size updated',
   INIT_STAGE_CALLBACK_FAILED: 'Partition initialization stage callback failed',
   REBALANCER_DEPENDENCIES_APPLIED:
@@ -603,24 +549,11 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   CDC_EVENT_FAILED: 'Failed to generate CDC event for committed entry',
   APPLY_COMMITTED_FAILED: 'Failed to apply committed entry',
   NOT_INITIALIZED: 'PartitionService not initialized',
-  TRANSACTION_ALREADY_ACTIVE: 'Transaction already active on this partition',
   WRITE_DEFERRED_USER_TRANSACTION_OPEN:
     'Write deferred: a user transaction holds the partition connection',
   SERVING_ADMISSION_FENCED_FOR_REMOVAL:
     'Serving admission fenced for replica removal',
-  BEGIN_TRANSACTION_FAILED: 'Failed to begin transaction',
-  PREPARE_CONFLICT: 'Prepare failed due to write conflict',
-  NO_ACTIVE_TRANSACTION_PREPARE: 'No active transaction to prepare',
-  SNAPSHOT_EXPIRED: 'Snapshot history expired for transaction epoch',
-  PREPARE_LOST: 'Prepared state lost after failover',
-  NO_ACTIVE_TRANSACTION_COMMIT: 'No active transaction to commit',
-  COMMIT_TRANSACTION_FAILED: 'Failed to commit transaction',
-  NO_ACTIVE_TRANSACTION_ROLLBACK: 'No active transaction to rollback',
-  ROLLBACK_TRANSACTION_FAILED: 'Failed to rollback transaction',
-  NO_ACTIVE_TRANSACTION: 'No active transaction',
-  TRANSACTION_WRITE_FAILED: 'Transaction write failed',
   RAFT_COMMAND_FAILED: 'Raft command failed',
-  TRANSACTION_COMMIT_RAFT_FAILED: 'Raft command failed for transaction commit',
   SINGLE_REPLICA_RAFT_OWNER_REQUIRED:
     'PartitionService single-replica leadership requires raft.campaign(...)',
   QUERY_FAILED: 'Query execution failed',
@@ -709,6 +642,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   MIGRATION_ALTER_MISSING_SQL: 'Migration ALTER TABLE SQL is required',
   COMMITTED_COMMAND_UNRECOGNISED:
     'Committed partition command type is not recognised',
+  COMMITTED_STATEMENT_ENTRY_ID_MISSING:
+    'Committed partition SQL command carries no entryId',
   COMMITTED_ENTRY_EFFECT_FAILED:
     'Committed partition entry effect failed after its transaction',
   WRITE_STATEMENT_MISSING:
@@ -717,23 +652,16 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   COMMITTED_STATEMENT_ENVIRONMENT_FAILED:
     'Committed partition statement failed in the host environment; the ' +
     'entry is not consumed and is applied again when the host recovers',
-  consensusInitRefused: (partitionId, answer) => {
-    const detail = answer?.failure?.detail ?? answer?.detail;
-    return `Partition ${partitionId} cannot initialize: its consensus port ` +
-      `refused it in phase ${answer?.phase} (${answer?.outcome}: ` +
-      `${answer?.reason}${detail ? ` ${JSON.stringify(detail)}` : ''})`;
-  },
-  backendSelectionRefused: (option, requested) =>
-    `Partition consensus backend selection refused: ${option}=` +
-    `${JSON.stringify(requested)} names a retired consensus backend; a ` +
-    'partition runs on its single consensus path and takes no selection',
 });
 
 const PARTITION_SERVICE_VALUE = Object.freeze({
   ONE_HUNDRED: NUM.HUNDRED,
   TEN: NUM.TEN,
+  // ends-on: the delivery is acknowledged (unreachable: deliverWithAck has no caller in src/)
   DEFAULT_TIMEOUT_MS: TIME_MS.SECOND * 30,
+  // ends-on: n/a dead (no consumer in src/)
   PENDING_REQUEST_SHUTDOWN_TIMEOUT_MS: TIME_MS.SECOND * 30,
+  // ends-on: n/a misnamed (a 100-character SQL log truncation length, not a time)
   DEFAULT_QUERY_TIMEOUT_MS: NUM.HUNDRED,
   SIZE_BYTES_DIVISOR: NUM.BYTES_PER_MIB,
   SIZE_MB_PRECISION: 2,
@@ -741,11 +669,11 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   // Election timeout should be 5-10x heartbeat to avoid unnecessary elections
   // On single-node clusters, all replicas are on same node so network is fast
   // but we still need stable leadership to avoid oscillation
-  LIFERAFT_HEARTBEAT_DEFAULT_MS: RAFT_ELECTION_TIMING.HEARTBEAT_DEFAULT_MS,
-  LIFERAFT_ELECTION_MIN_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MIN_DEFAULT_MS,
-  LIFERAFT_ELECTION_MAX_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MAX_DEFAULT_MS,
+  RAFT_HEARTBEAT_DEFAULT_MS: RAFT_ELECTION_TIMING.HEARTBEAT_DEFAULT_MS,
+  RAFT_ELECTION_MIN_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MIN_DEFAULT_MS,
+  RAFT_ELECTION_MAX_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MAX_DEFAULT_MS,
   // Jitter added per replica index to stagger election timeouts.
-  // Must be >= (LIFERAFT_ELECTION_MAX - LIFERAFT_ELECTION_MIN) so that
+  // Must be >= (RAFT_ELECTION_MAX - RAFT_ELECTION_MIN) so that
   // replica N's max timeout is always less than replica N+1's min timeout.
   // This guarantees r1 always fires first, preventing re-elections.
   // r1: [1000,3000], r2: [3500,5500], r3: [6000,8000], etc.
@@ -757,8 +685,12 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   CDC_PARSE_SLICE_END: NUM.HUNDRED,
   CDC_TABLE_NAME_EXTRACTION_STATE_FOUND: 'found',
   CDC_TABLE_NAME_EXTRACTION_STATE_NOT_FOUND: 'not_found',
-  LIFERAFT_SINGLE_REPLICA_COUNT: 1,
   ADDRESS_PARTS_MIN: 1,
+});
+
+// The statement-admission owner's log (partition-statement-admission.js).
+const PARTITION_STATEMENT_ADMISSION_LOG_MSG = Object.freeze({
+  STATEMENT_REFUSED: 'Partition statement refused by the statement-admission owner',
 });
 
 export {
@@ -766,9 +698,7 @@ export {
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
   PARTITION_COMMITTED_COMMAND_TYPES,
-  PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
   PARTITION_COMMITTED_SQL_COMMAND_TYPES,
-  PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
   PARTITION_SERVICE_CDC,
@@ -780,7 +710,6 @@ export {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -795,5 +724,5 @@ export {
   PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
-  PARTITION_TRANSACTION_PREPARED_STATE,
+  PARTITION_STATEMENT_ADMISSION_LOG_MSG,
 };

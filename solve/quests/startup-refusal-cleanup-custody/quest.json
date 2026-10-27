@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "startup-refusal-cleanup-custody",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A refused consensus startup retains its primary typed immutable consensus answer and original retry information when existing lifecycle cleanup fails. Cleanup failure remains visible, exact acquired handles remain owned until released, new initialization cannot overwrite them, and retrying the existing shutdown finishes the same release before a new instance opens. No new scheduler, durable ledger, cleanup coordinator or deadline is introduced. All three production service initializers and their existing lifecycle owners participate.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/startup-refusal-cleanup-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "primary-refusal-and-secondary-cleanup-preserved",
+        "exact-resource-custody-until-release",
+        "no-opening-over-pending-cleanup",
+        "same-owner-retry-and-safe-reopen",
+        "concurrent-shutdown-and-lifecycle-state",
+        "unchanged-native-and-lifecycle-regressions",
+        "independent-review-and-static-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-owner",
+      "statement": "Service lifecycle owners retain release decisions. Canonical error composition is a pure data operation; it does not execute cleanup or retries."
+    },
+    {
+      "id": "no-erased-evidence",
+      "statement": "Every measured attempt is retained, existing assertions and source-only controls remain. Full runtime release/whole-file-loss/snapshot authority are not inferred from constructor cleanup proof."
+    },
+    {
+      "id": "independent-review",
+      "statement": "Independent approving source verification is required before land. WIP preservation is not acceptance."
+    }
+  ],
+  "sealedAt": "0bc2ea4284e314d4b5dc00c07b8b0f135384c0af"
+}

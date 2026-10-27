@@ -56,6 +56,8 @@ import {
   observeFailure,
   openConsumerSession,
 } from './helpers/public-binding-consumer.js';
+import {buildDeliveryEnvelope} from
+  '../../src/transport/transport-semantic-outcome.js';
 
 const ADVERSARIAL_TIMEOUT_MS = 180_000;
 const PROBE_GUARD_SUBJECT =
@@ -72,14 +74,19 @@ const UNKNOWN_BINDING_NAME = 'images-seam-no-such-binding';
 const SEVERED_TRANSPORT_MESSAGE = `transport to ${NODE_B} was severed`;
 // Transport-level acknowledgement with no handler completion evidence: the
 // dispatcher refuses it before the call adapter sees a delivery.
-const TRANSPORT_ACK_DELIVERY = Object.freeze({acknowledged: true, success: true});
+const TRANSPORT_ACK_DELIVERY = buildDeliveryEnvelope(
+  {acknowledged: true},
+  {success: true},
+);
 // The handler reports it processed the message but returns no invocation
 // outcome: the call adapter's own ack-only refusal.
-const HANDLER_ACK_ONLY_DELIVERY = Object.freeze({
-  acknowledged: true,
-  handlerProcessed: true,
-  success: true,
-});
+const HANDLER_ACK_ONLY_DELIVERY = buildDeliveryEnvelope(
+  {acknowledged: true},
+  {
+    handlerProcessed: true,
+    success: true,
+  },
+);
 const CALL_ARGUMENTS = Object.freeze({topN: TOP_N});
 const SINGLE_ADMISSION = Object.freeze({
   activationRetryIntervalMs: 25,

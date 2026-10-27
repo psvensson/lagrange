@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -12,7 +13,7 @@ config.initialize();
 
 function createMockMessageRouter() {
   return {
-    deliver: async () => ({acknowledged: true, success: true}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
   };
 }
 

@@ -163,6 +163,7 @@ function createCluster(options = {}) {
     return {
       id: nodeId,
       role,
+      updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
       query: async (sql) => {
         const statement = String(sql);
         if (statement === 'SELECT 1') {
@@ -183,11 +184,14 @@ function createCluster(options = {}) {
             }],
           };
         }
-        if (statement.startsWith('UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {
+            rows: [{
+              partition_id: 'p1',
+              table_id: 'tbl-benchmark',
+              table_name: TABLE_NAME,
+            }],
+          };
         }
         return {rows: []};
       },

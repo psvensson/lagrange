@@ -60,31 +60,8 @@ describe('admin-service-message-adapter', () => {
     assert.equal(envelope.traceId, 'trace-context-1');
   });
 
-  it('maps partition callback messages into canonical operation payloads', () => {
-    const envelope = adaptAdminMessageToServiceMessage({
-      type: ADMIN_MESSAGE_TYPE.PARTITION_CALLBACK,
-      queryId: 'cb-1',
-      statement: 'SELECT callback()',
-      parameters: ['x'],
-      callbackModuleRef: 'mod@sha256:abc',
-      callbackExport: 'run',
-      runtimeKind: 'wasm_component',
-    });
-
-    assert.equal(
-      envelope.operation,
-      ADMIN_SERVICE_OPERATION.EXECUTE_PARTITION_CALLBACK,
-    );
-    assert.equal(envelope.payload.callbackModuleRef, 'mod@sha256:abc');
-    assert.equal(envelope.payload.callbackExport, 'run');
-  });
-
   it('flags dispatchable admin websocket message types', () => {
     assert.equal(isAdminMessageDispatchable(ADMIN_MESSAGE_TYPE.QUERY), true);
-    assert.equal(
-      isAdminMessageDispatchable(ADMIN_MESSAGE_TYPE.PARTITION_CALLBACK),
-      true,
-    );
     assert.equal(isAdminMessageDispatchable(ADMIN_MESSAGE_TYPE.REFRESH), true);
     assert.equal(isAdminMessageDispatchable(ADMIN_MESSAGE_TYPE.ERROR), false);
   });

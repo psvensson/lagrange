@@ -17,6 +17,7 @@ import {
 } from '../../src/query/pg/pg-translate.js';
 import {EXPR_TYPE} from '../../src/query/sql-parser.js';
 import {PG_EXPR_TYPE} from '../../src/query/pg/pg-compat-constants.js';
+import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 
 describe('translateBooleanLiteral', () => {
   it('translates TRUE to integer 1', () => {
@@ -168,21 +169,26 @@ describe('translateOnConflict', () => {
     assert.equal(insertAst.orReplace, false);
   });
 
-  it('sets orReplace=true for DO UPDATE', () => {
+  it('throws UNSUPPORTED_SQL_FEATURE for DO UPDATE', () => {
     const insertAst = {orIgnore: false, orReplace: false};
-    translateOnConflict(insertAst, {
-      action: {expr: {value: 'update'}},
-    });
-    assert.equal(insertAst.orReplace, true);
-    assert.equal(insertAst.orIgnore, false);
+    assert.throws(
+      () => translateOnConflict(insertAst, {
+        action: {expr: {value: 'update'}},
+      }),
+      (err) => err.code === QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE &&
+        /ON CONFLICT DO UPDATE is not supported/.test(err.message),
+    );
   });
 
-  it('sets orReplace=true for replace keyword', () => {
+  it('throws UNSUPPORTED_SQL_FEATURE for replace keyword', () => {
     const insertAst = {orIgnore: false, orReplace: false};
-    translateOnConflict(insertAst, {
-      action: {expr: {value: 'replace'}},
-    });
-    assert.equal(insertAst.orReplace, true);
+    assert.throws(
+      () => translateOnConflict(insertAst, {
+        action: {expr: {value: 'replace'}},
+      }),
+      (err) => err.code === QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE &&
+        /ON CONFLICT DO UPDATE is not supported/.test(err.message),
+    );
   });
 
   it('does nothing when onConflict is null', () => {

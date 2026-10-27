@@ -4,7 +4,9 @@
 //
 //   COMMITTED - the answer of the group leader's committed-membership read,
 //     as the read answered it: {kind, voters, votersOutgoing, learners,
-//     appliedIndex (j), commitIndex, term, leaderId, gateOpen, identities};
+//     learnersNext, appliedIndex (j), configurationKey,
+//     membershipGenerationIndex, commitIndex, term, leaderId, gateOpen,
+//     identities};
 //   GENESIS - a founding set of a partition no group exists for:
 //     {kind, founders} (replica identities).
 //
@@ -24,6 +26,7 @@ import {
   COMMITTED_MEMBERSHIP_STAMP_KIND,
 } from './raft-committed-membership-constants.js';
 import {deriveRaftRsPeerId} from './raft-rs-peer-identity.js';
+import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 import {deepFreeze} from './raft-operation-port.js';
 
 const TYPE_STRING = 'string';
@@ -74,7 +77,10 @@ const COMMITTED_STAMP_FIELDS = Object.freeze([
   'voters',
   'votersOutgoing',
   'learners',
+  'learnersNext',
   'appliedIndex',
+  'configurationKey',
+  'membershipGenerationIndex',
   'commitIndex',
   'term',
   'leaderId',
@@ -246,14 +252,17 @@ function canonicalCommittedPeerSets(stamp) {
     ownDataValue(stamp, 'votersOutgoing').value, isCanonicalPeerId);
   const learners = canonicalArray(ownDataValue(stamp, 'learners').value,
     isCanonicalPeerId);
+  const learnersNext = canonicalArray(
+    ownDataValue(stamp, 'learnersNext').value, isCanonicalPeerId);
   if (hasInvalidPeerSet(voters) || hasInvalidPeerSet(outgoing) ||
-      hasInvalidPeerSet(learners)) {
+      hasInvalidPeerSet(learners) || hasInvalidPeerSet(learnersNext)) {
     return null;
   }
-  const peerIds = uniquePeerIds(voters, outgoing, learners);
-  return {voters, outgoing, learners, peerIds,
+  const peerIds = uniquePeerIds(voters, outgoing, learners, learnersNext);
+  return {voters, outgoing, learners, learnersNext, peerIds,
     hasCrossRoleDuplicate: peerIds.length !==
-      voters.length + outgoing.length + learners.length};
+      voters.length + outgoing.length + learners.length +
+        learnersNext.length};
 }
 
 function isOptionalReplicaIdentity(value) {
@@ -263,6 +272,9 @@ function isOptionalReplicaIdentity(value) {
 
 function canonicalCommittedScalars(stamp) {
   const appliedIndex = ownDataValue(stamp, 'appliedIndex').value;
+  const configurationKey = ownDataValue(stamp, 'configurationKey').value;
+  const membershipGenerationIndex = ownDataValue(
+    stamp, 'membershipGenerationIndex').value;
   const commitIndex = ownDataValue(stamp, 'commitIndex').value;
   const term = ownDataValue(stamp, 'term').value;
   const leaderId = ownDataValue(stamp, 'leaderId').value;
@@ -272,12 +284,17 @@ function canonicalCommittedScalars(stamp) {
       COMMITTED_MEMBERSHIP_STAMP_DEFECT.MALFORMED :
       COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_BOOTSTRAP_INDEX};
   }
-  if (!isCanonicalIndex(commitIndex) || commitIndex < appliedIndex ||
+  if (typeof configurationKey !== TYPE_STRING ||
+      configurationKey.length === 0 ||
+      !isCanonicalIndex(membershipGenerationIndex) ||
+      membershipGenerationIndex > appliedIndex ||
+      !isCanonicalIndex(commitIndex) || commitIndex < appliedIndex ||
       !isCanonicalIndex(term) || !isOptionalReplicaIdentity(leaderId) ||
       typeof gateOpen !== 'boolean') {
     return {defect: COMMITTED_MEMBERSHIP_STAMP_DEFECT.MALFORMED};
   }
-  return {appliedIndex, commitIndex, term, leaderId, gateOpen};
+  return {appliedIndex, configurationKey, membershipGenerationIndex,
+    commitIndex, term, leaderId, gateOpen};
 }
 
 function leaderIdentityDefect(leaderId, voters, identities) {
@@ -306,9 +323,10 @@ function canonicalCommittedStamp(stamp) {
   if (scalars.defect) {
     return invalid(scalars.defect);
   }
-  const {voters, outgoing, learners, peerIds, hasCrossRoleDuplicate} =
-    peerSets;
-  const {appliedIndex, commitIndex, term, leaderId, gateOpen} = scalars;
+  const {voters, outgoing, learners, learnersNext, peerIds,
+    hasCrossRoleDuplicate} = peerSets;
+  const {appliedIndex, configurationKey, membershipGenerationIndex,
+    commitIndex, term, leaderId, gateOpen} = scalars;
   if (voters.length === 0) {
     return invalid(COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_VOTERS);
   }
@@ -316,6 +334,10 @@ function canonicalCommittedStamp(stamp) {
     return invalid(COMMITTED_MEMBERSHIP_STAMP_DEFECT.JOINT);
   }
   if (hasCrossRoleDuplicate) {
+    return invalid(COMMITTED_MEMBERSHIP_STAMP_DEFECT.MALFORMED);
+  }
+  if (configurationKey !== raftRsConfStateKey({voters,
+    votersOutgoing: outgoing, learners, learnersNext, autoLeave: false})) {
     return invalid(COMMITTED_MEMBERSHIP_STAMP_DEFECT.MALFORMED);
   }
   const resolved = canonicalIdentities(
@@ -330,8 +352,10 @@ function canonicalCommittedStamp(stamp) {
   }
   return Object.freeze({valid: true, stamp: Object.freeze(Object.assign(
     Object.create(null), {kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
-      voters, votersOutgoing: outgoing, learners, appliedIndex, commitIndex,
-      term, leaderId, gateOpen, identities: resolved.identities}))});
+      voters, votersOutgoing: outgoing, learners, learnersNext, appliedIndex,
+      configurationKey,
+      membershipGenerationIndex, commitIndex, term, leaderId, gateOpen,
+      identities: resolved.identities}))});
 }
 
 function canonicalGenesisStamp(stamp) {

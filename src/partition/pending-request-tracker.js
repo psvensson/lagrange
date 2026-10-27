@@ -6,12 +6,42 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {NUM} from '../constants/index.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   PARTITION_SUBSYSTEM,
   PENDING_REQUEST_DEFAULT,
   PENDING_REQUEST_ERROR_MSG,
   PENDING_REQUEST_LOG_MSG,
 } from './partition-constants.js';
+
+const PENDING_REQUEST_ACK_WAIT = Object.freeze({
+  wait: 'PENDING_REQUEST_DEFAULT.REQUEST_TIMEOUT_MS',
+  awaited: 'ACK for one tracked request',
+  stale: 'PENDING_REQUEST_DEFAULT.STALE_REQUEST_BUFFER_MS',
+  staleAwaited: 'ACK or timeout callback for one tracked request (backstop)',
+});
+
+/**
+ * Report one spent ACK wait (timeout or stale-cleanup backstop).
+ * @param {Object} tracker - PendingRequestTracker.
+ * @param {Object} spent - {wait, awaited, requestId, metadata, timeoutMs,
+ *   elapsedMs}.
+ * @private
+ */
+function reportPendingRequestSpent(tracker, spent) {
+  reportWaitBoundSpent(tracker.logger, {
+    wait: spent.wait,
+    awaited: spent.awaited,
+    boundMs: spent.timeoutMs,
+    elapsedMs: spent.elapsedMs,
+    lastObserved: {
+      type: spent.metadata?.type ?? null,
+      targetAddress: spent.metadata?.targetAddress ?? null,
+      pendingCount: tracker.pendingRequests.size,
+    },
+    scope: {requestId: spent.requestId},
+  });
+}
 
 const WAIT_TIME_BUCKETS = Object.freeze([
   {upperBoundMs: 10, label: 'le_10ms'},
@@ -168,10 +198,13 @@ class PendingRequestTracker {
         this.recordWaitTime(Date.now() - startedAt);
         this.stats.timedOutTotal += 1;
         this.stats.rejectedTotal += 1;
-        this.logger.warn(PENDING_REQUEST_LOG_MSG.REQUEST_TIMED_OUT, {
+        reportPendingRequestSpent(this, {
+          wait: PENDING_REQUEST_ACK_WAIT.wait,
+          awaited: PENDING_REQUEST_ACK_WAIT.awaited,
           requestId,
+          metadata,
           timeoutMs,
-          type: metadata.type,
+          elapsedMs: Date.now() - startedAt,
         });
         reject(new Error(PENDING_REQUEST_ERROR_MSG.ackTimeout(timeoutMs, requestId)));
       }, timeoutMs);
@@ -401,10 +434,13 @@ class PendingRequestTracker {
         this.stats.staleCleanedTotal += 1;
         this.stats.rejectedTotal += 1;
 
-        this.logger.warn(PENDING_REQUEST_LOG_MSG.CLEANED_STALE_REQUEST, {
+        reportPendingRequestSpent(this, {
+          wait: PENDING_REQUEST_ACK_WAIT.stale,
+          awaited: PENDING_REQUEST_ACK_WAIT.staleAwaited,
           requestId,
-          elapsed,
-          timeoutMs,
+          metadata: pending.metadata,
+          timeoutMs: timeoutMs + PENDING_REQUEST_DEFAULT.STALE_REQUEST_BUFFER_MS,
+          elapsedMs: elapsed,
         });
       }
     }

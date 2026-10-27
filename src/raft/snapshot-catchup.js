@@ -2,7 +2,7 @@
 // raft-snapshot-compacted-follower-catchup, spec
 // solve/specs/raft-snapshot-transfer-install/compacted-follower-catchup-
 // design.md, S4). Leader side: turn one typed install_snapshot decision
-// (emitted by liferaft.js) into a served snapshot transfer — resolve the
+// (emitted by the consensus catch-up decision owner) into a served snapshot transfer — resolve the
 // follower nodeId from the unified address, select the NEWEST eligible
 // sealed generation (index >= the leader boundary; anything older is an
 // unbounded install-dispatch loop, not benign), create one via S1 creation
@@ -16,7 +16,7 @@
 // or failure is a typed frozen outcome.
 
 import {AddressManager} from '../address/address-manager.js';
-import {durableRecordBootstrap} from './raft-committed-membership-stamp.js';
+import {buildReplacementServiceOptions} from '../partition/partition-reopen-options.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-key-constants.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
@@ -28,6 +28,7 @@ import {
   selectLatestPublishedMembershipEpoch,
 } from '../control-plane/membership-epoch-contract.js';
 
+import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
 } from './snapshot-checkpoint-constants.js';
@@ -207,10 +208,15 @@ async function resolveServableGeneration(options) {
   // The create-if-none fallback threads the OTHER dispatches' in-flight
   // generation pins into creation so its opportunistic retention sweep
   // cannot remove a generation mid-serve.
+  const hasRaftRsRecord = Boolean(
+    db && identity?.raftGroupId &&
+    RaftRsDurableStore.hasDurableRecordIn(db, identity.raftGroupId),
+  );
   const created = await createSqliteStateMachineCheckpoint({
     db,
     identity,
     checkpointsRoot,
+    ...(hasRaftRsRecord ? {raftRsGroupId: identity.raftGroupId} : {}),
     inProcessPins: listInFlightGenerationIndexes(options.inflightByFollower),
   });
   if (created.outcome !== RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED) {
@@ -228,7 +234,7 @@ async function resolveServableGeneration(options) {
  * catchup_range_empty decision is refused outright — it marks log
  * corruption and must never mint or serve a checkpoint.
  * @param {Object} options dispatch request
- * @param {Object} options.decision typed decision from liferaft emission
+ * @param {Object} options.decision typed decision from consensus catch-up
  * @param {string} options.checkpointsRoot leader durable checkpoint root
  * @param {Object} options.identity leader checkpoint identity
  * @param {Object} options.db live better-sqlite3 handle (creation fallback)
@@ -323,22 +329,6 @@ function resolveExpectedIdentityValue(expectedIdentity) {
     expectedIdentity;
 }
 
-function buildReplacementServiceOptions(service) {
-  return Object.freeze({
-    partitionId: service.partitionId,
-    tableId: service.tableId,
-    tableName: service.tableName,
-    replicaId: service.replicaId,
-    replicaIds: service.replicaIds,
-    // The replacement reopens the installed replica from its durable record
-    // and nothing else (O4); without one it is refused, never founded.
-    bootstrapMembership: durableRecordBootstrap(),
-    nodeId: service.nodeId,
-    // The production factory derives dbPath deterministically and ignores
-    // this option (recorded coupling); guard-injected factories honor it.
-    dbPath: service.dbPath,
-  });
-}
 
 /**
  * Follower-side install orchestration: receive the offered generation, shut
@@ -380,6 +370,7 @@ async function orchestrateSnapshotCatchupInstall(options) {
     generationIndex: transfer.descriptor.lastIncludedIndex,
     expectedIdentity: resolveExpectedIdentityValue(
       receiveOptions.expectedIdentity),
+    expectedReplicaIdentity: service.replicaId,
   });
   if (install.outcome !== RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED) {
     return orchestrationResult(INSTALL_ORCHESTRATION.INSTALL_REJECTED,

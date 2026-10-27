@@ -4,11 +4,14 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
+  ERRORS,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 
 const OPERATION_DISPATCH_RETRY_REFRESH_ROW_BEFORE_DISPATCH =
   'refreshRowBeforeDispatch';
@@ -35,8 +38,10 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
     const scheduled = [];
     const enqueues = [];
     const now = Date.now();
-    const retryableError =
-      new Error('Transaction already active on this partition');
+    const retryableError = new Error(ERRORS.WRITE_CUTOVER_PAUSED);
+    retryableError.failureCode =
+      PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED;
+    retryableError.deferRetry = true;
     retryableError.retryAfterMs = 123;
     const operationRow = {
       operation_id: 'op-retryable-dispatch-1',

@@ -1,0 +1,63 @@
+# WIP exact source-only negative for a duplicate post-PAUSE INSPECT.
+# No production changes, no QoS or deadline adjustment.
+name: rs-raft-control-single-census-red
+on:
+  push:
+    branches: [continue/rs-raft-control-pause-census-20261014]
+    paths: [.github/workflows/rs-raft-control-single-census-red.yml]
+permissions:
+  contents: read
+jobs:
+  negative:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact dependencies and require unchanged old owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git diff --name-only 47ceb42e4a36757007f0d8006d2014fa1400d9c8 HEAD -- src)"
+          npm ci
+      - name: Engage original control owner and preserve named duplicate inspection
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-control-single-census-negative
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          TEST=test/partition/participant-release-protocol.test.js
+          git rev-parse "47ceb42e4a36757007f0d8006d2014fa1400d9c8:src/node/replica-handler-participant-cutover.js" > "$OUT/source-blob.txt"
+          sha256sum "$TEST" > "$OUT/test-sha256.txt"
+          node --test \
+            --test-name-pattern='already-clean control release consumes one post-pause census at original recipient' \
+            "$TEST" > "$OUT/negative.tap" 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/status.txt"
+          tail -n 65 "$OUT/negative.tap"
+          test "$rc" -ne 0 || exit 1
+          grep -F 'a real current-control cohort already has a complete post-PAUSE member census' "$OUT/negative.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/negative.tap" || exit 1
+          grep -F 'actual: 2' "$OUT/negative.tap" || exit 1
+          grep -F 'expected: 1' "$OUT/negative.tap" || exit 1
+          echo 'Engaged old-source duplicate INSPECT proven: not a timeout or missing symbol.'
+      - name: Preserve all exact red evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-single-census-red-${{ github.sha }}
+          path: test-output/rs-raft-control-single-census-negative/
+          retention-days: 14
+          if-no-files-found: warn

@@ -21,6 +21,7 @@ import {runDecision} from '../../scripts/checks/push-gate-change-proof.js';
 import {PROOF_MODE} from '../../scripts/checks/change-selection-constants.js';
 import {planTestPaths, writeProofScope} from '../../scripts/select-change-tests.js';
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 const HEAD = 'a'.repeat(40);
 
@@ -331,7 +332,7 @@ test('the hosted canary runs only when dispatched by hand', () => {
 // The publisher's own fixture: a gate that proves a cone of one file, or fails.
 function publishFixture(t, {gateFails = false, startChild = null} = {}) {
   const parent = scratch(t, 'local-corpus-publish-');
-  const git = (cwd, args) => spawnSync('git', args, {cwd, encoding: 'utf8',
+  const git = (cwd, args) => spawnGit(args, {cwd, encoding: 'utf8',
     env: gitProcessEnvironment()}).stdout.trim();
   const root = path.join(parent, 'repo');
   const remote = path.join(parent, 'remote.git');
@@ -354,7 +355,7 @@ function publishFixture(t, {gateFails = false, startChild = null} = {}) {
   git(root, ['commit', '-q', '-m', 'initial']);
   git(root, ['remote', 'add', 'origin', remote]);
   // The first push carries the fixture's own gate; it must pass.
-  spawnSync('git', ['push', '-q', '-u', 'origin', 'main'], {cwd: root,
+  spawnGit(['push', '-q', '-u', 'origin', 'main'], {cwd: root,
     env: {...gitProcessEnvironment(), LAGRANGE_PUSH_SKIP_TESTS: '1'}});
   fs.writeFileSync(path.join(root, 'tracked.txt'), 'two\n');
   git(root, ['commit', '-qam', 'publish exact head']);

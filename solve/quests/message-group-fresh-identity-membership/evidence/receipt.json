@@ -1,0 +1,73 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "message-group-fresh-identity-membership",
+  "status": "pass",
+  "testFileDigests": {
+    "test/rebalancer/message-group-membership-operation-lane.test.js": "065fc37f96ded9591f1c98f6c38240c0c0a027ecb8519c2b0d9a975fb7687206",
+    "test/message-group/message-group-fresh-learner-snapshot.test.js": "bb623489a7d8b6071ad3562d6f8ffe12063663e19b5b08667d4d64c907bdfd1c",
+    "test/message-group/message-group-fresh-learner-promotion.test.js": "9d80b9ed882be70dd5e3ca7e0fbd76ac743129b9b15375d201155b5a75b3cef9",
+    "test/rebalancer/message-group-fresh-identity-two-replace.test.js": "bfbf7962fbd322e34ab4e76814f09854afc157d120122d82a77124cd4134f247",
+    "test/message-group/message-group-replace-removal-fence.test.js": "c0de93d63f9336e30f44305a6a992719c5cdc9a5deef3581b908b07dcfa08984",
+    "test/node/message-group-create-admission-recovery.test.js": "d11ab937183d5f9f7fd59b74dfa126abeda3754494d75989eb78911c593f9323",
+    "test/integration/message-group-fresh-identity-replacement.integration.test.js": "aa4a9802401abfad82684fed6ceded5c116677575786891d766203f461f4ae36"
+  },
+  "generatedAt": "2026-10-27T05:52:12.623Z",
+  "receipts": [
+    {
+      "id": "fresh-identity-permanent-registry-and-membership-lane",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/message-group-fresh-identity-two-replace.test.js test/raft/raft-rs-backend/peer-identity.test.js",
+      "detail": "Authoritative concurrent INSERTs produce one group lane; fresh logical/peer identities remain reserved across terminal-history pruning.",
+      "testFile": "test/rebalancer/message-group-membership-operation-lane.test.js"
+    },
+    {
+      "id": "committed-learner-real-state-transfer-and-create-fence",
+      "passed": true,
+      "command": "npm run test:file -- test/node/message-group-service-handler-membership.test.js test/node/message-group-create-admission-recovery.test.js test/message-group/message-group-fresh-learner-snapshot.test.js test/raft/raft-rs-backend/bootstrap-committed-membership.test.js",
+      "detail": "Committed ADD_LEARNER and a read-only join descriptor precede the exact identity81 CAS; only its token permits real replay/snapshot.",
+      "testFile": "test/message-group/message-group-fresh-learner-snapshot.test.js"
+    },
+    {
+      "id": "atomic-leader-proof-and-committed-promotion",
+      "passed": true,
+      "command": "npm run test:file -- test/message-group/message-group-fresh-learner-promotion.test.js test/node/message-group-service-handler-membership.test.js",
+      "detail": "One runtime-owner turn compares target and leader ConfState generations, evaluates leader progress and proposes ADD_PEER.",
+      "testFile": "test/message-group/message-group-fresh-learner-promotion.test.js"
+    },
+    {
+      "id": "serial-replace-handoff-and-source-retention",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/message-group-fresh-identity-two-replace.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/message-group/message-group-replace-removal-fence.test.js",
+      "detail": "R1 settles before R2; named handoff and voter proof precede source intent, and every defer retains the source.",
+      "testFile": "test/rebalancer/message-group-fresh-identity-two-replace.test.js"
+    },
+    {
+      "id": "separated-membership-obligation-and-terminal-settlement",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/message-group-fresh-identity-two-replace.test.js",
+      "detail": "Ordinary terminal settlement remains independent while exact orphan-learner removal retains the group lane until committed absence.",
+      "testFile": "test/rebalancer/message-group-membership-operation-lane.test.js"
+    },
+    {
+      "id": "committed-and-source-own-absence-exact-cleanup",
+      "passed": true,
+      "command": "npm run test:file -- test/message-group/message-group-replace-removal-fence.test.js test/node/replica-removal-consensus-exit.test.js",
+      "detail": "Leader/quorum absence releases membership serialization; source own applied absence alone retires its port and exact token permits cleanup.",
+      "testFile": "test/message-group/message-group-replace-removal-fence.test.js"
+    },
+    {
+      "id": "lost-answer-restart-pruning-and-stale-disk-recovery",
+      "passed": true,
+      "command": "npm run test:file -- test/node/message-group-create-admission-recovery.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/message-group/message-group-replace-removal-fence.test.js test/message-group/message-group-fresh-learner-snapshot.test.js",
+      "detail": "Every half-boundary restarts from durable owner facts; pruning, stale source disk and successor generation cannot revive old authority.",
+      "testFile": "test/node/message-group-create-admission-recovery.test.js"
+    },
+    {
+      "id": "distinct-offseed-seedloss-and-owner-censuses",
+      "passed": true,
+      "command": "npm run test:file -- test/integration/message-group-fresh-identity-replacement.integration.test.js test/rebalancer/message-group-membership-change-parked.test.js test/node/message-group-service-handler.test.js test/rebalancer/message-group-fresh-identity-two-replace.test.js",
+      "detail": "B4/C5 occupy distinct off-seed storage, survive seed loss at 2/3, and restore canonical SQL routing/CDC/cache with every bypass refused.",
+      "testFile": "test/integration/message-group-fresh-identity-replacement.integration.test.js"
+    }
+  ]
+}

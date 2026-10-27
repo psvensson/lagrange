@@ -415,6 +415,8 @@ test('end-to-end recovery from cutover_active phase: writes route ' +
     phase: recovered.status,
     metadata: recovered.metadata,
   });
+  context.splitReplication.authorized = true;
+  context.splitReplication.activities = new Set();
 
   t.ok(
     context.splitReplication,
@@ -478,6 +480,8 @@ test('recovery from backfilling phase queues writes in ' +
     phase: recovered.status,
     metadata: recovered.metadata,
   });
+  context.splitReplication.authorized = true;
+  context.splitReplication.activities = new Set();
 
   await handleAfterWriteFn.call(context, {
     sql: 'UPDATE users SET name = ? WHERE id = ?',

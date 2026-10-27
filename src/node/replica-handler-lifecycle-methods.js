@@ -11,12 +11,65 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
+import {OperationType} from '../rebalancer/replica-status.js';
+import {CREATE_ADMISSION_ERROR_CODE} from
+  './replica-create-admission-owner.js';
 import {
+  REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
+  REPLICA_HANDLER_PARTICIPANT_RELEASE_DISPATCH_KIND as DISPATCH_KIND,
 } from './replica-handler-constants.js';
+import {PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_TYPE} from
+  '../partition/partition-participant-transaction-cutover-constants.js';
+import {captureParticipantReleaseDispatch, receiveParticipantRelease} from
+  './replica-handler-participant-release.js';
+import {runParticipantCutover} from './replica-handler-participant-cutover.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const CREATE_ADMISSION_RECOVERY_NOT_STARTED = false;
+
+function invalidCreateOperationResponse(handler) {
+  return handler.buildReplicaOperationResponse(
+    ReplicaOperationResponseStatus.ERROR,
+    {
+      error: REPLICA_HANDLER_ERROR_MSG.CREATE_OPERATION_TYPE_REQUIRED,
+      errorCode: CREATE_ADMISSION_ERROR_CODE.INVALID,
+      nodeId: handler.nodeId,
+    },
+  );
+}
+
+async function dispatchCreateReplicaMessage(handler, payload) {
+  const operationType = payload?.[ReplicaOperationField.OPERATION_TYPE];
+  const valid = operationType === OperationType.ADD ||
+    operationType === OperationType.REPLACE;
+  return valid ? handler.handleCreateReplica(payload) :
+    invalidCreateOperationResponse(handler);
+}
+
+async function dispatchReplicaMessage(handler, type, payload) {
+  switch (type) {
+  case ReplicaOperationMessageType.CREATE_REPLICA:
+    return dispatchCreateReplicaMessage(handler, payload);
+  case ReplicaOperationMessageType.REMOVE_REPLICA:
+    return handler.handleRemoveReplica(payload);
+  case ReplicaOperationMessageType.STEP_DOWN_REPLICA:
+    return handler.handleStepDownReplica(payload);
+  case ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP:
+    return handler.handleReadReplicaMembership(payload);
+  case ReplicaOperationMessageType.RETIRE_REPLICA_PEER:
+    return handler.handleRetireReplicaPeer(payload);
+  case ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP:
+    return handler.handleReadCommittedMembership(payload);
+  default:
+    return handler.buildReplicaOperationResponse(
+      ReplicaOperationResponseStatus.ERROR,
+      {error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(type)},
+    );
+  }
+}
 
 function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
   class ReplicaHandlerLifecycleMethods {
@@ -42,12 +95,38 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
         this.removedReplicaCleanupAdmissionBarrier.then(
           (startupAuthorities) =>
             this.sweepRemovedReplicaCleanupDebt(startupAuthorities),
-        ).catch((error) => {
+        ).finally(() => this.watchGroupRetiredTombstones?.()).catch((error) => {
           this.logger.warn(
             REPLICA_HANDLER_LOG_MSG.REMOVED_CLEANUP_SWEEP_FAILED,
             {nodeId: this.nodeId, error: error.message},
           );
         });
+      this.startReplicaCreateAdmissionRecovery();
+    }
+
+    startReplicaCreateAdmissionRecovery() {
+      if (this.shuttingDown) return CREATE_ADMISSION_RECOVERY_NOT_STARTED;
+      this.replicaCreateAdmissionRecoveryRearmOwner.cancel();
+      const barrier = this.recoverRetainedReplicaCreateAdmissions();
+      this.replicaCreateAdmissionRecoveryBarrier = barrier;
+      this.replicaCreateAdmissionRecoveryTask = barrier.catch((error) => {
+        if (this.shuttingDown) return;
+        this.logger.warn(
+          REPLICA_HANDLER_LOG_MSG.CREATE_ADMISSION_RECOVERY_FAILED,
+          {nodeId: this.nodeId, error: error.message},
+        );
+        this.replicaCreateAdmissionRecoveryRearmOwner.arm(
+          () => this.startReplicaCreateAdmissionRecovery(),
+          REPLICA_HANDLER_DEFAULT.CREATE_ADMISSION_RECOVERY_RETRY_MS,
+        );
+      });
+      return barrier;
+    }
+
+    async awaitReplicaCreateAdmissionRecoveryBarrier() {
+      if (this.replicaCreateAdmissionRecoveryBarrier) {
+        await this.replicaCreateAdmissionRecoveryBarrier;
+      }
     }
     /**
      * Handle incoming message (called by message router).
@@ -55,39 +134,33 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
      * @return {Promise<Object>} Response.
      */
     async handleMessage(envelope) {
-      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
       const {payload, correlationId} = envelope;
-      const type = payload?.[ReplicaOperationField.TYPE];
+      const captured = captureParticipantReleaseDispatch(payload);
+      if (captured.kind === DISPATCH_KIND.MALFORMED) {
+        await this.awaitRemovedReplicaCleanupAdmissionBarrier();
+        const response = await dispatchReplicaMessage(this, undefined, null);
+        return {...response, correlationId};
+      }
+      const type = captured.kind === DISPATCH_KIND.RELEASE ? PARTICIPANT_RELEASE_TYPE :
+        captured.type;
+      // Release reads/pause/recovery stay available during bootstrap; this
+      // does not authorize create/remove/storage shortcuts.
+      if (type === PARTICIPANT_RELEASE_TYPE) {
+        const {request, refusal, observationValidated} = captured;
+        const response = refusal ??
+          (request.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
+            await runParticipantCutover(this, request) :
+            await receiveParticipantRelease(this, request,
+              observationValidated));
+        return {[PARTICIPANT_RELEASE_RESULT_FIELD]: response, correlationId};
+      }
+      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.MESSAGE_RECEIVED, {
         type,
         correlationId,
-        operationId: payload?.operationId,
+        operationId: captured.operationId,
       });
-      let response;
-      if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
-        response = await this.handleCreateReplica(payload);
-      } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
-        response = await this.handleRemoveReplica(payload);
-      } else if (type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
-        response = await this.handleStepDownReplica(payload);
-      } else if (
-        type === ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP
-      ) {
-        response = await this.handleReadReplicaMembership(payload);
-      } else if (type === ReplicaOperationMessageType.RETIRE_REPLICA_PEER) {
-        response = await this.handleRetireReplicaPeer(payload);
-      } else if (
-        type === ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP
-      ) {
-        response = await this.handleReadCommittedMembership(payload);
-      } else {
-        const unknownMessageType =
-          REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE;
-        response = this.buildReplicaOperationResponse(
-          ReplicaOperationResponseStatus.ERROR,
-          {error: unknownMessageType(type)},
-        );
-      }
+      const response = await dispatchReplicaMessage(this, type, payload);
       // Include correlationId in response for RPC matching; a request's
       // attempt sequence is echoed so the requester drops a late answer of
       // an earlier attempt.

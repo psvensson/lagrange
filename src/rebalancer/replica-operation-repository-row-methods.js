@@ -23,6 +23,16 @@ function isReadOnlyCacheWriteViolation(error) {
   );
 }
 
+function nullableSafeInteger(value) {
+  if (value == null) return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) ? number : null;
+}
+
+function nullableValue(value) {
+  return value ?? null;
+}
+
 function assignReplicaOperationRepositoryRowMethods(
   ReplicaOperationRepository,
   options = {},
@@ -44,6 +54,21 @@ function assignReplicaOperationRepositoryRowMethods(
     isTerminalReplicaOperationRecord,
     resolveReplicaOperationSemanticPhase,
   } = options;
+
+  function attachFailedCreateTargetCleanupPrecondition(
+    operation,
+    stepsHistory,
+  ) {
+    const precondition = getOperationMetadataObject(
+      stepsHistory,
+      OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+    );
+    if (precondition) {
+      operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = precondition;
+    }
+  }
 
   class ReplicaOperationRepositoryRowMethods {
   /**
@@ -76,7 +101,7 @@ function assignReplicaOperationRepositoryRowMethods(
         entityType,
         entityId,
         replicaId: row.replica_id,
-        targetClaimKey: row.target_claim_key || null,
+        targetClaimKey: nullableValue(row.target_claim_key),
         sourceNodeId: row.source_node_id,
         targetNodeId: row.target_node_id,
         status: row.status,
@@ -86,6 +111,45 @@ function assignReplicaOperationRepositoryRowMethods(
         completedAt: row.completed_at,
         errorMessage: row.error_message,
         stepsHistory,
+        sourceReplicaId: nullableValue(row.source_replica_id),
+        messageGroupMembershipLaneKey:
+          nullableValue(row.message_group_membership_lane_key),
+        messageGroupMembershipPhase:
+          nullableValue(row.message_group_membership_phase),
+        messageGroupMembershipObligationState:
+          nullableValue(row.message_group_membership_obligation_state),
+        messageGroupMembershipIdentity:
+          nullableValue(row.message_group_membership_identity),
+        messageGroupMembershipOwnerClaim:
+          nullableValue(row.message_group_membership_owner_claim),
+        messageGroupMembershipPermit:
+          nullableValue(row.message_group_membership_permit),
+        messageGroupLearnerStamp:
+          nullableValue(row.message_group_learner_stamp),
+        messageGroupVoterStamp:
+          nullableValue(row.message_group_voter_stamp),
+        messageGroupRemovalStamp:
+          nullableValue(row.message_group_removal_stamp),
+        messageGroupSourceLifecycleClaim:
+          nullableValue(row.message_group_source_lifecycle_claim),
+        createAdmissionState: nullableValue(row.create_admission_state),
+        createAdmissionToken: nullableValue(row.create_admission_token),
+        createAdmissionReplicaCreatedAt: nullableSafeInteger(
+          row.create_admission_replica_created_at,
+        ),
+        createAdmissionAttemptToken:
+          nullableValue(row.create_admission_attempt_token),
+        createAdmissionPreviousAttemptToken:
+          nullableValue(row.create_admission_previous_attempt_token),
+        createAdmissionAttemptSeq: nullableSafeInteger(
+          row.create_admission_attempt_seq,
+        ),
+        createAdmissionWorkflowUpdatedAt: nullableSafeInteger(
+          row.create_admission_workflow_updated_at,
+        ),
+        createAdmissionOwnerIncarnation: nullableSafeInteger(
+          row.create_admission_owner_incarnation,
+        ),
       };
       // Durable planning-epoch binding: SQL NULL / absent column stays
       // unbound (field omitted), a non-negative integer binds (zero stays
@@ -158,6 +222,7 @@ function assignReplicaOperationRepositoryRowMethods(
       if (bootstrapMembership) {
         operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] = bootstrapMembership;
       }
+      attachFailedCreateTargetCleanupPrecondition(operation, stepsHistory);
       return operation;
     }
     /**

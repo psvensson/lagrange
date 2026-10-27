@@ -35,7 +35,7 @@ describe('TraceCollector multi-node lineage integration', () => {
         traceCollector: collector,
         nodeId: 'node-b',
         serviceDefinitionId: 'svc-b',
-        source: 'partition_callback',
+        source: 'lineage',
       });
 
       const traceA = emitterA.createTraceApi({
@@ -46,7 +46,7 @@ describe('TraceCollector multi-node lineage integration', () => {
       const traceB = emitterB.createTraceApi({
         lineageId: 'lineage-multi-1',
         stageId: 2,
-        source: 'partition_callback',
+        source: 'lineage',
       });
 
       traceA.trace('info', 'service trace');

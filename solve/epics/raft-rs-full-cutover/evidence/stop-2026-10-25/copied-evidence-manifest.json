@@ -1,0 +1,122 @@
+[
+  {
+    "source": "/tmp/codex-admin-stop-preservation-20261025/WORKTREES.json",
+    "copy": "admin-frozen-worktrees.json",
+    "bytes": 22340,
+    "sha256": "45333da360973c6685fcd31eb2aa4ce68d01f29114c0b9b2ef345ffc7e4519ac"
+  },
+  {
+    "source": "/tmp/codex-admin-stop-preservation-20261025/PROCESS-SNAPSHOT.txt",
+    "copy": "admin-process-snapshot.txt",
+    "bytes": 1,
+    "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  {
+    "source": "/tmp/codex-coordinator-table-identity-20261025/REVIEW-HANDOFF.md",
+    "copy": "admin-coordinator-handoff.md",
+    "bytes": 3534,
+    "sha256": "401f94012319ea99c5ce614c588253df1e341527110fb9a268b5d5c33eaf870e"
+  },
+  {
+    "source": "/tmp/codex-log-marker-20261025/REVIEW-HANDOFF.md",
+    "copy": "admin-marker-handoff.md",
+    "bytes": 5610,
+    "sha256": "f0252eef3aa6b6fa78220f055b7172774f2b1b22997c9c3857795374e945ce22"
+  },
+  {
+    "source": "/tmp/codex-admin-owner-outcomes-20261025/REVIEW-HANDOFF.md",
+    "copy": "admin-owner-outcomes-handoff.md",
+    "bytes": 3232,
+    "sha256": "eb57e60a54adde572b657565dbb1f189eaee259ebe468a191089a6bed4571e17"
+  },
+  {
+    "source": "/tmp/codex-admin-partition-readback-20261025/REVIEW-HANDOFF.md",
+    "copy": "admin-partition-readback-handoff.md",
+    "bytes": 5508,
+    "sha256": "c70f423a1a8b7f7664766552961fcc43e8b07a1da6c0627383fc56f90b2869de"
+  },
+  {
+    "source": "/tmp/codex-log-marker-20261025/MIXED-LOAD-PURPOSE-MATRIX.md",
+    "copy": "mixed-load-purpose-matrix.md",
+    "bytes": 6594,
+    "sha256": "28850c6a15eca24bb8c12a53a630a043c1ff0d7ab69fc08ac35d9308ad033e68"
+  },
+  {
+    "source": "/tmp/codex-log-marker-20261025/DYNAMIC-LOGS-CALLER-PACKET.md",
+    "copy": "dynamic-logs-callers.md",
+    "bytes": 2871,
+    "sha256": "85b1fc771cfa6599c4403b0ec72ffc4409ccd2ab5f4770c679252e54831e36c6"
+  },
+  {
+    "source": "/tmp/codex-admission-callers-20261025/CALLER-DECISION-PACKET.md",
+    "copy": "caller-capability-decisions.md",
+    "bytes": 8112,
+    "sha256": "22c3ce32b8a02b672d19df0ad34310e40b09503a99ff196ce997a04ad90df8c2"
+  },
+  {
+    "source": "/tmp/codex-rs-raft-20261025/metric-revision/HANDOFF.md",
+    "copy": "metric-author-handoff.md",
+    "bytes": 6106,
+    "sha256": "867eee23d4c7203a8a724c36c64ee12f3232f7d59eb705e6234bd59ae51f168c"
+  },
+  {
+    "source": "/tmp/codex-rs-raft-20261025/metric-revision/final-freeze.json",
+    "copy": "metric-final-freeze.json",
+    "bytes": 7249,
+    "sha256": "414624f6df5f65f86b4f2af44c475888a1dfd4a0ba0842cc0954c6da26510763"
+  },
+  {
+    "source": "/tmp/codex-rs-raft-20261025/metric-delta-review/PARTIAL-STOP.md",
+    "copy": "metric-review-incomplete.md",
+    "bytes": 4138,
+    "sha256": "044064e7252011d97d8975981c1f48b9aa9bcca09a9b4ebd719412f08291f882"
+  },
+  {
+    "source": "/tmp/session-worktree-sMlGDY/tree/review/d1-composition/NATIVE-FIXTURE-CENSUS.md",
+    "copy": "native-fixture-census.md",
+    "bytes": 8706,
+    "sha256": "316294d08a3ae157c50032a47b4b630bf951ea527fecb144bf5ac223162f829f"
+  },
+  {
+    "source": "/tmp/codex-rs-raft-20261025/fresh-seed-canonical-controller.mjs",
+    "copy": "fresh-seed-canonical-controller.mjs.txt",
+    "bytes": 6306,
+    "sha256": "0abad2b9ecbb448a5137a34256ccbdc563057673601a6f3b7b6519e2e15ab7a9"
+  },
+  {
+    "source": "/tmp/codex-fresh-controller-independent-review-20261025/REVIEW-final.md",
+    "copy": "fresh-controller-review.md",
+    "bytes": 4009,
+    "sha256": "310cb4411b64b7f85f3becd3039e6d3058f15729cc25efb78f2b60bfdbe467c1"
+  },
+  {
+    "source": "/tmp/codex-rs-raft-20261025/fresh-seed-checkpoints-20261025.md",
+    "copy": "fresh-seed-author-handoff.md",
+    "bytes": 9627,
+    "sha256": "347f3d72125742f921cfc9a0bf99a71abd4da6aeffad7b90a5536b0d6b3877df"
+  },
+  {
+    "source": "/tmp/codex-rs-raft-20261025/fresh-startup-composition-cone.log",
+    "copy": "fresh-composition-original-failure.log",
+    "bytes": 76858,
+    "sha256": "d13f9d9ca534c001d70469ef5c00ba280166b5ebe6e777c8d2f9ae3b79b49ae9"
+  },
+  {
+    "source": "/tmp/codex-rs-raft-20261025/fresh-composition-r2-negative-corrected.tap",
+    "copy": "fresh-composition-r2-corrected.tap",
+    "bytes": 374,
+    "sha256": "af3ff2c2b45dc469c02bbbdb22fc73a6d3b9c5775ee37ddd6f8dbea09da32421"
+  },
+  {
+    "source": "/tmp/codex-rs-raft-20261025/q6-preservation/lab-reconciled-v2.json",
+    "copy": "q6-old-lab-reconciled-v2.json",
+    "bytes": 17295,
+    "sha256": "8b05c40600803dbfac4a57be8ef3c3e9804feff976fa96ed3d61431b2d50b721"
+  },
+  {
+    "source": "/tmp/codex-rs-raft-20261025/q6-preservation/lab-file-verdicts-v2.json",
+    "copy": "q6-old-file-verdicts-v2.json",
+    "bytes": 543707,
+    "sha256": "1830b03d18365d8fca459c2f5c6a173cecf4c6a0ab2b24096bd522ceeaa7b2cf"
+  }
+]

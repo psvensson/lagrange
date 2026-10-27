@@ -50,6 +50,8 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {RaftRole} from '../../src/partition/partition-service.js';
+import {forwardHandlerRegistry} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import {PARTITION_SERVICE_MESSAGE_TYPE} from
   '../../src/partition/partition-service-constants.js';
 import {RAFT_OPERATION_OUTCOME} from
@@ -83,8 +85,7 @@ const PUBLICATION_EPOCH_ONE = 1;
 // reaches the learner and no leader-side probe is triggered by one.
 function gatedProofChannel(inner, gate) {
   return {
-    register: (address, handler) => inner.register(address, handler),
-    unregister: (address) => inner.unregister(address),
+    ...forwardHandlerRegistry(inner),
     deliver: async (address, payload, options) => {
       if (gate.closed &&
           payload?.type === PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF) {

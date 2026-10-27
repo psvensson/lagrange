@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {"id": "failed-shutdown-custody-preservation", "passed": true},
+    {"id": "no-journal-delete-api", "passed": true},
+    {"id": "isolated-session-reset-and-runtime-identity-verification", "passed": true},
+    {"id": "movielens-test-cone-and-independent-verification", "passed": true}
+  ]
+}

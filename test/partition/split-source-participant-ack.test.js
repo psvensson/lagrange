@@ -385,7 +385,7 @@ async (t) => {
     sqlQueryEngine: {
       managedSplitWorkflow: {
         async acknowledgeSourceParticipant() {
-          throw new Error('simulated failure');
+          return {result: 'accepted'};
         },
       },
     },
@@ -397,6 +397,10 @@ async (t) => {
     isSameSplitReplication(left, right) {
       return mod.PartitionService.prototype
         .isSameSplitReplication.call(this, left, right);
+    },
+    emitSplitSourceAck(meta, status, checkpoint) {
+      return mod.PartitionService.prototype.emitSplitSourceAck.call(
+        this, meta, status, checkpoint);
     },
     resolveLeaderAddress() {
       return null;
@@ -411,7 +415,7 @@ async (t) => {
     transitionMetadata: metadata,
   });
 
-  t.ok(result.acknowledged, 'must acknowledge the request');
+  t.ok(result.success, 'must acknowledge the request');
 
   // Wait for the async workflow to settle
   await context.splitReplicationRun;

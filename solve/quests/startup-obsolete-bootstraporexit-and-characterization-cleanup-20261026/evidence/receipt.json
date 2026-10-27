@@ -1,0 +1,18 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "bootstraporexit-retired",
+      "passed": true
+    },
+    {
+      "id": "seed-startup-characterization-aligned",
+      "passed": true
+    },
+    {
+      "id": "targeted-test-cone-and-independent-verification",
+      "passed": true
+    }
+  ]
+}

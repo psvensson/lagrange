@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "reserved-name-create-and-resume",
+      "passed": true
+    },
+    {
+      "id": "case-exact-ingress-routing-and-runtime-grants",
+      "passed": true
+    },
+    {
+      "id": "existing-lowercase-client-and-owner-paths",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-checks",
+      "passed": true
+    }
+  ],
+  "source": {
+    "base": "6a228ced9439af07216b492bb8fdbba5540c3671",
+    "state": "checkpoint-awaiting-independent-review",
+    "sha256": {
+      "src/bootstrap/system-table-schema-shared-constants.js": "e14b82c572edd5229a5dae23bb84f144c9804af841d2b86fc34d1daec90361ef",
+      "src/control-plane/owners/runtime-access-policy-owner.js": "c532e5b35bad8d6b13856c0e692a5c5284679ea574ab7fefa600b685174e9928",
+      "src/query/query-constants.js": "9dec00eb3ae2f30486f28be13d707924859bbc614e007bc1c03a9d3b84b9c6b7",
+      "src/query/schema-provisioning-intent.js": "a5b5c9536fe930b6cd8c452c8ca560b7a3f57883fbbe4456af10aef98d32087d",
+      "src/query/table-creation-service-create-table.js": "58b5c9149cf49696db48a5785d6621092b5febaa69525f5dd4239347ce2eaaad",
+      "src/query/table-creation-service-durable-job.js": "4b8cb03ba48a862c50eed0de438900ae0b18c72f46cf0ba0d2ed7432c3adb4a2",
+      "src/query/user-table-create-intent.js": "9ef287a7d07b8b086093e610ce99076147f26ee482ad0b6a091f3dd3928f6357",
+      "src/runtime/pgwire-result-mapper.js": "0932472df96637049b624c830478359d5cebbe5812d6f4dad495b2de999a130e"
+    }
+  },
+  "focusedProof": {
+    "runner": "npm run test:file",
+    "retries": 0,
+    "files": 6,
+    "assertions": 517,
+    "output": "/tmp/codex-admission-callers-20261025/name-green-final-r2.log",
+    "outputSha256": "11ed2ee4e7a55747a61a93a7c431fd1608187e150c34b8900e4b8aa563b438a1"
+  },
+  "limitations": [
+    "Bounded local engine/partition/SQLite, durable schema-owner and runtime-policy proofs; no live distributed scenario claim.",
+    "Existing lowercase job identity remains unchanged. Old folded uppercase job records at the crash-after-intent point retain no original spelling; later table metadata/results may retain it. No legacy-record migration or reconciliation added; recovered reserved intent fails typed and existing rows remain.",
+    "Optional global namespace interpretation, parser grammar and pre-existing primary-key normalization remain unchanged.",
+    "Changed-file lint, diff check and impact audit pass; normal checkpoint hook and independent source review pending. No Quest landing, integration, main merge or publication."
+  ]
+}

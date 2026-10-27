@@ -14,6 +14,8 @@ import {IndexService} from '../../src/index-management/index-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -85,6 +87,8 @@ async function createTestPartition(partitionId, tableName) {
     tableName,
     replicaId: `${partitionId}-r1`,
     replicaIds: [`${partitionId}-r1`],
+    nodeId: 'test-node',
+    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     dbPath: ':memory:',
     schema: {
       columns: [
@@ -96,10 +100,7 @@ async function createTestPartition(partitionId, tableName) {
   }));
 
   await partition.initialize();
-
-  // Force leader role for testing
-  partition.role = 'leader';
-  partition.isLeader = true;
+  await resumeFixtureParticipantAdmission(partition);
 
   return partition;
 }

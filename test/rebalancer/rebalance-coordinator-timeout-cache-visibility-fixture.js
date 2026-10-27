@@ -1,5 +1,14 @@
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 
+function isolateTimeoutVisibilityReads(coordinator) {
+  // These tests count the read owned by the method under test. The independent
+  // failed-create cleanup-release startup census has its own recovery witness;
+  // keep it from consuming this fixture's gateway call counters.
+  coordinator.workflowOwner.repository
+    .queryTerminalFailedCreateCleanupOperations = async () => [];
+  return coordinator;
+}
+
 export function buildTransactionCoordinator() {
   return {
     async begin() {
@@ -28,15 +37,15 @@ export function createCoordinator(overrides = {}) {
       ?.executeAuthoritativeSystemTableRead === 'function';
 
   if (hasExplicitGateway || hasLocalAuthoritativeRead) {
-    return new RebalanceCoordinator({
+    return isolateTimeoutVisibilityReads(new RebalanceCoordinator({
       authoritativeVisibilityTimeoutMs: 0,
       authoritativeVisibilityRetryDelayMs: 0,
       ...overrides,
       sqlQueryEngine,
-    });
+    }));
   }
 
-  return new RebalanceCoordinator({
+  return isolateTimeoutVisibilityReads(new RebalanceCoordinator({
     authoritativeVisibilityTimeoutMs: 0,
     authoritativeVisibilityRetryDelayMs: 0,
     ...overrides,
@@ -52,5 +61,5 @@ export function createCoordinator(overrides = {}) {
         return sqlQueryEngine.executeQuery(sql, params, options);
       },
     },
-  });
+  }));
 }

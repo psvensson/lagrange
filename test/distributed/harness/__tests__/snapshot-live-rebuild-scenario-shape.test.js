@@ -70,7 +70,7 @@ describe('snapshot-live-rebuild scenario shape', () => {
   it('resolveSnapshotLiveRebuildScenarioConfig applies frozen defaults', () => {
     const resolved = resolveSnapshotLiveRebuildScenarioConfig({});
     assert.ok(Object.isFrozen(resolved));
-    assert.equal(resolved.tableName, 'logs');
+    assert.equal(resolved.tableName, 'benchmark_events');
     assert.equal(typeof resolved.floorBytes, 'number');
     assert.ok(resolved.floorBytes > 0);
     assert.ok(resolved.preloadRows > 0);

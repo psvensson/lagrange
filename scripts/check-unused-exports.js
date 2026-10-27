@@ -37,9 +37,32 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // another previously unimported export).
 // 2026-09-27: tightened 1435 -> 1434 per checker hint after the REPLACE
 // witness made the shared transport-delivery deferral classifier live.
-// 2026-10-03: tightened 1434 -> 1433 per checker hint (failed-gate-keeps-
-// evidence: renderRunSummary gained its first importer, the witnesses).
-const BASELINE_UNUSED_EXPORT_COUNT = 1433;
+// 2026-10-01: tightened 1434 -> 1430 per checker hint after the zero-reference
+// cutover deleted the census-disposed legacy group and timing modules.
+// 2026-10-04: tightened 1430 -> 1424 per checker hint after the cutover-orphan
+// census deleted or de-exported six exports whose only importers the cutover
+// deleted.
+// (origin/main 2026-10-03 tightened 1434 -> 1433: renderRunSummary gained
+// its first importer; superseded by the lower value here.)
+// 2026-10-04: the integrated branch had already tightened 1424 -> 1422.
+// 2026-10-05: replay and hysteresis tightened 1422 -> 1416: the participant
+// failure builder retired the executor's duplicate helpers and hysteresis
+// de-exported its managed-split metrics helpers on the combined tree.
+// 2026-10-24 (D1e): tightened 1416 -> 1413 on the checker hint.
+// 2026-10-26 (fresh-seed-activation C1-C4): tightened 1413 -> 1412 on the checker hint.
+// 2026-10-27 (TX1 composition): tightened 1412 -> 1411 on the checker hint.
+// D4 window deletion + admin/callback composition: tightened 1409 -> 1405 on
+// the checker hint.
+// 2026-10-26 (pkg-main-reconcile): tightened 1405 -> 1404 on the checker hint.
+// 2026-10-27 (retained-seed-original-handoff): tightened 1404 -> 1400 on the
+// checker hint after de-exporting verifyMemberBinding and consuming
+// ORIGINAL_ALLOCATION_PREPARATION_STATE.DEFERRED and cold recovery helpers.
+// 2026-10-27 (sql-ingress-hardening): tightened 1400 -> 1396 on the checker
+// hint after consuming DDL/DML ingress and remote query admission exports.
+// 2026-10-27 (sn1-tx1-freshmg-composition): tightened 1396 -> 1391 on the
+// checker hint after composing SN1 snapshot/compaction, TX1 admission, and
+// FreshMG source-removal fence.
+const BASELINE_UNUSED_EXPORT_COUNT = 1391;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

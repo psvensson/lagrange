@@ -6,6 +6,7 @@ import {CONTROL_PLANE_READ_LEADER_MODE} from
 import {
   assignReplicaOperationRepositoryIncompleteReadMethods,
 } from './replica-operation-repository-incomplete-read-methods.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_READ_COALESCING_KEY_SEPARATOR = ':';
@@ -17,7 +18,36 @@ const REPLICA_OPERATION_ENTITY_READ_COALESCING_KEY_PREFIX =
   'replica-operation-entity';
 const REPLICA_OPERATION_ENTITY_NODE_READ_COALESCING_KEY_PREFIX =
   'replica-operation-entity-node';
+const REPLICA_OPERATION_MEMBERSHIP_LANE_READ_COALESCING_KEY_PREFIX =
+  'replica-operation-membership-lane';
 const REPLICA_OPERATION_READ_DELIVERY_SOURCE_PREFIX = 'control-plane:read';
+const REPLICA_OPERATION_READ_RETRY_WAIT = Object.freeze({
+  wait: 'REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS',
+  awaited: 'authoritative replica_operations read without a retryable failure',
+});
+
+/**
+ * The authoritative read retry window is spent with the read still failing
+ * retryably: one wait_bound_spent ERROR; the caller still gets the failure.
+ * @param {Object} repository
+ * @param {Object} result - The last retryable failure.
+ * @param {Object} spent - {boundMs, elapsedMs, attempts, coalescingKey}
+ * @return {void}
+ */
+function reportReplicaOperationReadRetrySpent(repository, result, spent) {
+  reportWaitBoundSpent(repository.logger, {
+    ...REPLICA_OPERATION_READ_RETRY_WAIT,
+    boundMs: spent.boundMs,
+    elapsedMs: spent.elapsedMs,
+    lastObserved: {
+      errorCode: result?.errorCode || result?.code || null,
+      error: result?.error || result?.message || null,
+      attempts: spent.attempts,
+      coalescingKey: spent.coalescingKey || null,
+    },
+    scope: {nodeId: repository.nodeId || null},
+  });
+}
 
 function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, options = {}) {
   const {
@@ -35,6 +65,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     SQL,
     SYSTEM_TABLE_NAME,
     getControlPlaneRetryAfterMs,
+    getRemainingBudgetMs,
     isCoordinatorOwnedOperationType,
     isRetryableControlPlaneError,
     readAuthoritativeControlPlaneRows,
@@ -105,15 +136,34 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         return executeRead();
       }
 
-      const deadlineAtMs = this.timeSource.now() + REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
+      const startedAtMs = this.timeSource.now();
+      const enclosingRemainingMs = queryOptions.timeoutBudget &&
+        typeof queryOptions.timeoutBudget === 'object' ?
+        getRemainingBudgetMs(queryOptions.timeoutBudget, {
+          now: () => this.timeSource.now(),
+        }) :
+        REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
+      const retryBoundMs = Math.min(
+        REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+        enclosingRemainingMs,
+      );
+      const deadlineAtMs = startedAtMs + retryBoundMs;
+      let attempts = 0;
       while (true) {
         const result = await executeRead();
+        attempts += 1;
         if (result?.success !== false || !isRetryableControlPlaneError(result)) {
           return result;
         }
 
         const remainingMs = deadlineAtMs - this.timeSource.now();
         if (remainingMs <= 0) {
+          reportReplicaOperationReadRetrySpent(this, result, {
+            boundMs: retryBoundMs,
+            elapsedMs: this.timeSource.now() - startedAtMs,
+            attempts,
+            coalescingKey: queryOptions.coalescingKey,
+          });
           return result;
         }
         // Stop re-arming the backoff once the owning coordinator is shutting
@@ -210,6 +260,12 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           REPLICA_OPERATION_ENTITY_NODE_READ_COALESCING_KEY_PREFIX,
           params[0],
           params[1],
+        );
+      }
+      if (sql === SQL.SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE) {
+        return this.buildReplicaOperationReadCoalescingKey(
+          REPLICA_OPERATION_MEMBERSHIP_LANE_READ_COALESCING_KEY_PREFIX,
+          params[0],
         );
       }
       return null;
@@ -319,6 +375,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           ...readQueryOptions,
           leaderMode: options?.leaderMode,
           retryOnRetryableFailure: true,
+          timeoutBudget: options?.timeoutBudget,
         },
       );
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
@@ -453,6 +510,40 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATION_BY_TARGET_CLAIM,
         [targetClaimKey],
+        {
+          ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+          retryOnRetryableFailure: true,
+        },
+      );
+      if (
+        result?.success !== true ||
+        !Array.isArray(result.rows) ||
+        result.rows.length === 0
+      ) {
+        return null;
+      }
+      const operation = this.rowToOperation(result.rows[0]);
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        operation :
+        null;
+    }
+
+    /**
+     * Query the authoritative operation retaining one message-group
+     * membership lane. The nullable unique key is released only by the
+     * membership owner after it proves definitive non-admission or a fresh
+     * committed absence.
+     * @param {string} laneKey
+     * @return {Promise<object|null>}
+     */
+    async queryAuthoritativeOperationByMessageGroupMembershipLane(laneKey) {
+      if (typeof laneKey !== 'string' || laneKey.length === 0) {
+        return null;
+      }
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE,
+        [laneKey],
         {
           ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
           leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,

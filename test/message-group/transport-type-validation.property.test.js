@@ -6,11 +6,13 @@
  * Validates: Requirements 1.2
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -35,7 +37,7 @@ function createValidMessageRouter() {
   return {
     async initialize() {},
     async deliver() {
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
     setServiceNodeResolver() {},
     async shutdown() {},
@@ -59,11 +61,11 @@ test('Property 1: Transport Type Validation - valid transports accepted', async 
         const transport = createValidMessageRouter();
 
         // Property: Valid WebSocket-based transports should be accepted
-        const service = new MessageGroupService({
+        const service = new MessageGroupService(withTestDbPath({
           groupId,
           replicaId,
           transport,
-        });
+        }));
 
         t.ok(service, 'Service should be created with valid transport');
         t.equal(service.transport, transport, 'Transport should be set');
@@ -91,7 +93,7 @@ test('Property 1: Transport Type Validation - invalid transports rejected', asyn
         const invalidTransport = {
           async initialize() {},
           async deliver() {
-            return {acknowledged: true};
+            return buildDeliveryEnvelope({acknowledged: true});
           },
           async shutdown() {},
           // Missing setMessageRouter AND setServiceNodeResolver
@@ -99,11 +101,11 @@ test('Property 1: Transport Type Validation - invalid transports rejected', asyn
 
         // Property: Invalid transports should throw error
         t.throws(
-          () => new MessageGroupService({
+          () => new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             transport: invalidTransport,
-          }),
+          })),
           /requires WebSocket-based transport/,
           'Should reject transport without WebSocket markers',
         );
@@ -130,11 +132,11 @@ test('Property 1: Transport Type Validation - null/undefined rejected', async (t
       async (groupId, replicaId, transport) => {
         // Property: Null/undefined transport should throw error
         t.throws(
-          () => new MessageGroupService({
+          () => new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             transport,
-          }),
+          })),
           /requires transport.*WebSocket transport is mandatory/,
           'Should reject null/undefined transport',
         );
@@ -168,11 +170,11 @@ test('Property 1: Transport Type Validation - missing deliver rejected', async (
 
         // Property: Transport without deliver should throw error
         t.throws(
-          () => new MessageGroupService({
+          () => new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             transport: invalidTransport,
-          }),
+          })),
           /requires WebSocket-based transport/,
           'Should reject transport without deliver method',
         );
@@ -199,7 +201,7 @@ test('Property 1: Transport Type Validation - missing initialize rejected', asyn
         // Create transport missing initialize method
         const invalidTransport = {
           async deliver() {
-            return {acknowledged: true};
+            return buildDeliveryEnvelope({acknowledged: true});
           },
           setMessageRouter() {},
           async shutdown() {},
@@ -208,11 +210,11 @@ test('Property 1: Transport Type Validation - missing initialize rejected', asyn
 
         // Property: Transport without initialize should throw error
         t.throws(
-          () => new MessageGroupService({
+          () => new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             transport: invalidTransport,
-          }),
+          })),
           /requires WebSocket-based transport/,
           'Should reject transport without initialize method',
         );

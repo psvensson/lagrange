@@ -4,6 +4,7 @@
 // `land`, which commits.
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
@@ -21,14 +22,18 @@ import {
   appendEntry, evidenceDir, isOpenEpic, listEpics, listQuestIds, logFile, questDir,
   questExists, questState, readEpic, readLog, readQuest, verdictOf, writeQuest,
 } from './store.js';
-import {measure} from './probes.js';
+import {measure, requiredProofArtifacts} from './probes.js';
 import {
   SOLVE_PREFIX, canonicalImportGraphProblem, changedPaths, coupledPairProblems,
   epicScopeProblems, git, headSha, requiresVerification, stageablePaths,
   staticQualityProblems,
 } from './guards.js';
 import {
-  EVIDENCE_REF_PREFIX, deleteSharedEvidenceAsset, uploadAndVerify,
+  EVIDENCE_REF_PREFIX, addingCommits, bundleBasename, deleteSharedEvidenceAsset,
+  parsePathsList, recordRelocation, relocationManifest, relocationRecordsDir,
+  relocationRefusals, relocationShard, removeRelocated, sourceBlobs, sourceRefusals,
+  uploadAndVerify,
+  verifyRelocationBundle, writeRelocationBundle,
 } from './evidence-store.js';
 
 const TEXT_ENCODING = 'utf8';
@@ -541,6 +546,124 @@ function evidenceAdd(root, options) {
   return {id: quest.id, uploaded, entry};
 }
 
+// --- evidence relocate -----------------------------------------------------------
+
+const RELOCATE_MESSAGE = Object.freeze({
+  PATHS_FILE_REQUIRED: 'evidence relocate: --paths-file <list> is required',
+  SOURCE_COMMIT_REQUIRED: 'evidence relocate: --source-commit <sha> is required',
+  EMPTY: 'evidence relocate: the paths file names no path',
+  REFUSED: 'evidence relocate: refusing',
+  UNVERIFIED: 'evidence relocate: the re-downloaded bundle did not verify; ' +
+    'nothing was removed and no inventory entry was written:',
+});
+const RELOCATE_SCRATCH_PREFIX = 'solve-relocate-';
+const RELOCATE_REFUSAL_SAMPLE = 20;
+const LABEL_SUFFIX = '-evidence';
+const ISO_DATE_LENGTH = 10;
+const COMMIT_SUFFIX = '^{commit}';
+
+function requiredArtifactSet(root) {
+  return new Set(listQuestIds(root).flatMap((id) =>
+    requiredProofArtifacts(readQuest(root, id).doneWhen)));
+}
+
+function refuseListed(refusals) {
+  if (refusals.length === 0) return;
+  const sample = refusals.slice(0, RELOCATE_REFUSAL_SAMPLE)
+    .map((entry) => `${MESSAGE.PROBLEM_BULLET}${entry.path}: ${entry.reason}`);
+  refuse([`${RELOCATE_MESSAGE.REFUSED} ${refusals.length} path(s):`, ...sample]
+    .join(LINE_SEPARATOR));
+}
+
+function relocationInputs(root, options) {
+  if (!text(options.pathsFile)) refuse(RELOCATE_MESSAGE.PATHS_FILE_REQUIRED);
+  if (!text(options.sourceCommit)) refuse(RELOCATE_MESSAGE.SOURCE_COMMIT_REQUIRED);
+  const sourceCommit = git(root, ['rev-parse', '--verify',
+    `${options.sourceCommit}${COMMIT_SUFFIX}`]).trim();
+  const paths = parsePathsList(fs.readFileSync(path.resolve(root, options.pathsFile),
+    TEXT_ENCODING));
+  if (paths.length === 0) refuse(RELOCATE_MESSAGE.EMPTY);
+  return {sourceCommit, paths};
+}
+
+// Everything decided before anything leaves the machine: the upload quest
+// and the record quest are open, every path is relocatable, every path is a
+// blob at the source commit whose bytes the working tree still holds.
+function relocationPlan(root, options) {
+  const {quest} = openState(root, options.id);
+  const recordTo = text(options.recordTo) || quest.id;
+  openState(root, recordTo);
+  const {sourceCommit, paths} = relocationInputs(root, options);
+  refuseListed(relocationRefusals(paths, requiredArtifactSet(root)));
+  const blobs = sourceBlobs(root, sourceCommit, paths);
+  refuseListed(sourceRefusals(root, paths, blobs));
+  const manifest = relocationManifest({paths, sourceCommit, blobs,
+    adds: addingCommits(root, sourceCommit, paths)});
+  const basename = bundleBasename({label: text(options.label) ||
+    `${quest.id}${LABEL_SUFFIX}`, sourceCommit,
+  date: options.date || new Date().toISOString().slice(0, ISO_DATE_LENGTH)});
+  const bytes = manifest.files.reduce((total, entry) => total + entry.bytes, 0);
+  const records = path.relative(root, relocationRecordsDir(root, recordTo));
+  return {id: quest.id, recordTo, sourceCommit, blobs, manifest, basename,
+    summary: {id: quest.id, recordTo, records, sourceCommit, bundle: basename,
+      files: manifest.files.length, bytes}};
+}
+
+function bundleVerified(verification, uploaded) {
+  return verification.downloadedSha256 === uploaded.sha256 &&
+    verification.extracted && verification.manifestMatches &&
+    verification.unexpectedMembers.length === 0 && verification.mismatches.length === 0;
+}
+
+function uploadRelocation(root, plan, options, scratch) {
+  const bundle = writeRelocationBundle({root, manifest: plan.manifest, scratch,
+    basename: plan.basename});
+  return evidenceAdd(root, {id: plan.id, file: bundle, run: options.run,
+    tmpdir: options.tmpdir,
+    text: `relocated ${plan.summary.files} files (${plan.summary.bytes} B) at ` +
+      `${plan.sourceCommit} into ${plan.basename}; inventory and verification ` +
+      `under ${plan.summary.records}`});
+}
+
+/**
+ * Relocate committed bulk evidence to the store: bundle with a manifest,
+ * upload through `evidence add`, re-download and verify every member against
+ * the manifest and the source-commit blob, record the inventory and the
+ * verification in the record quest's relocation records directory (never its
+ * evidence/), and only then `git rm` the paths.
+ * `--dry-run` stops after the plan.
+ * @param {string} root
+ * @param {{id: string, pathsFile: string, sourceCommit: string,
+ *   recordTo?: string, label?: string, date?: string, dryRun?: boolean,
+ *   run?: Function, tmpdir?: string}} options
+ * @return {Object}
+ */
+function evidenceRelocate(root, options) {
+  const plan = relocationPlan(root, options);
+  if (options.dryRun) return {...plan.summary, dryRun: true};
+  const tmpdir = options.tmpdir || os.tmpdir();
+  const scratch = fs.mkdtempSync(path.join(tmpdir, RELOCATE_SCRATCH_PREFIX));
+  try {
+    const added = uploadRelocation(root, plan, {...options, tmpdir}, scratch);
+    const verification = verifyRelocationBundle({asset: added.uploaded.asset,
+      manifest: plan.manifest, blobs: plan.blobs, run: options.run, tmpdir});
+    const verified = bundleVerified(verification, added.uploaded);
+    const shard = relocationShard({manifest: plan.manifest, uploaded: added.uploaded});
+    if (!verified) {
+      refuse(`${RELOCATE_MESSAGE.UNVERIFIED} ${JSON.stringify({...verification,
+        results: undefined})}`);
+    }
+    const recorded = recordRelocation({
+      recordsRoot: relocationRecordsDir(root, plan.recordTo), shard,
+      verification: {...verification, verified}, verifiedAt: new Date().toISOString()});
+    const removed = removeRelocated(root, plan.manifest.files.map((entry) => entry.path));
+    return {...plan.summary, uploaded: added.uploaded, entry: added.entry,
+      recorded, removed};
+  } finally {
+    fs.rmSync(scratch, {recursive: true, force: true});
+  }
+}
+
 // --- board ------------------------------------------------------------------------
 
 /**
@@ -572,6 +695,7 @@ function board(root) {
 
 export {
   ALTITUDE_BUDGET, LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
-  SolveError, board, evidenceAdd, evidenceDelete, land, landChangeProofEnvironment,
+  SolveError, board, evidenceAdd, evidenceDelete, evidenceRelocate, land,
+  landChangeProofEnvironment,
   note, probe, runChangeProof, start,
 };

@@ -1,0 +1,142 @@
+{
+  "source_sha": "86fd86137cdbd3944f6eddcd34d7df04ab9b81e8",
+  "issue": 1049,
+  "result": "FAIL",
+  "files": [
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-chunk0.bin",
+      "bytes": 8000,
+      "sha256": "77aa3ffef75cc1a3dac823a96101ad02b7d2660d85ae1220a9a12ee129ee59a5"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-diagnostics.json",
+      "bytes": 84411,
+      "sha256": "5fd30d139d70f6cc651fc6524ec54785716cac370d0738e7cdf503913e081997"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence0-request.json",
+      "bytes": 688,
+      "sha256": "631feb3bb007f175b6b6945df1729f11a9a02d5adcdd3ff147f8f72b81266df8"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence0.json",
+      "bytes": 21269,
+      "sha256": "ef1f47cb02cc3b2b7c332cbd67e51dcc06df4885cf14798a9b1a67657545cc6a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence16000-request.json",
+      "bytes": 775,
+      "sha256": "b5c511e1981d057b91b7a69bac38b7911b4071771421e80e73d1d1a596965f3c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence16000.json",
+      "bytes": 21529,
+      "sha256": "6ac122a638bc7512e26e24f5314ce1cd6bdc0c936ee4c75a0657c111cb651d9e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence24000-request.json",
+      "bytes": 775,
+      "sha256": "cd9ce566154908a14342cb40ac6ada958ad7f0aec94156aebb87eb8fc9f94c8e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence24000.json",
+      "bytes": 21513,
+      "sha256": "a0cd02305c87222fa0bd2d98b7724f5c1e400ea9c2de6c198788510653745a51"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence32000-request.json",
+      "bytes": 775,
+      "sha256": "262c3b88d6df5c3df76f4e9d0ec9fb212623f1bc024b9ba16980b8284761991b"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence32000.json",
+      "bytes": 21527,
+      "sha256": "59c4db6e0b488ca439b33746520707736acdd520ec894935be077b861b52338a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence40000-request.json",
+      "bytes": 775,
+      "sha256": "ae8a1ab4b86edc130fe45d1132dcce0fd4cc74a061e98a67793c10a6498f47c9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence40000.json",
+      "bytes": 21535,
+      "sha256": "fbbe6675e47fdb35b109317521c86d0ca4094194ce922b88466db6c18de3b425"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence48000-request.json",
+      "bytes": 775,
+      "sha256": "0c219991a7700b928f4e9f7e5ddc7ea261e4ad5c98d5774b289edf5c0d275dd0"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence48000.json",
+      "bytes": 21588,
+      "sha256": "b637e3b5bbb68cde2195fda3c24c8008b7a53250206ed6acbc37dcc6cbdac512"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence56000-request.json",
+      "bytes": 775,
+      "sha256": "8e8c258914d8bd5882f7bb3b48b1a72ed57dcd400f26feac03c6bf26068e6ffa"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence56000.json",
+      "bytes": 10019,
+      "sha256": "19e8696ec7c805236c2f4ba8da0a4b5a583ffe298bfd5a61de737c578c3e51ec"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence8000-request.json",
+      "bytes": 774,
+      "sha256": "d61a708bff014ad0e5ef7e20bc1fa3784d9638759431b56075abc64a34ea5494"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence8000.json",
+      "bytes": 21466,
+      "sha256": "da289ad2351811275788aaa06bb82f410dbfe9c0f7414fd9361825827f3a0324"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-log-custody.json",
+      "bytes": 13435,
+      "sha256": "05a778c342137e4ba2e2e7e497c7b88097a03a5ec29cd923798b42fb71972057"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-partial.txt",
+      "bytes": 40000,
+      "sha256": "534c21fe989853e5ff0abcda656d7d136b8a5da9c93ef5ea492689b96b6a3aea"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-post-fleet-request.json",
+      "bytes": 593,
+      "sha256": "c9967fc1ee69053fafb15d0d5eb16f646c767fddaba08fc7b382e7b663e43f6c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-post-fleet.json",
+      "bytes": 5861,
+      "sha256": "4b4991028839dee0816fec17e7a8e5e834861c084a6763a2565b11f30456de44"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-pre-fleet.json",
+      "bytes": 5861,
+      "sha256": "25a3f6bf7e7d817be4206b172dec464ca295372aab14aedcdee471381ce46987"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-request.json",
+      "bytes": 4014,
+      "sha256": "9d3856915190cbe028ed4107273923ffc0ce258a9ebbd374218a5b60258747e6"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-source-envelope-observed.json",
+      "bytes": 2375,
+      "sha256": "1d54e3d3d086517982ad0f6c359631c34a7925faf3111bd0d90d6284993dd02f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-terminal-receipts.json",
+      "bytes": 3485,
+      "sha256": "21d065351e51373d2371b283352ca9a638c2b4eb5025f0c0ca16372f59a719e4"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-worker.log",
+      "bytes": 59196,
+      "sha256": "2826f710e7a1e3a3b22ccdc4ebeb8896c13011e62aa45e7eb8a8b06ef3a88884"
+    }
+  ]
+}

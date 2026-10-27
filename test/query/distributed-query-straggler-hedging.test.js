@@ -14,6 +14,7 @@
  * per-address artificial delay, and delivery-address tracking.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -71,7 +72,7 @@ function buildHedgingCluster(spec) {
   const messageRouter = {
     async deliver(address, message) {
       if (message.type !== 'QUERY') {
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       }
       const partitionId = address.split('/')[2];
       deliveries.push({partitionId, address, atMs: Date.now()});
@@ -81,13 +82,12 @@ function buildHedgingCluster(spec) {
         await sleep(spec.delayMs);
         slowSettled.push(address);
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows,
         count: rows.length,
         partitionId,
-      };
+      });
     },
   };
 

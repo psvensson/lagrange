@@ -15,6 +15,7 @@
  * on top of the same composition.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 
@@ -242,18 +243,18 @@ function createPartitionStores() {
 function executePartitionSql(partitionStores, partitionId, message) {
   const database = partitionStores.databases.get(partitionId);
   if (!database) {
-    return {acknowledged: true, success: false,
+    return {success: false,
       error: `unknown partition: ${partitionId}`};
   }
   const sql = message.sql || message.payload?.sql;
   const params = message.params || message.payload?.params || [];
   if (/^\s*SELECT/iu.test(sql)) {
     const rows = database.prepare(sql).all(...params);
-    return {acknowledged: true, success: true, rows,
+    return {success: true, rows,
       count: rows.length, partitionId};
   }
   const outcome = database.prepare(sql).run(...params);
-  return {acknowledged: true, success: true, rows: [],
+  return {success: true, rows: [],
     affectedRows: outcome.changes, changes: outcome.changes, partitionId};
 }
 
@@ -270,14 +271,15 @@ function createSharedMessageRouter(partitionStores) {
     },
     async deliver(address, message) {
       const handler = handlers.get(address);
-      if (handler) return handler(message);
+      if (handler) return buildDeliveryEnvelope({acknowledged: true}, await handler(message));
       if (message?.type === QUERY_MESSAGE_TYPE ||
           message?.payload?.type === QUERY_MESSAGE_TYPE) {
         const partitionId = address.split('/')[2];
         partitionQueryDeliveries.push(partitionId);
-        return executePartitionSql(partitionStores, partitionId, message);
+        return buildDeliveryEnvelope({acknowledged: true},
+          executePartitionSql(partitionStores, partitionId, message));
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
     send: async () => ({success: true}),
   };

@@ -597,14 +597,6 @@ function escapeSqlLiteral(value) {
   return String(value).replace(/'/g, '\'\'');
 }
 
-function buildBenchmarkPartitionLookupSql(tableName) {
-  return (
-    'SELECT partition_id FROM partitions WHERE table_name = \'' +
-    escapeSqlLiteral(tableName) +
-    '\''
-  );
-}
-
 function buildBenchmarkTableLookupSql(tableName) {
   return (
     'SELECT * FROM tables WHERE table_name = \'' +
@@ -615,27 +607,7 @@ function buildBenchmarkTableLookupSql(tableName) {
 
 function buildBenchmarkPartitionLookupByTableIdSql(tableId) {
   return (
-    'SELECT partition_id FROM partitions WHERE table_id = \'' +
-    escapeSqlLiteral(tableId) +
-    '\''
-  );
-}
-
-function buildBenchmarkPartitionRepairSql(tableName, tableId) {
-  return (
-    'UPDATE partitions SET table_name = \'' +
-    escapeSqlLiteral(tableName) +
-    '\' WHERE table_id = \'' +
-    escapeSqlLiteral(tableId) +
-    '\''
-  );
-}
-
-function buildBenchmarkTablePolicySql(tableId, benchmarkTablePolicies = {}) {
-  return (
-    'UPDATE tables SET table_policies = \'' +
-    escapeSqlLiteral(JSON.stringify(benchmarkTablePolicies)) +
-    '\' WHERE table_id = \'' +
+    'SELECT partition_id, table_id, table_name FROM partitions WHERE table_id = \'' +
     escapeSqlLiteral(tableId) +
     '\''
   );
@@ -1396,11 +1368,8 @@ export const POSTGRES_BASELINE_COMPARISON_CONSTANTS_AND_IMPORTS_BUNDLE = {
   normalizeTableId,
   buildBenchmarkTableDdl,
   escapeSqlLiteral,
-  buildBenchmarkPartitionLookupSql,
   buildBenchmarkTableLookupSql,
   buildBenchmarkPartitionLookupByTableIdSql,
-  buildBenchmarkPartitionRepairSql,
-  buildBenchmarkTablePolicySql,
   buildSutTableProbeSql,
   firstStringField,
   extractRequiredSchemaVersionFromRows,

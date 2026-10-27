@@ -2,7 +2,7 @@ import tap from 'tap';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {execFileSync, spawn, spawnSync} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 import {
@@ -15,9 +15,10 @@ import {
   validatePublishRequest,
 } from '../../scripts/publish-head.js';
 import {recordProof} from '../../scripts/proof-authority.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 function git(cwd, args) {
-  return execFileSync('git', args, {cwd, encoding: 'utf8'}).trim();
+  return execGit(args, {cwd, encoding: 'utf8'}).trim();
 }
 
 const PROOF_AUTHORITY = path.join(path.dirname(fileURLToPath(import.meta.url)),

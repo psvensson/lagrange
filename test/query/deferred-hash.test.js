@@ -8,9 +8,14 @@
  * Requirements: 3.1, 3.2
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 
 const config = ConfigurationManager.getInstance();
 config.initialize();
@@ -68,19 +73,16 @@ function createTestCache() {
 
 function createTestRouter() {
   return {
-    deliver: async () => ({
-      acknowledged: true,
-      success: true,
-      rows: [],
-      changes: 1,
-    }),
-  };
-}
-
-function createTestCdc() {
-  return {
-    async upsertSystemTableRow() {
-      return {success: true};
+    deliver: async (_address, message) => {
+      if (message?.type === 'TRANSACTION') {
+        return buildDeliveryEnvelope({acknowledged: true},
+          answerParticipantTransactionRequest(message));
+      }
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        success: true,
+        rows: [],
+        changes: 1,
+      });
     },
   };
 }
@@ -100,7 +102,7 @@ test('deferred hash - non-transactional INSERT does not call ' +
   const engine = new SQLQueryEngine({
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
-    cdcIntegrationService: createTestCdc(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   engine.fireNonTransactionalWriteResult = () => {
@@ -131,7 +133,7 @@ test('deferred hash - non-transactional UPDATE does not call ' +
   const engine = new SQLQueryEngine({
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
-    cdcIntegrationService: createTestCdc(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   engine.fireNonTransactionalWriteResult = () => {
@@ -162,7 +164,7 @@ test('deferred hash - non-transactional DELETE does not call ' +
   const engine = new SQLQueryEngine({
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
-    cdcIntegrationService: createTestCdc(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   engine.fireNonTransactionalWriteResult = () => {
@@ -195,7 +197,7 @@ async (t) => {
   const engine = new SQLQueryEngine({
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
-    cdcIntegrationService: createTestCdc(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   await engine.executeQuery('BEGIN TRANSACTION');
@@ -240,7 +242,7 @@ async (t) => {
   const engine = new SQLQueryEngine({
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
-    cdcIntegrationService: createTestCdc(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   await engine.executeQuery('BEGIN TRANSACTION');
@@ -285,7 +287,7 @@ async (t) => {
   const engine = new SQLQueryEngine({
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
-    cdcIntegrationService: createTestCdc(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   await engine.executeQuery('BEGIN TRANSACTION');

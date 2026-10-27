@@ -12,12 +12,63 @@ import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
 import {
   isRetryableManagedSplitTransition,
 } from './managed-split-retry-policy.js';
+import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
+import {storedTransitionOf} from './managed-workflow-record-store.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_DEFERRED = 'deferred';
 const LOCAL_STR_MANAGED_SPLIT_CHILD_PROVISIONING_PRECHEC = 'Managed split child provisioning precheck could not satisfy ';
 const LOCAL_STR_MINIMUM_ROUTABLE_COHORTS = 'minimum routable cohorts: ';
 const LOCAL_STR_SEMI_SPACE = '; ';
+
+// The `tables` row's identity fields of a decoded workflow.
+function rowIdentityOf(tableInfo) {
+  return {
+    tableId: tableInfo?.table_id || tableInfo?.tableId || null,
+    tableName: tableInfo?.table_name || tableInfo?.tableName || null,
+  };
+}
+
+// The `tables` row's timestamps of a decoded workflow.
+const ROW_UPDATED_AT_KEYS = Object.freeze(['updated_at', 'updatedAt']);
+const ROW_CREATED_AT_KEYS = Object.freeze(['created_at', 'createdAt',
+  ...ROW_UPDATED_AT_KEYS]);
+
+function rowTimestampsOf(tableInfo, now) {
+  const createdAt = Number(firstDefinedOf(tableInfo, ROW_CREATED_AT_KEYS) ??
+    now);
+  return {createdAt, updatedAt: Number(firstDefinedOf(tableInfo,
+    ROW_UPDATED_AT_KEYS) ?? createdAt)};
+}
+
+function firstDefinedOf(row, keys) {
+  return keys.map((key) => row?.[key]).find((value) =>
+    value !== undefined && value !== null);
+}
+
+// The canonical split participants a record names: the source, and the
+// children its target ids name.
+function canonicalSplitParticipantSpecsOf(workflow) {
+  const metadata = workflow.metadata || {};
+  const targets = Array.isArray(metadata[
+    PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]) ?
+    metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS] : [];
+  const source = String(metadata[
+    PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID] ||
+    workflow.partitionId || '');
+  return [
+    {participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+      partitionId: source || null},
+    {participantKey: SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD,
+      partitionId: targets[0] || null},
+    {participantKey: SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD,
+      partitionId: targets[1] || null},
+  ].filter((spec) => spec.partitionId ||
+    spec.participantKey === SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION);
+}
+
+// A canonical participant no acknowledgement has reached yet.
+const NOT_YET_ACKNOWLEDGED = null;
 
 class ManagedSplitWorkflowStateMethods {
   /**
@@ -63,28 +114,6 @@ class ManagedSplitWorkflowStateMethods {
   }
 
   /**
-   * Persist one participant acknowledgement by flushing the owning workflow
-   * through the canonical tables transition row.
-   * @param {Object} participant
-   * @return {Promise<void>}
-   * @private
-   */
-  async persistWorkflowParticipantState(participant) {
-    const workflowId = String(participant?.workflowId || '');
-    if (!workflowId) {
-      return;
-    }
-    const workflow = this.workflowCoordinator.getWorkflowById(workflowId);
-    if (!workflow) {
-      return;
-    }
-    workflow.updatedAt = Number.isFinite(participant?.updatedAt) ?
-      participant.updatedAt :
-      this.now();
-    await this.persistWorkflowTransition(workflow);
-  }
-
-  /**
    * Resolve one workflow from memory or recover it from the durable transition
    * row when async source-side execution resumes after execute() returns.
    * @param {string} workflowId
@@ -124,59 +153,71 @@ class ManagedSplitWorkflowStateMethods {
       if (persistedWorkflowId !== workflowId) {
         continue;
       }
-
-      const partitionId = String(
-        transition.metadata[
-          PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID
-        ] || '',
-      );
-      if (!partitionId) {
-        return null;
-      }
-
-      const workflow = this.workflowCoordinator.createWorkflowRecord({
-        workflowId,
-        ownerKey: partitionId,
-        tableId: tableInfo?.table_id || tableInfo?.tableId || null,
-        tableName: tableInfo?.table_name || tableInfo?.tableName || null,
-        partitionId,
-        step: transition.state,
-        status: transition.state,
-        metadata: this.cloneTransitionValue(transition.metadata),
-        participants: this.restoreParticipantsFromMetadata(
-          workflowId,
-          transition.metadata,
-        ),
-        createdAt: Number(
-          tableInfo?.created_at ??
-            tableInfo?.createdAt ??
-            tableInfo?.updated_at ??
-            tableInfo?.updatedAt ??
-            this.now(),
-        ),
-        updatedAt: Number(
-          tableInfo?.updated_at ??
-            tableInfo?.updatedAt ??
-            tableInfo?.created_at ??
-            tableInfo?.createdAt ??
-            this.now(),
-        ),
-      });
-      this.workflowCoordinator.setWorkflowState(workflow);
-      if (workflow.step) {
-        this.workflowCoordinator.markTransitionCommitted(
-          workflow.workflowId,
-          workflow.step,
-        );
-      }
-      this.ensureCanonicalSplitParticipants(
-        workflow.workflowId,
-        workflow.metadata,
-      );
-      return workflow;
+      return this.rebuildSplitWorkflowFromRecord(workflowId, tableInfo,
+        transition);
     }
 
     return null;
+  }
+
+  /**
+   * Build and register one split workflow from its durable record (a
+   * projection of the record as read).
+   * @param {string} workflowId
+   * @param {Object} tableInfo - The `tables` row.
+   * @return {Object|null}
+   * @private
+   */
+  rebuildSplitWorkflowFromRecord(workflowId, tableInfo) {
+    const decoded = this.decodeWorkflowRecord(workflowId, tableInfo);
+    if (!decoded) {
+      return null;
+    }
+    const workflow = this.workflowCoordinator.adoptWorkflowProjection(decoded);
+    if (workflow.step) {
+      this.workflowCoordinator.markTransitionCommitted(
+        workflow.workflowId,
+        workflow.step,
+      );
+    }
+    return workflow;
+  }
+
+  /**
+   * Decode one `tables` row into the split workflow it holds (its state,
+   * metadata, participants with the canonical ones materialized, ownership
+   * claim triple), or null when it holds no split of `workflowId`. Pure: the
+   * record store's decoder (managed-workflow-record-store.js).
+   * @param {string} workflowId
+   * @param {Object} tableInfo
+   * @return {Object|null}
+   * @private
+   */
+  decodeWorkflowRecord(workflowId, tableInfo) {
+    const transition = storedTransitionOf(tableInfo);
+    const partitionId = String(transition?.metadata?.[
+      PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID] || '');
+    if (!partitionId || String(transition.metadata[
+      PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || '') !==
+        String(workflowId)) {
+      return null;
+    }
+    return this.withCanonicalSplitParticipants({
+      workflowId,
+      ownerKey: partitionId,
+      ...rowIdentityOf(tableInfo),
+      partitionId,
+      step: transition.state,
+      status: transition.state,
+      metadata: this.cloneTransitionValue(transition.metadata),
+      participants: this.restoreParticipantsFromMetadata(
+        workflowId,
+        transition.metadata,
+      ),
+      // The durable ownership claim triple (one decode with the merge owner).
+      ...durableOwnershipClaimOf(transition.metadata),
+      ...rowTimestampsOf(tableInfo, this.now()),
+    });
   }
 
   /**
@@ -215,88 +256,48 @@ class ManagedSplitWorkflowStateMethods {
   }
 
   /**
-   * Ensure the canonical split participants exist on the workflow snapshot.
-   * @param {string} workflowId
-   * @param {Object} transitionMetadata
-   * @return {Object|null}
+   * The workflow with its canonical split participants (source, and the
+   * children its metadata names) materialized when missing; the others
+   * untouched. Pure.
+   * @param {Object} workflow
+   * @return {Object} A new workflow object.
    * @private
    */
-  ensureCanonicalSplitParticipants(workflowId, transitionMetadata = {}) {
-    const workflow = this.workflowCoordinator.getWorkflowById(workflowId);
-    if (!workflow) {
-      return null;
-    }
-    if (!(workflow.participants instanceof Map)) {
-      workflow.participants = new Map();
-    }
-
-    const createdAt = Number.isFinite(workflow.createdAt) ?
-      workflow.createdAt :
-      this.now();
-    const updatedAt = Number.isFinite(workflow.updatedAt) ?
-      workflow.updatedAt :
-      this.now();
-    const sourcePartitionId = String(
-      transitionMetadata?.[
-        PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID
-      ] || workflow.partitionId || '',
-    );
-    const targetPartitionIds = Array.isArray(
-      transitionMetadata?.[
-        PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
-      ],
-    ) ?
-      transitionMetadata[
-        PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
-      ] :
-      [];
-    const participantSpecs = [{
-      participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
-      participantId: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
-      partitionId: sourcePartitionId || null,
-    }];
-
-    if (targetPartitionIds.length > 0) {
-      participantSpecs.push({
-        participantKey: SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD,
-        participantId: SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD,
-        partitionId: targetPartitionIds[0] || null,
-      });
-    }
-    if (targetPartitionIds.length > 1) {
-      participantSpecs.push({
-        participantKey: SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD,
-        participantId: SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD,
-        partitionId: targetPartitionIds[1] || null,
-      });
-    }
-
-    for (const participantSpec of participantSpecs) {
-      if (!participantSpec.partitionId &&
-          participantSpec.participantKey !==
-            SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION) {
-        continue;
+  withCanonicalSplitParticipants(workflow) {
+    const participants = workflow.participants instanceof Map ?
+      new Map(workflow.participants) : new Map();
+    for (const spec of canonicalSplitParticipantSpecsOf(workflow)) {
+      if (!participants.has(spec.participantKey)) {
+        participants.set(spec.participantKey,
+          this.canonicalParticipantOf(workflow, spec));
       }
-      if (workflow.participants.has(participantSpec.participantKey)) {
-        continue;
-      }
-      workflow.participants.set(participantSpec.participantKey, {
-        workflowId,
-        participantId: participantSpec.participantId,
-        participantKey: participantSpec.participantKey,
-        partitionId: participantSpec.partitionId,
-        status: null,
-        // Seed the participant fence from the workflow claim epoch so a
-        // source ack stamped with an older fence is rejected as
-        // STALE_FENCE (fence validation is no longer opt-in for split).
-        fenceToken: Number.isInteger(workflow.fenceToken) ?
-          workflow.fenceToken :
-          null,
-        createdAt,
-        updatedAt,
-      });
     }
-    return workflow;
+    return {...workflow, participants};
+  }
+
+  /**
+   * One canonical participant, not yet acknowledged; its fence seeded from
+   * the workflow claim epoch so a source ack stamped with an older fence is
+   * rejected as STALE_FENCE (fence validation is no longer opt-in).
+   * @param {Object} workflow
+   * @param {Object} spec - {participantKey, partitionId}.
+   * @return {Object}
+   * @private
+   */
+  canonicalParticipantOf(workflow, spec) {
+    return {
+      workflowId: workflow.workflowId,
+      participantId: spec.participantKey,
+      participantKey: spec.participantKey,
+      partitionId: spec.partitionId,
+      status: NOT_YET_ACKNOWLEDGED,
+      fenceToken: Number.isInteger(workflow.fenceToken) ?
+        workflow.fenceToken : null,
+      createdAt: Number.isFinite(workflow.createdAt) ?
+        workflow.createdAt : this.now(),
+      updatedAt: Number.isFinite(workflow.updatedAt) ?
+        workflow.updatedAt : this.now(),
+    };
   }
 
   /**
@@ -574,8 +575,7 @@ class ManagedSplitWorkflowStateMethods {
       failingChildPartitionIds,
       childProvisioningAdmissionByPartitionId,
     );
-    const deniedMetadata = {
-      ...(workflow?.metadata || {}),
+    const deniedDelta = {
       [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
         options.admission,
       [PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT]:
@@ -594,10 +594,9 @@ class ManagedSplitWorkflowStateMethods {
     };
 
     if (workflow) {
-      await this.workflowCoordinator.updateWorkflow(options.workflowId, {
-        status: deniedState,
-        metadata: deniedMetadata,
-      });
+      await this.workflowCoordinator.recordExecutionOutcome(
+        options.workflowId, {status: deniedState, delta: deniedDelta,
+          incident: {reason: failureMessage}});
     }
 
     return {
@@ -676,8 +675,7 @@ class ManagedSplitWorkflowStateMethods {
     const workflow = this.workflowCoordinator.getWorkflowById(
       options.workflowId,
     );
-    const deferredMetadata = {
-      ...(workflow?.metadata || {}),
+    const deferredDelta = {
       [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
         options.admission,
       [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
@@ -695,10 +693,10 @@ class ManagedSplitWorkflowStateMethods {
     };
 
     if (workflow) {
-      await this.workflowCoordinator.updateWorkflow(options.workflowId, {
-        status: PARTITION_TRANSITION_STATE.DEFERRED,
-        metadata: deferredMetadata,
-      });
+      await this.workflowCoordinator.recordExecutionOutcome(
+        options.workflowId, {status: PARTITION_TRANSITION_STATE.DEFERRED,
+          delta: deferredDelta, incident: {reason: deferredDelta[
+            PARTITION_TRANSITION_METADATA_FIELD.FAILURE].message}});
     }
 
     return {
@@ -711,7 +709,7 @@ class ManagedSplitWorkflowStateMethods {
       state: PARTITION_TRANSITION_STATE.DEFERRED,
       admission: options.admission,
       retry:
-        deferredMetadata[PARTITION_TRANSITION_METADATA_FIELD.RETRY],
+        deferredDelta[PARTITION_TRANSITION_METADATA_FIELD.RETRY],
       error:
         options.error?.message || SPLIT_MERGE_LOG_MSG.INSUFFICIENT_ROWS_FOR_SPLIT,
     };

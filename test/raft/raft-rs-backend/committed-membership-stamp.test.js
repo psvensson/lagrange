@@ -27,6 +27,7 @@ import {
   waitFor,
 } from './committed-membership-harness.js';
 import {
+  bootstrapFold,
   durableAppliedState,
   foldAt,
   logFold,
@@ -109,7 +110,8 @@ test('T2: a join is stamped with the committed configuration its leader ' +
     assert.equal(harness.router.delivered[1].nodeId, leading[1]);
 
     // The target, built through its handler from that stamp, starts from
-    // the committed configuration plus itself (O2) and replays to the fold.
+    // the committed configuration plus itself as a learner (O2) and replays
+    // to the fold of its own log above j.
     const targetCache = metadataCache(PARTITION_ID, []);
     const {service: targetService} = await buildTargetFromOperation(harness, {
       target, operation, cache: targetCache});
@@ -117,8 +119,10 @@ test('T2: a join is stamped with the committed configuration its leader ' +
     const targetPeerId = String(statusOf(targetService).peerId);
     const atCreation = durableAppliedState(targetDb, PARTITION_ID);
     assert.deepEqual(atCreation.voters,
-      [...foldAt(fold, stamp.appliedIndex).voters, targetPeerId].sort(),
-      'the target bootstrap is the stamped configuration plus itself');
+      foldAt(fold, stamp.appliedIndex).voters,
+      'the target bootstrap voters are the stamped configuration');
+    assert.ok(atCreation.learners.includes(targetPeerId),
+      'the target names itself, as a learner until its AddNode applies');
     assert.equal(atCreation.bootstrapIndex, stamp.appliedIndex,
       'the durable bootstrap index is the stamp\'s committed index');
     assert.equal(atCreation.admissionIndex, null,
@@ -131,7 +135,9 @@ test('T2: a join is stamped with the committed configuration its leader ' +
 
     assert.equal(await admitThroughRows(harness, target,
       [founderA, source, founderB]), true, 'the group admits the target');
-    const targetFold = logFold(targetDb, PARTITION_ID, genesisPeerIds);
+    const targetFold = bootstrapFold(targetDb, PARTITION_ID, {
+      voters: stamp.voters, learners: stamp.learners,
+      bootstrapIndex: stamp.appliedIndex, selfPeerId: targetPeerId});
     const replayed = durableAppliedState(targetDb, PARTITION_ID);
     assert.deepEqual(replayed.voters,
       foldAt(targetFold, replayed.appliedIndex).voters,

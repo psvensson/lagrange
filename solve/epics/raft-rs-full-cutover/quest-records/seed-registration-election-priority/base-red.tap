@@ -1,0 +1,302 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/bootstrap/seed-registration-election-scheduling.test.js
+
+# test-files planned=1
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: ok cpu 63C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/bootstrap/seed-registration-election-scheduling.test.js (12 assertions, 26775ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: seed elections start the registration dependency cohort before the remainder
+    not ok 1 - unrelated election work stays held while the direct-write cut elects
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,7 +1,8 @@
+         Array [
+        +  "start:ordinary-a-r1",
+           "start:required-1-r1",
+           "start:required-2-r1",
+           "start:required-3-r1",
+           "start:required-4-r1",
+        -  "wait:registration-required",
+        +  "start:ordinary-b-r1",
+         ]
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 80
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:80:7)
+      source: |2
+      
+            await Promise.resolve();
+            t.same(fixture.events, [
+        ------^
+              'start:required-1-r1',
+              'start:required-2-r1',
+      ...
+    
+    not ok 2 - each dependency and remaining replica starts once
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,9 +1,8 @@
+         Array [
+        +  "start:ordinary-a-r1",
+           "start:required-1-r1",
+           "start:required-2-r1",
+           "start:required-3-r1",
+           "start:required-4-r1",
+        -  "wait:registration-required",
+        -  "start:ordinary-a-r1",
+           "start:ordinary-b-r1",
+         ]
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 90
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:90:7)
+      source: |2
+            fixture.leadership.resolve();
+            await scheduling;
+            t.same(fixture.events, [
+        ------^
+              'start:required-1-r1',
+              'start:required-2-r1',
+      ...
+    
+    1..2
+not ok 1 - seed elections start the registration dependency cohort before the remainder # time=14.857ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+    lineNumber: 74
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('seed elections start the registration dependency cohort before the
+    remainder',
+  
+    ^
+      async (t) => {
+        const fixture = createSchedulingFixture();
+  ...
+
+# Subtest: dependency failure releases the remaining elections before propagating
+    not ok 1 - the dependency failure remains the bootstrap outcome
+      ---
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 109
+        columnNumber: 13
+        typeName: Test
+      source: |2
+            await Promise.resolve();
+            fixture.leadership.reject(expected);
+            await t.rejects(scheduling, expected,
+        ------------^
+              'the dependency failure remains the bootstrap outcome');
+            t.same(fixture.events.slice(-2), [
+      ...
+    
+    not ok 2 - an active bootstrap does not strand the remaining cohort
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,4 @@
+         Array [
+        -  "start:ordinary-a-r1",
+        +  "start:required-4-r1",
+           "start:ordinary-b-r1",
+         ]
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 111
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:111:7)
+      source: |2
+            await t.rejects(scheduling, expected,
+              'the dependency failure remains the bootstrap outcome');
+            t.same(fixture.events.slice(-2), [
+        ------^
+              'start:ordinary-a-r1',
+              'start:ordinary-b-r1',
+      ...
+    
+    1..2
+not ok 2 - dependency failure releases the remaining elections before propagating # time=4.788ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+    lineNumber: 101
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('dependency failure releases the remaining elections before propagating',
+    ^
+      async (t) => {
+        const fixture = createSchedulingFixture();
+  ...
+
+# Subtest: shutdown during the dependency wait does not restart stopped work
+    not ok 1 - the interrupted dependency wait stays visible
+      ---
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 126
+        columnNumber: 13
+        typeName: Test
+      source: |2
+            fixture.setShuttingDown(true);
+            fixture.leadership.reject(expected);
+            await t.rejects(scheduling, expected,
+        ------------^
+              'the interrupted dependency wait stays visible');
+            t.equal(fixture.events.some((event) => event.includes('ordinary')), false,
+      ...
+    
+    not ok 2 - shutdown cleanup remains the only owner of the unstarted cohort
+      ---
+      compare: ===
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 128
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:128:7)
+      source: |2
+            await t.rejects(scheduling, expected,
+              'the interrupted dependency wait stays visible');
+            t.equal(fixture.events.some((event) => event.includes('ordinary')), false,
+        ------^
+              'shutdown cleanup remains the only owner of the unstarted cohort');
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +true
+      ...
+    
+    1..2
+not ok 3 - shutdown during the dependency wait does not restart stopped work # time=2.478ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+    lineNumber: 117
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('shutdown during the dependency wait does not restart stopped work',
+    ^
+      async (t) => {
+        const fixture = createSchedulingFixture();
+  ...
+
+# Subtest: registration owns the exact dependency cut and spends its gate once
+    not ok 1 - phase.getRequiredLeaderPartitionIds is not a function
+      ---
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:143:18)
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 143
+        columnNumber: 18
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+            });
+      
+            t.same(phase.getRequiredLeaderPartitionIds(), REQUIRED_PARTITION_IDS,
+        -----------------^
+              'the registration owner publishes its four direct-write dependencies');
+            await phase.waitForRequiredPartitionLeadership();
+      ...
+    
+    1..1
+not ok 4 - registration owns the exact dependency cut and spends its gate once # time=7.493ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+    lineNumber: 132
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('registration owns the exact dependency cut and spends its gate once',
+    ^
+      async (t) => {
+        const waits = [];
+  ...
+
+not ok 5 - registration dependency did not elect
+  ---
+  stack: >
+    Test.<anonymous>
+    (test/bootstrap/seed-registration-election-scheduling.test.js:104:22)
+  at:
+    fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+    lineNumber: 104
+    columnNumber: 22
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  tapCaught: unhandledRejection
+  test: TAP
+  source: |2
+      async (t) => {
+        const fixture = createSchedulingFixture();
+        const expected = new Error('registration dependency did not elect');
+    ---------------------^
+        const scheduling = fixture.phase.startDeferredBootstrapReplicaElections();
+  ...
+
+1..5
+# { total: 8, pass: 0, fail: 8 }
+# time=46.372ms
+file:///mnt/data/peter/projects/lagrange/.claude/worktrees/codex-seed-election-scheduling/test/bootstrap/seed-registration-election-scheduling.test.js:120
+    const expected = new Error('bootstrap stopped');
+                     ^
+
+Error: bootstrap stopped
+    at Test.<anonymous> (file:///mnt/data/peter/projects/lagrange/.claude/worktrees/codex-seed-election-scheduling/test/bootstrap/seed-registration-election-scheduling.test.js:120:22)
+    at TapWrap.runInAsyncScope (node:async_hooks:214:14)
+    at Test.cb (/mnt/data/peter/projects/lagrange/node_modules/@tapjs/core/src/test-base.ts:332:17)
+    at <anonymous> (/mnt/data/peter/projects/lagrange/node_modules/@tapjs/core/src/test-base.ts:1122:21)
+    at Test.main (/mnt/data/peter/projects/lagrange/node_modules/@tapjs/core/src/test-base.ts:1130:7)
+    at TapWrap.runInAsyncScope (node:async_hooks:214:14)
+    at Test.runMain (/mnt/data/peter/projects/lagrange/node_modules/@tapjs/core/src/base.ts:611:15)
+    at Test.runMain (/mnt/data/peter/projects/lagrange/node_modules/@tapjs/test/test-built/src/index.ts:81:19)
+    at TAP.#processSubtest (/mnt/data/peter/projects/lagrange/node_modules/@tapjs/core/src/test-base.ts:1199:9)
+    at TAP.#process (/mnt/data/peter/projects/lagrange/node_modules/@tapjs/core/src/test-base.ts:863:29)
+
+Node.js v22.23.2
+# test-files total=1 pass=0 fail=1 assertions=12

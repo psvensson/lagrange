@@ -13,7 +13,6 @@ const {
   CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
   ERRORS,
-  PARTITION_SERVICE_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_ROUTING_REPAIR_REASON,
@@ -474,7 +473,6 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
    * the current target has been disproven or admitted as too hot to accept
    * the write on the current attempt.
    * @param {string} partitionId
-   * @param {Object} executionOptions
    * @param {Object} failure
    * @param {boolean} forRead
    * @return {{state:string}}
@@ -482,7 +480,6 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
    */
   resolveControlPlaneWriteRetryDecision(
     partitionId,
-    executionOptions,
     failure,
     forRead = false,
   ) {
@@ -503,18 +500,6 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
       failure,
       forRead,
     );
-    if (
-      this.shouldRetryTransactionActiveWriteOnSameAddress(
-        partitionId,
-        executionOptions,
-        failure,
-        forRead,
-      )
-    ) {
-      return this.buildControlPlaneWriteRetryDecision(
-        CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS,
-      );
-    }
     const priorityControlPlaneWrite =
       !forRead &&
       classifySystemPartition({
@@ -539,46 +524,6 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     }
     return this.buildControlPlaneWriteRetryDecision(
       CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE,
-    );
-  }
-
-  /**
-   * Session-bound transactional control-plane writes must stay on the replica
-   * that already owns the in-flight transaction instead of widening to a
-   * different live replica mid-attempt.
-   * @param {string} partitionId
-   * @param {Object} executionOptions
-   * @param {Object} failure
-   * @param {boolean} forRead
-   * @return {boolean}
-   * @private
-   */
-  shouldRetryTransactionActiveWriteOnSameAddress(
-    partitionId,
-    executionOptions,
-    failure,
-    forRead = false,
-  ) {
-    if (
-      !this.isRetryableControlPlaneWriteFailure(partitionId, failure, forRead)
-    ) {
-      return false;
-    }
-    if (
-      typeof executionOptions?.sessionId !==
-        QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      executionOptions.sessionId.length <= 0
-    ) {
-      return false;
-    }
-    const failureMessage =
-      typeof failure?.message === 'string' ?
-        failure.message :
-        typeof failure?.error === 'string' ?
-          failure.error :
-          '';
-    return failureMessage.includes(
-      PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
     );
   }
 

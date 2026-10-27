@@ -31,6 +31,8 @@ import {
 import {
   resolveQueryTransportSelection,
 } from '../shared/query-transport-selection.js';
+import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
+  '../../raft/raft-rs-original-allocation-constants.js';
 
 const MESSAGE_ROUTER_SETUP_OWNER = 'MessageRouterSetup';
 const RECONCILER_INIT_REQUIRED =
@@ -73,6 +75,8 @@ class SeedInfrastructurePhase {
     // Passed straight through to MessageRouterSetup: the phase decides that a
     // router is created, never how its bytes physically move.
     this.routerFactory = options.routerFactory;
+    this.routerAcquisition = null;
+    this.lifecycleAcquisition = null;
     this.startupServiceLifecycleOwner =
       new StartupServiceLifecycleOwner({
         delegates: {
@@ -142,6 +146,7 @@ class SeedInfrastructurePhase {
    */
   async phaseInfrastructure() {
     const d = this.delegates;
+    d.assertOriginalSeedAttempt();
     const logger = d.getLogger();
     const nodeId = d.getNodeId();
     const config = d.getConfig();
@@ -177,8 +182,7 @@ class SeedInfrastructurePhase {
 
     // Route message-router setup through the shared owner.
     const messageRouter = await this.createSeedMessageRouter(wsPort);
-    d.setMessageRouter(messageRouter);
-    d.setTransport(messageRouter);
+    d.assertOriginalSeedAttempt();
 
     logger.debug(BOOTSTRAP_LOG_MSG.INFRA_READY, {
       nodeId: d.getNodeId(),
@@ -202,20 +206,35 @@ class SeedInfrastructurePhase {
    * @param {number|undefined} wsPort
    * @return {Promise<Object>}
    */
-  async createSeedMessageRouter(wsPort) {
+  createSeedMessageRouter(wsPort) {
+    this.delegates.assertOriginalSeedAttempt();
+    if (this.routerAcquisition) return this.routerAcquisition;
+    const {promise, resolve, reject} = Promise.withResolvers();
+    this.routerAcquisition = promise;
+    this.#initializeSeedMessageRouter(wsPort).then(resolve, reject);
+    return promise;
+  }
+
+  async #initializeSeedMessageRouter(wsPort) {
     const d = this.delegates;
+    d.assertOriginalSeedAttempt();
     let messageRouter;
     try {
       messageRouter = await MessageRouterSetup.create({
         nodeId: d.getNodeId(),
         nodeAddress: d.getNodeAddress(),
         advertisedNodeWsAddress: d.getAdvertisedNodeWsAddress?.() || null,
-        wsPort: wsPort,
+        // Original startup has local routing only until its protected
+        // handoff can authorize public transport admission.
         externalAdmissionEnabled: false,
         bootIncarnation: d.getBootIncarnation(),
         // The router resolves addresses from THIS runtime's cache.
         nodeService: this.nodeService,
         routerFactory: this.routerFactory,
+        retainRouter: (router) => {
+          d.setMessageRouter(router);
+          d.setTransport(router);
+        },
       });
     } catch (error) {
       d.getLogger().error(BOOTSTRAP_LOG_MSG.ROUTER_INIT_FAILED, {
@@ -226,6 +245,7 @@ class SeedInfrastructurePhase {
       });
       throw new Error(BOOTSTRAP_ERROR.routerInitFailed(error.message));
     }
+    d.assertOriginalSeedAttempt();
 
     if (typeof messageRouter.setQueryMessageGroupServiceResolver ===
         'function') {
@@ -243,7 +263,18 @@ class SeedInfrastructurePhase {
    * @return {Promise<void>}
    */
   async initializeUnifiedLifecycleOwners() {
-    await this.startupServiceLifecycleOwner.ensureOwners();
+    this.delegates.assertOriginalSeedAttempt();
+    if (!this.lifecycleAcquisition) {
+      this.lifecycleAcquisition = this.startupServiceLifecycleOwner.ensureOwners();
+    }
+    await this.lifecycleAcquisition;
+    this.delegates.assertOriginalSeedAttempt();
+  }
+
+  async settleAcquisitions() {
+    // Revocation precedes this join at both cleanup entries. No new
+    // acquisition may enter; each acquired object is already retained.
+    await Promise.allSettled([this.routerAcquisition, this.lifecycleAcquisition]);
   }
 
   /**
@@ -252,6 +283,7 @@ class SeedInfrastructurePhase {
    * @return {Promise<void>}
    */
   async triggerBootstrapReconciler(reason) {
+    this.delegates.assertOriginalSeedAttempt();
     await this.startupServiceLifecycleOwner.triggerReconciler(reason);
   }
 
@@ -294,14 +326,19 @@ class SeedInfrastructurePhase {
    */
   queueBootstrapServiceReplica(descriptor, options) {
     const d = this.delegates;
-    const serviceId =
-      descriptor[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
-    d.getBootstrapDesiredServiceDefinitions().set(
-      serviceId, descriptor,
-    );
-    d.getBootstrapReplicaOptionsByServiceId().set(
-      serviceId, options,
-    );
+    const ownedDescriptor = Object.freeze({...descriptor});
+    const admitted = d.admitOriginalSeedReplica(options);
+    const serviceId = ownedDescriptor[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
+    if (serviceId !== admitted.replicaId ||
+        ownedDescriptor[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID] !== admitted.replicaId ||
+        ownedDescriptor[SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE] !== admitted.serviceType) {
+      throw originalAllocationError(ORIGINAL_ALLOCATION_REASON.IDENTITY, serviceId);
+    }
+    const definitions = d.getBootstrapDesiredServiceDefinitions();
+    const replicaOptions = d.getBootstrapReplicaOptionsByServiceId();
+    d.assertOriginalSeedAttempt();
+    definitions.set(serviceId, ownedDescriptor);
+    replicaOptions.set(serviceId, admitted);
   }
 
   /**

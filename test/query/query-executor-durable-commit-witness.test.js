@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {resolvePartitionExecutionBuilders} from
@@ -26,7 +27,6 @@ test('default partition delivery preserves the durable commit witness',
     });
 
     const result = builders.buildSuccessResult({
-      acknowledged: true,
       success: true,
       rows: [],
       changes: 1,
@@ -50,15 +50,14 @@ test('INSERT rendering returns the durable commit witness to the coordinator',
       systemCache: createMockSystemCache(['widgets-p1']),
       messageRouter: {
         async deliver() {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: [],
             changes: 1,
             durableCommitWitness: DURABLE_COMMIT_WITNESS,
             acceptingNodeId: 'node-2',
             acknowledgedAtMs: 1785630280000,
-          };
+          });
         },
       },
     });

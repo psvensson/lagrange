@@ -24,6 +24,14 @@ import {
 } from './constants/entrypoint.js';
 import {HTTP_STATUS, STRING} from './constants/index.js';
 import {resolveRuntimeAddresses} from './entrypoint-runtime-options.js';
+import {reportWaitBoundSpent} from './logging/wait-bound-spent.js';
+
+const AUTO_REJOIN_PROBE_WAIT = Object.freeze({
+  wait: 'AUTO_REJOIN_PROBE_TIMEOUT_MS',
+  awaited: 'auto-rejoin peer probe HTTP response',
+  ABORT_TIMEOUT_ERROR_NAME: 'TimeoutError',
+  RESPONSE_RECEIVED: false,
+});
 
 
 const STARTUP_JOIN_DECISION_SOURCE = Object.freeze({
@@ -243,7 +251,20 @@ async function probeAutoRejoinPeerPath(baseUrl, path) {
       ready: response.ok,
       legacyFallback: response.status === HTTP_STATUS.NOT_FOUND,
     };
-  } catch (_error) {
+  } catch (error) {
+    if (error?.name === AUTO_REJOIN_PROBE_WAIT.ABORT_TIMEOUT_ERROR_NAME) {
+      reportWaitBoundSpent(null, {
+        wait: AUTO_REJOIN_PROBE_WAIT.wait,
+        awaited: AUTO_REJOIN_PROBE_WAIT.awaited,
+        boundMs: ENTRYPOINT_DEFAULT.AUTO_REJOIN_PROBE_TIMEOUT_MS,
+        elapsedMs: ENTRYPOINT_DEFAULT.AUTO_REJOIN_PROBE_TIMEOUT_MS,
+        lastObserved: {
+          peerBaseUrl: baseUrl,
+          path,
+          responseReceived: AUTO_REJOIN_PROBE_WAIT.RESPONSE_RECEIVED,
+        },
+      });
+    }
     return {
       ready: false,
       legacyFallback: false,
@@ -420,7 +441,15 @@ async function resolveStartupJoinDecision(options) {
     });
   }
   if (autoRejoinDecision.mode === STARTUP_JOIN_DECISION_MODE.FAIL) {
-    throw new Error(autoRejoinDecision.error);
+    // Preserve the membership owner's refusal through the public startup
+    // boundary. This is still the same FAIL decision, never recovery authority
+    // or an original-allocation classification supplied by this adapter.
+    const membershipOwnerOutcome = Object.freeze({...autoRejoinDecision.membershipOwnerOutcome});
+    throw Object.assign(new Error(autoRejoinDecision.error), {
+      code: membershipOwnerOutcome.outcomeType,
+      reason: membershipOwnerOutcome.reasonCode,
+      membershipOwnerOutcome,
+    });
   }
   if (autoRejoinDecision.mode !== STARTUP_JOIN_DECISION_MODE.JOIN) {
     return {

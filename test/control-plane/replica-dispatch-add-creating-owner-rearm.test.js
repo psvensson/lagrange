@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   ControlPlaneField,
@@ -347,10 +348,9 @@ test(
               'coordinator_create_delivery' :
               'deferred_duplicate_delivery',
           );
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState() {
           return 'connected';

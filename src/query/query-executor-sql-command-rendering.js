@@ -1,5 +1,11 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {renderSqliteIdentifier} from './sqlite-identifier.js';
+import {
+  affectedRowsField,
+  sumAffectedRowCounts,
+} from './application-database-result.js';
+import {isAppliedWithUnknownCount} from
+  '../partition/partition-write-kernel.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -14,18 +20,21 @@ const {
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
 
+function stringOrNull(value) {
+  return typeof value === LOCAL_STR_STRING ? value : null;
+}
+
 function copyParticipantDisposition(error, result) {
   Object.assign(error, {
-    failureCode: typeof result?.failureCode === LOCAL_STR_STRING ?
-      result.failureCode : null,
+    failureCode: stringOrNull(result?.failureCode),
     committed: result?.committed === true,
-    outcome: typeof result?.outcome === LOCAL_STR_STRING ?
-      result.outcome : null,
-    disposition: typeof result?.disposition === LOCAL_STR_STRING ?
-      result.disposition : null,
+    outcome: stringOrNull(result?.outcome),
+    disposition: stringOrNull(result?.disposition),
     logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
-    entryId: typeof result?.entryId === LOCAL_STR_STRING ?
-      result.entryId : null,
+    entryId: stringOrNull(result?.entryId),
+    // The redelivery owner's report of the wait it spent on an unknown
+    // outcome travels with the typed failure.
+    spentWait: result?.spentWait ?? null,
   });
 }
 
@@ -36,10 +45,12 @@ function buildDistributedMutationResult(
   fanoutMetrics,
 ) {
   const failedResults = results.filter((result) => !result.success);
-  const affectedRows = results.reduce(
-    (sum, result) => sum + (result.success ? result.changes || 0 : 0),
-    0,
-  );
+  const successfulResults = results.filter((result) => result.success);
+  const unknownCount = successfulResults.find(isAppliedWithUnknownCount);
+  const mutationResult = unknownCount === undefined ?
+    affectedRowsField(sumAffectedRowCounts(successfulResults
+      .map((result) => result.changes))) :
+    {settledReplay: unknownCount.settledReplay};
   const rows = results.flatMap((result) =>
     result.success && Array.isArray(result.rows) ? result.rows : [],
   );
@@ -50,7 +61,7 @@ function buildDistributedMutationResult(
     results.every((result) => result.originHlc === originHlc);
   const commonResult = {
     operation,
-    affectedRows,
+    ...mutationResult,
     partitions: partitionIds,
     rows,
     ...(hasSharedOriginHlc ? {originHlc} : {}),
@@ -408,10 +419,9 @@ const queryExecutorSqlCommandMethods = {
     return {
       success: true,
       operation: QUERY_EXECUTOR_LITERAL.STRING_INSERT,
-      affectedRows:
-        typeof result?.changes === QUERY_EXECUTOR_LITERAL.STRING_NUMBER ?
-          result.changes :
-          ast.values.length,
+      ...(isAppliedWithUnknownCount(result) ?
+        {settledReplay: result.settledReplay} :
+        affectedRowsField(sumAffectedRowCounts([result?.changes]))),
       rows: Array.isArray(result.rows) ? result.rows : [],
       partitions: [partitionId],
       durableCommitWitness: result.durableCommitWitness,

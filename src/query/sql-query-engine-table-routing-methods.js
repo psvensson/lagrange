@@ -1,6 +1,11 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SERVICE_READ_LOCALITY} from '../constants/index.js';
 import {SD_COL} from '../wasm-service/wasm-service-models.js';
+import {isSystemTableName} from
+  '../bootstrap/system-table-schema-shared-constants.js';
+import {
+  parseTablePartitionTransition,
+} from '../partition/partition-transition-row.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
@@ -17,7 +22,6 @@ const {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   QUERY_ERROR_MSG,
-  SYSTEM_TABLE_NAME,
   TABLES,
 } = SQL_QUERY_ENGINE_SHARED;
 
@@ -382,33 +386,7 @@ class SQLQueryEngineTableRoutingMethods {
    * @private
    */
   parsePartitionTransition(tableInfo) {
-    if (!tableInfo) {
-      return null;
-    }
-
-    const state = tableInfo.partition_transition_state ??
-      tableInfo.partitionTransitionState ??
-      null;
-    const rawMetadata = tableInfo.partition_transition_metadata ??
-      tableInfo.partitionTransitionMetadata ??
-      null;
-    if (!state || !rawMetadata) {
-      return null;
-    }
-
-    try {
-      const metadata = typeof rawMetadata === 'string' ?
-        JSON.parse(rawMetadata) :
-        rawMetadata;
-      return metadata && typeof metadata === LOCAL_STR_OBJECT ?
-        {
-          state,
-          metadata,
-        } :
-        null;
-    } catch (_parseErr) {
-      return null;
-    }
+    return parseTablePartitionTransition(tableInfo);
   }
 
   /**
@@ -503,7 +481,7 @@ class SQLQueryEngineTableRoutingMethods {
    * @private
    */
   isSystemTable(tableName) {
-    return Object.values(SYSTEM_TABLE_NAME).includes(tableName);
+    return isSystemTableName(tableName);
   }
 
   /**

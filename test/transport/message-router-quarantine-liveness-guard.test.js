@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * CL-007 guard: the ACK-timeout quarantine must not sever a connection to a
  * peer that is demonstrably ALIVE (recent inbound traffic or a recent ACK) —
@@ -94,7 +95,7 @@ test('quarantine is SKIPPED when the peer shows recent inbound activity',
       {type: 'TEST'},
     );
 
-    t.equal(result.acknowledged, false,
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
       'the timed-out message itself must still fail');
     const current = router.nodeConnections.get(PEER_NODE_ID);
     t.equal(current, connection,
@@ -119,7 +120,7 @@ test('quarantine is SKIPPED when the peer recently ACKed (lastAckAt)',
       {type: 'TEST'},
     );
 
-    t.equal(result.acknowledged, false,
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
       'the timed-out message itself must still fail');
     t.equal(router.nodeConnections.get(PEER_NODE_ID), connection,
       'a recent ACK is liveness evidence — connection preserved');
@@ -198,7 +199,7 @@ test('quarantine still fires when the peer has NO recent liveness evidence',
       {type: 'TEST'},
     );
 
-    t.equal(result.acknowledged, false, 'delivery fails on ACK timeout');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false, 'delivery fails on ACK timeout');
     const current = router.nodeConnections.get(PEER_NODE_ID);
     t.not(current, connection,
       'a silent peer must still be quarantined (connection replaced)');

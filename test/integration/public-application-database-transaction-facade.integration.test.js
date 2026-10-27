@@ -7,8 +7,9 @@
  * nodes) is BLOCKED, see finding F-TX-REPLICATED-APPLY (quest
  * distributed-transaction-replicated-apply): a committed transaction's rows
  * exist only on the replica that staged them, because followers applying the
- * TRANSACTION_COMMIT marker never run its operations. Nothing here asserts or
- * implies visibility, durability or atomicity on any other replica.
+ * participant decision used by that historical implementation did not apply
+ * the staged operations on followers. Nothing here asserts or implies
+ * visibility, durability or atomicity on any other replica.
  *
  * The application (test/integration/helpers/embedded-node-worker.js, public
  * package entry only) runs on ONE embedded runtime
@@ -51,8 +52,9 @@ import {
 } from './helpers/public-application-database-shape.js';
 
 const APPLICATION_ID = 'public-seam-transactions';
-const TRANSACTION_ALREADY_ACTIVE_MESSAGE =
-  'Transaction already active on this partition';
+const PARTICIPANT_ALREADY_ACTIVE_MESSAGE =
+  'Participant transaction request refused: ' +
+  'participant_transaction_already_active';
 const ERROR_CODE = Object.freeze({
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   TRANSACTION_CONTROL_RESERVED: 'TRANSACTION_CONTROL_RESERVED',
@@ -213,9 +215,9 @@ test('public application database transaction facade semantics (single runtime, 
   // FINDING F-2PC-CONCURRENT-PARTICIPANT (witness, asserts the CURRENT
   // defect; flips when the owner fixes it): the brief expects two concurrent
   // top-level transactions on disjoint ids to commit independently. Today a
-  // partition replica admits ONE open transaction on its single SQLite
-  // connection (PartitionServiceTransactionBase.beginTransaction refuses a
-  // second session with TRANSACTION_ALREADY_ACTIVE), the refusal reaches the
+  // partition replica admits one active participant staging session, so the
+  // current participant owner refuses a second session with
+  // participant_transaction_already_active; the refusal reaches the
   // application as an untyped INTERNAL_ERROR (not retryable, not deferred),
   // and the contract in architecture/process-replication.md (snapshot
   // isolation, first-committer-wins at prepare) is not what runs. The loser
@@ -241,7 +243,7 @@ test('public application database transaction facade semantics (single runtime, 
     t.equal(exposedProperty(loser.transaction.value, 'code'),
       ERROR_CODE.INTERNAL_ERROR, 'the refusal is an untyped INTERNAL_ERROR');
     t.equal(exposedProperty(loser.transaction.value, 'message'),
-      TRANSACTION_ALREADY_ACTIVE_MESSAGE);
+      PARTICIPANT_ALREADY_ACTIVE_MESSAGE);
     t.equal(exposedProperty(loser.transaction.value, 'deferred'), false,
       'and is not marked deferred');
     t.equal(exposedProperty(loser.transaction.value, 'retryAfterMs'), null,

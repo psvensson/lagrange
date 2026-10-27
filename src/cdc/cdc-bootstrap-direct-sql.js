@@ -8,6 +8,12 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {submitRoutedMutationHop} from './cdc-terminal-gate.js';
+import {
+  classifyPartitionStatementHead,
+  statementRefusalError,
+} from '../partition/partition-statement-admission.js';
+import {PARTITION_STATEMENT_KIND} from
+  '../partition/partition-statement-admission-constants.js';
 
 const {
   CDC_INTEGRATION_SERVICE_LITERAL,
@@ -92,9 +98,15 @@ async function executeBootstrapDirectSql(service, sql, params = []) {
       sql: sql.substring(0, Math.min(sql.length, NUM.HUNDRED)),
     },
   );
-  const isSelect = sql.trim().toUpperCase().startsWith('SELECT');
-
-  if (isSelect) {
+  // The statement-admission owner's head rule picks the lane: a SELECT head
+  // reads locally; any other admitted head takes the write lanes, both of
+  // which admit it through the same owner (a WITH is decided there by its
+  // compiled flags); an unadmitted head is refused before any lane.
+  const head = classifyPartitionStatementHead(sql);
+  if (!head.admitted) {
+    throw statementRefusalError(head);
+  }
+  if (head.kind === PARTITION_STATEMENT_KIND.READ) {
     const result = await submitRoutedMutationHop(service,
       CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
       () => partitionService.executeLocalQuery(sql, params));

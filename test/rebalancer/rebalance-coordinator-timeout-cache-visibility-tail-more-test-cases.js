@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests} from './rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
@@ -50,7 +51,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
           getOutboundPressureSummary() {
             return {backpressured: true};
@@ -132,7 +133,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -192,7 +193,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -265,7 +266,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -329,7 +330,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -407,7 +408,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -593,7 +594,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -881,7 +882,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: TEST_DISPATCH_STATUS};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: TEST_DISPATCH_STATUS});
           },
         },
         tablePolicyService: {
@@ -1042,7 +1043,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -1100,7 +1101,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       tablePolicyService: {
@@ -1168,7 +1169,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
