@@ -10,7 +10,10 @@ import {
   TABLES,
 } from '../../constants/index.js';
 import {NODE_STATE} from '../../constants/node-state.js';
-import {RAFT_ROLE} from '../../raft/constants.js';
+import {
+  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
+  resolveCanonicalPartitionLeaderObservation,
+} from '../../query/canonical-leader-routing.js';
 import {AuthoritativeControlPlaneView} from
   '../../control-plane/authoritative-control-plane-view.js';
 import {
@@ -638,29 +641,45 @@ class BootstrapJoinAdmissionOwner {
       partition.table_id === tableName || partition.table_name === tableName,
     ) || [];
 
-    if (partitions.length === 0) {
+    // Contract is explicitly scoped to single-partition tables.
+    if (partitions.length !== 1) {
       return null;
     }
 
     const partition = partitions[0];
-    const services = systemTableCache.filter(TABLES.SERVICES, (service) =>
-      service[COLUMN.PARTITION_ID] === partition[COLUMN.PARTITION_ID] &&
-      service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-      service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
+    const partitionId = partition[COLUMN.PARTITION_ID];
+    const serviceRows = systemTableCache.filter(TABLES.SERVICES, (service) =>
+      service[COLUMN.PARTITION_ID] === partitionId &&
+      service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION,
     ) || [];
+    const leaderObservation = resolveCanonicalPartitionLeaderObservation({
+      partition,
+      partitionPresent: true,
+      serviceRows,
+    });
+    if (
+      leaderObservation.state !==
+        CANONICAL_PARTITION_LEADER_OBSERVATION_STATE.AVAILABLE ||
+      !leaderObservation.leaderNodeId
+    ) {
+      return null;
+    }
 
-    if (services.length === 0) {
+    const leaderService = serviceRows.find((service) =>
+      service[COLUMN.NODE_ID] === leaderObservation.leaderNodeId &&
+      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
+    ) || null;
+    if (!leaderService) {
       return null;
     }
 
     return {
-      partitionId: partition[COLUMN.PARTITION_ID],
+      partitionId,
       tableName,
-      leaderNodeId: services[0][COLUMN.NODE_ID],
-      replicaId: services[0][COLUMN.REPLICA_ID] ||
-        services[0][COLUMN.SERVICE_ID],
-      address: services[0][COLUMN.ADDRESS],
+      leaderNodeId: leaderObservation.leaderNodeId,
+      replicaId: leaderService[COLUMN.REPLICA_ID] ||
+        leaderService[COLUMN.SERVICE_ID],
+      address: leaderService[COLUMN.ADDRESS],
     };
   }
 

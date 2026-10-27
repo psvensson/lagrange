@@ -104,6 +104,7 @@ class TablePolicyService extends EventEmitter {
 
     // Local policy cache for performance
     this.policyCache = new Map();
+    this.committedPolicyFences = new Map();
     this.cacheTTLMs = config.get(CONFIG_KEY.POLICY_CACHE_TTL_MS) || POLICY_DEFAULT.CACHE_TTL_MS;
 
     this.initialized = false;
@@ -135,6 +136,26 @@ class TablePolicyService extends EventEmitter {
     };
   }
 
+  applyCommittedPolicyFence(tableId, row) {
+    const fence = this.committedPolicyFences.get(tableId);
+    if (!fence) {
+      return row;
+    }
+    if (
+      row &&
+      (row.table_policies ?? null) === fence.previousTablePolicies &&
+      (row.updated_at ?? null) === fence.previousUpdatedAt
+    ) {
+      return {
+        ...row,
+        table_policies: fence.table_policies,
+        updated_at: fence.updated_at,
+      };
+    }
+    this.committedPolicyFences.delete(tableId);
+    return row;
+  }
+
   /**
    * Lookup one table row from the local system cache.
    * @param {string} tableId - Table ID.
@@ -146,22 +167,21 @@ class TablePolicyService extends EventEmitter {
       return null;
     }
 
+    let row = null;
     if (typeof this.systemTableCache.filter === 'function') {
       const rows = this.systemTableCache.filter(
         TABLES.TABLES,
         (table) => table?.table_id === tableId || table?.tableId === tableId,
       );
-      return rows[0] || null;
-    }
-
-    if (typeof this.systemTableCache.getAll === 'function') {
+      row = rows[0] || null;
+    } else if (typeof this.systemTableCache.getAll === 'function') {
       const rows = this.systemTableCache.getAll(TABLES.TABLES) || [];
-      return rows.find((table) =>
+      row = rows.find((table) =>
         table?.table_id === tableId || table?.tableId === tableId,
       ) || null;
     }
 
-    return null;
+    return this.applyCommittedPolicyFence(tableId, row);
   }
 
   /**
@@ -208,7 +228,13 @@ class TablePolicyService extends EventEmitter {
 
     // Check local cache first
     const cached = this.policyCache.get(tableId);
-    if (cached && this.now() - cached.timestamp < this.cacheTTLMs) {
+    const cachedTableRow = this.lookupCachedTable(tableId);
+    if (
+      cached &&
+      this.now() - cached.timestamp < this.cacheTTLMs &&
+      (!cachedTableRow ||
+        (cachedTableRow.table_policies ?? null) === cached.rawTablePolicies)
+    ) {
       return cached.policy;
     }
 
@@ -228,6 +254,7 @@ class TablePolicyService extends EventEmitter {
     // Update cache
     this.policyCache.set(tableId, {
       policy: mergedPolicy,
+      rawTablePolicies: table.table_policies ?? null,
       timestamp: this.now(),
     });
 
@@ -361,21 +388,32 @@ class TablePolicyService extends EventEmitter {
     });
 
     try {
+      const serializedPolicy = JSON.stringify(updatedStoredPolicy);
+      const updatedAt = Date.now();
       // Update via CDC integration service
       const mutationResult = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName: TABLES.TABLES,
         whereClause: {table_id: tableId},
         data: {
-          table_policies: JSON.stringify(updatedStoredPolicy),
-          updated_at: Date.now(),
+          table_policies: serializedPolicy,
+          updated_at: updatedAt,
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
         deliveryPriority: LOCAL_STR_CRITICAL,
+        expectedCacheFields: {table_policies: serializedPolicy},
+        minimumCacheFields: {updated_at: updatedAt},
       });
 
       requireConfirmedSingleRowMutation(mutationResult, POLICY_MUTATION_CONFIRMATION);
+
+      this.committedPolicyFences.set(tableId, {
+        previousTablePolicies: table?.table_policies ?? null,
+        previousUpdatedAt: table?.updated_at ?? null,
+        table_policies: serializedPolicy,
+        updated_at: updatedAt,
+      });
 
       // Invalidate cache
       this.policyCache.delete(tableId);
@@ -636,6 +674,7 @@ class TablePolicyService extends EventEmitter {
    */
   clearCache() {
     this.policyCache.clear();
+    this.committedPolicyFences.clear();
     this.logger.debug(POLICY_LOG_MSG.POLICY_CACHE_CLEARED);
   }
 
@@ -645,6 +684,7 @@ class TablePolicyService extends EventEmitter {
    */
   invalidateCache(tableId) {
     this.policyCache.delete(tableId);
+    this.committedPolicyFences.delete(tableId);
     this.logger.debug(POLICY_LOG_MSG.POLICY_CACHE_INVALIDATED, {tableId});
   }
 

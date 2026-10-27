@@ -32,6 +32,8 @@ test('BootstrapService waits for local query transport readiness before publishi
 
     let transportReady = false;
     let heartbeatSent = 0;
+    let capturedCapabilities = null;
+    let capturedOptions = null;
     const sleepDelays = [];
 
     const service = new BootstrapService({
@@ -54,8 +56,10 @@ test('BootstrapService waits for local query transport readiness before publishi
       },
     };
     service.heartbeatService = {
-      sendHeartbeat: async () => {
+      sendHeartbeat: async (_stats, capabilities, options) => {
         heartbeatSent += 1;
+        capturedCapabilities = capabilities;
+        capturedOptions = options;
       },
     };
     service.sleep = async (delayMs) => {
@@ -94,6 +98,12 @@ test('BootstrapService waits for local query transport readiness before publishi
 
     t.equal(heartbeatSent, 1,
       'seed ready heartbeat should be published once the local query transport becomes ready');
+    t.same(capturedCapabilities, [
+      'partition_replica',
+      'message_group_replica',
+    ], 'seed ready heartbeat publishes canonical node capabilities');
+    t.same(capturedOptions, {requireDurableVisibility: true},
+      'seed ready heartbeat requires durable visibility completion');
     t.same(sleepDelays, [1],
       'seed ready publication should back off before the first heartbeat when local query transport is deferred');
   });

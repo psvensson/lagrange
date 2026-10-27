@@ -1,3 +1,6 @@
+import path from 'path';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+import {STORAGE_CONFIG_KEY} from '../storage/storage-constants.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {requireIssuedBootIncarnation} from './boot-incarnation-contract.js';
 import {
@@ -62,6 +65,22 @@ const {
   uuidv4,
 } = NODE_JOINING_SERVICE_SHARED;
 
+function resolveNodeJoiningDataDir(options, nodeId) {
+  if (typeof options.dataDir === 'string' && options.dataDir.length > 0) {
+    return options.dataDir;
+  }
+  const config = ConfigurationManager.getInstance();
+  const configuredDataDir = config.get(STORAGE_CONFIG_KEY.DATA_DIR);
+  if (
+    typeof configuredDataDir === 'string' &&
+    configuredDataDir.length > 0 &&
+    configuredDataDir !== STORAGE_DEFAULT.DATA_DIR
+  ) {
+    return path.join(configuredDataDir, 'nodes', nodeId);
+  }
+  return STORAGE_DEFAULT.DATA_DIR;
+}
+
 class NodeJoiningOwnerConstruction extends EventEmitter {
   constructor(options = {}) {
     // A node lifecycle owner is valid only for one explicitly established
@@ -98,7 +117,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     // update carries it so receivers fence stale writers.
     this.bootIncarnation = bootIncarnation;
     this.wsPort = options.wsPort ?? null;
-    this.dataDir = options.dataDir || STORAGE_DEFAULT.DATA_DIR;
+    this.dataDir = resolveNodeJoiningDataDir(options, this.nodeId);
     this.config = {...JOINING_DEFAULT, ...options.config};
     this.config.replicaStaggerDelayMs = Number.isFinite(
       this.config.replicaStaggerDelayMs,

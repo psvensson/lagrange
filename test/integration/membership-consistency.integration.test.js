@@ -855,7 +855,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 15000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,

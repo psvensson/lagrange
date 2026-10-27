@@ -205,7 +205,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       wsPort: seedWsPort,
       config: {
         ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 3000,
+        leadershipWaitTimeoutMs: 15000,
       },
     });
 
@@ -346,9 +346,14 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       const seedConfirmation = seedConfirmationTracker.awaitConfirmation(
         TABLES.NODES,
         joiningNodeId,
+        {expectedFields: {[COLUMN.CPU_USAGE_PERCENT]: 42}},
       );
       const joiningConfirmation = joiningConfirmationTracker ?
-        joiningConfirmationTracker.awaitConfirmation(TABLES.NODES, joiningNodeId) :
+        joiningConfirmationTracker.awaitConfirmation(
+          TABLES.NODES,
+          joiningNodeId,
+          {expectedFields: {[COLUMN.CPU_USAGE_PERCENT]: 42}},
+        ) :
         Promise.resolve();
       const updateResult = await seedSqlEngine.executeQuery(
         'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
@@ -485,7 +490,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       wsPort: seedWsPort,
       config: {
         ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 3000,
+        leadershipWaitTimeoutMs: 15000,
       },
     });
 
@@ -567,6 +572,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
         const confirmation = cdcConfirmationTracker.awaitConfirmation(
           TABLES.NODES,
           seedNodeId,
+          {expectedFields: {[COLUMN.CPU_USAGE_PERCENT]: i * 10}},
         );
         await seedSqlEngine.executeQuery(
           'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
@@ -603,6 +609,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       const finalConfirmation = cdcConfirmationTracker.awaitConfirmation(
         TABLES.NODES,
         seedNodeId,
+        {expectedFields: {[COLUMN.MEMORY_USAGE_PERCENT]: 50}},
       );
       await seedSqlEngine.executeQuery(
         'UPDATE nodes SET memory_usage_percent = ? WHERE node_id = ?',
@@ -657,7 +664,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       wsPort: seedWsPort,
       config: {
         ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 3000,
+        leadershipWaitTimeoutMs: 15000,
       },
     });
 

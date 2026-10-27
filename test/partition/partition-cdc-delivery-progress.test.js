@@ -15,6 +15,12 @@ import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND,
   PARTITION_CDC_OBLIGATION_DRIVE_STATE, PARTITION_CDC_OBLIGATION_REASON,
   PARTITION_CDC_OBLIGATION_SQL} from
   '../../src/partition/partition-cdc-obligation-constants.js';
+import {
+  OBLIGATION_RETRY_DISPOSITION,
+  scheduleDeliveryRetry,
+} from '../../src/partition/partition-cdc-obligation-delivery.js';
+import {PARTITION_SERVICE_DEFAULT} from '../../src/partition/partition-service-constants.js';
+import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {CDC_TABLE as TABLE, applyCommitted, awaitProposal, clearFixtureSingletons, committedQueryOf,
   resetFixtureSingletons, settleTicks, shutdownAll, startLeader, track} from
@@ -243,3 +249,116 @@ test('source reads one payload per await while keeping its 256-visit quantum and
     assert.equal(observed.reads.every((read) => read.limit === 1 && read.count <= 1), true);
     assertOwedWithoutAck(f, quantum + 2);
   });
+
+test('435 owed obligations make bounded progress across explicit retry dispositions ' +
+  'without starving a concurrent TablePolicyService update', async (t) => {
+  const rows = Array.from({length: 435}, (_unused, index) => `ob-${index}`);
+  const f = await fixture(t, {rows, subscribers: 1});
+  const delivery = f.leader.cdcDelivery;
+  const initialDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+
+  // Verify explicit retry dispositions:
+  // 1. Genuine transient failure -> bounded exponential backoff
+  const d1 = scheduleDeliveryRetry(
+    delivery, new Error('transient'), OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE);
+  const lane = delivery.obligationLane;
+  assert.equal(d1, initialDelay);
+  assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE);
+  assert.equal(lane.retryDelayMs, initialDelay * 2,
+    'transient failure doubles retryDelayMs');
+  // 2. No pending work -> disarm retry and reset delay
+  assert.equal(
+    scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK),
+    0,
+  );
+  assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
+  assert.equal(lane.retryTimer.state, 'idle');
+  assert.equal(lane.retryDelayMs, initialDelay);
+  // 3. Subscriber/acknowledgement backpressure -> respect retry hint without doubling
+  const backpressureDelay = scheduleDeliveryRetry(
+    delivery,
+    {reason: 'backpressure', retryAfterMs: 12},
+    OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE,
+  );
+  assert.equal(backpressureDelay, 12);
+  assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
+  assert.equal(lane.retryDelayMs, initialDelay,
+    'backpressure respects hint without doubling retryDelayMs');
+  scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
+  // 4. Stale propagation lifetime -> refuse and disarm; never resume retired work
+  assert.equal(
+    scheduleDeliveryRetry(
+      delivery,
+      {stalePropagationLifetime: true},
+      OBLIGATION_RETRY_DISPOSITION.STALE_LIFETIME,
+    ),
+    0,
+  );
+  assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.STALE_LIFETIME);
+  assert.equal(lane.retryTimer.state, 'idle');
+
+  // 5. Drive 435 obligations with committed receipts and contend on the 10th obligation
+  // while committing a TablePolicyService update.
+  const cachedTables = new Map([
+    ['user_events', {table_id: 'user_events', table_policies: '{}', updated_at: 100}],
+  ]);
+  const policyService = new TablePolicyService({
+    systemTableCache: {
+      filter: (_tableName, predicate) => [...cachedTables.values()].filter(predicate),
+    },
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      executeRead: async ({readFromCache}) => ({rows: readFromCache()}),
+      submitMutation: async (mutation, options) => {
+        assert.deepEqual(options.expectedCacheFields, {
+          table_policies: mutation.data.table_policies,
+        });
+        assert.deepEqual(options.minimumCacheFields, {
+          updated_at: mutation.data.updated_at,
+        });
+        return {
+          success: true,
+          outcome: 'applied',
+          partitionResult: {affectedRows: 1},
+        };
+      },
+    },
+  });
+
+  f.behavior = (_index, event, context, groupId) => {
+    if (event.data.id === 'ob-9') {
+      context.markContended();
+    }
+    return recipientAnswer(event, groupId, true);
+  };
+
+  const firstDrive = await f.drive();
+  assert.equal(firstDrive.state, DRIVE.PAGE_YIELDED,
+    'contended obligation drive yields fairly after progress');
+  assert.equal(firstDrive.delivered, 10);
+  assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED);
+  assert.equal(lane.retryDelayMs, initialDelay,
+    'page yield after progress keeps initial continuation delay without backoff');
+
+  // Commit policy update while the 435-obligation lane is yielded between slices;
+  // verify immediate read-your-writes visibility without starvation.
+  await policyService.updateTablePolicy('user_events', {
+    mergeStorageThreshold: 1,
+    mergeTrafficThreshold: 0,
+  });
+  const visiblePolicy = await policyService.getTablePolicy('user_events');
+  assert.equal(visiblePolicy.mergeStorageThreshold, 1);
+  assert.equal(visiblePolicy.mergeTrafficThreshold, 0);
+
+  // Continue draining the remaining 425 obligations across bounded 256-row pages.
+  const secondDrive = await f.drive();
+  assert.equal(secondDrive.state, DRIVE.PAGE_YIELDED);
+  assert.equal(secondDrive.delivered, 256);
+  assert.equal(lane.retryDelayMs, initialDelay);
+
+  const thirdDrive = await f.drive();
+  assert.equal(thirdDrive.state, DRIVE.DRAINED);
+  assert.equal(thirdDrive.delivered, 435 - 10 - 256);
+  assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
+  assert.equal(f.calls.length, 435);
+});

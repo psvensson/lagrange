@@ -182,6 +182,7 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
   let closed = false;
   let refusal = null;
   let timeoutId = null;
+  let contended = false;
 
   const closeIfSettled = () => {
     if (closed || !dispatchClosed || childCount !== 0) return;
@@ -258,6 +259,10 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
     ownChild,
     run,
     retire,
+    markContended: () => {
+      contended = true;
+    },
+    isContended: () => contended,
     signal: controller.signal,
     cleanup: cleanup.promise,
     remainingMs: () => {

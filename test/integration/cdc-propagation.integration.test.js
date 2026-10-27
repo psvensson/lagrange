@@ -157,6 +157,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
       const confirmation = cdcConfirmationTracker.awaitConfirmation(
         TABLES.NODES,
         seedNodeId,
+        {expectedFields: {[COLUMN.STORAGE_BUDGET_BYTES]: testBudgetBytes}},
       );
       const updateResult = await sqlQueryEngine.executeQuery(
         'UPDATE nodes SET storage_budget_bytes = ? WHERE node_id = ?',
@@ -253,6 +254,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
       const confirmation = cdcConfirmationTracker.awaitConfirmation(
         TABLES.NODES,
         seedNodeId,
+        {expectedFields: {[COLUMN.STORAGE_BUDGET_SOURCE]: testBudgetSource}},
       );
 
       const updateResult = await sqlQueryEngine.executeQuery(
@@ -352,6 +354,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
         const confirmation = cdcConfirmationTracker.awaitConfirmation(
           TABLES.NODES,
           seedNodeId,
+          {expectedFields: {[COLUMN.STORAGE_BUDGET_BYTES]: budgetValue}},
         );
         const updateResult = await sqlQueryEngine.executeQuery(
           'UPDATE nodes SET storage_budget_bytes = ? WHERE node_id = ?',
@@ -469,6 +472,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
       const confirmation = cdcConfirmationTracker.awaitConfirmation(
         TABLES.NODES,
         seedNodeId,
+        {expectedFields: {[COLUMN.STORAGE_BUDGET_BYTES]: testBudgetBytes}},
       );
       const updateResult = await sqlQueryEngine.executeQuery(
         'UPDATE nodes SET storage_budget_bytes = ? WHERE node_id = ?',

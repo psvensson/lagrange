@@ -77,19 +77,28 @@ function assertRequiredString(value, errorMessage) {
   }
 }
 
-function resolvePartitionRaftRole(service) {
-  const isLeader = service?.isLeader === true ||
+function isLeaderPartitionService(service) {
+  return service?.isLeader === true ||
     (typeof service?.isLeaderReplica === 'function' &&
       service.isLeaderReplica());
-  if (isLeader) {
-    return RAFT_ROLE.LEADER;
+}
+
+function resolvePartitionRaftRole(service) {
+  if (isLeaderPartitionService(service)) {
+    return normalizePublishedRaftRole(RAFT_ROLE.LEADER, {
+      collapseLeaderToFollower: true,
+    });
   }
 
   if (typeof service?.getRole === 'function') {
-    return normalizePublishedRaftRole(service.getRole());
+    return normalizePublishedRaftRole(service.getRole(), {
+      collapseLeaderToFollower: true,
+    });
   }
 
-  return normalizePublishedRaftRole(service?.role);
+  return normalizePublishedRaftRole(service?.role, {
+    collapseLeaderToFollower: true,
+  });
 }
 
 function partitionCreateOwnershipError(code, replicaId, cause = null) {
@@ -248,11 +257,13 @@ class PartitionServiceRowOwner {
     };
   }
 
-  async publishCanonicalLeaderNodeId(row) {
+  async publishCanonicalLeaderNodeId(row, service = null) {
+    const isLeader = isLeaderPartitionService(service) ||
+      row?.raft_role === RAFT_ROLE.LEADER;
     if (!row ||
         row.service_type !== SERVICE_TYPE.PARTITION ||
         row.status !== SERVICE_STATUS.ACTIVE ||
-        row.raft_role !== RAFT_ROLE.LEADER ||
+        !isLeader ||
         !this.systemTableWriter ||
         typeof this.systemTableWriter.updateSystemTableRow !== 'function') {
       return;
@@ -316,7 +327,7 @@ class PartitionServiceRowOwner {
       );
     }
     const registrationEvidence = sealPartitionRegistrationEvidence(row);
-    await this.publishCanonicalLeaderNodeId(row);
+    await this.publishCanonicalLeaderNodeId(row, options.service);
 
     return registrationEvidence;
   }
@@ -363,7 +374,7 @@ class PartitionServiceRowOwner {
         options.partitionId,
       ),
     });
-    await this.publishCanonicalLeaderNodeId(row);
+    await this.publishCanonicalLeaderNodeId(row, options.service);
     return row;
   }
 }

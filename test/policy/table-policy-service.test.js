@@ -13,18 +13,17 @@ import {
   STORAGE_PLACEMENT_DEFAULT,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 
+function lookupMockRow(collection, id) {
+  const row = id ? collection?.[id] : null;
+  return {rows: row ? [row] : []};
+}
+
 // Mock SQL query engine
 function createMockSqlEngine(data = {}) {
   return {
     executeQuery: async (sql, params) => {
-      if (sql.includes('FROM tables') && params?.[0]) {
-        const table = data.tables?.[params[0]] || null;
-        return {rows: table ? [table] : []};
-      }
-      if (sql.includes('FROM partitions') && params?.[0]) {
-        const partition = data.partitions?.[params[0]] || null;
-        return {rows: partition ? [partition] : []};
-      }
+      if (sql.includes('FROM tables')) return lookupMockRow(data.tables, params?.[0]);
+      if (sql.includes('FROM partitions')) return lookupMockRow(data.partitions, params?.[0]);
       return {rows: []};
     },
   };
@@ -883,3 +882,61 @@ test('TablePolicyService - message group policy cache works',
       'After clearCache should query SQL engine again');
     t.end();
   });
+
+test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
+  'and refreshes cached policy when systemTableCache advances', async (t) => {
+  const tableRow = {
+    table_id: 'table-fence',
+    table_policies: '{}',
+    updated_at: 1000,
+  };
+  let capturedOptions = null;
+  const service = new TablePolicyService({
+    systemTableCache: {
+      filter: (_tableName, predicate) => [tableRow].filter(predicate),
+    },
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      executeRead: async ({readFromCache}) => ({rows: readFromCache()}),
+      submitMutation: async (_mutation, options) => {
+        capturedOptions = options;
+        // Simulate CDC cache update lagging behind durable commit completion.
+        return {
+          success: true,
+          outcome: 'applied',
+          partitionResult: {affectedRows: 1},
+        };
+      },
+    },
+  });
+
+  // Prime policyCache with pre-update default policy.
+  const initialPolicy = await service.getTablePolicy('table-fence');
+  t.equal(initialPolicy.replicaCount, 3);
+
+  await service.updateTablePolicy('table-fence', {
+    replicaCount: 5,
+    mergeStorageThreshold: 1,
+    mergeTrafficThreshold: 0,
+  });
+  t.ok(capturedOptions?.expectedCacheFields?.table_policies,
+    'submitMutation receives expectedCacheFields.table_policies');
+  t.ok(Number.isFinite(capturedOptions?.minimumCacheFields?.updated_at),
+    'submitMutation receives minimumCacheFields.updated_at');
+
+  // Even before systemTableCache receives the CDC event, getTablePolicy
+  // must return the newly committed policy and never cache the stale pre-update row.
+  const fencedPolicy = await service.getTablePolicy('table-fence');
+  t.equal(fencedPolicy.replicaCount, 5);
+  t.equal(fencedPolicy.mergeStorageThreshold, 1);
+  t.equal(fencedPolicy.mergeTrafficThreshold, 0);
+
+  // When systemTableCache subsequently advances to a newer policy, getTablePolicy
+  // observes the newer table_policies instead of serving a stale cached entry.
+  tableRow.table_policies = JSON.stringify({replicaCount: 7});
+  tableRow.updated_at = Date.now() + 1000;
+  const advancedPolicy = await service.getTablePolicy('table-fence');
+  t.equal(advancedPolicy.replicaCount, 7,
+    'policyCache invalidates when systemTableCache table_policies advances');
+  t.end();
+});
