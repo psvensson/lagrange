@@ -1,0 +1,27 @@
+// Read-only release-audit witness. Run with cwd set to lagrange-review.
+import {pathToFileURL} from 'node:url';
+const root = pathToFileURL(`${process.cwd()}/`);
+const {PartitionNodeCluster} = await import(new URL('test/raft/raft-rs-backend/partition-node-cluster.js', root));
+const {RaftRsDurableStore} = await import(new URL('src/raft/raft-rs-durable-store.js', root));
+const stores = new Set();
+const originalRecord = RaftRsDurableStore.prototype.record;
+RaftRsDurableStore.prototype.record = function (...args) {
+  stores.add(this);
+  return originalRecord.apply(this, args);
+};
+const cluster = new PartitionNodeCluster({partitionId: 'release-audit-journal', replicaIds: ['audit-a']});
+try {
+  await cluster.node('audit-a').campaign();
+  const store = [...stores][0];
+  const samples = [{proposals: 0, journalRecords: store.journal.length}];
+  for (let i = 1; i <= 2000; i++) {
+    const answer = await cluster.propose('audit-a', {i});
+    if (answer.outcome !== 'CORE_OK') throw new Error(JSON.stringify(answer));
+    if (i % 500 === 0) samples.push({proposals: i, journalRecords: store.journal.length,
+      appliedIndex: store.readDurableProgress('release-audit-journal').appliedIndex});
+  }
+  console.log(JSON.stringify({node: process.version, nativeOperationPort: true, samples}, null, 2));
+} finally {
+  await cluster.dispose();
+  RaftRsDurableStore.prototype.record = originalRecord;
+}

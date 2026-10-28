@@ -1,0 +1,63 @@
+import {writeFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+import {BootstrapAPI} from '../lagrange-review/src/bootstrap/bootstrap-api.js';
+import {BOOTSTRAP_API_ROUTE} from '../lagrange-review/src/bootstrap/bootstrap-api-constants.js';
+import {createEmptySystemTableCache, initializeTestEnvironment} from '../lagrange-review/test/bootstrap/bootstrap-api-test-fixtures.js';
+import {SERVICE_TYPE, SERVICE_STATUS} from '../lagrange-review/src/constants/index.js';
+
+initializeTestEnvironment();
+const mutations = [];
+const api = new BootstrapAPI({
+  seedNodeId: 'audit-seed',
+  seedNodeAddress: 'ws://private-seed.example:8082',
+  systemTableCache: createEmptySystemTableCache(),
+  sqlQueryEngine: {async executeQuery() {return {success: true, rows: [], affectedRows: 1};}},
+  controlPlaneSystemTableGateway: {
+    async readAuthoritativeRows() {return {success: true, rows: []};},
+    async submitMutation(mutation) {mutations.push(mutation); return {success: true, affectedRows: 1};},
+  },
+  requestCellEnv: {
+    PGWIRE_AUTH_USER: 'audit-user',
+    PGWIRE_AUTH_PASSWORD: 'audit-test-credential',
+    PGWIRE_AUTH_DATABASE: 'audit-db',
+  },
+  cdcIntegrationService: null,
+});
+
+const outcomes = [];
+try {
+  await api.initialize(0, {listen: false});
+  for (const request of [
+    {method: 'GET', url: '/application-example'},
+    {method: 'GET', url: BOOTSTRAP_API_ROUTE.CLUSTER_STATE},
+    {method: 'POST', url: BOOTSTRAP_API_ROUTE.BOOTSTRAP, payload: {}},
+    {method: 'POST', url: BOOTSTRAP_API_ROUTE.REGISTER_SERVICE, payload: {
+      service_id: 'audit-untrusted-replica',
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: 'audit-untrusted-node',
+      group_id: 'mg-audit-untrusted-node',
+      replica_id: 'audit-untrusted-replica',
+      status: SERVICE_STATUS.STOPPED,
+      address: 'audit-untrusted-node/message-group/audit-untrusted-replica',
+    }},
+  ]) {
+    const response = await api.getFastify().inject(request);
+    outcomes.push({method: request.method, url: request.url, authenticationHeader: false,
+      status: response.statusCode, body: response.json()});
+  }
+} finally {
+  await api.shutdown();
+}
+const evidence = {
+  release: 'a1e26f6de84433a3913c2ef855d1b787e926d7eb',
+  scope: 'Real BootstrapAPI and Basic authenticator with Fastify injection. Storage gateway is a spy; proves unauthenticated dispatch reaches a services mutation, not a live-cluster durability claim.',
+  outcomes, mutations,
+};
+assert.equal(outcomes[0].status, 401);
+assert.equal(outcomes[1].status, 200);
+assert.equal(outcomes[2].status, 400);
+assert.equal(outcomes[3].status, 200);
+assert.equal(mutations.length, 1);
+assert.equal(mutations[0].tableName, 'services');
+writeFileSync(new URL('./http-auth-boundary-witness.json', import.meta.url), JSON.stringify(evidence, null, 2) + '\n');
+console.log(JSON.stringify(evidence, null, 2));
