@@ -354,6 +354,14 @@ CDC-maintained maintenance.
 
 Historical notes lean async for 0.3, but that is not a sealed decision.
 
+The [2026-10-28 maintenance research](global-index-maintenance-research.md)
+records a newer provisional synchronous lean for ordinary SQL, current TX1/CDC
+source evidence, workload tradeoffs and a bounded decision experiment.
+**R2 remains unsealed.** Compare both modes against the same read-visibility
+and completeness contract; neither transaction enlistment nor a CDC offset
+alone proves that contract. Re-census the post-0.2.7 candidate before sealing
+C1. The note is decision input, not implementation or acceptance authority.
+
 The design must compare:
 
 - correctness surface and query fallback;

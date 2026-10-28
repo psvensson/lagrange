@@ -55,6 +55,40 @@ global-index and generic-live-query programs have coherent future epic
 boundaries, but they remain staged sections/specifications here until opening
 another epic is justified by predecessor evidence and current epic capacity.
 
+## Index-maintenance research - 2026-10-28
+
+The current C1 research is preserved in
+[Global index maintenance research](../specs/release-0-3-queryable-core/global-index-maintenance-research.md)
+and linked from the [C1 work item](../specs/release-0-3-queryable-core/tasks.md#c1--planned-global-index-maintenance-mode-seal--design-may-start-early).
+It is decision preparation: **R2 remains unsealed**, no implementation Quest
+is opened, and no acceptance or release axis is marked complete.
+
+The provisional recommendation is synchronous TX1-maintained non-unique global
+indexes as the ordinary-SQL default. This fits transactional application reads,
+read-your-writes, locking reads and the later uniqueness direction, but depends
+on proving the shared base/index read-visibility contract and measuring added
+participant fanout, partition contention and write-availability cost.
+Asynchronous maintenance remains a candidate under the same read contract;
+durable CDC progress, bounded waiting or correct fallback can support fresh
+reads. Rechecking returned base rows cannot repair omitted index candidates.
+Explicitly lag-tolerant projections are a stronger future async use case.
+
+The source census is pinned to main
+`0489a519fe683e2f278ff3f6294bb0787b94cba1`; it does not describe the older
+source tree of this 0.3 branch. The research consumes the raft-rs, TX1, FreshMG
+and SN1 foundations shipped in [v0.2.6](https://github.com/psvensson/lagrange/releases/tag/v0.2.6)
+and recognizes the separate [0.2.7 stabilization work](https://github.com/psvensson/lagrange/pull/149).
+The dated starting point below remains historical evidence; this research
+neither reopens completed foundations nor certifies the 0.3 integration fence.
+
+The first unresolved decision is the indexed-query visibility/completeness
+contract. Next, the existing C1 owner should re-census the post-0.2.7 candidate
+and prepare one bounded non-unique compound-index experiment. Both modes owe
+safe activation, concurrent backfill, restart, topology transitions and drop.
+Workload mix, acceptable latency/freshness budgets and comparative performance
+are **unmeasured**. The linked note retains the evidence, alternative tradeoffs,
+future boundaries and conditions that would change the recommendation.
+
 ## Verified starting point — 2026-10-02
 
 Measured against shared main
