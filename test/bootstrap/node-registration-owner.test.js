@@ -5,6 +5,7 @@ import {
 import {NodeRegistrationOwner} from
   '../../src/bootstrap/shared/node-registration-owner.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_PHASE_SCOPE,
@@ -1167,36 +1168,87 @@ test(
 );
 
 test(
-  'createBootstrapCacheHydrationApplier advances join-time seeded rows past ' +
-  'concurrent authoritative absence observations',
+  'createBootstrapCacheHydrationApplier preserves deletion protection when ' +
+  'replaying an older bootstrap registration after authoritative absence, ' +
+  'and accepts only a registration carrying a newer committed originHlc',
   async (t) => {
     const cache = new SystemTableCache();
-    cache.recordAuthoritativeObservation(TABLES.SERVICE_ENDPOINTS, {
-      observedAtMs: TEST_NOW_MS + 50,
-      causeId: 'test-catchup-sweep',
-    });
-
-    const applier = createBootstrapCacheHydrationApplier(cache);
-    applier(TABLES.SERVICE_ENDPOINTS, 'UPSERT', {
-      [COLUMN.ENDPOINT_ID]: `ep-${TEST_NODE_ID}-wasm`,
+    const endpointId = `ep-${TEST_NODE_ID}-wasm`;
+    const initialRow = {
+      [COLUMN.ENDPOINT_ID]: endpointId,
       [COLUMN.NODE_ID]: TEST_NODE_ID,
       [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
       [COLUMN.CREATED_AT]: TEST_NOW_MS,
       [COLUMN.UPDATED_AT]: TEST_NOW_MS,
-    });
-
-    const cached = cache.get(
-      TABLES.SERVICE_ENDPOINTS,
-      `ep-${TEST_NODE_ID}-wasm`,
-    );
+      [COLUMN.UPDATED_AT_HLC]: new HLCTimestamp(
+        TEST_NOW_MS,
+        1,
+        'seed-node',
+      ).toString(),
+    };
+    const applier = createBootstrapCacheHydrationApplier(cache);
+    applier(TABLES.SERVICE_ENDPOINTS, 'UPSERT', initialRow);
     t.ok(
-      cached,
-      'seeded join-time endpoint row must not be fenced by a prior absence sweep',
+      cache.get(TABLES.SERVICE_ENDPOINTS, endpointId),
+      'initial registration row is present before deletion',
+    );
+
+    const deleteHlc = new HLCTimestamp(
+      TEST_NOW_MS + 20,
+      1,
+      'seed-node',
+    ).toString();
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'DELETE', {
+      [COLUMN.ENDPOINT_ID]: endpointId,
+      [COLUMN.UPDATED_AT]: TEST_NOW_MS + 20,
+      [COLUMN.UPDATED_AT_HLC]: deleteHlc,
+    });
+    const mutationSnapshot = cache.captureTableMutationSnapshot(
+      TABLES.SERVICE_ENDPOINTS,
+    );
+    cache.reconcileAgainstAuthoritativeTruth(
+      {[TABLES.SERVICE_ENDPOINTS]: []},
+      {
+        mutationSnapshots: {[TABLES.SERVICE_ENDPOINTS]: mutationSnapshot},
+        authoritativeObservedAtMs: TEST_NOW_MS + 50,
+      },
+    );
+
+    applier(TABLES.SERVICE_ENDPOINTS, 'UPSERT', {
+      ...initialRow,
+      [COLUMN.UPDATED_AT]: TEST_NOW_MS + 10,
+      [COLUMN.UPDATED_AT_HLC]: new HLCTimestamp(
+        TEST_NOW_MS + 10,
+        1,
+        'seed-node',
+      ).toString(),
+    });
+    t.equal(
+      cache.get(TABLES.SERVICE_ENDPOINTS, endpointId),
+      undefined,
+      'stale bootstrap registration replay must remain fenced by deletion and authoritative absence',
+    );
+
+    const committedAfterObservationHlc = new HLCTimestamp(
+      TEST_NOW_MS + 60,
+      1,
+      'seed-node',
+    ).toString();
+    applier(TABLES.SERVICE_ENDPOINTS, 'UPSERT', {
+      ...initialRow,
+      [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION + 1,
+      [COLUMN.UPDATED_AT]: TEST_NOW_MS,
+      [COLUMN.UPDATED_AT_HLC]: committedAfterObservationHlc,
+    });
+    const recreated = cache.get(TABLES.SERVICE_ENDPOINTS, endpointId);
+    t.ok(
+      recreated,
+      'registration carrying a genuine committed originHlc after the observation supersedes absence',
     );
     t.equal(
-      cached?.[COLUMN.UPDATED_AT],
-      TEST_NOW_MS + 51,
-      'seeded row updated_at advances past the absence observation frontier',
+      recreated?.[COLUMN.UPDATED_AT_HLC],
+      committedAfterObservationHlc,
+      'accepted row preserves its authoritative committed originHlc',
     );
   },
 );

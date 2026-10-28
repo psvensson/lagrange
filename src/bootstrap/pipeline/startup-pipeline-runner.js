@@ -166,7 +166,14 @@ class StartupPipelineRunner {
       }
       this.emitCheckpointStart(step, resolvedSessionId);
       try {
-        await runBootstrapActivity(() => step.run(session));
+        await runBootstrapActivity(async () => {
+          if (step.terminal === true &&
+              typeof this.eventSink?.beforeTerminalStartupCheckpoint ===
+                LOCAL_STR_FUNCTION) {
+            await this.eventSink.beforeTerminalStartupCheckpoint(session);
+          }
+          await step.run(session);
+        });
       } catch (error) {
         session = await this.recordWorkflowFailure({
           error,

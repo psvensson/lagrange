@@ -140,6 +140,16 @@ class NodeRegistrationOwner {
             `Failed to register node: ${nodeUpsertResult?.error}`,
           );
         }
+        const nodeOriginHlc =
+          nodeUpsertResult?.originHlc ||
+          nodeUpsertResult?.partitionResult?.originHlc ||
+          null;
+        if (typeof nodeOriginHlc === 'string' && nodeOriginHlc.length > 0) {
+          budgetRow = {
+            ...budgetRow,
+            [COLUMN.UPDATED_AT_HLC]: nodeOriginHlc,
+          };
+        }
 
         this.seedJoinTimeCacheRow(TABLES.NODES, {
           ...budgetRow,

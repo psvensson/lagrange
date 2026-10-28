@@ -220,6 +220,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
                 {
                   fallbackPhase,
                   timeoutBudget,
+                  originHlc: options.originHlc,
                 },
               );
             const normalizedVisibilityResult =
@@ -652,6 +653,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
           CDC_OPERATION.UPSERT,
           matchingRow,
           key,
+          {originHlc: options.originHlc},
         );
       }
       const cacheExpectationSatisfied = this.isCacheExpectationSatisfied(

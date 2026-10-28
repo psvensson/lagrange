@@ -25,6 +25,8 @@ import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 
 const TRACKER_SUBSYSTEM = 'cdc-confirmation';
 const MAX_RECENT_EVENTS_PER_KEY = 8;
+const MAX_RECENT_EVENT_KEYS = 256;
+const RECENT_EVENT_TTL_MS = 30000;
 const OPERATION_UPSERT = 'UPSERT';
 const OPERATION_INSERT = 'INSERT';
 const OPERATION_UPDATE = 'UPDATE';
@@ -47,9 +49,10 @@ function resolveRecordOriginHlc(data, metadata) {
 function compareHlcStrings(left, right) {
   const leftTs = HLCTimestamp.tryFromString(left);
   const rightTs = HLCTimestamp.tryFromString(right);
-  return leftTs && rightTs ?
-    leftTs.compare(rightTs) :
-    String(left).localeCompare(String(right));
+  if (!leftTs || !rightTs) {
+    return null;
+  }
+  return leftTs.compare(rightTs);
 }
 
 function cloneObjectOrNull(value) {
@@ -75,7 +78,10 @@ function matchesRequiredHlc(entry, data, metadata) {
   const requiredMinHlc = entry.minHlc || entry.originHlc;
   if (!requiredMinHlc) return true;
   const recordHlc = resolveRecordOriginHlc(data, metadata);
-  return recordHlc !== null && compareHlcStrings(recordHlc, requiredMinHlc) >= 0;
+  const comparison = recordHlc !== null ?
+    compareHlcStrings(recordHlc, requiredMinHlc) :
+    null;
+  return comparison !== null && comparison >= 0;
 }
 
 function matchesExpectedFields(entry, data) {
@@ -133,26 +139,62 @@ function countPendingConfirmations(pending) {
   return count;
 }
 
-function recordRecentEvent(recentEvents, key, pkField, operation, data, metadata) {
-  let history = recentEvents.get(key);
-  if (!history) {
-    history = [];
-    recentEvents.set(key, history);
+function pruneRecentKeyHistory(recentEvents, key, cutoffMs) {
+  const history = recentEvents.get(key);
+  if (!history) return null;
+  while (history.length > 0 && history[0].recordedAtMs < cutoffMs) {
+    history.shift();
   }
-  history.push({
+  if (history.length === 0) {
+    recentEvents.delete(key);
+    return null;
+  }
+  return history;
+}
+
+function pruneExpiredRecentEvents(recentEvents, nowMs) {
+  const cutoffMs = nowMs - RECENT_EVENT_TTL_MS;
+  for (const key of [...recentEvents.keys()]) {
+    pruneRecentKeyHistory(recentEvents, key, cutoffMs);
+  }
+}
+
+function evictExcessRecentEventKeys(recentEvents) {
+  while (recentEvents.size > MAX_RECENT_EVENT_KEYS) {
+    const oldestKey = recentEvents.keys().next().value;
+    if (oldestKey === undefined) break;
+    recentEvents.delete(oldestKey);
+  }
+}
+
+function recordRecentEvent(recentEvents, key, pkField, operation, data, metadata) {
+  const nowMs = Date.now();
+  pruneExpiredRecentEvents(recentEvents, nowMs);
+  const existingHistory = recentEvents.get(key) || [];
+  if (recentEvents.has(key)) {
+    recentEvents.delete(key);
+  }
+  existingHistory.push({
     pkField,
     operation,
     data: cloneObjectOrNull(data),
     metadata: cloneObjectOrNull(metadata),
+    recordedAtMs: nowMs,
   });
-  if (history.length > MAX_RECENT_EVENTS_PER_KEY) {
-    history.shift();
+  if (existingHistory.length > MAX_RECENT_EVENTS_PER_KEY) {
+    existingHistory.shift();
   }
+  recentEvents.set(key, existingHistory);
+  evictExcessRecentEventKeys(recentEvents);
 }
 
 function hasMatchingRecentEvent(recentEvents, key, entry, pkField) {
   if (!entry.originHlc && !entry.minHlc && !entry.causeId) return false;
-  const history = recentEvents.get(key);
+  const history = pruneRecentKeyHistory(
+    recentEvents,
+    key,
+    Date.now() - RECENT_EVENT_TTL_MS,
+  );
   if (!history) return false;
   return history.some((event) =>
     doesConfirmationEntryMatch(entry, pkField, event.operation, event.data, event.metadata),
