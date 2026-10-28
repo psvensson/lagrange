@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2466,
+    "ordinary": 2467,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2483,
-  "digest": "fnv1a32-483febcf",
+  "censusSize": 2484,
+  "digest": "fnv1a32-5ad04e6d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -989,6 +989,7 @@
     "test/examples/comparative-efficiency-movielens-public-request-workload.test.js": "ordinary",
     "test/examples/dockerized-pg-client-compatibility-example.test.js": "ordinary",
     "test/examples/js-request-binding-example.test.js": "ordinary",
+    "test/examples/lab-cluster-smoke.test.js": "ordinary",
     "test/examples/minimal-deployment-request-binding-example.test.js": "ordinary",
     "test/examples/movielens-capacity-runtime-adapters.test.js": "ordinary",
     "test/examples/movielens-public-request-evidence-artifacts.test.js": "ordinary",
