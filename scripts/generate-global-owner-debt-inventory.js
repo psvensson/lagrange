@@ -20,6 +20,7 @@ import {
   OWNER_DEBT_REFRESH_COMMANDS as REFRESH_COMMANDS,
   OWNER_DEBT_REPORTS as REPORTS,
   OWNER_DEBT_DEPENDENCY_POLICY_PATH,
+  OWNER_DEBT_NESTED_PACKAGE_ROOTS,
   OWNER_DEBT_PACKAGE_PATH_SEPARATOR,
   OWNER_DEBT_PACKAGE_SECTIONS,
   OWNER_DEBT_PROBLEM_LIST_SEPARATOR,
@@ -560,8 +561,9 @@ const UNDECLARED_AMBIENT_DEPENDENCY_REMEDY =
 // The verdict itself lives in ./global-owner-debt-inventory/dependency-policy.js
 // so that the classification the tests exercise is the same code the canonical
 // graph runs. This loader only gathers the declared state it judges against.
-function loadDependencyPolicy(root) {
-  const manifestPath = path.join(root, PACKAGE_MANIFEST_FILE);
+function readDeclaredPackage(root, relativeRoot) {
+  const packageRoot = path.join(root, relativeRoot);
+  const manifestPath = path.join(packageRoot, PACKAGE_MANIFEST_FILE);
   if (!fs.existsSync(manifestPath)) return null;
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const declaredPackages = new Set();
@@ -570,7 +572,7 @@ function loadDependencyPolicy(root) {
       declaredPackages.add(name);
     }
   }
-  const lockPath = path.join(root, PACKAGE_LOCKFILE);
+  const lockPath = path.join(packageRoot, PACKAGE_LOCKFILE);
   if (fs.existsSync(lockPath)) {
     const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
     for (const entry of Object.keys(lock.packages || {})) {
@@ -580,13 +582,39 @@ function loadDependencyPolicy(root) {
       }
     }
   }
+  return {declaredPackages, selfName: manifest.name};
+}
+
+function loadDependencyPolicy(root) {
+  const rootPackage = readDeclaredPackage(root, '');
+  if (rootPackage === null) return null;
   const policyPath = path.join(root, OWNER_DEBT_DEPENDENCY_POLICY_PATH);
   const optionalExternals = fs.existsSync(policyPath) ?
     new Set(Object.keys(JSON.parse(
       fs.readFileSync(policyPath, 'utf8')).optionalExternals || {})) :
     new Set();
-  // The repository may import itself by name through its own exports map.
-  return {declaredPackages, optionalExternals, selfName: manifest.name};
+  const nestedPolicies = new Map();
+  for (const nestedRoot of OWNER_DEBT_NESTED_PACKAGE_ROOTS) {
+    const nested = readDeclaredPackage(root, nestedRoot);
+    if (nested === null) continue;
+    nestedPolicies.set(`${nestedRoot}/`, {
+      ...rootPackage,
+      optionalExternals,
+      declaredPackages: new Set([
+        ...rootPackage.declaredPackages,
+        ...nested.declaredPackages,
+        nested.selfName,
+      ]),
+    });
+  }
+  return {...rootPackage, optionalExternals, nestedPolicies};
+}
+
+function policyForImportSource(policy, source) {
+  for (const [prefix, nestedPolicy] of policy.nestedPolicies) {
+    if (source.startsWith(prefix)) return nestedPolicy;
+  }
+  return policy;
 }
 
 // A module belonging to an optional-external package is not part of the
@@ -688,7 +716,10 @@ function recordUnresolvedEdge(resolverInputs, source, specifier) {
 function applyDependencyPolicy(dependency, source, context) {
   const {policy} = context;
   if (policy === null || dependency.coreModule) return false;
-  const verdict = classifyDependencySpecifier(dependency.module, policy);
+  const verdict = classifyDependencySpecifier(
+    dependency.module,
+    policyForImportSource(policy, source),
+  );
   if (verdict === DEPENDENCY_CLASS.optionalExternal) {
     context.referencedOptionalExternals.add(packageNameOf(dependency.module));
     // Record the dependency truthfully, but stop here: following it would make

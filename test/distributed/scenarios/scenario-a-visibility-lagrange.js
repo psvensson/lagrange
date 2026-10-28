@@ -9,6 +9,9 @@ import {
   verifyLagrangeScenarioALiveAdmission,
 } from '../harness/oltp-scenario-a-lagrange-live-admission.js';
 import {
+  buildLagrangeScenarioARuntimePreflight,
+} from '../harness/oltp-scenario-a-lagrange-runtime-preflight.js';
+import {
   OLTP_SCENARIO_A_VISIBILITY_WORKLOAD,
   buildScenarioAVisibilityCase,
   evaluateScenarioAVisibilityObservation,
@@ -97,11 +100,31 @@ async function closeAndPersistVisibilityAttempt(adapter, evidence) {
   }
 }
 
-async function run(cluster) {
+async function preStart() {
+  const admission = await loadVisibilityAdmission();
+  const runtimePreflight = await buildLagrangeScenarioARuntimePreflight(admission);
+  return Object.freeze({
+    admissionSha256: admission.admissionSha256,
+    runtimePreflightSha256: runtimePreflight.preflightSha256,
+  });
+}
+
+async function prepareAdmittedVisibilityContext(cluster, preflight) {
+  const admission = await loadVisibilityAdmission();
+  if (preflight && preflight.admissionSha256 !== admission.admissionSha256) {
+    throw new Error('Lagrange visibility admission changed after pre-start check');
+  }
+  const runtimePreflight = await buildLagrangeScenarioARuntimePreflight(admission);
+  if (preflight && preflight.runtimePreflightSha256 !== runtimePreflight.preflightSha256) {
+    throw new Error('Lagrange visibility runtime changed after pre-start check');
+  }
+  return prepareLagrangeScenarioAPublicPgContext({cluster, admission});
+}
+
+async function run(cluster, preflight = null) {
   // Certification is consumed before any cluster query, SQL provisioning or
   // workload operation. A WIP 0.2.6 source tree alone cannot grant admission.
-  const admission = await loadVisibilityAdmission();
-  const context = await prepareLagrangeScenarioAPublicPgContext({cluster, admission});
+  const context = await prepareAdmittedVisibilityContext(cluster, preflight);
   const definition = buildScenarioAVisibilityCase();
   let adapter = null;
   let evidence = null;
@@ -155,4 +178,4 @@ async function run(cluster) {
   });
 }
 
-export {run};
+export {preStart, run};

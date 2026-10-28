@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2056,
+    "ordinary": 2058,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2073,
-  "digest": "fnv1a32-ea28ec23",
+  "censusSize": 2075,
+  "digest": "fnv1a32-1da34707",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -852,6 +852,7 @@
     "test/distributed/harness/__tests__/run.test.js": "ordinary",
     "test/distributed/harness/__tests__/scale-certification-receipt-freshness.test.js": "ordinary",
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "ordinary",
+    "test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-config.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-registry.test.js": "ordinary",
@@ -886,6 +887,7 @@
     "test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js": "ordinary",
     "test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js": "ordinary",
     "test/distributed/harness/virtual-network-cost-model.test.js": "ordinary",
+    "test/distributed/reference-client/lagrange-visibility-probe.test.js": "ordinary",
     "test/distributed/scenarios/__tests__/rolling-restart-budget-calibration.test.js": "ordinary",
     "test/entrypoint-runtime-helpers-join-decision.test.js": "ordinary",
     "test/entrypoint/application-database-runtime-composition.test.js": "ordinary",

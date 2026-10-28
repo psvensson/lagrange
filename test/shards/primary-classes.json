@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1811,
+    "unit": 1813,
     "integration": 75,
     "bootstrap": 180,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2073,
-  "digest": "fnv1a32-4a81a669",
+  "censusSize": 2075,
+  "digest": "fnv1a32-15188e8d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -853,6 +853,7 @@
     "test/distributed/harness/__tests__/run.test.js": "unit",
     "test/distributed/harness/__tests__/scale-certification-receipt-freshness.test.js": "unit",
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "unit",
+    "test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-config.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-registry.test.js": "unit",
@@ -887,6 +888,7 @@
     "test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js": "unit",
     "test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js": "unit",
     "test/distributed/harness/virtual-network-cost-model.test.js": "unit",
+    "test/distributed/reference-client/lagrange-visibility-probe.test.js": "unit",
     "test/distributed/scenarios/__tests__/rolling-restart-budget-calibration.test.js": "unit",
     "test/entrypoint-runtime-helpers-join-decision.test.js": "unit",
     "test/entrypoint/application-database-runtime-composition.test.js": "unit",

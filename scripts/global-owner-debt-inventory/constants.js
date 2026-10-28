@@ -131,11 +131,20 @@ export const OWNER_DEBT_PACKAGE_SECTIONS = Object.freeze([
 export const OWNER_DEBT_PACKAGE_PATH_SEPARATOR = '/';
 export const OWNER_DEBT_PACKAGE_SCOPE_PREFIX = '@';
 export const OWNER_DEBT_PROBLEM_LIST_SEPARATOR = ', ';
+// This independently-installed test client has its own authoritative manifest.
+// Its dependencies are legal only for imports owned by this package subtree.
+export const OWNER_DEBT_NESTED_PACKAGE_ROOTS = Object.freeze([
+  'test/distributed/reference-client',
+]);
 export const OWNER_DEBT_IMPORT_GRAPH_INPUT_AUTHORITIES = Object.freeze([
   'package.json',
   'package-lock.json',
   'dependency-cruiser.config.cjs',
   OWNER_DEBT_DEPENDENCY_POLICY_PATH,
+  ...OWNER_DEBT_NESTED_PACKAGE_ROOTS.flatMap((root) => [
+    `${root}/package.json`,
+    `${root}/package-lock.json`,
+  ]),
 ]);
 
 export const OWNER_DEBT_JAVASCRIPT_EXTENSIONS = new Set([

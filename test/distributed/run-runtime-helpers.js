@@ -452,6 +452,9 @@ function createDistributedRunRuntimeBundle(deps = {}) {
 
       let cluster = null;
       try {
+        const scenarioModule = await loadScenarioModule(scenario.path);
+        const scenarioPreflight = typeof scenarioModule.preStart === 'function' ?
+          await scenarioModule.preStart() : null;
         const clusterConfig = dockerOperationSink ?
           {...config, dockerOperationSink} :
           config;
@@ -478,9 +481,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           });
         }
 
-        const scenarioModule = await loadScenarioModule(scenario.path);
         const scenarioPayload = normalizeScenarioPayload(
-          await scenarioModule.run(cluster),
+          await scenarioModule.run(cluster, scenarioPreflight),
         );
 
         // Run log analysis before teardown
