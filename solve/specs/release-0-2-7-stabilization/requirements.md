@@ -339,7 +339,9 @@ state that assumption. Enterprise identity/tenancy stays out of scope.
 ### Q16 - Align release artifacts, metadata and documented journeys (P2)
 
 **Owner:** existing publication pipeline and package/chart/executable producers.
-**Findings:** F16; consumes Q05-Q07 and Q13-Q15.
+**Findings:** F16 and the
+[Docker Hub README addendum](../../epics/release-0-2-7-stabilization/dockerhub-readme-verification-2026-10-28.md);
+consumes Q05-Q07 and Q13-Q15.
 
 Make checksum paths match the delivered download layout, synchronize packaged
 chart examples/caveats, and make npm dist-tag policy intentional and visible.
@@ -357,6 +359,64 @@ This phase gates epic closure, not permission to start publication. A lagging
 next tag is acceptable only as
 an explicit channel policy, not accidental misleading metadata. Publication
 requires its normal version-specific authority; this epic does not grant it.
+
+**Docker Hub README synchronization is a required publication obligation.**
+The shared repository overview must describe the latest published stable
+release and latest applicable approved documentation, with clearly historical
+release notes. The 0.2.6 description update returned Forbidden, yet the
+best-effort step let publication appear complete. Q16 must close that gap:
+
+1. **One content source:** retain `docs/dockerhub-overview.md` plus release notes
+   from `CHANGELOG.md`, rendered by `scripts/release-notes.js`. Root README is
+   not the existing Hub source. Derive current tag/examples from the selected
+   published version; preserve absolute links, size limits and generated markers.
+   Update `RELEASE.md` and the template's instructions with the implemented
+   synchronization contract, replacing the current best-effort/manual-paste policy.
+2. **Automatic refresh:** run after stable publication and relevant approved
+   overview/changelog/renderer changes merge to the default branch. A documentation
+   correction must reach Hub without a new image version. Provide an idempotent
+   repair entry point in the existing release owner. Select documentation
+   applicable to the published stable release; do not advertise unreleased
+   behavior or infer publication from a tag or dated changelog section alone.
+   The existing renderer includes every non-Unreleased section, so version
+   selection/filtering must be proved when adding a main-branch trigger.
+3. **Correct permission:** validate repository-description edit capability and
+   the supported API authentication path. Successful image pull/push permission
+   is insufficient. Missing credentials or a 401/403 must yield an actionable,
+   credential-safe failure, never a warning followed by a success claim.
+4. **Ordered writes:** release and documentation-only writers use the existing
+   serialized publication ownership. Revalidate the selected stable release and
+   applicable document revision before mutation. Older release retries, delayed
+   prerelease jobs and out-of-order documentation runs for the same release
+   cannot overwrite newer content. Prereleases cannot replace the stable default;
+   any displayed prerelease history must be explicitly labelled.
+5. **Fetch-back verification:** retrieve the actual remote `full_description`
+   after updating and compare with the intended rendered payload, allowing only
+   explicitly defined transport normalization. Extend the existing receipt
+   owner with target repository, stable version/image digest, release-source SHA,
+   documentation-source SHA, renderer/input identity, expected/observed content
+   hashes, observation time and result. Preserve original observations on retry.
+   An action exit code or finding a version string somewhere in the page is
+   insufficient; current guidance must match while historical versions may remain.
+6. **Honest partial publication and repair:** remove the ignored-failure success
+   path. Permission failures, API errors, timeouts and readback mismatches leave
+   README synchronization failed/pending and block publication-complete/epic-
+   closure claims. Retain accurate successful image/npm artifact observations.
+   Do not roll back tags or rebuild/republish immutable artifacts just to repair
+   metadata. Bounded retry rechecks the current target; a superseded attempt
+   declines the stale write without claiming its own content was synchronized.
+7. **Proof:** extend existing renderer, workflow and publication-receipt tests
+   for stable publish, same-release doc correction, unpublished changelog content,
+   prerelease isolation, older release replay, out-of-order doc runs, permission
+   denial, transient errors, fetch-back mismatch and successful idempotent repair.
+   Keep marker/size checks. Reverting failure propagation, readback comparison or
+   stale-write protection must make its relevant witness red. Terminal acceptance
+   includes a real remote fetch-back of the selected current overview.
+
+Render/permission-policy/regression checks belong to candidate qualification;
+the actual remote write and fetch-back belong to publication confirmation.
+This requirement does not make pre-publication proof depend on an already
+published README or claim synchronization has been implemented by this plan.
 
 ### Q17 - Prove one composed release candidate (P1 terminal acceptance)
 

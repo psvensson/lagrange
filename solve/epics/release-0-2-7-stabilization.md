@@ -61,6 +61,7 @@ coordinates that release; existing subsystem owners retain their contracts.
 | Scope authority | User request on 2026-10-28: verify the release audit and create the 0.2.7 epic; existing Community maintenance scope and edition boundaries apply |
 | Acceptance owner | [Requirements and work packages](../specs/release-0-2-7-stabilization/requirements.md); this summary indexes that contract |
 | Verified baseline | [Independent verification dossier](release-0-2-7-stabilization/verification-2026-10-28.md), including corrected qualifications and retained witness sources |
+| Additional release finding | [Docker Hub README verification](release-0-2-7-stabilization/dockerhub-readme-verification-2026-10-28.md): live page still shows 0.1.0; 0.2.6 metadata update returned Forbidden and was ignored |
 | Planning review | [Three independent approvals](release-0-2-7-stabilization/planning-review-2026-10-28.md), after correction of publication ordering and certification semantics |
 | First demonstrated blockers | Q01 mutation expressions become NULL; Q02 admitted constraints disappear; Q03 text split placement and normal routing disagree |
 | Current unit | Planning and baseline verification complete; implementation packages below are proposed and unsealed |
@@ -91,7 +92,7 @@ The IDs below are work-package IDs, not fabricated Quest records or seals.
 | Q13 | Reconcile native build provenance | Existing binding/build manifest owner |
 | Q14 | State and rehearse the read/retry/upgrade envelope | Existing capability and pilot-envelope owners |
 | Q15 | Provide a tested private deployment profile | Existing chart/image owners; no enterprise feature expansion |
-| Q16 | Make release metadata and consumer journeys agree | Existing publication owner; follows Q05-Q07/Q13-Q15 |
+| Q16 | Align release metadata, verified Docker Hub README and consumer journeys | Existing publication owner; follows Q05-Q07/Q13-Q15 |
 | Q17 | Certify one composed candidate and published-artifact journeys | Integrates Q01-Q16; release gates remain separate and mandatory |
 | Q18 | Simplify touched decision paths and route residual debt | On-contact work; broad convergence remains with its existing epic |
 
@@ -134,3 +135,7 @@ cutover's separate physical-certification claims retain their own authority.
   programme, broad SQL expansion, commercial backup/PITR or production claim.
 - 2026-10-28: All implementation packages remain unsealed. The user authorized
   this epic and verification; this change does not publish version 0.2.7.
+- 2026-10-28: User requires Docker Hub to receive the current README reliably.
+  Q16 now requires automatic release/documentation synchronization, metadata-edit
+  permission checks, remote content verification, stale-write prevention and
+  honest failed/pending status. Updating the plan does not update the live page.
