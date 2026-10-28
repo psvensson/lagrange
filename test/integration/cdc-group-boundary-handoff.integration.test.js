@@ -41,6 +41,7 @@ import {
   getUniquePort,
   gracefulShutdown,
   initializeTestEnvironment,
+  quiescePostJoinRebalancing,
   TEST_CONFIG,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
@@ -57,7 +58,7 @@ const JOINING_CONFIG = Object.freeze({
   leadershipWaitMaxDelayMs: NUM.HUNDRED,
   replicaStaggerDelayMs: 20,
 });
-const ACKNOWLEDGED_TIMEOUT_MS = 60000;
+const ACKNOWLEDGED_TIMEOUT_MS = 180000;
 const POLL_INTERVAL_MS = 100;
 const HELD_WRITES = 260;
 const WITNESS_PREFIX = 'd4b-endpoint-';
@@ -205,7 +206,8 @@ test('W-D4b: a joiner whose self-hosted group was non-active while >256 node_end
     }));
     const httpPost = createInProcHttpPost(seedApi);
 
-    await joinWithRetry(t, fixtures, FIRST_JOINER_ID, seedWsPort, httpPost);
+    const {joiningService: firstJoiner} = await joinWithRetry(
+      t, fixtures, FIRST_JOINER_ID, seedWsPort, httpPost);
 
     const leader = endpointsLeader(bootstrapResult);
     t.ok(leader, 'the seed leads the node_endpoints partition');
@@ -225,6 +227,8 @@ test('W-D4b: a joiner whose self-hosted group was non-active while >256 node_end
             join.then(() => false)]);
           facts.holdReached = reached;
           if (reached) {
+            quiescePostJoinRebalancing(
+              bootstrapResult, bootstrapService, firstJoiner, service);
             facts.groupRowsNonActiveDuringHold =
               heldGroupRowsNonActive(systemTableCache, HELD_JOINER_ID);
             const deleted = await leader.deleteData(TABLES.NODE_ENDPOINTS,

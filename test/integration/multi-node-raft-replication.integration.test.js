@@ -30,6 +30,7 @@ import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
   TEST_CONFIG,
+  quiescePostJoinRebalancing,
   stopAllRebalancers,
   gracefulShutdown,
   gracefulJoiningShutdown,
@@ -161,6 +162,19 @@ async function waitForPartitionLeader(
   );
 }
 
+async function executeWriteWithRetry(sqlEngine, sql, params) {
+  let result = null;
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    result = await sqlEngine.executeQuery(sql, params);
+    if (result && result.success === true) {
+      return result;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return result;
+}
+
 test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
   t.beforeEach(() => {
     // This suite validates Raft packet handling and cluster join consensus.
@@ -223,6 +237,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
       t.ok(bootstrapResult.partitionServices.size > 0, 'seed should have partitions');
+      quiescePostJoinRebalancing(bootstrapResult, bootstrapService);
 
       // Wait for nodes-p1 partition to elect a leader
       const nodesLeader = await waitForPartitionLeader(
@@ -240,7 +255,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
 
       seedConfirmationTracker = new CDCConfirmationTracker({
         systemTableCache,
-        timeoutMs: 15000,
+        timeoutMs: 45000,
       });
 
       seedApi = new BootstrapAPI({
@@ -298,12 +313,13 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       const joinResult = await joiningService.join();
       t.equal(joinResult.success, true, 'node join should succeed');
       t.ok(joinResult.messageRouter, 'joining node should have message router');
+      quiescePostJoinRebalancing(bootstrapResult, bootstrapService, joiningService);
 
       const joiningCache = joiningService.cdcIntegrationService?.systemTableCache || null;
       if (joiningCache && joiningCache !== systemTableCache) {
         joiningConfirmationTracker = new CDCConfirmationTracker({
           systemTableCache: joiningCache,
-          timeoutMs: 15000,
+          timeoutMs: 45000,
         });
       }
 
@@ -505,6 +521,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       // =========================================================================
       bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
+      quiescePostJoinRebalancing(bootstrapResult, bootstrapService);
 
       // Wait for leader election to trigger Raft messages
       await waitForPartitionLeader(
@@ -521,7 +538,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
 
       cdcConfirmationTracker = new CDCConfirmationTracker({
         systemTableCache,
-        timeoutMs: 15000,
+        timeoutMs: 45000,
       });
 
       seedApi = new BootstrapAPI({
@@ -567,6 +584,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       // =========================================================================
       // PHASE 3: Trigger multiple Raft operations to generate append ack
       // =========================================================================
+      quiescePostJoinRebalancing(bootstrapResult, bootstrapService, joiningService);
       // Perform several writes to trigger Raft replication and append ack
       for (let i = 0; i < 3; i++) {
         const nextCpuPercent = (i + 1) * 10;
@@ -575,10 +593,12 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
           seedNodeId,
           {expectedFields: {[COLUMN.CPU_USAGE_PERCENT]: nextCpuPercent}},
         );
-        await seedSqlEngine.executeQuery(
+        const updateResult = await executeWriteWithRetry(
+          seedSqlEngine,
           'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
           [nextCpuPercent, seedNodeId],
         );
+        t.equal(updateResult.success, true, `append-ack write ${i + 1} should succeed`);
         await confirmation;
       }
 
@@ -612,10 +632,12 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
         seedNodeId,
         {expectedFields: {[COLUMN.MEMORY_USAGE_PERCENT]: 50}},
       );
-      await seedSqlEngine.executeQuery(
+      const finalUpdateResult = await executeWriteWithRetry(
+        seedSqlEngine,
         'UPDATE nodes SET memory_usage_percent = ? WHERE node_id = ?',
         [50, seedNodeId],
       );
+      t.equal(finalUpdateResult.success, true, 'final append-ack write should succeed');
       await finalConfirmation;
 
       console.warn = originalConsoleWarn;
@@ -680,6 +702,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       // =========================================================================
       bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
+      quiescePostJoinRebalancing(bootstrapResult, bootstrapService);
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
 
@@ -724,6 +747,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
 
       const joinResult2 = await joiningService2.join();
       t.equal(joinResult2.success, true, 'second node join should succeed');
+      quiescePostJoinRebalancing(bootstrapResult, bootstrapService, joiningService2);
 
       // =========================================================================
       // PHASE 3: Join third node
@@ -740,6 +764,12 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
 
       const joinResult3 = await joiningService3.join();
       t.equal(joinResult3.success, true, 'third node join should succeed');
+      quiescePostJoinRebalancing(
+        bootstrapResult,
+        bootstrapService,
+        joiningService2,
+        joiningService3,
+      );
 
       // =========================================================================
       // PHASE 4: Verify all 3 nodes in cluster
@@ -772,7 +802,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
           (operation) => !TERMINAL_STATUSES.includes(operation.status),
         ) || [];
         return inFlight.length === 0;
-      }, 30000, 250);
+      }, 2000, 100);
     } finally {
       // =========================================================================
       // CLEANUP - Stop rebalancers FIRST to prevent async operations

@@ -828,6 +828,70 @@ export async function waitForPartitionLeaderElection(
   return null;
 }
 
+function stopPartitionRebalancers(partitionServices) {
+  if (!partitionServices) return;
+  for (const service of partitionServices.values()) {
+    if (service && service.rebalancer && service.rebalancer.shutdown) {
+      service.rebalancer.shutdown();
+    }
+  }
+}
+
+function quiesceCoordinatorOperations(coordinator) {
+  if (!coordinator) return;
+  coordinator.isShuttingDown = true;
+  if (coordinator.repository && coordinator.repository.markShuttingDown) {
+    coordinator.repository.markShuttingDown();
+  }
+  if (
+    coordinator.workflowOwner &&
+    coordinator.workflowOwner.bumpOperationOwnershipFenceEpoch
+  ) {
+    coordinator.workflowOwner.bumpOperationOwnershipFenceEpoch();
+  }
+  if (coordinator.stopTimeoutChecking) {
+    coordinator.stopTimeoutChecking();
+  }
+  if (coordinator.unbindSystemTableCacheListener) {
+    coordinator.unbindSystemTableCacheListener();
+  }
+}
+
+/**
+ * Quiesce background rebalancers and coordinator replica operations without
+ * shutting down controlPlaneReadinessService or query execution.
+ *
+ * @param {Object} bootstrapResult - Seed bootstrap result.
+ * @param {Object} bootstrapService - Seed BootstrapService instance.
+ * @param {...Object} joiners - Joining service instances.
+ */
+export function quiescePostJoinRebalancing(
+  bootstrapResult,
+  bootstrapService,
+  ...joiners
+) {
+  stopPartitionRebalancers(bootstrapResult?.partitionServices);
+  quiesceCoordinatorOperations(bootstrapService?.rebalanceCoordinator);
+  for (const joiner of joiners) {
+    stopPartitionRebalancers(joiner?.partitionServices);
+    quiesceCoordinatorOperations(joiner?.rebalanceCoordinator);
+  }
+}
+
+function quiesceCoordinatorOnTeardown(coordinator) {
+  try {
+    coordinator.repository?.markShuttingDown?.();
+    coordinator.cdcIntegrationService?.markShuttingDown?.();
+    coordinator.sqlQueryEngine?.queryExecutor?.markShuttingDown?.();
+    const shutdownPromise = coordinator.shutdown?.();
+    if (shutdownPromise && typeof shutdownPromise.catch === 'function') {
+      shutdownPromise.catch(() => {});
+    }
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
 /**
  * Shutdown rebalancers attached to partition services.
  *
@@ -841,15 +905,23 @@ export function stopAllRebalancers(partitionServices) {
   const services = Array.isArray(partitionServices) ?
     partitionServices :
     [...partitionServices.values()];
+  const coordinators = new Set();
 
   for (const service of services) {
     try {
       if (service?.rebalancer?.shutdown) {
         service.rebalancer.shutdown();
       }
+      if (service?.rebalanceCoordinator) {
+        coordinators.add(service.rebalanceCoordinator);
+      }
     } catch {
       // Best-effort cleanup only.
     }
+  }
+
+  for (const coordinator of coordinators) {
+    quiesceCoordinatorOnTeardown(coordinator);
   }
 }
 
