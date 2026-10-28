@@ -212,13 +212,13 @@ test('CDCConfirmationTracker — concurrent waiters for same key both resolve in
     let p2Resolved = false;
     const p1 = tracker.awaitConfirmation('nodes', 'node-1', {
       expectedFields: {status: 'JOINING'},
-      originHlc: '1700000000001:0:node-1',
+      originHlc: '1700000000001-0-node-1',
     }).then(() => {
       p1Resolved = true;
     });
     const p2 = tracker.awaitConfirmation('nodes', 'node-1', {
       expectedFields: {status: 'ACTIVE'},
-      originHlc: '1700000000002:0:node-1',
+      originHlc: '1700000000002-0-node-1',
     }).then(() => {
       p2Resolved = true;
     });
@@ -226,7 +226,7 @@ test('CDCConfirmationTracker — concurrent waiters for same key both resolve in
     cache.fire('nodes', 'INSERT', {
       node_id: 'node-1',
       status: 'JOINING',
-      updated_at_hlc: '1700000000001:0:node-1',
+      updated_at_hlc: '1700000000001-0-node-1',
     });
     await p1;
     t.equal(p1Resolved, true, 'first waiter resolved on its causal event');
@@ -235,7 +235,7 @@ test('CDCConfirmationTracker — concurrent waiters for same key both resolve in
     cache.fire('nodes', 'UPDATE', {
       node_id: 'node-1',
       status: 'ACTIVE',
-      updated_at_hlc: '1700000000002:0:node-1',
+      updated_at_hlc: '1700000000002-0-node-1',
     });
     await p2;
     t.equal(p2Resolved, true, 'second waiter resolved on its causal event');
@@ -281,7 +281,7 @@ test('CDCConfirmationTracker — causal criteria ignore unrelated updates and mi
     let resolved = false;
     const promise = tracker.awaitConfirmation('nodes', 'node-1', {
       expectedFields: {storage_budget_source: 'test-update-source'},
-      originHlc: '1700000000002:0:node-1',
+      originHlc: '1700000000002-0-node-1',
     }).then(() => {
       resolved = true;
     });
@@ -291,7 +291,7 @@ test('CDCConfirmationTracker — causal criteria ignore unrelated updates and mi
       node_id: 'node-1',
       status: 'active',
       storage_budget_source: 'backfill',
-      updated_at_hlc: '1700000000001:0:node-1',
+      updated_at_hlc: '1700000000001-0-node-1',
     });
     await Promise.resolve();
     t.equal(resolved, false, 'unrelated heartbeat must not satisfy causal confirmation');
@@ -310,7 +310,7 @@ test('CDCConfirmationTracker — causal criteria ignore unrelated updates and mi
       node_id: 'node-1',
       status: 'active',
       storage_budget_source: 'test-update-source',
-      updated_at_hlc: '1700000000002:0:node-1',
+      updated_at_hlc: '1700000000002-0-node-1',
     });
     await promise;
     t.equal(resolved, true, 'matching causal update resolves confirmation');
@@ -331,16 +331,109 @@ test('CDCConfirmationTracker — resolves immediately when matching causal event
     cache.fire('nodes', 'UPDATE', {
       node_id: 'node-early',
       status: 'READY',
-      updated_at_hlc: '1700000000005:0:node-early',
+      updated_at_hlc: '1700000000005-0-node-early',
     });
 
     await tracker.awaitConfirmation('nodes', 'node-early', {
       operation: 'UPDATE',
       expectedFields: {status: 'READY'},
-      originHlc: '1700000000005:0:node-early',
+      originHlc: '1700000000005-0-node-early',
     });
 
     t.pass('causal confirmation resolved from recent event history without race');
+    tracker.shutdown();
+    t.end();
+  });
+
+test('CDCConfirmationTracker — bounds global recentEvents key retention under key churn',
+  async (t) => {
+    const cache = createCacheStub();
+    const tracker = new CDCConfirmationTracker({
+      systemTableCache: cache,
+      timeoutMs: 60,
+    });
+
+    for (let i = 0; i < 400; i += 1) {
+      cache.fire('replica_operations', 'INSERT', {
+        operation_id: `op-${i}`,
+        status: 'COMPLETED',
+        updated_at_hlc: `1700000000${String(i).padStart(3, '0')}-0-node-1`,
+      });
+    }
+
+    t.ok(
+      tracker.recentEvents.size <= 256,
+      `recentEvents size (${tracker.recentEvents.size}) is bounded at <= 256 keys`,
+    );
+    t.equal(
+      tracker.recentEvents.has('replica_operations:op-0'),
+      false,
+      'oldest key is evicted when global key cap is exceeded',
+    );
+    t.equal(
+      tracker.recentEvents.has('replica_operations:op-399'),
+      true,
+      'newest key is retained in bounded recent event history',
+    );
+
+    await tracker.awaitConfirmation('replica_operations', 'op-399', {
+      originHlc: '1700000000399-0-node-1',
+    });
+
+    tracker.shutdown();
+    t.end();
+  });
+
+test('CDCConfirmationTracker — fail-closed rejection when record or required HLC is malformed',
+  async (t) => {
+    const cache = createCacheStub();
+    const tracker = new CDCConfirmationTracker({
+      systemTableCache: cache,
+      timeoutMs: 60,
+    });
+
+    let resolved = false;
+    const promise = tracker.awaitConfirmation('nodes', 'node-hlc-guard', {
+      timeoutMs: 60,
+      expectedFields: {status: 'READY'},
+      originHlc: '1700000000002-0-node-1',
+    }).then(() => {
+      resolved = true;
+    });
+
+    // 'zzzz-invalid-hlc' would compare > '1700000000002-0-node-1' under localeCompare,
+    // but must be rejected fail-closed by HLCTimestamp parsing.
+    cache.fire('nodes', 'UPDATE', {
+      node_id: 'node-hlc-guard',
+      status: 'READY',
+      updated_at_hlc: 'zzzz-invalid-hlc',
+    });
+    await Promise.resolve();
+    t.equal(
+      resolved,
+      false,
+      'malformed record HLC must not satisfy causal confirmation via string comparison',
+    );
+
+    // Valid HLC >= required originHlc resolves the waiter.
+    cache.fire('nodes', 'UPDATE', {
+      node_id: 'node-hlc-guard',
+      status: 'READY',
+      updated_at_hlc: '1700000000002-0-node-1',
+    });
+    await promise;
+    t.equal(resolved, true, 'valid HLC satisfies causal confirmation');
+
+    // A waiter supplying a malformed required HLC must also fail closed.
+    await t.rejects(
+      tracker.awaitConfirmation('nodes', 'node-hlc-guard', {
+        timeoutMs: 40,
+        originHlc: 'malformed:required:hlc',
+      }),
+      {name: CDC_CONFIRMATION_ERROR_TYPE.TIMEOUT},
+      'waiter with malformed required HLC fails closed instead of matching recent events',
+    );
+
     tracker.shutdown();
     t.end();
   });

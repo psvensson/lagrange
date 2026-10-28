@@ -593,6 +593,7 @@ class ServiceRegistrationHandoffOwner {
 
       const registeredServiceRow =
         this.delegates.buildRegisteredServiceMutationRow(serviceData);
+      let registeredOriginHlc = null;
       try {
         const mutationResult =
           await this.writeRegisteredServiceRowWithRetry(
@@ -600,6 +601,10 @@ class ServiceRegistrationHandoffOwner {
             registeredServiceRow,
             handoffContext ? previousRegisteredServiceRow : null,
           );
+        registeredOriginHlc =
+          mutationResult?.originHlc ||
+          mutationResult?.partitionResult?.originHlc ||
+          null;
         if (!classifyControlPlaneMutationResult(mutationResult).applied) {
           const observed =
             await this.delegates.readCurrentRegisteredServiceRow(
@@ -680,6 +685,11 @@ class ServiceRegistrationHandoffOwner {
       return {
         success: true,
         serviceId: serviceData[COLUMN.SERVICE_ID],
+        originHlc:
+          typeof registeredOriginHlc === 'string' &&
+          registeredOriginHlc.length > 0 ?
+            registeredOriginHlc :
+            null,
         assignmentId: assignmentContext?.assignmentId || null,
         operationId: handoffContext?.operationId || null,
         [SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]:

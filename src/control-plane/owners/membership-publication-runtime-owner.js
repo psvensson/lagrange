@@ -64,6 +64,7 @@ class MembershipPublicationRuntimeOwner {
       systemMetadataOwners.nodeEndpointsOwner ||
       new NodeEndpointsOwner(ownerOptions);
     this.serviceEndpointsOwner = systemMetadataOwners.serviceEndpointsOwner;
+    this.messageGroupsOwner = systemMetadataOwners.messageGroupsOwner;
     this.controlPlanePublicationsOwner =
       systemMetadataOwners.controlPlanePublicationsOwner;
     this.syncOwnerDependencies(ownerOptions);
@@ -81,6 +82,7 @@ class MembershipPublicationRuntimeOwner {
     applyOwnerDependencies(this.nodesOwner, ownerOptions);
     applyOwnerDependencies(this.nodeEndpointsOwner, ownerOptions);
     applyOwnerDependencies(this.serviceEndpointsOwner, ownerOptions);
+    applyOwnerDependencies(this.messageGroupsOwner, ownerOptions);
     applyOwnerDependencies(this.controlPlanePublicationsOwner, ownerOptions);
     return this;
   }
@@ -211,6 +213,13 @@ class MembershipPublicationRuntimeOwner {
       update: (whereClause, data, identity) => owner.updateWhere(whereClause,
         data, {...mutationOptions, ...identity}),
     });
+  }
+
+  async upsertJoinMessageGroup(row, options = {}) {
+    return this.messageGroupsOwner.upsertMessageGroup(
+      row,
+      this.buildJoinMutationOptions(options),
+    );
   }
 
   getControlPlanePublicationsOwner() {

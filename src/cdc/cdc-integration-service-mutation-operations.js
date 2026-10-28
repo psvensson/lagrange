@@ -276,6 +276,7 @@ class CDCIntegrationServiceMutationOperations {
           visibilityResult = normalizeSystemTableVisibilityResult(
             await this.waitForCacheUpdate(tableName, pkValue, true, {
               allowPendingVisibility: options?.allowPendingVisibility === true,
+              originHlc: result.originHlc,
             }),
           );
         }
@@ -473,6 +474,7 @@ class CDCIntegrationServiceMutationOperations {
               expectedFields: expectedCacheFields,
               minimumFields: minimumCacheFields,
               allowPendingVisibility: options?.allowPendingVisibility === true,
+              originHlc: result.originHlc,
             }),
           );
         }

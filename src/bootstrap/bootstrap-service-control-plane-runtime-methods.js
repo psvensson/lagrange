@@ -72,6 +72,21 @@ function buildSeedNodeRegistrationRow(service, stats, now) {
   };
 }
 
+function buildSeedHeartbeatStatsPayload(stats) {
+  return {
+    cpu: {
+      count: stats?.cpu?.count,
+      usagePercent: stats?.cpu?.usagePercent,
+    },
+    memory: {
+      totalBytes: stats?.memory?.totalBytes,
+      usagePercent: stats?.memory?.usagePercent,
+    },
+    diskGb: stats?.diskGb,
+    diskUsagePercent: stats?.diskUsagePercent,
+  };
+}
+
 function isSeedRowReadyInCache(seedNodeRow) {
   return Boolean(seedNodeRow) &&
     seedNodeRow[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
@@ -330,25 +345,13 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
         });
 
         await this.heartbeatService.sendHeartbeat(
-          {
-            cpu: {
-              count: stats.cpu?.count,
-              usagePercent: stats.cpu?.usagePercent,
-            },
-            memory: {
-              totalBytes: stats.memory?.totalBytes,
-              usagePercent: stats.memory?.usagePercent,
-            },
-            diskGb: stats.diskGb,
-            diskUsagePercent: stats.diskUsagePercent,
-          },
+          buildSeedHeartbeatStatsPayload(stats),
           [...DEFAULT_NODE_CAPABILITIES],
           {
             requireDurableVisibility: true,
-            allowReadyPromotion: true,
           },
         );
-        assertSeedReadyPublicationContract(this);
+        this.seedReadyPublicationPending = true;
       } catch (error) {
         // A newer incarnation owns this node's row: the next boot lifecycle
         // must reserve above it (boot-incarnation-owner.js).
@@ -363,6 +366,43 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
         });
         throw error;
       }
+    },
+
+    /**
+     * Promote the registered seed node to ACTIVE/READY once runtime handlers
+     * and external transport admission have been initialized.
+     * @return {Promise<void>}
+     * @private
+     */
+    async publishSeedReadyWithControlPlane() {
+      if (typeof this.heartbeatService?.sendHeartbeat !== FUNCTION_TYPE) {
+        this.seedReadyPublicationPending = false;
+        return;
+      }
+      const stats = await NodeService.getInstance().getNodeStats();
+      await this.heartbeatService.sendHeartbeat(
+        buildSeedHeartbeatStatsPayload(stats),
+        [...DEFAULT_NODE_CAPABILITIES],
+        {
+          requireDurableVisibility: true,
+          allowReadyPromotion: true,
+        },
+      );
+      assertSeedReadyPublicationContract(this);
+      this.seedReadyPublicationPending = false;
+    },
+
+    /**
+     * Hook invoked by StartupPipelineRunner at the terminalFINALIZED checkpoint
+     * after RUNTIME_READY has completed.
+     * @return {Promise<void>}
+     * @private
+     */
+    async beforeTerminalStartupCheckpoint() {
+      if (this.seedReadyPublicationPending !== true) {
+        return;
+      }
+      await this.publishSeedReadyWithControlPlane();
     },
 
     /**

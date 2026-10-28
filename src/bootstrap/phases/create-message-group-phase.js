@@ -10,8 +10,6 @@ import {
   DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
 } from '../replication-target-authority.js';
 import {NodeService} from '../../node/node-service.js';
-import {prepareBootstrapHydrationRow} from
-  '../bootstrap-cache-hydration-applier.js';
 import {
   IDENTITY_WAIT,
   IDENTITY_WAIT_AWAITED,
@@ -40,6 +38,7 @@ import {
 import {
   ADDRESS,
   CDC_OPERATION,
+  COLUMN,
   ENTITY_TYPE,
   SERVICE_STATUS,
   TABLES,
@@ -111,24 +110,23 @@ function resolveRetryableMessageGroupRegistrationFailureAction(options = {}) {
 }
 
 function buildRetryableMessageGroupRegistrationError(error, classification) {
+  const details = classification || {};
   const retryableError = new Error(
     error?.message || JOINING_ERROR_MSG.BOOTSTRAP_REQUEST_FAILED,
   );
   retryableError.deferRetry = true;
   retryableError.retryable = true;
-  if (Number.isFinite(classification?.retryAfterMs) &&
-      classification.retryAfterMs > 0) {
-    retryableError.retryAfterMs = Math.floor(classification.retryAfterMs);
+  if (Number.isFinite(details.retryAfterMs) && details.retryAfterMs > 0) {
+    retryableError.retryAfterMs = Math.floor(details.retryAfterMs);
   }
-  if (classification?.parsedError) {
-    retryableError.bootstrapResponse = classification.parsedError;
+  if (details.parsedError) {
+    retryableError.bootstrapResponse = details.parsedError;
   }
-  if (typeof classification?.code === 'string' &&
-      classification.code.length > 0) {
-    retryableError.code = classification.code;
+  if (typeof details.code === 'string' && details.code.length > 0) {
+    retryableError.code = details.code;
   }
-  if (Number.isFinite(classification?.statusCode)) {
-    retryableError.statusCode = Math.floor(classification.statusCode);
+  if (Number.isFinite(details.statusCode)) {
+    retryableError.statusCode = Math.floor(details.statusCode);
   }
   if (error) {
     retryableError.cause = error;
@@ -455,6 +453,11 @@ class CreateMessageGroupPhase {
         throw error;
       }
 
+      const shortcutOriginHlc =
+        shortcutResult?.originHlc || shortcutResult?.partitionResult?.originHlc;
+      if (typeof shortcutOriginHlc === 'string' && shortcutOriginHlc.length > 0) {
+        serviceData[COLUMN.UPDATED_AT_HLC] = shortcutOriginHlc;
+      }
       if (typeof this.delegates.seedJoinTimeCacheRow === LOCAL_STR_FUNCTION) {
         this.delegates.seedJoinTimeCacheRow(
           TABLES.SERVICES,
@@ -521,26 +524,20 @@ class CreateMessageGroupPhase {
           throw err;
         }
 
+        if (typeof response.originHlc === 'string' &&
+            response.originHlc.length > 0) {
+          serviceData[COLUMN.UPDATED_AT_HLC] = response.originHlc;
+        }
         const systemTableCache =
           NodeService.getInstance().getSystemTableCache();
         if (systemTableCache) {
-          // Bootstrap timing exception: local cache seeding
-          // is required here because join-time CDC
-          // subscriptions are activated later in
-          // phaseQuerySystemState().
-          // Control-plane address resolution and readiness
-          // checks may consult the local services cache
-          // before CDC fanout reaches this node.
-          // See architecture.md: Sanctioned direct
-          // applySystemTableChange call sites.
+          // Bootstrap timing exception: local cache seeding is required here
+          // because join-time CDC subscriptions are activated later in
+          // phaseQuerySystemState(). See architecture.md.
           systemTableCache.applySystemTableChange(
             TABLES.SERVICES,
             CDC_OPERATION.UPSERT,
-            prepareBootstrapHydrationRow(
-              systemTableCache,
-              TABLES.SERVICES,
-              serviceData,
-            ),
+            serviceData,
           );
         }
 
@@ -764,7 +761,15 @@ class CreateMessageGroupPhase {
             .selfHostedMetadataUpsertFailed(groupId),
         );
       }
-
+      const flushOriginHlc =
+        upsertResult?.originHlc || upsertResult?.partitionResult?.originHlc;
+      if (typeof flushOriginHlc === 'string' && flushOriginHlc.length > 0) {
+        messageGroupRow[COLUMN.UPDATED_AT_HLC] = flushOriginHlc;
+      }
+      this.delegates.seedJoinTimeCacheRow?.(
+        TABLES.MESSAGE_GROUPS,
+        messageGroupRow,
+      );
       this.pendingCreateSelfHostedMessageGroupRow = null;
       this.delegates.getLogger().info(
         JOINING_LOG_MSG.SELF_HOSTED_METADATA_REGISTERED,

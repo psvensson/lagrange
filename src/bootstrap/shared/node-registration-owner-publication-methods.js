@@ -213,15 +213,30 @@ const RESOLVED_JOIN_ADMISSION_WITHDRAWAL = Object.freeze({
 
 function buildRefusedJoinAdmissionWithdrawal(registeredNodeId, transition) {
   return {
-    success: false,
-    accepted: false,
-    withdrawalDeferred: false,
-    registeredNodeId,
-    outcome: transition.outcome,
+    success: false, accepted: false, withdrawalDeferred: false,
+    registeredNodeId, outcome: transition.outcome,
     knownIncarnation: transition.knownIncarnation ?? null,
-    nodeEndpointWithdrawn: false,
-    metaEndpointCount: 0,
+    nodeEndpointWithdrawn: false, metaEndpointCount: 0,
     metaEndpointWithdrawnCount: 0,
+  };
+}
+
+function withOriginHlcStamp(row, originHlc) {
+  return typeof originHlc === 'string' && originHlc.length > 0 ?
+    {...row, [COLUMN.UPDATED_AT_HLC]: originHlc} : row;
+}
+
+function normalizeEndpointOutcomeResult(endpointOutcome) {
+  const completed =
+    isEndpointIncarnationOutcomeCompleted(endpointOutcome.outcome) &&
+    endpointOutcome.outcome !== ENDPOINT_INCARNATION_OUTCOME.ALREADY_ABSENT;
+  if (!completed && endpointOutcome.error) throw endpointOutcome.error;
+  const originHlc = endpointOutcome.result?.originHlc ||
+    endpointOutcome.result?.partitionResult?.originHlc || null;
+  return {
+    success: completed, outcome: endpointOutcome.outcome,
+    originHlc: typeof originHlc === 'string' && originHlc.length > 0 ? originHlc : null,
+    error: completed ? null : endpointOutcome.outcome,
   };
 }
 
@@ -275,8 +290,10 @@ class NodeRegistrationOwnerPublicationMethods {
       address: canonicalWsAddress,
     });
     // The row as written: born at this boot's exact incarnation.
-    return stampEndpointIncarnation(endpointData,
-      this.getRegistrationBootIncarnation());
+    return withOriginHlcStamp(
+      stampEndpointIncarnation(endpointData, this.getRegistrationBootIncarnation()),
+      endpointResult?.originHlc,
+    );
   }
 
   async registerMetaServiceEndpoints() {
@@ -286,7 +303,6 @@ class NodeRegistrationOwnerPublicationMethods {
       const endpointRows = [];
       await registerBuiltInMetaServiceEndpoints({
         upsertRow: async (tableName, row) => {
-          endpointRows.push(row);
           const result = await this.upsertSystemTableRowWithRetry(
             tableName,
             row,
@@ -299,6 +315,7 @@ class NodeRegistrationOwnerPublicationMethods {
             throw new Error(
               `Failed to register meta endpoint: ${result.error}`);
           }
+          endpointRows.push(withOriginHlcStamp(row, result?.originHlc));
           return result;
         },
         nodeId: this.nodeId,
@@ -374,39 +391,25 @@ class NodeRegistrationOwnerPublicationMethods {
 
   getJoinAdmissionControlPlaneSystemTableGateway() {
     const delegatedGateway =
-      this.delegates.getJoinAdmissionControlPlaneSystemTableGateway?.() ||
-      null;
-    if (delegatedGateway) {
-      return delegatedGateway;
-    }
-
-    const joinAdmissionSqlQueryEngine =
-      this.resolveJoinAdmissionSqlQueryEngine();
-    if (!joinAdmissionSqlQueryEngine) {
-      return null;
-    }
+      this.delegates.getJoinAdmissionControlPlaneSystemTableGateway?.() || null;
+    if (delegatedGateway) return delegatedGateway;
+    const joinAdmissionSqlQueryEngine = this.resolveJoinAdmissionSqlQueryEngine();
+    if (!joinAdmissionSqlQueryEngine) return null;
 
     // Contract: when a join-admission SQL query engine exists (guaranteed
     // above), the gateway drives CDC through that engine; a direct
     // cdcIntegrationService delegate is never wired on this path.
     const cdcIntegrationService = null;
-    const systemTableCache =
-      this.delegates.getSystemTableCache?.() ||
-      NodeService.getInstance().getSystemTableCache() ||
-      null;
+    const systemTableCache = this.delegates.getSystemTableCache?.() ||
+      NodeService.getInstance().getSystemTableCache() || null;
     const messageRouter = this.delegates.getMessageRouter?.() || null;
-
-    if (this.joinAdmissionControlPlaneSystemTableGateway) {
-      this.joinAdmissionControlPlaneSystemTableGateway.setSqlQueryEngine?.(
-        joinAdmissionSqlQueryEngine,
-      );
-      this.joinAdmissionControlPlaneSystemTableGateway
-        .setCdcIntegrationService?.(cdcIntegrationService);
-      this.joinAdmissionControlPlaneSystemTableGateway
-        .setSystemTableCache?.(systemTableCache);
-      this.joinAdmissionControlPlaneSystemTableGateway
-        .setMessageRouter?.(messageRouter);
-      return this.joinAdmissionControlPlaneSystemTableGateway;
+    const existing = this.joinAdmissionControlPlaneSystemTableGateway;
+    if (existing) {
+      existing.setSqlQueryEngine?.(joinAdmissionSqlQueryEngine);
+      existing.setCdcIntegrationService?.(cdcIntegrationService);
+      existing.setSystemTableCache?.(systemTableCache);
+      existing.setMessageRouter?.(messageRouter);
+      return existing;
     }
 
     this.joinAdmissionControlPlaneSystemTableGateway =
@@ -679,33 +682,31 @@ class NodeRegistrationOwnerPublicationMethods {
     };
   }
 
-  async upsertSystemTableRowWithRetry(
-    tableName,
-    rowData,
-    options = {},
-  ) {
+  async upsertSystemTableRowWithRetry(tableName, rowData, options = {}) {
     const membershipPublicationRuntimeOwner =
       this.getMembershipPublicationRuntimeOwner();
-    const joinTimeOptions = this.getJoinTimeUpsertOptions();
     const mutationOptions = {
-      ...joinTimeOptions,
+      ...this.getJoinTimeUpsertOptions(),
       ...(Number.isFinite(options.queryTimeoutMs) ?
-        {queryTimeoutMs: Math.floor(options.queryTimeoutMs)} :
-        {}),
-      controlPlaneWriteRetryOnRetry:
-        this.buildJoinAdmissionRetryLogger(
-          tableName,
-          options.admissionTarget || null,
-        ),
+        {queryTimeoutMs: Math.floor(options.queryTimeoutMs)} : {}),
+      controlPlaneWriteRetryOnRetry: this.buildJoinAdmissionRetryLogger(
+        tableName,
+        options.admissionTarget || null,
+      ),
     };
     if (tableName === TABLES.NODES) {
       return this.registerJoinNodeRow(rowData, mutationOptions);
     }
+    if (tableName === TABLES.MESSAGE_GROUPS) {
+      return membershipPublicationRuntimeOwner.upsertJoinMessageGroup(
+        rowData,
+        mutationOptions,
+      );
+    }
     if (tableName !== TABLES.NODE_ENDPOINTS &&
         tableName !== TABLES.SERVICE_ENDPOINTS) {
       throw new Error(
-        `${NODE_REGISTRATION_ERROR.UNSUPPORTED_PUBLICATION_TABLE}: ` +
-        `${tableName}`,
+        `${NODE_REGISTRATION_ERROR.UNSUPPORTED_PUBLICATION_TABLE}: ${tableName}`,
       );
     }
     // Endpoint rows are born or advanced at this boot's exact incarnation;
@@ -717,15 +718,7 @@ class NodeRegistrationOwnerPublicationMethods {
         this.getRegistrationBootIncarnation(),
         mutationOptions,
       );
-    const completed =
-      isEndpointIncarnationOutcomeCompleted(endpointOutcome.outcome) &&
-      endpointOutcome.outcome !== ENDPOINT_INCARNATION_OUTCOME.ALREADY_ABSENT;
-    if (!completed && endpointOutcome.error) throw endpointOutcome.error;
-    return {
-      success: completed,
-      outcome: endpointOutcome.outcome,
-      error: completed ? null : endpointOutcome.outcome,
-    };
+    return normalizeEndpointOutcomeResult(endpointOutcome);
   }
 
   getJoinTimeUpsertOptions() {

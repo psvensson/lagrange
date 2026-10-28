@@ -97,20 +97,21 @@ test('BootstrapService waits for local query transport readiness before publishi
     }
 
     t.equal(heartbeatSent, 1,
-      'seed ready heartbeat should be published once the local query transport becomes ready');
+      'seed registration heartbeat should be published once the local query transport becomes ready');
     t.same(capturedCapabilities, [
       'partition_replica',
       'message_group_replica',
-    ], 'seed ready heartbeat publishes canonical node capabilities');
+    ], 'seed registration heartbeat publishes canonical node capabilities');
     t.same(capturedOptions, {
       requireDurableVisibility: true,
-      allowReadyPromotion: true,
-    }, 'seed ready heartbeat requires durable visibility and explicit ready promotion');
+    }, 'seed registration heartbeat requires durable visibility without premature READY promotion');
+    t.equal(service.seedReadyPublicationPending, true,
+      'seed marks READY publication pending until runtime initialization completes');
     t.same(sleepDelays, [1],
-      'seed ready publication should back off before the first heartbeat when local query transport is deferred');
+      'seed registration publication should back off before the first heartbeat when local query transport is deferred');
   });
 
-test('BootstrapService registerSeedNodeWithControlPlane promotes a cached JOINING seed row to READY and enforces the READY completion contract',
+test('BootstrapService keeps seed JOINING during control-plane registration and promotes to READY only after runtime initialization',
   async (t) => {
     initializeTestEnvironment();
 
@@ -118,6 +119,16 @@ test('BootstrapService registerSeedNodeWithControlPlane promotes a cached JOININ
     const systemTableCache = {
       get(tableName, key) {
         return tableName === 'nodes' ? cachedRows.get(key) || null : null;
+      },
+      filter(tableName) {
+        if (tableName === 'service_endpoints') {
+          return [{
+            endpoint_id: 'ep-1',
+            node_id: 'seed-ready-contract-node',
+            boot_incarnation: 1,
+          }];
+        }
+        return [];
       },
     };
 
@@ -160,18 +171,8 @@ test('BootstrapService registerSeedNodeWithControlPlane promotes a cached JOININ
     });
 
     try {
-      // Case 1: If sendHeartbeat leaves the cached seed row in JOINING/CONNECTED,
-      // registerSeedNodeWithControlPlane fails the explicit READY completion contract.
-      service.heartbeatService = {
-        sendHeartbeat: async () => {},
-      };
-      await t.rejects(
-        service.registerSeedNodeWithControlPlane(),
-        /Seed bootstrap READY contract violated/,
-        'bootstrap registration rejects when the seed row remains JOINING/CONNECTED in cache',
-      );
-
-      // Case 2: With allowReadyPromotion, the seed row is promoted to ACTIVE/READY in cache.
+      // Step 1: Control-plane registration keeps the seed row in JOINING/CONNECTED
+      // so no peer can observe READY before runtime initialization and external admission.
       service.heartbeatService = {
         sendHeartbeat: async (_stats, capabilities, options) => {
           if (options?.allowReadyPromotion === true && options?.requireDurableVisibility === true) {
@@ -186,9 +187,151 @@ test('BootstrapService registerSeedNodeWithControlPlane promotes a cached JOININ
         },
       };
       await service.registerSeedNodeWithControlPlane();
-      const finalRow = systemTableCache.get('nodes', service.nodeId);
-      t.equal(finalRow?.status, 'active', 'seed row is ACTIVE when registration completes');
-      t.equal(finalRow?.connection_state, 'ready', 'seed row is READY when registration completes');
+      const postRegistrationRow = systemTableCache.get('nodes', service.nodeId);
+      t.equal(postRegistrationRow?.status, 'joining',
+        'seed row remains JOINING after control-plane registration before runtime initialization');
+      t.equal(postRegistrationRow?.connection_state, 'connected',
+        'seed row remains CONNECTED after control-plane registration before runtime initialization');
+      t.equal(service.seedReadyPublicationPending, true,
+        'seedReadyPublicationPending is armed after control-plane registration');
+
+      // Step 2: If publishSeedReadyWithControlPlane fails to promote the row to ACTIVE/READY,
+      // the explicit READY completion contract rejects fail-closed.
+      service.heartbeatService = {
+        sendHeartbeat: async () => {},
+      };
+      await t.rejects(
+        service.publishSeedReadyWithControlPlane(),
+        /Seed bootstrap READY contract violated/,
+        'publishSeedReadyWithControlPlane rejects when the seed row remains JOINING/CONNECTED in cache',
+      );
+
+      // Step 3: Verify full checkpoint ordering across CONTROL_PLANE_READY -> RUNTIME_READY -> FINALIZED:
+      // status is still JOINING while initializeRuntimeServiceHandler and openExternalTransportAdmission run,
+      // and transitions to ACTIVE/READY only at FINALIZED before bootstrap completes.
+      cachedRows.clear();
+      const observedStates = [];
+      let externalAdmissionOpen = false;
+      service.messageRouter = {
+        getQueryDataPlaneTransportReadiness() {
+          return {ready: true, state: 'ready'};
+        },
+        isExternalAdmissionEnabled() {
+          return externalAdmissionOpen;
+        },
+        setExternalAdmissionEnabled(enabled) {
+          externalAdmissionOpen = enabled === true;
+        },
+      };
+      service.heartbeatService = {
+        sendHeartbeat: async (_stats, capabilities, options) => {
+          if (options?.allowReadyPromotion === true && options?.requireDurableVisibility === true) {
+            cachedRows.set(service.nodeId, {
+              ...cachedRows.get(service.nodeId),
+              status: 'active',
+              connection_state: 'ready',
+              capabilities: JSON.stringify(capabilities),
+              ready_lease_expires_at: Date.now() + 30000,
+            });
+          }
+        },
+      };
+      service.initializeReplicaHandler = () => {
+        service.replicaHandler = {};
+      };
+      service.initializeMessageGroupServiceHandler = () => {
+        service.messageGroupServiceHandler = {};
+      };
+      service.initializeControlPlaneService = async () => {};
+      service.notifyLocalAdminRuntimeReady = async () => {
+        service.localAdminRuntimeReadyNotified = true;
+      };
+      service.activateMessageGroupServiceRows = async () => {
+        const rowDuringControlPlaneReady = systemTableCache.get('nodes', service.nodeId);
+        observedStates.push({
+          stage: 'control_plane_ready',
+          status: rowDuringControlPlaneReady?.status,
+          connectionState: rowDuringControlPlaneReady?.connection_state,
+          runtimeReady: Boolean(service.runtimeServiceHandler),
+          externalAdmissionOpen,
+        });
+      };
+      service.initializeRuntimeServiceHandler = () => {
+        const rowBeforeRuntimeHandler = systemTableCache.get('nodes', service.nodeId);
+        observedStates.push({
+          stage: 'before_runtime_handler',
+          status: rowBeforeRuntimeHandler?.status,
+          connectionState: rowBeforeRuntimeHandler?.connection_state,
+          runtimeReady: false,
+          externalAdmissionOpen,
+        });
+        service.runtimeServiceHandler = {};
+      };
+      service.openExternalTransportAdmission = () => {
+        const rowBeforeExternalAdmission = systemTableCache.get('nodes', service.nodeId);
+        observedStates.push({
+          stage: 'before_external_admission',
+          status: rowBeforeExternalAdmission?.status,
+          connectionState: rowBeforeExternalAdmission?.connection_state,
+          runtimeReady: Boolean(service.runtimeServiceHandler),
+          externalAdmissionOpen,
+        });
+        externalAdmissionOpen = true;
+      };
+      service.completeSuccessfulBootstrap = () => {
+        const rowAtFinalizeComplete = systemTableCache.get('nodes', service.nodeId);
+        observedStates.push({
+          stage: 'finalized_complete',
+          status: rowAtFinalizeComplete?.status,
+          connectionState: rowAtFinalizeComplete?.connection_state,
+          runtimeReady: Boolean(service.runtimeServiceHandler),
+          externalAdmissionOpen,
+        });
+        service.phase = 'complete';
+      };
+      service.hasActiveControlPlaneBackgroundWriters = () => true;
+
+      const steps = service.buildSeedCheckpointSteps(
+        {run: async () => {}},
+        {phases: []},
+      ).slice(5);
+      for (const step of steps) {
+        if (step.terminal === true) {
+          await service.beforeTerminalStartupCheckpoint();
+        }
+        await step.run({});
+      }
+
+      t.same(observedStates, [
+        {
+          stage: 'control_plane_ready',
+          status: 'joining',
+          connectionState: 'connected',
+          runtimeReady: false,
+          externalAdmissionOpen: false,
+        },
+        {
+          stage: 'before_runtime_handler',
+          status: 'joining',
+          connectionState: 'connected',
+          runtimeReady: false,
+          externalAdmissionOpen: false,
+        },
+        {
+          stage: 'before_external_admission',
+          status: 'joining',
+          connectionState: 'connected',
+          runtimeReady: true,
+          externalAdmissionOpen: false,
+        },
+        {
+          stage: 'finalized_complete',
+          status: 'active',
+          connectionState: 'ready',
+          runtimeReady: true,
+          externalAdmissionOpen: true,
+        },
+      ], 'seed remains JOINING/CONNECTED until after runtime handler and external admission are initialized');
     } finally {
       NodeStorageBudgetSetup.create = originalCreate;
       NodeStorageBudgetSetup.resolveAndPersist = originalResolveAndPersist;

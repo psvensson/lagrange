@@ -128,12 +128,12 @@ async function attempt(write) {
     const result = await write();
     if (classifyControlPlaneMutationResult(result).applied === true ||
         isPendingInstanceApplied(result)) {
-      return {applied: true, error: null};
+      return {applied: true, result, error: null};
     }
-    return {applied: false, error: result?.success === false ?
+    return {applied: false, result, error: result?.success === false ?
       failedResultError(result) : null};
   } catch (error) {
-    return {applied: false, error};
+    return {applied: false, result: null, error};
   }
 }
 
@@ -202,8 +202,23 @@ function classifyObservation(read, bootIncarnation, afterAttempt) {
   return NODE_REGISTRATION_OUTCOME.UNRESOLVED;
 }
 
-function freezeOutcome(outcome, observedRow = null, error = null) {
-  return Object.freeze({outcome, observedRow, error});
+function resolveAttemptOriginHlc(result, observedRow) {
+  const resultOriginHlc =
+    result?.originHlc ||
+    result?.partitionResult?.originHlc ||
+    observedRow?.[COLUMN.UPDATED_AT_HLC];
+  return typeof resultOriginHlc === 'string' && resultOriginHlc.length > 0 ?
+    resultOriginHlc :
+    null;
+}
+
+function freezeOutcome(outcome, observedRow = null, error = null, result = null) {
+  return Object.freeze({
+    outcome,
+    observedRow,
+    error,
+    originHlc: resolveAttemptOriginHlc(result, observedRow),
+  });
 }
 
 // A registration classified anything but UNRESOLVED is done: its write
@@ -251,7 +266,12 @@ async function writeNodeRegistrationAtIncarnation(options) {
   const firstAttempt = await attempt(first);
   if (firstAttempt.applied) {
     return settleRegistration(row,
-      freezeOutcome(NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow));
+      freezeOutcome(
+        NODE_REGISTRATION_OUTCOME.ACCEPTED,
+        observedRow,
+        null,
+        firstAttempt.result,
+      ));
   }
   return settleRegistration(row, await resolveUnappliedRegistration(options,
     row, bootIncarnation, firstAttempt));
@@ -267,11 +287,20 @@ async function resolveUnappliedRegistration(options, row, bootIncarnation,
     planRegistration(options, row, reread.row, bootIncarnation) : null;
   const retryAttempt = retry === null ? null : await attempt(retry);
   if (retryAttempt?.applied) {
-    return freezeOutcome(NODE_REGISTRATION_OUTCOME.ACCEPTED, reread.row);
+    return freezeOutcome(
+      NODE_REGISTRATION_OUTCOME.ACCEPTED,
+      reread.row,
+      null,
+      retryAttempt.result,
+    );
   }
   const settled = retryAttempt ? await options.observe() : reread;
-  return freezeOutcome(classifyObservation(settled, bootIncarnation, true),
-    settled.row || null, retryAttempt?.error || firstAttempt.error);
+  return freezeOutcome(
+    classifyObservation(settled, bootIncarnation, true),
+    settled.row || null,
+    retryAttempt?.error || firstAttempt.error,
+    retryAttempt?.result || firstAttempt.result,
+  );
 }
 
 /**

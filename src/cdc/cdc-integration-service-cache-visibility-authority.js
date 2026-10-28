@@ -5,7 +5,7 @@ import {
 import {
   SYSTEM_TABLE_CACHE_MUTATION_MODE,
 } from '../cache/cache-constants.js';
-import {CDC_OPERATION} from '../constants/index.js';
+import {CDC_OPERATION, COLUMN} from '../constants/index.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {applyAuthoritativeCacheMutation} from './cdc-terminal-gate.js';
 import {canonicalizeSystemTableRow} from
@@ -141,7 +141,7 @@ function applyAuthoritativeCacheRepairRow(
   const canonicalRow = canonicalizeSystemTableRow(tableName, row);
   const mutationMode = resolveAuthoritativeCacheRepairMutationMode(
     operation,
-    options?.mutationMode,
+    options.mutationMode,
   );
   const currentRow =
     typeof service.cacheMutationTarget.get === 'function' ?
@@ -166,14 +166,19 @@ function applyAuthoritativeCacheRepairRow(
   const mutationOptions = {
     causeId,
     mutationMode,
-    authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
+    authoritativeObservedAtMs: options.authoritativeObservedAtMs,
     authoritativeReadStartedAtMs:
-      options?.authoritativeReadStartedAtMs,
+      options.authoritativeReadStartedAtMs,
   };
+  const repairRow = Object.assign(
+    {},
+    options.originHlc ? {[COLUMN.UPDATED_AT_HLC]: options.originHlc} : null,
+    canonicalRow,
+  );
   service.cacheMutationTarget.applySystemTableChange(
     tableName,
     operation,
-    canonicalRow,
+    repairRow,
     mutationOptions,
   );
   return cacheRepairSatisfiedAfterApply({
