@@ -23,6 +23,7 @@
   "files": [
     "src/",
     "!src/test-helpers/",
+    "wit/",
     "vendor/raft-rs-wasm/",
     "CHANGELOG.md"
   ],
@@ -243,27 +244,25 @@
     "node": ">=22.12.0"
   },
   "dependencies": {
+    "@bytecodealliance/componentize-js": "0.21.0",
     "@bytecodealliance/jco-transpile": "0.4.2",
     "@fastify/websocket": "^11.2.0",
     "ajv": "^8.17.1",
     "better-sqlite3": "^11.7.0",
     "blessed": "^0.1.81",
-    "blessed-contrib": "^4.11.0",
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.7",
     "node-fetch": "^3.3.2",
     "node-sql-parser": "^5.4.0",
     "pg": "^8.18.0",
     "pino": "^9.6.0",
-    "piscina": "^4.8.0",
+    "piscina": "^4.9.4",
     "uuid": "^11.0.5",
     "ws": "^8.18.0"
   },
   "overrides": {
-    "lodash": "^4.18.1",
-    "xml2js": "^0.6.2"
+    "@bytecodealliance/weval": "^0.5.0"
   },
   "devDependencies": {
-    "@bytecodealliance/componentize-js": "0.21.0",
     "@eslint/js": "^9.18.0",
     "@stryker-mutator/core": "^9.5.1",
     "@stryker-mutator/tap-runner": "^9.5.1",

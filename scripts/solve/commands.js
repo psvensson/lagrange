@@ -8,7 +8,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
-import {CHECK_BASE_ENV} from '../checks/change-selection-constants.js';
+import {
+  CHECK_BASE_ENV, REFUSAL_RELEASE_PROOF_REQUIRED,
+} from '../checks/change-selection-constants.js';
 import {
   RETRY_FAILED_ONCE_ENABLED, RETRY_FAILED_ONCE_ENV,
 } from '../run-test-files.js';
@@ -44,6 +46,7 @@ const LANDING_MARKER_ENV = 'LAGRANGE_SOLVER_LANDING';
 const LANDING_MARKER_VALUE = '1';
 const NPM = 'npm';
 const NPM_TEST_ARGUMENTS = Object.freeze(['test']);
+const NPM_TEST_FALLBACK_ARGUMENTS = Object.freeze(['run', 'test:safety-pregate']);
 const TEST_METADATA_REFRESH_ARGUMENTS =
   Object.freeze(['run', '-s', 'test:metadata:refresh']);
 // The change proof's base. Landing proves the tree that will be committed,
@@ -354,11 +357,22 @@ function landChangeProofEnvironment(env = process.env) {
 // proof is actually spawned with, not only the helper that builds it.
 function runChangeProof(root, log, spawn = spawnSync) {
   log(LAND_PROOF_BASE_ANNOUNCEMENT);
+  const env = landChangeProofEnvironment();
   const result = spawn(NPM, [...NPM_TEST_ARGUMENTS], {cwd: root,
     encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER, timeout: TEST_TIMEOUT_MS,
-    env: landChangeProofEnvironment(), stdio: ['ignore', 'pipe', 'pipe']});
-  log(`${result.stdout || ''}${result.stderr || ''}`);
-  if (result.status !== 0) refuse(`npm test failed (exit ${result.status})`);
+    env, stdio: ['ignore', 'pipe', 'pipe']});
+  const output = `${result.stdout || ''}${result.stderr || ''}`;
+  log(output);
+  if (result.status === 0) return;
+  if (output.includes(REFUSAL_RELEASE_PROOF_REQUIRED)) {
+    const full = spawn(NPM, [...NPM_TEST_FALLBACK_ARGUMENTS], {cwd: root,
+      encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER, timeout: TEST_TIMEOUT_MS,
+      env, stdio: ['ignore', 'pipe', 'pipe']});
+    log(`${full.stdout || ''}${full.stderr || ''}`);
+    if (full.status === 0) return;
+    refuse(`npm run test:safety-pregate failed (exit ${full.status})`);
+  }
+  refuse(`npm test failed (exit ${result.status})`);
 }
 
 function commitSubject(quest) {

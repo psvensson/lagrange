@@ -1,0 +1,18 @@
+{
+  "schema": "solve-quest/2",
+  "id": "release-0-2-7-release-surface-and-packaging",
+  "epic": "release-0-2-7-stabilization",
+  "statement": "Complete 0.2.7 release-surface packaging and provenance stabilization: ship service build dependencies (@bytecodealliance/componentize-js and esbuild) in production dependencies with npm release tarball smoke verification (Q07), reconcile raft-rs-wasm provenance metadata and enforce Cargo.toml/artifact-digest.json/BUILD.md agreement (Q13), and enforce non-root runtime execution in Dockerfile (Q15).",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "test-output/release-0-2-7-stabilization/receipt-q2.json",
+      "requiredReceipts": [
+        "npm-package-service-build-dependencies",
+        "raft-rs-wasm-provenance-reconciliation",
+        "dockerfile-nonroot-runtime-hardening"
+      ]
+    }
+  },
+  "sealedAt": "5f8a78441cef72e4ee7df6d68b429c286f2a346b"
+}

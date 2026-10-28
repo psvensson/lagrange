@@ -47,6 +47,8 @@ const LAGRANGE_BIN_PATH = './src/sea-entry.js';
 const ADMIN_BIN_NAME = 'lagrange-admin';
 const ADMIN_BIN_PATH = './src/cli/bin/lagrange-admin.js';
 const PACKAGE_SOURCE_PATH = 'src/';
+const PACKAGE_WIT_PATH = 'wit/';
+const COMPONENTIZE_DEPENDENCY = '@bytecodealliance/componentize-js';
 const DISTRIBUTED_SQL_KEYWORD = 'distributed-sql';
 const PUBLIC_ACCESS = 'public';
 const PACKAGE_JSON_FILENAME = 'package.json';
@@ -95,6 +97,14 @@ const COMMAND_ARGUMENT = Object.freeze({
   NODE_MODULE_INPUT: '--input-type=module',
   NODE_EVAL: '--eval',
   OPTION_PREFIX: '--',
+  SERVICE_SUBCOMMAND: 'service',
+  SERVICE_INIT: 'init',
+  SERVICE_GENERATE: 'generate',
+  SERVICE_BUILD: 'build',
+  SERVICE_DIR_OPTION: '--dir',
+  SERVICE_NAME_OPTION: '--name',
+  SERVICE_SMOKE_DIR: 'service-smoke',
+  SERVICE_SMOKE_NAME: 'smoke-svc',
 });
 const HTTP = Object.freeze({
   CACHE_NO_STORE: 'no-store',
@@ -113,6 +123,9 @@ const MANIFEST_ERROR = Object.freeze({
   LAGRANGE_BIN: 'package.json must retain the lagrange executable',
   ADMIN_BIN: 'package.json must retain the lagrange-admin executable',
   FILES: 'package.json files must explicitly include src/',
+  WIT_FILES: 'package.json files must explicitly include wit/',
+  COMPONENTIZE_DEP:
+    'package.json dependencies must include @bytecodealliance/componentize-js',
   AUTHOR: 'package.json author must be non-empty',
   HOMEPAGE: 'package.json homepage must be non-empty',
   BUGS: 'package.json bugs.url must be non-empty',
@@ -234,6 +247,13 @@ function validatePackageStructure(packageJson, packageLock) {
   assertManifestCondition(Array.isArray(packageJson.files) &&
     packageJson.files.includes(PACKAGE_SOURCE_PATH),
   MANIFEST_ERROR.FILES);
+  assertManifestCondition(Array.isArray(packageJson.files) &&
+    packageJson.files.includes(PACKAGE_WIT_PATH),
+  MANIFEST_ERROR.WIT_FILES);
+  assertManifestCondition(
+    Boolean(packageJson.dependencies?.[COMPONENTIZE_DEPENDENCY]),
+    MANIFEST_ERROR.COMPONENTIZE_DEP,
+  );
 }
 
 function validatePublicationMetadata(packageJson) {
@@ -485,6 +505,30 @@ async function verifyInstalledPackage(packed) {
         DRY_RUN_ERROR,
       );
     }
+    const serviceDirectory = join(
+      temporaryRoot,
+      COMMAND_ARGUMENT.SERVICE_SMOKE_DIR,
+    );
+    runChecked(lagrangeBin, [
+      COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
+      COMMAND_ARGUMENT.SERVICE_INIT,
+      COMMAND_ARGUMENT.SERVICE_DIR_OPTION,
+      serviceDirectory,
+      COMMAND_ARGUMENT.SERVICE_NAME_OPTION,
+      COMMAND_ARGUMENT.SERVICE_SMOKE_NAME,
+    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
+    runChecked(lagrangeBin, [
+      COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
+      COMMAND_ARGUMENT.SERVICE_GENERATE,
+      COMMAND_ARGUMENT.SERVICE_DIR_OPTION,
+      serviceDirectory,
+    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
+    runChecked(lagrangeBin, [
+      COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
+      COMMAND_ARGUMENT.SERVICE_BUILD,
+      COMMAND_ARGUMENT.SERVICE_DIR_OPTION,
+      serviceDirectory,
+    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
     return packed;
   } finally {
     await rm(temporaryRoot, {recursive: true, force: true});
@@ -821,6 +865,7 @@ export {
   describePublishMismatch,
   publishNpmPackage,
   releaseChannel,
+  validatePackageStructure,
   validateWorkspaceManifest,
   verifyInstalledPackage,
 };

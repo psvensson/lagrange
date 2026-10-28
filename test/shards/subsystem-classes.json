@@ -28,7 +28,7 @@
   "censusSize": 2486,
   "digest": "fnv1a32-b27c074a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d4566338",
+  "observationDigest": "fnv1a32-0c95758c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8097,7 +8097,8 @@
         "src",
         "src/test-helpers",
         "test",
-        "test/distributed/harness"
+        "test/distributed/harness",
+        "wit"
       ]
     },
     "test/integration/leader-metadata-validation.integration.test.js": {
@@ -12710,6 +12711,9 @@
     "test/raft/raft-rs-backend/host-contract-citations.test.js": {
       "files": [
         "package.json"
+      ],
+      "directories": [
+        "src/raft"
       ]
     },
     "test/raft/raft-rs-backend/identity-record-window.test.js": {
@@ -15548,7 +15552,8 @@
         "solve/epics",
         "solve/quests",
         "src",
-        "test"
+        "test",
+        "wit"
       ]
     },
     "test/scripts/analyze-formation-release-phases.test.js": {
@@ -17337,13 +17342,15 @@
     },
     "test/scripts/release-npm-package.test.js": {
       "files": [
+        "Dockerfile",
         "package-lock.json",
         "package.json",
         "src/public-api.js"
       ],
       "directories": [
         "data",
-        "src"
+        "src",
+        "wit"
       ]
     },
     "test/scripts/release-preflight.test.js": {

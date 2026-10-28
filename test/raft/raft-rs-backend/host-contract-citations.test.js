@@ -137,3 +137,34 @@ test('the crate contradiction is recorded with both sides cited', async () => {
   'the example applies committed entries before it appends and stores the ' +
   'hard state; the contradiction the contract records is real');
 });
+
+test('the designated current build attempt in artifact-digest.json agrees with top-level wasm/glue hashes, source inputs, and production role descriptions', async () => {
+  const digest = readArtifactDigest();
+  const {root} = raftRsBindingPaths();
+  const attemptNo = digest.reproducibility?.checkedInArtifactIsAttempt;
+  assert.ok(Number.isInteger(attemptNo) && attemptNo >= 1);
+  const currentAttempt = (digest.reproducibility?.builds || []).find(
+    (entry) => entry.attempt === attemptNo,
+  );
+  assert.ok(currentAttempt, `checked-in attempt ${attemptNo} must exist in reproducibility.builds`);
+  assert.equal(currentAttempt.wasmSha256, digest.wasmSha256,
+    'checked-in build attempt wasmSha256 must match top-level wasmSha256');
+  assert.equal(currentAttempt.glueSha256, digest.glueSha256,
+    'checked-in build attempt glueSha256 must match top-level glueSha256');
+
+  const sourceInputs = digest.sourceInputs || {};
+  for (const relativeFile of ['src/lib.rs', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml']) {
+    assert.ok(sourceInputs[relativeFile], `sourceInputs must record ${relativeFile}`);
+    assert.equal(
+      fileDigest(path.join(root, relativeFile)),
+      sourceInputs[relativeFile],
+      `${relativeFile} digest must match artifact-digest.json sourceInputs`,
+    );
+  }
+
+  const buildMd = fs.readFileSync(path.join(root, 'BUILD.md'), TEXT_ENCODING);
+  const cargoToml = fs.readFileSync(path.join(root, 'Cargo.toml'), TEXT_ENCODING);
+  assert.ok(buildMd.includes('vendor/raft-rs-wasm/'), 'BUILD.md must name vendor/raft-rs-wasm/');
+  assert.ok(!buildMd.includes('It lives under `src/raft/`'), 'BUILD.md must not claim the binding lives under src/raft/');
+  assert.ok(!cargoToml.includes('Evaluation only'), 'Cargo.toml must not describe the production binding as Evaluation only');
+});

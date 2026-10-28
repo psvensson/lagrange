@@ -17,8 +17,8 @@
   "forkedFrom": "raft-logic 0.3.14 native/raft-wasm (repository head 918d481)",
   "upstreamed": false,
   "reproducibility": {
-    "attempts": 3,
-    "method": "the recorded build command run twice on one machine with `cargo clean` between them (attempts 1 and 2, one source); attempt 3 is the checked-in artifact after the fork fixes and is a DIFFERENT source, so it is not part of the reproducibility comparison",
+    "attempts": 4,
+    "method": "the recorded build command run twice on one machine with `cargo clean` between them (attempts 1 and 2, one source); attempt 3 is the intermediate artifact after the first three fork fixes; attempt 4 is the checked-in production artifact after the fourth fork fix (tagged recoverable binding refusals)",
     "builds": [
       {
         "attempt": 1,
@@ -34,15 +34,27 @@
         "attempt": 3,
         "wasmSha256": "ae5b180354f7e7aaf4c7e5c49c2c45d3f8fbb11479c7e32d405a501563e4d33b",
         "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81",
-        "note": "after the three fork fixes; not comparable to the earlier attempts, which were a different source"
+        "note": "after the first three fork fixes; superseded by attempt 4"
+      },
+      {
+        "attempt": 4,
+        "wasmSha256": "b285c5eca45ddb6c44301abc0e35c561cd74b24f3e1670b8c49882820aa9e5ad",
+        "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81",
+        "note": "checked-in production artifact after the fourth fork fix (tagged recoverable binding refusals)"
       }
     ],
-    "checkedInArtifactIsAttempt": 3,
+    "checkedInArtifactIsAttempt": 4,
     "glueIdentical": true,
     "wasmIdentical": false,
     "result": "differs",
-    "observation": "the generated JavaScript glue is byte-identical across both builds; the .wasm is not. Reported as measured; byte-for-byte reproducibility is not a requirement of this quest.",
-    "note": "attempts 1-3 measured the reproducibility of ONE source; attempt 4 is a different source (the fork fixes) and is the checked-in artifact. The reproducibility verdict below refers to attempts 1 and 2."
+    "observation": "the generated JavaScript glue is byte-identical across builds; the .wasm is not. Reported as measured; byte-for-byte reproducibility is not assumed.",
+    "note": "attempts 1 and 2 measured reproducibility of the original source; attempt 3 recorded the three-fix intermediate build; attempt 4 is the current checked-in artifact after all four fork fixes."
+  },
+  "sourceInputs": {
+    "src/lib.rs": "c64131af8e32126f06a056e2560dc56aa37dc2d4aa4bfe6f02e9a50f3c431cc7",
+    "Cargo.toml": "bac23df9887bc8e3c93f1bcfc20bdcc3acc80afdbd47ef0eef4199e3b97644af",
+    "Cargo.lock": "6d16d0cff5143d0b30f51fc1d06110cf22b41c89e3311d756c88ae8d4974761f",
+    "rust-toolchain.toml": "d9d51bbd4f251213d5420895ae01cc6d574275c64e2d8e2ef613b50bbfbe9c32"
   },
   "forkFixes": [
     {
@@ -62,7 +74,7 @@
       "why": "the private invocation owner must distinguish CORE_REFUSED from a WASM trap by construction, without inspecting a generic JavaScript exception class or message"
     }
   ],
-  "vendoredAt": "vendor/raft-rs-wasm — generated and vendored infrastructure for the experimental raft-rs-wasm backend the provider seam selects. It lives outside src/ because wasm-pack output is nobody's source: keeping it out of the source tree is what lets every repository checker stay on its own default walk with no exclusion for it. Moved here from the exhausted raft-backend-evaluation test tree (tag raft-backend-evaluation/round-3-rejected-tree); the .wasm and the glue are byte-identical to the tagged tree, which the two digests above prove.",
+  "vendoredAt": "vendor/raft-rs-wasm — generated and vendored infrastructure for the production raft-rs-wasm consensus backend loaded by src/raft/raft-rs-binding-owner.js. It lives outside src/ because wasm-pack output is nobody's handwritten JavaScript source: keeping it out of the source tree lets every repository checker stay on its own default walk with no exclusion for it, while package.json files ships it.",
   "citationSources": {
     "note": "The raft-rs 0.7.0 sources the host contract cites, vendored so a citation resolves without a cargo registry. The chain is: the crates.io checksum recorded as raftCrateChecksum is the sha256 of the published .crate tarball; these files were extracted from that tarball and their own digests recorded here.",
     "crateTarballSha256": "f12688b23a649902762d4c11d854d73c49c9b93138f2de16403ef9f571ad5bae",

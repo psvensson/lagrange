@@ -13,20 +13,26 @@ RUN apt-get update && \
          node_modules/node-sql-parser/*.map && \
   rm -rf node_modules/better-sqlite3/deps \
          node_modules/better-sqlite3/src \
-         node_modules/better-sqlite3/binding.gyp
+         node_modules/better-sqlite3/binding.gyp && \
+  mkdir -p /data && \
+  chown 10001:10001 /data
 
 # ---- runtime: distroless (no shell/apt/npm), node is the entrypoint ----
 FROM gcr.io/distroless/nodejs22-debian12 AS runtime
 
 WORKDIR /app
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY package.json ./
-COPY src/ ./src/
+COPY --from=builder --chown=10001:10001 /data /data
+COPY --from=builder --chown=10001:10001 /app/node_modules ./node_modules
+COPY --chown=10001:10001 package.json ./
+COPY --chown=10001:10001 src/ ./src/
+COPY --chown=10001:10001 wit/ ./wit/
 # The vendored raft-rs binding at its layout root beside src/, where the
 # runtime owner resolves it (RAFT_RS_BINDING_LAYOUT in
 # src/raft/raft-rs-core-constants.js).
-COPY vendor/raft-rs-wasm/ ./vendor/raft-rs-wasm/
+COPY --chown=10001:10001 vendor/raft-rs-wasm/ ./vendor/raft-rs-wasm/
+
+USER 10001:10001
 
 # Release provenance, set by release.yml (--build-arg VERSION/VCS_REF/
 # BUILD_DATE). OCI labels are the only per-tag metadata surface registries

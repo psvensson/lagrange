@@ -1,24 +1,21 @@
 # The raft-rs 0.7 WASM binding the `raft-rs-wasm` backend loads
 
-This directory is the **experimental backend's binding**: the Rust fork, its
-pinned toolchain, its build recipe, the built artifact the backend loads, and
-the raft-rs 0.7 sources the host contract is cited against.
+This directory is the **production `raft-rs-wasm` consensus backend's binding**:
+the Rust fork, its pinned toolchain, its build recipe, the built artifact the
+backend loads, and the raft-rs 0.7 sources the host contract is cited against.
 
-It lives under `src/raft/` and not under `test/` because the backend it serves
-is selected by production configuration through the provider seam
-(`src/raft/raft-backend-selection.js`). Production code may not import from the
-test tree, so a binding a production seam can select is production
-infrastructure. Selecting it is still explicit and never the default; see
-`src/raft/raft-backend-constants.js`.
+It lives under `vendor/raft-rs-wasm/` (outside `src/` so generated wasm-pack
+output is not walked as handwritten JavaScript source, while shipped via
+`package.json` `files`) because the backend it serves is the production
+consensus backend loaded by `src/raft/raft-rs-binding-owner.js`.
 
-Its immediate history is the fork built for the exhausted quest
-`raft-backend-evaluation`, kept at the tag
-`raft-backend-evaluation/round-3-rejected-tree` under
-`test/raft/backend-evaluation/raft-core/`. `pkg/raft_wasm_bg.wasm` and
-`pkg/raft_wasm.js` here are byte-for-byte the artifact from that tree; the two
-digests in `artifact-digest.json` are the proof, and a test re-computes them.
-That evaluation is uncertified historical evidence: nothing here is an oracle,
-a baseline or a source of expected values.
+Its immediate history is the fork initially created during the quest
+`raft-backend-evaluation` (tag `raft-backend-evaluation/round-3-rejected-tree`
+for the three-fix intermediate build) and then extended with the fourth fork fix
+(tagged recoverable binding refusals `{kind: "raft-rs-refusal", message}`).
+`pkg/raft_wasm_bg.wasm` and `pkg/raft_wasm.js` here are the checked-in fourth
+build attempt recorded in `artifact-digest.json`, and a test re-computes their
+digests and verifies agreement with `reproducibility.checkedInArtifactIsAttempt`.
 
 The fork starts from raft-logic's `native/raft-wasm` crate (raft-logic 0.3.14,
 repository head 918d481) and adds the raft-rs configuration and persistence

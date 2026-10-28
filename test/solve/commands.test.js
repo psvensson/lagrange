@@ -355,3 +355,22 @@ test('the change proof runs under the recorded retry policy, as CI does', () => 
   assert.equal(landing[RETRY_FAILED_ONCE_ENV], RETRY_FAILED_ONCE_ENABLED);
   assert.equal(caller[RETRY_FAILED_ONCE_ENV], undefined, 'the caller environment is not mutated');
 });
+
+test('the change proof escalates to test:safety-pregate when modular proof requires release proof', () => {
+  const spawned = [];
+  const spawn = (command, args) => {
+    spawned.push({command, args});
+    if (args[0] === 'test') {
+      return {
+        status: 1,
+        stdout: '',
+        stderr: 'MODULAR PROOF NOT SAFE\n  reason: RELEASE_PROOF_REQUIRED\n',
+      };
+    }
+    return {status: 0, stdout: 'all ok', stderr: ''};
+  };
+  runChangeProof('/repo', () => {}, spawn);
+  assert.equal(spawned.length, 2);
+  assert.deepEqual(spawned[0], {command: 'npm', args: ['test']});
+  assert.deepEqual(spawned[1], {command: 'npm', args: ['run', 'test:safety-pregate']});
+});

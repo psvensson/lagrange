@@ -13,6 +13,7 @@ doneWhen:
     certification: true
 quests:
   - release-0-2-7-core-runtime-and-semantics
+  - release-0-2-7-release-surface-and-packaging
 authorizes:
   - src/query
   - src/partition
@@ -36,6 +37,7 @@ authorizes:
   - Dockerfile
   - package.json
   - package-lock.json
+  - knip.json
   - architecture
   - docs
   - examples

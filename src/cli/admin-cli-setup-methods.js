@@ -1,5 +1,5 @@
 import blessed from 'blessed';
-import contrib from 'blessed-contrib';
+import {createBlessedTable} from './core/blessed-table-widget.js';
 import {ViewManager} from './core/view-manager.js';
 import {KeyboardHandler} from './core/keyboard-handler.js';
 import {NodesView} from './views/nodes-view.js';
@@ -110,7 +110,7 @@ const ADMIN_CLI_SETUP_METHODS = {
     });
 
     // Main content area - table display
-    this.mainTable = contrib.table({
+    this.mainTable = createBlessedTable({
       parent: this.screen,
       top: LOCAL_NUM_THREE,
       left: LOCAL_NUM_ZERO,
@@ -230,8 +230,8 @@ const ADMIN_CLI_SETUP_METHODS = {
       },
     });
 
-    // SQL results table (using contrib.table for proper formatting)
-    this.sqlResultsTable = contrib.table({
+    // SQL results table
+    this.sqlResultsTable = createBlessedTable({
       parent: this.sqlContainer,
       top: LOCAL_NUM_SIX,
       left: LOCAL_NUM_ZERO,

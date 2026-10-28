@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {describe, it} from 'node:test';
+import {fileURLToPath} from 'node:url';
 
 import {
   RELEASE_OUTCOME,
@@ -7,6 +10,8 @@ import {
   describePublishMismatch,
   normalizeRepositoryUrl,
   releaseChannel,
+  validatePackageStructure,
+  validateWorkspaceManifest,
 } from '../../scripts/release-npm-package.js';
 
 const VERSION = '0.1.0';
@@ -145,5 +150,52 @@ describe('publish mismatch verdicts carry npm output', () => {
       RELEASE_OUTCOME.VERSION_ABSENT, {status: 1, stderr: 'npm ERR! 403'});
     assert.equal(absentAfterFailure.outcome, RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT,
       'a non-zero exit is not the silent case');
+  });
+});
+
+describe('workspace manifest and Dockerfile hardening (Q06/Q07/Q15)', () => {
+  it('validates the workspace manifest and rejects missing wit/ or componentize-js', async () => {
+    const manifest = await validateWorkspaceManifest();
+    assert.ok(manifest.files.includes('wit/'));
+    assert.ok(manifest.dependencies['@bytecodealliance/componentize-js']);
+    assert.equal(manifest.dependencies['blessed-contrib'], undefined);
+
+    const mockLock = {
+      name: 'lagrange-server',
+      packages: {'': {name: 'lagrange-server', version: manifest.version}},
+    };
+    assert.throws(
+      () => validatePackageStructure(
+        {...manifest, files: ['src/']},
+        mockLock,
+      ),
+      /package\.json files must explicitly include wit\//u,
+    );
+    assert.throws(
+      () => validatePackageStructure(
+        {
+          ...manifest,
+          dependencies: {
+            ...manifest.dependencies,
+            '@bytecodealliance/componentize-js': undefined,
+          },
+        },
+        mockLock,
+      ),
+      /package\.json dependencies must include @bytecodealliance\/componentize-js/u,
+    );
+  });
+
+  it('requires non-root execution (USER 10001:10001) and wit/ in Dockerfile', () => {
+    const repoRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)), '..', '..',
+    );
+    const dockerfile = fs.readFileSync(
+      path.join(repoRoot, 'Dockerfile'),
+      'utf8',
+    );
+    assert.match(dockerfile, /^USER 10001:10001$/mu);
+    assert.match(dockerfile, /COPY --chown=10001:10001 wit\/ \.\/wit\//u);
+    assert.match(dockerfile, /COPY --from=builder --chown=10001:10001 \/data \/data/u);
   });
 });
