@@ -115,6 +115,28 @@ test('the producer accepts dependencies declared by their owning nested package'
     }
   });
 
+// The lab worker exposes its temporary directory through a short symlink to
+// the runner-owned workspace. dependency-cruiser can return the physical file
+// path, while callers pass the aliased root. That must not turn a legitimate
+// resolved edge into a noncanonical ../ resolver probe.
+test('the producer resolves imports under an aliased fixture root', async () => {
+  const root = buildFixture(ALL_FORMS);
+  const aliasParent = fs.mkdtempSync(path.join(os.tmpdir(), 'dep-policy-alias-'));
+  const aliasedRoot = path.join(aliasParent, 'fixture');
+  try {
+    fs.symlinkSync(root, aliasedRoot, 'dir');
+    const report = await produce(aliasedRoot);
+    assert.equal(probesFrom(report)[DECLARED_PACKAGE]?.state, 'resolved');
+    assert.ok(Object.hasOwn(report.degrees,
+      `node_modules/${DECLARED_PACKAGE}/index.js`));
+    assert.deepEqual(report, await produce(root),
+      'a filesystem alias must not alter any canonical import-graph evidence');
+  } finally {
+    fs.rmSync(aliasParent, {recursive: true, force: true});
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
 test('a nested manifest cannot authorize imports from the root package', async () => {
   const root = buildFixture([OPTIONAL_PACKAGE, NESTED_PACKAGE]);
   try {

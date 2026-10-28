@@ -795,7 +795,12 @@ function assertEdgeAccounting(degrees, edgeCount, unresolvedCount) {
   }
 }
 
-async function buildImportGraph(root, files) {
+async function buildImportGraph(inputRoot, files) {
+  // dependency-cruiser resolves source paths against the physical cwd. When
+  // the caller names the same tree through a symlink (e.g. lab TMPDIR), its
+  // baseDir must use that physical identity too, or legitimate dependencies
+  // can become escaping/noncanonical resolver probes.
+  const root = fs.realpathSync(inputRoot);
   const result = await cruise(SOURCE_DIRECTORIES.map((directory) =>
     path.join(root, directory)), {
     baseDir: root,
