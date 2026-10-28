@@ -32,6 +32,7 @@ import {
   normalizePartitionDiagnostics,
   normalizePreflightSnapshot,
   observeCluster,
+  parseCliArgs as parseObserveClusterCliArgs,
   sanitizeDiagnostic,
 } from '../../examples/lab-cluster-smoke/observe-cluster.js';
 
@@ -549,6 +550,135 @@ describe('observe-cluster.js: readiness predicates, stability window, and byte b
     assert.equal(sanitizedAggregate.omitted, true);
     assert.equal(sanitizedAggregate.reason, 'AGGREGATE_BYTE_BUDGET_EXCEEDED');
   });
+
+  it('parses CLI arguments including --enable-pg and --pg-port', () => {
+    const parsed = parseObserveClusterCliArgs([
+      '--members-json',
+      JSON.stringify([{name: 'node-1', restPort: 18080, adminWsPort: 18081, transportWsPort: 18082}]),
+      '--window-ms',
+      '5000',
+      '--enable-pg',
+      '--pg-port',
+      '15432',
+    ]);
+    assert.equal(parsed.enablePg, true);
+    assert.equal(parsed.pgPort, 15432);
+    assert.equal(parsed.windowMs, 5000);
+    assert.equal(parsed.members.length, 1);
+  });
+
+  it('observeCluster records pgSmoke.status === NOT_REQUESTED when enablePg is false', async () => {
+    let simulatedTime = 1000;
+    const nowFn = () => simulatedTime;
+    const sleepFn = async (ms) => {
+      simulatedTime += ms;
+    };
+    const mockFetch = async (url) => {
+      if (url.includes('/livez')) return {status: 200, json: async () => ({alive: true, nodeId: 'n1'})};
+      if (url.includes('/startupz')) return {status: 200, json: async () => ({started: true})};
+      if (url.includes('/readyz')) return {status: 200, json: async () => ({ready: true, phase: 'TRAFFIC_READY', state: 'join_ready'})};
+      return {status: 200, json: async () => ({})};
+    };
+
+    const outcome = await observeCluster({
+      members: [{name: 'node-1', restPort: 18080, adminWsPort: 18081, transportWsPort: 18082}],
+      windowMs: 2000,
+      minSamples: 2,
+      cadenceMs: 1000,
+      maxInterSampleGapMs: 2000,
+      overallTimeoutMs: 10000,
+      enablePg: false,
+      fetchFn: mockFetch,
+      nowFn,
+      sleepFn,
+    });
+
+    assert.equal(outcome.ok, true);
+    assert.equal(outcome.status, 'READY');
+    assert.equal(outcome.pgSmoke?.status, 'NOT_REQUESTED');
+  });
+
+  it('observeCluster invokes runPgSmoke when enablePg is true and succeeds when pgSmoke passes', async () => {
+    let simulatedTime = 1000;
+    const nowFn = () => simulatedTime;
+    const sleepFn = async (ms) => {
+      simulatedTime += ms;
+    };
+    const mockFetch = async (url) => {
+      if (url.includes('/livez')) return {status: 200, json: async () => ({alive: true, nodeId: 'n1'})};
+      if (url.includes('/startupz')) return {status: 200, json: async () => ({started: true})};
+      if (url.includes('/readyz')) return {status: 200, json: async () => ({ready: true, phase: 'TRAFFIC_READY', state: 'join_ready'})};
+      return {status: 200, json: async () => ({})};
+    };
+
+    let runPgSmokeCalledWithOptions = null;
+    const mockRunPgSmoke = async (opts) => {
+      runPgSmokeCalledWithOptions = opts;
+      return {status: 'PASSED', ok: true, queryResult: {ok: 1}};
+    };
+
+    const outcome = await observeCluster({
+      members: [{name: 'node-1', restPort: 18080, adminWsPort: 18081, transportWsPort: 18082}],
+      windowMs: 2000,
+      minSamples: 2,
+      cadenceMs: 1000,
+      maxInterSampleGapMs: 2000,
+      overallTimeoutMs: 10000,
+      enablePg: true,
+      pgPort: 15432,
+      fetchFn: mockFetch,
+      runPgSmokeFn: mockRunPgSmoke,
+      nowFn,
+      sleepFn,
+    });
+
+    assert.equal(outcome.ok, true);
+    assert.equal(outcome.status, 'READY');
+    assert.equal(outcome.pgSmoke?.status, 'PASSED');
+    assert.equal(runPgSmokeCalledWithOptions?.enablePg, true);
+    assert.equal(runPgSmokeCalledWithOptions?.pgPort, 15432);
+    assert.equal(runPgSmokeCalledWithOptions?.seedAdminWsPort, 18081);
+    assert.equal(runPgSmokeCalledWithOptions?.seedRestPort, 18080);
+    assert.ok(runPgSmokeCalledWithOptions?.activeNodeIds.has('n1'));
+  });
+
+  it('observeCluster fails closed when enablePg is true and runPgSmoke fails or throws', async () => {
+    let simulatedTime = 1000;
+    const nowFn = () => simulatedTime;
+    const sleepFn = async (ms) => {
+      simulatedTime += ms;
+    };
+    const mockFetch = async (url) => {
+      if (url.includes('/livez')) return {status: 200, json: async () => ({alive: true, nodeId: 'n1'})};
+      if (url.includes('/startupz')) return {status: 200, json: async () => ({started: true})};
+      if (url.includes('/readyz')) return {status: 200, json: async () => ({ready: true, phase: 'TRAFFIC_READY', state: 'join_ready'})};
+      return {status: 200, json: async () => ({})};
+    };
+
+    const mockRunPgSmokeFailing = async () => {
+      throw new Error('Connection refused at 127.0.0.1:15432');
+    };
+
+    const outcome = await observeCluster({
+      members: [{name: 'node-1', restPort: 18080, adminWsPort: 18081, transportWsPort: 18082}],
+      windowMs: 2000,
+      minSamples: 2,
+      cadenceMs: 1000,
+      maxInterSampleGapMs: 2000,
+      overallTimeoutMs: 10000,
+      enablePg: true,
+      pgPort: 15432,
+      fetchFn: mockFetch,
+      runPgSmokeFn: mockRunPgSmokeFailing,
+      nowFn,
+      sleepFn,
+    });
+
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.status, 'NOT_READY');
+    assert.match(outcome.error, /PG_SMOKE_FAILED: Connection refused at 127\.0\.0\.1:15432/);
+    assert.equal(outcome.pgSmoke?.status, 'FAILED');
+  });
 });
 
 describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
@@ -608,11 +738,10 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
             rows: [
               {
                 service_id: 'sys-postgres-wire',
-                name: 'sys-postgres-wire',
-                version: '1.0',
+                service_name: 'sys-postgres-wire',
                 replica_count: 0,
                 status: 'NOT_STARTED',
-                config_json: JSON.stringify({host: '127.0.0.1', authMode: 'trust', tlsMode: 'disable'}),
+                runtime_config: JSON.stringify({host: '127.0.0.1', authMode: 'trust', tlsMode: 'disable'}),
                 updated_at: '2026-10-28T12:00:00Z',
               },
             ],
@@ -625,8 +754,10 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
       }
     }
 
+    let discoveryUrlCalled = null;
     const mockFetch = async (url) => {
       if (url.includes('/api/admin/discovery/services')) {
+        discoveryUrlCalled = url;
         return {
           status: 200,
           json: async () => ({
@@ -689,11 +820,22 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
     assert.equal(outcome.ok, true);
     assert.equal(outcome.status, 'PASSED');
     assert.equal(outcome.originalServiceDefinition.service_id, 'sys-postgres-wire');
+    assert.equal(outcome.originalServiceDefinition.service_name, 'sys-postgres-wire');
     assert.equal(outcome.originalServiceDefinition.replica_count, 0);
+
+    // Verify discovery fetched on seedAdminWsPort (18081), NOT seedRestPort (18080)
+    assert.equal(
+      discoveryUrlCalled,
+      'http://127.0.0.1:18081/api/admin/discovery/services?serviceId=sys-postgres-wire',
+    );
 
     // Verify SQL mutations executed
     assert.equal(queries.length, 3);
-    assert.match(queries[0], /SELECT service_id.*FROM service_definitions/);
+    assert.equal(
+      queries[0],
+      'SELECT service_id, service_name, replica_count, status, runtime_config, updated_at ' +
+      'FROM service_definitions WHERE service_id = \'sys-postgres-wire\'',
+    );
     assert.match(queries[1], /UPDATE service_definitions SET runtime_config = '.*' WHERE service_id = 'sys-postgres-wire'/);
     assert.match(queries[2], /UPDATE service_definitions SET replica_count = 1 WHERE service_id = 'sys-postgres-wire'/);
 

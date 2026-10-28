@@ -8,6 +8,7 @@
 
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {runPgSmoke} from './pg-smoke.js';
 
 const STDOUT_MAX_BYTES = 65536; // 64 KiB
 const DIAGNOSTIC_MAX_BYTES = 65536; // 64 KiB
@@ -416,6 +417,47 @@ async function observeCluster(options = {}) {
 
         finalAdminDiagnostics = adminDiagnostics;
 
+        const runPgSmokeFn = options.runPgSmokeFn || runPgSmoke;
+        let pgSmoke = null;
+        try {
+          pgSmoke = await runPgSmokeFn({
+            enablePg: Boolean(options.enablePg),
+            seedAdminWsPort: seedMember.adminWsPort,
+            seedRestPort: seedMember.restPort,
+            pgPort: options.pgPort,
+            activeNodeIds: new Set(knownNodeIdentities.values()),
+            ...(options.pgOptions || {}),
+          });
+        } catch (pgError) {
+          if (options.enablePg) {
+            return {
+              status: 'NOT_READY',
+              ok: false,
+              reason: `PG_SMOKE_FAILED: ${pgError.message}`,
+              error: `PG_SMOKE_FAILED: ${pgError.message}`,
+              consecutivePassingSamples,
+              nodeIdentities: Object.fromEntries(knownNodeIdentities.entries()),
+              pgSmoke: {
+                status: 'FAILED',
+                ok: false,
+                error: pgError.message,
+              },
+            };
+          }
+        }
+
+        if (options.enablePg && pgSmoke && (pgSmoke.status !== 'PASSED' || !pgSmoke.ok)) {
+          return {
+            status: 'NOT_READY',
+            ok: false,
+            reason: `PG_SMOKE_FAILED: ${pgSmoke.error || pgSmoke.status}`,
+            error: `PG_SMOKE_FAILED: ${pgSmoke.error || pgSmoke.status}`,
+            consecutivePassingSamples,
+            nodeIdentities: Object.fromEntries(knownNodeIdentities.entries()),
+            pgSmoke,
+          };
+        }
+
         const summary = {
           status: 'READY',
           ok: true,
@@ -423,6 +465,7 @@ async function observeCluster(options = {}) {
           windowDurationMs: windowDuration,
           nodeIdentities: Object.fromEntries(knownNodeIdentities.entries()),
           seedBootstrapReady: seedBootstrapReadyDiagnostic,
+          pgSmoke,
           stabilityWindow: {
             requiredMinSamples: minSamples,
             requiredWindowMs: windowMs,
@@ -475,21 +518,28 @@ async function observeCluster(options = {}) {
 }
 
 /**
- * CLI runner for observe-cluster.js
+ * Parse CLI arguments for observe-cluster.js.
+ * @param {string[]} argv
+ * @return {Object}
  */
-async function main() {
-  const argv = process.argv.slice(2);
-  let membersJson = null;
+function parseCliArgs(argv) {
+  let members = null;
   let windowMs = DEFAULT_OPTIONS.WINDOW_MS;
   let minSamples = DEFAULT_OPTIONS.MIN_SAMPLES;
   let cadenceMs = DEFAULT_OPTIONS.CADENCE_MS;
   let maxInterSampleGapMs = DEFAULT_OPTIONS.MAX_INTER_SAMPLE_GAP_MS;
   let overallTimeoutMs = DEFAULT_OPTIONS.OVERALL_TIMEOUT_MS;
+  let enablePg = false;
+  let pgPort = null;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--members-json' && i + 1 < argv.length) {
-      membersJson = argv[i + 1];
+      try {
+        members = JSON.parse(argv[i + 1]);
+      } catch (err) {
+        throw new Error(`Failed to parse --members-json: ${err.message}`);
+      }
       i += 1;
     } else if (arg === '--window-ms' && i + 1 < argv.length) {
       windowMs = Number(argv[i + 1]);
@@ -506,29 +556,46 @@ async function main() {
     } else if (arg === '--overall-timeout-ms' && i + 1 < argv.length) {
       overallTimeoutMs = Number(argv[i + 1]);
       i += 1;
+    } else if (arg === '--enable-pg') {
+      enablePg = true;
+    } else if (arg === '--pg-port' && i + 1 < argv.length) {
+      pgPort = Number(argv[i + 1]);
+      i += 1;
     }
   }
 
-  if (!membersJson) {
-    process.stderr.write('observe-cluster: --members-json argument is required\n');
-    process.exit(1);
-  }
-
-  let members;
-  try {
-    members = JSON.parse(membersJson);
-  } catch (err) {
-    process.stderr.write(`observe-cluster: failed to parse members JSON: ${err.message}\n`);
-    process.exit(1);
-  }
-
-  const result = await observeCluster({
+  return {
     members,
     windowMs,
     minSamples,
     cadenceMs,
     maxInterSampleGapMs,
     overallTimeoutMs,
+    enablePg,
+    pgPort,
+  };
+}
+
+/**
+ * CLI runner for observe-cluster.js
+ */
+async function main() {
+  const parsed = parseCliArgs(process.argv.slice(2));
+
+  if (!parsed.members) {
+    process.stderr.write('observe-cluster: --members-json argument is required\n');
+    process.exit(1);
+  }
+
+  const result = await observeCluster({
+    members: parsed.members,
+    windowMs: parsed.windowMs,
+    minSamples: parsed.minSamples,
+    cadenceMs: parsed.cadenceMs,
+    maxInterSampleGapMs: parsed.maxInterSampleGapMs,
+    overallTimeoutMs: parsed.overallTimeoutMs,
+    enablePg: parsed.enablePg,
+    pgPort: parsed.pgPort,
   });
 
   const outputJson = JSON.stringify(result, null, 2);
@@ -571,5 +638,6 @@ export {
   normalizePartitionDiagnostics,
   normalizePreflightSnapshot,
   observeCluster,
+  parseCliArgs,
   sanitizeDiagnostic,
 };

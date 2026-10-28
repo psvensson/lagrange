@@ -70,8 +70,8 @@ async function runPgSmoke(options = {}) {
   }
 
   const seedRestPort = options.seedRestPort;
-  if (!Number.isInteger(seedRestPort) || seedRestPort <= 0) {
-    throw new Error(`seedRestPort is required when enablePg=true, received: ${seedRestPort}`);
+  if (seedRestPort !== undefined && (!Number.isInteger(seedRestPort) || seedRestPort <= 0)) {
+    throw new Error(`seedRestPort must be a positive integer if provided, received: ${seedRestPort}`);
   }
 
   const activeNodeIdSet = new Set(
@@ -108,7 +108,7 @@ async function runPgSmoke(options = {}) {
     await adminClient.connect();
 
     const selectOriginalSql =
-      'SELECT service_id, name, version, replica_count, status, config_json, updated_at ' +
+      'SELECT service_id, service_name, replica_count, status, runtime_config, updated_at ' +
       'FROM service_definitions WHERE service_id = \'sys-postgres-wire\'';
     const originalResult = await adminClient.query(selectOriginalSql);
     originalServiceDefinition = originalResult?.rows?.[0] || originalResult || null;
@@ -148,7 +148,7 @@ async function runPgSmoke(options = {}) {
 
     // 5. Poll discovery endpoint for placed, healthy sys-postgres-wire replica
     const discoveryUrl =
-      `http://127.0.0.1:${seedRestPort}/api/admin/discovery/services?serviceId=sys-postgres-wire`;
+      `http://127.0.0.1:${seedAdminWsPort}/api/admin/discovery/services?serviceId=sys-postgres-wire`;
     const discoveryStart = nowFn();
 
     while (nowFn() - discoveryStart < discoveryTimeoutMs) {
