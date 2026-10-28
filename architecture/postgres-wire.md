@@ -206,7 +206,7 @@ All resolution decisions are audit-logged via `ModuleAuditLogger`.
 
 ### SQLQueryEngine (SqlCore)
 - Single SQL planner and executor for all SQL workloads
-- All entrypoints (internal API, external protocol, WASM DB.call) converge here
+- All entrypoints (internal API, external protocol) converge here
 - Routes queries through system cache to find partition leaders
 - Supports SELECT, INSERT, UPDATE, DELETE, CREATE TABLE
 - Transaction support (BEGIN, COMMIT, ROLLBACK)
@@ -261,7 +261,7 @@ Active translations:
   `ON CONFLICT DO UPDATE` is refused before execution with SQLSTATE `0A000`
   (`UNSUPPORTED_SQL_FEATURE`); system-table lifecycle/status writes must keep
   partial-update semantics and must not use `INSERT OR REPLACE`.
-- `RETURNING` clause pass-through (SQLite 3.35+)
+- `RETURNING` clause on `INSERT`, `UPDATE`, and `DELETE` is refused before execution with SQLSTATE `0A000`
 - Subqueries, CTEs, CASE WHEN, derived tables, set operations pass-through
 
 Dialect flows through `SqlRequest.dialect` from `PostgresWireAdapter` to

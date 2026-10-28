@@ -235,7 +235,10 @@ progress branch only, never for a commit that lands source on the shared
 branch: skipping a gate to obtain a green state is exactly what R23 forbids.
 
 The pre-push hook is fast-fail ordered: unused files, tracked-file lint,
-duplication/file-size ratchets, cycles, unused exports, then the test stage:
+duplication/file-size ratchets, cycles, unused exports, then the test stage
+(`npm run test:static` executes ~30 static checkers in parallel waves via
+`scripts/checks/run-static-audits.js`, while the pre-commit and pre-push
+preflight tiers remain the fastest inner-loop checks):
 the focused contracts and audits, and last the change proof - the same
 `npm test` selection CI runs, fed the remote sha of main as its base - or the
 whole corpus when that proof cannot stand for it (a refused selection, a change

@@ -107,19 +107,21 @@ constructors refuse its absence.
 
 | Capability | Current state |
 | --- | --- |
-| SQLite partition checkpoint creation | Component exists; integration on raft-rs is unverified |
-| SQLite partition snapshot transfer/install | Component exists; integration on raft-rs is unverified |
-| SQLite partition proof-gated log compaction | Not verified on the raft-rs path |
-| Automatic partition checkpoint cadence | Unavailable on the current raft-rs path |
-| Integrated replica recovery on raft-rs | Not verified on the raft-rs path |
-| In-memory message-group log compaction | Unsupported |
-| Learner promotion | time based not progress based |
+| SQLite partition checkpoint creation | Active for file-backed SQLite partitions |
+| SQLite partition snapshot transfer/install | Active for file-backed SQLite partitions |
+| SQLite partition proof-gated log compaction | Active for file-backed SQLite partitions |
+| Automatic partition checkpoint cadence | Active for file-backed SQLite partitions |
+| Integrated replica recovery on raft-rs | Active for file-backed SQLite partitions |
+| Message-group log compaction | Unsupported |
+| Learner promotion | Leader match-index progress proof after initial scheduling delay |
 | Raft votes, appended entries and snapshots | Synced to disk before any dependent message is sent (survives power loss) |
 
-Component presence, automatic execution and full recovery are distinct claims. The
-current raft-rs partition leader cadence reports an unsupported committed-log
-owner; no historical snapshot test certifies the new path. Snapshot recovery
-is replica repair, not a user backup or PITR product.
+Component presence, automatic execution, and published recovery SLAs are distinct
+claims. File-backed SQLite user partitions run automatic raft-rs checkpoint
+cadence, proof-gated log compaction, and lagging-follower snapshot catch-up;
+control-plane partitions and message groups remain excluded from compaction, and
+snapshot recovery is internal replica repair rather than a user backup or PITR
+product.
 
 ## PostgreSQL wire
 
@@ -155,8 +157,8 @@ is replica repair, not a user backup or PITR product.
 | Evidence | Current state |
 | --- | --- |
 | Code-first public service demo | Single-node, two-partition functional proof |
-| Multi-node data-local comparison | Internal measurement path |
-| Historical SQLite snapshot live rebuild | Historical predecessor-path proof only |
+| Multi-node data-local comparison | Three-node local cluster on the code-first WASI call-Binding path |
+| Historical SQLite snapshot live rebuild | Active raft-rs snapshot compaction and lagging-follower catch-up suites |
 | Public-path scale benchmark | Not available |
 
 Functional tests, a demo, and a certification scenario are not the same as a
@@ -171,9 +173,9 @@ turning evidence into a product claim.
 | Query routing | Partition range comparison is string-based, so numeric strings sort lexicographically. |
 | Indexes | CREATE INDEX is unsupported and no secondary-index runtime path is active. |
 | SQL writes | A SQL write whose proposal reached consensus but whose outcome the serving replica cannot confirm is re-delivered under its own entry identity (backing off to 2 s) until the statement deadline, or query.timeoutMs (30 s) when the caller passed none, and then fails typed as partition_write_outcome_unknown; it may have applied. Re-issuing it is safe only under the same idempotency key, which the PostgreSQL wire and embedded application database surfaces do not yet accept. |
-| Replication | In-memory message-group logs still grow without bounded compaction and recover by full replay. This is separate from SQLite partition snapshot recovery. |
-| Replication | Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress. |
-| Replication | Message group mg-1 keeps all of its replicas on the seed node until a fresh-replica-identity ADD path for message groups exists: losing the seed's disk loses mg-1's committed state, with no recovery path. A replica held for reseed after proven history loss stays out of consensus for good; there is no reseed procedure yet. |
+| Replication | SQLite-backed message-group raft-rs logs still grow without bounded compaction and recover by full replay; they do not yet use the partition snapshot compaction lifecycle. |
+| Replication | Learner promotion waits for an initial scheduling delay and then requires a current-leader match-index progress proof against the safe promotion index before voting. |
+| Replication | A replica held in _raft_rs_replica_lifecycle with reason = 'reseed-required' after proven history loss stays out of consensus permanently; there is no automatic reseed procedure yet, and replacement requires fresh-replica-identity ADD/REPLACE/REMOVE. |
 | Replication | Only what Raft promises to peers (a vote, appended log entries, a snapshot) and the replica lifecycle row are synced to disk before they are acknowledged; other writes (commit index, applied progress, application rows) survive a process crash but may roll back on power loss and are re-applied from the synced log. A disk that acknowledges a flush from a volatile write cache without power-loss protection voids the power-loss guarantee. |
 | Storage lifecycle | Replica cleanup and recreation are durably serialized by services.service_id. A directory-local SQLite ownership lock rejects a second live OS process before provenance, rejoin, or replica storage activity. |
 | Service execution | Request and call Bindings are publicly invocable. Change, time, once, boot, and pushdown Bindings may be declared but have no public invocation adapter. |
@@ -192,8 +194,8 @@ turning evidence into a product claim.
 | Streaming & CDC | External CDC consumption on user tables (subscribeTable, subscribeTables, and CDCManager user-table streaming) is disabled and unsupported in the initial stable core (CDC_EVENT_STREAM_DISABLED, Decision D2), while internal replicated projection and message-group CDC obligations operate through the internal durable occurrence ledger. Evidenced in docs/migration.md, architecture/postgres-wire.md, and src/cdc/cdc-integration-service.js. |
 | Security | Node-to-node transport is plain WebSocket without cryptographic peer authentication; deploy it only on a trusted private network. |
 | Operations | Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x. |
-| Operations | In-place upgrade is unsupported from any build that moved a message-group replica to a joining node under its existing replica name: every release through 0.2.5 (npm 0.1.1, 0.2.4-rc.0 to rc.2 and 0.2.5; Docker 0.1.0, 0.1.1, 0.2.4-rc.2 and 0.2.5), the unreleased 0.2.6, and main before the identity-reuse fix. A node holding a message-group replica whose name it did not create can elect a second leader and lose acknowledged writes after the upgrade; rebuild such clusters or dump and restore them. |
-| Replication | Checkpoint and transfer/install components exist, but the current leader cadence returns committed_log_unsupported. No integrated automatic checkpoint, bounded raft-rs log compaction or end-to-end recovery guarantee is established. |
+| Operations | In-place upgrade is unsupported from any pre-0.2.6 build that moved a message-group replica to a joining node under its existing replica name: every release through 0.2.5 (npm 0.1.1, 0.2.4-rc.0 to rc.2 and 0.2.5; Docker 0.1.0, 0.1.1, 0.2.4-rc.2 and 0.2.5) and main before the 0.2.6 identity-reuse fix. A node holding a message-group replica whose name it did not create can elect a second leader and lose acknowledged writes after the upgrade; rebuild such clusters or dump and restore them. |
+| Replication | Automatic partition checkpoint cadence (10,000 entries or 256 MiB pending log bytes), proof-gated _raft_rs_log compaction, and lagging-follower snapshot catch-up are active for file-backed SQLite user partitions on raft-rs. Control-plane system partitions and message groups remain excluded from snapshot compaction, and partition snapshots are internal replica repair rather than a user backup/PITR product or published RPO/RTO SLA. |
 | PostgreSQL compatibility | Unverified PostgreSQL expressions (including dollar-quoted literal handling) are not certified. A valid PG literal must not silently become NULL; use public-path semantic tests before relying on it. |
 | Transactions | Public PostgreSQL-wire callers have no general idempotency-key/retry contract. A timeout or lost reply can leave COMMIT outcome unknown; do not infer rollback or retry an ambiguous mutation blindly. |
 

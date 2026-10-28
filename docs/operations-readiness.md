@@ -53,31 +53,32 @@ preserve structured retry or wait outcomes from long-running cluster changes.
 
 ## Replica recovery
 
-The code contains checkpoint creation and snapshot transfer/install components,
-but those component paths are not a certified automatic recovery lifecycle on
-raft-rs. The leader's current
-[`partition-snapshot-cadence.js`](../src/partition/partition-snapshot-cadence.js)
-returns `COMMITTED_LOG_UNSUPPORTED` for a live file-backed leader, because
-the old compaction proof depended on a committed-log owner absent from raft-rs.
-The message-group replica image in
-[`snapshot-checkpoint-store.js`](../src/raft/snapshot-checkpoint-store.js)
-preserves consensus/peer identity and deliberately scrubs application tables;
-it is not a SQL-partition recovery image or a user backup.
+File-backed SQLite user partitions run an integrated `raft-rs` checkpoint
+cadence (`10,000` entries or `256 MiB` pending log bytes), retention sweep,
+proof-gated `_raft_rs_log` compaction (`compactRaftRsCommittedEntries`), and
+lagging-follower snapshot catch-up (`SN1`) through
+[`partition-snapshot-cadence.js`](../src/partition/partition-snapshot-cadence.js),
+[`snapshot-checkpoint-store.js`](../src/raft/snapshot-checkpoint-store.js),
+[`snapshot-compaction.js`](../src/raft/snapshot-compaction.js), and
+[`snapshot-catchup.js`](../src/raft/snapshot-catchup.js). Partition checkpoints
+preserve user tables, partition metadata tables, `raft_rs_peer_identity`, and
+`maxCommittedHlc`, and refuse checkpoint creation while prepared transactions
+are pending (`PREPARED_TRANSACTIONS_PENDING`). Learner promotion waits for an
+initial scheduling delay and then requires a current-leader match-index progress
+proof (`src/raft/learner-promotion-progress.js`).
 
-Therefore **do not assume automatic snapshots, bounded partition-log growth,
-full snapshot catch-up or a published recovery time** on the current backend.
-Historical five-node snapshot tests on the predecessor log cannot prove this
-path. Recovery evidence must bind creation, bounded transfer, atomic install,
-durable apply/catch-up, compaction and follower readiness to the same owner
-and exact tested candidate while preserving application rows, transaction/outcome
-state, clock and applied boundaries, and replica identity.
+Operators must still plan around the remaining boundaries:
 
-Message-group logs still lack an established compaction lifecycle. Learner
-promotion remains time-based rather than follower-progress-based. A pilot must
-wipe and rebuild one non-leader replica under foreground writes and reconcile
-all acknowledged writes against an independent oracle before claiming recovery.
-The [capability page](current-capabilities-and-limitations.md) records the
-current unsupported/unverified states.
+- Control-plane system partitions and SQLite-backed message-group logs are not
+  compacted by the partition snapshot cadence; message-group logs grow without a
+  snapshot compaction bound and recover by full replay.
+- Partition snapshots are internal replica repair, not a user backup/restore or
+  point-in-time recovery product, and no published RPO or RTO SLA is claimed.
+- A pilot should still wipe and rebuild one non-leader replica under foreground
+  writes and reconcile all acknowledged writes against an independent oracle on
+  its target hardware. The
+  [capability page](current-capabilities-and-limitations.md) records the current
+  supported and unsupported states.
 
 ## Node loss and replacement
 
@@ -169,12 +170,12 @@ Do not claim an RPO or RTO that has not been measured end to end.
 `0.x` releases carry no backward-compatibility guarantee. There is no published
 supported rolling-upgrade, downgrade, or mixed-version contract.
 
-In-place upgrade, rolling or full-stop, is unsupported from any build that moved
-a message-group replica to a joining node under its existing replica name:
-every release through 0.2.5, the unreleased 0.2.6, and main before the
-identity-reuse fix. After such an upgrade a node holding a message-group replica
-whose name it did not create can elect a second leader and lose acknowledged
-writes. Rebuild such a cluster, or dump and restore it, instead. See
+In-place upgrade, rolling or full-stop, is unsupported from any pre-0.2.6 build
+that moved a message-group replica to a joining node under its existing replica
+name: every release through 0.2.5 and main before the 0.2.6 identity-reuse fix.
+After such an upgrade a node holding a message-group replica whose name it did
+not create can elect a second leader and lose acknowledged writes. Rebuild such
+a cluster, or dump and restore it, instead. See
 [current capabilities and limitations](current-capabilities-and-limitations.md).
 
 Before changing versions:

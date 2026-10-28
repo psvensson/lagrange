@@ -1,8 +1,8 @@
 {
   "schema": "raft-rs-full-cutover-epic/1",
-  "metric": 8,
+  "metric": 1,
   "target": 0,
-  "status": "transport-predecessor-in-progress",
-  "statement": "Full cutover is incomplete until R0-R8 close, all active consensus paths use raft-rs, active Liferaft references/dependency are zero, exact-main certification is durable, and core-convergence Q0 reports READY.",
+  "status": "v0.2.6-cutover-landed-on-main-awaiting-physical-certification",
+  "statement": "v0.2.6 landed the full raft-rs consensus cutover on main (54dd2d7ce / a1e26f6de): Liferaft is deleted with zero active references, and FreshMG, TX1, SN1, and bound WasmServiceReplica creation are active on raft-rs. Final epic closure awaits multi-machine exact-SHA certification and core-convergence Q0 READY.",
   "terminalEvidence": null
 }

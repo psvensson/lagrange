@@ -94,8 +94,10 @@ in this index does not mean those product contracts are already supported.
 - A call currently uses one literal single-table selector, one bounded row batch
   per shard, finite numeric partials, and one reducer.
 - PostgreSQL `SELECT ... FOR UPDATE` is a planned Phase 0.3 core capability, not
-  a current locking-read claim. The current transaction model uses snapshot
-  isolation plus first-committer-wins write-conflict detection.
+  a current locking-read claim. The current transaction model uses session
+  staged read-your-own-writes over current committed state plus
+  partition-write-generation first-committer-wins write-conflict detection at
+  prepare and apply.
 - The generic push-backed live-query data plane is an approved Phase 0.3 target,
   not a current general application-data capability. Existing admin/cache-backed
   live-query pieces must not be read as proof of that broader contract.
@@ -123,6 +125,6 @@ in this index does not mean those product contracts are already supported.
 - [Operational appendices](operational-appendices.md) - error, test, endpoint,
   and discovery details.
 
-Compatibility scaffolds, legacy callback paths, source-file owner maps, and
+Compatibility scaffolds, source-file owner maps, and
 machine-pinned contracts are deeper implementation material. They do not define
 the recommended service-authoring path.

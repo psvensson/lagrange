@@ -127,7 +127,7 @@ AdminWebSocketAPI debug route adapter
 - Terminal sub-phases auto-advance the parent state
 
 ### FailureDetector (Single Instance)
-- Single failure detection component (no duplicate detection in NodeLifecycleService)
+- Single failure detection component
 - Reads node state via SQL engine (not direct cache access)
 - Writes status changes via CDC (single write per status change)
 - Supports adaptive thresholds for flapping nodes
@@ -222,17 +222,18 @@ No other source file may call `applySystemTableChange` directly.
   every replica's cache (the envelope-level timestamp is re-minted per receiver and is
   not origin-stable), making the cache LWW compare and tombstone fence skew-immune. It
   is cache-only — the durable-write path filters unknown columns, so it is not persisted.
-- Owns participant-side distributed transaction behavior (`BEGIN`, `PREPARE`,
-  `COMMIT`, `ROLLBACK`) for partition-local state
-- `prepareTransaction()` validates write conflicts and durably appends a
-  `PREPARE_TRANSACTION` Raft log entry before acknowledging prepare success
-- Reconstructs prepared transaction state from Raft log entries on leader
-  election and keeps prepared writes durable across failover
-- Enforces participant prepared-state hold timeout and emits typed
-  `PREPARE_LOST` responses after autonomous timeout release
-- Implements epoch-based snapshot isolation on reads (committed-before-epoch
-  visibility + read-your-own-writes) and first-committer-wins write-conflict
-  detection at prepare
+- Owns participant-side distributed transaction behavior (`BEGIN`,
+  `PARTICIPANT_PREPARE`, `PARTICIPANT_DECISION`, and session staged queries) for
+  partition-local state (`TX1`)
+- Replicates `PARTICIPANT_PREPARE` and bound `PARTICIPANT_DECISION` commands
+  through the partition's `raft-rs` group and persists participant transaction
+  records in `_participant_transactions` and `_partition_write_generation`
+- Replays session staged writes over current committed state for
+  read-your-own-writes visibility inside an open transaction
+- Enforces partition-write-generation first-committer-wins conflict detection at
+  prepare and apply
+- Uses coordinator-driven persisted-deadline recovery and bound `ROLLBACK`
+  tombstones without autonomous participant hold-timeout release
 
 ### MessageGroupService
 - Reliable inter-service communication
@@ -270,17 +271,17 @@ No other source file may call `applySystemTableChange` directly.
   scaffold when `oci_container_enabled` is enabled; real container activation
   is not implemented
 
-### Legacy WasmServiceReplica Scaffold
-- `WasmServiceReplica` extends `RaftReplicaBase` with `entityType` set to
-  `WASM_SERVICE` and composes `SessionKVStore`, `SafetyInterval`,
-  `TimerManager`, and `WasmExecutor`.
-- Production startup constructs neither `WasmServiceLifecycle` nor a
-  `wasm_service` `UnifiedRebalancer`; its Raft field therefore has no active
-  production initialization path.
-- Treat the enum, lifecycle, and replica classes as legacy scaffold, not a
-  replicated service-state guarantee.
-- Current WASI execution uses `Wasm_Component_Driver` in placed
-  `runtime_service` Cells; durable service data remains in tables.
+### WasmServiceReplica and WasmServiceLifecycle
+- `WasmServiceReplica` (`src/wasm-service/wasm-service-replica.js`) and
+  `WasmServiceLifecycle` (`src/wasm-service/wasm-service-lifecycle.js`) run on
+  the `raft-rs` operation port for bound WASM service-instance creation and
+  consensus lifecycle (`entityType = WASM_SERVICE`, composing `SessionKVStore`,
+  `SafetyInterval`, `TimerManager`, and `WasmExecutor`).
+- Public HTTP request Bindings and distributed call Bindings execute as
+  stateless per-request Cells through `WasmComponentDriver`
+  (`src/runtime/wasm-component-driver.js`) and `WasiComponentCellRuntime`
+  (`src/runtime/wasi-component-cell-runtime.js`); durable application state
+  remains in partitioned tables.
 
 ### WasmMetaService (`sys-wasm-meta`)
 - Built-in placed runtime service for external WASM entity management

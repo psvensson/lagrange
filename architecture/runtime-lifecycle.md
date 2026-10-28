@@ -115,7 +115,7 @@ steady-state composition.
 | System cache key mapping | `SYSTEM_CACHE_KEY_DESCRIPTOR` | `SystemTableCache`, `SQLiteSystemCache` |
 | Runtime startup wiring | `createRuntimeStartupWiring` | Startup constructors only |
 | Dynamic config hot-reload wiring | `createDynamicConfigStartupWiring` | Entrypoint startup only |
-| Partition callback runtime ownership | `RuntimeDriverRegistry` injection | `SQLQueryEngine`, `CallbackRuntimeDriverRegistry` |
+| Runtime driver selection | `RuntimeDriverRegistry` | `ServiceRuntimeLifecycle` |
 
 No-dual-path policy for these concerns is mandatory:
 
@@ -165,10 +165,7 @@ and control-plane workflows.
    `Runtime_Driver_Registry`.
 4. SQL profile services select the kernel-internal provider through
    `SQL_ENGINE_RUNTIME_KIND`.
-5. Callback invocation is owned by `CallbackExecutionHost`; callback
-   runtime selection is through `CallbackRuntimeDriverRegistry` as a
-   strict adapter over the unified runtime registry.
-6. `sys-postgres-wire` is a built-in replicated runtime service
+5. `sys-postgres-wire` is a built-in replicated runtime service
    providing PostgreSQL wire protocol ingress. Lifecycle, placement,
    and endpoint ownership follow the unified runtime model. No
    standalone listener path exists.
@@ -246,8 +243,9 @@ Required implementation sequence:
 2. Define the per-replica `services` row shape and keep replica-only fields in
    that row.
 3. Route leader/follower/candidate and leader-change behavior through the
-   shared raft lifecycle path (`RaftReplicaBase` hooks or the shared lifecycle
-   binder used by the service).
+   shared `raft-rs` operation-port lifecycle path (`PartitionService`,
+   `MessageGroupService`, and `WasmServiceReplica` manage their `raft-rs`
+   operation-port lifecycle directly through the shared lifecycle binder).
 4. Route role persistence and owner-row leader persistence through the shared
    authoritative row mutation helper.
 5. Expose canonical diagnostics so control snapshots read the owner row first
@@ -306,16 +304,14 @@ Service_Runtime_Lifecycle
 2. Runtime fallback driver selection.
 3. Node-local adapter mutation ownership.
 4. Driver direct writes to system metadata bypassing SQL/CDC.
-5. Parallel callback runtime engine outside
-   `CallbackRuntimeDriverRegistry`.
-6. Schema/model command drift for `service_definitions`.
-7. Unlabeled active-vs-target documentation claims.
-8. Marking closure tasks complete without production-path evidence.
-9. Standalone PG wire TCP listener outside the replicated service
+5. Schema/model command drift for `service_definitions`.
+6. Unlabeled active-vs-target documentation claims.
+7. Marking closure tasks complete without production-path evidence.
+8. Standalone PG wire TCP listener outside the replicated service
    path (`sys-postgres-wire` is the only PG wire listener owner).
-10. Service Cells creating their own query routing, partition
-    resolution, or SQL execution path instead of using the injected
-    `replicaContext.queryExecutor` from `ServiceRuntimeLifecycle`.
+9. Service Cells creating their own query routing, partition
+   resolution, or SQL execution path instead of using the injected
+   `replicaContext.queryExecutor` from `ServiceRuntimeLifecycle`.
 
 ### Runtime Ownership Invariants
 
@@ -336,17 +332,20 @@ The unified runtime model has one steady-state posture:
 1. `docs/admin-api-reference.md`
 2. `docs/wasm-services-user-guide.md`
 
-## Legacy WASM Replica State
+## Bound WASM Service Replicas and Stateless Component Cells
 
-`SafetyInterval`, `SessionKVStore`, and `TimerManager` remain composed by the
-legacy `WasmServiceReplica` classes, but production startup constructs neither
-their lifecycle owner nor a `wasm_service` rebalancer. Closed-timestamp reads,
-Raft-backed service KV, and exactly-once service timers are therefore not
-current runtime guarantees.
+`WasmServiceReplica` (`src/wasm-service/wasm-service-replica.js`) and
+`WasmServiceLifecycle` (`src/wasm-service/wasm-service-lifecycle.js`) run on
+the `raft-rs` operation port for bound WASM service-instance creation and
+consensus lifecycle (`SafetyInterval`, `SessionKVStore`, `TimerManager`, and
+`WasmExecutor`).
 
-Current WASI components run through `Wasm_Component_Driver` in
-`runtime_service` Cells. Their durable state and synchronization use tables and
-the ordinary partition replication path.
+Public HTTP request Bindings and distributed call Bindings run as stateless
+per-request Cells through `Wasm_Component_Driver`
+(`src/runtime/wasm-component-driver.js`) and `WasiComponentCellRuntime`
+(`src/runtime/wasi-component-cell-runtime.js`) in `runtime_service` Cells. Their
+durable state and synchronization use tables and the ordinary partition
+replication path.
 
 ## Epoch Management
 
@@ -389,7 +388,6 @@ Constants: `METRICS_LOG_TAG` in `src/constants/metrics-constants.js`.
 | `metrics.cdc.propagation` | `CDCEventHandler` / `MessageGroupService` | `applyCDCEvent()` |
 | `metrics.hydration.table` | `CacheHydrationService` | `hydrateTable()` |
 | `metrics.hydration.complete` | `CacheHydrationService` | `hydrateCache()` |
-| `metrics.callback.throughput` | `CallbackExecutionHost` | `execute()` |
 | `metrics.rebalance.operation` | `RebalanceCoordinator` | terminal state transitions |
 | `metrics.pgwire.handshake` | `PgWireProtocolHandler` | startup/auth handshake |
 | `metrics.pgwire.query` | `PgWireProtocolHandler` | query execution |

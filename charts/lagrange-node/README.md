@@ -5,7 +5,7 @@ Deploys a Lagrange cluster: **1 seed node + N joiners** (default N=2 → a
 
 ```sh
 helm install lagrange charts/lagrange-node \
-  --set image.tag=0.1.0 --set joiners.replicas=2
+  --set image.tag=0.2.6 --set joiners.replicas=2
 ```
 
 The default `image.repository` (`docker.io/psvensson/lagrange`) is the
@@ -26,7 +26,7 @@ For local builds, build and push your own image and pass
   name on reconnect, so nodes survive pod restarts that change the pod IP.
 - **Durable identity.** `NODE_ID` is not set: join admission requires a UUID,
   so the runtime mints one on first boot and restores it from the data
-  directory (rejoin hints) on restart. Identity rides the PVC.
+  directory (the durable boot-incarnation store) on restart. Identity rides the PVC.
 - **Ports**: REST `node.restPort` (default 8080), admin WS restPort+1, and
   transport WS restPort+2. Set `admin.websocketPort` or `node.wsPort` to
   override either derived WS port. Admin WS remains pod-local on loopback;
@@ -55,7 +55,7 @@ For local builds, build and push your own image and pass
 | `persistence.size` | `10Gi` | Per-pod volume |
 | `resources` | 1 CPU / 2Gi | Per-pod resources |
 
-## Caveats (0.1)
+## Caveats (0.2)
 
 - **Migration from the original chart defaults:** values files containing
   `admin.websocketHost: 0.0.0.0` or
@@ -72,4 +72,4 @@ For local builds, build and push your own image and pass
 - The seed StatefulSet is a single replica by design. Fresh joiners need it up
   to bootstrap; already-joined nodes keep their own peer mesh, but seed
   availability during simultaneous full-cluster restarts has not been
-  k8s-exercised in 0.1.
+  k8s-exercised in 0.2.

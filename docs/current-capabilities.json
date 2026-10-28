@@ -47,13 +47,13 @@
     "partitionConsensusBackend": "raft_rs_wasm",
     "runtimeCellConsensus": "none",
     "runtimeCellDurableState": "ordinary replicated tables",
-    "snapshotCheckpointCreation": "component_present_integration_unverified",
-    "snapshotTransferInstall": "component_present_integration_unverified",
-    "physicalLogCompaction": "not_verified_on_raft_rs",
+    "snapshotCheckpointCreation": "active_sqlite_partition_path",
+    "snapshotTransferInstall": "active_sqlite_partition_path",
+    "physicalLogCompaction": "active_sqlite_partition_path",
     "messageGroupLogCompaction": "unsupported",
-    "learnerPromotion": "time_based_not_progress_based",
-    "automaticSnapshotCadence": "unavailable_on_raft_rs",
-    "integratedReplicaRecovery": "not_verified_on_raft_rs",
+    "learnerPromotion": "progress_proof_after_scheduling_delay",
+    "automaticSnapshotCadence": "active_sqlite_partition_path",
+    "integratedReplicaRecovery": "active_sqlite_partition_path",
     "raftPersistDurability": "raft_promises_synced_before_send"
   },
   "deployment": {
@@ -133,8 +133,8 @@
   },
   "evidence": {
     "publicCodeFirstDemo": "single_node_two_partition_functional_proof",
-    "multiNodeDataLocalComparison": "internal_service_path",
-    "sqliteSnapshotLiveRebuild": "historical_pre_cutover_only",
+    "multiNodeDataLocalComparison": "three_node_local_code_first_call_binding",
+    "sqliteSnapshotLiveRebuild": "active_raft_rs_compaction_and_catchup_suites",
     "publicPathScaleBenchmark": "not_available"
   },
   "limitations": [
@@ -161,17 +161,17 @@
     {
       "id": "message-group-log-lifecycle",
       "area": "Replication",
-      "summary": "In-memory message-group logs still grow without bounded compaction and recover by full replay. This is separate from SQLite partition snapshot recovery."
+      "summary": "SQLite-backed message-group raft-rs logs still grow without bounded compaction and recover by full replay; they do not yet use the partition snapshot compaction lifecycle."
     },
     {
       "id": "learner-promotion",
       "area": "Replication",
-      "summary": "Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress."
+      "summary": "Learner promotion waits for an initial scheduling delay and then requires a current-leader match-index progress proof against the safe promotion index before voting."
     },
     {
       "id": "message-group-seed-placement",
       "area": "Replication",
-      "summary": "Message group mg-1 keeps all of its replicas on the seed node until a fresh-replica-identity ADD path for message groups exists: losing the seed's disk loses mg-1's committed state, with no recovery path. A replica held for reseed after proven history loss stays out of consensus for good; there is no reseed procedure yet."
+      "summary": "A replica held in _raft_rs_replica_lifecycle with reason = 'reseed-required' after proven history loss stays out of consensus permanently; there is no automatic reseed procedure yet, and replacement requires fresh-replica-identity ADD/REPLACE/REMOVE."
     },
     {
       "id": "raft-durability-scope",
@@ -266,12 +266,12 @@
     {
       "id": "upgrade-from-message-group-move-builds",
       "area": "Operations",
-      "summary": "In-place upgrade is unsupported from any build that moved a message-group replica to a joining node under its existing replica name: every release through 0.2.5 (npm 0.1.1, 0.2.4-rc.0 to rc.2 and 0.2.5; Docker 0.1.0, 0.1.1, 0.2.4-rc.2 and 0.2.5), the unreleased 0.2.6, and main before the identity-reuse fix. A node holding a message-group replica whose name it did not create can elect a second leader and lose acknowledged writes after the upgrade; rebuild such clusters or dump and restore them."
+      "summary": "In-place upgrade is unsupported from any pre-0.2.6 build that moved a message-group replica to a joining node under its existing replica name: every release through 0.2.5 (npm 0.1.1, 0.2.4-rc.0 to rc.2 and 0.2.5; Docker 0.1.0, 0.1.1, 0.2.4-rc.2 and 0.2.5) and main before the 0.2.6 identity-reuse fix. A node holding a message-group replica whose name it did not create can elect a second leader and lose acknowledged writes after the upgrade; rebuild such clusters or dump and restore them."
     },
     {
       "id": "raft-rs-recovery-cadence",
       "area": "Replication",
-      "summary": "Checkpoint and transfer/install components exist, but the current leader cadence returns committed_log_unsupported. No integrated automatic checkpoint, bounded raft-rs log compaction or end-to-end recovery guarantee is established."
+      "summary": "Automatic partition checkpoint cadence (10,000 entries or 256 MiB pending log bytes), proof-gated _raft_rs_log compaction, and lagging-follower snapshot catch-up are active for file-backed SQLite user partitions on raft-rs. Control-plane system partitions and message groups remain excluded from snapshot compaction, and partition snapshots are internal replica repair rather than a user backup/PITR product or published RPO/RTO SLA."
     },
     {
       "id": "postgres-unverified-expression-semantics",

@@ -43,6 +43,12 @@ const DISPLAY_LABEL = Object.freeze({
   must_be_disjoint_across_shards: 'Must be disjoint across shards',
   single_node_two_partition_functional_proof:
     'Single-node, two-partition functional proof',
+  three_node_local_code_first_call_binding:
+    'Three-node local cluster on the code-first WASI call-Binding path',
+  active_raft_rs_compaction_and_catchup_suites:
+    'Active raft-rs snapshot compaction and lagging-follower catch-up suites',
+  progress_proof_after_scheduling_delay:
+    'Leader match-index progress proof after initial scheduling delay',
   internal_service_path: 'Internal measurement path',
   five_node_certification_window: 'Five-node certification window',
   not_available: 'Not available',
@@ -197,14 +203,16 @@ constructors refuse its absence.
 | SQLite partition proof-gated log compaction | ${displayCapability(capabilities.replication.physicalLogCompaction)} |
 | Automatic partition checkpoint cadence | ${displayCapability(capabilities.replication.automaticSnapshotCadence)} |
 | Integrated replica recovery on raft-rs | ${displayCapability(capabilities.replication.integratedReplicaRecovery)} |
-| In-memory message-group log compaction | ${displayCapability(capabilities.replication.messageGroupLogCompaction)} |
+| Message-group log compaction | ${displayCapability(capabilities.replication.messageGroupLogCompaction)} |
 | Learner promotion | ${displayCapability(capabilities.replication.learnerPromotion)} |
 | Raft votes, appended entries and snapshots | ${displayCapability(capabilities.replication.raftPersistDurability)} |
 
-Component presence, automatic execution and full recovery are distinct claims. The
-current raft-rs partition leader cadence reports an unsupported committed-log
-owner; no historical snapshot test certifies the new path. Snapshot recovery
-is replica repair, not a user backup or PITR product.
+Component presence, automatic execution, and published recovery SLAs are distinct
+claims. File-backed SQLite user partitions run automatic raft-rs checkpoint
+cadence, proof-gated log compaction, and lagging-follower snapshot catch-up;
+control-plane partitions and message groups remain excluded from compaction, and
+snapshot recovery is internal replica repair rather than a user backup or PITR
+product.
 
 ## PostgreSQL wire
 

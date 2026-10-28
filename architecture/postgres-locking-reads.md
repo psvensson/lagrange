@@ -4,8 +4,9 @@ Status: planned Phase 0.3 core contract
 
 ## Purpose
 
-Lagrange currently provides epoch-based snapshot isolation, read-your-own-writes,
-and first-committer-wins write-conflict detection at prepare. PostgreSQL clients
+Lagrange currently provides session staged read-your-own-writes over current
+committed state and partition-write-generation first-committer-wins
+write-conflict detection at prepare and apply. PostgreSQL clients
 can parse and execute ordinary transactional reads, but the current PostgreSQL
 SELECT AST does not preserve `FOR UPDATE` as an owned locking-read semantic.
 

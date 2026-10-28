@@ -2,7 +2,7 @@
 
 Lagrange can remove avoidable data movement and service/to-database round
 trips. It does not make WASM instructions automatically faster, remove Raft
-consensus, or make every workfload cheaper.
+consensus, or make every workload cheaper.
 
 The strongest workload shape is:
 
@@ -30,7 +30,7 @@ Add current bounds to any estimate:
 - the public path does not stream or page an oversized shard batch;
 - the default shard row bound is 4,096, with additional byte and deadline
   bounds;
-- partials are finite numers with shard-disjoint keys;
+- partials are finite numbers with shard-disjoint keys;
 - the default emit budget is 64 and the merged partial cap is 1,024;
 - shard dispatch allows up to eight concurrent runs, but shards routed to
   the same component instance serialize; and
@@ -99,7 +99,7 @@ entry, planning, local read, queuing, reduction, and coordination overhead.
 
 ### Data reduction
 
-Compare abytes at the service/storage boundary.
+Compare bytes at the service/storage boundary.
 
 Baseline:
 
@@ -228,8 +228,8 @@ The current repository contains:
 - a single-node, two-partition code-first WASM functional proof;
 - multi-node integration tests for host-local row reads and bounded shard
   dispatch; and
-- a multi-process MovieLens comparison whose service phase uses an internal
-  internal query-loop runtime.
+- a multi-process MovieLens comparison whose service phase runs a code-first
+  WASI call Binding across a local three-node cluster.
 
 It does not yet contain a multi-node, public code-first WASM benchmark
 compared against a controlled conventional deployment. Treat performance

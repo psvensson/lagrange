@@ -94,19 +94,20 @@ required or permitted.
 
 ## Consistency the consumer may rely on
 
-- Within one session's transaction: read-your-writes on the participant
-  epoch.
+- Within one session's transaction: session staged read-your-writes replay over
+  current committed state, with partition-write-generation first-committer-wins
+  write-conflict detection at prepare and apply.
 - Across sessions and nodes: an autocommit read is a follower-local snapshot
   read. A committed autocommit write becomes visible on another node after
   replication; no staleness bound is documented.
-- Transactions through `db.transaction`: one coordinator, one-phase commit for
-  a single participant, two-phase otherwise; a failed statement dooms the
-  transaction even if the callback catches it; raw transaction-control SQL is
-  refused; concurrent top-level transactions have distinct sessions. **These
-  are coordinator-visible semantics.** Replicated durability of transactional
-  writes is not provided today: see the blocking finding below. Until it is
-  repaired, an application must treat `db.transaction` as durable only on the
-  replica that executed it.
+- Transactions through `db.transaction`: one coordinator, two-phase commit
+  (`PARTICIPANT_PREPARE` + `PARTICIPANT_DECISION`) for every nonempty
+  transaction including single-participant transactions; a failed statement
+  dooms the transaction even if the callback catches it; raw
+  transaction-control SQL is refused; concurrent top-level transactions have
+  distinct sessions. Replicated participant staging and deterministic apply
+  (`TX1`, landed in `0.2.6`) make committed transactional writes durable across
+  partition replicas and leader failover.
 
 ## Binding invocation from an application
 
@@ -152,12 +153,12 @@ in [Execution semantics](../docs/execution-semantics.md).
 
 | Stage | Status | Evidence |
 | --- | --- | --- |
-| I1 public application database | PROVEN on one runtime; multi-node RECORDED | `test/integration/public-application-database-multinode.integration.test.js` runs on one runtime. A three-process lab run was green for key routing, update visibility, the falsifiers and every leak check, but the committed shape stays at one runtime until the formation write-readiness and transaction replication findings are repaired |
-| I2 distributed transaction visibility | BLOCKED | systemic transaction replication defect, see Findings; `test/integration/public-application-database-transaction-facade.integration.test.js` proves facade semantics only |
+| I1 public application database | PROVEN on one runtime; multi-node RECORDED | `test/integration/public-application-database-multinode.integration.test.js` runs on one runtime. A three-process lab run was green for key routing, update visibility, the falsifiers and every leak check |
+| I2 distributed transaction visibility | PROVEN (`TX1`, `0.2.6`) | `PARTICIPANT_PREPARE` + `PARTICIPANT_DECISION` 2PC-only replicated participant staging and deterministic apply; `test/integration/public-application-database-transaction-facade.integration.test.js` and `test/partition/partition-participant-transaction-apply.test.js` |
 | I3 public Binding invocation | PROVEN | `test/integration/public-binding-cell-invocation-seam.integration.test.js` |
 | I4 outcome contract | PROVEN | `test/integration/call-cell-public-outcome-adversarial.integration.test.js`, `test/service/call-cell-public-outcome.test.js` |
 | I5 consumer-contract ratchet | PROVEN | `test/release/public-consumer-contract-ratchet.test.js`, `test/integration/public-consumer-contract-ratchet.integration.test.js` |
-| I6 durability harness | CANDIDATE on the hard rs-raft path; final durability certification still blocked on the transaction finding and a fresh current-main run | `test/distributed/scenarios/public-seam-durability.js` (`certification: CANDIDATE`); the consensus prerequisite is owned by `test/raft/raft-rs-backend/single-path-partition-cutover.test.js` |
+| I6 durability harness | CANDIDATE on the hard rs-raft path; `TX1` replicated transaction durability landed in `0.2.6` | `test/distributed/scenarios/public-seam-durability.js` (`certification: CANDIDATE`); the consensus prerequisite is owned by `test/raft/raft-rs-backend/single-path-partition-cutover.test.js` |
 
 ## Falsifiers
 
@@ -165,7 +166,7 @@ in [Execution semantics](../docs/execution-semantics.md).
 | --- | --- | --- |
 | F1 consumer selects a node | no | `INVALID_ARGUMENT`; no options channel |
 | F2 consumer supplies a partition id | no | hints ignored; payload keys refused |
-| F3 half a transaction committed | no | atomic outcome on one runtime; replicated durability BLOCKED |
+| F3 half a transaction committed | no | atomic outcome and replicated participant apply (`TX1`, `0.2.6`) |
 | F4 caught statement error commits | no | transaction doomed |
 | F5 Binding bypasses the invocation owner | no | static: consumer import census plus the architectural path `executeRequest` to the lifecycle owner to `CallCellInvoker` |
 | F6 legacy callback axis used | no | static token scan |
@@ -181,13 +182,15 @@ the read-only cache proxy, the access-policy gap and the cluster-view half of
 the inbound-unreachable node are recorded only in this register and in the
 epic's memory notes.
 
-- **Transactional writes are not replicated (BLOCKING).** In-transaction
-  statements mutate only the staging replica; the commit marker carries the
-  operations but no replica applies them; `COMMIT` is acknowledged before
-  consensus; a leader change loses the rows. Measured directly in each
-  replica's database on a three-node lab cluster. Owner: the partition
-  transaction base and the transaction protocol. Quest
-  `distributed-transaction-replicated-apply`.
+- **Transactional writes are replicated (`F-TX-REPLICATED-APPLY`, resolved by `TX1` in `0.2.6`).**
+  Participants replicate `PARTICIPANT_PREPARE` and bound `PARTICIPANT_DECISION`
+  commands through `raft-rs`, replay session staged read-your-writes over
+  current committed state, and enforce partition-write-generation conflict
+  detection at prepare and apply. Owner: the partition participant transaction
+  store/apply path (`src/partition/partition-participant-transaction-apply.js`)
+  and the 2PC transaction coordinator. Quest
+  `replicated-transaction-decision-and-apply` (superseding
+  `distributed-transaction-replicated-apply`).
 - **Binary values over routed paths.** Buffers are JSON-serialized on the
   partition hop and in the committed entry with no reviver, and the wire bind
   parser ignores binary format codes. Owner: one canonical value codec for
@@ -233,6 +236,6 @@ lab and GCP targets. Current main has one fixed rs-raft partition consensus path
 so the scenario reports `certification: CANDIDATE` without consulting the
 retired provider-selection compatibility surface. The single-path prerequisite
 is proven by `test/raft/raft-rs-backend/single-path-partition-cutover.test.js`.
-Final Images durability certification still requires a fresh current-main run
-and the separate transaction replicated-apply repair; CANDIDATE is eligibility,
-not a passing verdict.
+Final Images durability certification still requires a fresh current-main
+`--certify <sha>` run (`TX1` replicated transaction apply landed in `0.2.6`);
+CANDIDATE is eligibility, not a passing verdict.

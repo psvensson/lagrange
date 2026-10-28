@@ -58,39 +58,40 @@ Entity types:
 - Learner phase for new replicas joining existing groups
 
 ### Log Storage
-- Message groups: In-memory log adapter
-- Partitions: SQLite log adapter (persistent)
+- Message groups: persistent SQLite consensus store (`RaftRsDurableStore`:
+  `_raft_rs_log`, `_raft_rs_hard_state`, `_raft_rs_applied_state`,
+  `_raft_rs_snapshot` in `src/raft/raft-rs-durable-store.js`), uncompacted log
+- Partitions: persistent SQLite consensus store (`RaftRsDurableStore`:
+  `_raft_rs_log`, `_raft_rs_hard_state`, `_raft_rs_applied_state`,
+  `_raft_rs_snapshot` in `src/raft/raft-rs-durable-store.js`) alongside user and
+  partition metadata tables
 - Runtime-service Cells have no service-state Raft log; durable state remains in
   partitioned tables.
 
-The in-memory adapter is ephemeral across process restart; that weaker
-durability contract does not permit deleting committed entries while the
-adapter is live. The snapshot protocol now exists END TO END and is WIRED INTO PRODUCTION for
-file-backed SQLite partition replicas (certified through the six-stage
-snapshot-transfer-install ladder, now complete): checkpoint
-CREATION (`src/raft/snapshot-checkpoint-{constants,format,store}.js`), atomic
-INSTALL at the closed-handle boot boundary (`snapshot-install{,-constants}.js`,
-`snapshot-boundary.js`), bulk TRANSFER over a dedicated byte-bounded per-peer
-channel (`snapshot-transfer{,-constants,-receiver}.js`,
-`src/transport/bulk-transfer-channel.js`), compacted-follower CATCH-UP
-(typed install_snapshot dispatch + orchestrator, `snapshot-catchup.js`), and
-bounded RETENTION with proof-gated physical compaction
-(`snapshot-retention.js`, `snapshot-compaction.js`). A proofless
-`compactCommittedEntries` call still returns the typed
-`snapshot_protocol_unavailable` refusal; physical prefix removal requires a
-durable, term-anchored local snapshot proof and advances the compacted-log
-boundary in the same transaction. S6 (`raft-snapshot-live-rebuild`) added the
-production trigger: a leader-only checkpoint cadence
-(`src/partition/partition-snapshot-cadence.js`) rides the 1s
-prepared-state-hold sweep, and on fire seals a generation, sweeps retention,
-and proof-gate-compacts the committed prefix past that generation — so a
-lagging or from-scratch SQLite follower is caught up by snapshot install
-rather than replaying an unbounded prefix. This was certified live on a
-five-node docker cluster (a wiped follower rebuilds ACTIVE under continuous
-foreground writes with zero lost acknowledged writes; N=15 window ABOVE_BAR).
-The in-memory adapter still retains its full committed prefix (its weaker
-durability contract forbids live prefix deletion); clearing it during
-lifecycle teardown is whole-instance destruction, not live log compaction.
+### Snapshot Creation
+The snapshot protocol exists end to end and is wired into production for
+file-backed SQLite partition replicas (`SN1`): checkpoint creation and
+validation (`src/raft/snapshot-checkpoint-constants.js`,
+`src/raft/snapshot-checkpoint-format.js`,
+`src/raft/snapshot-checkpoint-store.js`,
+`src/raft/snapshot-application-content.js`), atomic install at the
+closed-handle boot boundary (`src/raft/snapshot-install.js`,
+`src/raft/snapshot-install-constants.js`, `src/raft/snapshot-boundary.js`),
+bulk transfer over a dedicated byte-bounded per-peer channel
+(`src/raft/snapshot-transfer.js`, `src/raft/snapshot-transfer-constants.js`,
+`src/raft/snapshot-transfer-receiver.js`,
+`src/transport/bulk-transfer-channel.js`), compacted-follower catch-up
+(`src/raft/snapshot-catchup.js`), and bounded retention with proof-gated
+physical `_raft_rs_log` compaction (`src/raft/snapshot-retention.js`,
+`src/raft/snapshot-compaction.js`, `src/raft/raft-rs-snapshot-witness.js`).
+Partition checkpoints (`SN1`) preserve user tables, partition metadata tables,
+`raft_rs_peer_identity`, and `maxCommittedHlc` while compacting `_raft_rs_log`
+entries up to the checkpoint boundary. A leader-only checkpoint cadence
+(`src/partition/partition-snapshot-cadence.js`) seals a generation, sweeps
+retention, and proof-gate-compacts the committed prefix so a lagging or
+from-scratch SQLite follower catches up by snapshot install rather than
+replaying an unbounded prefix. Message-group logs in `RaftRsDurableStore`
+remain uncompacted.
 
 ## Rebalancing
 
@@ -299,11 +300,10 @@ Rebalancer/storage keys:
 5. No ad-hoc storage accounting maps or sets in planner or coordinator.
 ## Message Group Assignment
 
-When a new node joins the cluster, it needs at least one message group replica for communication. Two strategies determine how this is assigned:
+When a new node joins the cluster, it needs at least one message-group replica
+for communication. Every joining node uses `CREATE_SELF_HOSTED`:
 
-### CREATE_SELF_HOSTED Strategy
-
-Used when no existing replicas can be moved:
+### CREATE_SELF_HOSTED Join Strategy
 
 ```
 New Node joins
@@ -317,57 +317,28 @@ New Node joins
             ▼
 ┌─────────────────────────┐
 │ All 3 replicas on new   │
-│ node (temporary)        │
+│ node (initial group)    │
 └───────────┬─────────────┘
             │
             ▼
 ┌─────────────────────────┐
-│ Rebalancer spreads      │
-│ replicas to other nodes │
+│ UnifiedRebalancer plans │
+│ FreshMG ADD/REPLACE/    │
+│ REMOVE across nodes     │
 └─────────────────────────┘
 ```
 
-When used:
-- First node joining after seed node
-- No existing message groups have movable replicas
-- Cluster is scaling up rapidly
+### Retired MOVE_REPLICA Strategy and FreshMG Replication
 
-### MOVE_REPLICA Strategy
+`MOVE_REPLICA` join assignment was retired and is refused because reusing an
+existing message-group replica identity on a joining node's empty store violated
+Raft peer-id safety (vote amnesia and duplicate leadership in one term).
 
-Used when an existing replica can be transferred:
-
-```
-New Node joins
-     │
-     ▼
-┌─────────────────────────┐
-│ Find node with excess   │
-│ message group replicas  │
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│ Transfer replica ID to  │
-│ new node (not copy)     │
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│ Update services table   │
-│ to point to new node    │
-└─────────────────────────┘
-```
-
-When used:
-- Existing nodes have more than one message group replica
-- Rebalancing message groups across cluster
-- Preferred strategy for even distribution
-
-### Strategy Selection
-
-The bootstrap API automatically selects the strategy:
-
-1. Query services table for message group replicas
-2. Find nodes with multiple replicas (candidates for MOVE_REPLICA)
-3. If found: Use MOVE_REPLICA with the excess replica
-4. If not found: Use CREATE_SELF_HOSTED with new group ID
+Off-seed message-group replication instead uses `UnifiedRebalancer`
+fresh-identity `ADD`, `REPLACE`, and `REMOVE` operations (`FreshMG`):
+1. A new message-group replica receives a fresh replica and Raft peer identity.
+2. The group leader admits the fresh peer as a Raft learner (`ADD_LEARNER`),
+   transfers state, and records the committed learner origin.
+3. Once the leader proves the learner is caught up in the applied leader term,
+   the workflow promotes the learner to a voter (`ADD_NODE`) and records the
+   voter stamp before retiring any replaced source replica.

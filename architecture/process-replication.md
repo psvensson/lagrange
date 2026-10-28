@@ -94,49 +94,47 @@ What an operator sees:
 
 The hold is permanent. There is no reseed procedure and no release: the
 replica stays out of consensus, also across restarts, and its group runs on
-its other replicas. Restoring the group's replica count needs a
-fresh-replica-identity ADD path for that group kind, which does not exist yet
-for message groups.
+its other replicas. Restoring the group's replica count uses the
+fresh-replica-identity `ADD`/`REPLACE`/`REMOVE` workflow (`FreshMG` for
+message groups and `UnifiedRebalancer` for partitions) so a new replica joins
+under a fresh identity rather than reusing the retired replica's ID.
 
-Message group mg-1 currently keeps all of its replicas on the seed node. Its
-committed state therefore lives only on the seed's disk: losing that disk loses
-mg-1's committed state, and there is no recovery path. A joining node hosts only
-its own message group.
+A joining node creates its own self-hosted message-group replica via
+`CREATE_SELF_HOSTED`, while off-seed message-group replication and replacement
+use fresh-replica-identity `ADD`/`REPLACE`/`REMOVE` (`FreshMG`).
 
 ### Partition checkpoint and recovery status at the raft-rs boundary
 
-The checkpoint creation and snapshot transfer/install components exist, and
-historical S6 tests measured a five-node live rebuild on the predecessor
-consensus/log path. That evidence **does not** establish active automatic
-checkpointing, bounded compaction or end-to-end recovery for raft-rs.
+**Automatic rs-raft partition checkpoint cadence and proof-gated log compaction are active** for file-backed SQLite user partitions (`SN1`). In
+[`partition-snapshot-cadence.js`](../src/partition/partition-snapshot-cadence.js),
+a live file-backed user-partition leader evaluates its durable `RaftRsDurableStore`
+state (`_raft_rs_log` and `_raft_rs_snapshot`) against the entry threshold
+(`10,000` entries) and pending-log byte threshold (`256 MiB`). When triggered
+(or when retrying an uncompacted checkpoint after a leadership change), it seals
+a `raft_rs_replica_image` SQLite checkpoint via
+[`snapshot-checkpoint-store.js`](../src/raft/snapshot-checkpoint-store.js) and
+[`snapshot-application-content.js`](../src/raft/snapshot-application-content.js)
+(preserving user tables, partition metadata tables, `raft_rs_peer_identity`, and
+`maxCommittedHlc` while refusing creation if prepared transactions are pending),
+sweeps unpinned retention generations, and compacts `_raft_rs_log` through
+[`snapshot-compaction.js`](../src/raft/snapshot-compaction.js)
+(`compactRaftRsCommittedEntries`). Lagging followers whose `nextIndex` falls
+behind the compacted boundary catch up through
+[`snapshot-catchup.js`](../src/raft/snapshot-catchup.js) and
+[`snapshot-install.js`](../src/raft/snapshot-install.js).
 
-**Current rs-raft partition checkpoint cadence is unavailable.** In
-[`partition-snapshot-cadence.js`](../src/partition/partition-snapshot-cadence.js)
-a live file-backed leader returns the typed
-`COMMITTED_LOG_UNSUPPORTED` outcome. The original cadence depended on a
-committed-log owner that raft-rs does not expose. A component can create or
-install a snapshot without the production lifecycle selecting, transferring,
-installing and compacting it safely. No current proof closes that full chain.
+Operational boundaries:
 
-Operational consequences:
-
-- Do not claim SQLite partition logs are bounded on raft-rs from historical
-  S6 results. Snapshot creation, automatic cadence, transfer/install,
-  compaction and restored follower readiness need separately attributable
-  exact-source evidence.
-- A lagging follower is **not certified** to recover by the automatic
-  snapshot path on this backend. Retain the original failure and prove the
-  real recovery and no-loss outcome before changing this status.
-- In-memory message-group logs still grow without bound and rely on full
-  replay; persistent SQLite message-group logs opened by the message-group
-  consensus owner also lack an established compaction bound.
-- Learner promotion remains time-based, not progress-based.
+- Control-plane system partitions (`CONTROL_PLANE_PARTITION_IDS`) and in-memory
+  test partitions are intentionally excluded from automatic snapshot cadence.
+- SQLite-backed message-group logs still grow without bound and rely on full
+  replay; message-group log compaction is not yet implemented.
+- Partition snapshots are internal replica repair, not a customer backup/restore
+  or point-in-time recovery product, and carry no published RPO/RTO SLA.
 
 The active [capability declaration](../docs/current-capabilities.json) and
 generated [capability page](../docs/current-capabilities-and-limitations.md)
-record these separate states. The RS-Raft full-cutover milestone retains
-its established certification owner and acceptance criteria; this document
-does not change or close them.
+record these separate states.
 
 ## The write path
 
@@ -292,8 +290,7 @@ After the round trip, the partition validates the proof against its current
 leader identity, term, membership epoch and learner role before becoming a
 follower. A missing, stale or refused proof defers promotion with a typed reason
 and a scheduled recheck. The delay schedules the check; elapsed time alone
-does not authorize promotion. Checkpoint/install components do not yet certify
-the automatic raft-rs recovery path. The implementation owners are
+does not authorize promotion. The implementation owners are
 `src/partition/partition-service-learner-promotion-methods.js` and
 `src/raft/learner-promotion-progress.js`.
 
@@ -358,12 +355,15 @@ The operation lifecycle itself is owned by `RebalanceCoordinator`; see
 ## Reads and consistency
 
 - Reads may be served by any routable replica of the partition; writes may not.
-- Partitions implement epoch-based snapshot isolation: reads see writes
-  committed before the epoch, plus your own writes, and write conflicts are
-  detected first-committer-wins at prepare time.
-- Distributed transactions add participant enlistment and 1PC/2PC phases on top,
-  owned by `DistributedTransactionCoordinator`. A partition's prepared state is
-  a durable `PREPARE_TRANSACTION` Raft entry, so prepared writes survive leader
+- Within an explicit transaction, session reads replay deterministic staged
+  operations inside a rolled-back SQLite transaction over current committed
+  state (read-your-own-writes over current committed state), and `BEGIN`
+  captures the partition write generation for first-committer-wins conflict
+  detection at `PREPARE` and apply (`TX1`).
+- Distributed transactions use two-phase commit (`PARTICIPANT_PREPARE` and
+  `PARTICIPANT_DECISION`), owned by `DistributedTransactionCoordinator`. Both
+  prepared operations and commit/abort decisions are replicated through the
+  partition's `raft-rs` group, so prepared and committed writes survive leader
   failover.
 
 ## What this means when you build on it

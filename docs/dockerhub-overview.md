@@ -45,7 +45,7 @@ relevant data, so only reduced results cross the network.
 | Tag | Meaning |
 | --- | --- |
 | `latest` | Most recent release |
-| `0.1.0`, … | One tag per `vX.Y.Z` release, built from that git tag |
+| `0.2.6`, … | One tag per `vX.Y.Z` release, built from that git tag |
 
 Images are **linux/amd64 only** and built on
 [distroless Node.js 22](https://github.com/GoogleContainerTools/distroless) -

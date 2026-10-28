@@ -80,14 +80,14 @@ Enterprise
 | DistributedTransactionCoordinator skeleton | ✅ | Owns 2PC state machine |
 | Transaction state tables | ✅ | `sql_transactions`, `sql_transaction_participants`, `sql_write_operations` |
 | Participant enlistment | ✅ | Idempotent operations |
-| Prepare phase | ✅ | Real `PREPARE` dispatch + participant conflict checks |
-| Prepared-state durability | ✅ | `PREPARE_TRANSACTION` replicated in participant Raft log |
+| Prepare phase | ✅ | Real `PARTICIPANT_PREPARE` dispatch + participant conflict checks |
+| Prepared-state durability | ✅ | `PARTICIPANT_PREPARE` and `PARTICIPANT_DECISION` replicated in participant Raft log |
 | Commit phase | ✅ | Commit decision persisted before participant fanout |
 | Rollback | ✅ | Cross-partition rollback with idempotent participant handling |
 | Coordinator recovery | ✅ | Status-driven replay to terminal state after restart |
-| Snapshot isolation | ✅ | Epoch-based visibility + read-your-own-writes |
-| Write conflict detection | ✅ | First-committer-wins conflict detection at prepare |
-| Timeout and cleanup | ✅ | Budget-based abort + participant hold timeout + recovery sweep |
+| Read-your-own-writes isolation | ✅ | Session staged read-your-own-writes over current committed state |
+| Write conflict detection | ✅ | Partition-write-generation first-committer-wins conflict detection at prepare and apply |
+| Timeout and cleanup | ✅ | Budget-based abort + persisted deadline coordinator rollback + recovery sweep |
 
 ### 2. Schema Migration Workflow — 🟢 Community
 
@@ -324,7 +324,7 @@ loss, and demonstrate the same execution contract from a second language/runtime
 
 | Item | Status |
 |------|--------|
-| PG authentication | 🔧 | Loopback-only explicit trust is live; password/SCRAM exchange remains unimplemented |
+| PG authentication | 🔧 | Explicit `trust` (loopback-only) and `password` (`AuthenticationCleartextPassword`) are live; SCRAM remains unimplemented |
 | Admin auth middleware | ✅ |
 | Service authorization | ✅ |
 | Audit context | ✅ |
@@ -333,7 +333,7 @@ loss, and demonstrate the same execution contract from a second language/runtime
 | Tenant isolation | 🔲 |
 | Resource quotas | 🔲 |
 | Encryption at rest | 🔲 |
-| TLS transport | 🔲 |
+| TLS transport | 🔧 | PostgreSQL wire TLS (`disable`, `prefer`, `require`) is live; node-to-node mTLS remains unimplemented |
 
 ### 6. Production Guarantees — 🟢 Community
 
@@ -523,8 +523,8 @@ The Phase 1.0 productization milestone defines the minimum customer-service acce
 
 | Item | Status | Notes |
 |------|--------|-------|
-| `INSTALL SERVICE` / `REMOVE SERVICE` / `UPGRADE SERVICE` SQL | 🔲 | Service lifecycle as first-class cluster operations |
-| `SHOW SERVICES` / `SHOW SERVICE REVISIONS` / `SHOW SERVICE INSTANCES` SQL | 🔲 | Observability via SQL |
+| `INSTALL SERVICE` / `REMOVE SERVICE` / `UPGRADE SERVICE` SQL | ✅ | Service lifecycle as first-class cluster operations |
+| `SHOW SERVICES` / `SHOW SERVICE REVISIONS` / `SHOW SERVICE INSTANCES` SQL | ✅ | `SHOW SERVICES` live over authenticated PG wire; revision/instance views follow with catalog expansion |
 | `lagrange service install` / `upgrade` / `remove` / `list` / `status` CLI | 🔲 | CLI equivalents |
 | `lagrange registry add` / `list` CLI | 🔲 | Registry management |
 

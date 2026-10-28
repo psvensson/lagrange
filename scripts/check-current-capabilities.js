@@ -61,12 +61,10 @@ const CHECKED_FILE_PATHS = Object.freeze([
 const EXPECTED_STATUS = Object.freeze({
   SECONDARY_INDEXES: 'unsupported',
   PARTITION_BACKEND: 'raft_rs_wasm',
-  SNAPSHOT_COMPONENT: 'component_present_integration_unverified',
-  RAFT_RS_UNVERIFIED: 'not_verified_on_raft_rs',
-  RAFT_RS_CADENCE_UNAVAILABLE: 'unavailable_on_raft_rs',
-  HISTORICAL_SNAPSHOT_PROOF: 'historical_pre_cutover_only',
+  SNAPSHOT_ACTIVE: 'active_sqlite_partition_path',
+  SNAPSHOT_PROOF: 'active_raft_rs_compaction_and_catchup_suites',
   MESSAGE_GROUP_COMPACTION: 'unsupported',
-  LEARNER_PROMOTION: 'time_based_not_progress_based',
+  LEARNER_PROMOTION: 'progress_proof_after_scheduling_delay',
   RAFT_PERSIST_DURABILITY: 'raft_promises_synced_before_send',
   NODE_TRANSPORT: 'plain_websocket_trusted_network_only',
   HTTP_AUTHENTICATION: 'basic_against_configured_pgwire_credentials',
@@ -78,14 +76,14 @@ const AUDIT_MARKER = Object.freeze({
   SECONDARY_INDEX_ID: 'secondary-indexes',
   SECONDARY_INDEX_CONTRADICTION:
     'secondary-index capability contradicts the active architecture',
-  RAFT_RS_NOT_CERTIFIED:
-    'Current rs-raft partition checkpoint cadence is unavailable',
-  CADENCE_REFUSAL: 'RAFT_SNAPSHOT_CADENCE_OUTCOME.COMMITTED_LOG_UNSUPPORTED',
+  RAFT_RS_SNAPSHOT_ACTIVE:
+    'Automatic rs-raft partition checkpoint cadence and proof-gated log compaction are active',
+  CADENCE_COMPACTION: 'compactRaftRsCommittedEntries(',
   PARTITION_RAFT_RS_CONSTRUCTOR: 'createRaftRsOperationPort(request)',
   PARTITION_NO_ALTERNATE_BACKEND:
     'there is no selection and no injected provider',
   MESSAGE_GROUP_UNBOUNDED: 'message-group logs still grow without bound',
-  LEARNER_TIME_BASED: 'time-based, not progress-based',
+  LEARNER_PROGRESS_PROOF: 'current leader\'s progress proof',
   RAFT_SYNCED_BEFORE_SENT: 'synced to disk before they are sent',
   RAFT_SYNC_SOURCE: 'SET_FULL: \'synchronous = FULL\'',
   RAFT_DURABILITY_CONTRADICTION:
@@ -221,9 +219,9 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
 
   const replication = readText(REPLICATION_ARCHITECTURE_PATH, root);
   addProblem(problems,
-    replication.includes(AUDIT_MARKER.RAFT_RS_NOT_CERTIFIED) &&
+    replication.includes(AUDIT_MARKER.RAFT_RS_SNAPSHOT_ACTIVE) &&
       replication.includes(AUDIT_MARKER.MESSAGE_GROUP_UNBOUNDED) &&
-      replication.includes(AUDIT_MARKER.LEARNER_TIME_BASED),
+      replication.includes(AUDIT_MARKER.LEARNER_PROGRESS_PROOF),
     'replication limitations lost their current architecture evidence');
   const cadence = readText(SNAPSHOT_CADENCE_PATH, root);
   const partitionConstructor = readText(PARTITION_CONSTRUCTOR_PATH, root);
@@ -234,19 +232,19 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
       ) &&
       capabilities.replication.partitionConsensusBackend ===
         EXPECTED_STATUS.PARTITION_BACKEND &&
-      cadence.includes(AUDIT_MARKER.CADENCE_REFUSAL) &&
+      cadence.includes(AUDIT_MARKER.CADENCE_COMPACTION) &&
       capabilities.replication.snapshotCheckpointCreation ===
-        EXPECTED_STATUS.SNAPSHOT_COMPONENT &&
+        EXPECTED_STATUS.SNAPSHOT_ACTIVE &&
       capabilities.replication.snapshotTransferInstall ===
-        EXPECTED_STATUS.SNAPSHOT_COMPONENT &&
+        EXPECTED_STATUS.SNAPSHOT_ACTIVE &&
       capabilities.replication.physicalLogCompaction ===
-        EXPECTED_STATUS.RAFT_RS_UNVERIFIED &&
+        EXPECTED_STATUS.SNAPSHOT_ACTIVE &&
       capabilities.replication.automaticSnapshotCadence ===
-        EXPECTED_STATUS.RAFT_RS_CADENCE_UNAVAILABLE &&
+        EXPECTED_STATUS.SNAPSHOT_ACTIVE &&
       capabilities.replication.integratedReplicaRecovery ===
-        EXPECTED_STATUS.RAFT_RS_UNVERIFIED &&
+        EXPECTED_STATUS.SNAPSHOT_ACTIVE &&
       capabilities.evidence.sqliteSnapshotLiveRebuild ===
-        EXPECTED_STATUS.HISTORICAL_SNAPSHOT_PROOF &&
+        EXPECTED_STATUS.SNAPSHOT_PROOF &&
       capabilities.replication.messageGroupLogCompaction ===
         EXPECTED_STATUS.MESSAGE_GROUP_COMPACTION &&
       capabilities.replication.learnerPromotion ===

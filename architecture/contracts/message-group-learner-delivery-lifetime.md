@@ -99,9 +99,11 @@ documentClass: current
 
 Owner interaction: RouterConnectionAuthorityOwner -> existing group membership
 admission -> semantic operation port -> existing native membership turn.
-Scope: next bounded increment of message-group-fresh-identity-membership.
-This is not complete FreshMG activation or resolution of cross-group metadata
-currentness. The sealed source/target, J1, CREATE and cleanup rules stand.
+Scope: delivery-lifetime boundary slice of
+`message-group-fresh-identity-membership` (downstream `FreshMG` slices
+`6.A`-`6.D` are wired in production in `0.2.6`). This contract alone does not
+resolve cross-group metadata currentness. The sealed source/target, J1, CREATE
+and cleanup rules stand.
 
 ## Different obligations
 

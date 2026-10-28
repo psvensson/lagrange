@@ -41,10 +41,15 @@ coordination, storage admission, and execution handoff for topology changes.
   execution.
 - `operation-workflow-owner-decision.js` only as the compatibility facade for
   existing workflow decision callers.
-- Existing `rebalance-coordinator-segment-*`
-  and `unified-rebalancer-segment-*` files are legacy compatibility surfaces.
-  Use `_legacy_work/inventory/ordinal-segments.md` when opening semantic migration
-  packages for these files. New code should not add more stage/segment files.
+- `src/rebalancer/rebalance-coordinator.js`,
+  `src/rebalancer/unified-rebalancer.js`, and their focused collaborator modules
+  under `src/rebalancer/` (for example
+  `src/rebalancer/rebalance-coordinator-lifecycle.js`,
+  `src/rebalancer/rebalance-coordinator-operation-creation.js`,
+  `src/rebalancer/unified-rebalancer-rebalance-loop.js`, and
+  `src/rebalancer/unified-rebalancer-move-execution.js`) own coordinator and
+  rebalancer behavior directly; all legacy ordinal `*-segment-*` files have been
+  retired.
 
 ## Do Not
 
@@ -57,10 +62,10 @@ coordination, storage admission, and execution handoff for topology changes.
   lifecycle authority. Use `operation_progress` record fields and event
   projections.
 - Do not add local fallback planning, dispatch, or retry paths.
-- Do not add new `segment`, `stage`, or `part` files when extracting; use
-  owner-specific names for new boundaries. The current ordinal files are
-  inventoried in `_legacy_work/inventory/ordinal-segments.md` and should move only
-  through explicit semantic migration packages.
+- Do not add `segment`, `stage`, or `part` files when extracting; keep
+  responsibilities in `src/rebalancer/rebalance-coordinator.js`,
+  `src/rebalancer/unified-rebalancer.js`, and their focused, owner-named
+  collaborator modules under `src/rebalancer/`.
 
 ## Proof Surface
 

@@ -233,11 +233,13 @@ independent where the existing workflow requires it.
 
 ## Execution boundaries
 
-The current bounded execution plan belongs to
+The bounded execution plan belongs to
 [raft-rs full cutover](../../solve/epics/raft-rs-full-cutover.md), specifically
-its [contract-first plan](../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md).
-Broader reorganization remains with core-architecture-convergence and its
-activation gate. This contract is not implementation or certification proof.
+its [contract-first plan](../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md);
+the downstream `FreshMG` slices (`6.A`-`6.D`), `TX1`, and `SN1` are wired in
+production (`0.2.6`). Broader reorganization remains with
+core-architecture-convergence and its activation gate. This contract defines
+its specific boundary slice and is not itself certification proof.
 
 ## Safety-first operator mandate - 2026-10-09
 

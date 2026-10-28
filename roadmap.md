@@ -15,18 +15,20 @@ Released changes belong in [CHANGELOG.md](CHANGELOG.md).
 ## Recently completed - 0.1 Internal Coherence
 
 The first phase established the database foundations and the split/merge
-transition-integrity ladder: distributed transactions with snapshot isolation
-and recovery; schema migrations with backfill, cutover, rollback, and restart
-recovery; typed split-key comparison; durable dissolution witnesses; fenced
-abort parity; batched merge backfill; the durable split/merge overlap guard;
-and one configuration authority for split/merge thresholds.
+transition-integrity ladder: distributed transactions with read-your-writes,
+first-committer-wins conflict detection, and recovery; schema migrations with
+backfill, cutover, rollback, and restart recovery; typed split-key comparison;
+durable dissolution witnesses; fenced abort parity; batched merge backfill; the
+durable split/merge overlap guard; and one configuration authority for
+split/merge thresholds.
 
 ## Now - 0.2 Stable Core: make the existing public path credible
 
 The service compiler and public HTTP-to-distributed-call path exist. The next
 work is to make their useful envelope larger and their evidence easier to trust:
 
-- run the code-first WASM service path across a genuine multi-node dataset;
+- publish multi-machine benchmarks for the code-first WASM service path (local
+  three-node multi-process execution is live in the MovieLens comparison);
 - publish a controlled comparison against a strong conventional baseline;
 - support safe selector narrowing from call arguments;
 - process inputs larger than one bounded shard batch through an explicit
@@ -105,7 +107,9 @@ A serious pilot needs a complete operational boundary, not just successful
 queries:
 
 - cryptographically authenticated and encrypted node transport;
-- progress-proven learner promotion;
+- message-group log compaction and multi-machine soak/recovery certification
+  (partition snapshot cadence and match-index-gated learner promotion landed in
+  0.2.6);
 - documented data load, shadowing, cutover, rollback, and exit tooling;
 - named PostgreSQL-driver and SQL compatibility certification;
 - an upgrade and downgrade rehearsal for supported release pairs;

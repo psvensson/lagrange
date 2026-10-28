@@ -8,8 +8,8 @@ Package identity, registry mapping, OCI source references,
 and dependency lock semantics for WASM module distribution.
 
 This is the format and semantics reference behind module publishing; the
-step-by-step publish and service-creation workflow that uses these identifiers
-is [wasm-services-user-guide.md](wasm-services-user-guide.md).
+step-by-step build and service-deployment workflow that uses these identifiers
+is [service-deployment-guide.md](service-deployment-guide.md).
 
 ## Package Identity
 

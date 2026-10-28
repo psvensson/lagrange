@@ -11,7 +11,7 @@ for Lagrange. The command is `lagrange-admin`.
 4. [Detail Panels](#detail-panels)
 5. [Command Palette](#command-palette)
 6. [SQL Query View](#sql-query-view)
-7. [Live Query Subscriptions](#live-query-subscriptions)
+7. [Live Query Subscriptions](#live-query-subscriptions) *(user-table streaming disabled in `0.2.x`: `CDC_EVENT_STREAM_DISABLED`, scheduled for `0.3`)*
 8. [Troubleshooting](#troubleshooting)
 
 ---
@@ -437,6 +437,11 @@ In read-only mode, only SELECT queries are allowed.
 ---
 
 ## Live Query Subscriptions
+
+> **Note (`0.2.x` status):** External user-table live-query / CDC streaming
+> (`LIVE SELECT` on user tables) is disabled in `0.2.x`
+> (`CDC_EVENT_STREAM_DISABLED`, scheduled for `0.3`). Internal system-table
+> cache updates and log views continue to operate through internal channels.
 
 Live queries stream real-time changes matching your query criteria.
 

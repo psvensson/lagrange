@@ -217,6 +217,6 @@ claim.
 - [Programming model](../../docs/native-programming-model.md)
 - [Execution semantics](../../docs/execution-semantics.md)
 - [Technical evaluation](../../docs/evaluate.md)
-- [MovieLens comparison](../service-data-affinity/README.md), which uses a
-  larger multi-process workload but an internal service runtime rather than
-  this public code-first path
+- [MovieLens comparison](../service-data-affinity/README.md), which runs the
+  same code-first WASI `call`-Binding model across a three-node multi-process
+  workload and measures affinity-driven Cell placement

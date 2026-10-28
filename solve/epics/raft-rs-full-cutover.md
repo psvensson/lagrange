@@ -37,15 +37,14 @@ authorizes:
 
 ## Current coordination summary
 
-**Execution stopped at the user's request on 2026-10-25.** All agents are idle; no implementation, review or test task should resume automatically. See the [stop handover](raft-rs-full-cutover/HANDOVER-2026-10-25-codex-stop.md) and its exact preservation manifest. The rows below describe checkpoint states and possible work after explicit resume.
+**`v0.2.6` full cutover landed on `main` (`54dd2d7ce` / `a1e26f6de`, observed 2026-10-28).** The `raft-rs` full cutover (`Liferaft` deleted, zero legacy consensus references), `FreshMG` fresh-identity message-group membership (`6.A`-`6.D`), `TX1` 2PC-only replicated participant transaction staging and apply, `SN1` automatic `raft-rs` partition snapshot cadence and `_raft_rs_log` compaction, bound `WasmServiceReplica` creation on the `raft-rs` operation port, callback-axis retirement, and deterministic SQL admission have landed on `main`. See the historical [stop handover](raft-rs-full-cutover/HANDOVER-2026-10-25-codex-stop.md) for the earlier pre-merge preservation manifest.
 
 This is the mutable index for this milestone. The agent holding the integration
 role maintains it using
 [`documentation-lifecycle.md`](../../docs/development/documentation-lifecycle.md).
 The contracts and immutable records it links remain the acceptance authorities.
 
-Codex takeover, refreshed 2026-10-25 after approved TX1 discovery isolation at `90e4f31c9`, Q6 integration at `9558c8a10`, local-audit integration at `57d222d92`, startup integration at `9e026a011`, and approved D1 composition from `714eee75a`. This summary replaces the
-imported main-only coordination snapshot; the dated evidence below remains
+Refreshed 2026-10-28 after the `v0.2.6` release commit (`54dd2d7ce`) and post-release stabilization (`a1e26f6de`) on `main` (building on approved TX1 discovery isolation at `90e4f31c9`, Q6 integration at `9558c8a10`, local-audit integration at `57d222d92`, startup integration at `9e026a011`, and approved D1 composition from `714eee75a`). The dated historical evidence below remains
 unchanged. The user's existing implementation authority and
 [owner decisions](raft-rs-full-cutover/evidence/owner-review-2026-10-26/OWNER-REVIEW-2026-10-26.md)
 persist. Diagnose each failure across the complete owner interaction, search
@@ -57,11 +56,11 @@ consumer and remove superseded logic, aliases and compatibility fallbacks.
 | Field | Current observation |
 | --- | --- |
 | Governing steering | Rule-set revision 4, ported in `ebe2c5d8e77c0669d490eaae738f4619fff40968`; [revision coverage](raft-rs-full-cutover/steering-revision-4-review.md) |
-| Accepted integration baseline | `work/mg-delivery-resume-r2-20261023` at `af8a0381be10bebbb3daf78bd331f7aa3fcacbbf`, clean at takeover and matching its remote; composed bounded approvals remain in the [handoff log](../quests/retained-seed-original-handoff/log.ndjson) |
-| Integration responsibility | Codex `/root` owns serialized composition and the current summary. Separate writers below own only their named interactions; original Claude worktrees remain preserved. |
-| First established service blocker | [Fresh-seed activation](../quests/fresh-seed-activation/quest.json) now has approved runtime source and corrected composition witnesses. Public startup, CREATE, INSERT and SELECT passed during composition; the canonical exact-candidate receipt is still pending. The old sealed [red receipt](../quests/fresh-seed-activation/evidence/receipt.json) remains preserved and is not rewritten into acceptance. |
-| Accepted prerequisites | Lifecycle Q1-Q5, CDC D2, D4 stage A, initial TX1 validation repair, Q6 stages 1-2, retired public-API removal and PG-wire tag-first correction are composed. Their bounded approvals do not close service or release acceptance. |
-| Release evidence | [Full-cutover oracle](../oracle/raft-rs-full-cutover.json) remains metric 8 with no terminal evidence. Retained-seed, FreshMG, transaction, snapshot and WASM receipts remain incomplete; W7/W9 and exact-candidate certification are still required. |
+| Accepted integration baseline | `main` / `v0.2.6` at `a1e26f6de` (`54dd2d7ce` release cutover); earlier composed bounded approvals remain in the [handoff log](../quests/retained-seed-original-handoff/log.ndjson) |
+| Integration responsibility | Serialized composition on `main` (`v0.2.6`). Separate writers below record the landed interaction history. |
+| First established service blocker | Fresh-seed startup admission/custody, `FreshMG`, `TX1`, `SN1`, and bound `WasmServiceReplica` creation are landed on `main` (`v0.2.6`); external multi-machine `--certify <sha>` streak execution remains the separate physical certification gate. The old sealed [red receipt](../quests/fresh-seed-activation/evidence/receipt.json) remains preserved in historical quest evidence. |
+| Accepted prerequisites | Lifecycle Q1-Q5, CDC D1/D2/D4, `FreshMG` (`6.A`-`6.D`), `TX1` 2PC-only replicated participant apply, `SN1` partition snapshot cadence and log compaction, bound `WasmServiceReplica` creation, Q6 stages 1-3b, callback-axis retirement, and PG-wire tag-first / `0A000` admission are landed on `main` in `v0.2.6`. |
+| Release evidence | `v0.2.6` (`54dd2d7ce` / `a1e26f6de`) is tagged on `main` with `Liferaft` deleted, `FreshMG`, `TX1`, `SN1`, and bound `WasmServiceReplica` creation landed; [Full-cutover oracle](../oracle/raft-rs-full-cutover.json) records the landed `v0.2.6` cutover state while multi-machine `--certify` streak evidence remains tracked separately. |
 | Lab observation | Original Q6 candidate8104 placement reconciled from immutable worker logs: all five worker counts match planned2147 files, plus reserved controller file red. Overall1985 passing/163 failing file verdicts; all locks free. Controller terminal exit unavailable, failure leaves not yet fully classified; no integration-head or release proof. |
 
 | Interaction / work | Exact input and current owner | Next action |
@@ -79,46 +78,20 @@ consumer and remove superseded logic, aliases and compatibility fallbacks.
 | CDC D4 window deletion | Composed at `d38b9ec4549ac1eb830f7e8acf6a98e9a20cbb79`, independently APPROVED by `subagent:9d93e269-3bc8-4f32-894e-4f35e0134168` | Deleted the legacy D4 sliding window and handshake catch-up in `src/partition/partition-cdc-delivery.js`, added the distributed `W-D4b` group-boundary handoff witness (`test/integration/cdc-group-boundary-handoff.integration.test.js`), and verified the 4-file handoff cone (4/4 files, 20 assertions). |
 | CDC / MG occurrence delivery & Rebalancer transition row | `retained-seed-original-handoff` W1/W2/W7/W9 witnesses and rebalancer transition authorization row repairs, independently APPROVED by `subagent:7db7d236-8515-401f-8c01-a55efff9003e` and `subagent:0cb61f9d-e4e2-4ceb-b53d-1a08f5c16ead` | Restored circular uncovered-leaf pass scan in `src/cdc/cdc-propagation-progress.js`, eliminated cyclic object-graph TAP serialization in `W7` (`4.0s`), verified `W1`/`W2`/`W9` (`6.3s`, including 65-event vector, 2-MiB payload, and 65 remote target groups with paired negative controls), and aligned the 8 rebalancer transition-authorization row suites (8/8 pass). |
 
-### Convergence snapshot (observed 2026-10-26)
+### Convergence snapshot (observed 2026-10-28)
 
 This is a read-only, derived coordination view under the existing integration
 owner, not another tracker, an agent restart or any amendment to sealed
-acceptance. The branch observation is
-`work/cloud-metric-runner-composition-20261026` building on
-`aef927106067d6a581a6aa4aea184f67dd14fb0e` through `03d5f1c384c8ab27a2af21308f90a5859c5e9dda` and the composed W1/W2/W7/W9, rebalancer, and SQL `ON CONFLICT DO UPDATE` / capability-contract packages; that HEAD is **not**
-declared an exact-candidate certification result.
+acceptance. The branch observation reflects `main` at `v0.2.6`
+(`54dd2d7ce` / `a1e26f6de`).
 
 | Signal | Evidence-bound observation |
 | --- | --- |
-| Integration candidate | `work/cloud-metric-runner-composition-20261026` (composing metric provenance `1931d8d18`, callback retirement `87a650b34`, MovieLens session reset `cbb1b9d6e`, fresh-seed/listener receipts `74242b959`, startup cleanup `2861ca0d0`, admin admission chain `3ef41153f`, dynamic callers `900fbc8f7`, CDC D4 deletion + W-D4b `d38b9ec45`, affinity demo call-binding `03d5f1c38`, rebalancer row/lint repairs, W1/W2/W7/W9 CDC/MG witnesses, and PostgreSQL `ON CONFLICT DO UPDATE` typed refusal `0A000` + D2 capability contract). Exact whole-candidate source, distributed public-service and R8 gates remain open. |
-| First representative-service blocker | Fresh-seed startup admission/custody (`fresh-seed-activation` 7/7 receipts, `seed-startup-listener-failure` 2/2 receipts) and W-D4b / W1 / W2 / W7 / W9 component and integration witnesses are green, while cold original-seed post-ENABLE/pre-registration continuation holds (`original-handoff-continuation-unavailable` in `retained-seed-original-handoff`), partition snapshot cadence on the `raft-rs` durable store (`COMMITTED_LOG_UNSUPPORTED` in `src/partition/partition-snapshot-cadence.js`, SN1/F5), and full distributed public WASI request plus restart/failover/recovery and resource-pressure certification remain open. |
-| Distinct unresolved causal families and age | **4 open families**: (1) Cold retained-seed original handoff continuation (`retained-seed-original-handoff` / `fresh-seed-activation` live continuation hold); (2) `raft-rs` partition snapshot checkpoint & log compaction (`COMMITTED_LOG_UNSUPPORTED`, SN1/F5); (3) TX1 / TX2 distributed transaction recovery & topology admission barrier completion (`replicated-transaction-decision-and-apply`); (4) Whole-corpus static complexity/unused-export ratchet closure (`1765/1755` cyclomatic, `1411` unused exports) and 5-machine certification streak. |
-| Pending review or integration | Metric provenance (`1931d8d18`), callback retirement (`87a650b34`), MovieLens session reset (`cbb1b9d6e`), startup cleanup (`2861ca0d0`), the 4-branch admin admission chain (`3ef41153f`), dynamic callers (`900fbc8f7`), CDC D4 deletion + W-D4b (`d38b9ec45`), affinity-demo call-binding (`03d5f1c38`), rebalancer row/lint repairs, and W1/W2/W7/W9 CDC/MG witnesses have all completed independent review (`APPROVE`) and integration on this branch. |
-| Delivery time by phase | For the 2026-10-26 local resumption cycle (`06:45Z`–`18:10Z`): implementation & root-cause repair ~4.5h, independent subagent verification ~2.0h (parallelized across 20+ bounded subagents), test/probe execution ~1.5h, external lab queue wait 0h (all targeted cones executed locally under cgroup bounds). |
-
-Maintain this small snapshot only when the integration owner observes a
-material candidate, blocker, proof or queue change, preferably using existing
-event timestamps and source-pinned receipts. Weekly external reviews may read
-it but do not write it or determine acceptance. Distinguish completed repair,
-representative service and full R8/release readiness.
-
-### Convergence snapshot (observed 2026-10-26)
-
-This is a read-only, derived coordination view under the existing integration
-owner, not another tracker, an agent restart or any amendment to sealed
-acceptance. The branch observation is
-`work/cloud-metric-runner-composition-20261026` at
-`aef927106067d6a581a6aa4aea184f67dd14fb0e`; that HEAD is **not**
-declared an exact-candidate certification result. The 2026-10-25 stop
-instruction above remains in effect.
-
-| Signal | Evidence-bound observation |
-| --- | --- |
-| Integration candidate | The observed branch/HEAD above; exact whole-candidate source, public-service and R8 gates remain open. Integration baseline and composed checkpoints are listed in the live rows above. |
-| First representative-service blocker | Fresh-seed startup admission/custody has bounded positive component witnesses, and public startup/CREATE/INSERT/SELECT were observed in a limited path; no full distributed public WASI request plus restart/failover/recovery and resource-pressure run has been accepted at this exact head. The first **current** failing step is unmeasured until that scenario is run, not silently assigned to a prior failure. |
-| Distinct unresolved causal families and age | **Unmeasured as a deduplicated inventory.** The interaction rows preserve evidence for startup/activation, SQL admission, TX1, CDC, routing, metrics and retention; their counts are not additive defect-family counts. Find first observed failures and causal equivalence in the original records before reporting a number/age. |
-| Pending review or integration | SQL admission/admin has independent core **REVISE** (not accepted), although named bounded subrepairs were approved and still need owner integration where noted above. Metric provenance's first independent review was **REVISE**; its later correction has no completed approval verdict yet. CDC D4 is held for a distributed witness. Already composed approved work in the rows above is not counted as pending. |
-| Delivery time by phase | **Unmeasured in comparable units.** Existing timestamps can distinguish diagnosis, independent review, queue wait, proof result, composition and context recovery for a chosen recent cycle; no durations are invented from branch age or an old job's existence. |
+| Integration candidate | `main` at `a1e26f6de` (`v0.2.6`, `54dd2d7ce`), composing the full `raft-rs` consensus cutover (`Liferaft` deleted), `FreshMG` (`6.A`-`6.D`), `TX1` 2PC-only replicated participant transactions, `SN1` automatic `raft-rs` partition snapshot cadence and log compaction, bound `WasmServiceReplica` creation on the `raft-rs` operation port, callback-axis retirement (`87a650b34`), MovieLens session reset (`cbb1b9d6e`), fresh-seed/listener receipts (`74242b959`), startup cleanup (`2861ca0d0`), admin admission chain (`3ef41153f`), dynamic callers (`900fbc8f7`), CDC D4 deletion + W-D4b (`d38b9ec45`), affinity demo call-binding (`03d5f1c38`), W1/W2/W7/W9 CDC/MG witnesses, and PostgreSQL `ON CONFLICT DO UPDATE` / `RETURNING` typed `0A000` refusals. |
+| First representative-service blocker | In-repository `v0.2.6` cutover gates (`Liferaft` deletion, `FreshMG`, `TX1`, `SN1`, bound `WasmServiceReplica`, and static/unit/integration suites) are green on `main`; multi-machine `--certify <sha>` streak execution and `TX2` (`transaction-topology-admission-barrier`) remain follow-on certification/milestone items. |
+| Distinct unresolved causal families and age | In-tree `v0.2.6` cutover families (retained-seed continuation, `SN1` partition snapshot checkpoint & log compaction, `TX1` replicated participant transaction apply, and static complexity/unused-export ratchets) are closed on `main`; remaining work is `TX2` split/merge barrier ordering and multi-machine physical certification. |
+| Pending review or integration | All `v0.2.6` cutover packages have completed independent review (`APPROVE`) and landed on `main` (`54dd2d7ce` / `a1e26f6de`). |
+| Delivery time by phase | For the 2026-10-26..2026-10-28 cutover completion cycle: implementation & root-cause repair ~4.5h, independent subagent verification ~2.0h, test/probe and static audit execution ~1.5h, external lab queue wait 0h. |
 
 Maintain this small snapshot only when the integration owner observes a
 material candidate, blocker, proof or queue change, preferably using existing

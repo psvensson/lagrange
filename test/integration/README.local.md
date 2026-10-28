@@ -35,5 +35,5 @@ Default measurement values for the current suite:
 Targeted execution:
 
 ```bash
-npm test -- test/integration/node-join-convergence-slo.integration.test.js
+npm run test:file -- test/integration/node-join-convergence-slo.integration.test.js
 ```

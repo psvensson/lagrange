@@ -134,7 +134,7 @@ flowchart LR
 | **Artifact** | Immutable, digest-pinned service code | Artifact metadata and content records |
 | **Binding** | Immutable execution intent connecting an Artifact export to a source | Binding and access-policy rows |
 | **Cell** | A ready running instance derived from a Binding | None locally; durable service state remains in tables |
-| **Message group** | CDC transport and fan-out | Its group log, with a different durability boundary from partition storage |
+| **Message group** | CDC transport and fan-out | Persistent SQLite-backed `raft-rs` consensus state (`RaftRsDurableStore`), uncompacted log, and fresh-identity replica replacement (`FreshMG`) |
 | **Operation row** | Durable progress and outcome for a topology workflow | The owning system table |
 
 ### The storage hierarchy
@@ -425,7 +425,7 @@ operation accounting does not mean shared consensus semantics.
 | Entity | Primary role | Consensus and durable-state boundary |
 | --- | --- | --- |
 | **Partition group** | Stores one table key range | Persistent SQLite rows and Raft state; consensus active |
-| **Message group** | Carries CDC and cluster propagation | Raft-backed in-memory transport log with a weaker restart boundary than partition storage |
+| **Message group** | Carries CDC and cluster propagation | Persistent SQLite-backed `raft-rs` consensus state (`RaftRsDurableStore`: `_raft_rs_log`, `_raft_rs_hard_state`, `_raft_rs_applied_state`, `_raft_rs_snapshot`) and fresh-identity replica replacement (`FreshMG`) |
 | **Runtime-service Cell** | Runs Binding-derived service code | No per-service Raft state; durable application state remains in tables |
 
 Scaffold or compatibility code must not be read as another active production

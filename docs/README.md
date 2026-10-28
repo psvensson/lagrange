@@ -47,8 +47,9 @@ Use the shortest path that answers the question in front of you.
 - [Rewrite a hot path](tutorials/rewrite-a-hot-path.md) - a strong grouped-SQL
   baseline and the partition-function shape
 - [MovieLens comparison](../examples/service-data-affinity/README.md) -
-  correctness, transfer shape, and placement evidence; the service phase uses
-  an internal runtime path and is not a public-path benchmark
+  correctness, transfer shape, and placement evidence; runs a code-first WASI
+  `call` Binding across a local 3-node cluster (not a multi-machine production
+  benchmark)
 
 ## Operate a cluster
 

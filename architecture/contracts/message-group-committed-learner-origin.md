@@ -237,9 +237,10 @@ native proposal/Ready/application, file-backed SQL and the checkpoint owners:
 
 Use existing test fixtures and impact-contract registration, unchanged native
 fences, WAL/FULL settings and file budgets. No physical lab/GCP configuration
-changes. This first increment does not wire the repository phase/stamp update,
-registered membership route, full debt driver, successor issuance or CREATE.
-Those remain behind the retained evidence and subsequent independent review.
+changes. This contract defines only the committed-learner-origin boundary slice;
+the downstream `FreshMG` slices (`6.A`-`6.D`: repository phase/stamp recording,
+registered membership route, debt driver, successor issuance, and `CREATE`) are
+specified in their companion contracts and wired in production (`0.2.6`).
 
 A focused component pass is not shared-helper/full-cone proof, a physical
 network test, two off-seed replacements, or final-main certification. The

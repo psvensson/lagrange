@@ -470,13 +470,12 @@ It verifies that all three produce the same ordered top ten. It also
 records placement evidence and the service's convergence toward the data it
 accesses.
 
-The demo predates the public call path: its service phase drives the
-internal placement substrate directly rather than through an installed call
-Binding. It remains the best proof of the execution and placement *shape*; the
-public route to the same shape is
-the CALL binding shown above. Check the
-[examples index](../../examples/README.md) for the current runnable
-call-path example, and see
+The MovieLens demo (`examples/service-data-affinity/lagrange.service.js`)
+compiles and deploys an installed code-first WASI `call` Binding across a
+three-node local cluster and measures partition-local fanout, reduction, and
+affinity-driven Cell movement. Check the
+[examples index](../../examples/README.md) for the full set of runnable
+service examples, and see
 [`examples/js-request-binding-deployment`](../../examples/js-request-binding-deployment/README.md)
 for the smallest end-to-end deployment of a ComponentizeJS-built component
 through the identical lifecycle SQL.

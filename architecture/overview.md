@@ -77,7 +77,7 @@ fixture or observation is not evidence of a runtime architecture defect by itsel
 To prevent overlap and contradictory runtime behavior:
 
 1. **SQL Execution:** `SqlCore` (SQLQueryEngine) is the single SQL planner and
-   executor. All entrypoints (internal, external protocol, WASM DB.call,
+   executor. All entrypoints (internal, external protocol,
    service Cell `replicaContext.queryExecutor`)
    normalize into `SqlRequest` and delegate to SqlCore. No fallback engine.
 2. **Placement Planning:** `MovePlanner` is the only planner implementation.  
@@ -147,17 +147,16 @@ To prevent overlap and contradictory runtime behavior:
 11. **Admin API Ownership:** Node-local admin APIs are compatibility adapters.
     Service-owned handlers (`sys-admin-meta` and `sys-wasm-meta`) are the
     mutation/control owners.
-12. **Programmatic Runtime API Ownership:** `runtime.run` + `ctx.call` is the
-    single execution surface for the internal/legacy distributed-query
-    callback path. The public invocation surface for partition functions and
-    reducers is the call Binding (`CALL BINDING $1`); see
-    [query-runtime.md](query-runtime.md) and
-    [minimal-deployment-surface.md](minimal-deployment-surface.md). No
+12. **Programmatic Runtime API Ownership:** The public invocation surface for
+    partition functions and reducers is the call Binding (`CALL BINDING $1`);
+    see [query-runtime.md](query-runtime.md) and
+    [minimal-deployment-surface.md](minimal-deployment-surface.md).
+    Programmatic stage and plan execution (`runtime.run`) normalizes into
+    `SqlRequest` and delegates to `SqlCore.executeRequest(SqlRequest)`. No
     parallel runtime API may bypass either path.
 13. **Execution Mode Dispatch Ownership:** `SqlCore.executeRequest(SqlRequest)`
-    is the owner for execution-mode dispatch (`sql_statement`,
-    `partition_callback`, and plan-object execution). Each mode has a dedicated
-    dispatch branch; `partition_callback` is not aliased to statement execution.
+    is the owner for execution-mode dispatch (`sql_statement`, `stage`, and
+    plan-object execution). Each mode has a dedicated dispatch branch.
     Adapters may normalize requests but must not own runtime dispatch logic.
 14. **Runtime Selection Ownership:** `Runtime_Driver_Registry` is the single
     selector from `runtime_kind` to runtime driver. No fallback driver
@@ -212,16 +211,19 @@ The distributed SQL layer is single-path and owner-specific:
    `transitionStep()`, which persists `previousStep`, `nextStep`,
    `reason`, `timestamp`, and `ownerKey` on every transition.
 6. `DistributedTransactionCoordinator` is the only owner for distributed
-   transaction participant enlistment, final participant freeze, commit-mode
-   selection, and 1PC/2PC phase transitions
-   (`PREPARING/PREPARED/COMMITTING/ROLLING_BACK`), prepare/commit/rollback
-   dispatch, timeout-budget enforcement, and recovery from
-   `sql_transactions`, `sql_transaction_participants`, and
-   `sql_write_operations`. It composes `DurableWorkflowCoordinator`, persists
-   commit/rollback decisions before participant fanout, runs recovery replay,
-   and runs periodic recovery sweeps for timed-out non-terminal workflows.
-   Transaction-only semantics (write-operation journaling, retry/backoff,
-   timeout classification) remain local to this owner. Independent
+   transaction participant enlistment, OPEN-row compare-and-swap participant
+   manifest persistence on `sql_transactions`, final participant manifest
+   freeze, two-phase commit (`PARTICIPANT_PREPARE` and `PARTICIPANT_DECISION`),
+   immutable `COMMIT` or `ROLLBACK` decision persistence with `COMMITTING` /
+   `ROLLING_BACK` progress projections, timeout-budget enforcement, and
+   recovery from `sql_transactions`, `sql_transaction_participants`, and
+   `sql_write_operations`. Every nonempty transaction uses two-phase commit,
+   including single-participant transactions. It composes
+   `DurableWorkflowCoordinator`, persists the immutable decision before
+   participant decision fanout, runs recovery replay, and runs periodic
+   recovery sweeps for timed-out non-terminal workflows. Transaction-only
+   semantics (write-operation journaling, retry/backoff, timeout
+   classification) remain local to this owner. Independent
    `RebalanceCoordinator` step mutations use the guarded autocommit persistence
    lane; SQL promotes only a final post-mirror multi-participant statement to
    a statement-owned transaction. Idempotency is enforced
@@ -250,7 +252,7 @@ The distributed SQL layer is single-path and owner-specific:
    initiating owner execution has already returned.
    `SPLIT_OWNER_MANAGED_PHASES` in `partition-constants.js` enumerates
    every phase that only the workflow owner may persist.
-8. `SQLQueryEngine` remains the orchestration entrypoint and delegates to the
+9. `SQLQueryEngine` remains the orchestration entrypoint and delegates to the
    owners above. It does not keep alternate distributed execution branches.
 
 Forbidden patterns for distributed SQL:

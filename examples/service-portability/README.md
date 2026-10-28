@@ -62,7 +62,7 @@ through the same unmodified `pg` client code.
 
 ## Run it
 
-Prerequisites: Node.js 20+ and a running [Docker](https://docs.docker.com/)
+Prerequisites: Node.js 22.12 or newer and a running [Docker](https://docs.docker.com/)
 daemon. From the repository root:
 
 ```sh

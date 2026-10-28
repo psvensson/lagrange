@@ -18,6 +18,9 @@ replicated two-phase transaction decision and participant apply, fresh-identity
 message-group membership replacement, cold retained-seed handoff, and
 systematic deterministic replicated SQL admission (epic `raft-rs-full-cutover`):
 
+Formation health at cut time: `formation health: 0/20 passed (0%), 0 with a
+starved seed`.
+
 - Every node boot reserves a durable, monotonic boot incarnation from one
   owner per data directory before any lifecycle side effect; legacy
   rejoin hints are a one-time migration source only, and `bootIncarnation`

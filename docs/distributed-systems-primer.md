@@ -162,7 +162,8 @@ readiness, and wake-up rules.
 
 ## 10. Single-Node Mode Is A Learning Mode
 
-A single node can execute writes directly when there is no known remote leader.
+Even on a single-node cluster, writes go through the partition's single-voter
+Raft leader rather than bypassing consensus.
 That is useful for the first tutorial, but it does not demonstrate:
 
 - majority commit during a failure;

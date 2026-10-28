@@ -641,6 +641,10 @@ LAGRANGE_NODE_ADDRESS=localhost:8081 lagrange-admin --read-only
 
 ## Live Query Commands
 
+> **Note (`0.2.x` status):** External user-table live-query / CDC streaming
+> (`LIVE SELECT` on user tables) is disabled in `0.2.x`
+> (`CDC_EVENT_STREAM_DISABLED`, scheduled for `0.3`).
+
 Live queries stream real-time changes matching your query criteria.
 
 ### LIVE SELECT Syntax
@@ -648,6 +652,10 @@ Live queries stream real-time changes matching your query criteria.
 ```sql
 LIVE SELECT <columns> FROM <table> [WHERE <conditions>];
 ```
+
+| Command | Status in `0.2.x` | Notes |
+|---------|-------------------|-------|
+| `LIVE SELECT ... FROM <user_table>` | Disabled (`CDC_EVENT_STREAM_DISABLED`) | External user-table live-query / CDC streaming is scheduled for `0.3` |
 
 **Examples:**
 ```sql
@@ -757,6 +765,6 @@ Actions:        d (detail)  r (refresh)  p (pause)  q (quit)
 -- Regular query
 SELECT * FROM table WHERE condition;
 
--- Live query
+-- Live query (disabled for user tables in 0.2.x: CDC_EVENT_STREAM_DISABLED, scheduled for 0.3)
 LIVE SELECT * FROM table WHERE condition;
 ```

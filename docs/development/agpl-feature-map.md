@@ -121,16 +121,17 @@ was pruned) for historical context only.
 | DistributedTransactionCoordinator skeleton | ✅ | Owns 2PC state machine |
 | Transaction state tables | ✅ | `sql_transactions`, `sql_transaction_participants`, `sql_write_operations` |
 | Participant enlistment | ✅ | Idempotent operations |
-| Prepare phase | ✅ | Real `PREPARE` dispatch + participant conflict checks |
-| Prepared-state durability | ✅ | `PREPARE_TRANSACTION` replicated in participant Raft log |
+| Prepare phase | ✅ | Real `PARTICIPANT_PREPARE` dispatch + participant conflict checks |
+| Prepared-state durability | ✅ | `PARTICIPANT_PREPARE` and `PARTICIPANT_DECISION` replicated in participant Raft log |
 | Commit phase | ✅ | Commit decision persisted before participant fanout |
 | Rollback | ✅ | Cross-partition rollback with idempotent participant handling |
 | Coordinator recovery | ✅ | Status-driven replay to terminal state after restart |
-| Snapshot isolation | ✅ | Epoch-based visibility + read-your-own-writes |
-| Write conflict detection | ✅ | First-committer-wins conflict detection at prepare |
-| Timeout and cleanup | ✅ | Budget-based abort + participant hold timeout + recovery sweep |
+| Read-your-own-writes isolation | ✅ | Session staged read-your-own-writes over current committed state |
+| Write conflict detection | ✅ | Partition-write-generation first-committer-wins conflict detection at prepare and apply |
+| Timeout and cleanup | ✅ | Budget-based abort + persisted deadline coordinator rollback + recovery sweep |
 
-Goal achieved: multi-partition transactions with snapshot isolation and
+Goal achieved: multi-partition transactions with session staged
+read-your-own-writes, partition-write-generation conflict detection, and
 deterministic recovery/timeout handling.
 
 ### 2. Schema Migration Workflow
@@ -205,10 +206,10 @@ or OCI container execution.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
-| `RM-0.2-five-node-convergence` | Five-node cold formation and runtime-service initial placement | 🔧 | Formation, table creation, and initial service placement complete without stalled control-plane or service operations |
-| `RM-0.2-topology-safety` | Topology-operation safety closure | 🔧 | Authoritative operation-ledger release, safe surplus removal, and ready-lease candidate admission retain their safety invariants |
-| `RM-0.2-snapshot-integration` | Compacted-follower snapshot catch-up integration | 🔧 | Current snapshot catch-up work is landed and independently verified; this row does not claim complete snapshot recovery |
-| `RM-0.2-release-verification` | Core release verification | 🔧 | Enforcing memory-soak evidence and all required CI and release checks are green |
+| `RM-0.2-five-node-convergence` | Five-node cold formation and runtime-service initial placement | ✅ | Formation, table creation, and initial service placement complete without stalled control-plane or service operations |
+| `RM-0.2-topology-safety` | Topology-operation safety closure | ✅ | Authoritative operation-ledger release, safe surplus removal, and ready-lease candidate admission retain their safety invariants |
+| `RM-0.2-snapshot-integration` | Compacted-follower snapshot catch-up integration | ✅ | Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log` compaction (`SN1`), and follower catch-up landed in `0.2.6`; message-group log compaction and customer backup/PITR remain out of 0.2 scope |
+| `RM-0.2-release-verification` | Core release verification | ✅ | Enforcing memory-soak evidence and all required CI and release checks are green (`0.2.0`, `0.2.5`, and `0.2.6` shipped) |
 
 ### Phase 0.2 Exit Criteria
 
@@ -221,13 +222,11 @@ or OCI container execution.
 - Required CI and release checks are green, and remaining limitations are
   documented.
 
-Snapshot protocol foundations may ship in 0.2, but the release must not claim
-complete snapshot recovery or large-follower live rebuild until the retention,
-compaction, and live-rebuild Quests required by
-`solve/specs/raft-snapshot-transfer-install/requirements.md` are terminal.
-Automatic data affinity, the distributed-reduce live demonstration, and OCI
-container execution remain outside the 0.2 claim unless their own live
-acceptance Quests become terminal before the release cutoff.
+Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log`
+compaction (`SN1`), and follower catch-up shipped in `0.2.6`, while
+message-group log compaction and customer backup/PITR remain outside the 0.2
+claim. Automatic data affinity, the distributed-reduce live demonstration, and
+OCI container execution remain governed by their own acceptance milestones.
 
 Phase 0.5 deployment CLI, Docker Compose, WASM CLI, and onboarding work is not
 part of the 0.2 release gate.
@@ -612,8 +611,8 @@ operator flow, desired durable state, and success criteria for the active slice.
 
 | Item | Roadmap state | Scope notes |
 |------|--------|-------|
-| `INSTALL SERVICE` / `REMOVE SERVICE` / `UPGRADE SERVICE` SQL | 🔲 | Service lifecycle as first-class cluster operations |
-| `SHOW SERVICES` / `SHOW SERVICE REVISIONS` / `SHOW SERVICE INSTANCES` SQL | 🔲 | Observability via SQL |
+| `INSTALL SERVICE` / `REMOVE SERVICE` / `UPGRADE SERVICE` SQL | ✅ | Service lifecycle as first-class cluster operations |
+| `SHOW SERVICES` / `SHOW SERVICE REVISIONS` / `SHOW SERVICE INSTANCES` SQL | ✅ | `SHOW SERVICES` live over authenticated PG wire; revision/instance views follow with catalog expansion |
 | `lagrange service install` / `upgrade` / `remove` / `list` / `status` CLI | 🔲 | CLI equivalents |
 | `lagrange registry add` / `list` CLI | 🔲 | Registry management |
 

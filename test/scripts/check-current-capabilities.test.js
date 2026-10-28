@@ -48,7 +48,7 @@ test('current capabilities detect drift in both raft-rs source owners', () => {
     ['src/partition/partition-service-core-base.js',
       'createRaftRsOperationPort(request)'],
     ['src/partition/partition-snapshot-cadence.js',
-      'RAFT_SNAPSHOT_CADENCE_OUTCOME.COMMITTED_LOG_UNSUPPORTED'],
+      'compactRaftRsCommittedEntries('],
   ];
   for (const [relativePath, marker] of driftCases) {
     const fixtureRoot = createFixture();

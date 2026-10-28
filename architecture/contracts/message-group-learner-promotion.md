@@ -195,15 +195,15 @@ over it, so promotion adds no per-tick work; the restart scan's authoritative
 census still finds it and reports it retained (PHASE_NOT_OWNED). Unresolved
 promotion debt stays UNKNOWN and visible until its explicit caller acts.
 
-## Not in this contract
+## Scope of this contract slice
 
-Production dispatch (a driver that selects, delivers the permit to its
-destination's runtime consumer and calls the explicit entries), remote join
-wiring (the B2 descriptor, image transfer and leader observation routes) and a
-production route for the caught-up observation and the target status;
-leadership handoff, source removal and the source's own applied absence, quorum
-absence, exact-generation cleanup, reservation release, CREATE_ACTIVE and the
-services row; the physical two-replacement seed-loss proof.
+This contract defines the learner-promotion selection, native `ADD_NODE`
+proposal, voter-stamp recording, and ordered-successor boundary slice (`6.C`
+slice `C2`). The downstream `FreshMG` slices (`6.A`-`6.D`: production dispatch,
+remote join and state-transfer wiring, caught-up and target-status routes,
+leadership handoff, source removal, quorum absence, exact-generation cleanup,
+reservation release, `CREATE_ACTIVE`, and `services` row updates) are owned by
+their respective boundary slices and wired in production (`0.2.6`).
 
 ## Failure Classes
 

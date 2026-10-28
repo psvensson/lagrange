@@ -246,10 +246,12 @@ the next attempt, not a proposal; the debt stays UNKNOWN.
 The membership owner claim is bound to the process's issued boot incarnation,
 the one the router carries and the nodes row publishes.
 
-The full ordinary driver still needs initial learner action execution, followed
-by current CREATE through the existing leader descriptor/generation/sole-worker
-checks. These cannot be replaced by fixture-driven SENDING or a historical ADD
-receipt. J1 forward recovery remains unchanged.
+This contract defines the registered learner-read and discovery boundary slice.
+The downstream `FreshMG` slices (`6.A`-`6.D`, including initial learner action
+execution and `CREATE` through the leader descriptor, generation, and
+sole-worker checks) are wired in production (`0.2.6`). These cannot be replaced
+by fixture-driven `SENDING` or a historical `ADD` receipt. J1 forward recovery
+remains unchanged.
 
 ## Ordered successor of the learner action (runbook 6.C, slice C1)
 

@@ -62,8 +62,8 @@ refusal rather than execution against a retired partition.
 - One missing replica does not stop a healthy three-replica partition quorum.
 - File-backed SQLite replicas can rebuild through the active snapshot
   transfer/install path after required log history has been compacted.
-- Learner promotion is still time-based rather than progress-proven.
-- In-memory message-group logs do not use the SQLite snapshot lifecycle.
+- Learner promotion requires a leader match-index progress proof after an initial scheduling delay.
+- SQLite-backed message-group logs do not yet use the partition snapshot and log-compaction lifecycle.
 - Cells have no per-service Raft log; their durable effects must live in
   ordinary replicated tables.
 - Distributed calls provide exactly-once result visibility, not exactly-once

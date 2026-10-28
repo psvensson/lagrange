@@ -185,13 +185,12 @@ native observation in that isolated visibility test.
 
 Close/reopen in one process is not SIGKILL/power-loss proof. The process-loss cut
 between membership application and operation recording requires its own witness;
-the bounded implementation below does not replace distributed owner-path proof,
-complete change-impact/static checks or independent review.
-The planner, MessageGroupServiceHandler driver and CREATE safety parks remain.
+this contract defines the outcome-recording boundary slice, while the downstream
+`FreshMG` slices (`6.A`-`6.D`, including the planner, `MessageGroupServiceHandler`
+driver, and `CREATE` path) are wired in production (`0.2.6`).
 No successor attempt is authorized by missing evidence. J1 forward recovery after
-promotion authorization, full lab FAIL, timing findings and final off-seed/main
-proofs remain intact. No new coordinator, state store, lease or generic receipt
-framework is introduced by this transition.
+promotion authorization remains intact. No new coordinator, state store, lease
+or generic receipt framework is introduced by this transition.
 
 ## The promotion's voter stamp (6.C slice C2)
 

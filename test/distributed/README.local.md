@@ -551,14 +551,15 @@ Useful join config knobs in `NodeJoiningService` config:
 2. `joinReadinessPollIntervalMs`
 3. `joinReadinessTableName` (defaults to `services`)
 
-`MOVE_REPLICA` joins also use assignment-token handoff:
+Message-group join assignment and `FreshMG` replication:
 
-1. `/bootstrap` returns `assignmentId` and `assignmentLeaseExpiresAt`.
-2. Joiner sends `assignment_id` to `/register-service`.
-3. Seed rejects missing/unknown/expired/mismatched tokens
-   (`ASSIGNMENT_TOKEN_REQUIRED`, `ASSIGNMENT_TOKEN_UNKNOWN`,
-   `ASSIGNMENT_TOKEN_EXPIRED`, `ASSIGNMENT_TOKEN_MISMATCH`).
-4. Replica ownership conflicts fail closed with `REPLICA_OWNER_CONFLICT`.
+1. `MOVE_REPLICA` join handoff was retired and is refused on `/register-service`
+   because reusing an existing message-group replica identity on a joiner
+   violated Raft peer-id safety.
+2. Every joining node uses `CREATE_SELF_HOSTED` for its initial local message
+   group, and off-seed message-group replication uses `UnifiedRebalancer`
+   fresh-identity `ADD`/`REPLACE`/`REMOVE` (`FreshMG`).
+3. Replica ownership conflicts fail closed with `REPLICA_OWNER_CONFLICT`.
 
 ## Postgres Baseline Workflow
 
@@ -571,7 +572,7 @@ green.
 1. Shared readiness and guarded-mutation regressions:
 
 ```bash
-npm test -- \
+npm run test:file -- \
   test/admin/admin-websocket-api.test.js \
   test/control-plane/lease-sweep-serialization.test.js \
   test/raft/authoritative-row-mutation-helper.test.js
@@ -580,7 +581,7 @@ npm test -- \
 2. Deterministic convergence regressions:
 
 ```bash
-npm test -- \
+npm run test:file -- \
   test/convergence/deterministic-convergence-harness.test.js \
   test/convergence/baseline-discovered-regressions.test.js
 ```
@@ -588,7 +589,7 @@ npm test -- \
 3. Benchmark report and gate contract:
 
 ```bash
-npm test -- \
+npm run test:file -- \
   test/distributed/harness/__tests__/report-writer.test.js \
   test/distributed/harness/__tests__/run.test.js \
   test/scripts/compare-latest-baseline-runs.test.js
@@ -597,7 +598,7 @@ npm test -- \
 4. `postgres-baseline-comparison` control-path specs:
 
 ```bash
-npm test -- \
+npm run test:file -- \
   test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js \
   test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js \
   test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js \
@@ -613,7 +614,7 @@ npm test -- \
    correctness bugs:
 
 ```bash
-npm test -- \
+npm run test:file -- \
   test/integration/convergence-control-snapshot.integration.test.js \
   test/integration/node-joining-rebalance.integration.test.js \
   test/integration/three-node-seed-rebalance.integration.test.js
@@ -695,7 +696,6 @@ Default retention policy:
   `test-output/.playback`, `.tmp/.playback`, and `.playback/.playback`
 - keep at least the latest `4` other run-like entries in each scoped artifact
   directory, or the latest `4` replica file sets in each `logs-p1` directory
-```
 
 The comparison output includes:
 

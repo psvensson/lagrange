@@ -40,7 +40,12 @@ and write a reproducible report.
 
 Start with these files:
 
+- [`lagrange.service.js`](lagrange.service.js) - the authored code-first
+  service using `defineService`, `distributed`, and `sql`;
 - [`movie-ranking.js`](movie-ranking.js) - the ranking policy itself;
+- [`affinity-demo-binding-service.js`](affinity-demo-binding-service.js) -
+  the deployment helper that runs `runGenerate` -> `runBuild` -> `runDeploy`
+  and invokes `CALL BINDING $1` over authenticated pgwire;
 - [`run-comparison.js`](run-comparison.js) - the small top-level orchestrator
   that requires result parity and keeps unlike latency measurements separate;
 - [`run-affinity-demo.js`](run-affinity-demo.js) - the larger Lagrange proof
@@ -153,10 +158,11 @@ disjoint movie-id shard. Each replica:
 4. publishes the bounded partial under a lease; and
 5. participates in producing an atomic final snapshot.
 
-The generic runtime pieces are:
+The service and runtime pieces are:
 
-- `src/runtime/sql-query-loop-runtime-module.js`
-- `src/runtime/sql-query-loop-parallel-reduce.js`
+- `examples/service-data-affinity/lagrange.service.js`
+- `examples/service-data-affinity/affinity-demo-binding-service.js`
+- `src/service/call-cell-invoker.js` (`CALL BINDING $1`)
 
 The demo-specific formula and orchestration remain in this example directory.
 
@@ -239,8 +245,8 @@ SELECT partition_id, leader_node_id FROM partitions;
 SELECT node_id, service_id, access_json FROM service_partition_access;
 SELECT service_id, node_id, status FROM services;
 SELECT slot_id, replica_id, lease_expires_at, partial_json, computed_at
-FROM movielens_top10_reduce_slots;
-SELECT result_json, computed_at FROM movielens_top10;
+FROM call_cell_reduce_slots;
+SELECT result_json, computed_at FROM call_cell_reduce_results;
 ```
 
 The full mechanism is documented in
@@ -313,39 +319,27 @@ boundaries) is in
 
 ## Current API Boundary
 
-This demo proves the data-local execution, bounded-reduction, and placement
-shape, but it is **not yet the public service-authoring path**.
+This demo compiles and deploys
+[`examples/service-data-affinity/lagrange.service.js`](lagrange.service.js)
+(`defineService` / `distributed`) as a genuine [WASI](https://wasi.dev/)
+`call` Binding (`movielens--call--topn`) through the public
+`runGenerate` -> `runBuild` -> `runDeploy` pipeline (`INSTALL SERVICE` and
+`CREATE BINDING`), and invokes `CALL BINDING $1` over an authenticated
+PostgreSQL-wire session while the rebalancer moves the runtime service Cells
+toward partition leader hosts.
 
-It drives the internal placement substrate directly: the harness writes a
-`service_definitions` row for an internal query-loop module and pins two
-replicas so the disjoint-shard arithmetic is reproducible.
+The remaining boundaries are explicit:
 
-That direct write is demo scaffolding against a migration-input table. It is
-not how externally authored services are deployed.
-
-Public deployment uses Artifact / Binding / Cell. Genuine
-[WASI](https://wasi.dev/) request components are externally installable today
-(see [js-request-binding-deployment](../js-request-binding-deployment/README.md)),
-and the request context provides `read`, `write`, and `capability`.
-
-The public successor to this demo's internal query-loop module now
-exists: the `call` Binding kind is invocable end to end over pgwire
-(`CALL BINDING $1`), with a Binding-declared partition-local SELECT,
-shard-local `run` execution on partition-host nodes, and a coordinated
-`reduce` over numeric partials -
-[call-binding-account-summary](../call-binding-account-summary/README.md)
-is the runnable example. The `pushdown` Binding kind still has no public
-invocation adapter, and richer partial shapes (beyond numeric per-group
-values) remain product direction.
-
-This distinction is intentional:
-
-- this demo shows what the execution and placement substrate buys, at
-  MovieLens scale, against a strong conventional baseline;
-- the call-binding example shows the same shape on the public path;
-- the remaining work is `pushdown` invocation, structured partials, and
-  concurrent invocations on a single Cell instance (cross-node shard
-  dispatch is already bounded parallel).
+- the harness invokes `CALL BINDING $1` directly over pgwire rather than
+  exposing an outer HTTP `request` Binding (for a composed HTTP `request`
+  Binding + `call` Binding example, see
+  [call-binding-account-summary](../call-binding-account-summary/README.md));
+- all three Lagrange nodes and the PostgreSQL baseline run as local processes
+  on one machine, so this is a correctness, transfer-shape, and placement
+  study rather than a multi-machine production benchmark; and
+- the `pushdown` Binding kind still has no public invocation adapter, and
+  concurrent invocations on a single Cell instance serialize (cross-node shard
+  dispatch is bounded parallel).
 
 ## Troubleshooting
 
@@ -372,8 +366,9 @@ data/examples/service-data-affinity-demo-archive/
 | One-command comparison | `run-comparison.js` |
 | PostgreSQL grouped baseline | `run-postgres-baseline.js` |
 | Shared ranking contract | `movie-ranking.js` |
+| Authored code-first WASI service | `examples/service-data-affinity/lagrange.service.js` |
+| Call-Binding build, deploy, and invocation | `examples/service-data-affinity/affinity-demo-binding-service.js` |
 | Lagrange cluster, SQL, and service orchestration | `run-affinity-demo.js` |
-| Generic replica reduce loop | `src/runtime/sql-query-loop-runtime-module.js` |
-| Stable leases and atomic snapshots | `src/runtime/sql-query-loop-parallel-reduce.js` |
+| Call-Cell invocation and reduction coordinator | `src/service/call-cell-invoker.js` |
 | Placement evidence | `affinity-demo-evidence.js` |
 | Always-on affinity policy lift | `src/rebalancer/unified-rebalancer-policy-scheduler-methods.js` |

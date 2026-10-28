@@ -8,7 +8,7 @@ The command is `lagrange-admin`.
 
 ## System Requirements
 
-- **Node.js**: v22.0.0 or higher
+- **Node.js**: v22.12.0 or higher
 - **Terminal**: Any terminal emulator with ANSI color support
 - **Operating System**: Linux, macOS, or Windows (with WSL recommended)
 - **Network**: WebSocket connectivity to database nodes
@@ -18,7 +18,7 @@ The command is `lagrange-admin`.
 ### From npm (recommended)
 
 ```bash
-npm install -g lagrange
+npm install -g lagrange-server
 ```
 
 ### From source
@@ -152,6 +152,11 @@ INSERT INTO logs (message) VALUES ('test');
 ```
 
 ### Live Queries
+
+> **Note (`0.2.x` status):** External user-table live query / CDC event
+> streaming (`LIVE SELECT` on user tables) is disabled and unsupported in
+> `0.2.x` (`CDC_EVENT_STREAM_DISABLED`, scheduled for `0.3`). System-table cache
+> synchronization and internal logs streaming remain active.
 
 Use `LIVE SELECT` to stream real-time changes:
 

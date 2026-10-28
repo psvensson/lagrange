@@ -60,9 +60,8 @@ directly and never construct a request object; and `stage` and `plan` are
 declared execution modes that the current request constructor cannot actually
 produce, since it drops the fields they need.
 
-The `runtime.run` and `WASM DB.call` ingress shown here belongs to the active
-legacy distributed-query callback surface, not Artifact / Binding / Cell
-service deployment. See the
+The programmatic `runtime.run` ingress shown here belongs to stage and plan
+execution, not Artifact / Binding / Cell service deployment. See the
 [Service Deployment Guide](../docs/service-deployment-guide.md) for the
 supported external service path.
 
@@ -71,12 +70,10 @@ supported external service path.
 flowchart TD
   PG["PostgreSQL wire<br/>PostgresWireAdapter"]:::ext --> RQ
   AD["Admin WebSocket<br/>InternalSqlAdapter"]:::ext --> RQ
-  RT["Legacy callback runtime<br/>runtime.run + ctx.call"]:::ext --> RQ
-  WA["Legacy callback DB.call<br/>WasmCallAdapter"]:::ext --> RQ
+  RT["Programmatic runtime<br/>runtime.run"]:::ext --> RQ
   RQ["<b>SqlRequest</b> (frozen)"]:::svc --> EX["<b>executeRequest</b>"]:::svc
   EX --> M{"executionMode"}
   M -->|"sql_statement"| SQ["Plan · route · execute SQL"]:::data
-  M -->|"partition_callback"| CB["PartitionCallbackDispatcher<br/>→ CallbackExecutionHost"]:::data
   M -->|"stage"| SG["stage execution"]:::data
   M -->|"plan"| PL["reduceByKey / useBroadcast<br/>pipeline"]:::data
 

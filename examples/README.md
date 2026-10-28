@@ -220,10 +220,14 @@ and a replicated Lagrange service applying shard-local ranking policy with
 bounded top-N reduction - and shows placement converging toward the data.
 
 Answers: **what can disappear when a hot path is rewritten for partition-local
-work and bounded reduction?** Its honest boundary: the comparison harness
-exercises internal placement machinery to measure the execution shape. The
-developer-facing service path is the call model shown in
-[call-binding-account-summary](call-binding-account-summary/README.md).
+work and bounded reduction?** It compiles and deploys a code-first WASI `call`
+Binding (`examples/service-data-affinity/lagrange.service.js`) across a 3-node
+cluster and measures partition-local fanout, reduction, and affinity-driven
+Cell movement. Its honest boundary: it runs 3 local processes on one machine
+and invokes `CALL BINDING` directly over pgwire rather than through an outer
+HTTP handler (see
+[call-binding-account-summary](call-binding-account-summary/README.md) for the
+composed HTTP + `call` Binding path).
 
 - **You'll need**: Docker for PostgreSQL and internet access for the first
   dataset download; Lagrange nodes run as local processes.
@@ -238,7 +242,7 @@ TLS, and fail-closed credential attacks.
 Answers: **can an existing PostgreSQL application talk to Lagrange without a
 rewrite?** This is deliberately the compatibility path - no WASM involved.
 
-- **You'll need**: Docker and Node.js 20+.
+- **You'll need**: Docker and Node.js 22.12 or newer.
 
 ### [kubernetes-endpoint-sync-controller/](kubernetes-endpoint-sync-controller/README.md)
 

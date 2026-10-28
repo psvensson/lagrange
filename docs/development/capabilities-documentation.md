@@ -31,3 +31,9 @@ The rendered page contains product facts only. Do not put development workflow,
 evidence locations, automation instructions, or agent guidance in it. Add
 maintenance instructions here and keep implementation rules in their existing
 development or steering owner.
+
+Capability entries record the live production status rather than file presence:
+for example, `messageGroupLogCompaction` remains `"unsupported"` even though
+partition snapshot compaction (`SN1`) is active on `raft-rs`, and OCI
+`managedExecution` remains `"unsupported"` even though descriptor and scaffold
+modules exist.

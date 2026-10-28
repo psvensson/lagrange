@@ -145,8 +145,7 @@ or retry action for every retryable outcome.
 Client SQL Query (any entrypoint)
        │
        ├── Internal API ──► InternalSqlAdapter
-       ├── PG Wire ────────► PostgresWireAdapter
-       └── DB.call ────────► WasmCallAdapter
+       └── PG Wire ────────► PostgresWireAdapter
                                     │
                               ┌─────┴─────┐
                               │ SqlRequest │
@@ -307,9 +306,10 @@ budget expires.
 CDC-propagated tables on leadership gain via
 `cdcHandler.getSubscriptions()` → `subscribeToCDC(tableName)`. This
 follows the same subscription path as initial setup (no parallel
-mechanism). CDC events buffered on source partitions during the
-failover window are replayed when the new leader's subscriber
-registers via the existing `cdcEventBuffer` replay mechanism.
+mechanism). CDC obligations persisted on source partitions during the
+failover window (`_cdc_obligations` and `_cdc_obligation_progress`) are
+drained through the durable system-table CDC obligation lane when the
+new leader's subscriber registers.
 
 ### Meta Service Management Flow
 

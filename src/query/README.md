@@ -19,6 +19,14 @@ budget enforcement.
   stable pending/success/failure projection. The caller timeout only bounds
   waiting for that durable job; it never cancels the job itself. Public CREATE
   has no legacy fallback: unavailable durable persistence fails closed.
+- `src/query/sql-query-engine-statement-admission.js` and
+  `src/query/sql-parser-schema-mutation-methods.js` (together with
+  `src/partition/partition-statement-admission.js` and
+  `src/partition/partition-transaction-determinism.js`) own deterministic SQL
+  write and literal schema-default admission.
+- `src/query/sql-query-engine-transaction-persistence-methods.js` and
+  `src/query/distributed/distributed-transaction-coordinator.js` own TX1
+  distributed transaction coordinator state and guarded decision persistence.
 - Runtime primitives such as `lookup`, `emit`, and `broadcast` must route
   through the shared execution model.
 
@@ -27,8 +35,16 @@ budget enforcement.
 - `index.js` for exported query/runtime surface.
 - `sql-request.js` before adding entrypoint input shape.
 - `sql-query-engine.js` before changing SQL semantics.
-- `query-executor.js` and its partition-delivery segments before changing
-  execution or routing behavior.
+- `src/query/sql-query-engine-statement-admission.js` and
+  `src/query/sql-parser-schema-mutation-methods.js` for deterministic SQL write
+  and schema-default admission.
+- `src/query/sql-query-engine-transaction-persistence-methods.js` and
+  `src/query/distributed/distributed-transaction-coordinator.js` for TX1
+  coordinator decision persistence and recovery.
+- `src/query/query-executor.js`,
+  `src/query/query-executor-partition-delivery.js`, and
+  `src/query/query-executor-partition-attempt-budget.js` before changing
+  execution, partition delivery, or attempt-budget behavior.
 - `canonical-leader-routing.js` for canonical leader-gap decisions.
 - `runtime-runner.js` and `execution-context.js` for runtime API changes.
 

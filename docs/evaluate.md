@@ -134,10 +134,13 @@ measurements, and failure drills.
 Lagrange distributed SQL, and shard-local policy with bounded reduction over
 100,000 ratings. It reports correctness, transfer shape, and placement evidence.
 
-The service phase uses an internal measurement substrate rather than the
-current public code-first service path. It demonstrates the execution shape,
-not a complete current-product benchmark. It deliberately does not print a speedup
-ratio.
+The service phase compiles and deploys a code-first WASI `call` Binding
+(`examples/service-data-affinity/lagrange.service.js`) across a three-node local
+cluster and invokes `CALL BINDING $1` over authenticated PostgreSQL wire. Because
+all three node processes run on one machine and it does not include an outer
+HTTP request Binding or multi-host network benchmark, treat it as a local
+execution-shape and placement proof rather than a multi-machine production
+benchmark. It deliberately does not print a speedup ratio.
 
 ### Replica rebuild evidence
 
@@ -186,8 +189,8 @@ machine.
 The partition recovery path is more mature than the product operations surface:
 
 - replica snapshot rebuild is implemented for SQLite partitions;
-- message-group logs remain in memory and use full replay;
-- learner promotion is time-based rather than progress-based;
+- SQLite-backed message-group logs do not yet have bounded snapshot compaction and recover by full replay;
+- learner promotion requires a leader match-index progress proof after an initial scheduling delay;
 - no supported backup, restore, or point-in-time recovery surface is published;
 - no rolling-upgrade or downgrade contract is published for `0.x`; and
 - no supported cross-region durability contract is published.
