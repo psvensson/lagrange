@@ -27,6 +27,7 @@ on:
       - 'scripts/generate-global-owner-debt-inventory.js'
       - 'scripts/global-owner-debt-inventory/constants.js'
       - 'test/scripts/dependency-policy-producer-binding.test.js'
+      - 'test/scripts/impact-proof-cone-producer.test.js'
       - 'test/shards/impact-graph-seal.json'
   workflow_dispatch: {}
 
@@ -78,6 +79,11 @@ jobs:
             scripts/global-owner-debt-inventory/constants.js
           node --test \
             test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js \
-            test/scripts/dependency-policy-producer-binding.test.js
+            test/scripts/dependency-policy-producer-binding.test.js \
+            test/scripts/impact-proof-cone-producer.test.js
           npx tap test/distributed/reference-client/lagrange-visibility-probe.test.js
-          node scripts/generate-global-owner-debt-inventory.js --verify-import-graph
+          # The graph report is intentionally absent from a clean checkout.
+          # Reproduce the ordinary CI gate: regenerate it, then refuse any
+          # difference against the committed seal.
+          node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only
+          git diff --exit-code -- test/shards/impact-graph-seal.json
