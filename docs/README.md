@@ -75,6 +75,19 @@ pilot gates.
 - [Data affinity](../architecture/process-data-affinity.md)
 - [Rebalancing](../architecture/process-rebalancing.md)
 
+## Repository orientation
+
+If you are browsing the source checkout for the first time, focus on the
+application and evaluation surfaces first:
+
+| Directory | Audience | What is inside |
+| --- | --- | --- |
+| [`examples/`](../examples/README.md) | Application & platform evaluators | Runnable services (`call-binding-account-summary`, `service-data-affinity`) and cluster examples |
+| `src/authoring/` | Service authors | The four guest-safe authoring helpers (`defineService`, `distributed`, `http`, `sql`) |
+| `src/service/` & `src/cli/` | Service toolchain | Compiler, IR normalizer, deployment-record generator, and `lagrange service` CLI |
+| `src/runtime/`, `src/query/`, `src/raft/` | Runtime engineers | Partition SQL engine, parallel `run`/`reduce` coordinator, and Rust/WASM Raft replication |
+| [`architecture/`](../architecture/INDEX.md) & `test/` | Contributors & auditors | Formal system model, TLA+/Alloy specifications, and unit/integration/distributed test suites |
+
 Repository-development material lives behind
 [CONTRIBUTING.md](../CONTRIBUTING.md). It is not part of the product
 evaluation path.

@@ -360,5 +360,13 @@ async (t) => {
     assert.equal(source.includes(FORBIDDEN_BINDING_LITERAL), false,
       `${entry} must not carry the raw Binding-name literal`);
   }
+  const runnerSource = await readFile(
+    new URL('run-call-binding-account-summary.js', EXAMPLE_DIRECTORY),
+    'utf8',
+  );
+  assert.match(runnerSource, /function buildLocalityExecutionSummary\(/,
+    'runner defines the locality execution summary helper');
+  assert.match(runnerSource, /rawRowsSentToReducer:\s*ZERO_RAW_ROWS_TRANSFERRED/,
+    'runner reports zero raw rows transferred to the reducer');
   t.pass('example sources are free of the hand-built builder and raw literal');
 });

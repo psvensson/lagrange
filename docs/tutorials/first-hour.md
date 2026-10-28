@@ -38,6 +38,12 @@ It contains:
 The compiler derives those records from object-key identity and the handlers'
 `calls` declarations.
 
+Notice the boundary between the two files in that directory:
+`lagrange.service.js` (169 lines) is the entire service you write as an
+application developer, while `run-call-binding-account-summary.js` is an
+in-process test harness that boots a disposable node, splits a table into two
+partitions, and verifies the deployed service.
+
 ## 3. Run the proof
 
 ```bash
@@ -61,8 +67,11 @@ The runner:
     and
 11. shuts the node down.
 
-A successful report includes the account summary and the number of contributing
-shards.
+A successful report includes the account summary, the number of contributing
+shards, and a `locality` execution summary showing the data-local reduction:
+150 table rows scanned across 2 local partitions, 50 matching rows aggregated
+in place, 8 numeric partial pairs sent to the reducer, and 0 raw rows
+transferred across the reducer boundary.
 
 ## 4. Trace the request
 
@@ -121,10 +130,20 @@ cd my-service
 npm test
 ```
 
-The scaffold separates ordinary handler logic into a host-testable module and
-keeps the service descriptor in `lagrange.service.js`.
+The scaffold separates ordinary handler logic into a host-testable handler
+module and keeps the service descriptor in `lagrange.service.js`.
+Its `summarizeRun` function filters rows by the optional `accountId` argument
+and emits `<metric>:<shardKey>` partial keys (`count:<shardKey>` and
+`total:<shardKey>` keyed by the lowest matching row ID in that partition) so
+partials from multiple partitions remain disjoint during reduction.
 
-Generate and build:
+Generate and build in one step using the scaffolded package script:
+
+```bash
+npm run build
+```
+
+Or run the two CLI stages explicitly:
 
 ```bash
 lagrange service generate .

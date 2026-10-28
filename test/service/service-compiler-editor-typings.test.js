@@ -107,8 +107,10 @@ test('generate emits a deterministic runtime-types.d.ts covering ' +
   // Operation-keyed handles map.
   assert.match(first, /export interface OperationHandles/);
   assert.match(first, /readonly "summarizeAmounts": SummarizeAmountsOperation/);
-  // Row interface carries exactly the selected column.
+  // Row interface carries the selected columns.
   assert.match(first, /export interface SummarizeAmountsRow/);
+  assert.match(first, /readonly "id": unknown/);
+  assert.match(first, /readonly "account_id": unknown/);
   assert.match(first, /readonly "amount_cents": unknown/);
   // Handler context binds call() to the declared handle.
   assert.match(first, /export interface HandlerContext/);

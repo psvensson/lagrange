@@ -15,6 +15,7 @@ import {mkdtemp, readFile, readdir, rm} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 import {test} from '../../src/test-helpers/tap.js';
 
@@ -112,6 +113,68 @@ test('the WASM scaffold vendors the authoring library and authors a ' +
   assert.deepEqual(
     normalized.ir.operations.map((operation) => operation.id),
     ['summarizeAmounts']);
+
+  const pkg = JSON.parse(await readFile(path.join(target, 'package.json'), 'utf8'));
+  assert.equal(pkg.engines?.node, '>=22.12.0');
+  assert.deepEqual(pkg.scripts, {
+    build: 'lagrange service generate . && lagrange service build .',
+    deploy: 'lagrange service deploy .',
+    generate: 'lagrange service generate .',
+    test: 'node --test',
+  });
+});
+
+test('the scaffolded distributed operation emits shard-disjoint partials ' +
+  'and filters by accountId across multiple partitions', async (t) => {
+  const root = await makeTempRoot(t);
+  const target = path.join(root, 'amounts-service');
+  createWasmServiceProject(target);
+
+  const serviceModule = await import(
+    pathToFileURL(path.join(target, 'lagrange.service.js')).href
+  );
+  const operation = serviceModule.default.operations.summarizeAmounts;
+  const emittedPartials = [];
+  const emit = (key, value) => {
+    emittedPartials.push([key, value]);
+  };
+
+  const shardOneOutcome = operation.run(
+    [
+      {account_id: 7, amount_cents: 250, id: 1},
+      {account_id: 8, amount_cents: 999, id: 2},
+    ],
+    {accountId: 7},
+    {emit},
+  );
+  const shardTwoOutcome = operation.run(
+    [
+      {account_id: 7, amount_cents: 400, id: 101},
+      {account_id: 7, amount_cents: 150, id: 102},
+    ],
+    {accountId: 7},
+    {emit},
+  );
+
+  assert.deepEqual(shardOneOutcome, {matched: 1, scanned: 2});
+  assert.deepEqual(shardTwoOutcome, {matched: 2, scanned: 2});
+  const keys = emittedPartials.map(([key]) => key);
+  assert.equal(new Set(keys).size, keys.length,
+    'emitted partial keys must be disjoint across partition shards');
+  assert.deepEqual(emittedPartials, [
+    ['count:1', 1],
+    ['total:1', 250],
+    ['count:101', 2],
+    ['total:101', 550],
+  ]);
+
+  const reduced = operation.reduce(emittedPartials, {accountId: 7});
+  assert.deepEqual(reduced, {
+    accountId: 7,
+    contributingShards: 2,
+    totalCents: 800,
+    transactions: 3,
+  });
 });
 
 test('the scaffolded handler unit-tests green with fake collaborators ' +

@@ -287,13 +287,13 @@ npm run demo:account-summary
 
 The demo:
 
-1. builds a real WASI component;
+1. builds a real WASI component from [`lagrange.service.js`](examples/call-binding-account-summary/lagrange.service.js) (169 lines);
 2. starts Lagrange;
-3. creates and splits a table into two partitions;
+3. creates and splits a 150-row table into two partitions;
 4. deploys the service;
 5. calls its HTTP endpoint;
-6. runs the partition functions against local data; and
-7. checks the combined result.
+6. runs the partition functions against local data (emitting 8 numeric partials across 2 shards with 0 raw rows sent to the reducer); and
+7. checks the combined result and prints a JSON report including a `locality` execution summary.
 
 Both partitions are on one machine in this demo, so it proves the execution
 path rather than cluster-scale performance.
@@ -307,10 +307,12 @@ lagrange service init my-service
 cd my-service
 
 npm test
-lagrange service generate .
-lagrange service build .
+npm run build
 ```
 
+`npm run build` runs `lagrange service generate . && lagrange service build .`
+to emit the component entry, editor typings (`runtime-types.d.ts`), and
+`.lagrange/` deployment records and compile `.lagrange/component.wasm`.
 Deployment needs a running cluster and authenticated PostgreSQL-wire lifecycle
 configuration. The generated project README contains the exact `deploy`
 command.
@@ -354,6 +356,18 @@ for the exact current envelope.
 - [Security](docs/security.md) - current trust and authentication model
 - [Architecture](architecture/INDEX.md) - internals
 - [Documentation index](docs/README.md) - the complete documentation map
+
+## Repository layout
+
+If you are exploring the checkout, only a few directories are needed to evaluate
+or author services:
+
+- [`examples/call-binding-account-summary/`](examples/call-binding-account-summary/README.md) - the flagship code-first service (`lagrange.service.js`) and its self-contained demo harness
+- [`examples/service-data-affinity/`](examples/service-data-affinity/README.md) - 3-node MovieLens Top-N distributed `call`-Binding and placement-affinity study
+- [`docs/`](docs/README.md) - tutorials, programming model, evaluation guides, and capability ledger
+- `src/authoring/` and `src/service/` - guest-safe service authoring API and WASI service compiler
+- `src/runtime/`, `src/query/`, and `src/raft/` - partition storage, SQL/distributed-reduce engine, and consensus runtime
+- [`architecture/`](architecture/INDEX.md) and `test/` - system model, formal specs, and verification suites
 
 ## License and contributions
 

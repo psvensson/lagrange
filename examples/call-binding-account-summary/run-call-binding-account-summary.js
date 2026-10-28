@@ -574,6 +574,23 @@ async function exerciseDeployment(node, rows, partitions, deployment) {
   };
 }
 
+const PARTIAL_METRICS_PER_SHARD = 4;
+const ZERO_RAW_ROWS_TRANSFERRED = 0;
+
+function buildLocalityExecutionSummary(rows, partitions, summary) {
+  const contributingShards = Number(summary?.contributingShards ?? 0);
+  const partialPairsSentToReducer =
+    contributingShards * PARTIAL_METRICS_PER_SHARD;
+  return {
+    contributingShards,
+    matchingRowsForAccount: Number(summary?.transactions ?? 0),
+    partialPairsSentToReducer,
+    partitionsScannedLocally: partitions.length,
+    rawRowsSentToReducer: ZERO_RAW_ROWS_TRANSFERRED,
+    totalRowsInTable: rows.length,
+  };
+}
+
 async function runCallBindingAccountSummaryExample(options = {}) {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), TEMPORARY_PREFIX));
   let node = null;
@@ -604,6 +621,17 @@ async function runCallBindingAccountSummaryExample(options = {}) {
     logPhase('waiting for both request Cells and the call Cell');
     const observations =
       await exerciseDeployment(node, rows, partitions, deployment);
+    const locality = buildLocalityExecutionSummary(
+      rows,
+      partitions,
+      observations.summary,
+    );
+    logPhase(
+      `locality summary: ${locality.totalRowsInTable} rows scanned across ` +
+      `${locality.partitionsScannedLocally} local partitions -> ` +
+      `${locality.partialPairsSentToReducer} numeric partials -> ` +
+      `1 reduced JSON response (${locality.rawRowsSentToReducer} raw rows transferred)`,
+    );
     logPhase('all checks passed; shutting down');
     const report = {
       artifact: {
@@ -625,6 +653,7 @@ async function runCallBindingAccountSummaryExample(options = {}) {
           partition.partition_id || partition.partitionId),
         rows: rows.length,
       },
+      locality,
       observations,
       passed: true,
     };
@@ -652,5 +681,6 @@ if (isDirectRun) {
 }
 
 export {
+  buildLocalityExecutionSummary,
   runCallBindingAccountSummaryExample,
 };

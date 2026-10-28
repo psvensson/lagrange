@@ -32,10 +32,15 @@ import {typingsSource} from '../service/service-typings-generator.js';
 const SERVICE_VERSION = '0.1.0';
 // The template's statement text is shared by the authored source and the
 // scaffold-time typings projection so the two can never drift.
-const TEMPLATE_STATEMENT_TEXT = 'SELECT amount_cents FROM account_activity';
+const TEMPLATE_STATEMENT_TEXT =
+  'SELECT id, account_id, amount_cents FROM account_activity';
 const SERVICE_PACKAGE_TYPE = 'module';
+const SERVICE_BUILD_SCRIPT =
+  'lagrange service generate . && lagrange service build .';
+const SERVICE_DEPLOY_SCRIPT = 'lagrange service deploy .';
+const SERVICE_GENERATE_SCRIPT = 'lagrange service generate .';
 const SERVICE_TEST_SCRIPT = 'node --test';
-const SERVICE_NODE_ENGINE = '>=22.0.0';
+const SERVICE_NODE_ENGINE = '>=22.12.0';
 const TEXT_NEWLINE = '\n';
 
 const WASM_PROJECT_ERROR_NAME = 'ServiceWasmScaffoldError';
@@ -163,29 +168,70 @@ import {handleAmountSummary} from './src/handler.js';
 
 const SERVICE_NAME = '${serviceName}';
 const VERSION = '${SERVICE_VERSION}';
-const PARTIAL_KEY = 'total';
+const PARTIAL_METRIC = Object.freeze({
+  COUNT: 'count',
+  TOTAL: 'total',
+});
+const PARTIAL_KEY_SEPARATOR = ':';
 
 /**
+ * Partial keys must be disjoint across partition shards. Range-partitioned row
+ * IDs are disjoint across shards, so the lowest matching row ID suffixes each
+ * emitted metric key (\`<metric>:<shardKey>\`).
+ *
  * @param {readonly SummarizeAmountsRow[]} rows
- * @param {Record<string, unknown>} _runArguments
+ * @param {Record<string, unknown> | null | undefined} runArguments
  * @param {{emit(key: string, partial: unknown): void}} context
  */
-function summarizeRun(rows, _runArguments, {emit}) {
+function summarizeRun(rows, runArguments, {emit}) {
+  const accountId = runArguments?.accountId ?? null;
+  let matched = 0;
   let totalCents = 0;
+  /** @type {number | null} */
+  let shardKey = null;
   for (const row of rows) {
-    totalCents += Number(row.amount_cents ?? 0);
+    if (accountId !== null && row.account_id !== accountId) continue;
+    if (row.id === null || row.id === undefined ||
+      row.amount_cents === null || row.amount_cents === undefined) {
+      continue;
+    }
+    const id = Number(row.id);
+    const amountCents = Number(row.amount_cents);
+    if (shardKey === null || id < shardKey) shardKey = id;
+    matched += 1;
+    totalCents += amountCents;
   }
-  emit(PARTIAL_KEY, totalCents);
-  return {scanned: rows.length};
+  if (matched > 0) {
+    emit(\`\${PARTIAL_METRIC.COUNT}\${PARTIAL_KEY_SEPARATOR}\${shardKey}\`, matched);
+    emit(
+      \`\${PARTIAL_METRIC.TOTAL}\${PARTIAL_KEY_SEPARATOR}\${shardKey}\`,
+      totalCents,
+    );
+  }
+  return {matched, scanned: rows.length};
 }
 
-/** @param {readonly (readonly [string, unknown])[]} partials */
-function summarizeReduce(partials) {
+/**
+ * @param {readonly (readonly [string, unknown])[]} partials
+ * @param {Record<string, unknown> | null | undefined} [runArguments]
+ */
+function summarizeReduce(partials, runArguments) {
+  const accountId = runArguments?.accountId ?? null;
+  let transactions = 0;
   let totalCents = 0;
-  for (const [_key, value] of partials) {
-    totalCents += Number(value);
+  const shards = new Set();
+  for (const [key, value] of partials) {
+    const [metric, shardKey] = String(key).split(PARTIAL_KEY_SEPARATOR);
+    if (shardKey) shards.add(shardKey);
+    if (metric === PARTIAL_METRIC.COUNT) transactions += Number(value);
+    else if (metric === PARTIAL_METRIC.TOTAL) totalCents += Number(value);
   }
-  return {totalCents};
+  return {
+    accountId,
+    contributingShards: shards.size,
+    totalCents,
+    transactions,
+  };
 }
 
 // The single distributed operation, referenced by descriptor identity —
@@ -256,10 +302,16 @@ import {handleAmountSummary} from '../src/handler.js';
 test('handleAmountSummary invokes the operation and wraps the result', () => {
   const calls = [];
   const operation = {kind: 'distributed_operation'};
+  const expectedSummary = {
+    accountId: 7,
+    contributingShards: 2,
+    totalCents: 42,
+    transactions: 2,
+  };
   const context = {
     call(operationRef, callArguments) {
       calls.push([operationRef, callArguments]);
-      return {totalCents: 42};
+      return expectedSummary;
     },
     json(value, status) {
       return {body: JSON.stringify(value), status};
@@ -271,7 +323,7 @@ test('handleAmountSummary invokes the operation and wraps the result', () => {
 
   assert.deepEqual(calls, [[operation, {accountId: 7}]]);
   assert.equal(response.status, 200);
-  assert.deepEqual(JSON.parse(response.body), {totalCents: 42});
+  assert.deepEqual(JSON.parse(response.body), expectedSummary);
 });
 `;
 }
@@ -283,6 +335,9 @@ function packageJson(serviceName) {
     private: true,
     type: SERVICE_PACKAGE_TYPE,
     scripts: {
+      build: SERVICE_BUILD_SCRIPT,
+      deploy: SERVICE_DEPLOY_SCRIPT,
+      generate: SERVICE_GENERATE_SCRIPT,
       test: SERVICE_TEST_SCRIPT,
     },
     engines: {
@@ -302,12 +357,15 @@ A code-first Lagrange service, authored with
 
 ## Layout
 
-- \`lagrange.service.js\` — the service: one HTTP route and one
-  distributed operation, declared as data.
-- \`src/handler.js\` — the endpoint logic, split out so it unit-tests on
+- \`lagrange.service.js\` - the service: one HTTP route and one
+  distributed operation (\`summarizeAmounts\`), declared as data.
+  \`summarizeRun\` filters rows on the local partition and emits
+  shard-disjoint \`<metric>:<shardKey>\` partial keys so multi-partition
+  reductions combine cleanly without key overlap.
+- \`src/handler.js\` - the endpoint logic, split out so it unit-tests on
   the host with fake \`call\`/\`emit\` collaborators (no WASM).
-- \`test/handler.test.js\` — that unit test.
-- \`authoring/\` — the vendored guest-safe authoring library the service
+- \`test/handler.test.js\` - that unit test.
+- \`authoring/\` - the vendored guest-safe authoring library the service
   module imports; the compiler resolves it both on the host and inside
   the componentize sandbox.
 
@@ -318,6 +376,14 @@ npm test
 \`\`\`
 
 ## Compile and deploy
+
+Build in one step via the package script (runs \`generate\` then \`build\`):
+
+\`\`\`sh
+npm run build
+\`\`\`
+
+Or run the explicit CLI stages directly:
 
 \`\`\`sh
 lagrange service generate .

@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "developer-adoption-and-ergonomics",
+  "class": "product",
+  "epic": "developer-adoption-and-ergonomics",
+  "statement": "Make lagrange service init multi-partition-safe by default with shard-keyed partial emissions, accountId filtering, npm build/generate/deploy scripts, and Node >=22.12.0; surface quantitative data-locality execution telemetry in demo:account-summary; and clarify application-vs-harness framing and repository orientation across README.md, docs/README.md, docs/tutorials/first-hour.md, and examples/call-binding-account-summary/README.md.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/developer-adoption-and-ergonomics/evidence/receipt.json",
+      "requiredReceipts": [
+        "scaffold-multi-partition-disjoint-partials-and-account-filter",
+        "scaffold-package-scripts-and-node-22-12-engine-floor",
+        "account-summary-demo-locality-telemetry-and-trace",
+        "onboarding-docs-and-repo-orientation-aligned"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "multi-partition-safe-scaffold",
+      "statement": "Update src/cli/service-wasm-scaffold.js so summarizeAmounts projects id, account_id, and amount_cents, filters by optional accountId in summarizeRun, emits shard-disjoint count:<shardKey> and total:<shardKey> partials, and reduces them into {accountId, contributingShards, totalCents, transactions}."
+    },
+    {
+      "id": "scaffold-scripts-and-engine-floor",
+      "statement": "Add generate, build (generate + build), and deploy npm scripts and set engines.node to >=22.12.0 in the scaffolded package.json without breaking the single-stage refusal contracts of lagrange service build and deploy."
+    },
+    {
+      "id": "demo-locality-telemetry",
+      "statement": "Export buildLocalityExecutionSummary from examples/call-binding-account-summary/run-call-binding-account-summary.js, include locality in the demo report, and log the row-to-partial transfer reduction in the phase trace while keeping stdout strictly JSON."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Spawn an independent subagent verifier to audit the diff and test evidence before landing, and record its approval with --verifier subagent:<id> --verdict approve."
+    }
+  ],
+  "sealedAt": "98e69ba13db8f9a5bbf6bc919d6e9c941b07ac8e"
+}
