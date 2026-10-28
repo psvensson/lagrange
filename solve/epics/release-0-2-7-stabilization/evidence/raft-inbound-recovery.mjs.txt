@@ -1,0 +1,38 @@
+// Read-only release-audit native-boundary witness; no production network claim.
+// Run with cwd set to lagrange-review. Replays an actual leader heartbeat.
+import {pathToFileURL} from 'node:url';
+const root = pathToFileURL(`${process.cwd()}/`);
+const {PartitionNodeCluster} = await import(new URL('test/raft/raft-rs-backend/partition-node-cluster.js', root));
+const {VirtualTimeSource} = await import(new URL('src/time/time-source.js', root));
+const {setNativeInboundStageObserver} = await import(new URL('src/raft/raft-rs-runtime-owner.js', root));
+const ids = ['burst-a', 'burst-b', 'burst-c'];
+for (const burst of [10000]) {
+  const clocks = new Map(ids.map(id => [id, new VirtualTimeSource({startMs: 1000})]));
+  const cluster = new PartitionNodeCluster({partitionId: `release-audit-burst-${burst}`, replicaIds: ids,
+    substrateFor: id => ({timeSource: clocks.get(id)})});
+  let maximumQueued = 0;
+  try {
+    if (!cluster.settle(() => cluster.leaderReplicaId() === 'burst-a')) throw new Error('formation failed');
+    let heartbeat;
+    for (let i = 0; i < 20 && !heartbeat; i++) {
+      cluster.node('burst-a').tick();
+      heartbeat = cluster.replica('burst-b').inbox.find(x => x.message.msgType === 8);
+    }
+    if (!heartbeat) throw new Error('no native heartbeat');
+    for (const id of ids) cluster.replica(id).inbox.length = 0;
+    setNativeInboundStageObserver(event => {
+      if (event.replicaIdentity === 'burst-b') maximumQueued = Math.max(maximumQueued, event.queued);
+    });
+    let accepted = 0;
+    for (let i = 0; i < burst; i++) {
+      const answer = cluster.node('burst-b').step(heartbeat);
+      if (answer.reason === 'inbound-enqueued') accepted++;
+    }
+    const drained = await cluster.node('burst-b').tick();
+    const recovered = await cluster.node('burst-b').readStatus();
+    console.log(JSON.stringify({node: process.version, burst, accepted, maximumQueued, drained, recovered}, null, 2));
+  } finally {
+    setNativeInboundStageObserver(null);
+    await cluster.dispose();
+  }
+}

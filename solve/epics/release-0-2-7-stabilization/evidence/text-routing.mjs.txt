@@ -1,0 +1,41 @@
+// Exact released comparator + split-snapshot routing + ordinary resolver.
+// Transport is replaced by two isolated in-memory native SQLite databases.
+import Database from './lagrange-review/node_modules/better-sqlite3/lib/index.js';
+import {compareSplitKey, compareRoutingKeys} from './lagrange-review/src/partition/split-key-comparator.js';
+import {routeSplitSnapshotBatch} from './lagrange-review/src/partition/partition-split-routing.js';
+import {PartitionResolver} from './lagrange-review/src/query/partition-resolver.js';
+import {SQLParser} from './lagrange-review/src/query/sql-parser.js';
+
+const children = new Map(['left','right'].map(id=>{
+  const db = new Database(':memory:');
+  db.exec('CREATE TABLE t (id TEXT PRIMARY KEY)');
+  return [id,db];
+}));
+const routing = [];
+await routeSplitSnapshotBatch([{id:'Z'},{id:'a'}], ['id'],
+  {splitKey:'a', primaryKeyColumn:'id', targetPartitionIds:['left','right']},
+  {tableName:'t',queryExecutor:{async executeOnPartition(id,sql,params){
+    routing.push({partitionId:id,sql,params});
+    const result=children.get(id).prepare(sql).run(...params);
+    return {success:true,changes:result.changes};
+  }}});
+const resolver = new PartitionResolver();
+resolver.logger={debug(){},warn(){}};
+const partitions = [
+  {partition_id:'left',partition_key_start:null,partition_key_end:'a'},
+  {partition_id:'right',partition_key_start:'a',partition_key_end:null},
+];
+const query="SELECT * FROM t WHERE id = 'Z'";
+const ast = new SQLParser(query,{dialect:'postgresql'}).parse();
+const selected=resolver.resolvePartitions('t',ast.where,partitions);
+console.log(JSON.stringify({key:'Z',splitKey:'a',
+  splitComparison:compareSplitKey('Z','a'),
+  ordinaryComparison:compareRoutingKeys('Z','a'),
+  snapshotRoutes:routing,
+  leftRows:children.get('left').prepare('SELECT * FROM t').all(),
+  rightRows:children.get('right').prepare('SELECT * FROM t').all(),
+  ordinaryInsertChild:resolver.resolvePartitionForKey('t','Z',partitions),
+  selectedReadPartitions:selected,
+  readRows:selected.flatMap(id=>children.get(id).prepare(query).all()),
+}));
+for (const child of children.values()) child.close();

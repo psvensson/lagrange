@@ -1,0 +1,118 @@
+{
+  "schema": "lagrange-release-audit-inputs/1",
+  "kind": "verification-dossier-not-solver-acceptance",
+  "checkedDate": "2026-10-28",
+  "releasedSource": "a1e26f6de84433a3913c2ef855d1b787e926d7eb",
+  "reverifiedSource": "98e69ba13db8f9a5bbf6bc919d6e9c941b07ac8e",
+  "environment": {
+    "node": "v24.22.1",
+    "sqlite": "3.49.2",
+    "icu": "78.3",
+    "textCollator": "en-US"
+  },
+  "replayLayout": "Restore originalAuditRelativePath beneath an audit workspace containing the matching checkout as lagrange-review; run native/SQL witnesses with that checkout as cwd. These inert attachments are historical measurement inputs, not registered CI tests.",
+  "files": [
+    {
+      "path": "sql-mutations-and-constraints.mjs.txt",
+      "originalAuditRelativePath": "lagrange-sql-audit-witness.mjs",
+      "sha256": "4adda543030ee2868fac0b68944d3fd3a2fe3072ee02cce602d3faa8f3d3528f",
+      "bytes": 4812,
+      "purpose": "Original mutation/constraint witness; FK insert interpretation strengthened by the separate positive-control run."
+    },
+    {
+      "path": "text-routing.mjs.txt",
+      "originalAuditRelativePath": "lagrange-text-routing-witness.mjs",
+      "sha256": "6d74b4bb3a39cda8870a1466ddcc8cc9a421fa0105466d45126db873c0670340",
+      "bytes": 2135,
+      "purpose": "Native split placement followed by ordinary point routing."
+    },
+    {
+      "path": "sql-constraint-positive-controls.mjs.txt",
+      "originalAuditRelativePath": "verification-027/sql/constraint-positive-controls.mjs",
+      "sha256": "7ad060f820bb879bd5855461261bc2ce8907853fa6a4ba96498f414779ac2d7a",
+      "bytes": 5509,
+      "purpose": "Foreign keys enabled and rejecting declared-FK control; composite PK case added."
+    },
+    {
+      "path": "raft-journal-growth.mjs.txt",
+      "originalAuditRelativePath": "review-evidence/raft_journal_growth.mjs",
+      "sha256": "54859fd844b47da79a12dd9b6fcd4aef22a41e8670d3037abc48b27065eefcc2",
+      "bytes": 1397,
+      "purpose": "Actual production store discovered through passive record forwarding."
+    },
+    {
+      "path": "raft-inbound-burst.mjs.txt",
+      "originalAuditRelativePath": "review-evidence/raft_inbound_burst.mjs",
+      "sha256": "a0cac7f8912442a1f8c24ff10e1636fba9d221ee4b5dfb6d42f55c67331900ad",
+      "bytes": 1960,
+      "purpose": "Actual native leader heartbeat burst into follower operation port."
+    },
+    {
+      "path": "raft-inbound-recovery.mjs.txt",
+      "originalAuditRelativePath": "verification-027/raft/inbound-burst-recovery.mjs",
+      "sha256": "f256003342abad3bbee1ff81d944f4654aaa1a6a2ca4bca9ff147cbfc0a68f16",
+      "bytes": 2021,
+      "purpose": "Follow-up readStatus reconstructs follower after the native burst refusal."
+    },
+    {
+      "path": "http-auth-boundary.mjs.txt",
+      "originalAuditRelativePath": "release-artifacts-audit/http-auth-boundary-witness.mjs",
+      "sha256": "6b1aaa3feb53f87e8f77876ee56a6a04edbccc9c60a1f8c3a2c0d0f4b838f823",
+      "bytes": 2863,
+      "purpose": "Real BootstrapAPI/authenticator and storage mutation spy; fixture credential only."
+    }
+  ],
+  "publishedArtifacts": {
+    "lagrange": {
+      "sha256": "60c0099e84d23f97095732d7ac9811cdcd638e22028a77c8e9ffa7fc4806e43c",
+      "version": "0.2.6",
+      "dryRun": "MODULE_NOT_FOUND: better-sqlite3"
+    },
+    "lagrange-cli": {
+      "sha256": "0a09b0969ad3f4cf97c1359b6d889e3603bb9f084bb6d12dadfc0ac2fddcc6a9"
+    },
+    "lagrange-server-0.2.6.tgz": {
+      "sha256": "742393020d9229215b1381a0f426ca7c45a19da04df7cd6202a63c73dbddfa74",
+      "tarEntries": 1992,
+      "witEntries": 0
+    },
+    "lagrange-node-0.2.6.tgz": {
+      "sha256": "f78e8956aaf3941bf8e1e0915574b90778318edd9f89b1d3c82bcb7bf8b2421c"
+    },
+    "docker": {
+      "digest": "sha256:6fe9153645f28a63b26c6777a9f97b1b4e0d383d1861859fa375029cef63c37a",
+      "platform": "linux/amd64",
+      "user": "0",
+      "runtimeStartupMeasured": false
+    }
+  },
+  "releaseProof": {
+    "proofId": "release-full-v1",
+    "outcome": "proven",
+    "resolution": "exact-sha",
+    "objectSha": "b747fe1fdbbc24f7c3b463a48adf45cc6249db44",
+    "producer": {},
+    "completedAt": "2026-10-28T13:26:44.306Z",
+    "identityDigest": "f9ced098c307c6e5a1fc5cdee3d9a062bfb885da547e9c15843bb6b665e35a95"
+  },
+  "followupExistingSuites": [
+    {
+      "path": "test/query/unknown-outcome-same-entry.test.js",
+      "passedAssertions": 11,
+      "exitCode": 0
+    },
+    {
+      "path": "test/raft/snapshot-cadence.test.js",
+      "passedAssertions": 19,
+      "exitCode": 0
+    }
+  ],
+  "nonClaims": [
+    "No 0.2.7 implementation or certification",
+    "No full-corpus rerun in this follow-up",
+    "No live-cluster security attack",
+    "No observed OOM or disk-exhaustion incident",
+    "No Docker/Kubernetes deployment run",
+    "No source changes in re-verification witnesses"
+  ]
+}

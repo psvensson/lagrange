@@ -24,6 +24,11 @@ split/merge thresholds.
 
 ## Now - 0.2 Stable Core: make the existing public path credible
 
+The immediate corrective milestone is 0.2.7 stabilization: repair verified SQL
+and routing semantics, protect internal ingress, bound runtime retention,
+make the published artifacts usable, and prove the resulting operating envelope.
+The broader capabilities below retain their existing scope and evidence gates.
+
 The service compiler and public HTTP-to-distributed-call path exist. The next
 work is to make their useful envelope larger and their evidence easier to trust:
 
