@@ -5,8 +5,10 @@ import {trackStuckTransactionHeal} from '../diagnostics/raft-churn-sync-sections
 import {sweepParticipantTransactionHolds} from
   './partition-participant-transaction-session.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {createPartitionSnapshotCadence} from
-  './partition-snapshot-cadence.js';
+import {
+  createPartitionSnapshotCadence,
+  evaluatePartitionSnapshotCadence,
+} from './partition-snapshot-cadence.js';
 
 const {
   PARTITION_SERVICE_LITERAL,
@@ -14,6 +16,28 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS = Object.freeze({
+  /**
+   * Record a committed write and trigger snapshot cadence evaluation.
+   * @param {number} [count=1] - Number of committed writes.
+   * @return {Object} Cadence outcome.
+   */
+  recordCommittedWriteForSnapshotCadence(count = 1) {
+    if (typeof this.committedWritesSinceSnapshot === 'number') {
+      this.committedWritesSinceSnapshot += count;
+    } else {
+      this.committedWritesSinceSnapshot = count;
+    }
+    const outcome = evaluatePartitionSnapshotCadence(this);
+    this.lastSnapshotCadenceOutcome = outcome;
+    if (outcome?.status === 'failed') {
+      this.logger?.warn?.('partition snapshot cadence failed', {
+        partitionId: this.partitionId,
+        outcome,
+      });
+    }
+    return outcome;
+  },
+
   /**
    * One checkpoint-cadence tick, driven by the 1s prepared-state-hold sweep.
    * The cadence owner holds the leader-only role gate and in-flight flag. It

@@ -562,3 +562,49 @@ async () => withProject(async (project) => {
       .includes('account_activity'),
     'the distributed statement survives the project rewrite');
 }));
+
+test('build fails with MISSING_SOURCE when lagrange.service.js is missing', async () => {
+  const {runBuild, SERVICE_PIPELINE_COMMAND_ERROR_CODE} = await import('../../src/cli/service-pipeline-command.js');
+  const emptyDir = await mkdtemp(path.join(tmpdir(), 'lagrange-empty-'));
+  try {
+    await assert.rejects(
+      () => runBuild({projectDirectory: emptyDir}),
+      (err) => err.code === SERVICE_PIPELINE_COMMAND_ERROR_CODE.MISSING_SOURCE &&
+               err.message.includes('lagrange.service.js was not found'),
+    );
+  } finally {
+    await rm(emptyDir, {force: true, recursive: true});
+  }
+});
+
+test('buildServiceComponent classifies errors accurately', async () => {
+  const {
+    buildServiceComponent,
+    SERVICE_COMPONENT_BUILD_ERROR_CODE,
+  } = await import('../../src/service/service-component-build.js');
+
+  await assert.rejects(
+    () => buildServiceComponent({entryPath: '/nonexistent/path/entry.js'}),
+    (err) => err.code === SERVICE_COMPONENT_BUILD_ERROR_CODE.MISSING_GENERATED_ARTIFACTS,
+  );
+
+  await assert.rejects(
+    () => buildServiceComponent({
+      entryPath: new URL('../../src/index.js', import.meta.url).pathname,
+      witPath: '/nonexistent/wit/world.wit',
+    }),
+    (err) => err.code === SERVICE_COMPONENT_BUILD_ERROR_CODE.MISSING_WIT_WORLD,
+  );
+
+  await assert.rejects(
+    () => buildServiceComponent({
+      entryPath: new URL('../../src/index.js', import.meta.url).pathname,
+      componentizeImpl: {
+        async componentize() {
+          throw new Error('fake syntax error in component');
+        },
+      },
+    }),
+    (err) => err.code === SERVICE_COMPONENT_BUILD_ERROR_CODE.COMPONENTIZE_FAILED,
+  );
+});

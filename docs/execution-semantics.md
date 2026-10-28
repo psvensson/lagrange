@@ -209,11 +209,22 @@ it twice. The PostgreSQL wire and embedded application database surfaces do
 not yet accept a caller idempotency key, so a client of those surfaces must
 read the affected rows back to learn the outcome before it writes again.
 
+SQL `INSERT` and `UPDATE` statements evaluate supported expressions, safely
+escape string literals, and preserve dollar-quoted strings; unsupported AST
+nodes fail closed with a typed refusal before mutation. `CREATE TABLE` enforces
+`PRIMARY KEY` (including composite keys), `UNIQUE`, and `CHECK` constraints per
+partition, while `FOREIGN KEY` and `REFERENCES` declarations across distributed
+partitions are explicitly refused before creation.
+
 ## Movement
 
 Partition split, replica movement, Binding replacement, and Cell replacement
 can race with planning. The runtime checks immutable digests, partition epochs,
 leader ownership, route identity, and reduce-lease ownership at several points.
+Partition range placement and split boundary evaluation use unified UTF-8
+byte-order (`BINARY`) key comparison across split keys and routing keys,
+preventing split/routing placement divergence, while mixed-type key spaces
+fail closed.
 
 A stale target detected before guest execution is refused with a typed failure
 and may be re-resolved within the retry budget. An uncertain outcome after

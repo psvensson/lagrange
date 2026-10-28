@@ -398,7 +398,123 @@ function createPartitionSnapshotCadence(options) {
   });
 }
 
+const DEFAULT_SERVICE_SNAPSHOT_THRESHOLD = 10000;
+const WAL_CHECKPOINT_TRUNCATE_PRAGMA = 'wal_checkpoint(TRUNCATE)';
+const CADENCE_STATUS_COMPACTED = 'compacted';
+const CADENCE_STATUS_SKIPPED = 'skipped';
+const CADENCE_STATUS_FAILED = 'failed';
+const CADENCE_REASON_CANNOT_COMPACT = 'cannot_compact';
+const CADENCE_REASON_BELOW_THRESHOLD = 'below_threshold';
+
+function hasDurableCompactionSupport(service) {
+  return Boolean(
+    service?.durableCheckpointingEnabled === true ||
+    service?.durableCheckpointing === true ||
+    service?.db,
+  );
+}
+
+function resolveCompactionTargetFn(service) {
+  if (!service) return null;
+  if (service.raftBackend === null) {
+    return typeof service.raft?.compactLog === 'function' ?
+      (idx) => service.raft.compactLog(idx) :
+      null;
+  }
+  if (typeof service.compactDurableRaftLog === 'function') {
+    return (idx) => service.compactDurableRaftLog(idx);
+  }
+  if (typeof service.raftBackend?.compactLog === 'function') {
+    return (idx) => service.raftBackend.compactLog(idx);
+  }
+  if (typeof service.raft?.compactLog === 'function' &&
+      hasDurableCompactionSupport(service)) {
+    return (idx) => service.raft.compactLog(idx);
+  }
+  return null;
+}
+
+/**
+ * Whether a partition service can compact its Raft log.
+ * @param {Object} service - The PartitionService instance.
+ * @return {boolean} Whether log compaction is supported.
+ */
+function canCompactPartitionRaftLog(service) {
+  return resolveCompactionTargetFn(service) !== null;
+}
+
+function resolveServiceSnapshotThreshold(service) {
+  return Number.isSafeInteger(service?.snapshotThreshold) &&
+    service.snapshotThreshold > 0 ?
+    service.snapshotThreshold :
+    DEFAULT_SERVICE_SNAPSHOT_THRESHOLD;
+}
+
+function resolveServiceCommitIndex(service) {
+  const candidates = [
+    service?.lastCommittedIndex,
+    service?.lastIncludedIndex,
+    service?.commitIndex,
+    service?.raft?.commitIndex,
+    service?.raft?.lastApplied,
+    service?.lastCheckpointedCommitIndex,
+  ];
+  for (const candidate of candidates) {
+    if (candidate !== undefined && candidate !== null) {
+      return candidate;
+    }
+  }
+  return 0;
+}
+
+function runServiceLogCompaction(service, compactFn, commitIndex) {
+  if (service.raftBackend !== null && typeof service.db?.pragma === 'function') {
+    service.db.pragma(WAL_CHECKPOINT_TRUNCATE_PRAGMA);
+  }
+  const compactionResult = compactFn(commitIndex);
+  service.lastCheckpointedCommitIndex = commitIndex;
+  service.committedWritesSinceSnapshot = 0;
+  return {
+    status: CADENCE_STATUS_COMPACTED,
+    commitIndex,
+    compactionResult,
+  };
+}
+
+/**
+ * Evaluate snapshot cadence and compact the Raft log if eligible.
+ * @param {Object} service - The PartitionService instance.
+ * @return {Object} Evaluated cadence outcome.
+ */
+function evaluatePartitionSnapshotCadence(service) {
+  const compactFn = resolveCompactionTargetFn(service);
+  const threshold = resolveServiceSnapshotThreshold(service);
+  const writes = service?.committedWritesSinceSnapshot;
+  if (!compactFn) {
+    return {status: CADENCE_STATUS_SKIPPED, reason: CADENCE_REASON_CANNOT_COMPACT};
+  } else if (typeof writes === 'number' && writes < threshold) {
+    return {
+      status: CADENCE_STATUS_SKIPPED,
+      reason: CADENCE_REASON_BELOW_THRESHOLD,
+      committedWritesSinceSnapshot: writes,
+      threshold,
+    };
+  }
+  const commitIndex = resolveServiceCommitIndex(service);
+  try {
+    return runServiceLogCompaction(service, compactFn, commitIndex);
+  } catch (error) {
+    return {
+      status: CADENCE_STATUS_FAILED,
+      error: error?.message || String(error),
+      commitIndex,
+    };
+  }
+}
+
 export {
   RAFT_SNAPSHOT_CADENCE_OUTCOME,
+  canCompactPartitionRaftLog,
   createPartitionSnapshotCadence,
+  evaluatePartitionSnapshotCadence,
 };

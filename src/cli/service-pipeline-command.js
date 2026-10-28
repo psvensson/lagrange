@@ -24,7 +24,8 @@
  * external-service-manifest validator before writing it back.
  */
 
-import {readFile, writeFile} from 'node:fs/promises';
+import fs from 'node:fs';
+import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
 import {RUNTIME_KIND} from '../constants/runtime.js';
@@ -43,7 +44,8 @@ import {
   writeDeploymentTree,
 } from '../service/service-deployment-record-generator.js';
 import {
-  componentizeService,
+  SERVICE_COMPONENT_BUILD_ERROR_CODE,
+  ServiceComponentBuildError,
 } from '../service/service-component-build.js';
 import {
   normalizeServiceSource,
@@ -58,6 +60,26 @@ const SERVICE_PIPELINE_STAGE = Object.freeze({
   NORMALIZE: 'normalize',
   RECORDS: 'records',
 });
+
+const SERVICE_PIPELINE_COMMAND_ERROR_CODE = Object.freeze({
+  BUILD_FAILED: 'BUILD_FAILED',
+  MISSING_GENERATED_ARTIFACTS: 'BUILD_FAILED',
+  MISSING_SOURCE: 'MISSING_SOURCE',
+  MISSING_COMPONENTIZE: 'MISSING_COMPONENTIZE',
+});
+
+const SERVICE_PIPELINE_COMMAND_ERROR_NAME = 'ServicePipelineCommandError';
+const ERR_MODULE_NOT_FOUND_CODE = 'ERR_MODULE_NOT_FOUND';
+const DIST_DIRECTORY_NAME = 'dist';
+
+class ServicePipelineCommandError extends Error {
+  constructor(code, message, options = {}) {
+    super(message, options);
+    this.name = SERVICE_PIPELINE_COMMAND_ERROR_NAME;
+    this.code = code;
+    this.stage = options.stage || SERVICE_PIPELINE_STAGE.BUILD;
+  }
+}
 const SERVICE_MODULE_FILE = 'lagrange.service.js';
 const GENERATED_ENTRY_FILE = 'generated-entry.js';
 const GENERATED_TYPINGS_FILE = 'runtime-types.d.ts';
@@ -242,27 +264,94 @@ async function stampArtifactDescriptor(projectDirectory, descriptor) {
   return manifest;
 }
 
-async function runBuild({
-  createLocalOciLayoutBuilder,
-  platform = DEFAULT_PLATFORM,
-  projectDirectory,
-  sourceDateEpoch = DEFAULT_SOURCE_DATE_EPOCH,
-  writeOutput,
-}) {
-  const entryPath = path.join(projectDirectory, GENERATED_ENTRY_FILE);
-  const componentPath = path.join(
-    projectDirectory, LAGRANGE_DIRECTORY, COMPONENT_FILE);
-  let component;
+async function loadComponentBuilder(componentizeServiceOverride) {
+  if (componentizeServiceOverride) {
+    return componentizeServiceOverride;
+  }
   try {
-    ({component} = await componentizeService({sourcePath: entryPath}));
+    const mod = await import('../service/service-component-build.js');
+    return mod.buildServiceComponent || mod.componentizeService;
   } catch (error) {
+    if (error?.code === ERR_MODULE_NOT_FOUND_CODE ||
+        error?.code === SERVICE_COMPONENT_BUILD_ERROR_CODE.MISSING_COMPILER) {
+      throw new ServicePipelineCommandError(
+        SERVICE_PIPELINE_COMMAND_ERROR_CODE.MISSING_COMPONENTIZE,
+        `MISSING_COMPONENTIZE: ${error.message || error}`,
+        {cause: error},
+      );
+    }
+    throw error;
+  }
+}
+
+function resolveVerifiedBuildEntryPath(projectDirectory) {
+  const defaultEntryPath = path.join(projectDirectory, GENERATED_ENTRY_FILE);
+  if (fs.existsSync(defaultEntryPath)) {
+    return defaultEntryPath;
+  }
+  const altEntryPath = path.join(projectDirectory, 'generated', 'component-entry.js');
+  if (fs.existsSync(altEntryPath)) {
+    return altEntryPath;
+  }
+  const sourcePath = path.join(projectDirectory, SERVICE_MODULE_FILE);
+  if (!fs.existsSync(sourcePath)) {
+    throw new ServicePipelineCommandError(
+      SERVICE_PIPELINE_COMMAND_ERROR_CODE.MISSING_SOURCE,
+      `${SERVICE_MODULE_FILE} was not found in ${projectDirectory}`,
+    );
+  }
+  throw new ServicePipelineCommandError(
+    SERVICE_PIPELINE_COMMAND_ERROR_CODE.BUILD_FAILED,
+    `generated/component-entry.js was not found in ${projectDirectory}; run lagrange service generate before lagrange service build`,
+  );
+}
+
+async function invokeComponentBuilder(builder, entryPath) {
+  try {
+    const buildResult = await builder({entryPath, sourcePath: entryPath});
+    return buildResult.component;
+  } catch (error) {
+    if (error instanceof ServiceComponentBuildError) {
+      if (error.code === SERVICE_COMPONENT_BUILD_ERROR_CODE.MISSING_COMPILER ||
+          error.code === ERR_MODULE_NOT_FOUND_CODE) {
+        throw new ServicePipelineCommandError(
+          SERVICE_PIPELINE_COMMAND_ERROR_CODE.MISSING_COMPONENTIZE,
+          `MISSING_COMPONENTIZE: ${error.message}`,
+          {cause: error},
+        );
+      }
+      throw error;
+    }
     throw pipelineFailure(
       SERVICE_PIPELINE_STAGE.COMPONENTIZE,
       SERVICE_PIPELINE_MESSAGE.COMPONENTIZE_FAILED + error.message,
       error,
     );
   }
+}
+
+async function runBuild({
+  buildComponent = null,
+  componentizeService: componentizeOverride = null,
+  createLocalOciLayoutBuilder,
+  platform = DEFAULT_PLATFORM,
+  projectDirectory,
+  sourceDateEpoch = DEFAULT_SOURCE_DATE_EPOCH,
+  writeOutput,
+} = {}) {
+  const entryPath = resolveVerifiedBuildEntryPath(projectDirectory);
+  const componentPath = path.join(
+    projectDirectory, LAGRANGE_DIRECTORY, COMPONENT_FILE);
+  const distComponentPath = path.join(
+    projectDirectory, DIST_DIRECTORY_NAME, COMPONENT_FILE);
+
+  const builder = buildComponent || await loadComponentBuilder(componentizeOverride);
+  const component = await invokeComponentBuilder(builder, entryPath);
+  await mkdir(path.join(projectDirectory, LAGRANGE_DIRECTORY), {recursive: true});
   await writeFile(componentPath, component);
+  await mkdir(path.join(projectDirectory, DIST_DIRECTORY_NAME), {recursive: true});
+  await writeFile(distComponentPath, component);
+
   const receipt = await createLocalOciLayoutBuilder().build({
     outputRoot: path.join(projectDirectory, LAGRANGE_DIRECTORY),
     platform,
@@ -279,13 +368,17 @@ async function runBuild({
     digest: descriptor.digest,
     sizeBytes: descriptor.sizeBytes,
   });
-  await writeOutput(JSON.stringify({
-    component: componentPath,
-    digest: descriptor.digest,
-    sizeBytes: descriptor.sizeBytes,
-  }));
+  if (typeof writeOutput === 'function') {
+    await writeOutput(JSON.stringify({
+      component: componentPath,
+      digest: descriptor.digest,
+      sizeBytes: descriptor.sizeBytes,
+    }));
+  }
   return {componentPath, descriptor, layoutPath: receipt.layoutPath};
 }
+
+const runServiceBuildCommand = runBuild;
 
 // Substitute the real INSTALL-returned package id into a generated
 // binding's placeholder target, keeping the rest of the record verbatim
@@ -411,8 +504,12 @@ async function configureAccessPolicies(
 }
 
 export {
+  SERVICE_PIPELINE_COMMAND_ERROR_CODE,
+  ServicePipelineCommandError,
   ServicePipelineError,
+  loadComponentBuilder,
   runBuild,
   runDeploy,
   runGenerate,
+  runServiceBuildCommand,
 };

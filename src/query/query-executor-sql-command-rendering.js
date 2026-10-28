@@ -11,7 +11,6 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 
 const {
-  PG_EXPR_TYPE,
   QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
@@ -196,6 +195,53 @@ const queryExecutorSqlCommandMethods = {
     return sql;
   },
 
+  buildLiteralExpressionSQL(expr) {
+    if (expr.value === null) {
+      return QUERY_EXECUTOR_LITERAL.STRING_NULL;
+    }
+    if (typeof expr.value === QUERY_EXECUTOR_LITERAL.STRING_STRING) {
+      return `'${expr.value.replace(/'/g, '\'\'')}'`;
+    }
+    return String(expr.value);
+  },
+
+  buildBinaryExpressionSQL(expr) {
+    const left = this.buildExpressionSQL(expr.left);
+    if (
+      expr.operator === QUERY_EXECUTOR_LITERAL.STRING_IS_NULL ||
+      expr.operator === QUERY_EXECUTOR_LITERAL.STRING_IS_NOT_NULL
+    ) {
+      return `(${left} ${expr.operator})`;
+    }
+    return `(${left} ${expr.operator} ${this.buildExpressionSQL(expr.right)})`;
+  },
+
+  buildExtendedExpressionSQL(expr, normalizedType) {
+    switch (normalizedType) {
+    case 'cast': {
+      const targetType = expr.affinity || expr.targetType || expr.target || 'TEXT';
+      const innerExpr = expr.expression || expr.expr;
+      return `CAST(${this.buildExpressionSQL(innerExpr)} AS ${targetType})`;
+    }
+    case 'case':
+      return this.buildCaseSQL(expr);
+    case 'subquery':
+      return `(${this.buildSelectSQL(expr.query)})`;
+    case 'exists':
+      return `EXISTS (${this.buildSelectSQL(expr.query)})`;
+    case 'function_call':
+    case 'function': {
+      const fnArgs = (expr.args || []).map((arg) => this.buildExpressionSQL(arg));
+      return `${expr.name}(${fnArgs.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14)})`;
+    }
+    default: {
+      const error = new Error(`Unsupported expression type: ${expr.type}`);
+      error.code = 'UNSUPPORTED_SQL_FEATURE';
+      throw error;
+    }
+    }
+  },
+
   /**
    * Build SQL for an expression.
    * @param {Object} expr - Expression AST.
@@ -206,46 +252,28 @@ const queryExecutorSqlCommandMethods = {
     if (!expr) {
       return QUERY_EXECUTOR_LITERAL.STRING_VALUE;
     }
-    switch (expr.type) {
+    const normalizedType = String(expr.type || '').toLowerCase();
+    switch (normalizedType) {
     case QUERY_EXECUTOR_LITERAL.STRING_STAR:
       return QUERY_EXECUTOR_LITERAL.STRING_VALUE_3;
     case QUERY_EXECUTOR_LITERAL.STRING_LITERAL:
-      if (expr.value === null) {
-        return QUERY_EXECUTOR_LITERAL.STRING_NULL;
-      }
-      if (typeof expr.value === QUERY_EXECUTOR_LITERAL.STRING_STRING) {
-        return `'${expr.value}'`;
-      }
-      return String(expr.value);
+      return this.buildLiteralExpressionSQL(expr);
     case QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF:
-      if (expr.table) {
-        return `${expr.table}.${expr.column}`;
-      }
-      return expr.column;
+      return expr.table ? `${expr.table}.${expr.column}` : expr.column;
     case QUERY_EXECUTOR_LITERAL.STRING_BINARY:
-      if (
-        expr.operator === QUERY_EXECUTOR_LITERAL.STRING_IS_NULL ||
-          expr.operator === QUERY_EXECUTOR_LITERAL.STRING_IS_NOT_NULL
-      ) {
-        return `(${this.buildExpressionSQL(expr.left)} ${expr.operator})`;
-      }
-      return (
-        `(${this.buildExpressionSQL(expr.left)} ` +
-          `${expr.operator} ${this.buildExpressionSQL(expr.right)})`
-      );
+    case 'binary_expr':
+      return this.buildBinaryExpressionSQL(expr);
     case QUERY_EXECUTOR_LITERAL.STRING_UNARY:
-      return `${expr.operator} ${this.buildExpressionSQL(expr.operand)}`;
+    case 'unary_expr':
+      return `${expr.operator} ${this.buildExpressionSQL(expr.operand || expr.expr)}`;
     case QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE:
-    {
-      const aggArg = this.buildExpressionSQL(expr.argument);
+    case 'aggr_func': {
+      const aggArg = this.buildExpressionSQL(expr.argument || expr.args?.expr);
       const aggDistinct = expr.distinct ? 'DISTINCT ' : '';
-      return `${expr.function}(${aggDistinct}${aggArg})`;
+      return `${expr.function || expr.name}(${aggDistinct}${aggArg})`;
     }
-    case QUERY_EXECUTOR_LITERAL.STRING_IN:
-    {
-      const inVals = expr.values.map((value) =>
-        this.buildExpressionSQL(value),
-      );
+    case QUERY_EXECUTOR_LITERAL.STRING_IN: {
+      const inVals = expr.values.map((v) => this.buildExpressionSQL(v));
       const operator = expr.negated ? 'NOT IN' : 'IN';
       return (
         `${this.buildExpressionSQL(expr.expression)} ${operator} (` +
@@ -255,34 +283,21 @@ const queryExecutorSqlCommandMethods = {
     case QUERY_EXECUTOR_LITERAL.STRING_BETWEEN:
       return (
         `${this.buildExpressionSQL(expr.expression)} BETWEEN ` +
-          `${this.buildExpressionSQL(expr.low)} AND ` +
-          `${this.buildExpressionSQL(expr.high)}`
+        `${this.buildExpressionSQL(expr.low)} AND ` +
+        `${this.buildExpressionSQL(expr.high)}`
       );
     case QUERY_EXECUTOR_LITERAL.STRING_LIKE:
       return (
         `${this.buildExpressionSQL(expr.expression)} ` +
-          `${expr.negated ?
-            QUERY_EXECUTOR_LITERAL.STRING_NOT_LIKE :
-            QUERY_EXECUTOR_LITERAL.STRING_LIKE_2} ` +
-          `${this.buildExpressionSQL(expr.pattern)}`
+        `${expr.negated ?
+          QUERY_EXECUTOR_LITERAL.STRING_NOT_LIKE :
+          QUERY_EXECUTOR_LITERAL.STRING_LIKE_2} ` +
+        `${this.buildExpressionSQL(expr.pattern)}`
       );
     case QUERY_EXECUTOR_LITERAL.STRING_PARAMETER:
       return QUERY_EXECUTOR_LITERAL.STRING_VALUE_4;
-    case PG_EXPR_TYPE.CAST:
-      return `CAST(${this.buildExpressionSQL(expr.expression)} AS ${expr.affinity})`;
-    case PG_EXPR_TYPE.CASE:
-      return this.buildCaseSQL(expr);
-    case PG_EXPR_TYPE.SUBQUERY:
-      return `(${this.buildSelectSQL(expr.query)})`;
-    case PG_EXPR_TYPE.EXISTS:
-      return `EXISTS (${this.buildSelectSQL(expr.query)})`;
-    case PG_EXPR_TYPE.FUNCTION_CALL:
-    {
-      const fnArgs = expr.args.map((arg) => this.buildExpressionSQL(arg));
-      return `${expr.name}(${fnArgs.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14)})`;
-    }
     default:
-      return QUERY_EXECUTOR_LITERAL.STRING_VALUE;
+      return this.buildExtendedExpressionSQL(expr, normalizedType);
     }
   },
 
@@ -316,6 +331,14 @@ const queryExecutorSqlCommandMethods = {
     return sql;
   },
 
+  extractLiteralValue(expr) {
+    if (!expr) return null;
+    if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_LITERAL) {
+      return expr.value;
+    }
+    return expr.value !== undefined ? expr.value : null;
+  },
+
   /**
    * Execute an INSERT statement.
    * Routes ALL queries through message router - no local vs remote distinction.
@@ -325,7 +348,8 @@ const queryExecutorSqlCommandMethods = {
    * @return {Promise<Object>} Insert result.
    */
   async executeInsert(ast, partitionId, params = [], executionOptions = {}) {
-    const sql = this.buildInsertSQL(ast);
+    const targetParams = [...params];
+    const sql = this.buildInsertSQL(ast, targetParams);
     this.logger.debug(QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_INSERT, {
       table: ast.table,
       partitionId,
@@ -336,7 +360,7 @@ const queryExecutorSqlCommandMethods = {
     const result = await this.executeOnPartition(
       partitionId,
       sql,
-      params,
+      targetParams,
       false,
       false,
       false,
@@ -452,7 +476,8 @@ const queryExecutorSqlCommandMethods = {
    * @return {string} SQL string.
    * @private
    */
-  buildInsertSQL(ast) {
+  buildInsertSQL(ast, params) {
+    const bindLiterals = Array.isArray(params) && params.length === 0;
     let sql;
     if (ast.orReplace) {
       sql = `${SQL.INSERT_OR_REPLACE_INTO} `;
@@ -467,7 +492,13 @@ const queryExecutorSqlCommandMethods = {
     }
     sql += ` ${SQL.VALUES} `;
     const rows = ast.values.map((row) => {
-      const vals = row.map((value) => this.buildExpressionSQL(value));
+      const vals = row.map((value) => {
+        if (bindLiterals && value?.type === QUERY_EXECUTOR_LITERAL.STRING_LITERAL) {
+          params.push(this.extractLiteralValue(value));
+          return '?';
+        }
+        return this.buildExpressionSQL(value);
+      });
       return `(${vals.join(', ')})`;
     });
     sql += rows.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14);
@@ -482,11 +513,12 @@ const queryExecutorSqlCommandMethods = {
    * @return {Promise<Object>} Update result.
    */
   async executeUpdate(ast, partitionIds, params = [], executionOptions = {}) {
-    const sql = this.buildUpdateSQL(ast);
+    const targetParams = [...params];
+    const sql = this.buildUpdateSQL(ast, targetParams);
     return this.executeDistributedMutation(
       ast,
       partitionIds,
-      params,
+      targetParams,
       executionOptions,
       sql,
       QUERY_AST_TYPE.UPDATE,
@@ -546,12 +578,18 @@ const queryExecutorSqlCommandMethods = {
    * @return {string} SQL string.
    * @private
    */
-  buildUpdateSQL(ast) {
+  buildUpdateSQL(ast, params) {
+    const bindLiterals = Array.isArray(params) && params.length === 0;
     let sql = `UPDATE ${renderSqliteIdentifier(ast.table)} SET `;
-    const sets = ast.assignments.map(
-      (assignment) =>
-        `${assignment.column} = ${this.buildExpressionSQL(assignment.value)}`,
-    );
+    const assignments = ast.assignments || ast.set || [];
+    const sets = assignments.map((assignment) => {
+      const val = assignment.value;
+      if (bindLiterals && val?.type === QUERY_EXECUTOR_LITERAL.STRING_LITERAL) {
+        params.push(this.extractLiteralValue(val));
+        return `${assignment.column} = ?`;
+      }
+      return `${assignment.column} = ${this.buildExpressionSQL(val)}`;
+    });
     sql += sets.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14);
     if (ast.where) {
       sql += ` WHERE ${this.buildExpressionSQL(ast.where)}`;

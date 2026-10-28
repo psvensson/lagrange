@@ -21,14 +21,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {fileURLToPath} from 'node:url';
+import {extractReleasedSections} from '../release-notes.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFindIndex = Function.call.bind(Array.prototype.findIndex);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
+const arraySlice = Function.call.bind(Array.prototype.slice);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const arraySort = Function.call.bind(Array.prototype.sort);
 const stringSlice = Function.call.bind(String.prototype.slice);
 const stringReplace = Function.call.bind(String.prototype.replace);
+const stringTrim = Function.call.bind(String.prototype.trim);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 
@@ -40,6 +45,12 @@ const LINE_SEPARATOR = '\n';
 const ARGV_OFFSET = 2;
 const JSON_FLAG = '--json';
 const METRIC_FLAG = '--metric';
+const DOCKERHUB_OVERVIEW_FILE_FLAG = '--dockerhub-overview-file';
+const CHANGELOG_FILE_NAME = 'CHANGELOG.md';
+const INLINE_CONTENT_LABEL = '(inline content)';
+const ERR_TARGET_VERSION_REQUIRED =
+  'targetVersion is required to verify Docker Hub overview';
+const DOCKERHUB_OVERVIEW_ARTIFACT = 'dockerhub-overview';
 // --reobserve-next: after the release owner's manual `npm dist-tag add`, read
 // npm's dist-tags again and record next as now observed in the newest
 // receipt (next, nextLagging, nextObservedAt), so the consolidation budget
@@ -119,16 +130,109 @@ function artifactPublished(receipt, name) {
 }
 
 /**
+ * Verify that a Docker Hub overview payload matches release requirements:
+ * non-empty, contains the target version heading, and does not leak newer
+ * changelog version headings.
+ * @param {object} options
+ * @return {{valid: boolean, version: string}}
+ */
+function readOverviewText(filePath, content) {
+  if (content !== undefined) return content;
+  return filePath ? fs.readFileSync(filePath, TEXT_ENCODING) : '';
+}
+
+function readChangelogText(changelogPath, changelogText) {
+  if (changelogText !== undefined) return changelogText;
+  return fs.existsSync(changelogPath) ?
+    fs.readFileSync(changelogPath, TEXT_ENCODING) :
+    '';
+}
+
+function assertNoNewerSectionsLeaked(text, rawChangelog, normalizedTarget) {
+  if (!rawChangelog) return;
+  const sections = extractReleasedSections(rawChangelog);
+  const targetIndex = arrayFindIndex(sections, (s) => s.version === normalizedTarget);
+  if (targetIndex <= 0) return;
+  for (const newer of arraySlice(sections, 0, targetIndex)) {
+    if (
+      stringIncludes(text, `### ${newer.version}`) ||
+      stringIncludes(text, `- **${newer.version}**`)
+    ) {
+      throw new Error(
+        `Docker Hub overview leaks newer version: ${newer.version} (target: ${normalizedTarget})`,
+      );
+    }
+  }
+}
+
+export function verifyDockerHubOverview({
+  filePath,
+  content,
+  targetVersion,
+  changelogPath = path.join(REPO_ROOT, CHANGELOG_FILE_NAME),
+  changelogText,
+}) {
+  const text = readOverviewText(filePath, content);
+  if (!text || stringTrim(text) === '') {
+    throw new Error(`Docker Hub overview file is empty: ${filePath || INLINE_CONTENT_LABEL}`);
+  }
+  const normalizedTarget = stringTrim(
+    stringReplace(String(targetVersion || ''), TAG_PREFIX, EMPTY),
+  );
+  if (!normalizedTarget) {
+    throw new Error(ERR_TARGET_VERSION_REQUIRED);
+  }
+  const targetHeading = `### ${normalizedTarget}`;
+  if (!stringIncludes(text, targetHeading)) {
+    throw new Error(`Docker Hub overview missing target version heading: ${targetHeading}`);
+  }
+  assertNoNewerSectionsLeaked(
+    text,
+    readChangelogText(changelogPath, changelogText),
+    normalizedTarget,
+  );
+  return {valid: true, version: normalizedTarget};
+}
+
+function evaluateDockerHubOverviewRow(root, receipt, options, dockerHubOverview) {
+  try {
+    const filePath = typeof dockerHubOverview === 'string' ?
+      path.resolve(root, dockerHubOverview) :
+      undefined;
+    const rawTag = receipt?.tag ? stringReplace(String(receipt.tag), TAG_PREFIX, EMPTY) : '';
+    const targetVersion = options.targetVersion || receipt?.version || rawTag;
+    verifyDockerHubOverview({
+      filePath,
+      content: options.dockerHubOverviewContent,
+      targetVersion,
+      changelogPath: path.join(root, CHANGELOG_FILE_NAME),
+    });
+    return {name: DOCKERHUB_OVERVIEW_ARTIFACT, published: true};
+  } catch (err) {
+    return {name: DOCKERHUB_OVERVIEW_ARTIFACT, published: false, error: err.message};
+  }
+}
+
+/**
  * One row per release artifact: whether the newest receipt shows it published.
  * @param {string} root
+ * @param {object} [options]
  * @return {{receipt: object|null, rows: Array<{name: string, published: boolean}>}}
  */
-export function receiptVerdicts(root = REPO_ROOT) {
+export function receiptVerdicts(root = REPO_ROOT, options = {}) {
   const receipt = newestReleaseReceipt(root);
+  const rows = arrayMap(RELEASE_ARTIFACTS,
+    (name) => ({name, published: artifactPublished(receipt, name)}));
+
+  const dockerHubOverview = options.dockerHubOverview ||
+    options.dockerHubOverviewFile;
+  if (dockerHubOverview) {
+    rows.push(evaluateDockerHubOverviewRow(root, receipt, options, dockerHubOverview));
+  }
+
   return {
     receipt,
-    rows: arrayMap(RELEASE_ARTIFACTS,
-      (name) => ({name, published: artifactPublished(receipt, name)})),
+    rows,
   };
 }
 
@@ -190,7 +294,14 @@ function main(argv) {
     process.stdout.write(`${JSON.stringify(observed, null, JSON_INDENT)}${LINE_SEPARATOR}`);
     return observed && observed.npm.nextLagging ? EXIT_UNPUBLISHED : EXIT_OK;
   }
-  const {receipt, rows} = receiptVerdicts();
+  let dockerHubOverviewFile = null;
+  const overviewIdx = arrayIndexOf(argv, DOCKERHUB_OVERVIEW_FILE_FLAG);
+  if (overviewIdx !== -1 && overviewIdx + 1 < argv.length) {
+    dockerHubOverviewFile = argv[overviewIdx + 1];
+  }
+  const {receipt, rows} = receiptVerdicts(REPO_ROOT, {
+    dockerHubOverview: dockerHubOverviewFile,
+  });
   const unpublished = arrayFilter(rows, (row) => !row.published).length;
   if (arrayIncludes(argv, JSON_FLAG)) {
     process.stdout.write(

@@ -47,6 +47,8 @@ import {
   CORE_CALL_WITHOUT_HANDLE,
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
+  DEFAULT_MAX_INBOUND_QUEUE_LENGTH,
+  DEFAULT_MAX_INBOUND_QUEUE_BYTES,
   DURABLE_PROGRESS_OBSERVATION,
   FOLLOWER_RAFT_STATE,
   HEALTHY,
@@ -1184,15 +1186,11 @@ function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
   }
 }
 
-function applyEntries(group, expectedGeneration, entries, index = 0) {
-  if (index >= entries.length) {
-    return outcome(CORE_OK, {reason: RUNTIME_REASON.ENTRIES_APPLIED});
-  }
-  const entry = entries[index];
+function applyOneEntry(group, expectedGeneration, entry) {
   const resolvedConfState = resolveEntryConfStateOrFailure(
     group, expectedGeneration, entry);
   if (!resolvedConfState.ok) {
-    return unresolvedCommittedEntry(group, resolvedConfState.result);
+    return {ok: false, result: unresolvedCommittedEntry(group, resolvedConfState.result)};
   }
   const admitted = admitsReplica(group.gate, resolvedConfState.decoded,
     group.peerId, BigInt(entry.index));
@@ -1208,7 +1206,7 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
     group, entry, resolvedConfState, nextMembershipGeneration, admitted,
   });
   if (!applyFailure.ok) {
-    return applyFailure.result;
+    return {ok: false, result: applyFailure.result};
   }
   group.membershipGenerationIndex = nextMembershipGeneration;
   if (resolvedConfState.decoded !== undefined) {
@@ -1217,7 +1215,23 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
   // The runtime's own applied index (the entry whose configuration the core
   // now holds, durable with it) and the participation gate it moves.
   recordAppliedEntry(group, BigInt(entry.index), admitted);
-  return applyEntries(group, expectedGeneration, entries, index + 1);
+  return {ok: true};
+}
+
+function applyEntries(group, expectedGeneration, entries, startIndex = 0) {
+  for (let index = startIndex; index < entries.length; index += 1) {
+    const applied = applyOneEntry(group, expectedGeneration, entries[index]);
+    if (applied && typeof applied.then === 'function') {
+      return applied.then((res) => {
+        if (!res.ok) return res.result;
+        return applyEntries(group, expectedGeneration, entries, index + 1);
+      });
+    }
+    if (!applied.ok) {
+      return applied.result;
+    }
+  }
+  return outcome(CORE_OK, {reason: RUNTIME_REASON.ENTRIES_APPLIED});
 }
 
 function persistMemCommitIndex(group, expectedGeneration, ready, lightValue) {
@@ -1286,31 +1300,14 @@ function finishReady(group, expectedGeneration, ready) {
   return continuation;
 }
 
-function drainReady(group, expectedGeneration, cycles = 0) {
-  if (cycles >= RAFT_RS_READY_DRAIN_MAX_CYCLES) {
-    reportWaitBoundExceeded(group,
-      RUNTIME_FAULT_REPORT.READY_DRAIN_BOUND_EXCEEDED,
-      {cycles, maxCycles: RAFT_RS_READY_DRAIN_MAX_CYCLES});
-    return hostFailure(
-      RUNTIME_PHASE.READY_DRAIN,
-      new Error(RUNTIME_REASON.READY_DRAIN_BOUND_EXCEEDED),
-    );
-  }
-  const hasReady = invokeCoreAt(group, expectedGeneration, 'has_ready');
-  if (!hasReady.ok) {
-    return hasReady.result;
-  }
-  if (!hasReady.value) {
-    announce(group, expectedGeneration);
-    return outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED});
-  }
+function processReadyCycle(group, expectedGeneration) {
   // Before take_ready: a refused Ready stays whole in the core.
   if (!persistenceAdmitted(group)) {
-    return outcome(CORE_OK, {reason: RUNTIME_REASON.READY_DEFERRED});
+    return {done: true, result: outcome(CORE_OK, {reason: RUNTIME_REASON.READY_DEFERRED})};
   }
   const taken = invokeCoreAt(group, expectedGeneration, 'take_ready');
   if (!taken.ok) {
-    return taken.result;
+    return {done: true, result: taken.result};
   }
   try {
     // Native SnapshotMetadata does not carry the sender's configuration-only
@@ -1330,11 +1327,51 @@ function drainReady(group, expectedGeneration, cycles = 0) {
     group.persistedLastIndex = persistedLastIndexAfter(
       group.persistedLastIndex, taken.value);
   } catch (error) {
-    return groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE, error);
+    return {done: true, result: groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE, error)};
   }
   const finished = finishReady(group, expectedGeneration, taken.value);
-  return thenMaybe(finished, (result) => result.outcome === CORE_OK ?
-    drainReady(group, expectedGeneration, cycles + 1) : result);
+  return {done: false, finished};
+}
+
+function drainReady(group, expectedGeneration, startCycles = 0) {
+  for (
+    let cycles = startCycles;
+    cycles < RAFT_RS_READY_DRAIN_MAX_CYCLES;
+    cycles += 1
+  ) {
+    const hasReady = invokeCoreAt(group, expectedGeneration, 'has_ready');
+    if (!hasReady.ok) {
+      return hasReady.result;
+    }
+    if (!hasReady.value) {
+      announce(group, expectedGeneration);
+      return outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED});
+    }
+
+    const cycle = processReadyCycle(group, expectedGeneration);
+    if (cycle.done) {
+      return cycle.result;
+    }
+    const nextCycles = cycles + 1;
+    if (cycle.finished && typeof cycle.finished.then === 'function') {
+      return cycle.finished.then((result) => {
+        if (result.outcome !== CORE_OK) {
+          return result;
+        }
+        return drainReady(group, expectedGeneration, nextCycles);
+      });
+    }
+    if (cycle.finished.outcome !== CORE_OK) {
+      return cycle.finished;
+    }
+  }
+  reportWaitBoundExceeded(group,
+    RUNTIME_FAULT_REPORT.READY_DRAIN_BOUND_EXCEEDED,
+    {cycles: RAFT_RS_READY_DRAIN_MAX_CYCLES, maxCycles: RAFT_RS_READY_DRAIN_MAX_CYCLES});
+  return hostFailure(
+    RUNTIME_PHASE.READY_DRAIN,
+    new Error(RUNTIME_REASON.READY_DRAIN_BOUND_EXCEEDED),
+  );
 }
 
 // The leader a role change announces. A leader this replica's registry never
@@ -1803,31 +1840,111 @@ function acknowledgePendingSnapshot(group, expectedGeneration, message) {
   return !ack.ok && ack.result.outcome !== CORE_REFUSED ? ack.result : null;
 }
 
-function drainInbound(group, expectedGeneration, remaining, continuation) {
-  const refused = refusedExecution(group, expectedGeneration);
-  if (refused !== null) return refused;
-  if (!group.identityRecorded) group.inbound.length = 0;
-  if (remaining === 0 || group.inbound.length === 0) return continuation();
-  const envelope = group.inbound.shift();
+function stepOneInbound(group, expectedGeneration, envelope) {
   // The local-log guard decides before the core is entered: a refused
   // envelope is recorded against its sender and never stepped; one that
   // proves this replica's history lost holds the group and ends the turn.
   const guarded = refuseInboundStep(group, envelope, expectedGeneration);
   if (guarded !== null) {
-    return group.reseedHold ??
-      drainInbound(group, expectedGeneration, remaining - 1, continuation);
+    if (group.reseedHold !== null) {
+      return {done: true, result: group.reseedHold};
+    }
+    return {done: false};
   }
   const snapFailure = acknowledgePendingSnapshot(
     group, expectedGeneration, envelope.message);
-  if (snapFailure !== null) return snapFailure;
+  if (snapFailure !== null) {
+    return {done: true, result: snapFailure};
+  }
   const stepped = invokeCoreAt(group, expectedGeneration, 'step', envelope.message);
   if (!stepped.ok) {
-    if (stepped.result.outcome !== CORE_REFUSED) return stepped.result;
+    if (stepped.result.outcome !== CORE_REFUSED) {
+      return {done: true, result: stepped.result};
+    }
     recordInboundStepRefusal(group, envelope, stepped.result);
   }
-  return thenMaybe(drainReady(group, expectedGeneration), (result) =>
-    result.outcome === CORE_OK ?
-      drainInbound(group, expectedGeneration, remaining - 1, continuation) : result);
+  return {done: false, ready: drainReady(group, expectedGeneration)};
+}
+
+const DEFAULT_INBOUND_ENVELOPE_BYTES = 64;
+const ERR_CODE_INBOUND_QUEUE_OVERFLOW = 'RAFT_INBOUND_QUEUE_OVERFLOW';
+
+function estimateInboundEnvelopeBytes(envelope) {
+  return (
+    Number(envelope?.message?.byteLength ?? envelope?.byteLength) ||
+    DEFAULT_INBOUND_ENVELOPE_BYTES
+  );
+}
+
+function dequeueInboundEnvelope(group) {
+  const envelope = group.inbound.shift();
+  const entryBytes = estimateInboundEnvelopeBytes(envelope);
+  group.inboundBytes = Math.max(0, group.inboundBytes - entryBytes);
+  return envelope;
+}
+
+function pushInboundEnvelopeWithBounds(group, envelope) {
+  const entryBytes = estimateInboundEnvelopeBytes(envelope);
+  if (group.inbound.length >= group.maxInboundQueueLength ||
+      group.inboundBytes + entryBytes > group.maxInboundQueueBytes) {
+    group.inboundRejectedCount += 1;
+    const error = new Error('Raft inbound queue overflow');
+    error.code = ERR_CODE_INBOUND_QUEUE_OVERFLOW;
+    throw error;
+  }
+  group.inbound.push(snapshotEnvelope(envelope));
+  group.inboundBytes += entryBytes;
+}
+
+function drainInbound(group, expectedGeneration, remaining, continuation) {
+  group.draining = true;
+  try {
+    for (
+      let count = remaining;
+      count > 0 && group.inbound.length > 0;
+      count -= 1
+    ) {
+      const refused = refusedExecution(group, expectedGeneration);
+      if (refused !== null) {
+        group.draining = false;
+        return refused;
+      }
+      if (!group.identityRecorded) {
+        group.inbound.length = 0;
+        group.inboundBytes = 0;
+        break;
+      }
+      const envelope = dequeueInboundEnvelope(group);
+      const stepResult = stepOneInbound(group, expectedGeneration, envelope);
+      if (stepResult.done) {
+        group.draining = false;
+        return stepResult.result;
+      }
+      const ready = stepResult.ready;
+      if (ready && typeof ready.then === 'function') {
+        const nextCount = count - 1;
+        return ready.then((readyResult) => {
+          if (readyResult.outcome !== CORE_OK) {
+            group.draining = false;
+            return readyResult;
+          }
+          return drainInbound(group, expectedGeneration, nextCount, continuation);
+        }, (error) => {
+          group.draining = false;
+          throw error;
+        });
+      }
+      if (ready !== undefined && ready.outcome !== CORE_OK) {
+        group.draining = false;
+        return ready;
+      }
+    }
+    group.draining = false;
+    return continuation();
+  } catch (error) {
+    group.draining = false;
+    throw error;
+  }
 }
 
 function perform(group, command) {
@@ -1964,6 +2081,16 @@ function createRuntimeDispatcher(request) {
     const refused = runtimeRecoveryOutcome(request);
     throw Object.assign(new Error(refused.reason), {consensus: refused});
   }
+  const maxInboundQueueLength = Number.isInteger(request.maxInboundQueueLength) ?
+    request.maxInboundQueueLength :
+    Number.isInteger(request.options?.maxInboundQueueLength) ?
+      request.options.maxInboundQueueLength :
+      DEFAULT_MAX_INBOUND_QUEUE_LENGTH;
+  const maxInboundQueueBytes = Number.isInteger(request.maxInboundQueueBytes) ?
+    request.maxInboundQueueBytes :
+    Number.isInteger(request.options?.maxInboundQueueBytes) ?
+      request.options.maxInboundQueueBytes :
+      DEFAULT_MAX_INBOUND_QUEUE_BYTES;
   const store = new RaftRsDurableStore(request.database);
   const group = {
     key: nextGroupKey++,
@@ -2018,6 +2145,11 @@ function createRuntimeDispatcher(request) {
     entered: 0,
     tail: null,
     inbound: [],
+    inboundBytes: 0,
+    inboundRejectedCount: 0,
+    maxInboundQueueLength,
+    maxInboundQueueBytes,
+    draining: false,
     inboundDrainScheduled: false,
     inboundDrainTimer: null,
     inboundWakeDebt: INBOUND_WAKE_DEBT.NONE,
@@ -2087,10 +2219,16 @@ function createRuntimeDispatcher(request) {
         return outcome(CORE_OK, {
           reason: PARTICIPATION_GATE.INBOUND_DROPPED_IDENTITY_UNRECORDED});
       }
-      group.inbound.push(snapshotEnvelope(envelope));
+      pushInboundEnvelopeWithBounds(group, envelope);
       reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.ACCEPTED);
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
+    }),
+    stop: Object.freeze(() => {
+      group.closed = true;
+      group.inbound.length = 0;
+      group.inboundBytes = 0;
+      group.draining = false;
     }),
     execute: Object.freeze((command) => executeCommand(group, command)),
     // The acknowledgement that the opening's prior-existence fact is
@@ -2107,6 +2245,9 @@ function createRuntimeDispatcher(request) {
       containUnexpectedThrow(group, error)),
     close: Object.freeze(({enterCore}) => {
       group.closed = true;
+      group.inbound.length = 0;
+      group.inboundBytes = 0;
+      group.draining = false;
       group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
       const timerCleanupError = cancelOwnedInboundDrainTimer(group);
       // Even a timer-clear failure must not skip release of the native group.

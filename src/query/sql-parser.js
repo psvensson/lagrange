@@ -10,8 +10,6 @@ import postgresqlNodeSqlParser from
   'node-sql-parser/build/postgresql.js';
 
 
-const LOCAL_STR_PRIMARY_KEY = 'PRIMARY_KEY';
-const LOCAL_STR_UNIQUE = 'UNIQUE';
 const CREATE_TABLE_PREFIX_PATTERN = /^\s*CREATE\s+TABLE\b/iu;
 const CREATE_TABLE_STORAGE_OPTIONS_PATTERN =
   /\s+WITH\s*\(\s*split_storage_threshold\s*=\s*(\d+)\s*\)\s*;?\s*$/iu;
@@ -188,6 +186,22 @@ function parseTransactionControl(sql) {
   return kind === TRANSACTION_CONTROL_KIND.NONE ? null : {type: kind};
 }
 
+const DOLLAR_SIGN = '$';
+const ESCAPED_SINGLE_QUOTE = '\'\'';
+const DOLLAR_QUOTE_TOKEN_PATTERN =
+  /'(?:''|[^'])*'|"(?:""|[^"])*"|--[^\n]*|\/\*[\s\S]*?\*\/|\$([a-zA-Z0-9_]*)\$([\s\S]*?)\$\1\$/gu;
+
+function normalizeDollarQuotedStrings(sql) {
+  if (typeof sql !== 'string' || !sql.includes(DOLLAR_SIGN)) {
+    return sql;
+  }
+  return sql.replace(
+    DOLLAR_QUOTE_TOKEN_PATTERN,
+    (match, tag, body) =>
+      tag === undefined ? match : `'${body.replace(/'/g, ESCAPED_SINGLE_QUOTE)}'`,
+  );
+}
+
 function extractCreateTableStorageOptions(sql) {
   if (
     typeof sql !== 'string' ||
@@ -299,7 +313,8 @@ class SQLParser {
       const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL ?
         PARSER_CONFIG.DATABASE_PG :
         PARSER_CONFIG.DATABASE;
-      const createTableInput = extractCreateTableStorageOptions(this.sql);
+      const normalizedSql = normalizeDollarQuotedStrings(this.sql);
+      const createTableInput = extractCreateTableStorageOptions(normalizedSql);
       const externalAst = this.parser.astify(
         createTableInput.sql,
         {database: dbMode},
@@ -462,7 +477,7 @@ class SQLParser {
       const rowValues = [];
       const rowData = row.value || [];
       for (const val of rowData) {
-        rowValues.push(this.convertValue(val));
+        rowValues.push(this.convertMutationValue(val, {allowColumns: false}));
       }
       values.push(rowValues);
     }
@@ -513,7 +528,7 @@ class SQLParser {
     const tableName = ast.table[0].table;
     const assignments = ast.set.map((s) => ({
       column: externalSchemaIdentifier(s.column),
-      value: this.convertValue(s.value),
+      value: this.convertMutationValue(s.value, {allowColumns: true}),
     }));
     return {
       type: AST_TYPE.UPDATE,
@@ -544,57 +559,6 @@ class SQLParser {
     throw new Error(
       PARSER_ERROR_MSG.UNSUPPORTED_CREATE_TYPE_PREFIX + ast.keyword,
     );
-  }
-
-  convertCreateTable(ast) {
-    const tableName = ast.table[0].table;
-    const columns = [];
-    const tableConstraints = [];
-    let primaryKey = null;
-
-    for (const def of ast.create_definitions || []) {
-      if (def.resource === SQL_SCHEMA_KEYWORD.COLUMN) {
-        const column = {
-          name: externalSchemaIdentifier(def.column.column),
-          dataType: {
-            name: def.definition.dataType,
-            length: def.definition.length || null,
-            precision: null,
-            scale: null,
-          },
-          primaryKey: !!def.primary_key,
-          notNull: def.nullable?.type === SQL_SCHEMA_KEYWORD.NOT_NULL,
-          unique: !!def.unique,
-          defaultValue: this.convertColumnDefaultLiteral(def.default_val),
-        };
-        columns.push(column);
-        if (column.primaryKey && !primaryKey) {
-          primaryKey = [column.name];
-        }
-      } else if (def.resource === SQL_SCHEMA_KEYWORD.CONSTRAINT) {
-        if (def.constraint_type === SQL_SCHEMA_KEYWORD.PRIMARY_KEY) {
-          const pkColumns = def.definition.map(
-            (definition) => externalSchemaIdentifier(definition.column),
-          );
-          tableConstraints.push({type: LOCAL_STR_PRIMARY_KEY, columns: pkColumns});
-          primaryKey = pkColumns;
-        } else if (def.constraint_type === SQL_SCHEMA_KEYWORD.UNIQUE) {
-          const uniqueColumns = def.definition.map(
-            (definition) => externalSchemaIdentifier(definition.column),
-          );
-          tableConstraints.push({type: LOCAL_STR_UNIQUE, columns: uniqueColumns});
-        }
-      }
-    }
-
-    return {
-      type: AST_TYPE.CREATE_TABLE,
-      tableName,
-      ifNotExists: !!ast.if_not_exists,
-      columns,
-      tableConstraints,
-      primaryKey,
-    };
   }
 
   convertCreateIndex(ast) {

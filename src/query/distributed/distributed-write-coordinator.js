@@ -10,17 +10,18 @@ import {
 } from '../../partition/partition-write-kernel.js';
 import {buildParticipantFailureEntry} from '../query-execution-budget.js';
 import {
-  QUERY_AST_NODE,
   QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_SUBSYSTEM,
 } from '../query-constants.js';
+import {
+  enforceCoordinatorUniqueConstraints,
+  extractCoordinatorKeyValue,
+} from './distributed-write-constraint-helpers.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_NUMBER = 'number';
 
 const ERR_NO_PARTITION_FOR_KEY = 'No partition found for key: ';
 const DEFAULT_PRIMARY_KEY_COLUMN = 'id';
@@ -30,8 +31,6 @@ const DIGEST_PREFIX_LENGTH = 16;
 const OPERATION_ID_PREFIX = 'dwrite-';
 const PARTICIPANT_ENTRY_ID_PREFIX = 'dwrite-participant-';
 const PROMISE_STATUS_FULFILLED = 'fulfilled';
-const UNARY_MINUS = '-';
-const UNARY_PLUS = '+';
 const PARTICIPANT_ROLE_PRIMARY = 'primary';
 const PARTICIPANT_ROLE_MIRROR = 'mirror';
 
@@ -147,6 +146,7 @@ class DistributedWriteCoordinator {
       partitionStatements,
       returningSpec: ast.returning || null,
       idempotencyKey,
+      ast,
     };
   }
 
@@ -173,6 +173,36 @@ class DistributedWriteCoordinator {
   }
 
   /**
+   * Execute an INSERT statement directly through coordinator planning.
+   * @param {Object} ast - INSERT AST.
+   * @param {Array} params - Parameters.
+   * @param {Object} executionOptions - Execution options.
+   * @return {Promise<Object>} Aggregated write result.
+   */
+  async executeInsert(ast, params = [], executionOptions = {}) {
+    await this.enforceCrossPartitionUniqueConstraints(ast, params);
+    const plan = this.createWritePlan(ast, params, executionOptions);
+    return this.executePlan(plan, params, executionOptions);
+  }
+
+  /**
+   * Execute an UPDATE statement directly through coordinator planning.
+   * @param {Object} ast - UPDATE AST.
+   * @param {Array} params - Parameters.
+   * @param {Object} executionOptions - Execution options.
+   * @return {Promise<Object>} Aggregated write result.
+   */
+  async executeUpdate(ast, params = [], executionOptions = {}) {
+    await this.enforceCrossPartitionUniqueConstraints(ast, params);
+    const plan = this.createWritePlan(ast, params, executionOptions);
+    return this.executePlan(plan, params, executionOptions);
+  }
+
+  async enforceCrossPartitionUniqueConstraints(ast, params = []) {
+    return enforceCoordinatorUniqueConstraints(this, ast, params);
+  }
+
+  /**
    * Execute a distributed write plan and merge participant results.
    * @param {Object} plan - Distributed write plan.
    * @param {Array} params - Bound parameters.
@@ -180,6 +210,9 @@ class DistributedWriteCoordinator {
    * @return {Promise<Object>} Aggregated write result.
    */
   async executePlan(plan, params = [], executionOptions = {}) {
+    if (plan.ast) {
+      await this.enforceCrossPartitionUniqueConstraints(plan.ast, params);
+    }
     const participantResults = [];
     const orderedPartitions = Array.from(
       plan.partitionStatements.keys(),
@@ -516,32 +549,8 @@ class DistributedWriteCoordinator {
    * @return {*} Key value.
    * @private
    */
-  extractKeyValue(expr, params) {
-    if (!expr || typeof expr !== LOCAL_STR_OBJECT) {
-      return expr;
-    }
-    if (expr.type === QUERY_AST_NODE.LITERAL) {
-      return expr.value;
-    }
-    if (expr.type === QUERY_AST_NODE.PARAMETER) {
-      if (typeof expr.index === LOCAL_STR_NUMBER &&
-          expr.index >= 0 &&
-          expr.index < params.length) {
-        return params[expr.index];
-      }
-      return params[0];
-    }
-    if (expr.type === QUERY_AST_NODE.UNARY) {
-      const operand = this.extractKeyValue(expr.operand, params);
-      if (expr.operator === UNARY_MINUS) {
-        return -Number(operand);
-      }
-      if (expr.operator === UNARY_PLUS) {
-        return Number(operand);
-      }
-      return operand;
-    }
-    return expr.value;
+  extractKeyValue(expr, params = []) {
+    return extractCoordinatorKeyValue(this, expr, params);
   }
 
   /**

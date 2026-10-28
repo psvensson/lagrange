@@ -448,9 +448,51 @@ function materializedProofObject({proofId, sha, cwd, git, objectSha}) {
   });
 }
 
+const PRODUCER_KIND_GITHUB_ACTIONS = 'github-actions';
+const PRODUCER_KIND_LOCAL_CLI = 'local-cli';
+
+function defaultProducer(producer = {}, env = process.env) {
+  const isCi = env?.GITHUB_ACTIONS === 'true';
+  let defaults;
+  if (isCi) {
+    const workflow = env?.GITHUB_WORKFLOW || 'workflow';
+    const runId = env?.GITHUB_RUN_ID || 'run';
+    const attempt = env?.GITHUB_RUN_ATTEMPT || '1';
+    defaults = {
+      kind: PRODUCER_KIND_GITHUB_ACTIONS,
+      id: `${workflow}:${runId}:${attempt}`,
+    };
+    if (env?.GITHUB_SERVER_URL && env?.GITHUB_REPOSITORY && env?.GITHUB_RUN_ID) {
+      defaults.url =
+        `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`;
+    }
+  } else {
+    defaults = {
+      kind: PRODUCER_KIND_LOCAL_CLI,
+      id: `pid-${process.pid}`,
+    };
+  }
+
+  const attributable = {...defaults};
+  if (producer && typeof producer === 'object') {
+    for (const [key, value] of Object.entries(producer)) {
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        attributable[key] = value;
+      }
+    }
+  }
+  return attributable;
+}
+
 function buildReceipt({
-  proofId, sha, completedAt = new Date().toISOString(), producer = {}, identity = null,
+  proofId,
+  sha,
+  completedAt = new Date().toISOString(),
+  producer = {},
+  identity = null,
+  env = process.env,
 }) {
+  const attributableProducer = defaultProducer(producer, env);
   return Object.freeze({
     schema: RECEIPT_SCHEMA,
     proofId,
@@ -458,7 +500,7 @@ function buildReceipt({
     outcome: RECEIPT_OUTCOME_PASSED,
     reuse: REUSE.IMMUTABLE_SHA,
     completedAt,
-    producer: Object.freeze({...producer}),
+    producer: Object.freeze({...attributableProducer}),
     ...(identity ? {identity: Object.freeze({
       algorithm: identity.algorithm, digest: identity.digest,
     })} : {}),
@@ -506,6 +548,7 @@ function recordProof({
   completedAt = new Date().toISOString(),
   now = Date.now(),
   git = runGit,
+  env = process.env,
 }) {
   const contract = contractFor(proofId);
   if (!contract || contract.reuse !== REUSE.IMMUTABLE_SHA) {
@@ -531,7 +574,7 @@ function recordProof({
   }
 
   const identity = checkedOutIdentity({sha, cwd, git});
-  const receipt = buildReceipt({proofId, sha, completedAt, producer, identity});
+  const receipt = buildReceipt({proofId, sha, completedAt, producer, identity, env});
   const tagBody = buildTagBody({proofId, sha, receipt, now});
   const made = git(['mktag'], {cwd, input: tagBody});
   if (made.status !== 0 || !validSha(text(made.stdout))) {
@@ -691,6 +734,7 @@ export {
   indexProof,
   buildReceipt,
   buildTagBody,
+  defaultProducer,
   evaluateReceipt,
   proofRef,
   recordProof,

@@ -46,6 +46,18 @@ export const OVERVIEW_MARKER_END = '<!-- RELEASE-NOTES:END -->';
 // measured as UTF-8, not UTF-16 code units, so multibyte prose can't sneak past).
 export const DOCKERHUB_DESCRIPTION_MAX_BYTES = 25000;
 
+const OVERVIEW_MODE = 'overview';
+const NOTES_MODE = 'notes';
+const CHECK_MODE = 'check';
+const VALID_CLI_MODES = Object.freeze([CHECK_MODE, NOTES_MODE, OVERVIEW_MODE]);
+
+export function missingVersionMessage(version) {
+  return (
+    `CHANGELOG.md has no "## [${version}]" section. Move the [Unreleased] ` +
+    'items under a dated section for this release before tagging.'
+  );
+}
+
 const SECTION_HEADING_PATTERN = /^## \[([^\]]+)\](?:\s*[—–-]+\s*(.*))?\s*$/u;
 const LINK_DEFINITION_PATTERN = /^\[[^\]]+\]:\s+\S+\s*$/u;
 const CODE_FENCE_PATTERN = /^\s*(```|~~~)/u;
@@ -134,10 +146,7 @@ export function extractChangelogSection(changelogText, version) {
     (candidate) => candidate.version === version,
   );
   if (!section) {
-    throw new Error(
-      `CHANGELOG.md has no "## [${version}]" section. Move the [Unreleased] ` +
-        'items under a dated section for this release before tagging.',
-    );
+    throw new Error(missingVersionMessage(version));
   }
   if (section.body === '') {
     throw new Error(
@@ -146,6 +155,45 @@ export function extractChangelogSection(changelogText, version) {
     );
   }
   return section;
+}
+
+/**
+ * Render release notes or Docker Hub overview with version filtering.
+ */
+export function renderReleaseNotes(changelog, version, options = {}) {
+  const sections = extractReleasedSections(changelog);
+  const normalizedVersion = version !== undefined &&
+    version !== null &&
+    String(version).trim() !== '' ?
+    String(version).trim().replace(/^v/u, '') :
+    '';
+
+  const renderOverview = (targetSections) => {
+    const template = options.template !== undefined ?
+      options.template :
+      readFileSync(OVERVIEW_PATH, 'utf8');
+    return renderDockerhubOverview({
+      template,
+      sections: targetSections,
+      ...(options.maxBytes ? {maxBytes: options.maxBytes} : {}),
+    });
+  };
+
+  if (options.mode === OVERVIEW_MODE || options.mode === 'overview') {
+    if (version !== undefined && version !== null && String(version).trim() !== '') {
+      const startIndex = sections.findIndex(
+        (entry) => entry.version === normalizedVersion,
+      );
+      if (startIndex === -1) {
+        throw new Error(missingVersionMessage(normalizedVersion));
+      }
+      return renderOverview(sections.slice(startIndex));
+    }
+    return renderOverview(sections);
+  }
+
+  const section = extractChangelogSection(changelog, normalizedVersion);
+  return renderGitHubReleaseNotes(section);
 }
 
 /**
@@ -268,7 +316,7 @@ function parseArgs(argv) {
       throw new Error(`Unknown argument: ${argv[index]}`);
     }
   }
-  if (!['check', 'notes', 'overview'].includes(args.mode)) {
+  if (!VALID_CLI_MODES.includes(args.mode)) {
     throw new Error('Usage: release-notes.js --mode check|notes|overview --version x.y.z');
   }
   if (!args.version) {
@@ -306,10 +354,7 @@ function runCli(argv) {
   }
 
   process.stdout.write(
-    renderDockerhubOverview({
-      template: readFileSync(OVERVIEW_PATH, 'utf8'),
-      sections: extractReleasedSections(changelogText),
-    }),
+    renderReleaseNotes(changelogText, version, {mode: OVERVIEW_MODE}),
   );
 }
 
@@ -322,3 +367,9 @@ if (isMain) {
     process.exit(1);
   }
 }
+
+export {
+  CHECK_MODE,
+  NOTES_MODE,
+  OVERVIEW_MODE,
+};

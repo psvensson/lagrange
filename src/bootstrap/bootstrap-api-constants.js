@@ -129,6 +129,7 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
 });
 
 const BOOTSTRAP_API_ERROR = Object.freeze({
+  AUTHENTICATION_REQUIRED: 'Authentication required',
   SYSTEM_TABLE_CACHE_REQUIRED: 'BootstrapAPI requires systemTableCache',
   CLUSTER_ID_MISMATCH:
     'Bootstrap request cluster identity does not match this cluster',

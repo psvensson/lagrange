@@ -1,0 +1,31 @@
+{
+  "schema": "solve-quest/2",
+  "id": "release-0-2-7-core-runtime-and-semantics",
+  "epic": "release-0-2-7-stabilization",
+  "statement": "Stabilize SQL mutation/constraint semantics, storage-compatible key ordering, internal cluster HTTP ingress auth, Raft durable journal and inbound drain bounds, partition snapshot compaction, CLI service build diagnostics, Helm chart defaults, proof producer attribution, release notes/receipt gates, capabilities docs, and the composed 0.2.7 scenario.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "test-output/release-0-2-7-stabilization/receipt.json",
+      "requiredReceipts": [
+        "sql-mutation-expressions",
+        "sql-schema-constraints",
+        "split-routing-key-order",
+        "bootstrap-http-ingress-auth",
+        "cli-service-build-packaging",
+        "cli-service-build-error-classification",
+        "raft-durable-store-journal-bound",
+        "raft-inbound-drain-safety",
+        "partition-snapshot-cadence-consumption",
+        "partition-log-compaction-coverage",
+        "proof-authority-producer-attribution",
+        "capability-truth-table-sync",
+        "helm-chart-and-container-hardening",
+        "release-notes-and-dockerhub-sync",
+        "release-0-2-7-composed-scenario",
+        "single-owner-simplification-audit"
+      ]
+    }
+  },
+  "sealedAt": "bb479f0a0ed7eb0ad79e3e7330a8b6ed6861ad40"
+}

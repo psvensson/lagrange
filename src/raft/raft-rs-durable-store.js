@@ -55,6 +55,7 @@ import {
 } from './raft-rs-snapshot-witness.js';
 
 const DECIMAL_DIGITS = /^\d+$/u;
+const DEFAULT_MAX_JOURNAL_ENTRIES = 256;
 const PAYLOAD_ENCODING = 'base64';
 // The log table and the applied-state table.
 const LOG_AND_APPLIED_STATE_TABLE_COUNT = 2;
@@ -300,10 +301,16 @@ function readyCommitDurability(ready) {
 class RaftRsDurableStore {
   /**
    * @param {Object} db - The replica's own better-sqlite3 database.
+   * @param {Object} [options] - Options for the durable store.
    */
-  constructor(db) {
+  constructor(db, options = {}) {
     this.db = db;
+    this.maxJournalEntries =
+      Number.isInteger(options?.maxJournalEntries) && options.maxJournalEntries >= 0 ?
+        options.maxJournalEntries :
+        DEFAULT_MAX_JOURNAL_ENTRIES;
     this.journal = [];
+    this.journalWriteCount = 0;
     this.ownTransactionDepth = 0;
     this.createRecordTables();
     this.addMembershipGenerationColumns();
@@ -369,7 +376,23 @@ class RaftRsDurableStore {
    * @private
    */
   record(write, detail) {
+    this.journalWriteCount += 1;
+    if (this.maxJournalEntries <= 0) {
+      return;
+    }
+    if (this.journal.length >= this.maxJournalEntries) {
+      this.journal.splice(0, this.journal.length - this.maxJournalEntries + 1);
+    }
     this.journal.push(Object.freeze({write, ...detail}));
+  }
+
+  /**
+   * Safely and idempotently close the database connection if open.
+   */
+  close() {
+    if (this.db && this.db.open) {
+      this.db.close();
+    }
   }
 
   /** The durable writes made so far, in the order they were made.
@@ -664,18 +687,11 @@ class RaftRsDurableStore {
   }
 
   /**
-   * Read one group's applied proposals from an existing connection: the
-   * NORMAL entries that carry a payload, at or below the durable applied
-   * index, each decoded through the proposal codec. Configuration changes
-   * belong to the runtime and are never decoded here.
-   *
-   * Read-only and DDL-free: when the record's tables do not exist the group
-   * has no applied proposals and nothing is created. An undecodable applied
-   * entry fails closed with the codec's typed error.
+   * Read one group's applied NORMAL proposals at or below the durable applied
+   * index, each decoded through the proposal codec. Read-only and DDL-free.
    * @param {Object} db - An open better-sqlite3 database.
    * @param {string} groupId - The group.
-   * @return {Array<Object>} Frozen {index, term, command} records in log
-   *   order, index and term as decimal strings.
+   * @return {Array<Object>} Frozen {index, term, command} records in log order.
    */
   static readCommittedEntriesIn(db, groupId) {
     const {present} = db.prepare(
@@ -694,12 +710,10 @@ class RaftRsDurableStore {
   }
 
   /**
-   * Read one group's durable applied index from an existing connection.
-   * Read-only and DDL-free.
+   * Read one group's durable applied index from an existing connection (read-only).
    * @param {Object} db - An open better-sqlite3 database.
    * @param {string} groupId - The group.
-   * @return {string|null} The applied index as a decimal string, or null when
-   *   the group has no applied-state row (or the table does not exist).
+   * @return {string|null} The applied index as a decimal string, or null.
    */
   static readAppliedIndexIn(db, groupId) {
     const {present} = db.prepare(RAFT_RS_SQL.COUNT_APPLIED_STATE_TABLE).get();
@@ -714,27 +728,21 @@ class RaftRsDurableStore {
   static encodeSnapshotWitnessData(maxCommittedHlc) {
     return encodeSnapshotWitnessData(maxCommittedHlc);
   }
-
   static readCompactedMaxHlcIn(db, groupId) {
     return readCompactedMaxHlcIn(db, groupId);
   }
-
   static readSnapshotIndexIn(db, groupId) {
     return readSnapshotIndexIn(db, groupId);
   }
-
   readSnapshotIndex(groupId) {
     return readSnapshotIndexIn(this.db, groupId);
   }
-
   compactCommittedPrefix(groupId, options) {
     return compactRaftRsCommittedPrefix(this, groupId, options);
   }
 
   /**
-   * Whether the record's schema carries the participation gate: a table
-   * created before the gate existed lacks its columns, and such a record
-   * cannot prove this replica's role (owner decisions O1, O3).
+   * Whether the record's schema carries the participation gate columns.
    * @return {string} A RAFT_RS_RECORD_COMPATIBILITY state.
    */
   recordCompatibility() {
@@ -751,10 +759,6 @@ class RaftRsDurableStore {
 
   /**
    * Whether this group has a durable record to come back from.
-   *
-   * A named question rather than an exception: a caller deciding between
-   * creating a fresh group and restoring one asks it, and gets a state
-   * instead of reading emptiness out of a thrown error.
    * @param {string} groupId - The group.
    * @return {boolean} Whether a record exists.
    */
@@ -765,10 +769,7 @@ class RaftRsDurableStore {
   }
 
   /**
-   * Whether a group has a durable record in a database, asked without opening
-   * a store: this creates no table and writes nothing. A database that lacks
-   * the record's tables has no record. The predicate is hasDurableRecord's
-   * own, run on a read view of the database that skips the constructor's DDL.
+   * Whether a group has a durable record in a database without opening a store.
    * @param {Object} db - A better-sqlite3 database.
    * @param {string} groupId - The group.
    * @return {boolean} Whether a record exists.
@@ -786,4 +787,8 @@ class RaftRsDurableStore {
   }
 }
 
-export {RaftRsDurableStore, commitDurably};
+export {
+  DEFAULT_MAX_JOURNAL_ENTRIES,
+  RaftRsDurableStore,
+  commitDurably,
+};

@@ -13,22 +13,22 @@
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
-    "query-sql": 177,
+    "query-sql": 178,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 145,
     "solver-tooling": 7,
-    "storage-partition": 206,
+    "storage-partition": 207,
     "storage-raft": 148,
-    "test-infrastructure": 152,
+    "test-infrastructure": 153,
     "transactions": 16,
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2483,
-  "digest": "fnv1a32-eb7b3244",
+  "censusSize": 2486,
+  "digest": "fnv1a32-b27c074a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c7734a1c",
+  "observationDigest": "fnv1a32-d4566338",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1381,6 +1381,7 @@
     "test/partition/partition-service-write-commit.test.js": "storage-partition",
     "test/partition/partition-service.test.js": "storage-partition",
     "test/partition/partition-size-write-retry-spent-owner.test.js": "storage-partition",
+    "test/partition/partition-snapshot-cadence.test.js": "storage-partition",
     "test/partition/partition-split-merge-manager.test.js": "storage-partition",
     "test/partition/partition-split-policy-precedence.test.js": "storage-partition",
     "test/partition/partition-split-routing.test.js": "storage-partition",
@@ -1553,6 +1554,7 @@
     "test/query/service-read-locality-routing.test.js": "query-sql",
     "test/query/settled-replay-sql-surface.test.js": "query-sql",
     "test/query/sql-execution-guard.test.js": "query-sql",
+    "test/query/sql-mutation-and-constraint-stabilization.test.js": "query-sql",
     "test/query/sql-parse-cache.property.test.js": "query-sql",
     "test/query/sql-parse-cache.test.js": "query-sql",
     "test/query/sql-parser-pg.property.test.js": "query-sql",
@@ -2238,6 +2240,7 @@
     "test/scripts/release-npm-package.test.js": "test-infrastructure",
     "test/scripts/release-preflight.test.js": "test-infrastructure",
     "test/scripts/release-proof-identity.test.js": "test-infrastructure",
+    "test/scripts/release-publication-receipt.test.js": "test-infrastructure",
     "test/scripts/rerun-failed-distributed-scenarios.test.js": "test-infrastructure",
     "test/scripts/rolling-restart-stat-gate-summary.test.js": "test-infrastructure",
     "test/scripts/rule-set-revision.test.js": "test-infrastructure",
@@ -3931,6 +3934,7 @@
         "src/authoring/define-service.js",
         "src/cli/service-pipeline-router.js",
         "src/control-plane/owners/deployment-binding-contract.js",
+        "src/index.js",
         "src/service/index.js",
         "src/service/service-source-contract.js"
       ],
@@ -11848,6 +11852,12 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/query/sql-mutation-and-constraint-stabilization.test.js": {
+      "files": [
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
+      ]
+    },
     "test/query/sql-query-engine-create-table-quorum.test.js": {
       "files": [
         "src/partition/partition-participant-transaction-constants.js",
@@ -15586,10 +15596,12 @@
         ".github/workflows/full-corpus-canary.yml",
         ".github/workflows/release.yml",
         "AGENTS.md",
+        "CHANGELOG.md",
         "CLAUDE.md",
         "README.md",
         "data/formation-health/trend.ndjson",
         "data/releases/v0.2.5.json",
+        "docs/dockerhub-overview.md",
         "examples/service-data-affinity/run-affinity-demo.js",
         "package.json",
         "scripts/check-fast-static.js",
@@ -17360,6 +17372,16 @@
       "directories": [
         "data/releases",
         "solve"
+      ]
+    },
+    "test/scripts/release-publication-receipt.test.js": {
+      "files": [
+        "CHANGELOG.md",
+        "docs/dockerhub-overview.md",
+        "package.json"
+      ],
+      "directories": [
+        "data/releases"
       ]
     },
     "test/scripts/rerun-failed-distributed-scenarios.test.js": {

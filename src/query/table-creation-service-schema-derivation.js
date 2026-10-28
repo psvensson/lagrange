@@ -32,7 +32,11 @@ function derivePartitionKey(primaryKey) {
  * @private
  */
 function normalizeDataType(dataType) {
-  const typeName = dataType.name.toUpperCase();
+  if (!dataType) return TABLE_CREATION_SERVICE_LITERAL.DEFAULT_TYPE;
+  const rawName = typeof dataType === 'string' ?
+    dataType :
+    (dataType.name || TABLE_CREATION_SERVICE_LITERAL.DEFAULT_TYPE);
+  const typeName = rawName.toUpperCase();
 
   // Map common SQL types to SQLite types
   const typeMap = {
@@ -78,25 +82,66 @@ function deriveDefaultSqlLiteral(defaultValue) {
   return `'${String(value).replaceAll('\'', '\'\'')}'`;
 }
 
+function resolveDerivationColumns(columnsOrAst) {
+  if (Array.isArray(columnsOrAst)) return columnsOrAst;
+  return Array.isArray(columnsOrAst?.columns) ? columnsOrAst.columns : [];
+}
+
+function resolveDerivationConstraints(columnsOrAst, tableConstraints) {
+  if (Array.isArray(tableConstraints) && tableConstraints.length > 0) {
+    return tableConstraints;
+  }
+  return Array.isArray(columnsOrAst?.tableConstraints) ?
+    columnsOrAst.tableConstraints :
+    [];
+}
+
+function unpackSchemaDerivationArgs(columnsOrAst, tableConstraints, primaryKey) {
+  return {
+    columns: resolveDerivationColumns(columnsOrAst),
+    constraints: resolveDerivationConstraints(columnsOrAst, tableConstraints),
+    pk: primaryKey || columnsOrAst?.primaryKey || null,
+  };
+}
+
+function formatDerivedColumn(service, col) {
+  return {
+    name: col.name,
+    type: service.normalizeDataType(
+      col.dataType || {name: col.type || TABLE_CREATION_SERVICE_LITERAL.DEFAULT_TYPE},
+    ),
+    primaryKey: Boolean(col.primaryKey),
+    notNull: col.notNull === true || col.nullable === false,
+    unique: Boolean(col.unique),
+    checkSql: col.checkSql || null,
+    defaultValue: deriveDefaultSqlLiteral(col.defaultValue),
+  };
+}
+
 const SCHEMA_DERIVATION_METHODS = Object.freeze({
   derivePartitionKey,
 
   /**
    * Build schema definition from column AST.
-   * @param {Array<Object>} columns - Column definitions from AST.
+   * @param {Array<Object>|Object} columnsOrAst - Column definitions or AST.
+   * @param {Array<Object>} [tableConstraints=[]] - Table constraints.
+   * @param {Array<string>|null} [primaryKey=null] - Table primary key columns.
    * @return {Object} Schema definition.
    * @private
    */
-  buildSchemaDefinition(columns) {
+  buildSchemaDefinition(columnsOrAst, tableConstraints = [], primaryKey = null) {
+    const {columns, constraints, pk} = unpackSchemaDerivationArgs(
+      columnsOrAst,
+      tableConstraints,
+      primaryKey,
+    );
+    const derivedPk = Array.isArray(pk) && pk.length > 0 ?
+      pk :
+      columns.filter((col) => col.primaryKey).map((col) => col.name);
     return {
-      columns: columns.map((col) => ({
-        name: col.name,
-        type: this.normalizeDataType(col.dataType),
-        primaryKey: col.primaryKey || false,
-        notNull: col.notNull === true || col.nullable === false,
-        unique: col.unique || false,
-        defaultValue: deriveDefaultSqlLiteral(col.defaultValue),
-      })),
+      columns: columns.map((col) => formatDerivedColumn(this, col)),
+      primaryKey: derivedPk.length > 0 ? derivedPk : (pk || null),
+      tableConstraints: Array.isArray(constraints) ? constraints : [],
     };
   },
 

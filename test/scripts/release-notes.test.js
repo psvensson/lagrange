@@ -19,12 +19,14 @@ import {
   DOCKERHUB_DESCRIPTION_MAX_BYTES,
   OVERVIEW_MARKER_BEGIN,
   OVERVIEW_MARKER_END,
+  OVERVIEW_MODE,
   assertReleaseVersions,
   demoteHeadings,
   extractChangelogSection,
   extractReleasedSections,
   renderDockerhubOverview,
   renderGitHubReleaseNotes,
+  renderReleaseNotes,
 } from '../../scripts/release-notes.js';
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
@@ -224,4 +226,45 @@ test('wiring: the real CHANGELOG.md and dockerhub-overview.md satisfy the releas
     'rendered overview fits Docker Hub full_description limit',
   );
   t.match(rendered, /## Release notes/);
+});
+
+test('renderReleaseNotes: mode overview with target version excludes newer changelog sections', async (t) => {
+  const changelogWithNewer = [
+    '# Changelog',
+    '',
+    '## [0.2.7] — 2026-10-28',
+    '',
+    '### Fixed',
+    '- 0.2.7 newer stabilization item.',
+    '',
+    '## [0.2.6] — 2026-09-20',
+    '',
+    '### Added',
+    '- 0.2.6 target release item.',
+    '',
+    '## [0.2.5] — 2026-08-15',
+    '',
+    '### Added',
+    '- 0.2.5 older release item.',
+  ].join('\n');
+
+  const rendered = renderReleaseNotes(changelogWithNewer, '0.2.6', {
+    mode: OVERVIEW_MODE,
+    template: MARKED_TEMPLATE,
+  });
+
+  t.match(rendered, /### 0\.2\.6/);
+  t.match(rendered, /0\.2\.6 target release item\./);
+  t.match(rendered, /0\.2\.5/);
+  t.notMatch(rendered, /0\.2\.7/, 'excludes 0.2.7 section appearing above 0.2.6');
+  t.notMatch(rendered, /newer stabilization item/, 'excludes newer section body');
+
+  t.throws(
+    () => renderReleaseNotes(
+      changelogWithNewer,
+      '9.9.9',
+      {mode: 'overview', template: MARKED_TEMPLATE},
+    ),
+    /no "## \[9\.9\.9\]" section/,
+  );
 });

@@ -104,12 +104,15 @@ instead of frozen. A patch release for one fix follows the same steps.
    tag after a newer `v*` tag exists, preventing a rerun from moving `latest`
    backward. A partial-channel failure is repaired forward with a new patch
    version; a tag is never moved.
-6. **Docker Hub overview updates itself.**
+6. **Docker Hub overview updates itself and is verified.**
    [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is a template:
    `release.yml` renders it with a generated per-release "Release notes"
-   section (from `CHANGELOG.md`) and updates the repository description
-   best-effort. A failed description update never sinks a release. Manual
-   fallback if the step warns:
+   section (from `CHANGELOG.md`), filtered to start at the target release version,
+   and updates the repository description. The release publication gate verifies
+   the rendered overview via
+   `node scripts/checks/release-publication-receipt.js --dockerhub-overview-file dist/release/DOCKERHUB.md`,
+   confirming that it is non-empty, contains the target release version heading,
+   and does not leak newer changelog sections. Manual fallback if needed:
    `npm run release:notes -- --mode overview --version x.y.z` and paste the
    output. Edit the template whenever user-facing container behavior changes;
    never hand-edit between the `RELEASE-NOTES` markers.

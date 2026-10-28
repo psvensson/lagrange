@@ -208,10 +208,11 @@ jobs:
           LATEST_TAG="$(git -c versionsort.suffix=- tag --list 'v[0-9]*' --sort=-version:refname | head -n 1)"
           test "$GITHUB_REF_NAME" = "$LATEST_TAG" || { echo "::error::Refusing to move latest backward from $LATEST_TAG"; exit 1; }
           NOTES_DIR="$RUNNER_TEMP/lagrange-release-notes"
-          mkdir -p "$NOTES_DIR"
+          mkdir -p "$NOTES_DIR" dist/release
           node scripts/release-notes.js --mode check --version "$VERSION"
           node scripts/release-notes.js --mode notes --version "$VERSION" > "$NOTES_DIR/release-notes.md"
           node scripts/release-notes.js --mode overview --version "$VERSION" > "$NOTES_DIR/dockerhub-overview.md"
+          cp "$NOTES_DIR/dockerhub-overview.md" dist/release/DOCKERHUB.md
           CHANNEL_JSON="$(node scripts/release-npm-package.js channel --version "$VERSION")"
           PRERELEASE="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).prerelease))' "$CHANNEL_JSON")"
           DIST_TAG="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).distTag)' "$CHANNEL_JSON")"
@@ -412,6 +413,7 @@ jobs:
           cat "data/releases/${GITHUB_REF_NAME}.json"
           cp "data/releases/${GITHUB_REF_NAME}.json" release-receipt.json
           gh release upload "$GITHUB_REF_NAME" release-receipt.json --clobber
+          node scripts/checks/release-publication-receipt.js --dockerhub-overview-file dist/release/DOCKERHUB.md
 
   move-next:
     name: move next dist-tag (manual)

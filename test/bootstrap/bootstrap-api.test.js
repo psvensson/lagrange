@@ -1178,4 +1178,78 @@ test('BootstrapAPI - durable rejoin reuses existing message group without assign
     await api.shutdown();
   });
 
+test('verifyControlPlaneAuth protects control routes and admits authorized requests', async (st) => {
+  const authEnv = {
+    PGWIRE_AUTH_USER: 'ctrl-user',
+    PGWIRE_AUTH_PASSWORD: 'ctrl-password',
+    PGWIRE_AUTH_DATABASE: 'ctrl-db',
+  };
+  const api = new BootstrapAPI({
+    seedNodeId: 'auth-seed',
+    seedNodeAddress: 'ws://auth-seed:8082',
+    systemTableCache: createEmptySystemTableCache(),
+    requestCellEnv: authEnv,
+  });
+  await api.initialize(0, {listen: false});
+
+  // Probe routes bypass auth
+  const livezRes = await api.getFastify().inject({method: 'GET', url: '/livez'});
+  st.equal(livezRes.statusCode, HTTP_STATUS.OK);
+
+  // Unauthenticated GET /cluster/state
+  const stateUnauth = await api.getFastify().inject({method: 'GET', url: '/cluster/state'});
+  st.equal(stateUnauth.statusCode, HTTP_STATUS.UNAUTHORIZED);
+  st.same(stateUnauth.json(), {error: 'Authentication required'});
+
+  // Invalid credentials
+  const badAuth = 'Basic ' + Buffer.from('ctrl-user:wrong').toString('base64');
+  const stateBad = await api.getFastify().inject({
+    method: 'GET',
+    url: '/cluster/state',
+    headers: {authorization: badAuth},
+  });
+  st.equal(stateBad.statusCode, HTTP_STATUS.UNAUTHORIZED);
+
+  // Valid credentials
+  const goodAuth = 'Basic ' + Buffer.from('ctrl-user:ctrl-password').toString('base64');
+  const stateGood = await api.getFastify().inject({
+    method: 'GET',
+    url: '/cluster/state',
+    headers: {authorization: goodAuth},
+  });
+  st.equal(stateGood.statusCode, HTTP_STATUS.OK);
+
+  await api.shutdown();
+});
+
+test('verifyControlPlaneAuth uses authenticateControlRequest when provided', async (st) => {
+  let authCalled = false;
+  const api = new BootstrapAPI({
+    seedNodeId: 'custom-auth-seed',
+    seedNodeAddress: 'ws://custom-seed:8082',
+    systemTableCache: createEmptySystemTableCache(),
+    authenticateControlRequest: (req) => {
+      authCalled = true;
+      return req.headers.authorization === 'SecretToken';
+    },
+  });
+  await api.initialize(0, {listen: false});
+
+  const rejectRes = await api.getFastify().inject({
+    method: 'GET',
+    url: '/cluster/state',
+  });
+  st.equal(rejectRes.statusCode, HTTP_STATUS.UNAUTHORIZED);
+  st.equal(authCalled, true);
+
+  const allowRes = await api.getFastify().inject({
+    method: 'GET',
+    url: '/cluster/state',
+    headers: {authorization: 'SecretToken'},
+  });
+  st.equal(allowRes.statusCode, HTTP_STATUS.OK);
+
+  await api.shutdown();
+});
+
 registerBootstrapApiReadinessTests();

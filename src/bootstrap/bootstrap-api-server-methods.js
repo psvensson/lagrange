@@ -1,3 +1,4 @@
+import {timingSafeEqual} from 'node:crypto';
 import Fastify from 'fastify';
 import {
   ERRNO,
@@ -25,11 +26,51 @@ const REQUEST_CELL_HTTP_ROUTES = Object.freeze(['/', '/*']);
 const COMPLETE_PHASE = 'complete';
 const FUNCTION_TYPE = 'function';
 
+function safeStringEqual(actual, expected) {
+  if (typeof actual !== 'string' || typeof expected !== 'string') return false;
+  const actualBytes = Buffer.from(actual, 'utf8');
+  const expectedBytes = Buffer.from(expected, 'utf8');
+  const width = Math.max(actualBytes.length, expectedBytes.length, 1);
+  const actualPadded = Buffer.alloc(width);
+  const expectedPadded = Buffer.alloc(width);
+  actualBytes.copy(actualPadded);
+  expectedBytes.copy(expectedPadded);
+  return timingSafeEqual(actualPadded, expectedPadded) &&
+    actualBytes.length === expectedBytes.length;
+}
+
 async function ensureInProcessSeedTransportReady(adapter) {
   if (adapter?.phase === COMPLETE_PHASE &&
       typeof adapter?.startWebSocketServer === FUNCTION_TYPE) {
     await adapter.startWebSocketServer();
   }
+}
+
+const ENCODING_BASE64 = 'base64';
+const ENCODING_UTF8 = 'utf8';
+const ERR_AUTHENTICATION_REQUIRED = 'Authentication required';
+
+function parseBasicCredentialsHeader(authHeader) {
+  if (typeof authHeader !== 'string') return null;
+  const match = /^Basic\s+(.+)$/iu.exec(authHeader.trim());
+  if (!match) return null;
+  let decoded = '';
+  try {
+    decoded = Buffer.from(match[1], ENCODING_BASE64).toString(ENCODING_UTF8);
+  } catch (_err) {
+    return null;
+  }
+  const colonIndex = decoded.indexOf(':');
+  if (colonIndex === -1) return null;
+  return {
+    user: decoded.slice(0, colonIndex),
+    password: decoded.slice(colonIndex + 1),
+  };
+}
+
+function sendControlPlaneUnauthorized(reply) {
+  reply.code(HTTP_STATUS.UNAUTHORIZED).send({error: ERR_AUTHENTICATION_REQUIRED});
+  return false;
 }
 
 const bootstrapApiServerMethods = {
@@ -131,16 +172,19 @@ const bootstrapApiServerMethods = {
 
     // Bootstrap endpoint for new node registration
     this.fastify.post(BOOTSTRAP_API_ROUTE.BOOTSTRAP, async (request, reply) => {
+      if (!(await this.verifyControlPlaneAuth(request, reply))) return;
       return this.handleBootstrapRequest(request, reply);
     });
 
     // Register service endpoint - inserts service into services system table
     this.fastify.post(BOOTSTRAP_API_ROUTE.REGISTER_SERVICE, async (request, reply) => {
+      if (!(await this.verifyControlPlaneAuth(request, reply))) return;
       return this.handleRegisterServiceRequest(request, reply);
     });
 
     // Get cluster state endpoint
-    this.fastify.get(BOOTSTRAP_API_ROUTE.CLUSTER_STATE, async (_request, _reply) => {
+    this.fastify.get(BOOTSTRAP_API_ROUTE.CLUSTER_STATE, async (request, reply) => {
+      if (!(await this.verifyControlPlaneAuth(request, reply))) return;
       return this.getClusterState();
     });
 
@@ -154,6 +198,36 @@ const bootstrapApiServerMethods = {
         });
       }
     }
+  },
+
+  /**
+   * Verify HTTP authentication for internal control plane endpoints.
+   * @param {Object} request - Fastify request.
+   * @param {Object} reply - Fastify reply.
+   * @return {Promise<boolean>} Whether the request is authorized.
+   */
+  async verifyControlPlaneAuth(request, reply) {
+    if (typeof this.authenticateControlRequest === FUNCTION_TYPE) {
+      try {
+        const authorized = await this.authenticateControlRequest(request);
+        return authorized ? true : sendControlPlaneUnauthorized(reply);
+      } catch (_err) {
+        return sendControlPlaneUnauthorized(reply);
+      }
+    }
+
+    const expectedUser = this.controlAuthEnv?.PGWIRE_AUTH_USER;
+    const expectedPassword = this.controlAuthEnv?.PGWIRE_AUTH_PASSWORD;
+    if (!expectedUser || !expectedPassword) {
+      return true;
+    }
+    const creds = parseBasicCredentialsHeader(request.headers?.authorization);
+    if (!creds ||
+        !safeStringEqual(creds.user, expectedUser) ||
+        !safeStringEqual(creds.password, expectedPassword)) {
+      return sendControlPlaneUnauthorized(reply);
+    }
+    return true;
   },
 
   /**

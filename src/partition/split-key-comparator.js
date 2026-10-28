@@ -69,6 +69,15 @@ export function compareSplitKey(value, splitKey) {
   if (splitKeyType === SPLIT_KEY_TYPE.BUFFER) {
     return Buffer.compare(value, splitKey);
   }
+  if (splitKeyType === SPLIT_KEY_TYPE.STRING) {
+    const cmp = Buffer.compare(
+      Buffer.from(value, 'utf8'),
+      Buffer.from(splitKey, 'utf8'),
+    );
+    if (cmp < 0) return COMPARISON_RESULT.LEFT;
+    if (cmp > 0) return COMPARISON_RESULT.RIGHT;
+    return COMPARISON_RESULT.EQUAL;
+  }
   if (value < splitKey) {
     return COMPARISON_RESULT.LEFT;
   }
@@ -109,10 +118,19 @@ function isTextEncodedNumber(value) {
     Number.isFinite(Number(value));
 }
 
+const UTF8_ENCODING = 'utf8';
+
+function compareUtf8Strings(a, b) {
+  return Buffer.compare(
+    Buffer.from(String(a), UTF8_ENCODING),
+    Buffer.from(String(b), UTF8_ENCODING),
+  );
+}
+
 function compareWithinType(keyType, a, b) {
   if (keyType === SPLIT_KEY_TYPE.BUFFER) return Buffer.compare(a, b);
   if (keyType === SPLIT_KEY_TYPE.NUMBER) return a - b;
-  return a.localeCompare(b);
+  return compareUtf8Strings(a, b);
 }
 
 function isAbsentKey(value) {
@@ -165,7 +183,7 @@ export function compareRoutingKeys(a, b) {
   const numericOrder = compareNumberWithTextEncodedNumber(a, b, aType, bType);
   if (numericOrder !== null) return numericOrder;
   if (aType === null && bType === null && typeof a === typeof b) {
-    return String(a).localeCompare(String(b));
+    return compareUtf8Strings(a, b);
   }
   throw new Error(
     PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(

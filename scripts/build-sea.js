@@ -14,7 +14,7 @@
 import * as esbuild from 'esbuild';
 import {fileURLToPath} from 'url';
 import {dirname, join} from 'path';
-import {cpSync, existsSync, mkdirSync, rmSync, writeFileSync} from 'fs';
+import {cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'fs';
 
 import {RAFT_RS_BINDING_LAYOUT} from '../src/raft/raft-rs-core-constants.js';
 import {RUNTIME_BUILD_MANIFEST, measureRuntimeContent} from
@@ -45,6 +45,13 @@ const LOCAL_STR_STAGED_AUTHORING =
   '  \u2713 staged authoring library for service init';
 const LOCAL_STR_STAGED_RAFT_RS_BINDING =
   '  \u2713 staged vendored raft-rs binding (digest + wasm-pack package)';
+const LOCAL_STR_STAGED_WIT =
+  '  \u2713 staged WIT definitions for service build';
+const STAGED_WIT_DIR_NAME = 'wit';
+const INLINE_PIPELINE_ROUTER_IMPORTS_PLUGIN = 'inline-pipeline-router-imports';
+const JS_LOADER = 'js';
+const STAGED_WIT_FILE_NAME = 'lagrange-cell.wit';
+const STAGED_WIT_WORLD_NAME = 'world.wit';
 
 const BUILD_BANNER = [
   '// Single Executable Application Bundle',
@@ -54,7 +61,9 @@ const BUILD_BANNER = [
 ].join('\n');
 
 const MAIN_RUNTIME_EXTERNALS = [
+  '@bytecodealliance/componentize-js',
   'better-sqlite3',
+  'esbuild',
   'piscina',
 ];
 
@@ -95,13 +104,18 @@ const BUNDLES = [
 
 const RUNTIME_PACKAGES = [
   '@bytecodealliance',
+  '@esbuild',
   '@oxc-minify',
+  '@oxc-parser',
   'better-sqlite3',
   'binaryen',
   'bindings',
   'blessed',
+  'es-module-lexer',
+  'esbuild',
   'file-uri-to-path',
   'oxc-minify',
+  'oxc-parser',
   'piscina',
 ];
 
@@ -130,6 +144,26 @@ async function buildBundle(entryPoint, outputFile, name, external, format) {
     minify: true,
     sourcemap: false,
     treeShaking: true,
+    plugins: [
+      {
+        name: INLINE_PIPELINE_ROUTER_IMPORTS_PLUGIN,
+        setup(buildPlugin) {
+          buildPlugin.onLoad({filter: /service-pipeline-router\.js$/}, (args) => {
+            const source = readFileSync(args.path, 'utf8');
+            const contents = source
+              .replace(
+                'import(LOCAL_OCI_LAYOUT_BUILDER_SPECIFIER)',
+                'import(\'../service/service-local-oci-layout-builder.js\')',
+              )
+              .replace(
+                'import(SQL_CLIENT_SPECIFIER)',
+                'import(\'./service-lifecycle-sql-client.js\')',
+              );
+            return {contents, loader: JS_LOADER};
+          });
+        },
+      },
+    ],
     define: {
       'process.env.SEA_BUILD': LOCAL_STR_TRUE,
     },
@@ -168,6 +202,17 @@ function stageRuntimePackages() {
     authoringTarget,
     {recursive: true});
   console.log(LOCAL_STR_STAGED_AUTHORING);
+
+  const witTarget = join(projectRoot, LOCAL_STR_DIST, STAGED_WIT_DIR_NAME);
+  rmSync(witTarget, {recursive: true, force: true});
+  mkdirSync(witTarget, {recursive: true});
+  const witSource = existsSync(join(projectRoot, 'src', 'runtime', 'wit', STAGED_WIT_FILE_NAME)) ?
+    join(projectRoot, 'src', 'runtime', 'wit', STAGED_WIT_FILE_NAME) :
+    join(projectRoot, 'wit', STAGED_WIT_WORLD_NAME);
+  cpSync(witSource, join(witTarget, STAGED_WIT_FILE_NAME));
+  cpSync(witSource, join(witTarget, STAGED_WIT_WORLD_NAME));
+  console.log(LOCAL_STR_STAGED_WIT);
+
   stageRaftRsBinding();
 }
 

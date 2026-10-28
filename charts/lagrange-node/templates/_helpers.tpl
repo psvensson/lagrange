@@ -119,6 +119,10 @@ name-first addressing path that survives pod restarts with new IPs.
 {{- define "lagrange-node.containerCommon" -}}
 image: {{ include "lagrange-node.image" . }}
 imagePullPolicy: {{ .Values.image.pullPolicy }}
+{{- with .Values.securityContext }}
+securityContext:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 args:
   - {{ printf "--max-old-space-size=%d" (int .Values.node.maxOldSpaceSizeMb) | quote }}
   - "src/index.js"

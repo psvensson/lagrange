@@ -219,6 +219,47 @@ function requireLiteralPartitionDefault(defaultValue) {
   throw error;
 }
 
+const SQL_FRAGMENT_UNIQUE = ' UNIQUE';
+const SQL_CONSTRAINT_CHECK = 'CHECK';
+const SQL_CONSTRAINT_UNIQUE = 'UNIQUE';
+const SQL_CONSTRAINT_PRIMARY_KEY = 'PRIMARY_KEY';
+
+function formatPartitionColumnSql(col, isCompositePk, hasSqlConstraints) {
+  let def = `${col.name} ${col.type}`;
+  if (col.primaryKey && !isCompositePk) {
+    def += PARTITION_SERVICE_SQL_FRAGMENT.PRIMARY_KEY;
+  }
+  if (col.notNull) {
+    def += PARTITION_SERVICE_SQL_FRAGMENT.NOT_NULL;
+  }
+  if (hasSqlConstraints && col.unique === true) {
+    def += SQL_FRAGMENT_UNIQUE;
+  }
+  if (col.checkSql) {
+    def += ` CHECK (${col.checkSql})`;
+  }
+  if (col.defaultValue !== void 0 && col.defaultValue !== null) {
+    def += ` DEFAULT ${requireLiteralPartitionDefault(col.defaultValue)}`;
+  }
+  return def;
+}
+
+function formatPartitionTableConstraintSql(constraint, isCompositePk) {
+  if (!constraint || typeof constraint.type !== 'string') return null;
+  const cType = constraint.type.toUpperCase();
+  if (cType === SQL_CONSTRAINT_CHECK) {
+    return constraint.checkSql ? `CHECK (${constraint.checkSql})` : null;
+  }
+  const cols = constraint.columns;
+  if (!Array.isArray(cols) || cols.length === 0) return null;
+  const joined = cols.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+  if (cType === SQL_CONSTRAINT_UNIQUE) return `UNIQUE (${joined})`;
+  if (cType === SQL_CONSTRAINT_PRIMARY_KEY && cols.length > 1 && !isCompositePk) {
+    return `PRIMARY KEY (${joined})`;
+  }
+  return null;
+}
+
 /**
  * Create the partition's state table from its schema, apply the system-table
  * column upgrades, and create the schema's indexes (verbatim behavior of the
@@ -226,25 +267,27 @@ function requireLiteralPartitionDefault(defaultValue) {
  * @param {Object} service the partition service (open db, schema, logger)
  */
 function partitionServiceTableSql(tableName, schema) {
-  const columns = schema.columns
-    .map((col) => {
-      let def = `${col.name} ${col.type}`;
-      if (col.primaryKey) {
-        def += PARTITION_SERVICE_SQL_FRAGMENT.PRIMARY_KEY;
-      }
-      if (col.notNull) {
-        def += PARTITION_SERVICE_SQL_FRAGMENT.NOT_NULL;
-      }
-      if (col.defaultValue !== void 0 && col.defaultValue !== null) {
-        def += ` DEFAULT ${requireLiteralPartitionDefault(col.defaultValue)}`;
-      }
-      return def;
-    })
-    .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-  const sql =
-    'CREATE TABLE ' +
-    `${quoteSqliteIdentifier(tableName)} (${columns})`;
-  return sql;
+  const hasSqlConstraints = Array.isArray(schema.tableConstraints);
+  const isCompositePk =
+    hasSqlConstraints &&
+    Array.isArray(schema.primaryKey) &&
+    schema.primaryKey.length > 1;
+  const items = schema.columns.map((col) =>
+    formatPartitionColumnSql(col, isCompositePk, hasSqlConstraints),
+  );
+  if (isCompositePk) {
+    items.push(
+      `PRIMARY KEY (${schema.primaryKey.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE)})`,
+    );
+  }
+  for (const constraint of schema.tableConstraints || []) {
+    const clause = formatPartitionTableConstraintSql(constraint, isCompositePk);
+    if (clause) {
+      items.push(clause);
+    }
+  }
+  const columnsDef = items.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+  return `CREATE TABLE ${quoteSqliteIdentifier(tableName)} (${columnsDef})`;
 }
 
 function createPartitionServiceTable(service) {
@@ -277,5 +320,5 @@ function createPartitionServiceTable(service) {
   });
 }
 
-export {createPartitionServiceTable, readPartitionServiceTableSchemaIn,
+export {createPartitionServiceTable, partitionServiceTableSql, readPartitionServiceTableSchemaIn,
   PARTITION_TABLE_OBSERVATION};

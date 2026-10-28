@@ -96,6 +96,8 @@ const PEER_DELIVERY_OUTCOME = Object.freeze({
 });
 // The per-peer delivery observations a group keeps: one per peer it sent to,
 // oldest evicted first past the bound.
+const DEFAULT_MAX_INBOUND_QUEUE_LENGTH = 16384;
+const DEFAULT_MAX_INBOUND_QUEUE_BYTES = 64 * 1024 * 1024;
 const PEER_DELIVERY_OBSERVATION_LIMIT = 256;
 // The per-sender refusals of delivered envelopes a group keeps, under the
 // same bound as its per-peer delivery observations.
@@ -243,6 +245,8 @@ const DURABLE_PROGRESS_OBSERVATION = Object.freeze({
 export {
   CONF_STATE_NOT_ANNOUNCED,
   CORE_CALL_WITHOUT_HANDLE,
+  DEFAULT_MAX_INBOUND_QUEUE_LENGTH,
+  DEFAULT_MAX_INBOUND_QUEUE_BYTES,
   FOLLOWER_RAFT_STATE,
   CORE_OPERATION,
   CORE_REFUSAL_KIND,

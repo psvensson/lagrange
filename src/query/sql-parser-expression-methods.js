@@ -1,5 +1,6 @@
 import {EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT, PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
+import {QUERY_ERROR_CODE} from './query-constants.js';
 import {
   translateBooleanLiteral,
   translatePositionalParam,
@@ -112,6 +113,12 @@ const sqlParserExpressionMethods = {
     case EXT_EXPR_TYPE.NUMBER:
       return {type: EXPR_TYPE.LITERAL, value: expr.value};
     case EXT_EXPR_TYPE.SINGLE_QUOTE_STRING:
+      return {
+        type: EXPR_TYPE.LITERAL,
+        value: typeof expr.value === 'string' ?
+          expr.value.replace(/''/g, '\'') :
+          expr.value,
+      };
     case EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING:
     case EXT_EXPR_TYPE.STRING:
       return {type: EXPR_TYPE.LITERAL, value: expr.value};
@@ -130,13 +137,13 @@ const sqlParserExpressionMethods = {
       return {type: EXPR_TYPE.STAR, value: STAR_VALUE};
     case EXT_EXPR_TYPE.EXPR_LIST:
       return expr.value.map((v) => this.convertExpression(v));
-    default:
-      if (expr.value !== undefined) {
-        return {type: EXPR_TYPE.LITERAL, value: expr.value};
-      }
-      throw new Error(
+    default: {
+      const error = new Error(
         PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + expr.type,
       );
+      error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+      throw error;
+    }
     }
   },
 
@@ -407,6 +414,12 @@ const sqlParserExpressionMethods = {
     case EXT_EXPR_TYPE.NUMBER:
       return {type: EXPR_TYPE.LITERAL, value: val.value};
     case EXT_EXPR_TYPE.SINGLE_QUOTE_STRING:
+      return {
+        type: EXPR_TYPE.LITERAL,
+        value: typeof val.value === 'string' ?
+          val.value.replace(/''/g, '\'') :
+          val.value,
+      };
     case EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING:
     case EXT_EXPR_TYPE.STRING:
       return {type: EXPR_TYPE.LITERAL, value: val.value};
@@ -419,11 +432,13 @@ const sqlParserExpressionMethods = {
         return this.createParameterNode();
       }
       return {type: EXPR_TYPE.LITERAL, value: val.value};
-    default:
-      if (val.value !== undefined) {
-        return {type: EXPR_TYPE.LITERAL, value: val.value};
-      }
-      return {type: EXPR_TYPE.LITERAL, value: null};
+    default: {
+      const error = new Error(
+        PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + val.type,
+      );
+      error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+      throw error;
+    }
     }
   },
 };

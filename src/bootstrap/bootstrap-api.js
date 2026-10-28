@@ -209,6 +209,11 @@ class BootstrapAPI {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(BOOTSTRAP_API_SUBSYSTEM) : console;
+    this.controlAuthEnv = options.requestCellEnv || null;
+    this.authenticateControlRequest =
+      typeof options.authenticateControlRequest === 'function' ?
+        options.authenticateControlRequest :
+        null;
     this.requestCellRoutingSurface =
       options.requestCellRoutingSurface ||
       createRequestCellRoutingSurface({

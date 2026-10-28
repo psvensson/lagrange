@@ -146,7 +146,7 @@
     {
       "id": "partition-key-comparison",
       "area": "Query routing",
-      "summary": "Partition range comparison is string-based, so numeric strings sort lexicographically."
+      "summary": "Unified UTF-8 byte-order (BINARY) key comparison across split keys and routing keys ensures consistent placement and query routing, failing closed on unsupported mixed-type key comparisons."
     },
     {
       "id": "secondary-indexes",
@@ -241,7 +241,17 @@
     {
       "id": "sql-dollar-quoted-literals",
       "area": "SQL",
-      "summary": "Dollar-quoted string literals ($$...$$, $tag$...$tag$) are stored as NULL rather than their text. Use single-quoted literals or bind parameters."
+      "summary": "SQL INSERT and UPDATE statements evaluate supported expressions, safely escape string literals, and preserve dollar-quoted strings ($$...$$, $tag$...$tag$); unsupported AST expression nodes fail closed with a typed error before mutation."
+    },
+    {
+      "id": "sql-create-table-constraints",
+      "area": "SQL",
+      "summary": "CREATE TABLE enforces PRIMARY KEY (including composite PRIMARY KEY), UNIQUE, and CHECK constraints per partition; FOREIGN KEY and REFERENCES declarations across distributed partitions are explicitly refused before creation."
+    },
+    {
+      "id": "internal-cluster-http-ingress-auth",
+      "area": "Security",
+      "summary": "Internal cluster HTTP ingress on /cluster/state, /bootstrap, and /register-service enforces HTTP authentication when credentials are configured, while /livez, /startupz, and /readyz remain probe-accessible."
     },
     {
       "id": "sql-on-conflict-do-update",
@@ -276,7 +286,7 @@
     {
       "id": "postgres-unverified-expression-semantics",
       "area": "PostgreSQL compatibility",
-      "summary": "Unverified PostgreSQL expressions (including dollar-quoted literal handling) are not certified. A valid PG literal must not silently become NULL; use public-path semantic tests before relying on it."
+      "summary": "SQL INSERT and UPDATE expression evaluation supports safe string literal escaping, dollar-quoted strings, arithmetic, type casts, and functions, while unsupported AST nodes fail closed with SQLSTATE 0A000 before mutation."
     },
     {
       "id": "public-transaction-unknown-outcome",

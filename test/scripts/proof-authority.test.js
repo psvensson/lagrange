@@ -5,7 +5,14 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {
-  OUTCOME, PROOF, RECEIPT_REF_ROOT, proofRef, recordProof, resolveProof,
+  OUTCOME,
+  PROOF,
+  RECEIPT_REF_ROOT,
+  buildReceipt,
+  defaultProducer,
+  proofRef,
+  recordProof,
+  resolveProof,
 } from '../../scripts/proof-authority.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
 
@@ -116,4 +123,48 @@ test('unregistered proof names never become reusable by convention', () => {
   const result = resolveProof({proofId: 'some-future-proof-v1', sha, cwd: source});
   assert.equal(result.outcome, OUTCOME.UNAVAILABLE);
   assert.match(result.because, /unregistered proof contract/u);
+});
+
+test('defaultProducer produces attributable local CLI metadata when unconfigured', () => {
+  const producer = defaultProducer({}, {});
+  assert.equal(producer.kind, 'local-cli');
+  assert.equal(producer.id, `pid-${process.pid}`);
+  assert.equal(producer.url, undefined);
+});
+
+test('defaultProducer produces attributable GitHub Actions metadata when in CI', () => {
+  const env = {
+    GITHUB_ACTIONS: 'true',
+    GITHUB_WORKFLOW: 'Release Gate',
+    GITHUB_RUN_ID: '987654',
+    GITHUB_RUN_ATTEMPT: '3',
+    GITHUB_SERVER_URL: 'https://github.com',
+    GITHUB_REPOSITORY: 'org/lagrange',
+  };
+  const producer = defaultProducer({}, env);
+  assert.equal(producer.kind, 'github-actions');
+  assert.equal(producer.id, 'Release Gate:987654:3');
+  assert.equal(producer.url, 'https://github.com/org/lagrange/actions/runs/987654');
+
+  const overridden = defaultProducer({kind: 'custom-ci', id: 'manual-run'}, env);
+  assert.equal(overridden.kind, 'custom-ci');
+  assert.equal(overridden.id, 'manual-run');
+  assert.equal(overridden.url, 'https://github.com/org/lagrange/actions/runs/987654');
+});
+
+test('buildReceipt and recordProof populate non-empty producer attribution by default', () => {
+  const sha = 'b'.repeat(40);
+  const receipt = buildReceipt({proofId: PROOF.RELEASE_FULL, sha});
+  assert.ok(receipt.producer.kind && receipt.producer.kind.length > 0);
+  assert.ok(receipt.producer.id && receipt.producer.id.length > 0);
+
+  const {source, sha: commitSha} = fixture();
+  const recorded = recordProof({
+    proofId: PROOF.RELEASE_FULL,
+    sha: commitSha,
+    cwd: source,
+  });
+  assert.equal(recorded.outcome, OUTCOME.PROVEN);
+  assert.ok(recorded.receipt.producer.kind && recorded.receipt.producer.kind.length > 0);
+  assert.ok(recorded.receipt.producer.id && recorded.receipt.producer.id.length > 0);
 });

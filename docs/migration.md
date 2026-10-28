@@ -24,6 +24,9 @@ This stage answers:
 
 - Can the driver connect with password authentication and verified TLS?
 - Which statements, parameter styles, transactions, and result types work?
+- Do SQL `INSERT` and `UPDATE` statements evaluate expressions correctly, escape string literals, and preserve dollar-quoted strings? Unsupported AST nodes fail closed before mutation.
+- Do `CREATE TABLE` constraints (`PRIMARY KEY`, composite `PRIMARY KEY`, `UNIQUE`, `CHECK`) enforce declared semantics per partition? Distributed `FOREIGN KEY` and `REFERENCES` declarations are explicitly refused before creation.
+- Does partition routing match table keys? Split placement and routing use unified UTF-8 byte-order (`BINARY`) key comparison across split keys and routing keys.
 - Which ORM or driver behavior is unsupported?
 - How does the application handle Lagrange's readiness and typed failures?
 
@@ -47,7 +50,10 @@ Keep the summary operation declared while testing the health route.
 
 At this stage, verify the build and deployment records, immutable component
 installation, Basic-authenticated HTTP ingress, and ready service instances
-(Cells). One successful health request does not prove replacement, recovery, or
+(Cells). Internal cluster HTTP ingress endpoints (`/cluster/state`, `/bootstrap`,
+and `/register-service`) enforce authentication when credentials are configured,
+while `/livez`, `/startupz`, and `/readyz` remain probe-accessible without credentials.
+One successful health request does not prove replacement, recovery, or
 authorization denial; those need their own checks.
 
 This is a deployment step, not the data-local optimization. A WASI component

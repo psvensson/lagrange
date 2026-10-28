@@ -5,7 +5,11 @@ import {Worker} from 'worker_threads';
 import os from 'os';
 import fs from 'fs';
 import {test} from '../../src/test-helpers/tap.js';
-import {runEntrypoint} from '../../src/test-helpers/run-entrypoint.js';
+
+function runEntrypoint(entryPath, opts = {}) {
+  const {args = [], env = {}, timeoutMs = 15000} = opts;
+  return runSpawnedBundle(args, env, {bundle: entryPath, timeoutMs});
+}
 import {
   ENTRYPOINT_DRY_RUN_OUTCOME,
   ENTRYPOINT_LOG_MSG,
@@ -66,9 +70,11 @@ function layOutBundleWithoutBinding(root) {
 function runSpawnedBundle(args, env,
   {timeoutMs = 15000, bundle = mainBundle} = {}) {
   return new Promise((resolve, reject) => {
+    const childEnv = {...process.env, ...env};
+    delete childEnv.NODE_OPTIONS;
     const child = spawn(process.execPath, [bundle, ...args], {
       cwd: projectRoot,
-      env: {...process.env, ...env},
+      env: childEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -203,6 +209,23 @@ test('SEA bundle smoke test', {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS}, async (t) 
     fs.existsSync(join(serviceTarget, 'authoring', 'define-service.js')),
     true,
     'bundle service init vendors the staged authoring library',
+  );
+
+  const bundleServiceGenerate = await runEntrypoint(mainBundle, {
+    args: ['service', 'generate', serviceTarget],
+    timeoutMs: 30000,
+  });
+  t.equal(bundleServiceGenerate.exitCode, 0, 'bundle service generate exits cleanly');
+
+  const bundleServiceBuild = await runEntrypoint(mainBundle, {
+    args: ['service', 'build', serviceTarget],
+    timeoutMs: 60000,
+  });
+  t.equal(bundleServiceBuild.exitCode, 0, 'bundle service build exits cleanly');
+  t.equal(
+    fs.existsSync(join(serviceTarget, 'dist/component.wasm')),
+    true,
+    'bundle service build creates dist/component.wasm',
   );
 
   const bundleSecret = 'BUNDLE_SECRET_MUST_NOT_LEAK';

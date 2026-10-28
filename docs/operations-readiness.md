@@ -43,13 +43,16 @@ replacement, placement, or failure recovery.
 
 Use the dedicated probes:
 
-- `/livez` - process liveness only;
-- `/startupz` - bootstrap handoff;
-- `/readyz` - traffic readiness; and
-- `/health` - compatibility endpoint, not an orchestration oracle.
+- `/livez` -- process liveness only;
+- `/startupz` -- bootstrap handoff;
+- `/readyz` -- traffic readiness; and
+- `/health` -- compatibility endpoint, not an orchestration oracle.
 
 Do not route traffic because the process opened a port. Wait for readiness and
 preserve structured retry or wait outcomes from long-running cluster changes.
+When cluster credentials are configured, internal cluster HTTP ingress endpoints
+(`/cluster/state`, `/bootstrap`, and `/register-service`) enforce authentication,
+while `/livez`, `/startupz`, and `/readyz` remain probe-accessible without credentials.
 
 ## Replica recovery
 
@@ -108,7 +111,7 @@ against an obsolete partition layout.
 Current routing limitations make key choice operationally important:
 
 - partition narrowing effectively expects a key column named `id`;
-- range comparison is string-based;
+- split boundaries and query routing use unified UTF-8 byte-order (`BINARY`) key comparison, while mixed-type key comparisons fail closed;
 - non-usable predicates scatter to all partitions; and
 - secondary indexes are not available through the public SQL surface.
 
@@ -119,11 +122,15 @@ hot spots, and fan-out behavior with `EXPLAIN DISTRIBUTED` and telemetry.
 
 Public PostgreSQL-wire and other exposed SQL write operations must preserve
 accepted statement semantics or be refused by the SQL/transaction owner with
-a typed result **before any side effect**. PostgreSQL `ON CONFLICT DO UPDATE`
+a typed result **before any side effect**. SQL `INSERT` and `UPDATE` statements
+support expression evaluation, safe string literal escaping, and dollar-quoted
+strings; unsupported AST nodes fail closed with SQLSTATE `0A000` rather than
+silently corrupting or storing `NULL`. `CREATE TABLE` enforces `PRIMARY KEY`
+(including composite keys), `UNIQUE`, and `CHECK` constraints per partition,
+while `FOREIGN KEY` and `REFERENCES` declarations across distributed partitions
+are explicitly refused before creation. PostgreSQL `ON CONFLICT DO UPDATE`
 is refused before mutation with SQLSTATE `0A000` (`UNSUPPORTED_SQL_FEATURE`)
-rather than using replacement semantics. Dollar-quoted literals and other
-unverified expressions also require public-path regression proof; an
-unsupported literal must never be silently coerced to `NULL`.
+rather than using replacement semantics.
 
 A lost reply or timed-out distributed `COMMIT` is not proof of abort. Until
 a caller-visible idempotency/reconciliation contract is proven on the public

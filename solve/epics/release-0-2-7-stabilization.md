@@ -11,7 +11,8 @@ doneWhen:
     consecutive: 1
     metric: failed
     certification: true
-quests: []
+quests:
+  - release-0-2-7-core-runtime-and-semantics
 authorizes:
   - src/query
   - src/partition
@@ -21,6 +22,7 @@ authorizes:
   - src/bootstrap
   - src/runtime
   - src/service
+  - src/cli
   - src/diagnostics
   - src/admin
   - src/config
@@ -42,6 +44,7 @@ authorizes:
   - CHANGELOG.md
   - solve/specs/release-0-2-7-stabilization
   - solve/epics/release-0-2-7-stabilization
+  - solve/changes/global-owner-debt-inventory/inventory.json
 ---
 
 # 0.2.7 stabilization: correct semantics, bounded runtime, usable artifacts
