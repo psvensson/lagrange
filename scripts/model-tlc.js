@@ -33,8 +33,9 @@ const CONTRACT_EVIDENCE_DIR =
   path.resolve('architecture', 'contracts', 'evidence');
 const MODE_ARGUMENT = '--mode';
 const INVOCATION_LOG_ENV = 'MODEL_TLC_INVOCATION_LOG';
-const MAX_PARALLEL_TLC_WORKERS = 6;
+const MAX_PARALLEL_TLC_WORKERS = 4;
 const SERIAL_TLC_WORKERS = 1;
+const JAVA_MAXIMUM_HEAP_FLAG = '-Xmx512m';
 const IGNORE_STREAM_MODE = 'ignore';
 const PIPE_STREAM_MODE = 'pipe';
 const TLC_STREAM_MODES = Object.freeze([
@@ -135,6 +136,7 @@ function runTlc(config) {
   fs.mkdirSync(metadir, {recursive: true});
   return new Promise((resolve, reject) => {
     const child = spawn('java', [
+      JAVA_MAXIMUM_HEAP_FLAG,
       '-cp', JAR_PATH,
       'tlc2.TLC',
       '-deadlock',

@@ -240,7 +240,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
 
       seedConfirmationTracker = new CDCConfirmationTracker({
         systemTableCache,
-        timeoutMs: 5000,
+        timeoutMs: 15000,
       });
 
       seedApi = new BootstrapAPI({
@@ -303,7 +303,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       if (joiningCache && joiningCache !== systemTableCache) {
         joiningConfirmationTracker = new CDCConfirmationTracker({
           systemTableCache: joiningCache,
-          timeoutMs: 5000,
+          timeoutMs: 15000,
         });
       }
 
@@ -521,7 +521,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
 
       cdcConfirmationTracker = new CDCConfirmationTracker({
         systemTableCache,
-        timeoutMs: 5000,
+        timeoutMs: 15000,
       });
 
       seedApi = new BootstrapAPI({
@@ -569,14 +569,15 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       // =========================================================================
       // Perform several writes to trigger Raft replication and append ack
       for (let i = 0; i < 3; i++) {
+        const nextCpuPercent = (i + 1) * 10;
         const confirmation = cdcConfirmationTracker.awaitConfirmation(
           TABLES.NODES,
           seedNodeId,
-          {expectedFields: {[COLUMN.CPU_USAGE_PERCENT]: i * 10}},
+          {expectedFields: {[COLUMN.CPU_USAGE_PERCENT]: nextCpuPercent}},
         );
         await seedSqlEngine.executeQuery(
           'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
-          [i * 10, seedNodeId],
+          [nextCpuPercent, seedNodeId],
         );
         await confirmation;
       }

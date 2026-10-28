@@ -137,7 +137,8 @@ const PRIORITY_AUDIT_SCRIPTS = Object.freeze([
   'test:unused:prod',
   'lint:scripts',
 ]);
-const MAXIMUM_PARALLEL_AUDITS = 6;
+const MAXIMUM_PARALLEL_AUDITS = 4;
+const MAXIMUM_HEAVY_PARALLEL_AUDITS = 2;
 const SERIAL_PARALLEL_AUDITS = 1;
 const PIPE_STREAM_MODE = 'pipe';
 const IGNORE_STREAM_MODE = 'ignore';
@@ -378,7 +379,7 @@ function expandAuditTasks(owed) {
       }
     }
   }
-  return {queue: [...heavy, ...regular], taskCounts};
+  return {heavy, regular, taskCounts};
 }
 
 function hasEmptySubResults(subResults) {
@@ -403,8 +404,20 @@ function shouldAbortFastFail(fastFail, result) {
   return result.exitCode !== 0;
 }
 
+function shouldTakeHeavyTask(heavy, isHeavyWorker) {
+  if (!isHeavyWorker) return false;
+  return heavy.length > 0;
+}
+
+function nextTaskForWorker(heavy, regular, isHeavyWorker) {
+  if (shouldTakeHeavyTask(heavy, isHeavyWorker)) {
+    return arrayShift(heavy);
+  }
+  return arrayShift(regular);
+}
+
 async function executeOwedAudits(owed, fastFail) {
-  const {queue, taskCounts} = expandAuditTasks(owed);
+  const {heavy, regular, taskCounts} = expandAuditTasks(owed);
   const subResultsByParent = arrayMap(
     taskCounts,
     (count) => new Array(count),
@@ -418,14 +431,14 @@ async function executeOwedAudits(owed, fastFail) {
       return [steeringResult];
     }
   }
+  const totalTasks = heavy.length + regular.length;
   const workerLimit = fastFail ?
     SERIAL_PARALLEL_AUDITS :
-    Math.min(MAXIMUM_PARALLEL_AUDITS, queue.length);
+    Math.min(MAXIMUM_PARALLEL_AUDITS, totalTasks);
   let aborted = false;
-  async function runWorker() {
-    while (queue.length > 0) {
-      if (aborted) return;
-      const task = arrayShift(queue);
+  async function runWorker(isHeavyWorker) {
+    while (!aborted) {
+      const task = nextTaskForWorker(heavy, regular, isHeavyWorker);
       if (!task) return;
       const result = await runLeafAudit(task.scriptName, task.extraArguments);
       subResultsByParent[task.parentIndex][task.subIndex] = result;
@@ -437,7 +450,7 @@ async function executeOwedAudits(owed, fastFail) {
   }
   const workers = [];
   for (let index = 0; index < workerLimit; index += 1) {
-    arrayPush(workers, runWorker());
+    arrayPush(workers, runWorker(index < MAXIMUM_HEAVY_PARALLEL_AUDITS));
   }
   await Promise.all(workers);
   const completed = [];

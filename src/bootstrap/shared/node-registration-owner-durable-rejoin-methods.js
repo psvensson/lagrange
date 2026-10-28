@@ -312,44 +312,28 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   // over a newer owner. The cache is then seeded with this boot's rows.
   async advanceReusedEndpointRows(existingMembership) {
     const bootIncarnation = this.getRegistrationBootIncarnation();
-    const stampReusedEndpoint = (row, originHlc) => ({
-      ...row,
-      [COLUMN.BOOT_INCARNATION]: bootIncarnation,
-      ...(typeof originHlc === 'string' && originHlc.length > 0 ?
-        {[COLUMN.UPDATED_AT_HLC]: originHlc} :
-        {}),
-    });
-    if (existingMembership?.endpointRow) {
-      const result = await this.upsertSystemTableRowWithRetry(
-        TABLES.NODE_ENDPOINTS,
-        existingMembership.endpointRow,
-      );
+    const reused = [
+      [TABLES.NODE_ENDPOINTS, existingMembership?.endpointRow],
+      ...(existingMembership?.metaEndpointRows || []).map((row) =>
+        [TABLES.SERVICE_ENDPOINTS, row]),
+    ].filter(([, row]) => row);
+    for (const [tableName, row] of reused) {
+      const result = await this.upsertSystemTableRowWithRetry(tableName, row);
       if (result?.success === false) {
         throw new Error(
-          `${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ` +
-          `${TABLES.NODE_ENDPOINTS}`,
-        );
+          `${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ${tableName}`);
       }
-      existingMembership.endpointRow = stampReusedEndpoint(
-        existingMembership.endpointRow,
-        result?.originHlc,
-      );
-    }
-    const nextMetaEndpointRows = [];
-    for (const row of existingMembership?.metaEndpointRows || []) {
-      const result = await this.upsertSystemTableRowWithRetry(
-        TABLES.SERVICE_ENDPOINTS,
-        row,
-      );
-      if (result?.success === false) {
-        throw new Error(
-          `${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ` +
-          `${TABLES.SERVICE_ENDPOINTS}`,
-        );
+      if (typeof result?.originHlc === 'string' && result.originHlc.length > 0) {
+        row[COLUMN.UPDATED_AT_HLC] = result.originHlc;
       }
-      nextMetaEndpointRows.push(stampReusedEndpoint(row, result?.originHlc));
     }
-    existingMembership.metaEndpointRows = nextMetaEndpointRows;
+    existingMembership.endpointRow = existingMembership.endpointRow ?
+      {...existingMembership.endpointRow,
+        [COLUMN.BOOT_INCARNATION]: bootIncarnation} :
+      existingMembership.endpointRow;
+    existingMembership.metaEndpointRows =
+      (existingMembership.metaEndpointRows || []).map((row) =>
+        ({...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}));
   }
 
   getRegistrationBootIncarnation() {
