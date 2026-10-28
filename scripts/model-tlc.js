@@ -13,9 +13,10 @@
 // demand if tools/tla2tools.jar is absent (override with TLA_TOOLS_JAR).
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import {spawnSync} from 'node:child_process';
+import {spawn} from 'node:child_process';
 import https from 'node:https';
 import {pathToFileURL} from 'node:url';
 import {CONFIGS} from './model-tlc-configs.js';
@@ -31,6 +32,21 @@ const META_ROOT = path.resolve('test-output', 'tlc');
 const CONTRACT_EVIDENCE_DIR =
   path.resolve('architecture', 'contracts', 'evidence');
 const MODE_ARGUMENT = '--mode';
+const INVOCATION_LOG_ENV = 'MODEL_TLC_INVOCATION_LOG';
+const MAX_PARALLEL_TLC_WORKERS = 6;
+const SERIAL_TLC_WORKERS = 1;
+const IGNORE_STREAM_MODE = 'ignore';
+const PIPE_STREAM_MODE = 'pipe';
+const TLC_STREAM_MODES = Object.freeze([
+  IGNORE_STREAM_MODE,
+  PIPE_STREAM_MODE,
+  PIPE_STREAM_MODE,
+]);
+const UTF_EIGHT_ENCODING = 'utf8';
+const DATA_EVENT = 'data';
+const ERROR_EVENT = 'error';
+const CLOSE_EVENT = 'close';
+const FINISH_EVENT = 'finish';
 const DUPLICATE_MODE_PROBLEM =
   'model-tlc: --mode may be provided exactly once';
 const MISSING_MODE_PROBLEM =
@@ -99,9 +115,9 @@ function download(url, dest) {
         }
         const out = fs.createWriteStream(dest);
         res.pipe(out);
-        out.on('finish', () => out.close(resolve));
-        out.on('error', reject);
-      }).on('error', reject);
+        out.on(FINISH_EVENT, () => out.close(resolve));
+        out.on(ERROR_EVENT, reject);
+      }).on(ERROR_EVENT, reject);
     };
     request(url, 0);
   });
@@ -117,16 +133,30 @@ async function ensureJar() {
 function runTlc(config) {
   const metadir = path.join(META_ROOT, config.id || config.mode);
   fs.mkdirSync(metadir, {recursive: true});
-  const result = spawnSync('java', [
-    '-cp', JAR_PATH,
-    'tlc2.TLC',
-    '-deadlock',
-    '-metadir', metadir,
-    '-config', config.cfg,
-    config.module,
-  ], {encoding: 'utf8', maxBuffer: 32 * 1024 * 1024});
-  const output = `${result.stdout || ''}${result.stderr || ''}`;
-  return {exitCode: result.status, output};
+  return new Promise((resolve, reject) => {
+    const child = spawn('java', [
+      '-cp', JAR_PATH,
+      'tlc2.TLC',
+      '-deadlock',
+      '-metadir', metadir,
+      '-config', config.cfg,
+      config.module,
+    ], {stdio: TLC_STREAM_MODES});
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding(UTF_EIGHT_ENCODING);
+    child.stderr.setEncoding(UTF_EIGHT_ENCODING);
+    child.stdout.on(DATA_EVENT, (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on(DATA_EVENT, (chunk) => {
+      stderr += chunk;
+    });
+    child.on(ERROR_EVENT, reject);
+    child.on(CLOSE_EVENT, (code) => {
+      resolve({exitCode: code, output: `${stdout}${stderr}`});
+    });
+  });
 }
 
 function cleanTraceArtifacts(modulePath) {
@@ -136,6 +166,53 @@ function cleanTraceArtifacts(modulePath) {
       fs.rmSync(path.join(dir, entry), {force: true});
     }
   }
+}
+
+function tlcWorkerCount(configCount) {
+  if (process.env[INVOCATION_LOG_ENV] || configCount <= SERIAL_TLC_WORKERS) {
+    return SERIAL_TLC_WORKERS;
+  }
+  return Math.min(os.availableParallelism(), MAX_PARALLEL_TLC_WORKERS, configCount);
+}
+
+function groupConfigsByModuleDir(selectedConfigs) {
+  const queues = new Map();
+  for (let index = 0; index < selectedConfigs.length; index += 1) {
+    const config = selectedConfigs[index];
+    const dir = path.dirname(config.module);
+    if (!queues.has(dir)) queues.set(dir, []);
+    queues.get(dir).push({config, index});
+  }
+  return [...queues.values()];
+}
+
+async function runSelectedTlcConfigs(selectedConfigs) {
+  const runs = new Array(selectedConfigs.length);
+  const workerCount = tlcWorkerCount(selectedConfigs.length);
+  if (workerCount === SERIAL_TLC_WORKERS) {
+    for (let index = 0; index < selectedConfigs.length; index += 1) {
+      const config = selectedConfigs[index];
+      runs[index] = await runTlc(config);
+      cleanTraceArtifacts(config.module);
+    }
+    return runs;
+  }
+  const queues = groupConfigsByModuleDir(selectedConfigs);
+  let nextQueue = 0;
+  const runWorker = async () => {
+    while (nextQueue < queues.length) {
+      const queue = queues[nextQueue];
+      nextQueue += 1;
+      for (const {config, index} of queue) {
+        runs[index] = await runTlc(config);
+        cleanTraceArtifacts(config.module);
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({length: Math.min(workerCount, queues.length)}, () => runWorker()),
+  );
+  return runs;
 }
 
 function interpret(config, run) {
@@ -198,10 +275,11 @@ async function main(argv = process.argv.slice(2)) {
   await ensureJar();
   fs.mkdirSync(REPORTS_DIR, {recursive: true});
 
+  const runs = await runSelectedTlcConfigs(selectedConfigs);
   let allMet = true;
-  for (const config of selectedConfigs) {
-    const run = runTlc(config);
-    cleanTraceArtifacts(config.module);
+  for (let index = 0; index < selectedConfigs.length; index += 1) {
+    const config = selectedConfigs[index];
+    const run = runs[index];
     const {verdict, report} = renderTlcReport(config, run);
     const target = path.join(REPORTS_DIR, config.report);
     fs.writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);
