@@ -590,7 +590,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       planCosts: (planned) => estimateFileCosts(
         planClassifiedTestFiles(ROOT, planned), lastResultsRoots(ROOT)),
       runLocal: (planned, options) => runClassifiedTestFiles(planned, options),
-      lastGreen: (file) => readLastResult([ROOT], file) !== null,
+      lastGreen: (file) => readLastResult(lastResultsRoots(ROOT), file) !== null,
     }));
   }
 }

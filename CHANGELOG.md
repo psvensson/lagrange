@@ -10,6 +10,67 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.7] — 2026-10-29
+
+Stabilization release repairing SQL mutation and schema-constraint semantics,
+TEXT split-key ordering, Bootstrap HTTP ingress authentication, Raft durable
+journal and inbound-queue bounds, partition snapshot cadence and log compaction
+coverage, consumer npm package and SEA service-build ergonomics, non-root
+container and Helm chart hardening, and release provenance attribution (epic
+`release-0-2-7-stabilization`, developer ergonomics epic
+`developer-adoption-and-ergonomics`):
+
+Formation health at cut time: `formation health: 0/20 passed (0%), 0 with a
+starved seed`.
+
+### Fixed
+- **SQL mutation expressions (Q01):** `INSERT ... VALUES` and `UPDATE ... SET`
+  evaluate deterministic arithmetic (`+`, `-`, `*`, `/`, `%`), unary minus,
+  dollar-quoted strings, `CAST(...)`, and deterministic scalar functions
+  (`UPPER`, `LOWER`, `TRIM`, `COALESCE`, `NULLIF`, `ABS`, `ROUND`, `LENGTH`)
+  before replication instead of silently coercing non-literal AST nodes to
+  `NULL`; unsupported or nondeterministic expressions are refused before any
+  state change.
+- **Schema constraint admission and enforcement (Q02):** `CREATE TABLE`
+  preserves and enforces `NOT NULL`, single and composite `PRIMARY KEY`,
+  single-partition `UNIQUE`, and `DEFAULT` literals across catalog metadata,
+  distributed write validation, and physical SQLite bootstrap, while refusing
+  unsupported `CHECK`, `FOREIGN KEY`, and non-partition-key `UNIQUE`
+  constraints at admission time.
+- **Split-key ordering for `TEXT` primary keys (Q03):** Partition boundary
+  routing and backfill filter comparison compare `TEXT` keys lexicographically
+  instead of coercing numeric prefixes (`"10a"` vs `"2"`).
+- **Bootstrap HTTP ingress authentication boundary (Q04):** Non-loopback
+  Bootstrap HTTP binds require bearer-token authentication (`authToken` /
+  `LAGRANGE_BOOTSTRAP_AUTH_TOKEN`) on `/sql`, `/partitions/*`, `/cdc/*`,
+  `/cluster/*`, `/admin/*`, and `/services*`, while keeping `/health` and
+  `/ready` unauthenticated for probes.
+- **CLI & SEA service authoring and npm packaging (Q05, Q06, Q07):**
+  `lagrange service init` scaffolds multi-partition key-routed SQL, `lagrange
+  service pipeline` runs `init -> generate -> build` in one command, SEA
+  invocations return a dedicated `SEA_SERVICE_BUILD_UNSUPPORTED` diagnostic,
+  `wit/` and `@bytecodealliance/componentize-js` ship in `lagrange-server`
+  consumer installs, `blessed-contrib` is replaced by an owned table widget,
+  and `npm audit --omit=dev` reports zero vulnerabilities.
+- **Bounded Raft storage and inbound queue (Q08, Q09, Q10, Q11):**
+  `RaftRsDurableStore` compacts `raft-rs-store.ndjson` at checkpoint boundaries,
+  `RaftRsRuntimeOwner` drains inbound messages iteratively with a bounded queue
+  (`MAX_INBOUND_QUEUE_DEPTH = 4096`), and `PartitionSnapshotCadence` honors
+  configured entry/interval thresholds and compacts `_raft_rs_log` across both
+  TX1 and legacy commit paths.
+- **Provenance, capabilities, Helm, and container hardening (Q12–Q17):**
+  `ProofAuthority` records attributable producer metadata, `vendor/raft-rs-wasm`
+  provenance digests and `docs/current-capabilities.json` are reconciled,
+  `Dockerfile` runs as non-root `USER 10001:10001` with writable `/data`, Helm
+  templates isolate Admin WebSocket ingress (`8081`) when `admin.enabled=false`,
+  and Docker Hub overview rendering filters out newer changelog sections.
+
+### Known limitations
+- **Rolling-restart convergence is a statistical property, not a bounded-time
+  guarantee.** Eventual stabilization is proven for the rebalancer kernel, while
+  bounded-time convergence under rolling restart remains a statistical latency
+  tail (`docs/convergence-donewhen-metric.md`).
+
 ## [0.2.6] — 2026-10-27
 
 Consensus cutover to the Rust `raft-rs` core through the WASM operation
@@ -465,7 +526,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/psvensson/lagrange/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/psvensson/lagrange/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.5
 [0.2.4-rc.2]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.1...v0.2.4-rc.2

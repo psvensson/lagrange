@@ -788,7 +788,6 @@ class RaftRsDurableStore {
 }
 
 export {
-  DEFAULT_MAX_JOURNAL_ENTRIES,
   RaftRsDurableStore,
   commitDurably,
 };

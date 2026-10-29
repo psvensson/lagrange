@@ -31,6 +31,8 @@ import {fileURLToPath} from 'node:url';
 // the executable instead.
 const STAGED_WIT_DIR = 'wit';
 const WIT_FILE_NAME = 'lagrange-cell.wit';
+const WORLD_WIT_FILE = 'world.wit';
+const UTF8_ENCODING = 'utf8';
 
 const SEA_BUILD_FLAG = 'true';
 const WIT_RELATIVE_PATH = '../../wit';
@@ -42,7 +44,6 @@ function defaultWitPath() {
   return fileURLToPath(new URL(WIT_RELATIVE_PATH, import.meta.url));
 }
 
-const canonicalWitDirectory = defaultWitPath;
 const SERVICE_CELL_WORLD = 'service-cell';
 // Build-time-only devDependency; the specifier lives in a named const so
 // the dynamic import carries no bare module literal.
@@ -106,7 +107,17 @@ function resolveValidatedBuildPaths(entryPath, sourcePath, witPath) {
       `WIT world definition was not found at ${resolvedWitPath}`,
     );
   }
-  return {resolvedEntryPath, resolvedWitPath};
+  const witFilePath = fs.statSync(resolvedWitPath).isDirectory() ?
+    path.join(resolvedWitPath, WORLD_WIT_FILE) :
+    resolvedWitPath;
+  if (!fs.existsSync(witFilePath)) {
+    throw new ServiceComponentBuildError(
+      SERVICE_COMPONENT_BUILD_ERROR_CODE.MISSING_WIT_WORLD,
+      `WIT world definition was not found at ${witFilePath}`,
+    );
+  }
+  const witWorld = fs.readFileSync(witFilePath, UTF8_ENCODING);
+  return {resolvedEntryPath, resolvedWitPath, witWorld};
 }
 
 /**
@@ -126,13 +137,13 @@ async function buildServiceComponent({
   witPath = undefined,
   componentizeImpl = null,
 } = {}) {
-  const {resolvedEntryPath, resolvedWitPath} =
+  const {resolvedEntryPath, resolvedWitPath, witWorld} =
     resolveValidatedBuildPaths(entryPath, sourcePath, witPath);
   const {componentize} = await loadComponentize(componentizeImpl);
   const options = {
     disableFeatures: [...DISABLED_ENGINE_FEATURES],
     sourcePath: resolvedEntryPath,
-    witPath: resolvedWitPath,
+    witWorld,
     worldName,
   };
   let result;
@@ -148,7 +159,10 @@ async function buildServiceComponent({
       {cause: error},
     );
   }
-  return {component: result.component, options};
+  return {
+    component: result.component,
+    options: {...options, witPath: resolvedWitPath},
+  };
 }
 
 const componentizeService = buildServiceComponent;
@@ -157,7 +171,5 @@ export {
   SERVICE_COMPONENT_BUILD_ERROR_CODE,
   ServiceComponentBuildError,
   buildServiceComponent,
-  canonicalWitDirectory,
   componentizeService,
-  defaultWitPath,
 };

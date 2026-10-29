@@ -101,10 +101,7 @@ const COMMAND_ARGUMENT = Object.freeze({
   SERVICE_INIT: 'init',
   SERVICE_GENERATE: 'generate',
   SERVICE_BUILD: 'build',
-  SERVICE_DIR_OPTION: '--dir',
-  SERVICE_NAME_OPTION: '--name',
   SERVICE_SMOKE_DIR: 'service-smoke',
-  SERVICE_SMOKE_NAME: 'smoke-svc',
 });
 const HTTP = Object.freeze({
   CACHE_NO_STORE: 'no-store',
@@ -512,21 +509,16 @@ async function verifyInstalledPackage(packed) {
     runChecked(lagrangeBin, [
       COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
       COMMAND_ARGUMENT.SERVICE_INIT,
-      COMMAND_ARGUMENT.SERVICE_DIR_OPTION,
       serviceDirectory,
-      COMMAND_ARGUMENT.SERVICE_NAME_OPTION,
-      COMMAND_ARGUMENT.SERVICE_SMOKE_NAME,
     ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
     runChecked(lagrangeBin, [
       COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
       COMMAND_ARGUMENT.SERVICE_GENERATE,
-      COMMAND_ARGUMENT.SERVICE_DIR_OPTION,
       serviceDirectory,
     ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
     runChecked(lagrangeBin, [
       COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
       COMMAND_ARGUMENT.SERVICE_BUILD,
-      COMMAND_ARGUMENT.SERVICE_DIR_OPTION,
       serviceDirectory,
     ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
     return packed;

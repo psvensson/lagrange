@@ -378,8 +378,6 @@ async function runBuild({
   return {componentPath, descriptor, layoutPath: receipt.layoutPath};
 }
 
-const runServiceBuildCommand = runBuild;
-
 // Substitute the real INSTALL-returned package id into a generated
 // binding's placeholder target, keeping the rest of the record verbatim
 // (re-normalization by the SQL grammar is idempotent).
@@ -505,11 +503,8 @@ async function configureAccessPolicies(
 
 export {
   SERVICE_PIPELINE_COMMAND_ERROR_CODE,
-  ServicePipelineCommandError,
   ServicePipelineError,
-  loadComponentBuilder,
   runBuild,
   runDeploy,
   runGenerate,
-  runServiceBuildCommand,
 };
