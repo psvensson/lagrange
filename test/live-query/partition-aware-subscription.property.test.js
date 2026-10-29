@@ -36,13 +36,13 @@ function createMockSystemCache(tableName, partitions) {
   return {
     get: (type, key) => {
       if (type === 'tables' && key === tableName) {
-        return {table_name: tableName, primary_key: 'id'};
+        return {table_name: tableName, primary_key: 'id', partition_key_type: 'INTEGER'};
       }
       return null;
     },
     find: (type, predicate) => {
       if (type === 'tables') {
-        const table = {table_name: tableName, primary_key: 'id'};
+        const table = {table_name: tableName, primary_key: 'id', partition_key_type: 'INTEGER'};
         return predicate(table) ? table : null;
       }
       return null;
@@ -68,6 +68,7 @@ function createNumericPartitions(tableName, ranges) {
     table_name: tableName,
     partition_key_start: range[0],
     partition_key_end: range[1],
+    partition_key_type: 'INTEGER',
   }));
 }
 

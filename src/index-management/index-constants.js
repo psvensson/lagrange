@@ -29,6 +29,10 @@ const INDEX_LOG_MSG = Object.freeze({
   INDEX_REBUILD_FAILED: 'Failed to rebuild index on partition',
   SHUTTING_DOWN: 'Shutting down index service',
   EXECUTION_PLAN_GENERATED: 'Generated execution plan',
+  GLOBAL_INDEX_BACKFILL_FAILED: 'Global index backfill failed',
+  CHECKPOINT_UPDATE_FAILED: 'Secondary checkpoint update failed during error handling',
+  RESOLVE_TABLE_ID_FAILED: 'Failed to resolve tableId for tableName from system table',
+  FIND_INDEX_FAILED: 'Failed to find index by name from system table',
 });
 
 const INDEX_ERROR_MSG = Object.freeze({
@@ -42,6 +46,65 @@ const INDEX_ERROR_MSG = Object.freeze({
   INDEX_NOT_FOUND_PREFIX: 'Index \'',
   INDEX_NOT_FOUND_MIDDLE: '\' not found on table \'',
   INDEX_NOT_FOUND_SUFFIX: '\'',
+  UNSUPPORTED_SQL_FEATURE: 'UNSUPPORTED_SQL_FEATURE',
+});
+
+const GLOBAL_INDEX_STATE = Object.freeze({
+  CREATING: 'CREATING',
+  WRITE_ONLY: 'WRITE_ONLY',
+  BACKFILLING: 'BACKFILLING',
+  READ_WRITE: 'READ_WRITE',
+  DROPPING: 'DROPPING',
+  FAILED: 'FAILED',
+});
+
+const GLOBAL_INDEX_MAINTENANCE_MODE = Object.freeze({
+  SYNCHRONOUS_TX1: 'SYNCHRONOUS_TX1',
+});
+
+const GLOBAL_INDEX_SQL_STATE = Object.freeze({
+  FEATURE_NOT_SUPPORTED: '0A000',
+});
+
+const GLOBAL_INDEX_ERROR_MSG = Object.freeze({
+  CROSS_PARTITION_UNIQUE_DEFERRED:
+    'Cross-partition unique indexes remain deferred in Release 0.3',
+  INVALID_STATE_TRANSITION:
+    'Invalid global index state transition: ',
+  TABLE_NAME_REQUIRED: 'table_name is required for global secondary index',
+  INDEX_NAME_REQUIRED: 'index_name is required for global secondary index',
+  COLUMN_NAMES_REQUIRED: 'column_names is required for global secondary index',
+});
+
+const GLOBAL_INDEX_ACCESS_PATH = Object.freeze({
+  GLOBAL_SECONDARY_INDEX: 'GLOBAL_SECONDARY_INDEX',
+  SCATTER_GATHER: 'SCATTER_GATHER',
+  BASE_PRIMARY_KEY: 'BASE_PRIMARY_KEY',
+});
+
+const INDEX_REJECTION_REASON = Object.freeze({
+  NONE: 'NONE',
+  MISSING_LEADING_COLUMN: 'MISSING_LEADING_COLUMN',
+  NON_READABLE_INDEX_STATE: 'NON_READABLE_INDEX_STATE',
+  HIGHER_COST_OR_SHORTER_PREFIX: 'HIGHER_COST_OR_SHORTER_PREFIX',
+  INDEX_NOT_READ_WRITE: 'INDEX_NOT_READ_WRITE',
+  PREFIX_NOT_MATCHED: 'PREFIX_NOT_MATCHED',
+  NO_INDEX_AVAILABLE: 'NO_INDEX_AVAILABLE',
+});
+
+const INDEX_READABLE_STATE = Object.freeze({
+  READABLE: 'READABLE',
+  ACTIVE: 'ACTIVE',
+  READY: 'READY',
+});
+
+const GLOBAL_INDEX_DATASET_PREFIX = '__idx_';
+const BASE_PARTITION_ID_COLUMN = '__base_partition_id';
+const BASE_PK_COLUMN_PREFIX = '__base_pk_';
+
+const INDEX_MAINTENANCE_OPERATION = Object.freeze({
+  INSERT: 'INSERT',
+  DELETE: 'DELETE',
 });
 
 const INDEX_USAGE = Object.freeze({
@@ -81,13 +144,24 @@ const INDEX_DEFAULTS = Object.freeze({
 });
 
 export {
+  BASE_PARTITION_ID_COLUMN,
+  BASE_PK_COLUMN_PREFIX,
+  GLOBAL_INDEX_ACCESS_PATH,
+  GLOBAL_INDEX_DATASET_PREFIX,
+  GLOBAL_INDEX_ERROR_MSG,
+  GLOBAL_INDEX_MAINTENANCE_MODE,
+  GLOBAL_INDEX_SQL_STATE,
+  GLOBAL_INDEX_STATE,
   INDEX_CONFIG_KEY,
   INDEX_COST,
   INDEX_DEFAULTS,
   INDEX_ERROR_MSG,
   INDEX_HINT,
   INDEX_LOG_MSG,
+  INDEX_MAINTENANCE_OPERATION,
   INDEX_PRIORITY,
+  INDEX_READABLE_STATE,
+  INDEX_REJECTION_REASON,
   INDEX_SUBSYSTEM,
   INDEX_TYPE,
   INDEX_USAGE,

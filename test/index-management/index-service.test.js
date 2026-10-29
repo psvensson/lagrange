@@ -12,6 +12,12 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
+import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
+import {
+  createMockMessageRouter,
+  createMockSystemCache,
+} from '../query/sql-query-engine-test-support.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -808,4 +814,102 @@ test('IndexService - ignores non-INSERT partition CDC', async (t) => {
   t.pass('Non-INSERT partition CDC events handled gracefully');
 
   await indexService.shutdown();
+});
+
+test('SQLQueryEngine - executes CREATE INDEX and DROP INDEX statements end-to-end', async (t) => {
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [
+      {
+        partition_id: 'p1',
+        table_name: 'users',
+        partition_key_start: null,
+        partition_key_end: null,
+      },
+    ],
+  );
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
+
+  // 1. CREATE INDEX
+  const createResult = await engine.executeQuery(
+    'CREATE INDEX idx_users_email ON users (email)',
+  );
+  t.equal(createResult.success, true, 'CREATE INDEX should succeed');
+  t.equal(createResult.operation, 'CREATE_INDEX');
+  t.equal(createResult.indexName, 'idx_users_email');
+
+  // Verify in index service
+  const indices = engine.indexService.getIndicesForTable('users');
+  t.equal(indices.length, 1);
+  t.equal(indices[0].indexName, 'idx_users_email');
+  t.same(indices[0].columnNames, ['email']);
+
+  // 2. CREATE INDEX IF NOT EXISTS (idempotent)
+  const createExistsResult = await engine.executeQuery(
+    'CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)',
+  );
+  t.equal(createExistsResult.success, true);
+
+  // 3. DROP INDEX
+  const dropResult = await engine.executeQuery('DROP INDEX idx_users_email');
+  t.equal(dropResult.success, true, 'DROP INDEX should succeed');
+  t.equal(dropResult.operation, 'DROP_INDEX');
+  t.equal(dropResult.indexName, 'idx_users_email');
+
+  // Verify removed from index service
+  const remainingIndices = engine.indexService.getIndicesForTable('users');
+  t.equal(remainingIndices.length, 0);
+
+  // 4. DROP INDEX IF EXISTS
+  const dropExistsResult = await engine.executeQuery('DROP INDEX IF EXISTS idx_users_email');
+  t.equal(dropExistsResult.success, true);
+});
+
+test('SQLQueryEngine - rejects unsupported CREATE INDEX features fail-closed', async (t) => {
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [
+      {
+        partition_id: 'p1',
+        table_name: 'users',
+        partition_key_start: null,
+        partition_key_end: null,
+      },
+    ],
+  );
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
+
+  // 1. CONCURRENTLY
+  const r1 = await engine.executeQuery(
+    'CREATE INDEX CONCURRENTLY idx_users_email ON users (email)',
+  );
+  t.equal(r1.success, false);
+  t.equal(r1.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE);
+
+  // 2. USING hash
+  const r2 = await engine.executeQuery(
+    'CREATE INDEX idx_users_email ON users USING hash (email)',
+  );
+  t.equal(r2.success, false);
+  t.equal(r2.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE);
+
+  // 3. USING gin
+  const r3 = await engine.executeQuery(
+    'CREATE INDEX idx_users_email ON users USING gin (email)',
+  );
+  t.equal(r3.success, false);
+  t.equal(r3.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE);
+
+  // 4. Expression column (lower(email))
+  const r4 = await engine.executeQuery(
+    'CREATE INDEX idx_lower_email ON users (lower(email))',
+  );
+  t.equal(r4.success, false);
+  t.equal(r4.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE);
 });

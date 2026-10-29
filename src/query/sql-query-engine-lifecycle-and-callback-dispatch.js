@@ -4,6 +4,8 @@ import {
 } from './runtime-replica-state-projection.js';
 import {initializeSqlQueryEngineInstance} from
   './sql-query-engine-instance-initializer.js';
+import {releaseTransactionReservations} from
+  '../partition/partition-locking-read-reservation.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RUNTIME_ACCESS_POLICY_DENIED_STATUS = 'denied';
@@ -216,6 +218,17 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
   }
 
   /**
+   * Release remaining transaction reservations on shutdown.
+   */
+  releasePendingReservations() {
+    const transactions = this.transactionCoordinator?.transactionsBySession;
+    if (!transactions) return;
+    for (const tx of transactions.values()) {
+      releaseTransactionReservations(tx.transactionId);
+    }
+  }
+
+  /**
    * Shutdown lifecycle-owned query services.
    * @return {Promise<void>}
    */
@@ -240,6 +253,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     ) {
       this.transactionCoordinator.stopRecoverySweep();
     }
+    this.releasePendingReservations();
     if (
       this.tableCreationService &&
       typeof this.tableCreationService.shutdown === LOCAL_STR_FUNCTION

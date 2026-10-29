@@ -6,6 +6,7 @@ import {
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {KeyRange} from './key-range-manager.js';
+import {compareRoutingKeys} from './split-key-comparator.js';
 import {
   PARTITION_TRANSITION_STATE,
   SPLIT_MERGE_ERROR_MSG,
@@ -253,22 +254,7 @@ class PartitionSplitMergeManagerCoreMethods {
    * @private
    */
   comparePartitionKeys(left, right) {
-    if (left === right) {
-      return 0;
-    }
-    if (left === null || left === undefined) {
-      return -1;
-    }
-    if (right === null || right === undefined) {
-      return 1;
-    }
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-    return 0;
+    return compareRoutingKeys(left, right);
   }
 
   /**
@@ -446,6 +432,7 @@ class PartitionSplitMergeManagerCoreMethods {
     const medianResult = await partitionService.executeQuery(
       SPLIT_MERGE_SQL.selectMedian(primaryKeyColumn, tableName),
       [medianOffset],
+      {safeIntegers: true},
     );
 
     if (!medianResult.rows || medianResult.rows.length === 0) {
@@ -601,4 +588,7 @@ function createPartitionSplitMergeManagerCoreMethods() {
   return methods;
 }
 
-export {createPartitionSplitMergeManagerCoreMethods};
+export {
+  PartitionSplitMergeManagerCoreMethods,
+  createPartitionSplitMergeManagerCoreMethods,
+};

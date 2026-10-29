@@ -37,21 +37,28 @@ function createCanonicalPartitionRows(partitionIds) {
 }
 
 function createSystemCache({tables, partitions, services}) {
+  const normalizedTables = (tables || []).map((t) => ({
+    ...t,
+    partition_key_type: t.partition_key_type || t.partitionKeyType || 'TEXT',
+  }));
   const normalizedPartitions = (partitions || []).map((partition) => {
     const leaderService = (services || []).find((service) =>
       service.partition_id === partition.partition_id &&
       String(service.raft_role || '').toLowerCase() === String('leader'),
     );
     return {
-      ...partition,
+      partition_key_type: partition.partition_key_type ||
+        partition.partitionKeyType ||
+        'TEXT',
       leader_node_id: partition.leader_node_id ||
         partition.leaderNodeId ||
         leaderService?.node_id ||
         null,
+      ...partition,
     };
   });
   return {
-    tables: tables || [],
+    tables: normalizedTables,
     partitions: normalizedPartitions,
     services: services || [],
     get(type, key) {

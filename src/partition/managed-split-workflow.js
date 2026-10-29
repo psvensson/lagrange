@@ -23,6 +23,7 @@ import {
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {resolvePartitionRowKeyRange} from './partition-transition-overlap-guard.js';
+import {resolveDeclaredPartitionKeyType} from './partition-boundary-representation.js';
 import {
   ManagedSplitWorkflowStateMethods,
 } from './managed-split-workflow-state-methods.js';
@@ -504,12 +505,23 @@ class ManagedSplitWorkflow {
           metadata: {...current.metadata, ...planDelta}}));
       const transitionMetadata = prepared.metadata;
 
+      const sourcePartitionKeyType =
+        partitionInfo?.partition_key_type ??
+        partitionInfo?.partitionKeyType ??
+        resolveDeclaredPartitionKeyType(tableInfo);
+      if (!sourcePartitionKeyType) {
+        throw new Error(
+          `Source partition key type authority is missing for partition ${partitionId}; split cannot proceed`,
+        );
+      }
+
       const leftPartitionMetadata = {
         partition_id: splitPlan.leftPartition.partitionId,
         table_id: tableId,
         table_name: tableName,
         partition_key_start: splitPlan.leftPartition.keyRange.start,
         partition_key_end: splitPlan.leftPartition.keyRange.end,
+        partition_key_type: sourcePartitionKeyType,
         partition_version: targetVersion,
         replica_count: replicaCount,
         size_bytes: 0,
@@ -524,6 +536,7 @@ class ManagedSplitWorkflow {
         table_name: tableName,
         partition_key_start: splitPlan.rightPartition.keyRange.start,
         partition_key_end: splitPlan.rightPartition.keyRange.end,
+        partition_key_type: sourcePartitionKeyType,
         partition_version: targetVersion,
         replica_count: replicaCount,
         size_bytes: 0,

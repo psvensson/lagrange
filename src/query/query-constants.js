@@ -27,6 +27,8 @@ const QUERY_AST_TYPE = Object.freeze({
   DELETE: 'DELETE',
   CREATE_TABLE: 'CREATE_TABLE',
   ALTER_TABLE: 'ALTER_TABLE',
+  CREATE_INDEX: 'CREATE_INDEX',
+  DROP_INDEX: 'DROP_INDEX',
   BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
@@ -38,6 +40,8 @@ const QUERY_OPERATION = Object.freeze({
   DELETE: 'DELETE',
   CREATE_TABLE: 'CREATE_TABLE',
   ALTER_TABLE: 'ALTER_TABLE',
+  CREATE_INDEX: 'CREATE_INDEX',
+  DROP_INDEX: 'DROP_INDEX',
   BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
@@ -110,6 +114,7 @@ const QUERY_ERROR_CODE = Object.freeze({
   // Pre-cutover descriptor-epoch evidence gap: the write defers until
   // the evidence hydrates instead of failing open.
   PARTITION_EPOCH_EVIDENCE_DEFERRED: 'PARTITION_EPOCH_EVIDENCE_DEFERRED',
+  LOCK_NOT_AVAILABLE: 'LOCK_NOT_AVAILABLE',
 });
 
 const QUERY_ERROR_MSG = Object.freeze({
@@ -435,10 +440,6 @@ const QUERY_SESSION = Object.freeze({
   DEFAULT: 'default',
 });
 
-const QUERY_DEFAULT_VALUE = Object.freeze({
-  PRIMARY_KEY: 'id',
-});
-
 const SQL_PARSE_CACHE = Object.freeze({
   DEFAULT_MAX_SIZE: NUM.THOUSAND,
 });
@@ -512,7 +513,6 @@ export {
   QUERY_AST_NODE,
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
-  QUERY_DEFAULT_VALUE,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_JOIN_TYPE,

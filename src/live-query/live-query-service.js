@@ -7,7 +7,9 @@
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {resolveDeclaredPrimaryKeyColumns} from '../partition/partition-boundary-representation.js';
 import {TABLES} from '../constants/index.js';
+import {extractReferencedTables} from './live-query-sql-renderer.js';
 import {
   LIVE_QUERY_AST_TYPE,
   LIVE_QUERY_CONFIG_KEY,
@@ -370,8 +372,9 @@ class LiveQueryService {
     this.systemCache = options.systemCache || null;
     this.nodeId = options.nodeId || LIVE_QUERY_DEFAULT_VALUE.UNKNOWN;
 
-    // Extract table name from query
-    this.table = this.parsedQuery?.from?.name || null;
+    // Extract table names from query
+    this.tables = extractReferencedTables(this.parsedQuery);
+    this.table = this.tables[0] || this.parsedQuery?.from?.name || null;
 
     // Compile predicate from WHERE clause
     this.predicate = compilePredicate(this.parsedQuery?.where);
@@ -439,15 +442,15 @@ class LiveQueryService {
         );
 
       if (tableInfo) {
-        this.partitionKeyColumn = tableInfo.primary_key ||
-          tableInfo.primaryKey || LIVE_QUERY_DEFAULT_VALUE.PRIMARY_KEY_FALLBACK;
+        const keyColumns = resolveDeclaredPrimaryKeyColumns(tableInfo);
+        this.partitionKeyColumn = keyColumns[0] || null;
         return this.partitionKeyColumn;
       }
     } catch {
       // Cache not available
     }
 
-    return LIVE_QUERY_DEFAULT_VALUE.PRIMARY_KEY_FALLBACK;
+    return null;
   }
 
   /**
@@ -567,6 +570,7 @@ export {
   LiveQueryEventType,
   compilePredicate,
   extractPartitionKeyValue,
+  extractReferencedTables,
   canonicalizePredicate,
   parseLiveSelect,
   evaluateExpression,

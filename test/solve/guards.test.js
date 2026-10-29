@@ -9,8 +9,8 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {
-  changedPaths, coupledPairProblems, epicScopeProblems, headSha, requiresVerification,
-  staticQualityProblems,
+  changedPaths, coupledPairProblems, epicScopeProblems, gitCommonDir, headSha,
+  requiresVerification, staticQualityProblems,
 } from '../../scripts/solve/guards.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
 
@@ -90,4 +90,11 @@ test('coupled pairs: fewer than two paths or no registry means nothing to guard'
   assert.deepEqual(coupledPairProblems(root, [SRC, DOC]), []);
   write(root, 'test/shards/impact-contracts.json', '{');
   assert.equal(coupledPairProblems(root, [SRC, DOC]).length, 1, 'an unreadable registry blocks');
+});
+
+test('gitCommonDir returns the common directory or fallback', (t) => {
+  const root = repo(t);
+  const common = gitCommonDir(root);
+  assert.equal(common, path.join(root, '.git'));
+  assert.equal(gitCommonDir('/nonexistent/path'), path.join('/nonexistent/path', '.git'));
 });

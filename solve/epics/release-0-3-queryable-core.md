@@ -8,12 +8,16 @@ doneWhen:
   args:
     file: solve/oracle/release-0-3-queryable-core.json
 quests:
-  - partition-key-ordering-owner-completion-v12
+  - partition-key-ordering-owner-completion
 authorizes:
   - architecture
   - docs/development/agpl-feature-map.md
   - scripts/checks
+  - scripts/lab
   - scripts/quest-evidence
+  - scripts/solve
+  - scripts/solve.js
+  - solve/changes
   - solve/epics/release-0-3-queryable-core.md
   - solve/oracle/release-0-3-queryable-core.json
   - solve/specs/release-0-3-queryable-core
@@ -24,12 +28,17 @@ authorizes:
   - src/query
   - src/runtime
   - src/entrypoint-runtime-admin-composition.js
+  - test/compatibility
   - test/index-management
   - test/integration
   - test/live-query
   - test/partition
   - test/query
+  - test/runtime
+  - test/scripts
   - test/shards
+  - test/solve
+  - test/transaction
 ---
 
 # Release 0.3 — Queryable Core

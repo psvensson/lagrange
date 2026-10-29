@@ -6,10 +6,14 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {compareRoutingKeys} from '../partition/split-key-comparator.js';
+import {
+  decodePartitionBoundaryValue,
+  resolveDeclaredPartitionKeyType,
+  resolveDeclaredPrimaryKeyColumns,
+} from '../partition/partition-boundary-representation.js';
 import {TABLES} from '../constants/index.js';
 import {
   QUERY_AST_NODE,
-  QUERY_DEFAULT_VALUE,
   QUERY_LOG_MSG,
   QUERY_OPERATOR,
   QUERY_SUBSYSTEM,
@@ -18,15 +22,36 @@ import {DISTRIBUTED_PREDICATE_SHAPE as PREDICATE_SHAPE} from
   './distributed/distributed-query-plan-constants.js';
 import {
   KEY_CONDITION_TYPE,
+  applyBinaryKeyCondition,
   createInitialKeyConditions,
   resolvePredicateShape,
 } from './partition-resolver-key-conditions.js';
 
+const UNARY_OPERATOR = Object.freeze({PLUS: '+', MINUS: '-'});
 
-const UNARY_OPERATOR = Object.freeze({
-  PLUS: '+',
-  MINUS: '-',
-});
+function decodeCandidateValue(value, keyType) {
+  if (!keyType || value === null || value === undefined) return value;
+  try {
+    return decodePartitionBoundaryValue(value, keyType);
+  } catch {
+    return value;
+  }
+}
+
+function extractRawPartitionBounds(partition) {
+  const rawStart = 'partition_key_start' in partition ?
+    partition.partition_key_start : partition.keyRange?.start;
+  const rawEnd = 'partition_key_end' in partition ?
+    partition.partition_key_end : partition.keyRange?.end;
+  return {rawStart, rawEnd};
+}
+const LOCAL_AST_NODE_BINARY_EXPR = 'binary_expr';
+const LOCAL_AST_NODE_IN_EXPR = 'in_expr';
+const LOCAL_AST_NODE_BETWEEN_EXPR = 'between_expr';
+const LOCAL_AST_NODE_NUMBER = 'number';
+const LOCAL_AST_NODE_STRING = 'string';
+const LOCAL_AST_NODE_SINGLE_QUOTE_STRING = 'single_quote_string';
+const LOCAL_AST_NODE_BOOL = 'bool';
 
 /**
  * PartitionResolver resolves queries to relevant partitions based on
@@ -83,8 +108,19 @@ class PartitionResolver {
     }
 
     const resolutionContext = this.createResolutionContext(options);
-    const tableInfo = this.getTableInfo(tableName);
+    const tableInfo = options?.tableInfo || this.getTableInfo(tableName);
     const primaryKeyColumns = this.resolvePrimaryKeyColumns(tableInfo, options);
+
+    if (primaryKeyColumns.length === 0) {
+      const partitionIds = this.getAllPartitions(partitions);
+      this.lastResolutionInfo = Object.freeze({
+        tableName,
+        predicateShape: PREDICATE_SHAPE.SCATTER,
+        keyColumns: primaryKeyColumns,
+        partitionCount: partitionIds.length,
+      });
+      return partitionIds;
+    }
 
     if (primaryKeyColumns.length > 1) {
       const compositeResolution = this.resolveCompositeKeyPartitions(
@@ -92,6 +128,7 @@ class PartitionResolver {
         primaryKeyColumns,
         partitions,
         resolutionContext,
+        tableName,
       );
       this.lastResolutionInfo = Object.freeze({
         tableName,
@@ -102,8 +139,7 @@ class PartitionResolver {
       return compositeResolution.partitionIds;
     }
 
-    const primaryKey =
-      primaryKeyColumns[0] || QUERY_DEFAULT_VALUE.PRIMARY_KEY;
+    const primaryKey = primaryKeyColumns[0];
 
     // Extract key conditions from WHERE clause
     const keyConditions = this.extractKeyConditions(
@@ -118,9 +154,7 @@ class PartitionResolver {
         tableName,
         partitionCount: partitions.length,
       });
-      const partitionIds = partitions.map((partition) =>
-        partition.partition_id || partition.partitionId,
-      );
+      const partitionIds = this.getAllPartitions(partitions);
       this.lastResolutionInfo = Object.freeze({
         tableName,
         predicateShape: PREDICATE_SHAPE.SCATTER,
@@ -130,10 +164,21 @@ class PartitionResolver {
       return partitionIds;
     }
 
+    if (keyConditions.contradiction) {
+      this.lastResolutionInfo = Object.freeze({
+        tableName,
+        predicateShape: PREDICATE_SHAPE.POINT,
+        keyColumns: primaryKeyColumns,
+        partitionCount: 0,
+      });
+      return [];
+    }
+
     // Find partitions whose ranges overlap with query conditions
     const matchingPartitions = this.findMatchingPartitions(
       partitions,
       keyConditions,
+      tableInfo,
     );
 
     this.logger.debug(QUERY_LOG_MSG.RESOLVED_PARTITIONS, {
@@ -162,20 +207,7 @@ class PartitionResolver {
    * @private
    */
   resolvePrimaryKeyColumns(tableInfo, options) {
-    if (Array.isArray(options.keyColumns) &&
-      options.keyColumns.length > 0) {
-      return options.keyColumns;
-    }
-
-    const primaryKey = tableInfo?.primaryKey || tableInfo?.primary_key;
-    if (Array.isArray(primaryKey) && primaryKey.length > 0) {
-      return primaryKey;
-    }
-    if (typeof primaryKey === 'string' &&
-      primaryKey.length > 0) {
-      return [primaryKey];
-    }
-    return [QUERY_DEFAULT_VALUE.PRIMARY_KEY];
+    return resolveDeclaredPrimaryKeyColumns(tableInfo, options);
   }
 
   /**
@@ -202,6 +234,7 @@ class PartitionResolver {
    * @param {string[]} keyColumns - Composite key columns.
    * @param {Object[]} partitions - Candidate partitions.
    * @param {Object} resolutionContext - Resolution context.
+   * @param {string|null} [tableName=null] - Table name.
    * @return {{partitionIds: string[], predicateShape: string}}
    * @private
    */
@@ -210,6 +243,7 @@ class PartitionResolver {
     keyColumns,
     partitions,
     resolutionContext,
+    tableName = null,
   ) {
     const values = [];
     for (const keyColumn of keyColumns) {
@@ -219,22 +253,20 @@ class PartitionResolver {
         resolutionContext,
       );
       if (!keyConditions ||
+        keyConditions.contradiction ||
         keyConditions.type !== KEY_CONDITION_TYPE.EQUALS ||
         keyConditions.values.length !== 1) {
         return {
-          partitionIds: partitions.map((partition) =>
-            partition.partition_id || partition.partitionId,
-          ),
+          partitionIds: this.getAllPartitions(partitions),
           predicateShape: PREDICATE_SHAPE.SCATTER,
         };
       }
       values.push(keyConditions.values[0]);
     }
 
-    const serializedCompositeKey = JSON.stringify(values);
     const partitionId = this.resolvePartitionForKey(
-      null,
-      serializedCompositeKey,
+      tableName,
+      values,
       partitions,
     );
     if (!partitionId) {
@@ -326,34 +358,16 @@ class PartitionResolver {
   findKeyConditions(expr, primaryKey, conditions, resolutionContext) {
     if (!expr) return false;
 
-    switch (expr.type) {
-    case QUERY_AST_NODE.BINARY:
-      return this.handleBinaryExpr(
-        expr,
-        primaryKey,
-        conditions,
-        resolutionContext,
-      );
-
-    case QUERY_AST_NODE.IN:
-      return this.handleInExpr(
-        expr,
-        primaryKey,
-        conditions,
-        resolutionContext,
-      );
-
-    case QUERY_AST_NODE.BETWEEN:
-      return this.handleBetweenExpr(
-        expr,
-        primaryKey,
-        conditions,
-        resolutionContext,
-      );
-
-    default:
-      return false;
+    if (expr.type === QUERY_AST_NODE.BINARY || expr.type === LOCAL_AST_NODE_BINARY_EXPR) {
+      return this.handleBinaryExpr(expr, primaryKey, conditions, resolutionContext);
     }
+    if (expr.type === QUERY_AST_NODE.IN || expr.type === LOCAL_AST_NODE_IN_EXPR) {
+      return this.handleInExpr(expr, primaryKey, conditions, resolutionContext);
+    }
+    if (expr.type === QUERY_AST_NODE.BETWEEN || expr.type === LOCAL_AST_NODE_BETWEEN_EXPR) {
+      return this.handleBetweenExpr(expr, primaryKey, conditions, resolutionContext);
+    }
+    return false;
   }
 
   /**
@@ -406,40 +420,24 @@ class PartitionResolver {
 
     if (value === undefined) return false;
 
-    // Handle different operators
-    switch (rawOperator) {
-    case QUERY_OPERATOR.EQUALS:
-      conditions.type = KEY_CONDITION_TYPE.EQUALS;
-      conditions.values.push(value);
-      return true;
+    return this.applyBinaryKeyCondition(conditions, rawOperator, value);
+  }
 
-    case QUERY_OPERATOR.LESS_THAN:
-      conditions.type = KEY_CONDITION_TYPE.RANGE;
-      conditions.high = value;
-      conditions.highInclusive = false;
-      return true;
-
-    case QUERY_OPERATOR.LESS_THAN_OR_EQUAL:
-      conditions.type = KEY_CONDITION_TYPE.RANGE;
-      conditions.high = value;
-      conditions.highInclusive = true;
-      return true;
-
-    case QUERY_OPERATOR.GREATER_THAN:
-      conditions.type = KEY_CONDITION_TYPE.RANGE;
-      conditions.low = value;
-      conditions.lowInclusive = false;
-      return true;
-
-    case QUERY_OPERATOR.GREATER_THAN_OR_EQUAL:
-      conditions.type = KEY_CONDITION_TYPE.RANGE;
-      conditions.low = value;
-      conditions.lowInclusive = true;
-      return true;
-
-    default:
-      return false;
-    }
+  /**
+   * Apply one binary key condition with intersection and contradiction detection.
+   * @param {Object} conditions - Key conditions accumulator.
+   * @param {string} operator - Comparison operator.
+   * @param {*} value - Literal value.
+   * @return {boolean}
+   * @private
+   */
+  applyBinaryKeyCondition(conditions, operator, value) {
+    return applyBinaryKeyCondition(
+      conditions,
+      operator,
+      value,
+      (a, b) => this.compareValues(a, b),
+    );
   }
 
   /**
@@ -472,18 +470,29 @@ class PartitionResolver {
    * @private
    */
   handleInExpr(expr, primaryKey, conditions, resolutionContext) {
+    if (expr.not === true) {
+      return false;
+    }
     if (!this.isKeyColumn(expr.expression, primaryKey, resolutionContext)) {
       return false;
     }
 
-    conditions.type = KEY_CONDITION_TYPE.IN;
-    conditions.values = expr.values
-      .map((valueExpr) =>
-        this.extractLiteralValue(valueExpr, resolutionContext),
-      )
-      .filter((v) => v !== undefined);
+    const rawValues = Array.isArray(expr.values) ? expr.values : [];
+    const values = [];
+    for (const valueExpr of rawValues) {
+      const value = this.extractLiteralValue(valueExpr, resolutionContext);
+      if (value === undefined) {
+        return false;
+      }
+      values.push(value);
+    }
+    if (values.length === 0 || values.length !== rawValues.length) {
+      return false;
+    }
 
-    return conditions.values.length > 0;
+    conditions.type = KEY_CONDITION_TYPE.IN;
+    conditions.values = values;
+    return true;
   }
 
   /**
@@ -506,13 +515,9 @@ class PartitionResolver {
       return false;
     }
 
-    conditions.type = KEY_CONDITION_TYPE.RANGE;
-    conditions.low = low;
-    conditions.high = high;
-    conditions.lowInclusive = true;
-    conditions.highInclusive = true;
+    this.applyBinaryKeyCondition(conditions, QUERY_OPERATOR.GREATER_THAN_OR_EQUAL, low);
+    this.applyBinaryKeyCondition(conditions, QUERY_OPERATOR.LESS_THAN_OR_EQUAL, high);
     conditions.fromBetween = true;
-
     return true;
   }
 
@@ -549,7 +554,11 @@ class PartitionResolver {
   extractLiteralValue(expr, resolutionContext) {
     if (!expr) return undefined;
 
-    if (expr.type === QUERY_AST_NODE.LITERAL) {
+    if (expr.type === QUERY_AST_NODE.LITERAL ||
+        expr.type === LOCAL_AST_NODE_NUMBER ||
+        expr.type === LOCAL_AST_NODE_STRING ||
+        expr.type === LOCAL_AST_NODE_SINGLE_QUOTE_STRING ||
+        expr.type === LOCAL_AST_NODE_BOOL) {
       return expr.value;
     }
 
@@ -584,19 +593,21 @@ class PartitionResolver {
    * Find partitions matching key conditions.
    * @param {Array} partitions - Available partitions.
    * @param {Object} conditions - Key conditions.
+   * @param {Object|null} [tableInfo=null] - Table metadata row.
    * @return {Array} Matching partitions.
    * @private
    */
-  findMatchingPartitions(partitions, conditions) {
+  findMatchingPartitions(partitions, conditions, tableInfo = null) {
+    if (conditions.contradiction) {
+      return [];
+    }
     switch (conditions.type) {
     case KEY_CONDITION_TYPE.EQUALS:
-      return this.findPartitionsForValues(partitions, conditions.values);
-
     case KEY_CONDITION_TYPE.IN:
-      return this.findPartitionsForValues(partitions, conditions.values);
+      return this.findPartitionsForValues(partitions, conditions.values, tableInfo);
 
     case KEY_CONDITION_TYPE.RANGE:
-      return this.findPartitionsForRange(partitions, conditions);
+      return this.findPartitionsForRange(partitions, conditions, tableInfo);
 
     default:
       return partitions;
@@ -607,15 +618,16 @@ class PartitionResolver {
    * Find partitions containing specific values.
    * @param {Array} partitions - Available partitions.
    * @param {Array} values - Values to find.
+   * @param {Object|null} [tableInfo=null] - Table metadata row.
    * @return {Array} Matching partitions.
    * @private
    */
-  findPartitionsForValues(partitions, values) {
+  findPartitionsForValues(partitions, values, tableInfo = null) {
     const matching = new Set();
 
     for (const value of values) {
       for (const partition of partitions) {
-        if (this.isValueInPartition(value, partition)) {
+        if (this.isValueInPartition(value, partition, tableInfo)) {
           matching.add(partition);
         }
       }
@@ -628,12 +640,13 @@ class PartitionResolver {
    * Find partitions overlapping with a range.
    * @param {Array} partitions - Available partitions.
    * @param {Object} conditions - Range conditions.
+   * @param {Object|null} [tableInfo=null] - Table metadata row.
    * @return {Array} Matching partitions.
    * @private
    */
-  findPartitionsForRange(partitions, conditions) {
+  findPartitionsForRange(partitions, conditions, tableInfo = null) {
     return partitions.filter((partition) =>
-      this.rangeOverlaps(partition, conditions),
+      this.rangeOverlaps(partition, conditions, tableInfo),
     );
   }
 
@@ -641,70 +654,70 @@ class PartitionResolver {
    * Check if a value falls within a partition's range.
    * @param {*} value - Value to check.
    * @param {Object} partition - Partition with key range.
+   * @param {Object|null} [tableInfo=null] - Table metadata row.
    * @return {boolean} True if value in partition.
    * @private
    */
-  isValueInPartition(value, partition) {
-    // Use 'in' operator to check property existence since null is a valid value
-    const start = 'partition_key_start' in partition ?
-      partition.partition_key_start : partition.keyRange?.start;
-    const end = 'partition_key_end' in partition ?
-      partition.partition_key_end : partition.keyRange?.end;
-
-    // NULL/undefined start means unbounded lower (negative infinity)
-    // NULL/undefined end means unbounded upper (positive infinity)
-    if ((start === null || start === undefined) &&
-        (end === null || end === undefined)) {
+  isValueInPartition(value, partition, tableInfo = null) {
+    const {rawStart, rawEnd} = extractRawPartitionBounds(partition);
+    if ((rawStart === null || rawStart === undefined) &&
+        (rawEnd === null || rawEnd === undefined)) {
       return true;
     }
 
+    const keyType = partition.partition_key_type ??
+      partition.partitionKeyType ??
+      resolveDeclaredPartitionKeyType(tableInfo);
+    const start = decodePartitionBoundaryValue(rawStart, keyType);
+    const end = decodePartitionBoundaryValue(rawEnd, keyType);
+    const compValue = decodeCandidateValue(value, keyType);
+
     if (start === null || start === undefined) {
-      return this.compareValues(value, end) < 0;
+      return this.compareValues(compValue, end) < 0;
     }
-
     if (end === null || end === undefined) {
-      return this.compareValues(value, start) >= 0;
+      return this.compareValues(compValue, start) >= 0;
     }
-
-    return this.compareValues(value, start) >= 0 &&
-           this.compareValues(value, end) < 0;
+    return this.compareValues(compValue, start) >= 0 &&
+           this.compareValues(compValue, end) < 0;
   }
 
   /**
    * Check if partition range overlaps with query range.
    * @param {Object} partition - Partition with key range.
    * @param {Object} conditions - Query range conditions.
+   * @param {Object|null} [tableInfo=null] - Table metadata row.
    * @return {boolean} True if ranges overlap.
    * @private
    */
-  rangeOverlaps(partition, conditions) {
-    // Use 'in' operator to check property existence since null is a valid value
-    const pStart = 'partition_key_start' in partition ?
-      partition.partition_key_start : partition.keyRange?.start;
-    const pEnd = 'partition_key_end' in partition ?
-      partition.partition_key_end : partition.keyRange?.end;
+  rangeOverlaps(partition, conditions, tableInfo = null) {
+    const {rawStart, rawEnd} = extractRawPartitionBounds(partition);
+    if ((rawStart === null || rawStart === undefined) &&
+        (rawEnd === null || rawEnd === undefined)) {
+      return true;
+    }
+
+    const keyType = partition.partition_key_type ??
+      partition.partitionKeyType ??
+      resolveDeclaredPartitionKeyType(tableInfo);
+    const pStart = decodePartitionBoundaryValue(rawStart, keyType);
+    const pEnd = decodePartitionBoundaryValue(rawEnd, keyType);
     const {low, high, lowInclusive, highInclusive} = conditions;
+    const compLow = decodeCandidateValue(low, keyType);
+    const compHigh = decodeCandidateValue(high, keyType);
 
-    // Check if partition range overlaps with query range
-    // Partition: [pStart, pEnd)
-    // Query: [low, high] or variations based on inclusive flags
-
-    // If partition ends before query starts, no overlap
-    if (pEnd !== null && pEnd !== undefined && low !== null) {
-      const cmp = this.compareValues(pEnd, low);
+    if (pEnd !== null && pEnd !== undefined && compLow !== null && compLow !== undefined) {
+      const cmp = this.compareValues(pEnd, compLow);
       if (cmp < 0 || (cmp === 0 && !lowInclusive)) {
         return false;
       }
     }
-
-    // If partition starts after query ends, no overlap
-    if (pStart !== null && pStart !== undefined && high !== null) {
-      const cmp = this.compareValues(pStart, high);
+    if (pStart !== null && pStart !== undefined && compHigh !== null && compHigh !== undefined) {
+      const cmp = this.compareValues(pStart, compHigh);
       if (cmp > 0 || (cmp === 0 && !highInclusive)) {
         return false;
       }
     }
-
     return true;
   }
 
@@ -719,7 +732,6 @@ class PartitionResolver {
     return compareRoutingKeys(a, b);
   }
 
-
   /**
    * Resolve partition for a single key value (for INSERT/UPDATE/DELETE).
    * @param {string} tableName - Table name.
@@ -727,13 +739,14 @@ class PartitionResolver {
    * @param {Array} partitions - Available partitions.
    * @return {string|null} Partition ID or null.
    */
-  resolvePartitionForKey(tableName, keyValue, partitions) {
+  resolvePartitionForKey(tableName, keyValue, partitions, options = {}) {
     if (!partitions || partitions.length === 0) {
       return null;
     }
 
+    const tableInfo = options?.tableInfo || this.getTableInfo(tableName);
     for (const partition of partitions) {
-      if (this.isValueInPartition(keyValue, partition)) {
+      if (this.isValueInPartition(keyValue, partition, tableInfo)) {
         return partition.partition_id || partition.partitionId;
       }
     }
@@ -744,15 +757,19 @@ class PartitionResolver {
 
   /**
    * Get all partitions for a table (for scatter-gather).
-   * @param {string} tableName - Table name.
-   * @param {Array} partitions - Available partitions.
+   * Supports both (tableName, partitions) and (partitions).
+   * @param {string|Array} tableNameOrPartitions - Table name or partition list.
+   * @param {Array|null} [partitions=null] - Available partitions.
    * @return {Array} All partition IDs.
    */
-  getAllPartitions(tableName, partitions) {
-    if (!partitions || partitions.length === 0) {
+  getAllPartitions(tableNameOrPartitions, partitions = null) {
+    const list = Array.isArray(tableNameOrPartitions) ?
+      tableNameOrPartitions :
+      partitions;
+    if (!list || list.length === 0) {
       return [];
     }
-    return partitions.map((p) => p.partition_id || p.partitionId);
+    return list.map((p) => p.partition_id || p.partitionId);
   }
 
   /**

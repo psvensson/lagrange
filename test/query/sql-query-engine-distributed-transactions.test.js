@@ -206,8 +206,11 @@ test('SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output',
     t.same(Object.keys(result.rows[0].diagnostics).sort(), [
       'explain',
       'generatedAt',
+      'indexAccess',
       'joinPlan',
       'pushdownDecisions',
+      'rejectedIndexes',
+      'selectedIndex',
       'tableGraph',
       'tablePlans',
     ]);
@@ -246,8 +249,11 @@ test('SQLQueryEngine - distributed diagnostics schema is stable for SELECT',
     t.same(Object.keys(result.distributedDiagnostics).sort(), [
       'explain',
       'generatedAt',
+      'indexAccess',
       'joinPlan',
       'pushdownDecisions',
+      'rejectedIndexes',
+      'selectedIndex',
       'tableGraph',
       'tablePlans',
     ]);

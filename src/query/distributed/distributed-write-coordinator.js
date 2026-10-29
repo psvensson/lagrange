@@ -20,11 +20,11 @@ import {
   enforceCoordinatorUniqueConstraints,
   extractCoordinatorKeyValue,
 } from './distributed-write-constraint-helpers.js';
+import {resolveDeclaredPrimaryKeyColumns} from '../../partition/partition-boundary-representation.js';
 
 const LOCAL_STR_STRING = 'string';
 
 const ERR_NO_PARTITION_FOR_KEY = 'No partition found for key: ';
-const DEFAULT_PRIMARY_KEY_COLUMN = 'id';
 const HASH_ALGORITHM = 'sha1';
 const DIGEST_ENCODING = 'hex';
 const DIGEST_PREFIX_LENGTH = 16;
@@ -480,18 +480,100 @@ class DistributedWriteCoordinator {
     const partitions = this.getTablePartitions(ast.table) || [];
     const tableInfo = this.getTableInfo(ast.table);
     const primaryKeyColumns = this.resolvePrimaryKeyColumns(tableInfo);
-    const primaryKey = primaryKeyColumns[0];
-    const keyIndex = this.findPrimaryKeyIndex(ast, primaryKey);
 
+    if (primaryKeyColumns.length === 0) {
+      if (partitions.length === 1) {
+        const partitionId = partitions[0].partition_id || partitions[0].partitionId;
+        for (const row of ast.values || []) {
+          if (!partitionStatements.has(partitionId)) {
+            partitionStatements.set(partitionId, {
+              ast: {
+                ...ast,
+                values: [],
+              },
+              role: PARTICIPANT_ROLE_PRIMARY,
+              executionOptions: {},
+            });
+          }
+          partitionStatements.get(partitionId).ast.values.push(row);
+        }
+        return;
+      }
+      throw new Error(QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED);
+    }
+
+    if (primaryKeyColumns.length === 1) {
+      const primaryKey = primaryKeyColumns[0];
+      const keyIndex = this.findPrimaryKeyIndex(ast, primaryKey);
+
+      for (const row of ast.values || []) {
+        const keyValue = this.extractKeyValue(row[keyIndex], params);
+        const partitionId = this.partitionResolver.resolvePartitionForKey(
+          ast.table,
+          keyValue,
+          partitions,
+        );
+        if (!partitionId) {
+          throw new Error(ERR_NO_PARTITION_FOR_KEY + keyValue);
+        }
+        if (!partitionStatements.has(partitionId)) {
+          partitionStatements.set(partitionId, {
+            ast: {
+              ...ast,
+              values: [],
+            },
+            role: PARTICIPANT_ROLE_PRIMARY,
+            executionOptions: {},
+          });
+        }
+        partitionStatements.get(partitionId).ast.values.push(row);
+      }
+      return;
+    }
+
+    // primaryKeyColumns.length > 1 (Composite key)
+    const keyIndices = primaryKeyColumns.map((col) => this.findPrimaryKeyIndex(ast, col));
     for (const row of ast.values || []) {
-      const keyValue = this.extractKeyValue(row[keyIndex], params);
+      const keyValues = [];
+      let missingComponent = false;
+      for (const idx of keyIndices) {
+        if (idx === -1 || row[idx] === undefined) {
+          missingComponent = true;
+          break;
+        }
+        const val = this.extractKeyValue(row[idx], params);
+        if (val === undefined) {
+          missingComponent = true;
+          break;
+        }
+        keyValues.push(val);
+      }
+      if (missingComponent) {
+        if (partitions.length === 1) {
+          const partitionId = partitions[0].partition_id || partitions[0].partitionId;
+          if (!partitionStatements.has(partitionId)) {
+            partitionStatements.set(partitionId, {
+              ast: {
+                ...ast,
+                values: [],
+              },
+              role: PARTICIPANT_ROLE_PRIMARY,
+              executionOptions: {},
+            });
+          }
+          partitionStatements.get(partitionId).ast.values.push(row);
+          continue;
+        }
+        throw new Error(QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED);
+      }
+
       const partitionId = this.partitionResolver.resolvePartitionForKey(
         ast.table,
-        keyValue,
+        keyValues,
         partitions,
       );
       if (!partitionId) {
-        throw new Error(ERR_NO_PARTITION_FOR_KEY + keyValue);
+        throw new Error(ERR_NO_PARTITION_FOR_KEY + JSON.stringify(keyValues));
       }
       if (!partitionStatements.has(partitionId)) {
         partitionStatements.set(partitionId, {
@@ -514,14 +596,7 @@ class DistributedWriteCoordinator {
    * @private
    */
   resolvePrimaryKeyColumns(tableInfo) {
-    const primaryKey = tableInfo?.primaryKey || tableInfo?.primary_key;
-    if (Array.isArray(primaryKey) && primaryKey.length > 0) {
-      return primaryKey;
-    }
-    if (typeof primaryKey === LOCAL_STR_STRING && primaryKey.length > 0) {
-      return [primaryKey];
-    }
-    return [DEFAULT_PRIMARY_KEY_COLUMN];
+    return resolveDeclaredPrimaryKeyColumns(tableInfo);
   }
 
   /**

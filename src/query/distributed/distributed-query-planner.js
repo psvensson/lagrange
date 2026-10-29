@@ -1,5 +1,3 @@
-import {createHash} from 'node:crypto';
-import {NUM} from '../../constants/index.js';
 import {
   QUERY_AST_NODE,
   QUERY_AST_TYPE,
@@ -14,19 +12,24 @@ import {
   DISTRIBUTED_PREDICATE_SHAPE,
   DISTRIBUTED_QUERY_ERROR_MSG,
   DISTRIBUTED_ROLE_HINT,
+  DISTRIBUTED_SCAN_TYPE,
   DISTRIBUTED_STATEMENT_TYPE,
 } from './distributed-query-plan-constants.js';
 import {renderSqliteIdentifier} from '../sqlite-identifier.js';
+import {resolveDeclaredPrimaryKeyColumns} from '../../partition/partition-boundary-representation.js';
 import {
   renderPlannerExpression,
 } from './distributed-query-planner-expression-renderer.js';
-
-const PLAN_HASH = Object.freeze({
-  SHA1: 'sha1',
-  HEX: 'hex',
-  PREFIX: 'dqp-',
-  LENGTH: NUM.SIXTEEN,
-});
+import {
+  collectProjectedColumns,
+  expressionReferencesAlias,
+  extractProjectedColumns,
+  extractTableLocalPredicate,
+} from './distributed-query-planner-projection-helpers.js';
+import {
+  createDeterministicPlanId,
+  normalizePlanPayload,
+} from './distributed-query-planner-plan-id.js';
 
 /**
  * Canonical planner for distributed SQL plans.
@@ -36,9 +39,11 @@ const PLAN_HASH = Object.freeze({
 class DistributedQueryPlanner {
   /**
    * @param {Object} options
-   * @param {Object} options.partitionResolver
-   * @param {Function} options.getTablePartitions
+   * @param {Object} [options.partitionResolver]
+   * @param {Function} [options.getTablePartitions]
    * @param {Function} [options.getTableInfo]
+   * @param {Object} [options.queryOptimizer]
+   * @param {Object} [options.indexService]
    */
   constructor(options = {}) {
     this.partitionResolver = options.partitionResolver || null;
@@ -46,6 +51,33 @@ class DistributedQueryPlanner {
       (() => []);
     this.getTableInfo = options.getTableInfo ||
       (() => null);
+    this.queryOptimizer = options.queryOptimizer || null;
+    this.indexService = options.indexService || null;
+  }
+
+  /**
+   * Create deterministic read execution plan for a SELECT statement AST.
+   * @param {Object} ast - Parsed SELECT AST.
+   * @param {Array} [params] - Bound parameters.
+   * @param {Object} [options] - Planning options.
+   * @return {Object} Distributed query plan.
+   */
+  createReadExecutionPlan(ast, params = [], options = {}) {
+    return this.planSelect(ast, params, options);
+  }
+
+  /**
+   * Build deterministic explain plan for a statement AST.
+   * @param {Object} ast - Parsed statement AST.
+   * @param {Array} [params] - Bound parameters.
+   * @param {Object} [options] - Planning options.
+   * @return {Object} Distributed explain plan.
+   */
+  buildExplainPlan(ast, params = [], options = {}) {
+    return this.planStatement(ast, params, {
+      ...options,
+      explain: true,
+    });
   }
 
   /**
@@ -98,6 +130,8 @@ class DistributedQueryPlanner {
       joinPlan,
     );
 
+    const primaryTablePlan = Array.from(tablePlans.values())[0] || null;
+
     return {
       [PLAN_FIELD.PLAN_ID]: planId,
       [PLAN_FIELD.STATEMENT_TYPE]: DISTRIBUTED_STATEMENT_TYPE.SELECT,
@@ -108,6 +142,10 @@ class DistributedQueryPlanner {
       [PLAN_FIELD.MERGE_PLAN]: mergePlan,
       [PLAN_FIELD.EXECUTION_POLICY]: DISTRIBUTED_EXECUTION_POLICY.READ_FAIL_CLOSED,
       [PLAN_FIELD.DIAGNOSTICS]: diagnostics,
+      [PLAN_FIELD.INDEX_ACCESS]: primaryTablePlan?.indexAccess || null,
+      [PLAN_FIELD.SELECTED_INDEX]: primaryTablePlan?.selectedIndex || null,
+      [PLAN_FIELD.REJECTED_INDEXES]: Array.from(tablePlans.values())
+        .flatMap((plan) => plan.rejectedIndexes || []),
     };
   }
 
@@ -210,23 +248,23 @@ class DistributedQueryPlanner {
    */
   assertUpdateDoesNotMutatePartitionKey(ast) {
     const tableInfo = this.getTableInfo(ast?.table);
-    const partitionKey = tableInfo?.partition_key ?? tableInfo?.partitionKey;
-    if (typeof partitionKey !== 'string' || partitionKey.length === 0) {
+    const primaryKeyColumns = resolveDeclaredPrimaryKeyColumns(tableInfo);
+    if (!Array.isArray(primaryKeyColumns) || primaryKeyColumns.length === 0) {
       return;
     }
     const assignments = Array.isArray(ast?.assignments) ?
       ast.assignments :
       [];
-    const mutatesPartitionKey = assignments.some(
-      (assignment) => typeof assignment?.column === 'string' &&
-        assignment.column.toLowerCase() === partitionKey.toLowerCase(),
-    );
-    if (mutatesPartitionKey) {
-      throw new Error(
-        DISTRIBUTED_QUERY_ERROR_MSG.PARTITION_KEY_UPDATE_REJECTED_PREFIX +
-        `'${partitionKey}'` +
-        DISTRIBUTED_QUERY_ERROR_MSG.PARTITION_KEY_UPDATE_REJECTED_SUFFIX,
-      );
+    const pkSet = new Set(primaryKeyColumns.map((c) => String(c).toLowerCase()));
+    for (const assignment of assignments) {
+      if (typeof assignment?.column === 'string' &&
+          pkSet.has(assignment.column.toLowerCase())) {
+        throw new Error(
+          DISTRIBUTED_QUERY_ERROR_MSG.PARTITION_KEY_UPDATE_REJECTED_PREFIX +
+          `'${assignment.column}'` +
+          DISTRIBUTED_QUERY_ERROR_MSG.PARTITION_KEY_UPDATE_REJECTED_SUFFIX,
+        );
+      }
     }
   }
 
@@ -304,6 +342,100 @@ class DistributedQueryPlanner {
   }
 
   /**
+   * Resolve optimizer hints and index access for one table plan.
+   * @param {Object|null} ast - SELECT AST.
+   * @param {string} tableName - Target table name.
+   * @return {Object} Index access, selected index, and rejected indexes.
+   * @private
+   */
+  resolveTablePlanIndexAccess(ast, tableName) {
+    const optimization = this.queryOptimizer && ast &&
+      typeof this.queryOptimizer.analyzeQuery === 'function' ?
+      this.queryOptimizer.analyzeQuery(ast, tableName) :
+      null;
+
+    const selectedIndex = optimization?.selectedIndex ? {
+      name: optimization.selectedIndex.indexName,
+      indexName: optimization.selectedIndex.indexName,
+      matchedColumns: optimization.selectedIndex.matchedColumns || [],
+      scanType: DISTRIBUTED_SCAN_TYPE.INDEX_SCAN,
+      selectivity: optimization.selectedIndex.selectivity,
+      estimatedCost: optimization.selectedIndex.estimatedCost,
+      equalityPrefixColumns: optimization.selectedIndex.equalityPrefixColumns || [],
+      rangeColumn: optimization.selectedIndex.rangeColumn || null,
+      orderBySatisfied: Boolean(optimization.selectedIndex.orderBySatisfied),
+    } : null;
+
+    const rejectedIndexes = (optimization?.rejectedIndexes || []).map((rej) => ({
+      name: rej.indexName,
+      indexName: rej.indexName,
+      columns: rej.columns || [],
+      reason: rej.reason,
+    }));
+
+    const indexAccess = {
+      scanType: selectedIndex ?
+        DISTRIBUTED_SCAN_TYPE.INDEX_SCAN :
+        DISTRIBUTED_SCAN_TYPE.FULL_SCAN,
+      selectedIndex,
+      rejectedIndexes,
+    };
+
+    return {indexAccess, selectedIndex, rejectedIndexes};
+  }
+
+  /**
+   * Build access plan for a single table node.
+   * @param {Object} tableNode - Graph table node.
+   * @param {Object|null} ast - SELECT AST.
+   * @param {Array} params - Bound parameters.
+   * @return {Object} Table access plan.
+   * @private
+   */
+  buildSingleTablePlan(tableNode, ast, params) {
+    const tableName = tableNode.tableName;
+    const tableAlias = tableNode.tableAlias;
+    const partitions = this.getTablePartitions(tableName) || [];
+    const localPredicate = this.extractTableLocalPredicate(
+      ast?.where || null,
+      tableAlias,
+    );
+    const targetPredicate = localPredicate || ast?.where || null;
+    const partitionIds = this.partitionResolver ?
+      this.partitionResolver.resolvePartitions(
+        tableName,
+        targetPredicate,
+        partitions,
+        {
+          params,
+          tableAliases: [tableAlias, tableName],
+        },
+      ) :
+      partitions.map((partition) => partition.partition_id || partition.partitionId);
+
+    const resolutionInfo = this.partitionResolver &&
+      typeof this.partitionResolver.getLastResolutionInfo === 'function' ?
+      this.partitionResolver.getLastResolutionInfo() :
+      null;
+
+    const {indexAccess, selectedIndex, rejectedIndexes} =
+      this.resolveTablePlanIndexAccess(ast, tableName);
+
+    return {
+      tableName,
+      tableAlias,
+      partitions: partitionIds,
+      localPredicate,
+      projectedColumns: this.extractProjectedColumns(ast, tableAlias),
+      keyPredicateShape: resolutionInfo?.predicateShape ||
+        DISTRIBUTED_PREDICATE_SHAPE.SCATTER,
+      indexAccess,
+      selectedIndex,
+      rejectedIndexes,
+    };
+  }
+
+  /**
    * Build per-table access plans for every table alias in the graph.
    * @param {Object[]} tableGraph - Ordered table graph.
    * @param {Object|null} ast - SELECT-like AST shape.
@@ -313,44 +445,12 @@ class DistributedQueryPlanner {
   buildTablePlans(tableGraph, ast, params) {
     const tablePlans = new Map();
     for (const tableNode of tableGraph) {
-      if (!tableNode.tableName || !tableNode.tableAlias) {
-        continue;
+      if (tableNode.tableName && tableNode.tableAlias) {
+        tablePlans.set(
+          tableNode.tableAlias,
+          this.buildSingleTablePlan(tableNode, ast, params),
+        );
       }
-
-      const tableName = tableNode.tableName;
-      const tableAlias = tableNode.tableAlias;
-      const partitions = this.getTablePartitions(tableName) || [];
-      const localPredicate = this.extractTableLocalPredicate(
-        ast?.where || null,
-        tableAlias,
-      );
-      const targetPredicate = localPredicate || ast?.where || null;
-      const partitionIds = this.partitionResolver ?
-        this.partitionResolver.resolvePartitions(
-          tableName,
-          targetPredicate,
-          partitions,
-          {
-            params,
-            tableAliases: [tableAlias, tableName],
-          },
-        ) :
-        partitions.map((partition) => partition.partition_id || partition.partitionId);
-
-      const resolutionInfo = this.partitionResolver &&
-        typeof this.partitionResolver.getLastResolutionInfo === 'function' ?
-        this.partitionResolver.getLastResolutionInfo() :
-        null;
-
-      tablePlans.set(tableAlias, {
-        tableName,
-        tableAlias,
-        partitions: partitionIds,
-        localPredicate,
-        projectedColumns: this.extractProjectedColumns(ast, tableAlias),
-        keyPredicateShape: resolutionInfo?.predicateShape ||
-          DISTRIBUTED_PREDICATE_SHAPE.SCATTER,
-      });
     }
     return tablePlans;
   }
@@ -492,20 +592,38 @@ class DistributedQueryPlanner {
    * @return {Object} Diagnostics payload.
    */
   buildDiagnostics(tableGraph, tablePlans, joinPlan, options) {
-    const pushdownDecisions = Array.from(tablePlans.values()).map((tablePlan) => ({
+    const tablePlansArray = Array.from(tablePlans.values());
+    const pushdownDecisions = tablePlansArray.map((tablePlan) => ({
       tableAlias: tablePlan.tableAlias,
       predicatePushedDown: Boolean(tablePlan.localPredicate),
       projectionPushedDown: Array.isArray(tablePlan.projectedColumns),
       projectedColumnCount: Array.isArray(tablePlan.projectedColumns) ?
         tablePlan.projectedColumns.length :
         null,
+      indexAccess: tablePlan.indexAccess || null,
+      selectedIndex: tablePlan.selectedIndex || null,
+      rejectedIndexes: tablePlan.rejectedIndexes || [],
     }));
+
+    const primaryPlan = tablePlansArray[0];
+    const selectedIndex = primaryPlan?.selectedIndex || null;
+    const rejectedIndexes = tablePlansArray.flatMap((p) => p.rejectedIndexes || []);
+    const indexAccess = primaryPlan?.indexAccess || {
+      scanType: selectedIndex ?
+        DISTRIBUTED_SCAN_TYPE.INDEX_SCAN :
+        DISTRIBUTED_SCAN_TYPE.FULL_SCAN,
+      selectedIndex,
+      rejectedIndexes,
+    };
 
     return {
       tableGraph,
-      tablePlans: Array.from(tablePlans.values()),
+      tablePlans: tablePlansArray,
       joinPlan: joinPlan || null,
       pushdownDecisions,
+      indexAccess,
+      selectedIndex,
+      rejectedIndexes,
       explain: options.explain === true,
       generatedAt: Date.now(),
     };
@@ -521,27 +639,7 @@ class DistributedQueryPlanner {
    * @return {string} Deterministic plan ID.
    */
   createDeterministicPlanId(statementType, ast, params, tablePlans, joinPlan) {
-    const serializedTablePlans = Array.from(tablePlans.entries())
-      .map(([alias, plan]) => ({
-        alias,
-        tableName: plan.tableName,
-        partitions: [...plan.partitions].sort(),
-        keyPredicateShape: plan.keyPredicateShape,
-      }))
-      .sort((left, right) => left.alias.localeCompare(right.alias));
-
-    const payload = {
-      statementType,
-      ast: this.normalizePlanPayload(ast),
-      paramsCount: params.length,
-      tablePlans: serializedTablePlans,
-      joinPlan: joinPlan || null,
-    };
-    const digest = createHash(PLAN_HASH.SHA1)
-      .update(JSON.stringify(payload))
-      .digest(PLAN_HASH.HEX)
-      .slice(0, PLAN_HASH.LENGTH);
-    return `${PLAN_HASH.PREFIX}${digest}`;
+    return createDeterministicPlanId(statementType, ast, params, tablePlans, joinPlan);
   }
 
   /**
@@ -550,23 +648,7 @@ class DistributedQueryPlanner {
    * @return {*} Normalized value.
    */
   normalizePlanPayload(value) {
-    if (Array.isArray(value)) {
-      return value.map((entry) => this.normalizePlanPayload(entry));
-    }
-    if (!value || typeof value !== 'object') {
-      return value;
-    }
-
-    const normalized = {};
-    const keys = Object.keys(value).sort();
-    for (const key of keys) {
-      const entry = value[key];
-      if (typeof entry === 'function' || entry === undefined) {
-        continue;
-      }
-      normalized[key] = this.normalizePlanPayload(entry);
-    }
-    return normalized;
+    return normalizePlanPayload(value);
   }
 
   /**
@@ -576,34 +658,7 @@ class DistributedQueryPlanner {
    * @return {Object|null} Local predicate AST or null.
    */
   extractTableLocalPredicate(expr, tableAlias) {
-    if (!expr) {
-      return null;
-    }
-    if (expr.type === QUERY_AST_NODE.BINARY && expr.operator === QUERY_OPERATOR.AND) {
-      const left = this.extractTableLocalPredicate(expr.left, tableAlias);
-      const right = this.extractTableLocalPredicate(expr.right, tableAlias);
-      if (left && right) {
-        return {
-          ...expr,
-          left,
-          right,
-        };
-      }
-      return left || right || null;
-    }
-    if (expr.type === QUERY_AST_NODE.BINARY && expr.operator === QUERY_OPERATOR.OR) {
-      const left = this.extractTableLocalPredicate(expr.left, tableAlias);
-      const right = this.extractTableLocalPredicate(expr.right, tableAlias);
-      if (left && right) {
-        return {
-          ...expr,
-          left,
-          right,
-        };
-      }
-      return null;
-    }
-    return this.expressionReferencesAlias(expr, tableAlias) ? expr : null;
+    return extractTableLocalPredicate(expr, tableAlias);
   }
 
   /**
@@ -613,44 +668,7 @@ class DistributedQueryPlanner {
    * @return {boolean} True when local to target alias.
    */
   expressionReferencesAlias(expr, tableAlias) {
-    if (!expr || typeof expr !== 'object') {
-      return true;
-    }
-    if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
-      if (!expr.table) {
-        return true;
-      }
-      return String(expr.table).toLowerCase() === String(tableAlias).toLowerCase();
-    }
-    if (expr.type === QUERY_AST_NODE.BINARY) {
-      return this.expressionReferencesAlias(expr.left, tableAlias) &&
-        this.expressionReferencesAlias(expr.right, tableAlias);
-    }
-    if (expr.type === QUERY_AST_NODE.UNARY) {
-      return this.expressionReferencesAlias(expr.operand, tableAlias);
-    }
-    if (expr.type === QUERY_AST_NODE.IN) {
-      const expressionLocal = this.expressionReferencesAlias(
-        expr.expression,
-        tableAlias,
-      );
-      if (!expressionLocal) {
-        return false;
-      }
-      return (expr.values || []).every((valueExpr) =>
-        this.expressionReferencesAlias(valueExpr, tableAlias),
-      );
-    }
-    if (expr.type === QUERY_AST_NODE.BETWEEN) {
-      return this.expressionReferencesAlias(expr.expression, tableAlias) &&
-        this.expressionReferencesAlias(expr.low, tableAlias) &&
-        this.expressionReferencesAlias(expr.high, tableAlias);
-    }
-    if (expr.type === QUERY_AST_NODE.LIKE) {
-      return this.expressionReferencesAlias(expr.expression, tableAlias) &&
-        this.expressionReferencesAlias(expr.pattern, tableAlias);
-    }
-    return true;
+    return expressionReferencesAlias(expr, tableAlias);
   }
 
   /**
@@ -660,27 +678,7 @@ class DistributedQueryPlanner {
    * @return {string[]|null} Projected columns or null for wildcard.
    */
   extractProjectedColumns(ast, tableAlias) {
-    if (!ast || !Array.isArray(ast.columns)) {
-      return null;
-    }
-    if (ast.columns.some((column) =>
-      (column.type === QUERY_AST_NODE.STAR) ||
-      (column.expression && column.expression.type === QUERY_AST_NODE.STAR))) {
-      return null;
-    }
-
-    const projected = new Set();
-    for (const column of ast.columns) {
-      const expr = column.expression || column;
-      this.collectProjectedColumns(expr, tableAlias, projected);
-    }
-    for (const join of ast.joins || []) {
-      this.collectProjectedColumns(join.condition, tableAlias, projected);
-    }
-    if (projected.size === 0) {
-      return null;
-    }
-    return Array.from(projected.values());
+    return extractProjectedColumns(ast, tableAlias);
   }
 
   /**
@@ -690,43 +688,7 @@ class DistributedQueryPlanner {
    * @param {Set<string>} out - Output column set.
    */
   collectProjectedColumns(expr, tableAlias, out) {
-    if (!expr || typeof expr !== 'object') {
-      return;
-    }
-    if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
-      if (!expr.table ||
-        String(expr.table).toLowerCase() === String(tableAlias).toLowerCase()) {
-        if (expr.column) {
-          out.add(expr.column);
-        }
-      }
-      return;
-    }
-    if (expr.type === QUERY_AST_NODE.BINARY) {
-      this.collectProjectedColumns(expr.left, tableAlias, out);
-      this.collectProjectedColumns(expr.right, tableAlias, out);
-      return;
-    }
-    if (expr.type === QUERY_AST_NODE.UNARY) {
-      this.collectProjectedColumns(expr.operand, tableAlias, out);
-      return;
-    }
-    if (expr.type === QUERY_AST_NODE.IN) {
-      this.collectProjectedColumns(expr.expression, tableAlias, out);
-      for (const valueExpr of expr.values || []) {
-        this.collectProjectedColumns(valueExpr, tableAlias, out);
-      }
-      return;
-    }
-    if (expr.type === QUERY_AST_NODE.BETWEEN) {
-      this.collectProjectedColumns(expr.expression, tableAlias, out);
-      this.collectProjectedColumns(expr.low, tableAlias, out);
-      this.collectProjectedColumns(expr.high, tableAlias, out);
-      return;
-    }
-    if (expr.type === QUERY_AST_NODE.AGGREGATE) {
-      this.collectProjectedColumns(expr.argument, tableAlias, out);
-    }
+    return collectProjectedColumns(expr, tableAlias, out);
   }
 
   /**

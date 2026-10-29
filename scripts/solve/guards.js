@@ -56,11 +56,13 @@ const LIST_SEPARATOR = ', ';
 const ARGUMENT_SEPARATOR = ' ';
 const GIT_ARGUMENTS = Object.freeze({
   HEAD: Object.freeze(['rev-parse', '--verify', 'HEAD^{commit}']),
+  COMMON_DIR: Object.freeze(['rev-parse', '--git-common-dir']),
   DIFF_NAMES: Object.freeze(['diff', '--name-only', 'HEAD']),
   STAGED_NAMES: Object.freeze(['diff', '--cached', '--name-only', 'HEAD']),
   UNTRACKED: Object.freeze(['ls-files', '--others', '--exclude-standard']),
   INDEXED: Object.freeze(['ls-files', '--']),
 });
+const GIT_FALLBACK_DIR = '.git';
 const REGISTRY_UNAVAILABLE = 'coupled-pair registry could not be loaded';
 const OUTSIDE_SCOPE_PREFIX = 'paths outside epic ';
 const OUTSIDE_SCOPE_INFIX = ' authorizes: ';
@@ -77,6 +79,16 @@ function git(root, args, options = {}) {
 
 function headSha(root) {
   return git(root, [...GIT_ARGUMENTS.HEAD]).trim();
+}
+
+function gitCommonDir(root) {
+  try {
+    const common = git(root, [...GIT_ARGUMENTS.COMMON_DIR], {allowFailure: true}).trim();
+    if (common) return path.resolve(root, common);
+  } catch (_error) {
+    return path.join(root, GIT_FALLBACK_DIR);
+  }
+  return path.join(root, GIT_FALLBACK_DIR);
 }
 
 function lines(output) {
@@ -350,6 +362,6 @@ function canonicalImportGraphProblem(root, timeout = importGraphVerifyTimeout(),
 
 export {
   SOLVE_PREFIX, canonicalImportGraphProblem, changedPaths, coupledPairProblems,
-  epicScopeProblems, git, headSha, isSourcePath, requiresVerification,
+  epicScopeProblems, git, gitCommonDir, headSha, isSourcePath, requiresVerification,
   stageablePaths, staticQualityProblems,
 };

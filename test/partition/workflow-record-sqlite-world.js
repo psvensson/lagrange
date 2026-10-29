@@ -46,12 +46,13 @@ function parsePartitionTransition(tableInfo) {
 function insertPartitions(db, {tableId, tableName}, partitions) {
   const insertPartition = db.prepare('INSERT INTO partitions ' +
     '(partition_id, table_id, table_name, partition_key_start, ' +
-    'partition_key_end, partition_version, replica_count, size_bytes, ' +
+    'partition_key_end, partition_key_type, partition_version, replica_count, size_bytes, ' +
     'leader_node_id, state, created_at, updated_at) VALUES ' +
-    '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
   for (const row of partitions) {
     insertPartition.run(row.partition_id, tableId, tableName,
       row.partition_key_start ?? null, row.partition_key_end ?? null,
+      row.partition_key_type ?? 'TEXT',
       row.partition_version ?? 1, row.replica_count ?? 3,
       row.size_bytes ?? 128, row.leader_node_id ?? 'node-a', 'NORMAL', 1, 1);
   }
@@ -98,22 +99,34 @@ function submitWrite(store, writer, sql, params) {
  * @param {Array<Object>} [options.partitions] - Initial partitions rows.
  * @return {Object} The store.
  */
+const DEFAULT_SCHEMA_DEFINITION = JSON.stringify({
+  columns: [
+    {name: 'id', type: 'TEXT', primaryKey: true},
+  ],
+  primaryKey: ['id'],
+});
+
 function openRecordStore({tableId = 'tbl-users', tableName = 'users',
-  partitions = []} = {}) {
+  partitions = [], schemaDefinition} = {}) {
   const db = new Database(':memory:');
   db.exec(generateCreateTableSQL(TABLES_SCHEMA));
   db.exec(generateCreateTableSQL(PARTITIONS_SCHEMA));
+  const resolvedSchema = (schemaDefinition !== undefined && schemaDefinition !== null) ?
+    schemaDefinition : DEFAULT_SCHEMA_DEFINITION;
   db.prepare('INSERT INTO tables (table_id, table_name, schema_definition, ' +
     'partition_key, partition_count, active_partition_version, created_at, ' +
     'updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(tableId, tableName, '{}', 'id', partitions.length || 1, 1, 1, 1);
+    .run(tableId, tableName, resolvedSchema, 'id', partitions.length || 1, 1, 1, 1);
   // observers: called after every applied write, at its apply (the record
   // and the partitions rows are then exactly what that write left).
   const store = {db, tableId, writes: [], lostAcks: [], delays: [],
     delayed: [], observers: []};
   insertPartitions(db, {tableId, tableName}, partitions);
-  store.tablesRow = () => ({...db.prepare(
-    'SELECT * FROM tables WHERE table_id = ?').get(tableId)});
+  store.tablesRow = () => {
+    const row = db.prepare(
+      'SELECT * FROM tables WHERE table_id = ?').get(tableId);
+    return row ? {partition_key_type: 'TEXT', ...row} : null;
+  };
   store.partitionRow = (partitionId) => {
     const row = db.prepare('SELECT * FROM partitions WHERE partition_id = ?')
       .get(partitionId);

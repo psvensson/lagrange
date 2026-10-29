@@ -1,4 +1,5 @@
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
+import {PG_ERROR_CODE} from '../runtime/pgwire-protocol-constants.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
 
 const LOCAL_STR_COLUMN_REF = 'column_ref';
@@ -25,6 +26,10 @@ const ERR_AGGREGATE_IN_MUTATION =
   'Aggregate functions in mutations are not supported';
 const ERR_COLUMN_REF_IN_INSERT =
   'Column references in INSERT VALUES are not supported';
+const INDEX_ACCESS_METHOD_BTREE = 'btree';
+const ERR_CREATE_INDEX_CONCURRENTLY = 'CREATE INDEX CONCURRENTLY is not supported';
+const ERR_INDEX_MUST_HAVE_ONE_COLUMN = 'Index must have at least one column';
+const ERR_EXPRESSION_INDEXES_NOT_SUPPORTED = 'Expression indexes are not supported';
 const FK_KEYWORD_FOREIGN_KEY = 'FOREIGN KEY';
 const FK_KEYWORD_REFERENCES = 'REFERENCES';
 const NODE_TYPE_SINGLE_QUOTE_STRING = 'single_quote_string';
@@ -126,9 +131,13 @@ function externalSchemaIdentifier(value) {
     String(candidate || LOCAL_STR_EMPTY);
 }
 
-function throwUnsupportedFeature(message) {
+function throwUnsupportedFeature(
+  message,
+  sqlState = PG_ERROR_CODE.FEATURE_NOT_SUPPORTED,
+) {
   const error = new Error(message);
   error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+  error.sqlState = sqlState;
   throw error;
 }
 
@@ -263,6 +272,77 @@ function markSinglePrimaryKeyColumn(columns, primaryKey) {
   if (col) {
     col.primaryKey = true;
   }
+}
+
+function validateIndexTypeEntry(t) {
+  if (typeof t === LOCAL_STR_STRING &&
+      ![SQL_SCHEMA_UNIQUE, INDEX_ACCESS_METHOD_BTREE].includes(t.toLowerCase())) {
+    throwUnsupportedFeature(`Index access method '${t}' is not supported`);
+  }
+}
+
+function validateIndexType(indexType) {
+  if (typeof indexType === LOCAL_STR_STRING) {
+    validateIndexTypeEntry(indexType);
+  } else if (Array.isArray(indexType)) {
+    for (const t of indexType) {
+      validateIndexTypeEntry(t);
+    }
+  }
+}
+
+function validateCreateIndexMethod(ast, sql) {
+  const usingMethod = ast.index_using?.type ||
+    (typeof ast.index_using === LOCAL_STR_STRING ? ast.index_using : null);
+  if (usingMethod && usingMethod.toLowerCase() !== INDEX_ACCESS_METHOD_BTREE) {
+    throwUnsupportedFeature(`Index access method '${usingMethod}' is not supported`);
+  }
+  validateIndexType(ast.index_type);
+  if (typeof sql === LOCAL_STR_STRING) {
+    const match = /\bUSING\s+([a-zA-Z0-9_]+)\b/iu.exec(sql);
+    if (match && match[1].toLowerCase() !== INDEX_ACCESS_METHOD_BTREE) {
+      throwUnsupportedFeature(`Index access method '${match[1]}' is not supported`);
+    }
+  }
+}
+
+function validateCreateIndexFeatures(ast, sql) {
+  if (ast.concurrently || (typeof sql === LOCAL_STR_STRING && /\bCONCURRENTLY\b/iu.test(sql))) {
+    throwUnsupportedFeature(ERR_CREATE_INDEX_CONCURRENTLY);
+  }
+  validateCreateIndexMethod(ast, sql);
+}
+
+function extractCreateIndexColumns(indexColumns) {
+  if (!Array.isArray(indexColumns) || indexColumns.length === 0) {
+    throwUnsupportedFeature(ERR_INDEX_MUST_HAVE_ONE_COLUMN);
+  }
+  const columns = [];
+  for (const c of indexColumns) {
+    let colName = null;
+    if (c && c.type === LOCAL_STR_COLUMN_REF) {
+      if (typeof c.column === LOCAL_STR_STRING) {
+        colName = c.column;
+      } else if (typeof c.column?.expr?.value === LOCAL_STR_STRING) {
+        colName = c.column.expr.value;
+      }
+    }
+    if (!colName) {
+      throwUnsupportedFeature(ERR_EXPRESSION_INDEXES_NOT_SUPPORTED);
+    }
+    columns.push(colName);
+  }
+  return columns;
+}
+
+function resolveCreateIndexUniqueness(ast, sql) {
+  return Boolean(
+    (typeof ast.index_type === LOCAL_STR_STRING &&
+      ast.index_type.toLowerCase() === SQL_SCHEMA_UNIQUE) ||
+    (Array.isArray(ast.index_type) &&
+      ast.index_type.some((t) => String(t).toLowerCase() === SQL_SCHEMA_UNIQUE)) ||
+    (typeof sql === LOCAL_STR_STRING && /\bCREATE\s+UNIQUE\s+INDEX\b/iu.test(sql)),
+  );
 }
 
 const sqlParserSchemaMutationMethods = {
@@ -431,6 +511,29 @@ const sqlParserSchemaMutationMethods = {
   convertAlterDefaultValue(defaultNode) {
     const converted = this.convertColumnDefaultLiteral(defaultNode);
     return converted ? converted.value : null;
+  },
+
+  convertCreateIndex(ast) {
+    validateCreateIndexFeatures(ast, this.sql);
+    const columns = extractCreateIndexColumns(ast.index_columns);
+    const indexName = typeof ast.index === 'string' ?
+      ast.index :
+      (ast.index?.name ?? String(ast.index || ''));
+    const tableName = typeof ast.table === 'string' ?
+      ast.table :
+      (ast.table?.table ?? ast.table?.name ?? null);
+    const isUnique = resolveCreateIndexUniqueness(ast, this.sql);
+
+    return {
+      type: AST_TYPE.CREATE_INDEX,
+      indexName,
+      tableName,
+      columns,
+      unique: isUnique,
+      ifNotExists: Boolean(ast.if_not_exists),
+      indexType: 'btree',
+      rawSql: this.sql,
+    };
   },
 };
 

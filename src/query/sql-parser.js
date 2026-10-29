@@ -19,6 +19,7 @@ const {Parser: PostgreSQLParser} = postgresqlNodeSqlParser;
 import {LoggingService} from '../logging/logging-service.js';
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT} from './pg/pg-compat-constants.js';
+import {PG_ERROR_CODE} from '../runtime/pgwire-protocol-constants.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
 import {
   TRANSACTION_CONTROL_KIND,
@@ -30,6 +31,11 @@ import {
 import {sqlParserExpressionMethods} from './sql-parser-expression-methods.js';
 import {sqlParserSchemaMutationMethods} from
   './sql-parser-schema-mutation-methods.js';
+import {sqlParserSelectMethods} from './sql-parser-select-methods.js';
+import {
+  stripAndValidateLockingClause,
+  validateSelectAstLocking,
+} from './sql-locking-read-grammar.js';
 
 /**
  * Parser-specific error message constants.
@@ -86,47 +92,13 @@ const SQL_SCHEMA_KEYWORD = Object.freeze({
   BTREE: 'btree',
 });
 
-const SQL_JOIN_TYPE = Object.freeze({
-  LEFT: 'LEFT',
-  RIGHT: 'RIGHT',
-  CROSS: 'CROSS',
-  INNER: 'INNER',
-});
-
-const SQL_SORT_DIRECTION = Object.freeze({
-  ASC: 'ASC',
-});
-const SQL_LIMIT_ALL = 'ALL';
-const SQL_LIMIT_OFFSET_SEPARATOR = 'offset';
-
-/**
- * node-sql-parser expression-level AST type identifiers.
- * These are the raw type strings the external parser produces.
- */
-const EXT_EXPR_TYPE = Object.freeze({
-  BINARY_EXPR: 'binary_expr',
-  UNARY_EXPR: 'unary_expr',
-  COLUMN_REF: 'column_ref',
-  NUMBER: 'number',
-  SINGLE_QUOTE_STRING: 'single_quote_string',
-  DOUBLE_QUOTE_STRING: 'double_quote_string',
-  STRING: 'string',
-  BOOL: 'bool',
-  NULL: 'null',
-  ORIGIN: 'origin',
-  AGGR_FUNC: 'aggr_func',
-  STAR: 'star',
-  EXPR_LIST: 'expr_list',
-});
-
-/**
- * Star wildcard value used in SELECT * and aggregate(*) nodes.
- */
-const STAR_VALUE = '*';
-
 function createTypedParseError(code, message) {
   const error = new Error(message);
   error.code = code;
+  if (code === QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE) {
+    error.sqlState = PG_ERROR_CODE.FEATURE_NOT_SUPPORTED;
+    error.details = Object.freeze({sqlState: PG_ERROR_CODE.FEATURE_NOT_SUPPORTED});
+  }
   return error;
 }
 
@@ -234,47 +206,48 @@ function externalSchemaIdentifier(value) {
   return typeof candidate === 'string' ? candidate : String(candidate || '');
 }
 
-function isLimitAllNode(node) {
-  return node?.type === EXT_EXPR_TYPE.ORIGIN &&
-    String(node.value).toUpperCase() === SQL_LIMIT_ALL;
+const INDEX_ACCESS_METHOD_BTREE = 'btree';
+const ERR_CREATE_INDEX_CONCURRENTLY = 'CREATE INDEX CONCURRENTLY is not supported';
+
+function createUnsupportedIndexError(message) {
+  const error = new Error(message);
+  error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+  error.sqlState = PG_ERROR_CODE.FEATURE_NOT_SUPPORTED;
+  return error;
 }
 
-function requireIntegerLimitLiteral(node, errorMessage) {
-  const value = node?.value;
-  if (!Number.isInteger(value)) {
-    throw new Error(errorMessage);
+function assertIndexCreationSupported(sql) {
+  if (typeof sql !== 'string' || !/\bCREATE\s+(?:UNIQUE\s+)?INDEX\b/iu.test(sql)) {
+    return;
   }
-  return value;
+  if (/\bCONCURRENTLY\b/iu.test(sql)) {
+    throw createUnsupportedIndexError(ERR_CREATE_INDEX_CONCURRENTLY);
+  }
+  const usingMatch = /\bUSING\s+([a-zA-Z0-9_]+)\b/iu.exec(sql);
+  if (usingMatch && usingMatch[1].toLowerCase() !== INDEX_ACCESS_METHOD_BTREE) {
+    throw createUnsupportedIndexError(`Index access method '${usingMatch[1]}' is not supported`);
+  }
 }
 
-function convertExternalLimit(limit) {
-  const values = limit?.value;
-  if (!Array.isArray(values) || values.length === 0) {
+function parseDropIndexAst(sql) {
+  if (typeof sql !== 'string' || !/^\s*DROP\s+INDEX\b/iu.test(sql)) {
     return null;
   }
-  if (isLimitAllNode(values[0])) {
-    if (values.length > 1) {
-      throw new Error(PARSER_ERROR_MSG.LIMIT_ALL_WITH_OFFSET_UNSUPPORTED);
-    }
+  const dropIndexMatch = sql.match(
+    /^\s*DROP\s+INDEX\s+(IF\s+EXISTS\s+)?([A-Za-z0-9_".]+)(?:\s+ON\s+([A-Za-z0-9_".]+))?\s*;?\s*$/i,
+  );
+  if (!dropIndexMatch) {
     return null;
   }
-  if (
-    limit.seperator === SQL_LIMIT_OFFSET_SEPARATOR &&
-    values.length === 1
-  ) {
-    throw new Error(PARSER_ERROR_MSG.OFFSET_WITHOUT_LIMIT_UNSUPPORTED);
-  }
+  const ifExists = Boolean(dropIndexMatch[1]);
+  const indexName = dropIndexMatch[2].replace(/"/g, '');
+  const tableName = dropIndexMatch[3] ? dropIndexMatch[3].replace(/"/g, '') : null;
   return {
-    count: requireIntegerLimitLiteral(
-      values[0],
-      PARSER_ERROR_MSG.LIMIT_COUNT_MUST_BE_INTEGER_LITERAL,
-    ),
-    offset: values.length > 1 ?
-      requireIntegerLimitLiteral(
-        values[1],
-        PARSER_ERROR_MSG.LIMIT_OFFSET_MUST_BE_INTEGER_LITERAL,
-      ) :
-      null,
+    type: AST_TYPE.DROP_INDEX,
+    indexName,
+    tableName,
+    ifExists,
+    rawSql: sql,
   };
 }
 
@@ -309,11 +282,18 @@ class SQLParser {
     const transactionControl = parseTransactionControl(this.sql);
     if (transactionControl) return transactionControl;
 
+    assertIndexCreationSupported(this.sql);
+    const dropIndexAst = parseDropIndexAst(this.sql);
+    if (dropIndexAst) return dropIndexAst;
+
+    const {sql: parseSql, hasLocking} =
+      stripAndValidateLockingClause(this.sql);
+
     try {
       const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL ?
         PARSER_CONFIG.DATABASE_PG :
         PARSER_CONFIG.DATABASE;
-      const normalizedSql = normalizeDollarQuotedStrings(this.sql);
+      const normalizedSql = normalizeDollarQuotedStrings(parseSql);
       const createTableInput = extractCreateTableStorageOptions(normalizedSql);
       const externalAst = this.parser.astify(
         createTableInput.sql,
@@ -328,6 +308,7 @@ class SQLParser {
           this.positionalParams.length > 0) {
         ast._paramMapping = this.positionalParams;
       }
+      validateSelectAstLocking(ast, hasLocking);
       return ast;
     } catch (error) {
       const errorMsg =
@@ -384,75 +365,6 @@ class SQLParser {
         QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX + ast.type,
       );
     }
-  }
-  convertSelect(ast) {
-    // PG mode: distinct is {type: 'DISTINCT'|null} vs SQLite string
-    const distinct = typeof ast.distinct === 'object' ?
-      ast.distinct?.type === 'DISTINCT' :
-      ast.distinct === 'DISTINCT';
-
-    const ctes = this.convertCtes(ast.with);
-    const recursive = ast.with ?
-      ast.with.some((c) => !!c.recursive) :
-      false;
-
-    const setOperation = this.convertSetOperation(ast);
-
-    return {
-      type: AST_TYPE.SELECT,
-      distinct,
-      columns: this.convertColumns(ast.columns),
-      from: this.convertFrom(ast.from),
-      joins: this.convertJoins(ast.from),
-      where: ast.where ? this.convertExpression(ast.where) : null,
-      groupBy: ast.groupby ? this.convertGroupBy(ast.groupby) : null,
-      having: ast.having ? this.convertExpression(ast.having) : null,
-      orderBy: ast.orderby ? this.convertOrderBy(ast.orderby) : null,
-      limit: ast.limit ? this.convertLimit(ast.limit) : null,
-      ctes,
-      recursive,
-      setOperation,
-    };
-  }
-
-  /**
-   * Convert WITH clause CTE definitions from node-sql-parser AST.
-   * Handles both PG mode (stmt is direct select AST) and SQLite mode
-   * (stmt wraps in {tableList, columnList, ast}).
-   * @param {Array|null} withClause - Raw with clause array.
-   * @returns {Array|null} Converted CTE definitions or null.
-   */
-  convertCtes(withClause) {
-    if (!withClause || withClause.length === 0) {
-      return null;
-    }
-    return withClause.map((cte) => {
-      const name = cte.name?.value || cte.name;
-      // PG mode: stmt is the select AST directly
-      // SQLite mode: stmt wraps in {tableList, columnList, ast}
-      const stmtAst = cte.stmt?.ast || cte.stmt;
-      return {
-        name,
-        query: this.convertSelect(stmtAst),
-        recursive: !!cte.recursive,
-      };
-    });
-  }
-
-  /**
-   * Convert set operation (_next / set_op) from node-sql-parser AST.
-   * Handles UNION, UNION ALL, INTERSECT, EXCEPT in both dialects.
-   * @param {Object} ast - Raw select AST that may contain _next.
-   * @returns {Object|null} Set operation node or null.
-   */
-  convertSetOperation(ast) {
-    if (!ast._next || !ast.set_op) {
-      return null;
-    }
-    return {
-      type: ast.set_op.toUpperCase(),
-      right: this.convertSelect(ast._next),
-    };
   }
 
   convertInsert(ast) {
@@ -593,108 +505,9 @@ class SQLParser {
       PARSER_ERROR_MSG.UNSUPPORTED_DROP_TYPE_PREFIX + ast.keyword,
     );
   }
-
-  convertColumns(columns) {
-    return columns.map((col) => {
-      if (col.expr.type === EXT_EXPR_TYPE.STAR ||
-          col.expr.column === STAR_VALUE) {
-        return {type: EXPR_TYPE.STAR, value: STAR_VALUE};
-      }
-      return {
-        type: EXPR_TYPE.COLUMN,
-        expression: this.convertExpression(col.expr),
-        alias: col.as || null,
-      };
-    });
-  }
-
-  convertFrom(from) {
-    if (!from || from.length === 0) {
-      return null;
-    }
-    const firstTable = from[0];
-
-    // Derived table: FROM (SELECT ...) AS alias
-    if (firstTable.expr?.ast) {
-      return {
-        type: EXPR_TYPE.TABLE,
-        name: null,
-        alias: firstTable.as || null,
-        subquery: this.convertSelect(firstTable.expr.ast),
-      };
-    }
-
-    return {
-      type: EXPR_TYPE.TABLE,
-      name: firstTable.table,
-      alias: firstTable.as || null,
-    };
-  }
-
-  convertJoins(from) {
-    if (!from || from.length <= 1) {
-      return [];
-    }
-    const joins = [];
-    for (let i = 1; i < from.length; i++) {
-      const joinDef = from[i];
-      if (joinDef.join) {
-        // Derived table in JOIN: joinDef.expr.ast exists
-        let table;
-        if (joinDef.expr?.ast) {
-          table = {
-            type: EXPR_TYPE.TABLE,
-            name: null,
-            alias: joinDef.as || null,
-            subquery: this.convertSelect(joinDef.expr.ast),
-          };
-        } else {
-          table = {
-            type: EXPR_TYPE.TABLE,
-            name: joinDef.table,
-            alias: joinDef.as || null,
-          };
-        }
-        joins.push({
-          type: EXPR_TYPE.JOIN,
-          joinType: this.normalizeJoinType(joinDef.join),
-          table,
-          condition: joinDef.on ?
-            this.convertExpression(joinDef.on) : null,
-        });
-      }
-    }
-    return joins;
-  }
-
-  normalizeJoinType(joinType) {
-    const upper = joinType.toUpperCase();
-    if (upper.includes(SQL_JOIN_TYPE.LEFT)) return SQL_JOIN_TYPE.LEFT;
-    if (upper.includes(SQL_JOIN_TYPE.RIGHT)) return SQL_JOIN_TYPE.RIGHT;
-    if (upper.includes(SQL_JOIN_TYPE.CROSS)) return SQL_JOIN_TYPE.CROSS;
-    return SQL_JOIN_TYPE.INNER;
-  }
-
-  convertGroupBy(groupBy) {
-    const columns = groupBy.columns || groupBy;
-    if (!Array.isArray(columns)) {
-      return [this.convertExpression(columns)];
-    }
-    return columns.map((g) => this.convertExpression(g));
-  }
-
-  convertOrderBy(orderBy) {
-    return orderBy.map((o) => ({
-      expression: this.convertExpression(o.expr),
-      direction: o.type || SQL_SORT_DIRECTION.ASC,
-    }));
-  }
-
-  convertLimit(limit) {
-    return convertExternalLimit(limit);
-  }
 }
 
+Object.assign(SQLParser.prototype, sqlParserSelectMethods);
 Object.assign(SQLParser.prototype, sqlParserExpressionMethods);
 Object.assign(SQLParser.prototype, sqlParserSchemaMutationMethods);
 

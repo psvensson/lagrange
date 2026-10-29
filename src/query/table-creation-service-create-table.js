@@ -1,5 +1,6 @@
 import {validateUserTableCreateIntent} from './user-table-create-intent.js';
 import {v4 as uuidv4} from 'uuid';
+import {resolveDeclaredPartitionKeyType} from '../partition/partition-boundary-representation.js';
 import {STATE, TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
 import {resolveControlPlaneSystemTableVisibilityState} from '../control-plane/control-plane-system-table-visibility-constants.js';
@@ -51,7 +52,7 @@ function assertDurableMetadataIdentity(service, existingTable, ast, options) {
   if (!options.schemaJobId) return;
   const existingTableId = existingTable.table_id || existingTable.tableId;
   const expectedSchema = sortObject(
-    service.buildSchemaDefinition(ast.columns),
+    service.buildSchemaDefinition(ast.columns, ast),
   );
   let existingSchema = {};
   try {
@@ -174,12 +175,11 @@ function buildCreateTableMetadataContext(service, ast, options) {
   const partitionKey = service.derivePartitionKey(ast.primaryKey);
   const tableId = options.tableId || `tbl-${uuidv4()}`;
   const partitionId = options.partitionId || `${tableId}-p1`;
+  const schemaDefinition = service.buildSchemaDefinition(ast.columns, ast);
   const tableMetadata = {
     table_id: tableId,
     table_name: ast.tableName,
-    schema_definition: JSON.stringify(
-      service.buildSchemaDefinition(ast.columns),
-    ),
+    schema_definition: JSON.stringify(schemaDefinition),
     partition_key: partitionKey,
     table_policies: JSON.stringify(resolveCreateTablePolicy(ast)),
     partition_count: 1,
@@ -190,12 +190,14 @@ function buildCreateTableMetadataContext(service, ast, options) {
     created_at: Date.now(),
     updated_at: Date.now(),
   };
+  const partitionKeyType = resolveDeclaredPartitionKeyType(tableMetadata);
   const partitionMetadata = {
     partition_id: partitionId,
     table_id: tableId,
     table_name: ast.tableName,
     partition_key_start: null,
     partition_key_end: null,
+    partition_key_type: partitionKeyType,
     partition_version: 1,
     replica_count: service.defaultReplicaCount,
     size_bytes: 0,

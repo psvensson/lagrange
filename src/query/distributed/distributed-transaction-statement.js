@@ -99,6 +99,28 @@ const distributedTransactionStatementMethods = {
     });
   },
 
+  /**
+   * Cancel an active transaction explicitly: rolls back across all enlisted
+   * participants and releases all reservations.
+   * @param {string} sessionId
+   * @return {Promise<Object>}
+   */
+  async cancel(sessionId) {
+    const tx = this.transactionsBySession.get(sessionId);
+    if (!tx) {
+      return {
+        success: false,
+        error: QUERY_ERROR_MSG.NO_ACTIVE_TRANSACTION,
+        errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
+      };
+    }
+    const rollbackResult = await this.rollback(sessionId);
+    return {
+      ...rollbackResult,
+      outcome: 'typed_transaction_cancelled',
+      cancellation: true,
+    };
+  },
 };
 
 export {distributedTransactionStatementMethods};

@@ -9,12 +9,19 @@ import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {coordinatorTableParticipantRefusal} from
   './distributed/distributed-transaction-participant-admission.js';
+import {
+  executeLockingReadReservations,
+  isLockingReadAst,
+} from './sql-locking-read-execution.js';
+import {
+  fromlessSelectResult,
+  reportConditionWaitSpent,
+  selectRequestOptions,
+} from './sql-select-execution-helpers.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_BINARY = 'binary';
@@ -24,51 +31,6 @@ const LOCAL_STR_LITERAL = 'literal';
 const LOCAL_STR_PARAMETER = 'parameter';
 const LOCAL_STR_COLUMN_REF = 'column_ref';
 const LOCAL_STR_STAR = 'star';
-
-/**
- * Read the caller's last-observed state at expiry; an observer failure is
- * itself the observation (the spent error must still be thrown).
- * @param {Function|undefined} observe
- * @return {Object|null}
- * @private
- */
-function observeConditionWait(observe) {
-  if (typeof observe !== LOCAL_STR_FUNCTION) {
-    return null;
-  }
-  try {
-    return observe();
-  } catch (observeError) {
-    return {observeError: observeError?.message || String(observeError)};
-  }
-}
-
-/**
- * Report one spent waitForCondition bound and mark the thrown error so a
- * caller that used to log the same expiry does not log it twice.
- * @param {Object} engine - SQL query engine.
- * @param {Object} spent - {error, budget, polls, timeoutError,
- *   timeoutOptions}.
- * @private
- */
-function reportConditionWaitSpent(engine, spent) {
-  const options = spent.timeoutOptions;
-  const observed = observeConditionWait(options.observe);
-  reportWaitBoundSpent(engine.logger, {
-    wait: options.nestedOperation || LOCAL_STR_WAIT_FOR_CONDITION,
-    awaited: spent.timeoutError,
-    boundMs: spent.budget?.configuredBudgetMs,
-    elapsedMs: (engine.nowFn || Date.now)() - spent.budget?.startedAtMs,
-    lastObserved: {
-      predicateSatisfied: false,
-      polls: spent.polls,
-      classification: spent.error.timeoutClassification?.classification,
-      ...observed,
-    },
-    scope: options.scope,
-  });
-  spent.error.waitBoundSpentReported = true;
-}
 
 const {
   AuthoritativeControlPlaneView,
@@ -87,44 +49,6 @@ const {
   isRetryableControlPlaneError,
 } = SQL_QUERY_ENGINE_SHARED;
 
-// Preserve the same request identity and caller budget on every read branch.
-function selectRequestOptions(queryOptions, sessionId, transactionRead) {
-  return {
-    sessionId: transactionRead ? sessionId : null,
-    transactionIdentity: transactionRead?.identity,
-    timeoutMs: queryOptions.timeoutMs,
-    timeoutBudget: queryOptions.timeoutBudget || null,
-    cancellationToken: queryOptions.cancellationToken || null,
-    resultMaxBytes: queryOptions.budgets?.RESULT_MAX_BYTES,
-    resultMaxRows: queryOptions.budgets?.RESULT_MAX_ROWS,
-  };
-}
-
-function fromlessSelectResult(first, partitionId) {
-  if (!first || !first.success) {
-    return {
-      success: false,
-      error: first?.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
-      errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
-    };
-  }
-
-  return {
-    success: true,
-    rows: first.rows || [],
-    count: first.rows?.length || 0,
-    partitions: [partitionId],
-    tableName: null,
-    distributedPlan: null,
-    distributedDiagnostics: null,
-    distributedMetrics: {
-      planningDurationMs: 0,
-      executionDurationMs: 0,
-      fanout: null,
-      mergeDurationMs: 0,
-    },
-  };
-}
 class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
   /**
    * Create one control-plane timeout budget.
@@ -396,6 +320,18 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         Array.isArray(result.partitions) ? result.partitions : partitionIds,
         SERVICE_PARTITION_ACCESS_KIND.READ,
       );
+      if (transactionRead && isLockingReadAst(ast)) {
+        const lockingOutcome = await executeLockingReadReservations({
+          engine: this,
+          ast,
+          sessionId,
+          transactionRead,
+          selectResult: result,
+        });
+        if (lockingOutcome.success !== true) {
+          return lockingOutcome;
+        }
+      }
     }
 
     return {
@@ -738,17 +674,6 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       );
     });
   }
-
-  /**
-   * Return one canonical deferred result when a retryable control-plane table
-   * lifecycle mutation times out while authority establishment is still
-   * pending.
-   * @param {string|null} tableName
-   * @param {*} error
-   * @param {Object} [queryOptions={}]
-   * @return {Object|null}
-   * @private
-   */
 }
 
 Object.defineProperties(

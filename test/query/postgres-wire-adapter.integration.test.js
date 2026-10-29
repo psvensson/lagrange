@@ -73,8 +73,13 @@ function createMockMessageRouter() {
  * @return {Object} Mock system cache.
  */
 function createMockSystemCache(tables, partitions) {
+  const normalizedTables = tables.map((t) => ({
+    ...t,
+    partition_key_type: t.partition_key_type || t.partitionKeyType || 'TEXT',
+  }));
   const normalizedPartitions = partitions.map((partition) => ({
     ...partition,
+    partition_key_type: partition.partition_key_type || partition.partitionKeyType || 'TEXT',
     leader_node_id: partition.leader_node_id || partition.leaderNodeId || 'test-node',
   }));
   const services = partitions.map((p) => ({
@@ -90,7 +95,7 @@ function createMockSystemCache(tables, partitions) {
   return {
     get(type, key) {
       if (type === 'tables') {
-        return tables.find((t) => t.table_name === key);
+        return normalizedTables.find((t) => t.table_name === key);
       }
       return null;
     },
@@ -101,7 +106,7 @@ function createMockSystemCache(tables, partitions) {
     },
     getAll(type) {
       if (type === 'partitions') return normalizedPartitions;
-      if (type === 'tables') return tables;
+      if (type === 'tables') return normalizedTables;
       if (type === 'services') return services;
       return [];
     },

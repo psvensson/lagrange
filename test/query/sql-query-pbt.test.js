@@ -199,6 +199,21 @@ test('Property 10c: LIMIT respects count', async (t) => {
   t.pass('LIMIT correctly limits results from multiple partitions');
 });
 
+const testTableInfo = Object.freeze({
+  table_name: 'test',
+  primary_key: 'id',
+  partition_key_type: 'TEXT',
+});
+
+function createPbtResolver() {
+  return new PartitionResolver({
+    systemCache: {
+      get: () => testTableInfo,
+      find: () => testTableInfo,
+    },
+  });
+}
+
 /**
  * Property 41: Query Routing by Key Range
  * Validates: Requirements 20.6
@@ -222,10 +237,11 @@ test('Property 41: Query Routing by Key Range', async (t) => {
             partition_id: `p${i}`,
             partition_key_start: sortedBoundaries[i],
             partition_key_end: sortedBoundaries[i + 1],
+            partition_key_type: 'TEXT',
           });
         }
 
-        const resolver = new PartitionResolver();
+        const resolver = createPbtResolver();
         const partitionId = resolver.resolvePartitionForKey('test', keyValue, partitions);
 
         if (!partitionId) return false;
@@ -258,12 +274,12 @@ test('Property 41b: Equals filter routes to single partition', async (t) => {
       keyValueArb,
       (keyValue) => {
         const partitions = [
-          {partition_id: 'p1', partition_key_start: null, partition_key_end: 'm'},
-          {partition_id: 'p2', partition_key_start: 'm', partition_key_end: 'z'},
-          {partition_id: 'p3', partition_key_start: 'z', partition_key_end: null},
+          {partition_id: 'p1', partition_key_start: null, partition_key_end: 'm', partition_key_type: 'TEXT'},
+          {partition_id: 'p2', partition_key_start: 'm', partition_key_end: 'z', partition_key_type: 'TEXT'},
+          {partition_id: 'p3', partition_key_start: 'z', partition_key_end: null, partition_key_type: 'TEXT'},
         ];
 
-        const resolver = new PartitionResolver();
+        const resolver = createPbtResolver();
 
         // Create WHERE clause for equals condition
         const whereClause = {
@@ -307,10 +323,11 @@ test('Property 42: Scatter-Gather for Non-Key Queries', async (t) => {
             partition_id: `p${i}`,
             partition_key_start: i === 0 ? null : String(i),
             partition_key_end: i === partitionCount - 1 ? null : String(i + 1),
+            partition_key_type: 'TEXT',
           });
         }
 
-        const resolver = new PartitionResolver();
+        const resolver = createPbtResolver();
 
         // Create WHERE clause on non-key column
         const whereClause = {
@@ -345,10 +362,11 @@ test('Property 42b: No WHERE clause queries all partitions', async (t) => {
             partition_id: `p${i}`,
             partition_key_start: i === 0 ? null : String(i),
             partition_key_end: i === partitionCount - 1 ? null : String(i + 1),
+            partition_key_type: 'TEXT',
           });
         }
 
-        const resolver = new PartitionResolver();
+        const resolver = createPbtResolver();
         const result = resolver.resolvePartitions('test', null, partitions);
 
         // Property: No WHERE should query all partitions
@@ -373,11 +391,11 @@ test('Property 18: Write Operation Durability - INSERT routing', async (t) => {
       keyValueArb,
       (keyValue) => {
         const partitions = [
-          {partition_id: 'p1', partition_key_start: null, partition_key_end: 'm'},
-          {partition_id: 'p2', partition_key_start: 'm', partition_key_end: null},
+          {partition_id: 'p1', partition_key_start: null, partition_key_end: 'm', partition_key_type: 'TEXT'},
+          {partition_id: 'p2', partition_key_start: 'm', partition_key_end: null, partition_key_type: 'TEXT'},
         ];
 
-        const resolver = new PartitionResolver();
+        const resolver = createPbtResolver();
         const partitionId = resolver.resolvePartitionForKey('test', keyValue, partitions);
 
         // Property: INSERT should route to exactly one partition
@@ -408,11 +426,11 @@ test('Property 18b: UPDATE with key filter routes correctly', async (t) => {
       keyValueArb,
       (keyValue) => {
         const partitions = [
-          {partition_id: 'p1', partition_key_start: null, partition_key_end: 'm'},
-          {partition_id: 'p2', partition_key_start: 'm', partition_key_end: null},
+          {partition_id: 'p1', partition_key_start: null, partition_key_end: 'm', partition_key_type: 'TEXT'},
+          {partition_id: 'p2', partition_key_start: 'm', partition_key_end: null, partition_key_type: 'TEXT'},
         ];
 
-        const resolver = new PartitionResolver();
+        const resolver = createPbtResolver();
 
         const whereClause = {
           type: 'binary',
@@ -446,10 +464,11 @@ test('Property 18c: DELETE without key filter affects all partitions', async (t)
             partition_id: `p${i}`,
             partition_key_start: i === 0 ? null : String(i),
             partition_key_end: i === partitionCount - 1 ? null : String(i + 1),
+            partition_key_type: 'TEXT',
           });
         }
 
-        const resolver = new PartitionResolver();
+        const resolver = createPbtResolver();
 
         // Non-key WHERE clause
         const whereClause = {

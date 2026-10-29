@@ -1,5 +1,7 @@
 import {v4 as uuidv4} from 'uuid';
 import {compareRoutingKeys} from '../partition/split-key-comparator.js';
+import {PartitionResolver} from '../query/partition-resolver.js';
+import {resolveDeclaredPrimaryKeyColumns} from '../partition/partition-boundary-representation.js';
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
@@ -11,21 +13,73 @@ import {
   LIVE_QUERY_DEFAULT_VALUE,
   LIVE_QUERY_EMIT,
   LIVE_QUERY_EVENT,
+  LIVE_QUERY_GROUP_STATE,
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATION,
   LIVE_QUERY_SUBSYSTEM,
 } from './live-query-constants.js';
+import {compilePredicate, canonicalizePredicate, extractPartitionKeyValue} from
+  './live-query-service.js';
 import {
-  compilePredicate,
-  canonicalizePredicate,
-  extractPartitionKeyValue,
-} from './live-query-service.js';
+  buildSelectSQL,
+  compareVersions,
+  extractReferencedTables,
+  isComplexQuery,
+  isPartitionVisibleForRouting,
+  resolveActivePartitionVersion,
+} from './live-query-sql-renderer.js';
 
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const LOCAL_NUM_THIRTY_TWO = 32;
 
-const DEFAULT_PARTITION_VERSION = 1;
-const ACTIVE_PARTITION_STATE = 'NORMAL';
+function resolveGroupSql(options) {
+  return options.rawSql || options.sql ||
+    (typeof options.parsedQuery === 'string' ? options.parsedQuery : null);
+}
+
+function resolveTableInfo(parsedAst) {
+  const tables = extractReferencedTables(parsedAst);
+  return {
+    tables,
+    table: tables.length > 0 ? tables[0] : null,
+  };
+}
+
+function resolveWhereInfo(parsedAst) {
+  const whereClause = parsedAst?.where ?? null;
+  return {
+    whereClause,
+    predicate: compilePredicate(whereClause),
+  };
+}
+
+function extractEventVersion(change) {
+  return change?.logIndex ?? change?.appliedIndex ??
+    change?.version ?? change?.sequenceNumber ?? null;
+}
+
+function shouldSkipBufferedEvent(frontiers, partitionId, eventVersion, compareFn) {
+  if (!partitionId || eventVersion === null) return false;
+  const frontier = frontiers.get(partitionId);
+  return frontier !== undefined && frontier !== null && compareFn(eventVersion, frontier) <= 0;
+}
+
+function checkAndAdvanceFrontier(frontiers, partitionId, eventVersion, compareFn) {
+  if (!partitionId || eventVersion === null) return true;
+  const frontier = frontiers.get(partitionId);
+  if (frontier !== undefined && frontier !== null) {
+    if (compareFn(eventVersion, frontier) <= 0) return false;
+    frontiers.set(partitionId, eventVersion);
+  }
+  return true;
+}
+
+function extractSubscriptionFrontier(answer, options, partitionId) {
+  return answer?.versionContext?.streamVersion ??
+    answer?.streamVersion ??
+    options?.attachAfterVersion ??
+    options?.partitionFrontiers?.get?.(partitionId);
+}
 
 /**
  * QueryGroup manages clients with identical queries sharing CDC subscriptions.
@@ -35,48 +89,51 @@ class QueryGroup extends EventEmitter {
    * Create a new QueryGroup.
    * @param {Object} options - Configuration options.
    * @param {Object} options.parsedQuery - Parsed SELECT query AST.
-   * @param {Object} options.systemCache - System table cache.
-   * @param {string} options.nodeId - Node ID.
+   * @param {Object} [options.systemCache] - System table cache.
+   * @param {Object} [options.sqlQueryEngine] - SQL query engine for execution.
+   * @param {Object} [options.partitionResolver] - Canonical partition resolver.
+   * @param {string} [options.nodeId] - Node ID.
+   * @param {boolean} [options.deltaFormat] - Emit delta-formatted changes.
    */
   constructor(options = {}) {
     super();
 
     this.queryId = uuidv4();
-    this.parsedQuery = options.parsedQuery || null;
-    this.systemCache = options.systemCache || null;
-    this.nodeId = options.nodeId || LIVE_QUERY_DEFAULT_VALUE.UNKNOWN;
+    this.parsedQuery = options.parsedQuery ?? null;
+    this.systemCache = options.systemCache ?? null;
+    this.sqlQueryEngine = options.sqlQueryEngine ?? null;
+    this.partitionResolver = options.partitionResolver ?? null;
+    this.nodeId = options.nodeId ?? LIVE_QUERY_DEFAULT_VALUE.UNKNOWN;
+    this.deltaFormat = Boolean(options.deltaFormat);
+    this.sql = resolveGroupSql(options);
 
-    // Extract table name
-    this.table = this.parsedQuery?.from?.name || null;
+    const {tables, table} = resolveTableInfo(this.parsedQuery);
+    this.tables = tables;
+    this.table = table;
+    this.isComplex = isComplexQuery(this.parsedQuery);
 
-    // Compile predicate
-    this.predicate = compilePredicate(this.parsedQuery?.where);
-    this.whereClause = this.parsedQuery?.where || null;
+    const {whereClause, predicate} = resolveWhereInfo(this.parsedQuery);
+    this.whereClause = whereClause;
+    this.predicate = predicate;
 
-    // Clients in this group: clientId -> ClientSubscription
     this.clients = new Map();
-
-    // Subscribed partitions
     this.subscribedPartitions = new Set();
-
-    // CDC subscription handlers
     this.cdcHandlers = new Map();
+    this.partitionFrontiers = new Map();
+    this.isHydrating = false;
+    this.bufferedEvents = [];
+    this.lifecycleState = LIVE_QUERY_GROUP_STATE.INITIALIZING;
+    this.lastResultSet = null;
 
-    // Configuration
     this.config = ConfigurationManager.getInstance();
-    this.ttlMs = this.config.get(LIVE_QUERY_CONFIG_KEY.DEFAULT_TTL_MS) ||
+    this.ttlMs = this.config.get(LIVE_QUERY_CONFIG_KEY.DEFAULT_TTL_MS) ??
       LIVE_QUERY_DEFAULTS.DEFAULT_TTL_MS;
 
-    // Partition key info
     this.partitionKeyColumn = null;
     this.partitionKeyValue = null;
-
-    // Status
     this.active = false;
     this.createdAt = Date.now();
     this.lastActivityAt = Date.now();
-
-    // Logging
     this.logger = this.initLogger();
   }
 
@@ -95,6 +152,16 @@ class QueryGroup extends EventEmitter {
       // Logging not available
     }
     return console;
+  }
+
+  /**
+   * Compare two routing keys using the canonical comparator.
+   * @param {*} left - Left key.
+   * @param {*} right - Right key.
+   * @return {number} Negative if left < right, positive if left > right, 0 if equal.
+   */
+  compareValues(left, right) {
+    return compareRoutingKeys(left, right);
   }
 
   /**
@@ -192,30 +259,32 @@ class QueryGroup extends EventEmitter {
 
   /**
    * Get the partition key column for the table.
+   * @param {string} [tableName=this.table] - Table name.
    * @return {string|null} Partition key column name.
    */
-  getPartitionKeyColumn() {
-    if (this.partitionKeyColumn) {
+  getPartitionKeyColumn(tableName = this.table) {
+    if (this.partitionKeyColumn && tableName === this.table) {
       return this.partitionKeyColumn;
     }
 
-    if (!this.systemCache || !this.table) {
+    if (!this.systemCache || !tableName) {
       return null;
     }
 
     try {
-      const tableInfo = this.getTableInfo();
-
+      const tableInfo = this.getTableInfo(tableName);
       if (tableInfo) {
-        this.partitionKeyColumn = tableInfo.primary_key ||
-          tableInfo.primaryKey || LIVE_QUERY_DEFAULT_VALUE.PRIMARY_KEY_FALLBACK;
-        return this.partitionKeyColumn;
+        const keyColumns = resolveDeclaredPrimaryKeyColumns(tableInfo);
+        if (tableName === this.table) {
+          this.partitionKeyColumn = keyColumns[0] || null;
+        }
+        return keyColumns[0] || null;
       }
     } catch {
       // Cache not available
     }
 
-    return LIVE_QUERY_DEFAULT_VALUE.PRIMARY_KEY_FALLBACK;
+    return null;
   }
 
   /**
@@ -233,46 +302,79 @@ class QueryGroup extends EventEmitter {
   }
 
   /**
-   * Find partitions for the query based on partition key.
+   * Start hydration buffering mode before taking snapshot.
+   */
+  startHydration() {
+    this.isHydrating = true;
+    this.bufferedEvents = [];
+    this.lifecycleState = LIVE_QUERY_GROUP_STATE.INITIALIZING;
+  }
+
+  /**
+   * Compare two versions/timestamps for ordering and deduplication.
+   * @param {*} a - First version.
+   * @param {*} b - Second version.
+   * @return {number} -1, 0, or 1.
+   */
+  compareVersions(a, b) {
+    return compareVersions(a, b);
+  }
+
+  /**
+   * Drain buffered CDC events accumulated during snapshot hydration.
+   * Deduplicates events at or below attachAfterVersion for each partition.
+   */
+  drainBufferedEvents() {
+    this.isHydrating = false;
+    const events = this.bufferedEvents;
+    this.bufferedEvents = [];
+
+    for (const {change, partitionId} of events) {
+      const eventVersion = extractEventVersion(change);
+      if (shouldSkipBufferedEvent(
+        this.partitionFrontiers, partitionId, eventVersion, this.compareVersions,
+      )) {
+        continue;
+      }
+      this.handleCDCEvent(change, partitionId);
+    }
+    this.lifecycleState = LIVE_QUERY_GROUP_STATE.LIVE;
+  }
+
+  _resolveTablePartitions(resolver, tableName) {
+    const tableInfo = this.getTableInfo(tableName);
+    const partitions = this.getVisiblePartitionsForTable(tableName);
+    if (partitions.length === 0) return [];
+
+    const keyColumns = (this.partitionKeyColumn && tableName === this.table) ?
+      [this.partitionKeyColumn] : undefined;
+    return resolver.resolvePartitions(tableName, this.whereClause, partitions, {
+      tableInfo, tableMetadata: tableInfo, keyColumns,
+    });
+  }
+
+  /**
+   * Find candidate partitions for all referenced tables using canonical PartitionResolver.
    * @return {Promise<Set>} Set of partition IDs.
    */
   async findPartitionsForQuery() {
-    const keyValue = this.extractPartitionKeyValue();
+    if (!this.systemCache) return new Set();
 
-    if (!this.systemCache) {
-      return new Set();
-    }
+    const tables = this.tables && this.tables.length > 0 ?
+      this.tables : (this.table ? [this.table] : []);
+    if (tables.length === 0) return new Set();
 
     try {
-      const tableInfo = this.getTableInfo();
-      const activePartitionVersion = this.resolveActivePartitionVersion(tableInfo);
-      const partitions = (this.systemCache.filter(TABLES.PARTITIONS, (p) =>
-        p.table_name === this.table || p.tableName === this.table,
-      ) || []).filter((partition) =>
-        this.isPartitionVisibleForRouting(partition, activePartitionVersion),
-      );
+      const resolver = this.partitionResolver || new PartitionResolver({
+        systemCache: this.systemCache,
+      });
 
-      if (keyValue === null) {
-        // No partition key filter - subscribe to all partitions
-        this.logger.warn(LIVE_QUERY_LOG_MSG.NO_PARTITION_KEY_FILTER, {
-          queryId: this.queryId,
-          table: this.table,
-        });
-        return new Set(partitions.map((p) => p.partition_id || p.partitionId));
-      }
-
-      // Find partitions containing the key value(s)
       const matching = new Set();
-      const keyValues = Array.isArray(keyValue) ? keyValue : [keyValue];
-
-      for (const partition of partitions) {
-        for (const kv of keyValues) {
-          if (this.isKeyInPartition(kv, partition)) {
-            matching.add(partition.partition_id || partition.partitionId);
-          }
+      for (const tableName of tables) {
+        for (const partitionId of this._resolveTablePartitions(resolver, tableName)) {
+          matching.add(partitionId);
         }
       }
-
       return matching;
     } catch (error) {
       this.logger.error(LIVE_QUERY_LOG_MSG.PARTITIONS_LOOKUP_FAILED, {
@@ -284,220 +386,258 @@ class QueryGroup extends EventEmitter {
   }
 
   /**
-   * Check if a key value falls within a partition's range.
-   * @param {*} key - Key value.
-   * @param {Object} partition - Partition info.
-   * @return {boolean} True if key in partition.
+   * Get visible partitions for a given table from systemCache.
+   * @param {string} tableName
+   * @return {Array} Visible partition rows.
    */
-  isKeyInPartition(key, partition) {
-    const start = partition.partition_key_start ?? partition.keyRange?.start;
-    const end = partition.partition_key_end ?? partition.keyRange?.end;
-
-    // NULL start/end means unbounded
-    if ((start === null || start === undefined) &&
-        (end === null || end === undefined)) {
-      return true;
+  getVisiblePartitionsForTable(tableName) {
+    if (!this.systemCache || !tableName) {
+      return [];
     }
-
-    if (start === null || start === undefined) {
-      return this.compareValues(key, end) < 0;
-    }
-
-    if (end === null || end === undefined) {
-      return this.compareValues(key, start) >= 0;
-    }
-
-    return this.compareValues(key, start) >= 0 &&
-           this.compareValues(key, end) < 0;
+    const tableInfo = this.getTableInfo(tableName);
+    const activePartitionVersion = this.resolveActivePartitionVersion(tableInfo);
+    return (this.systemCache.filter(TABLES.PARTITIONS, (p) =>
+      p.table_name === tableName || p.tableName === tableName,
+    ) || []).filter((partition) =>
+      this.isPartitionVisibleForRouting(partition, activePartitionVersion),
+    );
   }
 
   /**
    * Read current table metadata from the system cache.
+   * @param {string} [tableName=this.table]
    * @return {Object|null} Table metadata row.
-   * @private
    */
-  getTableInfo() {
-    if (!this.systemCache || !this.table) {
+  getTableInfo(tableName = this.table) {
+    if (!this.systemCache || !tableName) {
       return null;
     }
 
-    return this.systemCache.get(TABLES.TABLES, this.table) ||
+    return this.systemCache.get(TABLES.TABLES, tableName) ||
       this.systemCache.find(TABLES.TABLES, (t) =>
-        t.table_name === this.table || t.tableName === this.table,
+        t.table_name === tableName || t.tableName === tableName,
       ) ||
       null;
   }
 
   /**
    * Resolve active partition version from table metadata.
-   * Missing values default to version 1 for compatibility.
    * @param {Object|null} tableInfo
    * @return {number}
    * @private
    */
   resolveActivePartitionVersion(tableInfo) {
-    const value = tableInfo?.active_partition_version ??
-      tableInfo?.activePartitionVersion;
-    const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed < DEFAULT_PARTITION_VERSION) {
-      return DEFAULT_PARTITION_VERSION;
-    }
-    return parsed;
+    return resolveActivePartitionVersion(tableInfo);
   }
 
-  /**
-   * Determine whether a partition participates in current table routing.
-   * @param {Object} partition
-   * @param {number} activePartitionVersion
-   * @return {boolean}
-   * @private
-   */
   isPartitionVisibleForRouting(partition, activePartitionVersion) {
-    const partitionVersion = Number(
-      partition?.partition_version ?? partition?.partitionVersion,
-    );
-    const normalizedVersion = Number.isInteger(partitionVersion) &&
-      partitionVersion >= DEFAULT_PARTITION_VERSION ?
-      partitionVersion :
-      DEFAULT_PARTITION_VERSION;
-    if (normalizedVersion !== activePartitionVersion) {
-      return false;
-    }
-
-    const state = String(
-      partition?.state ?? ACTIVE_PARTITION_STATE,
-    ).toUpperCase();
-    return state === ACTIVE_PARTITION_STATE;
+    return isPartitionVisibleForRouting(partition, activePartitionVersion);
   }
 
   /**
-   * Compare two values.
-   * @param {*} a - First value.
-   * @param {*} b - Second value.
-   * @return {number} Comparison result.
+   * Internal callback for incoming CDC events.
+   * Buffers when hydrating; otherwise dispatches.
+   * @param {Object} change - CDC change event.
+   * @param {string} partitionId - Source partition ID.
    */
-  compareValues(a, b) {
-    return compareRoutingKeys(a, b);
+  onCDCEvent(change, partitionId) {
+    if (this.isHydrating) {
+      this.bufferedEvents.push({change, partitionId});
+      return;
+    }
+    this.handleCDCEvent(change, partitionId);
   }
 
+  _fanOutResult(result, change) {
+    this.lastActivityAt = Date.now();
+    for (const [, subscription] of this.clients) {
+      try {
+        if (subscription.client && typeof subscription.client.send === 'function') {
+          subscription.client.send(JSON.stringify(result));
+        }
+        subscription.lastSeenHLC = change.hlc_timestamp || change.hlcTimestamp;
+      } catch (error) {
+        this.logger.warn(LIVE_QUERY_LOG_MSG.FAILED_SEND_CLIENT, {
+          queryId: this.queryId, error: error.message,
+        });
+      }
+    }
+    this.emit(LIVE_QUERY_EMIT.CHANGE, result);
+  }
 
   /**
    * Handle a CDC event from a partition.
-   * Evaluates predicate and fans out to all clients.
+   * Evaluates predicate and fans out to all clients, or re-executes if complex query.
    * @param {Object} change - CDC change event.
+   * @param {string|null} [partitionId=null] - Partition ID.
+   * @return {Promise<Object|null>} Evaluated result or null.
    */
-  handleCDCEvent(change) {
-    const result = this.evaluateChange(change);
-
-    if (result) {
-      this.lastActivityAt = Date.now();
-
-      // Fan-out to all clients
-      for (const [clientId, subscription] of this.clients) {
-        try {
-          if (subscription.client && typeof subscription.client.send === 'function') {
-            subscription.client.send(JSON.stringify(result));
-          }
-          subscription.lastSeenHLC = change.hlc_timestamp || change.hlcTimestamp;
-        } catch (error) {
-          this.logger.warn(LIVE_QUERY_LOG_MSG.FAILED_SEND_CLIENT, {
-            queryId: this.queryId,
-            clientId,
-            error: error.message,
-          });
-          throw error;
-        }
-      }
-
-      this.emit(LIVE_QUERY_EMIT.CHANGE, result);
+  async handleCDCEvent(change, partitionId = null) {
+    const eventVersion = extractEventVersion(change);
+    if (!checkAndAdvanceFrontier(
+      this.partitionFrontiers, partitionId, eventVersion, this.compareVersions,
+    )) {
+      return null;
     }
+
+    // Tier 2: Queries with JOIN, GROUP BY, aggregates, ORDER BY, LIMIT re-execute
+    if (this.isComplex) {
+      await this.reexecuteQuery();
+      return null;
+    }
+
+    // Tier 1: Incremental delta evaluation
+    const result = this.evaluateChange(change);
+    if (result) {
+      this._fanOutResult(result, change);
+    }
+    return result;
+  }
+
+  _resolveExecutionSQL() {
+    if (this.sql) return this.sql;
+    if (this.sqlQueryEngine?.executor?.buildSelectSQL) {
+      return this.sqlQueryEngine.executor.buildSelectSQL(this.parsedQuery);
+    }
+    return buildSelectSQL(this.parsedQuery);
+  }
+
+  _broadcastReset(resetNotification) {
+    this.lastActivityAt = Date.now();
+    for (const [, subscription] of this.clients) {
+      try {
+        if (subscription.client && typeof subscription.client.send === 'function') {
+          subscription.client.send(JSON.stringify(resetNotification));
+        }
+      } catch (error) {
+        this.logger.warn(LIVE_QUERY_LOG_MSG.FAILED_SEND_CLIENT, {
+          queryId: this.queryId, error: error.message,
+        });
+      }
+    }
+    this.emit(LIVE_QUERY_EMIT.CHANGE, resetNotification);
+    this.emit(LIVE_QUERY_EVENT.RESET, resetNotification);
+  }
+
+  /**
+   * Re-execute complex query against sqlQueryEngine and emit reset snapshot.
+   * @return {Promise<Object|null>} Reset snapshot notification or null.
+   */
+  async reexecuteQuery() {
+    if (!this.sqlQueryEngine) {
+      return null;
+    }
+
+    try {
+      const sql = this._resolveExecutionSQL();
+      const result = await this.sqlQueryEngine.executeQuery(sql);
+      const newRows = result.rows ?? result.results ?? [];
+      this.lastResultSet = newRows;
+
+      const resetNotification = {
+        type: LIVE_QUERY_EVENT.RESET, queryId: this.queryId,
+        rows: newRows, results: newRows,
+        count: result.count ?? newRows.length,
+      };
+
+      this._broadcastReset(resetNotification);
+      return resetNotification;
+    } catch (error) {
+      this.logger.error(LIVE_QUERY_LOG_MSG.REEXECUTION_FAILED, {
+        queryId: this.queryId,
+        error: error.message,
+      });
+      return null;
+    }
+  }
+
+  _makeInsertEvent(row, hlc, useDeltaFormat) {
+    return {
+      type: useDeltaFormat ? LIVE_QUERY_EVENT.ADDED : LIVE_QUERY_EVENT.INSERT,
+      deltaType: LIVE_QUERY_EVENT.ADDED,
+      operation: LIVE_QUERY_OPERATION.INSERT,
+      queryId: this.queryId,
+      row, data: row, hlc,
+    };
+  }
+
+  _makeDeleteEvent(row, hlc, useDeltaFormat) {
+    return {
+      type: useDeltaFormat ? LIVE_QUERY_EVENT.REMOVED : LIVE_QUERY_EVENT.DELETE,
+      deltaType: LIVE_QUERY_EVENT.REMOVED,
+      operation: LIVE_QUERY_OPERATION.DELETE,
+      queryId: this.queryId,
+      row, data: row, old: row, oldData: row, hlc,
+    };
+  }
+
+  _makeUpdateEvent(oldRow, newRow, hlc, useDeltaFormat) {
+    return {
+      type: useDeltaFormat ? LIVE_QUERY_EVENT.MODIFIED : LIVE_QUERY_EVENT.UPDATE,
+      deltaType: LIVE_QUERY_EVENT.MODIFIED,
+      operation: LIVE_QUERY_OPERATION.UPDATE,
+      queryId: this.queryId,
+      old: oldRow, oldData: oldRow, new: newRow, data: newRow, row: newRow, hlc,
+    };
+  }
+
+  _evaluateInsert(newRow, hlc, useDeltaFormat) {
+    return (newRow && this.predicate(newRow)) ?
+      this._makeInsertEvent(newRow, hlc, useDeltaFormat) : null;
+  }
+
+  _evaluateDelete(oldRow, hlc, useDeltaFormat) {
+    return (oldRow && this.predicate(oldRow)) ?
+      this._makeDeleteEvent(oldRow, hlc, useDeltaFormat) : null;
+  }
+
+  _evaluateUpdate(oldRow, newRow, hlc, useDeltaFormat) {
+    const oldMatched = Boolean(oldRow && this.predicate(oldRow));
+    const newMatched = Boolean(newRow && this.predicate(newRow));
+    if (!oldMatched && newMatched) {
+      return this._makeInsertEvent(newRow, hlc, useDeltaFormat);
+    }
+    if (oldMatched && !newMatched) {
+      return this._makeDeleteEvent(oldRow, hlc, useDeltaFormat);
+    }
+    if (oldMatched && newMatched) {
+      return this._makeUpdateEvent(oldRow, newRow, hlc, useDeltaFormat);
+    }
+    return null;
   }
 
   /**
    * Evaluate a CDC change against the predicate.
    * @param {Object} change - CDC change event.
+   * @param {Object} [options] - Evaluation options.
    * @return {Object|null} Event to send to clients or null.
    */
-  evaluateChange(change) {
+  evaluateChange(change, options = {}) {
     const {operation, data: newRow, old_data: oldRow} = change;
     const hlc = change.hlc_timestamp || change.hlcTimestamp;
+    const useDeltaFormat = options.deltaFormat ?? this.deltaFormat ?? false;
 
     switch (operation?.toUpperCase()) {
     case LIVE_QUERY_OPERATION.INSERT:
-      if (newRow && this.predicate(newRow)) {
-        return {
-          type: LIVE_QUERY_EVENT.INSERT,
-          queryId: this.queryId,
-          row: newRow,
-          hlc,
-        };
-      }
-      break;
-
-    case LIVE_QUERY_OPERATION.UPDATE: {
-      const oldMatched = oldRow && this.predicate(oldRow);
-      const newMatched = newRow && this.predicate(newRow);
-
-      if (!oldMatched && newMatched) {
-        // Row now matches predicate - treat as insert
-        return {
-          type: LIVE_QUERY_EVENT.INSERT,
-          queryId: this.queryId,
-          row: newRow,
-          hlc,
-        };
-      } else if (oldMatched && !newMatched) {
-        // Row no longer matches - treat as delete
-        return {
-          type: LIVE_QUERY_EVENT.DELETE,
-          queryId: this.queryId,
-          row: oldRow,
-          hlc,
-        };
-      } else if (oldMatched && newMatched) {
-        // Row still matches - send update
-        return {
-          type: LIVE_QUERY_EVENT.UPDATE,
-          queryId: this.queryId,
-          old: oldRow,
-          new: newRow,
-          hlc,
-        };
-      }
-      break;
-    }
-
+      return this._evaluateInsert(newRow, hlc, useDeltaFormat);
+    case LIVE_QUERY_OPERATION.UPDATE:
+      return this._evaluateUpdate(oldRow, newRow, hlc, useDeltaFormat);
     case LIVE_QUERY_OPERATION.DELETE:
-      if (oldRow && this.predicate(oldRow)) {
-        return {
-          type: LIVE_QUERY_EVENT.DELETE,
-          queryId: this.queryId,
-          row: oldRow,
-          hlc,
-        };
-      }
-      break;
+      return this._evaluateDelete(oldRow, hlc, useDeltaFormat);
+    default:
+      return null;
     }
-
-    return null;
   }
 
-  /**
-   * Update partition subscriptions (for split/merge handling).
-   * @param {Function} subscribeToPartition - Function to subscribe to a partition.
-   * @param {Function} unsubscribeFromPartition - Function to unsubscribe.
-   * @return {Promise<void>}
-   */
-  async updatePartitionSubscriptions(subscribeToPartition, unsubscribeFromPartition) {
-    const relevantPartitions = await this.findPartitionsForQuery();
-
-    // Unsubscribe from partitions no longer relevant
-    for (const partitionId of this.subscribedPartitions) {
+  async _unsubscribeStalePartitions(relevantPartitions, unsubscribeFromPartition) {
+    for (const partitionId of Array.from(this.subscribedPartitions)) {
       if (!relevantPartitions.has(partitionId)) {
         if (unsubscribeFromPartition) {
           await unsubscribeFromPartition(partitionId, this.queryId);
         }
         this.subscribedPartitions.delete(partitionId);
+        this.cdcHandlers.delete(partitionId);
+        this.partitionFrontiers.delete(partitionId);
 
         this.logger.debug(LIVE_QUERY_LOG_MSG.UNSUBSCRIBED_PARTITION, {
           queryId: this.queryId,
@@ -505,23 +645,45 @@ class QueryGroup extends EventEmitter {
         });
       }
     }
+  }
 
-    // Subscribe to new partitions
-    for (const partitionId of relevantPartitions) {
-      if (!this.subscribedPartitions.has(partitionId)) {
-        if (subscribeToPartition) {
-          await subscribeToPartition(partitionId, this.queryId, (change) => {
-            this.handleCDCEvent(change);
-          });
-        }
-        this.subscribedPartitions.add(partitionId);
-
-        this.logger.debug(LIVE_QUERY_LOG_MSG.SUBSCRIBED_PARTITION, {
-          queryId: this.queryId,
-          partitionId,
-        });
+  async _subscribeToSinglePartition(partitionId, subscribeToPartition, options) {
+    if (subscribeToPartition) {
+      const handler = (change) => this.onCDCEvent(change, partitionId);
+      this.cdcHandlers.set(partitionId, handler);
+      const answer = await subscribeToPartition(partitionId, this.queryId, handler, options);
+      const frontier = extractSubscriptionFrontier(answer, options, partitionId);
+      if (frontier !== undefined && !this.partitionFrontiers.has(partitionId)) {
+        this.partitionFrontiers.set(partitionId, frontier);
       }
     }
+    this.subscribedPartitions.add(partitionId);
+
+    this.logger.debug(LIVE_QUERY_LOG_MSG.SUBSCRIBED_PARTITION, {
+      queryId: this.queryId,
+      partitionId,
+    });
+  }
+
+  async _subscribeNewPartitions(relevantPartitions, subscribeToPartition, options) {
+    for (const partitionId of relevantPartitions) {
+      if (!this.subscribedPartitions.has(partitionId)) {
+        await this._subscribeToSinglePartition(partitionId, subscribeToPartition, options);
+      }
+    }
+  }
+
+  /**
+   * Update partition subscriptions (for split/merge handling and initial wiring).
+   * @param {Function} subscribeToPartition - Function to subscribe to a partition.
+   * @param {Function} unsubscribeFromPartition - Function to unsubscribe.
+   * @param {Object} [options] - Handshake options.
+   * @return {Promise<void>}
+   */
+  async updatePartitionSubscriptions(subscribeToPartition, unsubscribeFromPartition, options = {}) {
+    const relevantPartitions = await this.findPartitionsForQuery();
+    await this._unsubscribeStalePartitions(relevantPartitions, unsubscribeFromPartition);
+    await this._subscribeNewPartitions(relevantPartitions, subscribeToPartition, options);
   }
 
   /**
@@ -529,7 +691,10 @@ class QueryGroup extends EventEmitter {
    * @return {string} Query signature.
    */
   getQuerySignature() {
-    return `${this.table}${LIVE_QUERY_CURSOR.SEPARATOR}` +
+    const tablePart = this.tables && this.tables.length > 0 ?
+      this.tables.join(',') :
+      (this.table || '');
+    return `${tablePart}${LIVE_QUERY_CURSOR.SEPARATOR}` +
       `${canonicalizePredicate(this.whereClause)}`;
   }
 
@@ -541,6 +706,7 @@ class QueryGroup extends EventEmitter {
     return {
       queryId: this.queryId,
       table: this.table,
+      tables: this.tables,
       predicateHash: canonicalizePredicate(this.whereClause)
         .substring(0, LOCAL_NUM_THIRTY_TWO),
       partitionKeyValue: this.partitionKeyValue,
@@ -549,22 +715,27 @@ class QueryGroup extends EventEmitter {
       createdAt: this.createdAt,
       lastActivityAt: this.lastActivityAt,
       active: this.active,
+      lifecycleState: this.lifecycleState,
+      isComplex: this.isComplex,
     };
   }
 
   /**
-   * Clean up resources.
+   * Clean up resources and detach listeners.
    */
   cleanup() {
     this.active = false;
+    this.lifecycleState = LIVE_QUERY_GROUP_STATE.CLOSED;
+    this.isHydrating = false;
+    this.bufferedEvents = [];
+    this.partitionFrontiers.clear();
     this.clients.clear();
     this.subscribedPartitions.clear();
     this.cdcHandlers.clear();
     this.removeAllListeners();
 
     this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_CLEANED_UP, {
-      queryId: this.queryId,
-      table: this.table,
+      queryId: this.queryId, table: this.table,
     });
   }
 }

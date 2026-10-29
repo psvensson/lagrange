@@ -27,7 +27,7 @@ import {
 import {measure, requiredProofArtifacts} from './probes.js';
 import {
   SOLVE_PREFIX, canonicalImportGraphProblem, changedPaths, coupledPairProblems,
-  epicScopeProblems, git, headSha, requiresVerification, stageablePaths,
+  epicScopeProblems, git, gitCommonDir, headSha, requiresVerification, stageablePaths,
   staticQualityProblems,
 } from './guards.js';
 import {
@@ -63,6 +63,51 @@ const LAND_PROOF_BASE_ANNOUNCEMENT =
 const INVENTORY_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
 const INVENTORY_REFRESH_ARGUMENT = '--refresh';
 const PRIORITY_INVENTORY_PRODUCER = 'scripts/generate-priority-recovery-owner-inventory.js';
+const LAND_LOCK_FILENAME = 'lagrange-solve-land.lock';
+const LAND_LOCK_STALE_MS = 2 * 60 * 60 * 1000;
+const LAND_LOCK_POLL_MS = 200;
+const LAND_LOCK_TIMEOUT_MS = 90 * 60 * 1000;
+const LAND_LOCK_TIMEOUT_REFUSAL =
+  'land: could not acquire landing lock in git common dir; another landing is in progress';
+const INVENTORY_REFRESH_PREFIXES = Object.freeze(['src/', 'test/', 'scripts/', 'package']);
+const INT32_BYTES = 4;
+const LOCK_OPEN_MODE = 'wx';
+const LOCK_ERROR_EXIST = 'EEXIST';
+const LOCK_ERROR_PERM = 'EPERM';
+const RUNNER_INPUT_TYPE_FLAG = '--input-type=module';
+const RUNNER_EVAL_FLAG = '-e';
+const UNKNOWN_ERROR = 'unknown error';
+const PARALLEL_INVENTORY_RUNNER = `
+import {spawn} from 'node:child_process';
+
+function runChild(command, args) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], env: process.env });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('close', (status, signal) => { resolve({status, signal, stdout, stderr}); });
+  });
+}
+
+async function runGlobal() {
+  const fast = await runChild(process.execPath, [process.argv[1]]);
+  if (fast.status === 0) return {ok: true};
+  const refresh = await runChild(process.execPath, [process.argv[1], process.argv[2]]);
+  if (refresh.status === 0) return {ok: true};
+  return {ok: false, error: refresh.stderr || refresh.stdout};
+}
+
+async function runPriority() {
+  const priority = await runChild(process.execPath, [process.argv[3]]);
+  if (priority.status === 0) return {ok: true};
+  return {ok: false, error: priority.stderr || priority.stdout};
+}
+
+const [globalResult, priorityResult] = await Promise.all([runGlobal(), runPriority()]);
+process.stdout.write(JSON.stringify({globalResult, priorityResult}));
+`;
 const GENERATED_INVENTORY_PATHS = Object.freeze([
   'solve/changes/global-owner-debt-inventory/inventory.json',
   'solve/changes/priority-recovery-owner-inventory/inventory.json',
@@ -321,17 +366,39 @@ function altitudeProblems(state) {
   ] : [];
 }
 
-function refreshInventories(root) {
-  const fast = spawnSync(process.execPath, [INVENTORY_PRODUCER],
-    {cwd: root, encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER});
-  if (fast.status !== 0) {
-    const refresh = spawnSync(process.execPath, [INVENTORY_PRODUCER, INVENTORY_REFRESH_ARGUMENT],
-      {cwd: root, encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER});
-    if (refresh.status !== 0) refuse(`inventory refresh failed: ${refresh.stderr}`);
+function requiresInventoryRefresh(paths) {
+  if (!paths || paths.length === 0) return true;
+  return paths.some((filePath) =>
+    INVENTORY_REFRESH_PREFIXES.some((prefix) => filePath.startsWith(prefix)));
+}
+
+function verifyRunnerOutcome(outcome) {
+  if (!outcome.globalResult?.ok) {
+    refuse(`inventory refresh failed: ${outcome.globalResult?.error || UNKNOWN_ERROR}`);
   }
-  const priority = spawnSync(process.execPath, [PRIORITY_INVENTORY_PRODUCER],
-    {cwd: root, encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER});
-  if (priority.status !== 0) refuse(`priority inventory failed: ${priority.stderr}`);
+  if (!outcome.priorityResult?.ok) {
+    refuse(`priority inventory failed: ${outcome.priorityResult?.error || UNKNOWN_ERROR}`);
+  }
+}
+
+function refreshInventories(root) {
+  const runnerResult = spawnSync(process.execPath, [
+    RUNNER_INPUT_TYPE_FLAG, RUNNER_EVAL_FLAG, PARALLEL_INVENTORY_RUNNER,
+    path.join(root, INVENTORY_PRODUCER),
+    INVENTORY_REFRESH_ARGUMENT,
+    path.join(root, PRIORITY_INVENTORY_PRODUCER),
+  ], {cwd: root, encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER});
+
+  if (runnerResult.status !== 0) {
+    refuse(`inventory refresh failed: ${runnerResult.stderr || runnerResult.stdout}`);
+  }
+  let outcome;
+  try {
+    outcome = JSON.parse(runnerResult.stdout);
+  } catch (error) {
+    refuse(`inventory runner output unreadable: ${error.message}`);
+  }
+  verifyRunnerOutcome(outcome);
   const testMetadata = spawnSync(NPM, TEST_METADATA_REFRESH_ARGUMENTS,
     {cwd: root, encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER});
   if (testMetadata.status !== 0) {
@@ -350,6 +417,7 @@ function landChangeProofEnvironment(env = process.env) {
     ...env,
     [CHECK_BASE_ENV]: LAND_PROOF_BASE,
     [RETRY_FAILED_ONCE_ENV]: RETRY_FAILED_ONCE_ENABLED,
+    [LANDING_MARKER_ENV]: LANDING_MARKER_VALUE,
   };
 }
 
@@ -399,6 +467,16 @@ function unstageLanding(root, quest, paths) {
   git(root, [...GIT_UNSTAGE, ...paths, questDir(root, quest.id)], {allowFailure: true});
 }
 
+function runStagedPreCommitCheck(root, quest, paths, options) {
+  if (options.skipProof || !fs.existsSync(path.join(root, PRE_COMMIT_HOOK))) return false;
+  const hookProblem = preCommitProblem(root);
+  if (hookProblem) {
+    unstageLanding(root, quest, paths);
+    refuse(hookProblem);
+  }
+  return true;
+}
+
 // Refresh the generated inventories, verify the canonical import graph, stage
 // the change set, and prove it. Staging precedes the proof because the index
 // IS the change set: a checker reading the repository through `git ls-files`
@@ -407,30 +485,23 @@ function unstageLanding(root, quest, paths) {
 // how the staged-tree guarantee is observed under test.
 function proveLanding(root, quest, paths, options) {
   const injected = options.runProof || null;
-  if (!injected && !options.skipProof) {
+  const shouldRefresh = requiresInventoryRefresh(paths);
+  if (!injected && !options.skipProof && shouldRefresh) {
     refreshInventories(root);
     const graphProblem = canonicalImportGraphProblem(root);
     if (graphProblem) refuse(graphProblem);
   }
   stageLanding(root, quest, paths);
-  // Cheap before expensive: the commit-time checks (the pre-commit hook over
-  // the staged tree - file-size ratchets, guideline audits, lint) take a
-  // minute and used to run only after the change proof, so a ratchet miss
-  // cost a whole corpus run. They run here first, against the same index the
-  // commit will see, and a miss gives the index back before any test runs.
-  const hookProblem = preCommitProblem(root);
-  if (hookProblem) {
-    unstageLanding(root, quest, paths);
-    refuse(hookProblem);
-  }
+  const hookRan = runStagedPreCommitCheck(root, quest, paths, options);
   const proof = injected || (options.skipProof ? null : runChangeProof);
-  if (!proof) return;
+  if (!proof) return {hookRan};
   try {
     proof(root, options.log || (() => {}));
   } catch (error) {
     unstageLanding(root, quest, paths);
     throw error;
   }
+  return {hookRan};
 }
 
 // The pre-commit hook against the staged index, with the landing marker the
@@ -445,6 +516,111 @@ function preCommitProblem(root) {
   if (result.status === 0) return null;
   return `${MESSAGE.PRE_COMMIT_REFUSED}${LINE_SEPARATOR}` +
     `${result.stdout || ''}${result.stderr || ''}`;
+}
+
+function isPidAlive(pid) {
+  if (!pid || typeof pid !== 'number') return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === LOCK_ERROR_PERM;
+  }
+}
+
+function readLockRecord(lockPath) {
+  try {
+    const content = fs.readFileSync(lockPath, TEXT_ENCODING);
+    return JSON.parse(content);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function isLockStale(record, now = Date.now()) {
+  if (!record || typeof record.pid !== 'number') return true;
+  if (!isPidAlive(record.pid)) return true;
+  if (record.createdAt && (now - record.createdAt > LAND_LOCK_STALE_MS)) return true;
+  return false;
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(INT32_BYTES)), 0, 0, ms);
+}
+
+function tryCreateLandingLock(lockPath, questId, nowFn) {
+  try {
+    const fd = fs.openSync(lockPath, LOCK_OPEN_MODE);
+    const payload = JSON.stringify({
+      pid: process.pid,
+      createdAt: nowFn(),
+      questId: questId || null,
+    }) + LINE_SEPARATOR;
+    fs.writeFileSync(fd, payload, {encoding: TEXT_ENCODING});
+    fs.closeSync(fd);
+    return true;
+  } catch (error) {
+    if (error.code !== LOCK_ERROR_EXIST) {
+      throw error;
+    }
+    return false;
+  }
+}
+
+function removeOwnedLock(lockPath) {
+  try {
+    if (fs.existsSync(lockPath)) {
+      const current = readLockRecord(lockPath);
+      if (!current || current.pid === process.pid) {
+        fs.unlinkSync(lockPath);
+      }
+    }
+  } catch (_error) {
+    return false;
+  }
+  return true;
+}
+
+function clearStaleLock(lockPath, now) {
+  const record = readLockRecord(lockPath);
+  if (isLockStale(record, now)) {
+    try {
+      fs.unlinkSync(lockPath);
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
+  return false;
+}
+
+function acquireLandingLock(root, options = {}) {
+  const common = gitCommonDir(root);
+  if (!fs.existsSync(common)) {
+    fs.mkdirSync(common, {recursive: true});
+  }
+  const lockPath = path.join(common, LAND_LOCK_FILENAME);
+  const timeoutMs = options.lockTimeoutMs ?? LAND_LOCK_TIMEOUT_MS;
+  const pollMs = options.lockPollMs ?? LAND_LOCK_POLL_MS;
+  const nowFn = options.now ?? Date.now;
+  const sleepFn = options.sleep ?? sleepSync;
+  const start = nowFn();
+
+  while (true) {
+    if (tryCreateLandingLock(lockPath, options.id, nowFn)) {
+      return {
+        lockPath,
+        release: () => removeOwnedLock(lockPath),
+      };
+    }
+    if (clearStaleLock(lockPath, nowFn())) {
+      continue;
+    }
+    if (nowFn() - start >= timeoutMs) {
+      refuse(LAND_LOCK_TIMEOUT_REFUSAL);
+    }
+    sleepFn(pollMs);
+  }
 }
 
 function commitLanding(root, quest, paths, options) {
@@ -495,28 +671,36 @@ function land(root, options) {
     refuse(`${MESSAGE.LAND_REFUSED}${LINE_SEPARATOR}${MESSAGE.PROBLEM_BULLET}` +
       problems.join(`${LINE_SEPARATOR}${MESSAGE.PROBLEM_BULLET}`));
   }
-  proveLanding(root, quest, paths, options);
-  // The terminal entry rides in the landing commit; a refused commit takes
-  // the entry back out so the quest stays open and land can be retried.
-  const logPath = logFile(root, quest.id);
-  const logBefore = fs.readFileSync(logPath);
-  const terminal = appendEntry(root, quest.id, {
-    type: ENTRY_TYPE.TERMINAL,
-    status: QUEST_STATUS.SOLVED,
-    text: `landed: probe ${quest.doneWhen.probe} metric=${measured.metric} ` +
-      `target=${measured.target}; ${paths.length} paths`,
-    probe: measured,
-    ...changeSetRecord(paths),
-  });
-  let commit;
+  const landingLock = acquireLandingLock(root, options);
+  let proven;
   try {
-    commit = commitLanding(root, quest, paths, options);
-  } catch (error) {
-    fs.writeFileSync(logPath, logBefore);
-    unstageLanding(root, quest, paths);
-    refuse(`land: the commit was refused, the quest stays open: ${error.message}`);
+    proven = proveLanding(root, quest, paths, options);
+    // The terminal entry rides in the landing commit; a refused commit takes
+    // the entry back out so the quest stays open and land can be retried.
+    const logPath = logFile(root, quest.id);
+    const logBefore = fs.readFileSync(logPath);
+    const terminal = appendEntry(root, quest.id, {
+      type: ENTRY_TYPE.TERMINAL,
+      status: QUEST_STATUS.SOLVED,
+      text: `landed: probe ${quest.doneWhen.probe} metric=${measured.metric} ` +
+        `target=${measured.target}; ${paths.length} paths`,
+      probe: measured,
+      ...changeSetRecord(paths),
+    });
+    let commit;
+    try {
+      const commitOptions = {...options,
+        noVerify: options.noVerify || Boolean(proven?.hookRan)};
+      commit = commitLanding(root, quest, paths, commitOptions);
+    } catch (error) {
+      fs.writeFileSync(logPath, logBefore);
+      unstageLanding(root, quest, paths);
+      refuse(`land: the commit was refused, the quest stays open: ${error.message}`);
+    }
+    return {id: quest.id, commit, paths, probe: measured, terminal};
+  } finally {
+    landingLock.release();
   }
-  return {id: quest.id, commit, paths, probe: measured, terminal};
 }
 
 // --- evidence add ----------------------------------------------------------------
@@ -708,8 +892,9 @@ function board(root) {
 }
 
 export {
-  ALTITUDE_BUDGET, LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
-  SolveError, board, evidenceAdd, evidenceDelete, evidenceRelocate, land,
-  landChangeProofEnvironment,
-  note, probe, runChangeProof, start,
+  ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_TIMEOUT_REFUSAL,
+  LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
+  SolveError, acquireLandingLock, board, evidenceAdd, evidenceDelete, evidenceRelocate,
+  isLockStale, isPidAlive, land, landChangeProofEnvironment,
+  note, probe, requiresInventoryRefresh, runChangeProof, start,
 };

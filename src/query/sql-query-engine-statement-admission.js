@@ -8,6 +8,16 @@
 
 import {AST_TYPE} from './parser-constants.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
+import {PG_ERROR_CODE} from '../runtime/pgwire-protocol-constants.js';
+import {TRANSACTION_MODE} from '../constants/index.js';
+import {
+  LOCKING_READ_AGGREGATE_TYPE,
+  LOCKING_READ_CLAUSE,
+  LOCKING_READ_ERROR_MSG,
+  LOCKING_READ_SET_OPERATION_KEYS,
+  LOCKING_READ_STRENGTH,
+  LOCKING_READ_SUBQUERY_TYPE,
+} from './sql-locking-read-constants.js';
 import {coordinatorTableParticipantRefusal} from
   './distributed/distributed-transaction-participant-admission.js';
 
@@ -87,11 +97,142 @@ function admitExpectedTransaction(
  * @param {?string} expectedTransactionId - The expected transaction.
  * @return {{state: string, failure?: Object}} STATEMENT_ADMISSION decision.
  */
+function isLockingReadAst(ast) {
+  if (!ast) return false;
+  return Boolean(
+    ast.locking?.strength === LOCKING_READ_STRENGTH.UPDATE ||
+    ast.locking_read === LOCKING_READ_CLAUSE.FOR_UPDATE ||
+    ast.forUpdate === true ||
+    ast.locking,
+  );
+}
+
+function hasAggregateColumns(columns) {
+  if (!Array.isArray(columns)) return false;
+  return columns.some((col) => {
+    if (!col) return false;
+    if (col.type === LOCKING_READ_AGGREGATE_TYPE ||
+        col.expression?.type === LOCKING_READ_AGGREGATE_TYPE ||
+        col.hasAggregates === true || col.aggregate) {
+      return true;
+    }
+    const fn = col.expression?.function || col.expression?.name || col.name;
+    return typeof fn === 'string' &&
+      /^(COUNT|SUM|AVG|MIN|MAX)$/i.test(fn);
+  });
+}
+
+function checkUnsupportedLockingOptions(locking) {
+  if (!locking) return null;
+  if (locking.strength && locking.strength !== LOCKING_READ_STRENGTH.UPDATE) {
+    return `FOR ${locking.strength} is not supported; only FOR UPDATE is supported`;
+  }
+  if (locking.nowait === true) {
+    return LOCKING_READ_ERROR_MSG.NOWAIT_NOT_SUPPORTED;
+  }
+  if (locking.skipLocked === true) {
+    return LOCKING_READ_ERROR_MSG.SKIP_LOCKED_NOT_SUPPORTED;
+  }
+  if (locking.of) {
+    return LOCKING_READ_ERROR_MSG.OF_NOT_SUPPORTED;
+  }
+  return null;
+}
+
+function hasSetOperation(ast) {
+  return LOCKING_READ_SET_OPERATION_KEYS
+    .some((key) => Boolean(ast[key]));
+}
+
+function hasGrouping(ast) {
+  if (ast.having) return true;
+  if (Array.isArray(ast.groupBy)) return ast.groupBy.length > 0;
+  if (Array.isArray(ast.group_by)) return ast.group_by.length > 0;
+  return Boolean(ast.groupBy && typeof ast.groupBy === 'object');
+}
+
+function checkUnsupportedLockingClauses(ast) {
+  if (ast.distinct === true) {
+    return LOCKING_READ_ERROR_MSG.DISTINCT_NOT_SUPPORTED;
+  }
+  if (hasGrouping(ast)) {
+    return LOCKING_READ_ERROR_MSG.GROUP_BY_OR_HAVING_NOT_SUPPORTED;
+  }
+  if (hasSetOperation(ast)) {
+    return LOCKING_READ_ERROR_MSG.SET_OPERATIONS_NOT_SUPPORTED;
+  }
+  if (Array.isArray(ast.joins) && ast.joins.length > 0) {
+    return LOCKING_READ_ERROR_MSG.JOIN_NOT_SUPPORTED;
+  }
+  return null;
+}
+
+function checkUnsupportedLockingStructure(ast) {
+  if (ast.with || ast.cte || ast.from?.type === LOCKING_READ_SUBQUERY_TYPE || ast.from?.ast) {
+    return LOCKING_READ_ERROR_MSG.SUBQUERY_OR_CTE_NOT_SUPPORTED;
+  }
+  if (ast.hasAggregates || hasAggregateColumns(ast.columns)) {
+    return LOCKING_READ_ERROR_MSG.AGGREGATES_NOT_SUPPORTED;
+  }
+  if (!ast.from?.name) {
+    return LOCKING_READ_ERROR_MSG.REQUIRES_FROM_TABLE;
+  }
+  return null;
+}
+
+function admitLockingReadStatement(transactionCoordinator, sessionId, ast) {
+  if (!isLockingReadAst(ast)) return ADMITTED;
+
+  const optError = checkUnsupportedLockingOptions(ast.locking);
+  if (optError) {
+    return refused({
+      success: false,
+      error: optError,
+      errorCode: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+      sqlState: PG_ERROR_CODE.FEATURE_NOT_SUPPORTED,
+    });
+  }
+
+  const clauseError = checkUnsupportedLockingClauses(ast);
+  if (clauseError) {
+    return refused({
+      success: false,
+      error: clauseError,
+      errorCode: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+      sqlState: PG_ERROR_CODE.FEATURE_NOT_SUPPORTED,
+    });
+  }
+
+  const structError = checkUnsupportedLockingStructure(ast);
+  if (structError) {
+    return refused({
+      success: false,
+      error: structError,
+      errorCode: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+      sqlState: PG_ERROR_CODE.FEATURE_NOT_SUPPORTED,
+    });
+  }
+
+  const tx = transactionCoordinator.getTransaction(sessionId);
+  if (!tx || tx.transactionMode !== TRANSACTION_MODE.EXPLICIT) {
+    return refused({
+      success: false,
+      error: LOCKING_READ_ERROR_MSG.REQUIRES_ACTIVE_EXPLICIT_TRANSACTION,
+      errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
+      sqlState: PG_ERROR_CODE.NO_ACTIVE_SQL_TRANSACTION,
+    });
+  }
+
+  return ADMITTED;
+}
+
 function admitParsedStatement(
   transactionCoordinator, sessionId, ast, expectedTransactionId,
 ) {
   const form = admitStatementForm(ast);
   if (form.state === STATEMENT_ADMISSION.REFUSED) return form;
+  const locking = admitLockingReadStatement(transactionCoordinator, sessionId, ast);
+  if (locking.state === STATEMENT_ADMISSION.REFUSED) return locking;
   if (transactionCoordinator.getTransaction(sessionId)) {
     const tables = [ast?.table, ast?.from?.name,
       ...(ast?.joins || []).map((join) => join.table?.name)];

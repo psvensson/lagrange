@@ -13,22 +13,22 @@
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
-    "query-sql": 178,
+    "query-sql": 183,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 145,
     "solver-tooling": 7,
-    "storage-partition": 207,
+    "storage-partition": 208,
     "storage-raft": 148,
     "test-infrastructure": 153,
     "transactions": 16,
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2486,
-  "digest": "fnv1a32-b27c074a",
+  "censusSize": 2492,
+  "digest": "fnv1a32-3a0533b7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0c95758c",
+  "observationDigest": "fnv1a32-854e164f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1023,6 +1023,8 @@
     "test/function/query-then-invoke-continuation.property.test.js": "services-runtime",
     "test/helm/lagrange-node-admin-default-deny.test.js": "release-packaging",
     "test/hlc/hlc.test.js": "runtime-primitives",
+    "test/index-management/global-secondary-index-lifecycle.test.js": "query-sql",
+    "test/index-management/global-secondary-index-routing.test.js": "query-sql",
     "test/index-management/index-maintenance-consistency.property.test.js": "query-sql",
     "test/index-management/index-service.test.js": "query-sql",
     "test/index-management/query-optimizer.test.js": "query-sql",
@@ -1115,6 +1117,7 @@
     "test/integration/versioned-cdc-readiness-convergence.integration.test.js": "cdc-metadata",
     "test/integration/websocket-create-replica-ack.integration.test.js": "transport-messaging",
     "test/invariants/invariant-catalog.test.js": "architecture-governance",
+    "test/live-query/live-query-generic-push-data-plane.test.js": "query-sql",
     "test/live-query/live-query-manager.test.js": "query-sql",
     "test/live-query/live-query-service.test.js": "query-sql",
     "test/live-query/live-query-startup-wiring.test.js": "query-sql",
@@ -1327,6 +1330,7 @@
     "test/partition/participant-release-protocol.test.js": "storage-partition",
     "test/partition/participant-release-retention-native.test.js": "storage-partition",
     "test/partition/partition-admission-redrive-wakes.test.js": "storage-partition",
+    "test/partition/partition-boundary-representation.test.js": "storage-partition",
     "test/partition/partition-cdc-delivery-progress.test.js": "storage-partition",
     "test/partition/partition-cdc-drain-admission.test.js": "storage-partition",
     "test/partition/partition-cdc-generator.test.js": "storage-partition",
@@ -1496,6 +1500,8 @@
     "test/query/internal-sql-adapter.test.js": "query-sql",
     "test/query/lineage-integration.test.js": "query-sql",
     "test/query/lineage-tracker.test.js": "query-sql",
+    "test/query/locking-read-canonical-ast.test.js": "query-sql",
+    "test/query/locking-read-execution-lifecycle.test.js": "query-sql",
     "test/query/lookup-primitive.test.js": "query-sql",
     "test/query/nested-call-classifier.test.js": "query-sql",
     "test/query/nested-call-rejection-messages.test.js": "query-sql",
@@ -7739,6 +7745,7 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -7752,6 +7759,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -11638,6 +11646,19 @@
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
+      ]
+    },
+    "test/query/locking-read-canonical-ast.test.js": {
+      "files": [
+        "architecture/postgres-locking-reads.md",
+        "solve/specs/release-0-3-queryable-core/locking-read-wait-policy.json"
+      ]
+    },
+    "test/query/locking-read-execution-lifecycle.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/nested-call-rejection-messages.test.js": {
@@ -18324,6 +18345,7 @@
         ".githooks/pre-commit",
         "Dockerfile",
         "README.md",
+        "architecture/postgres-locking-reads.md",
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
@@ -18332,15 +18354,20 @@
         "scripts/check-guideline-decision-boundaries.js",
         "scripts/check-guideline-literals.js",
         "scripts/check-guideline-silent-catch.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-priority-recovery-owner-inventory.js",
         "scripts/inventory-ordinal-segments.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/solve.js",
         "scripts/test-machine-factor.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/index.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -18366,7 +18393,10 @@
         "test"
       ],
       "env": [
-        "PATH"
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "PATH",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/solve/evidence-store.test.js": {

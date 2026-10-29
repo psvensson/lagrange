@@ -68,6 +68,8 @@ function stripPartitionDetails(result) {
   delete stripped.sourcePartition;
   delete stripped.partition_key_start;
   delete stripped.partition_key_end;
+  delete stripped.partition_key_type;
+  delete stripped.partitionKeyType;
 
   // Strip internal partition details from rows if present
   if (Array.isArray(stripped.rows)) {
@@ -98,8 +100,10 @@ function isPartitionField(fieldName) {
     '_partitionId',
     'partition_key_start',
     'partition_key_end',
+    'partition_key_type',
     'partitionKeyStart',
     'partitionKeyEnd',
+    'partitionKeyType',
     'sourcePartition',
   ]);
   return partitionFields.has(fieldName);

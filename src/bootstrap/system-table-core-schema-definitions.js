@@ -61,6 +61,7 @@ const PARTITIONS_SCHEMA = {
     {name: 'table_name', type: COLUMN_TYPE.TEXT},
     {name: 'partition_key_start', type: COLUMN_TYPE.TEXT},
     {name: 'partition_key_end', type: COLUMN_TYPE.TEXT},
+    {name: 'partition_key_type', type: COLUMN_TYPE.TEXT},
     {
       name: 'partition_version',
       type: COLUMN_TYPE.INTEGER,
@@ -89,10 +90,19 @@ const INDICES_SCHEMA = {
   columns: [
     {name: 'index_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
     {name: 'table_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'table_name', type: COLUMN_TYPE.TEXT},
     {name: 'index_name', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'column_names', type: COLUMN_TYPE.TEXT, notNull: true}, // JSON array
     {name: 'index_type', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'btree\''},
+    {name: 'is_global', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 1},
+    {name: 'is_unique', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'state', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'CREATING\''},
+    {name: 'backfill_cursor_partition_id', type: COLUMN_TYPE.TEXT},
+    {name: 'backfill_cursor_pk', type: COLUMN_TYPE.TEXT},
+    {name: 'backfill_total_rows', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'error_message', type: COLUMN_TYPE.TEXT},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER},
   ],
   indices: [
     {name: 'idx_indices_table', columns: ['table_id']},

@@ -1,0 +1,26 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering"
+  },
+  "statement": "Complete Stage A1-A4 key ordering, persisted boundary representation, declared primary-key resolution, and compound primary-key narrowing with zero legacy or fallback logic: PartitionSplitMergeManager.comparePartitionKeys delegates to compareRoutingKeys, finite numeric comparisons avoid subtraction overflow, unsupported/absent keys validate before equality, PARTITIONS_SCHEMA and split/merge/create workflows persist and validate partition_key_type with 64-bit BigInt median precision, compareNumberWithTextEncodedNumber and 'id' primary-key fallbacks are removed across all resolvers/coordinators/live-query owners, and compound primary keys route and narrow with exact tuple comparison, AND-bound intersection, and NOT IN scatter safety.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "test-output/release-0-3-queryable-core/a1-receipt.json",
+      "requiredReceipts": [
+        "sqlite-binary-text-order",
+        "finite-numeric-comparison-bounds",
+        "unsupported-and-absent-key-validation",
+        "merge-evaluation-partition-key-delegation",
+        "typed-boundary-representation-and-bigint-precision",
+        "no-legacy-boundary-or-text-number-fallback",
+        "declared-primary-key-resolution-no-id-fallback",
+        "compound-primary-key-routing-and-predicate-intersection"
+      ]
+    }
+  },
+  "sealedAt": "87def7e8bf71ae35d0596583bed31fc9b28a2951"
+}

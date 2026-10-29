@@ -17,6 +17,7 @@ import {
   readAffectedRowCount,
   withExecutedStatementType,
 } from './application-database-result.js';
+import {sqlQueryEngineDdlMethods} from './sql-query-engine-ddl-methods.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -75,6 +76,8 @@ const PRESSURE_WRITE_AST_TYPES = new Set([
   QUERY_AST_TYPE.DELETE,
   QUERY_AST_TYPE.CREATE_TABLE,
   QUERY_AST_TYPE.ALTER_TABLE,
+  QUERY_AST_TYPE.CREATE_INDEX,
+  QUERY_AST_TYPE.DROP_INDEX,
 ]);
 
 /**
@@ -240,6 +243,7 @@ class SQLQueryEngineStatementExecution extends
         success: false,
         error: parseError.message,
         errorCode: resolveParseFailureCode(parseError),
+        ...(parseError.sqlState ? {sqlState: parseError.sqlState} : {}),
       };
     }
 
@@ -324,6 +328,14 @@ class SQLQueryEngineStatementExecution extends
 
       case QUERY_AST_TYPE.ALTER_TABLE:
         result = await this.executeAlterTable(ast, sessionId);
+        break;
+
+      case QUERY_AST_TYPE.CREATE_INDEX:
+        result = await this.executeCreateIndex(ast, sessionId, options);
+        break;
+
+      case QUERY_AST_TYPE.DROP_INDEX:
+        result = await this.executeDropIndex(ast, sessionId, options);
         break;
 
       case QUERY_AST_TYPE.BEGIN_TRANSACTION:
@@ -495,6 +507,7 @@ class SQLQueryEngineStatementExecution extends
         success: false,
         error: error.message,
         errorCode: resolveParseFailureCode(error),
+        ...(error.sqlState ? {sqlState: error.sqlState} : {}),
       };
     }
 
@@ -586,5 +599,7 @@ class SQLQueryEngineStatementExecution extends
    * @private
    */
 }
+
+Object.assign(SQLQueryEngineStatementExecution.prototype, sqlQueryEngineDdlMethods);
 
 export {SQLQueryEngineStatementExecution};

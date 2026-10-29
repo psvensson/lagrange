@@ -47,7 +47,8 @@ class ManagedSplitWorkflowProvisioningMethods {
         PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
       ] :
       null;
-    if (!splitKey ||
+    if (splitKey === null ||
+        splitKey === undefined ||
         !targetPartitionIds ||
         targetPartitionIds.length !== 2 ||
         !targetPartitionIds[0] ||

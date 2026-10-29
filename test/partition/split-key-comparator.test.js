@@ -8,6 +8,7 @@ import {
   compareSplitKey,
   resolveSplitTargetPartitionId,
   SPLIT_KEY_TYPE,
+  SUPPORTED_KEY_TYPE_LIST,
 } from '../../src/partition/split-key-comparator.js';
 import * as routingModule from '../../src/partition/partition-split-routing.js';
 import {
@@ -103,7 +104,7 @@ test('unusable split key types reject instead of silently comparing', (t) => {
     {
       message: PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
         SPLIT_KEY_TYPE.NUMBER,
-        'number/string/buffer',
+        SUPPORTED_KEY_TYPE_LIST,
       ),
     },
   );
@@ -112,7 +113,7 @@ test('unusable split key types reject instead of silently comparing', (t) => {
     {
       message: PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
         'object',
-        'number/string/buffer',
+        SUPPORTED_KEY_TYPE_LIST,
       ),
     },
   );
@@ -121,7 +122,7 @@ test('unusable split key types reject instead of silently comparing', (t) => {
     {
       message: PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
         'boolean',
-        'number/string/buffer',
+        SUPPORTED_KEY_TYPE_LIST,
       ),
     },
   );

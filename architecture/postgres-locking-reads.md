@@ -4,9 +4,8 @@ Status: planned Phase 0.3 core contract
 
 ## Purpose
 
-Lagrange currently provides session staged read-your-own-writes over current
-committed state and partition-write-generation first-committer-wins
-write-conflict detection at prepare and apply. PostgreSQL clients
+Lagrange currently provides epoch-based snapshot isolation, read-your-own-writes,
+and first-committer-wins write-conflict detection at prepare. PostgreSQL clients
 can parse and execute ordinary transactional reads, but the current PostgreSQL
 SELECT AST does not preserve `FOR UPDATE` as an owned locking-read semantic.
 
@@ -87,3 +86,79 @@ benchmark must not claim that TiDB `FOR UPDATE` and Lagrange ordinary snapshot
 reads use equivalent locking mechanisms. Once this capability lands, Scenario A
 should add a contention profile that exercises the public PostgreSQL locking-read
 path directly.
+
+
+## Sealed Phase 0.3 wait/conflict policy
+
+The machine-readable wait and conflict policy specification governs
+conflict, release, timeout, cancellation, crash, and recovery behavior.
+
+The initial locking-read slice is deliberately **fail-fast**, not blocking.
+When a partition transaction participant finds a reservation owned by another
+transaction it returns a typed reservation-conflict refusal immediately. It
+does not enqueue the requester, poll for release, or create a wake-up
+obligation. PG wire transports that outcome and remains transport-only.
+
+This choice matches the transaction model already present in Lagrange and keeps
+one owner per concern:
+
+- the partition transaction participant owns durable/replicated reservation
+  acquire, idempotent same-transaction reacquire, conflict detection, and the
+  participant-side effect of release;
+- `DistributedTransactionCoordinator` owns transaction lifetime, participant
+  enlistment, timeout/cancellation resolution, whole-transaction rollback,
+  commit decision, and recovery re-drive;
+- no session-local lock map, local mutex, benchmark retry loop, or node-local
+  cache is reservation authority.
+
+A conflict on **any** participant has two explicit owned transitions. First, the
+participant refuses the reservation and reports
+`typed_locking_read_reservation_conflict`. Second, the
+`DistributedTransactionCoordinator` owns the terminal conflict-abort transition:
+it rolls back the whole transaction, waits for rollback/release acknowledgement
+from every already-enlisted participant, and only then reports
+`transaction_aborted` with the reservation conflict as its cause. Earlier
+reservations therefore cannot remain held after the caller observes terminal
+abort.
+
+Reservation lifetime is transaction-owned rather than TTL-owned. A participant
+must not expire an unresolved reservation merely because its local clock
+advances. Commit, rollback, transaction timeout, explicit cancellation, or
+recovery resolution is what authorizes release. If a participant crashes,
+durable reservation state remains unresolved state for transaction recovery;
+restart must neither erase it nor invent a terminal outcome.
+
+The observable failures remain typed and distinct: reservation contention,
+transaction timeout, cancellation, and transaction abort must not collapse into
+one generic retry result. This lets callers decide whether and when to retry
+without moving retry correctness into PG wire.
+
+### Exact machine-readable transition mirror
+
+This prose mirrors the machine policy literally so ownership cannot drift.
+There is **no waiter queue** and there is no participant **local TTL** release
+authority. On conflict the coordinator must **confirm release** of reservations
+held by earlier participants before the terminal abort is observable.
+
+| Transition | Owner identifier | Action | Outcome identifier |
+| --- | --- | --- | --- |
+| acquire | `partition_transaction_participant` | create durable replicated reservation | `reservation_acquired` |
+| same-transaction-reacquire | `partition_transaction_participant` | idempotent reacquire existing reservation | `reservation_already_owned` |
+| conflict | `partition_transaction_participant` | refuse without waiting and report owner conflict | `typed_locking_read_reservation_conflict` |
+| conflict-abort | `DistributedTransactionCoordinator` | on participant conflict rollback whole transaction wait for release acknowledgements then report terminal abort | `transaction_aborted` |
+| timeout | `DistributedTransactionCoordinator` | rollback transaction and release all participant reservations | `typed_transaction_timeout` |
+| cancellation | `DistributedTransactionCoordinator` | rollback transaction and release all participant reservations | `typed_transaction_cancelled` |
+| commit | `DistributedTransactionCoordinator` | commit transaction then release participant reservations | `committed_and_released` |
+| rollback | `DistributedTransactionCoordinator` | rollback transaction then release participant reservations | `rolled_back_and_released` |
+| crash | `partition_transaction_participant` | retain durable reservation state for transaction recovery | `unresolved_reservation_preserved` |
+| recovery | `DistributedTransactionCoordinator` | replay terminal decision or rollback then reconcile participant reservations | `transaction_resolved_and_reservations_reconciled` |
+
+The participant-level contention outcome remains
+`typed_locking_read_reservation_conflict`; `transaction_aborted` is the later
+coordinator-owned terminal outcome after whole-transaction rollback and release
+confirmation.
+
+Blocking wait semantics, `NOWAIT`, `SKIP LOCKED`, and additional PostgreSQL
+row-lock strengths are not silently layered on this policy. Introducing a
+waiter queue or wake-up owner requires a superseding policy because it would
+change the deadlock and recovery model.

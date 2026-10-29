@@ -76,7 +76,9 @@ function createDurableTableRow(tableId, tableName, partitionCount = 1) {
   return {
     table_id: tableId,
     table_name: tableName,
+    primary_key: 'id',
     partition_key: 'id',
+    partition_key_type: 'TEXT',
     active_partition_version: 1,
     // The table's committed partition count (its live partitions).
     partition_count: partitionCount,
@@ -182,6 +184,7 @@ test('overlap-refused-at-registration: a split whose source key range ' +
       table_name: 'orders',
       partition_key_start: null,
       partition_key_end: 'n',
+      partition_key_type: 'TEXT',
       partition_version: 1,
       replica_count: 2,
       leader_node_id: 'node-a',
@@ -197,6 +200,7 @@ test('overlap-refused-at-registration: a split whose source key range ' +
       // ['q','t')).
       partition_key_start: 'u',
       partition_key_end: null,
+      partition_key_type: 'TEXT',
       partition_version: 1,
       replica_count: 2,
       leader_node_id: 'node-a',
@@ -400,6 +404,7 @@ test('restart-surviving-guard (split): a fresh split workflow ' +
     table_name: 'orders',
     partition_key_start: 'k',
     partition_key_end: 'z',
+    partition_key_type: 'TEXT',
     replica_count: 2,
     leader_node_id: 'node-a',
     size_bytes: 64,
@@ -456,6 +461,7 @@ test('terminal durable transitions do not block registration ' +
       table_name: 'orders',
       partition_key_start: null,
       partition_key_end: 'n',
+      partition_key_type: 'TEXT',
       partition_version: 1,
       replica_count: 2,
       leader_node_id: 'node-a',

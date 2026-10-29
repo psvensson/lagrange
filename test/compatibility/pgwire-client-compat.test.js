@@ -28,9 +28,9 @@ const TABLE = 'client_rows';
 const SPLIT_KEY = 100;
 const PARTITIONS = Object.freeze([
   {partition_id: 'compat-p1', partition_key_start: null,
-    partition_key_end: SPLIT_KEY},
+    partition_key_end: SPLIT_KEY, partition_key_type: 'INTEGER'},
   {partition_id: 'compat-p2', partition_key_start: SPLIT_KEY,
-    partition_key_end: null},
+    partition_key_end: null, partition_key_type: 'INTEGER'},
 ]);
 const silentLogger = Object.freeze({
   debug() {},

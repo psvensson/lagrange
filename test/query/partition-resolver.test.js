@@ -7,11 +7,31 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionResolver} from '../../src/query/partition-resolver.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
+import {TABLES} from '../../src/constants/index.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
+
+const DEFAULT_TEST_TABLES = [
+  {table_name: 'users', primary_key: 'id', partition_key_type: 'TEXT'},
+  {table_name: 'items', primary_key: 'id', partition_key_type: 'INTEGER'},
+];
+
+function createMockSystemCache(tables = DEFAULT_TEST_TABLES) {
+  const map = new Map(tables.map((t) => [t.table_name || t.tableName, t]));
+  return {
+    get: (table, key) => (table === TABLES.TABLES ? map.get(key) || null : null),
+    find: (table, pred) => (table === TABLES.TABLES ? tables.find(pred) || null : null),
+  };
+}
+
+function createResolver(tables = DEFAULT_TEST_TABLES) {
+  return new PartitionResolver({
+    systemCache: createMockSystemCache(tables),
+  });
+}
 
 // Helper to create test partitions
 function createPartitions() {
@@ -21,18 +41,21 @@ function createPartitions() {
       table_name: 'users',
       partition_key_start: null,
       partition_key_end: 'm',
+      partition_key_type: 'TEXT',
     },
     {
       partition_id: 'p2',
       table_name: 'users',
       partition_key_start: 'm',
       partition_key_end: 'z',
+      partition_key_type: 'TEXT',
     },
     {
       partition_id: 'p3',
       table_name: 'users',
       partition_key_start: 'z',
       partition_key_end: null,
+      partition_key_type: 'TEXT',
     },
   ];
 }
@@ -45,7 +68,7 @@ function parseWhere(sql) {
 }
 
 test('PartitionResolver - routes to all partitions without WHERE', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
 
   const result = resolver.resolvePartitions('users', null, partitions);
@@ -55,7 +78,7 @@ test('PartitionResolver - routes to all partitions without WHERE', async (t) => 
 });
 
 test('PartitionResolver - routes to single partition with equals', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE id = \'alice\'');
 
@@ -66,7 +89,7 @@ test('PartitionResolver - routes to single partition with equals', async (t) => 
 });
 
 test('PartitionResolver - routes to correct partition for key in middle', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE id = \'peter\'');
 
@@ -77,7 +100,7 @@ test('PartitionResolver - routes to correct partition for key in middle', async 
 });
 
 test('PartitionResolver - routes to last partition for high key', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE id = \'zack\'');
 
@@ -88,7 +111,7 @@ test('PartitionResolver - routes to last partition for high key', async (t) => {
 });
 
 test('PartitionResolver - routes to multiple partitions with IN clause', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE id IN (\'alice\', \'peter\', \'zack\')');
 
@@ -99,7 +122,7 @@ test('PartitionResolver - routes to multiple partitions with IN clause', async (
 });
 
 test('PartitionResolver - routes to subset with IN clause', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE id IN (\'alice\', \'bob\')');
 
@@ -110,7 +133,7 @@ test('PartitionResolver - routes to subset with IN clause', async (t) => {
 });
 
 test('PartitionResolver - routes with range query (>=)', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE id >= \'n\'');
 
@@ -122,7 +145,7 @@ test('PartitionResolver - routes with range query (>=)', async (t) => {
 });
 
 test('PartitionResolver - routes with range query (<)', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE id < \'n\'');
 
@@ -134,7 +157,7 @@ test('PartitionResolver - routes with range query (<)', async (t) => {
 });
 
 test('PartitionResolver - routes with BETWEEN', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE id BETWEEN \'a\' AND \'n\'');
 
@@ -146,7 +169,7 @@ test('PartitionResolver - routes with BETWEEN', async (t) => {
 });
 
 test('PartitionResolver - scatter-gather for non-key WHERE', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE name = \'John\'');
 
@@ -157,7 +180,7 @@ test('PartitionResolver - scatter-gather for non-key WHERE', async (t) => {
 });
 
 test('PartitionResolver - scatter-gather for OR conditions', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere(
     'SELECT * FROM users WHERE id = \'alice\' OR name = \'John\'',
@@ -170,7 +193,7 @@ test('PartitionResolver - scatter-gather for OR conditions', async (t) => {
 });
 
 test('PartitionResolver - handles AND with key condition', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere(
     'SELECT * FROM users WHERE id = \'alice\' AND status = \'active\'',
@@ -184,7 +207,7 @@ test('PartitionResolver - handles AND with key condition', async (t) => {
 });
 
 test('PartitionResolver - resolvePartitionForKey finds correct partition', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
 
   t.equal(resolver.resolvePartitionForKey('users', 'alice', partitions), 'p1');
@@ -193,7 +216,7 @@ test('PartitionResolver - resolvePartitionForKey finds correct partition', async
 });
 
 test('PartitionResolver - handles boundary values', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
 
   // 'm' is the boundary - should be in p2 (>= m)
@@ -204,11 +227,11 @@ test('PartitionResolver - handles boundary values', async (t) => {
 });
 
 test('PartitionResolver - handles numeric keys', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = [
-    {partition_id: 'p1', partition_key_start: null, partition_key_end: 100},
-    {partition_id: 'p2', partition_key_start: 100, partition_key_end: 200},
-    {partition_id: 'p3', partition_key_start: 200, partition_key_end: null},
+    {partition_id: 'p1', partition_key_start: null, partition_key_end: 100, partition_key_type: 'INTEGER'},
+    {partition_id: 'p2', partition_key_start: 100, partition_key_end: 200, partition_key_type: 'INTEGER'},
+    {partition_id: 'p3', partition_key_start: 200, partition_key_end: null, partition_key_type: 'INTEGER'},
   ];
 
   t.equal(resolver.resolvePartitionForKey('items', 50, partitions), 'p1');
@@ -217,9 +240,9 @@ test('PartitionResolver - handles numeric keys', async (t) => {
 });
 
 test('PartitionResolver - handles single partition (full range)', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = [
-    {partition_id: 'p1', partition_key_start: null, partition_key_end: null},
+    {partition_id: 'p1', partition_key_start: null, partition_key_end: null, partition_key_type: 'TEXT'},
   ];
 
   const result = resolver.resolvePartitions('users', null, partitions);
@@ -231,14 +254,14 @@ test('PartitionResolver - handles single partition (full range)', async (t) => {
 });
 
 test('PartitionResolver - returns empty for no partitions', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
 
   const result = resolver.resolvePartitions('users', null, []);
   t.equal(result.length, 0);
 });
 
 test('PartitionResolver - getAllPartitions returns all', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
 
   const result = resolver.getAllPartitions('users', partitions);
@@ -246,10 +269,10 @@ test('PartitionResolver - getAllPartitions returns all', async (t) => {
 });
 
 test('PartitionResolver - handles keyRange format', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = [
-    {partitionId: 'p1', keyRange: {start: null, end: 'm'}},
-    {partitionId: 'p2', keyRange: {start: 'm', end: null}},
+    {partitionId: 'p1', keyRange: {start: null, end: 'm'}, partition_key_type: 'TEXT'},
+    {partitionId: 'p2', keyRange: {start: 'm', end: null}, partition_key_type: 'TEXT'},
   ];
 
   t.equal(resolver.resolvePartitionForKey('users', 'alice', partitions), 'p1');
@@ -257,7 +280,7 @@ test('PartitionResolver - handles keyRange format', async (t) => {
 });
 
 test('PartitionResolver - routes with parameterized key predicates', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE id = ?');
 
@@ -273,7 +296,7 @@ test('PartitionResolver - routes with parameterized key predicates', async (t) =
 });
 
 test('PartitionResolver - supports key predicate with parameter on left side', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = createPartitions();
   const where = parseWhere('SELECT * FROM users WHERE ? < id');
 
@@ -290,17 +313,19 @@ test('PartitionResolver - supports key predicate with parameter on left side', a
 });
 
 test('PartitionResolver - supports composite key pruning with equality', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = [
     {
       partition_id: 'p1',
       partition_key_start: null,
-      partition_key_end: '["n"',
+      partition_key_end: '["n"]',
+      partition_key_type: 'COMPOSITE',
     },
     {
       partition_id: 'p2',
-      partition_key_start: '["n"',
+      partition_key_start: '["n"]',
       partition_key_end: null,
+      partition_key_type: 'COMPOSITE',
     },
   ];
   const where = parseWhere(
@@ -319,17 +344,19 @@ test('PartitionResolver - supports composite key pruning with equality', async (
 });
 
 test('PartitionResolver - scatters when composite key predicate is incomplete', async (t) => {
-  const resolver = new PartitionResolver();
+  const resolver = createResolver();
   const partitions = [
     {
       partition_id: 'p1',
       partition_key_start: null,
-      partition_key_end: '["n"',
+      partition_key_end: '["n"]',
+      partition_key_type: 'COMPOSITE',
     },
     {
       partition_id: 'p2',
-      partition_key_start: '["n"',
+      partition_key_start: '["n"]',
       partition_key_end: null,
+      partition_key_type: 'COMPOSITE',
     },
   ];
   const where = parseWhere(

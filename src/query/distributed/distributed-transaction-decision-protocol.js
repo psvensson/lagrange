@@ -32,6 +32,8 @@ import {
   PARTICIPANT_TRANSACTION_DECISION,
   PARTICIPANT_TRANSACTION_REFUSAL_CAUSE,
 } from '../../partition/partition-participant-transaction-constants.js';
+import {releaseTransactionReservations} from
+  '../../partition/partition-locking-read-reservation.js';
 import {
   PARTICIPANT_STATUS,
   TRANSACTION_DECISION_LOG_MSG,
@@ -93,6 +95,7 @@ function endTransaction(coordinator, tx) {
     coordinator.transactionsBySession.delete(tx.sessionId);
     coordinator.endedTransactions?.record(tx);
   }
+  releaseTransactionReservations(tx.transactionId);
 }
 
 const distributedTransactionDecisionProtocolMethods = {

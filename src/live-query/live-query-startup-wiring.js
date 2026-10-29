@@ -154,6 +154,64 @@ function initLogger() {
   return console;
 }
 
+function dispatchTopologyChange(operation, record, onPartitionTopologyChange, logger) {
+  const topologyChange = buildPartitionTopologyChange(operation, record);
+  if (!topologyChange) {
+    return;
+  }
+  const maybePromise = onPartitionTopologyChange(topologyChange);
+  if (maybePromise && typeof maybePromise.catch === 'function') {
+    maybePromise.catch((error) => {
+      logger.warn(LOG_MSG_PARTITION_HANDLER_FAILED, {
+        error: error.message,
+      });
+    });
+  }
+}
+
+function findMatchingSubscription(subscriptions, tableName, tableResolver) {
+  for (const subscription of subscriptions.values()) {
+    const knownTableName = subscription.tableName ||
+      tableResolver(subscription.partitionId);
+
+    if (!knownTableName) {
+      continue;
+    }
+
+    if (!subscription.tableName) {
+      subscription.tableName = knownTableName;
+    }
+
+    if (knownTableName === tableName) {
+      return subscription;
+    }
+  }
+  return null;
+}
+
+function dispatchChangeToSubscriptions(
+  subscriptions, tableName, change, tableResolver, logger,
+) {
+  for (const groupSubs of subscriptions.values()) {
+    const selected = findMatchingSubscription(
+      groupSubs, tableName, tableResolver,
+    );
+    if (!selected) {
+      continue;
+    }
+
+    try {
+      selected.handler(change);
+    } catch (error) {
+      logger.warn(LOG_MSG_SUBSCRIPTION_HANDLER_FAILED, {
+        queryId: selected.queryId,
+        partitionId: selected.partitionId,
+        error: error.message,
+      });
+    }
+  }
+}
+
 /**
  * Create adapter that bridges cache CDC notifications to live query handlers.
  * @param {Object} [options]
@@ -182,60 +240,18 @@ function createLiveQueryCacheSubscriptionAdapter(options = {}) {
     }
 
     if (tableName === TABLES.PARTITIONS && onPartitionTopologyChange) {
-      const topologyChange = buildPartitionTopologyChange(operation, record);
-      if (topologyChange) {
-        const maybePromise = onPartitionTopologyChange(topologyChange);
-        if (maybePromise && typeof maybePromise.catch === 'function') {
-          maybePromise.catch((error) => {
-            logger.warn(LOG_MSG_PARTITION_HANDLER_FAILED, {
-              error: error.message,
-            });
-          });
-        }
-      }
+      dispatchTopologyChange(operation, record, onPartitionTopologyChange, logger);
     }
 
     const change = buildLiveQueryChange(operation, record);
-    if (!change) {
-      return;
-    }
-
-    for (const querySubscriptions of subscriptionsByQueryId.values()) {
-      let selectedSubscription = null;
-
-      for (const subscription of querySubscriptions.values()) {
-        const knownTableName = subscription.tableName ||
-          resolvePartitionTableName(systemTableCache, subscription.partitionId);
-
-        if (!knownTableName) {
-          continue;
-        }
-
-        if (!subscription.tableName) {
-          subscription.tableName = knownTableName;
-        }
-
-        if (knownTableName !== tableName) {
-          continue;
-        }
-
-        selectedSubscription = subscription;
-        break;
-      }
-
-      if (!selectedSubscription) {
-        continue;
-      }
-
-      try {
-        selectedSubscription.handler(change);
-      } catch (error) {
-        logger.warn(LOG_MSG_SUBSCRIPTION_HANDLER_FAILED, {
-          queryId: selectedSubscription.queryId,
-          partitionId: selectedSubscription.partitionId,
-          error: error.message,
-        });
-      }
+    if (change) {
+      dispatchChangeToSubscriptions(
+        subscriptionsByQueryId,
+        tableName,
+        change,
+        (partitionId) => resolvePartitionTableName(systemTableCache, partitionId),
+        logger,
+      );
     }
   };
 
@@ -289,6 +305,29 @@ function createLiveQueryCacheSubscriptionAdapter(options = {}) {
   };
 }
 
+function resolvePartition(options, partitionId) {
+  return options.partitionService?.getPartition?.(partitionId) ||
+    options.partitions?.get?.(partitionId) || null;
+}
+
+async function trySubscribeViaPartition(partition, queryId, handler, subOptions) {
+  if (!partition) {
+    return {handled: false};
+  }
+  if (typeof partition.subscribeToCDCWithHandshake === 'function') {
+    const result = await partition.subscribeToCDCWithHandshake(handler, {
+      subscriberId: queryId,
+      ...subOptions,
+    });
+    return {handled: true, result};
+  }
+  if (typeof partition.subscribeToCDC === 'function') {
+    const result = partition.subscribeToCDC(handler);
+    return {handled: true, result};
+  }
+  return {handled: false};
+}
+
 /**
  * Create startup-owned live query wiring for one node.
  * @param {Object} [options]
@@ -311,11 +350,44 @@ function createLiveQueryStartupWiring(options = {}) {
     },
   });
 
+  const subscribeToPartition = async (partitionId, queryId, handler, subOptions = {}) => {
+    if (typeof options.subscribeToPartition === 'function') {
+      return await options.subscribeToPartition(partitionId, queryId, handler, subOptions);
+    }
+    if (typeof options.partitionService?.subscribeToPartition === 'function') {
+      return await options.partitionService.subscribeToPartition(
+        partitionId, queryId, handler, subOptions,
+      );
+    }
+    const partition = resolvePartition(options, partitionId);
+    const subResult = await trySubscribeViaPartition(partition, queryId, handler, subOptions);
+    if (subResult.handled) {
+      return subResult.result;
+    }
+    return cacheSubscriptionAdapter.subscribeToPartition(partitionId, queryId, handler);
+  };
+
+  const unsubscribeFromPartition = async (partitionId, queryId) => {
+    if (typeof options.unsubscribeFromPartition === 'function') {
+      return await options.unsubscribeFromPartition(partitionId, queryId);
+    }
+    if (typeof options.partitionService?.unsubscribeFromPartition === 'function') {
+      return await options.partitionService.unsubscribeFromPartition(partitionId, queryId);
+    }
+    const partition = options.partitionService?.getPartition?.(partitionId) ||
+      options.partitions?.get?.(partitionId);
+    if (partition && typeof partition.unsubscribeFromCDC === 'function') {
+      partition.unsubscribeFromCDC(queryId);
+    }
+    return cacheSubscriptionAdapter.unsubscribeFromPartition(partitionId, queryId);
+  };
+
   liveQueryManager.initialize({
     systemCache: options.systemTableCache || null,
     sqlQueryEngine: options.sqlQueryEngine || null,
-    subscribeToPartition: cacheSubscriptionAdapter.subscribeToPartition,
-    unsubscribeFromPartition: cacheSubscriptionAdapter.unsubscribeFromPartition,
+    partitionService: options.partitionService || null,
+    subscribeToPartition,
+    unsubscribeFromPartition,
   });
 
   let shutdownCompleted = false;

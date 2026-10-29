@@ -6,6 +6,7 @@
  */
 
 import {STATE} from '../constants/index.js';
+import {resolveDeclaredPartitionKeyType} from '../partition/partition-boundary-representation.js';
 import {QUERY_ERROR_CODE, QUERY_LOG_MSG} from './query-constants.js';
 import {
   TABLE_CREATION_SERVICE_LITERAL,
@@ -131,6 +132,7 @@ const PARTITION_PROVISIONING_METHODS = Object.freeze({
         tableName,
       partition_key_start: null,
       partition_key_end: null,
+      partition_key_type: resolveDeclaredPartitionKeyType(existingTableRecord),
       partition_version:
         Number.isInteger(partitionVersion) && partitionVersion > 0 ?
           partitionVersion :

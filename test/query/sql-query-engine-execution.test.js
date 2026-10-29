@@ -979,19 +979,21 @@ test('SQLQueryEngine - does not persist successful non-transactional ' +
 async (t) => {
   const upserts = [];
   const cache = createMockSystemCache(
-    [{table_name: 'users', primaryKey: 'id'}],
+    [{table_name: 'users', primaryKey: 'id', partition_key_type: 'TEXT'}],
     [
       {
         partition_id: 'p1',
         table_name: 'users',
         partition_key_start: null,
         partition_key_end: 'm',
+        partition_key_type: 'TEXT',
       },
       {
         partition_id: 'p2',
         table_name: 'users',
         partition_key_start: 'm',
         partition_key_end: null,
+        partition_key_type: 'TEXT',
       },
     ],
   );
@@ -1038,6 +1040,7 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
         table_id: 'tbl-users',
         table_name: 'users',
         primaryKey: 'id',
+        partition_key_type: 'TEXT',
         active_partition_version: 2,
         partition_transition_state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
         partition_transition_metadata: JSON.stringify(transitionMetadata),
@@ -1049,6 +1052,7 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
           table_name: 'users',
           partition_key_start: null,
           partition_key_end: null,
+          partition_key_type: 'TEXT',
           partition_version: 1,
         },
         {
@@ -1057,6 +1061,7 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
           table_name: 'users',
           partition_key_start: null,
           partition_key_end: 'm',
+          partition_key_type: 'TEXT',
           partition_version: 2,
         },
         {
@@ -1065,6 +1070,7 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
           table_name: 'users',
           partition_key_start: 'm',
           partition_key_end: null,
+          partition_key_type: 'TEXT',
           partition_version: 2,
         },
       ],

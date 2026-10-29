@@ -1,6 +1,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
+import {clearAllReservations} from '../../src/partition/partition-locking-read-reservation.js';
 
 function createMockMessageRouter(mockPartitionData) {
   return {
@@ -31,7 +32,16 @@ function createMockMessageRouter(mockPartitionData) {
  * Create a mock system cache with services for routing.
  */
 function createMockSystemCache(tables, partitions) {
+  clearAllReservations();
+  const normalizedTables = tables.map((t) => ({
+    primary_key: 'id',
+    primaryKey: 'id',
+    partition_key: 'id',
+    partition_key_type: 'TEXT',
+    ...t,
+  }));
   const normalizedPartitions = partitions.map((partition) => ({
+    partition_key_type: 'TEXT',
     ...partition,
     leader_node_id: partition.leader_node_id || partition.leaderNodeId || 'test-node',
   }));
@@ -46,7 +56,7 @@ function createMockSystemCache(tables, partitions) {
   }));
 
   return {
-    tables,
+    tables: normalizedTables,
     partitions: normalizedPartitions,
     services,
     get: function(type, key) {

@@ -15,6 +15,14 @@ const DISTRIBUTED_PLAN_FIELD = Object.freeze({
   MERGE_PLAN: 'mergePlan',
   EXECUTION_POLICY: 'executionPolicy',
   DIAGNOSTICS: 'diagnostics',
+  INDEX_ACCESS: 'indexAccess',
+  SELECTED_INDEX: 'selectedIndex',
+  REJECTED_INDEXES: 'rejectedIndexes',
+});
+
+const DISTRIBUTED_SCAN_TYPE = Object.freeze({
+  INDEX_SCAN: 'INDEX_SCAN',
+  FULL_SCAN: 'FULL_SCAN',
 });
 
 const DISTRIBUTED_JOIN_STRATEGY = Object.freeze({
@@ -69,5 +77,6 @@ export {
   DISTRIBUTED_QUERY_ERROR_CODE,
   DISTRIBUTED_QUERY_ERROR_MSG,
   DISTRIBUTED_ROLE_HINT,
+  DISTRIBUTED_SCAN_TYPE,
   DISTRIBUTED_STATEMENT_TYPE,
 };

@@ -23,6 +23,7 @@ import {
   isPartitionReserved,
   readPreparedParticipantIds,
 } from './partition-participant-transaction-store.js';
+import {hasLockingReadReservations} from './partition-locking-read-reservation.js';
 
 // Per partition service: participantId -> session.
 const SESSIONS = new WeakMap();
@@ -163,6 +164,9 @@ function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
   let discarded = 0;
   for (const session of [...(sessions?.values() ?? [])]) {
     if (!session.inFlight && nowMs - session.startedAt >= holdTimeoutMs) {
+      if (hasLockingReadReservations(session.identity?.transactionId)) {
+        continue;
+      }
       sessions.delete(session.identity.participantId);
       discarded += 1;
       service.logger.info(LOG_MSG.SESSION_EXPIRED, {

@@ -97,10 +97,21 @@ function resolveDerivationConstraints(columnsOrAst, tableConstraints) {
 }
 
 function unpackSchemaDerivationArgs(columnsOrAst, tableConstraints, primaryKey) {
+  const constraints = resolveDerivationConstraints(
+    columnsOrAst,
+    Array.isArray(tableConstraints) ?
+      tableConstraints :
+      tableConstraints?.tableConstraints,
+  );
+  const pk = primaryKey ||
+    (Array.isArray(tableConstraints?.primaryKey) ? tableConstraints.primaryKey : null) ||
+    (typeof tableConstraints?.primaryKey === 'string' ? [tableConstraints.primaryKey] : null) ||
+    columnsOrAst?.primaryKey ||
+    null;
   return {
     columns: resolveDerivationColumns(columnsOrAst),
-    constraints: resolveDerivationConstraints(columnsOrAst, tableConstraints),
-    pk: primaryKey || columnsOrAst?.primaryKey || null,
+    constraints,
+    pk,
   };
 }
 

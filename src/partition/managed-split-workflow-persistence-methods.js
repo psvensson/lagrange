@@ -32,6 +32,7 @@ const LOCAL_STR_TABLE_ID = 'table_id';
 const LOCAL_STR_TABLE_NAME = 'table_name';
 const LOCAL_STR_PARTITION_KEY_START = 'partition_key_start';
 const LOCAL_STR_PARTITION_KEY_END = 'partition_key_end';
+const LOCAL_STR_PARTITION_KEY_TYPE = 'partition_key_type';
 const LOCAL_STR_PARTITION_VERSION = 'partition_version';
 const LOCAL_STR_EPOCH_EFFECT_DETAIL =
   ': expected exactly 1 tables row update for workflow ';
@@ -521,6 +522,11 @@ class ManagedSplitWorkflowPersistenceMethods {
       LOCAL_STR_PARTITION_KEY_END,
       expected.partition_key_end,
       existing.partition_key_end ?? existing.partitionKeyEnd ?? null,
+    );
+    compareField(
+      LOCAL_STR_PARTITION_KEY_TYPE,
+      expected.partition_key_type,
+      existing.partition_key_type ?? existing.partitionKeyType ?? null,
     );
     compareField(
       LOCAL_STR_PARTITION_VERSION,

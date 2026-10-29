@@ -129,6 +129,7 @@ function buildWriteConfirmationTarget(service, result, operation, entry) {
 
 function executeAdmittedReadQuery(service, admission, params, options) {
   const sqliteStartMs = service.timeSource.now();
+  admission.statement.safeIntegers(options?.safeIntegers === true);
   const visibleRows = collectBoundedSqliteRows(admission.statement, params, {
     cancellationToken: options.cancellationToken || null,
     deadlineMs: options.resultDeadlineMs,

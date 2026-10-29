@@ -11,19 +11,26 @@ const LIVE_QUERY_EVENT = Object.freeze({
   INSERT: 'insert',
   UPDATE: 'update',
   DELETE: 'delete',
+  ADDED: 'added',
+  MODIFIED: 'modified',
+  REMOVED: 'removed',
+  RESET: 'reset',
   SNAPSHOT: 'snapshot',
   ERROR: 'error',
 });
 
 const LIVE_QUERY_AST_TYPE = Object.freeze({
-  BINARY: 'binary',
-  UNARY: 'unary',
-  LITERAL: 'literal',
-  COLUMN_REF: 'column_ref',
-  IN: 'in',
+  AGGR_FUNC: 'aggr_func',
+  AGGREGATE: 'aggregate',
   BETWEEN: 'between',
+  BINARY: 'binary',
+  COLUMN_REF: 'column_ref',
+  FUNCTION: 'function',
+  IN: 'in',
   LIKE: 'like',
+  LITERAL: 'literal',
   STAR: 'star',
+  UNARY: 'unary',
 });
 
 const LIVE_QUERY_OPERATOR = Object.freeze({
@@ -42,11 +49,26 @@ const LIVE_QUERY_OPERATOR = Object.freeze({
 });
 
 const LIVE_QUERY_SQL = Object.freeze({
-  LIVE_PREFIX: 'LIVE ',
-  SELECT_PREFIX: 'SELECT',
-  SELECT: 'SELECT',
+  AS: 'AS',
+  DISTINCT: 'DISTINCT',
   FROM: 'FROM',
+  GROUP_BY: 'GROUP BY',
+  HAVING: 'HAVING',
+  LIMIT: 'LIMIT',
+  LIVE_PREFIX: 'LIVE ',
+  NULL: 'NULL',
+  OFFSET: 'OFFSET',
+  ORDER_BY: 'ORDER BY',
+  SELECT: 'SELECT',
+  SELECT_PREFIX: 'SELECT',
   STAR: '*',
+  WHERE: 'WHERE',
+});
+
+const LIVE_QUERY_GROUP_STATE = Object.freeze({
+  CLOSED: 'CLOSED',
+  INITIALIZING: 'INITIALIZING',
+  LIVE: 'LIVE',
 });
 
 const LIVE_QUERY_LOG_MSG = Object.freeze({
@@ -75,6 +97,8 @@ const LIVE_QUERY_LOG_MSG = Object.freeze({
   SUBSCRIPTIONS_PARTITION_CHANGE: 'Updating subscriptions for partition change',
   SUBSCRIPTION_EXPIRED: 'Live query subscription expired',
   MANAGER_SHUTDOWN: 'Live query manager shutdown',
+  REEXECUTION_FAILED: 'Query re-execution failed',
+  UNSUBSCRIBE_PARTITION_FAILED: 'Failed to unsubscribe from partition during cleanup',
 });
 
 const LIVE_QUERY_ERROR_MSG = Object.freeze({
@@ -88,7 +112,6 @@ const LIVE_QUERY_ERROR_MSG = Object.freeze({
 
 const LIVE_QUERY_DEFAULT_VALUE = Object.freeze({
   UNKNOWN: STRING.UNKNOWN,
-  PRIMARY_KEY_FALLBACK: 'id',
   EMPTY_WHERE: STRING.EMPTY,
 });
 
@@ -149,6 +172,7 @@ export {
   LIVE_QUERY_EMIT,
   LIVE_QUERY_ERROR_MSG,
   LIVE_QUERY_EVENT,
+  LIVE_QUERY_GROUP_STATE,
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATION,
   LIVE_QUERY_OPERATOR,

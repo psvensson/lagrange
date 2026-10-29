@@ -24,6 +24,7 @@ function createDefaultPartitionInfos() {
       table_name: FIXTURE_TABLE_NAME,
       partition_key_start: null,
       partition_key_end: FIXTURE_BOUNDARY_KEY,
+      partition_key_type: 'TEXT',
       partition_version: 1,
       replica_count: 2,
       leader_node_id: 'node-a',
@@ -36,6 +37,7 @@ function createDefaultPartitionInfos() {
       table_name: FIXTURE_TABLE_NAME,
       partition_key_start: FIXTURE_BOUNDARY_KEY,
       partition_key_end: null,
+      partition_key_type: 'TEXT',
       partition_version: 1,
       replica_count: 2,
       leader_node_id: 'node-a',
@@ -61,6 +63,7 @@ function createThreePartitionInfos() {
     table_name: FIXTURE_TABLE_NAME,
     partition_key_start: FIXTURE_SIBLING_BOUNDARY_KEY,
     partition_key_end: null,
+    partition_key_type: 'TEXT',
     partition_version: 1,
     replica_count: 2,
     leader_node_id: 'node-a',
@@ -173,7 +176,9 @@ function createDefaultDurableTableRow() {
   return {
     table_id: FIXTURE_TABLE_ID,
     table_name: FIXTURE_TABLE_NAME,
+    primary_key: 'id',
     partition_key: 'id',
+    partition_key_type: 'TEXT',
     active_partition_version: 1,
     partition_count: 2,
     partition_transition_state: null,
@@ -225,9 +230,20 @@ function buildMergeWorkflow(options = {}) {
   const startMergeCalls = opt('startMergeCalls', []);
   const replicaRemovalCalls = opt('replicaRemovalCalls', []);
   const partitionInfos = opt('partitionInfos', createDefaultPartitionInfos());
+  for (const info of Object.values(partitionInfos || {})) {
+    if (info && !info.partition_key_type && !info.partitionKeyType) {
+      info.partition_key_type = 'TEXT';
+    }
+  }
   const durableTableRow = opt(
     'durableTableRow', createDefaultDurableTableRow(),
   );
+  if (durableTableRow && !durableTableRow.partition_key_type && !durableTableRow.partitionKeyType) {
+    durableTableRow.partition_key_type = 'TEXT';
+  }
+  if (durableTableRow && !durableTableRow.primary_key && !durableTableRow.primaryKey) {
+    durableTableRow.primary_key = 'id';
+  }
   const serviceRowsByPartitionId = opt(
     'serviceRowsByPartitionId', createDefaultServiceRowsByPartitionId(),
   );

@@ -1253,6 +1253,11 @@ const PLACEMENT_SHELL_COMMAND = '-c';
 const PLACEMENT_GIT_HAS_COMMIT = Object.freeze(['cat-file', '-e']);
 const PLACEMENT_GIT_IS_ANCESTOR = Object.freeze(['merge-base', '--is-ancestor']);
 const PLACEMENT_GIT_HEAD = Object.freeze(['rev-parse', 'HEAD']);
+const PLACEMENT_COMMIT_ENV = 'LAGRANGE_PLACEMENT_COMMIT';
+const PLACEMENT_CANDIDATE_REF_PREFIX = 'refs/lagrange-placement/candidate-';
+const COMMIT_CANDIDATE_MESSAGE = 'lagrange-placement-candidate';
+const GIT_REF_HEAD = 'HEAD';
+const GIT_CMD_UPDATE_REF = 'update-ref';
 const PLACEMENT_CHILD_EVENT = Object.freeze({ERROR: 'error', EXIT: 'exit', CLOSE: 'close',
   DATA: 'data', END: 'end'});
 const PLACEMENT_STDIO_IGNORE = 'ignore';
@@ -1884,8 +1889,9 @@ const PLACEMENT_SCRIPT_HEAD = [
   'for stale in $(git for-each-ref --format="%(refname)" refs/lagrange-placement/); do',
   '  [ "$stale" = "$ref" ] || git update-ref -d "$stale" >/dev/null 2>&1',
   'done',
-  'if [ -n "$bundle" ]; then git fetch --quiet "$bundle" "HEAD:$ref" >/dev/null 2>&1 || ' +
-    `exit ${PLACEMENT_EXIT.SETUP}; fi`,
+  'if [ -n "$bundle" ]; then ' +
+    'bundle_ref=$(git bundle list-heads "$bundle" 2>/dev/null | awk \'NR==1 {print $2}\'); ' +
+    `[ -n "$bundle_ref" ] && git fetch --quiet "$bundle" "$bundle_ref:$ref" >/dev/null 2>&1 || exit ${PLACEMENT_EXIT.SETUP}; fi`,
   `git worktree add --detach --quiet "$wt" "$sha" >/dev/null 2>&1 || exit ${PLACEMENT_EXIT.SETUP}`,
   `[ "$(git -C "$wt" rev-parse HEAD)" = "$sha" ] || exit ${PLACEMENT_EXIT.SETUP}`,
   // What the worktree actually is, for the controller's log.
@@ -2042,13 +2048,19 @@ function bundleFor(machine, {root, sha, local}) {
     throw new Error(PLACEMENT_TEXT.NO_HISTORY);
   }
   if (gitSucceeds(root, [...PLACEMENT_GIT_IS_ANCESTOR, sha, machine.repoHead])) return null;
-  // A bundle names refs, not bare shas, so it carries HEAD - which must be
-  // the commit being placed.
-  if (gitAt(root, PLACEMENT_GIT_HEAD).stdout?.trim() !== sha) {
-    throw new Error(`HEAD is not ${sha}`);
+  const head = gitAt(root, PLACEMENT_GIT_HEAD);
+  const headSha = head.status === 0 ? head.stdout.trim() : null;
+  let refToBundle;
+  if (sha === headSha) {
+    refToBundle = GIT_REF_HEAD;
+  } else {
+    const candidateRef = `${PLACEMENT_CANDIDATE_REF_PREFIX}${sha.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}`;
+    const updated = gitAt(root, [GIT_CMD_UPDATE_REF, candidateRef, sha]);
+    if (updated.status !== 0) throw new Error(`git update-ref exited ${updated.status}`);
+    refToBundle = candidateRef;
   }
   const bundleFile = `${local}.bundle`;
-  const made = gitAt(root, ['bundle', 'create', bundleFile, 'HEAD', '--not', machine.repoHead]);
+  const made = gitAt(root, ['bundle', 'create', bundleFile, refToBundle, '--not', machine.repoHead]);
   if (made.status !== 0) throw new Error(`git bundle create exited ${made.status}`);
   return bundleFile;
 }
@@ -2333,13 +2345,49 @@ export function fleetRequirement(root, sha = null) {
   };
 }
 
+function isStagedIndexOnly(root) {
+  const unstaged = gitAt(root, ['diff', '--name-only']);
+  if (unstaged.status !== 0 || unstaged.stdout.trim().length > 0) return false;
+  const untracked = gitAt(root, ['ls-files', '--others', '--exclude-standard']);
+  if (untracked.status !== 0 || untracked.stdout.trim().length > 0) return false;
+  const staged = gitAt(root, ['diff', '--cached', '--name-only']);
+  return staged.status === 0 && staged.stdout.trim().length > 0;
+}
+
+function synthesizeStagedCandidate(root) {
+  const staged = gitAt(root, ['diff', '--cached', '--name-only']);
+  if (staged.status !== 0 || staged.stdout.trim().length === 0) return null;
+  const tree = gitAt(root, ['write-tree']);
+  if (tree.status !== 0 || !tree.stdout.trim()) return null;
+  const treeSha = tree.stdout.trim();
+  const head = gitAt(root, PLACEMENT_GIT_HEAD);
+  if (head.status !== 0 || !head.stdout.trim()) return null;
+  const headSha = head.stdout.trim();
+  const commit = gitAt(root, ['commit-tree', treeSha, '-p', headSha, '-m', COMMIT_CANDIDATE_MESSAGE]);
+  if (commit.status !== 0 || !commit.stdout.trim()) return null;
+  const candidateSha = commit.stdout.trim();
+  const candidateRef = `${PLACEMENT_CANDIDATE_REF_PREFIX}${process.pid}`;
+  gitAt(root, [GIT_CMD_UPDATE_REF, candidateRef, candidateSha]);
+  return candidateSha;
+}
+
 // The sha the tree at root exactly is - nothing modified, nothing untracked -
 // or null: a working tree is never sent anywhere.
-function commitAt(root) {
+// When changes are staged in the index during landing, a candidate commit parented
+// on HEAD is synthesized without moving HEAD so remote lab machines can prove it.
+function commitAt(root, env = process.env) {
   const status = gitAt(root, ['status', '--porcelain']);
-  if (status.status !== 0 || status.stdout.trim().length > 0) return null;
-  const head = gitAt(root, PLACEMENT_GIT_HEAD);
-  return head.status === 0 ? head.stdout.trim() : null;
+  if (status.status === 0 && status.stdout.trim().length === 0) {
+    const head = gitAt(root, PLACEMENT_GIT_HEAD);
+    return head.status === 0 ? head.stdout.trim() : null;
+  }
+  const isCandidateEligible = env?.LAGRANGE_SOLVER_LANDING === '1' ||
+    Boolean(env?.[PLACEMENT_COMMIT_ENV]) ||
+    isStagedIndexOnly(root);
+  if (isCandidateEligible) {
+    return synthesizeStagedCandidate(root);
+  }
+  return null;
 }
 
 // Discovery for a run that places `sha`: every machine is measured against
@@ -2429,7 +2477,7 @@ export function placementDeps({root, failFast = false, env = process.env,
   return {
     failFast, env, planCosts, runLocal, lastGreen,
     runLocalChild: (files) => runClassifiedChild(root, files, env),
-    commitAt: () => commitAt(root),
+    commitAt: () => commitAt(root, env),
     checkBase: () => resolvedCheckBaseCommit(null, env, root),
     discover: (sha) => discoverPlacement(root, env, sha),
     runRemote: (shard, options) => startRemoteShard(shard, {...options, root}),
@@ -2923,10 +2971,11 @@ export function labTestDeps({root, env = gitProcessEnvironment()}) {
     discover: (sha) => discoverPlacement(root, env, sha),
     runRemote: (shard, options) => startRemoteShard(shard, {...options, root, env}),
     runLocalChild: (files, options) => runClassifiedChild(root, files, env, options),
-    commitAt: () => commitAt(root),
+    commitAt: () => commitAt(root, env),
     controllerHeadroom: () => controllerHeadroom({env}),
   };
 }
 
-export {DISCOVERY_FAILURE, LAB_TEST_RESULTS_FILE, PLACEMENT_ENV,
-  PLACEMENT_EXIT, PLACEMENT_LOCAL, PLACEMENT_MIN_PLAN_MS};
+export {DISCOVERY_FAILURE, LAB_TEST_RESULTS_FILE, PLACEMENT_CANDIDATE_REF_PREFIX,
+  PLACEMENT_COMMIT_ENV, PLACEMENT_ENV, PLACEMENT_EXIT, PLACEMENT_LOCAL,
+  PLACEMENT_MIN_PLAN_MS, bundleFor, commitAt};

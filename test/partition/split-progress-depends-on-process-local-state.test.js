@@ -114,6 +114,7 @@ function buildRecoverableWorkflow(options = {}) {
       table_name: FIXTURE_TABLE_NAME,
       partition_key_start: null,
       partition_key_end: null,
+      partition_key_type: 'TEXT',
       replica_count: FIXTURE_REPLICA_COUNT,
       leader_node_id: FIXTURE_NODE_ID,
       size_bytes: FIXTURE_SIZE_BYTES,
@@ -121,7 +122,9 @@ function buildRecoverableWorkflow(options = {}) {
     getTableInfo: () => ({
       table_id: FIXTURE_TABLE_ID,
       table_name: FIXTURE_TABLE_NAME,
+      primary_key: FIXTURE_PRIMARY_KEY_COLUMN,
       partition_key: FIXTURE_PRIMARY_KEY_COLUMN,
+      partition_key_type: 'TEXT',
       active_partition_version: 1,
       partition_transition_state: null,
       partition_transition_metadata: null,

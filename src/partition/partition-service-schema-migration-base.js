@@ -131,6 +131,9 @@ class PartitionServiceSchemaMigrationBase extends PartitionServiceRaftInitBase {
     const hasPartitionVersion = columns.some(
       (col) => col.name === PARTITION_SERVICE_COLUMN.PARTITION_VERSION,
     );
+    const hasPartitionKeyType = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.PARTITION_KEY_TYPE,
+    );
     if (!hasTableName) {
       this.db.exec(
         `ALTER TABLE ${this.tableName} ` +
@@ -150,6 +153,49 @@ class PartitionServiceSchemaMigrationBase extends PartitionServiceRaftInitBase {
         tableName: this.tableName,
         partitionId: this.partitionId,
       });
+    }
+    if (!hasPartitionKeyType) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+          PARTITION_SERVICE_COLUMN_SQL.ADD_PARTITION_KEY_TYPE,
+      );
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_PARTITION_KEY_TYPE, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+  }
+  /**
+   * Ensure indices table includes global index lifecycle columns.
+   * @private
+   */
+  ensureIndicesTableColumns() {
+    if (this.tableName !== SYSTEM_TABLE_NAME.INDICES) {
+      return;
+    }
+    const columns = this.db
+      .prepare(`PRAGMA table_info(${this.tableName})`)
+      .all();
+    const present = new Set(columns.map((col) => col.name));
+    const addedColumns = [
+      ['table_name', 'ADD COLUMN table_name TEXT'],
+      ['is_global', 'ADD COLUMN is_global INTEGER NOT NULL DEFAULT 1'],
+      ['is_unique', 'ADD COLUMN is_unique INTEGER NOT NULL DEFAULT 0'],
+      ['state', 'ADD COLUMN state TEXT NOT NULL DEFAULT \'CREATING\''],
+      ['backfill_cursor_partition_id', 'ADD COLUMN backfill_cursor_partition_id TEXT'],
+      ['backfill_cursor_pk', 'ADD COLUMN backfill_cursor_pk TEXT'],
+      ['backfill_total_rows', 'ADD COLUMN backfill_total_rows INTEGER NOT NULL DEFAULT 0'],
+      ['error_message', 'ADD COLUMN error_message TEXT'],
+      ['updated_at', 'ADD COLUMN updated_at INTEGER'],
+    ];
+    for (const [column, addSql] of addedColumns) {
+      if (!present.has(column)) {
+        this.db.exec(`ALTER TABLE ${this.tableName} ${addSql}`);
+        this.logger.info(`Added ${column} column to indices table`, {
+          tableName: this.tableName,
+          partitionId: this.partitionId,
+        });
+      }
     }
   }
 }

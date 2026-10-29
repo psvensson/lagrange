@@ -135,7 +135,9 @@ function createFixtureRows() {
     tableRow: {
       table_id: TABLE_ID,
       table_name: TABLE_NAME,
+      primary_key: 'id',
       partition_key: 'id',
+      partition_key_type: 'INTEGER',
       active_partition_version: 1,
       partition_transition_state: null,
       partition_transition_metadata: null,
@@ -146,6 +148,7 @@ function createFixtureRows() {
       table_name: TABLE_NAME,
       partition_key_start: null,
       partition_key_end: null,
+      partition_key_type: 'INTEGER',
       partition_version: 1,
       replica_count: 3,
       leader_node_id: NODE_A,

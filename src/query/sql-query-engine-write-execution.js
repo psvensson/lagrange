@@ -14,6 +14,12 @@ import {
 } from '../constants/index.js';
 import {COMMIT_POINT_REACHED_FIELD} from
   './distributed/distributed-transaction-commit-point.js';
+import {
+  checkWriteStatementReservations,
+  stageWriteReservationsAfterExecution,
+} from './sql-locking-read-execution.js';
+import {releaseTransactionReservations} from
+  '../partition/partition-locking-read-reservation.js';
 
 
 const {
@@ -238,6 +244,9 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
   }
 
   async rollbackOwnedWriteTransaction(transaction) {
+    if (transaction?.transactionState?.transactionId) {
+      releaseTransactionReservations(transaction.transactionState.transactionId);
+    }
     if (
       transaction.ownership ===
         WRITE_TRANSACTION_OWNERSHIP.STATEMENT_AUTOCOMMIT &&
@@ -291,6 +300,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       tableInfo,
       dualWriteMigration,
       statementType: QUERY_AST_TYPE.INSERT,
+      ast,
       logRouting: () => this.logger.debug(QUERY_LOG_MSG.ROUTING_INSERT, {
         tableName,
         rowCount: ast.values.length,
@@ -396,6 +406,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       tableInfo,
       dualWriteMigration,
       statementType,
+      ast,
       logRouting: () => this.logger.debug(statement.routingLogMessage, {
         tableName,
         partitionCount: partitionIds.length,
@@ -551,6 +562,14 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       statementType,
       tableName: statement.tableName,
     };
+    const reservationConflict = await checkWriteStatementReservations({
+      engine: this,
+      statement,
+      writeTransaction,
+    });
+    if (reservationConflict) {
+      return {result: reservationConflict, executionDurationMs: 0};
+    }
     let result;
     const executionStartTimeMs = Date.now();
     try {
@@ -602,8 +621,15 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       throw error;
     }
     const executionDurationMs = Date.now() - executionStartTimeMs;
+    const finalResult = await this.finishWriteTransaction(writeTransaction, result);
+    stageWriteReservationsAfterExecution({
+      engine: this,
+      statement,
+      writeTransaction,
+      result: finalResult,
+    });
     return {
-      result: await this.finishWriteTransaction(writeTransaction, result),
+      result: finalResult,
       executionDurationMs,
     };
   }

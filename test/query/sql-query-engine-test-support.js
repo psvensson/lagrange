@@ -43,6 +43,10 @@ export function createMockMessageRouter() {
 
 // Mock system cache with services for routing
 export function createMockSystemCache(tables, partitions, services, nodes = []) {
+  const resolvedTables = (tables || []).map((t) => {
+    if (t.partition_key_type || t.partitionKeyType) return t;
+    return {...t, partition_key_type: 'TEXT'};
+  });
   const resolvedServices = services || partitions.map((p) => ({
     service_id: p.partition_id,
     service_type: 'partition',
@@ -53,31 +57,60 @@ export function createMockSystemCache(tables, partitions, services, nodes = []) 
     status: 'active',
   }));
   const resolvedPartitions = partitions.map((partition) => {
-    if (Object.prototype.hasOwnProperty.call(partition, 'leader_node_id') ||
-        Object.prototype.hasOwnProperty.call(partition, 'leaderNodeId')) {
-      return partition;
-    }
     const leaderService = resolvedServices.find((service) =>
       service.partition_id === partition.partition_id &&
       service.raft_role === 'leader',
     ) || resolvedServices.find((service) =>
       service.partition_id === partition.partition_id,
     );
+    const table = resolvedTables.find((t) =>
+      (t.table_name || t.tableName) === (partition.table_name || partition.tableName),
+    );
     return {
       ...partition,
-      leader_node_id: leaderService?.node_id || 'test-node',
+      partition_key_type: partition.partition_key_type ||
+        partition.partitionKeyType ||
+        table?.partition_key_type ||
+        'TEXT',
+      leader_node_id: partition.leader_node_id ||
+        partition.leaderNodeId ||
+        leaderService?.node_id ||
+        'test-node',
     };
   });
   return {
-    tables,
+    tables: resolvedTables,
     partitions: resolvedPartitions,
     services: resolvedServices,
     get: function(type, key) {
       if (type === 'tables') {
-        return this.tables.find((t) => t.table_name === key);
+        return this.tables.find((t) =>
+          t.table_name === key ||
+          t.table_id === key ||
+          t.tableName === key ||
+          t.tableId === key,
+        ) || null;
+      }
+      if (type === 'partitions') {
+        return this.partitions.find((p) =>
+          p.partition_id === key ||
+          p.partitionId === key,
+        ) || null;
       }
       if (type === 'nodes') {
         return nodes.find((node) => node[COLUMN.NODE_ID] === key) || null;
+      }
+      return null;
+    },
+    find: function(type, predicate) {
+      if (type === 'tables') {
+        return this.tables.find(predicate) || null;
+      }
+      if (type === 'partitions') {
+        return this.partitions.find(predicate) || null;
+      }
+      if (type === 'services') {
+        return this.services.find(predicate) || null;
       }
       return null;
     },

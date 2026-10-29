@@ -11,13 +11,13 @@ function createMockSystemCache(partitions = []) {
   return {
     get: (table, key) => {
       if (table === 'tables') {
-        return {table_name: key, primary_key: 'id'};
+        return {table_name: key, primary_key: 'id', partition_key_type: 'INTEGER'};
       }
       return null;
     },
     find: (table, _predicate) => {
       if (table === 'tables') {
-        return {table_name: 'orders', primary_key: 'customer_id'};
+        return {table_name: 'orders', primary_key: 'id', partition_key_type: 'INTEGER'};
       }
       return null;
     },
@@ -117,9 +117,9 @@ test('QueryGroup - detects expired subscriptions', async (t) => {
 
 test('QueryGroup - finds partitions for key value', async (t) => {
   const partitions = [
-    {partition_id: 'p1', table_name: 'orders', partition_key_start: null, partition_key_end: 100},
-    {partition_id: 'p2', table_name: 'orders', partition_key_start: 100, partition_key_end: 200},
-    {partition_id: 'p3', table_name: 'orders', partition_key_start: 200, partition_key_end: null},
+    {partition_id: 'p1', table_name: 'orders', partition_key_start: null, partition_key_end: 100, partition_key_type: 'INTEGER'},
+    {partition_id: 'p2', table_name: 'orders', partition_key_start: 100, partition_key_end: 200, partition_key_type: 'INTEGER'},
+    {partition_id: 'p3', table_name: 'orders', partition_key_start: 200, partition_key_end: null, partition_key_type: 'INTEGER'},
   ];
 
   const group = new QueryGroup({
@@ -645,8 +645,8 @@ test('LiveQueryManager - handles partition topology change', async (t) => {
 
   // Simulate partition split
   currentPartitions = [
-    {partition_id: 'p1a', table_name: 'orders', partition_key_start: null, partition_key_end: 100},
-    {partition_id: 'p1b', table_name: 'orders', partition_key_start: 100, partition_key_end: null},
+    {partition_id: 'p1a', table_name: 'orders', partition_key_start: null, partition_key_end: 100, partition_key_type: 'INTEGER'},
+    {partition_id: 'p1b', table_name: 'orders', partition_key_start: 100, partition_key_end: null, partition_key_type: 'INTEGER'},
   ];
 
   await manager.handlePartitionTopologyChange({

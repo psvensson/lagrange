@@ -47,6 +47,7 @@ function seedPartitionRow(schema, nodeId, now) {
     table_name: schema.tableName,
     partition_key_start: null,
     partition_key_end: null,
+    partition_key_type: schema.columns[0].type,
     partition_version: 1,
     replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
     size_bytes: 0,

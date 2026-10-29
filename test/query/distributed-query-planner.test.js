@@ -131,23 +131,26 @@ test('DistributedQueryPlanner - records predicate shapes per table', async (t) =
       table_name: 'users',
       partition_key_start: null,
       partition_key_end: 'm',
+      partition_key_type: 'TEXT',
     },
     {
       partition_id: 'users-p2',
       table_name: 'users',
       partition_key_start: 'm',
       partition_key_end: null,
+      partition_key_type: 'TEXT',
     },
     {
       partition_id: 'orders-p1',
       table_name: 'orders',
       partition_key_start: null,
       partition_key_end: null,
+      partition_key_type: 'TEXT',
     },
   ];
   const tables = [
-    {table_name: 'users', primaryKey: 'id'},
-    {table_name: 'orders', primaryKey: 'user_id'},
+    {table_name: 'users', primaryKey: 'id', partition_key_type: 'TEXT'},
+    {table_name: 'orders', primaryKey: 'user_id', partition_key_type: 'TEXT'},
   ];
   const resolver = new PartitionResolver({
     systemCache: createSystemCache(partitions, tables),
@@ -305,12 +308,14 @@ test('DistributedQueryPlanner - consumes updated partition map after split-style
         table_name: 'users',
         partition_key_start: null,
         partition_key_end: 'm',
+        partition_key_type: 'TEXT',
       },
       {
         partition_id: 'users-p1b',
         table_name: 'users',
         partition_key_start: 'm',
         partition_key_end: null,
+        partition_key_type: 'TEXT',
       },
     ]);
 

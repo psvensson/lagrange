@@ -21,32 +21,15 @@ import {
 } from './partition-constants.js';
 import {MERGE_ACK_STATUS, MERGE_PARTICIPANT_PREFIX} from
   './merge-ack-constants.js';
-import {
-  ManagedSplitWorkflowStateMethods,
-} from './managed-split-workflow-state-methods.js';
-import {
-  ManagedSplitWorkflowProvisioningMethods,
-} from './managed-split-workflow-provisioning-methods.js';
-import {
-  buildMergeWorkflowOwnerId,
-  ManagedMergeWorkflowStateMethods,
-} from './managed-merge-workflow-state-methods.js';
-import {
-  ManagedMergeWorkflowPersistenceMethods,
-} from './managed-merge-workflow-persistence-methods.js';
-import {
-  ManagedMergeWorkflowExecutionGateMethods,
-} from './managed-merge-workflow-execution-gate-methods.js';
-import {ManagedSourceReplicationStartConfirmationMethods} from
-  './managed-source-replication-start-confirmation-methods.js';
-import {startSourceReplicationWithConfirmation} from
-  './managed-source-replication-start-delivery.js';
-import {
-  ManagedMergeWorkflowDissolutionMethods,
-} from './managed-merge-workflow-dissolution-methods.js';
-import {
-  ManagedMergeWorkflowPlanMethods,
-} from './managed-merge-workflow-plan-methods.js';
+import {ManagedSplitWorkflowStateMethods} from './managed-split-workflow-state-methods.js';
+import {ManagedSplitWorkflowProvisioningMethods} from './managed-split-workflow-provisioning-methods.js';
+import {buildMergeWorkflowOwnerId, ManagedMergeWorkflowStateMethods} from './managed-merge-workflow-state-methods.js';
+import {ManagedMergeWorkflowPersistenceMethods} from './managed-merge-workflow-persistence-methods.js';
+import {ManagedMergeWorkflowExecutionGateMethods} from './managed-merge-workflow-execution-gate-methods.js';
+import {ManagedSourceReplicationStartConfirmationMethods} from './managed-source-replication-start-confirmation-methods.js';
+import {startSourceReplicationWithConfirmation} from './managed-source-replication-start-delivery.js';
+import {ManagedMergeWorkflowDissolutionMethods} from './managed-merge-workflow-dissolution-methods.js';
+import {ManagedMergeWorkflowPlanMethods} from './managed-merge-workflow-plan-methods.js';
 import {
   REPLICATION_TARGET_SOURCE,
   resolveDesiredReplicationFactor,
@@ -57,6 +40,7 @@ import {
 } from './managed-merge-workflow-topology-bindings.js';
 import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
 import {registerWorkflowWithClaim} from './managed-workflow-ownership-core.js';
+import {resolveDeclaredPartitionKeyType} from './partition-boundary-representation.js';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_MANAGED_MERGE = 'managed_merge';
@@ -64,6 +48,8 @@ const LOCAL_STR_MANAGED_MERGE_WORKFLOW = 'managed-merge-workflow';
 const LOCAL_STR_GETCDCINTEGRATIONSERVICE = 'getCDCIntegrationService';
 const ACTIVE_PARTITION_STATE = 'NORMAL';
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
+const LOCAL_STR_MERGE_KEY_TYPE_MISSING =
+  'Merge partition key type authority is missing for source partitions; merge cannot proceed';
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
 // Durable ownership lease for merge workflow claims (same rationale as
 // the split owner: covers an idle ack gap during backfill, stolen
@@ -475,6 +461,7 @@ class ManagedMergeWorkflow {
         tableInfo: input.tableInfo,
         primaryKeyColumn: input.primaryKeyColumn,
         leftInfo: input.leftInfo,
+        rightInfo: input.rightInfo,
         leftRange: input.leftRange,
         rightRange: input.rightRange,
         replicaCount: input.replicaCount,
@@ -648,12 +635,28 @@ class ManagedMergeWorkflow {
           [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]: compactAdmission}}));
 
     const now = this.now();
+    const leftKeyType = input.leftInfo?.partition_key_type ??
+      input.leftInfo?.partitionKeyType ?? null;
+    const rightKeyType = input.rightInfo?.partition_key_type ??
+      input.rightInfo?.partitionKeyType ?? null;
+    if (leftKeyType && rightKeyType && leftKeyType !== rightKeyType) {
+      throw new Error(
+        `Merge partition key type mismatch: left is ${leftKeyType}, right is ${rightKeyType}`,
+      );
+    }
+    const partitionKeyType = leftKeyType ??
+      rightKeyType ??
+      resolveDeclaredPartitionKeyType(input.tableInfo);
+    if (!partitionKeyType) {
+      throw new Error(LOCAL_STR_MERGE_KEY_TYPE_MISSING);
+    }
     const mergedPartitionMetadata = {
       partition_id: input.mergedPartitionId,
       table_id: input.tableId,
       table_name: input.tableName,
       partition_key_start: input.leftRange.start,
       partition_key_end: input.rightRange.end,
+      partition_key_type: partitionKeyType,
       partition_version: input.targetVersion,
       replica_count: input.replicaCount,
       size_bytes: 0,

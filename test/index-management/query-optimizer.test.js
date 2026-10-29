@@ -6,6 +6,7 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {QueryOptimizer} from '../../src/index-management/query-optimizer.js';
+import {DistributedQueryPlanner} from '../../src/query/distributed/distributed-query-planner.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -280,4 +281,185 @@ test('QueryOptimizer - analyzes JOIN conditions', async (t) => {
 
   const joinIndex = result.usableIndices.find((i) => i.usage === 'join');
   t.ok(joinIndex, 'Should find index for JOIN');
+});
+
+test('QueryOptimizer - compound index matching follows strict left-prefix rules', async (t) => {
+  const indexService = createMockIndexService([
+    {
+      indexId: 'idx-compound',
+      tableId: 'metrics',
+      indexName: 'idx_metrics_a_b_c',
+      columnNames: ['a', 'b', 'c'],
+      indexType: 'btree',
+      state: 'READABLE',
+    },
+  ]);
+  const optimizer = new QueryOptimizer({indexService});
+
+  // 1. leading column equality
+  const q1 = optimizer.analyzeQuery(parseSQL('SELECT * FROM metrics WHERE a = 1'), 'metrics');
+  t.ok(q1.selectedIndex, 'Should match leading column a');
+  t.equal(q1.selectedIndex.indexName, 'idx_metrics_a_b_c');
+  t.same(q1.selectedIndex.matchedColumns, ['a']);
+  t.same(q1.selectedIndex.equalityPrefixColumns, ['a']);
+  t.equal(q1.selectedIndex.rangeColumn, null);
+
+  // 2. equality on a and b
+  const q2 = optimizer.analyzeQuery(parseSQL('SELECT * FROM metrics WHERE a = 1 AND b = 2'), 'metrics');
+  t.same(q2.selectedIndex.matchedColumns, ['a', 'b']);
+  t.same(q2.selectedIndex.equalityPrefixColumns, ['a', 'b']);
+  t.equal(q2.selectedIndex.rangeColumn, null);
+
+  // 3. equality on a and range on b
+  const q3 = optimizer.analyzeQuery(parseSQL('SELECT * FROM metrics WHERE a = 1 AND b > 5'), 'metrics');
+  t.same(q3.selectedIndex.matchedColumns, ['a', 'b']);
+  t.same(q3.selectedIndex.equalityPrefixColumns, ['a']);
+  t.equal(q3.selectedIndex.rangeColumn, 'b');
+
+  // 4. equality on a, range on b, condition on c (c cannot narrow index scan)
+  const q4 = optimizer.analyzeQuery(
+    parseSQL('SELECT * FROM metrics WHERE a = 1 AND b > 5 AND c = 3'),
+    'metrics',
+  );
+  t.same(q4.selectedIndex.matchedColumns, ['a', 'b']);
+  t.same(q4.selectedIndex.equalityPrefixColumns, ['a']);
+  t.equal(q4.selectedIndex.rangeColumn, 'b');
+
+  // 5. single-value IN treated as equality prefix
+  const q5 = optimizer.analyzeQuery(
+    parseSQL('SELECT * FROM metrics WHERE a IN (1) AND b = 2'),
+    'metrics',
+  );
+  t.same(q5.selectedIndex.matchedColumns, ['a', 'b']);
+  t.same(q5.selectedIndex.equalityPrefixColumns, ['a', 'b']);
+
+  // 6. missing leading column: WHERE b = 2
+  const q6 = optimizer.analyzeQuery(parseSQL('SELECT * FROM metrics WHERE b = 2'), 'metrics');
+  t.equal(q6.selectedIndex, null);
+  t.ok(q6.rejectedIndexes.some(
+    (r) => r.indexName === 'idx_metrics_a_b_c' && r.reason === 'MISSING_LEADING_COLUMN',
+  ));
+
+  // 7. missing leading column: WHERE c = 3
+  const q7 = optimizer.analyzeQuery(parseSQL('SELECT * FROM metrics WHERE c = 3'), 'metrics');
+  t.equal(q7.selectedIndex, null);
+  t.ok(q7.rejectedIndexes.some(
+    (r) => r.indexName === 'idx_metrics_a_b_c' && r.reason === 'MISSING_LEADING_COLUMN',
+  ));
+
+  // 8. missing leading column: WHERE b = 2 AND c = 3
+  const q8 = optimizer.analyzeQuery(
+    parseSQL('SELECT * FROM metrics WHERE b = 2 AND c = 3'),
+    'metrics',
+  );
+  t.equal(q8.selectedIndex, null);
+  t.ok(q8.rejectedIndexes.some(
+    (r) => r.indexName === 'idx_metrics_a_b_c' && r.reason === 'MISSING_LEADING_COLUMN',
+  ));
+
+  // 9. top-level OR disjunction: WHERE a = 1 OR b = 2
+  const q9 = optimizer.analyzeQuery(
+    parseSQL('SELECT * FROM metrics WHERE a = 1 OR b = 2'),
+    'metrics',
+  );
+  t.equal(q9.selectedIndex, null);
+  t.ok(q9.rejectedIndexes.some(
+    (r) => r.indexName === 'idx_metrics_a_b_c' && r.reason === 'MISSING_LEADING_COLUMN',
+  ));
+});
+
+test('QueryOptimizer - compound index ORDER BY ordering checks remaining columns', async (t) => {
+  const indexService = createMockIndexService([
+    {
+      indexId: 'idx-compound',
+      tableId: 'items',
+      indexName: 'idx_items_a_b_c',
+      columnNames: ['a', 'b', 'c'],
+      indexType: 'btree',
+      state: 'READABLE',
+    },
+  ]);
+  const optimizer = new QueryOptimizer({indexService});
+
+  // a = 1 ORDER BY b -> b matches next column
+  const q1 = optimizer.analyzeQuery(
+    parseSQL('SELECT * FROM items WHERE a = 1 ORDER BY b'),
+    'items',
+  );
+  t.equal(q1.selectedIndex?.orderBySatisfied, true, 'ORDER BY b should be satisfied');
+
+  // a = 1 AND b = 2 ORDER BY c -> c matches next column
+  const q2 = optimizer.analyzeQuery(
+    parseSQL('SELECT * FROM items WHERE a = 1 AND b = 2 ORDER BY c'),
+    'items',
+  );
+  t.equal(q2.selectedIndex?.orderBySatisfied, true, 'ORDER BY c should be satisfied');
+
+  // a = 1 ORDER BY c -> c does not match next column (b skipped)
+  const q3 = optimizer.analyzeQuery(
+    parseSQL('SELECT * FROM items WHERE a = 1 ORDER BY c'),
+    'items',
+  );
+  t.equal(
+    q3.selectedIndex?.orderBySatisfied,
+    false,
+    'ORDER BY c should NOT be satisfied when b skipped',
+  );
+});
+
+test('DistributedQueryPlanner - surfaces indexAccess, selectedIndex, and rejectedIndexes in plans and EXPLAIN', async (t) => {
+  const indexService = createMockIndexService([
+    {
+      indexId: 'idx-1',
+      tableId: 'users',
+      indexName: 'idx_users_tenant_created',
+      columnNames: ['tenant_id', 'created_at'],
+      indexType: 'btree',
+      state: 'READABLE',
+    },
+    {
+      indexId: 'idx-2',
+      tableId: 'users',
+      indexName: 'idx_users_email',
+      columnNames: ['email'],
+      indexType: 'btree',
+      state: 'BUILDING',
+    },
+  ]);
+  const optimizer = new QueryOptimizer({indexService});
+  const planner = new DistributedQueryPlanner({
+    queryOptimizer: optimizer,
+    getTablePartitions: () => [{partition_id: 'p1'}],
+  });
+
+  const ast1 = parseSQL(
+    'SELECT * FROM users WHERE tenant_id = \'org-1\' ORDER BY created_at',
+  );
+  const plan1 = planner.planSelect(ast1);
+
+  t.equal(plan1.selectedIndex?.name, 'idx_users_tenant_created');
+  t.equal(plan1.selectedIndex?.scanType, 'INDEX_SCAN');
+  t.same(plan1.selectedIndex?.matchedColumns, ['tenant_id']);
+  t.equal(plan1.indexAccess?.scanType, 'INDEX_SCAN');
+  t.ok(plan1.rejectedIndexes.some(
+    (r) => r.name === 'idx_users_email' && r.reason === 'NON_READABLE_INDEX_STATE',
+  ));
+
+  // Test deterministic methods
+  const readPlan = planner.createReadExecutionPlan(ast1);
+  t.equal(readPlan.selectedIndex?.name, 'idx_users_tenant_created');
+
+  const explainPlan = planner.buildExplainPlan(ast1);
+  t.equal(explainPlan.diagnostics.explain, true);
+  t.equal(explainPlan.diagnostics.selectedIndex?.name, 'idx_users_tenant_created');
+  t.equal(explainPlan.diagnostics.indexAccess?.scanType, 'INDEX_SCAN');
+
+  // Unindexed query falls back to FULL_SCAN
+  const ast2 = parseSQL('SELECT * FROM users WHERE status = \'active\'');
+  const plan2 = planner.planSelect(ast2);
+  t.equal(plan2.selectedIndex, null);
+  t.equal(plan2.indexAccess?.scanType, 'FULL_SCAN');
+  t.ok(plan2.rejectedIndexes.some(
+    (r) => r.name === 'idx_users_tenant_created' && r.reason === 'MISSING_LEADING_COLUMN',
+  ));
 });

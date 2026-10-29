@@ -14,9 +14,16 @@ import {
 } from '../../scripts/solve/schema.js';
 import {readLog, readQuest} from '../../scripts/solve/store.js';
 import {
-  ALTITUDE_BUDGET, SolveError, board, land, landChangeProofEnvironment, note,
-  probe, runChangeProof, start,
+  ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_TIMEOUT_REFUSAL,
+  LANDING_MARKER_ENV, LANDING_MARKER_VALUE,
+  SolveError, acquireLandingLock, board, isLockStale, isPidAlive, land,
+  landChangeProofEnvironment, note, probe, requiresInventoryRefresh,
+  runChangeProof, start,
 } from '../../scripts/solve/commands.js';
+import {gitCommonDir} from '../../scripts/solve/guards.js';
+import {
+  PLACEMENT_CANDIDATE_REF_PREFIX, PLACEMENT_COMMIT_ENV, bundleFor, commitAt,
+} from '../../scripts/lab/probe.js';
 import {
   CHECK_BASE_ENV, RANGE_SOURCE,
 } from '../../scripts/checks/change-selection-constants.js';
@@ -353,6 +360,7 @@ test('the change proof runs under the recorded retry policy, as CI does', () => 
   const caller = {};
   const landing = landChangeProofEnvironment(caller);
   assert.equal(landing[RETRY_FAILED_ONCE_ENV], RETRY_FAILED_ONCE_ENABLED);
+  assert.equal(landing[LANDING_MARKER_ENV], LANDING_MARKER_VALUE);
   assert.equal(caller[RETRY_FAILED_ONCE_ENV], undefined, 'the caller environment is not mutated');
 });
 
@@ -373,4 +381,100 @@ test('the change proof escalates to test:safety-pregate when modular proof requi
   assert.equal(spawned.length, 2);
   assert.deepEqual(spawned[0], {command: 'npm', args: ['test']});
   assert.deepEqual(spawned[1], {command: 'npm', args: ['run', 'test:safety-pregate']});
+});
+
+test('requiresInventoryRefresh skips docs and architecture while including code', () => {
+  assert.equal(requiresInventoryRefresh([]), true);
+  assert.equal(requiresInventoryRefresh(null), true);
+  assert.equal(requiresInventoryRefresh(['docs/plan.md']), false);
+  assert.equal(requiresInventoryRefresh(['architecture/postgres-locking-reads.md']), false);
+  assert.equal(requiresInventoryRefresh(['src/index.js']), true);
+  assert.equal(requiresInventoryRefresh(['test/unit.test.js']), true);
+  assert.equal(requiresInventoryRefresh(['scripts/solve.js']), true);
+  assert.equal(requiresInventoryRefresh(['package.json']), true);
+  assert.equal(requiresInventoryRefresh(['package-lock.json']), true);
+  assert.equal(requiresInventoryRefresh(['docs/readme.md', 'src/app.js']), true);
+});
+
+test('cross-worktree landing lock is acquired and released on success', (t) => {
+  const root = repo(t, {legacy: true});
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, DOC_FILE, TEXT);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  let lockObserved = false;
+  const landed = land(root, {id: QUEST_ID, runProof: () => {
+    const lockPath = path.join(gitCommonDir(root), LAND_LOCK_FILENAME);
+    lockObserved = fs.existsSync(lockPath);
+  }});
+  assert.equal(lockObserved, true, 'lock held during proof');
+  assert.match(landed.commit, /^[0-9a-f]{40}$/u);
+  const lockPath = path.join(gitCommonDir(root), LAND_LOCK_FILENAME);
+  assert.equal(fs.existsSync(lockPath), false, 'lock released after successful landing');
+});
+
+test('cross-worktree landing lock is released on refusal', (t) => {
+  const root = repo(t, {legacy: true});
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, DOC_FILE, TEXT);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  let lockObserved = false;
+  refuses(() => land(root, {id: QUEST_ID, runProof: () => {
+    const lockPath = path.join(gitCommonDir(root), LAND_LOCK_FILENAME);
+    lockObserved = fs.existsSync(lockPath);
+    throw new SolveError('proof failure');
+  }}), /proof failure/u);
+  assert.equal(lockObserved, true, 'lock was held before refusal');
+  const lockPath = path.join(gitCommonDir(root), LAND_LOCK_FILENAME);
+  assert.equal(fs.existsSync(lockPath), false, 'lock released after refusal');
+});
+
+test('acquireLandingLock detects held locks and clears stale locks', (t) => {
+  assert.equal(isPidAlive(process.pid), true);
+  assert.equal(isPidAlive(9999999), false);
+  assert.equal(isLockStale({pid: 9999999, createdAt: Date.now()}), true);
+  assert.equal(isLockStale({pid: process.pid, createdAt: Date.now()}), false);
+  const root = repo(t, {legacy: true});
+  const lock = acquireLandingLock(root, {id: 'q1'});
+  const common = gitCommonDir(root);
+  const lockPath = path.join(common, LAND_LOCK_FILENAME);
+  assert.equal(fs.existsSync(lockPath), true);
+
+  refuses(() => acquireLandingLock(root, {id: 'q2', lockTimeoutMs: 10, lockPollMs: 5}),
+    new RegExp(LAND_LOCK_TIMEOUT_REFUSAL, 'u'));
+
+  lock.release();
+  assert.equal(fs.existsSync(lockPath), false);
+
+  fs.writeFileSync(lockPath, JSON.stringify({pid: 9999999, createdAt: Date.now() - 1000}));
+  assert.equal(fs.existsSync(lockPath), true);
+  const reacquired = acquireLandingLock(root, {id: 'q3'});
+  assert.equal(fs.existsSync(lockPath), true);
+  reacquired.release();
+  assert.equal(fs.existsSync(lockPath), false);
+});
+
+test('staged landing index synthesizes a candidate commit for lab placement without moving HEAD', (t) => {
+  const root = repo(t, {legacy: true});
+  const head = git(root, ['rev-parse', 'HEAD']).trim();
+  write(root, DOC_FILE, TEXT);
+  assert.equal(commitAt(root, {}), null, 'untracked change returns null');
+  git(root, ['add', DOC_FILE]);
+  const candidateSha = commitAt(root, landChangeProofEnvironment({}));
+  assert.match(candidateSha, /^[0-9a-f]{40}$/u);
+  assert.notEqual(candidateSha, head);
+  assert.equal(git(root, ['rev-parse', 'HEAD']).trim(), head, 'HEAD does not move');
+  assert.equal(git(root, ['rev-parse', `${candidateSha}^`]).trim(), head);
+  assert.equal(git(root, ['rev-parse', `${candidateSha}^{tree}`]).trim(),
+    git(root, ['write-tree']).trim());
+  const bundleLocal = path.join(os.tmpdir(), `cand-bundle-${process.pid}`);
+  const bundleFile = bundleFor({repoHead: head, name: 'lab-test'},
+    {root, sha: candidateSha, local: bundleLocal});
+  assert.equal(fs.existsSync(bundleFile), true);
+  const listHeads = git(root, ['bundle', 'list-heads', bundleFile]).trim();
+  assert.ok(listHeads.includes(candidateSha));
+  assert.ok(listHeads.includes(`${PLACEMENT_CANDIDATE_REF_PREFIX}${candidateSha.slice(0, 12)}`));
+  fs.rmSync(bundleFile, {force: true});
+  assert.match(commitAt(root, {[PLACEMENT_COMMIT_ENV]: '1'}), /^[0-9a-f]{40}$/u);
 });

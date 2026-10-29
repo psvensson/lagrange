@@ -9,7 +9,6 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
-  LIVE_QUERY_AST_TYPE,
   LIVE_QUERY_CONFIG_KEY,
   LIVE_QUERY_CURSOR,
   LIVE_QUERY_DEFAULTS,
@@ -18,15 +17,16 @@ import {
   LIVE_QUERY_ERROR_MSG,
   LIVE_QUERY_EVENT,
   LIVE_QUERY_LOG_MSG,
-  LIVE_QUERY_SQL,
   LIVE_QUERY_SUBSYSTEM,
 } from './live-query-constants.js';
 import {QueryGroup} from './live-query-group.js';
 import {canonicalizePredicate} from './live-query-service.js';
+import {
+  buildSelectSQL as renderSelectSQL,
+  extractReferencedTables,
+} from './live-query-sql-renderer.js';
 
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
-const LOCAL_STR_COMMA_SPACE = ', ';
-const LOCAL_STR_SPACE = ' ';
 
 /**
  * LiveQueryManager manages all live query subscriptions.
@@ -133,7 +133,7 @@ class LiveQueryManager extends EventEmitter {
    * @param {Object} client - Client connection.
    * @return {Promise<Object>} Registration result.
    */
-  async registerLiveQuery(parsedQuery, client) {
+  async registerLiveQuery(parsedQuery, client, options = {}) {
     const clientId = client.id || client.clientId;
 
     // Check client query limit
@@ -146,9 +146,10 @@ class LiveQueryManager extends EventEmitter {
       );
     }
 
-    // Compute group key
-    const table = parsedQuery?.from?.name;
-    const groupKey = `${table}${LIVE_QUERY_CURSOR.SEPARATOR}` +
+    // Compute group key across all referenced tables
+    const tables = extractReferencedTables(parsedQuery);
+    const tablePrefix = tables.length > 0 ? tables.join(',') : (parsedQuery?.from?.name || '');
+    const groupKey = `${tablePrefix}${LIVE_QUERY_CURSOR.SEPARATOR}` +
       `${canonicalizePredicate(parsedQuery?.where)}`;
 
     let group = this.queryGroups.get(groupKey);
@@ -164,22 +165,38 @@ class LiveQueryManager extends EventEmitter {
         clientId,
         clientCount: group.clients.size,
       });
+
+      // Send initial snapshot to joining client
+      await this.sendSnapshotToClient(group, client, options);
     } else {
       // Create new group
       group = new QueryGroup({
         parsedQuery,
+        rawSql: typeof parsedQuery === 'string' ? parsedQuery : (parsedQuery?.sql || options.sql),
         systemCache: this.systemCache,
+        sqlQueryEngine: this.sqlQueryEngine,
+        partitionResolver: options.partitionResolver,
         nodeId: this.nodeId,
+        deltaFormat: options.deltaFormat ?? false,
       });
       group.addClient(client);
       this.queryGroups.set(groupKey, group);
       isNewGroup = true;
 
-      // Start CDC subscriptions
+      // Arm subscriptions in buffering mode before snapshot hydration
+      group.startHydration();
+
       await group.updatePartitionSubscriptions(
         this.subscribeToPartition,
         this.unsubscribeFromPartition,
+        options,
       );
+
+      // Execute snapshot and record frontiers
+      await this.sendSnapshotToClient(group, client, options);
+
+      // Drain buffered CDC events deduplicating version <= attachAfterVersion
+      group.drainBufferedEvents();
       group.active = true;
 
       this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_CREATED, {
@@ -202,14 +219,14 @@ class LiveQueryManager extends EventEmitter {
     this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTION_CREATED, {
       queryId: group.queryId,
       clientId,
-      table,
+      table: group.table,
       isNewGroup,
     });
 
     this.emit(LIVE_QUERY_EMIT.SUBSCRIPTION_CREATED, {
       queryId: group.queryId,
       clientId,
-      table,
+      table: group.table,
       groupKey,
     });
 
@@ -226,9 +243,10 @@ class LiveQueryManager extends EventEmitter {
    * Send initial snapshot to a client.
    * @param {Object} group - Query group.
    * @param {Object} client - Client connection.
+   * @param {Object} [options] - Snapshot options.
    * @return {Promise<void>}
    */
-  async sendSnapshotToClient(group, client) {
+  async sendSnapshotToClient(group, client, options = {}) {
     if (!this.sqlQueryEngine) {
       this.logger.warn(LIVE_QUERY_LOG_MSG.SNAPSHOT_ENGINE_UNAVAILABLE, {
         queryId: group.queryId,
@@ -237,15 +255,34 @@ class LiveQueryManager extends EventEmitter {
     }
 
     try {
-      // Build SELECT query from parsed query
-      const sql = this.buildSelectSQL(group.parsedQuery);
+      // Execute the full original query (including WHERE, ORDER BY, LIMIT, JOIN)
+      const sql = group.sql ||
+        (this.sqlQueryEngine.executor?.buildSelectSQL ?
+          this.sqlQueryEngine.executor.buildSelectSQL(group.parsedQuery) :
+          this.buildSelectSQL(group.parsedQuery));
       const result = await this.sqlQueryEngine.executeQuery(sql);
+
+      const rows = result.rows ?? result.results ?? [];
+      group.lastResultSet = rows;
+
+      // Record frontiers if provided
+      if (options.attachAfterVersion !== undefined && options.partitionId) {
+        group.partitionFrontiers.set(options.partitionId, options.attachAfterVersion);
+      }
+      if (options.partitionFrontiers) {
+        for (const [pid, ver] of options.partitionFrontiers) {
+          group.partitionFrontiers.set(pid, ver);
+        }
+      }
+      if (result.appliedIndex !== undefined && options.partitionId) {
+        group.partitionFrontiers.set(options.partitionId, result.appliedIndex);
+      }
 
       const snapshot = {
         type: LIVE_QUERY_EVENT.SNAPSHOT,
         queryId: group.queryId,
-        rows: result.results || [],
-        count: result.count || 0,
+        rows,
+        count: result.count ?? rows.length,
       };
 
       if (client && typeof client.send === 'function') {
@@ -282,31 +319,7 @@ class LiveQueryManager extends EventEmitter {
    * @private
    */
   buildSelectSQL(parsedQuery) {
-    // Simple reconstruction - in production would use proper SQL builder
-    const parts = [LIVE_QUERY_SQL.SELECT];
-
-    // Columns
-    if (parsedQuery.columns) {
-      const cols = parsedQuery.columns.map((c) => {
-        if (c.type === LIVE_QUERY_AST_TYPE.STAR) return LIVE_QUERY_SQL.STAR;
-        if (c.expression?.type === LIVE_QUERY_AST_TYPE.COLUMN_REF) {
-          const col = c.expression.column || c.expression.name;
-          return c.alias ? `${col} AS ${c.alias}` : col;
-        }
-        return LIVE_QUERY_SQL.STAR;
-      });
-      parts.push(cols.join(LOCAL_STR_COMMA_SPACE));
-    } else {
-      parts.push(LIVE_QUERY_SQL.STAR);
-    }
-
-    // FROM
-    parts.push(LIVE_QUERY_SQL.FROM, parsedQuery.from?.name || LIVE_QUERY_DEFAULT_VALUE.UNKNOWN);
-
-    // WHERE (simplified - would need full AST to SQL conversion)
-    // For now, we rely on the original SQL being available
-
-    return parts.join(LOCAL_STR_SPACE);
+    return renderSelectSQL(parsedQuery);
   }
 
   /**
@@ -469,6 +482,22 @@ class LiveQueryManager extends EventEmitter {
    */
   removeGroup(group) {
     const groupKey = group.getQuerySignature();
+    if (this.unsubscribeFromPartition) {
+      for (const partitionId of Array.from(group.subscribedPartitions)) {
+        try {
+          const res = this.unsubscribeFromPartition(partitionId, group.queryId);
+          if (res && typeof res.catch === 'function') {
+            res.catch(() => undefined);
+          }
+        } catch (error) {
+          this.logger.debug(LIVE_QUERY_LOG_MSG.UNSUBSCRIBE_PARTITION_FAILED, {
+            partitionId,
+            queryId: group.queryId,
+            error: error?.message,
+          });
+        }
+      }
+    }
     group.cleanup();
     this.queryGroups.delete(groupKey);
 
@@ -520,11 +549,15 @@ class LiveQueryManager extends EventEmitter {
    * @param {Object} change - Partition CDC change event.
    */
   async handlePartitionTopologyChange(change) {
-    const tableName = change.new?.table_name || change.old?.table_name;
+    const tableName = change.new?.table_name || change.old?.table_name ||
+      change.new?.tableName || change.old?.tableName;
 
-    // Find all groups for this table
+    // Find all groups that reference this table
     for (const group of this.queryGroups.values()) {
-      if (group.table === tableName) {
+      const referencesTable = (group.tables && group.tables.includes(tableName)) ||
+        group.table === tableName;
+
+      if (referencesTable) {
         this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTIONS_PARTITION_CHANGE, {
           queryId: group.queryId,
           table: tableName,

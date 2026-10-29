@@ -128,6 +128,10 @@ const SQLSTATE_BY_ENGINE_ERROR_CODE = new Map([
     PG_ERROR_CODE.INSUFFICIENT_PRIVILEGE],
   [QUERY_ERROR_CODE.SYSTEM_TABLE_NAME_RESERVED,
     PG_ERROR_CODE.INSUFFICIENT_PRIVILEGE],
+  [QUERY_ERROR_CODE.NO_TRANSACTION,
+    PG_ERROR_CODE.NO_ACTIVE_SQL_TRANSACTION],
+  [QUERY_ERROR_CODE.LOCK_NOT_AVAILABLE,
+    PG_ERROR_CODE.LOCK_NOT_AVAILABLE],
 ]);
 
 /**
@@ -140,7 +144,8 @@ const SQLSTATE_BY_ENGINE_ERROR_CODE = new Map([
  */
 function resolveFailureSqlState(failure) {
   if (typeof failure?.sqlState === LOCAL_STR_STRING) return failure.sqlState;
-  return SQLSTATE_BY_ENGINE_ERROR_CODE.get(failure?.errorCode) ??
+  const lookupKey = failure?.errorCode || failure?.code;
+  return SQLSTATE_BY_ENGINE_ERROR_CODE.get(lookupKey) ??
     PG_ERROR_CODE.INTERNAL_ERROR;
 }
 

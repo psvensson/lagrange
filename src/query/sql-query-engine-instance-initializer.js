@@ -16,6 +16,8 @@ import {
   rolledBackAnswerOf,
   transactionOutcomeAnswerOf,
 } from './sql-query-engine-participant-wire.js';
+import {IndexService} from '../index-management/index-service.js';
+import {QueryOptimizer} from '../index-management/query-optimizer.js';
 
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
 const LOCAL_STR_FUNCTION = 'function';
@@ -149,6 +151,20 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     now: engine.nowFn,
   });
 
+  engine.indexService = options.indexService ||
+    new IndexService({
+      systemTableCache: engine.systemCache,
+      cdcIntegrationService: engine.cdcIntegrationService,
+      sqlQueryEngine: engine,
+      controlPlaneSystemTableGateway: engine.controlPlaneSystemTableGateway,
+      partitionService: options.partitionService || null,
+    });
+  engine.queryOptimizer = options.queryOptimizer ||
+    new QueryOptimizer({
+      indexService: engine.indexService,
+      systemTableCache: engine.systemCache,
+    });
+
   engine.partitionResolver = new PartitionResolver({
     systemCache: engine.systemCache,
   });
@@ -158,6 +174,8 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
       partitionResolver: engine.partitionResolver,
       getTablePartitions: (tableName) => engine.getTablePartitions(tableName),
       getTableInfo: (tableName) => engine.getTableInfo(tableName),
+      indexService: engine.indexService,
+      queryOptimizer: engine.queryOptimizer,
     });
 
   engine.queryExecutor = new QueryExecutor({

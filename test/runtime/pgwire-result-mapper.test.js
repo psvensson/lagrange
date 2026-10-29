@@ -397,9 +397,9 @@ describe('every engine DML producer yields a countable result', () => {
     },
     partitions: [
       {partition_id: 'count-p1', partition_key_start: null,
-        partition_key_end: SPLIT_KEY},
+        partition_key_end: SPLIT_KEY, partition_key_type: 'INTEGER'},
       {partition_id: 'count-p2', partition_key_start: SPLIT_KEY,
-        partition_key_end: null},
+        partition_key_end: null, partition_key_type: 'INTEGER'},
     ],
   });
   const adapter = createTestPostgresWireAdapter({sqlCore: engine});
@@ -495,9 +495,9 @@ describe('a partition answer without a count leaves the count absent', () => {
     },
     partitions: [
       {partition_id: 'counted-p1', partition_key_start: null,
-        partition_key_end: SPLIT_KEY},
+        partition_key_end: SPLIT_KEY, partition_key_type: 'INTEGER'},
       {partition_id: 'uncounted-p2', partition_key_start: SPLIT_KEY,
-        partition_key_end: null},
+        partition_key_end: null, partition_key_type: 'INTEGER'},
     ],
     uncountedPartitions: ['uncounted-p2'],
   });
