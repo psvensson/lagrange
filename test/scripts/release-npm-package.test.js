@@ -195,7 +195,7 @@ describe('workspace manifest and Dockerfile hardening (Q06/Q07/Q15)', () => {
       'utf8',
     );
     assert.match(dockerfile, /^USER 10001:10001$/mu);
-    assert.match(dockerfile, /COPY --chown=10001:10001 wit\/ \.\/wit\//u);
+    assert.match(dockerfile, /^COPY wit\/ \.\/wit\/$/mu);
     assert.match(dockerfile, /COPY --from=builder --chown=10001:10001 \/data \/data/u);
   });
 });

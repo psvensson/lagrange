@@ -10,6 +10,30 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.8] — 2026-10-29
+
+Patch release repairing the runtime container build context for `wit/` after the
+`0.2.7` partial-channel release (where npm published `0.2.7` before the Docker
+image step failed on `.dockerignore`) and improving release-proof receipt
+recording and reuse (epic `release-0-2-7-stabilization`):
+
+Formation health at cut time: `formation health: 0/20 passed (0%), 0 with a
+starved seed`.
+
+### Fixed
+- **Docker build context for `wit/` (`release-0-2-7-docker-context-and-publish-speedup`):**
+  `.dockerignore` now admits `!wit/` and `!wit/**` alongside `Dockerfile`'s
+  `COPY wit/ ./wit/`, and `test/release/project-hardening-contracts.test.js`
+  enforces that the build context admits `wit/` for the runtime image stage.
+- **Whole-corpus proof receipt recording (`scripts/proof-authority.js`):**
+  `recordProof` skips release-content identity traversal when recording
+  non-identity-reusable contracts (`corpus-full-v1`), preventing cold
+  working-tree scans from exceeding the publisher's receipt-recording timeout.
+- **Release-proof whole-corpus receipt reuse (`scripts/run-release-proof.js`):**
+  `npm run check:release` reuses an exact-SHA `corpus-full-v1` receipt for
+  `HEAD` and runs only the non-corpus CI and release-hardening steps instead of
+  repeating `npm run test:all`.
+
 ## [0.2.7] — 2026-10-29
 
 Stabilization release repairing SQL mutation and schema-constraint semantics,
@@ -526,7 +550,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/psvensson/lagrange/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/psvensson/lagrange/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/psvensson/lagrange/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.5
