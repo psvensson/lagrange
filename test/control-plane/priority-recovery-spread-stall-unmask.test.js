@@ -272,3 +272,42 @@ test('spread completion covers the numeric gap with distinct eligible targets', 
   );
   t.end();
 });
+
+test('set-coverage deduplication: an operation on an already-counted operational node does not double-count to close the spread gap', (t) => {
+  const operationOnNodeB = dispatchPhaseOpUnverified({
+    operationId: 'replace-node-b',
+    targetNodeId: 'nodeB',
+    targetVisibilityState: 'active_operational',
+  });
+  const operationOnNodeC = dispatchPhaseOpUnverified({
+    operationId: 'replace-node-c',
+    targetNodeId: 'nodeC',
+    targetVisibilityState: 'active_operational',
+  });
+  const alreadyCoveredCoverage = buildPriorityRecoverySpreadCompletion({
+    activeOperationContexts: [operationOnNodeB],
+    eligibleTargetNodeIds: ['nodeA', 'nodeB', 'nodeC'],
+    operationalServiceNodeIds: ['nodeA', 'nodeB'],
+    plannerReadyDistinctNodeCount: 2,
+    plannerSpreadGap: 1,
+  });
+  t.equal(
+    alreadyCoveredCoverage.satisfied,
+    false,
+    'operation on nodeB does not double-count nodeB to satisfy spread gap when nodeB is already operational',
+  );
+
+  const distinctTargetCoverage = buildPriorityRecoverySpreadCompletion({
+    activeOperationContexts: [operationOnNodeB, operationOnNodeC],
+    eligibleTargetNodeIds: ['nodeA', 'nodeB', 'nodeC'],
+    operationalServiceNodeIds: ['nodeA', 'nodeB'],
+    plannerReadyDistinctNodeCount: 2,
+    plannerSpreadGap: 1,
+  });
+  t.equal(
+    distinctTargetCoverage.satisfied,
+    true,
+    'operation on nodeC covers the remaining spread gap without double-counting nodeB',
+  );
+  t.end();
+});

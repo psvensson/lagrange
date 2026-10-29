@@ -127,6 +127,8 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
     ) ?
       replicaOperationContexts.byPartitionId[partitionId] :
       [];
+    const operationalServiceNodeIds =
+      replicaOperationContexts.operationalServiceNodeIdsByPartitionId?.[partitionId] || [];
     const partitionSnapshot = buildPriorityRecoveryDecisionSnapshot({
       partitionId,
       publicationEpoch,
@@ -140,6 +142,7 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
       admission,
       learnerPromotion,
       operationContexts,
+      operationalServiceNodeIds,
       serialLaneOperationContexts,
       stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
       authoritativeOperationReadDeferred: false,
@@ -156,6 +159,7 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
       publicationEpoch,
       operationContexts,
       replicaOperationContexts.byOperationId,
+      operationalServiceNodeIds,
     );
     for (const appendedSnapshot of appendedSnapshots) {
       recordPriorityRecoveryDecisionSnapshotSummary(

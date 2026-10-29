@@ -83,6 +83,8 @@ export function buildPriorityRecoveryPartitionAssessment(options = {}) {
   const spreadCompletion = buildPriorityRecoverySpreadCompletion({
     plannerReady: planner.ready === true,
     plannerSpreadGap: planner.spreadGap,
+    plannerReadyDistinctNodeCount: planner.readyDistinctNodeCount,
+    operationalServiceNodeIds: options.operationalServiceNodeIds,
     activeOperationContexts: spreadRelevantOperationContexts,
     eligibleTargetNodeIds: admission.effectiveEligibleNodeIds,
   });

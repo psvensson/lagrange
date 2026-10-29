@@ -1,43 +1,31 @@
 import {
   inferPriorityRecoveryTableNameFromPartitionId,
-  normalizePriorityRecoveryInteger,
-  normalizePriorityRecoveryStringList,
+  normalizePriorityRecoveryInteger, normalizePriorityRecoveryStringList,
 } from './priority-recovery-helpers.js';
 import {
-  normalizeReplicaOperationRecord,
-  resolveStepTimeoutMs,
+  normalizeReplicaOperationRecord, resolveStepTimeoutMs,
 } from '../rebalancer/replica-operation-liveness.js';
 import {
   memoizedParseStepsHistoryString,
 } from '../rebalancer/steps-history-parse-memo.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {
-  LOCAL_STR_EMPTY,
-  PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION,
+  LOCAL_STR_EMPTY, PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_COMPLETED_AT,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_CREATED_AT,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_UPDATED_AT,
   PRIORITY_RECOVERY_REPLICA_OPERATION_SUMMARY_FIELD_OPERATION_TIMELINE_BY_ID,
   PRIORITY_RECOVERY_REPLICA_OPERATION_SUMMARY_FIELD_ROWS,
-  PRIORITY_RECOVERY_SERVICE_FIELD_ADDRESS,
-  PRIORITY_RECOVERY_SERVICE_FIELD_CREATEDAT,
-  PRIORITY_RECOVERY_SERVICE_FIELD_CREATED_AT,
-  PRIORITY_RECOVERY_SERVICE_FIELD_NODE_ID,
-  PRIORITY_RECOVERY_SERVICE_FIELD_PARTITION_ID,
-  PRIORITY_RECOVERY_SERVICE_FIELD_RAFT_ROLE,
-  PRIORITY_RECOVERY_SERVICE_FIELD_RAFT_ROLE_CAMEL,
-  PRIORITY_RECOVERY_SERVICE_FIELD_REPLICA_ID,
-  PRIORITY_RECOVERY_SERVICE_FIELD_SERVICE_TYPE,
-  PRIORITY_RECOVERY_SERVICE_FIELD_STATEENTEREDAT,
-  PRIORITY_RECOVERY_SERVICE_FIELD_STATE_ENTERED_AT,
-  PRIORITY_RECOVERY_SERVICE_FIELD_STATUS,
-  PRIORITY_RECOVERY_SERVICE_FIELD_UPDATEDAT,
-  PRIORITY_RECOVERY_SERVICE_FIELD_UPDATED_AT,
-  PRIORITY_RECOVERY_SERVICE_TYPE_PARTITION,
-  PRIORITY_RECOVERY_SNAPSHOT_LITERAL,
-  PRIORITY_RECOVERY_STATUS_ACTIVE,
-  PRIORITY_RECOVERY_STATUS_SYNCING,
+  PRIORITY_RECOVERY_SERVICE_FIELD_ADDRESS, PRIORITY_RECOVERY_SERVICE_FIELD_CREATEDAT,
+  PRIORITY_RECOVERY_SERVICE_FIELD_CREATED_AT, PRIORITY_RECOVERY_SERVICE_FIELD_NODE_ID,
+  PRIORITY_RECOVERY_SERVICE_FIELD_PARTITION_ID, PRIORITY_RECOVERY_SERVICE_FIELD_RAFT_ROLE,
+  PRIORITY_RECOVERY_SERVICE_FIELD_RAFT_ROLE_CAMEL, PRIORITY_RECOVERY_SERVICE_FIELD_REPLICA_ID,
+  PRIORITY_RECOVERY_SERVICE_FIELD_SERVICE_TYPE, PRIORITY_RECOVERY_SERVICE_FIELD_STATEENTEREDAT,
+  PRIORITY_RECOVERY_SERVICE_FIELD_STATE_ENTERED_AT, PRIORITY_RECOVERY_SERVICE_FIELD_STATUS,
+  PRIORITY_RECOVERY_SERVICE_FIELD_UPDATEDAT, PRIORITY_RECOVERY_SERVICE_FIELD_UPDATED_AT,
+  PRIORITY_RECOVERY_SERVICE_TYPE_PARTITION, PRIORITY_RECOVERY_SNAPSHOT_LITERAL,
+  PRIORITY_RECOVERY_STATUS_ACTIVE, PRIORITY_RECOVERY_STATUS_SYNCING,
   PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_STATUSES,
   PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS,
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
@@ -302,7 +290,12 @@ function buildPriorityRecoveryReplicaOperationContexts(
       String(left.operationId).localeCompare(String(right.operationId)),
     );
   }
-  return {byOperationId, byPartitionId};
+  return {
+    byOperationId,
+    byPartitionId,
+    operationalServiceNodeIdsByPartitionId:
+      buildPriorityRecoveryOperationalServiceNodeIdsByPartitionId(serviceRows),
+  };
 }
 
 function parsePriorityRecoveryStepsHistory(stepsHistoryRaw) {
@@ -410,6 +403,57 @@ function resolvePriorityRecoveryTargetServiceRowVisibilityState(serviceRow) {
     return PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL;
   }
   return PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.NON_ACTIVE;
+}
+
+function buildPriorityRecoveryOperationalServiceNodeIdsByPartitionId(
+  serviceRows = [],
+) {
+  const nodeIdsByPartitionId = new Map();
+  for (const serviceRow of Array.isArray(serviceRows) ? serviceRows : []) {
+    if (!serviceRow || typeof serviceRow !== 'object') {
+      continue;
+    }
+    const serviceType = String(
+      readFirstStringField(
+        serviceRow,
+        PRIORITY_RECOVERY_SERVICE_FIELD_SERVICE_TYPE,
+        'serviceType',
+      ) || PRIORITY_RECOVERY_SERVICE_TYPE_PARTITION,
+    ).toLowerCase();
+    if (serviceType !== PRIORITY_RECOVERY_SERVICE_TYPE_PARTITION) {
+      continue;
+    }
+    if (
+      resolvePriorityRecoveryTargetServiceRowVisibilityState(serviceRow) !==
+      PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL
+    ) {
+      continue;
+    }
+    const partitionId = readFirstStringField(
+      serviceRow,
+      PRIORITY_RECOVERY_SERVICE_FIELD_PARTITION_ID,
+      'partitionId',
+    );
+    const nodeId = readFirstStringField(
+      serviceRow,
+      PRIORITY_RECOVERY_SERVICE_FIELD_NODE_ID,
+      'nodeId',
+    );
+    if (!partitionId || !nodeId) {
+      continue;
+    }
+    let nodeSet = nodeIdsByPartitionId.get(partitionId);
+    if (!nodeSet) {
+      nodeSet = new Set();
+      nodeIdsByPartitionId.set(partitionId, nodeSet);
+    }
+    nodeSet.add(nodeId);
+  }
+  const result = {};
+  for (const [partitionId, nodeSet] of nodeIdsByPartitionId.entries()) {
+    result[partitionId] = Object.freeze([...nodeSet].sort());
+  }
+  return result;
 }
 
 function resolvePriorityRecoveryTargetServiceRowTerminalState(serviceRow) {
@@ -726,6 +770,7 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
 
 export {
   _resolvePriorityRecoveryTargetVisibilityState,
+  buildPriorityRecoveryOperationalServiceNodeIdsByPartitionId,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryReplicaOperationContext,
   buildPriorityRecoveryReplicaOperationContexts,
