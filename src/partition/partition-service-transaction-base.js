@@ -3,6 +3,9 @@ import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-ba
 import {
   trackStuckTransactionHeal,
 } from '../diagnostics/raft-churn-sync-sections.js';
+import {
+  rollbackSqlitePreservingRaftState,
+} from './partition-service-table-bootstrap.js';
 
 
 const {
@@ -689,6 +692,8 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       transactionEpoch,
     });
     try {
+      this._activeTxRaftBaselineIndex =
+        this.logAdapter?.getLastInfo?.()?.index || 0;
       this.db.exec(PARTITION_SERVICE_SQL.BEGIN_IMMEDIATE);
       this._maxObservedTransactionEpoch = Math.max(
         this._maxObservedTransactionEpoch || 0,
@@ -820,7 +825,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       );
       if (conflictCheck.hasConflict) {
         try {
-          this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
+          rollbackSqlitePreservingRaftState(this);
         } catch (_rollbackErr) {
           void _rollbackErr;
         }
@@ -902,9 +907,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         error: error.message,
       });
       try {
-        this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
+        rollbackSqlitePreservingRaftState(this);
       } catch (_rollbackErr) {
-        // Ignore rollback failures after the original commit failure.
+        void _rollbackErr;
       }
       this.activeTransactions.delete(resolvedSessionId);
       this.preparedTransactions.delete(resolvedSessionId);
@@ -948,11 +953,11 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       operationCount: transactionState.operations.length,
     });
     try {
+      rollbackSqlitePreservingRaftState(this);
       const raftEntry = await this.replicateTransactionRollback(
         resolvedSessionId,
         transactionState.transactionEpoch,
       );
-      this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
       const duration = Date.now() - transactionState.startTime;
       const operationCount = transactionState.operations.length;
       this.activeTransactions.delete(resolvedSessionId);

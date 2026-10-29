@@ -15,6 +15,9 @@ import {
   TIMEOUT_ERROR_MESSAGES,
   TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {
+  isPrepareWriteConflictFailure,
+} from './transaction-participant-error-projection.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const COMMIT_MISS_RESOLUTION = Object.freeze({
@@ -313,9 +316,7 @@ const distributedTransactionProtocolMethods = {
       }
       if (
         tx.commitMode === COMMIT_MODE.ONE_PHASE_COMMIT &&
-        commitFailures.some((entry) =>
-          String(entry?.error || '').includes('Prepare failed due to write conflict'),
-        )
+        commitFailures.some((entry) => isPrepareWriteConflictFailure(entry))
       ) {
         await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
         this.transactionsBySession.delete(tx.sessionId);
@@ -538,7 +539,7 @@ const distributedTransactionProtocolMethods = {
         await operation(partitionId);
         return;
       } catch (error) {
-        if (String(error?.message || '').includes('Prepare failed due to write conflict')) {
+        if (isPrepareWriteConflictFailure(error)) {
           throw error;
         }
         const commitMissResolution =

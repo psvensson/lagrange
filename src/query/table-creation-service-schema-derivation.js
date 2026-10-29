@@ -84,19 +84,29 @@ const SCHEMA_DERIVATION_METHODS = Object.freeze({
   /**
    * Build schema definition from column AST.
    * @param {Array<Object>} columns - Column definitions from AST.
+   * @param {Array<string>} [primaryKey] - PRIMARY KEY column names.
    * @return {Object} Schema definition.
    * @private
    */
-  buildSchemaDefinition(columns) {
+  buildSchemaDefinition(columns, primaryKey = []) {
+    const declaredPk = Array.isArray(primaryKey) ?
+      primaryKey.filter(Boolean) :
+      (primaryKey ? [primaryKey] : []);
+    const columnPk = columns.filter((col) => col.primaryKey).map((col) => col.name);
+    const normalizedPk = declaredPk.length > 0 ? declaredPk : columnPk;
+    const isSinglePk = normalizedPk.length === 1;
     return {
       columns: columns.map((col) => ({
         name: col.name,
         type: this.normalizeDataType(col.dataType),
-        primaryKey: col.primaryKey || false,
+        primaryKey: Boolean(
+          col.primaryKey || (isSinglePk && normalizedPk[0] === col.name),
+        ),
         notNull: col.notNull === true || col.nullable === false,
         unique: col.unique || false,
         defaultValue: deriveDefaultSqlLiteral(col.defaultValue),
       })),
+      ...(normalizedPk.length > 0 ? {primaryKey: [...normalizedPk]} : {}),
     };
   },
 

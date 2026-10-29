@@ -551,6 +551,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       payload.transactionEpoch = Math.floor(options.transactionEpoch);
     }
     const executionOptions = {
+      sessionId,
       buildRequest: () => ({...payload}),
       buildSuccessResult: (response) => ({...response, success: true}),
       isSuccessfulResponse: (response) =>

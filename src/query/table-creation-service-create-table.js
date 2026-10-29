@@ -48,7 +48,7 @@ function assertDurableMetadataIdentity(service, existingTable, ast, options) {
   if (!options.schemaJobId) return;
   const existingTableId = existingTable.table_id || existingTable.tableId;
   const expectedSchema = sortObject(
-    service.buildSchemaDefinition(ast.columns),
+    service.buildSchemaDefinition(ast.columns, ast.primaryKey),
   );
   let existingSchema = {};
   try {
@@ -188,7 +188,7 @@ function buildCreateTableMetadataContext(service, ast, options) {
     table_id: tableId,
     table_name: ast.tableName,
     schema_definition: JSON.stringify(
-      service.buildSchemaDefinition(ast.columns),
+      service.buildSchemaDefinition(ast.columns, ast.primaryKey),
     ),
     partition_key: partitionKey,
     table_policies: JSON.stringify(resolveCreateTablePolicy(ast)),

@@ -333,7 +333,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 executionOptions.sessionId,
                 partitionId,
               );
-            } else {
+            } else if (!forRead) {
               this.setSessionPartitionAddress(
                 executionOptions.sessionId,
                 partitionId,
@@ -402,7 +402,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                   executionOptions.sessionId,
                   partitionId,
                 );
-              } else {
+              } else if (!forRead) {
                 this.setSessionPartitionAddress(
                   executionOptions.sessionId,
                   partitionId,
@@ -433,6 +433,22 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               response.leaderAddress,
             );
+            if (
+              !forRead &&
+              !this.isLeaderUnavailable(
+                redirectFailureMessage,
+                redirectResponse?.errorCode,
+              ) &&
+              redirectRetryDecision.state ===
+                CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE
+            ) {
+              return {
+                ...buildFailureResult(
+                  redirectFailureMessage,
+                  redirectResponse,
+                ),
+              };
+            }
             if (
               redirectRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS

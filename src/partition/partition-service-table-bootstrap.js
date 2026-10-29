@@ -16,9 +16,28 @@ const {
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_LOG_MSG,
+  PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_SQL_FRAGMENT,
   SYSTEM_TABLE_NAME,
 } = PARTITION_SERVICE_SHARED;
+
+const SQL_PRESERVE_RAFT_STATE =
+  'SELECT key, value FROM _raft_state';
+const SQL_RESTORE_RAFT_STATE =
+  'INSERT INTO _raft_state (key, value) VALUES (?, ?) ' +
+  'ON CONFLICT(key) DO UPDATE SET value = excluded.value';
+
+const SQL_PRESERVE_RAFT_LOG =
+  'SELECT log_index, term, command, timestamp FROM _raft_log WHERE log_index > ?';
+const SQL_RESTORE_RAFT_LOG =
+  'INSERT INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?) ' +
+  'ON CONFLICT(log_index) DO UPDATE SET term = excluded.term, command = excluded.command, timestamp = excluded.timestamp';
+
+const SQL_PRESERVE_TX_OUTCOMES =
+  'SELECT session_id, outcome, transaction_epoch, updated_at FROM _transaction_outcomes';
+const SQL_RESTORE_TX_OUTCOMES =
+  'INSERT INTO _transaction_outcomes (session_id, outcome, transaction_epoch, updated_at) VALUES (?, ?, ?, ?) ' +
+  'ON CONFLICT(session_id, transaction_epoch) DO UPDATE SET outcome = excluded.outcome, updated_at = excluded.updated_at';
 
 function quoteSqliteIdentifier(identifier) {
   return PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE +
@@ -132,9 +151,20 @@ function createPartitionServiceTable(service) {
       return def;
     })
     .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+  const hasColumnPrimaryKey = service.schema.columns.some((col) => Boolean(col.primaryKey));
+  let tableConstraint = '';
+  if (
+    !hasColumnPrimaryKey &&
+    Array.isArray(service.schema.primaryKey) &&
+    service.schema.primaryKey.length > 0
+  ) {
+    tableConstraint = `, PRIMARY KEY (${service.schema.primaryKey
+      .map((col) => quoteSqliteIdentifier(col))
+      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE)})`;
+  }
   const sql =
     'CREATE TABLE IF NOT EXISTS ' +
-    `${quoteSqliteIdentifier(service.tableName)} (${columns})`;
+    `${quoteSqliteIdentifier(service.tableName)} (${columns}${tableConstraint})`;
   service.db.exec(sql);
   ensureNodesTableColumns(service);
   service.ensureTablesTableColumns();
@@ -155,4 +185,78 @@ function createPartitionServiceTable(service) {
   });
 }
 
-export {createPartitionServiceTable};
+/**
+ * Rollback the active SQLite transaction while preserving _raft_state,
+ * _raft_log, and _transaction_outcomes mutations made during the transaction.
+ * @param {Object} service the partition service (open db, logAdapter)
+ */
+function rollbackSqlitePreservingRaftState(service) {
+  if (!service?.db || !service.db.inTransaction) {
+    return;
+  }
+  let raftEntries = [];
+  let logEntries = [];
+  let txRecords = [];
+  try {
+    raftEntries = service.db.prepare(SQL_PRESERVE_RAFT_STATE).all();
+  } catch (_err) {
+    void _err;
+  }
+  try {
+    const baseline = Number.isInteger(service._activeTxRaftBaselineIndex) ?
+      service._activeTxRaftBaselineIndex :
+      0;
+    logEntries = service.db.prepare(SQL_PRESERVE_RAFT_LOG).all(baseline);
+  } catch (_err) {
+    void _err;
+  }
+  try {
+    txRecords = service.db.prepare(SQL_PRESERVE_TX_OUTCOMES).all();
+  } catch (_err) {
+    void _err;
+  }
+
+  try {
+    service.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
+  } catch (_err) {
+    void _err;
+  }
+
+  if (raftEntries.length > 0) {
+    try {
+      const stmt = service.db.prepare(SQL_RESTORE_RAFT_STATE);
+      for (const row of raftEntries) {
+        stmt.run(row.key, row.value);
+      }
+    } catch (_err) {
+      void _err;
+    }
+  }
+  if (logEntries.length > 0) {
+    try {
+      const stmt = service.db.prepare(SQL_RESTORE_RAFT_LOG);
+      for (const row of logEntries) {
+        stmt.run(row.log_index, row.term, row.command, row.timestamp);
+      }
+    } catch (_err) {
+      void _err;
+    }
+  }
+  if (txRecords.length > 0) {
+    try {
+      const stmt = service.db.prepare(SQL_RESTORE_TX_OUTCOMES);
+      for (const row of txRecords) {
+        stmt.run(
+          row.session_id,
+          row.outcome,
+          row.transaction_epoch,
+          row.updated_at,
+        );
+      }
+    } catch (_err) {
+      void _err;
+    }
+  }
+}
+
+export {createPartitionServiceTable, rollbackSqlitePreservingRaftState};

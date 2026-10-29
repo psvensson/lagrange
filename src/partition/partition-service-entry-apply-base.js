@@ -359,6 +359,28 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     const transactionEpoch = Number.isFinite(payload?.transactionEpoch) ?
       Math.floor(payload.transactionEpoch) :
       null;
+    if (
+      (operation === PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION ||
+        operation === PARTITION_SERVICE_LITERAL.BEGIN) &&
+      this.role !== RaftRole.LEADER
+    ) {
+      const leaderAddress = this.resolveLeaderAddress();
+      if (leaderAddress) {
+        return {
+          acknowledged: true,
+          success: false,
+          redirect: PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT,
+          leaderAddress,
+          partitionId: this.partitionId,
+        };
+      }
+      return {
+        acknowledged: true,
+        success: false,
+        error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+        partitionId: this.partitionId,
+      };
+    }
     try {
       const result = await this.executeTransactionControl(
         operation,
@@ -1084,6 +1106,33 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     } else if (
       command.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT
     ) {
+      if (
+        command.proposedBy &&
+        command.proposedBy !== this.replicaId &&
+        Array.isArray(command.operations)
+      ) {
+        for (const op of command.operations) {
+          if (op?.sql) {
+            try {
+              const stmt = this.db.prepare(op.sql);
+              stmt.run(...(op.params || []));
+            } catch (error) {
+              if (!this.isIdempotentInsertReplayConstraint(error, op)) {
+                this.logger.error(
+                  PARTITION_SERVICE_ERROR_MSG.APPLY_COMMITTED_FAILED,
+                  {
+                    partitionId: this.partitionId,
+                    error: error.message,
+                    sql: op.sql,
+                    params: op.params || [],
+                  },
+                );
+                throw error;
+              }
+            }
+          }
+        }
+      }
       this.recordTransactionCommitOutcome(
         command.sessionId,
         command.transactionEpoch,
