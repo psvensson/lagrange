@@ -16,7 +16,7 @@ const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
  * @param {Function|undefined} observe
  * @return {Object|null}
  */
-export function observeConditionWait(observe) {
+function observeConditionWait(observe) {
   if (typeof observe !== LOCAL_STR_FUNCTION) {
     return null;
   }

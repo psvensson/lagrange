@@ -45,12 +45,12 @@ authorizes:
 
 ## Intent
 
-- Reach partitioned data via ordinary SQL: typed key ordering, declared/compound PK narrowing, locking reads, local indexes, compound planner semantics, non-unique GSIs, and live queries (`RM-0.3-qs-live-query-data-plane` in `docs/development/agpl-feature-map.md`).
+- Reach partitioned data via ordinary SQL: typed key ordering, declared/compound PK narrowing, locking reads, local indexes, compound planner semantics, non-unique GSIs, and live queries (`RM-0.3-qs-generic-live-queries` in `docs/development/agpl-feature-map.md`).
 - Single open 0.3 epic; locking reads, GSIs, and live queries remain staged sections.
 
 ## Post-0.2.8 handoff census - 2026-10-29
 
-- **D0:** `RM-0.3-qs-live-query-data-plane` in `docs/development/agpl-feature-map.md`.
+- **D0:** `RM-0.3-qs-generic-live-queries` in `docs/development/agpl-feature-map.md`.
 - **Q01-Q03 on `main` (`c32680a12`):** UTF-8 comparator, composite PK/UNIQUE/CHECK schema preservation, cross-partition checks.
 - **Residual Stage A (`add04d91a`):** A1 comparator delegation; A2 boundary schema & safe integers; A3/A4 PK resolution; A5/A6 index DDL & optimizer.
 
@@ -88,7 +88,7 @@ authorizes:
 
 ### Generic live-query planning alignment
 
-- `RM-0.3-qs-live-query-data-plane` in `docs/development/agpl-feature-map.md`.
+- `RM-0.3-qs-generic-live-queries` in `docs/development/agpl-feature-map.md`.
 
 ## Release axes
 

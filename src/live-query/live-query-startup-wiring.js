@@ -407,6 +407,5 @@ function createLiveQueryStartupWiring(options = {}) {
 }
 
 export {
-  createLiveQueryCacheSubscriptionAdapter,
   createLiveQueryStartupWiring,
 };

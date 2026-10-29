@@ -100,7 +100,7 @@ Prerequisites: A2, A5, A6, and completed rs-raft cutover.
 
 ### D0 — completed `generic-live-query-roadmap-authority` — FIRST
 
-- `RM-0.3-qs-live-query-data-plane` registered in `docs/development/agpl-feature-map.md`.
+- `RM-0.3-qs-generic-live-queries` registered in `docs/development/agpl-feature-map.md`.
 
 ### D1 — planned `live-query-canonical-plan-dependencies`
 

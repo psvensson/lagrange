@@ -17,7 +17,6 @@ import {
 export {
   BASE_PARTITION_ID_COLUMN,
   BASE_PK_COLUMN_PREFIX,
-  GLOBAL_INDEX_DATASET_PREFIX,
 };
 
 const LOCAL_STR_ESCAPED_QUOTE = '""';
@@ -37,21 +36,11 @@ export function getGlobalIndexDatasetName(tableName, indexName) {
 }
 
 /**
- * Determine if a table name belongs to a global secondary index dataset.
- * @param {string} tableName
- * @return {boolean}
- */
-export function isGlobalIndexDataset(tableName) {
-  return typeof tableName === 'string' &&
-    tableName.startsWith(GLOBAL_INDEX_DATASET_PREFIX);
-}
-
-/**
  * Format the prefixed column name for a base primary key column in the index dataset.
  * @param {string} pkColumn - Base table primary key column name.
  * @return {string} Prefixed column name.
  */
-export function getBasePrimaryKeyColumnName(pkColumn) {
+function getBasePrimaryKeyColumnName(pkColumn) {
   return `${BASE_PK_COLUMN_PREFIX}${pkColumn}`;
 }
 
@@ -199,7 +188,7 @@ export function buildIndexEntry(baseRow, context) {
  * @param {Object} partition - Partition descriptor with key start/end.
  * @return {boolean} True if key falls in partition.
  */
-export function isKeyInIndexPartition(key, partition) {
+function isKeyInIndexPartition(key, partition) {
   const start = partition.partition_key_start !== undefined ?
     partition.partition_key_start :
     partition.partitionKeyStart;

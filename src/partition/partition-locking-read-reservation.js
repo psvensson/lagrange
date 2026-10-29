@@ -22,11 +22,7 @@ import {
 } from '../query/sql-locking-read-constants.js';
 
 export {
-  LOCKING_READ_ERROR_CODE,
-  LOCKING_READ_SQL_STATE,
   LOCKING_READ_RESERVATION_KIND,
-  LOCKING_READ_LOCAL_EXPIRY,
-  LOCKING_READ_RESERVATION_OUTCOME,
 };
 
 const DEFAULT_UNKNOWN_ROW_KEY = 'unknown';
@@ -45,7 +41,7 @@ const TRANSACTION_RESERVATIONS = new Map();
  * @param {Array<*>|*} pkValues - Declared primary-key values tuple.
  * @return {string} Canonical row lock key: ${tableName}:${partitionId}:${JSON.stringify(pkValues)}
  */
-export function deriveRowLockKey(tableName, partitionId, pkValues) {
+function deriveRowLockKey(tableName, partitionId, pkValues) {
   const normalizedValues = Array.isArray(pkValues) ? pkValues : [pkValues];
   return `${tableName}:${partitionId}:${JSON.stringify(normalizedValues)}`;
 }
@@ -68,22 +64,6 @@ export function createLockConflictResult(details = {}) {
     conflict: true,
     ...details,
   };
-}
-
-/**
- * Create a typed locking conflict Error instance.
- *
- * @param {Object} details - Error details.
- * @return {Error}
- */
-export function createLockNotAvailableError(details = {}) {
-  const result = createLockConflictResult(details);
-  const error = new Error(result.error);
-  error.code = result.code;
-  error.errorCode = result.errorCode;
-  error.sqlState = result.sqlState;
-  error.conflict = true;
-  return Object.assign(error, details);
 }
 
 function resolveExistingReservationOutcome(existing, transactionId, rowKey) {

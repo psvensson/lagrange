@@ -550,7 +550,6 @@ function validateSelectAstLocking(ast, hasLocking) {
 }
 
 export {
-  LOCKING_ERROR_MSG,
   LOCKING_READ_STRENGTH,
   LOCKING_READ_WAIT_POLICY,
   SQLError,

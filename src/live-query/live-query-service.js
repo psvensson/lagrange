@@ -17,7 +17,6 @@ import {
   LIVE_QUERY_DEFAULTS,
   LIVE_QUERY_DEFAULT_VALUE,
   LIVE_QUERY_ERROR_MSG,
-  LIVE_QUERY_EVENT,
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATOR,
   LIVE_QUERY_REGEX,
@@ -30,10 +29,15 @@ import {
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 
-/**
- * Live query event types sent to clients.
- */
-const LiveQueryEventType = LIVE_QUERY_EVENT;
+const BINARY_COMPARATORS = Object.freeze({
+  [LIVE_QUERY_OPERATOR.EQUALS]: (l, r) => l === r,
+  [LIVE_QUERY_OPERATOR.NOT_EQUALS]: (l, r) => l !== r,
+  [LIVE_QUERY_OPERATOR.NOT_EQUALS_ALT]: (l, r) => l !== r,
+  [LIVE_QUERY_OPERATOR.LESS_THAN]: (l, r) => l < r,
+  [LIVE_QUERY_OPERATOR.LESS_THAN_OR_EQUAL]: (l, r) => l <= r,
+  [LIVE_QUERY_OPERATOR.GREATER_THAN]: (l, r) => l > r,
+  [LIVE_QUERY_OPERATOR.GREATER_THAN_OR_EQUAL]: (l, r) => l >= r,
+});
 
 /**
  * Compiles a WHERE clause AST into an efficient evaluation function.
@@ -94,41 +98,25 @@ function evaluateExpression(expr, row) {
 function evaluateBinaryExpression(expr, row) {
   const {operator, left, right} = expr;
 
-  switch (operator) {
-  case LIVE_QUERY_OPERATOR.AND:
+  if (operator === LIVE_QUERY_OPERATOR.AND) {
     return evaluateExpression(left, row) && evaluateExpression(right, row);
-
-  case LIVE_QUERY_OPERATOR.OR:
-    return evaluateExpression(left, row) || evaluateExpression(right, row);
-
-  case LIVE_QUERY_OPERATOR.EQUALS:
-    return evaluateExpression(left, row) === evaluateExpression(right, row);
-
-  case LIVE_QUERY_OPERATOR.NOT_EQUALS:
-  case LIVE_QUERY_OPERATOR.NOT_EQUALS_ALT:
-    return evaluateExpression(left, row) !== evaluateExpression(right, row);
-
-  case LIVE_QUERY_OPERATOR.LESS_THAN:
-    return evaluateExpression(left, row) < evaluateExpression(right, row);
-
-  case LIVE_QUERY_OPERATOR.LESS_THAN_OR_EQUAL:
-    return evaluateExpression(left, row) <= evaluateExpression(right, row);
-
-  case LIVE_QUERY_OPERATOR.GREATER_THAN:
-    return evaluateExpression(left, row) > evaluateExpression(right, row);
-
-  case LIVE_QUERY_OPERATOR.GREATER_THAN_OR_EQUAL:
-    return evaluateExpression(left, row) >= evaluateExpression(right, row);
-
-  case LIVE_QUERY_OPERATOR.IS_NULL:
-    return evaluateExpression(left, row) === null;
-
-  case LIVE_QUERY_OPERATOR.IS_NOT_NULL:
-    return evaluateExpression(left, row) !== null;
-
-  default:
-    return true;
   }
+  if (operator === LIVE_QUERY_OPERATOR.OR) {
+    return evaluateExpression(left, row) || evaluateExpression(right, row);
+  }
+  if (operator === LIVE_QUERY_OPERATOR.IS_NULL) {
+    return evaluateExpression(left, row) === null;
+  }
+  if (operator === LIVE_QUERY_OPERATOR.IS_NOT_NULL) {
+    return evaluateExpression(left, row) !== null;
+  }
+
+  const comparator = BINARY_COMPARATORS[operator];
+  if (comparator) {
+    return comparator(evaluateExpression(left, row), evaluateExpression(right, row));
+  }
+
+  return true;
 }
 
 /**
@@ -353,6 +341,18 @@ function parseLiveSelect(sql) {
   };
 }
 
+function resolveLiveQueryPrimaryTable(tables, parsedQuery) {
+  if (tables.length > 0) {
+    return tables[0];
+  }
+  return parsedQuery?.from?.name || null;
+}
+
+function resolveLiveQueryTtlMs(config) {
+  return config.get(LIVE_QUERY_CONFIG_KEY.DEFAULT_TTL_MS) ||
+    LIVE_QUERY_DEFAULTS.DEFAULT_TTL_MS;
+}
+
 /**
  * LiveQueryService manages a single live query subscription.
  */
@@ -367,20 +367,18 @@ class LiveQueryService {
    */
   constructor(options = {}) {
     this.queryId = uuidv4();
-    this.parsedQuery = options.parsedQuery || null;
-    this.client = options.client || null;
-    this.systemCache = options.systemCache || null;
+    this.parsedQuery = options.parsedQuery ?? null;
+    this.client = options.client ?? null;
+    this.systemCache = options.systemCache ?? null;
     this.nodeId = options.nodeId || LIVE_QUERY_DEFAULT_VALUE.UNKNOWN;
 
     // Extract table names from query
     this.tables = extractReferencedTables(this.parsedQuery);
-    this.table = this.tables[0] || this.parsedQuery?.from?.name || null;
+    this.table = resolveLiveQueryPrimaryTable(this.tables, this.parsedQuery);
 
     // Compile predicate from WHERE clause
-    this.predicate = compilePredicate(this.parsedQuery?.where);
-
-    // Store original WHERE clause for partition key extraction
-    this.whereClause = this.parsedQuery?.where || null;
+    this.whereClause = this.parsedQuery?.where ?? null;
+    this.predicate = compilePredicate(this.whereClause);
 
     // Partition key value (extracted lazily)
     this.partitionKeyValue = null;
@@ -391,8 +389,7 @@ class LiveQueryService {
 
     // Lifecycle management
     this.config = ConfigurationManager.getInstance();
-    this.ttlMs = this.config.get(LIVE_QUERY_CONFIG_KEY.DEFAULT_TTL_MS) ||
-      LIVE_QUERY_DEFAULTS.DEFAULT_TTL_MS;
+    this.ttlMs = resolveLiveQueryTtlMs(this.config);
     this.lastRenewal = Date.now();
     this.lastSeenHLC = null;
     this.createdAt = Date.now();
@@ -567,11 +564,8 @@ class LiveQueryService {
 
 export {
   LiveQueryService,
-  LiveQueryEventType,
   compilePredicate,
   extractPartitionKeyValue,
-  extractReferencedTables,
   canonicalizePredicate,
   parseLiveSelect,
-  evaluateExpression,
 };

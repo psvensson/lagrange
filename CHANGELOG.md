@@ -10,6 +10,55 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-29
+
+Phase 0.3 Queryable Core release delivering explicit typed partition boundary
+ordering across split, merge, and routing paths, SQL-first local and compound
+index DDL and planner selection, PostgreSQL locking reads (`SELECT ... FOR
+UPDATE` and `SELECT ... FOR SHARE` with `NOWAIT`), partition-independent Global
+Secondary Indexes (`CREATE INDEX ... GLOBAL`) with online backfill and
+point-read routing, and generic push-driven live queries over table CDC without
+polling (epic `release-0-3-queryable-core`):
+
+Formation health at cut time: `formation health: 0/20 passed (0%), 0 with a
+starved seed`.
+
+### Added
+- **Typed partition boundary ordering and representation (`partition-key-ordering-owner-completion`, `A1`–`A4`):**
+  Canonical `partition-boundary-representation.js` and `split-key-comparator.js`
+  enforce explicit `partition_key_type` (`INTEGER`, `REAL`, `TEXT`, `BLOB`)
+  ordering across `CREATE TABLE`, `PartitionResolver`, `ManagedSplitWorkflow`,
+  and `ManagedMergeWorkflow` with zero text-to-number coercion or untyped
+  fallback.
+- **SQL-first local and compound secondary index DDL and planner selection (`A5`–`A6`):**
+  `SQLQueryEngine` routes `CREATE [UNIQUE] INDEX [IF NOT EXISTS]` and
+  `DROP INDEX [IF EXISTS]` through `IndexService` and replicates local index
+  DDL across table partitions; `DistributedQueryPlanner` and `QueryOptimizer`
+  enforce strict leftmost-prefix matching for single-column and compound
+  indexes.
+- **PostgreSQL locking reads (`SELECT ... FOR UPDATE` / `FOR SHARE`, `B1`–`B5`):**
+  Canonical AST normalization (`lockingRead: {strength, waitPolicy, ofTables}`),
+  explicit transaction-block admission (`25P01` outside `BEGIN`), Fail-Fast /
+  `NOWAIT` conflict rejection (`SQLSTATE 55P03`), and participant row-lock
+  reservations that block conflicting concurrent `UPDATE`/`DELETE`/`INSERT` and
+  release deterministically on `COMMIT`, `ROLLBACK`, and session teardown.
+- **Global Secondary Indexes (`CREATE INDEX ... GLOBAL`, `C1`–`C5`):**
+  Catalog metadata contract (`scope: 'GLOBAL'`, lifecycle state machine
+  `WRITE_ONLY` -> `BACKFILLING` -> `PUBLIC` -> `DROPPING`), independent global
+  index dataset and Raft partition provisioning, idempotent online backfill
+  coordinator, synchronous write-path index maintenance across `INSERT`,
+  `UPDATE`, and `DELETE`, and two-hop point-read routing when `PUBLIC`.
+- **Generic push-driven live-query data plane (`D0`–`D6`):**
+  `LiveQueryService`, `LiveQueryManager`, and `LiveQueryGroup` subscribe
+  active SQL queries directly to `CDCManager` table events and re-evaluate and
+  push delta updates (`added`, `modified`, `removed`) to WebSocket subscribers
+  without polling timers.
+- **Solver parallelization and home lab placement (`scripts/solve/*`, `scripts/lab/probe.js`):**
+  `solve.js land` synthesizes a candidate commit from the staged index for
+  remote lab test placement, routes `select-change-tests.js` through
+  `runPlacedClassifiedTestFiles()`, deduplicates `.githooks/pre-commit`, and
+  serializes concurrent worktree landings via a cross-worktree lock.
+
 ## [0.2.8] — 2026-10-29
 
 Patch release repairing the runtime container build context for `wit/` after the
@@ -550,7 +599,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/psvensson/lagrange/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/psvensson/lagrange/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/psvensson/lagrange/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/psvensson/lagrange/compare/v0.2.5...v0.2.6

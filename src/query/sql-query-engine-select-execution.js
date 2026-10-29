@@ -196,10 +196,63 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         sessionId, queryOptions, rawSql, transactionRead));
   }
 
+  resolveSelectPreferLeader(tableName, routingReadinessDimension, queryOptions,
+    transactionRead) {
+    if (transactionRead) return true;
+    if (typeof queryOptions?.preferLeader === 'boolean') {
+      return queryOptions.preferLeader;
+    }
+    const recoveryLaneSystemTableSelect =
+      this.isSystemTable(tableName) &&
+      routingReadinessDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    return this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect;
+  }
+
+  validateSelectJoinPlans(ast, distributedPlan) {
+    for (const join of ast.joins || []) {
+      const joinTableName = join.table?.name;
+      if (!joinTableName) continue;
+      const joinAlias = join.table.alias || joinTableName;
+      const joinPlan =
+        distributedPlan.tablePlans.get(joinAlias) ||
+        distributedPlan.tablePlans.get(joinTableName) ||
+        null;
+      if (!joinPlan || joinPlan.partitions.length === 0) {
+        return {
+          success: false,
+          error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${joinTableName}`,
+          errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
+        };
+      }
+    }
+    return null;
+  }
+
+  async finalizeSelectSuccess(ast, sessionId, queryOptions, transactionRead,
+    result, partitionIds) {
+    this.recordServicePartitionAccess(
+      queryOptions,
+      Array.isArray(result.partitions) ? result.partitions : partitionIds,
+      SERVICE_PARTITION_ACCESS_KIND.READ,
+    );
+    if (transactionRead && isLockingReadAst(ast)) {
+      const lockingOutcome = await executeLockingReadReservations({
+        engine: this,
+        ast,
+        sessionId,
+        transactionRead,
+        selectResult: result,
+      });
+      if (lockingOutcome.success !== true) {
+        return lockingOutcome;
+      }
+    }
+    return null;
+  }
+
   async executeSelectOwned(ast, params, sessionId, queryOptions, rawSql,
     transactionRead = null) {
-    // FROM-less SELECT (e.g., SELECT 1, SELECT 1+1) — route to any
-    // available partition and let SQLite evaluate the expression.
     if (!ast.from) {
       return this.executeFromlessSelect(ast, params, sessionId, queryOptions,
         transactionRead);
@@ -254,32 +307,14 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       tableName,
       queryOptions.routingReadinessDimension,
     );
-    const recoveryLaneSystemTableSelect =
-      this.isSystemTable(tableName) &&
-      routingReadinessDimension ===
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    const preferLeader = transactionRead ? true :
-      typeof queryOptions?.preferLeader === 'boolean' ?
-        queryOptions.preferLeader :
-        (this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect);
-    for (const join of ast.joins || []) {
-      const joinTableName = join.table?.name;
-      if (!joinTableName) {
-        continue;
-      }
-      const joinAlias = join.table.alias || joinTableName;
-      const joinPlan =
-        distributedPlan.tablePlans.get(joinAlias) ||
-        distributedPlan.tablePlans.get(joinTableName) ||
-        null;
-      if (!joinPlan || joinPlan.partitions.length === 0) {
-        return {
-          success: false,
-          error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${joinTableName}`,
-          errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
-        };
-      }
-    }
+    const preferLeader = this.resolveSelectPreferLeader(
+      tableName,
+      routingReadinessDimension,
+      queryOptions,
+      transactionRead,
+    );
+    const joinPlanFailure = this.validateSelectJoinPlans(ast, distributedPlan);
+    if (joinPlanFailure) return joinPlanFailure;
 
     if (transactionRead) {
       const allParticipants = Array.from(distributedPlan.tablePlans.values())
@@ -288,7 +323,6 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       if (enlisted.success !== true) return enlisted;
     }
 
-    // Execute on resolved partitions
     const executionStartTimeMs = Date.now();
     const deliveryPriority = this.resolveRoutedDeliveryPriority(
       tableName,
@@ -313,25 +347,15 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     const executionDurationMs = Date.now() - executionStartTimeMs;
 
     if (result?.success === true) {
-      // Attribution feed: result.partitions is the executed set (main
-      // table plus join fanout); fall back to the planned root set.
-      this.recordServicePartitionAccess(
+      const lockingFailure = await this.finalizeSelectSuccess(
+        ast,
+        sessionId,
         queryOptions,
-        Array.isArray(result.partitions) ? result.partitions : partitionIds,
-        SERVICE_PARTITION_ACCESS_KIND.READ,
+        transactionRead,
+        result,
+        partitionIds,
       );
-      if (transactionRead && isLockingReadAst(ast)) {
-        const lockingOutcome = await executeLockingReadReservations({
-          engine: this,
-          ast,
-          sessionId,
-          transactionRead,
-          selectResult: result,
-        });
-        if (lockingOutcome.success !== true) {
-          return lockingOutcome;
-        }
-      }
+      if (lockingFailure) return lockingFailure;
     }
 
     return {

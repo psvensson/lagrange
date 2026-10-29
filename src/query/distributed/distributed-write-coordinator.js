@@ -469,6 +469,64 @@ class DistributedWriteCoordinator {
     }
   }
 
+  appendInsertRowToPartition(partitionStatements, partitionId, ast, row) {
+    if (!partitionStatements.has(partitionId)) {
+      partitionStatements.set(partitionId, {
+        ast: {
+          ...ast,
+          values: [],
+        },
+        role: PARTICIPANT_ROLE_PRIMARY,
+        executionOptions: {},
+      });
+    }
+    partitionStatements.get(partitionId).ast.values.push(row);
+  }
+
+  routeRowToSinglePartitionOrThrow(partitions, partitionStatements, ast, row) {
+    if (partitions.length !== 1) {
+      throw new Error(QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED);
+    }
+    const partitionId = partitions[0].partition_id || partitions[0].partitionId;
+    this.appendInsertRowToPartition(partitionStatements, partitionId, ast, row);
+  }
+
+  extractCompositeInsertKeyValues(row, keyIndices, params) {
+    const keyValues = [];
+    for (const idx of keyIndices) {
+      if (idx === -1 || row[idx] === undefined) return null;
+      const val = this.extractKeyValue(row[idx], params);
+      if (val === undefined) return null;
+      keyValues.push(val);
+    }
+    return keyValues;
+  }
+
+  routeCompositeInsertRows(ast, params, partitions, primaryKeyColumns,
+    partitionStatements) {
+    const keyIndices = primaryKeyColumns.map((col) =>
+      this.findPrimaryKeyIndex(ast, col));
+    for (const row of ast.values || []) {
+      const keyValues = this.extractCompositeInsertKeyValues(
+        row, keyIndices, params);
+      if (!keyValues) {
+        this.routeRowToSinglePartitionOrThrow(
+          partitions, partitionStatements, ast, row);
+        continue;
+      }
+      const partitionId = this.partitionResolver.resolvePartitionForKey(
+        ast.table,
+        keyValues,
+        partitions,
+      );
+      if (!partitionId) {
+        throw new Error(ERR_NO_PARTITION_FOR_KEY + JSON.stringify(keyValues));
+      }
+      this.appendInsertRowToPartition(
+        partitionStatements, partitionId, ast, row);
+    }
+  }
+
   /**
    * Build INSERT partition statements grouped by partition key.
    * @param {Object} ast - INSERT AST.
@@ -482,24 +540,11 @@ class DistributedWriteCoordinator {
     const primaryKeyColumns = this.resolvePrimaryKeyColumns(tableInfo);
 
     if (primaryKeyColumns.length === 0) {
-      if (partitions.length === 1) {
-        const partitionId = partitions[0].partition_id || partitions[0].partitionId;
-        for (const row of ast.values || []) {
-          if (!partitionStatements.has(partitionId)) {
-            partitionStatements.set(partitionId, {
-              ast: {
-                ...ast,
-                values: [],
-              },
-              role: PARTICIPANT_ROLE_PRIMARY,
-              executionOptions: {},
-            });
-          }
-          partitionStatements.get(partitionId).ast.values.push(row);
-        }
-        return;
+      for (const row of ast.values || []) {
+        this.routeRowToSinglePartitionOrThrow(
+          partitions, partitionStatements, ast, row);
       }
-      throw new Error(QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED);
+      return;
     }
 
     if (primaryKeyColumns.length === 1) {
@@ -516,77 +561,14 @@ class DistributedWriteCoordinator {
         if (!partitionId) {
           throw new Error(ERR_NO_PARTITION_FOR_KEY + keyValue);
         }
-        if (!partitionStatements.has(partitionId)) {
-          partitionStatements.set(partitionId, {
-            ast: {
-              ...ast,
-              values: [],
-            },
-            role: PARTICIPANT_ROLE_PRIMARY,
-            executionOptions: {},
-          });
-        }
-        partitionStatements.get(partitionId).ast.values.push(row);
+        this.appendInsertRowToPartition(
+          partitionStatements, partitionId, ast, row);
       }
       return;
     }
 
-    // primaryKeyColumns.length > 1 (Composite key)
-    const keyIndices = primaryKeyColumns.map((col) => this.findPrimaryKeyIndex(ast, col));
-    for (const row of ast.values || []) {
-      const keyValues = [];
-      let missingComponent = false;
-      for (const idx of keyIndices) {
-        if (idx === -1 || row[idx] === undefined) {
-          missingComponent = true;
-          break;
-        }
-        const val = this.extractKeyValue(row[idx], params);
-        if (val === undefined) {
-          missingComponent = true;
-          break;
-        }
-        keyValues.push(val);
-      }
-      if (missingComponent) {
-        if (partitions.length === 1) {
-          const partitionId = partitions[0].partition_id || partitions[0].partitionId;
-          if (!partitionStatements.has(partitionId)) {
-            partitionStatements.set(partitionId, {
-              ast: {
-                ...ast,
-                values: [],
-              },
-              role: PARTICIPANT_ROLE_PRIMARY,
-              executionOptions: {},
-            });
-          }
-          partitionStatements.get(partitionId).ast.values.push(row);
-          continue;
-        }
-        throw new Error(QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED);
-      }
-
-      const partitionId = this.partitionResolver.resolvePartitionForKey(
-        ast.table,
-        keyValues,
-        partitions,
-      );
-      if (!partitionId) {
-        throw new Error(ERR_NO_PARTITION_FOR_KEY + JSON.stringify(keyValues));
-      }
-      if (!partitionStatements.has(partitionId)) {
-        partitionStatements.set(partitionId, {
-          ast: {
-            ...ast,
-            values: [],
-          },
-          role: PARTICIPANT_ROLE_PRIMARY,
-          executionOptions: {},
-        });
-      }
-      partitionStatements.get(partitionId).ast.values.push(row);
-    }
+    this.routeCompositeInsertRows(
+      ast, params, partitions, primaryKeyColumns, partitionStatements);
   }
 
   /**

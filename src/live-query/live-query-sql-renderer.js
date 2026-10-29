@@ -451,6 +451,5 @@ export {
   extractReferencedTables,
   isComplexQuery,
   isPartitionVisibleForRouting,
-  renderExpression,
   resolveActivePartitionVersion,
 };
