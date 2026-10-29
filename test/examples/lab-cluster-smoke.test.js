@@ -16,6 +16,7 @@ import {pathToFileURL} from 'node:url';
 
 import {
   DEFAULT_NODE22_PATH,
+  DEFAULT_TIMINGS,
   PROFILE,
   RELEASE_0_2_6_SUT,
   SCENARIO_A_GATE_FACTS,
@@ -27,6 +28,7 @@ import {
 } from '../../examples/lab-cluster-smoke/cluster-config.js';
 
 import {
+  DEFAULT_DEADLINE_MS,
   isMainModule as isWaitSeedMain,
   parseCliArgs as parseWaitSeedCliArgs,
   waitForSeedLivez,
@@ -216,6 +218,10 @@ describe('cluster-config: C1b specification and options validation', () => {
     assert.throws(() => assertValidPort(70000, 'overflow port'), /between 1024 and 65535/);
     assert.throws(() => assertValidPort('18080', 'string port'), /between 1024 and 65535/);
   });
+
+  it('exports DEFAULT_TIMINGS with START_WINDOW_SECONDS set to 120', () => {
+    assert.equal(DEFAULT_TIMINGS.START_WINDOW_SECONDS, 120);
+  });
 });
 
 describe('fixture profiles: release-0.2.6-smoke vs scenario-a-dev-formation separation', () => {
@@ -281,6 +287,10 @@ describe('fixture profiles: release-0.2.6-smoke vs scenario-a-dev-formation sepa
 });
 
 describe('wait-seed.js: joiner contact liveness wrapper', () => {
+  it('exports DEFAULT_DEADLINE_MS set to 60000 to accommodate cold bootstrap on slower hosts', () => {
+    assert.equal(DEFAULT_DEADLINE_MS, 60000);
+  });
+
   it('parses CLI arguments accurately', () => {
     const parsed = parseWaitSeedCliArgs([
       '--seed-livez-url',

@@ -14,7 +14,7 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
-const DEFAULT_DEADLINE_MS = 15000;
+const DEFAULT_DEADLINE_MS = 60000;
 const DEFAULT_INTERVAL_MS = 200;
 const HTTP_STATUS_OK = 200;
 
