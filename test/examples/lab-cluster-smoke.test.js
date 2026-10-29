@@ -16,6 +16,7 @@ import {pathToFileURL} from 'node:url';
 
 import {
   DEFAULT_NODE22_PATH,
+  DEFAULT_STABILITY,
   DEFAULT_TIMINGS,
   PROFILE,
   RELEASE_0_2_6_SUT,
@@ -36,6 +37,7 @@ import {
 
 import {
   AGGREGATE_DIAGNOSTIC_MAX_BYTES,
+  DEFAULT_OPTIONS,
   DIAGNOSTIC_MAX_BYTES,
   evaluateReadinessSample,
   isMainModule as isObserveClusterMain,
@@ -219,8 +221,40 @@ describe('cluster-config: C1b specification and options validation', () => {
     assert.throws(() => assertValidPort('18080', 'string port'), /between 1024 and 65535/);
   });
 
-  it('exports DEFAULT_TIMINGS with START_WINDOW_SECONDS set to 120', () => {
+  it('exports DEFAULT_TIMINGS with updated start and run windows', () => {
     assert.equal(DEFAULT_TIMINGS.START_WINDOW_SECONDS, 120);
+    assert.equal(DEFAULT_TIMINGS.MAX_RUN_SECONDS, 300);
+    assert.equal(DEFAULT_TIMINGS.OBSERVER_TIMEOUT_SECONDS, 240);
+  });
+
+  it('exports DEFAULT_STABILITY and DEFAULT_OPTIONS with OVERALL_TIMEOUT_MS set to 210000', () => {
+    assert.equal(DEFAULT_STABILITY.OVERALL_TIMEOUT_MS, 210000);
+    assert.equal(DEFAULT_OPTIONS.OVERALL_TIMEOUT_MS, 210000);
+  });
+
+  it('guarantees overallTimeoutMs is strictly less than observerTimeoutSeconds * 1000', () => {
+    const {spec, fixtureMetadata} = generateClusterSpec({
+      profile: PROFILE.RELEASE_0_2_6_SMOKE,
+      memberCount: 3,
+      allowWildcardRestBind: true,
+    });
+    assert.ok(
+      fixtureMetadata.stabilityWindow.overallTimeoutMs < spec.observer.timeoutSeconds * 1000,
+      'overallTimeoutMs must be strictly less than observer timeout ms',
+    );
+  });
+
+  it('rejects configuration if overallTimeoutMs >= observerTimeoutSeconds * 1000', () => {
+    assert.throws(
+      () => generateClusterSpec({
+        profile: PROFILE.RELEASE_0_2_6_SMOKE,
+        memberCount: 3,
+        allowWildcardRestBind: true,
+        overallTimeoutMs: 250000,
+        observerTimeoutSeconds: 240,
+      }),
+      /overallTimeoutMs must be strictly less than observerTimeoutSeconds \* 1000/,
+    );
   });
 });
 

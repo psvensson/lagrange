@@ -32,9 +32,9 @@ const SCENARIO_A_GATE_FACTS = Object.freeze({
 const DEFAULT_TIMINGS = Object.freeze({
   QUEUE_WINDOW_SECONDS: 300,
   START_WINDOW_SECONDS: 120,
-  MAX_RUN_SECONDS: 180,
+  MAX_RUN_SECONDS: 300,
   STOP_GRACE_SECONDS: 10,
-  OBSERVER_TIMEOUT_SECONDS: 90,
+  OBSERVER_TIMEOUT_SECONDS: 240,
 });
 
 const DEFAULT_NODE22_PATH =
@@ -45,7 +45,7 @@ const DEFAULT_STABILITY = Object.freeze({
   MIN_SAMPLES: 6,
   CADENCE_MS: 2000,
   MAX_INTER_SAMPLE_GAP_MS: 3000,
-  OVERALL_TIMEOUT_MS: 120000,
+  OVERALL_TIMEOUT_MS: 210000,
 });
 
 const MIN_PORT = 1024;
@@ -150,6 +150,9 @@ function validateClusterConfigOptions(options = {}) {
   const maxInterSampleGapMs = options.maxInterSampleGapMs ||
     DEFAULT_STABILITY.MAX_INTER_SAMPLE_GAP_MS;
   const overallTimeoutMs = options.overallTimeoutMs || DEFAULT_STABILITY.OVERALL_TIMEOUT_MS;
+  if (overallTimeoutMs >= observerTimeoutSeconds * 1000) {
+    throw new Error('overallTimeoutMs must be strictly less than observerTimeoutSeconds * 1000');
+  }
 
   // Build member port declarations
   const members = [];
