@@ -32,9 +32,9 @@ const SCENARIO_A_GATE_FACTS = Object.freeze({
 const DEFAULT_TIMINGS = Object.freeze({
   QUEUE_WINDOW_SECONDS: 300,
   START_WINDOW_SECONDS: 120,
-  MAX_RUN_SECONDS: 480,
+  MAX_RUN_SECONDS: 660,
   STOP_GRACE_SECONDS: 10,
-  OBSERVER_TIMEOUT_SECONDS: 450,
+  OBSERVER_TIMEOUT_SECONDS: 630,
 });
 
 const DEFAULT_NODE22_PATH =
@@ -45,7 +45,7 @@ const DEFAULT_STABILITY = Object.freeze({
   MIN_SAMPLES: 6,
   CADENCE_MS: 2000,
   MAX_INTER_SAMPLE_GAP_MS: 3000,
-  OVERALL_TIMEOUT_MS: 420000,
+  OVERALL_TIMEOUT_MS: 600000,
 });
 
 const MIN_PORT = 1024;
@@ -120,12 +120,12 @@ function validateClusterConfigOptions(options = {}) {
 
   const oltpComparison = options.oltpComparison === true;
 
-  const defaultMaxRunSeconds = oltpComparison ? 600 : DEFAULT_TIMINGS.MAX_RUN_SECONDS;
+  const defaultMaxRunSeconds = oltpComparison ? 660 : DEFAULT_TIMINGS.MAX_RUN_SECONDS;
   const defaultObserverTimeoutSeconds = oltpComparison ?
-    570 :
+    630 :
     DEFAULT_TIMINGS.OBSERVER_TIMEOUT_SECONDS;
   const defaultOverallTimeoutMs = oltpComparison ?
-    540000 :
+    600000 :
     DEFAULT_STABILITY.OVERALL_TIMEOUT_MS;
 
   const queueWindowSeconds = options.queueWindowSeconds || DEFAULT_TIMINGS.QUEUE_WINDOW_SECONDS;

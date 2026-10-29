@@ -227,13 +227,13 @@ describe('cluster-config: C1b specification and options validation', () => {
 
   it('exports DEFAULT_TIMINGS with updated start and run windows', () => {
     assert.equal(DEFAULT_TIMINGS.START_WINDOW_SECONDS, 120);
-    assert.equal(DEFAULT_TIMINGS.MAX_RUN_SECONDS, 480);
-    assert.equal(DEFAULT_TIMINGS.OBSERVER_TIMEOUT_SECONDS, 450);
+    assert.equal(DEFAULT_TIMINGS.MAX_RUN_SECONDS, 660);
+    assert.equal(DEFAULT_TIMINGS.OBSERVER_TIMEOUT_SECONDS, 630);
   });
 
-  it('exports DEFAULT_STABILITY and DEFAULT_OPTIONS with OVERALL_TIMEOUT_MS set to 420000', () => {
-    assert.equal(DEFAULT_STABILITY.OVERALL_TIMEOUT_MS, 420000);
-    assert.equal(DEFAULT_OPTIONS.OVERALL_TIMEOUT_MS, 420000);
+  it('exports DEFAULT_STABILITY and DEFAULT_OPTIONS with OVERALL_TIMEOUT_MS set to 600000', () => {
+    assert.equal(DEFAULT_STABILITY.OVERALL_TIMEOUT_MS, 600000);
+    assert.equal(DEFAULT_OPTIONS.OVERALL_TIMEOUT_MS, 600000);
   });
 
   it('guarantees overallTimeoutMs is strictly less than observerTimeoutSeconds * 1000', () => {
@@ -254,8 +254,8 @@ describe('cluster-config: C1b specification and options validation', () => {
         profile: PROFILE.RELEASE_0_2_6_SMOKE,
         memberCount: 3,
         allowWildcardRestBind: true,
-        overallTimeoutMs: 460000,
-        observerTimeoutSeconds: 450,
+        overallTimeoutMs: 640000,
+        observerTimeoutSeconds: 630,
       }),
       /overallTimeoutMs must be strictly less than observerTimeoutSeconds \* 1000/,
     );
@@ -267,13 +267,13 @@ describe('cluster-config: C1b specification and options validation', () => {
     };
     const validated = validateClusterConfigOptions(opts);
     assert.equal(validated.oltpComparison, true);
-    assert.equal(validated.maxRunSeconds, 600);
-    assert.equal(validated.observerTimeoutSeconds, 570);
-    assert.equal(validated.overallTimeoutMs, 540000);
+    assert.equal(validated.maxRunSeconds, 660);
+    assert.equal(validated.observerTimeoutSeconds, 630);
+    assert.equal(validated.overallTimeoutMs, 600000);
 
     const {spec, fixtureMetadata} = generateClusterSpec(opts);
-    assert.equal(spec.maxRunSeconds, 600);
-    assert.equal(spec.observer.timeoutSeconds, 570);
+    assert.equal(spec.maxRunSeconds, 660);
+    assert.equal(spec.observer.timeoutSeconds, 630);
     assert.ok(spec.observer.argv.includes('--oltp-comparison'));
     assert.equal(fixtureMetadata.oltpComparison, true);
   });
