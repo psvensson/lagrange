@@ -10,7 +10,7 @@
     "control-plane": 185,
     "convergence-topology": 77,
     "distributed-harness": 168,
-    "examples-e2e": 7,
+    "examples-e2e": 8,
     "pgwire-compat": 17,
     "placement-rebalance": 231,
     "query-sql": 158,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2076,
-  "digest": "fnv1a32-006ab381",
+  "censusSize": 2077,
+  "digest": "fnv1a32-c3c03c6d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -918,6 +918,7 @@
     "test/examples/comparative-efficiency-movielens-public-request-workload.test.js": "examples-e2e",
     "test/examples/dockerized-pg-client-compatibility-example.test.js": "examples-e2e",
     "test/examples/js-request-binding-example.test.js": "examples-e2e",
+    "test/examples/lab-cluster-smoke.test.js": "examples-e2e",
     "test/examples/minimal-deployment-request-binding-example.test.js": "examples-e2e",
     "test/examples/movielens-capacity-runtime-adapters.test.js": "examples-e2e",
     "test/examples/movielens-public-request-evidence-artifacts.test.js": "examples-e2e",

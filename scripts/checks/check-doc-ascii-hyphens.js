@@ -73,8 +73,10 @@ function findEmDashLines(filePath) {
   return hits;
 }
 
+const targets = process.argv.slice(2);
+const rootsToScan = targets.length > 0 ? targets : SCAN_ROOTS;
 const violations = [];
-for (const root of SCAN_ROOTS) {
+for (const root of rootsToScan) {
   for (const filePath of walkFiles(root)) {
     violations.push(...findEmDashLines(filePath));
   }

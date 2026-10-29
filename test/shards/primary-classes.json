@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1814,
+    "unit": 1815,
     "integration": 75,
     "bootstrap": 180,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2076,
-  "digest": "fnv1a32-a63c0efd",
+  "censusSize": 2077,
+  "digest": "fnv1a32-34d5f641",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -901,6 +901,7 @@
     "test/examples/comparative-efficiency-movielens-public-request-workload.test.js": "unit",
     "test/examples/dockerized-pg-client-compatibility-example.test.js": "unit",
     "test/examples/js-request-binding-example.test.js": "unit",
+    "test/examples/lab-cluster-smoke.test.js": "unit",
     "test/examples/minimal-deployment-request-binding-example.test.js": "unit",
     "test/examples/movielens-capacity-runtime-adapters.test.js": "unit",
     "test/examples/movielens-public-request-evidence-artifacts.test.js": "unit",
