@@ -1132,9 +1132,10 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
     assert.ok(replicaWakeQueries.length >= 2, 'Expected periodic re-wake query during discovery');
   });
 
-  it('runPgSmoke with oltpComparison: true waits for workloadReady and executes runOltpComparisonFn', async () => {
+  it('runPgSmoke with oltpComparison: true proceeds directly to runOltpComparisonFn without blocking on tableless workloadReady', async () => {
     let wsClosed = false;
     let pgClientClosed = false;
+    let pgClientClosedBeforeOltp = false;
 
     class MockAdminWsClient {
       async connect() {}
@@ -1162,7 +1163,7 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
                 address: '127.0.0.1',
                 port: 15432,
                 healthStatus: 'healthy',
-                readiness: {workloadReady: discoveryCalls >= 2},
+                readiness: {workloadReady: false},
               }],
             }],
           }),
@@ -1184,6 +1185,7 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
 
     let oltpComparisonCalledWith = null;
     const mockRunOltpComparison = async (opts) => {
+      pgClientClosedBeforeOltp = pgClientClosed;
       oltpComparisonCalledWith = opts;
       return {workloadResult: {totalTransactions: 400}, retryEvidence: {totalRetries: 0}};
     };
@@ -1203,8 +1205,9 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
 
     assert.equal(outcome.ok, true);
     assert.equal(outcome.status, 'PASSED');
-    assert.equal(discoveryCalls, 2);
-    assert.equal(outcome.discoveredReplica.workloadReadinessStatus, 'READY');
+    assert.equal(discoveryCalls, 1);
+    assert.equal(outcome.discoveredReplica.workloadReadinessStatus, 'NOT_READY');
+    assert.equal(pgClientClosedBeforeOltp, true);
     assert.equal(oltpComparisonCalledWith?.pgPort, 15432);
     assert.equal(oltpComparisonCalledWith?.user, 'postgres');
     assert.equal(oltpComparisonCalledWith?.database, 'postgres');

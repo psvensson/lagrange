@@ -319,62 +319,9 @@ async function runPgSmoke(options = {}) {
     }
 
     // Retain readiness and benchmark admission verbatim
-    let replicaReadiness = matchingReplica.readiness || {};
-    let replicaBenchmarkAdmission = matchingReplica.benchmarkAdmission || {};
-    let workloadReady = replicaReadiness.workloadReady === true;
-
-    if (options.oltpComparison === true && !workloadReady) {
-      const workloadReadyStart = nowFn();
-      const workloadReadyTimeoutMs = options.workloadReadyTimeoutMs || 120000;
-      while (nowFn() - workloadReadyStart < workloadReadyTimeoutMs) {
-        await sleepFn(discoveryIntervalMs);
-        try {
-          const response = await fetchFn(discoveryUrl);
-          if (response && response.status === 200) {
-            const body = typeof response.json === 'function' ? await response.json() : null;
-            if (body && Array.isArray(body.services)) {
-              for (const service of body.services) {
-                const serviceIds = Array.isArray(service.serviceIds) ?
-                  service.serviceIds :
-                  [service.serviceId];
-                if (serviceIds.includes('sys-postgres-wire') && Array.isArray(service.replicas)) {
-                  for (const replica of service.replicas) {
-                    if (replica.serviceId === 'sys-postgres-wire' &&
-                        replica.address === '127.0.0.1' &&
-                        replica.port === pgPort &&
-                        replica.healthStatus === 'healthy') {
-                      matchingReplica = replica;
-                      replicaReadiness = matchingReplica.readiness || {};
-                      replicaBenchmarkAdmission = matchingReplica.benchmarkAdmission || {};
-                      if (replicaReadiness.workloadReady === true) {
-                        workloadReady = true;
-                        break;
-                      }
-                    }
-                  }
-                }
-                if (workloadReady) {
-                  break;
-                }
-              }
-            }
-          }
-        } catch {
-          // ignore transient poll error while polling for workloadReady
-        }
-        if (workloadReady) {
-          break;
-        }
-      }
-
-      if (!workloadReady) {
-        throw new Error(
-          `Timed out after ${nowFn() - workloadReadyStart}ms waiting for sys-postgres-wire workloadReady=true`,
-        );
-      }
-    }
-
-    const workloadReadinessStatus = workloadReady ? 'READY' : 'NOT_READY';
+    const replicaReadiness = matchingReplica.readiness || {};
+    const replicaBenchmarkAdmission = matchingReplica.benchmarkAdmission || {};
+    const workloadReadinessStatus = replicaReadiness.workloadReady === true ? 'READY' : 'NOT_READY';
 
     // 6. Connect via pg.Client and verify SELECT 1
     pgClient = new PgClientCtor({
@@ -396,6 +343,10 @@ async function runPgSmoke(options = {}) {
         `SELECT 1 returned unexpected result: ${JSON.stringify(queryResult?.rows)}`,
       );
     }
+
+    // Release probe connection before starting comparison
+    await pgClient.end();
+    pgClient = null;
 
     let oltpComparison = null;
     if (options.oltpComparison === true) {
