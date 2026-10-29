@@ -1,7 +1,5 @@
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG, QUERY_OPERATION} from '../query-constants.js';
-import {
-  TIMEOUT_BUDGET_DEFAULT, createTopLevelOperationBudget,
-} from '../../control-plane/timeout-budget.js';
+import {TIMEOUT_BUDGET_DEFAULT, createTopLevelOperationBudget} from '../../control-plane/timeout-budget.js';
 import {DurableWorkflowCoordinator} from '../../workflow/durable-workflow-coordinator.js';
 import {COMMIT_MODE, PARTICIPANT_SET_STATE, TRANSACTION_MODE} from '../../constants/index.js';
 import {
@@ -28,9 +26,8 @@ import {
 import {
   persistTransactionRecord, persistParticipants,
   persistParticipantRecord, persistWriteOperationRecord,
-  createTransactionId, createParticipantId,
-  createWritePayloadHash, parseJsonArrayField,
-  resolveFiniteNumberField, getOrderedParticipantIds,
+  createTransactionId, createParticipantId, createWritePayloadHash,
+  parseJsonArrayField, resolveFiniteNumberField, getOrderedParticipantIds,
   getOrderedParticipantDetails, resolveEnlistDeadlockState,
 } from './distributed-transaction-records.js';
 import {buildFrozenTransactionDecision} from './distributed-transaction-commit-mode.js';
@@ -109,34 +106,31 @@ class DistributedTransactionCoordinator {
     this.workflowCoordinator =
       options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
-        persistWorkflow: async (workflow) => {
-          await this.persistTransaction({
-            transactionId: workflow.transactionId || workflow.workflowId,
-            sessionId: workflow.sessionId || workflow.ownerKey,
-            status: workflow.status,
-            transactionEpoch: workflow.transactionEpoch,
-            timeoutDeadline: workflow.timeoutDeadline,
-            transactionMode: workflow.transactionMode,
-            participantSetState: workflow.participantSetState,
-            commitMode: workflow.commitMode,
-            frozenParticipantCount: workflow.frozenParticipantCount,
-            createdAt: workflow.createdAt,
-            updatedAt: workflow.updatedAt,
-          });
-        },
-        persistParticipant: async (participant) => {
-          await this.persistParticipant({
-            participantId: participant.participantId,
-            transactionId: participant.transactionId || participant.workflowId,
-            partitionId: participant.partitionId || participant.participantKey,
-            status: participant.status,
-            lastError: participant.lastError,
-            createdAt: participant.createdAt,
-            updatedAt: participant.updatedAt,
-          });
-        },
+        persistWorkflow: (w) => this.persistTransaction({
+          transactionId: w.transactionId || w.workflowId,
+          sessionId: w.sessionId || w.ownerKey,
+          status: w.status,
+          transactionEpoch: w.transactionEpoch,
+          timeoutDeadline: w.timeoutDeadline,
+          transactionMode: w.transactionMode,
+          participantSetState: w.participantSetState,
+          commitMode: w.commitMode,
+          frozenParticipantCount: w.frozenParticipantCount,
+          createdAt: w.createdAt,
+          updatedAt: w.updatedAt,
+        }),
+        persistParticipant: (p) => this.persistParticipant({
+          participantId: p.participantId,
+          transactionId: p.transactionId || p.workflowId,
+          partitionId: p.partitionId || p.participantKey,
+          status: p.status,
+          lastError: p.lastError,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        }),
         now: this.now,
       });
+    this.transactions = this.workflowCoordinator.workflowsById;
     this.transactionsBySession = this.workflowCoordinator.workflowsByOwnerKey;
     this.transactionOperationTailBySession = new Map();
     this.recoveredTransactionIds = new Set();
@@ -275,6 +269,7 @@ class DistributedTransactionCoordinator {
     const uniquePartitionIds = Array.from(new Set(partitionIds || [])).sort();
     const newPartitionIds = uniquePartitionIds.filter((id) => !tx.participants.has(id));
     const newlyEnlisted = [];
+    const participantEpochs = new Map();
     tx.enlistingPartitionIds = new Set();
     try {
       for (const partitionId of newPartitionIds) {
@@ -293,6 +288,11 @@ class DistributedTransactionCoordinator {
           } else {
             participantEpoch = tx.transactionEpoch;
           }
+          tx.transactionEpoch = Math.max(
+            Number(tx.transactionEpoch) || 0,
+            Number(participantEpoch) || 0,
+          );
+          participantEpochs.set(partitionId, participantEpoch);
           try {
             await this.beginParticipant(sessionId, partitionId, participantEpoch);
             break;
@@ -323,7 +323,10 @@ class DistributedTransactionCoordinator {
               newlyEnlisted;
             for (const enlistedId of partitionsToRelease) {
               try {
-                await this.rollbackParticipant(sessionId, enlistedId);
+                const epoch = tx.participants.get(enlistedId)?.transactionEpoch ??
+                  participantEpochs.get(enlistedId) ??
+                  tx.transactionEpoch;
+                await this.rollbackParticipant(sessionId, enlistedId, epoch);
               } catch (_rollbackErr) {
                 void _rollbackErr;
               }
@@ -341,6 +344,7 @@ class DistributedTransactionCoordinator {
           participantId: this.createParticipantId(tx.transactionId, partitionId),
           transactionId: tx.transactionId,
           partitionId,
+          transactionEpoch: participantEpochs.get(partitionId) ?? tx.transactionEpoch,
           status: PARTICIPANT_STATUS.ACTIVE,
           lastError: null,
           createdAt: now,
@@ -486,12 +490,10 @@ class DistributedTransactionCoordinator {
     }
     if (tx.participantSetState === PARTICIPANT_SET_STATE.OPEN) {
       const previousDecision = {
-        participantSetState: tx.participantSetState,
-        commitMode: tx.commitMode,
+        participantSetState: tx.participantSetState, commitMode: tx.commitMode,
         frozenParticipantCount: tx.frozenParticipantCount,
         participantSetFrozenAt: tx.participantSetFrozenAt,
-        decisionTrace: tx.decisionTrace,
-        updatedAt: tx.updatedAt,
+        decisionTrace: tx.decisionTrace, updatedAt: tx.updatedAt,
       };
       const decision = buildFrozenTransactionDecision({
         transactionMode: tx.transactionMode,
@@ -615,8 +617,8 @@ class DistributedTransactionCoordinator {
     return buildDeferredRecoverySweepResult.call(this, errorLike, overrides);
   }
 
-  recoverFromSystemTables(payload = {}) {
-    return recoverFromSystemTables.call(this, payload);
+  recoverFromSystemTables(payload = {}, options = {}) {
+    return recoverFromSystemTables.call(this, payload, options);
   }
 
   async setTransactionStatus(tx, status) {

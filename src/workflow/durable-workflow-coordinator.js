@@ -258,6 +258,26 @@ class DurableWorkflowCoordinator {
   }
 
   /**
+   * Alias for getWorkflowByOwnerKey.
+   * @param {string} ownerKey
+   * @return {Object|null}
+   */
+  getWorkflowByOwner(ownerKey) {
+    return this.getWorkflowByOwnerKey(ownerKey);
+  }
+
+  /**
+   * Hydrate one workflow record from a row.
+   * @param {Object} row
+   * @param {Object|Function} [options]
+   * @return {Object|null}
+   */
+  hydrateWorkflowRow(row, options = {}) {
+    const loader = typeof options === 'function' ? options : options?.loadWorkflow;
+    return typeof loader === 'function' ? loader(row) : row;
+  }
+
+  /**
    * Upsert and persist one workflow participant record.
    * @param {string} workflowId - Workflow ID.
    * @param {Object} record - Participant record.
@@ -601,32 +621,60 @@ class DurableWorkflowCoordinator {
    * @private
    */
   restoreRecoveredWorkflowRow(row, loadWorkflow, isTerminalWorkflow) {
-    const workflowRecord = typeof loadWorkflow === 'function' ?
-      loadWorkflow(row) :
-      row;
+    let loader = loadWorkflow;
+    let terminalCheck = isTerminalWorkflow;
+    if (typeof loadWorkflow === 'object' && loadWorkflow !== null) {
+      loader = loadWorkflow.loadWorkflow;
+      terminalCheck = loadWorkflow.isTerminalWorkflow;
+    }
+    const workflowRecord = this.hydrateWorkflowRow(row, loader) || null;
     if (!workflowRecord) {
       return null;
     }
-    if (typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
-        isTerminalWorkflow(workflowRecord, row)) {
+    const workflowId = String(workflowRecord.workflowId || '');
+    const existingWorkflow = this.getWorkflowById(workflowId);
+    const existingOwnerWorkflow = workflowRecord.ownerKey ?
+      this.getWorkflowByOwner(String(workflowRecord.ownerKey || '')) :
+      null;
+    const existingOwnerCheck = typeof terminalCheck === LOCAL_STR_FUNCTION;
+    const existingOwnerIsLive = (candidate) =>
+      Boolean(
+        candidate &&
+        (!existingOwnerCheck || !terminalCheck(candidate, null)),
+      );
+
+    if (existingOwnerCheck && terminalCheck(workflowRecord, row)) {
+      if (
+        existingWorkflow &&
+        (!existingOwnerCheck || !existingOwnerIsLive(existingWorkflow) ||
+          existingWorkflow.workflowId === workflowId)
+      ) {
+        this.removeWorkflow(workflowId);
+      }
+      if (
+        existingOwnerWorkflow &&
+        existingOwnerWorkflow.workflowId !== workflowId &&
+        (!existingOwnerCheck || !existingOwnerIsLive(existingOwnerWorkflow) ||
+          Number(workflowRecord.createdAt || 0) >= Number(existingOwnerWorkflow.createdAt || 0))
+      ) {
+        this.removeWorkflow(existingOwnerWorkflow.workflowId);
+      }
       return null;
     }
-    const existingWorkflow = this.getWorkflowById(
-      String(workflowRecord.workflowId || ''),
-    );
+
     if (existingWorkflow) {
       return null;
     }
-    const existingOwnerWorkflow = this.getWorkflowByOwnerKey(
-      String(workflowRecord.ownerKey || ''),
-    );
-    const existingOwnerIsLive =
-      existingOwnerWorkflow &&
-      !(typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
-        isTerminalWorkflow(existingOwnerWorkflow, null));
-    if (existingOwnerIsLive) {
-      return null;
+
+    if (existingOwnerWorkflow && existingOwnerWorkflow.workflowId !== workflowId) {
+      if (existingOwnerCheck && existingOwnerIsLive(existingOwnerWorkflow)) {
+        return null;
+      }
+      if (Number(workflowRecord.createdAt || 0) < Number(existingOwnerWorkflow.createdAt || 0)) {
+        return null;
+      }
     }
+
     return this.setWorkflowState(this.createWorkflowRecord(workflowRecord));
   }
 

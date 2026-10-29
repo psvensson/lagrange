@@ -1,28 +1,15 @@
+import {COMMIT_MODE, PARTICIPANT_SET_STATE, TRANSACTION_MODE} from '../../constants/index.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG, QUERY_OPERATION} from '../query-constants.js';
 import {
-  COMMIT_MODE,
-  PARTICIPANT_SET_STATE,
-  TRANSACTION_MODE,
-} from '../../constants/index.js';
-import {
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  QUERY_OPERATION,
-} from '../query-constants.js';
-import {
-  getControlPlaneRetryAfterMs,
-  isRetryableControlPlaneError,
+  getControlPlaneRetryAfterMs, isRetryableControlPlaneError,
 } from '../../control-plane/control-plane-error-classification.js';
 import {
-  PARTICIPANT_STATUS,
-  RECOVERY_COMMIT_TRANSACTION_STATUS,
-  RECOVERY_ROLLBACK_TRANSACTION_STATUS,
-  RECOVERY_SWEEP_DEFER_BASE_MS,
-  RECOVERY_SWEEP_DEFER_MAX_MS,
-  RECOVERY_SWEEP_LOG_MSG,
-  TERMINAL_TRANSACTION_STATUS,
-  TRANSACTION_STATUS,
-  WRITE_OPERATION_STATUS,
+  PARTICIPANT_STATUS, RECOVERY_COMMIT_TRANSACTION_STATUS,
+  RECOVERY_ROLLBACK_TRANSACTION_STATUS, RECOVERY_SWEEP_DEFER_BASE_MS,
+  RECOVERY_SWEEP_DEFER_MAX_MS, RECOVERY_SWEEP_LOG_MSG,
+  TERMINAL_TRANSACTION_STATUS, TRANSACTION_STATUS, WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {prepareRecoveryTransactionRows} from './distributed-transaction-records.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -397,7 +384,7 @@ const distributedTransactionRecoveryMethods = {
           throw error;
         }
         if (payload && typeof payload === LOCAL_STR_OBJECT) {
-          this.recoverFromSystemTables(payload);
+          this.recoverFromSystemTables(payload, {sweepOnlyExpired: true, now: this.now()});
         }
       }
 
@@ -619,7 +606,7 @@ const distributedTransactionRecoveryMethods = {
    * @param {Object[]} [payload.writeOperations] - sql_write_operations rows.
    */
 
-  recoverFromSystemTables(payload = {}) {
+  recoverFromSystemTables(payload = {}, options = {}) {
     const transactionRows = Array.isArray(payload.transactions) ?
       payload.transactions :
       [];
@@ -630,14 +617,20 @@ const distributedTransactionRecoveryMethods = {
       payload.writeOperations :
       [];
 
-    validateRecoveryRowsBeforeMutation(
+    const sortedTransactionRows = prepareRecoveryTransactionRows(
       this,
       transactionRows,
+      options,
+    );
+
+    validateRecoveryRowsBeforeMutation(
+      this,
+      sortedTransactionRows,
       participantRows,
     );
 
     const recoveryOutcome = this.workflowCoordinator.recover({
-      workflows: transactionRows,
+      workflows: sortedTransactionRows,
       participants: participantRows,
       loadWorkflow: (row) => {
         const sessionId = row.session_id || row.sessionId;
@@ -730,7 +723,7 @@ const distributedTransactionRecoveryMethods = {
         validateRecoveredTransactionDecision(tx, tx);
       }
     }
-    for (const row of transactionRows) {
+    for (const row of sortedTransactionRows) {
       const transactionId = row.transaction_id || row.transactionId;
       if (!transactionId || !restoredWorkflowIds.has(transactionId)) {
         continue;
@@ -740,6 +733,11 @@ const distributedTransactionRecoveryMethods = {
         continue;
       }
       this.recoveredTransactionIds.add(transactionId);
+    }
+    for (const id of Array.from(this.recoveredTransactionIds)) {
+      if (!this.transactions?.has(id) && !this.workflowCoordinator?.getWorkflowById(id)) {
+        this.recoveredTransactionIds.delete(id);
+      }
     }
 
     for (const row of writeOperationRows) {

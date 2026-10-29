@@ -423,11 +423,11 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       return this.beginTransaction(sessionId, transactionEpoch);
     case PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION:
     case PARTITION_SERVICE_LITERAL.PREPARE:
-      return this.prepareTransaction(sessionId);
+      return this.prepareTransaction(sessionId, transactionEpoch);
     case PARTITION_SERVICE_OPERATION.COMMIT:
-      return this.commitTransaction(sessionId);
+      return this.commitTransaction(sessionId, transactionEpoch);
     case PARTITION_SERVICE_OPERATION.ROLLBACK:
-      return this.rollbackTransaction(sessionId);
+      return this.rollbackTransaction(sessionId, transactionEpoch);
     case PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME:
       return {
         success: true,

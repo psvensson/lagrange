@@ -731,7 +731,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * @param {string|null} sessionId - Transaction session ID.
    * @return {Promise<Object>} Prepare result.
    */
-  async prepareTransaction(sessionId = null) {
+  async prepareTransaction(sessionId = null, transactionEpoch = null) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -748,6 +748,18 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     }
     const {sessionId: transactionSessionId, state: transactionState} =
       transaction;
+    if (
+      Number.isFinite(transactionEpoch) &&
+      Number.isFinite(transactionState?.transactionEpoch) &&
+      transactionEpoch < transactionState.transactionEpoch
+    ) {
+      return {
+        success: false,
+        operation: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+        partitionId: this.partitionId,
+        error: PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_PREPARE,
+      };
+    }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.PREPARING_TRANSACTION, {
       partitionId: this.partitionId,
       sessionId: transactionSessionId,
@@ -797,7 +809,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * Ensures durability through Raft replication before acknowledging.
    * @return {Promise<Object>} Commit result.
    */
-  async commitTransaction(sessionId = null) {
+  async commitTransaction(sessionId = null, transactionEpoch = null) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -818,6 +830,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     }
     const {sessionId: resolvedSessionId, state: transactionState} =
       transaction;
+    if (
+      Number.isFinite(transactionEpoch) &&
+      Number.isFinite(transactionState?.transactionEpoch) &&
+      transactionEpoch < transactionState.transactionEpoch
+    ) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_COMMIT);
+    }
     if (activeTransaction) {
       const conflictCheck = this.checkWriteConflicts(
         transactionState.writeSet,
@@ -921,7 +940,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * Rollback the active transaction.
    * @return {Promise<Object>} Rollback result.
    */
-  async rollbackTransaction(sessionId = null) {
+  async rollbackTransaction(sessionId = null, transactionEpoch = null) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -947,6 +966,20 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     }
     const {sessionId: resolvedSessionId, state: transactionState} =
       transaction;
+    if (
+      Number.isFinite(transactionEpoch) &&
+      Number.isFinite(transactionState?.transactionEpoch) &&
+      transactionEpoch < transactionState.transactionEpoch
+    ) {
+      return {
+        success: true,
+        operation: PARTITION_SERVICE_OPERATION.ROLLBACK,
+        partitionId: this.partitionId,
+        rolledBack: true,
+        idempotent: true,
+        sessionId: resolvedSessionId,
+      };
+    }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.ROLLING_BACK_TRANSACTION, {
       partitionId: this.partitionId,
       sessionId: resolvedSessionId,

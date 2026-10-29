@@ -236,7 +236,14 @@ const distributedTransactionProtocolMethods = {
         tx,
         PARTICIPANT_STATUS.PREPARING,
         PARTICIPANT_STATUS.PREPARED,
-        (partitionId) => this.prepareParticipant(tx.sessionId, partitionId),
+        (partitionId) => {
+          const participant = tx.participants?.get(partitionId);
+          return this.prepareParticipant(
+            tx.sessionId,
+            partitionId,
+            participant?.transactionEpoch ?? tx.transactionEpoch,
+          );
+        },
         {participantKeys: this.getPrepareParticipantKeys(tx)},
       );
       if (prepareFailures.length > 0) {
@@ -295,7 +302,14 @@ const distributedTransactionProtocolMethods = {
             tx,
             PARTICIPANT_STATUS.COMMITTING,
             PARTICIPANT_STATUS.COMMITTED,
-            (partitionId) => this.commitParticipant(tx.sessionId, partitionId),
+            (partitionId) => {
+              const participant = tx.participants?.get(partitionId);
+              return this.commitParticipant(
+                tx.sessionId,
+                partitionId,
+                participant?.transactionEpoch ?? tx.transactionEpoch,
+              );
+            },
             {
               participantKeys: this.getCommitParticipantKeys(tx),
               skipBudgetEnforcement: commitStatusAllowsTimeout,
@@ -363,7 +377,11 @@ const distributedTransactionProtocolMethods = {
           tx,
           PARTICIPANT_STATUS.COMMITTING,
           partitionId,
-          () => this.commitParticipant(tx.sessionId, partitionId),
+          () => this.commitParticipant(
+            tx.sessionId,
+            partitionId,
+            participant?.transactionEpoch ?? tx.transactionEpoch,
+          ),
           options,
         );
         participant.status = PARTICIPANT_STATUS.COMMITTED;
@@ -401,7 +419,14 @@ const distributedTransactionProtocolMethods = {
       tx,
       PARTICIPANT_STATUS.ROLLING_BACK,
       PARTICIPANT_STATUS.ROLLED_BACK,
-      (partitionId) => this.rollbackParticipant(tx.sessionId, partitionId),
+      (partitionId) => {
+        const participant = tx.participants?.get(partitionId);
+        return this.rollbackParticipant(
+          tx.sessionId,
+          partitionId,
+          participant?.transactionEpoch ?? tx.transactionEpoch,
+        );
+      },
       {participantKeys: this.getRollbackParticipantKeys(tx)},
     );
 
