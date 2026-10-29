@@ -83,7 +83,7 @@ import {
   SELECTION_WIDENED,
   PROOF_SCOPE_PATH,
 } from './checks/change-selection-constants.js';
-import {runClassifiedTestFiles} from './run-classified-test-files.js';
+import {runPlacedClassifiedTestFiles} from './run-classified-test-files.js';
 import {derivePrimaryClasses} from './checks/test-primary-classification.js';
 import {
   PRIMARY_CLASS_CONVERGENCE_PROBE,
@@ -225,6 +225,38 @@ function isDigit(character) {
   return character >= JSON_DIGIT_MIN && character <= JSON_DIGIT_MAX;
 }
 
+function isJsonNumberContinuation(character) {
+  if (isDigit(character) || character === JSON_NUMBER_DECIMAL) return true;
+  if (character === JSON_NUMBER_EXPONENT_LOWER || character === JSON_NUMBER_EXPONENT_UPPER) {
+    return true;
+  }
+  return character === JSON_NUMBER_PLUS || character === JSON_NUMBER_MINUS;
+}
+
+function readJsonNumberEnd(text, start) {
+  let end = start + 1;
+  while (end < text.length && isJsonNumberContinuation(text[end])) {
+    end += 1;
+  }
+  return end;
+}
+
+function isLossyJsonNumberToken(token) {
+  const numericValue = toNumber(token);
+  if (stringIncludes(token, JSON_NUMBER_DECIMAL)) return true;
+  if (stringIncludes(token, JSON_NUMBER_EXPONENT_LOWER) ||
+      stringIncludes(token, JSON_NUMBER_EXPONENT_UPPER)) {
+    return true;
+  }
+  return !numberIsSafeInteger(numericValue) || objectIs(numericValue, NEGATIVE_ZERO);
+}
+
+function stepJsonStringState(character, escaped) {
+  if (escaped) return {inString: true, escaped: false};
+  if (character === JSON_STRING_ESCAPE) return {inString: true, escaped: true};
+  return {inString: character !== JSON_STRING_QUOTE, escaped: false};
+}
+
 // Native JSON.parse rounds integers beyond Number's safe range and may also
 // collapse distinct decimal/exponent spellings. Those forms are not needed by
 // package manifests or npm lockfiles, so treat their presence as an unavailable
@@ -235,13 +267,7 @@ function hasPotentiallyLossyJsonNumber(text) {
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
     if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (character === JSON_STRING_ESCAPE) {
-        escaped = true;
-      } else if (character === JSON_STRING_QUOTE) {
-        inString = false;
-      }
+      ({inString, escaped} = stepJsonStringState(character, escaped));
       continue;
     }
     if (character === JSON_STRING_QUOTE) {
@@ -249,27 +275,8 @@ function hasPotentiallyLossyJsonNumber(text) {
       continue;
     }
     if (character !== JSON_NUMBER_MINUS && !isDigit(character)) continue;
-    let end = index + 1;
-    while (
-      end < text.length &&
-      (isDigit(text[end]) || text[end] === JSON_NUMBER_DECIMAL ||
-        text[end] === JSON_NUMBER_EXPONENT_LOWER ||
-        text[end] === JSON_NUMBER_EXPONENT_UPPER ||
-        text[end] === JSON_NUMBER_PLUS || text[end] === JSON_NUMBER_MINUS)
-    ) {
-      end += 1;
-    }
-    const token = stringSlice(text, index, end);
-    const numericValue = toNumber(token);
-    if (
-      stringIncludes(token, JSON_NUMBER_DECIMAL) ||
-      stringIncludes(token, JSON_NUMBER_EXPONENT_LOWER) ||
-      stringIncludes(token, JSON_NUMBER_EXPONENT_UPPER) ||
-      !numberIsSafeInteger(numericValue) ||
-      objectIs(numericValue, NEGATIVE_ZERO)
-    ) {
-      return true;
-    }
+    const end = readJsonNumberEnd(text, index);
+    if (isLossyJsonNumberToken(stringSlice(text, index, end))) return true;
     index = end - 1;
   }
   return false;
@@ -376,8 +383,19 @@ export function planChangeProof({base = null, head = null,
   });
 }
 
-// The union. The spine is added HERE, unconditionally, never by the selector.
-export function buildExecutionPlan(options) {
+function isNullishPackageFields(packageFieldInput) {
+  return packageFieldInput === null || packageFieldInput === undefined;
+}
+
+function isValidPlanInputTypes(changedPaths, packageFieldInput, packageFields,
+  planRoot, selector, spine) {
+  if (!changedPaths) return false;
+  if (!isNullishPackageFields(packageFieldInput) && !packageFields) return false;
+  if (typeof planRoot !== 'string' || planRoot.length === 0) return false;
+  return typeof selector === 'function' && typeof spine === 'function';
+}
+
+function validateExecutionPlanInput(options) {
   const input = copyOwnDataRecord(options);
   if (!input) throw new Error(INVALID_EXECUTION_PLAN_INPUT_PROBLEM);
   const {
@@ -390,25 +408,17 @@ export function buildExecutionPlan(options) {
     spine = loadSafetySpine,
   } = input;
   const changedPaths = copyOwnStringArray(changedPathInput);
-  const packageFields = packageFieldInput === null ||
-    packageFieldInput === undefined ? packageFieldInput :
-    copyOwnStringArray(packageFieldInput);
-  if (!changedPaths ||
-      (packageFieldInput !== null && packageFieldInput !== undefined &&
-        !packageFields) ||
-      typeof planRoot !== 'string' || planRoot.length === 0 ||
-      typeof selector !== 'function' || typeof spine !== 'function') {
+  const packageFields = isNullishPackageFields(packageFieldInput) ?
+    packageFieldInput : copyOwnStringArray(packageFieldInput);
+  if (!isValidPlanInputTypes(changedPaths, packageFieldInput, packageFields,
+    planRoot, selector, spine)) {
     throw new Error(INVALID_EXECUTION_PLAN_INPUT_PROBLEM);
   }
-  const selection = normalizeSelection(selector({
-    root: planRoot,
-    changedPaths,
-    changedPackageFields: packageFields,
-    lockfileGraphChanged,
-    vanishedPaths: vanished,
-  }));
-  const selected = selection.tests;
-  const spineTests = requireValidSafetySpine(spine(planRoot));
+  return {changedPaths, packageFields, lockfileGraphChanged, vanished,
+    planRoot, selector, spine};
+}
+
+function mergeSpineAndSelectedTests(spineTests, selected) {
   const merged = createOrderedStringMap();
   for (let index = 0; index < spineTests.length; index += 1) {
     addPlanReasons(merged, spineTests[index], [REASON_SAFETY_SPINE]);
@@ -417,9 +427,12 @@ export function buildExecutionPlan(options) {
     const entry = selected[index];
     addPlanReasons(merged, entry.path, entry.reasons);
   }
+  return merged;
+}
+
+function partitionMergedPlanTests(merged, primaryClasses) {
   const tests = [];
   const observedElsewhere = [];
-  const primaryClasses = derivePrimaryClasses(planRoot).classes;
   const testPaths = sortStrings(orderedStringMapKeys(merged));
   for (let index = 0; index < testPaths.length; index += 1) {
     const testPath = testPaths[index];
@@ -430,6 +443,27 @@ export function buildExecutionPlan(options) {
       !arrayIncludes(reasons, REASON_SAFETY_SPINE);
     appendArrayValue(leftOut ? observedElsewhere : tests, {path: testPath, reasons});
   }
+  return {tests, observedElsewhere};
+}
+
+// The union. The spine is added HERE, unconditionally, never by the selector.
+export function buildExecutionPlan(options) {
+  const {
+    changedPaths, packageFields, lockfileGraphChanged, vanished,
+    planRoot, selector, spine,
+  } = validateExecutionPlanInput(options);
+  const selection = normalizeSelection(selector({
+    root: planRoot,
+    changedPaths,
+    changedPackageFields: packageFields,
+    lockfileGraphChanged,
+    vanishedPaths: vanished,
+  }));
+  const selected = selection.tests;
+  const spineTests = requireValidSafetySpine(spine(planRoot));
+  const merged = mergeSpineAndSelectedTests(spineTests, selected);
+  const primaryClasses = derivePrimaryClasses(planRoot).classes;
+  const {tests, observedElsewhere} = partitionMergedPlanTests(merged, primaryClasses);
   return {
     kind: selection.kind,
     refusals: selection.refusals || [],
@@ -443,43 +477,60 @@ export function buildExecutionPlan(options) {
   };
 }
 
-function normalizeSelection(value) {
-  const selection = copyOwnDataRecord(value);
-  if (!selection ||
-      (selection.kind !== SELECTION_PRECISE &&
-        selection.kind !== SELECTION_WIDENED &&
-        selection.kind !== SELECTION_REFUSED)) {
-    throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
-  }
-  const sourceTests = copyOwnDataArray(selection.tests);
+function isValidSelectionKind(kind) {
+  return kind === SELECTION_PRECISE ||
+    kind === SELECTION_WIDENED ||
+    kind === SELECTION_REFUSED;
+}
+
+function isValidSelectedTestEntry(entry, reasons, selectedPaths, expectedIndex) {
+  if (!entry || typeof entry.path !== 'string' || entry.path.length === 0) return false;
+  if (!reasons || reasons.length === 0) return false;
+  return orderedStringSetValues(selectedPaths).length === expectedIndex;
+}
+
+function normalizeSelectedTestEntries(sourceTests, kind) {
+  if (!sourceTests) throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
   const tests = [];
   const selectedPaths = createOrderedStringSet();
-  if (!sourceTests) throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
   for (let index = 0; index < sourceTests.length; index += 1) {
     const entry = copyOwnDataRecord(sourceTests[index]);
     const reasons = copyOwnStringArray(entry?.reasons);
-    if (!entry || typeof entry.path !== 'string' || entry.path.length === 0 ||
-        !reasons || reasons.length === 0 ||
-        orderedStringSetValues(selectedPaths).length !== index) {
+    if (!isValidSelectedTestEntry(entry, reasons, selectedPaths, index)) {
       throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
     }
     orderedStringSetAdd(selectedPaths, entry.path);
     appendArrayValue(tests, {path: entry.path, reasons});
   }
   if (orderedStringSetValues(selectedPaths).length !== tests.length ||
-      (selection.kind === SELECTION_REFUSED && tests.length > 0)) {
+      (kind === SELECTION_REFUSED && tests.length > 0)) {
     throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
   }
+  return tests;
+}
+
+function isValidRefusalCode(kind, refusalCode) {
+  if (refusalCode !== null && typeof refusalCode !== 'string') return false;
+  if (kind === SELECTION_REFUSED) {
+    return refusalCode !== null && refusalCode.length > 0;
+  }
+  return true;
+}
+
+function normalizeSelection(value) {
+  const selection = copyOwnDataRecord(value);
+  if (!selection || !isValidSelectionKind(selection.kind)) {
+    throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
+  }
+  const sourceTests = copyOwnDataArray(selection.tests);
+  const tests = normalizeSelectedTestEntries(sourceTests, selection.kind);
   const subsystems = selection.subsystems === undefined ? [] :
     copyOwnStringArray(selection.subsystems);
   const refusals = selection.refusals === undefined ? [] :
     copyOwnStringArray(selection.refusals);
   const refusalCode = selection.refusalCode === undefined ? null :
     selection.refusalCode;
-  if (!subsystems || !refusals ||
-      (refusalCode !== null && typeof refusalCode !== 'string') ||
-      (selection.kind === SELECTION_REFUSED &&
-        (refusalCode === null || refusalCode.length === 0))) {
+  if (!subsystems || !refusals || !isValidRefusalCode(selection.kind, refusalCode)) {
     throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
   }
   return {
@@ -625,7 +676,7 @@ export function releaseProofSatisfiesRefusal(
     check(sha) === true;
 }
 
-function main() {
+async function main() {
   const invocation = parseInvocation(arraySlice(process.argv, 2));
   if (!invocation.valid) {
     process.stderr.write(USAGE);
@@ -669,7 +720,7 @@ function main() {
   // This path never runs the whole corpus; the push gate's proof owns that
   // decision and records it itself.
   writeProofScope({head: headSha(), fullCorpus: false, plan});
-  process.exitCode = runClassifiedTestFiles(
+  process.exitCode = await runPlacedClassifiedTestFiles(
     planTestPaths(plan), {root});
 }
 
@@ -722,4 +773,4 @@ export function planTestPaths(plan) {
   return paths;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) await main();

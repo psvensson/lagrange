@@ -64,6 +64,9 @@ function createChangeProofFixture({
       'export function runClassifiedTestFiles(files) {\n' +
       `  fs.writeFileSync(${JSON.stringify(sentinel)}, JSON.stringify(files));\n` +
       '  return 0;\n' +
+      '}\n' +
+      'export async function runPlacedClassifiedTestFiles(files) {\n' +
+      '  return runClassifiedTestFiles(files);\n' +
       '}\n', UTF8);
     git(['init', '--quiet']);
     git(['config', 'user.email', 'fixture@example.invalid']);

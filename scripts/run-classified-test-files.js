@@ -336,22 +336,39 @@ export function estimateFileCosts(plan, resultsRoots) {
   return costs;
 }
 
-export function planClassifiedTestFiles(
-  root, inputFiles, resultsRoots = lastResultsRoots(root)) {
+function validatePlanInputs(inputFiles, resultsRoots) {
   const copiedInput = copyOwnStringArray(inputFiles);
   if (!copiedInput) throw new Error(INVALID_FILES_PROBLEM);
   const copiedResultsRoots = copyOwnStringArray(resultsRoots);
   if (!copiedResultsRoots) throw new Error(INVALID_RESULTS_ROOTS_PROBLEM);
   if (copiedInput.length === 0) throw new Error(NO_FILES_PROBLEM);
-  const primary = derivePrimaryClasses(root);
-  const resource = deriveResourceClasses(root);
-  if (resource.problems.length > 0) {
-    throw new Error(arrayJoin(resource.problems, NEWLINE));
-  }
   const uniqueFiles = createOrderedStringSet(copiedInput);
   const files = sortStrings(orderedStringSetValues(uniqueFiles));
   if (files.length !== copiedInput.length) {
     throw new Error(DUPLICATE_FILES_PROBLEM);
+  }
+  return {copiedResultsRoots, files};
+}
+
+function classifySingleFileLane(primary, resource, file) {
+  if (!objectHasOwn(primary.classes, file) ||
+      !objectHasOwn(resource.classes, file)) {
+    throw new Error(`unclassified or missing test file: ${file}`);
+  }
+  const primaryClass = primary.classes[file];
+  const resourceClass = resource.classes[file];
+  if (!stringCollectionHas(PRIMARY_CLASSES, primaryClass) ||
+      !stringCollectionHas(RESOURCE_CLASSES, resourceClass)) {
+    throw new Error(`unclassified or missing test file: ${file}`);
+  }
+  return effectiveResourceClass(primaryClass, resourceClass, file);
+}
+
+function classifyFilesIntoLanes(root, files) {
+  const primary = derivePrimaryClasses(root);
+  const resource = deriveResourceClasses(root);
+  if (resource.problems.length > 0) {
+    throw new Error(arrayJoin(resource.problems, NEWLINE));
   }
   const lanes = createOrderedStringMap();
   for (let index = 0; index < RESOURCE_CLASSES.length; index += 1) {
@@ -360,19 +377,13 @@ export function planClassifiedTestFiles(
   orderedStringMapSet(lanes, LANE_BOOTSTRAP, []);
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
-    if (!objectHasOwn(primary.classes, file) ||
-        !objectHasOwn(resource.classes, file)) {
-      throw new Error(`unclassified or missing test file: ${file}`);
-    }
-    const primaryClass = primary.classes[file];
-    const resourceClass = resource.classes[file];
-    if (!stringCollectionHas(PRIMARY_CLASSES, primaryClass) ||
-        !stringCollectionHas(RESOURCE_CLASSES, resourceClass)) {
-      throw new Error(`unclassified or missing test file: ${file}`);
-    }
-    appendArrayValue(orderedStringMapGet(lanes,
-      effectiveResourceClass(primaryClass, resourceClass, file)), file);
+    const laneClass = classifySingleFileLane(primary, resource, file);
+    appendArrayValue(orderedStringMapGet(lanes, laneClass), file);
   }
+  return lanes;
+}
+
+function buildLanePlan(lanes, copiedResultsRoots, totalFiles) {
   const plan = [];
   let plannedFiles = 0;
   for (let index = 0; index < LANE_ORDER.length; index += 1) {
@@ -390,10 +401,24 @@ export function planClassifiedTestFiles(
       resourceClass,
     });
   }
-  if (plannedFiles !== files.length || plan.length === 0) {
+  if (plannedFiles !== totalFiles || plan.length === 0) {
     throw new Error(INCOMPLETE_PLAN_PROBLEM);
   }
   return plan;
+}
+
+export function planClassifiedTestFiles(
+  root, inputFiles, resultsRoots = lastResultsRoots(root)) {
+  const {copiedResultsRoots, files} = validatePlanInputs(inputFiles, resultsRoots);
+  const lanes = classifyFilesIntoLanes(root, files);
+  return buildLanePlan(lanes, copiedResultsRoots, files.length);
+}
+
+function isValidRunnerOptionShape(root, spawn, failFast, env, write, sources) {
+  const validRoot = typeof root === 'string' && root.length > 0;
+  const validCallbacks = typeof spawn === 'function' && typeof write === 'function';
+  const validEnv = Boolean(env) && typeof env === 'object' && Boolean(sources);
+  return validRoot && validCallbacks && typeof failFast === 'boolean' && validEnv;
 }
 
 // The runner's options, validated: every one an own data value, so an
@@ -406,9 +431,7 @@ function runnerOptions(options) {
     write = (text) => process.stdout.write(text), thermalSources = {},
     thermalSleep} = ownedOptions;
   const sources = copyOwnDataRecord(thermalSources);
-  if (typeof root !== 'string' || root.length === 0 ||
-      typeof spawn !== 'function' || typeof failFast !== 'boolean' ||
-      !env || typeof env !== 'object' || typeof write !== 'function' || !sources) {
+  if (!isValidRunnerOptionShape(root, spawn, failFast, env, write, sources)) {
     throw new Error(INVALID_OPTIONS_PROBLEM);
   }
   return {root, spawn, failFast, env, write, sources, sleep: thermalSleep};
@@ -570,6 +593,20 @@ function readInputFiles(argv) {
   return files;
 }
 
+export function runPlacedClassifiedTestFiles(files, options = {}) {
+  const root = options.root || ROOT;
+  const failFast = Boolean(options.failFast);
+  return runPlacedTestFiles(files, placementDeps({
+    root,
+    failFast,
+    planCosts: (planned) => estimateFileCosts(
+      planClassifiedTestFiles(root, planned), lastResultsRoots(root)),
+    runLocal: (planned, localOptions) =>
+      runClassifiedTestFiles(planned, {...options, ...localOptions}),
+    lastGreen: (file) => readLastResult(lastResultsRoots(root), file) !== null,
+  }));
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const argv = arraySlice(process.argv, 2);
   const failFast = stringCollectionHas(argv, FAIL_FAST_FLAG);
@@ -584,13 +621,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   } else {
     // Placement decides whether lab machines can shorten this run; when they
     // cannot, or may not, it is exactly the local run it always was.
-    process.exitCode = await runPlacedTestFiles(files, placementDeps({
+    process.exitCode = await runPlacedClassifiedTestFiles(files, {
       root: ROOT,
       failFast,
-      planCosts: (planned) => estimateFileCosts(
-        planClassifiedTestFiles(ROOT, planned), lastResultsRoots(ROOT)),
-      runLocal: (planned, options) => runClassifiedTestFiles(planned, options),
-      lastGreen: (file) => readLastResult(lastResultsRoots(ROOT), file) !== null,
-    }));
+    });
   }
 }
