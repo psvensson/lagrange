@@ -728,6 +728,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           idempotencyKey: idempotencyKey || null,
           splitMirrorOrigin: splitMirrorOrigin || null,
           sessionId: sessionId || null,
+          inTransaction: payload?.inTransaction === true,
           resultDeadlineMs,
           resultMaxBytes,
           resultMaxRows,
@@ -746,6 +747,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         ...(resultSuccess || !result?.errorCode ?
           {} :
           {errorCode: result.errorCode}),
+        ...(result?.waitedForActiveTransaction === true ?
+          {waitedForActiveTransaction: true} :
+          {}),
         rows: result.rows,
         changes: result.changes,
         count: result.count,

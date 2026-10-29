@@ -50,6 +50,8 @@ const LOCAL_STR_INSERT_PREFIX = 'INSERT ';
 const LOCAL_STR_WHERE_CLAUSE_PREFIX = ' WHERE ';
 const LOCAL_STR_COLON = ':';
 const LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD = 1_000_000_000_000;
+const LOCAL_NUM_ACTIVE_TX_WAIT_ATTEMPTS = 35;
+const LOCAL_NUM_ACTIVE_TX_WAIT_MS = 15;
 
 class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
   async executeQuery(sql, params = [], options = {}) {
@@ -73,6 +75,23 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         const transaction = this.resolveActiveTransactionState(
           options.sessionId || null,
         );
+        let waitedForActiveTransaction = false;
+        if (options.inTransaction === true) {
+          let waitAttempts = 0;
+          while (
+            waitAttempts < LOCAL_NUM_ACTIVE_TX_WAIT_ATTEMPTS &&
+            Array.from(this.activeTransactions.entries()).some(
+              ([activeSessionId, activeState]) =>
+                activeSessionId !== transaction?.sessionId &&
+                activeState?.beforeImages instanceof Map &&
+                activeState.beforeImages.size > 0,
+            )
+          ) {
+            waitAttempts += 1;
+            waitedForActiveTransaction = true;
+            await new Promise((resolve) => setTimeout(resolve, LOCAL_NUM_ACTIVE_TX_WAIT_MS));
+          }
+        }
         const needsCleanRead = Array.from(this.activeTransactions.entries()).some(
           ([activeSessionId, activeState]) =>
             activeSessionId !== transaction?.sessionId &&
@@ -141,6 +160,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         }
         return {
           success: true,
+          ...(waitedForActiveTransaction ? {waitedForActiveTransaction: true} : {}),
           rows: visibleRows,
           count: visibleRows.length,
           partitionId: this.partitionId,

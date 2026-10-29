@@ -224,6 +224,9 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
     const inTransaction =
       this.transactionCoordinator?.hasActiveTransaction?.(sessionId) === true;
+    const activeTx =
+      this.transactionCoordinator?.transactionsBySession?.get?.(sessionId) ||
+      null;
     const preferLeader =
       typeof queryOptions?.preferLeader === 'boolean' ?
         queryOptions.preferLeader :
@@ -264,6 +267,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       params,
       {
         sessionId,
+        ...(inTransaction ? {inTransaction: true} : {}),
         preferLeader,
         preferSameLatencyGroup,
         deliveryPriority,
@@ -279,6 +283,17 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     const executionDurationMs = Date.now() - executionStartTimeMs;
 
     if (result?.success === true) {
+      if (activeTx) {
+        if (
+          result.waitedForActiveTransaction === true &&
+          activeTx.participants.size === 0 &&
+          activeTx.hasReadStatement !== true &&
+          typeof this.transactionCoordinator?.epochSource === 'function'
+        ) {
+          activeTx.transactionEpoch = this.transactionCoordinator.epochSource();
+        }
+        activeTx.hasReadStatement = true;
+      }
       // Attribution feed: result.partitions is the executed set (main
       // table plus join fanout); fall back to the planned root set.
       this.recordServicePartitionAccess(

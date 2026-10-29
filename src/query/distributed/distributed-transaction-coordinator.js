@@ -36,36 +36,22 @@ import {
 
 const LOCAL_NUM_ENLIST_BUSY_DELAY_MS = 10;
 import {
-  setTransactionStatus,
-  getRemainingTransactionBudgetMs,
-  isTransactionBudgetExceeded,
-  hasTimeoutFailure,
-  abortTimedOutTransaction,
-  runCommitProtocol,
-  runRollbackProtocol,
-  buildParticipantFailureResult,
-  getPrepareParticipantKeys,
-  getCommitParticipantKeys,
-  getRollbackParticipantKeys,
-  executeParticipantStage,
-  executeOnePhaseCommitStage,
-  executeParticipantOperationWithRetry,
-  resolveParticipantCommitMiss,
-  createTransactionTimeoutError,
-  emitParticipantRetryDiagnostic,
+  setTransactionStatus, getRemainingTransactionBudgetMs,
+  isTransactionBudgetExceeded, hasTimeoutFailure,
+  abortTimedOutTransaction, runCommitProtocol, runRollbackProtocol,
+  buildParticipantFailureResult, getPrepareParticipantKeys,
+  getCommitParticipantKeys, getRollbackParticipantKeys,
+  executeParticipantStage, executeOnePhaseCommitStage,
+  executeParticipantOperationWithRetry, resolveParticipantCommitMiss,
+  createTransactionTimeoutError, emitParticipantRetryDiagnostic,
   calculateParticipantRetryDelay,
 } from './distributed-transaction-protocol.js';
 import {
-  persistTransactionRecord,
-  persistParticipants,
-  persistParticipantRecord,
-  persistWriteOperationRecord,
-  createTransactionId,
-  createParticipantId,
-  createWritePayloadHash,
-  parseJsonArrayField,
-  resolveFiniteNumberField,
-  getOrderedParticipantIds,
+  persistTransactionRecord, persistParticipants,
+  persistParticipantRecord, persistWriteOperationRecord,
+  createTransactionId, createParticipantId,
+  createWritePayloadHash, parseJsonArrayField,
+  resolveFiniteNumberField, getOrderedParticipantIds,
   getOrderedParticipantDetails,
 } from './distributed-transaction-records.js';
 import {
@@ -248,6 +234,7 @@ class DistributedTransactionCoordinator {
       decisionTrace: [],
       participants: new Map(),
       writeOperations: [],
+      hasReadStatement: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -322,12 +309,22 @@ class DistributedTransactionCoordinator {
         continue;
       }
       const maxBusyAttempts = tx.participants.size === 0 && newlyEnlisted.length === 0 ?
-        300 : (50 + Math.floor(Math.random() * 50));
+        300 : (8 + Math.floor(Math.random() * 8));
       let attempt = 0;
       while (true) {
         attempt += 1;
+        const participantEpoch = (attempt > 1 && tx.hasReadStatement !== true) ?
+          this.epochSource() : tx.transactionEpoch;
+        if (
+          tx.participants.size === 0 &&
+          newlyEnlisted.length === 0 &&
+          attempt > 1 &&
+          tx.hasReadStatement !== true
+        ) {
+          tx.transactionEpoch = participantEpoch;
+        }
         try {
-          await this.beginParticipant(sessionId, partitionId, tx.transactionEpoch);
+          await this.beginParticipant(sessionId, partitionId, participantEpoch);
           break;
         } catch (error) {
           const isBusy = String(error?.message || '').includes(
@@ -337,12 +334,15 @@ class DistributedTransactionCoordinator {
             await this.sleep(LOCAL_NUM_ENLIST_BUSY_DELAY_MS);
             continue;
           }
-          for (const enlistedId of newlyEnlisted) {
+          const partitionsToRelease = isBusy ?
+            [...newlyEnlisted, ...Array.from(tx.participants.keys())] : newlyEnlisted;
+          for (const enlistedId of partitionsToRelease) {
             try {
               await this.rollbackParticipant(sessionId, enlistedId);
             } catch (_rollbackErr) {
               void _rollbackErr;
             }
+            tx.participants.delete(enlistedId);
           }
           throw error;
         }
