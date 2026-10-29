@@ -462,9 +462,14 @@ describe('project hardening contracts', () => {
       const contextCopies = runtimeStage.match(CONTEXT_COPY) || [];
       assert.ok(contextCopies.includes('COPY src/ ./src/'),
         'the runtime stage copies src/ from the build context');
+      assert.ok(contextCopies.includes('COPY wit/ ./wit/'),
+        'the runtime stage copies wit/ from the build context');
       assert.ok(contextCopies.includes(`COPY ${bindingRoot} ./${bindingRoot}`),
         'the runtime stage copies the binding layout root beside src/');
       const admitted = dockerignore.split('\n').map((line) => line.trim());
+      assert.ok(admitted.includes('!wit/') &&
+        admitted.includes('!wit/**'),
+      'the build context admits wit/');
       assert.ok(admitted.includes(`!${bindingRoot}`) &&
         admitted.includes(`!${bindingRoot}**`),
       'the build context admits the binding layout root');

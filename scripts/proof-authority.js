@@ -573,7 +573,8 @@ function recordProof({
     throw new Error(SUBJECT_NOT_COMMIT);
   }
 
-  const identity = checkedOutIdentity({sha, cwd, git});
+  const identity = contract.identityReuse === true ?
+    checkedOutIdentity({sha, cwd, git}) : null;
   const receipt = buildReceipt({proofId, sha, completedAt, producer, identity, env});
   const tagBody = buildTagBody({proofId, sha, receipt, now});
   const made = git(['mktag'], {cwd, input: tagBody});
@@ -602,7 +603,7 @@ function recordProof({
   if (recorded.outcome !== OUTCOME.PROVEN) {
     throw new Error(`persisted proof did not verify: ${recorded.because || recorded.outcome}`);
   }
-  if (identity && contract.identityReuse === true) {
+  if (identity) {
     publishIdentityRef({proofId, identity, objectSha, remote, cwd, git, now});
   }
   return {...recorded, reused: false};

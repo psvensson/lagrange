@@ -7,5 +7,7 @@
 !package-lock.json
 !src/
 !src/**
+!wit/
+!wit/**
 !vendor/raft-rs-wasm/
 !vendor/raft-rs-wasm/**

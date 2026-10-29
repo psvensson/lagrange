@@ -26,7 +26,7 @@ COPY --from=builder --chown=10001:10001 /data /data
 COPY --from=builder /app/node_modules ./node_modules
 COPY package.json ./
 COPY src/ ./src/
-COPY --chown=10001:10001 wit/ ./wit/
+COPY wit/ ./wit/
 # The vendored raft-rs binding at its layout root beside src/, where the
 # runtime owner resolves it (RAFT_RS_BINDING_LAYOUT in
 # src/raft/raft-rs-core-constants.js).

@@ -56,6 +56,8 @@ test('release proof is single-pass and hardening tail contains only unique work'
   const manifest = JSON.parse(read(TAIL_MANIFEST));
   t.match(proof, /'run', 'test:ci'/u,
     'complete CI corpus is executed exactly once');
+  t.match(proof, /PROOF\.CORPUS_FULL/u,
+    'an exact-SHA whole-corpus receipt is reused instead of rerunning test:all');
   const ids = manifest.commands.map((command) => command.id);
   t.same(ids, [
     'focused-contracts',

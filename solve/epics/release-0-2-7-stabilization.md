@@ -14,6 +14,7 @@ doneWhen:
 quests:
   - release-0-2-7-core-runtime-and-semantics
   - release-0-2-7-release-surface-and-packaging
+  - release-0-2-7-docker-context-and-publish-speedup
 authorizes:
   - src/query
   - src/partition
@@ -34,6 +35,7 @@ authorizes:
   - wit
   - charts/lagrange-node
   - .github/workflows/release.yml
+  - .dockerignore
   - Dockerfile
   - package.json
   - package-lock.json

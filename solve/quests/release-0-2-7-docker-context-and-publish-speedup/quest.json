@@ -1,0 +1,18 @@
+{
+  "schema": "solve-quest/2",
+  "id": "release-0-2-7-docker-context-and-publish-speedup",
+  "epic": "release-0-2-7-stabilization",
+  "statement": "Admit wit/ in .dockerignore and align Dockerfile COPY wit/ ./wit/ with runtime stage context-copy contracts so the release Docker image build succeeds, skip release-content identity traversal when recording non-identity-reusable corpus-full-v1 receipts so publish-head records corpus receipts without timing out, and reuse exact-SHA corpus-full-v1 receipts in run-release-proof.js instead of repeating test:all.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "test-output/release-0-2-7-stabilization/receipt-q3.json",
+      "requiredReceipts": [
+        "dockerignore-admits-wit",
+        "proof-authority-corpus-skip-identity",
+        "release-proof-reuses-corpus-receipt"
+      ]
+    }
+  },
+  "sealedAt": "b3b5062ea006cf303a62f0286ea479db8f003fe3"
+}

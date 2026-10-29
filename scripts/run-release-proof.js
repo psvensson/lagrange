@@ -27,6 +27,25 @@ const STEPS = Object.freeze([
   }),
 ]);
 
+const STEPS_WITH_PROVEN_CORPUS = Object.freeze([
+  Object.freeze({
+    label: 'complete-ci-static-proof',
+    command: 'npm',
+    args: ['run', 'test:static'],
+  }),
+  Object.freeze({
+    label: 'complete-ci-model-contracts',
+    command: 'npm',
+    args: ['run', 'model:contracts'],
+  }),
+  Object.freeze({
+    label: 'complete-ci-chart-endpoint-sync',
+    command: 'npm',
+    args: ['run', 'test:chart:endpoint-sync'],
+  }),
+  STEPS[1],
+]);
+
 function gitOutput(args) {
   const result = spawnGit(args, {
     cwd: process.cwd(),
@@ -40,11 +59,12 @@ function gitOutput(args) {
   return result.stdout.trim();
 }
 
+const remote = process.env.LAGRANGE_PROOF_REMOTE || 'origin';
 const headSha = gitOutput(['rev-parse', 'HEAD']);
 const existing = resolveProof({
   proofId: PROOF.RELEASE_FULL,
   sha: headSha,
-  remote: process.env.LAGRANGE_PROOF_REMOTE || 'origin',
+  remote,
 });
 
 if (existing.outcome === OUTCOME.PROVEN) {
@@ -64,7 +84,22 @@ if (existing.outcome === OUTCOME.UNAVAILABLE) {
   console.log(`[release-proof] no durable receipt for ${headSha}; running once`);
 }
 
-for (const step of STEPS) {
+const corpusProof = resolveProof({
+  proofId: PROOF.CORPUS_FULL,
+  sha: headSha,
+  remote,
+});
+const stepsToRun = corpusProof.outcome === OUTCOME.PROVEN ?
+  STEPS_WITH_PROVEN_CORPUS :
+  STEPS;
+if (corpusProof.outcome === OUTCOME.PROVEN) {
+  console.log(
+    `[release-proof] reuse ${PROOF.CORPUS_FULL} for ${headSha} ` +
+    `(${corpusProof.objectSha})`,
+  );
+}
+
+for (const step of stepsToRun) {
   console.log(`[release-proof] ${step.label}`);
   const result = spawnSync(step.command, step.args, {
     cwd: process.cwd(),

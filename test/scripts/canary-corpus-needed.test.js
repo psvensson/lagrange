@@ -127,6 +127,8 @@ test('a recorded whole-corpus receipt is what the canary reads back', () => {
       producer: {kind: 'test-fixture', id: 'canary-corpus-needed'},
     });
     assert.equal(recorded.reused, false);
+    assert.equal(recorded.receipt.identity, undefined,
+      'a non-identity-reusable corpus receipt skips release-content identity traversal');
     assert.equal(resolveCorpusProof({sha, cwd: source}), true);
     assert.deepEqual(
       corpusNeeded({sha, resolve: ({sha: asked}) =>
