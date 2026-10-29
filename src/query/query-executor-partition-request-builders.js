@@ -92,6 +92,9 @@ function createDefaultPartitionRequestBuilder({
     if (executionOptions.inTransaction === true) {
       request.inTransaction = true;
     }
+    if (executionOptions.waitForCleanRead === true) {
+      request.waitForCleanRead = true;
+    }
     stampMigrationIdentityFields(request, executionOptions);
     // Write-path epoch fencing: carry the partition epoch the write was
     // planned against so the partition boundary can reject stale-epoch

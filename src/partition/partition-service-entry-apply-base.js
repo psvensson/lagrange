@@ -729,6 +729,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           splitMirrorOrigin: splitMirrorOrigin || null,
           sessionId: sessionId || null,
           inTransaction: payload?.inTransaction === true,
+          waitForCleanRead: payload?.waitForCleanRead === true,
           resultDeadlineMs,
           resultMaxBytes,
           resultMaxRows,

@@ -1,40 +1,19 @@
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG, QUERY_OPERATION} from '../query-constants.js';
 import {
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  QUERY_OPERATION,
-} from '../query-constants.js';
-import {
-  TIMEOUT_BUDGET_DEFAULT,
-  createTopLevelOperationBudget,
+  TIMEOUT_BUDGET_DEFAULT, createTopLevelOperationBudget,
 } from '../../control-plane/timeout-budget.js';
 import {DurableWorkflowCoordinator} from '../../workflow/durable-workflow-coordinator.js';
+import {COMMIT_MODE, PARTICIPANT_SET_STATE, TRANSACTION_MODE} from '../../constants/index.js';
 import {
-  COMMIT_MODE,
-  PARTICIPANT_SET_STATE,
-  TRANSACTION_MODE,
-} from '../../constants/index.js';
-import {
-  PARTICIPANT_RETRY_DEFAULT,
-  PARTICIPANT_STATUS,
-  RECOVERY_SWEEP_DEFAULT_INTERVAL_MS,
-  TRANSACTION_STATUS,
-  WRITE_OPERATION_STATUS,
+  PARTICIPANT_RETRY_DEFAULT, PARTICIPANT_STATUS,
+  RECOVERY_SWEEP_DEFAULT_INTERVAL_MS, TRANSACTION_STATUS, WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
 import {
-  recover,
-  resumeRecoveredTransactions,
-  runRecoverySweep,
-  startRecoverySweep,
-  stopRecoverySweep,
-  isRecoverySweepDeferred,
-  shouldDeferRecoverySweepError,
-  deferRecoverySweep,
-  clearRecoverySweepDeferState,
-  buildDeferredRecoverySweepResult,
+  recover, resumeRecoveredTransactions, runRecoverySweep, startRecoverySweep,
+  stopRecoverySweep, isRecoverySweepDeferred, shouldDeferRecoverySweepError,
+  deferRecoverySweep, clearRecoverySweepDeferState, buildDeferredRecoverySweepResult,
   recoverFromSystemTables,
 } from './distributed-transaction-recovery.js';
-
-const LOCAL_NUM_ENLIST_BUSY_DELAY_MS = 10;
 import {
   setTransactionStatus, getRemainingTransactionBudgetMs,
   isTransactionBudgetExceeded, hasTimeoutFailure,
@@ -52,11 +31,14 @@ import {
   createTransactionId, createParticipantId,
   createWritePayloadHash, parseJsonArrayField,
   resolveFiniteNumberField, getOrderedParticipantIds,
-  getOrderedParticipantDetails,
+  getOrderedParticipantDetails, resolveEnlistDeadlockState,
 } from './distributed-transaction-records.js';
-import {
-  buildFrozenTransactionDecision,
-} from './distributed-transaction-commit-mode.js';
+import {buildFrozenTransactionDecision} from './distributed-transaction-commit-mode.js';
+
+const LOCAL_NUM_ENLIST_BUSY_DELAY_MS = 10;
+const LOCAL_NUM_ENLIST_MAX_BUSY_ATTEMPTS = 500;
+const LOCAL_NUM_ENLIST_DEADLOCK_VICTIM_LIMIT = 2;
+const LOCAL_NUM_ENLIST_DEADLOCK_NON_VICTIM_LIMIT = 8;
 
 
 /**
@@ -88,53 +70,38 @@ class DistributedTransactionCoordinator {
     this.rollbackParticipant = options.rollbackParticipant || (async () => {});
     this.persistTransaction = options.persistTransaction || (async () => {});
     this.persistParticipant = options.persistParticipant || (async () => {});
-    this.persistWriteOperation =
-      options.persistWriteOperation || (async () => {});
+    this.persistWriteOperation = options.persistWriteOperation || (async () => {});
     this.resolveParticipantCommitOutcome =
       typeof options.resolveParticipantCommitOutcome === 'function' ?
-        options.resolveParticipantCommitOutcome :
-        null;
+        options.resolveParticipantCommitOutcome : null;
     this.now = options.now || (() => Date.now());
     this.nextEpoch = Number.isFinite(options.initialEpoch) ?
-      Math.floor(options.initialEpoch) :
-      this.now();
-    this.epochSource =
-      options.epochSource || (() => {
-        this.nextEpoch = Number.isFinite(options.initialEpoch) ?
-          this.nextEpoch + 1 : Math.max(this.nextEpoch + 1, this.now());
-        return this.nextEpoch;
-      });
-    this.transactionBudgetMs =
-      Number.isFinite(options.transactionBudgetMs) &&
+      Math.floor(options.initialEpoch) : this.now();
+    this.epochSource = options.epochSource || (() => {
+      this.nextEpoch = Number.isFinite(options.initialEpoch) ?
+        this.nextEpoch + 1 : Math.max(this.nextEpoch + 1, this.now());
+      return this.nextEpoch;
+    });
+    this.transactionBudgetMs = Number.isFinite(options.transactionBudgetMs) &&
       options.transactionBudgetMs > 0 ?
-        Math.floor(options.transactionBudgetMs) :
-        TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS;
-    this.participantRetryMaxRetries =
-      Number.isFinite(options.participantRetryMaxRetries) &&
+      Math.floor(options.transactionBudgetMs) : TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS;
+    this.participantRetryMaxRetries = Number.isFinite(options.participantRetryMaxRetries) &&
       options.participantRetryMaxRetries >= 0 ?
-        Math.floor(options.participantRetryMaxRetries) :
-        PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES;
-    this.participantRetryBaseDelayMs =
-      Number.isFinite(options.participantRetryBaseDelayMs) &&
+      Math.floor(options.participantRetryMaxRetries) : PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES;
+    this.participantRetryBaseDelayMs = Number.isFinite(options.participantRetryBaseDelayMs) &&
       options.participantRetryBaseDelayMs > 0 ?
-        Math.floor(options.participantRetryBaseDelayMs) :
-        PARTICIPANT_RETRY_DEFAULT.BASE_DELAY_MS;
-    this.participantRetryMaxDelayMs =
-      Number.isFinite(options.participantRetryMaxDelayMs) &&
+      Math.floor(options.participantRetryBaseDelayMs) : PARTICIPANT_RETRY_DEFAULT.BASE_DELAY_MS;
+    this.participantRetryMaxDelayMs = Number.isFinite(options.participantRetryMaxDelayMs) &&
       options.participantRetryMaxDelayMs > 0 ?
-        Math.floor(options.participantRetryMaxDelayMs) :
-        PARTICIPANT_RETRY_DEFAULT.MAX_DELAY_MS;
-    this.sleep =
-      options.sleep ||
+      Math.floor(options.participantRetryMaxDelayMs) : PARTICIPANT_RETRY_DEFAULT.MAX_DELAY_MS;
+    this.sleep = options.sleep ||
       ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     this.onParticipantRetry = options.onParticipantRetry || null;
     this.logger = options.logger || console;
     this.loadRecoveryStateForSweep = options.loadRecoveryStateForSweep || null;
-    this.recoverySweepIntervalMs =
-      Number.isFinite(options.recoverySweepIntervalMs) &&
+    this.recoverySweepIntervalMs = Number.isFinite(options.recoverySweepIntervalMs) &&
       options.recoverySweepIntervalMs > 0 ?
-        Math.floor(options.recoverySweepIntervalMs) :
-        RECOVERY_SWEEP_DEFAULT_INTERVAL_MS;
+      Math.floor(options.recoverySweepIntervalMs) : RECOVERY_SWEEP_DEFAULT_INTERVAL_MS;
     this.recoverySweepTimer = null;
     this.recoverySweepInFlight = false;
     this.recoverySweepDeferredUntilMs = 0;
@@ -235,6 +202,9 @@ class DistributedTransactionCoordinator {
       participants: new Map(),
       writeOperations: [],
       hasReadStatement: false,
+      firstReadEpochByPartition: new Map(),
+      waitingForPartitionId: null,
+      enlistingPartitionIds: new Set(),
       createdAt: now,
       updatedAt: now,
     };
@@ -302,68 +272,89 @@ class DistributedTransactionCoordinator {
       };
     }
 
-    const uniquePartitionIds = Array.from(new Set(partitionIds || []));
+    const uniquePartitionIds = Array.from(new Set(partitionIds || [])).sort();
+    const newPartitionIds = uniquePartitionIds.filter((id) => !tx.participants.has(id));
     const newlyEnlisted = [];
-    for (const partitionId of uniquePartitionIds) {
-      if (tx.participants.has(partitionId)) {
-        continue;
-      }
-      const maxBusyAttempts = tx.participants.size === 0 && newlyEnlisted.length === 0 ?
-        300 : (8 + Math.floor(Math.random() * 8));
-      let attempt = 0;
-      while (true) {
-        attempt += 1;
-        const participantEpoch = (attempt > 1 && tx.hasReadStatement !== true) ?
-          this.epochSource() : tx.transactionEpoch;
-        if (
-          tx.participants.size === 0 &&
-          newlyEnlisted.length === 0 &&
-          attempt > 1 &&
-          tx.hasReadStatement !== true
-        ) {
-          tx.transactionEpoch = participantEpoch;
-        }
-        try {
-          await this.beginParticipant(sessionId, partitionId, participantEpoch);
-          break;
-        } catch (error) {
-          const isBusy = String(error?.message || '').includes(
-            'Transaction already active on this partition',
-          );
-          if (isBusy && attempt < maxBusyAttempts) {
-            await this.sleep(LOCAL_NUM_ENLIST_BUSY_DELAY_MS);
-            continue;
+    tx.enlistingPartitionIds = new Set();
+    try {
+      for (const partitionId of newPartitionIds) {
+        let attempt = 0;
+        tx.waitingForPartitionId = partitionId;
+        while (true) {
+          attempt += 1;
+          const priorReadEpoch = tx.firstReadEpochByPartition?.get?.(partitionId);
+          const hasPriorReadOnPartition = Number.isFinite(priorReadEpoch);
+          let participantEpoch;
+          if (hasPriorReadOnPartition) {
+            participantEpoch = priorReadEpoch;
+          } else if (attempt > 1) {
+            participantEpoch = Math.max(tx.transactionEpoch, this.epochSource());
+            tx.transactionEpoch = participantEpoch;
+          } else {
+            participantEpoch = tx.transactionEpoch;
           }
-          const partitionsToRelease = isBusy ?
-            [...newlyEnlisted, ...Array.from(tx.participants.keys())] : newlyEnlisted;
-          for (const enlistedId of partitionsToRelease) {
-            try {
-              await this.rollbackParticipant(sessionId, enlistedId);
-            } catch (_rollbackErr) {
-              void _rollbackErr;
+          try {
+            await this.beginParticipant(sessionId, partitionId, participantEpoch);
+            break;
+          } catch (error) {
+            const isBusy = String(error?.message || '').includes(
+              'Transaction already active on this partition',
+            );
+            if (isBusy) {
+              const deadlock = resolveEnlistDeadlockState(
+                this.transactionsBySession,
+                tx,
+                partitionId,
+                newlyEnlisted,
+              );
+              const limit = deadlock.inCycle ?
+                (deadlock.isVictim ?
+                  LOCAL_NUM_ENLIST_DEADLOCK_VICTIM_LIMIT :
+                  LOCAL_NUM_ENLIST_DEADLOCK_NON_VICTIM_LIMIT) :
+                LOCAL_NUM_ENLIST_MAX_BUSY_ATTEMPTS;
+              if (attempt < limit) {
+                await this.sleep(LOCAL_NUM_ENLIST_BUSY_DELAY_MS);
+                continue;
+              }
             }
-            tx.participants.delete(enlistedId);
+            tx.waitingForPartitionId = null;
+            const partitionsToRelease = isBusy ?
+              [...newlyEnlisted, ...Array.from(tx.participants.keys())] :
+              newlyEnlisted;
+            for (const enlistedId of partitionsToRelease) {
+              try {
+                await this.rollbackParticipant(sessionId, enlistedId);
+              } catch (_rollbackErr) {
+                void _rollbackErr;
+              }
+            }
+            throw error;
           }
-          throw error;
         }
+        tx.waitingForPartitionId = null;
+        newlyEnlisted.push(partitionId);
+        tx.enlistingPartitionIds.add(partitionId);
       }
-      const now = this.now();
-      await this.workflowCoordinator.upsertParticipant(tx.workflowId, {
-        participantId: this.createParticipantId(tx.transactionId, partitionId),
-        transactionId: tx.transactionId,
-        partitionId,
-        status: PARTICIPANT_STATUS.ACTIVE,
-        lastError: null,
-        createdAt: now,
-        updatedAt: now,
-      });
-      newlyEnlisted.push(partitionId);
-    }
-
-    tx.updatedAt = this.now();
-    if (newlyEnlisted.length > 0) {
-      await this.persistTransactionRecord(tx);
-      await this.persistParticipants(tx, newlyEnlisted);
+      for (const partitionId of newlyEnlisted) {
+        const now = this.now();
+        await this.workflowCoordinator.upsertParticipant(tx.workflowId, {
+          participantId: this.createParticipantId(tx.transactionId, partitionId),
+          transactionId: tx.transactionId,
+          partitionId,
+          status: PARTICIPANT_STATUS.ACTIVE,
+          lastError: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      tx.updatedAt = this.now();
+      if (newlyEnlisted.length > 0) {
+        await this.persistTransactionRecord(tx);
+        await this.persistParticipants(tx, newlyEnlisted);
+      }
+    } finally {
+      tx.waitingForPartitionId = null;
+      tx.enlistingPartitionIds?.clear?.();
     }
 
     return {

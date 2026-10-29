@@ -227,6 +227,12 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     const activeTx =
       this.transactionCoordinator?.transactionsBySession?.get?.(sessionId) ||
       null;
+    const waitForCleanRead =
+      inTransaction &&
+      activeTx !== null &&
+      activeTx.participants.size === 0 &&
+      (activeTx.firstReadEpochByPartition?.size || 0) === 0 &&
+      activeTx.hasReadStatement !== true;
     const preferLeader =
       typeof queryOptions?.preferLeader === 'boolean' ?
         queryOptions.preferLeader :
@@ -268,6 +274,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       {
         sessionId,
         ...(inTransaction ? {inTransaction: true} : {}),
+        ...(waitForCleanRead ? {waitForCleanRead: true} : {}),
         preferLeader,
         preferSameLatencyGroup,
         deliveryPriority,
@@ -284,13 +291,31 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
 
     if (result?.success === true) {
       if (activeTx) {
+        const executedPartitions = Array.isArray(result.partitions) ?
+          result.partitions :
+          partitionIds;
         if (
           result.waitedForActiveTransaction === true &&
           activeTx.participants.size === 0 &&
-          activeTx.hasReadStatement !== true &&
+          (activeTx.firstReadEpochByPartition?.size || 0) === 0 &&
           typeof this.transactionCoordinator?.epochSource === 'function'
         ) {
           activeTx.transactionEpoch = this.transactionCoordinator.epochSource();
+        }
+        const readEpoch =
+          activeTx.participants.size === 0 &&
+          (activeTx.firstReadEpochByPartition?.size || 0) === 0 ?
+            activeTx.transactionEpoch :
+            Math.max(
+              activeTx.transactionEpoch,
+              this.transactionCoordinator?.epochSource?.() ?? activeTx.transactionEpoch,
+            );
+        if (activeTx.firstReadEpochByPartition instanceof Map) {
+          for (const pid of executedPartitions) {
+            if (!activeTx.firstReadEpochByPartition.has(pid)) {
+              activeTx.firstReadEpochByPartition.set(pid, readEpoch);
+            }
+          }
         }
         activeTx.hasReadStatement = true;
       }

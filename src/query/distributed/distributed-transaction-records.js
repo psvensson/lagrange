@@ -179,6 +179,70 @@ function getOrderedParticipantDetails(tx) {
     .sort((left, right) => left.partitionId.localeCompare(right.partitionId));
 }
 
+function resolveEnlistDeadlockState(
+  transactionsBySession,
+  tx,
+  targetPartitionId,
+  newlyEnlisted = [],
+) {
+  if (!transactionsBySession || !tx || !targetPartitionId) {
+    return {inCycle: false, isVictim: false};
+  }
+  const heldByTx = new Set([
+    ...(tx.participants ? tx.participants.keys() : []),
+    ...newlyEnlisted,
+  ]);
+  let currentPartitionId = targetPartitionId;
+  const visitedPartitions = new Set();
+  const cycleTransactions = [tx];
+
+  while (currentPartitionId) {
+    if (visitedPartitions.has(currentPartitionId)) {
+      break;
+    }
+    visitedPartitions.add(currentPartitionId);
+    let holderTx = null;
+    const sessionTxs = typeof transactionsBySession.values === 'function' ?
+      transactionsBySession.values() :
+      Object.values(transactionsBySession);
+    for (const otherTx of sessionTxs) {
+      if (otherTx === tx) {
+        continue;
+      }
+      const holdsPartition =
+        Boolean(otherTx.participants?.has?.(currentPartitionId)) ||
+        Boolean(otherTx.enlistingPartitionIds?.has?.(currentPartitionId));
+      if (holdsPartition) {
+        holderTx = otherTx;
+        break;
+      }
+    }
+    if (!holderTx || !holderTx.waitingForPartitionId) {
+      return {inCycle: false, isVictim: false};
+    }
+    cycleTransactions.push(holderTx);
+    if (heldByTx.has(holderTx.waitingForPartitionId)) {
+      let victim = cycleTransactions[0];
+      for (let i = 1; i < cycleTransactions.length; i += 1) {
+        const candidate = cycleTransactions[i];
+        const victimEpoch = Number(victim.transactionEpoch) || 0;
+        const candidateEpoch = Number(candidate.transactionEpoch) || 0;
+        if (candidateEpoch > victimEpoch) {
+          victim = candidate;
+        } else if (candidateEpoch === victimEpoch) {
+          const victimId = String(victim.transactionId || '');
+          const candidateId = String(candidate.transactionId || '');
+          if (candidateId.localeCompare(victimId) > 0) {
+            victim = candidate;
+          }
+        }
+      }
+      return {inCycle: true, isVictim: victim === tx};
+    }
+    currentPartitionId = holderTx.waitingForPartitionId;
+  }
+  return {inCycle: false, isVictim: false};
+}
 
 export {
   persistTransactionRecord,
@@ -192,4 +256,5 @@ export {
   resolveFiniteNumberField,
   getOrderedParticipantIds,
   getOrderedParticipantDetails,
+  resolveEnlistDeadlockState,
 };

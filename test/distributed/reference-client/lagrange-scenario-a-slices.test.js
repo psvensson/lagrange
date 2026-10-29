@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import t from 'tap';
 
+import {
+  DistributedTransactionCoordinator,
+} from '../../../src/query/distributed/distributed-transaction-coordinator.js';
 import {computeSourceFingerprint} from '../../../src/diagnostics/source-fingerprint.js';
 import {
   LAGRANGE_SCENARIO_A_FORMATION_REQUIREMENT,
@@ -533,3 +536,146 @@ await t.test('all Lagrange Scenario A runners export preStart and return valid t
   testPreStartTokens);
 await t.test('all Lagrange Scenario A runners execute run contract and pass evaluation',
   testScenarioRunContracts);
+
+async function testMultiPartitionRollbackCleanRetry() {
+  const activePartitionsBySession = new Map();
+  let districtBusy = true;
+  const coordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async (sessionId, partitionId) => {
+      if (partitionId === 'district' && districtBusy) {
+        const error = new Error('Transaction already active on this partition (district)');
+        error.code = '40001';
+        throw error;
+      }
+      let held = activePartitionsBySession.get(sessionId);
+      if (!held) {
+        held = new Set();
+        activePartitionsBySession.set(sessionId, held);
+      }
+      held.add(partitionId);
+    },
+    commitParticipant: async (sessionId, partitionId) => {
+      activePartitionsBySession.get(sessionId)?.delete(partitionId);
+    },
+    rollbackParticipant: async (sessionId, partitionId) => {
+      activePartitionsBySession.get(sessionId)?.delete(partitionId);
+    },
+    epochSource: () => 100,
+  });
+
+  const sessionId = 'session-multi-part-retry';
+  await coordinator.begin(sessionId);
+
+  const write1 = await coordinator.executeWriteStatement(
+    sessionId,
+    {operationId: 'op-w1', partitionIds: ['warehouse']},
+    async () => ({rowCount: 1}),
+  );
+  assert.equal(write1.rowCount, 1);
+
+  let failed = false;
+  try {
+    await coordinator.executeWriteStatement(
+      sessionId,
+      {operationId: 'op-d1', partitionIds: ['district']},
+      async () => ({rowCount: 1}),
+    );
+  } catch (err) {
+    failed = true;
+    assert.equal(err.code, '40001');
+  }
+  assert.equal(failed, true, 'Statement 2 should fail with 40001');
+
+  const rollbackResult = await coordinator.rollback(sessionId);
+  assert.equal(
+    rollbackResult.success,
+    true,
+    'Rollback should succeed cleanly without ENLISTED_PARTICIPANTS_MISSING',
+  );
+
+  districtBusy = false;
+  await coordinator.begin(sessionId);
+  const retryWrite1 = await coordinator.executeWriteStatement(
+    sessionId,
+    {operationId: 'op-w2', partitionIds: ['warehouse']},
+    async () => ({rowCount: 1}),
+  );
+  assert.equal(retryWrite1.rowCount, 1);
+  const retryWrite2 = await coordinator.executeWriteStatement(
+    sessionId,
+    {operationId: 'op-d2', partitionIds: ['district']},
+    async () => ({rowCount: 1}),
+  );
+  assert.equal(retryWrite2.rowCount, 1);
+
+  const commitResult = await coordinator.commit(sessionId);
+  assert.equal(commitResult.success, true, 'Commit should succeed on retry');
+}
+
+async function testNonCyclicLockContentionWaitsAndCommits() {
+  const activePartitions = new Map();
+  const coordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async (sessionId, partitionId) => {
+      const holder = activePartitions.get(partitionId);
+      if (holder && holder !== sessionId) {
+        const error = new Error(`Transaction already active on this partition (${partitionId})`);
+        error.code = '40001';
+        throw error;
+      }
+      activePartitions.set(partitionId, sessionId);
+    },
+    commitParticipant: async (sessionId, partitionId) => {
+      if (activePartitions.get(partitionId) === sessionId) {
+        activePartitions.delete(partitionId);
+      }
+    },
+    rollbackParticipant: async (sessionId, partitionId) => {
+      if (activePartitions.get(partitionId) === sessionId) {
+        activePartitions.delete(partitionId);
+      }
+    },
+    epochSource: () => 200,
+  });
+
+  const session1 = 'tx1-holder';
+  const session2 = 'tx2-waiter';
+
+  await coordinator.begin(session1);
+  await coordinator.executeWriteStatement(
+    session1,
+    {operationId: 'tx1-op1', partitionIds: ['district']},
+    async () => ({rowCount: 1}),
+  );
+
+  await coordinator.begin(session2);
+  await coordinator.executeWriteStatement(
+    session2,
+    {operationId: 'tx2-op1', partitionIds: ['warehouse']},
+    async () => ({rowCount: 1}),
+  );
+
+  const tx2Promise = coordinator.executeWriteStatement(
+    session2,
+    {operationId: 'tx2-op2', partitionIds: ['district']},
+    async () => ({rowCount: 1}),
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const commit1 = await coordinator.commit(session1);
+  assert.equal(commit1.success, true, 'Tx1 should commit successfully');
+
+  const tx2Result = await tx2Promise;
+  assert.equal(tx2Result.rowCount, 1, 'Tx2 statement on district should succeed');
+
+  const commit2 = await coordinator.commit(session2);
+  assert.equal(commit2.success, true, 'Tx2 should commit successfully on Attempt 1');
+}
+
+await t.test(
+  'multi-partition transaction rolling back on busy partition clears held partitions cleanly and succeeds on retry',
+  testMultiPartitionRollbackCleanRetry,
+);
+await t.test(
+  'non-cyclic lock contention waits and commits both transactions on attempt 1 without false abort',
+  testNonCyclicLockContentionWaitsAndCommits,
+);

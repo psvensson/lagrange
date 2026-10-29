@@ -75,29 +75,28 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         const transaction = this.resolveActiveTransactionState(
           options.sessionId || null,
         );
-        let waitedForActiveTransaction = false;
-        if (options.inTransaction === true) {
+        const readerSessionId = options.sessionId || transaction?.sessionId || null;
+        const hasForeignActiveWrite = () =>
+          Array.from(this.activeTransactions.entries()).some(
+            ([activeSessionId, activeState]) =>
+              activeSessionId !== readerSessionId &&
+              activeState?.beforeImages instanceof Map &&
+              activeState.beforeImages.size > 0,
+          );
+        let waited = false;
+        if (options.waitForCleanRead === true) {
           let waitAttempts = 0;
           while (
             waitAttempts < LOCAL_NUM_ACTIVE_TX_WAIT_ATTEMPTS &&
-            Array.from(this.activeTransactions.entries()).some(
-              ([activeSessionId, activeState]) =>
-                activeSessionId !== transaction?.sessionId &&
-                activeState?.beforeImages instanceof Map &&
-                activeState.beforeImages.size > 0,
-            )
+            hasForeignActiveWrite()
           ) {
             waitAttempts += 1;
-            waitedForActiveTransaction = true;
+            waited = true;
             await new Promise((resolve) => setTimeout(resolve, LOCAL_NUM_ACTIVE_TX_WAIT_MS));
           }
         }
-        const needsCleanRead = Array.from(this.activeTransactions.entries()).some(
-          ([activeSessionId, activeState]) =>
-            activeSessionId !== transaction?.sessionId &&
-            activeState?.beforeImages instanceof Map &&
-            activeState.beforeImages.size > 0,
-        );
+        const needsCleanRead = hasForeignActiveWrite();
+        const waitedForActiveTransaction = waited && !needsCleanRead;
         let rows;
         if (needsCleanRead) {
           this.db.exec(LOCAL_STR_SAVEPOINT_CLEAN_READ);

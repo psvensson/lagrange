@@ -421,6 +421,7 @@ class QueryExecutorBase {
       {
         ...(typeof options.sessionId === 'string' && options.sessionId.length > 0 ? {sessionId: options.sessionId} : {}),
         ...(options.inTransaction === true ? {inTransaction: true} : {}),
+        ...(options.waitForCleanRead === true ? {waitForCleanRead: true} : {}),
         deliveryPriority: options.deliveryPriority,
         routingReadinessDimension: options.routingReadinessDimension,
         timeoutMs: options.timeoutMs,
