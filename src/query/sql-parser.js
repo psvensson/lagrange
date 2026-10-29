@@ -449,7 +449,7 @@ class SQLParser {
     const tableName = ast.table[0].table;
     const assignments = ast.set.map((s) => ({
       column: externalSchemaIdentifier(s.column),
-      value: this.convertValue(s.value),
+      value: this.convertExpression(s.value),
     }));
     return {
       type: AST_TYPE.UPDATE,

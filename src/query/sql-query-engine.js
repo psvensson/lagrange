@@ -14,6 +14,9 @@ const LOCAL_STR_SYNTAX = 'syntax';
 const LOCAL_STR_TABLE_NOT_FOUND = 'table not found';
 const LOCAL_STR_TIMEOUT = 'timeout';
 const LOCAL_STR_BOOLEAN = 'boolean';
+const LOCAL_STR_WRITE_CONFLICT = 'write conflict';
+const LOCAL_STR_TX_ALREADY_ACTIVE =
+  'transaction already active on this partition';
 
 const {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -607,8 +610,14 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
         error.code.length > 0) {
       return error.code;
     }
-    const message = error.message.toLowerCase();
+    const message = (error?.message || '').toLowerCase();
 
+    if (
+      message.includes(LOCAL_STR_WRITE_CONFLICT) ||
+      message.includes(LOCAL_STR_TX_ALREADY_ACTIVE)
+    ) {
+      return QUERY_ERROR_CODE.WRITE_CONFLICT;
+    }
     if (message.includes(LOCAL_STR_PARSE) || message.includes(LOCAL_STR_SYNTAX)) {
       return QUERY_ERROR_CODE.SYNTAX_ERROR;
     }

@@ -222,10 +222,14 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       this.isSystemTable(tableName) &&
       routingReadinessDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    const inTransaction =
+      this.transactionCoordinator?.hasActiveTransaction?.(sessionId) === true;
     const preferLeader =
       typeof queryOptions?.preferLeader === 'boolean' ?
         queryOptions.preferLeader :
-        (this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect);
+        inTransaction ||
+          queryOptions?.dialect === 'postgresql' ||
+          (this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect);
     for (const join of ast.joins || []) {
       const joinTableName = join.table?.name;
       if (!joinTableName) {
@@ -259,6 +263,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       partitionIds,
       params,
       {
+        sessionId,
         preferLeader,
         preferSameLatencyGroup,
         deliveryPriority,

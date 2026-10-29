@@ -6,7 +6,11 @@ import {
 } from '../query-constants.js';
 
 function isPrepareWriteConflictFailure(entry) {
-  return entry?.error === PARTITION_SERVICE_ERROR_MSG.PREPARE_CONFLICT;
+  return (
+    entry?.error === PARTITION_SERVICE_ERROR_MSG.PREPARE_CONFLICT ||
+    entry?.error === PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE ||
+    entry?.errorCode === QUERY_ERROR_CODE.WRITE_CONFLICT
+  );
 }
 
 function projectTransactionParticipantFailure(result) {
@@ -17,17 +21,30 @@ function projectTransactionParticipantFailure(result) {
     return result;
   }
   if (
-    result.errorCode !== QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE ||
-    !Array.isArray(result.failedParticipants) ||
-    !result.failedParticipants.some(isPrepareWriteConflictFailure)
+    typeof result.error === 'string' &&
+    (result.error.includes(PARTITION_SERVICE_ERROR_MSG.PREPARE_CONFLICT) ||
+      result.error.includes(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE))
   ) {
-    return result;
+    return {
+      ...result,
+      errorCode: QUERY_ERROR_CODE.WRITE_CONFLICT,
+      error: QUERY_ERROR_MSG.WRITE_CONFLICT,
+    };
   }
-  return {
-    ...result,
-    errorCode: QUERY_ERROR_CODE.WRITE_CONFLICT,
-    error: QUERY_ERROR_MSG.WRITE_CONFLICT,
-  };
+  const hasParticipantFailure =
+    (Array.isArray(result.failedParticipants) &&
+      result.failedParticipants.some(isPrepareWriteConflictFailure)) ||
+    (Array.isArray(result.participantFailures) &&
+      result.participantFailures.some(isPrepareWriteConflictFailure));
+
+  if (hasParticipantFailure) {
+    return {
+      ...result,
+      errorCode: QUERY_ERROR_CODE.WRITE_CONFLICT,
+      error: QUERY_ERROR_MSG.WRITE_CONFLICT,
+    };
+  }
+  return result;
 }
 
 export {

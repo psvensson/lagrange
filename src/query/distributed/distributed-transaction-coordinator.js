@@ -33,6 +33,8 @@ import {
   buildDeferredRecoverySweepResult,
   recoverFromSystemTables,
 } from './distributed-transaction-recovery.js';
+
+const LOCAL_NUM_ENLIST_BUSY_DELAY_MS = 10;
 import {
   setTransactionStatus,
   getRemainingTransactionBudgetMs,
@@ -319,7 +321,32 @@ class DistributedTransactionCoordinator {
       if (tx.participants.has(partitionId)) {
         continue;
       }
-      await this.beginParticipant(sessionId, partitionId, tx.transactionEpoch);
+      const maxBusyAttempts =
+        tx.participants.size === 0 && newlyEnlisted.length === 0 ? 150 : 25;
+      let attempt = 0;
+      while (true) {
+        attempt += 1;
+        try {
+          await this.beginParticipant(sessionId, partitionId, tx.transactionEpoch);
+          break;
+        } catch (error) {
+          const isBusy = String(error?.message || '').includes(
+            'Transaction already active on this partition',
+          );
+          if (isBusy && attempt < maxBusyAttempts) {
+            await this.sleep(LOCAL_NUM_ENLIST_BUSY_DELAY_MS);
+            continue;
+          }
+          for (const enlistedId of newlyEnlisted) {
+            try {
+              await this.rollbackParticipant(sessionId, enlistedId);
+            } catch (_rollbackErr) {
+              void _rollbackErr;
+            }
+          }
+          throw error;
+        }
+      }
       const now = this.now();
       await this.workflowCoordinator.upsertParticipant(tx.workflowId, {
         participantId: this.createParticipantId(tx.transactionId, partitionId),

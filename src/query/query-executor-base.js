@@ -419,6 +419,7 @@ class QueryExecutorBase {
       options.preferLeader || false,
       options.preferSameLatencyGroup === true,
       {
+        ...(typeof options.sessionId === 'string' && options.sessionId.length > 0 ? {sessionId: options.sessionId} : {}),
         deliveryPriority: options.deliveryPriority,
         routingReadinessDimension: options.routingReadinessDimension,
         timeoutMs: options.timeoutMs,

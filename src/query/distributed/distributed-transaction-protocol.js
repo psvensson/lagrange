@@ -311,7 +311,15 @@ const distributedTransactionProtocolMethods = {
           TRANSACTION_STATUS.COMMITTING,
         );
       }
-      if (commitStageResult.deferred !== true) {
+      if (
+        tx.commitMode === COMMIT_MODE.ONE_PHASE_COMMIT &&
+        commitFailures.some((entry) =>
+          String(entry?.error || '').includes('Prepare failed due to write conflict'),
+        )
+      ) {
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+        this.transactionsBySession.delete(tx.sessionId);
+      } else if (commitStageResult.deferred !== true) {
         await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
       }
       return {
@@ -530,6 +538,9 @@ const distributedTransactionProtocolMethods = {
         await operation(partitionId);
         return;
       } catch (error) {
+        if (String(error?.message || '').includes('Prepare failed due to write conflict')) {
+          throw error;
+        }
         const commitMissResolution =
           await this.resolveParticipantCommitMiss(
             tx,
