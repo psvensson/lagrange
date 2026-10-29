@@ -223,13 +223,13 @@ describe('cluster-config: C1b specification and options validation', () => {
 
   it('exports DEFAULT_TIMINGS with updated start and run windows', () => {
     assert.equal(DEFAULT_TIMINGS.START_WINDOW_SECONDS, 120);
-    assert.equal(DEFAULT_TIMINGS.MAX_RUN_SECONDS, 300);
-    assert.equal(DEFAULT_TIMINGS.OBSERVER_TIMEOUT_SECONDS, 240);
+    assert.equal(DEFAULT_TIMINGS.MAX_RUN_SECONDS, 480);
+    assert.equal(DEFAULT_TIMINGS.OBSERVER_TIMEOUT_SECONDS, 450);
   });
 
-  it('exports DEFAULT_STABILITY and DEFAULT_OPTIONS with OVERALL_TIMEOUT_MS set to 210000', () => {
-    assert.equal(DEFAULT_STABILITY.OVERALL_TIMEOUT_MS, 210000);
-    assert.equal(DEFAULT_OPTIONS.OVERALL_TIMEOUT_MS, 210000);
+  it('exports DEFAULT_STABILITY and DEFAULT_OPTIONS with OVERALL_TIMEOUT_MS set to 420000', () => {
+    assert.equal(DEFAULT_STABILITY.OVERALL_TIMEOUT_MS, 420000);
+    assert.equal(DEFAULT_OPTIONS.OVERALL_TIMEOUT_MS, 420000);
   });
 
   it('guarantees overallTimeoutMs is strictly less than observerTimeoutSeconds * 1000', () => {
@@ -250,8 +250,8 @@ describe('cluster-config: C1b specification and options validation', () => {
         profile: PROFILE.RELEASE_0_2_6_SMOKE,
         memberCount: 3,
         allowWildcardRestBind: true,
-        overallTimeoutMs: 250000,
-        observerTimeoutSeconds: 240,
+        overallTimeoutMs: 460000,
+        observerTimeoutSeconds: 450,
       }),
       /overallTimeoutMs must be strictly less than observerTimeoutSeconds \* 1000/,
     );
