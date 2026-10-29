@@ -12,6 +12,29 @@ Current package/catalog behavior is described by
 and the external manifest shape by
 [`architecture/lagrange-service-manifest.md`](../../../architecture/lagrange-service-manifest.md).
 
+## Release assignment
+
+The complete installable-service product contract belongs to roadmap **0.9**.
+It consumes roadmap **0.6**'s managed OCI activation and native Call Cells through
+the existing service-portability owners. The minimum identity, compatibility,
+dependency and required-configuration admission, authentication, health,
+cleanup and recovery contracts needed to execute managed OCI safely are 0.6
+prerequisites; assigning the full product to 0.9 does not postpone those
+preflight or runtime obligations.
+
+0.9 completes and stabilizes the public customer-facing contract around that
+working lifecycle: verified installation, configuration and dependency
+operations, health-gated upgrade/rollback, diagnostics, support bundles,
+customer-controlled export and the separately released acceptance consumer.
+It extends the same catalog, lifecycle and runtime owners used by 0.6. Edition
+ownership and commercial implementation homes remain defined by
+[`edition-matrix.md`](../../../edition-matrix.md).
+
+The [AGPL feature map](../../../docs/development/agpl-feature-map.md) owns the
+release sequence. These are queued version homes while 0.2.9 stabilization is
+current; they do not create parallel active implementation or change existing
+sealed acceptance.
+
 ## Purpose
 
 A separately released service must not require a customer to run a second
@@ -813,8 +836,10 @@ This is ordering guidance, not active Quest definition.
 1. **Seal generic product-state and owner contracts.** Reconcile manifest,
    catalog, lifecycle and runtime actual vocabularies; add the compatibility and
    configuration preflight owner without duplicating existing checks.
-2. **Graduate managed OCI activation.** Make `oci_container` a real
-   `ServiceLifecycleManager`-owned runtime with idempotent cleanup/recovery.
+2. **Consume the 0.6 managed OCI prerequisite.** Require the real
+   `ServiceLifecycleManager`-owned `oci_container` runtime and its idempotent
+   cleanup/recovery evidence before completing the 0.9 product lifecycle. Any
+   missing activation prerequisite stays with the 0.6 service-portability owner.
 3. **Add service health/diagnostics contribution.** One bounded versioned
    contract consumed by status and support collection.
 4. **Add local support-bundle framework.** Core snapshot + bounded service

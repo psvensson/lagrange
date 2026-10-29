@@ -2,7 +2,7 @@
 id: release-0-2-7-stabilization
 status: open
 proof: certification
-roadmapRow: null
+roadmapRow: RM-0.2.9-stable-core-completion
 graduatesTo: solve/specs/release-0-2-7-stabilization/requirements.md
 doneWhen:
   probe: scenario-harness
@@ -51,30 +51,38 @@ authorizes:
   - solve/changes/global-owner-debt-inventory/inventory.json
 ---
 
-# 0.2.7 stabilization: correct semantics, bounded runtime, usable artifacts
+# Stable-core completion for 0.2.9
 
-0.2.6 landed the real raft-rs cutover, TX1, FreshMG and SN1. Its next patch
-must repair the verified correctness, admission and packaging defects and
-establish a bounded, honestly described evaluation envelope. This epic
-coordinates that release; existing subsystem owners retain their contracts.
+This existing stabilization epic continues from the released 0.2.8 baseline.
+Its original 0.2.7 identity, work-package IDs, Quest seals and evidence remain
+unchanged; the user-approved next completion milestone is **0.2.9**. This is a
+current planning correction, not a new release, runtime fix or acceptance claim.
+Existing subsystem owners retain their contracts.
 
 ## Current coordination summary
 
 | Field | Current observation |
 | --- | --- |
-| Checked | 2026-10-28; steering rules/router reviewed 2026-10-28 at `98e69ba13db8f9a5bbf6bc919d6e9c941b07ac8e` |
-| Released baseline | `v0.2.6`, `a1e26f6de84433a3913c2ef855d1b787e926d7eb` |
-| Integration baseline | `main`, `98e69ba13db8f9a5bbf6bc919d6e9c941b07ac8e`; affected runtime, dependencies, native artifacts and packaging owners unchanged from the release |
-| Scope authority | User request on 2026-10-28: verify the release audit and create the 0.2.7 epic; existing Community maintenance scope and edition boundaries apply |
-| Acceptance owner | [Requirements and work packages](../specs/release-0-2-7-stabilization/requirements.md); this summary indexes that contract |
-| Verified baseline | [Independent verification dossier](release-0-2-7-stabilization/verification-2026-10-28.md), including corrected qualifications and retained witness sources |
-| Additional release finding | [Docker Hub README verification](release-0-2-7-stabilization/dockerhub-readme-verification-2026-10-28.md): live page still shows 0.1.0; 0.2.6 metadata update returned Forbidden and was ignored |
-| Planning review | [Three independent approvals](release-0-2-7-stabilization/planning-review-2026-10-28.md), after correction of publication ordering and certification semantics |
-| First demonstrated blockers | Q01 mutation expressions become NULL; Q02 admitted constraints disappear; Q03 text split placement and normal routing disagree |
-| Current unit | Planning and baseline verification complete; implementation packages below are proposed and unsealed |
-| Next action / owner | Query owner seals Q01 from the retained native-storage reproducer; release integration owner coordinates Q04-Q07 in the independent ingress/artifact lane |
-| Continuation | No implementation or background certification run has been submitted by this planning change; the agent assigned next owns continuation |
-| Release state | 0.2.7 is not implemented, certified, tagged or published; no runtime repair is claimed here |
+| Checked | 2026-10-29 against `main` / `v0.2.8` at `add04d91a8ef8d9300a6f9cb1a23003ec4a61cd7`; governing rules/router reviewed 2026-10-28 |
+| Released baseline | [0.2.8](https://github.com/psvensson/lagrange/releases/tag/v0.2.8), following the raft-rs/TX1/FreshMG/SN1 foundation in 0.2.6 |
+| Publication history | [CHANGELOG.md](../../CHANGELOG.md) records 0.2.7's npm-only partial publication after Docker context failure and 0.2.8's forward repair; neither fact closes every Q01-Q18 obligation |
+| Scope authority | User-approved 2026-10-29 single version sequence: residual stable-core obligations belong to 0.2.9; service expansion/Scenario A comparison to 0.4; pilot qualification to 0.5. Community maintenance and edition boundaries remain unchanged |
+| Acceptance owner | [Requirements and work packages](../specs/release-0-2-7-stabilization/requirements.md); this summary indexes the existing contract without changing its predicates |
+| Recorded component completions | The three linked Quests have original solved terminal records: [core/runtime](../quests/release-0-2-7-core-runtime-and-semantics/log.ndjson), [release surface](../quests/release-0-2-7-release-surface-and-packaging/log.ndjson), and [Docker/proof repair](../quests/release-0-2-7-docker-context-and-publish-speedup/log.ndjson). Their bounded claims do not automatically establish full epic acceptance |
+| First directly observed publication blocker | The [0.2.8 publish job](https://github.com/psvensson/lagrange/actions/runs/40859657429/job/123399556166) returned `Forbidden` on Docker Hub description PATCH; its later overview check validates local rendered content, not remote synchronization. Q16 remains an owed publication obligation |
+| Public-path evidence boundary | The [named scenario](../../test/distributed/scenarios/release-0-2-7-stabilization.js) currently checks local comparator/parser/route/receipt/rendering behavior. It does not supply Q17's public transactions, remote failure/recovery or installed-consumer journeys |
+| Residual census | Reconcile Q10/Q11 retained-log coverage and Q14 transaction/read/retry claims with current source and original evidence. The [capability page](../../docs/current-capabilities-and-limitations.md) still excludes control-plane/message-group snapshot compaction. A documented partial-commit limitation requires source/evidence reconciliation; client uncertainty alone is not proof of partial commit |
+| Unmerged work | [Scenario A PR #148](https://github.com/psvensson/lagrange/pull/148), observed at `3b737ce7e1c818194f8188297dd175f6135e271e`, contains relevant SQL/transaction/replication repairs. Its older PR-body proof count and earlier lab receipts are not current-head qualification |
+| Current unit | Documentation and release-allocation reconciliation. No 0.2.9 runtime candidate or certification run is created by this change |
+| Next action / owner | Release integration owner re-censuses outstanding Q01-Q18 obligations against 0.2.8 and relevant WIP, routes the Q16 permission/readback defect to the publication owner, and prepares genuine Q17 composed evidence without broadening prior component seals |
+| Continuation | Next implementation and physical certification are not submitted by this documentation change; the release integration owner retains continuation |
+| Release state | 0.2.8 artifacts are published experimental alpha. 0.2.9 is the current planned milestone and remains unreleased; full stable-core/public-path acceptance is not inferred from artifact publication |
+
+The [original verification dossier](release-0-2-7-stabilization/verification-2026-10-28.md),
+[Docker Hub finding](release-0-2-7-stabilization/dockerhub-readme-verification-2026-10-28.md)
+and [planning review](release-0-2-7-stabilization/planning-review-2026-10-28.md)
+remain dated evidence. Current implementation and later observations supersede
+their status snapshots without rewriting those records.
 
 ## Work sequence
 
@@ -103,9 +111,10 @@ The IDs below are work-package IDs, not fabricated Quest records or seals.
 | Q17 | Certify one composed candidate and published-artifact journeys | Integrates Q01-Q16; release gates remain separate and mandatory |
 | Q18 | Simplify touched decision paths and route residual debt | On-contact work; broad convergence remains with its existing epic |
 
-One writer owns each changing interaction. SQL, ingress/packaging and Raft
-investigation can proceed in parallel; shared parser/runtime/package edits
-integrate serially. Each implementation starts from a bounded Quest with a
+One writer owns each changing interaction. These packages are work within the
+single 0.2.9 milestone, not independently scheduled release tracks. Shared
+parser/runtime/package edits integrate serially. Each residual implementation
+starts from its existing or explicitly superseding bounded Quest with a
 measuring red witness. Reuse or supersede existing records explicitly; never
 rewrite their seals or infer that an old OPEN board entry means landed code
 is absent. The [ownership map](../specs/release-0-2-7-stabilization/requirements.md#existing-work-and-scope-boundaries)
@@ -121,11 +130,12 @@ confirms registry artifacts before final epic closure. Q18 requires narrow
 cleanup and durable routing of broader
 debt, not a whole-project rewrite or zero historical complexity violations.
 
-The epic probe is deliberately **not measuring**. Q17 must bind `recordedLog`
-to its actual append-only certification Quest log when created, then produce
-genuine archived terminal evidence including publication confirmation. The
-scenario, recording binding and report production are Q17 work; no fake Quest,
-pass receipt or manual green oracle is created here. Existing exact-candidate
+The named scenario now exists, but its local checks do not provide Q17's full
+composed witness. Q17 must bind `recordedLog` to its actual append-only
+certification Quest log and produce genuine archived terminal evidence,
+including publication confirmation. The production-path scenario, recording
+binding and report remain obligations of Q17; no synthetic Quest, pass receipt
+or manual green oracle is created here. Existing exact-candidate
 release/corpus gates and the
 cutover's separate physical-certification claims retain their own authority.
 
@@ -146,3 +156,10 @@ cutover's separate physical-certification claims retain their own authority.
   Q16 now requires automatic release/documentation synchronization, metadata-edit
   permission checks, remote content verification, stale-write prevention and
   honest failed/pending status. Updating the plan does not update the live page.
+
+- 2026-10-29: User approved one ordered, fully versioned programme and its
+  implementation in the planning documents. Preserve this epic's stable 0.2.7
+  identity and all recorded seals/history; assign its residual completion to
+  0.2.9. Record delivered component work and observed Q16/Q17 evidence limits in
+  the mutable summary. This update neither publishes 0.2.9 nor certifies a
+  runtime, comparative workload or physical operating envelope.

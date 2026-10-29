@@ -3,7 +3,7 @@ scope: governance
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-29
 ---
 
 > **Canonical source.** Roadmap and edition-scope pointer.
@@ -50,6 +50,33 @@ Use these documents as follows:
   `../../edition-matrix.md` is out of scope for implementation in this
   repository unless the user explicitly asks for AGPL-scoped preparatory work.
 
+## One ordered version sequence
+
+The user-approved programme (29 October 2026) has one current release milestone
+and an ordered queue. Every planned deliverable, including its decision research,
+documentation and acceptance workload, names one version for initial completion.
+The canonical sequence and finite feature allocations live in `agpl-feature-map.md`;
+this policy does not maintain a second feature inventory.
+
+- Do not create independent parallel, cross-cutting or unversioned product tracks.
+- Later milestones identify the extension or stronger guarantee they add; they
+  do not defer proof necessary for an earlier milestone's own claim.
+- Existing candidate branches and preparation remain preserved, but their
+  existence does not activate a later release or prove it complete. Reconcile
+  them with the accepted predecessor baseline when their version becomes current.
+- A priority or scope change moves the affected deliverable explicitly in the
+  feature map, human roadmap and visibility roadmap together, under existing
+  user authority. Basic security/correctness required by an earlier release
+  cannot be shifted to a later qualification milestone.
+- Preserve stable roadmap row identities and sealed historical references when
+  relocating a row. The containing version is the current allocation; a legacy
+  numeric prefix in a stable identifier is not a second release assignment.
+- Edition ownership is unchanged by a version allocation. Commercial obligations
+  retain their implementation homes even when they share the product sequence.
+
+This release ordering does not create new acceptance gates or alter sealed
+predicates. Use the existing milestone, proof and release owners.
+
 ## Document Authority Map
 
 This map mirrors `AGENTS.md`; `AGENTS.md` is authoritative for the steering load
@@ -66,7 +93,7 @@ Use repository documents according to this ownership split:
 | Stable testing policy | `test/guidelines/INDEX.md` | Durable repo-wide testing rules |
 | Style and lint | `docs/development/code-style.md` | Formatting, lint, and local coding style |
 | Architecture entrypoint | `architecture/INDEX.md` | Canonical architecture entrypoint and subsystem detail |
-| Human roadmap | `roadmap.md` | Public Now / Next / Later product direction |
+| Human roadmap | `roadmap.md` | Human-readable ordered version milestones |
 | AGPL feature map | `docs/development/agpl-feature-map.md` | Allowed feature scope and broad sequence |
 | Visibility roadmap | `docs/development/product-roadmap.md` | Cross-edition status only |
 | Scope matrix | `edition-matrix.md` | Edition and implementation-home mapping |
