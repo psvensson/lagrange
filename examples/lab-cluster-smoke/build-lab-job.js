@@ -7,6 +7,7 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {
@@ -17,16 +18,28 @@ import {
 /**
  * Build the full process-cluster job envelope and fixture metadata.
  * @param {Object} options
- * @return {{driver: string, timeoutSeconds: number, source: null, spec: Object, fixtureMetadata: Object}}
+ * @return {Object}
  */
 function buildLabJob(options = {}) {
   const {spec, fixtureMetadata} = generateClusterSpec(options);
   const timeoutSeconds = spec.startWindowSeconds + spec.maxRunSeconds + spec.stopGraceSeconds + 60;
+  const source = options.source !== undefined ? options.source : null;
+
+  if (options.clientWorkOnly === true) {
+    return {
+      driver: 'process-cluster',
+      ...(options.host !== undefined ? {host: options.host} : {}),
+      source,
+      spec,
+      timeoutSeconds,
+    };
+  }
 
   return {
     driver: 'process-cluster',
+    ...(options.host !== undefined ? {host: options.host} : {}),
     timeoutSeconds,
-    source: null,
+    source,
     spec,
     fixtureMetadata,
   };
@@ -40,7 +53,11 @@ function buildLabJob(options = {}) {
 function parseCliArgs(argv) {
   const options = {};
   let outputPath = null;
+  let metadataOutputPath = null;
   let pretty = false;
+  let sourceRepo = null;
+  let sourceRef = null;
+  let sourceSha = null;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -65,14 +82,39 @@ function parseCliArgs(argv) {
       i += 1;
     } else if (arg === '--pretty') {
       pretty = true;
+    } else if (arg === '--host' && i + 1 < argv.length) {
+      options.host = argv[i + 1];
+      i += 1;
+    } else if (arg === '--source-repo' && i + 1 < argv.length) {
+      sourceRepo = argv[i + 1];
+      i += 1;
+    } else if (arg === '--source-ref' && i + 1 < argv.length) {
+      sourceRef = argv[i + 1];
+      i += 1;
+    } else if (arg === '--source-sha' && i + 1 < argv.length) {
+      sourceSha = argv[i + 1];
+      i += 1;
+    } else if (arg === '--client-work') {
+      options.clientWorkOnly = true;
+    } else if (arg === '--metadata-output' && i + 1 < argv.length) {
+      metadataOutputPath = argv[i + 1];
+      i += 1;
     }
   }
 
-  return {options, outputPath, pretty};
+  if (sourceRepo && sourceRef && sourceSha) {
+    options.source = {
+      repo: sourceRepo,
+      ref: sourceRef,
+      sha: sourceSha,
+    };
+  }
+
+  return {options, outputPath, metadataOutputPath, pretty};
 }
 
 function main() {
-  const {options, outputPath, pretty} = parseCliArgs(process.argv.slice(2));
+  const {options, outputPath, metadataOutputPath, pretty} = parseCliArgs(process.argv.slice(2));
 
   // Default allowWildcardRestBind to true for release-0.2.6-smoke CLI invocation unless negated
   if (options.profile === undefined || options.profile === PROFILE.RELEASE_0_2_6_SMOKE) {
@@ -81,6 +123,7 @@ function main() {
     }
   }
 
+  const {fixtureMetadata} = generateClusterSpec(options);
   const job = buildLabJob(options);
   const jsonOutput = pretty ? JSON.stringify(job, null, 2) : JSON.stringify(job);
 
@@ -89,9 +132,45 @@ function main() {
   } else {
     process.stdout.write(jsonOutput + '\n');
   }
+
+  if (metadataOutputPath) {
+    fs.writeFileSync(metadataOutputPath, JSON.stringify(fixtureMetadata, null, 2) + '\n', 'utf8');
+  }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+/**
+ * Determine whether the given module URL corresponds to the entrypoint script,
+ * resolving real paths so symlinked entrypoint invocations execute main().
+ *
+ * @param {string} importMetaUrl
+ * @param {string|undefined} argv1
+ * @return {boolean}
+ */
+function isMainModule(importMetaUrl, argv1) {
+  if (!argv1) {
+    return false;
+  }
+  try {
+    const scriptPath = fileURLToPath(importMetaUrl);
+    let realScriptPath;
+    try {
+      realScriptPath = fs.realpathSync(scriptPath);
+    } catch {
+      realScriptPath = path.resolve(scriptPath);
+    }
+    let realArgv1;
+    try {
+      realArgv1 = fs.realpathSync(argv1);
+    } catch {
+      realArgv1 = path.resolve(argv1);
+    }
+    return realScriptPath === realArgv1;
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) {
   try {
     main();
   } catch (err) {
@@ -102,5 +181,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
 
 export {
   buildLabJob,
+  isMainModule,
   parseCliArgs,
 };

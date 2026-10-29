@@ -7,19 +7,27 @@
  */
 
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {describe, it} from 'node:test';
+import {pathToFileURL} from 'node:url';
 
 import {
+  DEFAULT_NODE22_PATH,
   PROFILE,
   RELEASE_0_2_6_SUT,
   SCENARIO_A_GATE_FACTS,
   assertNoPortConflicts,
   assertValidPort,
+  buildDefaultSetupSpec,
   generateClusterSpec,
   validateClusterConfigOptions,
 } from '../../examples/lab-cluster-smoke/cluster-config.js';
 
 import {
+  isMainModule as isWaitSeedMain,
   parseCliArgs as parseWaitSeedCliArgs,
   waitForSeedLivez,
 } from '../../examples/lab-cluster-smoke/wait-seed.js';
@@ -28,6 +36,7 @@ import {
   AGGREGATE_DIAGNOSTIC_MAX_BYTES,
   DIAGNOSTIC_MAX_BYTES,
   evaluateReadinessSample,
+  isMainModule as isObserveClusterMain,
   normalizeControlSnapshot,
   normalizePartitionDiagnostics,
   normalizePreflightSnapshot,
@@ -41,7 +50,11 @@ import {
   runPgSmoke,
 } from '../../examples/lab-cluster-smoke/pg-smoke.js';
 
-import {buildLabJob} from '../../examples/lab-cluster-smoke/build-lab-job.js';
+import {
+  buildLabJob,
+  isMainModule as isBuildLabJobMain,
+  parseCliArgs as parseBuildLabJobCliArgs,
+} from '../../examples/lab-cluster-smoke/build-lab-job.js';
 
 describe('cluster-config: C1b specification and options validation', () => {
   it('enforces C1b 5-key port schema with wildcard rest bind and loopback admin/transport', () => {
@@ -127,6 +140,7 @@ describe('cluster-config: C1b specification and options validation', () => {
     for (let i = 0; i < spec.members.length; i += 1) {
       const env = spec.members[i].env;
       assert.equal(env.NODE_ID, undefined, 'NODE_ID must NOT be set in member env');
+      assert.equal(env.PATH, DEFAULT_NODE22_PATH);
       assert.equal(env.NODE_ADDRESS, `127.0.0.1:${20000 + (i * 4)}`);
       assert.equal(env.REST_API_PORT, String(20000 + (i * 4)));
       assert.equal(env.ADMIN_WS_PORT, String(20000 + (i * 4) + 1));
@@ -261,6 +275,7 @@ describe('fixture profiles: release-0.2.6-smoke vs scenario-a-dev-formation sepa
     assert.equal(typeof job.timeoutSeconds, 'number');
     assert.equal(job.spec.protocol, 'lab3-process-cluster/v1');
     assert.equal(job.spec.nodeCount, 3);
+    assert.ok(job.spec.setup, 'spec.setup should be populated by default');
     assert.equal(job.fixtureMetadata.profile, PROFILE.RELEASE_0_2_6_SMOKE);
   });
 });
@@ -949,5 +964,191 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
 
     assert.equal(outcome.ok, true);
     assert.equal(outcome.discoveredReplica.workloadReadinessStatus, 'NOT_READY');
+  });
+});
+
+describe('process-cluster worker staging and live job emission', () => {
+  it('propagates DEFAULT_NODE22_PATH across setup, member, and observer env', () => {
+    const {spec} = generateClusterSpec({
+      profile: PROFILE.RELEASE_0_2_6_SMOKE,
+      memberCount: 3,
+      allowWildcardRestBind: true,
+    });
+
+    assert.ok(spec.setup);
+    assert.equal(spec.setup.env.PATH, DEFAULT_NODE22_PATH);
+    assert.equal(spec.observer.env.PATH, DEFAULT_NODE22_PATH);
+    assert.equal(spec.members.length, 3);
+    for (const member of spec.members) {
+      assert.equal(member.env.PATH, DEFAULT_NODE22_PATH);
+    }
+  });
+
+  it('allows explicit setup: null or custom setup override', () => {
+    const nullSetup = generateClusterSpec({
+      profile: PROFILE.RELEASE_0_2_6_SMOKE,
+      memberCount: 3,
+      allowWildcardRestBind: true,
+      setup: null,
+    });
+    assert.equal(nullSetup.spec.setup, null);
+
+    const custom = {argv: ['echo', 'custom'], env: {}, cwd: 'run', timeoutSeconds: 5};
+    const customSetup = generateClusterSpec({
+      profile: PROFILE.RELEASE_0_2_6_SMOKE,
+      memberCount: 3,
+      allowWildcardRestBind: true,
+      setup: custom,
+    });
+    assert.deepEqual(customSetup.spec.setup, custom);
+  });
+
+  it('buildDefaultSetupSpec bounds timeoutSeconds and emits deterministic staging script', () => {
+    const specBounded = buildDefaultSetupSpec(['node-1', 'node-2'], 60);
+    assert.equal(specBounded.timeoutSeconds, 30);
+    assert.equal(specBounded.cwd, 'run');
+    assert.equal(specBounded.env.PATH, DEFAULT_NODE22_PATH);
+    assert.equal(specBounded.argv[0], '/bin/sh');
+    assert.equal(specBounded.argv[1], '-c');
+    assert.ok(specBounded.argv[2].includes('set -eu'));
+    assert.ok(specBounded.argv[2].includes('SRC="${LAB3_SOURCE_DIR:-$(pwd)}"'));
+
+    const specTight = buildDefaultSetupSpec(['node-1'], 15);
+    assert.equal(specTight.timeoutSeconds, 15);
+  });
+
+  it('executes spec.setup staging in temporary directory and enables isMainModule across symlinks', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-cluster-smoke-staging-'));
+    try {
+      const mockSourceDir = path.join(tmpDir, 'source');
+      const mockRunDir = path.join(tmpDir, 'run');
+      const mockMemberDataDir = path.join(tmpDir, 'member-data');
+
+      fs.mkdirSync(mockSourceDir, {recursive: true});
+      fs.mkdirSync(path.join(mockSourceDir, 'examples/lab-cluster-smoke'), {recursive: true});
+      fs.mkdirSync(path.join(mockSourceDir, 'src'), {recursive: true});
+      fs.mkdirSync(path.join(mockSourceDir, 'node_modules'), {recursive: true});
+      fs.writeFileSync(path.join(mockSourceDir, 'package.json'), '{}');
+      fs.writeFileSync(path.join(mockSourceDir, 'src/sea-entry.js'), 'console.log("mock sea-entry");');
+
+      const waitSeedPath = path.join(mockSourceDir, 'examples/lab-cluster-smoke/wait-seed.js');
+      const observeClusterPath = path.join(mockSourceDir, 'examples/lab-cluster-smoke/observe-cluster.js');
+      fs.writeFileSync(waitSeedPath, 'export function dummy() {}');
+      fs.writeFileSync(observeClusterPath, 'export function dummy() {}');
+
+      fs.mkdirSync(mockRunDir, {recursive: true});
+      fs.mkdirSync(mockMemberDataDir, {recursive: true});
+
+      const {spec} = generateClusterSpec({
+        profile: PROFILE.RELEASE_0_2_6_SMOKE,
+        memberCount: 3,
+        allowWildcardRestBind: true,
+      });
+
+      assert.ok(spec.setup);
+      assert.equal(spec.setup.argv[0], '/bin/sh');
+      assert.equal(spec.setup.argv[1], '-c');
+
+      // Execute staging script in mockRunDir with LAB3_SOURCE_DIR pointing to mockSourceDir
+      childProcess.execFileSync('/bin/sh', ['-c', spec.setup.argv[2]], {
+        cwd: mockRunDir,
+        env: {
+          ...process.env,
+          LAB3_SOURCE_DIR: mockSourceDir,
+          PATH: DEFAULT_NODE22_PATH,
+        },
+      });
+
+      // Verify symlinks created in run dir
+      const runWaitSeed = path.join(mockRunDir, 'examples/lab-cluster-smoke/wait-seed.js');
+      const runObserveCluster = path.join(mockRunDir, 'examples/lab-cluster-smoke/observe-cluster.js');
+      assert.ok(fs.existsSync(runWaitSeed));
+      assert.ok(fs.existsSync(runObserveCluster));
+
+      // Verify symlinks created in member-data/node-1 dir
+      const node1Dir = path.join(mockMemberDataDir, 'node-1');
+      const node1DataDir = path.join(node1Dir, 'member-data');
+      const node1WaitSeed = path.join(node1Dir, 'examples/lab-cluster-smoke/wait-seed.js');
+      assert.ok(fs.existsSync(node1DataDir));
+      assert.ok(fs.statSync(node1DataDir).isDirectory());
+      assert.ok(fs.existsSync(node1WaitSeed));
+
+      // Verify isMainModule returns true across the symlink
+      const realWaitSeedUrl = pathToFileURL(waitSeedPath).href;
+      assert.equal(isWaitSeedMain(realWaitSeedUrl, runWaitSeed), true);
+      assert.equal(isWaitSeedMain(realWaitSeedUrl, node1WaitSeed), true);
+
+      const realObserveClusterUrl = pathToFileURL(observeClusterPath).href;
+      assert.equal(isObserveClusterMain(realObserveClusterUrl, runObserveCluster), true);
+
+      // Verify isMainModule returns false when argv1 does not match the script
+      assert.equal(isWaitSeedMain(realWaitSeedUrl, runObserveCluster), false);
+    } finally {
+      fs.rmSync(tmpDir, {recursive: true, force: true});
+    }
+  });
+
+  it('buildLabJob with host, source, and clientWorkOnly: true produces exact 5 keys', () => {
+    const job = buildLabJob({
+      profile: PROFILE.RELEASE_0_2_6_SMOKE,
+      host: 'tv-dator',
+      source: {
+        repo: 'psvensson/lagrange',
+        ref: 'refs/heads/feat/lab-cluster-smoke-20261028',
+        sha: 'ede2fded9c353d20fdbf37e8f741388a4954a3e8',
+      },
+      clientWorkOnly: true,
+      allowWildcardRestBind: true,
+    });
+
+    assert.deepEqual(Object.keys(job), ['driver', 'host', 'source', 'spec', 'timeoutSeconds']);
+    assert.equal(job.driver, 'process-cluster');
+    assert.equal(job.host, 'tv-dator');
+    assert.deepEqual(job.source, {
+      repo: 'psvensson/lagrange',
+      ref: 'refs/heads/feat/lab-cluster-smoke-20261028',
+      sha: 'ede2fded9c353d20fdbf37e8f741388a4954a3e8',
+    });
+    assert.equal(job.fixtureMetadata, undefined);
+  });
+
+  it('build-lab-job CLI parser accurately handles --host, --source-*, --client-work, and --metadata-output', () => {
+    const parsed = parseBuildLabJobCliArgs([
+      '--profile', 'release-0.2.6-smoke',
+      '--host', 'tv-dator',
+      '--source-repo', 'psvensson/lagrange',
+      '--source-ref', 'refs/heads/feat/lab-cluster-smoke-20261028',
+      '--source-sha', 'ede2fded9c353d20fdbf37e8f741388a4954a3e8',
+      '--client-work',
+      '--metadata-output', '/tmp/meta.json',
+      '--allow-wildcard-rest-bind',
+    ]);
+
+    assert.equal(parsed.options.host, 'tv-dator');
+    assert.deepEqual(parsed.options.source, {
+      repo: 'psvensson/lagrange',
+      ref: 'refs/heads/feat/lab-cluster-smoke-20261028',
+      sha: 'ede2fded9c353d20fdbf37e8f741388a4954a3e8',
+    });
+    assert.equal(parsed.options.clientWorkOnly, true);
+    assert.equal(parsed.metadataOutputPath, '/tmp/meta.json');
+  });
+
+  it('isBuildLabJobMain resolves realpaths accurately across symlinks', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-cluster-smoke-build-job-'));
+    try {
+      const realScript = path.join(tmpDir, 'build-lab-job.js');
+      const symlinkScript = path.join(tmpDir, 'symlink-job.js');
+      fs.writeFileSync(realScript, 'console.log("job");');
+      fs.symlinkSync(realScript, symlinkScript);
+
+      const scriptUrl = pathToFileURL(realScript).href;
+      assert.equal(isBuildLabJobMain(scriptUrl, symlinkScript), true);
+      assert.equal(isBuildLabJobMain(scriptUrl, realScript), true);
+      assert.equal(isBuildLabJobMain(scriptUrl, path.join(tmpDir, 'nonexistent.js')), false);
+      assert.equal(isBuildLabJobMain(scriptUrl, undefined), false);
+    } finally {
+      fs.rmSync(tmpDir, {recursive: true, force: true});
+    }
   });
 });

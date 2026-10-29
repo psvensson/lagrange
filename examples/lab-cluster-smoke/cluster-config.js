@@ -37,6 +37,9 @@ const DEFAULT_TIMINGS = Object.freeze({
   OBSERVER_TIMEOUT_SECONDS: 90,
 });
 
+const DEFAULT_NODE22_PATH =
+  '/home/peter/.nvm/versions/node/v22.23.2/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+
 const DEFAULT_STABILITY = Object.freeze({
   WINDOW_MS: 10000,
   MIN_SAMPLES: 6,
@@ -212,6 +215,56 @@ function validateClusterConfigOptions(options = {}) {
 }
 
 /**
+ * Build deterministic setup spec for Lab v3 process-cluster worker staging.
+ *
+ * @param {string[]} memberNames
+ * @param {number} startWindowSeconds
+ * @return {{argv: string[], env: {PATH: string}, cwd: string, timeoutSeconds: number}}
+ */
+function buildDefaultSetupSpec(memberNames, startWindowSeconds) {
+  const memberList = memberNames.join(' ');
+  const memberStagingLines = memberNames.length > 0 ? [
+    `for m in ${memberList}; do`,
+    '  mkdir -p "../member-data/$m/member-data"',
+    '  for item in src examples scripts vendor package.json node_modules; do',
+    '    if [ -e "$SRC/$item" ]; then',
+    '      [ -e "../member-data/$m/$item" ] || ln -s "$SRC/$item" "../member-data/$m/$item"',
+    '    fi',
+    '  done',
+    'done',
+  ] : [];
+
+  const setupScript = [
+    'set -eu',
+    'SRC="${LAB3_SOURCE_DIR:-$(pwd)}"',
+    'if [ ! -e "$SRC/node_modules" ]; then',
+    '  for cand in /mnt/data/peter/projects/lagrange/node_modules /home/peter/projects/lagrange/node_modules /home/peter/projects/lagrange-main/node_modules; do',
+    '    if [ -d "$cand" ]; then',
+    '      ln -s "$cand" "$SRC/node_modules"',
+    '      break',
+    '    fi',
+    '  done',
+    '  if [ ! -e "$SRC/node_modules" ]; then',
+    '    (cd "$SRC" && npm ci --omit=dev --no-audit --no-fund)',
+    '  fi',
+    'fi',
+    'for item in src examples scripts vendor package.json node_modules; do',
+    '  if [ -e "$SRC/$item" ]; then',
+    '    [ -e "$item" ] || ln -s "$SRC/$item" "$item"',
+    '  fi',
+    'done',
+    ...memberStagingLines,
+  ].join('\n');
+
+  return {
+    argv: ['/bin/sh', '-c', setupScript],
+    env: {PATH: DEFAULT_NODE22_PATH},
+    cwd: 'run',
+    timeoutSeconds: Math.min(30, startWindowSeconds),
+  };
+}
+
+/**
  * Generate C1b process-cluster specification and fixture metadata.
  * @param {Object} options
  * @return {{spec: Object, fixtureMetadata: Object}}
@@ -247,6 +300,7 @@ function generateClusterSpec(options = {}) {
     ];
 
     const env = {
+      PATH: DEFAULT_NODE22_PATH,
       NODE_ADDRESS: `127.0.0.1:${member.restPort}`,
       REST_API_PORT: String(member.restPort),
       ADMIN_WS_PORT: String(member.adminWsPort),
@@ -340,12 +394,17 @@ function generateClusterSpec(options = {}) {
     maxRunSeconds: normalized.maxRunSeconds,
     stopGraceSeconds: normalized.stopGraceSeconds,
     completionMode: 'observer-exit',
-    setup: null,
+    setup: options.setup === null ?
+      null :
+      (options.setup || buildDefaultSetupSpec(
+        normalized.members.map((m) => m.name),
+        normalized.startWindowSeconds,
+      )),
     members: specMembers,
     auxiliaryPorts,
     observer: {
       argv: observerArgv,
-      env: {},
+      env: {PATH: DEFAULT_NODE22_PATH},
       cwd: 'run',
       timeoutSeconds: normalized.observerTimeoutSeconds,
     },
@@ -387,6 +446,7 @@ function generateClusterSpec(options = {}) {
 }
 
 export {
+  DEFAULT_NODE22_PATH,
   DEFAULT_STABILITY,
   DEFAULT_TIMINGS,
   PROFILE,
@@ -394,6 +454,7 @@ export {
   SCENARIO_A_GATE_FACTS,
   assertNoPortConflicts,
   assertValidPort,
+  buildDefaultSetupSpec,
   generateClusterSpec,
   validateClusterConfigOptions,
 };

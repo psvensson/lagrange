@@ -9,6 +9,8 @@
  */
 
 import {spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
@@ -146,7 +148,39 @@ async function main() {
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+/**
+ * Determine whether the given module URL corresponds to the entrypoint script,
+ * resolving real paths so symlinked entrypoint invocations execute main().
+ *
+ * @param {string} importMetaUrl
+ * @param {string|undefined} argv1
+ * @return {boolean}
+ */
+function isMainModule(importMetaUrl, argv1) {
+  if (!argv1) {
+    return false;
+  }
+  try {
+    const scriptPath = fileURLToPath(importMetaUrl);
+    let realScriptPath;
+    try {
+      realScriptPath = fs.realpathSync(scriptPath);
+    } catch {
+      realScriptPath = path.resolve(scriptPath);
+    }
+    let realArgv1;
+    try {
+      realArgv1 = fs.realpathSync(argv1);
+    } catch {
+      realArgv1 = path.resolve(argv1);
+    }
+    return realScriptPath === realArgv1;
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) {
   main().catch((fatalError) => {
     process.stderr.write(`wait-seed fatal: ${fatalError.message}\n`);
     process.exit(1);
@@ -156,6 +190,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
 export {
   DEFAULT_DEADLINE_MS,
   DEFAULT_INTERVAL_MS,
+  isMainModule,
   parseCliArgs,
   waitForSeedLivez,
 };
