@@ -614,11 +614,17 @@ class DurableWorkflowCoordinator {
     const existingWorkflow = this.getWorkflowById(
       String(workflowRecord.workflowId || ''),
     );
-    const existingIsLive =
-      existingWorkflow &&
+    if (existingWorkflow) {
+      return null;
+    }
+    const existingOwnerWorkflow = this.getWorkflowByOwnerKey(
+      String(workflowRecord.ownerKey || ''),
+    );
+    const existingOwnerIsLive =
+      existingOwnerWorkflow &&
       !(typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
-        isTerminalWorkflow(existingWorkflow, null));
-    if (existingIsLive) {
+        isTerminalWorkflow(existingOwnerWorkflow, null));
+    if (existingOwnerIsLive) {
       return null;
     }
     return this.setWorkflowState(this.createWorkflowRecord(workflowRecord));

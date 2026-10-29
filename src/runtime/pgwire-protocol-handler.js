@@ -601,7 +601,6 @@ class PgWireProtocolHandler {
    */
   async _executeAndSend(query, params) {
     const upper = query.trimStart().toUpperCase();
-    this._applyTransactionStart(upper);
 
     try {
       const result = await this._adapter.execute(
@@ -641,9 +640,14 @@ class PgWireProtocolHandler {
       const tag = deriveCommandTag(result, query);
       this._socket.write(buildCommandComplete(tag));
 
+      this._applyTransactionStart(upper);
       this._applyTransactionCompletion(upper);
     } catch (err) {
-      this._applyTransactionFailure();
+      if (upper.startsWith(LOCAL_STR_ROLLBACK)) {
+        this._session.setTransactionState(PG_TRANSACTION_STATE.IDLE);
+      } else {
+        this._applyTransactionFailure();
+      }
       this._sendError(
         PG_SEVERITY.ERROR,
         typeof err.sqlState === 'string' ?

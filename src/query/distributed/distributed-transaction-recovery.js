@@ -199,11 +199,11 @@ function validateRecoveryRowsBeforeMutation(
         row,
       });
     }
-    if (coordinator.transactionsBySession.has(sessionId)) {
+    if (coordinator.transactionsBySession.has(sessionId) ||
+        coordinator.workflowCoordinator?.getWorkflowById?.(transactionId)) {
       continue;
     }
-    const participantKeys =
-      participantKeysByTransaction.get(transactionId) || new Set();
+    const participantKeys = participantKeysByTransaction.get(transactionId) || new Set();
     validateRecoveredTransactionDecision(
       {
         ...buildRecoveredTransactionDecisionState(row, status),

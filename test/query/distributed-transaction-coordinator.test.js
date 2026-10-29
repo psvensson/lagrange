@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {EventEmitter} from 'node:events';
 import {
   DistributedTransactionCoordinator,
   TRANSACTION_STATUS,
@@ -16,6 +17,14 @@ import {
 } from '../../src/constants/index.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
+import {deriveCommandTag} from '../../src/runtime/pgwire-result-mapper.js';
+import {PgWireProtocolHandler} from '../../src/runtime/pgwire-protocol-handler.js';
+import {
+  PG_TRANSACTION_STATE,
+  PG_BACKEND_MSG,
+  PG_PROTOCOL_VERSION,
+  PG_FRONTEND_MSG,
+} from '../../src/runtime/pgwire-protocol-constants.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -867,3 +876,128 @@ test('DistributedTransactionCoordinator - recovery rejects multi-participant 1PC
     t.equal(coordinator.hasActiveTransaction('invalid-one-phase'), false,
       'repeated recovery must reject the same poison state');
   });
+
+test('deriveCommandTag supports affectedRows fallback for INSERT, UPDATE, DELETE', async (t) => {
+  t.equal(deriveCommandTag({changes: 5}, 'INSERT INTO t VALUES(1)'), 'INSERT 0 5');
+  t.equal(deriveCommandTag({affectedRows: 4}, 'INSERT INTO t VALUES(1)'), 'INSERT 0 4');
+  t.equal(deriveCommandTag({changes: 3}, 'UPDATE t SET x=1'), 'UPDATE 3');
+  t.equal(deriveCommandTag({affectedRows: 2}, 'UPDATE t SET x=1'), 'UPDATE 2');
+  t.equal(deriveCommandTag({changes: 1}, 'DELETE FROM t'), 'DELETE 1');
+  t.equal(deriveCommandTag({affectedRows: 6}, 'DELETE FROM t'), 'DELETE 6');
+  t.equal(deriveCommandTag({changes: 3, affectedRows: 5}, 'UPDATE t SET x=1'), 'UPDATE 3');
+  t.equal(deriveCommandTag({}, 'UPDATE t SET x=1'), 'UPDATE 0');
+});
+
+test('DistributedTransactionCoordinator - recoverFromSystemTables does not resurrect in-memory completed transactions', async (t) => {
+  const coordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async () => {},
+    now: () => 1000,
+  });
+
+  const beginResult = await coordinator.begin('s-swept');
+  t.equal(beginResult.success, true);
+  await coordinator.enlistParticipants('s-swept', ['p1']);
+  const commitResult = await coordinator.commit('s-swept');
+  t.equal(commitResult.success, true);
+  t.equal(coordinator.hasActiveTransaction('s-swept'), false);
+
+  coordinator.recoverFromSystemTables({
+    transactions: [{
+      transaction_id: beginResult.transactionId,
+      session_id: 's-swept',
+      status: TRANSACTION_STATUS.ACTIVE,
+      ...frozenTransactionDecision(1),
+      created_at: 1,
+      updated_at: 2,
+    }],
+    participants: [{
+      participant_id: `${beginResult.transactionId}:p1`,
+      transaction_id: beginResult.transactionId,
+      partition_id: 'p1',
+      status: 'ACTIVE',
+      created_at: 1,
+      updated_at: 2,
+    }],
+  });
+
+  t.equal(coordinator.hasActiveTransaction('s-swept'), false);
+  const nextBegin = await coordinator.begin('s-swept');
+  t.equal(nextBegin.success, true);
+  await coordinator.rollback('s-swept');
+});
+
+test('PgWireProtocolHandler - failed BEGIN does not leave session in FAILED state', async (t) => {
+  class TestSocket extends EventEmitter {
+    constructor() {
+      super();
+      this.written = [];
+    }
+    write(buf) {
+      this.written.push(Buffer.from(buf));
+      return true;
+    }
+    end() {}
+    destroy() {}
+    findMessages(type) {
+      const all = Buffer.concat(this.written);
+      const msgs = [];
+      let off = 0;
+      while (off < all.length) {
+        const msgType = all[off];
+        if (off + 5 > all.length) break;
+        const len = all.readInt32BE(off + 1);
+        const total = 1 + len;
+        if (off + total > all.length) break;
+        if (msgType === type) {
+          msgs.push(all.subarray(off, off + total));
+        }
+        off += total;
+      }
+      return msgs;
+    }
+  }
+
+  const socket = new TestSocket();
+  const adapter = {
+    authenticate: async (id) => ({sessionId: id, tenantId: 'test'}),
+    execute: async () => {
+      const err = new Error('begin failed');
+      err.sqlState = '40001';
+      throw err;
+    },
+    closeSession: () => {},
+  };
+  const handler = new PgWireProtocolHandler({
+    adapter,
+    socket,
+    logger: {debug() {}, info() {}, warn() {}, error() {}},
+  });
+  handler.start();
+
+  const startupPayload = Buffer.concat([
+    Buffer.alloc(4),
+    Buffer.from('user\0test\0database\0test\0\0'),
+  ]);
+  startupPayload.writeInt32BE(PG_PROTOCOL_VERSION.CODE, 0);
+  const startupBuf = Buffer.alloc(4 + startupPayload.length);
+  startupBuf.writeInt32BE(startupBuf.length, 0);
+  startupPayload.copy(startupBuf, 4);
+  socket.emit('data', startupBuf);
+  await new Promise((r) => setImmediate(r));
+
+  socket.written = [];
+  const qStr = 'BEGIN\0';
+  const qBuf = Buffer.alloc(5 + Buffer.byteLength(qStr));
+  qBuf[0] = PG_FRONTEND_MSG.QUERY;
+  qBuf.writeInt32BE(4 + Buffer.byteLength(qStr), 1);
+  qBuf.write(qStr, 5);
+  socket.emit('data', qBuf);
+  await new Promise((r) => setImmediate(r));
+
+  const rfq = socket.findMessages(PG_BACKEND_MSG.READY_FOR_QUERY);
+  t.ok(rfq.length > 0, 'received ReadyForQuery');
+  t.equal(rfq[0][5], PG_TRANSACTION_STATE.IDLE, 'session state is IDLE, not FAILED');
+  handler.destroy();
+});

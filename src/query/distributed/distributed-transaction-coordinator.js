@@ -113,9 +113,9 @@ class DistributedTransactionCoordinator {
       Math.floor(options.initialEpoch) :
       this.now();
     this.epochSource =
-      options.epochSource ||
-      (() => {
-        this.nextEpoch += 1;
+      options.epochSource || (() => {
+        this.nextEpoch = Number.isFinite(options.initialEpoch) ?
+          this.nextEpoch + 1 : Math.max(this.nextEpoch + 1, this.now());
         return this.nextEpoch;
       });
     this.transactionBudgetMs =
