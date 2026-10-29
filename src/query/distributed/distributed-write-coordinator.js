@@ -259,10 +259,13 @@ class DistributedWriteCoordinator {
               result.participantAddress :
               null,
         errorCode:
-            typeof result.errorCode === 'string' ?
-              result.errorCode :
-              null,
+            typeof result.firstFailedParticipant?.errorCode === 'string' ?
+              result.firstFailedParticipant.errorCode :
+              (typeof result.errorCode === 'string' ?
+                result.errorCode :
+                null),
         error:
+            result.firstFailedParticipant?.error ||
             result.error ||
             QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
         durationMs:
@@ -301,6 +304,19 @@ class DistributedWriteCoordinator {
         },
         0,
       );
+      const writeConflictPattern =
+        /write conflict|transaction already active on this partition/i;
+      const conflictFailure = participantFailures.find(
+        (entry) =>
+          entry.errorCode === QUERY_ERROR_CODE.WRITE_CONFLICT ||
+          writeConflictPattern.test(entry.error || ''),
+      );
+      const topLevelErrorCode = conflictFailure ?
+        QUERY_ERROR_CODE.WRITE_CONFLICT :
+        QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE;
+      const topLevelError = conflictFailure ?
+        conflictFailure.error :
+        QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE;
       return {
         success: false,
         operation: plan.statementType,
@@ -314,6 +330,7 @@ class DistributedWriteCoordinator {
         partitionErrors: failedParticipants.map((result) => ({
           partitionId: result.partitionId,
           error:
+              result.firstFailedParticipant?.error ||
               result.error ||
               QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
           retryAfterMs:
@@ -325,8 +342,8 @@ class DistributedWriteCoordinator {
         participantFailures,
         firstFailedParticipant,
         participantResults,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        errorCode: topLevelErrorCode,
+        error: topLevelError,
         idempotencyKey: plan.idempotencyKey,
         operationId: plan.operationId,
         retryCount,

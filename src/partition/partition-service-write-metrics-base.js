@@ -48,6 +48,7 @@ const LOCAL_STR_UPDATE_PREFIX = 'UPDATE ';
 const LOCAL_STR_DELETE_PREFIX = 'DELETE ';
 const LOCAL_STR_INSERT_PREFIX = 'INSERT ';
 const LOCAL_STR_WHERE_CLAUSE_PREFIX = ' WHERE ';
+const LOCAL_STR_COLON = ':';
 const LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD = 1_000_000_000_000;
 
 class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
@@ -279,14 +280,48 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         } catch (_queryErr) {
           void _queryErr;
         }
-        if (Array.isArray(matchedRows) && transactionState.beforeImages instanceof Map) {
-          for (const row of matchedRows) {
-            const rowid = Number(row.__lagrange_rowid__);
-            if (Number.isInteger(rowid) && !transactionState.beforeImages.has(rowid)) {
-              const cleanRow = {...row};
-              delete cleanRow.__lagrange_rowid__;
-              transactionState.beforeImages.set(rowid, {exists: true, row: cleanRow});
-            }
+      }
+
+      const candidateWriteSet = new Set(transactionState.writeSet);
+      if (Array.isArray(matchedRows) && matchedRows.length > 0) {
+        const pkColumns = this.resolveTransactionPrimaryKeyColumns();
+        const tableName = entry.tableName || this.tableName;
+        for (const row of matchedRows) {
+          const hasAllKeys = pkColumns.every(
+            (col) => row[col] !== undefined && row[col] !== null,
+          );
+          if (hasAllKeys) {
+            candidateWriteSet.add(
+              `${tableName}:${pkColumns.map((col) => row[col]).join(LOCAL_STR_COLON)}`,
+            );
+          }
+        }
+      }
+      const candidateSingleKey =
+        this.resolveTransactionWriteSetKey(entry, matchedRows);
+      if (candidateSingleKey) {
+        candidateWriteSet.add(candidateSingleKey);
+      }
+      if (
+        Number.isFinite(transactionState.transactionEpoch) &&
+        transactionState.transactionEpoch >= LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD
+      ) {
+        const conflictCheck = this.checkWriteConflicts(
+          candidateWriteSet,
+          transactionState.transactionEpoch,
+        );
+        if (conflictCheck.hasConflict) {
+          throw new Error(PARTITION_SERVICE_ERROR_MSG.PREPARE_CONFLICT);
+        }
+      }
+
+      if (Array.isArray(matchedRows) && transactionState.beforeImages instanceof Map) {
+        for (const row of matchedRows) {
+          const rowid = Number(row.__lagrange_rowid__);
+          if (Number.isInteger(rowid) && !transactionState.beforeImages.has(rowid)) {
+            const cleanRow = {...row};
+            delete cleanRow.__lagrange_rowid__;
+            transactionState.beforeImages.set(rowid, {exists: true, row: cleanRow});
           }
         }
       }

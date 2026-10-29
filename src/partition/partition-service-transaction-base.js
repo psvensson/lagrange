@@ -17,6 +17,7 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const LOCAL_STR_COLON = ':';
+const LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD = 1_000_000_000_000;
 
 class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   /**
@@ -165,6 +166,24 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         return pkConstraint.columns;
       }
     }
+    if (this._pragmaPrimaryKeyColumns) {
+      return this._pragmaPrimaryKeyColumns;
+    }
+    if (this.db && typeof this.tableName === 'string' && this.tableName) {
+      try {
+        const rows = this.db.prepare(`PRAGMA table_info("${this.tableName}")`).all();
+        const pkCols = rows
+          .filter((col) => Number(col.pk) > 0)
+          .sort((a, b) => Number(a.pk) - Number(b.pk))
+          .map((col) => col.name);
+        if (pkCols.length > 0) {
+          this._pragmaPrimaryKeyColumns = pkCols;
+          return pkCols;
+        }
+      } catch (_err) {
+        void _err;
+      }
+    }
     return [];
   }
   /**
@@ -236,11 +255,46 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * @private
    */
   trackTransactionWriteSetKey(transactionState, entry, matchedRows = null) {
-    const writeSetKey = this.resolveTransactionWriteSetKey(entry, matchedRows);
-    if (!writeSetKey) {
+    if (!transactionState?.writeSet) {
       return;
     }
-    transactionState.writeSet.add(writeSetKey);
+    const pkColumns = this.resolveTransactionPrimaryKeyColumns();
+    const tableName = entry?.tableName || this.tableName;
+    if (Array.isArray(matchedRows) && matchedRows.length > 0 && pkColumns.length > 0) {
+      for (const row of matchedRows) {
+        const hasAllKeys = pkColumns.every(
+          (col) => row[col] !== undefined && row[col] !== null,
+        );
+        if (hasAllKeys) {
+          transactionState.writeSet.add(
+            `${tableName}:${pkColumns.map((col) => row[col]).join(LOCAL_STR_COLON)}`,
+          );
+        }
+      }
+    }
+    if (
+      typeof entry?.sql === 'string' &&
+      Array.isArray(entry.params) &&
+      pkColumns.length > 0
+    ) {
+      const match = entry.sql.match(/INSERT\s+INTO\s+[`"']?(\w+)[`"']?\s*\(([^)]+)\)/i);
+      if (match) {
+        const colList = match[2].split(',').map((c) => c.trim().replace(/[`"']/g, ''));
+        const pkIndices = pkColumns.map((pk) => colList.indexOf(pk));
+        if (pkIndices.every((idx) => idx >= 0 && idx < entry.params.length)) {
+          const keyValues = pkIndices.map((idx) => entry.params[idx]);
+          if (keyValues.every((val) => val !== undefined && val !== null)) {
+            transactionState.writeSet.add(
+              `${tableName}:${keyValues.join(LOCAL_STR_COLON)}`,
+            );
+          }
+        }
+      }
+    }
+    const writeSetKey = this.resolveTransactionWriteSetKey(entry, matchedRows);
+    if (writeSetKey) {
+      transactionState.writeSet.add(writeSetKey);
+    }
   }
   /**
    * Check whether a write set conflicts with later committed writes.
@@ -256,7 +310,8 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       return {hasConflict: false, conflicts: []};
     }
     const conflicts = [];
-    const isWallClockEpoch = transactionEpoch >= 1_000_000_000_000;
+    const isWallClockEpoch =
+      transactionEpoch >= LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD;
     for (const commitRecord of this.committedWriteLog) {
       const commitEpoch = isWallClockEpoch ?
         (Number.isFinite(commitRecord?.committedAt) ?
@@ -326,6 +381,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       !transactionState ||
       !Number.isFinite(transactionState.transactionEpoch)
     ) {
+      return rows;
+    }
+    if (transactionState.transactionEpoch >= LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD) {
       return rows;
     }
     if (this.isSnapshotExpired(transactionState.transactionEpoch)) {
@@ -632,6 +690,10 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     });
     try {
       this.db.exec(PARTITION_SERVICE_SQL.BEGIN_IMMEDIATE);
+      this._maxObservedTransactionEpoch = Math.max(
+        this._maxObservedTransactionEpoch || 0,
+        Number.isFinite(transactionEpoch) ? transactionEpoch : 0,
+      );
       const transactionState = {
         sessionId: transactionSessionId,
         transactionEpoch,
@@ -796,7 +858,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         await this.generateCDCEvent(op);
       }
       if (transactionState.writeSet.size > 0) {
-        const committedAt = Date.now();
+        const committedAt = Math.max(
+          Date.now(),
+          (Number(transactionState.transactionEpoch) || 0) + 1,
+          (this._maxObservedTransactionEpoch || 0) + 1,
+          (this._lastCommitWallClock || 0) + 1,
+        );
+        this._lastCommitWallClock = committedAt;
         for (const writeSetKey of transactionState.writeSet) {
           this.rowCommitEpoch.set(
             writeSetKey,

@@ -321,8 +321,8 @@ class DistributedTransactionCoordinator {
       if (tx.participants.has(partitionId)) {
         continue;
       }
-      const maxBusyAttempts =
-        tx.participants.size === 0 && newlyEnlisted.length === 0 ? 150 : 25;
+      const maxBusyAttempts = tx.participants.size === 0 && newlyEnlisted.length === 0 ?
+        300 : (50 + Math.floor(Math.random() * 50));
       let attempt = 0;
       while (true) {
         attempt += 1;
@@ -361,8 +361,10 @@ class DistributedTransactionCoordinator {
     }
 
     tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
-    await this.persistParticipants(tx, newlyEnlisted);
+    if (newlyEnlisted.length > 0) {
+      await this.persistTransactionRecord(tx);
+      await this.persistParticipants(tx, newlyEnlisted);
+    }
 
     return {
       success: true,
@@ -430,7 +432,6 @@ class DistributedTransactionCoordinator {
     tx.writeOperations.push(normalized);
     tx.updatedAt = now;
 
-    await this.persistTransactionRecord(tx);
     await this.persistWriteOperationRecord(tx, normalized);
   }
 
@@ -468,7 +469,6 @@ class DistributedTransactionCoordinator {
     operation.updatedAt = this.now();
     tx.updatedAt = operation.updatedAt;
 
-    await this.persistTransactionRecord(tx);
     await this.persistWriteOperationRecord(tx, operation);
   }
 

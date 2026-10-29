@@ -264,8 +264,17 @@ const queryExecutorSelectAggregationMethods = {
     const colName = arg?.type === 'column_ref' ? arg.column : null;
     let values = rows;
     if (colName) {
+      const qualifiedCol = arg.table ? `${arg.table}.${colName}` : null;
       values = rows
-        .map((row) => row[colName])
+        .map((row) => {
+          if (
+            qualifiedCol &&
+            Object.prototype.hasOwnProperty.call(row, qualifiedCol)
+          ) {
+            return row[qualifiedCol];
+          }
+          return row[colName];
+        })
         .filter((value) => value !== null && value !== undefined);
     }
     if (expr.distinct && colName) {
@@ -337,24 +346,32 @@ const queryExecutorSelectAggregationMethods = {
    * @return {*} Expression value.
    * @private
    */
-  evaluateExpression(row, expr) {
+  evaluateExpression(row, expr, params = []) {
     if (!expr) {
       return true;
     }
     switch (expr.type) {
     case QUERY_EXECUTOR_LITERAL.STRING_BINARY:
-      return this.evaluateBinary(row, expr);
+      return this.evaluateBinary(row, expr, params);
     case QUERY_EXECUTOR_LITERAL.STRING_UNARY:
-      return this.evaluateUnary(row, expr);
+      return this.evaluateUnary(row, expr, params);
     case QUERY_EXECUTOR_LITERAL.STRING_IN:
-      return this.evaluateIn(row, expr);
+      return this.evaluateIn(row, expr, params);
     case QUERY_EXECUTOR_LITERAL.STRING_BETWEEN:
-      return this.evaluateBetween(row, expr);
+      return this.evaluateBetween(row, expr, params);
     case QUERY_EXECUTOR_LITERAL.STRING_LIKE:
-      return this.evaluateLike(row, expr);
+      return this.evaluateLike(row, expr, params);
     case QUERY_EXECUTOR_LITERAL.STRING_LITERAL:
       return expr.value;
+    case QUERY_EXECUTOR_LITERAL.STRING_PARAMETER:
+      return params[expr.index];
     case QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF:
+      if (
+        expr.table &&
+        Object.prototype.hasOwnProperty.call(row, `${expr.table}.${expr.column}`)
+      ) {
+        return row[`${expr.table}.${expr.column}`];
+      }
       return row[expr.column];
     case QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE:
     {
@@ -371,12 +388,13 @@ const queryExecutorSelectAggregationMethods = {
    * Evaluate a binary expression.
    * @param {Object} row - Data row.
    * @param {Object} expr - Binary expression.
+   * @param {Array} [params=[]] - Query parameters.
    * @return {boolean} Expression result.
    * @private
    */
-  evaluateBinary(row, expr) {
-    const left = this.evaluateExpression(row, expr.left);
-    const right = this.evaluateExpression(row, expr.right);
+  evaluateBinary(row, expr, params = []) {
+    const left = this.evaluateExpression(row, expr.left, params);
+    const right = this.evaluateExpression(row, expr.right, params);
     switch (expr.operator) {
     case QUERY_EXECUTOR_LITERAL.STRING_AND:
       return left && right;
@@ -408,11 +426,12 @@ const queryExecutorSelectAggregationMethods = {
    * Evaluate a unary expression.
    * @param {Object} row - Data row.
    * @param {Object} expr - Unary expression.
+   * @param {Array} [params=[]] - Query parameters.
    * @return {*} Expression result.
    * @private
    */
-  evaluateUnary(row, expr) {
-    const operand = this.evaluateExpression(row, expr.operand);
+  evaluateUnary(row, expr, params = []) {
+    const operand = this.evaluateExpression(row, expr.operand, params);
     switch (expr.operator) {
     case QUERY_EXECUTOR_LITERAL.STRING_NOT:
       return !operand;
@@ -429,12 +448,13 @@ const queryExecutorSelectAggregationMethods = {
    * Evaluate an IN/NOT IN expression.
    * @param {Object} row - Data row.
    * @param {Object} expr - IN expression AST.
+   * @param {Array} [params=[]] - Query parameters.
    * @return {boolean} Expression result.
    * @private
    */
-  evaluateIn(row, expr) {
-    const value = this.evaluateExpression(row, expr.expression);
-    const set = expr.values.map((v) => this.evaluateExpression(row, v));
+  evaluateIn(row, expr, params = []) {
+    const value = this.evaluateExpression(row, expr.expression, params);
+    const set = expr.values.map((v) => this.evaluateExpression(row, v, params));
     const matches = set.some((candidate) => candidate === value);
     return expr.negated ? !matches : matches;
   },
@@ -443,13 +463,14 @@ const queryExecutorSelectAggregationMethods = {
    * Evaluate a BETWEEN expression.
    * @param {Object} row - Data row.
    * @param {Object} expr - BETWEEN expression AST.
+   * @param {Array} [params=[]] - Query parameters.
    * @return {boolean} Expression result.
    * @private
    */
-  evaluateBetween(row, expr) {
-    const value = this.evaluateExpression(row, expr.expression);
-    const low = this.evaluateExpression(row, expr.low);
-    const high = this.evaluateExpression(row, expr.high);
+  evaluateBetween(row, expr, params = []) {
+    const value = this.evaluateExpression(row, expr.expression, params);
+    const low = this.evaluateExpression(row, expr.low, params);
+    const high = this.evaluateExpression(row, expr.high, params);
     return value >= low && value <= high;
   },
 
@@ -457,12 +478,13 @@ const queryExecutorSelectAggregationMethods = {
    * Evaluate a LIKE/NOT LIKE expression.
    * @param {Object} row - Data row.
    * @param {Object} expr - LIKE expression AST.
+   * @param {Array} [params=[]] - Query parameters.
    * @return {boolean} Expression result.
    * @private
    */
-  evaluateLike(row, expr) {
-    const value = this.evaluateExpression(row, expr.expression);
-    const pattern = this.evaluateExpression(row, expr.pattern);
+  evaluateLike(row, expr, params = []) {
+    const value = this.evaluateExpression(row, expr.expression, params);
+    const pattern = this.evaluateExpression(row, expr.pattern, params);
     if (
       value === null ||
       value === undefined ||

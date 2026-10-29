@@ -145,6 +145,7 @@ const queryExecutorJoinExecutionMethods = {
         join,
         leftTableRef,
         rightTableRef,
+        params,
       );
       leftTableRef = rightTableRef;
     }
@@ -348,7 +349,7 @@ const queryExecutorJoinExecutionMethods = {
    * @return {Array} Joined rows.
    * @private
    */
-  performJoin(leftRows, rightRows, join, leftTableName, rightTableName) {
+  performJoin(leftRows, rightRows, join, leftTableName, rightTableName, params = []) {
     const joinType = (join.joinType || QUERY_JOIN_TYPE.INNER).toUpperCase();
     const condition = join.condition;
 
@@ -365,6 +366,7 @@ const queryExecutorJoinExecutionMethods = {
         joinType,
         leftTableName,
         rightTableName,
+        params,
       );
     }
 
@@ -512,25 +514,21 @@ const queryExecutorJoinExecutionMethods = {
     joinType,
     leftTableRef = QUERY_EXECUTOR_LITERAL.STRING_LEFT,
     rightTableRef = QUERY_EXECUTOR_LITERAL.STRING_RIGHT,
+    params = [],
   ) {
     const result = [];
     const matchedRight = new Set();
     for (const leftRow of leftRows) {
       let hasMatch = false;
       for (const rightRow of rightRows) {
-        const combined = {
-          ...leftRow,
-          ...rightRow,
-        };
-        if (this.evaluateExpression(combined, condition)) {
-          result.push(
-            this.combineJoinRows(
-              leftRow,
-              rightRow,
-              leftTableRef,
-              rightTableRef,
-            ),
-          );
+        const combined = this.combineJoinRows(
+          leftRow,
+          rightRow,
+          leftTableRef,
+          rightTableRef,
+        );
+        if (this.evaluateExpression(combined, condition, params)) {
+          result.push(combined);
           matchedRight.add(rightRow);
           hasMatch = true;
         }
