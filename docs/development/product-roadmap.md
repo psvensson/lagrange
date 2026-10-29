@@ -5,540 +5,283 @@ documentClass: planning
 
 # Lagrange Product Roadmap
 
-This document is a cross-edition status board for Community, Pro, and
-Enterprise planning.
-
-It is visibility-only. Do not use this file to create specs, tasks, or code in
-the AGPL repository. AGPL implementation scope is owned by the agent feature
-map under `docs/steering/`.
-
-Paid-tier source-of-truth planning remains external to this repository. Statuses
-here are mirrored so progress can be shown without turning paid backlog into
-actionable work in this codebase.
-
-## Status Legend
-
-| Symbol | Meaning      |
-|--------|--------------|
-| ✅     | Done         |
-| 🔧     | In Progress  |
-| 🔲     | Not Started  |
-
-Note: in the
-[AGPL feature map](agpl-feature-map.md) the ✅ glyph means
-"available at roadmap scope" — release readiness may still need release-gate
-proof there, while here it simply means done.
-
-## Edition Legend
-
-| Symbol | Edition              |
-|--------|----------------------|
-| 🟢     | Community (AGPL)     |
-| 🟡     | Pro                  |
-| 🔴     | Enterprise           |
-
-## Editions
-
-Community (AGPL)
-- Full distributed SQL database
-- Programmable execution runtime
-- Cluster operation via CLI
-
-Pro
-- Automated backup and point-in-time recovery
-- Advanced observability
-- Operational tooling
-
-Enterprise
-- Multi-tenant security
-- Cross-region replication
-- Compliance features
-
----
-
-## Phase 0.1 — Internal Coherence
-
-*"The system behaves predictably under stress."*
-
-### 0.1a. Topology Workflow Stabilization — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| `replica_operations` single-writer cutover | ✅ | `RebalanceCoordinator` is the canonical writer/owner path |
-| Managed split durable-owner cutover | ✅ | `ManagedSplitWorkflow` owns split lifecycle and resume |
-| Readiness stratification for internal vs load lanes | ✅ | Internal topology paths use `repairEligible`; load/routing paths use `serveEligible` |
-| Atomic topology transitions fail closed without transaction owner | ✅ | Optional fallback semantics removed on atomic cut points |
-| Cache observation boundary enforcement | ✅ | Workflow advance requires owner commit and acknowledgement, not cache timing |
-| Owner-dependency fallback removal | ✅ | Active topology paths fail closed when required owners are missing |
-| Deterministic regression ladder enforcement | ✅ | Repros and focused suites run before 7-node harness confirmation |
-| Scenario policy SQL ownership guard | ✅ | `npm run guard:scenario-policy:file` enforces `table_policies` owner helper usage |
-
-### 1. Distributed Transactions — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| DistributedTransactionCoordinator skeleton | ✅ | Owns 2PC state machine |
-| Transaction state tables | ✅ | `sql_transactions`, `sql_transaction_participants`, `sql_write_operations` |
-| Participant enlistment | ✅ | Idempotent operations |
-| Prepare phase | ✅ | Real `PARTICIPANT_PREPARE` dispatch + participant conflict checks |
-| Prepared-state durability | ✅ | `PARTICIPANT_PREPARE` and `PARTICIPANT_DECISION` replicated in participant Raft log |
-| Commit phase | ✅ | Commit decision persisted before participant fanout |
-| Rollback | ✅ | Cross-partition rollback with idempotent participant handling |
-| Coordinator recovery | ✅ | Status-driven replay to terminal state after restart |
-| Read-your-own-writes isolation | ✅ | Session staged read-your-own-writes over current committed state |
-| Write conflict detection | ✅ | Partition-write-generation first-committer-wins conflict detection at prepare and apply |
-| Timeout and cleanup | ✅ | Budget-based abort + persisted deadline coordinator rollback + recovery sweep |
-
-### 2. Schema Migration Workflow — 🟢 Community
-
-| Item | Status |
-|------|--------|
-| System table schema definitions | ✅ |
-| Schema version tracking | ✅ |
-| Bootstrap schema migration | ✅ |
-| Internal ALTER TABLE support | ✅ |
-| User-facing migration pipeline | ✅ |
-| Dual-write compatibility | ✅ |
-| Backfill stage | ✅ |
-| Cutover stage | ✅ |
-| Cancellation and rollback path | ✅ |
-| Restart recovery of non-terminal migrations | ✅ |
-| Migration observability tables (`schema_migrations`, `schema_migration_partitions`) | ✅ |
-
-### 3. Operational Visibility — 🟢 Community basics / 🟡 Pro advanced
-
-| Item | Edition | Status |
-|------|---------|--------|
-| Metrics instrumentation | 🟢 | ✅ |
-| Admin CLI | 🟢 | ✅ |
-| Health probes | 🟢 | ✅ |
-| Diagnostics API | 🟢 | ✅ |
-| Live query subscriptions | 🟢 | ✅ |
-| EXPLAIN DISTRIBUTED | 🟢 | ✅ |
-| Cluster SQL diagnostics | 🟢 | ✅ |
-| Partition diagnostics | 🟢 | ✅ |
-| CDC diagnostics | 🟢 | ✅ |
-| Prometheus export | 🟡 | 🔲 |
-| OpenTelemetry tracing | 🟡 | 🔲 |
-| Partition heatmaps | 🟡 | 🔲 |
-| Runtime execution traces | 🟡 | 🔲 |
-
-### 4. Failure Simulations — 🟢 Community
-
-| Item | Status |
-|------|--------|
-| Distributed test harness | ✅ |
-| Node failure tests | ✅ |
-| Network partition tests | ✅ |
-| Rolling restart tests | ✅ |
-| Node join under load | ✅ |
-| Seed restart under load | ✅ |
-| Sustained throughput tests | ✅ |
-| Write visibility tests | ✅ |
-| WASM service failover | ✅ |
-| Partition kill/heal | ✅ |
-| 7-node stress scenarios | ✅ |
-| Postgres baseline comparison | ✅ |
-| Invariant engine | ✅ |
-| Disk full simulation | ✅ |
-| Slow follower simulation | ✅ |
-| In-cluster chaos injection | ✅ |
-
----
-
-## Phase 0.3 — Queryable Core
-
-*"Ordinary SQL can reach the right data efficiently without physical-partition knowledge."*
-
-### Query Semantics and Access Paths — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Typed partition-key and tuple ordering | 🔲 | One type-aware total order for persisted boundaries and indexed tuples |
-| Primary-key and compound-primary-key partition narrowing beyond `id` | 🔲 | Use the already-persisted declared key rather than hardcoded fallbacks |
-| Local ordered index DDL | 🔲 | `CREATE INDEX` / `DROP INDEX`; ordinary and compound B-tree indexes; unsupported families fail closed |
-| Ordered and compound index planner semantics | 🔲 | Left-prefix, equality-prefix-plus-range, and sealed NULL/type/collation behavior |
-| Non-unique global secondary and compound indexes | 🔲 | Partitioned/replicated index datasets, resumable backfill, lifecycle/failure state, routed reads and `EXPLAIN DISTRIBUTED` |
-| Index state and backfill diagnostics | 🔲 | Ordinary SQL/catalog visibility suitable for 0.5 operator and onboarding UX |
-
-Phase 0.3 indexes are access paths: rejecting or losing an index may make a
-query slower but must not change base-table correctness. Unique global indexes
-are therefore intentionally assigned to the Phase 1.0 production-invariant
-boundary below.
-
----
-
-## Phase 0.5 — External Usability
-
-*"Developers can realistically try this."*
-
-### 1. Cluster Deployment Experience — 🟢 Community
-
-| Item | Status |
-|------|--------|
-| Dockerfile | ✅ |
-| Bootstrap API | ✅ |
-| Node join protocol | ✅ |
-| Admin port | ✅ |
-| `lagrange cluster init` | 🔲 |
-| `lagrange node start` | 🔲 |
-| `lagrange cluster join` | 🔲 |
-| `docker-compose` cluster | 🔲 |
-| Kubernetes Helm chart | ✅ |
-
-### 2. Developer Workflow — 🟢 Community
-
-| Item | Status |
-|------|--------|
-| Programmatic runtime | ✅ |
-| Iterator mode | ✅ |
-| Stage mode | ✅ |
-| Plan mode | ✅ |
-| WASM deployment via manifest | ✅ |
-| CLI wasm publish | 🔲 |
-| CLI wasm deploy | 🔲 |
-| CLI wasm scale | 🔲 |
-| Getting-started tutorial | 🔲 |
-| Indexed-query example and index-state inspection | 🔲 |
-
-### 3. Debugging Tools — 🟢 Community
-
-| Item | Status |
-|------|--------|
-| Debug sessions | ✅ |
-| Breakpoints and snapshots | ✅ |
-| DAP server | ✅ |
-| DWARF mapping | ✅ |
-| Replay runtime | ✅ |
-| Plan diagnostics | ✅ |
-| Playback viewer | ✅ |
-| Query execution tracing | 🔲 |
-| EXPLAIN EXECUTION | 🔲 |
-
----
-
-## Phase 0.6 — Native OCI Call Cells
-
-*"Keep the customer's runtime; move the selected function to the data."*
-
-Phase 0.6 follows the 0.5 external-usability baseline and precedes the 1.0
-production-hardening milestone. It makes the native-runtime bridge a scheduled
-product milestone rather than an unversioned advanced-runtime idea. It contains
-the minimum real managed OCI lifecycle needed to run customer containers,
-followed by native Call Cell invocation through the existing Artifact / Binding /
-Cell execution owners.
-
-### 1. Real Managed OCI Activation — 🟢 Community core
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Digest-pinned live OCI activation | 🔧 | Pull/create/start/inspect/stop/remove the exact managed revision through the unified lifecycle and selected host provider |
-| Managed health, endpoint and log integration | 🔲 | Runtime evidence feeds ordinary service readiness/diagnostics rather than a side-channel supervisor |
-| Named instance kill and replacement | 🔲 | Exact failed instance is replaced once through existing service placement/lifecycle owners |
-| Authenticated replica identity | 🔲 | Lifecycle-issued identity binds the managed process to cluster/node/service/revision/Cell identity |
-
-### 2. Native OCI Call Cells — 🟢 Community core
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Native invocation/broker contract | 🔲 | Application-initiated authenticated stream; broker adapts service-originated calls and admitted worker invocation but owns no placement, fanout, reduce or retries |
-| `OciContainerDriver.invoke()` | 🔲 | Provider-specific execution begins only after `ServiceRuntimeLifecycle.invoke()` |
-| First code-first native SDK | 🔲 | Source-level operation handle compiles to existing Artifact, Binding, export identity and outbound-call policy; no closure/function shipping |
-| Multi-node data-local execution | 🔲 | Handler-originated and direct calls converge on `CallCellInvoker`; each destination reads its local partition replica before native execution |
-| Native dependency and worker-loss proof | 🔲 | Real native library, pinned revision, typed ambiguous/retry behavior, and no false exactly-once external-side-effect claim |
-| Second-language conformance | 🔲 | Materially different runtime consumes the same broker/context semantics without a new execution owner |
-| Fresh-clone evaluator terminal | 🔲 | End-to-end proof covers identity, authorization, locality, emit/reduce, recovery, negatives, teardown and replay semantics |
-
-Phase 0.6 completes when a real managed OCI service can expose a distributed
-operation from the same ordinary program, execute that operation on multiple
-partition hosts with a genuine native dependency, recover honestly from worker
-loss, and demonstrate the same execution contract from a second language/runtime.
-
----
-
-## Phase 1.0 — Real Product
-
-*"Companies can run this in production."*
-
-### 1. System Service Foundations — 🟢 Community core
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Unified service lifecycle | ✅ | `ServiceLifecycleManager` + `ServiceReconciler` + `ServiceDispatcher` |
-| Built-in runtime services | ✅ | `sys-postgres-wire`, `sys-admin-meta`, `sys-wasm-meta` |
-| Kernel-internal runtime | ✅ | Active provider for first-party system services |
-| `wasm_component` runtime | ✅ | Available runtime for replicated services |
-| Service manifest schema definition | 🔲 | Identity, runtime, capabilities, compatibility |
-| Manifest validation rules | 🔲 | Required fields, version format, capability recognition, dependency validation |
-| Service catalog system tables | 🔲 | Desired/actual installed-service state and failure recording |
-| Installation reconciler | 🔲 | Fetch/validate/place/start-stop convergence |
-| Service lifecycle API | 🔲 | `onInstall`, `onStart`, `onStop`, `onUpgrade`, `onUninstall` |
-| Replicated service state API | 🔲 | Stable service-owned state surface |
-| CDC subscription API | 🔲 | Change-stream consumption for service workflows |
-| Admin surface registration | 🔲 | Services register SQL/CLI/HTTP control surfaces |
-| Capability enforcement | 🔲 | Kernel gates service access to privileged APIs |
-| Consistent snapshot API | 🔲 | Required for backup barriers and cluster-consistent reads |
-| Topology API | 🔲 | Required for service placement and orchestration |
-| Event emission API | 🔲 | Structured progress and failure reporting |
-
-### 2. Backup / Restore / PITR — 🟡 Pro
-
-| Item | Status |
-|------|--------|
-| Bootstrap snapshots | ✅ |
-| Partition snapshots | ✅ |
-| External backup storage | 🔲 |
-| Incremental backup | 🔲 |
-| Restore to cluster | 🔲 |
-| Restore to new cluster | 🔲 |
-| Point-in-time recovery | 🔲 |
-| Cross-region replication | 🔲 🔴 |
-
-### 3. PostgreSQL Compatibility — 🟢 Community
-
-| Item | Status |
-|------|--------|
-| Postgres wire protocol | ✅ |
-| SQL dialect translation | ✅ |
-| CTEs / subqueries | ✅ |
-| EXPLAIN DISTRIBUTED | ✅ |
-| `information_schema` | 🔲 |
-| `pg_catalog` shims | 🔲 |
-| Window functions | 🔲 |
-| Sequences | 🔲 |
-
-### 4. Observability Platform — 🟡 Pro
-
-| Item | Status |
-|------|--------|
-| Query correlation IDs | ✅ |
-| CDC lag monitoring | ✅ |
-| Diagnostics sampler | ✅ |
-| Metrics dimensions | ✅ |
-| Prometheus export | 🔲 |
-| OpenTelemetry tracing | 🔲 |
-| Partition heatmap | 🔲 |
-| Runtime execution traces | 🔲 |
-
-### 5. Security and Tenancy — 🔴 Enterprise
-
-| Item | Status |
-|------|--------|
-| PG authentication | 🔧 | Explicit `trust` (loopback-only) and `password` (`AuthenticationCleartextPassword`) are live; SCRAM remains unimplemented |
-| Admin auth middleware | ✅ |
-| Service authorization | ✅ |
-| Audit context | ✅ |
-| Tenant context propagation | 🔧 |
-| RBAC | 🔲 |
-| Tenant isolation | 🔲 |
-| Resource quotas | 🔲 |
-| Encryption at rest | 🔲 |
-| TLS transport | 🔧 | PostgreSQL wire TLS (`disable`, `prefer`, `require`) is live; node-to-node mTLS remains unimplemented |
-
-### 6. Production Guarantees — 🟢 Community
-
-| Item | Status |
-|------|--------|
-| Replica count guarantees | ✅ |
-| Replica recovery | ✅ |
-| Failure detection | ✅ |
-| Node reintegration | ✅ |
-| Failover SLO definition | 🔲 |
-| Durability SLO definition | 🔲 |
-| Raft snapshot recovery and bounded log lifecycle | 🔲 |
-| Supported data-plane scale envelope | 🔲 |
-| Feasibility-qualified placement balance SLO | 🔲 |
-| Topology convergence SLO | 🔲 |
-| Large-scale data-plane certification | 🔲 |
-
-### 7. Production Index and Constraint Guarantees — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Unique global secondary indexes | 🔲 | Require synchronous maintenance capable of transactional uniqueness enforcement |
-| Transactional synchronous index maintenance | 🔲 | Required index partitions participate in the write/2PC correctness boundary |
-| Production index rebuild/backfill guarantees | 🔲 | Restart/failover-safe rebuild with measured pressure and supported recovery envelope |
-| Index write-amplification and capacity envelope | 🔲 | Publish representative costs for supported compound/global-index profiles |
-| Supported ordered-key/NULL/type/collation contract | 🔲 | Stabilize the production subset exposed through PG metadata and constraints |
-
-### 8. Customer-Installable Service Product Platform — 🟢 core / 🟡🔴 commercial controls
-
-This is a cross-edition convergence milestone for separately released services such as Lagrange AI. It groups existing core and paid-platform work into one customer acceptance boundary; it does not change the implementation-home rules in `edition-matrix.md`. Phase 0.6 establishes the first live managed OCI activation and native Call Cell path; Phase 1.0 hardens that substrate for supported customer operation.
-
-#### Managed package and runtime lifecycle — 🟢 Community core
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Signed immutable OCI package/revision identity | 🔧 | Build on the existing verified install catalog rather than a second package path |
-| Managed OCI lifecycle production hardening | 🔲 | 0.6 establishes live activation; 1.0 adds compatibility policy, rollout fencing, upgrade/rollback guarantees and supported operational envelopes |
-| Kernel/service compatibility preflight | 🔲 | Refuse incompatible kernel/API/dependency combinations before activation |
-| Configuration schema validation | 🔲 | Service-declared schema plus typed validation failures |
-| Health/readiness contribution contract | 🔲 | Service-specific readiness feeds the ordinary service actual/readiness model |
-| Idempotent install/status/remove lifecycle | 🔧 | Existing lifecycle SQL/catalog work becomes the supported customer service path |
-| Health-gated upgrade and rollback | 🔲 | Immutable revisions, rollout fencing and rollback to prior known-good revision |
-| Air-gapped/mirrored package operation | 🔲 | Customer-controlled artifact acquisition without requiring public registry access |
-
-#### Diagnostics and customer support boundary — 🟢 core / 🟡 advanced export
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Stable service diagnostics contribution contract | 🔲 | Installed services contribute typed health, metrics and diagnostic facts without private side channels |
-| Customer-inspectable support bundle | 🔲 | Versioned local bundle with manifest, bounded diagnostics and service-contributed sections |
-| Redaction contract | 🔲 | Secrets and customer payload data are excluded by contract unless explicitly opted in |
-| Customer-controlled telemetry contribution plumbing | 🔲 | Core accepts service metrics/events; Pro exporters may send them to Prometheus/OTel or other destinations |
-| Telemetry/licensing separation | 🔲 | A valid commercial service entitlement must never require operational telemetry to be enabled |
-
-#### Commercial service controls — 🟡 Pro / 🔴 Enterprise
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Offline-capable signed entitlement assertion | 🔲 | Commercial implementation; product/edition/feature claims can be verified without mandatory phone-home |
-| Grace/expiry behavior contract | 🔲 | Licensing failure is typed and must not silently corrupt state or become a cluster-availability hazard |
-| Cluster-resolved secret references | 🔲 | Enterprise implementation home; provider/service credentials never live in public manifests or guest authority |
-
-Acceptance consumer: at least one separately released first-party service must install, become ready, survive restart, expose useful diagnostics, upgrade, roll back and remove through this common lifecycle. Lagrange AI is a natural first consumer.
-
----
-
-## Phase 1.x — SQL Breadth and Compatibility
-
-*"Broader SQL/index ergonomics after the core access path and production invariants are stable."*
-
-### Advanced Index Compatibility — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Partial indexes | 🔲 | Predicate-scoped membership and planner matching |
-| Expression indexes | 🔲 | Stable expression identity and evaluation semantics |
-| `INCLUDE` / covering syntax and index-only scans | 🔲 | Separate key from payload columns and prove visibility semantics |
-| Richer collation and operator semantics | 🔲 | Expand beyond the deliberately small 0.3 ordered-index contract |
-| Broader PostgreSQL index catalog/DDL compatibility | 🔲 | Include concurrent-build behavior where honestly supportable |
-
----
-
-## Phase 2.0 — Deeper Distributed Execution
-
-*"One product: services whose functions run across the data. This phase
-deepens the shipped call surface rather than adding a separate platform."*
-
-### 1. Multi-Stage Distributed Plans — 🟢 Community
-
-| Item | Status |
-|------|--------|
-| Distributed query planner | ✅ |
-| Parallel coordinator | ✅ |
-| Merge engine | ✅ |
-| Strategy selector | ✅ |
-| Plan diagnostics | ✅ |
-| Multi-stage plans | 🔲 |
-| Cost-based optimizer | 🔲 |
-| Statistics and cardinality estimates | 🔲 |
-| Cost-based index selection | 🔲 |
-| Index intersection / union and bitmap-style access plans | 🔲 |
-| Query hints | 🔲 |
-| Index recommendation / advisor tooling | 🔲 |
-
-### 2. Advanced Runtime Services — 🟢 Community core / future service platform
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Advanced OCI provider/resource placement | 🔲 | First live managed OCI activation and native Call Cells belong to 0.6; this row covers additional providers, deeper resource-aware placement and runtime-platform scale |
-| Vector search service | 🔲 | Specialized search family distinct from the ordinary ordered B-tree contract |
-| Full-text search service | 🔲 | Specialized search semantics/storage rather than a required B-tree variant |
-| Spatial search/index service | 🔲 | Specialized geometry/index semantics rather than a required B-tree variant |
-| Embedding service | 🔲 | Specialized service workload |
-
-These specialized search families remain distinct from the ordinary ordered
-B-tree contract introduced in 0.3; they can use service-specific storage and
-semantics where appropriate.
-
-The foundational managed-OCI lifecycle and native Call Cell path are Phase 0.6
-product gates. Phase 2.0 may deepen container/resource placement and service
-APIs; it should not create a second activation or invocation path.
-
-### 3. External Kernel Platform API — 🟢 Community core / 🔴 Enterprise extensions
-
-#### Phase 0 — Minimal Deployment Follow-ons — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Keyed invocation routing | 🔲 | Trusted actor-key extraction and rendezvous assignment over ready Cells |
-| Generic Cell request continuity and failover | 🔲 | Provider-neutral route recovery and duplicate-effect safety |
-| Non-request source invocation | 🔲 | CDC, timer, once, boot, named call, and pushdown execution through existing Cell owners |
-
-#### Phase A — Stable External Service Contract — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Stable manifest registration contract | 🔲 | Versioned external contract for identity, runtime, capabilities, compatibility |
-| Stable service lifecycle API | 🔲 | Supported install/start/stop/upgrade hooks |
-| Stable replicated service state API | 🔲 | Versioned service-owned state contract |
-| Stable CDC subscription API | 🔲 | Supported table change streams |
-| Stable admin surface registration | 🔲 | Supported SQL/CLI/HTTP command registration contract |
-| Stable capability model | 🔲 | Public capability taxonomy and enforcement contract |
-
-#### Phase B — Advanced External Service APIs — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Upgrade / rollout API | 🔲 | Rolling, canary, all-at-once strategies |
-| External topology API | 🔲 | Supported node, partition, and leader introspection |
-| External event emission API | 🔲 | Public structured events contract |
-
-#### Phase C — Enterprise Platform APIs — 🔴 Enterprise
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Policy provider API | 🔲 | RBAC, tenant isolation, quotas, placement rules |
-| Secrets and external references API | 🔲 | Cluster-resolved credentials and KMS integration |
-
-### 4. Installable Service Ecosystem — 🟢 Community core / 🟡🔴 advanced controls
-
-The Phase 1.0 productization milestone defines the minimum customer-service acceptance gate. This section continues the broader ecosystem work: discovery, multiple registries, richer external APIs, and service-platform scale.
-
-#### Artifact and Package Registry — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| OCI registry transport | 🔲 | Primary artifact distribution via OCI |
-| Registry configuration (`add` / `list` / `remove`) | 🔲 | Multiple registries with priority and auth |
-| Local artifact path (dev-install) | 🔲 | Fast local development workflow |
-| Air-gapped / mirror registry support | 🔲 | Enterprise local mirror path |
-| Trust and verification (digest, signature) | 🔲 | Artifact and manifest integrity checks |
-
-#### Manifest and Install UX — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Configuration schema support | 🔲 | JSON Schema for service config contracts |
-| Upgrade strategy declaration | 🔲 | Rolling, canary, all-at-once in manifest |
-| Health and probe definitions | 🔲 | Startup, readiness, liveness probes |
-| Dependency declaration | 🔲 | Service and kernel feature dependencies |
-| Install lifecycle (discover → resolve → validate → record → reconcile → observe) | 🔲 | Declarative desired-state convergence |
-| Remove lifecycle | 🔲 | Drain, stop, cleanup per policy |
-| Upgrade lifecycle with rollback | 🔲 | Versioned revisions, rollback to prior known-good |
-| Failure recording and queryability | 🔲 | Structured durable failure state |
-
-#### SQL / CLI Surface — 🟢 Community
-
-| Item | Status | Notes |
-|------|--------|-------|
-| `INSTALL SERVICE` / `REMOVE SERVICE` / `UPGRADE SERVICE` SQL | ✅ | Service lifecycle as first-class cluster operations |
-| `SHOW SERVICES` / `SHOW SERVICE REVISIONS` / `SHOW SERVICE INSTANCES` SQL | ✅ | `SHOW SERVICES` live over authenticated PG wire; revision/instance views follow with catalog expansion |
-| `lagrange service install` / `upgrade` / `remove` / `list` / `status` CLI | 🔲 | CLI equivalents |
-| `lagrange registry add` / `list` CLI | 🔲 | Registry management |
-
-#### Licensing and Edition Gating — 🟡 Pro / 🔴 Enterprise
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Edition requirement enforcement | 🔲 | Services declare `community` / `pro` / `enterprise` |
-| License token / entitlement validation | 🔲 | Cluster validates entitlement before activation |
-
-### 5. Data-Local AI Processing — visibility only until edition classification
-
-| Item | Status |
-|------|--------|
-| Local summarization | 🔲 |
-| Local anomaly detection | 🔲 |
-| Local semantic filtering | 🔲 |
+This is the cross-edition view of one ordered release sequence. Every future
+capability below has a numbered release home. Later milestones follow the
+preceding release; they are not independent implementation lanes. A section
+assigns intended scope, not a delivery date or a claim that its work is complete.
+
+This file is visibility-only. The [AGPL feature map](agpl-feature-map.md) owns
+allowed implementation scope and sequence in this repository. The
+[edition matrix](../../edition-matrix.md) owns edition and implementation-home
+boundaries. Pro and Enterprise implementation remains in the external commercial
+repository; listing it here does not authorize implementation in the AGPL tree.
+
+[Current capabilities and limitations](../current-capabilities-and-limitations.md)
+is the checked-in support authority; [CHANGELOG.md](../../CHANGELOG.md) records
+released changes. Existing components, an unmerged candidate, a passing focused
+proof, a qualified release and a supported operating guarantee are distinct
+states. The active epic and its original evidence establish detailed progress.
+No status in this roadmap substitutes for that evidence.
+
+## Release Sequence
+
+| Version | Product outcome | Edition scope |
+| --- | --- | --- |
+| 0.2.9 | Complete the stable core on the released 0.2.8 foundation | Community |
+| 0.3 | Queryable Core: keys, access paths, locking reads and live results | Community |
+| 0.4 | Practical service core and a qualified ordinary-SQL comparison | Community |
+| 0.5 | Pilot-ready security, deployment and operations | Community |
+| 0.6 | Safe managed OCI activation and native Call Cells | Community |
+| 0.7 | Transport independence, NATS-only operation and effective static timing | Community |
+| 0.8 | Veilid-only cluster operation | Community |
+| 0.9 | Complete installable-service lifecycle, diagnostics and support | Community core; Pro/Enterprise commercial integrations |
+| 1.0 | Production guarantees, global uniqueness and backup/recovery products | Community core; Pro backup/restore/PITR |
+| 1.1 | Broader SQL and PostgreSQL compatibility | Community |
+| 1.2 | Enterprise identity, tenancy, secrets and cross-region operation | Enterprise, external implementation |
+| 2.0 | Deeper execution, optimizer, advanced artifact storage and full Scenario B | Community |
+| 2.1 | Specialized search and data-local processing services | Community search substrate; AI edition remains unclassified |
+
+## Baseline Through 0.2.8
+
+The earlier roadmap's completed-component inventory is retained here as the
+foundation for the numbered releases. It is not blanket certification of every
+listed behavior under the current backend, topology or failure schedule. Read
+the current capability page before relying on a specific operation.
+
+| Foundation | Existing work carried forward |
+| --- | --- |
+| Topology workflow ownership | Single-writer `replica_operations`, managed split ownership, internal/load readiness separation, owner-required atomic transitions, committed cache-observation boundaries and removal of owner-dependency fallbacks |
+| Transaction machinery | Coordinator and participant state, enlistment, prepare/decision durability, commit/rollback, recovery, read-your-writes, conflict detection, deadlines and cleanup; remaining public correctness obligations close in 0.2.9 |
+| Schema migrations | System schema definitions and versions, bootstrap migrations, internal ALTER TABLE, user migration workflow, dual-write compatibility, backfill, cutover, rollback, restart recovery and migration diagnostics |
+| Operational visibility | Metrics, admin CLI, health probes, diagnostics APIs, `EXPLAIN DISTRIBUTED`, cluster/partition/CDC views, correlation IDs and diagnostic sampling; generic push-backed live queries remain a 0.3 milestone |
+| Failure and regression apparatus | Deterministic regression ladder, scenario SQL ownership guard, distributed harness, node/seed restart, join and failure cases, network partition, disk-full and slow-follower cases, chaos, sustained load, visibility, WASM failover, seven-node scenarios, baseline comparisons and invariant checks |
+| Deployment and development substrate | Docker and Helm scaffolding, bootstrap/join/admin surfaces, programmatic runtime, iterator/stage/plan modes and manifest-based WASM deployment |
+| Debugging substrate | Debug sessions, breakpoints, snapshots, DAP, DWARF mapping, replay, plan diagnostics and playback |
+| Service substrate | Unified lifecycle, built-in runtime services, kernel-internal and WASM providers, immutable Artifact/Binding/Cell records and existing service SQL; managed OCI execution remains a 0.6 deliverable |
+| Query execution substrate | Distributed planner, parallel coordinator, merge engine and strategy selection; SQL support is limited to the tested subset in the capability page |
+| Replica-recovery substrate | raft-rs cutover, partition snapshots/catch-up, progress-proven learner promotion and existing failure detection/reintegration; snapshots are not the 1.0 backup product |
+
+## Phase 0.2.9 - Stable Core Completion
+
+Complete and qualify the existing public SQL and distributed WASM service paths
+before adding 0.3 access paths. This release carries forward unresolved
+stabilization acceptance from the 0.2.7 plan and subsequent released corrections;
+shipping a patch does not itself close the full stable-core milestone.
+
+| Requirement | Edition | Release outcome |
+| --- | --- | --- |
+| Public SQL and transaction correctness | Community | Preserve accepted expression, constraint, routing and session semantics; prove visibility, contention, rollback, commit completion, restart and follower application on representative public workloads |
+| Transaction uncertainty and retry contract | Community | Preserve durable commit decisions through recovery, distinguish a known abort from an unknown result, and resolve the documented partial-commit limitation; no blind retry or claimed caller idempotency without its own proof |
+| Scenario A semantic acceptance | Community | Use the ordinary SQL workload to expose and close core defects; review its unmerged runtime changes through the existing owners before claiming acceptance |
+| Representative public WASM service | Community | Exact-candidate end-to-end service behavior and failure/recovery evidence through the supported public path |
+| Runtime and security stabilization | Community | Correct internal ingress admission, bounded retention/backpressure, artifact usability and the remaining native runtime failures |
+| Release integrity | Community | Reproducible binaries, npm/container artifacts, usable authoring path, current Docker Hub overview and post-publication identity/content confirmation |
+| Capability truth | Community | Current operational and compatibility guidance matches the qualified candidate and names unsupported behavior explicitly |
+
+The full TiDB/TiKV performance comparison belongs to 0.4. Its absence must not
+turn a current transaction defect into an optional benchmark improvement.
+
+## Phase 0.3 - Queryable Core
+
+| Requirement | Edition | Release outcome |
+| --- | --- | --- |
+| Typed persisted keys and tuples | Community | One type-aware order, exact boundary representation, declared primary-key metadata and compound-key narrowing beyond an implicit `id` convention |
+| Local ordered index DDL | Community | Ordinary and compound `CREATE INDEX` / `DROP INDEX`, with a defined B-tree family and typed refusal for unsupported kinds |
+| Compound access-path semantics | Community | Correct left-prefix and equality-prefix-plus-range behavior, with explicit NULL/type/collation rules |
+| Non-unique global secondary indexes | Community | Partitioned and replicated index datasets, one selected maintenance contract, resumable backfill, restart-safe lifecycle and failure state |
+| Safe index reads and fallback | Community | An unavailable or insufficiently current index cannot omit valid base-table results; use the owned safe fallback when eligibility is not proven |
+| Planner and catalog visibility | Community | Explain selected/rejected indexes; inspect definitions, build/backfill progress and failures through ordinary SQL/catalog surfaces |
+| PostgreSQL locking reads | Community | Preserve `SELECT ... FOR UPDATE` in the canonical AST and enforce its distributed transaction conflict, cancellation, timeout, release and recovery semantics |
+| Generic push-backed live queries | Community | Ordinary application queries, partition-scoped CDC dependencies, equivalent-interest coalescing, gap-free snapshot/frontier handoff and topology changes |
+| Live-query maintenance | Community | Incremental deltas for supported plans and event-triggered re-execution/reset for other plans; idle change discovery performs no repeated data reads |
+
+Global unique secondary indexes belong to 1.0. An optional 0.3 access path may
+change performance but may not weaken base-table correctness. The owner contracts
+remain [PostgreSQL Locking Reads](../../architecture/postgres-locking-reads.md)
+and [Live Query Data Plane](../../architecture/live-query-data-plane.md).
+
+## Phase 0.4 - Practical And Demonstrated Service Core
+
+| Requirement | Edition | Release outcome |
+| --- | --- | --- |
+| Typed per-call selector narrowing | Community | Call arguments bind declared parameter slots without arbitrary caller SQL or selector concatenation |
+| Paging or streaming beyond one shard batch | Community | Explicit page identity, backpressure, budgets, cancellation/deadlines and deterministic reduction |
+| Bounded structured partials | Community | Versioned canonical encoding, size limits and defined duplicate-key/merge behavior |
+| Multi-operation service dispatch | Community | Default code-first output and examples expose multiple operations through the existing service owners |
+| Public-path physical evidence | Community | Multi-machine WASM-over-HTTP behavior, local-data execution and reproducible resource/performance evidence |
+| Complete Scenario A SQL comparison | Community | Both products satisfy the independent semantic contract; matched-budget and architecture-native accounting, open-loop latency, repeated paired runs and honest statistical results |
+
+Scenario A measures the ordinary database cost without substituting WASM or a
+custom service for SQL work. A result favoring TiDB/TiKV is valid. This release
+makes the bounded service path useful; full dynamic-graph Scenario B is assigned
+to 2.0 with its deeper-composition prerequisites.
+
+## Phase 0.5 - Pilot Operations
+
+| Requirement | Edition | Release outcome |
+| --- | --- | --- |
+| Core cluster security | Community | Cryptographic peer authentication and encrypted node transport, plus ingress/PG authentication, SCRAM and TLS for the selected pilot driver/network profile |
+| Usable deployment | Community | Cluster init/start/join, compose and Helm paths with persistent state, readiness admission, cleanup and reproducible fresh-clone onboarding |
+| Practical authoring and debugging | Community | Coherent programmatic/CLI publish, deploy and scale workflow; local OCI dev-install, scaffold/defaults and WASM hot reload; getting-started and indexed-query examples, query execution tracing and `EXPLAIN EXECUTION` |
+| Recovery and log lifecycle | Community | Qualify delivered bounded-log and message-group compaction mechanisms under the declared pilot topology, load, multi-machine soak, node-loss, replica-rebuild and recovery profiles; bounded-log correctness obligations close in 0.2.9 |
+| Data adoption | Community | Resumable load, shadowing, parity, cutover, rollback and exit tooling |
+| Driver and SQL compatibility | Community | Named, tested PostgreSQL-driver/SQL matrix; unsupported authentication and SQL modes are explicit |
+| Upgrade and operating envelope | Community | Supported topology/capacity bounds and executable upgrade/downgrade rehearsals for named release pairs |
+| Operator view | Community | Correlated request, shard, partial, placement, retry and failure diagnostics; inspect index and live-query dependency/frontier state |
+
+Security is required on the supported transport in 0.5. It does not wait for
+NATS or Veilid. Advanced exporters and paid telemetry are assigned to 0.9;
+enterprise identity and tenancy are assigned to 1.2.
+
+## Phase 0.6 - Safe Managed OCI And Native Call Cells
+
+This release establishes the minimum complete, safe runtime lifecycle consumed
+by native calls. Its package, compatibility, identity and health prerequisites
+are included here; 0.9 expands the customer product surface around that runtime.
+
+| Requirement | Edition | Release outcome |
+| --- | --- | --- |
+| Verified managed activation | Community | Signature/digest-verified acquisition of a pinned revision, runtime/media-type discrimination, compatibility/dependency and configuration preflight, pull/create/start/inspect/stop/remove and exact-instance replacement |
+| Identity and health | Community | Authenticated service/revision/Cell identity, activation leases, endpoint/log integration and readiness evidence through ordinary lifecycle owners |
+| Required request continuity | Community | Provider-neutral route recovery, receiver revalidation and idempotent managed-result visibility required by native invocation; no second OCI routing/retry owner |
+| Native invocation seam | Community | `ServiceRuntimeLifecycle.invoke()` dispatches to `OciContainerDriver.invoke()` through a node-local authenticated application-initiated broker stream |
+| Code-first native SDK | Community | Source-level operation handles generate immutable Artifact/Binding/export identity and outbound-call authority; no closure shipping |
+| Shared execution semantics | Community | Handler-originated and direct calls converge on `CallCellInvoker`, destination-local replica reads, emit/reduce, deadlines, budgets and typed outcomes |
+| Native workload qualification | Community | A genuine native dependency runs across partition hosts, survives named worker loss honestly and conforms from a second materially different language/runtime |
+| Fresh-clone acceptance | Community | Identity, authorization, locality, result visibility, failure negatives, teardown and documented replay/ambiguity semantics are exercised end to end |
+
+Native process globals and loaded models are disposable cache. Exactly-once
+managed-result visibility does not make arbitrary external side effects exactly
+once. The contract is [Native OCI Call Cells](../../architecture/native-oci-call-cells.md).
+
+## Phase 0.7 - Transport Independence And NATS
+
+Complete these steps in order on an accepted stable-core baseline:
+
+1. **N0:** finish the physical multi-host baseline, per-peer/message-class and
+   pressure attribution, and desired-versus-effective timing observations.
+2. **N1:** isolate the narrow peer-link interaction while preserving WebSocket
+   identity, delivery, ACK/correlation, cancellation, pressure and retry semantics.
+3. **NATS-only:** prove formation, SQL/services, replication, CDC, snapshot/bulk
+   transfer, split/merge, restart, broker loss and seed loss with direct inter-node
+   WebSocket paths disabled.
+4. **Effective static timing:** prove that declared Raft profiles control actual
+   behavior and remain correct within their measured latency/pressure envelopes.
+
+All four are Community scope. `MessageRouter` retains semantic authority; a
+transport adapter owns physical framing and link behavior. Component tests on
+two workers do not certify a three-host network. Dynamic timing adaptation and
+optional mixed-transport policy are assigned to 2.0.
+
+## Phase 0.8 - Veilid-Only Cluster Operation
+
+Community scope: the complete cluster workload operates over Veilid alone,
+including bounded frame/bulk transfer, private-route establishment and renewal,
+backpressure, effective timing, formation, recovery and snapshot catch-up.
+Acceptance disables alternate inter-node WebSocket and NATS paths. Mixed
+transports are not required for correctness or availability of this mode.
+
+This release consumes 0.7's transport and timing contracts and publishes its
+measured capacity and latency envelope. It does not promise enterprise
+cross-region replication, which is assigned to 1.2.
+
+## Phase 0.9 - Installable Service Product Platform
+
+A separately released service must install, become ready, survive restart,
+expose useful diagnostics, upgrade, roll back and remove through the common
+lifecycle. This is one versioned product milestone, building on 0.6.
+
+| Requirement | Edition / implementation | Release outcome |
+| --- | --- | --- |
+| Stable manifest and validation contract | Community / AGPL | Versioned identity/runtime/capability/configuration, dependency and compatibility declarations, including startup/readiness/liveness probes |
+| Catalog and reconciliation | Community / AGPL | Desired/actual state, immutable revisions, durable typed failures, installation reconciliation and inspectable progress |
+| Complete lifecycle and rollout API | Community / AGPL | Install/start/stop/upgrade/uninstall hooks, idempotent install/status/remove, health-gated rolling/canary/all-at-once rollout and rollback |
+| Stable service APIs | Community / AGPL | Replicated service state, supported CDC subscriptions, admin surface registration, capability enforcement, topology introspection and structured event emission |
+| Registry and acquisition UX | Community / AGPL | Complete OCI registry add/list/remove with priority/auth, digest/signature trust, mirrored and air-gapped operation, consuming the 0.5 development-install path and 0.6 verified acquisition |
+| SQL and CLI operations | Community / AGPL | Service install/upgrade/remove/list/status, service revision/instance views and registry management through the normal public surfaces |
+| Diagnostics and support | Community / AGPL | Health/metrics contributions, bounded customer-inspectable support bundles and explicit secret/payload redaction |
+| Telemetry contributions | Community / AGPL | Customer-controlled export plumbing, separate from licensing and entitlement validity |
+| Advanced observability | Pro / External commercial | Prometheus export, OpenTelemetry tracing, partition heatmaps and advanced runtime traces |
+| Entitlement and edition controls | Pro/Enterprise / External commercial | Offline-capable signed entitlement assertions, edition requirements, activation checks and safe typed grace/expiry behavior |
+| Commercial provider integration contracts | Community seams; external commercial providers | Defined capability discovery and secret-reference/policy integration; unavailable paid providers fail explicitly rather than being presumed implemented |
+
+The complete enterprise identity/policy/secrets providers remain 1.2 work.
+0.9 mirroring and air-gapped use can consume ordinary registries; the advanced
+in-cluster native artifact store is assigned to 2.0. A real separately released
+service is the acceptance consumer; Lagrange AI is a possible consumer only
+within its eventual edition classification.
+
+## Phase 1.0 - Production Guarantees
+
+| Requirement | Edition / implementation | Release outcome |
+| --- | --- | --- |
+| Supported operational guarantees | Community / AGPL | Named durability, availability, consistency, failover, recovery and topology-convergence contracts on measured hardware/workloads |
+| Capacity and placement guarantees | Community / AGPL | Supported data-plane scale, bounded queues/resources, feasibility-qualified placement balance and large-scale certification |
+| Recovery and log guarantees | Community / AGPL | Qualified checkpoint, snapshot transfer/install, compaction/retention and restart/rebuild behavior, including acknowledged-write reconciliation |
+| Stable compatibility policies | Community / AGPL | SQL/service/driver, upgrade/downgrade and supported transport-profile contracts |
+| Global unique indexes | Community / AGPL | Synchronous transactional index maintenance participates in commit correctness and enforces global uniqueness |
+| Production index guarantees | Community / AGPL | Supported NULL/type/collation contract, rebuild/backfill under failure, write amplification and recovery/pressure bounds |
+| Consistent snapshot service API | Community / AGPL | Cluster-consistent barriers and snapshot contracts consumed by recovery products |
+| Backup, restore and PITR | Pro / External commercial | External storage, incremental backup, restore into existing/new clusters, point-in-time recovery and measured disaster-recovery RPO/RTO |
+| Supported installed services | Community core; commercial products externally | Production security, compatibility, diagnostics, upgrade/rollback and operating guarantees over the 0.9 lifecycle |
+
+Replica snapshots remain distinct from customer backups. A support statement
+names its edition, tested configuration, failure envelope and original evidence.
+
+## Phase 1.1 - SQL Breadth And PostgreSQL Compatibility
+
+Community scope follows the 0.3 access-path foundation and 1.0 invariants:
+
+- partial and expression indexes;
+- `INCLUDE` / covering-index syntax and index-only scans;
+- richer collation and operator semantics;
+- broader PostgreSQL index catalog and DDL compatibility, including concurrent
+  builds where the guarantees can be preserved;
+- broader `information_schema` and `pg_catalog` compatibility;
+- window functions, sequences and other explicitly tested relational conveniences.
+
+## Phase 1.2 - Enterprise Operations
+
+These are Enterprise features implemented in the external commercial repository.
+The AGPL implementation home and the security floor of earlier releases do not
+change.
+
+| Requirement | Release outcome |
+| --- | --- |
+| Enterprise identity and policy | Enterprise authentication/SSO integrations, RBAC, audit policy and a supported policy-provider API |
+| Tenancy | Tenant context propagation, isolation, resource quotas and policy-controlled placement |
+| Secrets and encryption | Cluster-resolved external references, credentials, secrets/KMS integrations and encryption-at-rest controls |
+| Cross-region operation | Supported replication, durability/failover, data-sovereignty and latency contracts with measured failure/recovery evidence |
+| Compliance surfaces | Commercial operational and audit controls for the declared tenancy and deployment model |
+
+## Phase 2.0 - Deeper Distributed Execution
+
+| Requirement | Edition | Release outcome |
+| --- | --- | --- |
+| Multi-stage execution | Community | Deeper data-dependent call composition, streaming exchange/backpressure, concurrent Cell invocation and planner-initiated pushdown |
+| Expanded SDK and runtime placement | Community | Richer typed handles across WASM/native providers, additional host providers and activation/image/warm-cache/locality cost modeling without new scheduling authority |
+| Advanced invocation sources | Community | Keyed actor routing and the remaining change/time/once/boot/pushdown sources through existing Cell owners; basic named calls remain established by earlier releases |
+| Optimizer | Community | Statistics, cardinality estimates, cost-based index choice, intersection/union/bitmap access plans, hints and index recommendation tools |
+| Full Scenario B architecture comparison | Community | Local-only, one-remote, sequential and fan-out graphs, controlled topology cost and movement, strong valid TiDB/TiKV implementations, independent oracle and repeated paired evidence |
+| Advanced network policy | Community | Optional mixed transports and dynamic per-group timing adaptation, each preserving the standalone transport contracts and measured authority boundaries |
+| Native artifact store | Community | Artifact metadata/version/object tables, immutable blob chunks, replicated `sys-artifact-store`, bounded streaming, node-local cache, internal acquisition preference and reference-counted GC |
+| Native registry interoperability | Community | Optional OCI Distribution API over the native artifact store, with ordinary OCI identity and trust semantics |
+
+Scenario B's full graph ladder depends on this release's deeper composition.
+The initial comparison uses immutable preloaded histories and a single region
+before controlled latency experiments. Earlier limited demonstrations do not
+complete this milestone. The artifact store extends distribution of immutable
+bytes; it does not create a second service lifecycle.
+
+## Phase 2.1 - Specialized Search And Data-Local Processing
+
+| Requirement | Edition / implementation | Release outcome |
+| --- | --- | --- |
+| Vector, full-text and spatial search | Community substrate / AGPL | Separate specialized access paths or services with their own semantics and storage contracts |
+| Embedding service | Community substrate / AGPL | A specialized service workload consuming the ordinary installation and runtime contracts |
+| Local summarization | TBD / not yet classified | Version home is 2.1; implementation waits for an explicit edition and implementation-home decision |
+| Local anomaly detection | TBD / not yet classified | Version home is 2.1; implementation waits for an explicit edition and implementation-home decision |
+| Local semantic filtering | TBD / not yet classified | Version home is 2.1; implementation waits for an explicit edition and implementation-home decision |
+
+Specialized search is separate from the ordered B-tree family. Assigning an AI
+feature to 2.1 does not classify its edition or authorize it in the AGPL repo.

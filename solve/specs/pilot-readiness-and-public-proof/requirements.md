@@ -5,6 +5,19 @@ Design decisions cited below as D1–D12 are the epic's binding decisions and ar
 authoritative; this spec restates them as per-Quest requirements and does not
 override them.
 
+## Release allocation
+
+The epic's [current release allocation](../../epics/pilot-readiness-and-public-proof.md#current-release-allocation)
+places the service envelope and representative public-path proof in 0.4 and the
+complete operational pilot boundary in 0.5. Q11 still depends on Q7's
+authenticated/encrypted node transport and the other prerequisites in the
+existing ladder. Neither 0.4 service measurements nor the separately owned
+Scenario A SQL comparison can substitute for that 0.5 certification. Known
+current SQL and transaction defects remain 0.2.9 stabilization obligations;
+completion of the common semantic benchmark contract and paired comparison is
+0.4 work. These are queued version homes after current 0.2.9 stabilization;
+all sealed Quest acceptance terms and edition boundaries remain unchanged.
+
 ## Scope and claim rule
 
 This spec covers the twelve Community/AGPL Quests that take the code-first

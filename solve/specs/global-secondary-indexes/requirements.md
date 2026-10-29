@@ -23,7 +23,13 @@ Phase 0.3 treats global secondary indexes as access paths. Unique global
 secondary indexes are a Phase 1.0 production-invariant concern because they
 require a synchronous maintenance mode capable of participating in transaction
 correctness. Partial/expression indexes and richer PostgreSQL index semantics
-remain Phase 1.x; cost-based combination of multiple indexes remains Phase 2.0.
+belong to Phase 1.1; cost-based combination of multiple indexes remains Phase 2.0.
+Specialized vector, full-text and spatial search families belong to Phase 2.1
+and retain their distinct storage and semantic contracts. These are queued
+release homes in the [AGPL feature map](../../../docs/development/agpl-feature-map.md),
+not permission to start parallel implementation during current 0.2.9
+stabilization. This version allocation does not seal R2's maintenance decision
+or change any existing acceptance contract.
 
 ## R1 — Index as a system-managed partitioned dataset
 

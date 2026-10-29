@@ -5,332 +5,337 @@ documentClass: planning
 
 # Lagrange Roadmap
 
-Lagrange is becoming one product: a distributed runtime for data-intensive
-services, backed by partitioned and replicated SQL storage.
+Lagrange is one product: a distributed runtime for data-intensive services,
+backed by partitioned and replicated SQL storage.
 
-This page describes direction, not current support. The checked-in status
-authority is [Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md).
-Released changes belong in [CHANGELOG.md](CHANGELOG.md).
+This is one ordered release programme. Each planned deliverable has one version
+that owns its initial completion, including its research, documentation and
+acceptance evidence. Later versions name the extension or stronger guarantee
+they add. There are no independent parallel release tracks.
 
-## Recently completed - 0.1 Internal Coherence
+The released baseline is **0.2.8, experimental alpha**, checked on 29 October
+2026. **0.2.9 is the current planned milestone; 0.3 is next.** Version targets
+express scope and priority, not shipping dates or claims of current support.
+Use [Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md)
+for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 
-The first phase established the database foundations and the split/merge
-transition-integrity ladder: distributed transactions with read-your-writes,
-first-committer-wins conflict detection, and recovery; schema migrations with
-backfill, cutover, rollback, and restart recovery; typed split-key comparison;
-durable dissolution witnesses; fenced abort parity; batched merge backfill; the
-durable split/merge overlap guard; and one configuration authority for
-split/merge thresholds.
+## Release sequence
 
-## Now - 0.2 Stable Core: make the existing public path credible
+| Version | Milestone | Completion outcome |
+| --- | --- | --- |
+| 0.2.9 | Stable-core completion | Remaining correctness and delivery obligations have public-path evidence and an honest operating envelope. |
+| 0.3 | Queryable Core | Ordinary SQL, indexes, locking reads and live results share correct keys and read semantics. |
+| 0.4 | Practical and demonstrated service core | Useful bounded service execution and reproducible multi-machine evidence, including the first qualified Scenario A SQL comparison. |
+| 0.5 | Pilot-ready operation | A secure deployment can be installed, operated, recovered and evaluated within a measured pilot envelope. |
+| 0.6 | Native OCI Call Cells | Real managed native services execute functions at the data through the same service model. |
+| 0.7 | Transport independence and NATS | Complete NATS-only cluster operation and effective Raft timing profiles follow a measured transport baseline. |
+| 0.8 | Veilid-only networking | The complete cluster workload works over Veilid alone within a measured envelope. |
+| 0.9 | Customer-installable service products | A separately released service completes installation, operation, upgrade, rollback and removal through one lifecycle. |
+| 1.0 | Production-supported release | Named profiles have supported correctness, durability, recovery, compatibility and capacity guarantees. |
+| 1.1 | Broader SQL compatibility | Additional SQL and ordered-index features preserve the established distributed contracts. |
+| 1.2 | Enterprise deployment and cross-region operation | Assigned enterprise identity, policy, secrets and cross-region profiles have explicit support contracts. |
+| 2.0 | Deeper distributed execution and planning | Dynamic multi-stage execution, advanced planning and the complete Scenario B comparison are demonstrated. |
+| 2.1 | Specialized search services | Vector, full-text, spatial and related services have their own semantics, lifecycle and acceptance. |
 
-The immediate corrective milestone is 0.2.7 stabilization: repair verified SQL
-and routing semantics, protect internal ingress, bound runtime retention,
-make the published artifacts usable, and prove the resulting operating envelope.
-The broader capabilities below retain their existing scope and evidence gates.
+## Released - 0.1 Internal coherence
 
-The service compiler and public HTTP-to-distributed-call path exist. The next
-work is to make their useful envelope larger and their evidence easier to trust:
+The earlier phase established the transaction, schema-migration and split/merge
+foundations, including recovery, typed split-key comparison, durable dissolution
+witnesses, fenced abort behavior and the split/merge overlap guard. Current
+support remains bounded by the capability declaration.
 
-- publish multi-machine benchmarks for the code-first WASM service path (local
-  three-node multi-process execution is live in the MovieLens comparison);
-- publish a controlled comparison against a strong conventional baseline;
-- support safe selector narrowing from call arguments;
-- process inputs larger than one bounded shard batch through an explicit
-  streaming or paging contract;
-- support bounded structured partials rather than finite numbers only;
-- complete multi-operation service dispatch beyond the current one-operation
-  component limit; and
-- bind every externally visible performance claim to reproducible evidence.
+## Released - 0.2 Foundation through 0.2.8
 
-## Next - 0.3 Queryable Core: normal SQL access paths and live results
+[0.2.6](https://github.com/psvensson/lagrange/releases/tag/v0.2.6) shipped the
+raft-rs consensus cutover through WASM, replicated transaction decisions and
+participant apply, fresh-identity message-group replacement, durable boot
+incarnations and generation-fenced replica lifecycle, and automatic user-partition
+snapshot compaction and follower reconstruction.
 
-A credible distributed database should not require callers to understand its
-physical partition key before ordinary queries become efficient. Phase 0.3
-makes keys, ordered access paths, secondary indexes, locking reads, and
-continuing query observation coherent core capabilities rather than collections
-of planner or adapter exceptions.
+0.2.7 added SQL/routing, ingress, runtime-bound, packaging and developer-workflow
+repairs, but publication reached npm before its Docker build failed.
+[0.2.8](https://github.com/psvensson/lagrange/releases/tag/v0.2.8) repaired the
+Docker build context and release-proof recording/reuse. Improved service
+scaffolding, package authoring and onboarding are part of this baseline.
 
-PostgreSQL `SELECT ... FOR UPDATE` is a core transaction semantic, not merely
-syntax accepted by PG wire. Phase 0.3 preserves the locking-read clause through
-the canonical SQL AST and routes it through the existing transaction/participant
-owners so conflicting work observes a real distributed write-intent/reservation
-contract with bounded timeout, cancellation, rollback and recovery behavior.
-The design boundary is specified in
-[PostgreSQL Locking Reads](architecture/postgres-locking-reads.md).
+Published alpha artifacts do not establish general production support or close
+every stabilization obligation. User-partition replica repair is distinct from
+control-plane/message-group log coverage and from a user backup/PITR product.
 
-The existing live-query runtime already contains useful grouping and CDC-driven
-pieces, but its generic data-plane contract is not complete. Phase 0.3 promotes
-live queries into a push-backed core primitive: normal `SqlCore` planning owns
-query semantics and partition dependencies, relevant partition CDC drives
-changes, equivalent local interests are coalesced, and the snapshot-to-stream
-boundary is gap-free. Distributed change detection by polling is not an
-acceptable implementation path. The target owner map and migration boundary are
-specified in [Live Query Data Plane](architecture/live-query-data-plane.md).
+## Current - 0.2.9 Stable-core completion
 
-The milestone includes:
+Complete the remaining verified defects and public-path obligations against the
+released foundation. Preserve the delivered consensus, transaction, membership
+and snapshot mechanisms and establish their actual composed behavior.
 
-- one type-aware total order for persisted partition keys and indexed tuples;
-- primary-key and compound-primary-key partition narrowing beyond an implicit
-  `id` convention;
-- PostgreSQL `SELECT ... FOR UPDATE` retained as an explicit canonical SQL
-  semantic and enforced by the distributed transaction/participant owners,
-  including conflict, timeout/cancellation, commit/rollback release, and
-  recovery proofs;
-- ordinary and compound local `CREATE INDEX` / `DROP INDEX` support using one
-  well-defined ordered B-tree index family;
-- correct left-prefix and equality-prefix-plus-range semantics for compound
-  indexes, with unsupported index kinds or access paths failing closed;
-- non-unique global secondary and compound indexes represented as
-  system-managed, partitioned, Raft-replicated datasets;
-- resumable backfill, restart-safe lifecycle, durable failure state, and safe
-  fallback to scatter-gather when an index is unavailable or not readable;
-- planner integration and `EXPLAIN DISTRIBUTED` output that show which index was
-  selected, or why an available index was rejected;
-- generic push-backed live queries over ordinary application tables/queries,
-  routed only to partitions that can affect the result and multiplexed across
-  equivalent node-local consumers;
-- one gap-free initial-snapshot/frontier contract using the existing committed
-  CDC handshake/replay substrate rather than repeated reads; and
-- incremental row deltas where the normal plan can be safely maintained, with
-  event-triggered normal-query re-execution/reset for more complex plans rather
-  than polling.
+The milestone owns:
 
-A Phase 0.3 live query should be able to remain idle with zero repeated data
-reads used to discover change, then receive a remote committed mutation as an
-unsolicited update. Split/merge/leader transitions must update the subscription
-footprint through existing topology owners without exposing physical partitions
-to the consumer.
+- public SQL visibility, conflict, commit/rollback, follower application and
+  recovery behavior, including applicable Scenario A correctness findings;
+- explicit client retry and unknown-outcome semantics, reconciling documentation
+  with current transaction behavior before stronger claims depend on it;
+- remaining ingress, retained-history, diagnostic and queue-bound obligations;
+- genuine installed-package, executable, container and public-service journeys;
+- verified release metadata and Docker Hub documentation synchronization,
+  including remote readback and honest failed/pending publication outcomes; and
+- capability and operating-contract documentation supported by candidate evidence.
 
-Global uniqueness is intentionally not part of 0.3. A secondary index in this
-milestone is an access path: losing or rejecting it may make a query slower, but
-must never make base-table results incorrect.
+Completion requires composed public-path and applicable physical recovery proofs,
+plus observed artifact/documentation publication. Local parser or metadata checks
+alone do not establish these outcomes. Relevant transaction work is preserved in
+[Scenario A implementation work](https://github.com/psvensson/lagrange/pull/148);
+unmerged changes require review and integration before becoming baseline facts.
+The full comparative performance result belongs to 0.4. Existing correctness
+defects are not deferred to that comparison or to production hardening.
 
-## Then - 0.5 Easy To Try: pilot-ready operations
+## Next - 0.3 Queryable Core
 
-A serious pilot needs a complete operational boundary, not just successful
-queries:
+Ordinary SQL should reach the right data efficiently without physical-partition
+knowledge. First define the supported key/row-identity and read-visibility
+contracts shared by routing, indexes, locking reads and live-query startup.
+Consume what stabilization actually delivered rather than repeat completed
+ordering or transaction repairs. Changing an access path must preserve the
+query's promised result semantics; this does not imply global snapshot isolation
+or serializability.
 
-- cryptographically authenticated and encrypted node transport;
-- message-group log compaction and multi-machine soak/recovery certification
-  (partition snapshot cadence and match-index-gated learner promotion landed in
-  0.2.6);
-- documented data load, shadowing, cutover, rollback, and exit tooling;
-- named PostgreSQL-driver and SQL compatibility certification;
-- an upgrade and downgrade rehearsal for supported release pairs;
-- a supported topology and capacity envelope; and
-- one operational view that ties requests, shard runs, partials, placement,
-  retries, and failures together.
+The milestone has four outcomes:
 
-The 0.5 developer/operator surface should expose the 0.3 capabilities cleanly:
-index definitions and state should be inspectable through normal SQL/catalog
-surfaces, build/backfill progress and failures should be diagnosable, and the
-getting-started path should demonstrate indexed access without requiring
-cluster-internal knowledge. Live-query diagnostics should likewise show the
-query identity, current dependency/partition footprint, coalesced consumer
-count, frontier/resume state, and whether maintenance is incremental or
-re-execution based without exposing transport mechanics as application policy.
+1. **Correct keys and routing:** one type-aware persisted key/tuple order, exact
+   supported value representation, a boundary revalidation/upgrade policy, and
+   declared/compound primary-key narrowing beyond an implicit `id` convention.
+2. **Usable indexes:** ordinary and compound local B-tree `CREATE INDEX` /
+   `DROP INDEX`; non-unique global indexes as partitioned, Raft-replicated
+   datasets; resumable backfill, readable activation, failure, restart and drop;
+   correct left-prefix/equality-prefix-plus-range matching; and selection or
+   rejection explained by `EXPLAIN DISTRIBUTED`.
+3. **Real locking transactions:** preserve `SELECT ... FOR UPDATE` through the
+   canonical SQL path and enforce reservations through the transaction owners,
+   with defined contention, waiting, cancellation, release and recovery.
+4. **Live application results:** ordinary SQL owns query identity and future
+   dependencies, including changes entering an initially empty result; relevant
+   partition CDC drives updates and equivalent local interests are coalesced.
+   Startup, reconnect and topology changes preserve a proven result/frontier
+   boundary or produce an explicit reset.
 
-Backup/restore/PITR, enterprise identity controls, secrets/KMS integration, and
-cross-region durability are separate product areas and must follow their edition
-and implementation-home decisions.
+0.3 owns the global-index maintenance decision and its proof. Current research
+favors synchronous TX1 maintenance for ordinary non-unique indexes, conditional
+on read completeness and measured contention, fanout and write-availability cost.
+One production model is selected; the recommendation is not an implemented or
+sealed choice. Incomplete read paths fall back safely. Required transactional
+maintenance can refuse a write when unavailable; it cannot silently omit index
+updates. Global uniqueness belongs to 1.0.
 
-## Cross-cutting milestone - Installable Service Product Platform
+Live queries discover changes without polling. Safe plans emit incremental row
+deltas; more complex plans may re-execute/reset in response to committed events.
+Idle observation performs no repeated data reads to discover change. Consumer
+cleanup, pressure and split/merge/leader transitions are part of the contract.
 
-Before first-party paid services such as Lagrange AI can be shipped to customers,
-Lagrange needs a coherent product boundary for installing and operating a
-service. This milestone draws together existing service-platform work that was
-previously spread across runtime, registry, external-kernel, observability and
-commercial-control tracks. It does not change edition ownership: shared service
-substrate remains Community/AGPL where assigned there, while paid-only
-entitlements, advanced telemetry and secrets/KMS behavior remain in their
-commercial implementation homes.
+Completion is demonstrated through declared-key lifecycle, indexed query and
+build recovery, public locking-transaction, and remote live-view journeys. See
+[PostgreSQL Locking Reads](architecture/postgres-locking-reads.md),
+[Live Query Data Plane](architecture/live-query-data-plane.md), and the
+[unmerged 0.3 preparation](https://github.com/psvensson/lagrange/pull/74).
 
-The architecture and specification target defines the shared owner boundaries,
-lifecycle, compatibility, configuration, managed OCI activation,
-upgrade/rollback, diagnostics, support-bundle, telemetry, commercial-extension
-and acceptance-consumer contracts without claiming those surfaces are
-implemented today.
+## Planned - 0.4 Practical and demonstrated service core
 
-The customer-facing target is that a signed service can be installed into an
-existing cluster without a repository checkout or a second service manager.
-The shared platform therefore needs:
+Make the code-first WASM service path useful for larger inputs and richer
+operations, then measure the declared configuration reproducibly.
 
-- signed, immutable OCI package/revision identity and verified acquisition;
-- real managed OCI service activation, restart and desired-state reconciliation;
-- kernel/service compatibility and dependency preflight before activation;
-- declarative configuration and health/readiness contracts;
-- one install/status/remove/upgrade surface with idempotent operations;
-- health-gated rollout and rollback to a prior known-good revision;
-- a stable service diagnostics/metrics contribution contract;
-- a customer-inspectable, redacted support-bundle format to which services can
-  contribute diagnostics;
-- customer-controlled telemetry/export plumbing that never doubles as a
-  licensing requirement;
-- air-gapped/mirrored artifact operation; and
-- clean integration points for commercial entitlement checks and
-  cluster-resolved secret references where the customer's edition provides them.
+- Narrow selectors safely from call arguments.
+- Page or stream inputs beyond one bounded shard batch through an explicit
+  contract with bounded memory, cancellation and pressure behavior.
+- Support bounded structured partials and multi-operation service dispatch.
+- Publish multi-machine public HTTP-to-distributed-service measurements and a
+  controlled conventional-baseline comparison for the supported workload.
+- Complete the common Scenario A semantic proof and publish the first qualified
+  TiDB/TiKV ordinary-SQL comparison with an independent oracle, equivalent
+  durability, full resource accounting and repeated paired measurements.
 
-The first acceptance consumer should be a real separately released service,
-with Lagrange AI a natural candidate. The proof is not merely that `INSTALL
-SERVICE` records a package: the service must become ready under Lagrange
-ownership, survive restart, expose useful diagnostics, upgrade and roll back
-through the supported lifecycle, and remove without leaving unmanaged runtime
-state.
+A valid slower Lagrange result still completes the comparative measurement.
+Claims name their source, workload, topology and limitations. These measurements
+do not substitute for 0.5's full secure pilot/failure certification. Input paging
+within one operation belongs here; multi-stage exchange and the complete dynamic
+Scenario B comparison belong to 2.0. See
+[Execution Semantics](docs/execution-semantics.md) and the
+[comparative workload contract](https://github.com/psvensson/lagrange/blob/3b737ce7e1c818194f8188297dd175f6135e271e/docs/benchmarks/tidb-reference-scenarios.md).
 
-Implementation scope and sequencing remain governed by the AGPL feature map and
-edition matrix; this milestone is the product-level convergence gate those rows
-must satisfy together.
+## Planned - 0.5 Pilot-ready operation
 
-## Planned - 0.6 Native OCI Call Cells: native runtimes at the data
+A developer can install, load data, deploy a service, connect supported SQL
+clients, diagnose failure and rehearse recovery within a measured pilot profile.
 
-0.6 is a release milestone, not an unversioned follow-on. It follows 0.5's
-external-usability baseline and precedes 1.0 production hardening. It turns the
-existing Call Cell model into a practical bridge for customers whose important
-code and libraries live in ordinary native runtimes. The first part of the
-milestone is real managed OCI activation if that has not already landed while
-completing 0.5; the second part is native Call Cell invocation through that
-managed runtime. The milestone must not be deferred to later advanced-runtime
-work merely because OCI is the execution provider.
+- Cryptographically authenticate and encrypt node communication on the supported
+  transport; this requirement does not wait for NATS or Veilid.
+- Complete cluster/CLI onboarding, service development and debugging workflows.
+- Document and exercise data load, shadowing, cutover, rollback and exit tooling.
+- Certify named PostgreSQL-driver/SQL profiles, supported release-pair upgrade
+  and downgrade procedures, and a topology/capacity/failure-domain envelope.
+- Qualify the bounded retained-log and message-group mechanisms completed in
+  0.2.9 under the declared pilot topology, load, soak and recovery profile.
+- Provide one operational view of requests, shard runs, placement, retries and
+  failures, plus index build/state and live-query dependency/frontier diagnostics.
 
-Lagrange should not require customers to move a useful data-local function to
-WebAssembly merely because its language runtime or important libraries are hard
-to compile to WASM. An installed OCI service revision should be able to expose
-named Call Cell functions from the same program and have Lagrange execute those
-functions on the nodes holding the selected partition replicas.
+Completion includes a fresh-install journey and failure, recovery, upgrade and
+exit rehearsals. The production backup/PITR service is assigned to 1.0 in its
+commercial implementation home; pilot recovery limitations and independent
+export/reload procedures must already be explicit here. See
+[Operations Readiness](docs/operations-readiness.md),
+[Migration and Adoption](docs/migration.md), and [Security](docs/security.md).
 
-The architecture is specified in
-[Native OCI Call Cells](architecture/native-oci-call-cells.md). It extends the
-existing Artifact / Binding / Cell path at the runtime-provider boundary rather
-than introducing a second callback system. `CallCellInvoker` remains the sole
-fanout and reduce owner; the destination node still builds the bounded batch
-from its local partition replica; and provider-specific behavior begins only at
-`ServiceRuntimeLifecycle.invoke()`.
+## Planned - 0.6 Native OCI Call Cells
 
-The 0.6 milestone requires:
+Run code with genuine native dependencies at the selected data through the
+existing Artifact / Binding / Cell model. This release owns both minimum safe
+managed OCI activation and the native invocation path.
 
-- real digest-pinned OCI services are pulled, started, health-checked, replaced,
-  stopped and removed through the unified service lifecycle rather than an
-  in-memory or hand-managed container path;
-- an idiomatic language SDK where a source-level function/operation handle
-  compiles to the existing immutable Artifact, call Binding, export interface,
-  and outbound-call policy rather than serializing a closure at runtime;
-- an ordinary handler in that OCI program can call the generated operation
-  handle over its authenticated broker channel; the broker derives the
-  service/revision identity and generated outbound-call authority and hands the
-  request to the existing Call Cell ingress rather than resolving a partition
-  itself;
-- exact manifest/revision/export identity for every native invocation;
-- `OciContainerDriver.invoke()` as the OCI execution-provider seam, reached only
-  through the existing Call Cell owner route;
-- an authenticated application-initiated long-lived channel from each managed
-  process to a node-local invocation broker, with no public callback port;
-- the same bounded `ctx` semantics for emit, nested call, deadline, budgets,
-  identity, and typed failures as the corresponding WASM operation;
-- existing activation leases and runtime-service placement to materialize the
-  exact service revision on a selected partition host, optionally consuming
-  image-presence and warm-runtime cost as placement inputs rather than authority;
-- explicit semantics that process globals, loaded models, VM heaps, and native
-  libraries are disposable warm cache rather than distributed durable state;
-- honest retry semantics: Lagrange may make its managed result exactly-once
-  visible, but arbitrary external side effects from native code are not
-  exactly-once and need application idempotency;
-- a multi-node proof that every shard function reads from the local partition
-  replica before entering the native runtime; and
-- acceptance with a genuine native dependency plus a second materially
-  different language/runtime, proving the capability is useful beyond a
-  Node-specific transport shim.
+- Verify signed immutable package/revision identity, compatibility, dependencies
+  and required configuration before activation.
+- Pull, start, inspect, health-check, restart, replace, stop and remove the exact
+  revision through one lifecycle, with diagnostics and desired-state reconciliation.
+- Provide a code-first native SDK and authenticated application-initiated broker
+  channel; handler-originated and direct calls converge on the existing
+  distributed invocation owner.
+- Preserve bounded context, identity, deadlines, emit/reduce, nested calls and
+  typed failures across WASM and OCI, including necessary request continuity
+  and duplicate-effect protection.
+- Read each shard's local partition replica before native execution. Keep loaded
+  models, process globals and native heaps disposable warm cache.
+- Prove worker-loss/retry ambiguity honestly: managed result visibility does not
+  make arbitrary external side effects exactly-once.
 
-0.6 is complete only when both the handler-originated SDK path and direct call
-surface converge on the same distributed execution owner, a real native-library
-workload succeeds across multiple partition hosts, worker loss demonstrates the
-documented retry/ambiguity semantics, and a second language/runtime conforms to
-the same broker/context contract.
+Completion requires a multi-node genuine-native-library workload and a second
+materially different language/runtime. The OCI host agent remains lifecycle-only;
+it does not own partition routing, scheduling or retries. 0.9 extends this
+working substrate into the complete customer service-product lifecycle. See
+[Native OCI Call Cells](architecture/native-oci-call-cells.md).
 
-The OCI host agent remains lifecycle-only. It may provision the managed process
-and its broker connectivity, but it must not become a partition router,
-scheduler, retry loop, or alternate Call Cell owner. A customer application may
-mix separately installed native OCI and WASM operations where ecosystem
-compatibility, portability, density, or stronger isolation make each provider
-the better fit; runtime kind remains part of each installed Artifact/revision.
+## Planned - 0.7 Transport independence and NATS
 
-## Later - 1.0 Production Ready: production support and relational invariants
+Complete the networking work in dependency order within this release:
 
-A production-supported release requires explicit, evidence-backed guarantees:
+1. Finish N0's physical baseline, including traffic attribution, per-peer timing,
+   pressure and desired-versus-effective Raft timing observations.
+2. Establish N1's narrow peer-link boundary while preserving WebSocket semantics
+   and one routing/delivery owner.
+3. Prove NATS-only formation, SQL/service calls, replication, CDC, snapshot/bulk
+   transfer, split/merge, restart, broker loss and seed-loss recovery.
+4. Prove effective configurable static Raft timing profiles for the supported
+   workload and latency envelope.
 
-- documented durability, availability, consistency, recovery, and balance
-  contracts;
-- backup, restore, and disaster-recovery procedures with measured RPO/RTO;
-- stable service, SQL, and upgrade compatibility policies;
-- security controls suitable for the declared network and tenancy model;
-- representative certification on named hardware and workloads; and
-- support boundaries that distinguish implemented, tested, certified, and
-  commercially supported behavior.
+The selected transport carries the complete workload with no hidden inter-node
+fallback. Completion includes inherited security, bounded pressure/bulk behavior
+and physical failure/recovery evidence. Existing component measurements are
+inputs, not full baseline certification. The preserved
+[networking preparation](https://github.com/psvensson/lagrange/pull/145) must be
+reconciled against the accepted release baseline before implementation.
 
-For indexing, 1.0 is where an access path may also become a relational
-invariant. It therefore owns:
+## Planned - 0.8 Veilid-only networking
 
-- unique global secondary indexes only with a synchronous maintenance mode that
-  participates in transaction correctness;
-- production guarantees for index rebuild/backfill, restart and failover;
-- measured bounds and supported envelopes for index write amplification and
-  rebuild pressure; and
-- the supported tuple-order, NULL, type and collation contract exposed through
-  PostgreSQL-facing metadata and constraint behavior.
+Consume 0.7's transport and timing contracts to deliver standalone Veilid
+operation: bounded small-frame and bulk transfer, private-route lifecycle,
+identity, cancellation, pressure and complete cluster workload support.
 
-The first live managed OCI execution path and native OCI Call Cells are assigned
-to 0.6. A commercially supported installable service in 1.0 builds on that
-substrate with production compatibility, upgrade/rollback, diagnostics, support,
-security and operating guarantees rather than reopening activation or call
-routing as separate implementations. First-party services should consume the
-common lifecycle rather than introducing product-specific installers, telemetry
-transports, support collectors, secret stores, or upgraders.
+Completion requires formation, SQL/services, replication, CDC, snapshot catch-up,
+topology change, restart and route-loss recovery over Veilid alone, plus measured
+resource, latency and failure bounds. NATS or WebSocket is not a required
+inter-node fallback. Backend availability does not establish the cross-region
+support profiles assigned to 1.2.
 
-## Later 1.x - SQL Breadth and Compatibility
+## Planned - 0.9 Customer-installable service products
 
-Once the ordered-index foundation and production invariants are stable, SQL
-breadth can expand without changing the core distributed index architecture.
-This is the home for features such as:
+A signed separately released service can be installed and operated without a
+repository checkout or a second service manager. Consume the working lifecycle
+and native execution delivered in 0.6 and complete:
 
-- partial and expression indexes;
-- `INCLUDE` / covering-index syntax and index-only scans;
-- richer collation and operator semantics;
-- broader PostgreSQL index catalog and DDL compatibility, including concurrent
-  build behavior where Lagrange can support it honestly; and
-- other relational conveniences that improve compatibility but are not needed
-  to make ordinary indexed access correct.
+- one idempotent install/status/remove/upgrade surface, with health-gated rollout
+  and rollback to a known-good immutable revision;
+- stable configuration, diagnostics and metrics contribution contracts;
+- customer-inspectable support bundles with bounded content and redaction;
+- customer-controlled telemetry/export plumbing, independent of licensing;
+- mirrored and air-gapped artifact acquisition; and
+- commercial entitlement and secret-reference integration contracts with typed
+  unavailable/refusal behavior where the selected edition lacks a provider.
 
-## Future - 2.0 Deeper Distributed Execution
+Completion uses a real separately released service: install, become ready,
+survive restart, diagnose failure, upgrade, roll back and remove without unmanaged
+state. Shared substrate remains Community; paid implementations retain their
+assigned homes. Broader enterprise providers belong to 1.2. Service choice does
+not silently classify Lagrange AI or another unclassified product.
 
-Once the bounded call path and its operating contract are stable, deeper
-execution can add:
+## Planned - 1.0 Production-supported release
 
-- multi-stage plans with streaming exchange and backpressure;
-- deeper call composition;
-- concurrent invocations on one Cell instance;
-- query-planner-initiated pushdown;
-- richer typed language SDKs and generated operation handles across both WASM
-  and native OCI Call Cell providers; and
-- provider-aware cost modeling that can account for image availability, warm
-  native workers, WASM materialization cost, and partition locality without
-  moving scheduling authority out of the existing owners.
+Support named configurations with explicit, evidenced guarantees:
 
-The query planner can also become substantially more sophisticated here rather
-than pulling optimizer research into 0.3. Phase 2.0 is the natural home for
-statistics and cardinality estimates, cost-based index selection, index
-intersection/union and bitmap-style access plans, richer query hints, and
-index-advisor or recommendation tooling.
+- durability, availability, consistency, recovery, balance and capacity contracts;
+- stable service, SQL, upgrade and support policies;
+- security appropriate to the declared network and tenancy model;
+- supported backup/restore/PITR and measured disaster-recovery procedures in
+  their assigned implementation homes; replica snapshots are not user backups;
+- unique global secondary indexes with transactional uniqueness enforcement;
+- supported index rebuild/backfill, restart/failover and write-amplification
+  envelopes; and
+- stable tuple-order, NULL, type and collation semantics exposed through SQL
+  metadata and constraints.
 
-Specialized search families should remain distinct from the ordinary ordered
-index contract. Vector, full-text, spatial, and similar indexes may be delivered
-as specialized services or later access-path families where their semantics and
-storage warrant it.
+Completion requires representative certification on named hardware/workloads and
+measured recovery objectives. Support names the qualified transport profiles and
+distinguishes availability from certification. 0.3 may already supply synchronous
+non-unique maintenance; 1.0 adds uniqueness and production guarantees. Installed
+services consume the 0.6/0.9 lifecycle and gain production compatibility,
+diagnostics, support and operating guarantees.
 
-The installable-service platform is no longer treated as an optional 2.0
-addition: its foundational product lifecycle is a prerequisite for separately
-released customer services. Phase 2.0 can deepen the external service API and
-placement model once that common lifecycle is usable.
+## Planned - 1.1 Broader SQL compatibility
 
-These extend the same model rather than introducing a second product:
-applications call one service, and Lagrange runs the relevant functions where
-the data lives.
+Expand the established contracts with partial and expression indexes,
+`INCLUDE`/covering indexes and index-only scans, richer collation/operator
+semantics, and broader PostgreSQL catalog/DDL compatibility, including supported
+concurrent build behavior, window functions and sequences. Each admitted feature
+needs public SQL and lifecycle evidence; the enumerated compatibility profile is
+the completion boundary.
+
+## Planned - 1.2 Enterprise deployment and cross-region operation
+
+Deliver the assigned enterprise identity/SSO, policy/RBAC, tenant isolation and
+quota controls, advanced secrets/KMS integrations, and named cross-region
+replication, durability and recovery profiles in their designated implementation
+homes. Consume 0.9's integration contracts and 1.0's support discipline.
+
+Completion names supported identity providers, tenancy boundaries, region and
+failure-domain configurations, and measured recovery/security behavior. These
+features do not replace 0.5's basic security. The
+[Edition Matrix](edition-matrix.md) continues to govern repository ownership.
+
+## Planned - 2.0 Deeper distributed execution and planning
+
+Extend the same service model with multi-stage plans, streaming exchange and
+backpressure, deeper dynamic call composition, concurrent Cell invocations,
+planner-initiated pushdown, richer typed SDKs, and provider-aware placement/cost
+modeling. This release also owns keyed invocation and non-request source
+extensions, richer external service/registry APIs and the native artifact-store
+substrate beyond the earlier installation requirements.
+
+Optional mixed-backend selection and adaptive network/timing policies belong to
+this release, extending the independently qualified single-backend contracts.
+
+Planning adds statistics/cardinality estimates, cost-based index selection,
+index intersection/union and bitmap-style access, query hints and advisor tooling.
+
+The complete Scenario B comparison is part of acceptance: data-dependent
+sequential and fan-out graphs, strong valid TiDB/TiKV comparators, controlled
+topology cost, movement, equivalent resource accounting and repeated paired
+measurements. Implement the required composition first, then publish the result
+even if it does not demonstrate the hoped-for advantage. Earlier bounded
+demonstrations do not satisfy this full contract. See the
+[Scenario B workload](https://github.com/psvensson/lagrange/blob/3b737ce7e1c818194f8188297dd175f6135e271e/docs/benchmarks/tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision).
+
+## Planned - 2.1 Specialized search services
+
+Deliver vector, full-text, spatial, embedding and related search capabilities as
+explicitly classified services or access-path families. They retain their own
+query, storage, update and recovery semantics rather than stretching the ordinary
+ordered B-tree contract.
+
+Completion requires public query behavior, installation/build/update/drop
+lifecycle, restart/failure and representative performance evidence for each
+admitted family. Edition and implementation-home classification must precede
+implementation of any unclassified data-local AI service.

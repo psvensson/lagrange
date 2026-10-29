@@ -27,6 +27,35 @@ doneWhen:
 
 # Pilot readiness and public-path proof
 
+## Current release allocation
+
+The [AGPL feature map](../../docs/development/agpl-feature-map.md) assigns this
+epic's remaining outcomes to the single versioned release sequence:
+
+| Release | Outcome owned by this epic |
+| --- | --- |
+| 0.4 Service Envelope and Public Proof | Q1-Q5: the public WASI baseline, typed selector narrowing, paged execution, bounded structured partials and multi-operation dispatch, with representative public-path measurements and independent parity evidence. |
+| 0.5 Pilot Operations | Q7-Q12: authenticated/encrypted node transport, load/cutover/rollback, named PostgreSQL compatibility, full public-path scale/failure certification and the supported upgrade/recovery envelope. |
+
+Existing accepted prerequisites, including Q6's progress-proven learner
+promotion, are consumed rather than reopened by this allocation. Q11 retains
+its dependency on Q7 and its other declared prerequisites; the representative
+service measurements assigned to 0.4 do not satisfy 0.5's full scale/failure
+certification.
+
+Known current SQL and transaction defects exposed by Scenario A remain 0.2.9
+stabilization work. Completion of the common semantic benchmark contract and
+the paired Scenario A comparison belongs to 0.4, under its own benchmark
+owners. Its SQL evidence does not replace this epic's public WASI-over-HTTP
+evidence. The existing
+[Scenario A implementation PR](https://github.com/psvensson/lagrange/pull/148)
+is unmerged work, not a mainline capability or accepted comparison result.
+
+These version homes are queued work. 0.2.9 stabilization remains the current
+release work; this allocation does not start parallel implementation, change a
+sealed acceptance contract, or mark an existing Quest complete. The audit and
+decision records below retain their original observation dates and source heads.
+
 ## Adversarial risk follow-ups (2026-10-10)
 
 The [final risk review](../../docs/development/adversarial-risk-review-2026-10-10.md)
