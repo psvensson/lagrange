@@ -1,9 +1,18 @@
 import {createHash} from 'node:crypto';
-import {mkdir, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
-import {CONVERGENCE_DEFAULTS, REQUEST_CELL_AUTH} from '../harness/constants.js';
 import {
+  prepareLagrangeScenarioAPublicPgContext,
+} from '../harness/oltp-scenario-a-lagrange-public-pg-context.js';
+import {
+  verifyLagrangeScenarioALiveAdmission,
+} from '../harness/oltp-scenario-a-lagrange-live-admission.js';
+import {
+  buildLagrangeScenarioARuntimePreflight,
+} from '../harness/oltp-scenario-a-lagrange-runtime-preflight.js';
+import {
+  OLTP_PAIRED_RETRY_OUTCOME,
   executePairedOltpTransactionWithRetry,
 } from '../harness/oltp-paired-retry-owner.js';
 import {
@@ -27,171 +36,21 @@ import {
 } from '../reference-client/lagrange-new-order-contention-observer.js';
 
 const ZERO = 0;
-const POSTGRES_SERVICE_ID = 'sys-postgres-wire';
-const POSTGRES_PROTOCOL = 'postgresql';
-const ACTIVE = 'active';
-const HEALTHY = 'healthy';
-const ENDPOINT_TIMEOUT_MS = 120000;
-const ENDPOINT_POLL_MS = 500;
+const ADMISSION_ENV = 'LAGRANGE_SCENARIO_A_ADMISSION_PATH';
+const PROOF_CASE_ID = 'new-order-contention';
+const EVIDENCE_ID = 'lagrange-new-order-contention-v1';
 const OUTPUT_PATH =
   process.env.LAGRANGE_SCENARIO_A_CONTENTION_EVIDENCE_PATH ||
   'test-output/tidb-reference/scenario-a-new-order-contention-lagrange.json';
-const PG_RUNTIME_CONFIG = Object.freeze({
-  host: '0.0.0.0',
-  authMode: 'password',
-  tlsMode: 'disable',
-});
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function sqlLiteral(value) {
-  const escaped = String(value).replace(/'/gu, String.fromCharCode(39, 39));
-  return `'${escaped}'`;
-}
-
-function rowsOf(result) {
-  return Array.isArray(result?.rows) ? result.rows : [];
-}
-
-async function waitForRuntimePlacementAdmission(cluster) {
-  if (typeof cluster?.waitForLoadReadinessStability !== 'function') {
-    throw new Error(
-      'Lagrange contention proof requires authoritative load-readiness admission',
-    );
-  }
-  await cluster.waitForLoadReadinessStability({
-    stableWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-    timeoutMs: ENDPOINT_TIMEOUT_MS,
-    requireActiveGatePromotion: true,
-  });
-}
-
-function assertPublicPgRuntimeConfig(row) {
-  let runtimeConfig;
-  try {
-    runtimeConfig = JSON.parse(String(row?.runtime_config || ''));
-  } catch (error) {
-    throw new Error(
-      'PostgreSQL wire desired-state runtime_config is not valid JSON: ' +
-      error.message,
-    );
-  }
-  if (
-    runtimeConfig.host !== PG_RUNTIME_CONFIG.host ||
-    runtimeConfig.authMode !== PG_RUNTIME_CONFIG.authMode ||
-    runtimeConfig.tlsMode !== PG_RUNTIME_CONFIG.tlsMode
-  ) {
-    throw new Error(
-      'PostgreSQL wire desired-state runtime_config did not become authoritative',
-    );
-  }
-}
-
-async function configurePublicPgWire(seedNode) {
-  const runtimeConfig = JSON.stringify(PG_RUNTIME_CONFIG);
-  await seedNode.query(
-    'UPDATE service_definitions SET runtime_config = ' +
-      sqlLiteral(runtimeConfig) +
-      ' WHERE service_id = ' + sqlLiteral(POSTGRES_SERVICE_ID),
-  );
-  await seedNode.query(
-    'UPDATE service_definitions SET replica_count = 1 WHERE service_id = ' +
-      sqlLiteral(POSTGRES_SERVICE_ID),
-  );
-  const desiredStateResult = await seedNode.query(
-    'SELECT service_id, status, replica_count, runtime_config ' +
-      'FROM service_definitions WHERE service_id = ' +
-      sqlLiteral(POSTGRES_SERVICE_ID),
-  );
-  const desiredState = rowsOf(desiredStateResult)[ZERO];
-  if (!desiredState) {
-    throw new Error('PostgreSQL wire desired-state row is not authoritative');
-  }
-  if (String(desiredState.status || '').toLowerCase() !== ACTIVE) {
-    throw new Error('PostgreSQL wire desired-state service is not active');
-  }
-  if (Number(desiredState.replica_count) !== 1) {
-    throw new Error(
-      'PostgreSQL wire desired-state replica_count did not become authoritative',
-    );
-  }
-  assertPublicPgRuntimeConfig(desiredState);
-}
-
-async function discoverPublicPgWireEndpoint(cluster, seedNode) {
-  const deadline = Date.now() + ENDPOINT_TIMEOUT_MS;
-  const sql =
-    'SELECT service_id, node_id, protocol, address, port, health_status ' +
-    'FROM service_endpoints WHERE service_id = ' +
-    sqlLiteral(POSTGRES_SERVICE_ID);
-  while (Date.now() < deadline) {
-    const result = await seedNode.query(sql);
-    const row = rowsOf(result).find((candidate) =>
-      candidate?.protocol === POSTGRES_PROTOCOL &&
-      candidate?.health_status === HEALTHY &&
-      Number.isInteger(candidate?.port));
-    if (row) {
-      const nodeId = String(row.node_id || '');
-      const node = cluster.getNodes().find((candidate) => candidate.id === nodeId);
-      if (node?.ip) {
-        return Object.freeze({
-          endpoint: Object.freeze({host: node.ip, port: Number(row.port)}),
-          serviceEndpoint: Object.freeze({
-            nodeId,
-            protocol: row.protocol,
-            advertisedAddress: row.address || null,
-            port: Number(row.port),
-            healthStatus: row.health_status,
-          }),
-        });
-      }
-    }
-    await sleep(ENDPOINT_POLL_MS);
-  }
-  throw new Error('Timed out waiting for healthy public PostgreSQL wire endpoint');
-}
-
-function connectionConfig() {
-  return Object.freeze({
-    user: REQUEST_CELL_AUTH.USER,
-    password: REQUEST_CELL_AUTH.PASSWORD,
-    database: REQUEST_CELL_AUTH.DATABASE,
-    ssl: false,
-  });
-}
-
-async function executeLogicalRequest(adapter, operation) {
-  try {
-    const outcome = await executePairedOltpTransactionWithRetry({
-      executeAttempt: () => adapter.executeTransaction(operation),
-    });
-    return Object.freeze({
-      status: 'committed',
-      workerId: operation.workerId,
-      result: outcome.result,
-      retryEvidence: outcome.evidence,
-      error: null,
-    });
-  } catch (error) {
-    return Object.freeze({
-      status: 'failed',
-      workerId: operation.workerId,
-      result: null,
-      retryEvidence: error?.oltpRetryEvidence || null,
-      error: Object.freeze({
-        name: String(error?.name || 'Error'),
-        message: String(error?.message || error),
-        sqlState: typeof error?.sqlState === 'string' ? error.sqlState : null,
-      }),
-    });
-  }
-}
+const NON_COMPARABLE_REASON =
+  'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.';
 
 function itemIds() {
-  return OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS
-    .flatMap((operation) => operation.lines.map(({itemId}) => itemId));
+  return [...new Set(
+    OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS.flatMap(
+      (operation) => operation.lines.map(({itemId}) => itemId),
+    ),
+  )].sort((left, right) => left - right);
 }
 
 function payloadDigest(payload) {
@@ -200,58 +59,108 @@ function payloadDigest(payload) {
     .digest('hex');
 }
 
-async function run(cluster) {
-  const nodes = cluster.getNodes();
-  const seedNode = nodes.find((node) => node.role === 'seed') || nodes[ZERO];
-  if (!seedNode) throw new Error('Lagrange contention proof requires seed node');
+async function loadAdmission(options = {}) {
+  if (options.admission) {
+    const verified = verifyLagrangeScenarioALiveAdmission(options.admission);
+    if (verified.proofCaseId !== PROOF_CASE_ID) {
+      throw new Error(`Lagrange ${PROOF_CASE_ID} proof requires ${PROOF_CASE_ID}-bound admission`);
+    }
+    return verified;
+  }
+  const admissionPath = String(process.env[ADMISSION_ENV] || '').trim();
+  if (!admissionPath) {
+    throw new Error(`Lagrange ${PROOF_CASE_ID} proof requires ${ADMISSION_ENV}`);
+  }
+  const admission = verifyLagrangeScenarioALiveAdmission(
+    JSON.parse(await readFile(admissionPath, 'utf8')),
+  );
+  if (admission.proofCaseId !== PROOF_CASE_ID) {
+    throw new Error(`Lagrange ${PROOF_CASE_ID} proof requires ${PROOF_CASE_ID}-bound admission`);
+  }
+  return admission;
+}
 
-  await cluster.waitForConvergence({
-    targetVoterCount: nodes.length,
-    settleTimeoutMs: 120000,
-    quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
+async function executeLogicalRequest(adapter, operation) {
+  const retryOutcome = await executePairedOltpTransactionWithRetry({
+    executeAttempt: () => adapter.executeTransaction(operation),
   });
-  await waitForRuntimePlacementAdmission(cluster);
-  await configurePublicPgWire(seedNode);
-  const discovered = await discoverPublicPgWireEndpoint(cluster, seedNode);
-  const connection = connectionConfig();
+  return Object.freeze({
+    phase: operation.phase,
+    workerId: operation.workerId,
+    sequence: operation.sequence,
+    status: retryOutcome.outcome === OLTP_PAIRED_RETRY_OUTCOME.COMMITTED ?
+      'committed' : 'aborted',
+    orderId: Number(retryOutcome.result?.orderId || ZERO),
+    retryEvidence: retryOutcome.evidence,
+  });
+}
+
+async function preStart(options = {}) {
+  const admission = await loadAdmission(options);
+  const runtimePreflight = await buildLagrangeScenarioARuntimePreflight(admission);
+  return Object.freeze({
+    admissionSha256: admission.admissionSha256,
+    runtimePreflightSha256: runtimePreflight.preflightSha256,
+  });
+}
+
+async function prepareAdmittedNewOrderContentionContext(cluster, preflight, options = {}) {
+  const admission = await loadAdmission(options);
+  if (preflight && preflight.admissionSha256 !== admission.admissionSha256) {
+    throw new Error('Lagrange contention admission changed after pre-start check');
+  }
+  const runtimePreflight = await buildLagrangeScenarioARuntimePreflight(admission);
+  if (preflight && preflight.runtimePreflightSha256 !== runtimePreflight.preflightSha256) {
+    throw new Error('Lagrange contention runtime changed after pre-start check');
+  }
+  const prepareContext = options.prepareContext || prepareLagrangeScenarioAPublicPgContext;
+  return prepareContext({cluster, admission});
+}
+
+async function run(cluster, preflight = null) {
+  const options = (preflight && typeof preflight === 'object' &&
+    !preflight.admissionSha256 && !preflight.runtimePreflightSha256) ? preflight : {};
+  const preflightToken = (preflight &&
+    (preflight.admissionSha256 || preflight.runtimePreflightSha256)) ? preflight : null;
+  const context = await prepareAdmittedNewOrderContentionContext(
+    cluster, preflightToken, options);
   const definition = buildScenarioANewOrderContentionCase();
+  const createAdapter = options.createAdapter || createLagrangeOltpAdapter;
   let adapter = null;
   let evidence = null;
+  let primaryError = null;
+
   try {
-    adapter = await createLagrangeOltpAdapter({
-      endpoint: discovered.endpoint,
-      connection,
+    adapter = await createAdapter({
+      endpoint: context.endpoint,
+      connection: context.connection,
       workload: OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_WORKLOAD,
     });
     if (adapter.datasetSha256 !== definition.identity.datasetSha256) {
       throw new Error('Lagrange contention proof dataset identity mismatch');
     }
 
-    await cluster.waitForConvergence({
-      targetVoterCount: nodes.length,
-      settleTimeoutMs: 120000,
-      quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-    });
-
+    const observeState = options.observeState || observeLagrangeNewOrderContentionState;
     const logicalResults = await Promise.all(
       OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS.map((operation) =>
         executeLogicalRequest(adapter, operation)),
     );
-    const observedState = await observeLagrangeNewOrderContentionState({
-      endpoint: discovered.endpoint,
-      connection,
+    const observedState = await observeState({
+      endpoint: context.endpoint,
+      connection: context.connection,
       itemIds: itemIds(),
     });
     const logicalCommitted = logicalResults.filter(
       ({status}) => status === 'committed',
     ).length;
-    const evaluation = evaluateScenarioANewOrderContentionObservation({
+    const observation = Object.freeze({
       logicalCommitted,
       ...observedState,
     });
+    const evaluation = evaluateScenarioANewOrderContentionObservation(observation);
     const payload = Object.freeze({
       schemaVersion: 1,
-      evidenceId: 'lagrange-new-order-contention-v1',
+      evidenceId: EVIDENCE_ID,
       system: OLTP_SCENARIO_A_SYSTEM.LAGRANGE,
       caseId: definition.identity.caseId,
       caseSha256: definition.caseSha256,
@@ -259,13 +168,14 @@ async function run(cluster) {
       executionPath: adapter.executionPath,
       protocol: adapter.protocol,
       lockingReadMode: adapter.lockingReadMode,
-      serviceEndpoint: discovered.serviceEndpoint,
+      serviceEndpoint: context.serviceEndpoint,
+      admissionSha256: context.admission.admissionSha256,
+      runtimePreflight: context.runtimePreflight,
       logicalResults,
-      observation: Object.freeze({logicalCommitted, ...observedState}),
+      observation,
       evaluation,
       comparable: false,
-      nonComparableReason:
-        'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.',
+      nonComparableReason: NON_COMPARABLE_REASON,
     });
     const artifactSha256 = payloadDigest(payload);
     evidence = Object.freeze({
@@ -281,28 +191,45 @@ async function run(cluster) {
       }),
       artifactSha256,
     });
-    await mkdir(path.dirname(OUTPUT_PATH), {recursive: true});
-    await writeFile(OUTPUT_PATH, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
     if (!evaluation.passed) {
       throw new Error(
         'Lagrange new-order contention semantic proof failed: ' +
         evaluation.failures.join(','),
       );
     }
-    return {
-      status: 'passed',
-      artifactSha256,
-      retries: logicalResults.reduce(
-        (sum, result) => sum + Number(result.retryEvidence?.retries || ZERO),
-        ZERO,
-      ),
-      orderIds: observedState.orderIds,
-      endpoint: discovered.serviceEndpoint,
-      proofIds: evaluation.proofIds,
-    };
-  } finally {
-    if (adapter) await adapter.close({dropTables: false});
+  } catch (error) {
+    primaryError = error;
   }
+
+  let cleanupError = null;
+  try {
+    if (adapter) await adapter.close({dropTables: false});
+    if (evidence) {
+      const outputPath = options.outputPath || OUTPUT_PATH;
+      await mkdir(path.dirname(outputPath), {recursive: true});
+      await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
+    }
+  } catch (error) {
+    cleanupError = error;
+  }
+  if (primaryError && cleanupError) {
+    throw new AggregateError(
+      [primaryError, cleanupError],
+      'Lagrange contention proof and cleanup both failed',
+    );
+  }
+  if (primaryError) throw primaryError;
+  if (cleanupError) throw cleanupError;
+
+  return Object.freeze({
+    status: 'passed',
+    artifactSha256: evidence.artifactSha256,
+    proofIds: evidence.evaluation.proofIds,
+    endpoint: context.serviceEndpoint,
+  });
 }
 
-export {run};
+export {
+  preStart,
+  run,
+};

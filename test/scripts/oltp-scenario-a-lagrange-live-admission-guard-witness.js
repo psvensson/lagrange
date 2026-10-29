@@ -17,6 +17,17 @@ import {
 const CORE_HEAD_SHA = 'a'.repeat(40);
 const SRC_FINGERPRINT = 'c'.repeat(16);
 const ARTIFACT_SHA256 = 'b'.repeat(64);
+const SCENARIO_FILES = Object.freeze([
+  'test/distributed/scenarios/scenario-a-visibility-lagrange.js',
+  'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js',
+  'test/distributed/scenarios/scenario-a-payment-lagrange.js',
+  'test/distributed/scenarios/scenario-a-order-status-lagrange.js',
+  'test/distributed/scenarios/scenario-a-delivery-lagrange.js',
+  'test/distributed/scenarios/scenario-a-stock-level-lagrange.js',
+  'test/distributed/scenarios/scenario-a-failure-atomicity-lagrange.js',
+  'test/distributed/scenarios/scenario-a-retryable-conflict-lagrange.js',
+  'test/distributed/scenarios/scenario-a-durability-lagrange.js',
+]);
 
 function certification(overrides = {}) {
   return {
@@ -115,6 +126,17 @@ for (const admission of admissions) {
   assert.equal(admission.publicExecutionContract.executionPath, 'public-sql');
 }
 
+function scenarioFileDeficit(filePath) {
+  const source = readFileSync(filePath, 'utf8');
+  if (!source.includes('preStart') || !source.includes('run')) return 1;
+  const runAt = source.indexOf('prepareAdmitted');
+  const runtimeCheckAt = source.indexOf(
+    'await buildLagrangeScenarioARuntimePreflight(admission)', runAt);
+  const sqlContextAt = source.indexOf(
+    'prepareLagrangeScenarioAPublicPgContext', runAt);
+  return (runAt >= 0 && runtimeCheckAt > runAt && runtimeCheckAt < sqlContextAt) ? 0 : 1;
+}
+
 // R27: Quest measurement inspects the runner's committed ordering; the
 // dedicated scenario-a-prestart-admission.test.js independently exercises the seam.
 function preStartBoundaryDeficit() {
@@ -124,15 +146,11 @@ function preStartBoundaryDeficit() {
   const constructAt = source.indexOf('cluster = clusterFactory(');
   const runnerDeficit = loadAt >= 0 && preStartAt > loadAt && preStartAt < constructAt ?
     0 : 1;
-  const visibilitySource = readFileSync(
-    'test/distributed/scenarios/scenario-a-visibility-lagrange.js', 'utf8');
-  const runAt = visibilitySource.indexOf('async function prepareAdmittedVisibilityContext(');
-  const runtimeCheckAt = visibilitySource.indexOf(
-    'await buildLagrangeScenarioARuntimePreflight(admission)', runAt);
-  const sqlContextAt = visibilitySource.indexOf(
-    'prepareLagrangeScenarioAPublicPgContext({cluster, admission})', runAt);
-  const runtimeDeficit = runtimeCheckAt > runAt && runtimeCheckAt < sqlContextAt ? 0 : 1;
-  return runnerDeficit + runtimeDeficit;
+  let scenarioDeficits = 0;
+  for (const filePath of SCENARIO_FILES) {
+    scenarioDeficits += scenarioFileDeficit(filePath);
+  }
+  return runnerDeficit + scenarioDeficits;
 }
 
 function evaluateLagrangeScenarioALiveAdmissionGuard() {

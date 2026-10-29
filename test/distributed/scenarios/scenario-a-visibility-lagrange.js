@@ -38,7 +38,14 @@ const OUTPUT_PATH =
 const NON_COMPARABLE_REASON =
   'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.';
 
-async function loadVisibilityAdmission() {
+async function loadVisibilityAdmission(options = {}) {
+  if (options.admission) {
+    const verified = verifyLagrangeScenarioALiveAdmission(options.admission);
+    if (verified.proofCaseId !== PROOF_CASE_ID) {
+      throw new Error('Lagrange visibility proof requires visibility-bound admission');
+    }
+    return verified;
+  }
   const admissionPath = String(process.env[ADMISSION_ENV] || '').trim();
   if (!admissionPath) {
     throw new Error(`Lagrange visibility proof requires ${ADMISSION_ENV}`);
@@ -90,18 +97,19 @@ function buildVisibilityEvidence(context, adapter, definition, observation) {
   });
 }
 
-async function closeAndPersistVisibilityAttempt(adapter, evidence) {
+async function closeAndPersistVisibilityAttempt(adapter, evidence, options = {}) {
   if (adapter) {
     await adapter.close({dropTables: false});
   }
   if (evidence) {
-    await mkdir(path.dirname(OUTPUT_PATH), {recursive: true});
-    await writeFile(OUTPUT_PATH, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
+    const outputPath = options.outputPath || OUTPUT_PATH;
+    await mkdir(path.dirname(outputPath), {recursive: true});
+    await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
   }
 }
 
-async function preStart() {
-  const admission = await loadVisibilityAdmission();
+async function preStart(options = {}) {
+  const admission = await loadVisibilityAdmission(options);
   const runtimePreflight = await buildLagrangeScenarioARuntimePreflight(admission);
   return Object.freeze({
     admissionSha256: admission.admissionSha256,
@@ -109,8 +117,8 @@ async function preStart() {
   });
 }
 
-async function prepareAdmittedVisibilityContext(cluster, preflight) {
-  const admission = await loadVisibilityAdmission();
+async function prepareAdmittedVisibilityContext(cluster, preflight, options = {}) {
+  const admission = await loadVisibilityAdmission(options);
   if (preflight && preflight.admissionSha256 !== admission.admissionSha256) {
     throw new Error('Lagrange visibility admission changed after pre-start check');
   }
@@ -118,20 +126,26 @@ async function prepareAdmittedVisibilityContext(cluster, preflight) {
   if (preflight && preflight.runtimePreflightSha256 !== runtimePreflight.preflightSha256) {
     throw new Error('Lagrange visibility runtime changed after pre-start check');
   }
-  return prepareLagrangeScenarioAPublicPgContext({cluster, admission});
+  const prepareContext = options.prepareContext || prepareLagrangeScenarioAPublicPgContext;
+  return prepareContext({cluster, admission});
 }
 
 async function run(cluster, preflight = null) {
   // Certification is consumed before any cluster query, SQL provisioning or
   // workload operation. A WIP 0.2.6 source tree alone cannot grant admission.
-  const context = await prepareAdmittedVisibilityContext(cluster, preflight);
+  const options = (preflight && typeof preflight === 'object' &&
+    !preflight.admissionSha256 && !preflight.runtimePreflightSha256) ? preflight : {};
+  const preflightToken = (preflight &&
+    (preflight.admissionSha256 || preflight.runtimePreflightSha256)) ? preflight : null;
+  const context = await prepareAdmittedVisibilityContext(cluster, preflightToken, options);
   const definition = buildScenarioAVisibilityCase();
+  const createAdapter = options.createAdapter || createLagrangeOltpAdapter;
   let adapter = null;
   let evidence = null;
   let primaryError = null;
 
   try {
-    adapter = await createLagrangeOltpAdapter({
+    adapter = await createAdapter({
       endpoint: context.endpoint,
       connection: context.connection,
       workload: OLTP_SCENARIO_A_VISIBILITY_WORKLOAD,
@@ -139,7 +153,8 @@ async function run(cluster, preflight = null) {
     if (adapter.datasetSha256 !== definition.identity.datasetSha256) {
       throw new Error('Lagrange visibility proof dataset identity mismatch');
     }
-    const observation = await runLagrangeVisibilityProbe({
+    const runProbe = options.runProbe || runLagrangeVisibilityProbe;
+    const observation = await runProbe({
       endpoint: context.endpoint,
       connection: context.connection,
       warehouseId: definition.identity.target.key.id,
@@ -158,7 +173,7 @@ async function run(cluster, preflight = null) {
 
   let cleanupError = null;
   try {
-    await closeAndPersistVisibilityAttempt(adapter, evidence);
+    await closeAndPersistVisibilityAttempt(adapter, evidence, options);
   } catch (error) {
     cleanupError = error;
   }
@@ -178,4 +193,7 @@ async function run(cluster, preflight = null) {
   });
 }
 
-export {preStart, run};
+export {
+  preStart,
+  run,
+};
