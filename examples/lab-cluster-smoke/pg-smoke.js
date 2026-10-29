@@ -20,8 +20,9 @@ import {induceLagrangeRetryableConflict} from '../../test/distributed/reference-
 const DEFAULT_USER = 'postgres';
 const DEFAULT_DATABASE = 'postgres';
 const DEFAULT_TIMEOUT_MS = 5000;
-const DEFAULT_DISCOVERY_TIMEOUT_MS = 30000;
+const DEFAULT_DISCOVERY_TIMEOUT_MS = 120000;
 const DEFAULT_DISCOVERY_INTERVAL_MS = 500;
+const DEFAULT_DESIRED_STATE_WAKE_INTERVAL_MS = 6000;
 
 const DEFAULT_OLTP_WORKLOAD_OPTIONS = Object.freeze({
   seed: 20260911,
@@ -181,6 +182,8 @@ async function runPgSmoke(options = {}) {
 
   const discoveryTimeoutMs = options.discoveryTimeoutMs || DEFAULT_DISCOVERY_TIMEOUT_MS;
   const discoveryIntervalMs = options.discoveryIntervalMs || DEFAULT_DISCOVERY_INTERVAL_MS;
+  const desiredStateWakeIntervalMs =
+    options.desiredStateWakeIntervalMs || DEFAULT_DESIRED_STATE_WAKE_INTERVAL_MS;
   const connectionTimeoutMs = options.connectionTimeoutMs || DEFAULT_TIMEOUT_MS;
   const queryTimeoutMs = options.queryTimeoutMs || DEFAULT_TIMEOUT_MS;
 
@@ -229,6 +232,7 @@ async function runPgSmoke(options = {}) {
 
     const configUpdateRes = await adminClient.query(updateConfigSql);
     const replicaUpdateRes = await adminClient.query(updateReplicasSql);
+    let lastDesiredStateWakeAtMs = nowFn();
 
     desiredStateMutation = {
       runtimeConfig: runtimeConfigObj,
@@ -296,6 +300,15 @@ async function runPgSmoke(options = {}) {
         break;
       }
       await sleepFn(discoveryIntervalMs);
+
+      if (nowFn() - lastDesiredStateWakeAtMs >= desiredStateWakeIntervalMs) {
+        try {
+          await adminClient.query(updateReplicasSql);
+        } catch {
+          // ignore transient wake error while polling
+        }
+        lastDesiredStateWakeAtMs = nowFn();
+      }
     }
 
     if (!matchingReplica) {
@@ -312,7 +325,7 @@ async function runPgSmoke(options = {}) {
 
     if (options.oltpComparison === true && !workloadReady) {
       const workloadReadyStart = nowFn();
-      const workloadReadyTimeoutMs = options.workloadReadyTimeoutMs || 60000;
+      const workloadReadyTimeoutMs = options.workloadReadyTimeoutMs || 120000;
       while (nowFn() - workloadReadyStart < workloadReadyTimeoutMs) {
         await sleepFn(discoveryIntervalMs);
         try {
@@ -429,6 +442,7 @@ async function runPgSmoke(options = {}) {
 
 export {
   DEFAULT_DATABASE,
+  DEFAULT_DESIRED_STATE_WAKE_INTERVAL_MS,
   DEFAULT_DISCOVERY_INTERVAL_MS,
   DEFAULT_DISCOVERY_TIMEOUT_MS,
   DEFAULT_OLTP_WORKLOAD_OPTIONS,
