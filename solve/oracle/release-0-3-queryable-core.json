@@ -1,0 +1,18 @@
+{
+  "metric": 8,
+  "target": 0,
+  "status": "PLANNED",
+  "observedMain": "edf20e39b0014d5d2a63a2ecea990712f0349153",
+  "observedAt": "2026-10-02",
+  "outstanding": [
+    "typed-key-and-tuple-ordering",
+    "declared-and-compound-primary-key-narrowing",
+    "distributed-locking-reads",
+    "local-ordered-index-ddl",
+    "ordered-and-compound-index-planner-semantics",
+    "non-unique-global-secondary-indexes",
+    "generic-push-backed-live-query-data-plane",
+    "exact-head-0.3-release-exit"
+  ],
+  "rule": "Only an exact-head certification Quest may remove an outstanding axis. A green feature test, roadmap glyph, old receipt, or different SHA is not authority."
+}
