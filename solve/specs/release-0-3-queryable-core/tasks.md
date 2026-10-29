@@ -142,6 +142,12 @@ dependency, or fallback.
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
 
+**Verified preparation (2026-10-29):** the
+[key-domain and lifecycle census](preimplementation-research.md#1-keys-and-row-identity)
+refreshes the existing October 7 D1-D9 investigation, corrects its dated
+safe-integer census and separates Q03's boundary handoff from residual A2 work.
+The real-path discriminator and representation choice remain open.
+
 This Quest exists because A1 cannot honestly solve the persisted representation
 problem by changing a comparator.
 
@@ -178,6 +184,10 @@ Do not invent lossy migration.
 
 **Roadmap:** `RM-0.3-qs-pk-partition-narrowing`.
 
+The [verified caller trace](preimplementation-research.md#1-keys-and-row-identity)
+connects catalog metadata to resolver/write consumers and the proposed Q02
+physical-schema handoff. Re-check that handoff on the integration candidate.
+
 Make one metadata owner answer "which columns form this table's partition/
 primary key?" and make PartitionResolver and write/live consumers ask that
 owner.
@@ -205,6 +215,11 @@ default.
 
 **Roadmap:** `RM-0.3-qs-pk-partition-narrowing`.
 
+The [compound lifecycle preparation](preimplementation-research.md#1-keys-and-row-identity)
+records partial INSERT/query representations and explicit split refusal; the
+[predicate census](preimplementation-research.md#5-predicate-and-access-path-semantics)
+qualifies accumulator risks and proposes real-path result witnesses.
+
 Activate and prove the composite path only after A2/A3 settle representation
 and metadata ownership.
 
@@ -228,6 +243,10 @@ Do not grow cost-based planning or global uniqueness here.
 ### A5 — planned `local-index-ddl-owner-wiring`
 
 **Roadmap:** `RM-0.3-qs-local-index-ddl`.
+
+The [verified DDL census](preimplementation-research.md#4-local-index-ddl-and-activation)
+distinguishes unwired scaffolding from public behavior and identifies intent,
+physical materialization, eligibility and recovery decisions for this owner.
 
 Consume the existing IndexService rather than rebuilding an index subsystem.
 
@@ -263,6 +282,11 @@ not complete.
 
 **Roadmap:** `RM-0.3-qs-compound-index-semantics`.
 
+The [verified predicate/access-path preparation](preimplementation-research.md#5-predicate-and-access-path-semantics)
+separates the orphan optimizer from the active PK resolver, adds bounded
+falsifier candidates, and distinguishes local SQLite choices from distributed
+narrowing claims. It seals no normal form or expanded SQL subset.
+
 Replace the current any-matching-column heuristic with one ordered-index
 contract shared by local and later global indexes.
 
@@ -291,6 +315,11 @@ The architecture owner is
 as a locking read.
 
 ### B1 — planned `locking-read-wait-policy-seal` — DESIGN MAY START EARLY
+
+The [current read/locking census](preimplementation-research.md#2-read-visibility-and-locking)
+records TX1's actual visibility and participant envelope, compares wait-policy
+alternatives and traces the public PG cancellation gap. Use current main's
+architecture, not historical snapshot-isolation wording on this branch.
 
 Seal the architecture document's remaining explicit question before source
 implementation: wait/conflict/deadlock policy, timeout/cancellation semantics,
@@ -421,6 +450,11 @@ This is a planning/authority repair, not implementation.
 
 ### D1 — planned `live-query-canonical-plan-dependencies`
 
+The [verified live-query preparation](preimplementation-research.md#3-live-query-identity-and-continuity)
+distinguishes query-result identity from shared source interest and continuing
+mutation dependencies from the partitions contacted by one execution. The
+canonical planner remains the owner of both descriptions.
+
 Freshly re-derive the historical rung against current main:
 
 - live mode consumes ordinary SqlCore plan semantics;
@@ -435,6 +469,11 @@ A3/A4 should land first so "canonical resolver" means the 0.3 resolver.
 
 ### D2 — planned `live-query-selective-partition-cdc` — AFTER RAFT CUTOVER
 
+The [current CDC census](preimplementation-research.md#3-live-query-identity-and-continuity)
+records the durable obligation lane and registration-only handshake, together
+with the explicit absence of generic user-table capture. Historical helper or
+buffer behavior is not evidence of a current replay guarantee.
+
 Replace cache-backed generic user-table change detection with selective
 PartitionService CDC subscriptions through existing handshake/replay and
 MessageRouter ownership. Keep cache observation only where system-table cache
@@ -444,6 +483,11 @@ is actually the declared read model.
 broadcasting the user table through every node's SystemTableCache.
 
 ### D3 — planned `live-query-gap-free-snapshot-frontier`
+
+The [hydration/frontier review](preimplementation-research.md#3-live-query-identity-and-continuity)
+identifies the reusable leader-local image and its limits. The proposed
+identity/dependency/state matrix also prepares D4/D5 result maintenance,
+resume/reset, topology and slow-consumer decisions; these remain unsealed.
 
 Seal and prove the initial snapshot ↔ CDC frontier. Concurrent writes during
 subscribe/reconnect cannot disappear. Duplicate delivery must not corrupt
@@ -478,6 +522,10 @@ Strong end-to-end proof:
 ## Stage E — release closure
 
 ### E1 — planned `release-0-3-acceptance-matrix`
+
+The [0.2.7 handoff and four integration journeys](preimplementation-research.md#6-the-027-handoff-and-release-journeys)
+organize proposed evidence for this matrix. They do not duplicate stabilization
+ownership, replace acceptance predicates or establish passing runtime proof.
 
 One deterministic matrix binds each 0.3 capability to:
 

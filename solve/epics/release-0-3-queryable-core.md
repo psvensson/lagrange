@@ -55,6 +55,41 @@ global-index and generic-live-query programs have coherent future epic
 boundaries, but they remain staged sections/specifications here until opening
 another epic is justified by predecessor evidence and current epic capacity.
 
+## Verified implementation preparation - 2026-10-29
+
+The next preparation findings are preserved in
+[Verified preparation for 0.3 implementation](../specs/release-0-3-queryable-core/preimplementation-research.md)
+and linked from the existing A2-A6, B1, D1-D3 and E1 work items. The source
+census is pinned to current main
+`71179adf82be304b3ad1530f62c108adb35fbd1b`, with the 0.2.7 proposal inspected
+at `25c390cb52606b3e6afbee95c1f088d7b2be8302`. This is source and caller
+verification, not runtime qualification, a new design seal or release progress.
+
+Prepare the admitted key-domain/lifecycle matrix and read-visibility matrix
+first. They feed declared/compound routing, the C1 index decision, B1 locking
+and D1/D3 live-query continuity. Next, make live identity/dependency/frontier
+behavior, local-index activation, and conservative predicate extraction
+reviewable through their existing owners. Four proposed E1 journeys connect
+keys, indexes, public PG locking and live-view recovery without replacing
+existing acceptance predicates.
+
+The verification narrows several earlier observations. Current main does use
+exact-integer reads in selected durable paths; the ordinary user-key median
+path still needs its own precision proof. Compound support consists of partial
+paths, including an explicit split refusal. Index-management classes and some
+live snapshot/resume helpers are unfinished material, so their limitations
+must not be described as reproduced public failures. Active committed CDC
+already has durable obligation delivery and a leader-local hydration image;
+generic user-table capture, distributed result/frontier binding and client
+continuation remain separate work. Event-triggered re-execution/reset is
+already permitted by the live-query architecture.
+
+The note maps the 0.2.7 Q01/Q02/Q03/Q10/Q11/Q14 handoff, including Q03's
+persisted-boundary policy. Re-census what that proposal actually delivers before
+assigning residual 0.3 work. The October 2 starting point and October 7 A2
+reconnaissance remain dated evidence. No integration fence or release axis is
+certified, no implementation Quest is opened, and C1/R2 remains unsealed.
+
 ## Index-maintenance research - 2026-10-28
 
 The current C1 research is preserved in
