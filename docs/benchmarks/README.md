@@ -6,6 +6,7 @@ Deterministic multi-system comparative benchmark statistics across PostgreSQL, T
 - Scenario specifications:
   - [Scenario A: Contended OLTP Baseline (tidb-oltp-baseline)](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline)
   - [Scenario B: Distributed Risk Decision & Partition Movement (tidb-distributed-risk-decision)](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision)
+  - [Scenario C: streaming-feature-risk-decision](tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision)
   - [Paired Benchmark Owner](tidb-reference-paired-owner.md)
   - [Scenario A Semantic Evidence Gate (scenario-a-semantic-closure)](tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate)
 - Detail pages:
@@ -13,6 +14,7 @@ Deterministic multi-system comparative benchmark statistics across PostgreSQL, T
   - [PostgreSQL Single-Primary & Patroni Sync-HA Comparison](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html))
   - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))
   - [YugabyteDB & Apache Ignite 3 Colocated Compute Comparison](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html))
+  - [Scenario C: PostgreSQL 17 + Valkey 8 Feature-Store & Freshness Comparison](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html))
 
 ![Multi-system comparative benchmark overview](comparative-overview.svg)
 
@@ -43,6 +45,8 @@ Two distinct measurement boundaries are evaluated:
 | YugabyteDB 2024.2 (YSQL RF=3 + App Service) 2024.2.1 | distributed-sql-ysql | 4 (7) | Yes | 7.40 (1190.00 ms) | 234.80 (34.20 ms) | 3840 B | `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
 | YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) 2024.2.1-proc | distributed-sql-stored-proc | 3 (6) | Yes | 7.40 (1190.00 ms) | 286.50 (28.40 ms) | 2420 B | `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
 | Apache Ignite 3 (JobTarget.colocated RF=3) 3.0.0 | distributed-colocated-compute-grid | 3 (3) | Yes | 9.60 (845.00 ms) | 408.60 (20.10 ms) | 820 B | `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) 17.2-valkey-8.0-sync | relational-cache-write-through | 8 (11) | Yes | 8.40 (920.50 ms) | 462.40 (16.20 ms) | 620 B | `modeled-topology-oracle` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) 17.2-valkey-8.0-async | relational-cache-async-stream | 9 (12) | Yes | 8.40 (920.50 ms) | 538.00 (12.40 ms) | 480 B | `modeled-topology-oracle` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
 
 ## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
@@ -94,3 +98,11 @@ Two distinct measurement boundaries are evaluated:
 | Apache Ignite 3 (JobTarget.colocated RF=3) | one-remote-stage | 432.00 | 12.40 | 2 | 640 B |
 | Apache Ignite 3 (JobTarget.colocated RF=3) | sequential | 274.00 | 22.80 | 3 | 1280 B |
 | Apache Ignite 3 (JobTarget.colocated RF=3) | fan-out | 316.40 | 19.60 | 2 | 1180 B |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | local-only | 645.00 | 3.80 | 1 | 320 B |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | one-remote-stage | 490.00 | 11.20 | 1 | 540 B |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | sequential | 342.00 | 18.60 | 2 | 820 B |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | fan-out | 372.60 | 16.40 | 1 | 800 B |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | local-only | 710.00 | 2.90 | 1 | 240 B |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | one-remote-stage | 565.00 | 8.80 | 1 | 420 B |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | sequential | 412.00 | 14.80 | 1 | 640 B |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | fan-out | 465.00 | 12.60 | 1 | 620 B |

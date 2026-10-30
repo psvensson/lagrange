@@ -3,13 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
-
 import {readEpic} from '../solve/store.js';
 import {epicProblems} from '../solve/schema.js';
 import {
-  DEFAULT_MULTI_SYSTEM_MATRIX_PATH, EPIC_ID, MULTI_SYSTEM_MATRIX_SCHEMA,
-  TOTAL_EPIC_SLICES, buildMultiSystemComparativeMatrix,
-  readMultiSystemComparativeMatrix, writeMultiSystemComparativeMatrix,
+  DEFAULT_MULTI_SYSTEM_MATRIX_PATH, EPIC_ID, MULTI_SYSTEM_MATRIX_SCHEMA, TOTAL_EPIC_SLICES,
+  buildMultiSystemComparativeMatrix, readMultiSystemComparativeMatrix,
+  writeMultiSystemComparativeMatrix,
 } from '../../test/distributed/harness/comparative-matrix-runner.js';
 import {
   DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH, DEFAULT_POSTGRESQL_PROGRESS_MD_PATH,
@@ -20,8 +19,7 @@ import {
 import {
   DEFAULT_CITUS_PROGRESS_HTML_PATH, DEFAULT_CITUS_PROGRESS_MD_PATH,
   DEFAULT_CITUS_PROGRESS_SVG_PATH, renderCitusComparisonHtml,
-  renderCitusComparisonMarkdown, renderCitusComparisonSvg,
-  writeCitusComparisonStaticWebArtifacts,
+  renderCitusComparisonMarkdown, renderCitusComparisonSvg, writeCitusComparisonStaticWebArtifacts,
 } from '../../test/distributed/harness/citus-comparison-static-web.js';
 import {
   DEFAULT_SCENARIO_B_CROSSOVER_SVG_PATH, DEFAULT_YUGABYTE_IGNITE_PROGRESS_HTML_PATH,
@@ -36,6 +34,12 @@ import {
   renderComparativeLandingHtml, renderComparativeLandingMarkdown,
   renderComparativeOverviewSvg, writeComparativeLandingArtifacts,
 } from '../../test/distributed/harness/comparative-landing-page.js';
+import {
+  DEFAULT_SCENARIO_C_PROGRESS_HTML_PATH, DEFAULT_SCENARIO_C_PROGRESS_MD_PATH,
+  DEFAULT_SCENARIO_C_PROGRESS_SVG_PATH, renderScenarioCComparisonHtml,
+  renderScenarioCComparisonMarkdown, renderScenarioCComparisonSvg,
+  writeScenarioCComparisonStaticWebArtifacts,
+} from '../../test/distributed/harness/scenario-c-comparison-static-web.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayEvery = Function.call.bind(Array.prototype.every);
@@ -48,7 +52,6 @@ const PASS_MESSAGE = 'comparative-benchmark-matrix-guard: PASS\n';
 const NEWLINE = '\n';
 const FLAG_METRIC = '--metric';
 const PARENT_DIR = '..';
-
 const TARGET_LAGRANGE = 'lagrange';
 const TARGET_TIDB = 'tidb-tikv';
 const TARGET_PG_SINGLE = 'pg-single-primary';
@@ -60,22 +63,23 @@ const TARGET_CITUS_UDF = 'citus-distributed-function';
 const TARGET_YUGABYTE_YSQL = 'yugabytedb-ysql-rf3';
 const TARGET_YUGABYTE_PROC = 'yugabytedb-stored-proc';
 const TARGET_IGNITE_COMPUTE = 'ignite3-colocated-compute';
-
+const TARGET_PG_VALKEY_SYNC = 'pg-valkey-sync-write-through';
+const TARGET_PG_VALKEY_ASYNC = 'pg-valkey-async-stream';
 const REQUIRED_TARGET_IDS = Object.freeze([
-  TARGET_LAGRANGE, TARGET_TIDB, TARGET_PG_SINGLE, TARGET_PG_PATRONI,
-  TARGET_PG_PLPGSQL_SINGLE, TARGET_PG_PLPGSQL_PATRONI, TARGET_CITUS_SQL,
-  TARGET_CITUS_UDF, TARGET_YUGABYTE_YSQL, TARGET_YUGABYTE_PROC, TARGET_IGNITE_COMPUTE,
+  TARGET_LAGRANGE, TARGET_TIDB, TARGET_PG_SINGLE, TARGET_PG_PATRONI, TARGET_PG_PLPGSQL_SINGLE,
+  TARGET_PG_PLPGSQL_PATRONI, TARGET_CITUS_SQL, TARGET_CITUS_UDF, TARGET_YUGABYTE_YSQL,
+  TARGET_YUGABYTE_PROC, TARGET_IGNITE_COMPUTE, TARGET_PG_VALKEY_SYNC, TARGET_PG_VALKEY_ASYNC,
 ]);
-
-const EXPECTED_COMPLETED_SLICES = 4;
-const EXPECTED_REMAINING_SLICES = 1;
+const EXPECTED_COMPLETED_SLICES = 5;
+const EXPECTED_REMAINING_SLICES = 0;
 const MARKER_LOCALITY_CONTROL_MD = 'Three-way locality control';
 const MARKER_LOCALITY_CONTROL_HTML = 'Three-Way Locality Control';
 const MARKER_CITUS_LOCALITY_MD = 'Entity-locality progression';
 const MARKER_CITUS_LOCALITY_HTML = 'Entity-Locality Progression';
 const MARKER_IGNITE_COLOCATED_MD = 'Colocated compute comparison';
 const MARKER_IGNITE_COLOCATED_HTML = 'Colocated Compute Comparison';
-
+const MARKER_SCENARIO_C_FRESHNESS_MD = 'Feature-freshness SLA tradeoff';
+const MARKER_SCENARIO_C_FRESHNESS_HTML = 'Feature-Freshness SLA Tradeoff';
 const SHAPE_LOCAL_ONLY = 'local-only';
 const SHAPE_ONE_REMOTE = 'one-remote-stage';
 const SHAPE_SEQUENTIAL = 'sequential';
@@ -83,38 +87,33 @@ const SHAPE_FAN_OUT = 'fan-out';
 const REQUIRED_SHAPE_IDS = Object.freeze([
   SHAPE_LOCAL_ONLY, SHAPE_ONE_REMOTE, SHAPE_SEQUENTIAL, SHAPE_FAN_OUT,
 ]);
-
 const LINK_SCENARIO_A = 'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline';
 const LINK_SCENARIO_B = 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision';
+const LINK_SCENARIO_C = 'tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision';
 const LINK_TIDB_PROGRESS = 'tidb-comparison-progress.md';
 const LINK_POSTGRES_PROGRESS = 'postgresql-comparison-progress.md';
 const LINK_CITUS_PROGRESS = 'citus-comparison-progress.md';
 const LINK_YUGABYTE_IGNITE_PROGRESS = 'yugabyte-ignite-comparison-progress.md';
+const LINK_SCENARIO_C_PROGRESS = 'scenario-c-feature-store-progress.md';
 const LINK_CROSSOVER_SVG = 'scenario-b-shape-crossover.svg';
-
 const README_PATH = 'README.md';
 const DOCS_README_PATH = 'docs/README.md';
 const LINK_BENCHMARKS_README = 'benchmarks/README.md';
 const LINK_BENCHMARKS_INDEX = 'benchmarks/index.html';
-
 const ERR_TARGETS_MISSING = 'All required targets must be present';
 const ERR_ROOT_README_MISSING = 'README.md must exist';
 const ERR_DOCS_README_MISSING = 'docs/README.md must exist';
-
 const NUM_ZERO = 0;
 const NUM_ONE = 1;
 
 const REPO_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  PARENT_DIR,
-  PARENT_DIR,
+  path.dirname(fileURLToPath(import.meta.url)), PARENT_DIR, PARENT_DIR,
 );
 
 function verifyEpicDefinition(rootDir) {
   const epic = readEpic(rootDir, EPIC_ID);
   assert.ok(epic, `Epic ${EPIC_ID} must exist`);
-  const problems = epicProblems(epic.front);
-  assert.equal(problems.length, NUM_ZERO);
+  assert.equal(epicProblems(epic.front).length, NUM_ZERO);
   assert.equal(epic.front.quests.length, TOTAL_EPIC_SLICES);
 }
 
@@ -127,7 +126,6 @@ function verifyComparativeMatrix(matrix) {
   const targetIds = arrayMap(matrix.targets, (t) => t.targetId);
   const allTargetsValid = arrayEvery(REQUIRED_TARGET_IDS, (id) => arrayIncludes(targetIds, id));
   assert.equal(allTargetsValid, true, ERR_TARGETS_MISSING);
-
   for (const target of matrix.targets) {
     assert.ok(target.scenarioA, `Target ${target.targetId} must define scenarioA`);
     assert.ok(target.scenarioB?.shapes, `Target ${target.targetId} must define scenarioB.shapes`);
@@ -144,9 +142,9 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
     DEFAULT_CITUS_PROGRESS_MD_PATH, DEFAULT_CITUS_PROGRESS_HTML_PATH,
     DEFAULT_CITUS_PROGRESS_SVG_PATH, DEFAULT_YUGABYTE_IGNITE_PROGRESS_MD_PATH,
     DEFAULT_YUGABYTE_IGNITE_PROGRESS_HTML_PATH, DEFAULT_YUGABYTE_IGNITE_PROGRESS_SVG_PATH,
-    DEFAULT_SCENARIO_B_CROSSOVER_SVG_PATH,
+    DEFAULT_SCENARIO_C_PROGRESS_MD_PATH, DEFAULT_SCENARIO_C_PROGRESS_HTML_PATH,
+    DEFAULT_SCENARIO_C_PROGRESS_SVG_PATH, DEFAULT_SCENARIO_B_CROSSOVER_SVG_PATH,
   ];
-
   const contents = {};
   for (const relPath of docRelPaths) {
     const absPath = path.resolve(rootDir, relPath);
@@ -165,19 +163,27 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
   const citusHtml = contents[DEFAULT_CITUS_PROGRESS_HTML_PATH];
   const ybMd = contents[DEFAULT_YUGABYTE_IGNITE_PROGRESS_MD_PATH];
   const ybHtml = contents[DEFAULT_YUGABYTE_IGNITE_PROGRESS_HTML_PATH];
+  const scMd = contents[DEFAULT_SCENARIO_C_PROGRESS_MD_PATH];
+  const scHtml = contents[DEFAULT_SCENARIO_C_PROGRESS_HTML_PATH];
+  const scSvg = contents[DEFAULT_SCENARIO_C_PROGRESS_SVG_PATH];
 
-  for (const link of [LINK_TIDB_PROGRESS, LINK_POSTGRES_PROGRESS, LINK_CITUS_PROGRESS,
-    LINK_YUGABYTE_IGNITE_PROGRESS, LINK_CROSSOVER_SVG]) {
+  for (const link of [
+    LINK_TIDB_PROGRESS, LINK_POSTGRES_PROGRESS, LINK_CITUS_PROGRESS,
+    LINK_YUGABYTE_IGNITE_PROGRESS, LINK_SCENARIO_C_PROGRESS, LINK_CROSSOVER_SVG,
+    LINK_SCENARIO_C,
+  ]) {
     assert.equal(stringIncludes(landingMd, link), true);
     assert.equal(stringIncludes(landingHtml, link), true);
   }
-  assert.equal(stringIncludes(pgMd, LINK_TIDB_PROGRESS), true);
-
+  for (const scDoc of [scMd, scHtml, scSvg]) {
+    assert.equal(stringIncludes(scDoc, LINK_SCENARIO_C), true);
+  }
   for (const [docs, markers] of [
     [[pgMd, pgHtml], [TARGET_PG_PLPGSQL_SINGLE, TARGET_PG_PLPGSQL_PATRONI]],
     [[citusMd, citusHtml], [TARGET_CITUS_SQL, TARGET_CITUS_UDF]],
     [[ybMd, ybHtml], [TARGET_YUGABYTE_YSQL, TARGET_YUGABYTE_PROC,
       TARGET_IGNITE_COMPUTE, LINK_CROSSOVER_SVG]],
+    [[scMd, scHtml], [TARGET_PG_VALKEY_SYNC, TARGET_PG_VALKEY_ASYNC]],
   ]) {
     for (const doc of docs) {
       for (const marker of markers) {
@@ -185,21 +191,22 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
       }
     }
   }
-  assert.equal(stringIncludes(pgMd, MARKER_LOCALITY_CONTROL_MD), true);
-  assert.equal(stringIncludes(pgHtml, MARKER_LOCALITY_CONTROL_HTML), true);
-  assert.equal(stringIncludes(citusMd, MARKER_CITUS_LOCALITY_MD), true);
-  assert.equal(stringIncludes(citusHtml, MARKER_CITUS_LOCALITY_HTML), true);
-  assert.equal(stringIncludes(ybMd, MARKER_IGNITE_COLOCATED_MD), true);
-  assert.equal(stringIncludes(ybHtml, MARKER_IGNITE_COLOCATED_HTML), true);
-
-  assert.equal(fs.existsSync(path.resolve(rootDir, README_PATH)), true, ERR_ROOT_README_MISSING);
-  assert.equal(
-    fs.existsSync(path.resolve(rootDir, DOCS_README_PATH)),
-    true,
-    ERR_DOCS_README_MISSING,
-  );
-  for (const docFile of [README_PATH, DOCS_README_PATH]) {
-    const text = fs.readFileSync(path.resolve(rootDir, docFile), UTF8);
+  for (const [doc, marker] of [
+    [pgMd, LINK_TIDB_PROGRESS],
+    [pgMd, MARKER_LOCALITY_CONTROL_MD], [pgHtml, MARKER_LOCALITY_CONTROL_HTML],
+    [citusMd, MARKER_CITUS_LOCALITY_MD], [citusHtml, MARKER_CITUS_LOCALITY_HTML],
+    [ybMd, MARKER_IGNITE_COLOCATED_MD], [ybHtml, MARKER_IGNITE_COLOCATED_HTML],
+    [scMd, MARKER_SCENARIO_C_FRESHNESS_MD], [scHtml, MARKER_SCENARIO_C_FRESHNESS_HTML],
+  ]) {
+    assert.equal(stringIncludes(doc, marker), true);
+  }
+  for (const [docFile, errMsg] of [
+    [README_PATH, ERR_ROOT_README_MISSING],
+    [DOCS_README_PATH, ERR_DOCS_README_MISSING],
+  ]) {
+    const abs = path.resolve(rootDir, docFile);
+    assert.equal(fs.existsSync(abs), true, errMsg);
+    const text = fs.readFileSync(abs, UTF8);
     assert.equal(stringIncludes(text, LINK_BENCHMARKS_README), true);
     assert.equal(stringIncludes(text, LINK_BENCHMARKS_INDEX), true);
   }
@@ -211,17 +218,16 @@ function verifyHarnessRendererParity(rootDir, matrix) {
   assert.equal(defaultMatrix.epicId, EPIC_ID);
   assert.equal(defaultMatrix.totalSlices, TOTAL_EPIC_SLICES);
   assert.equal(Array.isArray(CANONICAL_DEFAULT_TARGETS), true);
-
   for (const fn of [
     writeMultiSystemComparativeMatrix, writePostgresqlComparisonStaticWebArtifacts,
     writeCitusComparisonStaticWebArtifacts, writeYugabyteIgniteComparisonStaticWebArtifacts,
-    writeComparativeLandingArtifacts,
+    writeScenarioCComparisonStaticWebArtifacts, writeComparativeLandingArtifacts,
   ]) {
     assert.equal(typeof fn, TYPE_FUNCTION);
   }
 
   const testMatrix = matrix || defaultMatrix;
-  const parityPairs = [
+  for (const [renderer, relPath] of [
     [renderPostgresqlComparisonMarkdown, DEFAULT_POSTGRESQL_PROGRESS_MD_PATH],
     [renderPostgresqlComparisonHtml, DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH],
     [renderPostgresqlComparisonSvg, DEFAULT_POSTGRESQL_PROGRESS_SVG_PATH],
@@ -231,13 +237,14 @@ function verifyHarnessRendererParity(rootDir, matrix) {
     [renderYugabyteIgniteComparisonMarkdown, DEFAULT_YUGABYTE_IGNITE_PROGRESS_MD_PATH],
     [renderYugabyteIgniteComparisonHtml, DEFAULT_YUGABYTE_IGNITE_PROGRESS_HTML_PATH],
     [renderYugabyteIgniteComparisonSvg, DEFAULT_YUGABYTE_IGNITE_PROGRESS_SVG_PATH],
+    [renderScenarioCComparisonMarkdown, DEFAULT_SCENARIO_C_PROGRESS_MD_PATH],
+    [renderScenarioCComparisonHtml, DEFAULT_SCENARIO_C_PROGRESS_HTML_PATH],
+    [renderScenarioCComparisonSvg, DEFAULT_SCENARIO_C_PROGRESS_SVG_PATH],
     [renderScenarioBShapeCrossoverSvg, DEFAULT_SCENARIO_B_CROSSOVER_SVG_PATH],
     [renderComparativeLandingMarkdown, DEFAULT_COMPARATIVE_LANDING_MD_PATH],
     [renderComparativeLandingHtml, DEFAULT_COMPARATIVE_LANDING_HTML_PATH],
     [renderComparativeOverviewSvg, DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH],
-  ];
-
-  for (const [renderer, relPath] of parityPairs) {
+  ]) {
     assert.equal(renderer(testMatrix), fs.readFileSync(path.resolve(rootDir, relPath), UTF8));
   }
 }
@@ -250,7 +257,6 @@ export async function runComparativeBenchmarkMatrixGuard(rootDir = REPO_ROOT) {
   verifyComparativeMatrix(matrix);
   verifyBenchmarkDocumentsAndLinks(rootDir);
   verifyHarnessRendererParity(rootDir, matrix);
-
   return {
     ok: true,
     remainingSlicesCount: matrix.remainingSlicesCount,

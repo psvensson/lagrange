@@ -6,9 +6,10 @@
     "epic-and-postgresql-app-service-baseline",
     "postgresql-plpgsql-server-functions-control",
     "citus-colocated-tables-and-distributed-functions",
-    "yugabytedb-distributed-sql-and-apache-ignite3-colocated-compute"
+    "yugabytedb-distributed-sql-and-apache-ignite3-colocated-compute",
+    "scenario-c-postgresql-valkey-freshness-bounded-risk"
   ],
-  "remainingSlicesCount": 1,
+  "remainingSlicesCount": 0,
   "updatedAt": "2026-10-30T16:45:00.000Z",
   "scenarios": [
     {
@@ -22,6 +23,12 @@
       "label": "Scenario B: Distributed Risk Decision & Partition Movement",
       "definitionHref": "tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision",
       "semanticGateHref": "tidb-reference-paired-owner.md"
+    },
+    {
+      "scenarioId": "streaming-feature-risk-decision",
+      "label": "Scenario C: Streaming Feature Store & Freshness-Bounded Risk Decision",
+      "definitionHref": "tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision",
+      "semanticGateHref": "scenario-c-feature-store-progress.md"
     }
   ],
   "targets": [
@@ -79,6 +86,16 @@
             "roundTrips": 1
           }
         }
+      },
+      "scenarioC": {
+        "evidenceTier": "modeled-topology-oracle",
+        "freshDecisionsPerSec0ms": 441.15,
+        "freshDecisionsPerSec100ms": 441.15,
+        "freshDecisionsPerSec1000ms": 441.15,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0,
+        "cacheRestartRecoverySec": 3.2,
+        "operationalPipelines": 1
       }
     },
     {
@@ -359,6 +376,16 @@
             "roundTrips": 1
           }
         }
+      },
+      "scenarioC": {
+        "evidenceTier": "modeled-topology-oracle",
+        "freshDecisionsPerSec0ms": 316.8,
+        "freshDecisionsPerSec100ms": 316.8,
+        "freshDecisionsPerSec1000ms": 316.8,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0,
+        "cacheRestartRecoverySec": 8.5,
+        "operationalPipelines": 1
       }
     },
     {
@@ -644,6 +671,140 @@
             "roundTrips": 2
           }
         }
+      }
+    },
+    {
+      "targetId": "pg-valkey-sync-write-through",
+      "label": "PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service)",
+      "shortLabel": "PG 17 + Valkey 8 (Sync)",
+      "version": "17.2-valkey-8.0-sync",
+      "category": "relational-cache-write-through",
+      "topologyUnits": 8,
+      "processCount": 11,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "scenario-c-feature-store-progress.md",
+      "detailPageHtml": "scenario-c-feature-store-progress.html",
+      "scenarioA": {
+        "evidenceTier": "modeled-topology-oracle",
+        "throughputTxPerSec": 8.4,
+        "commitP50Ms": 390.2,
+        "commitP95Ms": 920.5,
+        "commitP99Ms": 1290.8,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33
+      },
+      "scenarioB": {
+        "evidenceTier": "modeled-topology-oracle",
+        "decisionsPerSec": 462.4,
+        "p50Ms": 8.6,
+        "p95Ms": 13.8,
+        "p99Ms": 16.2,
+        "wanBytesPerDecision": 620,
+        "sqlRoundTripsPerDecision": 1.25,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 645,
+            "p99Ms": 3.8,
+            "wanBytes": 320,
+            "roundTrips": 1
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 490,
+            "p99Ms": 11.2,
+            "wanBytes": 540,
+            "roundTrips": 1
+          },
+          "sequential": {
+            "decisionsPerSec": 342,
+            "p99Ms": 18.6,
+            "wanBytes": 820,
+            "roundTrips": 2
+          },
+          "fan-out": {
+            "decisionsPerSec": 372.6,
+            "p99Ms": 16.4,
+            "wanBytes": 800,
+            "roundTrips": 1
+          }
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "modeled-topology-oracle",
+        "freshDecisionsPerSec0ms": 310,
+        "freshDecisionsPerSec100ms": 462.4,
+        "freshDecisionsPerSec1000ms": 485,
+        "staleDecisionRatePct": 0.42,
+        "ruleChangeBackfillSec": 185,
+        "cacheRestartRecoverySec": 42,
+        "operationalPipelines": 3
+      }
+    },
+    {
+      "targetId": "pg-valkey-async-stream",
+      "label": "PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service)",
+      "shortLabel": "PG 17 + Valkey 8 (Async)",
+      "version": "17.2-valkey-8.0-async",
+      "category": "relational-cache-async-stream",
+      "topologyUnits": 9,
+      "processCount": 12,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "scenario-c-feature-store-progress.md",
+      "detailPageHtml": "scenario-c-feature-store-progress.html",
+      "scenarioA": {
+        "evidenceTier": "modeled-topology-oracle",
+        "throughputTxPerSec": 8.4,
+        "commitP50Ms": 390.2,
+        "commitP95Ms": 920.5,
+        "commitP99Ms": 1290.8,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33
+      },
+      "scenarioB": {
+        "evidenceTier": "modeled-topology-oracle",
+        "decisionsPerSec": 538,
+        "p50Ms": 6.4,
+        "p95Ms": 10.4,
+        "p99Ms": 12.4,
+        "wanBytesPerDecision": 480,
+        "sqlRoundTripsPerDecision": 1,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 710,
+            "p99Ms": 2.9,
+            "wanBytes": 240,
+            "roundTrips": 1
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 565,
+            "p99Ms": 8.8,
+            "wanBytes": 420,
+            "roundTrips": 1
+          },
+          "sequential": {
+            "decisionsPerSec": 412,
+            "p99Ms": 14.8,
+            "wanBytes": 640,
+            "roundTrips": 1
+          },
+          "fan-out": {
+            "decisionsPerSec": 465,
+            "p99Ms": 12.6,
+            "wanBytes": 620,
+            "roundTrips": 1
+          }
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "modeled-topology-oracle",
+        "freshDecisionsPerSec0ms": 0,
+        "freshDecisionsPerSec100ms": 492,
+        "freshDecisionsPerSec1000ms": 538,
+        "staleDecisionRatePct": 6.8,
+        "ruleChangeBackfillSec": 240,
+        "cacheRestartRecoverySec": 58,
+        "operationalPipelines": 4
       }
     }
   ]
