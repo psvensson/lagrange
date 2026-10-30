@@ -13,7 +13,6 @@ import {
 import {
   parseComparisonHistoryNdjson,
   buildComparisonProgressSummary,
-  createComparisonHistoryRecord,
   recordComparisonResultToDisk,
 } from '../../test/distributed/harness/oltp-comparison-history-store.js';
 import {
@@ -23,13 +22,17 @@ import {
   renderComparisonProgressMarkdown,
   renderComparisonProgressHtml,
 } from '../../test/distributed/harness/oltp-comparison-static-web.js';
+import {
+  runObservedScenarioBHarnessComparison,
+} from '../../test/distributed/harness/scenario-b-comparators.js';
 
 const stringIncludes = Function.call.bind(String.prototype.includes);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
 
 const PASS_MESSAGE = 'scenario-b-fairness-version-gate-guard: PASS';
 const STR_HISTORY_PATH = 'data/tidb-comparison/history.ndjson';
 const STR_UTF8 = 'utf8';
-const STR_SCENARIO_A = 'scenario-a-oltp-core';
+const STR_SCENARIO_A = 'tidb-oltp-baseline';
 const STR_SCENARIO_B = 'tidb-distributed-risk-decision';
 const STR_PROFILE_B = 'risk-three-island-rf3';
 const STR_LAGRANGE_V030 = '0.3.0';
@@ -37,6 +40,7 @@ const STR_LAGRANGE_V031 = '0.3.1';
 const STR_TIDB_V858 = 'v8.5.8';
 const STR_TIDB_V859 = 'v8.5.9';
 const STR_TIMING_OBSERVED = 'observed';
+const STR_OBSERVED_HARNESS_BASELINE = 'observed-harness-baseline';
 const STR_SMOKE_PROFILE = 'smoke';
 const STR_CONTRACT_MODEL = 'deterministic-contract-model';
 const STR_SCORECARD_MD_HEADER = '## Scenario B distributed risk & movement scorecard';
@@ -177,8 +181,13 @@ async function verifyScenarioBVersionGatedExecution(existingRecords) {
     fairnessEvidence: createSatisfiedScenarioBEvidence(),
   });
 
-  const firstRun = await runScenarioBVersionGatedComparison({
+  const recordsWithoutScenarioB = arrayFilter(
     existingRecords,
+    (r) => r?.framework?.scenarioId !== STR_SCENARIO_B,
+  );
+
+  const firstRun = await runScenarioBVersionGatedComparison({
+    existingRecords: recordsWithoutScenarioB,
     scenarioId: STR_SCENARIO_B,
     profileId: STR_PROFILE_B,
     systems: systemsBase,
@@ -188,7 +197,7 @@ async function verifyScenarioBVersionGatedExecution(existingRecords) {
   assert.equal(firstRun.skipped, false);
   assert.equal(typeof firstRun.record?.recordSha256 === 'string', true);
 
-  const recordsWithScenarioB = [...existingRecords, firstRun.record];
+  const recordsWithScenarioB = [...recordsWithoutScenarioB, firstRun.record];
   const secondRun = await runScenarioBVersionGatedComparison({
     existingRecords: recordsWithScenarioB,
     scenarioId: STR_SCENARIO_B,
@@ -258,18 +267,11 @@ async function verifyScenarioBVersionGatedExecution(existingRecords) {
 
 async function runGuard() {
   const rawNdjson = await fs.readFile(STR_HISTORY_PATH, STR_UTF8);
-  const parsedRecords = parseComparisonHistoryNdjson(rawNdjson);
-  const scenarioARecord = createComparisonHistoryRecord({
-    framework: {
-      ...parsedRecords[1].framework,
-      scenarioId: STR_SCENARIO_A,
-    },
-    systems: parsedRecords[1].systems,
-    recordedAt: parsedRecords[1].recordedAt,
-    metrics: parsedRecords[1].metrics,
-    evidenceSource: parsedRecords[1].evidenceSource,
-  });
-  const existingRecords = [...parsedRecords, scenarioARecord];
+  const existingRecords = parseComparisonHistoryNdjson(rawNdjson);
+
+  const observedSmoke = runObservedScenarioBHarnessComparison({profile: STR_SMOKE_PROFILE});
+  assert.equal(observedSmoke.timingSource, STR_OBSERVED_HARNESS_BASELINE);
+  assert.equal(observedSmoke.fairnessEvidence?.oraclePassed, true);
 
   await verifyScenarioASystemVersionGate(existingRecords);
   verifyScenarioBFairnessGateEvaluation();

@@ -20,14 +20,12 @@ function escapeXml(value) {
 }
 
 function formatNum(num, digits = 2) {
-  if (typeof num === 'number' && numberIsFinite(num)) return numberToFixed(num, digits);
-  return '0.00';
+  return (typeof num === 'number' && numberIsFinite(num)) ? numberToFixed(num, digits) : '0.00';
 }
 
 function formatSigned(num, digits = 2) {
   if (typeof num !== 'number' || !numberIsFinite(num)) return '0.00';
-  const formatted = numberToFixed(num, digits);
-  return num > 0 ? `+${formatted}` : formatted;
+  const f = numberToFixed(num, digits); return num > 0 ? `+${f}` : f;
 }
 
 function shortSha(sha, len = 10) {
@@ -43,13 +41,18 @@ function getScenarioBEntries(entries) {
 
 function renderComparisonProgressSvg(summary) {
   const entries = (summary && Array.isArray(summary.entries)) ? summary.entries : [];
-  const latest = entries.length > 0 ? entries[entries.length - 1] : undefined;
+  const scenarioAEntries = arrayFilter(
+    entries,
+    (e) => (e.record || e)?.framework?.scenarioId !== 'tidb-distributed-risk-decision',
+  );
+  const targetEntries = scenarioAEntries.length > 0 ? scenarioAEntries : entries;
+  const latest = targetEntries.length > 0 ? targetEntries[targetEntries.length - 1] : undefined;
   const rec = latest ? (latest.record || latest) : undefined;
-  const pairedPerf = arrayFilter(entries, (e) => {
+  const pairedPerf = arrayFilter(targetEntries, (e) => {
     const r = e.record || e;
     return (r?.metrics?.tidbTikv?.opsPerSec ?? 0) > 0 && (r?.metrics?.lagrange?.opsPerSec ?? 0) > 0;
   });
-  const anyPerf = arrayFilter(entries, (e) => {
+  const anyPerf = arrayFilter(targetEntries, (e) => {
     const r = e.record || e;
     return (r?.metrics?.tidbTikv?.opsPerSec ?? 0) > 0 || (r?.metrics?.lagrange?.opsPerSec ?? 0) > 0;
   });
@@ -63,8 +66,8 @@ function renderComparisonProgressSvg(summary) {
   const lagOps = perfRec?.metrics?.lagrange?.opsPerSec ?? 0.83;
   const ratio = perfRec?.comparison?.throughputRatioLagrangeToTiDb ??
     (lagOps / (tidbOps || 1));
-  const lagFactor = perfRec?.comparison?.throughputLagFactorTiDbOverLagrange ??
-    (tidbOps / (lagOps || 1));
+  const lagFactor =
+    perfRec?.comparison?.throughputLagFactorTiDbOverLagrange ?? (tidbOps / (lagOps || 1));
 
   const maxOps = Math.max(tidbOps, lagOps, 1);
   const tidbBarW = Math.max(4, Math.min(230, Math.round((tidbOps / maxOps) * 230)));
@@ -82,8 +85,11 @@ function renderComparisonProgressSvg(summary) {
     {commit: 'initial-admit', passed: 4, req: 33}, {commit: 'conflict-wip', passed: 16, req: 33},
     {commit: 'gate-closure', passed: 33, req: 33},
   ];
-  const proofItems = entries.length > 0 ?
-    arrayMap(arrayFilter(entries, (_, i) => i >= Math.max(0, entries.length - 5)), (e) => {
+  const recentProofs = arrayFilter(
+    targetEntries, (_, i) => i >= Math.max(0, targetEntries.length - 5),
+  );
+  const proofItems = targetEntries.length > 0 ?
+    arrayMap(recentProofs, (e) => {
       const r = e.record || e;
       return {
         commit: shortSha(r?.framework?.frameworkCommitSha, 10),
@@ -307,7 +313,6 @@ async function writeComparisonStaticWebArtifacts({
   const targetSvgPath = svgPath || DEFAULT_COMPARISON_PROGRESS_SVG_PATH;
   const targetMarkdownPath = markdownPath || DEFAULT_COMPARISON_PROGRESS_MARKDOWN_PATH;
   const targetHtmlPath = htmlPath || DEFAULT_COMPARISON_PROGRESS_HTML_PATH;
-
   const svg = renderComparisonProgressSvg(summary);
   const markdown = renderComparisonProgressMarkdown(summary);
   const html = renderComparisonProgressHtml(summary);
@@ -315,17 +320,12 @@ async function writeComparisonStaticWebArtifacts({
   const writeTarget = async (p, c) => {
     await mkdir(path.dirname(p), {recursive: true}); await writeFile(p, c, 'utf8');
   };
-  await writeTarget(targetSvgPath, svg);
-  await writeTarget(targetMarkdownPath, markdown);
+  await writeTarget(targetSvgPath, svg); await writeTarget(targetMarkdownPath, markdown);
   await writeTarget(targetHtmlPath, html);
 
   return Object.freeze({
-    svg,
-    markdown,
-    html,
-    svgPath: targetSvgPath,
-    markdownPath: targetMarkdownPath,
-    htmlPath: targetHtmlPath,
+    svg, markdown, html,
+    svgPath: targetSvgPath, markdownPath: targetMarkdownPath, htmlPath: targetHtmlPath,
   });
 }
 

@@ -28,7 +28,7 @@
     <div class="chart-box"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-label="TiDB and Lagrange comparison progress over time">
   <rect width="960" height="420" fill="#0f172a" rx="12"/>
   <text x="30" y="36" fill="#f8fafc" font-size="18" font-family="system-ui, sans-serif" font-weight="700">TiDB/TiKV and Lagrange Comparison Progress</text>
-  <text x="930" y="36" text-anchor="end" fill="#94a3b8" font-size="12" font-family="monospace">Runs: 4</text>
+  <text x="930" y="36" text-anchor="end" fill="#94a3b8" font-size="12" font-family="monospace">Runs: 5</text>
   <rect x="30" y="55" width="280" height="335" rx="8" fill="#1e293b" stroke="#334155"/>
   <text x="45" y="85" fill="#38bdf8" font-size="14" font-weight="600" font-family="system-ui, sans-serif">Throughput (ops/sec)</text>
   <text x="45" y="105" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Version &amp; Commit Capacity</text>
@@ -78,6 +78,7 @@
         <tr><td>2026-10-29T18:53:52.000Z</td><td>0.3.0 (8039e45f2a)</td><td>tidb-oltp-baseline / oltp-baseline-v1</td><td>0.3.0 (8039e45f2a)</td><td>v8.5.8 (pingcap/ti)</td><td><span class="badge">bf82fab206b7901b</span></td></tr>
         <tr><td>2026-10-30T11:45:00.000Z</td><td>0.3.0 (66d054c9c9)</td><td>scenario-a-semantic-closure / scenario-a-semantic-v1</td><td>n/a (unknown)</td><td>v8.5.8 (pingcap/ti)</td><td><span class="badge">b7bc651037235b53</span></td></tr>
         <tr><td>2026-10-30T12:11:36.102Z</td><td>0.3.0 (27af74dc7b)</td><td>scenario-a-semantic-closure / scenario-a-semantic-v1</td><td>n/a (unknown)</td><td>v8.5.8 (pingcap/ti)</td><td><span class="badge">d9bd6c6b6bbf07d5</span></td></tr>
+        <tr><td>2026-10-30T16:05:00.000Z</td><td>0.3.0 (2d416de6e5)</td><td>tidb-distributed-risk-decision / risk-three-island-rf3</td><td>0.3.0 (2d416de6e5)</td><td>v8.5.8 (pingcap/ti)</td><td><span class="badge">6f9f87d6c27b84d0</span></td></tr>
       </tbody></table>
     </div>
     <div class="card">
@@ -88,6 +89,14 @@
         <tr><td>2026-10-29T18:53:52.000Z</td><td>0.83 ops/s</td><td>2269.44 / 4418.93 / 5343.10 ms</td><td>6.75 ops/s</td><td>535.12 / 1383.18 / 1887.96 ms</td><td>0.122x (8.17x lag)</td><td>0</td><td>4/33 vs 11/33</td><td>TiDB ops: 0.00, proofs: 0</td></tr>
         <tr><td>2026-10-30T11:45:00.000Z</td><td>0.00 ops/s</td><td>0.00 / 0.00 / 0.00 ms</td><td>6.75 ops/s</td><td>535.12 / 1383.18 / 1887.96 ms</td><td>0.00x (0.00x lag)</td><td>1</td><td>0/33 vs 16/33</td><td>TiDB ops: 0.00, proofs: 0.00</td></tr>
         <tr><td>2026-10-30T12:11:36.102Z</td><td>0.00 ops/s</td><td>0.00 / 0.00 / 0.00 ms</td><td>6.75 ops/s</td><td>535.12 / 1383.18 / 1887.96 ms</td><td>0.00x (0.00x lag)</td><td>2</td><td>0/33 vs 33/33</td><td>TiDB ops: 0.00, proofs: +17</td></tr>
+        <tr><td>2026-10-30T16:05:00.000Z</td><td>441.15 ops/s</td><td>12.06 / 18.09 / 18.09 ms</td><td>221.44 ops/s</td><td>24.06 / 36.08 / 36.08 ms</td><td>1.992x (0.50x lag)</td><td>0</td><td>8/33 vs 8/33</td><td>TiDB ops: 0.00, proofs: 0.00</td></tr>
+      </tbody></table>
+    </div>
+    <div class="card">
+      <h2>Scenario B Distributed Risk &amp; Movement Scorecard</h2>
+      <table class="data-table"><thead><tr><th>Recorded (UTC)</th><th>Profile</th><th>Lagrange Cross-Island Bytes/Req</th><th>TiDB Cross-Island Bytes/Req</th><th>Lagrange Move p99 (ms)</th><th>TiDB Move p99 (ms)</th><th>Convergence (Lagrange vs TiDB ms)</th></tr></thead>
+      <tbody>
+        <tr><td>2026-10-30T16:05:00.000Z</td><td>risk-three-island-rf3</td><td>144</td><td>6144</td><td>18.00</td><td>64.00</td><td>45.00 vs 180.00</td></tr>
       </tbody></table>
     </div>
   </div>
