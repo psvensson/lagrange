@@ -1,0 +1,11 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "solve-active-budget-evidence-relocation--overflow-membership-inventory-6089dcf03-2026-10-30.tar.gz",
+  "bundleSha256": "a3d842a48cc684628166d063a5ad83095abb897e6f420d9a3d3f7498cd2024ce",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/solve-active-budget-evidence-relocation--overflow-membership-inventory-6089dcf03-2026-10-30.tar.gz",
+  "sourceCommit": "6089dcf03f886219e7e02e886f557109a98470ee",
+  "root": "solve/epics/formation-seed-decoupling/evidence/overflow-budget-audit-verified-packet-2026-09-20/historical/",
+  "files": [
+    ["membership-epoch-domain-inventory.json","d6865886a9e05c83bebf77bd48566d9b2f1eabd8d7c8fff1cc3a2ce38609b563",298445]
+  ]
+}
