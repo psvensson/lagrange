@@ -43,7 +43,7 @@ const STR_LAGRANGE_V031 = '0.3.1';
 const STR_TIDB_V858 = 'v8.5.8';
 const STR_TIDB_V859 = 'v8.5.9';
 const STR_TIMING_OBSERVED = 'observed';
-const STR_OBSERVED_HARNESS_BASELINE = 'observed-harness-baseline';
+const STR_MODELED_HARNESS_BASELINE = 'local-oracle-plus-network-model';
 const STR_SMOKE_PROFILE = 'smoke';
 const STR_CONTRACT_MODEL = 'deterministic-contract-model';
 const STR_SCORECARD_MD_HEADER = '## Scenario B distributed risk & movement scorecard';
@@ -284,7 +284,9 @@ async function runGuard() {
   const existingRecords = parseComparisonHistoryNdjson(rawNdjson);
 
   const observedSmoke = runObservedScenarioBHarnessComparison({profile: STR_SMOKE_PROFILE});
-  assert.equal(observedSmoke.timingSource, STR_OBSERVED_HARNESS_BASELINE);
+  assert.equal(observedSmoke.timingSource, STR_MODELED_HARNESS_BASELINE);
+  assert.equal(observedSmoke.evidenceSource?.kind, STR_MODELED_HARNESS_BASELINE);
+  assert.equal(observedSmoke.comparable, false);
   assert.equal(observedSmoke.fairnessEvidence?.oraclePassed, true);
 
   await verifyScenarioASystemVersionGate(existingRecords);

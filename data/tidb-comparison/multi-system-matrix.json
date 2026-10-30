@@ -11,6 +11,142 @@
   ],
   "remainingSlicesCount": 0,
   "updatedAt": "2026-10-30T16:45:00.000Z",
+  "scaleoutSeries": {
+    "epicId": "distributed-scaleout-and-provenance-benchmark-series",
+    "totalSlices": 5,
+    "completedSlices": [
+      "provenance-audit-and-evidence-tier-separation"
+    ],
+    "remainingSlicesCount": 4
+  },
+  "lagrangeEvolutionTimeline": [
+    {
+      "milestoneId": "v0.2.0-tidb-ref",
+      "version": "0.2.0",
+      "commitSha": "b0b2f9abcc",
+      "recordedAt": "2026-09-12T20:07:34Z",
+      "label": "TiDB Reference Baseline Established",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 0,
+      "scenarioAP50Ms": 0,
+      "scenarioAP95Ms": 0,
+      "scenarioAP99Ms": 0,
+      "semanticProofPassed": 0,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 0,
+      "scenarioBP99Ms": 0,
+      "scenarioBWanBytes": 0,
+      "scenarioBMoveP99Ms": 0,
+      "scenarioBConvergenceMs": 0,
+      "scenarioCFresh0msDecPerSec": 0
+    },
+    {
+      "milestoneId": "v0.3.0-lab-paired",
+      "version": "0.3.0",
+      "commitSha": "8039e45f2a",
+      "recordedAt": "2026-10-29T18:53:52Z",
+      "label": "5-Node Lab Paired Scenario A Baseline",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 0.83,
+      "scenarioAP50Ms": 2269.44,
+      "scenarioAP95Ms": 4418.93,
+      "scenarioAP99Ms": 5343.1,
+      "semanticProofPassed": 4,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 0,
+      "scenarioBP99Ms": 0,
+      "scenarioBWanBytes": 0,
+      "scenarioBMoveP99Ms": 0,
+      "scenarioBConvergenceMs": 0,
+      "scenarioCFresh0msDecPerSec": 0
+    },
+    {
+      "milestoneId": "v0.3.0-conflict-retry",
+      "version": "0.3.0",
+      "commitSha": "66d054c9c9",
+      "recordedAt": "2026-10-30T11:45:00Z",
+      "label": "Retryable Conflict & Visibility Gate",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 0.83,
+      "scenarioAP50Ms": 2269.44,
+      "scenarioAP95Ms": 4418.93,
+      "scenarioAP99Ms": 5343.1,
+      "semanticProofPassed": 16,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 0,
+      "scenarioBP99Ms": 0,
+      "scenarioBWanBytes": 0,
+      "scenarioBMoveP99Ms": 0,
+      "scenarioBConvergenceMs": 0,
+      "scenarioCFresh0msDecPerSec": 0
+    },
+    {
+      "milestoneId": "v0.3.0-semantic-closure",
+      "version": "0.3.0",
+      "commitSha": "27af74dc7b",
+      "recordedAt": "2026-10-30T12:11:36Z",
+      "label": "Full 33/33 Semantic Proof Closure",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 0.83,
+      "scenarioAP50Ms": 2269.44,
+      "scenarioAP95Ms": 4418.93,
+      "scenarioAP99Ms": 5343.1,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 0,
+      "scenarioBP99Ms": 0,
+      "scenarioBWanBytes": 0,
+      "scenarioBMoveP99Ms": 0,
+      "scenarioBConvergenceMs": 0,
+      "scenarioCFresh0msDecPerSec": 0
+    },
+    {
+      "milestoneId": "v0.3.0-scenario-b-model",
+      "version": "0.3.0",
+      "commitSha": "2d416de6e5",
+      "recordedAt": "2026-10-30T16:05:00Z",
+      "label": "Scenario B 3-Island RF=3 Risk & Movement Model",
+      "evidenceTier": "modeled-topology-oracle",
+      "executionPath": "local-js-oracle",
+      "scenarioATxPerSec": 0.83,
+      "scenarioAP50Ms": 2269.44,
+      "scenarioAP95Ms": 4418.93,
+      "scenarioAP99Ms": 5343.1,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 441.15,
+      "scenarioBP99Ms": 18.09,
+      "scenarioBWanBytes": 144,
+      "scenarioBMoveP99Ms": 18,
+      "scenarioBConvergenceMs": 45,
+      "scenarioCFresh0msDecPerSec": 0
+    },
+    {
+      "milestoneId": "v0.3.2-provenance-matrix",
+      "version": "0.3.2",
+      "commitSha": "4dc6db6b93",
+      "recordedAt": "2026-10-30T20:11:52Z",
+      "label": "13-Target Matrix, Scenario C & Provenance Audit",
+      "evidenceTier": "modeled-topology-oracle",
+      "executionPath": "local-js-oracle",
+      "scenarioATxPerSec": 0.83,
+      "scenarioAP50Ms": 2269.44,
+      "scenarioAP95Ms": 4418.93,
+      "scenarioAP99Ms": 5343.1,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 441.15,
+      "scenarioBP99Ms": 18.09,
+      "scenarioBWanBytes": 144,
+      "scenarioBMoveP99Ms": 18,
+      "scenarioBConvergenceMs": 45,
+      "scenarioCFresh0msDecPerSec": 441.15
+    }
+  ],
   "scenarios": [
     {
       "scenarioId": "tidb-oltp-baseline",
@@ -49,7 +185,14 @@
         "commitP95Ms": 4418.93,
         "commitP99Ms": 5343.1,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -85,6 +228,13 @@
             "wanBytes": 192,
             "roundTrips": 1
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       },
       "scenarioC": {
@@ -95,7 +245,14 @@
         "staleDecisionRatePct": 0,
         "ruleChangeBackfillSec": 0,
         "cacheRestartRecoverySec": 3.2,
-        "operationalPipelines": 1
+        "operationalPipelines": 1,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       }
     },
     {
@@ -115,7 +272,14 @@
         "commitP95Ms": 1383.18,
         "commitP99Ms": 1887.96,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -151,6 +315,13 @@
             "wanBytes": 6144,
             "roundTrips": 5
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       }
     },
@@ -171,7 +342,14 @@
         "commitP95Ms": 412.6,
         "commitP99Ms": 580.2,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -207,6 +385,13 @@
             "wanBytes": 1900,
             "roundTrips": 4
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       }
     },
@@ -227,7 +412,14 @@
         "commitP95Ms": 920.5,
         "commitP99Ms": 1290.8,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -263,6 +455,13 @@
             "wanBytes": 3560,
             "roundTrips": 4
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       }
     },
@@ -283,7 +482,14 @@
         "commitP95Ms": 412.6,
         "commitP99Ms": 580.2,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -319,6 +525,13 @@
             "wanBytes": 352,
             "roundTrips": 1
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       }
     },
@@ -339,7 +552,14 @@
         "commitP95Ms": 920.5,
         "commitP99Ms": 1290.8,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -375,6 +595,13 @@
             "wanBytes": 1056,
             "roundTrips": 1
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       },
       "scenarioC": {
@@ -385,7 +612,14 @@
         "staleDecisionRatePct": 0,
         "ruleChangeBackfillSec": 0,
         "cacheRestartRecoverySec": 8.5,
-        "operationalPipelines": 1
+        "operationalPipelines": 1,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       }
     },
     {
@@ -406,7 +640,14 @@
         "commitP95Ms": 685,
         "commitP99Ms": 960.4,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -442,6 +683,13 @@
             "wanBytes": 4400,
             "roundTrips": 3
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       }
     },
@@ -463,7 +711,14 @@
         "commitP95Ms": 685,
         "commitP99Ms": 960.4,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -499,6 +754,13 @@
             "wanBytes": 2280,
             "roundTrips": 2
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       }
     },
@@ -520,7 +782,14 @@
         "commitP95Ms": 1190,
         "commitP99Ms": 1480,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -556,6 +825,13 @@
             "wanBytes": 5040,
             "roundTrips": 3
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       }
     },
@@ -577,7 +853,14 @@
         "commitP95Ms": 1190,
         "commitP99Ms": 1480,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -613,6 +896,13 @@
             "wanBytes": 3520,
             "roundTrips": 3
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       }
     },
@@ -634,7 +924,14 @@
         "commitP95Ms": 845,
         "commitP99Ms": 1120,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -670,6 +967,13 @@
             "wanBytes": 1180,
             "roundTrips": 2
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       }
     },
@@ -691,7 +995,14 @@
         "commitP95Ms": 920.5,
         "commitP99Ms": 1290.8,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -727,6 +1038,13 @@
             "wanBytes": 800,
             "roundTrips": 1
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       },
       "scenarioC": {
@@ -737,7 +1055,14 @@
         "staleDecisionRatePct": 0.42,
         "ruleChangeBackfillSec": 185,
         "cacheRestartRecoverySec": 42,
-        "operationalPipelines": 3
+        "operationalPipelines": 3,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       }
     },
     {
@@ -758,7 +1083,14 @@
         "commitP95Ms": 920.5,
         "commitP99Ms": 1290.8,
         "semanticProofPassed": 33,
-        "semanticProofTotal": 33
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       },
       "scenarioB": {
         "evidenceTier": "modeled-topology-oracle",
@@ -794,6 +1126,13 @@
             "wanBytes": 620,
             "roundTrips": 1
           }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
         }
       },
       "scenarioC": {
@@ -804,7 +1143,14 @@
         "staleDecisionRatePct": 6.8,
         "ruleChangeBackfillSec": 240,
         "cacheRestartRecoverySec": 58,
-        "operationalPipelines": 4
+        "operationalPipelines": 4,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
       }
     }
   ]

@@ -224,6 +224,10 @@ function renderScenarioBMarkdownSection(bEntries) {
   if (bEntries.length === 0) return '';
   const bRows = arrayJoin(arrayMap(bEntries, renderScenarioBMarkdownRow), '\n');
   return '\n## Scenario B distributed risk & movement scorecard ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))\n\n' +
+    '> **Provenance notice (`local-oracle-plus-network-model` | `contract-model-non-comparable`):** ' +
+    'This series combines local JavaScript request-oracle execution with stage-delay and payload-multiplier formulas ' +
+    '(`stages * oneWayMs` vs `stages * 2 * oneWayMs`, `stages * 96 B` vs `stages * 4096 B`) ' +
+    'and is classified as a non-comparable modeled hypothesis rather than live cluster wire execution.\n\n' +
     '![Scenario B distributed risk and movement comparison chart](tidb-scenario-b-comparison.svg)\n\n' +
     '| Recorded (UTC) | Profile | Lagrange Cross-Island Bytes/Req | ' +
     'TiDB Cross-Island Bytes/Req | Lagrange Move p99 (ms) | TiDB Move p99 (ms) | ' +
@@ -265,6 +269,10 @@ function renderScenarioBHtmlCard(summary, bEntries) {
   const bTrs = arrayJoin(arrayMap(bEntries, renderScenarioBHtmlRow), '\n');
   return '    <div class="card">\n' +
     '      <h2><a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B Distributed Risk &amp; Movement Scorecard (tidb-distributed-risk-decision)</a></h2>\n' +
+    '      <p class="desc"><strong>Provenance notice (<code>local-oracle-plus-network-model</code> | <code>contract-model-non-comparable</code>):</strong> ' +
+    'This series combines local JavaScript request-oracle execution with stage-delay and payload-multiplier formulas ' +
+    '(<code>stages * oneWayMs</code> vs <code>stages * 2 * oneWayMs</code>, <code>stages * 96 B</code> vs <code>stages * 4096 B</code>) ' +
+    'and is classified as a non-comparable modeled hypothesis rather than live cluster wire execution.</p>\n' +
     `      <div class="chart-box">${renderScenarioBComparisonSvg(summary)}</div>\n` +
     '      <table class="data-table"><thead><tr><th>Recorded (UTC)</th><th>Profile</th>' +
     '<th>Lagrange Cross-Island Bytes/Req</th><th>TiDB Cross-Island Bytes/Req</th>' +

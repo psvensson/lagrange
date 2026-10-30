@@ -15,7 +15,7 @@ This page is generated deterministically from [`data/tidb-comparison/history.ndj
 | 2026-10-29T18:53:52.000Z | 0.3.0 (8039e45f2a) | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) / oltp-baseline-v1 | 0.3.0 (8039e45f2a) | v8.5.8 (pingcap/ti) | bf82fab206b7901b |
 | 2026-10-30T11:45:00.000Z | 0.3.0 (66d054c9c9) | [scenario-a-semantic-closure](tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate) / scenario-a-semantic-v1 | n/a (unknown) | v8.5.8 (pingcap/ti) | b7bc651037235b53 |
 | 2026-10-30T12:11:36.102Z | 0.3.0 (27af74dc7b) | [scenario-a-semantic-closure](tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate) / scenario-a-semantic-v1 | n/a (unknown) | v8.5.8 (pingcap/ti) | d9bd6c6b6bbf07d5 |
-| 2026-10-30T16:05:00.000Z | 0.3.0 (2d416de6e5) | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) / risk-three-island-rf3 | 0.3.0 (2d416de6e5) | v8.5.8 (pingcap/ti) | 6f9f87d6c27b84d0 |
+| 2026-10-30T16:05:00.000Z | 0.3.0 (2d416de6e5) | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) / risk-three-island-rf3 | 0.3.0 (2d416de6e5) | v8.5.8 (pingcap/ti) | 026e356c0f4566e3 |
 
 ## Throughput, latency, and semantic proof progression
 
@@ -38,6 +38,8 @@ This page is generated deterministically from [`data/tidb-comparison/history.ndj
 | 2026-10-30T16:05:00.000Z | 2d416de6e5 | 0.00 / 0.00 | 0.00 / 0.00 | 0.00 | 0.00 | 0.00 |
 
 ## Scenario B distributed risk & movement scorecard ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
+
+> **Provenance notice (`local-oracle-plus-network-model` | `contract-model-non-comparable`):** This series combines local JavaScript request-oracle execution with stage-delay and payload-multiplier formulas (`stages * oneWayMs` vs `stages * 2 * oneWayMs`, `stages * 96 B` vs `stages * 4096 B`) and is classified as a non-comparable modeled hypothesis rather than live cluster wire execution.
 
 ![Scenario B distributed risk and movement comparison chart](tidb-scenario-b-comparison.svg)
 

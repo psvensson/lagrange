@@ -285,12 +285,12 @@ function executeObservedMovementComparison() {
   const lagReport = evaluateScenarioBMovementSubphase({
     system: 'lagrange', movementPlan: movePlan, samples: lagSamples,
     automaticServiceColocationConverged: true, externalCoordinatorReconfigRequired: false,
-    routingConvergenceMs: 45, timingSource: 'observed-harness-baseline',
+    routingConvergenceMs: 45, timingSource: 'local-oracle-plus-network-model',
   });
   const tidbReport = evaluateScenarioBMovementSubphase({
     system: 'tidb', movementPlan: movePlan, samples: tidbSamples,
     automaticServiceColocationConverged: false, externalCoordinatorReconfigRequired: true,
-    routingConvergenceMs: 180, timingSource: 'observed-harness-baseline',
+    routingConvergenceMs: 180, timingSource: 'local-oracle-plus-network-model',
   });
   return compareScenarioBMovementResilience({
     lagrangeReport: lagReport, tidbReport,
@@ -363,8 +363,21 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
 
   return Object.freeze({
     profile, datasetSha256: dataset.datasetSha256, workloadPlanSha256: plan.workloadPlanSha256,
-    timingSource: 'observed-harness-baseline',
-    evidenceSource: Object.freeze({kind: 'observed-harness-baseline'}),
+    timingSource: 'local-oracle-plus-network-model',
+    comparisonView: 'contract-model-non-comparable',
+    comparable: false,
+    evidenceSource: Object.freeze({kind: 'local-oracle-plus-network-model'}),
+    measurementProvenance: Object.freeze({
+      executionPath: 'local-js-oracle',
+      latencySource: 'oracle-plus-stage-delay-formula',
+      wireBytesSource: 'stage-multiplier-constant',
+      movementSource: 'synthetic-phase-constants',
+      lagrangeDelayFormula: 'execMs + stages * oneWayMs',
+      tidbDelayFormula: 'execMs + stages * 2 * oneWayMs',
+      lagrangeBytesFormula: 'stages * 96',
+      tidbBytesFormula: 'stages * 4096',
+      comparableClusterEvidence: false,
+    }),
     fairnessEvidence: Object.freeze({
       tidbPushdownVerified: true, tidbRawHistoryForcedThroughCoordinator: false,
       topologyProfile: 'three-island-five-node-rf3', distributedCoordinatorFairnessSatisfied: true,
@@ -373,7 +386,7 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
       crossIslandBytesPerRequest: lagrangeEdgeSummary.crossIslandBytesPerRequest,
       oraclePassed: true,
       movementIdentityPreserved: movementComparison.bothPreservedOracleAndIdentity,
-      timingSource: 'observed-harness-baseline',
+      timingSource: 'local-oracle-plus-network-model',
     }),
     lagrangeResult, tidbResult,
     edgeSummary: Object.freeze({
@@ -384,3 +397,5 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
     movementComparison,
   });
 }
+
+export const runModeledScenarioBHarnessComparison = runObservedScenarioBHarnessComparison;

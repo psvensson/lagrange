@@ -365,8 +365,8 @@
     },
     {
       "schemaVersion": 1,
-      "combinationKey": "fw=0.3.0@2d416de6e5bfc59f88972d56cdb81cea0929ee27|scenario=tidb-distributed-risk-decision|profile=risk-three-island-rf3:-|workload=b28b56b626ad0acebe20b8174beda8c0e78b8fe50df3e73323711d738acb1280|measure=-|view=architecture-native|lagrange=0.3.0@2d416de6e5bfc59f88972d56cdb81cea0929ee27|tidb=v8.5.8@pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8",
-      "combinationSha256": "6f9f87d6c27b84d071e3e1e40ee8a48f7b44b1d51e5c8e7074942fb6ec1c8bbd",
+      "combinationKey": "fw=0.3.0@2d416de6e5bfc59f88972d56cdb81cea0929ee27|scenario=tidb-distributed-risk-decision|profile=risk-three-island-rf3:-|workload=b28b56b626ad0acebe20b8174beda8c0e78b8fe50df3e73323711d738acb1280|measure=-|view=contract-model-non-comparable|lagrange=0.3.0@2d416de6e5bfc59f88972d56cdb81cea0929ee27|tidb=v8.5.8@pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8",
+      "combinationSha256": "026e356c0f4566e349e02f0d597c4887393e778e59118e844f3e7f949334ec60",
       "framework": {
         "frameworkVersion": "0.3.0",
         "frameworkCommitSha": "2d416de6e5bfc59f88972d56cdb81cea0929ee27",
@@ -378,7 +378,7 @@
         "measurementPlanSha256": null,
         "retryPolicyId": "scenario-b-bounded-retry-v1",
         "openLoopProfileId": "scenario-b-open-loop-v1",
-        "comparisonView": "architecture-native"
+        "comparisonView": "contract-model-non-comparable"
       },
       "systems": {
         "lagrange": {
@@ -394,7 +394,7 @@
       },
       "recordedAt": "2026-10-30T16:05:00.000Z",
       "evidenceSource": {
-        "kind": "observed-harness-baseline",
+        "kind": "local-oracle-plus-network-model",
         "runId": null,
         "issueNumber": null,
         "url": null,
@@ -461,7 +461,7 @@
         },
         "semanticProofDeltaLagrangeMinusTiDb": 0
       },
-      "recordSha256": "bf8a91174eb377b8fe1a074cf1612a8b7398a9b8260a554ad35622d3e57865f7",
+      "recordSha256": "d7e5bccaf87e4fbaf2b99c24deb706190ce86dda7fb894bc77937b9468d10780",
       "deltas": {
         "lagrangeOpsPerSecDeltaFromPrev": null,
         "lagrangeOpsPerSecDeltaFromFirst": 0,
@@ -482,5 +482,5 @@
       "lagrangeSemanticProofsDeltaFromPrev": null
     }
   ],
-  "summarySha256": "858a276d66e53f021ec53d76f28caf39655fb5439aed775c337962e491bfba77"
+  "summarySha256": "466ded0a418aaf1ef56ac60aa161a05bfbfdc55ab2e07e4580622630b35420d4"
 }

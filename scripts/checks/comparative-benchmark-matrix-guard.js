@@ -40,6 +40,9 @@ import {
   renderScenarioCComparisonMarkdown, renderScenarioCComparisonSvg,
   writeScenarioCComparisonStaticWebArtifacts,
 } from '../../test/distributed/harness/scenario-c-comparison-static-web.js';
+import {
+  runDistributedScaleoutProvenanceGuard,
+} from './distributed-scaleout-provenance-guard.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayEvery = Function.call.bind(Array.prototype.every);
@@ -257,6 +260,7 @@ export async function runComparativeBenchmarkMatrixGuard(rootDir = REPO_ROOT) {
   verifyComparativeMatrix(matrix);
   verifyBenchmarkDocumentsAndLinks(rootDir);
   verifyHarnessRendererParity(rootDir, matrix);
+  await runDistributedScaleoutProvenanceGuard(rootDir);
   return {
     ok: true,
     remainingSlicesCount: matrix.remainingSlicesCount,

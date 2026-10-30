@@ -10,6 +10,7 @@ Deterministic multi-system comparative benchmark statistics across PostgreSQL, T
   - [Paired Benchmark Owner](tidb-reference-paired-owner.md)
   - [Scenario A Semantic Evidence Gate (scenario-a-semantic-closure)](tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate)
 - Detail pages:
+  - [Lagrange Metrics Evolution Over Time](lagrange-metrics-evolution.md) ([HTML](lagrange-metrics-evolution.html))
   - [TiDB / TiKV & Lagrange Comparison Progress](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html))
   - [PostgreSQL Single-Primary & Patroni Sync-HA Comparison](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html))
   - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))
@@ -34,19 +35,19 @@ Two distinct measurement boundaries are evaluated:
 
 | System / Configuration | Category | Topology Units (Processes) | RPO=0 Host-Loss Survival | [Scenario A](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) tx/sec (p95 ms) | [Scenario B](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) decisions/sec (p99 ms) | WAN / Wire Bytes per Decision | Evidence Tier | Detail Page |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.3.0 | distributed-native | 3 (3) | Yes | 0.83 (4418.93 ms) | 441.15 (18.09 ms) | 144 B | `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
-| TiDB + TiKV v8.5.8 | distributed-sql | 6 (6) | Yes | 6.75 (1383.18 ms) | 221.44 (36.08 ms) | 6144 B | `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
-| PostgreSQL 17 (Single Primary + App Service) 17.2 | relational-single-primary | 2 (2) | No | 14.80 (412.60 ms) | 294.60 (26.40 ms) | 1420 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) 17.2-patroni-4.0 | relational-sync-ha | 6 (9) | Yes | 8.40 (920.50 ms) | 218.20 (35.20 ms) | 2680 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
-| PostgreSQL 17 (Single Primary + PL/pgSQL Function) 17.2-plpgsql | relational-server-function | 1 (1) | No | 14.80 (412.60 ms) | 418.40 (17.60 ms) | 320 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) 17.2-patroni-4.0-plpgsql | relational-sync-ha-function | 5 (8) | Yes | 8.40 (920.50 ms) | 316.80 (24.10 ms) | 960 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
-| Citus 13 (Sharded SQL RF=3 + App Service) 13.0-pg17 | sharded-postgresql-sql | 5 (5) | Yes | 11.20 (685.00 ms) | 256.40 (31.80 ms) | 3120 B | `modeled-topology-oracle` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
-| Citus 13 (Colocated Tables + Distributed Function RF=3) 13.0-pg17-udf | sharded-postgresql-colocated-udf | 4 (4) | Yes | 11.20 (685.00 ms) | 364.20 (22.90 ms) | 1540 B | `modeled-topology-oracle` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
-| YugabyteDB 2024.2 (YSQL RF=3 + App Service) 2024.2.1 | distributed-sql-ysql | 4 (7) | Yes | 7.40 (1190.00 ms) | 234.80 (34.20 ms) | 3840 B | `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
-| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) 2024.2.1-proc | distributed-sql-stored-proc | 3 (6) | Yes | 7.40 (1190.00 ms) | 286.50 (28.40 ms) | 2420 B | `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
-| Apache Ignite 3 (JobTarget.colocated RF=3) 3.0.0 | distributed-colocated-compute-grid | 3 (3) | Yes | 9.60 (845.00 ms) | 408.60 (20.10 ms) | 820 B | `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
-| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) 17.2-valkey-8.0-sync | relational-cache-write-through | 8 (11) | Yes | 8.40 (920.50 ms) | 462.40 (16.20 ms) | 620 B | `modeled-topology-oracle` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
-| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) 17.2-valkey-8.0-async | relational-cache-async-stream | 9 (12) | Yes | 8.40 (920.50 ms) | 538.00 (12.40 ms) | 480 B | `modeled-topology-oracle` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
+| Lagrange 0.3.0 | distributed-native | 3 (3) | Yes | 0.83 (4418.93 ms) | 441.15 (18.09 ms) | 144 B | A: `observed-docker-cluster` / B: `modeled-topology-oracle` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
+| TiDB + TiKV v8.5.8 | distributed-sql | 6 (6) | Yes | 6.75 (1383.18 ms) | 221.44 (36.08 ms) | 6144 B | A: `observed-docker-cluster` / B: `modeled-topology-oracle` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
+| PostgreSQL 17 (Single Primary + App Service) 17.2 | relational-single-primary | 2 (2) | No | 14.80 (412.60 ms) | 294.60 (26.40 ms) | 1420 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) 17.2-patroni-4.0 | relational-sync-ha | 6 (9) | Yes | 8.40 (920.50 ms) | 218.20 (35.20 ms) | 2680 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) 17.2-plpgsql | relational-server-function | 1 (1) | No | 14.80 (412.60 ms) | 418.40 (17.60 ms) | 320 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) 17.2-patroni-4.0-plpgsql | relational-sync-ha-function | 5 (8) | Yes | 8.40 (920.50 ms) | 316.80 (24.10 ms) | 960 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| Citus 13 (Sharded SQL RF=3 + App Service) 13.0-pg17 | sharded-postgresql-sql | 5 (5) | Yes | 11.20 (685.00 ms) | 256.40 (31.80 ms) | 3120 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) 13.0-pg17-udf | sharded-postgresql-colocated-udf | 4 (4) | Yes | 11.20 (685.00 ms) | 364.20 (22.90 ms) | 1540 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) 2024.2.1 | distributed-sql-ysql | 4 (7) | Yes | 7.40 (1190.00 ms) | 234.80 (34.20 ms) | 3840 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) 2024.2.1-proc | distributed-sql-stored-proc | 3 (6) | Yes | 7.40 (1190.00 ms) | 286.50 (28.40 ms) | 2420 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
+| Apache Ignite 3 (JobTarget.colocated RF=3) 3.0.0 | distributed-colocated-compute-grid | 3 (3) | Yes | 9.60 (845.00 ms) | 408.60 (20.10 ms) | 820 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) 17.2-valkey-8.0-sync | relational-cache-write-through | 8 (11) | Yes | 8.40 (920.50 ms) | 462.40 (16.20 ms) | 620 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) 17.2-valkey-8.0-async | relational-cache-async-stream | 9 (12) | Yes | 8.40 (920.50 ms) | 538.00 (12.40 ms) | 480 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
 
 ## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
@@ -106,3 +107,36 @@ Two distinct measurement boundaries are evaluated:
 | PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | one-remote-stage | 565.00 | 8.80 | 1 | 420 B |
 | PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | sequential | 412.00 | 14.80 | 1 | 640 B |
 | PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | fan-out | 465.00 | 12.60 | 1 | 620 B |
+
+## How Lagrange metrics develop over time
+
+![Lagrange Metrics Evolution Over Time](lagrange-metrics-evolution.svg)
+
+| Milestone / Commit | Scenario A tx/s (p95 ms) | Semantic Proofs | Scenario B dec/s (p99 ms / WAN B) | Scenario C 0ms Fresh dec/s | Provenance |
+| --- | --- | --- | --- | --- | --- |
+| v0.2.0-tidb-ref (`b0b2f9abcc`) | 0.00 (0.00 ms) | 0/33 | 0.00 (0.00 ms / 0 B) | 0.00 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.3.0-lab-paired (`8039e45f2a`) | 0.83 (4418.93 ms) | 4/33 | 0.00 (0.00 ms / 0 B) | 0.00 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.3.0-conflict-retry (`66d054c9c9`) | 0.83 (4418.93 ms) | 16/33 | 0.00 (0.00 ms / 0 B) | 0.00 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.3.0-semantic-closure (`27af74dc7b`) | 0.83 (4418.93 ms) | 33/33 | 0.00 (0.00 ms / 0 B) | 0.00 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.3.0-scenario-b-model (`2d416de6e5`) | 0.83 (4418.93 ms) | 33/33 | 441.15 (18.09 ms / 144 B) | 0.00 | `modeled-topology-oracle` / `local-js-oracle` |
+| v0.3.2-provenance-matrix (`4dc6db6b93`) | 0.83 (4418.93 ms) | 33/33 | 441.15 (18.09 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
+
+## Measurement provenance and evidence-tier separation
+
+Scenario B evaluation uses `local-oracle-plus-network-model` (`contract-model-non-comparable`) stage-delay formulas (`stages * oneWayMs` vs `stages * 2 * oneWayMs` and `stages * 96 B` vs `stages * 4096 B`) with synthetic movement phase constants rather than live wire counters. Only live cluster runs provide comparable cluster evidence.
+
+| System / Configuration | Scenario A Provenance | Scenario B Execution & Latency Source | Wire & Movement Source | Comparable Cluster Evidence |
+| --- | --- | --- | --- | --- |
+| Lagrange | `live-cluster-wire` (measured-client-wall-clock) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| TiDB + TiKV | `live-cluster-wire` (measured-client-wall-clock) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| PostgreSQL 17 (Single Primary + App Service) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| Citus 13 (Sharded SQL RF=3 + App Service) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
