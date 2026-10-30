@@ -5,6 +5,7 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 const numberIsFinite = Number.isFinite;
 const numberToFixed = Function.call.bind(Number.prototype.toFixed);
 const stringReplace = Function.call.bind(String.prototype.replace);
+const stringSlice = Function.call.bind(String.prototype.slice);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 
@@ -30,10 +31,42 @@ function getTargetColor(targetId, index = 0) {
   const tid = stringToLowerCase(String(targetId || ''));
   if (stringStartsWith(tid, 'lagrange')) return '#6366f1';
   if (stringStartsWith(tid, 'tidb')) return '#0284c7';
+  if (stringStartsWith(tid, 'pg-valkey')) return '#06b6d4';
+  if (stringStartsWith(tid, 'pg-plpgsql-sync-ha')) return '#d97706';
+  if (stringStartsWith(tid, 'pg-plpgsql')) return '#14b8a6';
   if (stringStartsWith(tid, 'pg-patroni')) return '#f59e0b';
   if (stringStartsWith(tid, 'pg')) return '#10b981';
+  if (stringStartsWith(tid, 'citus-distributed')) return '#ec4899';
+  if (stringStartsWith(tid, 'citus')) return '#db2777';
+  if (stringStartsWith(tid, 'yugabyte')) return '#8b5cf6';
+  if (stringStartsWith(tid, 'ignite')) return '#ef4444';
   const palette = ['#6366f1', '#0284c7', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
   return palette[index % palette.length];
+}
+
+function shortTargetLabel(target) {
+  if (!target) return '';
+  if (typeof target.shortLabel === 'string' && target.shortLabel.length > 0) {
+    return target.shortLabel;
+  }
+  const tid = stringToLowerCase(String(target.targetId || ''));
+  if (stringStartsWith(tid, 'pg-plpgsql-sync-ha')) return 'PG 17 (Patroni HA + PL/pgSQL)';
+  if (stringStartsWith(tid, 'pg-plpgsql')) return 'PG 17 (Single + PL/pgSQL Fn)';
+  if (stringStartsWith(tid, 'pg-patroni')) return 'PG 17 (Patroni Sync HA + App)';
+  if (stringStartsWith(tid, 'pg-valkey')) return 'PG 17 + Valkey Cache';
+  if (stringStartsWith(tid, 'pg')) return 'PG 17 (Single + App Service)';
+  if (stringStartsWith(tid, 'citus-distributed')) return 'Citus Distributed RF=3';
+  if (stringStartsWith(tid, 'citus')) return 'Citus Single-Node';
+  if (stringStartsWith(tid, 'yugabyte')) return 'YugabyteDB (RF=3)';
+  if (stringStartsWith(tid, 'ignite')) return 'Apache Ignite 3';
+  if (stringStartsWith(tid, 'tidb')) return 'TiDB + TiKV';
+  if (stringStartsWith(tid, 'lagrange')) return 'Lagrange';
+  const label = String(target.label || tid);
+  if (label.length <= 30) return label;
+  let s = stringReplace(label, /PostgreSQL 17/gu, 'PG 17');
+  s = stringReplace(s, /Function/gu, 'Fn');
+  s = stringReplace(s, /Service/gu, 'App');
+  return s.length > 30 ? stringSlice(s, 0, 30) : s;
 }
 
 function getTargets(matrix) {
@@ -71,115 +104,181 @@ function getEvidenceTier(target, scenario = 'scenarioA') {
   return target[scenario]?.evidenceTier ?? target.evidenceTier ?? 'observed-docker-cluster';
 }
 
-function renderCard(x, y, title, subtitle, content) {
-  return `  <rect x="${x}" y="${y}" width="280" height="315" rx="8" fill="#1e293b" stroke="#334155"/>\n` +
-    `  <text x="${x + 15}" y="${y + 28}" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">${title}</text>\n` +
-    `  <text x="${x + 15}" y="${y + 46}" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">${subtitle}</text>\n` +
+function renderCard(x, y, title, subtitle, content, cardHeight = 315) {
+  return `  <rect x="${x}" y="${y}" width="280" height="${cardHeight}" ` +
+    'rx="8" fill="#1e293b" stroke="#334155"/>\n' +
+    `  <text x="${x + 15}" y="${y + 28}" fill="#38bdf8" font-size="13" ` +
+    `font-weight="600" font-family="system-ui, sans-serif">${title}</text>\n` +
+    `  <text x="${x + 15}" y="${y + 46}" fill="#94a3b8" font-size="11" ` +
+    `font-family="system-ui, sans-serif">${subtitle}</text>\n` +
     `${content}`;
 }
 
 function renderMetricBars(targets, {x, yBase, getValue, formatVal, maxVal, scenario}) {
   return arrayJoin(arrayMap(targets, (t, i) => {
-    const y = yBase + 65 + i * 55;
+    const y = yBase + 68 + i * 54;
     const val = getValue(t);
     const w = barW(val, maxVal, 220);
     const color = getTargetColor(t.targetId, i);
     const tier = getEvidenceTier(t, scenario);
-    const dash = tier === 'modeled-topology-oracle' ? ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"' : '';
-    const label = `${escapeXml(t.label)}: ${formatVal(val, t)}`;
-    return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${label}</text>\n` +
-      `    <rect x="${x}" y="${y + 6}" width="220" height="12" fill="#334155" rx="3"/>\n` +
-      `    <rect x="${x}" y="${y + 6}" width="${w}" height="12" fill="${color}" rx="3"${dash}/>`;
+    const dash = tier === 'modeled-topology-oracle' ?
+      ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"' : '';
+    const name = escapeXml(shortTargetLabel(t));
+    const metric = escapeXml(formatVal(val, t));
+    return `    <text x="${x}" y="${y}" fill="#cbd5e1" ` +
+      `font-size="11" font-family="monospace">${name}</text>\n` +
+      `    <text x="${x}" y="${y + 13}" fill="#94a3b8" ` +
+      `font-size="10" font-family="monospace">${metric}</text>\n` +
+      `    <rect x="${x}" y="${y + 18}" width="220" height="11" fill="#334155" rx="3"/>\n` +
+      `    <rect x="${x}" y="${y + 18}" width="${w}" height="11" fill="${color}" rx="3"${dash}/>`;
   }), '\n');
 }
 
 function renderPanel3Bars(targets, yBase, maxProcs) {
   return arrayJoin(arrayMap(targets, (t, i) => {
-    const y = yBase + 65 + i * 55;
+    const y = yBase + 68 + i * 54;
     const procs = t.processCount ?? 1;
     const units = t.topologyUnits ?? 1;
     const w = barW(procs, maxProcs, 140);
     const color = getTargetColor(t.targetId, i);
-    const rpoZero = Boolean(t.rpoZeroSurvivability === true || t.rpoZeroSurvivability === 'Yes' || t.rpoZeroSurvivability === 'true');
+    const rpoZero = Boolean(
+      t.rpoZeroSurvivability === true ||
+      t.rpoZeroSurvivability === 'Yes' ||
+      t.rpoZeroSurvivability === 'true',
+    );
     const rpoColor = rpoZero ? '#10b981' : '#ef4444';
     const rpoText = rpoZero ? 'RPO=0: YES' : 'RPO=0: NO';
-    const label = `${escapeXml(t.label)}: ${units}u / ${procs}p`;
-    return `    <text x="665" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${label}</text>\n` +
-      `    <rect x="665" y="${y + 6}" width="140" height="12" fill="#334155" rx="3"/>\n` +
-      `    <rect x="665" y="${y + 6}" width="${w}" height="12" fill="${color}" rx="3"/>\n` +
-      `    <rect x="815" y="${y + 4}" width="75" height="15" fill="#0f172a" rx="3" stroke="${rpoColor}"/>\n` +
-      `    <text x="852" y="${y + 15}" fill="${rpoColor}" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">${rpoText}</text>`;
+    const name = escapeXml(shortTargetLabel(t));
+    const metric = `${units}u / ${procs}p`;
+    return `    <text x="665" y="${y}" fill="#cbd5e1" ` +
+      `font-size="11" font-family="monospace">${name}</text>\n` +
+      `    <text x="665" y="${y + 13}" fill="#94a3b8" ` +
+      `font-size="10" font-family="monospace">${metric}</text>\n` +
+      `    <rect x="665" y="${y + 18}" width="140" height="11" fill="#334155" rx="3"/>\n` +
+      `    <rect x="665" y="${y + 18}" width="${w}" height="11" fill="${color}" rx="3"/>\n` +
+      `    <rect x="815" y="${y + 16}" width="75" height="15" ` +
+      `fill="#0f172a" rx="3" stroke="${rpoColor}"/>\n` +
+      `    <text x="852" y="${y + 27}" fill="${rpoColor}" ` +
+      'font-size="10" font-weight="700" font-family="monospace" ' +
+      `text-anchor="middle">${rpoText}</text>`;
   }), '\n');
 }
 
 function renderPanel5Bars(targets, yBase, maxP99) {
   return arrayJoin(arrayMap(targets, (t, i) => {
-    const y = yBase + 65 + i * 55;
+    const y = yBase + 68 + i * 54;
     const p99 = getP99(t);
     const w = barW(p99, maxP99, 220);
     const color = getTargetColor(t.targetId, i);
     const tier = getEvidenceTier(t, 'scenarioB');
-    const dash = tier === 'modeled-topology-oracle' ? ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"' : '';
+    const dash = tier === 'modeled-topology-oracle' ?
+      ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"' : '';
     const localP99 = t.scenarioB?.shapes?.['local-only']?.p99Ms;
     const seqP99 = t.scenarioB?.shapes?.['sequential']?.p99Ms;
     const shapeNote = (localP99 !== undefined && seqP99 !== undefined) ?
-      ` [loc: ${formatNum(localP99)}ms | seq: ${formatNum(seqP99)}ms]` : '';
-    const label = `${escapeXml(t.label)}: ${formatNum(p99)} ms${shapeNote}`;
-    return `    <text x="355" y="${y}" fill="#cbd5e1" font-size="10" font-family="monospace">${label}</text>\n` +
-      `    <rect x="355" y="${y + 6}" width="220" height="12" fill="#334155" rx="3"/>\n` +
-      `    <rect x="355" y="${y + 6}" width="${w}" height="12" fill="${color}" rx="3"${dash}/>`;
+      ` (loc ${formatNum(localP99, 1)} | seq ${formatNum(seqP99, 1)})` : '';
+    const name = escapeXml(shortTargetLabel(t));
+    const metric = `${formatNum(p99)} ms${shapeNote}`;
+    return `    <text x="355" y="${y}" fill="#cbd5e1" ` +
+      `font-size="11" font-family="monospace">${name}</text>\n` +
+      `    <text x="355" y="${y + 13}" fill="#94a3b8" ` +
+      `font-size="10" font-family="monospace">${metric}</text>\n` +
+      `    <rect x="355" y="${y + 18}" width="220" height="11" fill="#334155" rx="3"/>\n` +
+      `    <rect x="355" y="${y + 18}" width="${w}" height="11" fill="${color}" rx="3"${dash}/>`;
   }), '\n');
 }
 
-function renderRow1(targets, yBase = 92) {
+function renderRow1(targets, yBase = 104, cardHeight = 330) {
   const maxTx = Math.max(...arrayMap(targets, getTxPerSec), 1);
   const maxP95 = Math.max(...arrayMap(targets, getP95), 1);
   const maxProcs = Math.max(...arrayMap(targets, (t) => t.processCount ?? 1), 1);
 
   const p1 = renderCard(30, yBase, 'Scenario A Throughput (tx/sec)', 'Contended OLTP Capacity',
-    renderMetricBars(targets, {x: 45, yBase, getValue: getTxPerSec, formatVal: (v) => `${formatNum(v)} tx/s`, maxVal: maxTx, scenario: 'scenarioA'}));
-  const p2 = renderCard(340, yBase, 'Scenario A Commit Latency p95 (ms)', 'Commit Tail Distribution',
-    renderMetricBars(targets, {x: 355, yBase, getValue: getP95, formatVal: (v) => `${formatNum(v)} ms`, maxVal: maxP95, scenario: 'scenarioA'}));
-  const p3 = renderCard(650, yBase, 'Whole-Topology Units &amp; Processes', 'Footprint &amp; RPO=0 HA Survival',
-    renderPanel3Bars(targets, yBase, maxProcs));
+    renderMetricBars(targets, {
+      x: 45, yBase, getValue: getTxPerSec, maxVal: maxTx, scenario: 'scenarioA',
+      formatVal: (v) => `${formatNum(v)} tx/s`,
+    }), cardHeight);
+  const p2 = renderCard(340, yBase, 'Scenario A Commit Latency p95 (ms)',
+    'Commit Tail Distribution', renderMetricBars(targets, {
+      x: 355, yBase, getValue: getP95, maxVal: maxP95, scenario: 'scenarioA',
+      formatVal: (v) => `${formatNum(v)} ms`,
+    }), cardHeight);
+  const p3 = renderCard(650, yBase, 'Whole-Topology Units &amp; Processes',
+    'Footprint &amp; RPO=0 HA Survival',
+    renderPanel3Bars(targets, yBase, maxProcs), cardHeight);
 
   return `${p1}\n${p2}\n${p3}`;
 }
 
-function renderRow2(targets, yBase = 442) {
+function renderRow2(targets, yBase = 470, cardHeight = 330) {
   const maxDec = Math.max(...arrayMap(targets, getDecisionsPerSec), 1);
   const maxP99 = Math.max(...arrayMap(targets, getP99), 1);
   const maxBytes = Math.max(...arrayMap(targets, getWireBytes), 1);
 
   const p4 = renderCard(30, yBase, 'Scenario B Risk Decisions/sec', 'Throughput (higher is better)',
-    renderMetricBars(targets, {x: 45, yBase, getValue: getDecisionsPerSec, formatVal: (v) => `${formatNum(v)} dec/s`, maxVal: maxDec, scenario: 'scenarioB'}));
-  const p5 = renderCard(340, yBase, 'Scenario B Decision p99 Latency (ms)', 'Decision Tail + Shape Markers',
-    renderPanel5Bars(targets, yBase, maxP99));
-  const p6 = renderCard(650, yBase, 'Wire / WAN Traffic per Decision (bytes)', 'Network Payload (lower is better)',
-    renderMetricBars(targets, {x: 665, yBase, getValue: getWireBytes, formatVal: (v) => `${v} B/dec`, maxVal: maxBytes, scenario: 'scenarioB'}));
+    renderMetricBars(targets, {
+      x: 45, yBase, getValue: getDecisionsPerSec, maxVal: maxDec, scenario: 'scenarioB',
+      formatVal: (v) => `${formatNum(v)} dec/s`,
+    }), cardHeight);
+  const p5 = renderCard(340, yBase, 'Scenario B Decision p99 Latency (ms)',
+    'Decision Tail + Shape Markers',
+    renderPanel5Bars(targets, yBase, maxP99), cardHeight);
+  const p6 = renderCard(650, yBase, 'Wire / WAN Traffic per Decision (bytes)',
+    'Network Payload (lower is better)', renderMetricBars(targets, {
+      x: 665, yBase, getValue: getWireBytes, maxVal: maxBytes, scenario: 'scenarioB',
+      formatVal: (v) => `${v} B/dec`,
+    }), cardHeight);
 
   return `${p4}\n${p5}\n${p6}`;
 }
 
 function renderComparativeOverviewSvg(matrix) {
   const targets = getTargets(matrix);
-  const targetLabels = arrayJoin(arrayMap(targets, (t) => t.label), ', ');
-  const r1Header = '  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline">' +
-    '<text x="30" y="80" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">' +
-    'Scenario A - Contended OLTP Baseline (tidb-oltp-baseline) &amp; Topology Footprint</text></a>\n';
-  const r2Header = '  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">' +
-    '<text x="30" y="430" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">' +
-    'Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision)</text></a>\n';
+  const labels = arrayMap(targets, (t) => shortTargetLabel(t));
+  const targetLines = [];
+  for (let i = 0; i < labels.length; i += 4) {
+    const prefix = i === 0 ? 'Targets: ' : '         ';
+    const chunk = arrayJoin(labels.slice(i, i + 4), ', ');
+    targetLines.push(`${prefix}${escapeXml(chunk)}`);
+  }
+  const subtitleSvg = arrayJoin(arrayMap(targetLines, (line, idx) =>
+    `  <text x="30" y="${50 + idx * 16}" fill="#94a3b8" font-size="11" ` +
+    `font-family="system-ui, sans-serif">${line}</text>\n`), '');
+  const legendY = 50 + targetLines.length * 16;
+  const rowStep = 54;
+  const cardHeight = Math.max(330, 68 + targets.length * rowStep);
+  const r1HeaderY = legendY + 24;
+  const r1Y = r1HeaderY + 12;
+  const r2HeaderY = r1Y + cardHeight + 24;
+  const r2Y = r2HeaderY + 12;
+  const svgHeight = r2Y + cardHeight + 20;
 
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 780" width="960" height="780" role="img" ' +
+  const r1Header = '  <a href="' +
+    'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline">' +
+    `<text x="30" y="${r1HeaderY}" fill="#94a3b8" font-size="13" ` +
+    'font-family="system-ui, sans-serif" font-weight="600">' +
+    'Scenario A - Contended OLTP Baseline (tidb-oltp-baseline) &amp; ' +
+    'Topology Footprint</text></a>\n';
+  const r2Header = '  <a href="' +
+    'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">' +
+    `<text x="30" y="${r2HeaderY}" fill="#94a3b8" font-size="13" ` +
+    'font-family="system-ui, sans-serif" font-weight="600">' +
+    'Scenario B - Distributed Risk Decision &amp; ' +
+    'Partition Movement (tidb-distributed-risk-decision)</text></a>\n';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 ${svgHeight}" width="960" ` +
+    `height="${svgHeight}" role="img" ` +
     'aria-label="Lagrange Comparative Benchmark Statistics - Multi-System Overview">\n' +
-    '  <rect width="960" height="780" fill="#0f172a" rx="12"/>\n' +
-    '  <text x="30" y="32" fill="#f8fafc" font-size="18" font-weight="700" font-family="system-ui, sans-serif">' +
+    `  <rect width="960" height="${svgHeight}" fill="#0f172a" rx="12"/>\n` +
+    '  <text x="30" y="32" fill="#f8fafc" font-size="18" font-weight="700" ' +
+    'font-family="system-ui, sans-serif">' +
     'Lagrange Comparative Benchmark Statistics - Multi-System Overview</text>\n' +
-    '  <text x="30" y="52" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif">' +
-    `Targets: ${escapeXml(targetLabels)} | Legend: solid = observed-docker-cluster, dashed = modeled-topology-oracle</text>\n` +
-    `${r1Header}${renderRow1(targets, 92)}\n` +
-    `${r2Header}${renderRow2(targets, 442)}\n` +
+    subtitleSvg +
+    `  <text x="30" y="${legendY}" fill="#94a3b8" font-size="11" ` +
+    'font-family="system-ui, sans-serif">' +
+    'Legend: solid bar = observed-docker-cluster | dashed bar = modeled-topology-oracle</text>\n' +
+    `${r1Header}${renderRow1(targets, r1Y, cardHeight)}\n` +
+    `${r2Header}${renderRow2(targets, r2Y, cardHeight)}\n` +
     '</svg>\n';
 }
 
@@ -196,4 +295,5 @@ export {
   getTxPerSec,
   getWireBytes,
   renderComparativeOverviewSvg,
+  shortTargetLabel,
 };

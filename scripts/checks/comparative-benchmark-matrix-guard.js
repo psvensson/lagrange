@@ -46,12 +46,21 @@ const TARGET_LAGRANGE = 'lagrange';
 const TARGET_TIDB = 'tidb-tikv';
 const TARGET_PG_SINGLE = 'pg-single-primary';
 const TARGET_PG_PATRONI = 'pg-patroni-sync-ha-rf3';
+const TARGET_PG_PLPGSQL_SINGLE = 'pg-plpgsql-single-primary';
+const TARGET_PG_PLPGSQL_PATRONI = 'pg-plpgsql-sync-ha-rf3';
 const REQUIRED_TARGET_IDS = Object.freeze([
   TARGET_LAGRANGE,
   TARGET_TIDB,
   TARGET_PG_SINGLE,
   TARGET_PG_PATRONI,
+  TARGET_PG_PLPGSQL_SINGLE,
+  TARGET_PG_PLPGSQL_PATRONI,
 ]);
+
+const EXPECTED_COMPLETED_SLICES = 2;
+const EXPECTED_REMAINING_SLICES = 3;
+const MARKER_LOCALITY_CONTROL_MD = 'Three-way locality control';
+const MARKER_LOCALITY_CONTROL_HTML = 'Three-Way Locality Control';
 
 const SHAPE_LOCAL_ONLY = 'local-only';
 const SHAPE_ONE_REMOTE = 'one-remote-stage';
@@ -102,6 +111,8 @@ function verifyComparativeMatrix(matrix) {
     matrix.completedSlices.length + matrix.remainingSlicesCount,
     TOTAL_EPIC_SLICES,
   );
+  assert.equal(matrix.completedSlices.length, EXPECTED_COMPLETED_SLICES);
+  assert.equal(matrix.remainingSlicesCount, EXPECTED_REMAINING_SLICES);
   const targetIds = arrayMap(matrix.targets, (t) => t.targetId);
   const allTargetsValid = arrayEvery(REQUIRED_TARGET_IDS, (reqId) =>
     arrayIncludes(targetIds, reqId),
@@ -115,7 +126,11 @@ function verifyComparativeMatrix(matrix) {
     const allShapesPresent = arrayEvery(REQUIRED_SHAPE_IDS, (shapeId) =>
       Boolean(target.scenarioB.shapes[shapeId]),
     );
-    assert.equal(allShapesPresent, true, `Target ${target.targetId} must define all required shapes`);
+    assert.equal(
+      allShapesPresent,
+      true,
+      `Target ${target.targetId} must define all required shapes`,
+    );
   }
 }
 
@@ -154,12 +169,21 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
   const landingMd = fs.readFileSync(landingMdPath, UTF8);
   const landingHtml = fs.readFileSync(landingHtmlPath, UTF8);
   const pgMd = fs.readFileSync(pgMdPath, UTF8);
+  const pgHtml = fs.readFileSync(pgHtmlPath, UTF8);
 
   assert.equal(stringIncludes(landingMd, LINK_TIDB_PROGRESS), true);
   assert.equal(stringIncludes(landingMd, LINK_POSTGRES_PROGRESS), true);
   assert.equal(stringIncludes(landingHtml, LINK_TIDB_PROGRESS), true);
   assert.equal(stringIncludes(landingHtml, LINK_POSTGRES_PROGRESS), true);
   assert.equal(stringIncludes(pgMd, LINK_TIDB_PROGRESS), true);
+
+  assert.equal(stringIncludes(pgMd, MARKER_LOCALITY_CONTROL_MD), true);
+  assert.equal(stringIncludes(pgMd, TARGET_PG_PLPGSQL_SINGLE), true);
+  assert.equal(stringIncludes(pgMd, TARGET_PG_PLPGSQL_PATRONI), true);
+
+  assert.equal(stringIncludes(pgHtml, MARKER_LOCALITY_CONTROL_HTML), true);
+  assert.equal(stringIncludes(pgHtml, TARGET_PG_PLPGSQL_SINGLE), true);
+  assert.equal(stringIncludes(pgHtml, TARGET_PG_PLPGSQL_PATRONI), true);
 
   const rootReadmePath = path.resolve(rootDir, README_PATH);
   const docsReadmePath = path.resolve(rootDir, DOCS_README_PATH);
