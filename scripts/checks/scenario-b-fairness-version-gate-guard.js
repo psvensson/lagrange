@@ -19,6 +19,7 @@ import {
   runScenarioAPairedSweep,
 } from '../../test/distributed/harness/oltp-paired-sweep-runner.js';
 import {
+  getScenarioDefinitionHref,
   renderComparisonProgressHtml,
   renderComparisonProgressMarkdown,
   renderComparisonProgressSvg,
@@ -53,6 +54,7 @@ const STR_TMP_SUMMARY = 'summary.json';
 const STR_RISK_DECISIONS_PER_SEC = 'Risk Decisions/sec';
 const STR_CROSS_ISLAND_WAN_TRAFFIC = 'Cross-Island WAN Traffic';
 const STR_SCENARIO_B_SVG_FILENAME = 'tidb-scenario-b-comparison.svg';
+const STR_SCENARIO_B_DOC_HREF = 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision';
 
 const NUM_BYTES_192 = 192;
 const NUM_RATE_ONE = 1;
@@ -242,9 +244,12 @@ async function verifyScenarioBVersionGatedExecution(existingRecords) {
   const html = renderComparisonProgressHtml(summary);
   const progressSvg = renderComparisonProgressSvg(summary);
   const scenarioBSvg = renderScenarioBComparisonSvg(summary);
+  assert.equal(getScenarioDefinitionHref(STR_SCENARIO_B), STR_SCENARIO_B_DOC_HREF);
   assert.equal(stringIncludes(markdown, STR_SCORECARD_MD_HEADER), true);
   assert.equal(stringIncludes(html, STR_SCORECARD_HTML_HEADER), true);
   assert.equal(stringIncludes(markdown, STR_SCENARIO_B_SVG_FILENAME), true);
+  assert.equal(stringIncludes(markdown, STR_SCENARIO_B_DOC_HREF), true);
+  assert.equal(stringIncludes(html, STR_SCENARIO_B_DOC_HREF), true);
   assert.equal(stringIncludes(progressSvg, STR_RISK_DECISIONS_PER_SEC), true);
   assert.equal(stringIncludes(progressSvg, STR_CROSS_ISLAND_WAN_TRAFFIC), true);
   assert.equal(stringIncludes(scenarioBSvg, STR_RISK_DECISIONS_PER_SEC), true);

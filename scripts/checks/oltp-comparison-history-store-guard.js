@@ -21,6 +21,7 @@ import {
   DEFAULT_COMPARISON_PROGRESS_MARKDOWN_PATH,
   DEFAULT_COMPARISON_PROGRESS_SVG_PATH,
   DEFAULT_SCENARIO_B_COMPARISON_SVG_PATH,
+  getScenarioDefinitionHref,
   renderComparisonProgressHtml,
   renderComparisonProgressMarkdown,
   renderComparisonProgressSvg,
@@ -82,7 +83,12 @@ const SIGNED_NEG_EXPECTED = '-3.10';
 const SHA_INPUT = '0123456789abcdef';
 const SHA_EXPECTED_LEN = 8;
 const SHA_EXPECTED = '01234567';
+const SCENARIO_A_FULL_ID = 'tidb-oltp-baseline';
 const SCENARIO_B_FULL_ID = 'tidb-distributed-risk-decision';
+const SCENARIO_SEMANTIC_ID = 'scenario-a-semantic-closure';
+const HREF_SCENARIO_A = 'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline';
+const HREF_SCENARIO_B = 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision';
+const HREF_SEMANTIC_GATE = 'tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate';
 
 function verifySvgRendererHelpers() {
   assert.equal(escapeXml(ESCAPE_XML_INPUT), ESCAPE_XML_EXPECTED);
@@ -90,6 +96,9 @@ function verifySvgRendererHelpers() {
   assert.equal(formatSigned(SIGNED_POS_INPUT), SIGNED_POS_EXPECTED);
   assert.equal(formatSigned(SIGNED_NEG_INPUT), SIGNED_NEG_EXPECTED);
   assert.equal(shortSha(SHA_INPUT, SHA_EXPECTED_LEN), SHA_EXPECTED);
+  assert.equal(getScenarioDefinitionHref(SCENARIO_A_FULL_ID), HREF_SCENARIO_A);
+  assert.equal(getScenarioDefinitionHref(SCENARIO_B_FULL_ID), HREF_SCENARIO_B);
+  assert.equal(getScenarioDefinitionHref(SCENARIO_SEMANTIC_ID), HREF_SEMANTIC_GATE);
   const sampleEntries = [
     {framework: {scenarioId: SCENARIO_A}},
     {
@@ -238,11 +247,20 @@ async function verifyCommittedDataAndWebArtifacts() {
 
   assert.equal(stringIncludes(rawSvg, MARKER_RISK_DECISIONS), true);
   assert.equal(stringIncludes(rawSvg, MARKER_WAN_TRAFFIC), true);
+  assert.equal(stringIncludes(rawSvg, HREF_SCENARIO_A), true);
+  assert.equal(stringIncludes(rawSvg, HREF_SCENARIO_B), true);
   assert.equal(stringIncludes(rawScenarioBSvg, MARKER_RISK_DECISIONS), true);
   assert.equal(stringIncludes(rawScenarioBSvg, MARKER_WAN_TRAFFIC), true);
+  assert.equal(stringIncludes(rawScenarioBSvg, HREF_SCENARIO_B), true);
   assert.equal(stringIncludes(rawMd, MARKER_SCENARIO_B_SVG_FILE), true);
+  assert.equal(stringIncludes(rawMd, HREF_SCENARIO_A), true);
+  assert.equal(stringIncludes(rawMd, HREF_SCENARIO_B), true);
+  assert.equal(stringIncludes(rawMd, HREF_SEMANTIC_GATE), true);
   assert.equal(stringIncludes(rawHtml, MARKER_RISK_DECISIONS), true);
   assert.equal(stringIncludes(rawHtml, MARKER_WAN_TRAFFIC), true);
+  assert.equal(stringIncludes(rawHtml, HREF_SCENARIO_A), true);
+  assert.equal(stringIncludes(rawHtml, HREF_SCENARIO_B), true);
+  assert.equal(stringIncludes(rawHtml, HREF_SEMANTIC_GATE), true);
 
   const rootReadme = await fs.readFile(README_PATH, UTF8);
   const docsReadme = await fs.readFile(DOCS_README_PATH, UTF8);
