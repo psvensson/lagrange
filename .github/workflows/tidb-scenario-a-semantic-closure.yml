@@ -71,6 +71,7 @@ jobs:
             test/distributed/harness/postgresql-comparison-static-web.js \
             test/distributed/harness/citus-comparison-static-web.js \
             test/distributed/harness/yugabyte-ignite-comparison-static-web.js \
+            test/distributed/harness/scenario-c-comparison-static-web.js \
             test/distributed/harness/comparative-landing-svg-renderer.js \
             test/distributed/harness/comparative-landing-page.js \
             scripts/checks/comparative-benchmark-matrix-guard.js

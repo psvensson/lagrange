@@ -1,6 +1,6 @@
 ---
 id: multi-system-comparative-benchmark-matrix
-status: open
+status: done
 proof: deterministic
 roadmapRow: null
 doneWhen:
@@ -63,3 +63,4 @@ WAN round-trips, measuring both losses and parity alongside advantages.
   locality control; Slice 3: Citus 13 colocated tables; Slice 4: YugabyteDB and Apache Ignite 3;
   Slice 5: Scenario C PostgreSQL + Valkey freshness-bounded risk). Established the comparative
   statistics landing page and per-target detail pages as the persistent publication structure.
+- 2026-10-30: Completed all five comparative benchmark slices across PostgreSQL 17, PL/pgSQL server functions, Citus 13 distributed functions, YugabyteDB 2024.2, Apache Ignite 3 colocated compute, and Scenario C PostgreSQL 17 + Valkey 8 freshness-bounded risk decisions (remainingSlicesCount = 0).

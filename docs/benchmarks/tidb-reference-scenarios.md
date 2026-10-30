@@ -612,3 +612,17 @@ The current implementation sequence is:
 Each step must remain independently reviewable. Smoke/proof results are useful
 engineering evidence but must remain explicitly `comparable: false` until all
 required comparative owners and fairness contracts are satisfied.
+
+## Scenario C: streaming-feature-risk-decision
+
+### Purpose
+
+Evaluate whether an optimized relational + in-memory cache/feature-store stack (`PostgreSQL 17 + Valkey 8 + Application Service`) provides a better complete solution than Lagrange for continuous payment/device/merchant event ingestion paired with low-latency risk decisions under explicit feature-freshness SLAs (`0 ms` read-your-writes, `100 ms` bounded staleness, and `1000 ms` relaxed staleness).
+
+### Freshness SLA profiles and operational dimensions
+
+1. `0 ms` (strict read-your-writes: a risk decision must observe an event ingested immediately prior on the same account/merchant/device).
+2. `100 ms` (bounded sub-second feature staleness).
+3. `1000 ms` (relaxed precomputed feature window).
+4. **Rule-change backfill cost (seconds)**: time required to deploy a new multi-entity correlated risk feature and populate active windows before serving accurate decisions.
+5. **Cache-node restart recovery (seconds)** and **operational pipeline count**.

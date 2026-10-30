@@ -62,6 +62,8 @@ function renderComparativeLandingMarkdown(matrix) {
     '- Scenario specifications:\n' +
     '  - [Scenario A: Contended OLTP Baseline (tidb-oltp-baseline)](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline)\n' +
     '  - [Scenario B: Distributed Risk Decision & Partition Movement (tidb-distributed-risk-decision)](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision)\n' +
+    '  - [Scenario C: streaming-feature-risk-decision]' +
+    '(tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision)\n' +
     '  - [Paired Benchmark Owner](tidb-reference-paired-owner.md)\n' +
     '  - [Scenario A Semantic Evidence Gate (scenario-a-semantic-closure)](tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate)\n' +
     '- Detail pages:\n' +
@@ -70,7 +72,10 @@ function renderComparativeLandingMarkdown(matrix) {
     '  - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))\n' +
     '  - [YugabyteDB & Apache Ignite 3 Colocated Compute Comparison]' +
     '(yugabyte-ignite-comparison-progress.md) ' +
-    '([HTML](yugabyte-ignite-comparison-progress.html))\n\n' +
+    '([HTML](yugabyte-ignite-comparison-progress.html))\n' +
+    '  - [Scenario C: PostgreSQL 17 + Valkey 8 Feature-Store & Freshness Comparison]' +
+    '(scenario-c-feature-store-progress.md) ' +
+    '([HTML](scenario-c-feature-store-progress.html))\n\n' +
     '![Multi-system comparative benchmark overview](comparative-overview.svg)\n\n' +
     'Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg) | [TiDB comparison progress chart](tidb-comparison-progress.svg)\n\n' +
     '## Evidence-tier and measurement boundary qualification\n\n' +
@@ -170,13 +175,17 @@ function renderComparativeLandingHtml(matrix) {
     '    <p class="desc">Specifications &amp; Detail: ' +
     '<a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline">Scenario A</a> | ' +
     '<a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B</a> | ' +
+    '<a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision">' +
+    'Scenario C Spec</a> | ' +
     '<a href="tidb-reference-paired-owner.md">Paired Benchmark Owner</a> | ' +
     '<a href="tidb-comparison-progress.html">TiDB Progress</a> | ' +
     '<a href="postgresql-comparison-progress.html">PostgreSQL Progress</a> | ' +
     '<a href="citus-comparison-progress.html">Citus Distributed Functions (HTML)</a> | ' +
     '<a href="citus-comparison-progress.md">Citus Detail (MD)</a> | ' +
     '<a href="yugabyte-ignite-comparison-progress.html">YugabyteDB &amp; Ignite 3 (HTML)</a> | ' +
-    '<a href="yugabyte-ignite-comparison-progress.md">YugabyteDB &amp; Ignite 3 (MD)</a></p>\n' +
+    '<a href="yugabyte-ignite-comparison-progress.md">YugabyteDB &amp; Ignite 3 (MD)</a> | ' +
+    '<a href="scenario-c-feature-store-progress.html">Scenario C: PG + Valkey (HTML)</a> | ' +
+    '<a href="scenario-c-feature-store-progress.md">Scenario C (MD)</a></p>\n' +
     `    <div class="chart-box">${svg}</div>\n` +
     '    <div class="filter-bar"><label for="landing-filter">Filter:</label><input type="text" id="landing-filter" placeholder="Filter targets, categories, shapes..."/></div>\n' +
     '    <div class="card">\n' +

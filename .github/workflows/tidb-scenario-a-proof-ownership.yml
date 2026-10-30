@@ -47,6 +47,7 @@ on:
       - 'test/distributed/harness/postgresql-comparison-static-web.js'
       - 'test/distributed/harness/citus-comparison-static-web.js'
       - 'test/distributed/harness/yugabyte-ignite-comparison-static-web.js'
+      - 'test/distributed/harness/scenario-c-comparison-static-web.js'
       - 'test/distributed/harness/comparative-landing-svg-renderer.js'
       - 'test/distributed/harness/comparative-landing-page.js'
       - 'docs/benchmarks/postgresql-comparison-progress.svg'
@@ -54,6 +55,7 @@ on:
       - 'docs/benchmarks/postgresql-comparison-progress.html'
       - 'docs/benchmarks/citus-comparison-progress.*'
       - 'docs/benchmarks/yugabyte-ignite-comparison-progress.*'
+      - 'docs/benchmarks/scenario-c-feature-store-progress.*'
       - 'docs/benchmarks/scenario-b-shape-crossover.svg'
       - 'docs/benchmarks/comparative-overview.svg'
       - 'docs/benchmarks/README.md'
@@ -115,6 +117,7 @@ jobs:
             test/distributed/harness/postgresql-comparison-static-web.js \
             test/distributed/harness/citus-comparison-static-web.js \
             test/distributed/harness/yugabyte-ignite-comparison-static-web.js \
+            test/distributed/harness/scenario-c-comparison-static-web.js \
             test/distributed/harness/comparative-landing-svg-renderer.js \
             test/distributed/harness/comparative-landing-page.js \
             scripts/checks/comparative-benchmark-matrix-guard.js

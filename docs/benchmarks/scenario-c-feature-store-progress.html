@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PostgreSQL 17 + Valkey 8 Feature Store and Lagrange Comparative Progress</title>
+  <style>
+:root { --bg: #0f172a; --card-bg: #1e293b; --text: #f8fafc; --muted: #94a3b8; --border: #334155;
+  --accent: #38bdf8; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+.container { max-width: 1100px; margin: 0 auto; } h1 { font-size: 24px; color: #fff; }
+.nav-bar { margin: 12px 0 20px 0; font-size: 13px; color: var(--muted); }
+.nav-bar a { color: var(--accent); text-decoration: none; margin-right: 12px; }
+.card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 18px; margin-bottom: 24px; } .card h2 { font-size: 16px; color: var(--accent); }
+.card p, .card li { font-size: 13px; line-height: 1.6; color: #cbd5e1; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+th { color: var(--muted); font-weight: 600; } .chart-box { margin-bottom: 24px; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>PostgreSQL 17 + Valkey 8 Feature Store and Lagrange Comparative Progress</h1>
+    <div class="nav-bar"><a href="index.html">Dashboard</a><a href="README.md">Index</a>
+      <a href="tidb-comparison-progress.html">TiDB</a><a href="postgresql-comparison-progress.html">PG</a>
+      <a href="citus-comparison-progress.html">Citus</a><a href="yugabyte-ignite-comparison-progress.html">YB</a>
+      <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline">Scen A</a>
+      <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scen B</a>
+      <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision">Scen C</a></div>
+    <div class="chart-box">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 476" width="960" height="476">
+  <rect width="960" height="476" fill="#0f172a" rx="8"/>
+  <text x="20" y="28" fill="#f8fafc" font-size="16" font-weight="bold">PostgreSQL 17 + Valkey 8 &amp; Lagrange Feature Store Matrix</text>
+  <text x="20" y="44" fill="#94a3b8" font-size="11">Continuous ingestion paired with freshness-bounded risk decision</text>
+  <text x="20" y="58" fill="#64748b" font-size="10">Synchronous write-through cache vs asynchronous CDC streaming</text>
+  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="640" y="28" fill="#94a3b8" font-size="11">Scenario A</text></a>
+  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="730" y="28" fill="#94a3b8" font-size="11">Scenario B</text></a>
+  <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="820" y="28" fill="#38bdf8" font-size="11" font-weight="bold">Scenario C</text></a>
+  <rect x="20" y="78" width="290" height="380" fill="#1e293b" rx="6" stroke="#334155"/>
+  <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="35" y="100" fill="#38bdf8" font-size="13" font-weight="bold">0 ms Read-Your-Writes SLA</text></a>
+  <text x="35" y="116" fill="#94a3b8" font-size="10">Fresh decisions/s &amp; stale rate</text>
+  <text x="35" y="128" fill="#64748b" font-size="9">Strict transactional visibility</text>
+  <rect x="330" y="78" width="290" height="380" fill="#1e293b" rx="6" stroke="#334155"/>
+  <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="345" y="100" fill="#38bdf8" font-size="13" font-weight="bold">1000 ms Relaxed Staleness</text></a>
+  <text x="345" y="116" fill="#94a3b8" font-size="10">Decisions/s &amp; p99 latency</text>
+  <text x="345" y="128" fill="#64748b" font-size="9">Bounded precomputed cache</text>
+  <rect x="640" y="78" width="300" height="380" fill="#1e293b" rx="6" stroke="#334155"/>
+  <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="655" y="100" fill="#38bdf8" font-size="13" font-weight="bold">Rule-Change Backfill &amp; Recovery</text></a>
+  <text x="655" y="116" fill="#94a3b8" font-size="10">Backfill &amp; restart (sec)</text>
+  <text x="655" y="128" fill="#64748b" font-size="9">Operational pipeline count</text>
+    <text x="35" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
+    <text x="35" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
+    <text x="35" y="170" fill="#cbd5e1" font-size="10">441.1 dec/s (0.00% stale)</text>
+    <rect x="35" y="176" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="176" width="221" height="8" fill="#38bdf8" rx="3"/>
+    <text x="35" y="194" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
+    <text x="345" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
+    <text x="345" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
+    <text x="345" y="170" fill="#cbd5e1" font-size="10">441.1 dec/s (p99: 18.1ms)</text>
+    <rect x="345" y="176" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="176" width="184" height="8" fill="#38bdf8" rx="3"/>
+    <text x="345" y="194" fill="#64748b" font-size="9">100ms: 441.1 dec/s</text>
+    <text x="655" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
+    <text x="655" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
+    <text x="655" y="170" fill="#cbd5e1" font-size="10">Backfill: 0s (Restart: 3.2s)</text>
+    <rect x="655" y="176" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="176" width="4" height="8" fill="#38bdf8" rx="3"/>
+    <text x="655" y="194" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: 3.2s</text>
+    <text x="35" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
+    <text x="35" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
+    <text x="35" y="242" fill="#cbd5e1" font-size="10">316.8 dec/s (0.00% stale)</text>
+    <rect x="35" y="248" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="248" width="158" height="8" fill="#d97706" rx="3"/>
+    <text x="35" y="266" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
+    <text x="345" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
+    <text x="345" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
+    <text x="345" y="242" fill="#cbd5e1" font-size="10">316.8 dec/s (p99: 24.1ms)</text>
+    <rect x="345" y="248" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="248" width="132" height="8" fill="#d97706" rx="3"/>
+    <text x="345" y="266" fill="#64748b" font-size="9">100ms: 316.8 dec/s</text>
+    <text x="655" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
+    <text x="655" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
+    <text x="655" y="242" fill="#cbd5e1" font-size="10">Backfill: 0s (Restart: 8.5s)</text>
+    <rect x="655" y="248" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="248" width="4" height="8" fill="#d97706" rx="3"/>
+    <text x="655" y="266" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: 8.5s</text>
+    <text x="35" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
+    <text x="35" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
+    <text x="35" y="314" fill="#cbd5e1" font-size="10">310.0 dec/s (0.42% stale)</text>
+    <rect x="35" y="320" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="320" width="155" height="8" fill="#10b981" rx="3"/>
+    <text x="35" y="338" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
+    <text x="345" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
+    <text x="345" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
+    <text x="345" y="314" fill="#cbd5e1" font-size="10">485.0 dec/s (p99: 16.2ms)</text>
+    <rect x="345" y="320" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="320" width="202" height="8" fill="#10b981" rx="3"/>
+    <text x="345" y="338" fill="#64748b" font-size="9">100ms: 462.4 dec/s</text>
+    <text x="655" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
+    <text x="655" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
+    <text x="655" y="314" fill="#cbd5e1" font-size="10">Backfill: 185s (Restart: 42.0s)</text>
+    <rect x="655" y="320" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="320" width="192" height="8" fill="#10b981" rx="3"/>
+    <text x="655" y="338" fill="#94a3b8" font-size="9">3 pipeline(s) | Recovery: 42.0s</text>
+    <text x="35" y="362" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Async</text>
+    <text x="35" y="374" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (9-u)</text>
+    <text x="35" y="386" fill="#cbd5e1" font-size="10">0.0 dec/s (6.80% stale)</text>
+    <rect x="35" y="392" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="392" width="4" height="8" fill="#8b5cf6" rx="3"/>
+    <text x="35" y="410" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
+    <text x="345" y="362" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Async</text>
+    <text x="345" y="374" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (9-u)</text>
+    <text x="345" y="386" fill="#cbd5e1" font-size="10">538.0 dec/s (p99: 12.4ms)</text>
+    <rect x="345" y="392" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="392" width="224" height="8" fill="#8b5cf6" rx="3"/>
+    <text x="345" y="410" fill="#64748b" font-size="9">100ms: 492.0 dec/s</text>
+    <text x="655" y="362" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Async</text>
+    <text x="655" y="374" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (9-u)</text>
+    <text x="655" y="386" fill="#cbd5e1" font-size="10">Backfill: 240s (Restart: 58.0s)</text>
+    <rect x="655" y="392" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="392" width="250" height="8" fill="#8b5cf6" rx="3"/>
+    <text x="655" y="410" fill="#94a3b8" font-size="9">4 pipeline(s) | Recovery: 58.0s</text>
+</svg>
+    </div>
+    <div class="card">
+      <h2>Feature-Freshness SLA Tradeoff (0 ms Read-Your-Writes vs 1000 ms Relaxed Staleness)</h2>
+      <ul><li><strong>0 ms read-your-writes</strong>: Lagrange delivers 441.2 dec/s (0.0% stale).
+        PG Patroni HA reaches 316.8 dec/s (0.0% stale). Sync write-through reaches 310.0 dec/s
+        (0.42% stale). Async CDC yields 0.0 dec/s (6.8% stale) due to replication lag.</li>
+      <li><strong>1000 ms relaxed staleness</strong>: Valkey caching decouples decisions:
+        async CDC reaches 538.0 dec/s (12.4ms p99), sync reaches 485.0 dec/s (16.2ms p99),
+        exceeding Lagrange (441.2 dec/s, 18.1ms p99).</li></ul></div>
+    <div class="card">
+      <h2>Rule-Change Agility, Backfill Downtime, and Operational Footprint</h2>
+      <ul><li><strong>Rule-change backfill</strong>: 185.0s (sync) to 240.0s (async CDC) backfill.
+        Lagrange and PG functions require 0.0s because features evaluate on demand.</li>
+      <li><strong>Cache restart recovery</strong>: Valkey restart takes 42.0s (sync) to 58.0s
+        (async); Lagrange recovers in 3.2s via Raft log replay.</li>
+      <li><strong>Operational pipelines</strong>: Lagrange operates 1 binary pipeline.
+        Relational + Valkey requires 3 (sync) or 4 (async CDC) pipelines.</li></ul>
+      <table><thead><tr><th>Target</th><th>Version</th><th>Units</th><th>Pipelines</th>
+        <th>0 ms SLA</th><th>100 ms SLA</th><th>1000 ms SLA</th><th>Stale</th>
+        <th>Backfill</th><th>Recovery</th></tr></thead><tbody>
+<tr><td><strong>lagrange</strong></td><td>0.3.0</td><td>3</td><td>1</td><td>441.1</td><td>441.1</td><td>441.1</td><td>0.00%</td><td>0.0s</td><td>3.2s</td></tr>
+<tr><td><strong>pg-plpgsql-sync-ha-rf3</strong></td><td>17.2-patroni-4.0-plpgsql</td><td>5</td><td>1</td><td>316.8</td><td>316.8</td><td>316.8</td><td>0.00%</td><td>0.0s</td><td>8.5s</td></tr>
+<tr><td><strong>pg-valkey-sync-write-through</strong></td><td>17.2-valkey-8.0-sync</td><td>8</td><td>3</td><td>310.0</td><td>462.4</td><td>485.0</td><td>0.42%</td><td>185.0s</td><td>42.0s</td></tr>
+<tr><td><strong>pg-valkey-async-stream</strong></td><td>17.2-valkey-8.0-async</td><td>9</td><td>4</td><td>0.0</td><td>492.0</td><td>538.0</td><td>6.80%</td><td>240.0s</td><td>58.0s</td></tr>
+</tbody></table></div>
+    <div class="card"><h2>Topology and Baseline Context</h2>
+      <table><thead><tr><th>Target</th><th>Units</th><th>Procs</th><th>RPO=0 HA</th>
+        <th>Scenario A (tx/s)</th><th>Scenario B (dec/s)</th><th>p99</th>
+        <th>WAN Bytes</th></tr></thead><tbody>
+<tr><td><strong>lagrange</strong></td><td>3</td><td>3</td><td>Yes</td><td>0.8</td><td>441.1</td><td>18.1</td><td>144</td></tr>
+<tr><td><strong>pg-plpgsql-sync-ha-rf3</strong></td><td>5</td><td>8</td><td>Yes</td><td>8.4</td><td>316.8</td><td>24.1</td><td>960</td></tr>
+<tr><td><strong>pg-valkey-sync-write-through</strong></td><td>8</td><td>11</td><td>Yes</td><td>8.4</td><td>462.4</td><td>16.2</td><td>620</td></tr>
+<tr><td><strong>pg-valkey-async-stream</strong></td><td>9</td><td>12</td><td>Yes</td><td>8.4</td><td>538.0</td><td>12.4</td><td>480</td></tr>
+</tbody></table></div>
+  </div>
+</body>
+</html>
