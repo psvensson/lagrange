@@ -23,9 +23,6 @@ import {
   buildScenarioAPaymentCase,
 } from '../../test/distributed/harness/oltp-scenario-a-payment-case.js';
 import {
-  createTiDbOltpAdapter,
-} from '../../test/distributed/reference-client/tidb-oltp-adapter.js';
-import {
   observeTiDbOltpStateSnapshot,
 } from '../../test/distributed/reference-client/tidb-oltp-state-snapshot.js';
 import {
@@ -226,26 +223,21 @@ async function runTiDbDurabilityProof(options = {}) {
       executeAttempt: () =>
         state.adapter.executeTransaction(paymentDefinition.identity.operation),
     });
+    const databaseName = state.adapter.databaseName;
     const before = await observeTiDbOltpStateSnapshot({
       endpoint,
-      databaseName: state.adapter.databaseName,
+      databaseName,
     });
+    await state.adapter.close({dropDatabase: false});
     const restart = await restartPersistentTiDbTopology(provider, state);
-
-    await state.adapter.close();
-    state.adapter = await createTiDbOltpAdapter({
-      endpoint,
-      databaseName: state.adapter.databaseName,
-      workload: paymentDefinition.identity.workload,
-    });
 
     const after = await observeTiDbOltpStateSnapshot({
       endpoint,
-      databaseName: state.adapter.databaseName,
+      databaseName,
     });
     const paymentObservation = await observeTiDbPaymentState({
       endpoint,
-      databaseName: state.adapter.databaseName,
+      databaseName,
       operation: paymentDefinition.identity.operation,
     });
     const observation = Object.freeze({

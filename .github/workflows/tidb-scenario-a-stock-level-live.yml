@@ -14,6 +14,7 @@ on:
       - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
       - 'test/distributed/harness/oltp-scenario-a-stock-level-case.js'
       - 'test/distributed/harness/tidb-reference-lifecycle.js'
+      - 'test/distributed/harness/tidb-scenario-a-live-harness.js'
       - 'test/distributed/reference-client/tidb-oltp-adapter.js'
       - 'test/distributed/reference-client/tidb-oltp-state-snapshot.js'
   workflow_dispatch: {}

@@ -34,8 +34,9 @@ function createTiDbLiveRunId(label) {
 }
 
 function createTiDbLiveDatabaseName(label) {
+  const cleanLabel = stringReplace(String(label || ''), /[^a-zA-Z0-9_]/gu, '_');
   const cleanId = stringSlice(stringReplace(randomUUID(), /-/gu, ''), ZERO, 12);
-  return `lagrange_tidb_${label}_${cleanId}`;
+  return `lagrange_tidb_${cleanLabel}_${cleanId}`;
 }
 
 function canonicalPayloadDigest(payload) {

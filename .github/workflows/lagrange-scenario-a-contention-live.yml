@@ -1,28 +1,12 @@
 name: lagrange-scenario-a-contention-live
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/lagrange-scenario-a-contention-live.yml'
-      - 'test/distributed/config/local-benchmark-3node-timeout180.json'
-      - 'test/distributed/run.js'
-      - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
-      - 'test/distributed/harness/oltp-paired-retry-owner.js'
-      - 'test/distributed/harness/oltp-scenario-a-comparison-systems.js'
-      - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
-      - 'test/distributed/harness/oltp-scenario-a-new-order-contention-case.js'
-      - 'test/distributed/reference-client/lagrange-oltp-adapter.js'
-      - 'test/distributed/reference-client/lagrange-new-order-contention-observer.js'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/lagrange-scenario-a-contention-live.yml'
-      - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
-      - 'test/distributed/reference-client/lagrange-new-order-contention-observer.js'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      admission_path:
+        description: 'Path to passed Lagrange Scenario A live admission artifact'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -36,6 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
+      LAGRANGE_SCENARIO_A_ADMISSION_PATH: ${{ inputs.admission_path }}
       LAGRANGE_SCENARIO_A_CONTENTION_EVIDENCE_PATH: test-output/tidb-reference/scenario-a-new-order-contention-lagrange.json
       LAGRANGE_SCENARIO_A_CONTENTION_REPORT_PATH: test-output/tidb-reference/scenario-a-new-order-contention-lagrange.report.json
     steps:
