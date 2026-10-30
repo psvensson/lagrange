@@ -149,9 +149,9 @@ const runCaseGuard = async () => {
       const session = createLagrangeSession(client);
       await assert.rejects(
         session.transaction(async () => {
-          throw new Error('callback pre-commit failure');
+          throw new Error('callback before-commit failure');
         }),
-        /callback pre-commit failure/u,
+        /callback before-commit failure/u,
       );
       assert.deepEqual(executed, ['BEGIN', 'ROLLBACK']);
     }
@@ -229,9 +229,9 @@ const runCaseGuard = async () => {
       const session = createTiDbSession(connection);
       await assert.rejects(
         session.transaction(async () => {
-          throw new Error('callback pre-commit failure');
+          throw new Error('callback before-commit failure');
         }),
-        /callback pre-commit failure/u,
+        /callback before-commit failure/u,
       );
       assert.deepEqual(executed, ['BEGIN', 'ROLLBACK']);
     }

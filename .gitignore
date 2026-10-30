@@ -26,6 +26,10 @@ data
 !/data/storage-load/
 /data/storage-load/*
 !/data/storage-load/*.json
+!/data/tidb-comparison/
+/data/tidb-comparison/*
+!/data/tidb-comparison/*.ndjson
+!/data/tidb-comparison/*.json
 data2/
 .tap/
 .tmp/

@@ -50,6 +50,7 @@ Use the shortest path that answers the question in front of you.
   correctness, transfer shape, and placement evidence; runs a code-first WASI
   `call` Binding across a local 3-node cluster (not a multi-machine production
   benchmark)
+- [TiDB/TiKV and Lagrange comparison progress](benchmarks/tidb-comparison-progress.md) - persisted results across framework, Lagrange, and TiDB/TiKV versions and commits ([interactive HTML dashboard](benchmarks/tidb-comparison-progress.html))
 
 ## Operate a cluster
 
