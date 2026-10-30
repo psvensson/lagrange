@@ -31,9 +31,10 @@ Edition ownership and implementation-home rules live in `edition-matrix.md`.
 
 ## Version Sequence
 
-The delivery sequence is linear:
+Publication and milestone acceptance follow one ordered sequence after the
+published 0.3.0 baseline:
 
-`0.2.9 -> 0.3 -> 0.4 -> 0.5 -> 0.6 -> 0.7 -> 0.8 -> 0.9 -> 1.0 -> 1.1 -> 1.2 -> 2.0 -> 2.1`
+`0.3.1 -> 0.3.2 -> 0.4 -> 0.5 -> 0.6 -> 0.7 -> 0.8 -> 0.9 -> 1.0 -> 1.1 -> 1.2 -> 2.0 -> 2.1`
 
 Every planned feature has one primary version home below. Earlier capabilities
 are prerequisites reused by later milestones. Phase 0.1 and Phase 0.2 retain
@@ -41,6 +42,19 @@ historical foundation scope; they are not open-ended feature backlogs.
 Phase 1.2 is an explicit external-edition milestone and authorizes no paid
 implementation in this repository. Version placement is delivery order, not a
 calendar promise, runtime claim or Quest completion receipt.
+
+The former future 0.2.9 is retired. Its stable row IDs remain below under their
+current 0.3.1 or 0.3.2 allocation. The existing stabilization and Queryable Core
+epics retain their identities and acceptance ownership; publication of 0.3.0
+does not discharge unfinished axes or historical seals.
+
+Independent bounded implementation, including 0.4 and 0.5 work, may proceed
+concurrently when consumed contracts are defined. One writer owns each changing
+interaction, dependent changes integrate in order, and the release candidate
+proves their composition. Early implementation neither advances milestone
+acceptance nor creates a separate release track. Major product capability
+acceptance follows the existing testing owner's
+[user-journey rule](../../test/guidelines/release-gate.md#major-feature-user-journeys).
 
 The roadmap preserves Lagrange's core advantage: data locality + programmable
 execution + strong distributed semantics.
@@ -148,7 +162,7 @@ was pruned) for historical context only.
 Original component scope: multi-partition coordination, session staged
 read-your-own-writes, partition-write-generation conflict detection and
 recovery/timeout machinery. Current public transaction behavior and remaining
-composed evidence are reconciled in 0.2.9.
+composed evidence are reconciled in 0.3.2.
 
 ### 2. Schema Migration Workflow
 
@@ -181,7 +195,7 @@ composed evidence are reconciled in 0.2.9.
 | CDC diagnostics | ✅ |
 
 The existing live-subscription row covers the cache-backed observation surface.
-Generic application-table live queries have their own Phase 0.3 row.
+Generic application-table live queries have their own Phase 0.3.2 row.
 
 ### 4. Failure Simulations
 
@@ -220,13 +234,14 @@ currently satisfied. This roadmap records the criteria and sequence only.
 
 This section preserves the scope of the earlier 0.2 release foundation.
 Released changes are recorded in `CHANGELOG.md`; residual stabilization belongs
-to 0.2.9, useful service expansion to 0.4, and managed OCI execution to 0.6.
+to 0.3.1/0.3.2 as allocated below, useful service expansion to 0.4, and managed
+OCI execution to 0.6.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
 | `RM-0.2-five-node-convergence` | Five-node cold formation and runtime-service initial placement | ✅ | Formation, table creation, and initial service placement complete without stalled control-plane or service operations |
 | `RM-0.2-topology-safety` | Topology-operation safety closure | ✅ | Authoritative operation-ledger release, safe surplus removal, and ready-lease candidate admission retain their safety invariants |
-| `RM-0.2-snapshot-integration` | Compacted-follower snapshot catch-up integration | ✅ | Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log` compaction (`SN1`), and follower catch-up landed in `0.2.6`; subsequent retention corrections belong to 0.2.9, pilot log/recovery qualification to 0.5, and customer backup/PITR to the external 1.0 product |
+| `RM-0.2-snapshot-integration` | Compacted-follower snapshot catch-up integration | ✅ | Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log` compaction (`SN1`), and follower catch-up landed in `0.2.6`; subsequent retention corrections belong to 0.3.2, pilot log/recovery qualification to 0.5, and customer backup/PITR to the external 1.0 product |
 | `RM-0.2-release-verification` | Core release verification | ✅ | Historical release checks include the tagged but unpublished `0.2.0` candidate and published `0.2.5`/`0.2.6` releases, as recorded in `CHANGELOG.md`; each current release claim still requires its own exact-candidate evidence |
 
 ### Phase 0.2 Exit Criteria
@@ -242,67 +257,88 @@ to 0.2.9, useful service expansion to 0.4, and managed OCI execution to 0.6.
 
 Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log`
 compaction (`SN1`), and follower catch-up shipped in `0.2.6`, while
-the remaining bounded-log corrections are assigned to 0.2.9 and pilot-scale
+the remaining bounded-log corrections are assigned to 0.3.2 and pilot-scale
 log/recovery qualification to 0.5. Customer backup/PITR is an external 1.0
-product. The service demonstration belongs to 0.4, OCI execution to 0.6, and
-advanced automatic data-affinity/cost-aware placement to 2.0.
+product. The existing bounded distributed service journey is consumed by 0.3.2;
+service expansion and qualified multi-machine comparison belong to 0.4, OCI
+execution to 0.6, and advanced automatic data-affinity/cost-aware placement to 2.0.
 
 Phase 0.5 deployment CLI, Docker Compose, WASM CLI, and onboarding work is not
 part of the 0.2 release gate.
 
 ---
 
-## Phase 0.2.9 — Stable-Core Completion
+## Released 0.3.0 — Implementation Baseline
 
-Complete the residual correctness and operating-contract work after the released
-0.2.x foundation. Consume fixes already delivered by 0.2.7/0.2.8 and re-census
-the actual candidate before assigning remaining work. This milestone does not
-reopen raft-rs, TX1, FreshMG or SN1 as missing programs.
+Credit the released 0.3.0 implementation and PR #151's merged Scenario A
+framework/runtime corrections when assigning remaining work. Release history is
+in `CHANGELOG.md`; exact-candidate acceptance remains with the existing proof
+owners. Historical branch execution and implemented proof-ID coverage do not
+certify the merged candidate. Planned rows below describe remaining completion
+scope, not a finding that every underlying component is absent.
+
+## Phase 0.3.1 — Installed-Product And Claim Corrections
+
+Complete the selected installed-startup, artifact/publication and truthful-claim
+corrections through the existing stabilization and bounded feature owners. Adopt
+the standing major-feature user-journey rule through its testing owner and
+reconcile the advertised capability inventory using existing records. This
+bounded reconciliation does not make every historical capability a new gate.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
-| RM-0.2.9-stable-core-completion | Residual correctness, ingress and runtime stability | 🔲 | Close verified remaining SQL/routing, internal-ingress, bounded-retention and recovery defects through their current owners. Existing stabilization scope: `solve/epics/release-0-2-7-stabilization.md`. |
-| RM-0.2.9-published-operating-contract | Usable artifacts and exact-candidate operating contract | 🔲 | Qualify supported package/container/CLI entry points and actual read, transaction, retry and recovery limits; bind published claims to the candidate. No new service-envelope features are included. |
+| RM-0.2.9-published-operating-contract | Usable artifacts and exact-candidate operating contract | 🔲 | Bounded installed-startup/artifact/publication corrections, genuine supported-use consumer checks and accurate read/transaction/retry/recovery declarations. Existing owner: `solve/epics/release-0-2-7-stabilization.md`. Full composed stable-core and service acceptance remains 0.3.2; no new service-envelope features are included. |
 
-### Phase 0.2.9 Exit Criteria
+### Phase 0.3.1 Exit Criteria
 
-The existing public service/SQL path, supported artifacts, bounded durable
-obligations and declared operating envelope have current evidence. The handoff
-to 0.3 records what expression/schema/order/boundary work actually landed and
-what remains. A release version is assigned only through `RELEASE.md`.
+The selected correction scope passes through actual supported distributions,
+public claims match the measured envelope, and existing publication/consumer
+requirements are satisfied. Independently proved bounded feature corrections
+may ship here. The remaining Queryable Core axes, full distributed service
+journey and inherited stable-core obligations stay open for 0.3.2. This release
+does not discharge all of stabilization Q17. Versions are assigned through
+`RELEASE.md`; this scope map is not a release receipt.
 
 ---
 
-## Phase 0.3 — Queryable Core
+## Phase 0.3.2 — Queryable Core Completion
 
 *"Ordinary SQL reaches the right data efficiently without physical-partition knowledge."*
 
-Consume the 0.2.9 handoff before extending query semantics. Start with the
+Consume delivered 0.3.0/PR151 work and the bounded 0.3.1 corrections. Start with the
 admitted key/row-identity and read-visibility contracts shared by routing,
 indexes, locking candidate discovery and live-query startup. Then complete
 ordered access paths, locking reads and live results through their existing
 owners. The superseded `solve/epics/query-access-path-ladder.md` is historical
 rationale; its older source census and async-first lean are not current seals.
 
+The existing `solve/epics/release-0-3-queryable-core.md` owns completion of the
+Queryable Core axes. Its `solve/specs/release-0-3-queryable-core/user-journeys.md`
+names the useful feature outcomes and consumes inherited obligations through
+their existing owners. Do not duplicate stabilization, service or comparison
+acceptance predicates in the Queryable Core specification.
+
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
+| RM-0.2.9-stable-core-completion | Residual correctness, ingress and runtime stability | 🔲 | Complete remaining SQL/routing, internal-ingress, bounded-retention/recovery and composed operating obligations through `solve/epics/release-0-2-7-stabilization.md`. Consume the existing bounded public WASI service and applicable current-candidate Scenario A semantic evidence; preserve their service/comparison owners. |
 | RM-0.3-qs-typed-key-ordering | Typed partition-key and tuple ordering | 🔲 | One declared type/precision/NULL/collation and persisted representation contract, including boundary migration or revalidation. Consume completed 0.2.x ordering fixes; do not repeat them. |
 | RM-0.3-qs-read-visibility | Shared base/index/transaction read contract | 🔲 | Define ordinary freshness, distributed visibility and transaction-local staged reads before index or locking implementation. TX1 outcome durability does not itself establish a global read snapshot. Contract: `docs/execution-semantics.md`. |
 | RM-0.3-qs-pk-partition-narrowing | Primary-key and compound-primary-key partition narrowing beyond `id` | 🔲 | Consume declared metadata through one owner; prove read/write identity and the admitted scalar/compound lifecycle. Full compound equality narrows; unproved partial predicates scatter safely. Explicitly refuse unsupported topology transitions. |
 | RM-0.3-qs-local-index-ddl | Local ordered index DDL | 🔲 | Reuse and complete `IndexService` material through canonical SQL dispatch and lifecycle owners. Prove physical materialization, readable publication, retry, restart, later partitions and drop for ordinary/compound B-tree indexes. Unsupported families fail closed. |
 | RM-0.3-qs-compound-index-semantics | Ordered and compound index planner semantics | 🔲 | Seal tuple/NULL/type/collation semantics, left-prefix and equality-prefix-plus-next-range selection. Candidate sets must include every possible match; rejected narrowing preserves ordinary correct execution. |
 | RM-0.3-qs-global-secondary-indexes | Non-unique global secondary and compound indexes | 🔲 | Partitioned replicated index datasets with one selected maintenance model, complete candidates, concurrent resumable backfill, restart-safe lifecycle, drop fencing and `EXPLAIN DISTRIBUTED`. Spec: `solve/specs/global-secondary-indexes/requirements.md`. |
-| RM-0.3-qs-locking-reads | PostgreSQL `SELECT ... FOR UPDATE` locking reads | 🔲 | Canonical AST and existing transaction/participant owners enforce reservations, bounded conflict/wait policy, timeout/cancellation, commit/rollback release and recovery through public PG. Index and scan discovery reserve the same base-row identity. Architecture: `architecture/postgres-locking-reads.md`. |
+| RM-0.3-qs-locking-reads | PostgreSQL `SELECT ... FOR UPDATE` locking reads | 🔲 | Canonical AST and existing transaction/participant owners enforce the supported fail-fast reservation contract, timeout/cancellation, commit/rollback release and recovery through public PG across nodes. Index and scan discovery reserve the same base-row identity beneath projection. Broader modes require an explicit scope decision. Architecture: `architecture/postgres-locking-reads.md`. |
 | RM-0.3-qs-generic-live-queries | Generic push-backed application live queries | 🔲 | Canonical query identity and continuing dependencies, ordinary user-table change capture, coalesced local interest, gap-free snapshot/stream startup, bounded resume or explicit reset, and topology handoff. Idle observations perform zero reads solely to discover change. Architecture: `architecture/live-query-data-plane.md`. |
 
 The former `RM-1.0-qs-typed-key-ordering`,
 `RM-1.0-qs-pk-partition-narrowing`, `RM-1.0-qs-local-index-ddl` and
 `RM-1.0-qs-global-secondary-indexes` IDs remain retired historical references.
 
-Global-index maintenance is a 0.3 decision. Current research provisionally
+Global-index maintenance completion belongs to 0.3.2. Current research provisionally
 favors synchronous TX1 maintenance for ordinary non-unique indexes, conditional
-on a proved read contract and measured write/fanout/contention cost; R2 remains
-unsealed. Choose one production model through the existing requirements owner.
+on a proved read contract and measured write/fanout/contention cost. Reconcile
+and explicitly seal or supersede the existing maintenance decision through its
+requirements owner; a provisional recommendation is not a seal.
 An unreadable/incomplete index is rejected for reads with correct fallback;
 required synchronous maintenance cannot silently skip a failed index write.
 Rechecking returned base rows cannot repair omitted index candidates.
@@ -310,7 +346,8 @@ Global uniqueness remains 1.0 work, even if transactional maintenance lands here
 
 The [0.3 research retained with PR #74](https://github.com/psvensson/lagrange/pull/74)
 is decision preparation, not evidence that its runtime branch or release axes
-are complete. Re-census the post-0.2.9 implementation before sealing the choice.
+are complete. Reconcile it with the actual 0.3.0/PR151 implementation before
+sealing the choice; preserve completed component evidence.
 
 Live result maintenance admits a proved row-delta subset and relevant-event
 normal-query re-execution/reset for other supported plans. Dependencies cover
@@ -319,7 +356,7 @@ split/merge/leader transitions preserve continuity or issue an explicit reset.
 No new global snapshot, serializability or general incremental-view guarantee
 is implied by these rows.
 
-### Phase 0.3 Exit Criteria
+### Phase 0.3.2 Exit Criteria
 
 - Declared-key lifecycle: admitted non-`id`/compound schemas preserve row identity
   through writes, narrowed reads, real boundaries/topology and restart.
@@ -331,6 +368,16 @@ is implied by these rows.
 - Live application view: remote changes, future matches, snapshot/stream races,
   reconnect, topology changes and final-interest cleanup are covered; an idle
   observation receives an unsolicited update without change-detection polling.
+- The real SQL/CDC owners establish snapshot/occurrence provenance, comparable
+  per-partition frontiers and topology lineage. Bounded pressure/reset/reconnect
+  handling reaches useful current results after finite faults clear and shares
+  acknowledgement/retention authority with the inherited operating owners.
+- Applicable inherited stabilization obligations, current-candidate Scenario A
+  semantic regressions and the existing bounded public distributed WASI service
+  journey pass through their own owners on the integrated candidate.
+- Existing exact-candidate release and published-consumer requirements pass;
+  current declarations match measured support. Only the existing certification
+  process discharges outstanding axes. Full comparison remains 0.4.
 
 ---
 
@@ -364,7 +411,7 @@ alone does not close the milestone.
 
 ## Phase 0.5 — Pilot-Ready Security and Operations
 
-A developer can try the 0.3 query and 0.4 service capabilities through a secure,
+A developer can try the 0.3.2 query and 0.4 service capabilities through a secure,
 observable deployment with a supported pilot operating envelope. This is the
 first pilot boundary; 0.9 integrates the complete service product and 1.0 adds
 production support guarantees.
@@ -408,7 +455,7 @@ in `CHANGELOG.md`. The rows above require coherent installed-consumer pilot
 journeys, not another WASM command family. Stable `cli-wasm` row IDs do not
 prescribe a namespace beside the canonical service CLI.
 
-The 0.5 onboarding and operator surface should make the 0.3 access paths easy
+The 0.5 onboarding and operator surface should make the 0.3.2 access paths easy
 to inspect: index definitions/state and build failures belong in ordinary
 SQL/catalog diagnostics, and examples should demonstrate indexed access without
 requiring callers to understand partition internals.
@@ -449,7 +496,7 @@ authority.
 |----|------|---------------|-------------|
 | RM-0.5-pilot-transport-security | Authenticated and encrypted node transport | 🔲 | Protect the supported transport before pilot use. Enterprise identity, RBAC and tenant policy remain the external 1.2 milestone. Contract: `docs/security.md`. |
 | RM-0.5-pilot-pg-authentication | Pilot PostgreSQL authentication and TLS | 🔲 | Qualify the selected driver/authentication profile, including SCRAM where required; preserve explicit trust/password/TLS limits. Enterprise identity integration remains 1.2. Contract: `architecture/postgres-wire.md`. |
-| RM-0.5-pilot-recovery-envelope | Bounded logs and pilot recovery certification | 🔲 | Qualify message-group compaction and multi-machine soak/recovery using completed 0.2.x mechanisms. Name supported topology, capacity and fault cases; do not defer initial pilot proof to 0.9. Contract: `docs/operations-readiness.md`. |
+| RM-0.5-pilot-recovery-envelope | Bounded logs and pilot recovery certification | 🔲 | Qualify message-group compaction and multi-machine soak/recovery using the delivered mechanisms and 0.3.2's completed initial retention obligations. Name supported topology, capacity and fault cases; do not defer initial pilot proof to 0.9. Contract: `docs/operations-readiness.md`. |
 | RM-0.5-pilot-migration-upgrades | Pilot migration, upgrade and exit procedures | 🔲 | Data load, shadowing, cutover, rollback/exit and supported release-pair upgrade/downgrade rehearsals. Customer backup/PITR implementation remains external in 1.0. Contract: `docs/migration.md`. |
 | RM-0.5-pilot-driver-certification | Named PostgreSQL-driver and SQL profiles | 🔲 | Certify the declared current subset and necessary metadata through actual drivers. Broader catalogs, window functions, sequences and index syntax are assigned to 1.1. Contract: `architecture/postgres-wire.md`. |
 | RM-0.5-pilot-operational-view | One public operating and diagnostics view | 🔲 | Correlate requests, shard runs, partials, placement, retries and typed failures; expose index state/build failures and live-query dependencies/frontiers/maintenance mode. Basic diagnostics remain Community; advanced exporters remain external. |
@@ -467,11 +514,17 @@ supported profile has authenticated/encrypted node communication, a measured
 pilot capacity envelope, recovery and upgrade/rollback evidence, and actionable
 SQL/service diagnostics.
 
-Until `lagrange cluster init`, `lagrange node start`, `lagrange cluster join`,
-one local-cluster tutorial, and public package/CLI naming alignment are real,
-broad service-platform expansion remains design/substrate work only. The sequence must preserve the completed foundation and qualify these pilot
-operator basics before 0.6 expands the runtime provider.
-Phase 0.6 is the first versioned service-runtime expansion after these basics.
+The 0.6 milestone consumes working `lagrange cluster init`, `lagrange node start`,
+`lagrange cluster join`, a local-cluster tutorial and aligned public package/CLI
+naming. Preserve these pilot operator prerequisites for release acceptance;
+independent bounded implementation follows the concurrency rule above. Phase
+0.6 remains the first versioned service-runtime expansion after these basics.
+
+At 0.5, choose the first intended production workload and review whether OCI and
+every alternative transport must precede 1.0. Until an explicit coordinated
+version reallocation changes this map and the other planning surfaces, 0.6-0.9
+retain their existing scope and remain chronological predecessors. The review
+alone does not move a feature or relax a production guarantee.
 
 ---
 
@@ -628,7 +681,7 @@ are 1.2 in their external implementation homes.
 | Item | Roadmap state | Scope notes |
 |------|---------------|-------------|
 | Unique global secondary indexes | 🔲 | Enforce global uniqueness transactionally through synchronous maintenance, with typed refusal when the invariant cannot be maintained. |
-| Transactional uniqueness participation | 🔲 | Extend the selected 0.3 maintenance/read contract with uniqueness reservation and correctness; do not defer all synchronous non-unique maintenance to this phase. |
+| Transactional uniqueness participation | 🔲 | Extend the selected 0.3.2 maintenance/read contract with uniqueness reservation and correctness; do not defer all synchronous non-unique maintenance to this phase. |
 | Production index rebuild/backfill guarantees | 🔲 | Restart/failover-safe rebuild with measured pressure, bounded operating impact and a supported recovery envelope. |
 | Index write-amplification and capacity envelope | 🔲 | Publish representative write/read/rebuild costs for supported compound/global-index profiles. |
 | Supported ordered-key/NULL/type/collation contract | 🔲 | Stabilize the production subset exposed through PG metadata and constraints; broader compatibility is 1.1. |
@@ -667,7 +720,7 @@ Implemented, tested, certified and commercially supported remain distinct claims
 | Partial indexes | 🔲 | Predicate-scoped index membership and matching rules. |
 | Expression indexes | 🔲 | Stable expression identity and evaluation semantics before planner use. |
 | `INCLUDE` / covering syntax and index-only scans | 🔲 | Separate key/payload columns and prove visibility for base-row-free reads. |
-| Richer collation and operator semantics | 🔲 | Expand the deliberately bounded 0.3/1.0 ordered-key contract. |
+| Richer collation and operator semantics | 🔲 | Expand the deliberately bounded 0.3.2/1.0 ordered-key contract. |
 | Broader PostgreSQL index DDL | 🔲 | Compatible options and concurrent-build behavior where supported by the lifecycle contract. |
 
 ### Phase 1.1 Exit Criteria
@@ -709,7 +762,7 @@ then qualify the full Scenario B comparison against that supported contract.
 |----|------|---------------|-------------|
 | RM-2.0-multi-stage-execution | Multi-stage plans and streaming exchange | 🔲 | Streaming exchange, backpressure, deeper composition and concurrent invocations on one Cell through existing owners; 0.4 bounded call input remains a prerequisite. |
 | RM-2.0-planner-pushdown | Planner-initiated execution and richer SDKs | 🔲 | Query-planner pushdown and richer typed/generated operation handles across WASM and native providers. |
-| RM-2.0-cost-based-planning | Statistics and cost-based access planning | 🔲 | Cardinality estimates, cost-based optimizer/index selection, index intersection/union and bitmap-style plans, hints and index advisor tooling. The conservative 0.3 planner remains the correctness foundation. |
+| RM-2.0-cost-based-planning | Statistics and cost-based access planning | 🔲 | Cardinality estimates, cost-based optimizer/index selection, index intersection/union and bitmap-style plans, hints and index advisor tooling. The conservative 0.3.2 planner remains the correctness foundation. |
 | RM-2.0-scenario-b-comparison | Complete Scenario B comparison | 🔲 | Full compute-at-data comparison using the approved workload and equivalent declared semantics; early evidence does not substitute for this complete acceptance. Scope: `solve/epics/comparative-workload-efficiency-evidence.md`. |
 
 ### 2. Advanced Provider and Placement Behavior

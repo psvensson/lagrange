@@ -6,9 +6,11 @@ documentClass: planning
 # Lagrange Product Roadmap
 
 This is the cross-edition view of one ordered release sequence. Every future
-capability below has a numbered release home. Later milestones follow the
-preceding release; they are not independent implementation lanes. A section
-assigns intended scope, not a delivery date or a claim that its work is complete.
+capability below has a numbered release home. Publication and milestone acceptance
+follow the preceding release. Independent bounded implementation may proceed
+concurrently when consumed contracts are defined, with one writer per changing
+interaction and ordered integration. A section assigns intended scope, not a
+delivery date or a claim that its work is complete.
 
 This file is visibility-only. The [AGPL feature map](agpl-feature-map.md) owns
 allowed implementation scope and sequence in this repository. The
@@ -27,8 +29,8 @@ No status in this roadmap substitutes for that evidence.
 
 | Version | Product outcome | Edition scope |
 | --- | --- | --- |
-| 0.2.9 | Complete the stable core on the released 0.2.8 foundation | Community |
-| 0.3 | Queryable Core: keys, access paths, locking reads and live results | Community |
+| 0.3.1 | Bounded installed-product, publication and claim corrections after 0.3.0 | Community |
+| 0.3.2 | Complete Queryable Core and inherited stable-core/public-service acceptance | Community |
 | 0.4 | Practical service core and a qualified ordinary-SQL comparison | Community |
 | 0.5 | Pilot-ready security, deployment and operations | Community |
 | 0.6 | Safe managed OCI activation and native Call Cells | Community |
@@ -41,19 +43,31 @@ No status in this roadmap substitutes for that evidence.
 | 2.0 | Deeper execution, optimizer, advanced artifact storage and full Scenario B | Community |
 | 2.1 | Specialized search and data-local processing services | Community search substrate; AI edition remains unclassified |
 
-## Baseline Through 0.2.8
+The released baseline is 0.3.0. The former future 0.2.9 is retired; its unfinished
+obligations are allocated below to 0.3.1 or 0.3.2 through their existing owners
+and stable roadmap IDs. The standing major-feature
+[user-journey rule](../../test/guidelines/release-gate.md#major-feature-user-journeys)
+governs useful public outcomes; this visibility document does not certify them.
+
+## Baseline Through 0.3.0
 
 The earlier roadmap's completed-component inventory is retained here as the
 foundation for the numbered releases. It is not blanket certification of every
 listed behavior under the current backend, topology or failure schedule. Read
 the current capability page before relying on a specific operation.
 
+Credit the published 0.3.0 implementation and the Scenario A framework/runtime
+corrections merged in [PR #151](https://github.com/psvensson/lagrange/pull/151).
+The latter is current-main material for the next candidate. Historical branch
+receipts and implemented proof-ID coverage are distinct from execution and
+qualification on that candidate.
+
 | Foundation | Existing work carried forward |
 | --- | --- |
 | Topology workflow ownership | Single-writer `replica_operations`, managed split ownership, internal/load readiness separation, owner-required atomic transitions, committed cache-observation boundaries and removal of owner-dependency fallbacks |
-| Transaction machinery | Coordinator and participant state, enlistment, prepare/decision durability, commit/rollback, recovery, read-your-writes, conflict detection, deadlines and cleanup; remaining public correctness obligations close in 0.2.9 |
+| Transaction machinery | Coordinator and participant state, enlistment, prepare/decision durability, commit/rollback, recovery, read-your-writes, conflict detection, deadlines and cleanup; remaining composed public correctness obligations close in 0.3.2 |
 | Schema migrations | System schema definitions and versions, bootstrap migrations, internal ALTER TABLE, user migration workflow, dual-write compatibility, backfill, cutover, rollback, restart recovery and migration diagnostics |
-| Operational visibility | Metrics, admin CLI, health probes, diagnostics APIs, `EXPLAIN DISTRIBUTED`, cluster/partition/CDC views, correlation IDs and diagnostic sampling; generic push-backed live queries remain a 0.3 milestone |
+| Operational visibility | Metrics, admin CLI, health probes, diagnostics APIs, `EXPLAIN DISTRIBUTED`, cluster/partition/CDC views, correlation IDs and diagnostic sampling; generic application live-query completion remains a 0.3.2 milestone |
 | Failure and regression apparatus | Deterministic regression ladder, scenario SQL ownership guard, distributed harness, node/seed restart, join and failure cases, network partition, disk-full and slow-follower cases, chaos, sustained load, visibility, WASM failover, seven-node scenarios, baseline comparisons and invariant checks |
 | Deployment and development substrate | Docker and Helm scaffolding, bootstrap/join/admin surfaces, programmatic runtime, iterator/stage/plan modes and manifest-based WASM deployment |
 | Debugging substrate | Debug sessions, breakpoints, snapshots, DAP, DWARF mapping, replay, plan diagnostics and playback |
@@ -61,44 +75,59 @@ the current capability page before relying on a specific operation.
 | Query execution substrate | Distributed planner, parallel coordinator, merge engine and strategy selection; SQL support is limited to the tested subset in the capability page |
 | Replica-recovery substrate | raft-rs cutover, partition snapshots/catch-up, progress-proven learner promotion and existing failure detection/reintegration; snapshots are not the 1.0 backup product |
 
-## Phase 0.2.9 - Stable Core Completion
+## Phase 0.3.1 - Installed-Product And Claim Corrections
 
-Complete and qualify the existing public SQL and distributed WASM service paths
-before adding 0.3 access paths. This release carries forward unresolved
-stabilization acceptance from the 0.2.7 plan and subsequent released corrections;
-shipping a patch does not itself close the full stable-core milestone.
-
-| Requirement | Edition | Release outcome |
-| --- | --- | --- |
-| Public SQL and transaction correctness | Community | Preserve accepted expression, constraint, routing and session semantics; prove visibility, contention, rollback, commit completion, restart and follower application on representative public workloads |
-| Transaction uncertainty and retry contract | Community | Preserve durable commit decisions through recovery, distinguish a known abort from an unknown result, and resolve the documented partial-commit limitation; no blind retry or claimed caller idempotency without its own proof |
-| Scenario A semantic acceptance | Community | Use the ordinary SQL workload to expose and close core defects; review its unmerged runtime changes through the existing owners before claiming acceptance |
-| Representative public WASM service | Community | Exact-candidate end-to-end service behavior and failure/recovery evidence through the supported public path |
-| Runtime and security stabilization | Community | Correct internal ingress admission, bounded retention/backpressure, artifact usability and the remaining native runtime failures |
-| Release integrity | Community | Reproducible binaries, npm/container artifacts, usable authoring path, current Docker Hub overview and post-publication identity/content confirmation |
-| Capability truth | Community | Current operational and compatibility guidance matches the qualified candidate and names unsupported behavior explicitly |
-
-The full TiDB/TiKV performance comparison belongs to 0.4. Its absence must not
-turn a current transaction defect into an optional benchmark improvement.
-
-## Phase 0.3 - Queryable Core
+The existing stabilization and bounded feature owners complete the selected
+correction slice. Shared setup and valid existing evidence are reused. This
+release does not discharge the whole Queryable Core epic, stabilization Q17 or
+the full distributed service milestone.
 
 | Requirement | Edition | Release outcome |
 | --- | --- | --- |
+| Installed consumer usability | Community | Supported artifacts boot in a clean consumer environment and complete their declared SQL/restart or authoring/build/basic-deployment use, using actual artifact bytes |
+| Release integrity | Community | Selected binary/npm/container corrections, current Docker Hub overview and immutable post-publication identity/content/consumer confirmation |
+| Capability truth | Community | Current operational and compatibility guidance matches the measured correction scope and names unfinished behavior explicitly |
+| Major-feature journey rule | Community | Existing specifications and Quest evidence show useful public outcomes; the bounded historical inventory does not turn every old capability into a new release gate |
+| Selected bounded repairs | Community | Independently verified corrections may ship without claiming that their wider feature or service acceptance passed |
+
+Missing feature journeys retain their existing owner and assigned version.
+Completion claims still require the existing proof and release authorities.
+
+## Phase 0.3.2 - Queryable Core Completion
+
+The existing Queryable Core epic owns its feature acceptance and consumes
+stabilization, service and comparison evidence through their existing owners.
+Credit delivered components; prove the claimed combination on one candidate.
+
+| Requirement | Edition | Release outcome |
+| --- | --- | --- |
+| Inherited public SQL and transaction correctness | Community | Stabilization owners complete expression/constraint/routing/session repairs and prove admitted visibility, contention, commit/abort, restart and follower behavior; global uniqueness remains 1.0 |
+| Transaction uncertainty and retry contract | Community | Preserve durable decisions, distinguish acknowledged, known-abort, outcome-unknown and recovered states, and retain the correct public retry boundary |
+| Current-candidate Scenario A regression | Community | Use PR151's merged ordinary-SQL workload and runtime corrections; exercise current-core guarantees with actual semantic receipts and honest performance observations |
+| Representative public WASI service | Community | Existing service owners and stabilization Q17 prove the bounded public distributed business/failure journey without importing 0.4 service expansions |
+| Inherited operating acceptance | Community | Stabilization owners complete remaining internal ingress, diagnostic, queue, durable retention/replay and recovery obligations with useful progress and cleanup |
 | Typed persisted keys and tuples | Community | One type-aware order, exact boundary representation, declared primary-key metadata and compound-key narrowing beyond an implicit `id` convention |
 | Local ordered index DDL | Community | Ordinary and compound `CREATE INDEX` / `DROP INDEX`, with a defined B-tree family and typed refusal for unsupported kinds |
 | Compound access-path semantics | Community | Correct left-prefix and equality-prefix-plus-range behavior, with explicit NULL/type/collation rules |
 | Non-unique global secondary indexes | Community | Partitioned and replicated index datasets, one selected maintenance contract, resumable backfill, restart-safe lifecycle and failure state |
 | Safe index reads and fallback | Community | An unavailable or insufficiently current index cannot omit valid base-table results; use the owned safe fallback when eligibility is not proven |
 | Planner and catalog visibility | Community | Explain selected/rejected indexes; inspect definitions, build/backfill progress and failures through ordinary SQL/catalog surfaces |
-| PostgreSQL locking reads | Community | Preserve `SELECT ... FOR UPDATE` in the canonical AST and enforce its distributed transaction conflict, cancellation, timeout, release and recovery semantics |
+| PostgreSQL locking reads | Community | Preserve `SELECT ... FOR UPDATE` in the canonical AST and enforce the supported fail-fast distributed reservation, cancellation, timeout, release and recovery contract; broader modes require a scope decision |
 | Generic push-backed live queries | Community | Ordinary application queries, partition-scoped CDC dependencies, equivalent-interest coalescing, gap-free snapshot/frontier handoff and topology changes |
 | Live-query maintenance | Community | Incremental deltas for supported plans and event-triggered re-execution/reset for other plans; idle change discovery performs no repeated data reads |
 
-Global unique secondary indexes belong to 1.0. An optional 0.3 access path may
+Global unique secondary indexes belong to 1.0. An optional 0.3.2 access path may
 change performance but may not weaken base-table correctness. The owner contracts
 remain [PostgreSQL Locking Reads](../../architecture/postgres-locking-reads.md)
 and [Live Query Data Plane](../../architecture/live-query-data-plane.md).
+
+User journeys establish actual index engagement and complete results in the same
+execution, distributed locking authority, and the real SQL/CDC snapshot and
+occurrence handoff. Empty live results retain future dependencies; bounded
+pressure or reset/reconnect handling must restore useful results. Existing
+certification and release owners accept the integrated candidate and published
+consumers. Full qualified comparison remains 0.4; a current promised SQL or
+transaction defect cannot be deferred as an optional benchmark improvement.
 
 ## Phase 0.4 - Practical And Demonstrated Service Core
 
@@ -123,7 +152,7 @@ to 2.0 with its deeper-composition prerequisites.
 | Core cluster security | Community | Cryptographic peer authentication and encrypted node transport, plus ingress/PG authentication, SCRAM and TLS for the selected pilot driver/network profile |
 | Usable deployment | Community | Cluster init/start/join, compose and Helm paths with persistent state, readiness admission, cleanup and reproducible fresh-clone onboarding |
 | Practical authoring and debugging | Community | Coherent programmatic/CLI publish, deploy and scale workflow; local OCI dev-install, scaffold/defaults and WASM hot reload; getting-started and indexed-query examples, query execution tracing and `EXPLAIN EXECUTION` |
-| Recovery and log lifecycle | Community | Qualify delivered bounded-log and message-group compaction mechanisms under the declared pilot topology, load, multi-machine soak, node-loss, replica-rebuild and recovery profiles; bounded-log correctness obligations close in 0.2.9 |
+| Recovery and log lifecycle | Community | Qualify delivered bounded-log and message-group compaction mechanisms under the declared pilot topology, load, multi-machine soak, node-loss, replica-rebuild and recovery profiles; initial bounded-log correctness obligations close in 0.3.2 |
 | Data adoption | Community | Resumable load, shadowing, parity, cutover, rollback and exit tooling |
 | Driver and SQL compatibility | Community | Named, tested PostgreSQL-driver/SQL matrix; unsupported authentication and SQL modes are explicit |
 | Upgrade and operating envelope | Community | Supported topology/capacity bounds and executable upgrade/downgrade rehearsals for named release pairs |
@@ -132,6 +161,11 @@ to 2.0 with its deeper-composition prerequisites.
 Security is required on the supported transport in 0.5. It does not wait for
 NATS or Veilid. Advanced exporters and paid telemetry are assigned to 0.9;
 enterprise identity and tenancy are assigned to 1.2.
+
+At 0.5, choose the first production workload and review whether OCI and all
+alternative transports must precede 1.0. Until an explicit coordinated version
+reallocation changes the scope map, 0.6-0.9 retain their current homes and remain
+chronological predecessors. This review alone does not accelerate 1.0.
 
 ## Phase 0.6 - Safe Managed OCI And Native Call Cells
 
@@ -230,7 +264,7 @@ names its edition, tested configuration, failure envelope and original evidence.
 
 ## Phase 1.1 - SQL Breadth And PostgreSQL Compatibility
 
-Community scope follows the 0.3 access-path foundation and 1.0 invariants:
+Community scope follows the 0.3.2 access-path foundation and 1.0 invariants:
 
 - partial and expression indexes;
 - `INCLUDE` / covering-index syntax and index-only scans;

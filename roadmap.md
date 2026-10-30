@@ -11,11 +11,15 @@ backed by partitioned and replicated SQL storage.
 This is one ordered release programme. Each planned deliverable has one version
 that owns its initial completion, including its research, documentation and
 acceptance evidence. Later versions name the extension or stronger guarantee
-they add. There are no independent parallel release tracks.
+they add. Independent bounded implementation may proceed concurrently when its
+consumed contracts are defined. One writer owns each changing interaction;
+dependent changes integrate in order and publication follows one release train.
 
-The released baseline is **0.2.8, experimental alpha**, checked on 29 October
-2026. **0.2.9 is the current planned milestone; 0.3 is next.** Version targets
-express scope and priority, not shipping dates or claims of current support.
+The released baseline is **0.3.0, experimental alpha**, checked on 30 October
+2026. **0.3.1 is the bounded correction milestone; 0.3.2 owns full Queryable Core
+completion.** The former future 0.2.9 obligations move into those two releases
+through their existing owners. Version targets express scope and priority, not
+shipping dates or claims of current support.
 Use [Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md)
 for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 
@@ -23,8 +27,8 @@ for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 
 | Version | Milestone | Completion outcome |
 | --- | --- | --- |
-| 0.2.9 | Stable-core completion | Remaining correctness and delivery obligations have public-path evidence and an honest operating envelope. |
-| 0.3 | Queryable Core | Ordinary SQL, indexes, locking reads and live results share correct keys and read semantics. |
+| 0.3.1 | Installed-product and claim corrections | Selected artifact/startup/publication repairs work for their advertised use; declarations identify remaining incomplete features. |
+| 0.3.2 | Queryable Core completion | Ordinary SQL, indexes, locking reads and live results have working public journeys on one candidate, with inherited stable-core and bounded service evidence. |
 | 0.4 | Practical and demonstrated service core | Useful bounded service execution and reproducible multi-machine evidence, including the first qualified Scenario A SQL comparison. |
 | 0.5 | Pilot-ready operation | A secure deployment can be installed, operated, recovered and evaluated within a measured pilot envelope. |
 | 0.6 | Native OCI Call Cells | Real managed native services execute functions at the data through the same service model. |
@@ -36,6 +40,18 @@ for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 | 1.2 | Enterprise deployment and cross-region operation | Assigned enterprise identity, policy, secrets and cross-region profiles have explicit support contracts. |
 | 2.0 | Deeper distributed execution and planning | Dynamic multi-stage execution, advanced planning and the complete Scenario B comparison are demonstrated. |
 | 2.1 | Specialized search services | Vector, full-text, spatial and related services have their own semantics, lifecycle and acceptance. |
+
+Major product capabilities require a tangible, credible journey through their
+ordinary public entrypoint and real production composition. Existing applicable
+evidence is reused; a bounded repair can complete while a wider feature remains
+open with a named owner. Publication alone does not complete a feature.
+
+Target the bounded 0.3.1 correction candidate in the next several working days,
+subject to its acceptance. Review the integrated candidate, passing journeys and
+first blockers by 6 November 2026; use observed repair, review and integration
+throughput by 13 November to set or revise 0.3.2 and 0.4 windows. These are review
+horizons, not shipping promises or waiting periods. Independent 0.4 and 0.5 work
+can advance without creating another release sequence.
 
 ## Released - 0.1 Internal coherence
 
@@ -62,33 +78,35 @@ Published alpha artifacts do not establish general production support or close
 every stabilization obligation. User-partition replica repair is distinct from
 control-plane/message-group log coverage and from a user backup/PITR product.
 
-## Current - 0.2.9 Stable-core completion
+## Released - 0.3.0 implementation baseline
 
-Complete the remaining verified defects and public-path obligations against the
-released foundation. Preserve the delivered consensus, transaction, membership
-and snapshot mechanisms and establish their actual composed behavior.
+[0.3.0](https://github.com/psvensson/lagrange/releases/tag/v0.3.0) is the published
+baseline for completing Queryable Core. Credit its delivered implementation
+without inferring that every public journey or inherited stabilization obligation
+passed. [PR #151](https://github.com/psvensson/lagrange/pull/151) subsequently
+merged the Scenario A framework and runtime corrections onto main. That work is
+part of the next candidate; historical branch receipts do not certify it.
 
-The milestone owns:
+## Current - 0.3.1 Installed-product and claim corrections
 
-- public SQL visibility, conflict, commit/rollback, follower application and
-  recovery behavior, including applicable Scenario A correctness findings;
-- explicit client retry and unknown-outcome semantics, reconciling documentation
-  with current transaction behavior before stronger claims depend on it;
-- remaining ingress, retained-history, diagnostic and queue-bound obligations;
-- genuine installed-package, executable, container and public-service journeys;
-- verified release metadata and Docker Hub documentation synchronization,
-  including remote readback and honest failed/pending publication outcomes; and
-- capability and operating-contract documentation supported by candidate evidence.
+Complete the selected installed-startup, artifact and publication corrections
+through the existing stabilization owners. A new evaluator must be able to
+install a supported distribution, boot it, create/read data and restart within
+the advertised correction-release scope. Check the installed authoring package
+through its documented build and basic deployment path.
 
-Completion requires composed public-path and applicable physical recovery proofs,
-plus observed artifact/documentation publication. Local parser or metadata checks
-alone do not establish these outcomes. Relevant transaction work is preserved in
-[Scenario A implementation work](https://github.com/psvensson/lagrange/pull/148);
-unmerged changes require review and integration before becoming baseline facts.
-The full comparative performance result belongs to 0.4. Existing correctness
-defects are not deferred to that comparison or to production hardening.
+Verify immutable published artifact identities, consumer startup and Docker Hub
+documentation readback, including honest pending or failed publication outcomes.
+Correct current capability and operating declarations, and adopt the standing
+major-feature user-journey requirement. Reuse valid evidence and shared setup;
+the retrospective inventory does not make every historical feature a new gate.
 
-## Next - 0.3 Queryable Core
+Independently proved bounded SQL or feature repairs may ship here. This release
+does not close all Queryable Core axes, the full distributed service journey or
+the remaining stable-core acceptance. Those obligations remain visible for
+0.3.2 with their original owners and evidence.
+
+## Next - 0.3.2 Queryable Core completion
 
 Ordinary SQL should reach the right data efficiently without physical-partition
 knowledge. First define the supported key/row-identity and read-visibility
@@ -110,19 +128,22 @@ The milestone has four outcomes:
    rejection explained by `EXPLAIN DISTRIBUTED`.
 3. **Real locking transactions:** preserve `SELECT ... FOR UPDATE` through the
    canonical SQL path and enforce reservations through the transaction owners,
-   with defined contention, waiting, cancellation, release and recovery.
+   with the supported fail-fast contention, cancellation, release and recovery
+   contract. Broader waiting and locking modes require their own scope decision.
 4. **Live application results:** ordinary SQL owns query identity and future
    dependencies, including changes entering an initially empty result; relevant
    partition CDC drives updates and equivalent local interests are coalesced.
    Startup, reconnect and topology changes preserve a proven result/frontier
    boundary or produce an explicit reset.
 
-0.3 owns the global-index maintenance decision and its proof. Current research
-favors synchronous TX1 maintenance for ordinary non-unique indexes, conditional
-on read completeness and measured contention, fanout and write-availability cost.
-One production model is selected; the recommendation is not an implemented or
-sealed choice. Incomplete read paths fall back safely. Required transactional
-maintenance can refuse a write when unavailable; it cannot silently omit index
+0.3.2 owns completion of the global-index maintenance decision and its proof.
+Current research favors synchronous TX1 maintenance for ordinary non-unique
+indexes, conditional on read completeness and measured contention, fanout and
+write-availability cost.
+Reconcile the existing implementation with one explicitly sealed maintenance
+decision through its current owner; a recommendation or component implementation
+alone does not establish full acceptance. Incomplete read paths fall back safely.
+Required transactional maintenance can refuse a write when unavailable; it cannot silently omit index
 updates. Global uniqueness belongs to 1.0.
 
 Live queries discover changes without polling. Safe plans emit incremental row
@@ -131,10 +152,20 @@ Idle observation performs no repeated data reads to discover change. Consumer
 cleanup, pressure and split/merge/leader transitions are part of the contract.
 
 Completion is demonstrated through declared-key lifecycle, indexed query and
-build recovery, public locking-transaction, and remote live-view journeys. See
+build recovery, public locking-transaction, and remote live-view journeys on one
+identified candidate. The existing stabilization owners also complete remaining
+SQL/retry/unknown-outcome, internal-ingress, retained-history, diagnostic and
+queue-bound obligations, plus the existing bounded public distributed WASI
+service journey. Its service contract does not gain 0.4's expanded features here.
+
+Use the merged Scenario A workload as a current-candidate semantic regression
+with honest performance observations. Full comparative qualification remains
+0.4; defects in the current promised SQL/transaction behavior cannot be deferred
+to that comparison. Relevant restart, concurrency, topology and pressure cases
+must preserve useful progress and cleanup through the actual public owners. See
 [PostgreSQL Locking Reads](architecture/postgres-locking-reads.md),
-[Live Query Data Plane](architecture/live-query-data-plane.md), and the
-[unmerged 0.3 preparation](https://github.com/psvensson/lagrange/pull/74).
+[Live Query Data Plane](architecture/live-query-data-plane.md), and
+[Execution Semantics](docs/execution-semantics.md).
 
 ## Planned - 0.4 Practical and demonstrated service core
 
@@ -157,7 +188,7 @@ do not substitute for 0.5's full secure pilot/failure certification. Input pagin
 within one operation belongs here; multi-stage exchange and the complete dynamic
 Scenario B comparison belong to 2.0. See
 [Execution Semantics](docs/execution-semantics.md) and the
-[comparative workload contract](https://github.com/psvensson/lagrange/blob/3b737ce7e1c818194f8188297dd175f6135e271e/docs/benchmarks/tidb-reference-scenarios.md).
+[comparative workload contract](https://github.com/psvensson/lagrange/blob/a43ce6a9fe3c2ffd17fcb084e596a0c709ba88c9/docs/benchmarks/tidb-reference-scenarios.md).
 
 ## Planned - 0.5 Pilot-ready operation
 
@@ -171,7 +202,7 @@ clients, diagnose failure and rehearse recovery within a measured pilot profile.
 - Certify named PostgreSQL-driver/SQL profiles, supported release-pair upgrade
   and downgrade procedures, and a topology/capacity/failure-domain envelope.
 - Qualify the bounded retained-log and message-group mechanisms completed in
-  0.2.9 under the declared pilot topology, load, soak and recovery profile.
+  0.3.2 under the declared pilot topology, load, soak and recovery profile.
 - Provide one operational view of requests, shard runs, placement, retries and
   failures, plus index build/state and live-query dependency/frontier diagnostics.
 
@@ -181,6 +212,11 @@ commercial implementation home; pilot recovery limitations and independent
 export/reload procedures must already be explicit here. See
 [Operations Readiness](docs/operations-readiness.md),
 [Migration and Adoption](docs/migration.md), and [Security](docs/security.md).
+
+At this milestone, choose the first intended production workload and review
+whether OCI and every alternative transport must precede 1.0. The current
+0.6-0.9 allocations remain chronological predecessors. Accelerating 1.0 requires
+an explicit coordinated version reallocation; this review alone moves no work.
 
 ## Planned - 0.6 Native OCI Call Cells
 
@@ -227,7 +263,8 @@ fallback. Completion includes inherited security, bounded pressure/bulk behavior
 and physical failure/recovery evidence. Existing component measurements are
 inputs, not full baseline certification. The preserved
 [networking preparation](https://github.com/psvensson/lagrange/pull/145) must be
-reconciled against the accepted release baseline before implementation.
+reconciled with consumed owner contracts during integration and with the
+accepted predecessor baseline for milestone acceptance.
 
 ## Planned - 0.8 Veilid-only networking
 
@@ -279,7 +316,7 @@ Support named configurations with explicit, evidenced guarantees:
 
 Completion requires representative certification on named hardware/workloads and
 measured recovery objectives. Support names the qualified transport profiles and
-distinguishes availability from certification. 0.3 may already supply synchronous
+distinguishes availability from certification. 0.3.2 may already supply synchronous
 non-unique maintenance; 1.0 adds uniqueness and production guarantees. Installed
 services consume the 0.6/0.9 lifecycle and gain production compatibility,
 diagnostics, support and operating guarantees.

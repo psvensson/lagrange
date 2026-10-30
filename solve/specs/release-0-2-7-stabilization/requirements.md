@@ -3,34 +3,160 @@ audience: development
 documentClass: planning
 ---
 
-# 0.2.7 stabilization requirements and work packages
+# Stable-core stabilization requirements and work packages
 
 ## Purpose and authority
 
 The [release epic](../../epics/release-0-2-7-stabilization.md) owns coordination.
-This document owns the proposed multi-Quest acceptance contract for the user's
-2026-10-28 stabilization request. The
-[verification dossier](../../epics/release-0-2-7-stabilization/verification-2026-10-28.md)
-owns the audit observations and their evidence ceilings. Runtime contracts,
-bounded Quest seals and immutable proof receipts retain their existing authority.
+This document owns its multi-Quest acceptance and the installation, inherited
+operations and publication journeys consumed by the
+[Queryable Core execution plan](../release-0-3-queryable-core/tasks.md). Preserve
+Q01-Q18 ownership, bounded Quest seals and immutable receipts. The user's
+2026-10-30 adoption changes future completion allocation, not historical proof.
 
-Baseline: `v0.2.6` at `a1e26f6de84433a3913c2ef855d1b787e926d7eb`, rechecked
-against `main` at `98e69ba13db8f9a5bbf6bc919d6e9c941b07ac8e`. The affected
-production implementation is unchanged. This plan establishes no repaired
-runtime, completed Quest, production SLA or published 0.2.7 release.
+The [original verification dossier](../../epics/release-0-2-7-stabilization/verification-2026-10-28.md)
+records the 0.2.6 audit at `a1e26f6de84433a3913c2ef855d1b787e926d7eb` and
+`98e69ba13db8f9a5bbf6bc919d6e9c941b07ac8e`; its findings are dated observations.
+The current reviewed baseline is released 0.3.0 source
+`79ac781fcc3a30482492751b9971cb178e3cfdca` plus PR151 at main
+`a43ce6a9fe3c2ffd17fcb084e596a0c709ba88c9`. Credit delivered work using applicable
+original evidence before opening successors. This plan is not a new runtime
+measurement, repaired product or release certificate.
 
-The outcome is a usable corrective release: admitted SQL preserves its declared
-meaning; internal ingress has an explicit trust boundary; supported runtime
-resources have owned bounds; published artifacts run their advertised journeys;
-and the operating envelope and proof provenance are accurate.
+The outcome is usable public SQL and service behavior, protected internal
+ingress, bounded runtime resources, genuinely usable installed distributions,
+and an accurate operating/provenance contract on one integrated candidate.
+Detailed runtime contracts retain their current owners. The standing
+[Major Feature User Journeys](../../../test/guidelines/release-gate.md#major-feature-user-journeys)
+policy governs feature completion without widening every bounded repair.
+
+## Current version allocation
+
+0.2.9 is retired as a future release. Its stable roadmap IDs and all historical
+seals remain. The following allocation assigns each remaining Q obligation;
+proved components are credited, not implemented again. A selected independently
+proved bounded correction may ship in 0.3.1, without pretending the whole Q17
+or Queryable Core milestone passed.
+
+| Package | 0.3.1 correction scope | 0.3.2 completion scope |
+| --- | --- | --- |
+| Q01-Q03 | Any explicitly selected bounded SQL/key correction and honest declarations | Remaining expression/constraint/key correctness and composed public-path acceptance |
+| Q04 | Credit applicable ingress repairs; selected bounded correction if needed | Remaining internal-ingress obligations and legitimate startup/recovery composition |
+| Q05 | Complete installed runtime/startup for advertised distributions | Consume its applicable artifact evidence in the integrated candidate |
+| Q06 | Installed authoring and documented basic deployment usability | Full existing distributed service business/failure journey consumed by Q17 |
+| Q07 | Actual delivered dependency-tree remediation/disposition | Revalidate applicability when integrated dependencies change |
+| Q08-Q11 | Credit proved diagnostic/admission/snapshot work | Remaining diagnostic/queue bounds, retained-log coverage, debt visibility and recovery correctness |
+| Q12-Q13 | Attributable reusable proof and internally consistent native/artifact provenance for the correction | Preserve/revalidate applicability for final composed proof |
+| Q14 | Accurate current capability/read/retry/upgrade declarations | Named operating, lost-answer and recovery rehearsals |
+| Q15 | Genuine startup/persistence/exposure evidence for the advertised installation profile | Remaining composed private evaluation profile; broader pilot qualification stays 0.5 |
+| Q16 | Correction artifact/publication confirmation, including remote documentation readback | Final integrated artifact/publication confirmation |
+| Q17 | Correction candidate's selected evidence slice only | Full terminal composed stable-core/public-service certification |
+| Q18 | Simplify touched decisions and route remaining debt | Terminal accounting of touched obligations; broader convergence retains its own epic |
+
+The smaller correction release does not alter full terminal acceptance. Initial
+retention correctness stays in 0.3.2; it cannot be moved to 0.5 by relabeling the
+load as a pilot. Full qualified Scenario A comparison and service expansion stay
+0.4. Backup/PITR, enterprise features and production guarantees retain their
+edition/version homes.
+
+## J1 installed-consumer journey
+
+**Initial completion: 0.3.1. Producers: Q05-Q07, Q12-Q16; Q17 consumes the result.**
+
+A new evaluator follows the documented installation for each distribution
+actually claimed supported, starts a clean seed and the declared cluster,
+connects through a public client, creates data, commits a small transaction and
+reads its result, restarts with the intended persistent state, and reads it
+again. A developer uses the installed
+package for documented authoring and basic deployment. Full distributed service
+business/failure acceptance remains Q17/J9 at 0.3.2; this slice does not inherit
+all of that milestone.
+
+Repair the lockfile/runtime-content measurement mismatch at the artifact
+producer/consumer boundary while preserving verification. Investigate npm's
+installed/hoisted dependency layout and required assets separately from Docker
+and standalone executables. A missing or mismatched required input must fail at
+the intended diagnostic while the correct artifact genuinely boots; version,
+import, dry-run and authoring-build checks alone do not establish runtime use.
+
+The imported [lab setup](../../../examples/lab-cluster-smoke/cluster-config.js)
+launches source processes and may reuse pre-existing dependencies. Its release
+profile metadata does not acquire or verify the named tarball. Extend the
+existing fixture or consumer verifier to use actual candidate bytes in a clean
+consumer environment, without checkout-only assets, private dependency symlinks,
+global transitive packages or undocumented state. Bind the report to the source,
+dependency and artifact identity actually executed.
+
+Use shared fresh-install setup: one installed distribution carries the composed
+feature journey, while every advertised packaging surface gets a genuine boot
+or appropriate consumer check. Do not multiply every distribution by every
+feature/fault. Validate candidate artifacts before publication and immutable
+registry identities/practical consumer use afterward through Q16. Public PG or
+service activation uses the supported lifecycle/configuration owner; raw client
+system-table writes must not bypass ingress merely to make setup pass.
+
+## J8 retained-history and recovery journey
+
+**Initial completion: 0.3.2. Producers: Q04, Q08-Q11, Q14-Q15 and Q18.**
+
+An operator runs the declared cluster under foreground work, observes pressure
+and retained-history debt, interrupts or replaces a relevant replica, restarts
+the affected process, and sees acknowledged data preserved and useful service
+resume after finite faults clear. Use the existing snapshot, message-group,
+durable-store, admission and recovery owners. Credit delivered user-partition
+snapshots and applicable diagnostic/ingress repairs; successors address a
+remaining demonstrated cause.
+
+Complete outstanding control-plane/message-group retention and replay under
+the Q10/Q11 contracts. Keep unresolved transaction decisions, CDC custody,
+deduplication and lifecycle obligations safe; generic TTL deletion cannot supply
+reclamation authority. Expose checkpoint/compaction failure, growing retained
+debt and inability to prune. Bound diagnostics, admission and queues as well as
+persistent history. Coordinate changes to user-table CDC production/acknowledgement
+with the [live-query work](../release-0-3-queryable-core/tasks.md), so producer,
+subscriber, slow-consumer/cancellation and retention obligations stay owned.
+
+Use Q10's declared cycles/roles and Q11's fault observations, with actual process,
+replica/storage target and fault-boundary/incarnation evidence. Equal snapshots
+and a no-op restart callback do not prove recovery. Exercise refusal while the
+fault persists and successor progress after it clears, with attributable cleanup
+on failure. Keep safety, progress and resource bounds separate; independent-host
+claims need independent physical hosts. This bounded proof does not establish
+unlimited-age production operation, a general upgrade promise or user backup/PITR.
+
+## J10 integrated-candidate and publication
+
+**Correction evidence: 0.3.1. Full composed acceptance: 0.3.2. Producers: Q16/Q17.**
+
+The release integration owner joins applicable feature and existing service
+journeys on one identified source/dependency/artifact configuration through the
+normal proof authority. A final merge or artifact rebuild cannot silently reuse
+proof from a different runtime. Preserve valid exact-source/content-identity
+reuse and the original proving source. Historical 0.3.0 receipts and CI failures
+retain their own scope; trace current causes rather than using either to certify
+or veto a new head. PR151's cache/readiness changes may change prior failures.
+
+Qualify actual candidate artifacts before publication; afterward observe registry
+identity, consumer startup, version agreement and remote documentation content.
+Use Q16's failure handling, ordered writes and readback contract. Credit the
+successful 0.3.0 Docker Hub PATCH; it does not prove readback or reliable future
+failure handling. A failed/pending external action stays visible while successful
+artifact publication remains credited. Metadata repair does not authorize
+rebuilding or replacing immutable released artifacts.
+
+Update canonical capabilities and their generated projection, current operating
+and architecture explanations, roadmap/task summaries and release instructions
+through their existing owners from the measured support. Preserve original
+release/Quest history. The existing terminal process alone discharges Q17; no
+manual green oracle, synthetic receipt or second acceptance ledger is introduced.
 
 ## Acceptance discipline
 
-- **P1** is a release-blocking correctness, admission, packaging or resource
-  obligation. A reproducer measures the named interaction; a bounded success
+- **P1** is a blocking correctness, admission, packaging or resource
+  obligation for its assigned completion scope/version. A reproducer measures the named interaction; a bounded success
   never substitutes for the final public-service proof.
 - **P2** is required release assurance or operational clarity in this plan.
-  Its acceptance is proportionate to the claim. A deployment or support-envelope
+  Its acceptance is proportionate to the assigned claim. A deployment or support-envelope
   change must be explicit and tested, not an undocumented workaround.
 - Every package names one owner interaction. Split further only when distinct
   durable application contracts require it; do not create one broad repair Quest.
@@ -69,7 +195,7 @@ numbers, quoted strings and parameters remain correct; nondeterministic
 expressions still refuse where required. Exercise direct core, PGwire and
 embedded ingress, with actual native stored rows as the oracle. Reverting the
 correction restores at least one successful NULL corruption. No TX1 rewrite is
-needed. Sequence first; serialize shared parser integration with Q02.
+needed. Coordinate shared parser integration with Q02.
 
 ### Q02 - Make schema admission and physical enforcement agree (P1)
 
@@ -141,7 +267,7 @@ remains separately owned unless explicitly brought into a bounded contract.
 Publish a complete supported platform archive containing the external native
 modules, worker entrypoints and vendored WASM it needs, or make the executable
 truly self-contained. Name platform/architecture and native ABI assumptions.
-Do not market the current bare file as a standalone installation.
+A distribution marketed as standalone must pass that installed journey.
 
 **Acceptance:** download/unpack the exact candidate into an empty directory
 without checkout/node_modules assistance; version, dry-run, actual startup,
@@ -165,7 +291,7 @@ it consistently. Do not rely on this repository's development dependencies.
 runs the documented service init -> generate -> build -> deploy/invoke journey.
 WIT resolution works outside the checkout; the resulting component is valid
 and runs on the supported service path. Missing source, generated records,
-compiler and WIT produce accurate distinct diagnostics. Current misleading
+compiler and WIT produce accurate distinct diagnostics. A misleading
 "generate first" output must not mask a missing compiler. Reverting compiler
 or WIT packaging makes its respective consumer witness fail. Coordinate Q07.
 
@@ -250,7 +376,7 @@ open gate unless product authority explicitly changes the supported envelope.
 **Owner:** existing partition cadence -> diagnostics/health interaction.
 **Finding:** F11.
 
-Consume the typed cadence outcome currently discarded by the timer caller.
+Consume the typed cadence outcome through the timer and diagnostics owners.
 Retain bounded last-success/failure/refusal, checkpoint/compaction position and
 outstanding history bytes/count/age. Health decisions stay with the health
 owner; do not add another readiness authority, retry loop or per-tick error log.
@@ -363,8 +489,10 @@ requires its normal version-specific authority; this epic does not grant it.
 **Docker Hub README synchronization is a required publication obligation.**
 The shared repository overview must describe the latest published stable
 release and latest applicable approved documentation, with clearly historical
-release notes. The 0.2.6 description update returned Forbidden, yet the
-best-effort step let publication appear complete. Q16 must close that gap:
+release notes. Earlier description updates returned Forbidden while the
+best-effort step allowed publication to appear complete. The 0.3.0 PATCH
+succeeded; preserve that observation while closing the remaining failure
+handling/readback gap:
 
 1. **One content source:** retain `docs/dockerhub-overview.md` plus release notes
    from `CHANGELOG.md`, rendered by `scripts/release-notes.js`. Root README is
@@ -430,7 +558,7 @@ artifacts, workload, failure injection and resource bars before its pass run.
 Before measuring acceptance, bind the epic probe's `recordedLog` to the actual
 certification Quest's append-only log when that Quest is created/sealed, and
 select its evidence directory if different from the existing default. The
-current draft has neither that execution binding nor archived measurements;
+current epic has neither that execution binding nor archived measurements;
 archives alone cannot make the existing certification owner return done without
 the log cross-check. Do not synthesize a Quest/log or pass receipt to fill it.
 
@@ -452,6 +580,19 @@ queue bytes/count, log/checkpoint debt and application correctness through the
 declared endurance workload. Local native evidence cannot certify independent
 machine fault domains. Use the supported multi-machine profile for that claim;
 retain the cutover's separate sealed physical certification obligation.
+
+For the existing bounded public WASI journey (J9), reuse the
+[account-summary example](../../../examples/call-binding-account-summary/README.md)
+and Artifact/Binding/Cell owners: build from the supported package, install,
+invoke authenticated HTTP, check the reduced business result from relevant
+partitions, interrupt a worker/leader, and observe declared recovery and cleanup.
+Its current one-process/two-partition example is local evidence. Extend or compose
+the existing harness for the actual distributed execution claim and observe
+local reads/reduction plus complete-result publication. An ordinary SQL workload
+cannot substitute for the service outcome. Keep fixed selectors, bounded input
+and numeric partials; preserve exactly-once result visibility versus possibly
+repeated external effects. Argument narrowing, paging/cancellation, structured
+partials, multi-operation dispatch and multi-machine comparison remain 0.4.
 
 Run normal exact-candidate change, corpus and release proof gates through their
 owners and preserve failures/retries. Final artifact publication verification
@@ -503,8 +644,9 @@ protected, not relabelled missing because a historic record remains OPEN.
 
 ## Release exclusions and decisions still required
 
-The patch does not promise arbitrary PostgreSQL compatibility, secondary
-indexes, general serializable/linearizable reads, unconstrained transactions,
+This stabilization scope does not own the separate Queryable Core index
+implementation and does not promise arbitrary PostgreSQL compatibility,
+general serializable/linearizable reads, unconstrained transactions,
 multi-operation/paged WASI calls, public multi-tenant deployment, commercial
 backup/PITR, rolling/mixed-version upgrades, a broad performance advantage or
 production SLAs. These remain in their existing roadmaps and owners.
