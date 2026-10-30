@@ -75,6 +75,7 @@ jobs:
             test/distributed/harness/comparative-landing-svg-renderer.js \
             test/distributed/harness/comparative-landing-page.js \
             test/distributed/harness/lagrange-evolution-static-web.js \
+            test/distributed/harness/scaleout-node-rf-comparison-static-web.js \
             scripts/checks/distributed-scaleout-provenance-guard.js \
             scripts/checks/comparative-benchmark-matrix-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
