@@ -9,30 +9,19 @@ const TOTAL_EPIC_SLICES = 5;
 
 function createLagrangeTarget() {
   return {
-    targetId: 'lagrange',
-    label: 'Lagrange',
-    version: '0.3.0',
-    category: 'distributed-native',
-    topologyUnits: 3, processCount: 3, rpoZeroSurvivability: true,
-    detailPageMd: 'tidb-comparison-progress.md',
-    detailPageHtml: 'tidb-comparison-progress.html',
+    targetId: 'lagrange', label: 'Lagrange', version: '0.3.0',
+    category: 'distributed-native', topologyUnits: 3, processCount: 3,
+    rpoZeroSurvivability: true,
+    detailPageMd: 'tidb-comparison-progress.md', detailPageHtml: 'tidb-comparison-progress.html',
     scenarioA: {
-      evidenceTier: 'observed-docker-cluster',
-      throughputTxPerSec: 0.83,
-      commitP50Ms: 2269.44,
-      commitP95Ms: 4418.93,
-      commitP99Ms: 5343.1,
+      evidenceTier: 'observed-docker-cluster', throughputTxPerSec: 0.83,
+      commitP50Ms: 2269.44, commitP95Ms: 4418.93, commitP99Ms: 5343.1,
       semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
-      evidenceTier: 'modeled-topology-oracle',
-      decisionsPerSec: 441.15,
-      p50Ms: 12.06,
-      p95Ms: 18.09,
-      p99Ms: 18.09,
-      wanBytesPerDecision: 144,
-      sqlRoundTripsPerDecision: 0,
-      movementContinuityPassed: true,
+      evidenceTier: 'modeled-topology-oracle', decisionsPerSec: 441.15,
+      p50Ms: 12.06, p95Ms: 18.09, p99Ms: 18.09, wanBytesPerDecision: 144,
+      sqlRoundTripsPerDecision: 0, movementContinuityPassed: true,
       shapes: {
         'local-only': {decisionsPerSec: 620.0, p99Ms: 4.2, wanBytes: 0, roundTrips: 0},
         'one-remote-stage': {decisionsPerSec: 495.0, p99Ms: 14.8, wanBytes: 96, roundTrips: 1},
@@ -45,30 +34,19 @@ function createLagrangeTarget() {
 
 function createTidbTarget() {
   return {
-    targetId: 'tidb-tikv',
-    label: 'TiDB + TiKV',
-    version: 'v8.5.8',
-    category: 'distributed-sql',
-    topologyUnits: 6, processCount: 6, rpoZeroSurvivability: true,
-    detailPageMd: 'tidb-comparison-progress.md',
-    detailPageHtml: 'tidb-comparison-progress.html',
+    targetId: 'tidb-tikv', label: 'TiDB + TiKV', version: 'v8.5.8',
+    category: 'distributed-sql', topologyUnits: 6, processCount: 6,
+    rpoZeroSurvivability: true,
+    detailPageMd: 'tidb-comparison-progress.md', detailPageHtml: 'tidb-comparison-progress.html',
     scenarioA: {
-      evidenceTier: 'observed-docker-cluster',
-      throughputTxPerSec: 6.75,
-      commitP50Ms: 535.12,
-      commitP95Ms: 1383.18,
-      commitP99Ms: 1887.96,
+      evidenceTier: 'observed-docker-cluster', throughputTxPerSec: 6.75,
+      commitP50Ms: 535.12, commitP95Ms: 1383.18, commitP99Ms: 1887.96,
       semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
-      evidenceTier: 'modeled-topology-oracle',
-      decisionsPerSec: 221.44,
-      p50Ms: 24.06,
-      p95Ms: 36.08,
-      p99Ms: 36.08,
-      wanBytesPerDecision: 6144,
-      sqlRoundTripsPerDecision: 4.5,
-      movementContinuityPassed: true,
+      evidenceTier: 'modeled-topology-oracle', decisionsPerSec: 221.44,
+      p50Ms: 24.06, p95Ms: 36.08, p99Ms: 36.08, wanBytesPerDecision: 6144,
+      sqlRoundTripsPerDecision: 4.5, movementContinuityPassed: true,
       shapes: {
         'local-only': {decisionsPerSec: 280.0, p99Ms: 16.5, wanBytes: 2048, roundTrips: 2},
         'one-remote-stage': {decisionsPerSec: 235.0, p99Ms: 32.1, wanBytes: 4096, roundTrips: 4},
@@ -83,28 +61,19 @@ function createPgSingleTarget() {
   return {
     targetId: 'pg-single-primary',
     label: 'PostgreSQL 17 (Single Primary + App Service)',
-    version: '17.2',
-    category: 'relational-single-primary',
+    version: '17.2', category: 'relational-single-primary',
     topologyUnits: 2, processCount: 2, rpoZeroSurvivability: false,
     detailPageMd: 'postgresql-comparison-progress.md',
     detailPageHtml: 'postgresql-comparison-progress.html',
     scenarioA: {
-      evidenceTier: 'modeled-topology-oracle',
-      throughputTxPerSec: 14.8,
-      commitP50Ms: 185.4,
-      commitP95Ms: 412.6,
-      commitP99Ms: 580.2,
+      evidenceTier: 'modeled-topology-oracle', throughputTxPerSec: 14.8,
+      commitP50Ms: 185.4, commitP95Ms: 412.6, commitP99Ms: 580.2,
       semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
-      evidenceTier: 'modeled-topology-oracle',
-      decisionsPerSec: 294.6,
-      p50Ms: 15.4,
-      p95Ms: 22.8,
-      p99Ms: 26.4,
-      wanBytesPerDecision: 1420,
-      sqlRoundTripsPerDecision: 2.75,
-      movementContinuityPassed: false,
+      evidenceTier: 'modeled-topology-oracle', decisionsPerSec: 294.6,
+      p50Ms: 15.4, p95Ms: 22.8, p99Ms: 26.4, wanBytesPerDecision: 1420,
+      sqlRoundTripsPerDecision: 2.75, movementContinuityPassed: false,
       shapes: {
         'local-only': {decisionsPerSec: 520.0, p99Ms: 7.4, wanBytes: 640, roundTrips: 1},
         'one-remote-stage': {decisionsPerSec: 330.0, p99Ms: 14.2, wanBytes: 1180, roundTrips: 2},
@@ -119,28 +88,19 @@ function createPgPatroniTarget() {
   return {
     targetId: 'pg-patroni-sync-ha-rf3',
     label: 'PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)',
-    version: '17.2-patroni-4.0',
-    category: 'relational-sync-ha',
+    version: '17.2-patroni-4.0', category: 'relational-sync-ha',
     topologyUnits: 6, processCount: 9, rpoZeroSurvivability: true,
     detailPageMd: 'postgresql-comparison-progress.md',
     detailPageHtml: 'postgresql-comparison-progress.html',
     scenarioA: {
-      evidenceTier: 'modeled-topology-oracle',
-      throughputTxPerSec: 8.4,
-      commitP50Ms: 390.2,
-      commitP95Ms: 920.5,
-      commitP99Ms: 1290.8,
+      evidenceTier: 'modeled-topology-oracle', throughputTxPerSec: 8.4,
+      commitP50Ms: 390.2, commitP95Ms: 920.5, commitP99Ms: 1290.8,
       semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
-      evidenceTier: 'modeled-topology-oracle',
-      decisionsPerSec: 218.2,
-      p50Ms: 21.8,
-      p95Ms: 31.4,
-      p99Ms: 35.2,
-      wanBytesPerDecision: 2680,
-      sqlRoundTripsPerDecision: 2.75,
-      movementContinuityPassed: true,
+      evidenceTier: 'modeled-topology-oracle', decisionsPerSec: 218.2,
+      p50Ms: 21.8, p95Ms: 31.4, p99Ms: 35.2, wanBytesPerDecision: 2680,
+      sqlRoundTripsPerDecision: 2.75, movementContinuityPassed: true,
       shapes: {
         'local-only': {decisionsPerSec: 385.0, p99Ms: 11.2, wanBytes: 1280, roundTrips: 1},
         'one-remote-stage': {decisionsPerSec: 248.0, p99Ms: 19.8, wanBytes: 2240, roundTrips: 2},
@@ -155,28 +115,19 @@ function createPgPlpgsqlSingleTarget() {
   return {
     targetId: 'pg-plpgsql-single-primary',
     label: 'PostgreSQL 17 (Single Primary + PL/pgSQL Function)',
-    version: '17.2-plpgsql',
-    category: 'relational-server-function',
+    version: '17.2-plpgsql', category: 'relational-server-function',
     topologyUnits: 1, processCount: 1, rpoZeroSurvivability: false,
     detailPageMd: 'postgresql-comparison-progress.md',
     detailPageHtml: 'postgresql-comparison-progress.html',
     scenarioA: {
-      evidenceTier: 'modeled-topology-oracle',
-      throughputTxPerSec: 14.8,
-      commitP50Ms: 185.4,
-      commitP95Ms: 412.6,
-      commitP99Ms: 580.2,
+      evidenceTier: 'modeled-topology-oracle', throughputTxPerSec: 14.8,
+      commitP50Ms: 185.4, commitP95Ms: 412.6, commitP99Ms: 580.2,
       semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
-      evidenceTier: 'modeled-topology-oracle',
-      decisionsPerSec: 418.4,
-      p50Ms: 9.8,
-      p95Ms: 14.9,
-      p99Ms: 17.6,
-      wanBytesPerDecision: 320,
-      sqlRoundTripsPerDecision: 1.0,
-      movementContinuityPassed: false,
+      evidenceTier: 'modeled-topology-oracle', decisionsPerSec: 418.4,
+      p50Ms: 9.8, p95Ms: 14.9, p99Ms: 17.6, wanBytesPerDecision: 320,
+      sqlRoundTripsPerDecision: 1.0, movementContinuityPassed: false,
       shapes: {
         'local-only': {decisionsPerSec: 590.0, p99Ms: 5.1, wanBytes: 256, roundTrips: 1},
         'one-remote-stage': {decisionsPerSec: 442.0, p99Ms: 10.6, wanBytes: 320, roundTrips: 1},
@@ -191,28 +142,19 @@ function createPgPlpgsqlPatroniTarget() {
   return {
     targetId: 'pg-plpgsql-sync-ha-rf3',
     label: 'PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function)',
-    version: '17.2-patroni-4.0-plpgsql',
-    category: 'relational-sync-ha-function',
+    version: '17.2-patroni-4.0-plpgsql', category: 'relational-sync-ha-function',
     topologyUnits: 5, processCount: 8, rpoZeroSurvivability: true,
     detailPageMd: 'postgresql-comparison-progress.md',
     detailPageHtml: 'postgresql-comparison-progress.html',
     scenarioA: {
-      evidenceTier: 'modeled-topology-oracle',
-      throughputTxPerSec: 8.4,
-      commitP50Ms: 390.2,
-      commitP95Ms: 920.5,
-      commitP99Ms: 1290.8,
+      evidenceTier: 'modeled-topology-oracle', throughputTxPerSec: 8.4,
+      commitP50Ms: 390.2, commitP95Ms: 920.5, commitP99Ms: 1290.8,
       semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
-      evidenceTier: 'modeled-topology-oracle',
-      decisionsPerSec: 316.8,
-      p50Ms: 13.9,
-      p95Ms: 20.8,
-      p99Ms: 24.1,
-      wanBytesPerDecision: 960,
-      sqlRoundTripsPerDecision: 1.0,
-      movementContinuityPassed: true,
+      evidenceTier: 'modeled-topology-oracle', decisionsPerSec: 316.8,
+      p50Ms: 13.9, p95Ms: 20.8, p99Ms: 24.1, wanBytesPerDecision: 960,
+      sqlRoundTripsPerDecision: 1.0, movementContinuityPassed: true,
       shapes: {
         'local-only': {decisionsPerSec: 455.0, p99Ms: 7.8, wanBytes: 768, roundTrips: 1},
         'one-remote-stage': {decisionsPerSec: 338.0, p99Ms: 14.9, wanBytes: 960, roundTrips: 1},
@@ -223,23 +165,74 @@ function createPgPlpgsqlPatroniTarget() {
   };
 }
 
+function createCitusSqlTarget() {
+  return {
+    targetId: 'citus-sql-service',
+    label: 'Citus 13 (Sharded SQL RF=3 + App Service)',
+    shortLabel: 'Citus 13 (Sharded SQL + App)',
+    version: '13.0-pg17', category: 'sharded-postgresql-sql',
+    topologyUnits: 5, processCount: 5, rpoZeroSurvivability: true,
+    detailPageMd: 'citus-comparison-progress.md', detailPageHtml: 'citus-comparison-progress.html',
+    scenarioA: {
+      evidenceTier: 'modeled-topology-oracle', throughputTxPerSec: 11.2,
+      commitP50Ms: 280.4, commitP95Ms: 685.0, commitP99Ms: 960.4,
+      semanticProofPassed: 33, semanticProofTotal: 33,
+    },
+    scenarioB: {
+      evidenceTier: 'modeled-topology-oracle', decisionsPerSec: 256.4,
+      p50Ms: 18.2, p95Ms: 27.6, p99Ms: 31.8, wanBytesPerDecision: 3120,
+      sqlRoundTripsPerDecision: 3.0, movementContinuityPassed: true,
+      shapes: {
+        'local-only': {decisionsPerSec: 468.0, p99Ms: 8.9, wanBytes: 1120, roundTrips: 1},
+        'one-remote-stage': {decisionsPerSec: 276.0, p99Ms: 18.4, wanBytes: 2480, roundTrips: 2},
+        'sequential': {decisionsPerSec: 164.0, p99Ms: 33.8, wanBytes: 4480, roundTrips: 4},
+        'fan-out': {decisionsPerSec: 196.0, p99Ms: 28.4, wanBytes: 4400, roundTrips: 3},
+      },
+    },
+  };
+}
+
+function createCitusUdfTarget() {
+  return {
+    targetId: 'citus-distributed-function',
+    label: 'Citus 13 (Colocated Tables + Distributed Function RF=3)',
+    shortLabel: 'Citus 13 (Dist Function)',
+    version: '13.0-pg17-udf', category: 'sharded-postgresql-colocated-udf',
+    topologyUnits: 4, processCount: 4, rpoZeroSurvivability: true,
+    detailPageMd: 'citus-comparison-progress.md', detailPageHtml: 'citus-comparison-progress.html',
+    scenarioA: {
+      evidenceTier: 'modeled-topology-oracle', throughputTxPerSec: 11.2,
+      commitP50Ms: 280.4, commitP95Ms: 685.0, commitP99Ms: 960.4,
+      semanticProofPassed: 33, semanticProofTotal: 33,
+    },
+    scenarioB: {
+      evidenceTier: 'modeled-topology-oracle', decisionsPerSec: 364.2,
+      p50Ms: 13.4, p95Ms: 20.1, p99Ms: 22.9, wanBytesPerDecision: 1540,
+      sqlRoundTripsPerDecision: 1.75, movementContinuityPassed: true,
+      shapes: {
+        'local-only': {decisionsPerSec: 605.0, p99Ms: 4.8, wanBytes: 280, roundTrips: 1},
+        'one-remote-stage': {decisionsPerSec: 382.0, p99Ms: 14.6, wanBytes: 1240, roundTrips: 2},
+        'sequential': {decisionsPerSec: 228.0, p99Ms: 26.8, wanBytes: 2360, roundTrips: 3},
+        'fan-out': {decisionsPerSec: 268.0, p99Ms: 23.4, wanBytes: 2280, roundTrips: 2},
+      },
+    },
+  };
+}
+
 function buildMultiSystemComparativeMatrix(options = {}) {
   const updatedAt = typeof options.updatedAt === 'string' ?
     options.updatedAt : '2026-10-30T16:45:00.000Z';
   return {
-    schema: MULTI_SYSTEM_MATRIX_SCHEMA,
-    epicId: EPIC_ID,
-    totalSlices: TOTAL_EPIC_SLICES,
+    schema: MULTI_SYSTEM_MATRIX_SCHEMA, epicId: EPIC_ID, totalSlices: TOTAL_EPIC_SLICES,
     completedSlices: [
       'comparative-landing-page-and-postgresql-app-service',
       'postgresql-plpgsql-server-side-locality-control',
+      'citus-colocated-tables-and-distributed-functions',
     ],
-    remainingSlicesCount: 3,
-    updatedAt,
+    remainingSlicesCount: 2, updatedAt,
     scenarios: [
       {
-        scenarioId: 'tidb-oltp-baseline',
-        label: 'Scenario A: Contended OLTP Baseline',
+        scenarioId: 'tidb-oltp-baseline', label: 'Scenario A: Contended OLTP Baseline',
         definitionHref: 'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline',
         semanticGateHref: 'tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate',
       },
@@ -251,12 +244,10 @@ function buildMultiSystemComparativeMatrix(options = {}) {
       },
     ],
     targets: [
-      createLagrangeTarget(),
-      createTidbTarget(),
-      createPgSingleTarget(),
-      createPgPatroniTarget(),
-      createPgPlpgsqlSingleTarget(),
-      createPgPlpgsqlPatroniTarget(),
+      createLagrangeTarget(), createTidbTarget(),
+      createPgSingleTarget(), createPgPatroniTarget(),
+      createPgPlpgsqlSingleTarget(), createPgPlpgsqlPatroniTarget(),
+      createCitusSqlTarget(), createCitusUdfTarget(),
     ],
   };
 }
@@ -264,8 +255,7 @@ function buildMultiSystemComparativeMatrix(options = {}) {
 async function readMultiSystemComparativeMatrix(options = {}) {
   const rootDir = options.rootDir || process.cwd();
   const filePath = options.matrixPath || path.resolve(rootDir, DEFAULT_MULTI_SYSTEM_MATRIX_PATH);
-  const raw = await readFile(filePath, 'utf8');
-  return JSON.parse(raw);
+  return JSON.parse(await readFile(filePath, 'utf8'));
 }
 
 async function writeMultiSystemComparativeMatrix(options = {}) {

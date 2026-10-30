@@ -66,7 +66,8 @@ function renderComparativeLandingMarkdown(matrix) {
     '  - [Scenario A Semantic Evidence Gate (scenario-a-semantic-closure)](tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate)\n' +
     '- Detail pages:\n' +
     '  - [TiDB / TiKV & Lagrange Comparison Progress](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html))\n' +
-    '  - [PostgreSQL Single-Primary & Patroni Sync-HA Comparison](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html))\n\n' +
+    '  - [PostgreSQL Single-Primary & Patroni Sync-HA Comparison](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html))\n' +
+    '  - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))\n\n' +
     '![Multi-system comparative benchmark overview](comparative-overview.svg)\n\n' +
     'Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg) | [TiDB comparison progress chart](tidb-comparison-progress.svg)\n\n' +
     '## Evidence-tier and measurement boundary qualification\n\n' +
@@ -167,7 +168,9 @@ function renderComparativeLandingHtml(matrix) {
     '<a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B</a> | ' +
     '<a href="tidb-reference-paired-owner.md">Paired Benchmark Owner</a> | ' +
     '<a href="tidb-comparison-progress.html">TiDB Progress</a> | ' +
-    '<a href="postgresql-comparison-progress.html">PostgreSQL Progress</a></p>\n' +
+    '<a href="postgresql-comparison-progress.html">PostgreSQL Progress</a> | ' +
+    '<a href="citus-comparison-progress.html">Citus Distributed Functions (HTML)</a> | ' +
+    '<a href="citus-comparison-progress.md">Citus Detail (MD)</a></p>\n' +
     `    <div class="chart-box">${svg}</div>\n` +
     '    <div class="filter-bar"><label for="landing-filter">Filter:</label><input type="text" id="landing-filter" placeholder="Filter targets, categories, shapes..."/></div>\n' +
     '    <div class="card">\n' +

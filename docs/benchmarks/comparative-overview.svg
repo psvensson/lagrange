@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 958" width="960" height="958" role="img" aria-label="Lagrange Comparative Benchmark Statistics - Multi-System Overview">
-  <rect width="960" height="958" fill="#0f172a" rx="12"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1174" width="960" height="1174" role="img" aria-label="Lagrange Comparative Benchmark Statistics - Multi-System Overview">
+  <rect width="960" height="1174" fill="#0f172a" rx="12"/>
   <text x="30" y="32" fill="#f8fafc" font-size="18" font-weight="700" font-family="system-ui, sans-serif">Lagrange Comparative Benchmark Statistics - Multi-System Overview</text>
   <text x="30" y="50" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Targets: Lagrange, TiDB + TiKV, PG 17 (Single + App Service), PG 17 (Patroni Sync HA + App)</text>
-  <text x="30" y="66" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">         PG 17 (Single + PL/pgSQL Fn), PG 17 (Patroni HA + PL/pgSQL)</text>
+  <text x="30" y="66" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">         PG 17 (Single + PL/pgSQL Fn), PG 17 (Patroni HA + PL/pgSQL), Citus 13 (Sharded SQL + App), Citus 13 (Dist Function)</text>
   <text x="30" y="82" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Legend: solid bar = observed-docker-cluster | dashed bar = modeled-topology-oracle</text>
   <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="30" y="106" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">Scenario A - Contended OLTP Baseline (tidb-oltp-baseline) &amp; Topology Footprint</text></a>
-  <rect x="30" y="118" width="280" height="392" rx="8" fill="#1e293b" stroke="#334155"/>
+  <rect x="30" y="118" width="280" height="500" rx="8" fill="#1e293b" stroke="#334155"/>
   <text x="45" y="146" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario A Throughput (tx/sec)</text>
   <text x="45" y="164" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Contended OLTP Capacity</text>
     <text x="45" y="186" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
@@ -32,7 +32,15 @@
     <text x="45" y="469" fill="#94a3b8" font-size="10" font-family="monospace">8.40 tx/s</text>
     <rect x="45" y="474" width="220" height="11" fill="#334155" rx="3"/>
     <rect x="45" y="474" width="125" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-  <rect x="340" y="118" width="280" height="392" rx="8" fill="#1e293b" stroke="#334155"/>
+    <text x="45" y="510" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="45" y="523" fill="#94a3b8" font-size="10" font-family="monospace">11.20 tx/s</text>
+    <rect x="45" y="528" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="528" width="166" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="564" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="45" y="577" fill="#94a3b8" font-size="10" font-family="monospace">11.20 tx/s</text>
+    <rect x="45" y="582" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="582" width="166" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="340" y="118" width="280" height="500" rx="8" fill="#1e293b" stroke="#334155"/>
   <text x="355" y="146" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario A Commit Latency p95 (ms)</text>
   <text x="355" y="164" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Commit Tail Distribution</text>
     <text x="355" y="186" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
@@ -59,7 +67,15 @@
     <text x="355" y="469" fill="#94a3b8" font-size="10" font-family="monospace">920.50 ms</text>
     <rect x="355" y="474" width="220" height="11" fill="#334155" rx="3"/>
     <rect x="355" y="474" width="46" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-  <rect x="650" y="118" width="280" height="392" rx="8" fill="#1e293b" stroke="#334155"/>
+    <text x="355" y="510" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="355" y="523" fill="#94a3b8" font-size="10" font-family="monospace">685.00 ms</text>
+    <rect x="355" y="528" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="528" width="34" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="564" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="355" y="577" fill="#94a3b8" font-size="10" font-family="monospace">685.00 ms</text>
+    <rect x="355" y="582" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="582" width="34" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="650" y="118" width="280" height="500" rx="8" fill="#1e293b" stroke="#334155"/>
   <text x="665" y="146" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Whole-Topology Units &amp; Processes</text>
   <text x="665" y="164" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Footprint &amp; RPO=0 HA Survival</text>
     <text x="665" y="186" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
@@ -98,86 +114,122 @@
     <rect x="665" y="474" width="124" height="11" fill="#d97706" rx="3"/>
     <rect x="815" y="472" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="483" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="534" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision)</text></a>
-  <rect x="30" y="546" width="280" height="392" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="45" y="574" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Risk Decisions/sec</text>
-  <text x="45" y="592" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Throughput (higher is better)</text>
-    <text x="45" y="614" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
-    <text x="45" y="627" fill="#94a3b8" font-size="10" font-family="monospace">441.15 dec/s</text>
-    <rect x="45" y="632" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="632" width="220" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="668" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
-    <text x="45" y="681" fill="#94a3b8" font-size="10" font-family="monospace">221.44 dec/s</text>
-    <rect x="45" y="686" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="686" width="110" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="722" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
-    <text x="45" y="735" fill="#94a3b8" font-size="10" font-family="monospace">294.60 dec/s</text>
+    <text x="665" y="510" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="665" y="523" fill="#94a3b8" font-size="10" font-family="monospace">5u / 5p</text>
+    <rect x="665" y="528" width="140" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="528" width="78" height="11" fill="#db2777" rx="3"/>
+    <rect x="815" y="526" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
+    <text x="852" y="537" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
+    <text x="665" y="564" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="665" y="577" fill="#94a3b8" font-size="10" font-family="monospace">4u / 4p</text>
+    <rect x="665" y="582" width="140" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="582" width="62" height="11" fill="#ec4899" rx="3"/>
+    <rect x="815" y="580" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
+    <text x="852" y="591" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
+  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="642" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision)</text></a>
+  <rect x="30" y="654" width="280" height="500" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="45" y="682" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Risk Decisions/sec</text>
+  <text x="45" y="700" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Throughput (higher is better)</text>
+    <text x="45" y="722" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="45" y="735" fill="#94a3b8" font-size="10" font-family="monospace">441.15 dec/s</text>
     <rect x="45" y="740" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="740" width="147" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="776" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
-    <text x="45" y="789" fill="#94a3b8" font-size="10" font-family="monospace">218.20 dec/s</text>
+    <rect x="45" y="740" width="220" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="776" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="45" y="789" fill="#94a3b8" font-size="10" font-family="monospace">221.44 dec/s</text>
     <rect x="45" y="794" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="794" width="109" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="830" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
-    <text x="45" y="843" fill="#94a3b8" font-size="10" font-family="monospace">418.40 dec/s</text>
+    <rect x="45" y="794" width="110" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="830" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="45" y="843" fill="#94a3b8" font-size="10" font-family="monospace">294.60 dec/s</text>
     <rect x="45" y="848" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="848" width="209" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="884" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
-    <text x="45" y="897" fill="#94a3b8" font-size="10" font-family="monospace">316.80 dec/s</text>
+    <rect x="45" y="848" width="147" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="884" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="45" y="897" fill="#94a3b8" font-size="10" font-family="monospace">218.20 dec/s</text>
     <rect x="45" y="902" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="902" width="158" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-  <rect x="340" y="546" width="280" height="392" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="355" y="574" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Decision p99 Latency (ms)</text>
-  <text x="355" y="592" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Decision Tail + Shape Markers</text>
-    <text x="355" y="614" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
-    <text x="355" y="627" fill="#94a3b8" font-size="10" font-family="monospace">18.09 ms (loc 4.2 | seq 22.4)</text>
-    <rect x="355" y="632" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="632" width="110" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="668" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
-    <text x="355" y="681" fill="#94a3b8" font-size="10" font-family="monospace">36.08 ms (loc 16.5 | seq 48.6)</text>
-    <rect x="355" y="686" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="686" width="220" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="722" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
-    <text x="355" y="735" fill="#94a3b8" font-size="10" font-family="monospace">26.40 ms (loc 7.4 | seq 24.8)</text>
+    <rect x="45" y="902" width="109" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="938" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="45" y="951" fill="#94a3b8" font-size="10" font-family="monospace">418.40 dec/s</text>
+    <rect x="45" y="956" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="956" width="209" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="992" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="45" y="1005" fill="#94a3b8" font-size="10" font-family="monospace">316.80 dec/s</text>
+    <rect x="45" y="1010" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="1010" width="158" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1046" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="45" y="1059" fill="#94a3b8" font-size="10" font-family="monospace">256.40 dec/s</text>
+    <rect x="45" y="1064" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="1064" width="128" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1100" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="45" y="1113" fill="#94a3b8" font-size="10" font-family="monospace">364.20 dec/s</text>
+    <rect x="45" y="1118" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="1118" width="182" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="340" y="654" width="280" height="500" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="355" y="682" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Decision p99 Latency (ms)</text>
+  <text x="355" y="700" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Decision Tail + Shape Markers</text>
+    <text x="355" y="722" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="355" y="735" fill="#94a3b8" font-size="10" font-family="monospace">18.09 ms (loc 4.2 | seq 22.4)</text>
     <rect x="355" y="740" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="740" width="161" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="776" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
-    <text x="355" y="789" fill="#94a3b8" font-size="10" font-family="monospace">35.20 ms (loc 11.2 | seq 34.6)</text>
+    <rect x="355" y="740" width="110" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="776" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="355" y="789" fill="#94a3b8" font-size="10" font-family="monospace">36.08 ms (loc 16.5 | seq 48.6)</text>
     <rect x="355" y="794" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="794" width="215" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="830" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
-    <text x="355" y="843" fill="#94a3b8" font-size="10" font-family="monospace">17.60 ms (loc 5.1 | seq 17.8)</text>
+    <rect x="355" y="794" width="220" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="830" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="355" y="843" fill="#94a3b8" font-size="10" font-family="monospace">26.40 ms (loc 7.4 | seq 24.8)</text>
     <rect x="355" y="848" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="848" width="107" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="884" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
-    <text x="355" y="897" fill="#94a3b8" font-size="10" font-family="monospace">24.10 ms (loc 7.8 | seq 25.2)</text>
+    <rect x="355" y="848" width="161" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="884" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="355" y="897" fill="#94a3b8" font-size="10" font-family="monospace">35.20 ms (loc 11.2 | seq 34.6)</text>
     <rect x="355" y="902" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="902" width="147" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-  <rect x="650" y="546" width="280" height="392" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="665" y="574" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Wire / WAN Traffic per Decision (bytes)</text>
-  <text x="665" y="592" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Network Payload (lower is better)</text>
-    <text x="665" y="614" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
-    <text x="665" y="627" fill="#94a3b8" font-size="10" font-family="monospace">144 B/dec</text>
-    <rect x="665" y="632" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="632" width="5" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="668" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
-    <text x="665" y="681" fill="#94a3b8" font-size="10" font-family="monospace">6144 B/dec</text>
-    <rect x="665" y="686" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="686" width="220" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="722" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
-    <text x="665" y="735" fill="#94a3b8" font-size="10" font-family="monospace">1420 B/dec</text>
+    <rect x="355" y="902" width="215" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="938" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="355" y="951" fill="#94a3b8" font-size="10" font-family="monospace">17.60 ms (loc 5.1 | seq 17.8)</text>
+    <rect x="355" y="956" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="956" width="107" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="992" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="355" y="1005" fill="#94a3b8" font-size="10" font-family="monospace">24.10 ms (loc 7.8 | seq 25.2)</text>
+    <rect x="355" y="1010" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="1010" width="147" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1046" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="355" y="1059" fill="#94a3b8" font-size="10" font-family="monospace">31.80 ms (loc 8.9 | seq 33.8)</text>
+    <rect x="355" y="1064" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="1064" width="194" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1100" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="355" y="1113" fill="#94a3b8" font-size="10" font-family="monospace">22.90 ms (loc 4.8 | seq 26.8)</text>
+    <rect x="355" y="1118" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="1118" width="140" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="650" y="654" width="280" height="500" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="665" y="682" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Wire / WAN Traffic per Decision (bytes)</text>
+  <text x="665" y="700" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Network Payload (lower is better)</text>
+    <text x="665" y="722" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="665" y="735" fill="#94a3b8" font-size="10" font-family="monospace">144 B/dec</text>
     <rect x="665" y="740" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="740" width="51" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="776" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
-    <text x="665" y="789" fill="#94a3b8" font-size="10" font-family="monospace">2680 B/dec</text>
+    <rect x="665" y="740" width="5" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="776" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="665" y="789" fill="#94a3b8" font-size="10" font-family="monospace">6144 B/dec</text>
     <rect x="665" y="794" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="794" width="96" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="830" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
-    <text x="665" y="843" fill="#94a3b8" font-size="10" font-family="monospace">320 B/dec</text>
+    <rect x="665" y="794" width="220" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="830" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="665" y="843" fill="#94a3b8" font-size="10" font-family="monospace">1420 B/dec</text>
     <rect x="665" y="848" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="848" width="11" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="884" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
-    <text x="665" y="897" fill="#94a3b8" font-size="10" font-family="monospace">960 B/dec</text>
+    <rect x="665" y="848" width="51" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="884" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="665" y="897" fill="#94a3b8" font-size="10" font-family="monospace">2680 B/dec</text>
     <rect x="665" y="902" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="902" width="34" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <rect x="665" y="902" width="96" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="938" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="665" y="951" fill="#94a3b8" font-size="10" font-family="monospace">320 B/dec</text>
+    <rect x="665" y="956" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="956" width="11" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="992" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="665" y="1005" fill="#94a3b8" font-size="10" font-family="monospace">960 B/dec</text>
+    <rect x="665" y="1010" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="1010" width="34" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1046" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="665" y="1059" fill="#94a3b8" font-size="10" font-family="monospace">3120 B/dec</text>
+    <rect x="665" y="1064" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="1064" width="112" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1100" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="665" y="1113" fill="#94a3b8" font-size="10" font-family="monospace">1540 B/dec</text>
+    <rect x="665" y="1118" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="1118" width="55" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
 </svg>

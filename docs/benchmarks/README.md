@@ -11,6 +11,7 @@ Deterministic multi-system comparative benchmark statistics across PostgreSQL, T
 - Detail pages:
   - [TiDB / TiKV & Lagrange Comparison Progress](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html))
   - [PostgreSQL Single-Primary & Patroni Sync-HA Comparison](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html))
+  - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))
 
 ![Multi-system comparative benchmark overview](comparative-overview.svg)
 
@@ -36,6 +37,8 @@ Two distinct measurement boundaries are evaluated:
 | PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) 17.2-patroni-4.0 | relational-sync-ha | 6 (9) | Yes | 8.40 (920.50 ms) | 218.20 (35.20 ms) | 2680 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
 | PostgreSQL 17 (Single Primary + PL/pgSQL Function) 17.2-plpgsql | relational-server-function | 1 (1) | No | 14.80 (412.60 ms) | 418.40 (17.60 ms) | 320 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
 | PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) 17.2-patroni-4.0-plpgsql | relational-sync-ha-function | 5 (8) | Yes | 8.40 (920.50 ms) | 316.80 (24.10 ms) | 960 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| Citus 13 (Sharded SQL RF=3 + App Service) 13.0-pg17 | sharded-postgresql-sql | 5 (5) | Yes | 11.20 (685.00 ms) | 256.40 (31.80 ms) | 3120 B | `modeled-topology-oracle` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) 13.0-pg17-udf | sharded-postgresql-colocated-udf | 4 (4) | Yes | 11.20 (685.00 ms) | 364.20 (22.90 ms) | 1540 B | `modeled-topology-oracle` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
 
 ## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
@@ -65,3 +68,11 @@ Two distinct measurement boundaries are evaluated:
 | PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | one-remote-stage | 338.00 | 14.90 | 1 | 960 B |
 | PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | sequential | 234.00 | 25.20 | 1 | 1056 B |
 | PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | fan-out | 272.00 | 21.80 | 1 | 1056 B |
+| Citus 13 (Sharded SQL RF=3 + App Service) | local-only | 468.00 | 8.90 | 1 | 1120 B |
+| Citus 13 (Sharded SQL RF=3 + App Service) | one-remote-stage | 276.00 | 18.40 | 2 | 2480 B |
+| Citus 13 (Sharded SQL RF=3 + App Service) | sequential | 164.00 | 33.80 | 4 | 4480 B |
+| Citus 13 (Sharded SQL RF=3 + App Service) | fan-out | 196.00 | 28.40 | 3 | 4400 B |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | local-only | 605.00 | 4.80 | 1 | 280 B |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | one-remote-stage | 382.00 | 14.60 | 2 | 1240 B |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | sequential | 228.00 | 26.80 | 3 | 2360 B |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | fan-out | 268.00 | 23.40 | 2 | 2280 B |

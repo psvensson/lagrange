@@ -25,6 +25,15 @@ import {
   writePostgresqlComparisonStaticWebArtifacts,
 } from '../../test/distributed/harness/postgresql-comparison-static-web.js';
 import {
+  DEFAULT_CITUS_PROGRESS_HTML_PATH,
+  DEFAULT_CITUS_PROGRESS_MD_PATH,
+  DEFAULT_CITUS_PROGRESS_SVG_PATH,
+  renderCitusComparisonHtml,
+  renderCitusComparisonMarkdown,
+  renderCitusComparisonSvg,
+  writeCitusComparisonStaticWebArtifacts,
+} from '../../test/distributed/harness/citus-comparison-static-web.js';
+import {
   CANONICAL_DEFAULT_TARGETS,
   DEFAULT_COMPARATIVE_LANDING_HTML_PATH,
   DEFAULT_COMPARATIVE_LANDING_MD_PATH,
@@ -53,6 +62,8 @@ const TARGET_PG_SINGLE = 'pg-single-primary';
 const TARGET_PG_PATRONI = 'pg-patroni-sync-ha-rf3';
 const TARGET_PG_PLPGSQL_SINGLE = 'pg-plpgsql-single-primary';
 const TARGET_PG_PLPGSQL_PATRONI = 'pg-plpgsql-sync-ha-rf3';
+const TARGET_CITUS_SQL = 'citus-sql-service';
+const TARGET_CITUS_UDF = 'citus-distributed-function';
 const REQUIRED_TARGET_IDS = Object.freeze([
   TARGET_LAGRANGE,
   TARGET_TIDB,
@@ -60,12 +71,16 @@ const REQUIRED_TARGET_IDS = Object.freeze([
   TARGET_PG_PATRONI,
   TARGET_PG_PLPGSQL_SINGLE,
   TARGET_PG_PLPGSQL_PATRONI,
+  TARGET_CITUS_SQL,
+  TARGET_CITUS_UDF,
 ]);
 
-const EXPECTED_COMPLETED_SLICES = 2;
-const EXPECTED_REMAINING_SLICES = 3;
+const EXPECTED_COMPLETED_SLICES = 3;
+const EXPECTED_REMAINING_SLICES = 2;
 const MARKER_LOCALITY_CONTROL_MD = 'Three-way locality control';
 const MARKER_LOCALITY_CONTROL_HTML = 'Three-Way Locality Control';
+const MARKER_CITUS_LOCALITY_MD = 'Entity-locality progression';
+const MARKER_CITUS_LOCALITY_HTML = 'Entity-Locality Progression';
 
 const SHAPE_LOCAL_ONLY = 'local-only';
 const SHAPE_ONE_REMOTE = 'one-remote-stage';
@@ -82,6 +97,7 @@ const LINK_SCENARIO_A = 'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseli
 const LINK_SCENARIO_B = 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision';
 const LINK_TIDB_PROGRESS = 'tidb-comparison-progress.md';
 const LINK_POSTGRES_PROGRESS = 'postgresql-comparison-progress.md';
+const LINK_CITUS_PROGRESS = 'citus-comparison-progress.md';
 
 const README_PATH = 'README.md';
 const DOCS_README_PATH = 'docs/README.md';
@@ -146,40 +162,35 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
   const pgMdPath = path.resolve(rootDir, DEFAULT_POSTGRESQL_PROGRESS_MD_PATH);
   const pgHtmlPath = path.resolve(rootDir, DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH);
   const pgSvgPath = path.resolve(rootDir, DEFAULT_POSTGRESQL_PROGRESS_SVG_PATH);
+  const citusMdPath = path.resolve(rootDir, DEFAULT_CITUS_PROGRESS_MD_PATH);
+  const citusHtmlPath = path.resolve(rootDir, DEFAULT_CITUS_PROGRESS_HTML_PATH);
+  const citusSvgPath = path.resolve(rootDir, DEFAULT_CITUS_PROGRESS_SVG_PATH);
 
   const filePaths = [
-    landingMdPath,
-    landingHtmlPath,
-    landingSvgPath,
-    pgMdPath,
-    pgHtmlPath,
-    pgSvgPath,
+    landingMdPath, landingHtmlPath, landingSvgPath,
+    pgMdPath, pgHtmlPath, pgSvgPath,
+    citusMdPath, citusHtmlPath, citusSvgPath,
   ];
-
   for (const filePath of filePaths) {
     assert.equal(fs.existsSync(filePath), true, `File must exist on disk: ${filePath}`);
     const rawContent = fs.readFileSync(filePath, UTF8);
-    assert.equal(
-      stringIncludes(rawContent, LINK_SCENARIO_A),
-      true,
-      `File ${filePath} must contain link to ${LINK_SCENARIO_A}`,
-    );
-    assert.equal(
-      stringIncludes(rawContent, LINK_SCENARIO_B),
-      true,
-      `File ${filePath} must contain link to ${LINK_SCENARIO_B}`,
-    );
+    assert.equal(stringIncludes(rawContent, LINK_SCENARIO_A), true);
+    assert.equal(stringIncludes(rawContent, LINK_SCENARIO_B), true);
   }
 
   const landingMd = fs.readFileSync(landingMdPath, UTF8);
   const landingHtml = fs.readFileSync(landingHtmlPath, UTF8);
   const pgMd = fs.readFileSync(pgMdPath, UTF8);
   const pgHtml = fs.readFileSync(pgHtmlPath, UTF8);
+  const citusMd = fs.readFileSync(citusMdPath, UTF8);
+  const citusHtml = fs.readFileSync(citusHtmlPath, UTF8);
 
   assert.equal(stringIncludes(landingMd, LINK_TIDB_PROGRESS), true);
   assert.equal(stringIncludes(landingMd, LINK_POSTGRES_PROGRESS), true);
+  assert.equal(stringIncludes(landingMd, LINK_CITUS_PROGRESS), true);
   assert.equal(stringIncludes(landingHtml, LINK_TIDB_PROGRESS), true);
   assert.equal(stringIncludes(landingHtml, LINK_POSTGRES_PROGRESS), true);
+  assert.equal(stringIncludes(landingHtml, LINK_CITUS_PROGRESS), true);
   assert.equal(stringIncludes(pgMd, LINK_TIDB_PROGRESS), true);
 
   assert.equal(stringIncludes(pgMd, MARKER_LOCALITY_CONTROL_MD), true);
@@ -189,6 +200,14 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
   assert.equal(stringIncludes(pgHtml, MARKER_LOCALITY_CONTROL_HTML), true);
   assert.equal(stringIncludes(pgHtml, TARGET_PG_PLPGSQL_SINGLE), true);
   assert.equal(stringIncludes(pgHtml, TARGET_PG_PLPGSQL_PATRONI), true);
+
+  assert.equal(stringIncludes(citusMd, MARKER_CITUS_LOCALITY_MD), true);
+  assert.equal(stringIncludes(citusMd, TARGET_CITUS_SQL), true);
+  assert.equal(stringIncludes(citusMd, TARGET_CITUS_UDF), true);
+
+  assert.equal(stringIncludes(citusHtml, MARKER_CITUS_LOCALITY_HTML), true);
+  assert.equal(stringIncludes(citusHtml, TARGET_CITUS_SQL), true);
+  assert.equal(stringIncludes(citusHtml, TARGET_CITUS_UDF), true);
 
   const rootReadmePath = path.resolve(rootDir, README_PATH);
   const docsReadmePath = path.resolve(rootDir, DOCS_README_PATH);
@@ -212,6 +231,7 @@ function verifyHarnessRendererParity(rootDir, matrix) {
   assert.equal(Array.isArray(CANONICAL_DEFAULT_TARGETS), true);
   assert.equal(typeof writeMultiSystemComparativeMatrix, TYPE_FUNCTION);
   assert.equal(typeof writePostgresqlComparisonStaticWebArtifacts, TYPE_FUNCTION);
+  assert.equal(typeof writeCitusComparisonStaticWebArtifacts, TYPE_FUNCTION);
   assert.equal(typeof writeComparativeLandingArtifacts, TYPE_FUNCTION);
 
   const testMatrix = matrix || defaultMatrix;
@@ -221,10 +241,16 @@ function verifyHarnessRendererParity(rootDir, matrix) {
   const pgMdPath = path.resolve(rootDir, DEFAULT_POSTGRESQL_PROGRESS_MD_PATH);
   const pgHtmlPath = path.resolve(rootDir, DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH);
   const pgSvgPath = path.resolve(rootDir, DEFAULT_POSTGRESQL_PROGRESS_SVG_PATH);
+  const citusMdPath = path.resolve(rootDir, DEFAULT_CITUS_PROGRESS_MD_PATH);
+  const citusHtmlPath = path.resolve(rootDir, DEFAULT_CITUS_PROGRESS_HTML_PATH);
+  const citusSvgPath = path.resolve(rootDir, DEFAULT_CITUS_PROGRESS_SVG_PATH);
 
   assert.equal(renderPostgresqlComparisonMarkdown(testMatrix), fs.readFileSync(pgMdPath, UTF8));
   assert.equal(renderPostgresqlComparisonHtml(testMatrix), fs.readFileSync(pgHtmlPath, UTF8));
   assert.equal(renderPostgresqlComparisonSvg(testMatrix), fs.readFileSync(pgSvgPath, UTF8));
+  assert.equal(renderCitusComparisonMarkdown(testMatrix), fs.readFileSync(citusMdPath, UTF8));
+  assert.equal(renderCitusComparisonHtml(testMatrix), fs.readFileSync(citusHtmlPath, UTF8));
+  assert.equal(renderCitusComparisonSvg(testMatrix), fs.readFileSync(citusSvgPath, UTF8));
   assert.equal(renderComparativeLandingMarkdown(testMatrix), fs.readFileSync(landingMdPath, UTF8));
   assert.equal(renderComparativeLandingHtml(testMatrix), fs.readFileSync(landingHtmlPath, UTF8));
   assert.equal(renderComparativeOverviewSvg(testMatrix), fs.readFileSync(landingSvgPath, UTF8));
