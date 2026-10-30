@@ -41,6 +41,18 @@ const {
   resolvePartitionWriteCommitMode,
 } = PARTITION_SERVICE_SHARED;
 
+const LOCAL_STR_SAVEPOINT_CLEAN_READ = 'SAVEPOINT __lagrange_clean_read__';
+const LOCAL_STR_ROLLBACK_RELEASE_SAVEPOINT =
+  'ROLLBACK TO SAVEPOINT __lagrange_clean_read__; RELEASE SAVEPOINT __lagrange_clean_read__';
+const LOCAL_STR_UPDATE_PREFIX = 'UPDATE ';
+const LOCAL_STR_DELETE_PREFIX = 'DELETE ';
+const LOCAL_STR_INSERT_PREFIX = 'INSERT ';
+const LOCAL_STR_WHERE_CLAUSE_PREFIX = ' WHERE ';
+const LOCAL_STR_COLON = ':';
+const LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD = 1_000_000_000_000;
+const LOCAL_NUM_ACTIVE_TX_WAIT_ATTEMPTS = 35;
+const LOCAL_NUM_ACTIVE_TX_WAIT_MS = 15;
+
 class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
   async executeQuery(sql, params = [], options = {}) {
     if (!this.initialized) {
@@ -60,15 +72,77 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         this.db.prepare(sql);
       if (isSelect) {
         const sqliteStartMs = Date.now();
-        const rows = collectBoundedSqliteRows(stmt, params, {
-          cancellationToken: options.cancellationToken || null,
-          deadlineMs: options.resultDeadlineMs,
-          maxBytes: options.resultMaxBytes,
-          maxRows: options.resultMaxRows,
-        });
         const transaction = this.resolveActiveTransactionState(
           options.sessionId || null,
         );
+        const readerSessionId = options.sessionId || transaction?.sessionId || null;
+        const hasForeignActiveWrite = () =>
+          Array.from(this.activeTransactions.entries()).some(
+            ([activeSessionId, activeState]) =>
+              activeSessionId !== readerSessionId &&
+              activeState?.beforeImages instanceof Map &&
+              activeState.beforeImages.size > 0,
+          );
+        let waited = false;
+        if (options.waitForCleanRead === true) {
+          let waitAttempts = 0;
+          while (
+            waitAttempts < LOCAL_NUM_ACTIVE_TX_WAIT_ATTEMPTS &&
+            hasForeignActiveWrite()
+          ) {
+            waitAttempts += 1;
+            waited = true;
+            await new Promise((resolve) => setTimeout(resolve, LOCAL_NUM_ACTIVE_TX_WAIT_MS));
+          }
+        }
+        const needsCleanRead = hasForeignActiveWrite();
+        const waitedForActiveTransaction = waited && !needsCleanRead;
+        let rows;
+        if (needsCleanRead) {
+          this.db.exec(LOCAL_STR_SAVEPOINT_CLEAN_READ);
+          try {
+            for (const [activeSessionId, activeState] of this.activeTransactions.entries()) {
+              if (activeSessionId === transaction?.sessionId) continue;
+              if (!(activeState?.beforeImages instanceof Map)) continue;
+              for (const [rowid, snapshot] of activeState.beforeImages.entries()) {
+                if (!snapshot.exists) {
+                  this.db.prepare(`DELETE FROM ${this.tableName} WHERE rowid = ?`).run(rowid);
+                } else if (snapshot.row) {
+                  const cols = Object.keys(snapshot.row);
+                  if (cols.length > 0) {
+                    const setClauses = cols.map((c) => `"${c}" = ?`).join(', ');
+                    const vals = Object.values(snapshot.row);
+                    const info = this.db.prepare(
+                      `UPDATE ${this.tableName} SET ${setClauses} WHERE rowid = ?`,
+                    ).run(...vals, rowid);
+                    if (info.changes === 0) {
+                      const colNames = ['rowid', ...cols.map((c) => `"${c}"`)].join(', ');
+                      const placeholders = ['?', ...cols.map(() => '?')].join(', ');
+                      this.db.prepare(
+                        `INSERT INTO ${this.tableName} (${colNames}) VALUES (${placeholders})`,
+                      ).run(rowid, ...vals);
+                    }
+                  }
+                }
+              }
+            }
+            rows = collectBoundedSqliteRows(stmt, params, {
+              cancellationToken: options.cancellationToken || null,
+              deadlineMs: options.resultDeadlineMs,
+              maxBytes: options.resultMaxBytes,
+              maxRows: options.resultMaxRows,
+            });
+          } finally {
+            this.db.exec(LOCAL_STR_ROLLBACK_RELEASE_SAVEPOINT);
+          }
+        } else {
+          rows = collectBoundedSqliteRows(stmt, params, {
+            cancellationToken: options.cancellationToken || null,
+            deadlineMs: options.resultDeadlineMs,
+            maxBytes: options.resultMaxBytes,
+            maxRows: options.resultMaxRows,
+          });
+        }
         const visibleRows = transaction ?
           this.applySnapshotReadFilter(rows, transaction.state) :
           rows;
@@ -85,6 +159,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         }
         return {
           success: true,
+          ...(waitedForActiveTransaction ? {waitedForActiveTransaction: true} : {}),
           rows: visibleRows,
           count: visibleRows.length,
           partitionId: this.partitionId,
@@ -202,11 +277,103 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       },
     );
     try {
+      const sqlTrimmed = String(entry.sql || '').trim().toUpperCase();
+      let matchedRows = null;
+      if (
+        sqlTrimmed.startsWith(LOCAL_STR_UPDATE_PREFIX) ||
+        sqlTrimmed.startsWith(LOCAL_STR_DELETE_PREFIX)
+      ) {
+        const whereMatch = entry.sql.match(/\bWHERE\s+([\s\S]+?)(?:\s+RETURNING\b[\s\S]*)?$/i);
+        let whereParams = [];
+        if (whereMatch) {
+          const preWhereParams = (entry.sql.slice(0, whereMatch.index).match(/\?/g) || []).length;
+          whereParams = (entry.params || []).slice(
+            preWhereParams,
+            preWhereParams + (whereMatch[1].match(/\?/g) || []).length,
+          );
+        }
+        try {
+          matchedRows = this.db.prepare(
+            `SELECT rowid AS __lagrange_rowid__, * FROM ${this.tableName}${whereMatch ? LOCAL_STR_WHERE_CLAUSE_PREFIX + whereMatch[1] : ''}`,
+          ).all(...whereParams);
+        } catch (_queryErr) {
+          void _queryErr;
+        }
+      }
+
+      const candidateWriteSet = new Set(transactionState.writeSet);
+      if (Array.isArray(matchedRows) && matchedRows.length > 0) {
+        const pkColumns = this.resolveTransactionPrimaryKeyColumns();
+        const tableName = entry.tableName || this.tableName;
+        for (const row of matchedRows) {
+          const hasAllKeys = pkColumns.every(
+            (col) => row[col] !== undefined && row[col] !== null,
+          );
+          if (hasAllKeys) {
+            candidateWriteSet.add(
+              `${tableName}:${pkColumns.map((col) => row[col]).join(LOCAL_STR_COLON)}`,
+            );
+          }
+        }
+      }
+      const candidateSingleKey =
+        this.resolveTransactionWriteSetKey(entry, matchedRows);
+      if (candidateSingleKey) {
+        candidateWriteSet.add(candidateSingleKey);
+      }
+      if (
+        Number.isFinite(transactionState.transactionEpoch) &&
+        transactionState.transactionEpoch >= LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD
+      ) {
+        const conflictCheck = this.checkWriteConflicts(
+          candidateWriteSet,
+          transactionState.transactionEpoch,
+        );
+        if (conflictCheck.hasConflict) {
+          throw new Error(PARTITION_SERVICE_ERROR_MSG.PREPARE_CONFLICT);
+        }
+      }
+
+      if (Array.isArray(matchedRows) && transactionState.beforeImages instanceof Map) {
+        for (const row of matchedRows) {
+          const rowid = Number(row.__lagrange_rowid__);
+          if (Number.isInteger(rowid) && !transactionState.beforeImages.has(rowid)) {
+            const cleanRow = {...row};
+            delete cleanRow.__lagrange_rowid__;
+            transactionState.beforeImages.set(rowid, {exists: true, row: cleanRow});
+          }
+        }
+      }
+
       const stmt = this.db.prepare(entry.sql);
       const info = stmt.run(...(entry.params || []));
       const trackedEntry = {...entry, changes: info.changes};
       transactionState.operations.push(trackedEntry);
-      this.trackTransactionWriteSetKey(transactionState, trackedEntry);
+      if (
+        sqlTrimmed.startsWith(LOCAL_STR_INSERT_PREFIX) &&
+        info.changes > 0 &&
+        info.lastInsertRowid !== undefined &&
+        info.lastInsertRowid !== null &&
+        transactionState.beforeImages instanceof Map
+      ) {
+        const insertedRowid = Number(info.lastInsertRowid);
+        if (Number.isInteger(insertedRowid) && !transactionState.beforeImages.has(insertedRowid)) {
+          transactionState.beforeImages.set(insertedRowid, {exists: false, row: null});
+        }
+      }
+      this.trackTransactionWriteSetKey(transactionState, trackedEntry, matchedRows);
+      if (
+        Number.isFinite(transactionState.transactionEpoch) &&
+        transactionState.transactionEpoch >= LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD
+      ) {
+        const conflictCheck = this.checkWriteConflicts(
+          transactionState.writeSet,
+          transactionState.transactionEpoch,
+        );
+        if (conflictCheck.hasConflict) {
+          throw new Error(PARTITION_SERVICE_ERROR_MSG.PREPARE_CONFLICT);
+        }
+      }
       this.syncLegacyTransactionAliases();
       return {
         success: true,

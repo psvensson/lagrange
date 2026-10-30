@@ -27,9 +27,14 @@ const {
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_LOG_MSG,
   QUERY_RESPONSE_TYPE,
+  QUERY_ROUTING_DIAGNOSTIC_REASON,
   normalizeParticipantFailureString,
   resolveParticipantBackpressureState,
 } = QUERY_EXECUTOR_SHARED;
+
+const LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS = 30;
+const LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING =
+  'planning_snapshot_refresh_pending';
 
 class QueryExecutorPartitionDelivery extends QueryExecutorBase {
   async executeOnPartition(
@@ -99,6 +104,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const maxAttempts = forRead ?
       this.getReadRetryAttemptLimit() :
       Number.MAX_SAFE_INTEGER;
+    let currentMaxAttempts = maxAttempts;
     let lastError = null;
     let lastFailureDetails = null;
     let awaitedRoutingRepair = false;
@@ -124,7 +130,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const waitForLeaderRetryBudget = async () => waitForRetryBudget(
       resolvePartitionRetryDelayMs(this.leaderRetryDelayMs, lastFailureDetails),
     );
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    for (let attempt = 1; attempt <= currentMaxAttempts; attempt++) {
       this.throwIfCancelled(cancellationToken);
       const attemptBudgetMs = getRemainingExecutionBudgetMs();
       if (attemptBudgetMs !== null && attemptBudgetMs <= 0) {
@@ -230,7 +236,24 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         } else {
           // §1.10/§1.12: Reads get bounded retries so routing
           // repair and cache convergence can discover candidates.
-          if (hasPartitionRecord && attempt < maxAttempts) {
+          const isPlanningRefreshPending =
+            routingSnapshot?.reasonCode ===
+              QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS &&
+            Object.values(routingSnapshot?.deniedByNodeId || {}).some((entry) =>
+              Array.isArray(entry?.reasonCodes) &&
+              entry.reasonCodes.some(
+                (code) =>
+                  String(code?.code ?? code) ===
+                  LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING,
+              ),
+            );
+          if (
+            isPlanningRefreshPending &&
+            currentMaxAttempts < LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS
+          ) {
+            currentMaxAttempts = LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS;
+          }
+          if (hasPartitionRecord && attempt < currentMaxAttempts) {
             lastError = QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND;
             if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
               return {
@@ -333,7 +356,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 executionOptions.sessionId,
                 partitionId,
               );
-            } else {
+            } else if (!forRead) {
               this.setSessionPartitionAddress(
                 executionOptions.sessionId,
                 partitionId,
@@ -402,7 +425,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                   executionOptions.sessionId,
                   partitionId,
                 );
-              } else {
+              } else if (!forRead) {
                 this.setSessionPartitionAddress(
                   executionOptions.sessionId,
                   partitionId,
@@ -433,6 +456,22 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               response.leaderAddress,
             );
+            if (
+              !forRead &&
+              !this.isLeaderUnavailable(
+                redirectFailureMessage,
+                redirectResponse?.errorCode,
+              ) &&
+              redirectRetryDecision.state ===
+                CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE
+            ) {
+              return {
+                ...buildFailureResult(
+                  redirectFailureMessage,
+                  redirectResponse,
+                ),
+              };
+            }
             if (
               redirectRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS

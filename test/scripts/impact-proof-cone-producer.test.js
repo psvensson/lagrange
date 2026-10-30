@@ -48,6 +48,7 @@ function writeFixture(root, relativePath, content = '') {
 }
 
 test(TEST_NAME, async () => {
+  const previousDirectory = process.cwd();
   const root = fs.mkdtempSync(path.join(os.tmpdir(), FIXTURE_ROOT_PREFIX));
   try {
     for (const directory of FIXTURE_DIRECTORIES) {
@@ -66,6 +67,10 @@ test(TEST_NAME, async () => {
     fs.symlinkSync(PACKAGE_SYMLINK_TARGET,
       path.join(root, PACKAGE_SYMLINK_PATH));
 
+    // The canonical producer is invoked from the tree it cruises. The lab's
+    // short TMPDIR symlink otherwise gives dependency-cruiser a different
+    // physical cwd and baseDir, making valid fixture paths unresolvable.
+    process.chdir(root);
     const report = await refreshImportGraphReport(
       root, listJavaScriptFiles(root));
     const primaryPaths = Object.keys(report.fileDigests);
@@ -79,6 +84,7 @@ test(TEST_NAME, async () => {
     assert.deepEqual(modulePaths, [...primaryPaths, ...followedPaths].sort());
     assert.equal(report.moduleCount, modulePaths.length);
   } finally {
+    process.chdir(previousDirectory);
     fs.rmSync(root, {recursive: true, force: true});
   }
 });

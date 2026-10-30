@@ -20,6 +20,8 @@ quests:
   - ratchet-realignment
   - test-file-content-receipts
   - raft-ownership
+  - scenario-a-prestart-certification-guard
+  - scenario-a-prestart-cluster-admission-v2
 authorizes:
   - scripts
   - test

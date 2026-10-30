@@ -26,6 +26,9 @@ const UNDECLARED_PACKAGE = 'undeclared-pkg';
 const ENTRY = 'src/entry.js';
 const LOCAL = 'src/local.js';
 const OPTIONAL_OWNER = ENTRY;
+const NESTED_PACKAGE_ROOT = 'test/distributed/reference-client';
+const NESTED_ENTRY = `${NESTED_PACKAGE_ROOT}/entry.js`;
+const NESTED_PACKAGE = 'nested-only-dependency';
 
 function writeFile(root, relative, contents) {
   const destination = path.join(root, relative);
@@ -36,10 +39,10 @@ function writeFile(root, relative, contents) {
 // An installed package inside the fixture. The optional external is installed
 // DELIBERATELY: the whole contract is that a present package must not reach the
 // canonical graph, so a fixture that omitted it would prove nothing.
-function installPackage(root, name) {
-  writeFile(root, `node_modules/${name}/package.json`,
+function installPackage(root, name, moduleRoot = 'node_modules') {
+  writeFile(root, `${moduleRoot}/${name}/package.json`,
     `${JSON.stringify({name, version: '1.0.0', main: 'index.js'})}\n`);
-  writeFile(root, `node_modules/${name}/index.js`, 'export default 1;\n');
+  writeFile(root, `${moduleRoot}/${name}/index.js`, 'export default 1;\n');
 }
 
 function buildFixture(imports, {installOptional = true} = {}) {
@@ -79,15 +82,73 @@ const ALL_FORMS = [
 // incidental: with a mismatched cwd, dependency-cruiser emits some modules
 // relative to baseDir and others relative to cwd, so the same file arrives
 // under two spellings and the module census double-counts it.
-async function produce(root) {
+async function produce(root, files = [ENTRY, LOCAL]) {
   const previous = process.cwd();
   process.chdir(root);
   try {
-    return await refreshImportGraphReport(root, [ENTRY, LOCAL]);
+    return await refreshImportGraphReport(root, files);
   } finally {
     process.chdir(previous);
   }
 }
+
+function installNestedPackageFixture(root) {
+  writeFile(root, `${NESTED_PACKAGE_ROOT}/package.json`, `${JSON.stringify({
+    name: 'fixture-reference-client',
+    dependencies: {[NESTED_PACKAGE]: '1.0.0'},
+  })}\n`);
+  installPackage(root, NESTED_PACKAGE, `${NESTED_PACKAGE_ROOT}/node_modules`);
+  writeFile(root, NESTED_ENTRY, `import '${NESTED_PACKAGE}';\n`);
+}
+
+test('the producer accepts dependencies declared by their owning nested package',
+  async () => {
+    const root = buildFixture([OPTIONAL_PACKAGE]);
+    try {
+      installNestedPackageFixture(root);
+      const report = await produce(root, [ENTRY, LOCAL, NESTED_ENTRY]);
+      const edge = report.resolverInputs.find((candidate) =>
+        candidate.from === NESTED_ENTRY && candidate.specifier === NESTED_PACKAGE);
+      assert.equal(edge?.state, 'resolved');
+    } finally {
+      fs.rmSync(root, {recursive: true, force: true});
+    }
+  });
+
+// The lab worker exposes its temporary directory through a short symlink to
+// the runner-owned workspace. dependency-cruiser can return the physical file
+// path, while callers pass the aliased root. That must not turn a legitimate
+// resolved edge into a noncanonical ../ resolver probe.
+test('the producer resolves imports under an aliased fixture root', async () => {
+  const root = buildFixture(ALL_FORMS);
+  const aliasParent = fs.mkdtempSync(path.join(os.tmpdir(), 'dep-policy-alias-'));
+  const aliasedRoot = path.join(aliasParent, 'fixture');
+  try {
+    fs.symlinkSync(root, aliasedRoot, 'dir');
+    const report = await produce(aliasedRoot);
+    assert.equal(probesFrom(report)[DECLARED_PACKAGE]?.state, 'resolved');
+    assert.ok(Object.hasOwn(report.degrees,
+      `node_modules/${DECLARED_PACKAGE}/index.js`));
+    assert.deepEqual(report, await produce(root),
+      'a filesystem alias must not alter any canonical import-graph evidence');
+  } finally {
+    fs.rmSync(aliasParent, {recursive: true, force: true});
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test('a nested manifest cannot authorize imports from the root package', async () => {
+  const root = buildFixture([OPTIONAL_PACKAGE, NESTED_PACKAGE]);
+  try {
+    installNestedPackageFixture(root);
+    await assert.rejects(
+      produce(root, [ENTRY, LOCAL, NESTED_ENTRY]),
+      /ambient undeclared dependency.*nested-only-dependency.*src\/entry.js/u,
+    );
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
 
 function probesFrom(report) {
   return Object.fromEntries(

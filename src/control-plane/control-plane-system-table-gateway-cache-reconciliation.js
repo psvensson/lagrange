@@ -29,6 +29,7 @@ const CACHE_RECONCILIATION_DIAGNOSTIC = Object.freeze({
   UNCLASSIFIED_POST_APPLY_DIVERGENCE:
     'post_apply_cache_divergence=unclassified',
 });
+const LOCAL_STR_APPLYSYSTEMTABLECHANGE = 'applySystemTableChange';
 
 // The cache's own causal order (HLC / updated_at / nodes heartbeat watermark)
 // is the authority on row supersession. A cached row that this order proves
@@ -75,10 +76,27 @@ function buildCacheUnavailableFailure(tableName) {
   };
 }
 
+function isWritableCacheTarget(cache) {
+  return Boolean(
+    cache &&
+    typeof cache === 'object' &&
+    LOCAL_STR_APPLYSYSTEMTABLECHANGE in cache &&
+    typeof cache.applySystemTableChange === 'function',
+  );
+}
+
 function resolveCacheTargets(gateway, options) {
   const defaultCache = gateway.resolveSystemTableCache();
+  const cdcWritableCache =
+    gateway.resolveCdcIntegrationService?.()?.cacheMutationTarget || null;
+  const candidateWritable = options?.cacheMutationTarget || defaultCache;
+  const writableCache = isWritableCacheTarget(candidateWritable) ?
+    candidateWritable :
+    isWritableCacheTarget(cdcWritableCache) ?
+      cdcWritableCache :
+      candidateWritable;
   return {
-    writableCache: options?.cacheMutationTarget || defaultCache,
+    writableCache,
     readableCache:
       options?.systemTableCache || defaultCache ||
       options?.cacheMutationTarget,
@@ -87,8 +105,7 @@ function resolveCacheTargets(gateway, options) {
 
 function hasUsableCacheTargets(writableCache, readableCache) {
   return Boolean(
-    writableCache &&
-    typeof writableCache.applySystemTableChange === 'function' &&
+    isWritableCacheTarget(writableCache) &&
     readableCache,
   );
 }

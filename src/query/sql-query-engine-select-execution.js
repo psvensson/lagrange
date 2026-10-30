@@ -222,10 +222,23 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       this.isSystemTable(tableName) &&
       routingReadinessDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    const inTransaction =
+      this.transactionCoordinator?.hasActiveTransaction?.(sessionId) === true;
+    const activeTx =
+      this.transactionCoordinator?.transactionsBySession?.get?.(sessionId) ||
+      null;
+    const waitForCleanRead =
+      inTransaction &&
+      activeTx !== null &&
+      activeTx.participants.size === 0 &&
+      (activeTx.firstReadEpochByPartition?.size || 0) === 0 &&
+      activeTx.hasReadStatement !== true;
     const preferLeader =
       typeof queryOptions?.preferLeader === 'boolean' ?
         queryOptions.preferLeader :
-        (this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect);
+        inTransaction ||
+          queryOptions?.dialect === 'postgresql' ||
+          (this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect);
     for (const join of ast.joins || []) {
       const joinTableName = join.table?.name;
       if (!joinTableName) {
@@ -259,6 +272,9 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       partitionIds,
       params,
       {
+        sessionId,
+        ...(inTransaction ? {inTransaction: true} : {}),
+        ...(waitForCleanRead ? {waitForCleanRead: true} : {}),
         preferLeader,
         preferSameLatencyGroup,
         deliveryPriority,
@@ -274,6 +290,35 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     const executionDurationMs = Date.now() - executionStartTimeMs;
 
     if (result?.success === true) {
+      if (activeTx) {
+        const executedPartitions = Array.isArray(result.partitions) ?
+          result.partitions :
+          partitionIds;
+        if (
+          result.waitedForActiveTransaction === true &&
+          activeTx.participants.size === 0 &&
+          (activeTx.firstReadEpochByPartition?.size || 0) === 0 &&
+          typeof this.transactionCoordinator?.epochSource === 'function'
+        ) {
+          activeTx.transactionEpoch = this.transactionCoordinator.epochSource();
+        }
+        const readEpoch =
+          activeTx.participants.size === 0 &&
+          (activeTx.firstReadEpochByPartition?.size || 0) === 0 ?
+            activeTx.transactionEpoch :
+            Math.max(
+              activeTx.transactionEpoch,
+              this.transactionCoordinator?.epochSource?.() ?? activeTx.transactionEpoch,
+            );
+        if (activeTx.firstReadEpochByPartition instanceof Map) {
+          for (const pid of executedPartitions) {
+            if (!activeTx.firstReadEpochByPartition.has(pid)) {
+              activeTx.firstReadEpochByPartition.set(pid, readEpoch);
+            }
+          }
+        }
+        activeTx.hasReadStatement = true;
+      }
       // Attribution feed: result.partitions is the executed set (main
       // table plus join fanout); fall back to the planned root set.
       this.recordServicePartitionAccess(

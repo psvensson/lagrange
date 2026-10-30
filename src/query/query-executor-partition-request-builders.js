@@ -89,6 +89,12 @@ function createDefaultPartitionRequestBuilder({
       request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
         executionOptions.splitMirrorOrigin;
     }
+    if (executionOptions.inTransaction === true) {
+      request.inTransaction = true;
+    }
+    if (executionOptions.waitForCleanRead === true) {
+      request.waitForCleanRead = true;
+    }
     stampMigrationIdentityFields(request, executionOptions);
     // Write-path epoch fencing: carry the partition epoch the write was
     // planned against so the partition boundary can reject stale-epoch
@@ -136,6 +142,9 @@ function resolvePartitionExecutionBuilders({
         acceptingNodeId: response.acceptingNodeId,
         acknowledgedAtMs: response.acknowledgedAtMs,
         readAuthorityWitness: response.readAuthorityWitness,
+        ...(response.waitedForActiveTransaction === true ?
+          {waitedForActiveTransaction: true} :
+          {}),
       });
   return Object.freeze({
     buildRequest,

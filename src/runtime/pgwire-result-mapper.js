@@ -34,15 +34,18 @@ function deriveCommandTag(result, query) {
     return `SELECT ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_INSERT)) {
-    const count = result?.changes ?? result?.rowCount ?? 0;
+    const count =
+      result?.changes ?? result?.rowCount ?? result?.affectedRows ?? 0;
     return `INSERT 0 ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_UPDATE)) {
-    const count = result?.changes ?? result?.rowCount ?? 0;
+    const count =
+      result?.changes ?? result?.rowCount ?? result?.affectedRows ?? 0;
     return `UPDATE ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_DELETE)) {
-    const count = result?.changes ?? result?.rowCount ?? 0;
+    const count =
+      result?.changes ?? result?.rowCount ?? result?.affectedRows ?? 0;
     return `DELETE ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_CREATE)) return LOCAL_STR_CREATE_TABLE;

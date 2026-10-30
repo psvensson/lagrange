@@ -1,16 +1,13 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {installControlPlaneReadinessNodeMethods} from './control-plane-readiness-service-node-methods.js';
 import {
-  createNodeLivenessSemanticProjectionOwner,
-  installControlPlaneReadinessNodeLivenessMethods,
+  createNodeLivenessSemanticProjectionOwner, installControlPlaneReadinessNodeLivenessMethods,
 } from './control-plane-readiness-node-liveness-methods.js';
 import {
-  recordChangedReadinessOwnerDependencies,
-  syncNullableOwnerDependency,
+  recordChangedReadinessOwnerDependencies, syncNullableOwnerDependency,
 } from './control-plane-readiness-owner-dependencies.js';
 import {resolveTimeSource} from '../time/time-source.js';
-import {ReadinessPlanningSnapshotOwner} from
-  './readiness-planning-snapshot-owner.js';
+import {ReadinessPlanningSnapshotOwner} from './readiness-planning-snapshot-owner.js';
 import {FormationReleaseHandoffClosureOwner} from './formation-release-handoff-closure-owner.js';
 import {FormationReleaseHandoffPublicationCoordinator} from './formation-release-handoff-publication-coordinator.js';
 import {installControlPlaneReadinessPlanningOwnerDelegateMethods} from './control-plane-readiness-planning-owner-delegate-methods.js';
@@ -25,42 +22,47 @@ const LOCAL_STR_HEARTBEATSERVICE = 'heartbeatService';
 const LOCAL_STR_NODESOWNER = 'nodesOwner';
 const LOCAL_STR_SERVICESOWNER = 'servicesOwner';
 const LOCAL_STR_CACHEMUTATIONTARGET = 'cacheMutationTarget';
-const LOCAL_STR_CONTROLPLANESYSTEMTABLEGATEWAY =
-  'controlPlaneSystemTableGateway';
-const LOCAL_STR_AUTHORITATIVECONTROLPLANEVIEW =
-  'authoritativeControlPlaneView';
-const LOCAL_STR_LOCALCLUSTERINCARNATIONFENCEPROVIDER =
-  'localClusterIncarnationFenceProvider';
+const LOCAL_STR_CONTROLPLANESYSTEMTABLEGATEWAY = 'controlPlaneSystemTableGateway';
+const LOCAL_STR_AUTHORITATIVECONTROLPLANEVIEW = 'authoritativeControlPlaneView';
+const LOCAL_STR_LOCALCLUSTERINCARNATIONFENCEPROVIDER = 'localClusterIncarnationFenceProvider';
+const LOCAL_STR_APPLYSYSTEMTABLECHANGE = 'applySystemTableChange';
 const numberIsFinite = Number.isFinite;
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
 
+function isWritableCacheTarget(target) {
+  return Boolean(
+    target && typeof target === 'object' && LOCAL_STR_APPLYSYSTEMTABLECHANGE in target,
+  );
+}
+
+function resolveWritableCacheMutationTarget(
+  candidateTarget, systemTableCache, cdcIntegrationService,
+) {
+  const explicitTarget = candidateTarget || systemTableCache || null;
+  if (isWritableCacheTarget(explicitTarget)) {
+    return explicitTarget;
+  }
+  const cdcTarget = cdcIntegrationService?.cacheMutationTarget || null;
+  if (isWritableCacheTarget(cdcTarget)) {
+    return cdcTarget;
+  }
+  return explicitTarget;
+}
+
 const {
-  AUTHORITATIVE_READINESS_REPAIR,
-  AuthoritativeNodeEvidenceReconciler,
-  CONTROL_PLANE_PARTICIPATION_DECISION,
-  CONTROL_PLANE_READINESS_DEFAULT,
-  CONTROL_PLANE_READINESS_REASON,
-  CONTROL_PLANE_READINESS_SUBSYSTEM,
-  ControlPlaneDiagnosticsLedger,
-  DurableWorkflowCoordinator,
-  LoggingService,
-  MEMBERSHIP_PUBLICATION_PLANNING,
-  MEMBERSHIP_PUBLICATION_READ_OPTIONS,
-  OperationLane,
-  READINESS_DIAGNOSTICS_LEDGER_LIMIT,
-  READINESS_TRANSITION_HISTORY_LIMIT,
-  RECOVERY_EPOCH_EVENT_LIMIT,
-  RECOVERY_EPOCH_HISTORY_LIMIT,
-  buildParticipationErrorCode,
-  buildParticipationErrorMessage,
-  compactEligibilitySnapshot,
-  createControlPlaneRuntimeBundle,
-  evaluateEligibilityDecision,
-  normalizeControlPlaneParticipationKind,
-  normalizePositiveInteger,
-  resolveParticipationDecisionDimension,
-  shouldAllowLocalExecutionForParticipation,
+  AUTHORITATIVE_READINESS_REPAIR, AuthoritativeNodeEvidenceReconciler,
+  CONTROL_PLANE_PARTICIPATION_DECISION, CONTROL_PLANE_READINESS_DEFAULT,
+  CONTROL_PLANE_READINESS_REASON, CONTROL_PLANE_READINESS_SUBSYSTEM,
+  ControlPlaneDiagnosticsLedger, DurableWorkflowCoordinator, LoggingService,
+  MEMBERSHIP_PUBLICATION_PLANNING, MEMBERSHIP_PUBLICATION_READ_OPTIONS,
+  OperationLane, READINESS_DIAGNOSTICS_LEDGER_LIMIT,
+  READINESS_TRANSITION_HISTORY_LIMIT, RECOVERY_EPOCH_EVENT_LIMIT,
+  RECOVERY_EPOCH_HISTORY_LIMIT, buildParticipationErrorCode,
+  buildParticipationErrorMessage, compactEligibilitySnapshot,
+  createControlPlaneRuntimeBundle, evaluateEligibilityDecision,
+  normalizeControlPlaneParticipationKind, normalizePositiveInteger,
+  resolveParticipationDecisionDimension, shouldAllowLocalExecutionForParticipation,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 class ControlPlaneReadinessParticipationBase {
@@ -78,8 +80,11 @@ class ControlPlaneReadinessParticipationBase {
     this.nodeLifecycleStateMachine = options.nodeLifecycleStateMachine || null;
     this.storageAccountingService = options.storageAccountingService || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.cacheMutationTarget =
-      options.cacheMutationTarget || options.systemTableCache || null;
+    this.cacheMutationTarget = resolveWritableCacheMutationTarget(
+      options.cacheMutationTarget,
+      this.systemTableCache,
+      this.cdcIntegrationService,
+    );
     this.cdcGroupPropagationService =
       options.cdcGroupPropagationService || null;
     this.heartbeatService = options.heartbeatService || null;
@@ -423,26 +428,32 @@ class ControlPlaneReadinessParticipationBase {
     if (systemTableCacheProvided) {
       this.systemTableCache = options.systemTableCache || null;
     }
-    if (cacheMutationTargetProvided) {
-      this.cacheMutationTarget = options[LOCAL_STR_CACHEMUTATIONTARGET] || null;
-    } else if (systemTableCacheProvided) {
-      this.cacheMutationTarget = this.systemTableCache;
-    }
     const nullableOwnerDependencies = [
-      LOCAL_STR_MESSAGEROUTER,
-      LOCAL_STR_NODELIFECYCLESTATEMACHINE,
-      LOCAL_STR_CDCINTEGRATIONSERVICE,
-      LOCAL_STR_STORAGEACCOUNTINGSERVICE,
-      LOCAL_STR_CDCGROUPPROPAGATIONSERVICE,
-      LOCAL_STR_HEARTBEATSERVICE,
-      LOCAL_STR_NODESOWNER,
-      LOCAL_STR_SERVICESOWNER,
-      LOCAL_STR_CONTROLPLANESYSTEMTABLEGATEWAY,
-      LOCAL_STR_AUTHORITATIVECONTROLPLANEVIEW,
+      LOCAL_STR_MESSAGEROUTER, LOCAL_STR_NODELIFECYCLESTATEMACHINE,
+      LOCAL_STR_CDCINTEGRATIONSERVICE, LOCAL_STR_STORAGEACCOUNTINGSERVICE,
+      LOCAL_STR_CDCGROUPPROPAGATIONSERVICE, LOCAL_STR_HEARTBEATSERVICE,
+      LOCAL_STR_NODESOWNER, LOCAL_STR_SERVICESOWNER,
+      LOCAL_STR_CONTROLPLANESYSTEMTABLEGATEWAY, LOCAL_STR_AUTHORITATIVECONTROLPLANEVIEW,
       LOCAL_STR_LOCALCLUSTERINCARNATIONFENCEPROVIDER,
     ];
     for (const ownerName of nullableOwnerDependencies) {
       syncNullableOwnerDependency(this, options, ownerName);
+    }
+    if (cacheMutationTargetProvided) {
+      this.cacheMutationTarget = resolveWritableCacheMutationTarget(
+        options[LOCAL_STR_CACHEMUTATIONTARGET] || null,
+        this.systemTableCache,
+        this.cdcIntegrationService,
+      );
+    } else if (
+      systemTableCacheProvided ||
+      objectHasOwn(options, LOCAL_STR_CDCINTEGRATIONSERVICE)
+    ) {
+      this.cacheMutationTarget = resolveWritableCacheMutationTarget(
+        this.cacheMutationTarget,
+        this.systemTableCache,
+        this.cdcIntegrationService,
+      );
     }
     if (objectHasOwn(options, LOCAL_STR_MEMBERSHIPPUBLICATIONSERVICE)) {
       const previousMembershipPublicationService =

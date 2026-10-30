@@ -1,4 +1,4 @@
-# TiDB/Lagrange paired benchmark owner — implementation sequence item 10
+# TiDB/Lagrange paired benchmark owner - implementation sequence item 10
 
 Status: required next step after the Lagrange OLTP adapter
 

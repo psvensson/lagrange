@@ -81,6 +81,9 @@ jobs:
             test/distributed/harness/oltp-paired-sweep-plan.js \
             test/distributed/reference-client/tidb-oltp-adapter.js \
             test/distributed/reference-client/lagrange-oltp-adapter.js \
+            test/distributed/reference-client/lagrange-visibility-probe.js \
+            test/distributed/reference-client/lagrange-visibility-probe.test.js \
+            test/distributed/scenarios/scenario-a-visibility-lagrange.js \
             scripts/checks/oltp-baseline-transaction-executor-guard.js \
             scripts/checks/oltp-paired-retry-owner-guard.js \
             scripts/checks/oltp-open-loop-step-owner-guard.js \
@@ -98,6 +101,7 @@ jobs:
           node scripts/checks/oltp-scenario-a-semantic-gate-guard.js
           node scripts/checks/oltp-paired-sweep-plan-guard.js
           node scripts/checks/lagrange-oltp-adapter-guard.js
+          npx tap test/distributed/reference-client/lagrange-visibility-probe.test.js
 
       - name: Run PG wire transaction-conflict contract guard
         run: |

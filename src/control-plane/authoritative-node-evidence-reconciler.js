@@ -79,6 +79,7 @@ const OWNER_DEPENDENCY_NAMES = Object.freeze([
 ]);
 const UNKNOWN_AUTHORITATIVE_REPAIR_STATE_ERROR_PREFIX =
   'Unknown authoritative node repair state: ';
+const LOCAL_STR_APPLYSYSTEMTABLECHANGE = 'applySystemTableChange';
 const objectHasOwn = Object.hasOwn;
 
 function normalizePositiveInteger(value, fallback = 0) {
@@ -276,6 +277,8 @@ class AuthoritativeNodeEvidenceReconciler {
       typeof this.cdcIntegrationService.executeAuthoritativeSystemTableRead ===
         'function' &&
       this.cacheMutationTarget &&
+      typeof this.cacheMutationTarget === 'object' &&
+      LOCAL_STR_APPLYSYSTEMTABLECHANGE in this.cacheMutationTarget &&
       typeof this.cacheMutationTarget.applySystemTableChange ===
         'function',
     );

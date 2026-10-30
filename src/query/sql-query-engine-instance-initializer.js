@@ -194,23 +194,26 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
           QUERY_OPERATION.BEGIN,
           {transactionEpoch},
         ),
-      prepareParticipant: async (sessionId, partitionId) =>
+      prepareParticipant: async (sessionId, partitionId, transactionEpoch) =>
         engine.deliverTransactionOperation(
           sessionId,
           partitionId,
           QUERY_OPERATION.PREPARE,
+          {transactionEpoch},
         ),
-      commitParticipant: async (sessionId, partitionId) =>
+      commitParticipant: async (sessionId, partitionId, transactionEpoch) =>
         engine.deliverTransactionOperation(
           sessionId,
           partitionId,
           QUERY_OPERATION.COMMIT,
+          {transactionEpoch},
         ),
-      rollbackParticipant: async (sessionId, partitionId) =>
+      rollbackParticipant: async (sessionId, partitionId, transactionEpoch) =>
         engine.deliverTransactionOperation(
           sessionId,
           partitionId,
           QUERY_OPERATION.ROLLBACK,
+          {transactionEpoch},
         ),
       resolveParticipantCommitOutcome: async (
         sessionId,

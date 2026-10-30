@@ -419,6 +419,9 @@ class QueryExecutorBase {
       options.preferLeader || false,
       options.preferSameLatencyGroup === true,
       {
+        ...(typeof options.sessionId === 'string' && options.sessionId.length > 0 ? {sessionId: options.sessionId} : {}),
+        ...(options.inTransaction === true ? {inTransaction: true} : {}),
+        ...(options.waitForCleanRead === true ? {waitForCleanRead: true} : {}),
         deliveryPriority: options.deliveryPriority,
         routingReadinessDimension: options.routingReadinessDimension,
         timeoutMs: options.timeoutMs,
@@ -477,6 +480,9 @@ class QueryExecutorBase {
       success: true,
       rows: aggregated.rows,
       count: aggregated.rows.length,
+      ...(results.some((r) => r?.waitedForActiveTransaction === true) ?
+        {waitedForActiveTransaction: true} :
+        {}),
       partitions: partitionIds,
       readAuthorityWitnesses: results.map(
         (result) => result.readAuthorityWitness,

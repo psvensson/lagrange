@@ -55,6 +55,13 @@ const PGWIRE_DEFAULT = Object.freeze({
   MAX_SESSIONS: 100,
 });
 
+let lastWallClockEpoch = 0;
+function nextMonotonicWallClockEpoch() {
+  const now = Date.now();
+  lastWallClockEpoch = Math.max(now, lastWallClockEpoch + 1);
+  return lastWallClockEpoch;
+}
+
 // --- Error messages ---
 
 const PGWIRE_MODULE_ERROR = Object.freeze({
@@ -392,6 +399,7 @@ class PostgresWireRuntimeModule {
         return;
       }
       connections.add(socket);
+      socket.setNoDelay?.(true);
       const handler = new PgWireProtocolHandler({
         adapter,
         socket,
@@ -555,4 +563,5 @@ export {
   PGWIRE_DEFAULT,
   LISTENER_STATE,
   resolveConfig,
+  nextMonotonicWallClockEpoch,
 };

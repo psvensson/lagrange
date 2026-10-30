@@ -1,4 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {EventEmitter} from 'node:events';
+import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   DistributedTransactionCoordinator,
   TRANSACTION_STATUS,
@@ -16,6 +21,14 @@ import {
 } from '../../src/constants/index.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
+import {deriveCommandTag} from '../../src/runtime/pgwire-result-mapper.js';
+import {PgWireProtocolHandler} from '../../src/runtime/pgwire-protocol-handler.js';
+import {
+  PG_TRANSACTION_STATE,
+  PG_BACKEND_MSG,
+  PG_PROTOCOL_VERSION,
+  PG_FRONTEND_MSG,
+} from '../../src/runtime/pgwire-protocol-constants.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -867,3 +880,286 @@ test('DistributedTransactionCoordinator - recovery rejects multi-participant 1PC
     t.equal(coordinator.hasActiveTransaction('invalid-one-phase'), false,
       'repeated recovery must reject the same poison state');
   });
+
+test('deriveCommandTag supports affectedRows fallback for INSERT, UPDATE, DELETE', async (t) => {
+  t.equal(deriveCommandTag({changes: 5}, 'INSERT INTO t VALUES(1)'), 'INSERT 0 5');
+  t.equal(deriveCommandTag({affectedRows: 4}, 'INSERT INTO t VALUES(1)'), 'INSERT 0 4');
+  t.equal(deriveCommandTag({changes: 3}, 'UPDATE t SET x=1'), 'UPDATE 3');
+  t.equal(deriveCommandTag({affectedRows: 2}, 'UPDATE t SET x=1'), 'UPDATE 2');
+  t.equal(deriveCommandTag({changes: 1}, 'DELETE FROM t'), 'DELETE 1');
+  t.equal(deriveCommandTag({affectedRows: 6}, 'DELETE FROM t'), 'DELETE 6');
+  t.equal(deriveCommandTag({changes: 3, affectedRows: 5}, 'UPDATE t SET x=1'), 'UPDATE 3');
+  t.equal(deriveCommandTag({}, 'UPDATE t SET x=1'), 'UPDATE 0');
+});
+
+test('DistributedTransactionCoordinator - recoverFromSystemTables does not resurrect in-memory completed transactions', async (t) => {
+  const coordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async () => {},
+    now: () => 1000,
+  });
+
+  const beginResult = await coordinator.begin('s-swept');
+  t.equal(beginResult.success, true);
+  await coordinator.enlistParticipants('s-swept', ['p1']);
+  const commitResult = await coordinator.commit('s-swept');
+  t.equal(commitResult.success, true);
+  t.equal(coordinator.hasActiveTransaction('s-swept'), false);
+
+  coordinator.recoverFromSystemTables({
+    transactions: [{
+      transaction_id: beginResult.transactionId,
+      session_id: 's-swept',
+      status: TRANSACTION_STATUS.ACTIVE,
+      ...frozenTransactionDecision(1),
+      created_at: 1,
+      updated_at: 2,
+    }],
+    participants: [{
+      participant_id: `${beginResult.transactionId}:p1`,
+      transaction_id: beginResult.transactionId,
+      partition_id: 'p1',
+      status: 'ACTIVE',
+      created_at: 1,
+      updated_at: 2,
+    }],
+  });
+
+  t.equal(coordinator.hasActiveTransaction('s-swept'), false);
+  const nextBegin = await coordinator.begin('s-swept');
+  t.equal(nextBegin.success, true);
+  await coordinator.rollback('s-swept');
+});
+
+test('PgWireProtocolHandler - failed BEGIN does not leave session in FAILED state', async (t) => {
+  class TestSocket extends EventEmitter {
+    constructor() {
+      super();
+      this.written = [];
+    }
+    write(buf) {
+      this.written.push(Buffer.from(buf));
+      return true;
+    }
+    end() {}
+    destroy() {}
+    findMessages(type) {
+      const all = Buffer.concat(this.written);
+      const msgs = [];
+      let off = 0;
+      while (off < all.length) {
+        const msgType = all[off];
+        if (off + 5 > all.length) break;
+        const len = all.readInt32BE(off + 1);
+        const total = 1 + len;
+        if (off + total > all.length) break;
+        if (msgType === type) {
+          msgs.push(all.subarray(off, off + total));
+        }
+        off += total;
+      }
+      return msgs;
+    }
+  }
+
+  const socket = new TestSocket();
+  const adapter = {
+    authenticate: async (id) => ({sessionId: id, tenantId: 'test'}),
+    execute: async () => {
+      const err = new Error('begin failed');
+      err.sqlState = '40001';
+      throw err;
+    },
+    closeSession: () => {},
+  };
+  const handler = new PgWireProtocolHandler({
+    adapter,
+    socket,
+    logger: {debug() {}, info() {}, warn() {}, error() {}},
+  });
+  handler.start();
+
+  const startupPayload = Buffer.concat([
+    Buffer.alloc(4),
+    Buffer.from('user\0test\0database\0test\0\0'),
+  ]);
+  startupPayload.writeInt32BE(PG_PROTOCOL_VERSION.CODE, 0);
+  const startupBuf = Buffer.alloc(4 + startupPayload.length);
+  startupBuf.writeInt32BE(startupBuf.length, 0);
+  startupPayload.copy(startupBuf, 4);
+  socket.emit('data', startupBuf);
+  await new Promise((r) => setImmediate(r));
+
+  socket.written = [];
+  const qStr = 'BEGIN\0';
+  const qBuf = Buffer.alloc(5 + Buffer.byteLength(qStr));
+  qBuf[0] = PG_FRONTEND_MSG.QUERY;
+  qBuf.writeInt32BE(4 + Buffer.byteLength(qStr), 1);
+  qBuf.write(qStr, 5);
+  socket.emit('data', qBuf);
+  await new Promise((r) => setImmediate(r));
+
+  const rfq = socket.findMessages(PG_BACKEND_MSG.READY_FOR_QUERY);
+  t.ok(rfq.length > 0, 'received ReadyForQuery');
+  t.equal(rfq[0][5], PG_TRANSACTION_STATE.IDLE, 'session state is IDLE, not FAILED');
+  handler.destroy();
+});
+
+test('DistributedTransactionCoordinator - runRecoverySweep does not import non-expired ACTIVE transactions and evicts terminal or superseded', async (t) => {
+  let currentTime = 1000;
+  let sweepState = {
+    transactions: [
+      {
+        transaction_id: 'tx-remote-active',
+        session_id: 'session-remote',
+        status: TRANSACTION_STATUS.ACTIVE,
+        created_at: 950,
+        updated_at: 950,
+        timeout_deadline: 2000,
+        ...frozenTransactionDecision(1),
+      },
+    ],
+    participants: [
+      {
+        participant_id: 'tx-remote-active:p1',
+        transaction_id: 'tx-remote-active',
+        partition_id: 'p1',
+        status: 'ACTIVE',
+        created_at: 950,
+        updated_at: 950,
+      },
+    ],
+  };
+
+  const coordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async () => {},
+    now: () => currentTime,
+    loadRecoveryStateForSweep: async () => sweepState,
+  });
+
+  // 1. runRecoverySweep() when now (1000) < timeout_deadline (2000):
+  // non-expired ACTIVE transaction must NOT be imported into memory!
+  await coordinator.runRecoverySweep();
+  t.equal(coordinator.transactions.has('tx-remote-active'), false, 'non-expired active tx not imported');
+  t.equal(coordinator.hasActiveTransaction('session-remote'), false, 'session has no active tx');
+
+  // 2. Now let's simulate that an expired transaction was imported in sweep:
+  currentTime = 2500;
+  await coordinator.runRecoverySweep();
+  t.equal(coordinator.transactions.has('tx-remote-active'), true, 'expired tx was imported for sweep');
+  t.equal(coordinator.recoveredTransactionIds.has('tx-remote-active'), true, 'tx marked as recovered');
+
+  // 3. Next sweep: the remote node committed the transaction, so DB returns COMMITTED.
+  sweepState = {
+    transactions: [
+      {
+        transaction_id: 'tx-remote-active',
+        session_id: 'session-remote',
+        status: TRANSACTION_STATUS.COMMITTED,
+        created_at: 950,
+        updated_at: 1050,
+        timeout_deadline: 2000,
+        ...frozenTransactionDecision(1),
+      },
+    ],
+    participants: [],
+  };
+  await coordinator.runRecoverySweep();
+  t.equal(coordinator.transactions.has('tx-remote-active'), false, 'transitioned committed tx evicted from memory');
+  t.equal(coordinator.recoveredTransactionIds.has('tx-remote-active'), false, 'evicted from recoveredTransactionIds');
+  t.equal(coordinator.hasActiveTransaction('session-remote'), false, 'session has no active tx');
+
+  // 4. Test eviction when superseded by a newer transaction on the same session:
+  currentTime = 3000;
+  sweepState = {
+    transactions: [
+      {
+        transaction_id: 'tx-stale',
+        session_id: 'session-superseded',
+        status: TRANSACTION_STATUS.ACTIVE,
+        created_at: 2000,
+        updated_at: 2000,
+        timeout_deadline: 2500,
+        ...frozenTransactionDecision(0),
+      },
+    ],
+    participants: [],
+  };
+  await coordinator.runRecoverySweep();
+  t.equal(coordinator.transactions.has('tx-stale'), true, 'tx-stale imported because expired');
+
+  // Newer transaction on same session:
+  sweepState = {
+    transactions: [
+      {
+        transaction_id: 'tx-stale',
+        session_id: 'session-superseded',
+        status: TRANSACTION_STATUS.ACTIVE,
+        created_at: 2000,
+        updated_at: 2000,
+        timeout_deadline: 2500,
+        ...frozenTransactionDecision(0),
+      },
+      {
+        transaction_id: 'tx-newer',
+        session_id: 'session-superseded',
+        status: TRANSACTION_STATUS.COMMITTED,
+        created_at: 2600,
+        updated_at: 2700,
+        timeout_deadline: 3500,
+        ...frozenTransactionDecision(0),
+      },
+    ],
+    participants: [],
+  };
+  await coordinator.runRecoverySweep();
+  t.equal(coordinator.transactions.has('tx-stale'), false, 'stale tx evicted when superseded by newer session tx');
+  t.equal(coordinator.recoveredTransactionIds.has('tx-stale'), false, 'tx-stale removed from recoveredTransactionIds');
+});
+
+test('PartitionService - rollbackTransaction with stale epoch returns idempotent success without rolling back active transaction', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-epoch-fence-'));
+  const dbPath = path.join(dir, 'partition.db');
+  t.teardown(() => fs.rmSync(dir, {recursive: true, force: true}));
+
+  const partition = new PartitionService({
+    partitionId: 'p-test',
+    tableId: 't-test',
+    tableName: 't_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-test',
+    schema: {
+      columns: [
+        {name: 'id', type: 'INTEGER', primaryKey: true},
+        {name: 'value', type: 'TEXT'},
+      ],
+    },
+    dbPath,
+  });
+  await partition.initialize();
+  try {
+    const sessionId = 'session-fenced';
+    const activeEpoch = 200;
+    const beginRes = await partition.beginTransaction(sessionId, activeEpoch);
+    t.equal(beginRes.success, true);
+    t.equal(partition.activeTransactions.has(sessionId), true);
+
+    // Rollback with stale epoch (100 < 200): must return idempotent success without rolling back!
+    const staleRollbackRes = await partition.rollbackTransaction(sessionId, 100);
+    t.equal(staleRollbackRes.success, true);
+    t.equal(staleRollbackRes.rolledBack, true);
+    t.equal(staleRollbackRes.idempotent, true);
+    t.equal(partition.activeTransactions.has(sessionId), true, 'active transaction remains intact');
+
+    // Rollback with matching epoch (200): rolls back cleanly!
+    const matchingRollbackRes = await partition.rollbackTransaction(sessionId, 200);
+    t.equal(matchingRollbackRes.success, true);
+    t.equal(partition.activeTransactions.has(sessionId), false, 'transaction is now rolled back');
+  } finally {
+    await partition.shutdown();
+  }
+});

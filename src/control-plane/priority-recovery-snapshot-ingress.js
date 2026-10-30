@@ -158,6 +158,107 @@ function resolvePriorityRecoveryRequiredSatisfyingTargetCount(
   return normalizedSpreadGap;
 }
 
+function filterPriorityRecoveryEligibleOperationalServiceNodeIds(
+  operationalServiceNodeIds = [],
+  eligibleTargetNodeIds = [],
+) {
+  const normalizedServiceNodeIds = normalizePriorityRecoveryStringList(
+    operationalServiceNodeIds,
+  );
+  const eligibleTargetNodeIdSet = new Set(
+    normalizePriorityRecoveryStringList(eligibleTargetNodeIds),
+  );
+  if (eligibleTargetNodeIdSet.size === 0) {
+    return normalizedServiceNodeIds;
+  }
+  return normalizedServiceNodeIds.filter((nodeId) =>
+    eligibleTargetNodeIdSet.has(nodeId),
+  );
+}
+
+function partitionPriorityRecoveryOperationalServiceNodeIds(
+  operationalServiceNodeIds = [],
+  satisfyingTargetNodeIds = new Set(),
+) {
+  const nonTargetOperationalNodeIds = new Set();
+  const operationalTargetNodeIds = new Set();
+  for (const nodeId of operationalServiceNodeIds) {
+    if (satisfyingTargetNodeIds.has(nodeId)) {
+      operationalTargetNodeIds.add(nodeId);
+    } else {
+      nonTargetOperationalNodeIds.add(nodeId);
+    }
+  }
+  return {nonTargetOperationalNodeIds, operationalTargetNodeIds};
+}
+
+function hasPriorityRecoveryBaselineServiceCensus(
+  plannerReadyDistinctNodeCount,
+  nonTargetOperationalNodeCount,
+  operationalTargetNodeCount,
+) {
+  if (nonTargetOperationalNodeCount > 0) {
+    return true;
+  }
+  return (
+    plannerReadyDistinctNodeCount > 1 &&
+    operationalTargetNodeCount >= plannerReadyDistinctNodeCount
+  );
+}
+
+function resolvePriorityRecoveryUncoveredSatisfyingTargetCount(
+  options = {},
+) {
+  const satisfyingTargetNodeIds =
+    options.satisfyingTargetNodeIds instanceof Set ?
+      options.satisfyingTargetNodeIds :
+      new Set(
+        normalizePriorityRecoveryStringList(
+          options.satisfyingTargetNodeIds,
+        ),
+      );
+  const plannerReadyDistinctNodeCount = normalizePriorityRecoveryInteger(
+    options.plannerReadyDistinctNodeCount,
+  );
+  if (
+    satisfyingTargetNodeIds.size === 0 ||
+    !Number.isFinite(plannerReadyDistinctNodeCount) ||
+    plannerReadyDistinctNodeCount <= 0
+  ) {
+    return satisfyingTargetNodeIds.size;
+  }
+  const operationalServiceNodeIds =
+    filterPriorityRecoveryEligibleOperationalServiceNodeIds(
+      options.operationalServiceNodeIds,
+      options.eligibleTargetNodeIds,
+    );
+  const {nonTargetOperationalNodeIds, operationalTargetNodeIds} =
+    partitionPriorityRecoveryOperationalServiceNodeIds(
+      operationalServiceNodeIds,
+      satisfyingTargetNodeIds,
+    );
+  if (
+    !hasPriorityRecoveryBaselineServiceCensus(
+      plannerReadyDistinctNodeCount,
+      nonTargetOperationalNodeIds.size,
+      operationalTargetNodeIds.size,
+    )
+  ) {
+    return satisfyingTargetNodeIds.size;
+  }
+  const alreadyCountedTargetCount = Math.max(
+    0,
+    Math.min(
+      operationalTargetNodeIds.size,
+      plannerReadyDistinctNodeCount - nonTargetOperationalNodeIds.size,
+    ),
+  );
+  return Math.max(
+    0,
+    satisfyingTargetNodeIds.size - alreadyCountedTargetCount,
+  );
+}
+
 function buildPriorityRecoverySpreadCompletion(options = {}) {
   const activeOperationContexts = Array.isArray(options.activeOperationContexts) ?
     options.activeOperationContexts :
@@ -203,7 +304,14 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
     resolvePriorityRecoveryRequiredSatisfyingTargetCount(
       options.plannerSpreadGap,
     );
-  if (satisfyingTargetNodeIds.size >= requiredSatisfyingTargetCount) {
+  const uncoveredSatisfyingTargetCount =
+    resolvePriorityRecoveryUncoveredSatisfyingTargetCount({
+      satisfyingTargetNodeIds,
+      plannerReadyDistinctNodeCount: options.plannerReadyDistinctNodeCount,
+      operationalServiceNodeIds: options.operationalServiceNodeIds,
+      eligibleTargetNodeIds,
+    });
+  if (uncoveredSatisfyingTargetCount >= requiredSatisfyingTargetCount) {
     return Object.freeze({
       satisfied: true,
       reasonCode: resolvePriorityRecoverySpreadSatisfyingReasonCode(
@@ -608,4 +716,5 @@ export {
   resolvePriorityRecoveryReasonCodesFromReadiness,
   resolvePriorityRecoverySemanticState,
   resolvePriorityRecoverySpreadSatisfyingReasonCode,
+  resolvePriorityRecoveryUncoveredSatisfyingTargetCount,
 };

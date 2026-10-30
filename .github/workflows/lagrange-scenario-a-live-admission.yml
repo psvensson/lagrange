@@ -5,6 +5,7 @@ on:
     branches:
       - benchmark/tidb-reference-scenarios
       - benchmark/scenario-a-lagrange-live-admission-staging
+      - benchmark/lagrange-scenario-a-visibility-20261028
     paths:
       - '.github/workflows/lagrange-scenario-a-live-admission.yml'
       - 'test/distributed/harness/oltp-scenario-a-comparison-systems.js'
@@ -13,6 +14,37 @@ on:
       - 'test/distributed/harness/oltp-scenario-a-lagrange-proof-plan.js'
       - 'test/distributed/harness/oltp-scenario-a-lagrange-live-admission.js'
       - 'scripts/checks/oltp-scenario-a-lagrange-live-admission-guard.js'
+      - 'test/distributed/run-runtime-helpers.js'
+      - 'test/distributed/scenarios/scenario-a-visibility-lagrange.js'
+      - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
+      - 'test/distributed/scenarios/scenario-a-payment-lagrange.js'
+      - 'test/distributed/scenarios/scenario-a-order-status-lagrange.js'
+      - 'test/distributed/scenarios/scenario-a-delivery-lagrange.js'
+      - 'test/distributed/scenarios/scenario-a-stock-level-lagrange.js'
+      - 'test/distributed/scenarios/scenario-a-failure-atomicity-lagrange.js'
+      - 'test/distributed/scenarios/scenario-a-retryable-conflict-lagrange.js'
+      - 'test/distributed/scenarios/scenario-a-durability-lagrange.js'
+      - 'test/distributed/reference-client/lagrange-visibility-probe.js'
+      - 'test/distributed/reference-client/lagrange-payment-observer.js'
+      - 'test/distributed/reference-client/lagrange-oltp-state-snapshot.js'
+      - 'test/distributed/reference-client/lagrange-delivery-observer.js'
+      - 'test/distributed/reference-client/lagrange-retryable-conflict-probe.js'
+      - 'test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js'
+      - 'test/distributed/harness/__fixtures__/scenario-with-prestart.js'
+      - 'test/distributed/reference-client/lagrange-visibility-probe.test.js'
+      - 'test/distributed/reference-client/lagrange-scenario-a-slices.test.js'
+      - 'test/distributed/harness/oltp-scenario-a-lagrange-runtime-preflight.js'
+      - 'test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js'
+      - 'test/distributed/harness/oltp-scenario-a-visibility-case.js'
+      - 'test/scripts/oltp-scenario-a-lagrange-live-admission-guard-witness.js'
+      - 'scripts/generate-global-owner-debt-inventory.js'
+      - 'scripts/global-owner-debt-inventory/constants.js'
+      - 'test/scripts/dependency-policy-producer-binding.test.js'
+      - 'test/scripts/impact-proof-cone-producer.test.js'
+      - 'test/shards/impact-graph-seal.json'
+      - 'test/shards/primary-classes.json'
+      - 'test/shards/resource-classes.json'
+      - 'test/shards/subsystem-classes.json'
   workflow_dispatch: {}
 
 permissions:
@@ -50,3 +82,40 @@ jobs:
             test/distributed/harness/oltp-scenario-a-lagrange-live-admission.js \
             scripts/checks/oltp-scenario-a-lagrange-live-admission-guard.js
           node scripts/checks/oltp-scenario-a-lagrange-live-admission-guard.js
+
+      - name: Prove pre-start admission and nested dependency authority
+        run: |
+          set -euo pipefail
+          npx eslint \
+            test/distributed/run-runtime-helpers.js \
+            test/distributed/scenarios/scenario-a-visibility-lagrange.js \
+            test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js \
+            test/distributed/scenarios/scenario-a-payment-lagrange.js \
+            test/distributed/scenarios/scenario-a-order-status-lagrange.js \
+            test/distributed/scenarios/scenario-a-delivery-lagrange.js \
+            test/distributed/scenarios/scenario-a-stock-level-lagrange.js \
+            test/distributed/scenarios/scenario-a-failure-atomicity-lagrange.js \
+            test/distributed/scenarios/scenario-a-retryable-conflict-lagrange.js \
+            test/distributed/scenarios/scenario-a-durability-lagrange.js \
+            test/distributed/reference-client/lagrange-visibility-probe.js \
+            test/distributed/reference-client/lagrange-payment-observer.js \
+            test/distributed/reference-client/lagrange-oltp-state-snapshot.js \
+            test/distributed/reference-client/lagrange-delivery-observer.js \
+            test/distributed/reference-client/lagrange-retryable-conflict-probe.js \
+            test/distributed/reference-client/lagrange-scenario-a-slices.test.js \
+            test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js \
+            test/scripts/oltp-scenario-a-lagrange-live-admission-guard-witness.js \
+            scripts/generate-global-owner-debt-inventory.js \
+            scripts/global-owner-debt-inventory/constants.js
+          node --test \
+            test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js \
+            test/scripts/dependency-policy-producer-binding.test.js \
+            test/scripts/impact-proof-cone-producer.test.js
+          npx tap \
+            test/distributed/reference-client/lagrange-visibility-probe.test.js \
+            test/distributed/reference-client/lagrange-scenario-a-slices.test.js
+          # The graph report is intentionally absent from a clean checkout.
+          # Reproduce the ordinary CI gate: regenerate it, then refuse any
+          # difference against the committed seal.
+          node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only
+          git diff --exit-code -- test/shards/impact-graph-seal.json

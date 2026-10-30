@@ -20,6 +20,7 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
     PRIORITY_RECOVERY_OPERATION_ID_ELIGIBLE_REMOVE_PHASE,
     PRIORITY_RECOVERY_OPERATION_ID_EXCLUDED_TARGET_CREATING,
     PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+    PRIORITY_RECOVERY_OPERATION_TYPE_ADD,
     PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
     PRIORITY_RECOVERY_OPERATION_UPDATED_AT_MS,
     PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
@@ -870,6 +871,101 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
         pendingSnapshot.semanticState,
         PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
         'the stale pending row should inherit the partition-level spread-satisfied state',
+      );
+    });
+
+  test('priority recovery decision snapshots deduplicate operational target node when computing spread completion',
+    async (t) => {
+      const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+        capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+        publicationConvergence: {
+          publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+          publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+          publishedActiveNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+          pendingAckNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: false,
+            blockedPartitions: [{
+              partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+              requiredDistinctNodeCount: 3,
+              readyDistinctNodeCount: 2,
+              spreadGap: 1,
+            }],
+            missingPartitionIds: [SQL_TRANSACTION_PRIORITY_PARTITION_ID],
+            requiredDistinctNodeCount: 3,
+          },
+          membershipLifecycleSummary: {
+            projectedServingNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+              PRIORITY_RECOVERY_NODE_ID_C,
+            ],
+            locallyEligibleNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+              PRIORITY_RECOVERY_NODE_ID_C,
+            ],
+          },
+        },
+        readinessByNodeId: {},
+        workflowAdmissionsByWorkflowId: {},
+        replicaOperationRows: [{
+          operation_id: 'completed-add-op-node-c',
+          partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+          entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+          operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_ADD,
+          status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+          workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+          source_node_id: null,
+          target_node_id: PRIORITY_RECOVERY_NODE_ID_C,
+          replica_id: PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLACEMENT_REPLICA_ID,
+          created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+          updated_at: PRIORITY_RECOVERY_OPERATION_COMPLETED_AT_MS,
+        }],
+        replicaOperations: {
+          operationTimelineById: {
+            'completed-add-op-node-c': [{
+              step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+              status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+              inFlight: false,
+            }],
+          },
+        },
+        serviceRows: [{
+          partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+          status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+          raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
+          node_id: PRIORITY_RECOVERY_NODE_ID_A,
+        }, {
+          partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+          status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+          raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
+          node_id: PRIORITY_RECOVERY_NODE_ID_C,
+        }],
+      });
+
+      const snapshot = decisionSnapshots.snapshots.find((entry) =>
+        entry.partitionId === SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+      );
+      t.ok(snapshot, 'partition snapshot should exist');
+      t.equal(
+        snapshot.spreadCompletion.satisfied,
+        false,
+        'completed ADD on node-c must not double-count node-c when it is already in serviceRows',
+      );
+
+      const closureWitness = buildPriorityRecoveryClosureWitness({
+        decisionSnapshots,
+        priorityPartitionSummary: decisionSnapshots.priorityPartitionSummary,
+      });
+      t.equal(
+        closureWitness.prioritySpreadPending,
+        true,
+        'priority spread should remain pending because distinct node count requirement is not satisfied',
       );
     });
 }

@@ -3,6 +3,9 @@ import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-ba
 import {
   trackStuckTransactionHeal,
 } from '../diagnostics/raft-churn-sync-sections.js';
+import {
+  rollbackSqlitePreservingRaftState,
+} from './partition-service-table-bootstrap.js';
 
 
 const {
@@ -15,6 +18,9 @@ const {
   PARTICIPANT_COMMIT_OUTCOME,
   RaftRole,
 } = PARTITION_SERVICE_SHARED;
+
+const LOCAL_STR_COLON = ':';
+const LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD = 1_000_000_000_000;
 
 class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   /**
@@ -143,51 +149,155 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     return primaryKeyColumn?.name || null;
   }
   /**
+   * Resolve the primary-key columns used for write-set tracking.
+   * @return {string[]} Primary-key column names.
+   * @private
+   */
+  resolveTransactionPrimaryKeyColumns() {
+    const singlePk = this.resolveTransactionPrimaryKeyColumn();
+    if (typeof singlePk === 'string') {
+      return [singlePk];
+    }
+    if (Array.isArray(this.schema?.primaryKey) && this.schema.primaryKey.length > 0) {
+      return this.schema.primaryKey;
+    }
+    if (Array.isArray(this.schema?.tableConstraints)) {
+      const pkConstraint = this.schema.tableConstraints.find(
+        (c) => c?.type === 'PRIMARY KEY' && Array.isArray(c.columns) && c.columns.length > 0,
+      );
+      if (pkConstraint) {
+        return pkConstraint.columns;
+      }
+    }
+    if (this._pragmaPrimaryKeyColumns) {
+      return this._pragmaPrimaryKeyColumns;
+    }
+    if (this.db && typeof this.tableName === 'string' && this.tableName) {
+      try {
+        const rows = this.db.prepare(`PRAGMA table_info("${this.tableName}")`).all();
+        const pkCols = rows
+          .filter((col) => Number(col.pk) > 0)
+          .sort((a, b) => Number(a.pk) - Number(b.pk))
+          .map((col) => col.name);
+        if (pkCols.length > 0) {
+          this._pragmaPrimaryKeyColumns = pkCols;
+          return pkCols;
+        }
+      } catch (_err) {
+        void _err;
+      }
+    }
+    return [];
+  }
+  /**
    * Resolve one write-set key from a transaction entry.
    * @param {Object} entry - Transaction write entry.
+   * @param {Array|null} [matchedRows=null] - Pre-mutation matched rows.
    * @return {string|null} Write-set key.
    * @private
    */
-  resolveTransactionWriteSetKey(entry) {
+  resolveTransactionWriteSetKey(entry, matchedRows = null) {
     const primaryKeyColumn = this.resolveTransactionPrimaryKeyColumn();
-    if (!primaryKeyColumn) {
-      return null;
-    }
     const tableName = entry.tableName || this.tableName;
-    if (
-      entry?.whereClause &&
-      Object.prototype.hasOwnProperty.call(entry.whereClause, primaryKeyColumn)
-    ) {
-      return `${tableName}:${entry.whereClause[primaryKeyColumn]}`;
-    }
-    if (
-      entry?.data &&
-      Object.prototype.hasOwnProperty.call(entry.data, primaryKeyColumn)
-    ) {
-      return `${tableName}:${entry.data[primaryKeyColumn]}`;
-    }
-    try {
-      const routingKey = this.extractSplitRoutingKey(entry, primaryKeyColumn);
-      if (routingKey === void 0 || routingKey === null) {
-        return null;
+    if (primaryKeyColumn) {
+      if (
+        entry?.whereClause &&
+        Object.prototype.hasOwnProperty.call(entry.whereClause, primaryKeyColumn)
+      ) {
+        return `${tableName}:${entry.whereClause[primaryKeyColumn]}`;
       }
-      return `${tableName}:${routingKey}`;
-    } catch (_err) {
+      if (
+        entry?.data &&
+        Object.prototype.hasOwnProperty.call(entry.data, primaryKeyColumn)
+      ) {
+        return `${tableName}:${entry.data[primaryKeyColumn]}`;
+      }
+      try {
+        const routingKey = this.extractSplitRoutingKey(entry, primaryKeyColumn);
+        if (routingKey !== void 0 && routingKey !== null) {
+          return `${tableName}:${routingKey}`;
+        }
+      } catch (_err) {
+        void _err;
+      }
+      if (
+        Array.isArray(matchedRows) &&
+        matchedRows.length > 0 &&
+        matchedRows[0]?.[primaryKeyColumn] !== undefined &&
+        matchedRows[0]?.[primaryKeyColumn] !== null
+      ) {
+        return `${tableName}:${matchedRows[0][primaryKeyColumn]}`;
+      }
       return null;
     }
+
+    const pkColumns = this.resolveTransactionPrimaryKeyColumns();
+    if (pkColumns.length > 0) {
+      const candidateSources = [
+        matchedRows?.[0],
+        entry?.whereClause,
+        entry?.data,
+      ].filter(Boolean);
+
+      for (const source of candidateSources) {
+        const hasAllKeys = pkColumns.every(
+          (col) => source[col] !== undefined && source[col] !== null,
+        );
+        if (hasAllKeys) {
+          return `${tableName}:${pkColumns.map((col) => source[col]).join(LOCAL_STR_COLON)}`;
+        }
+      }
+    }
+    return null;
   }
   /**
    * Track one transaction write-set key.
    * @param {Object} transactionState - Active transaction state.
    * @param {Object} entry - Transaction write entry.
+   * @param {Array|null} [matchedRows=null] - Pre-mutation matched rows.
    * @private
    */
-  trackTransactionWriteSetKey(transactionState, entry) {
-    const writeSetKey = this.resolveTransactionWriteSetKey(entry);
-    if (!writeSetKey) {
+  trackTransactionWriteSetKey(transactionState, entry, matchedRows = null) {
+    if (!transactionState?.writeSet) {
       return;
     }
-    transactionState.writeSet.add(writeSetKey);
+    const pkColumns = this.resolveTransactionPrimaryKeyColumns();
+    const tableName = entry?.tableName || this.tableName;
+    if (Array.isArray(matchedRows) && matchedRows.length > 0 && pkColumns.length > 0) {
+      for (const row of matchedRows) {
+        const hasAllKeys = pkColumns.every(
+          (col) => row[col] !== undefined && row[col] !== null,
+        );
+        if (hasAllKeys) {
+          transactionState.writeSet.add(
+            `${tableName}:${pkColumns.map((col) => row[col]).join(LOCAL_STR_COLON)}`,
+          );
+        }
+      }
+    }
+    if (
+      typeof entry?.sql === 'string' &&
+      Array.isArray(entry.params) &&
+      pkColumns.length > 0
+    ) {
+      const match = entry.sql.match(/INSERT\s+INTO\s+[`"']?(\w+)[`"']?\s*\(([^)]+)\)/i);
+      if (match) {
+        const colList = match[2].split(',').map((c) => c.trim().replace(/[`"']/g, ''));
+        const pkIndices = pkColumns.map((pk) => colList.indexOf(pk));
+        if (pkIndices.every((idx) => idx >= 0 && idx < entry.params.length)) {
+          const keyValues = pkIndices.map((idx) => entry.params[idx]);
+          if (keyValues.every((val) => val !== undefined && val !== null)) {
+            transactionState.writeSet.add(
+              `${tableName}:${keyValues.join(LOCAL_STR_COLON)}`,
+            );
+          }
+        }
+      }
+    }
+    const writeSetKey = this.resolveTransactionWriteSetKey(entry, matchedRows);
+    if (writeSetKey) {
+      transactionState.writeSet.add(writeSetKey);
+    }
   }
   /**
    * Check whether a write set conflicts with later committed writes.
@@ -203,10 +313,17 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       return {hasConflict: false, conflicts: []};
     }
     const conflicts = [];
+    const isWallClockEpoch =
+      transactionEpoch >= LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD;
     for (const commitRecord of this.committedWriteLog) {
+      const commitEpoch = isWallClockEpoch ?
+        (Number.isFinite(commitRecord?.committedAt) ?
+          Math.max(Number(commitRecord?.epoch || 0), commitRecord.committedAt) :
+          commitRecord?.epoch) :
+        commitRecord?.epoch;
       if (
-        !Number.isFinite(commitRecord?.epoch) ||
-        commitRecord.epoch <= transactionEpoch
+        !Number.isFinite(commitEpoch) ||
+        commitEpoch <= transactionEpoch
       ) {
         continue;
       }
@@ -267,6 +384,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       !transactionState ||
       !Number.isFinite(transactionState.transactionEpoch)
     ) {
+      return rows;
+    }
+    if (transactionState.transactionEpoch >= LOCAL_NUM_WALL_CLOCK_EPOCH_THRESHOLD) {
       return rows;
     }
     if (this.isSnapshotExpired(transactionState.transactionEpoch)) {
@@ -572,7 +692,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       transactionEpoch,
     });
     try {
+      this._activeTxRaftBaselineIndex =
+        this.logAdapter?.getLastInfo?.()?.index || 0;
       this.db.exec(PARTITION_SERVICE_SQL.BEGIN_IMMEDIATE);
+      this._maxObservedTransactionEpoch = Math.max(
+        this._maxObservedTransactionEpoch || 0,
+        Number.isFinite(transactionEpoch) ? transactionEpoch : 0,
+      );
       const transactionState = {
         sessionId: transactionSessionId,
         transactionEpoch,
@@ -580,6 +706,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         operations: [],
         writeSet: /* @__PURE__ */ new Set(),
         readSet: /* @__PURE__ */ new Set(),
+        beforeImages: new Map(),
       };
       this.activeTransactions.set(transactionSessionId, transactionState);
       this.syncLegacyTransactionAliases();
@@ -604,7 +731,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * @param {string|null} sessionId - Transaction session ID.
    * @return {Promise<Object>} Prepare result.
    */
-  async prepareTransaction(sessionId = null) {
+  async prepareTransaction(sessionId = null, transactionEpoch = null) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -621,6 +748,18 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     }
     const {sessionId: transactionSessionId, state: transactionState} =
       transaction;
+    if (
+      Number.isFinite(transactionEpoch) &&
+      Number.isFinite(transactionState?.transactionEpoch) &&
+      transactionEpoch < transactionState.transactionEpoch
+    ) {
+      return {
+        success: false,
+        operation: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+        partitionId: this.partitionId,
+        error: PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_PREPARE,
+      };
+    }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.PREPARING_TRANSACTION, {
       partitionId: this.partitionId,
       sessionId: transactionSessionId,
@@ -670,7 +809,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * Ensures durability through Raft replication before acknowledging.
    * @return {Promise<Object>} Commit result.
    */
-  async commitTransaction(sessionId = null) {
+  async commitTransaction(sessionId = null, transactionEpoch = null) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -681,14 +820,46 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         transactionSessionId,
       );
     }
+    const activeTransaction =
+      this.resolveActiveTransactionState(transactionSessionId);
     const transaction =
-      this.resolveActiveTransactionState(transactionSessionId) ||
+      activeTransaction ||
       this.resolvePreparedTransactionState(transactionSessionId);
     if (!transaction) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_COMMIT);
     }
     const {sessionId: resolvedSessionId, state: transactionState} =
       transaction;
+    if (
+      Number.isFinite(transactionEpoch) &&
+      Number.isFinite(transactionState?.transactionEpoch) &&
+      transactionEpoch < transactionState.transactionEpoch
+    ) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_COMMIT);
+    }
+    if (activeTransaction) {
+      const conflictCheck = this.checkWriteConflicts(
+        transactionState.writeSet,
+        transactionState.transactionEpoch,
+      );
+      if (conflictCheck.hasConflict) {
+        try {
+          rollbackSqlitePreservingRaftState(this);
+        } catch (_rollbackErr) {
+          void _rollbackErr;
+        }
+        this.activeTransactions.delete(resolvedSessionId);
+        this.preparedTransactions.delete(resolvedSessionId);
+        this.syncLegacyTransactionAliases();
+        return {
+          success: false,
+          operation: PARTITION_SERVICE_OPERATION.COMMIT,
+          partitionId: this.partitionId,
+          error: PARTITION_SERVICE_ERROR_MSG.PREPARE_CONFLICT,
+          conflicts: conflictCheck.conflicts,
+        };
+      }
+    }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.COMMITTING_TRANSACTION, {
       partitionId: this.partitionId,
       sessionId: resolvedSessionId,
@@ -711,7 +882,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         await this.generateCDCEvent(op);
       }
       if (transactionState.writeSet.size > 0) {
-        const committedAt = Date.now();
+        const committedAt = Math.max(
+          Date.now(),
+          (Number(transactionState.transactionEpoch) || 0) + 1,
+          (this._maxObservedTransactionEpoch || 0) + 1,
+          (this._lastCommitWallClock || 0) + 1,
+        );
+        this._lastCommitWallClock = committedAt;
         for (const writeSetKey of transactionState.writeSet) {
           this.rowCommitEpoch.set(
             writeSetKey,
@@ -749,9 +926,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         error: error.message,
       });
       try {
-        this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
+        rollbackSqlitePreservingRaftState(this);
       } catch (_rollbackErr) {
-        // Ignore rollback failures after the original commit failure.
+        void _rollbackErr;
       }
       this.activeTransactions.delete(resolvedSessionId);
       this.preparedTransactions.delete(resolvedSessionId);
@@ -763,7 +940,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * Rollback the active transaction.
    * @return {Promise<Object>} Rollback result.
    */
-  async rollbackTransaction(sessionId = null) {
+  async rollbackTransaction(sessionId = null, transactionEpoch = null) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -789,17 +966,31 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     }
     const {sessionId: resolvedSessionId, state: transactionState} =
       transaction;
+    if (
+      Number.isFinite(transactionEpoch) &&
+      Number.isFinite(transactionState?.transactionEpoch) &&
+      transactionEpoch < transactionState.transactionEpoch
+    ) {
+      return {
+        success: true,
+        operation: PARTITION_SERVICE_OPERATION.ROLLBACK,
+        partitionId: this.partitionId,
+        rolledBack: true,
+        idempotent: true,
+        sessionId: resolvedSessionId,
+      };
+    }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.ROLLING_BACK_TRANSACTION, {
       partitionId: this.partitionId,
       sessionId: resolvedSessionId,
       operationCount: transactionState.operations.length,
     });
     try {
+      rollbackSqlitePreservingRaftState(this);
       const raftEntry = await this.replicateTransactionRollback(
         resolvedSessionId,
         transactionState.transactionEpoch,
       );
-      this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
       const duration = Date.now() - transactionState.startTime;
       const operationCount = transactionState.operations.length;
       this.activeTransactions.delete(resolvedSessionId);

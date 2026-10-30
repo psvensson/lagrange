@@ -135,6 +135,7 @@ function resolvePriorityRecoveryDecisionAssessment(options = {}) {
     admission: options.admission,
     learnerPromotion: options.learnerPromotion,
     operationContexts: options.operationContexts,
+    operationalServiceNodeIds: options.operationalServiceNodeIds,
     serialLaneOperationContexts: options.serialLaneOperationContexts,
     nowMs: options.nowMs,
     stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
@@ -318,6 +319,7 @@ function buildPriorityRecoveryDecisionSnapshot(options = {}) {
     admission,
     learnerPromotion,
     operationContexts,
+    operationalServiceNodeIds: options.operationalServiceNodeIds,
     serialLaneOperationContexts: options.serialLaneOperationContexts,
     nowMs: options.capturedAt,
     stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
@@ -525,6 +527,7 @@ function buildPriorityRecoveryOperationSnapshotAssessment(
   snapshot,
   operationContexts,
   capturedAt,
+  operationalServiceNodeIds = [],
 ) {
   return buildPriorityRecoveryPartitionAssessment({
     partitionId: snapshot.partitionId,
@@ -533,6 +536,7 @@ function buildPriorityRecoveryOperationSnapshotAssessment(
     learnerPromotion:
       resolvePriorityRecoveryOperationSnapshotLearnerPromotion(snapshot),
     operationContexts,
+    operationalServiceNodeIds,
     nowMs: capturedAt,
   });
 }
@@ -553,6 +557,7 @@ function preservePriorityRecoveryOperationSnapshotPressure(
 function buildPriorityRecoveryOperationSpecificSnapshotBase(
   partitionSnapshot,
   operationContext,
+  operationalServiceNodeIds = [],
 ) {
   const sanitizedSnapshot =
     stripInheritedPriorityRecoveryOperationOwnerObservation(
@@ -570,6 +575,7 @@ function buildPriorityRecoveryOperationSpecificSnapshotBase(
     sanitizedSnapshot,
     operationContexts,
     capturedAt,
+    operationalServiceNodeIds,
   );
   const completion =
     isPriorityRecoverySnapshotObject(sanitizedSnapshot.completion) ?
@@ -632,6 +638,7 @@ function appendPriorityRecoveryPartitionSnapshots(
   publicationEpoch,
   operationContexts,
   byOperationId,
+  operationalServiceNodeIds = [],
 ) {
   const appendedSnapshots = [];
   const operationIds =
@@ -647,6 +654,7 @@ function appendPriorityRecoveryPartitionSnapshots(
       buildPriorityRecoveryOperationSpecificSnapshotBase(
         partitionSnapshot,
         operationContext,
+        operationalServiceNodeIds,
       );
     const snapshotWithOperationContext = {
       ...operationSnapshotBase,

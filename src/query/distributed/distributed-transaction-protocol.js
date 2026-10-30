@@ -15,6 +15,9 @@ import {
   TIMEOUT_ERROR_MESSAGES,
   TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {
+  isPrepareWriteConflictFailure,
+} from './transaction-participant-error-projection.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const COMMIT_MISS_RESOLUTION = Object.freeze({
@@ -233,7 +236,14 @@ const distributedTransactionProtocolMethods = {
         tx,
         PARTICIPANT_STATUS.PREPARING,
         PARTICIPANT_STATUS.PREPARED,
-        (partitionId) => this.prepareParticipant(tx.sessionId, partitionId),
+        (partitionId) => {
+          const participant = tx.participants?.get(partitionId);
+          return this.prepareParticipant(
+            tx.sessionId,
+            partitionId,
+            participant?.transactionEpoch ?? tx.transactionEpoch,
+          );
+        },
         {participantKeys: this.getPrepareParticipantKeys(tx)},
       );
       if (prepareFailures.length > 0) {
@@ -292,7 +302,14 @@ const distributedTransactionProtocolMethods = {
             tx,
             PARTICIPANT_STATUS.COMMITTING,
             PARTICIPANT_STATUS.COMMITTED,
-            (partitionId) => this.commitParticipant(tx.sessionId, partitionId),
+            (partitionId) => {
+              const participant = tx.participants?.get(partitionId);
+              return this.commitParticipant(
+                tx.sessionId,
+                partitionId,
+                participant?.transactionEpoch ?? tx.transactionEpoch,
+              );
+            },
             {
               participantKeys: this.getCommitParticipantKeys(tx),
               skipBudgetEnforcement: commitStatusAllowsTimeout,
@@ -311,7 +328,13 @@ const distributedTransactionProtocolMethods = {
           TRANSACTION_STATUS.COMMITTING,
         );
       }
-      if (commitStageResult.deferred !== true) {
+      if (
+        tx.commitMode === COMMIT_MODE.ONE_PHASE_COMMIT &&
+        commitFailures.some((entry) => isPrepareWriteConflictFailure(entry))
+      ) {
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+        this.transactionsBySession.delete(tx.sessionId);
+      } else if (commitStageResult.deferred !== true) {
         await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
       }
       return {
@@ -354,7 +377,11 @@ const distributedTransactionProtocolMethods = {
           tx,
           PARTICIPANT_STATUS.COMMITTING,
           partitionId,
-          () => this.commitParticipant(tx.sessionId, partitionId),
+          () => this.commitParticipant(
+            tx.sessionId,
+            partitionId,
+            participant?.transactionEpoch ?? tx.transactionEpoch,
+          ),
           options,
         );
         participant.status = PARTICIPANT_STATUS.COMMITTED;
@@ -392,7 +419,14 @@ const distributedTransactionProtocolMethods = {
       tx,
       PARTICIPANT_STATUS.ROLLING_BACK,
       PARTICIPANT_STATUS.ROLLED_BACK,
-      (partitionId) => this.rollbackParticipant(tx.sessionId, partitionId),
+      (partitionId) => {
+        const participant = tx.participants?.get(partitionId);
+        return this.rollbackParticipant(
+          tx.sessionId,
+          partitionId,
+          participant?.transactionEpoch ?? tx.transactionEpoch,
+        );
+      },
       {participantKeys: this.getRollbackParticipantKeys(tx)},
     );
 
@@ -530,6 +564,9 @@ const distributedTransactionProtocolMethods = {
         await operation(partitionId);
         return;
       } catch (error) {
+        if (isPrepareWriteConflictFailure(error)) {
+          throw error;
+        }
         const commitMissResolution =
           await this.resolveParticipantCommitMiss(
             tx,
