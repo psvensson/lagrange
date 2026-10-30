@@ -53,7 +53,11 @@ jobs:
             scripts/checks/tidb-scenario-a-semantic-gate-evidence.js \
             test/distributed/harness/oltp-comparison-history-store.js \
             scripts/checks/oltp-comparison-history-store-guard.js \
-            test/distributed/harness/oltp-comparison-static-web.js
+            test/distributed/harness/oltp-comparison-static-web.js \
+            test/distributed/harness/scenario-b-risk-dataset.js \
+            test/distributed/harness/scenario-b-risk-oracle.js \
+            test/distributed/harness/scenario-b-comparators.js \
+            scripts/checks/scenario-b-risk-benchmark-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
           node scripts/checks/oltp-scenario-a-new-order-contention-case-guard.js
           node scripts/checks/oltp-scenario-a-visibility-case-guard.js
@@ -68,6 +72,7 @@ jobs:
           node scripts/checks/oltp-scenario-a-semantic-gate-guard.js
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js
           node scripts/checks/oltp-comparison-history-store-guard.js
+          node scripts/checks/scenario-b-risk-benchmark-guard.js
 
   semantic-live-gate:
     runs-on: ubuntu-24.04
