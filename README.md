@@ -353,6 +353,7 @@ for the exact current envelope.
   existing system
 - [Evaluate Lagrange](docs/evaluate.md) - decide whether a workload is a good
   fit
+- [Comparative benchmark statistics](docs/benchmarks/README.md) - multi-system graphical summaries and comparisons across PostgreSQL, TiDB/TiKV, and Lagrange ([interactive HTML landing page](docs/benchmarks/index.html))
 - [TiDB/TiKV and Lagrange comparison progress](docs/benchmarks/tidb-comparison-progress.md) - versioned OLTP throughput, latency, and semantic proof history ([interactive HTML dashboard](docs/benchmarks/tidb-comparison-progress.html))
 - [Security](docs/security.md) - current trust and authentication model
 - [Architecture](architecture/INDEX.md) - internals
