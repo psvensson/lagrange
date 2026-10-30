@@ -1,0 +1,31 @@
+{
+  "schema": "solve-quest/2",
+  "id": "benchmark-history-consensus-axis-retirement",
+  "class": "fix",
+  "statement": "Current distributed benchmark defaults and historical selection retain a retired consensus-provider axis, causing the strict zero-reference audit and unrelated normal landing proofs to fail. The benchmark history owner must select the first usable summary for its existing similarity key without a consensus selector, remove the unused provider-switch defaults, and preserve comparison thresholds, parity/ratio/mitigation policy and report provenance. This repairs the harness gate only; runtime consensus and benchmark execution are unchanged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/benchmark-history-consensus-axis-retirement/evidence/receipt.json",
+      "requiredReceipts": [
+        "zero-retired-references",
+        "benchmark-history-selection"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "owner",
+      "statement": "The historical benchmark selection owner is createDistributedRunRuntimeBundle in test/distributed/run-runtime-helpers.js, consumed by test/distributed/run.js. Remove the obsolete axis there and its defaults, rather than add a renamed selector, competing policy or scanner exception."
+    },
+    {
+      "id": "preserve-comparison",
+      "statement": "Retain existing caller report order, exact similarity matching, first positive finite throughput selection, report path/timestamp, throughput regression, PostgreSQL ratio, parity, mitigation and missing-baseline behavior."
+    },
+    {
+      "id": "bounded-proof",
+      "statement": "The existing strict zero-reference audit is the red/green discriminator. Retain focused real-entry helper tests plus existing runner tests and normal static/landing gates. No distributed cluster or release acceptance is claimed. The probe reads receipts only."
+    }
+  ],
+  "sealedAt": "6089dcf03f886219e7e02e886f557109a98470ee"
+}

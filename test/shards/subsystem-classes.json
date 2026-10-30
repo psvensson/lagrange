@@ -9,7 +9,7 @@
     "cli-tooling": 97,
     "control-plane": 224,
     "convergence-topology": 78,
-    "distributed-harness": 181,
+    "distributed-harness": 182,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2496,
-  "digest": "fnv1a32-c1093aef",
+  "censusSize": 2497,
+  "digest": "fnv1a32-956292e5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f32177ce",
+  "observationDigest": "fnv1a32-cdf09b34",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -827,6 +827,7 @@
     "test/distributed/harness/__tests__/assertions.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-observation.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/benchmark-history-selection.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-partition-convergence.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-resource-live-observation-authority.test.js": "distributed-harness",
@@ -5626,6 +5627,39 @@
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
+      ]
+    },
+    "test/distributed/harness/__tests__/benchmark-history-selection.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
+        "test/distributed/harness/priority-recovery-summary-normalization.js",
+        "test/distributed/harness/publication-evidence-contract.js",
+        "test/distributed/harness/report-writer-optimization-summary.js",
+        "test/distributed/harness/startup-readiness-evidence.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover",
+        "test/distributed/config",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "LAGRANGE_CAPTURE_LOGS",
+        "LAGRANGE_DEBUG_LOGS",
+        "TAP"
       ]
     },
     "test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js": {
