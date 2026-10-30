@@ -10,6 +10,20 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-10-30
+
+Scenario A transaction coordination fast-path and multi-system comparative
+benchmark completion release reducing per-statement coordinator metadata
+bookkeeping, overlapping independent participant `BEGIN`/`PREPARE`/`COMMIT`/`ROLLBACK`
+stages, adding opt-in row-key-disjoint concurrent participant staging sessions,
+reusing pre-validated compiled operations across staging replay, pruning
+composite-key partitions by prefix and range, caching SQLite determinism
+compilation plans, and completing Slices 3–5 of the comparative benchmark
+matrix (epic `scenario-a-transaction-coordination-fast-path`):
+
+Formation health at cut time: `formation health: 0/20 passed (0%), 0 with a
+starved seed`.
+
 ### Added
 - **Scenario A transaction coordination fast path & telemetry (`scenario-a-transaction-coordination-fast-path`):**
   Per-transaction phase and metadata telemetry (`distributed-transaction-telemetry.js`),
@@ -24,6 +38,10 @@ releases without a compatibility guarantee.
   `lagrange-oltp-adapter.js`), and `schema_version`-fenced SQLite determinism
   plan caching plus Raft durable sync telemetry (`partition-transaction-determinism.js`,
   `raft-rs-durable-store.js`).
+- **Multi-system comparative benchmark matrix completion (`#166`–`#168`):**
+  Citus colocated tables and distributed functions comparison (Slice 3),
+  YugabyteDB 2024.2 and Apache Ignite 3 colocated compute comparison (Slice 4),
+  and Scenario C PostgreSQL + Valkey freshness-bounded risk comparison (Slice 5).
 
 ## [0.3.2] — 2026-10-30
 
@@ -655,7 +673,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/psvensson/lagrange/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/psvensson/lagrange/compare/v0.3.0...v0.3.2
 [0.3.0]: https://github.com/psvensson/lagrange/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/psvensson/lagrange/compare/v0.2.7...v0.2.8

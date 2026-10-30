@@ -247,11 +247,14 @@ async function closeClients(clients) {
   }
 }
 
-function isExplicitCommitSerializationAbort(error) {
-  const code = String(
+function resolveErrorSqlState(error) {
+  return String(
     error?.sqlState || error?.sqlstate || error?.code || '',
   ).toUpperCase();
-  return code === '40001' &&
+}
+
+function isExplicitCommitSerializationAbort(error) {
+  return resolveErrorSqlState(error) === '40001' &&
     error?.commitOutcomeUnknown !== true &&
     error?.outcome !== 'OUTCOME_UNKNOWN' &&
     error?.code !== 'OUTCOME_UNKNOWN';
@@ -544,6 +547,13 @@ async function cleanupDataset(createClient, options) {
   }
 }
 
+function resolveLockingReadModeOption(lockingReadMode) {
+  return typeof lockingReadMode === 'string' &&
+    lockingReadMode.trim().length > ZERO ?
+    lockingReadMode.trim() :
+    LOCKING_READ_MODE;
+}
+
 async function createLagrangeOltpAdapter(options = {}) {
   const endpoint = normalizeEndpoint(options.endpoint);
   const connection = normalizeConnection(options.connection);
@@ -552,11 +562,9 @@ async function createLagrangeOltpAdapter(options = {}) {
   const datasetSha256 = hashOltpBaselineDataset(dataset);
   const datasetSummary = summarizeOltpBaselineDataset(dataset);
   const createClient = options.createClient || defaultClientFactory;
-  const resolvedLockingReadMode =
-    typeof options.lockingReadMode === 'string' &&
-    options.lockingReadMode.trim().length > ZERO ?
-      options.lockingReadMode.trim() :
-      LOCKING_READ_MODE;
+  const resolvedLockingReadMode = resolveLockingReadModeOption(
+    options.lockingReadMode,
+  );
   const resolvedClientOptions = clientOptions(endpoint, connection);
   const workerClients = [];
   const workerSessions = [];

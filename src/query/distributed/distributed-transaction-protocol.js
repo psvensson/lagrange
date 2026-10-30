@@ -249,6 +249,22 @@ function isRetriedParticipantFailure(owner, error, attempt, budgetBound) {
   return attempt < owner.participantRetryMaxRetries;
 }
 
+function attachCommitMissOutcomeField(error, commitMissResolution) {
+  if (commitMissResolution === COMMIT_MISS_RESOLUTION.NOT_COMMITTED) {
+    error[PARTICIPANT_COMMIT_OUTCOME_FIELD] =
+      PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED;
+  } else if (commitMissResolution === COMMIT_MISS_RESOLUTION.UNKNOWN) {
+    error[PARTICIPANT_COMMIT_OUTCOME_FIELD] =
+      PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
+  }
+}
+
+function assertStageBudgetNotExceeded(owner, tx, budgetBound) {
+  if (budgetBound && owner.isTransactionBudgetExceeded(tx)) {
+    throw owner.createTransactionTimeoutError();
+  }
+}
+
 const distributedTransactionProtocolMethods = {
   async setTransactionStatus(tx, status) {
     const previousStatus = tx.status;
@@ -446,13 +462,10 @@ const distributedTransactionProtocolMethods = {
   ) {
     let attempt = 0;
     const startedAtMs = readWaitClock(this);
-    const skipBudgetEnforcement = options.skipBudgetEnforcement === true;
-    const budgetBound = !skipBudgetEnforcement &&
+    const budgetBound = options.skipBudgetEnforcement !== true &&
       stage !== PARTICIPANT_STATUS.ROLLING_BACK;
     while (true) {
-      if (budgetBound && this.isTransactionBudgetExceeded(tx)) {
-        throw this.createTransactionTimeoutError();
-      }
+      assertStageBudgetNotExceeded(this, tx, budgetBound);
       try {
         return await operation(partitionId);
       } catch (error) {
@@ -466,15 +479,7 @@ const distributedTransactionProtocolMethods = {
         if (commitMissResolution === COMMIT_MISS_RESOLUTION.COMMITTED) {
           return commitMissResolution;
         }
-        if (commitMissResolution === COMMIT_MISS_RESOLUTION.NOT_COMMITTED) {
-          error[PARTICIPANT_COMMIT_OUTCOME_FIELD] =
-            PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED;
-          throw error;
-        }
-        if (commitMissResolution === COMMIT_MISS_RESOLUTION.UNKNOWN) {
-          error[PARTICIPANT_COMMIT_OUTCOME_FIELD] =
-            PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
-        }
+        attachCommitMissOutcomeField(error, commitMissResolution);
         if (!isRetriedParticipantFailure(this, error, attempt, budgetBound)) {
           reportParticipantRetriesSpent(this, {
             tx, stage, partitionId, attempt, error, startedAtMs,
@@ -494,9 +499,7 @@ const distributedTransactionProtocolMethods = {
           retryDelayMs,
           error: error.message,
         });
-        if (budgetBound && this.isTransactionBudgetExceeded(tx)) {
-          throw this.createTransactionTimeoutError();
-        }
+        assertStageBudgetNotExceeded(this, tx, budgetBound);
         await this.sleep(retryDelayMs);
       }
     }

@@ -98,47 +98,71 @@ function compareTuplePrefix(prefixValues, boundaryTuple) {
   return ZERO;
 }
 
+function applyRangeEntryToBounds(state, entry) {
+  const handlers = {
+    [KEY_CONDITION_TYPE.GTE]: () => {
+      state.low = entry.value;
+      state.lowInclusive = true;
+      state.hasRange = true;
+    },
+    [KEY_CONDITION_TYPE.GT]: () => {
+      state.low = entry.value;
+      state.lowInclusive = false;
+      state.hasRange = true;
+    },
+    [KEY_CONDITION_TYPE.LTE]: () => {
+      state.high = entry.value;
+      state.highInclusive = true;
+      state.hasRange = true;
+    },
+    [KEY_CONDITION_TYPE.LT]: () => {
+      state.high = entry.value;
+      state.highInclusive = false;
+      state.hasRange = true;
+    },
+    [KEY_CONDITION_TYPE.RANGE]: () => {
+      state.low = entry.low !== undefined ? entry.low : state.low;
+      state.high = entry.high !== undefined ? entry.high : state.high;
+      state.lowInclusive = entry.lowInclusive !== undefined ?
+        entry.lowInclusive :
+        state.lowInclusive;
+      state.highInclusive = entry.highInclusive !== undefined ?
+        entry.highInclusive :
+        state.highInclusive;
+      state.hasRange = true;
+    },
+  };
+  handlers[entry.type]?.();
+}
+
 function normalizeDirectConditionList(entries) {
   if (!Array.isArray(entries) || entries.length === ZERO) {
     return null;
   }
-  let low = null;
-  let high = null;
-  let lowInclusive = true;
-  let highInclusive = false;
-  let hasRange = false;
+  const state = {
+    low: null,
+    high: null,
+    lowInclusive: true,
+    highInclusive: false,
+    hasRange: false,
+  };
   for (const entry of entries) {
     if (!entry || typeof entry !== TYPE_OBJECT) continue;
     if (entry.type === KEY_CONDITION_TYPE.EQUALS) {
       const val = entry.value !== undefined ? entry.value : entry.values?.[ZERO];
       return {type: KEY_CONDITION_TYPE.EQUALS, values: [val], contradiction: false};
     }
-    if (entry.type === KEY_CONDITION_TYPE.GTE) {
-      low = entry.value;
-      lowInclusive = true;
-      hasRange = true;
-    } else if (entry.type === KEY_CONDITION_TYPE.GT) {
-      low = entry.value;
-      lowInclusive = false;
-      hasRange = true;
-    } else if (entry.type === KEY_CONDITION_TYPE.LTE) {
-      high = entry.value;
-      highInclusive = true;
-      hasRange = true;
-    } else if (entry.type === KEY_CONDITION_TYPE.LT) {
-      high = entry.value;
-      highInclusive = false;
-      hasRange = true;
-    } else if (entry.type === KEY_CONDITION_TYPE.RANGE) {
-      low = entry.low ?? low;
-      high = entry.high ?? high;
-      lowInclusive = entry.lowInclusive ?? lowInclusive;
-      highInclusive = entry.highInclusive ?? highInclusive;
-      hasRange = true;
-    }
+    applyRangeEntryToBounds(state, entry);
   }
-  return hasRange ?
-    {type: KEY_CONDITION_TYPE.RANGE, low, high, lowInclusive, highInclusive, contradiction: false} :
+  return state.hasRange ?
+    {
+      type: KEY_CONDITION_TYPE.RANGE,
+      low: state.low,
+      high: state.high,
+      lowInclusive: state.lowInclusive,
+      highInclusive: state.highInclusive,
+      contradiction: false,
+    } :
     null;
 }
 
@@ -178,6 +202,24 @@ function matchesCompositeEndBound(
   return true;
 }
 
+function decodeAllCompositePartitionBounds(partitions, expectedLength) {
+  const decodedBounds = [];
+  for (const partition of partitions) {
+    const {rawStart, rawEnd} = extractRawPartitionBounds(partition);
+    const startDecoded = decodeCompositeBoundaryTuple(rawStart, expectedLength);
+    const endDecoded = decodeCompositeBoundaryTuple(rawEnd, expectedLength);
+    if (!startDecoded || !endDecoded) {
+      return null;
+    }
+    decodedBounds.push({
+      partition,
+      startTuple: startDecoded.tuple,
+      endTuple: endDecoded.tuple,
+    });
+  }
+  return decodedBounds;
+}
+
 function pruneCompositePartitionsByPrefix(partitions, keyColumns, columnConditions) {
   const prefixValues = [];
   let idx = ZERO;
@@ -195,15 +237,12 @@ function pruneCompositePartitionsByPrefix(partitions, keyColumns, columnConditio
   }
   const nextCond = idx < keyColumns.length ? columnConditions[idx] : null;
   const nextRange = nextCond?.type === KEY_CONDITION_TYPE.RANGE ? nextCond : null;
-  const decodedBounds = [];
-  for (const partition of partitions) {
-    const {rawStart, rawEnd} = extractRawPartitionBounds(partition);
-    const startDecoded = decodeCompositeBoundaryTuple(rawStart, keyColumns.length);
-    const endDecoded = decodeCompositeBoundaryTuple(rawEnd, keyColumns.length);
-    if (!startDecoded || !endDecoded) {
-      return null;
-    }
-    decodedBounds.push({partition, startTuple: startDecoded.tuple, endTuple: endDecoded.tuple});
+  const decodedBounds = decodeAllCompositePartitionBounds(
+    partitions,
+    keyColumns.length,
+  );
+  if (!decodedBounds) {
+    return null;
   }
   const matched = decodedBounds
     .filter(({startTuple, endTuple}) =>
@@ -212,26 +251,54 @@ function pruneCompositePartitionsByPrefix(partitions, keyColumns, columnConditio
     .map(({partition}) => partition.partition_id || partition.partitionId);
   return {
     partitionIds: matched,
-    predicateShape: nextRange ? PREDICATE_SHAPE.RANGE : PREDICATE_SHAPE.RANGE,
+    predicateShape: PREDICATE_SHAPE.RANGE,
   };
 }
 
-function resolveCompositeKeyPartitions(
+function normalizeCompositeCallArgs(
   optionsOrResolver,
-  directPartitions = null,
-  directKeyColumns = null,
-  directConditionsMap = null,
+  directPartitions,
+  directKeyColumns,
+  directConditionsMap,
 ) {
   const isDirectCall = directConditionsMap instanceof Map ||
     Array.isArray(directPartitions);
-  const resolver = isDirectCall ? optionsOrResolver : optionsOrResolver?.resolver;
-  const partitions = isDirectCall ? directPartitions : optionsOrResolver?.partitions;
-  const keyColumns = isDirectCall ? directKeyColumns : optionsOrResolver?.keyColumns;
-  const whereClause = isDirectCall ? null : optionsOrResolver?.whereClause;
-  const resolutionContext = isDirectCall ? null : optionsOrResolver?.resolutionContext;
-  const tableName = isDirectCall ? null : (optionsOrResolver?.tableName ?? null);
-  const tableInfo = isDirectCall ? null : (optionsOrResolver?.tableInfo ?? null);
+  if (isDirectCall) {
+    return {
+      isDirectCall: true,
+      resolver: optionsOrResolver,
+      partitions: directPartitions,
+      keyColumns: directKeyColumns,
+      whereClause: null,
+      resolutionContext: null,
+      tableName: null,
+      tableInfo: null,
+      directConditionsMap,
+    };
+  }
+  return {
+    isDirectCall: false,
+    resolver: optionsOrResolver?.resolver,
+    partitions: optionsOrResolver?.partitions,
+    keyColumns: optionsOrResolver?.keyColumns,
+    whereClause: optionsOrResolver?.whereClause,
+    resolutionContext: optionsOrResolver?.resolutionContext,
+    tableName: optionsOrResolver?.tableName ?? null,
+    tableInfo: optionsOrResolver?.tableInfo ?? null,
+    directConditionsMap: null,
+  };
+}
 
+function collectCompositeColumnConditions(callSpec) {
+  const {
+    isDirectCall,
+    resolver,
+    keyColumns,
+    whereClause,
+    resolutionContext,
+    tableInfo,
+    directConditionsMap,
+  } = callSpec;
   const values = [];
   const columnConditions = [];
   let allEquals = true;
@@ -246,47 +313,66 @@ function resolveCompositeKeyPartitions(
         colType,
       );
     if (keyConditions?.contradiction) {
-      const empty = {partitionIds: [], predicateShape: PREDICATE_SHAPE.POINT};
-      return isDirectCall ? empty.partitionIds : empty;
+      return {contradiction: true, values: [], columnConditions: [], allEquals: false};
     }
     columnConditions.push(keyConditions);
     if (allEquals &&
-        keyConditions &&
-        keyConditions.type === KEY_CONDITION_TYPE.EQUALS &&
+        keyConditions?.type === KEY_CONDITION_TYPE.EQUALS &&
         keyConditions.values?.length === ONE) {
       values.push(keyConditions.values[ZERO]);
     } else {
       allEquals = false;
     }
   }
+  return {contradiction: false, values, columnConditions, allEquals};
+}
 
-  if (!allEquals) {
+function formatCompositeResolutionResult(isDirectCall, result) {
+  return isDirectCall ? result.partitionIds : result;
+}
+
+function resolveCompositeKeyPartitions(
+  optionsOrResolver,
+  directPartitions = null,
+  directKeyColumns = null,
+  directConditionsMap = null,
+) {
+  const callSpec = normalizeCompositeCallArgs(
+    optionsOrResolver,
+    directPartitions,
+    directKeyColumns,
+    directConditionsMap,
+  );
+  const {isDirectCall, resolver, partitions, keyColumns, tableName, tableInfo} = callSpec;
+  const collected = collectCompositeColumnConditions(callSpec);
+  if (collected.contradiction) {
+    return formatCompositeResolutionResult(isDirectCall, {
+      partitionIds: [],
+      predicateShape: PREDICATE_SHAPE.POINT,
+    });
+  }
+  if (!collected.allEquals) {
     const pruned = pruneCompositePartitionsByPrefix(
       partitions,
       keyColumns,
-      columnConditions,
+      collected.columnConditions,
     );
-    if (pruned) {
-      return isDirectCall ? pruned.partitionIds : pruned;
-    }
-    const scattered = {
+    const fallback = pruned || {
       partitionIds: resolver.getAllPartitions(partitions),
       predicateShape: PREDICATE_SHAPE.SCATTER,
     };
-    return isDirectCall ? scattered.partitionIds : scattered;
+    return formatCompositeResolutionResult(isDirectCall, fallback);
   }
-
   const partitionId = resolver.resolvePartitionForKey(
     tableName,
-    values,
+    collected.values,
     partitions,
     {tableInfo},
   );
-  const exact = {
+  return formatCompositeResolutionResult(isDirectCall, {
     partitionIds: partitionId ? [partitionId] : [],
     predicateShape: PREDICATE_SHAPE.EQ,
-  };
-  return isDirectCall ? exact.partitionIds : exact;
+  });
 }
 
 /**

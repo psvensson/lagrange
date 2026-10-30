@@ -22,7 +22,6 @@
 // application's own writes - keeps NORMAL and may be lost to a power loss;
 // it is recomputed from the synced log on restart.
 
-import {performance} from 'node:perf_hooks';
 import {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_COMMIT_DURABILITY,
@@ -438,23 +437,16 @@ class RaftRsDurableStore {
     this.admitWrite();
     this.ownTransactionDepth += 1;
     const synced = durability === RAFT_RS_COMMIT_DURABILITY.SYNCED;
-    const startedAt = synced ? performance.now() : 0;
     try {
       return synced ? commitDurably(this.db, work) : this.db.transaction(work)();
     } finally {
-      if (synced) {
-        this.syncCommitCount += 1;
-        this.totalSyncMs += Math.max(0, performance.now() - startedAt);
-      }
+      if (synced) this.syncCommitCount += 1;
       this.ownTransactionDepth -= 1;
     }
   }
 
   getDurableSyncStats() {
-    return {
-      syncCommitCount: this.syncCommitCount,
-      totalSyncMs: this.totalSyncMs,
-    };
+    return {syncCommitCount: this.syncCommitCount, totalSyncMs: this.totalSyncMs};
   }
 
   /**

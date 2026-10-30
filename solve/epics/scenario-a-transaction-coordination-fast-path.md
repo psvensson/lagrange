@@ -1,6 +1,6 @@
 ---
 id: scenario-a-transaction-coordination-fast-path
-status: open
+status: done
 proof: deterministic
 roadmapRow: null
 doneWhen:

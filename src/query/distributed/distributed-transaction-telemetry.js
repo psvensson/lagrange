@@ -41,13 +41,18 @@ function createTransactionTelemetry(transactionId, sessionId) {
   };
 }
 
+function extractTransactionId(txOrId) {
+  if (typeof txOrId === TYPE_STRING) {
+    return txOrId;
+  }
+  return txOrId?.transactionId || txOrId?.workflowId || null;
+}
+
 function resolveTelemetryTarget(coordinator, txOrId) {
   if (txOrId && typeof txOrId === TYPE_OBJECT && txOrId.telemetry) {
     return txOrId.telemetry;
   }
-  const id = typeof txOrId === TYPE_STRING ?
-    txOrId :
-    txOrId?.transactionId || txOrId?.workflowId || null;
+  const id = extractTransactionId(txOrId);
   if (typeof id !== TYPE_STRING || id.length === ZERO) {
     return null;
   }
@@ -177,5 +182,4 @@ export {
   distributedTransactionTelemetryMethods,
   finalizeTransactionTelemetry,
   resolveNowMs,
-  snapshotTransactionTelemetry,
 };

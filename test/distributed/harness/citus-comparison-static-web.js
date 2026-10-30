@@ -65,30 +65,40 @@ function renderSvgBarRow(x, y, [l1, l2], met, w, col, sub, barW = 250, subCol = 
     <text x="${x}" y="${y + 48}" fill="${subCol}" font-size="9">${sub}</text>`;
 }
 
+function computeScaledBarWidth(val, maxVal, maxPx) {
+  return Math.max(4, Math.min(maxPx, Math.round(((val || 0) / maxVal) * maxPx)));
+}
+
+function formatLadderDecisionsSummary(shapes) {
+  const s = shapes || {};
+  return `${fmtNum(s['local-only']?.decisionsPerSec, 0)} / ` +
+    `${fmtNum(s['one-remote-stage']?.decisionsPerSec, 0)} / ` +
+    `${fmtNum(s['sequential']?.decisionsPerSec, 0)} / ` +
+    `${fmtNum(s['fan-out']?.decisionsPerSec, 0)} dec/s`;
+}
+
+function renderSingleTargetSvgRows(t, idx) {
+  const y = 138 + idx * 70;
+  const col = TARGET_COLORS[t.targetId] || '#94a3b8';
+  const lines = TARGET_STACKED_LABELS[t.targetId] || [t.label, ''];
+  const a = t.scenarioA || {};
+  const b = t.scenarioB || {};
+  const wA = computeScaledBarWidth(a.throughputTxPerSec, 20, 250);
+  const wB = computeScaledBarWidth(b.decisionsPerSec, 500, 250);
+  const aMet = `${fmtNum(a.throughputTxPerSec, 1)} tx/s (p95: ${fmtNum(a.commitP95Ms, 1)}ms)`;
+  const bMet = `${fmtNum(b.decisionsPerSec, 1)} dec/s (p99: ${fmtNum(b.p99Ms, 1)}ms)`;
+  const r1 = renderSvgBarRow(35, y, lines, aMet, wA, col, escapeXml(a.evidenceTier || 'modeled'));
+  const r2 = renderSvgBarRow(345, y, lines, bMet, wB, col, escapeXml(b.evidenceTier || 'modeled'));
+  const wan = b.wanBytesPerDecision || 0;
+  const rt = fmtNum(b.sqlRoundTripsPerDecision, 1);
+  const wW = computeScaledBarWidth(wan, 7000, 260);
+  const ladMet = formatLadderDecisionsSummary(b.shapes);
+  const r3 = renderSvgBarRow(655, y, lines, `WAN: ${wan}B (${rt} RT)`, wW, col, ladMet, 260, '#94a3b8');
+  return `${r1}\n${r2}\n${r3}`;
+}
+
 function renderSvgRows(targets) {
-  return arrayJoin(arrayMap(targets, (t, idx) => {
-    const y = 138 + idx * 70;
-    const col = TARGET_COLORS[t.targetId] || '#94a3b8';
-    const lines = TARGET_STACKED_LABELS[t.targetId] || [t.label, ''];
-    const a = t.scenarioA || {};
-    const b = t.scenarioB || {};
-    const wA = Math.max(4, Math.min(250, Math.round(((a.throughputTxPerSec || 0) / 20) * 250)));
-    const wB = Math.max(4, Math.min(250, Math.round(((b.decisionsPerSec || 0) / 500) * 250)));
-    const aMet = `${fmtNum(a.throughputTxPerSec, 1)} tx/s (p95: ${fmtNum(a.commitP95Ms, 1)}ms)`;
-    const bMet = `${fmtNum(b.decisionsPerSec, 1)} dec/s (p99: ${fmtNum(b.p99Ms, 1)}ms)`;
-    const r1 = renderSvgBarRow(35, y, lines, aMet, wA, col, escapeXml(a.evidenceTier || 'modeled'));
-    const r2 = renderSvgBarRow(345, y, lines, bMet, wB, col, escapeXml(b.evidenceTier || 'modeled'));
-    const wan = b.wanBytesPerDecision || 0;
-    const rt = fmtNum(b.sqlRoundTripsPerDecision, 1);
-    const wW = Math.max(4, Math.min(260, Math.round(((wan || 0) / 7000) * 260)));
-    const s = b.shapes || {};
-    const ladMet = `${fmtNum(s['local-only']?.decisionsPerSec, 0)} / ` +
-      `${fmtNum(s['one-remote-stage']?.decisionsPerSec, 0)} / ` +
-      `${fmtNum(s['sequential']?.decisionsPerSec, 0)} / ` +
-      `${fmtNum(s['fan-out']?.decisionsPerSec, 0)} dec/s`;
-    const r3 = renderSvgBarRow(655, y, lines, `WAN: ${wan}B (${rt} RT)`, wW, col, ladMet, 260, '#94a3b8');
-    return `${r1}\n${r2}\n${r3}`;
-  }), '\n');
+  return arrayJoin(arrayMap(targets, renderSingleTargetSvgRows), '\n');
 }
 
 function renderCitusComparisonSvg(matrix) {

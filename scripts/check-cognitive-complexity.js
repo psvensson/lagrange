@@ -47,8 +47,8 @@ const TARGET_THRESHOLD = 20;
 // 2026-10-26 (D4 window deletion): tightened 150 -> 149 on the checker's hint
 // after deleting the sliding-window replay and handshake catch-up in
 // partition-cdc-delivery.js.
-// 2026-10-30: tightened 149 -> 148 on the checker's hint.
-const BASELINE_COUNT = 148;
+// 2026-10-30: tightened 149 -> 147 on the checker's hint.
+const BASELINE_COUNT = 147;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

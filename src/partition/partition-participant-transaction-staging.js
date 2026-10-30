@@ -266,6 +266,19 @@ function stageWrite(service, session, request, params) {
     lastInsertRowid: outcome.ran.lastInsertRowid};
 }
 
+function executeDirectEmptyRead(service, statement, params, rowBudgetOptions) {
+  try {
+    const rows = collectBoundedSqliteRows(statement, params, rowBudgetOptions);
+    replayStatsOf(service).emptyReadDirectExecutions += ONE;
+    return {success: true, rows, count: rows.length};
+  } catch (directReadError) {
+    return refused(CODE.STATEMENT_FAILED, {
+      error: String(directReadError?.message ?? directReadError),
+      errorCode: directReadError?.code ?? null,
+    });
+  }
+}
+
 function readInSession(service, session, request, params) {
   const classified = classifyTransactionStatement(service.db,
     {tableName: service.tableName, sql: request.sql, params});
@@ -278,20 +291,12 @@ function readInSession(service, session, request, params) {
     maxRows: request[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
   };
   if (session.operations.length === ZERO) {
-    try {
-      const rows = collectBoundedSqliteRows(
-        classified.statement,
-        params,
-        rowBudgetOptions,
-      );
-      replayStatsOf(service).emptyReadDirectExecutions += ONE;
-      return {success: true, rows, count: rows.length};
-    } catch (directReadError) {
-      return refused(CODE.STATEMENT_FAILED, {
-        error: String(directReadError?.message ?? directReadError),
-        errorCode: directReadError?.code ?? null,
-      });
-    }
+    return executeDirectEmptyRead(
+      service,
+      classified.statement,
+      params,
+      rowBudgetOptions,
+    );
   }
   const outcome = validateOverReplay(service, session, () =>
     collectBoundedSqliteRows(classified.statement, params, rowBudgetOptions));
