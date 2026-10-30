@@ -39,6 +39,8 @@ This page is generated deterministically from [`data/tidb-comparison/history.ndj
 
 ## Scenario B distributed risk & movement scorecard
 
+![Scenario B distributed risk and movement comparison chart](tidb-scenario-b-comparison.svg)
+
 | Recorded (UTC) | Profile | Lagrange Cross-Island Bytes/Req | TiDB Cross-Island Bytes/Req | Lagrange Move p99 (ms) | TiDB Move p99 (ms) | Convergence (Lagrange vs TiDB ms) |
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-10-30T16:05:00.000Z | risk-three-island-rf3 | 144 | 6144 | 18.00 | 64.00 | 45.00 vs 180.00 |

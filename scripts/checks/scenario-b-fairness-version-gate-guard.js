@@ -19,8 +19,10 @@ import {
   runScenarioAPairedSweep,
 } from '../../test/distributed/harness/oltp-paired-sweep-runner.js';
 import {
-  renderComparisonProgressMarkdown,
   renderComparisonProgressHtml,
+  renderComparisonProgressMarkdown,
+  renderComparisonProgressSvg,
+  renderScenarioBComparisonSvg,
 } from '../../test/distributed/harness/oltp-comparison-static-web.js';
 import {
   runObservedScenarioBHarnessComparison,
@@ -48,6 +50,9 @@ const STR_SCORECARD_HTML_HEADER = 'Scenario B Distributed Risk &amp; Movement Sc
 const STR_TMP_PREFIX = 'scenario-b-version-gate-';
 const STR_TMP_NDJSON = 'history.ndjson';
 const STR_TMP_SUMMARY = 'summary.json';
+const STR_RISK_DECISIONS_PER_SEC = 'Risk Decisions/sec';
+const STR_CROSS_ISLAND_WAN_TRAFFIC = 'Cross-Island WAN Traffic';
+const STR_SCENARIO_B_SVG_FILENAME = 'tidb-scenario-b-comparison.svg';
 
 const NUM_BYTES_192 = 192;
 const NUM_RATE_ONE = 1;
@@ -173,10 +178,7 @@ function verifyScenarioBFairnessGateEvaluation() {
 }
 
 async function verifyScenarioBVersionGatedExecution(existingRecords) {
-  const systemsBase = {
-    lagrange: {version: STR_LAGRANGE_V030},
-    tidbTikv: {version: STR_TIDB_V858},
-  };
+  const systemsBase = {lagrange: {version: STR_LAGRANGE_V030}, tidbTikv: {version: STR_TIDB_V858}};
   const executeComparison = async () => ({
     fairnessEvidence: createSatisfiedScenarioBEvidence(),
   });
@@ -238,8 +240,15 @@ async function verifyScenarioBVersionGatedExecution(existingRecords) {
   const summary = buildComparisonProgressSummary(recordsWithScenarioB);
   const markdown = renderComparisonProgressMarkdown(summary);
   const html = renderComparisonProgressHtml(summary);
+  const progressSvg = renderComparisonProgressSvg(summary);
+  const scenarioBSvg = renderScenarioBComparisonSvg(summary);
   assert.equal(stringIncludes(markdown, STR_SCORECARD_MD_HEADER), true);
   assert.equal(stringIncludes(html, STR_SCORECARD_HTML_HEADER), true);
+  assert.equal(stringIncludes(markdown, STR_SCENARIO_B_SVG_FILENAME), true);
+  assert.equal(stringIncludes(progressSvg, STR_RISK_DECISIONS_PER_SEC), true);
+  assert.equal(stringIncludes(progressSvg, STR_CROSS_ISLAND_WAN_TRAFFIC), true);
+  assert.equal(stringIncludes(scenarioBSvg, STR_RISK_DECISIONS_PER_SEC), true);
+  assert.equal(stringIncludes(scenarioBSvg, STR_CROSS_ISLAND_WAN_TRAFFIC), true);
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), STR_TMP_PREFIX));
   try {

@@ -24,7 +24,9 @@ on:
       - 'data/tidb-comparison/history.ndjson'
       - 'data/tidb-comparison/progress-summary.json'
       - 'test/distributed/harness/oltp-comparison-static-web.js'
+      - 'test/distributed/harness/oltp-comparison-svg-renderer.js'
       - 'docs/benchmarks/tidb-comparison-progress.svg'
+      - 'docs/benchmarks/tidb-scenario-b-comparison.svg'
       - 'docs/benchmarks/tidb-comparison-progress.md'
       - 'docs/benchmarks/tidb-comparison-progress.html'
       - 'test/distributed/harness/scenario-b-risk-dataset.js'
@@ -78,6 +80,7 @@ jobs:
             scripts/checks/oltp-scenario-a-proof-ownership-guard.js \
             scripts/checks/oltp-comparison-history-store-guard.js \
             test/distributed/harness/oltp-comparison-static-web.js \
+            test/distributed/harness/oltp-comparison-svg-renderer.js \
             test/distributed/harness/scenario-b-risk-dataset.js \
             test/distributed/harness/scenario-b-risk-oracle.js \
             test/distributed/harness/scenario-b-comparators.js \

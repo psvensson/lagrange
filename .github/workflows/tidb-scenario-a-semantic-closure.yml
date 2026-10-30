@@ -54,6 +54,7 @@ jobs:
             test/distributed/harness/oltp-comparison-history-store.js \
             scripts/checks/oltp-comparison-history-store-guard.js \
             test/distributed/harness/oltp-comparison-static-web.js \
+            test/distributed/harness/oltp-comparison-svg-renderer.js \
             test/distributed/harness/scenario-b-risk-dataset.js \
             test/distributed/harness/scenario-b-risk-oracle.js \
             test/distributed/harness/scenario-b-comparators.js \
