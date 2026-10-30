@@ -1,0 +1,8 @@
+{
+  "name": "lagrange-distributed-reference-client",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "mysql2": "3.24.4"
+  }
+}

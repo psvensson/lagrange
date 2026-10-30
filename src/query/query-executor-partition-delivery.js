@@ -41,6 +41,10 @@ const {
   resolveParticipantBackpressureState,
 } = QUERY_EXECUTOR_SHARED;
 
+const LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS = 30;
+const LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING =
+  'planning_snapshot_refresh_pending';
+
 class QueryExecutorPartitionDelivery extends QueryExecutorBase {
   async executeOnPartition(
     partitionId,
@@ -134,6 +138,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const maxAttempts = forRead ?
       this.getReadRetryAttemptLimit() :
       Number.MAX_SAFE_INTEGER;
+    let currentMaxAttempts = maxAttempts;
     let lastError = null;
     let lastFailureDetails = null;
     let awaitedRoutingRepair = false;
@@ -170,10 +175,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         this.leaderRetryDelayMs, lastFailureDetails)),
     );
     const returnReadAttemptsSpent = () => {
-      attemptBudget.reportReadAttemptsSpent(maxAttempts);
+      attemptBudget.reportReadAttemptsSpent(currentMaxAttempts);
       return buildLastFailureResult();
     };
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    for (let attempt = 1; attempt <= currentMaxAttempts; attempt++) {
       lastAttempt = attempt;
       this.throwIfCancelled(cancellationToken);
       const attemptBudgetMs = getRemainingExecutionBudgetMs();
@@ -281,7 +286,22 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         } else {
           // §1.10/§1.12: Reads get bounded retries so routing
           // repair and cache convergence can discover candidates.
-          if (hasPartitionRecord && attempt < maxAttempts) {
+          const isPlanningRefreshPending =
+            Object.values(routingSnapshot?.deniedByNodeId || {}).some((entry) =>
+              Array.isArray(entry?.reasonCodes) &&
+              entry.reasonCodes.some(
+                (code) =>
+                  String(code?.code ?? code) ===
+                  LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING,
+              ),
+            );
+          if (
+            isPlanningRefreshPending &&
+            currentMaxAttempts < LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS
+          ) {
+            currentMaxAttempts = LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS;
+          }
+          if (hasPartitionRecord && attempt < currentMaxAttempts) {
             lastError = QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND;
             if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
               return {
@@ -408,7 +428,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 executionOptions.sessionId,
                 partitionId,
               );
-            } else {
+            } else if (!forRead) {
               this.setSessionPartitionAddress(
                 executionOptions.sessionId,
                 partitionId,
@@ -482,7 +502,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                   executionOptions.sessionId,
                   partitionId,
                 );
-              } else {
+              } else if (!forRead) {
                 this.setSessionPartitionAddress(
                   executionOptions.sessionId,
                   partitionId,
@@ -822,7 +842,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         }
       }
       if (candidateState.shouldRetryCurrentAddress()) {
-        if (attempt < maxAttempts) {
+        if (attempt < currentMaxAttempts) {
           if (!(await waitForLeaderRetryBudget())) {
             return buildLastFailureResult();
           }
@@ -831,7 +851,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         return returnReadAttemptsSpent();
       }
       if (candidateState.shouldDeferPartitionRetry()) {
-        if (attempt < maxAttempts) {
+        if (attempt < currentMaxAttempts) {
           if (!(await waitForLeaderRetryBudget())) {
             return buildLastFailureResult();
           }
@@ -839,7 +859,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         }
         return returnReadAttemptsSpent();
       }
-      if (attempt < maxAttempts) {
+      if (attempt < currentMaxAttempts) {
         if (!(await waitForLeaderRetryBudget())) {
           return buildLastFailureResult();
         }

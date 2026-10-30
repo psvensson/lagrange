@@ -105,6 +105,7 @@ test('ReadOnlySystemTableCache - getTableNames works correctly', async (t) => {
 
 test('ReadOnlySystemTableCache - forwards freshness/version accessors', async (t) => {
   const readOnly = new ReadOnlySystemTableCache(underlyingCache);
+  const proxiedReadOnly = createReadOnlyCache(underlyingCache);
   underlyingCache.getLastAppliedAtMs = (_tableName) => 1234;
   underlyingCache.getLastAppliedCauseId = (_tableName) => 'cause-1';
   underlyingCache.getAppliedSchemaVersion = (_tableName) => '42';
@@ -134,6 +135,63 @@ test('ReadOnlySystemTableCache - forwards freshness/version accessors', async (t
     'should forward the table snapshot identity');
   t.equal(tableSnapshot.entries.length, 2,
     'should forward every table row with its key revision');
+
+  t.equal(
+    typeof readOnly.getTableMutationVersion('nodes'),
+    'number',
+    'should forward getTableMutationVersion to underlying cache',
+  );
+  t.equal(
+    readOnly.getTableMutationVersion('nodes'),
+    underlyingCache.getTableMutationVersion('nodes'),
+    'should match underlying cache mutation version',
+  );
+  t.equal(
+    readOnly.getShared('nodes', 'node-1')?.id,
+    'node-1',
+    'should forward getShared to underlying cache',
+  );
+  t.equal(
+    readOnly.getAllShared('nodes').length,
+    2,
+    'should forward getAllShared to underlying cache',
+  );
+  t.equal(
+    readOnly.filterShared('nodes', (r) => r.status === 'active').length,
+    1,
+    'should forward filterShared to underlying cache',
+  );
+  t.same(
+    readOnly.getAppliedSchemaVersions(),
+    underlyingCache.getAppliedSchemaVersions(),
+    'should forward getAppliedSchemaVersions to underlying cache',
+  );
+
+  t.equal(
+    proxiedReadOnly.getTableMutationVersion('nodes'),
+    underlyingCache.getTableMutationVersion('nodes'),
+    'proxy should forward getTableMutationVersion',
+  );
+  t.equal(
+    proxiedReadOnly.getShared('nodes', 'node-1')?.id,
+    'node-1',
+    'proxy should forward getShared',
+  );
+  t.equal(
+    proxiedReadOnly.getAllShared('nodes').length,
+    2,
+    'proxy should forward getAllShared',
+  );
+  t.equal(
+    proxiedReadOnly.filterShared('nodes', (r) => r.status === 'active').length,
+    1,
+    'proxy should forward filterShared',
+  );
+  t.same(
+    proxiedReadOnly.getAppliedSchemaVersions(),
+    underlyingCache.getAppliedSchemaVersions(),
+    'proxy should forward getAppliedSchemaVersions',
+  );
 });
 
 test('createReadOnlyCache - blocks applySystemTableChange', async (t) => {

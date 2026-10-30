@@ -115,6 +115,7 @@ const PG_ERROR_CODE = Object.freeze({
   IN_FAILED_TRANSACTION: '25P02',
   TRANSACTION_TIMEOUT: '25P04',
   LOCK_NOT_AVAILABLE: '55P03',
+  SERIALIZATION_FAILURE: '40001',
 });
 
 // --- Describe target types ---

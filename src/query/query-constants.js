@@ -78,6 +78,7 @@ const QUERY_ERROR_CODE = Object.freeze({
   // applied on its partition between the transaction's BEGIN and its PREPARE
   // (TX1 design 3.2, limit L5): the transaction rolled back.
   TRANSACTION_CONFLICT: 'TRANSACTION_CONFLICT',
+  WRITE_CONFLICT: 'WRITE_CONFLICT',
   // A ROLLBACK asked of a transaction whose COMMIT is already decided: the
   // decision stands and recovery completes it.
   TRANSACTION_COMMIT_DECIDED: 'TRANSACTION_COMMIT_DECIDED',
@@ -137,6 +138,7 @@ const QUERY_ERROR_MSG = Object.freeze({
   SYSTEM_CACHE_UNSUPPORTED: 'System cache does not support filter or getAll',
   NO_ACTIVE_SERVICE_FOR_PARTITION: 'No active service found for partition',
   TRANSACTION_ACTIVE: 'Transaction already active for this session',
+  WRITE_CONFLICT: 'Write conflict detected',
   NO_TRANSACTION_COMMIT: 'No active transaction to commit',
   NO_TRANSACTION_ROLLBACK: 'No active transaction to rollback',
   NO_ACTIVE_TRANSACTION: 'No active transaction',

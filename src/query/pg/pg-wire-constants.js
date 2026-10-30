@@ -15,6 +15,10 @@ const PG_SESSION_STATE = Object.freeze({
   CLOSED: 'closed',
 });
 
+const PG_WIRE_SQLSTATE = Object.freeze({
+  SERIALIZATION_FAILURE: '40001',
+});
+
 /**
  * Error messages specific to the PostgreSQL wire adapter.
  * @enum {string}
@@ -27,4 +31,8 @@ const PG_WIRE_ERROR_MSG = Object.freeze({
   AUTHORIZATION_FAILED: 'Query authorization failed',
 });
 
-export {PG_SESSION_STATE, PG_WIRE_ERROR_MSG};
+export {
+  PG_SESSION_STATE,
+  PG_WIRE_ERROR_MSG,
+  PG_WIRE_SQLSTATE,
+};
