@@ -29,6 +29,19 @@ function shortSha(sha, len = 10) {
 const barW = (v, m, w = 230, min = 4) =>
   Math.max(min, Math.min(w, Math.round((v / Math.max(m, 1)) * w)));
 
+function getScenarioDefinitionHref(scenarioId) {
+  if (scenarioId === 'tidb-oltp-baseline') {
+    return 'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline';
+  }
+  if (scenarioId === 'scenario-a-semantic-closure') {
+    return 'tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate';
+  }
+  if (scenarioId === 'tidb-distributed-risk-decision') {
+    return 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision';
+  }
+  return 'tidb-reference-scenarios.md';
+}
+
 function getScenarioBEntries(entries) {
   if (!entries || !Array.isArray(entries)) return [];
   return arrayFilter(entries, (e) => {
@@ -197,7 +210,7 @@ function renderScenarioBComparisonSvg(summary) {
   const bEntries = getScenarioBEntries(summary?.entries);
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-label="Scenario B distributed risk decision and movement comparison">\n' +
     '  <rect width="960" height="420" fill="#0f172a" rx="12"/>\n' +
-    '  <text x="30" y="36" fill="#f8fafc" font-size="18" font-family="system-ui, sans-serif" font-weight="700">Scenario B: Distributed Risk Decision &amp; Partition Movement</text>\n' +
+    '  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="36" fill="#f8fafc" font-size="18" font-family="system-ui, sans-serif" font-weight="700">Scenario B: Distributed Risk Decision &amp; Partition Movement</text></a>\n' +
     `  <text x="930" y="36" text-anchor="end" fill="#94a3b8" font-size="12" font-family="monospace">Runs: ${bEntries.length}</text>\n` +
     `${renderScenarioBPanelsSvg(bEntries, 55)}\n` +
     '</svg>\n';
@@ -225,9 +238,9 @@ function renderComparisonProgressSvg(summary) {
     '  <rect width="960" height="790" fill="#0f172a" rx="12"/>\n' +
     '  <text x="30" y="32" fill="#f8fafc" font-size="18" font-family="system-ui, sans-serif" font-weight="700">TiDB/TiKV and Lagrange Comparison Progress</text>\n' +
     `  <text x="930" y="32" text-anchor="end" fill="#94a3b8" font-size="12" font-family="monospace">Runs: ${entries.length}</text>\n` +
-    '  <text x="30" y="54" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif" font-weight="600">Scenario A - Contended OLTP Baseline (tidb-oltp-baseline)</text>\n' +
+    '  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="30" y="54" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif" font-weight="600">Scenario A - Contended OLTP Baseline (tidb-oltp-baseline)</text></a>\n' +
     `${renderScenarioAPanelsSvg(targetEntries, 65)}\n` +
-    '  <text x="30" y="424" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif" font-weight="600">Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision)</text>\n' +
+    '  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="424" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif" font-weight="600">Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision)</text></a>\n' +
     `${renderScenarioBPanelsSvg(bEntries, 435)}\n` +
     '</svg>\n';
 }
@@ -238,6 +251,7 @@ export {
   formatSigned,
   shortSha,
   getScenarioBEntries,
+  getScenarioDefinitionHref,
   renderComparisonProgressSvg,
   renderScenarioBComparisonSvg,
 };
