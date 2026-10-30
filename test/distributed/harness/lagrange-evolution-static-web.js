@@ -54,9 +54,11 @@ const DEFAULT_TIMELINE = Object.freeze([
     '13-Target Matrix, Scenario C & Provenance Audit', 'modeled-topology-oracle', 'local-js-oracle',
     [0.83, 2269.44, 4418.93, 5343.1], 33, [441.15, 18.09, 144, 18.0, 45.0], 441.15),
   makeMilestone('v0.3.2-scaleout-3to5-rf3', '0.3.2', '89300e4d8a', '2026-10-30T21:40:00Z',
-    '3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Separation',
-    'modeled-topology-oracle', 'local-js-oracle',
+    '3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Separation', 'modeled-topology-oracle', 'local-js-oracle',
     [2.24, 1380.0, 2590.0, 3120.0], 33, [720.4, 18.09, 144, 18.0, 45.0], 441.15),
+  makeMilestone('v0.3.2-partition-sweep-p6to60', '0.3.2', '2025f7780d', '2026-10-30T22:10:00Z',
+    '5-Node RF=3 Partition Granularity Sweep (P=6..60)', 'modeled-topology-oracle', 'local-js-oracle',
+    [2.24, 1520.0, 2590.0, 3120.0], 33, [784.0, 16.9, 144, 42.0, 45.0], 441.15),
 ]);
 
 const MILESTONE_LABELS = Object.freeze({
@@ -67,6 +69,7 @@ const MILESTONE_LABELS = Object.freeze({
   'v0.3.0-scenario-b-model': ['v0.3.0 @ 2d416de (2026-10-30)', '3-Island RF=3 Risk Model'],
   'v0.3.2-provenance-matrix': ['v0.3.2 @ 4dc6db6 (2026-10-30)', '13-Target Matrix & Scen C'],
   'v0.3.2-scaleout-3to5-rf3': ['v0.3.2 @ 89300e4 (2026-10-30)', '3-to-5-Node RF=3 Scale-Out'],
+  'v0.3.2-partition-sweep-p6to60': ['0.3.2@2025f778 (P=6..60)', 'Partition Sweep (784 dec/s)'],
 });
 
 const COMMIT_DELTAS = Object.freeze([
@@ -77,6 +80,7 @@ const COMMIT_DELTAS = Object.freeze([
   ['v0.3.0-scenario-b-model', '2d416de6e5', 'Scenario B 3-island RF=3 risk model (441.15 dec/s, 18.09ms p99, 144 B/req WAN).'],
   ['v0.3.2-provenance-matrix', '4dc6db6b93', '13-target comparison matrix, Scenario C (441.15 dec/s @ 0ms), provenance audit.'],
   ['v0.3.2-scaleout-3to5-rf3', '89300e4d8a', '3-to-5-node RF=3 scale-out (2.24 tx/s proportional, 720.4 dec/s aggregate).'],
+  ['v0.3.2-partition-sweep-p6to60', '2025f7780d', 'Peak 784.0 dec/s at P=30 (6 leaders/node) vs -5.9% coordination drop at P=60'],
 ]);
 
 function getMilestoneLabels(m) {
@@ -128,7 +132,7 @@ function renderPanel(px, href, title, subTitle, timeline, panelType) {
       (isP2 ? `WAN: ${m.scenarioBWanBytes || 0} B/req | Mode: ${m.executionMode}` :
         `Move p99: ${formatNum(m.scenarioBMoveP99Ms, 1)}ms | Conv: ${formatNum(m.scenarioBConvergenceMs, 1)}ms`);
     const val = isP1 ? (m.semanticProofPassed / 33) :
-      (isP2 ? (m.scenarioBDecisionsPerSec / 750) : (m.scenarioCFresh0msDecPerSec / 500));
+      (isP2 ? (m.scenarioBDecisionsPerSec / 800) : (m.scenarioCFresh0msDecPerSec / 500));
     const w = Math.max(val > 0 ? 4 : 0, Math.min(250, Math.round(val * 250)));
     const col = isP1 ? '#38bdf8' : (isP2 ? '#10b981' : '#a855f7');
     const isDashed = isP1 ?
@@ -169,17 +173,15 @@ function renderTables(timeline) {
   const htM = arrayJoin(arrayMap(timeline, (m) =>
     `<tr><td><strong>${escapeXml(m.id)}</strong></td><td>${escapeXml(m.version)}</td>` +
     `<td><code>${escapeXml(m.commit)}</code></td><td>${stringSlice(String(m.date || ''), 0, 10)}</td>` +
-    `<td>${escapeXml(m.evidenceTier)}</td><td>${escapeXml(m.executionMode)}</td>` +
-    `<td>${f(m.scenarioATxPerSec, 2)}</td><td>${f(m.scenarioAP95Ms, 1)}</td>` +
-    `<td>${m.semanticProofPassed}/${m.semanticProofRequired || 33}</td>` +
+    `<td>${escapeXml(m.evidenceTier)}</td><td>${escapeXml(m.executionMode)}</td><td>${f(m.scenarioATxPerSec, 2)}</td>` +
+    `<td>${f(m.scenarioAP95Ms, 1)}</td><td>${m.semanticProofPassed}/${m.semanticProofRequired || 33}</td>` +
     `<td>${f(m.scenarioBDecisionsPerSec, 1)}</td><td>${f(m.scenarioCFresh0msDecPerSec, 1)}</td></tr>`), '\n');
   return {trM, htM};
 }
 
 export function renderLagrangeEvolutionMarkdown(matrix) {
   const {trM} = renderTables(getTimeline(matrix));
-  const mdD = arrayJoin(arrayMap(COMMIT_DELTAS, ([id, c, d]) =>
-    `- **${id} (commit ${c})**: ${d}`), '\n');
+  const mdD = arrayJoin(arrayMap(COMMIT_DELTAS, ([id, c, d]) => `- **${id} (commit ${c})**: ${d}`), '\n');
   return `# Lagrange Longitudinal Metrics Evolution
 
 Progressive evolution of Lagrange across chronological milestones, tracking Scenario A OLTP throughput,
@@ -193,7 +195,7 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 ## How Lagrange metrics develop over time (version and commit progression)
 
 | Milestone | Version | Commit | Date | Evidence Tier | Execution Mode | Scenario A (tx/s) | p95 (ms) | Proofs | Scenario B (dec/s) | Scenario C (dec/s) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${trM}
 
 ## Commit-over-commit delta progression
@@ -216,8 +218,7 @@ export function renderLagrangeEvolutionHtml(matrix) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Lagrange Longitudinal Metrics Evolution</title>
   ${HTML_PAGE_STYLE}
 </head>

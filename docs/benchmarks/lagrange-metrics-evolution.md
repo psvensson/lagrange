@@ -11,7 +11,7 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 ## How Lagrange metrics develop over time (version and commit progression)
 
 | Milestone | Version | Commit | Date | Evidence Tier | Execution Mode | Scenario A (tx/s) | p95 (ms) | Proofs | Scenario B (dec/s) | Scenario C (dec/s) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | v0.2.0-tidb-ref | 0.2.0 | b0b2f9abcc | 2026-09-12 | observed-docker-cluster | live-cluster-wire | 0.00 | 0.0 | 0/33 | 0.0 | 0.0 |
 | v0.3.0-lab-paired | 0.3.0 | 8039e45f2a | 2026-10-29 | observed-docker-cluster | live-cluster-wire | 0.83 | 4418.9 | 4/33 | 0.0 | 0.0 |
 | v0.3.0-conflict-retry | 0.3.0 | 66d054c9c9 | 2026-10-30 | observed-docker-cluster | live-cluster-wire | 0.83 | 4418.9 | 16/33 | 0.0 | 0.0 |
@@ -19,6 +19,7 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 | v0.3.0-scenario-b-model | 0.3.0 | 2d416de6e5 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 0.83 | 4418.9 | 33/33 | 441.1 | 0.0 |
 | v0.3.2-provenance-matrix | 0.3.2 | 4dc6db6b93 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 0.83 | 4418.9 | 33/33 | 441.1 | 441.1 |
 | v0.3.2-scaleout-3to5-rf3 | 0.3.2 | 89300e4d8a | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 720.4 | 441.1 |
+| v0.3.2-partition-sweep-p6to60 | 0.3.2 | 2025f7780d | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 784.0 | 441.1 |
 
 ## Commit-over-commit delta progression
 
@@ -29,6 +30,7 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 - **v0.3.0-scenario-b-model (commit 2d416de6e5)**: Scenario B 3-island RF=3 risk model (441.15 dec/s, 18.09ms p99, 144 B/req WAN).
 - **v0.3.2-provenance-matrix (commit 4dc6db6b93)**: 13-target comparison matrix, Scenario C (441.15 dec/s @ 0ms), provenance audit.
 - **v0.3.2-scaleout-3to5-rf3 (commit 89300e4d8a)**: 3-to-5-node RF=3 scale-out (2.24 tx/s proportional, 720.4 dec/s aggregate).
+- **v0.3.2-partition-sweep-p6to60 (commit 2025f7780d)**: Peak 784.0 dec/s at P=30 (6 leaders/node) vs -5.9% coordination drop at P=60
 
 ## Provenance qualification across historical milestones
 

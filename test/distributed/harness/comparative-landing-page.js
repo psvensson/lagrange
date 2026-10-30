@@ -2,17 +2,9 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
 import {
-  CANONICAL_DEFAULT_TARGETS,
-  DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH,
-  escapeXml,
-  formatNum,
-  getDecisionsPerSec,
-  getEvidenceTier,
-  getP95,
-  getP99,
-  getTargets,
-  getTxPerSec,
-  getWireBytes,
+  CANONICAL_DEFAULT_TARGETS, DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH,
+  escapeXml, formatNum, getDecisionsPerSec, getEvidenceTier,
+  getP95, getP99, getTargets, getTxPerSec, getWireBytes,
   renderComparativeOverviewSvg,
 } from './comparative-landing-svg-renderer.js';
 
@@ -78,7 +70,8 @@ function renderComparativeLandingMarkdown(matrix) {
     '  - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))\n' +
     '  - [YugabyteDB & Apache Ignite 3 Colocated Compute Comparison](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html))\n' +
     '  - [Scenario C: PostgreSQL 17 + Valkey 8 Feature-Store & Freshness Comparison](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html))\n' +
-    '  - [3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Comparison](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html))\n\n' +
+    '  - [3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Comparison](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html))\n' +
+    '  - [5-Node RF=3 Partition Granularity Sweep (P=6..60)](partition-granularity-sweep-progress.md) ([HTML](partition-granularity-sweep-progress.html))\n\n' +
     '![Multi-system comparative benchmark overview](comparative-overview.svg)\n\n' +
     'Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg) | [TiDB comparison progress chart](tidb-comparison-progress.svg)\n\n' +
     '## Evidence-tier and measurement boundary qualification\n\n' +
@@ -149,19 +142,25 @@ function renderMilestoneRowsHtml(timeline) {
     `<td><span class="badge">${escapeXml(m.evidenceTier)}</span> <span class="badge">${escapeXml(m.executionPath)}</span></td></tr>`), '\n');
 }
 
+function provVal(obj, prop) {
+  const v = obj && obj[prop];
+  return v ? escapeXml(v) : 'n/a';
+}
+
+function renderProvenanceRowHtml(t) {
+  const a = t.scenarioA ? t.scenarioA.measurementProvenance : null;
+  const b = t.scenarioB ? t.scenarioB.measurementProvenance : null;
+  const isComp = Boolean(b && b.comparableClusterEvidence);
+  return '        <tr>' +
+    `<td><strong>${escapeXml(t.label)}</strong></td>` +
+    `<td><span class="badge">${provVal(a, 'executionPath')}</span> ${provVal(a, 'latencySource')}</td>` +
+    `<td><span class="badge">${provVal(b, 'executionPath')}</span> ${provVal(b, 'latencySource')}</td>` +
+    `<td>${provVal(b, 'wireBytesSource')} / ${provVal(b, 'movementSource')}</td>` +
+    `<td><span class="badge ${isComp ? 'badge-green' : 'badge-red'}">${isComp ? 'Yes' : 'No'}</span></td></tr>`;
+}
+
 function renderProvenanceRowsHtml(targets) {
-  return arrayJoin(arrayMap(targets, (t) => {
-    const a = t.scenarioA?.measurementProvenance || {};
-    const b = t.scenarioB?.measurementProvenance || {};
-    const comp = b.comparableClusterEvidence ? 'Yes' : 'No';
-    const cls = b.comparableClusterEvidence ? 'badge-green' : 'badge-red';
-    return '        <tr>' +
-      `<td><strong>${escapeXml(t.label)}</strong></td>` +
-      `<td><span class="badge">${escapeXml(a.executionPath || 'n/a')}</span> ${escapeXml(a.latencySource || 'n/a')}</td>` +
-      `<td><span class="badge">${escapeXml(b.executionPath || 'n/a')}</span> ${escapeXml(b.latencySource || 'n/a')}</td>` +
-      `<td>${escapeXml(b.wireBytesSource || 'n/a')} / ${escapeXml(b.movementSource || 'n/a')}</td>` +
-      `<td><span class="badge ${cls}">${comp}</span></td></tr>`;
-  }), '\n');
+  return arrayJoin(arrayMap(targets, renderProvenanceRowHtml), '\n');
 }
 
 function renderComparativeLandingHtml(matrix) {
@@ -212,7 +211,9 @@ function renderComparativeLandingHtml(matrix) {
     '<a href="scenario-c-feature-store-progress.html">Scenario C: PG + Valkey (HTML)</a> | ' +
     '<a href="scenario-c-feature-store-progress.md">Scenario C (MD)</a> | ' +
     '<a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out (HTML)</a> | ' +
-    '<a href="scaleout-3to5-node-rf3-progress.md">3-to-5-Node RF=3 Scale-Out (MD)</a></p>\n' +
+    '<a href="scaleout-3to5-node-rf3-progress.md">3-to-5-Node RF=3 Scale-Out (MD)</a> | ' +
+    '<a href="partition-granularity-sweep-progress.html">5-Node RF=3 Partition Granularity Sweep (P=6..60) (HTML)</a> | ' +
+    '<a href="partition-granularity-sweep-progress.md">(Markdown)</a></p>\n' +
     `    <div class="chart-box">${svg}</div>\n` +
     '    <div class="filter-bar"><label for="landing-filter">Filter:</label><input type="text" id="landing-filter" placeholder="Filter targets, categories, shapes..."/></div>\n' +
     '    <div class="card">\n' +
@@ -253,9 +254,9 @@ async function writeComparativeLandingArtifacts(options = {}) {
   const markdownPath = options.markdownPath || DEFAULT_COMPARATIVE_LANDING_MD_PATH;
   const htmlPath = options.htmlPath || DEFAULT_COMPARATIVE_LANDING_HTML_PATH;
 
-  await mkdir(path.dirname(svgPath), {recursive: true});
-  await mkdir(path.dirname(markdownPath), {recursive: true});
-  await mkdir(path.dirname(htmlPath), {recursive: true});
+  for (const p of [svgPath, markdownPath, htmlPath]) {
+    await mkdir(path.dirname(p), {recursive: true});
+  }
 
   await writeFile(svgPath, renderComparativeOverviewSvg(matrix), 'utf8');
   await writeFile(markdownPath, renderComparativeLandingMarkdown(matrix), 'utf8');
@@ -265,12 +266,8 @@ async function writeComparativeLandingArtifacts(options = {}) {
 }
 
 export {
-  CANONICAL_DEFAULT_TARGETS,
-  DEFAULT_COMPARATIVE_LANDING_HTML_PATH,
-  DEFAULT_COMPARATIVE_LANDING_MD_PATH,
-  DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH,
-  renderComparativeLandingHtml,
-  renderComparativeLandingMarkdown,
-  renderComparativeOverviewSvg,
-  writeComparativeLandingArtifacts,
+  CANONICAL_DEFAULT_TARGETS, DEFAULT_COMPARATIVE_LANDING_HTML_PATH,
+  DEFAULT_COMPARATIVE_LANDING_MD_PATH, DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH,
+  renderComparativeLandingHtml, renderComparativeLandingMarkdown,
+  renderComparativeOverviewSvg, writeComparativeLandingArtifacts,
 };

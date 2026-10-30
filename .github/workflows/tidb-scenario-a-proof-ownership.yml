@@ -67,6 +67,11 @@ on:
       - 'docs/benchmarks/lagrange-metrics-evolution.*'
       - 'test/distributed/harness/scaleout-node-rf-comparison-static-web.js'
       - 'docs/benchmarks/scaleout-3to5-node-rf3-progress.*'
+      - 'test/distributed/harness/scaleout-series-experiments.js'
+      - 'test/distributed/harness/partition-granularity-comparison-static-web.js'
+      - 'docs/benchmarks/partition-granularity-sweep-progress.md'
+      - 'docs/benchmarks/partition-granularity-sweep-progress.html'
+      - 'docs/benchmarks/partition-granularity-sweep-progress.svg'
   workflow_dispatch: {}
 
 permissions:
@@ -128,6 +133,8 @@ jobs:
             test/distributed/harness/comparative-landing-page.js \
             test/distributed/harness/lagrange-evolution-static-web.js \
             test/distributed/harness/scaleout-node-rf-comparison-static-web.js \
+            test/distributed/harness/scaleout-series-experiments.js \
+            test/distributed/harness/partition-granularity-comparison-static-web.js \
             scripts/checks/distributed-scaleout-provenance-guard.js \
             scripts/checks/comparative-benchmark-matrix-guard.js
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js
