@@ -7,6 +7,12 @@ categories: [harness-fidelity]
 For new DT tests, fixtures, or stubs — and for verifying that a green test
 binds to the live mechanism. Each item requires an evidence path.
 
+For a major product feature, apply this checklist to its ordinary user journey
+under [Major Feature User Journeys](../../../test/guidelines/release-gate.md#major-feature-user-journeys),
+including public setup, actual artifact/dependency identity and observed fault
+engagement. Keep a bounded repair's narrower predicate and evidence ceiling;
+the feature journey does not become every repair's acceptance.
+
 1. **Red for the RIGHT reason.** Show the head-red assertion failing via
    the claimed mechanism (not via a missing method / fixture gap). A
    compressed-geometry fixture can let the WRONG existing machinery absorb

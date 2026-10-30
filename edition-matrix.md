@@ -12,6 +12,12 @@ outcomes in several releases; each outcome is assigned explicitly below and in
 the product planning surfaces. A release assignment does not alter edition
 ownership or authorize external commercial work in this repository.
 
+The published baseline is 0.3.0. Selected installed-product, publication and
+claim corrections belong to 0.3.1; full Queryable Core and inherited stable-core
+acceptance belong to 0.3.2. The former future 0.2.9 is retired without changing
+edition ownership or historical roadmap IDs. Independently proved bounded
+repairs may ship in 0.3.1 without completing the broader 0.3.2 outcome.
+
 Implementation rule:
 
 - Only rows whose `Implementation home` is `AGPL repo` may drive specs, tasks,
@@ -20,17 +26,17 @@ Implementation rule:
 
 | Feature area | Edition | Implementation home | Release home | Canonical roadmap or backlog | May drive work in this repo? | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| Topology workflow stabilization | Community | AGPL repo | 0.2.9; production guarantees in 1.0 | AGPL feature map (agent steering) | Yes | Core control-plane stabilization |
-| Distributed transactions | Community | AGPL repo | 0.2.9; locking reads in 0.3; production invariants in 1.0 | AGPL feature map (agent steering) | Yes | Core database capability |
-| Schema migration workflow | Community | AGPL repo | 0.2.9; supported recovery in 1.0 | AGPL feature map (agent steering) | Yes | Core database capability |
-| Operational visibility basics | Community | AGPL repo | 0.2.9; pilot view in 0.5; service contributions in 0.9 | AGPL feature map (agent steering) | Yes | Metrics, diagnostics, admin visibility |
+| Topology workflow stabilization | Community | AGPL repo | 0.3.2 inherited completion; production guarantees in 1.0 | AGPL feature map (agent steering) | Yes | Core control-plane stabilization |
+| Distributed transactions | Community | AGPL repo | 0.3.2 inherited completion and locking reads; production invariants in 1.0 | AGPL feature map (agent steering) | Yes | Core database capability |
+| Schema migration workflow | Community | AGPL repo | 0.3.2 inherited completion; supported recovery in 1.0 | AGPL feature map (agent steering) | Yes | Core database capability |
+| Operational visibility basics | Community | AGPL repo | 0.3.2 inherited completion; pilot view in 0.5; service contributions in 0.9 | AGPL feature map (agent steering) | Yes | Metrics, diagnostics, admin visibility |
 | Advanced observability | Pro | External / commercial | 0.9 | Cross-edition visibility plus external paid backlog | No | Prometheus, tracing, heatmaps, advanced runtime traces |
-| Failure simulations | Community | AGPL repo | 0.2.9, 0.4, 0.5, 1.0 and 2.0 acceptance workloads | AGPL feature map (agent steering) | Yes | Test and resilience work |
+| Failure simulations | Community | AGPL repo | 0.3.2, 0.4, 0.5, 1.0 and 2.0 acceptance workloads | AGPL feature map (agent steering) | Yes | Test and resilience work |
 | Cluster deployment experience | Community | AGPL repo | 0.5 | AGPL feature map (agent steering) | Yes | Community operator UX |
 | Developer workflow and debugging | Community | AGPL repo | 0.5 | AGPL feature map (agent steering) | Yes | Community developer experience |
 | System service foundations | Community | AGPL repo | 0.6 minimum; 0.9 complete lifecycle; 1.0 support | AGPL feature map (agent steering) | Yes | Shared substrate remains in scope here even when it enables paid services |
 | Backup / Restore / PITR | Pro | External / commercial | 1.0 | Cross-edition visibility plus external paid backlog | No | First-party paid system service |
-| PostgreSQL compatibility | Community | AGPL repo | 0.2.9 semantics; 0.5 driver certification; 1.1 breadth | AGPL feature map (agent steering) | Yes | Community database compatibility |
+| PostgreSQL compatibility | Community | AGPL repo | 0.3.2 inherited semantics; 0.5 driver certification; 1.1 breadth | AGPL feature map (agent steering) | Yes | Community database compatibility |
 | Security and tenancy | Enterprise | External / commercial | 1.2 | Cross-edition visibility plus external paid backlog | No | Tenant isolation, RBAC, enterprise security controls |
 | Cross-region replication | Enterprise | External / commercial | 1.2 | Cross-edition visibility plus external paid backlog | No | Enterprise durability and replication feature set |
 | Production guarantees | Community | AGPL repo | 1.0 | AGPL feature map (agent steering) | Yes | Includes Raft snapshot/log lifecycle, supported scale profiles, balance/convergence SLOs, and certification; excludes user backup/restore/PITR |
@@ -41,8 +47,8 @@ Implementation rule:
 | Installable service ecosystem core | Community | AGPL repo | 0.9; native artifact store extension in 2.0 | AGPL feature map (agent steering) | Yes | Package registry, install UX, SQL/CLI surface |
 | Licensing and edition gating | Pro / Enterprise | External / commercial | 0.9 | Cross-edition visibility plus external paid backlog | No | Commercial activation and entitlement checks |
 | Data-local AI processing | TBD | Not yet classified | 2.1; edition classification required before implementation | Cross-edition visibility only | No | Do not implement until edition and implementation home are assigned |
-| Queryable Core | Community | AGPL repo | 0.3; global uniqueness in 1.0; SQL breadth in 1.1 | AGPL feature map (agent steering) | Yes | Ordered keys, local/global access paths, locking reads and live queries; existing edition ownership is unchanged |
-| Practical service core and comparisons | Community | AGPL repo | 0.4 Scenario A; 2.0 full Scenario B | AGPL feature map (agent steering) | Yes | Bounded public service capabilities and independently qualified comparative evidence |
+| Queryable Core | Community | AGPL repo | 0.3.2 completion; global uniqueness in 1.0; SQL breadth in 1.1 | AGPL feature map (agent steering) | Yes | Ordered keys, local/global access paths, locking reads and live queries; existing edition ownership is unchanged |
+| Practical service core and comparisons | Community | AGPL repo | 0.3.2 existing bounded service and Scenario A semantic regression; 0.4 expansions and qualified comparisons; 2.0 full Scenario B | AGPL feature map (agent steering) | Yes | Existing service/comparison owners retain their contracts and evidence |
 | Core peer trust and encrypted transport | Community | AGPL repo | 0.5 | AGPL feature map (agent steering) | Yes | Minimum node authentication/encryption belongs to every edition, distinct from enterprise identity and tenancy |
 | Transport-independent networking | Community | AGPL repo | 0.7 N0/N1, NATS and static timing; 0.8 Veilid; 2.0 advanced policy | AGPL feature map (agent steering) | Yes | Each backend must support standalone complete-cluster operation; mixed transports are optional 2.0 scope |
 | Specialized search and embedding substrate | Community | AGPL repo | 2.1 | AGPL feature map (agent steering) | Yes | Preserves the Community advanced-runtime substrate classification; data-local AI product classification remains separate |

@@ -3,13 +3,26 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-30
 ---
 
 > **Canonical source.** Scenario and release-gate Quest proof policy. Index:
 > [`INDEX.md`](INDEX.md).
 
 # Testing - Scenario And Release-Gate Quests
+
+## Documentation-Only Changes
+
+Documentation-only planning, roadmap and policy changes require the relevant
+documentation, rule-set, roadmap, link and generated-consistency checks, plus
+review against their canonical owners. They do not require runtime,
+distributed, soak or full-system execution merely because they describe those
+systems or future acceptance requirements. Existing evidence remains attributed
+to its actual source and configuration, and unsupported capability or support
+claims remain explicitly unverified. Adopting documentation does not discharge
+sealed feature or release acceptance or create a new whole-corpus receipt.
+Any accompanying change to runtime behavior, executable harnesses or enforced
+acceptance predicates retains its own applicable proof requirements.
 
 ## Separate Acceptance Claims
 
@@ -111,6 +124,85 @@ engages and changes its intended observable. Retain separate verdicts for
 mechanism correctness and for measured service or statistical improvement. If
 the live target never engages, preserve the outer result, name the blocking
 cause, and route the next repair; do not rerun unchanged to seek a passing sample.
+
+## Major Feature User Journeys
+
+Every major feature has a tangible, credible user journey as part of the
+feature. It is complete only when a user can achieve the stated useful outcome
+through a supported public entrypoint and real production composition on an
+identified candidate. A major feature is an externally claimed product
+capability or a product roadmap outcome, not every helper, refactor or bounded
+causal repair. Research and documentation use acceptance appropriate to their
+actual deliverable; they do not invent a product journey.
+
+Define the journey in the existing owning specification before implementing a
+major capability. Keep application code and ordinary user steps distinct from
+harness orchestration. The specification and its existing Quest evidence name:
+
+1. The user, useful outcome, declared prerequisites and supported configuration.
+2. A reproducible invocation through the supported installed CLI, PostgreSQL
+   wire, lifecycle SQL, public HTTP or documented subscription surface.
+3. The real production factories and owners reached. Observation and named
+   fault injection are allowed; fixtures cannot supply missing runtime wiring,
+   seed internal authority, replace the feature mechanism or require
+   undocumented private preparation. Public setup consumes the supported
+   lifecycle/configuration owner rather than bypassing product admission.
+4. A business result checked by an oracle independent of the mechanism under
+   test, and evidence that the feature engaged in that execution. At least one
+   positive witness contains the expected business effects; empty output is
+   valid only when the oracle expects it. Catalog presence, a separate plan
+   explanation or result parity alone cannot prove an access path was used.
+5. A meaningful negative control and the concurrency, interruption, restart,
+   topology or pressure behavior relevant to the claim. The control changes,
+   disables or reproduces the pre-repair behavior at the real seam and makes
+   the named acceptance assertion fail. A measured pre-repair or red-on-revert
+   witness can be reused. An edge-case input alone is not automatically such
+   a control; import, setup and missing-method failures do not discriminate the
+   target behavior.
+6. Honest refusal or uncertainty while a finite fault persists, preserved
+   obligations, useful successor progress after it clears, and bounded cleanup
+   even when the main journey fails. Record the actual affected owner, process,
+   incarnation or durable-state transition: a no-op restart callback and equal
+   snapshots do not demonstrate recovery. Across a lifecycle/topology change,
+   exercise stale work and the owner's refusal or reconciliation, followed by
+   fresh authorized work. Separate safety, progress and resource conclusions.
+7. Source and dependency/runtime versions, actual artifact identity when
+   applicable, topology/fault domains, invocation, result, original evidence
+   and evidence applicability. Descriptive fixture metadata does not establish
+   which artifact ran. Source processes or reused checkout dependencies do not
+   prove installed-consumer usability; several processes on one host do not
+   prove independent-host failure tolerance.
+
+The journey is maintained with the feature. A semantic, packaging, startup or
+owner-interaction change reruns the affected journey or establishes applicable
+evidence through the current proof owner. Retain genuine CDC/receipt fields,
+identity and deadline/ordering semantics when using controlled substitutes.
+Bounded queues, replay, explicit reset or typed termination may satisfy the
+declared pressure contract; silent loss of acknowledged obligations cannot.
+
+Select one credible successful journey per capability and a bounded set of
+shared owner-boundary witnesses. Reuse setup and unaffected evidence; do not
+take the Cartesian product of distributions, key types, topologies and faults.
+Keep a composed witness for the combination actually claimed. Use the existing
+specifications, Quest records, proof authority and harnesses, without a second
+acceptance ledger, test framework or approval stage. The measuring probe reads
+retained evidence; execution remains in the attempt/harness.
+
+A bounded repair may close and integrate before the whole feature journey
+passes, with its remaining blocker and owner recorded. The broader journey does
+not replace that repair's sealed predicate. A useful refusal is part of the
+journey and cannot replace its promised successful outcome. Removing promised
+scope requires an explicit product decision and safe exclusion across public,
+internal, background and recovery paths; a dormant flag or alternate runtime
+cannot manufacture completion.
+
+Apply this requirement to the current milestone and newly completed or changed
+major features. Reconcile existing advertised capabilities through the canonical
+[capability source](../../docs/current-capabilities.json) and existing owners.
+Credit applicable evidence, correct unsupported current claims, and assign
+missing journeys a specific owner and version. This bounded reconciliation does
+not silently make every historical capability a new correction-release gate or
+require a whole-project rewrite.
 
 ## Static Gate Baselines Are A One-Way Ratchet
 

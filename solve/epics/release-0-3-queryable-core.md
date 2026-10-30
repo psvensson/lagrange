@@ -41,82 +41,80 @@ authorizes:
   - test/transaction
 ---
 
-# Release 0.3 — Queryable Core
+# Release 0.3 - Queryable Core completion
 
 ## Intent
 
-- Reach partitioned data via ordinary SQL: typed key ordering, declared/compound PK narrowing, locking reads, local indexes, compound planner semantics, non-unique GSIs, and live queries (`RM-0.3-qs-generic-live-queries` in `docs/development/agpl-feature-map.md`).
-- Single open 0.3 epic; locking reads, GSIs, and live queries remain staged sections.
+Complete the original eight Queryable Core axes in **0.3.2**, consuming existing
+stabilization/service/comparison evidence. **0.3.1** owns selected corrections
+and the [journey rule](../../test/guidelines/release-gate.md#major-feature-user-journeys),
+not full feature acceptance. The [feature map](../../docs/development/agpl-feature-map.md)
+owns version scope; this planning adoption certifies no runtime.
 
-## Post-0.2.8 handoff census - 2026-10-29
+## Current summary
 
-- **D0:** `RM-0.3-qs-generic-live-queries` in `docs/development/agpl-feature-map.md`.
-- **Q01-Q03 on `main` (`c32680a12`):** UTF-8 comparator, composite PK/UNIQUE/CHECK schema preservation, cross-partition checks.
-- **Residual Stage A (`add04d91a`):** A1 comparator delegation; A2 boundary schema & safe integers; A3/A4 PK resolution; A5/A6 index DDL & optimizer.
+Checked **2026-10-30**. Continuation: Queryable Core integration owner.
 
-## Verified implementation preparation - 2026-10-29
+| Field | Current state |
+| --- | --- |
+| Source/policy | Main `a43ce6a9fe3c2ffd17fcb084e596a0c709ba88c9`, reviewed under rule-set 4; adopted policy revision 5 is identified by this commit. |
+| Published | [v0.3.0](https://github.com/psvensson/lagrange/releases/tag/v0.3.0), source `79ac781fcc3a30482492751b9971cb178e3cfdca`; publication does not discharge axes. |
+| Integrated | [PR151](https://github.com/psvensson/lagrange/pull/151): Scenario A plus cache/readiness, UPDATE, join/read-affinity and PG conflict/TCP repairs. Current execution needs receipts. |
+| First pickups | J1 installed startup/provenance; J7 real formation/admission and public setup. Establish current applicability of earlier failures. |
+| Remaining frontier | SQL/key, index lifecycle, durable reservations, GSI integration and live producer/handoff qualification; [journeys](../specs/release-0-3-queryable-core/user-journeys.md) credit present components. |
+| Next action | Integration owner assigns bounded Quests via [first actions](../specs/release-0-3-queryable-core/tasks.md#first-actions), recording actual candidate, causal blocker and continuation owner. |
+| Acceptance | Existing [oracle](../oracle/release-0-3-queryable-core.json): PLANNED, eight outstanding axes; only certification may remove them. |
 
-- See [Verified preparation for 0.3 implementation](../specs/release-0-3-queryable-core/preimplementation-research.md), pinned to `71179adf82be304b3ad1530f62c108adb35fbd1b`. C1/R2 unsealed.
+The [five-process receipt](https://github.com/psvensson/lagrange-lab/issues/2643#issuecomment-6505606365)
+measured 200 transactions at approximately 0.826 transactions/second on
+`8039e45f2ad8314239ed8c67c9883ebb8b47ec9f`, not rebased main. Implemented 33-ID
+coverage is not execution. CI/publication provenance stays in the
+[stabilization summary](release-0-2-7-stabilization.md#current-coordination-summary);
+old receipts neither certify nor veto fresh main by themselves.
 
-## Index-maintenance research - 2026-10-28
+## Package and owner index
 
-- See [Global index maintenance research](../specs/release-0-3-queryable-core/global-index-maintenance-research.md) (linked from [C1 task](../specs/release-0-3-queryable-core/tasks.md#c1--planned-global-index-maintenance-mode-seal--design-may-start-early)). Status: **R2 unsealed**. Provisional lean: sync TX1-maintained GSI.
+Use the sole [J0-J10 pickup table](../specs/release-0-3-queryable-core/tasks.md#package-ownership-and-pickup).
+J labels are not Quest IDs. Stabilization retains J1/J8/J10 and inherited J2;
+J7 consumes graduated comparison authority and J9 service/Q17. Detailed feature
+acceptance remains in the journeys and their canonical owners.
 
-## Verified starting point — 2026-10-02
+## Dependencies and scope
 
-- Baseline: main `edf20e39b0014d5d2a63a2ecea990712f0349153`.
+Follow the [dependency map](../specs/release-0-3-queryable-core/tasks.md#dependencies):
+independent work under defined contracts, one writer per changing interaction,
+ordered integration and one release train. Preserve alpha read limits, fail-fast
+locking, complete-read fallback and one SQL/key/TX1/CDC authority. No global
+snapshot, serializability, global uniqueness, general transactional DDL or broader
+SQL is added. Expansion/comparison stays 0.4, pilot 0.5, global uniqueness 1.0.
 
-### Consensus integration fence
+The unchanged `authorizes` list grants no blanket cache/testing/steering scope.
+Record narrow future expansions, including `src/cache/cdc-table-policy.js`,
+through the existing lifecycle before editing. Version bumps remain release-owned.
 
-- PR #73 (`finalize/zero-liferaft-2026-10-02`): safe 0.3 work develops on branches until rs-raft cutover merges.
+## Adoption coverage and preserved history
 
-### The old access-path epic is provenance, not authority
+Coverage: R19/revision 5, testing and routed Quest/harness guidance, generated
+steering, coordinated roadmap/edition surfaces, both epics/specifications.
+Record actual audits in existing review evidence. J0/J10 capability graduation
+still needs its canonical source/generator and measured support.
 
-- `solve/epics/query-access-path-ladder.md` superseded; retains solved `numeric-key-routing` baseline.
+Preserve original Quest IDs, seals, logs, receipts and `doneWhen`/oracle. The
+[prior summary](https://github.com/psvensson/lagrange/blob/a43ce6a9fe3c2ffd17fcb084e596a0c709ba88c9/solve/epics/release-0-3-queryable-core.md),
+[preimplementation research](../specs/release-0-3-queryable-core/preimplementation-research.md)
+and [GSI research](../specs/release-0-3-queryable-core/global-index-maintenance-research.md)
+remain provenance, not serial fences. The [crosswalk](../specs/release-0-3-queryable-core/tasks.md#existing-task-crosswalk)
+preserves task identities; changed seals require explicit supersession.
 
-### Current typed-ordering gaps
+## Completion and next review
 
-- `RM-0.3-qs-typed-key-ordering`: SQLite BINARY vs localeCompare, merge adjacency, large integers.
+[Evidence/completion](../specs/release-0-3-queryable-core/user-journeys.md#evidence-and-completion)
+binds ordering, PK narrowing, locking, local indexes, compound planning, GSI,
+live queries and exact-head exit to working journeys on one candidate. It
+consumes stabilization, current-core Scenario A and bounded public-service proof.
+0.3.1 leaves unfinished axes open; only existing certification closes them.
 
-### Current PK narrowing gaps
-
-- Resolver ignores `tables.partition_key` and defaults to `id`.
-
-### Current local-index and planner gaps
-
-- Unwired `IndexService`; `QueryOptimizer.checkIndexMatch()` permits non-leading column fallback.
-
-### Generic live-query planning alignment
-
-- `RM-0.3-qs-generic-live-queries` in `docs/development/agpl-feature-map.md`.
-
-## Release axes
-
-1. Typed partition-key/tuple ordering.
-2. Declared and compound PK narrowing.
-3. Distributed locking reads.
-4. Local ordered index DDL and lifecycle.
-5. Ordered/compound index planner semantics.
-6. Non-unique global secondary indexes.
-7. Generic push-backed live queries.
-8. Exact-head 0.3 candidate/release exit.
-
-## Integration rules
-
-1. **Consensus boundary:** Avoid Raft runtime/transport.
-2. **Single ordering owner:** Narrowing and indexes consume one ordering owner.
-3. **Representation vs comparison:** A1 resolves comparison; A2 resolves persisted representation.
-4. **Indexes as access paths:** Missing index affects latency, not correctness; no uniqueness in 0.3.
-5. **Transaction lock ownership:** Coordinator owns locks; PG wire transports `FOR UPDATE`.
-6. **Reuse SQL & CDC:** Live queries reuse standard SQL and CDC; no polling.
-7. **Versioning last:** Version bumps occur only on final release candidate under `RELEASE.md`.
-8. **Adversarial verification:** Source Quests require red-on-revert or controlled negatives.
-
-## Ordered work program
-
-- Tasks in `solve/specs/release-0-3-queryable-core/tasks.md`. Active: `partition-key-ordering-owner-completion-v12`.
-- Stages: Stage A (Access: A1-A6) -> Stage B (Locking: B1-B5) -> Stage C (GSIs: C1-C5) -> Stage D (Live queries: D0-D6) -> Stage E (Release: E1-E2).
-
-## Final release exit
-
-- Eight axes proven; docs match capabilities; `[Unreleased]` cut to 0.3.0 in `CHANGELOG.md`; publish gate green.
+By **6 November 2026**, report candidate, passing journeys, first blockers and
+Scenario A execution. By **13 November**, use observed repair/review/lab/integration
+throughput to set/revise 0.3.2/0.4 windows. These are review horizons, not promises
+or waiting periods.

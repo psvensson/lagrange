@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-10-28
+last_reviewed: 2026-10-30
 ---
 
 # Quest workflow
@@ -25,6 +25,12 @@ Do not weaken a seal to close work; explicitly supersede a changed premise.
 When a unit of work needs a quest and none exists yet, prepare a bounded
 quest proposal (statement, owning epic, reproducer, `doneWhen`) and take the
 next authorized action; the missing record is not by itself a reason to stop.
+
+For a major feature, define the user journey in its existing owning specification
+before implementation and apply the
+[feature-journey policy](../../../test/guidelines/release-gate.md#major-feature-user-journeys)
+when sealing and reviewing completion. That policy keeps bounded repair and
+feature acceptance distinct; it adds no second acceptance record or gate stage.
 
 ## Contract-first owner work
 

@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-10-28
+last_reviewed: 2026-10-30
 ---
 
 # Owner router
@@ -15,7 +15,7 @@ an implementation changes its row, not the rule. Consult only relevant owners.
 | `contracts` | [`architecture/contracts/`](../../architecture/contracts/) | changing a boundary's shape, lifecycle, pressure or retry behaviour |
 | `generated-artifacts` | the producer named in the artifact's own header; `npm run commands` lists the generators | an artifact looks stale, wrong, or worth editing by hand |
 | `guideline-audits` | `npm run audit:guidelines` and the checker each violation names | naming a value, encoding an outcome, or a guideline audit fails |
-| `sealed-acceptance` | the quest's own `quest.json` and [`solve-commands.md`](generated/solve-commands.md) | sealing a claim, or judging whether evidence proves one |
+| `sealed-acceptance` | the quest's own `quest.json`, [`solve-commands.md`](generated/solve-commands.md), and [`release-gate.md`](../../test/guidelines/release-gate.md) for feature journeys and evidence ceilings | sealing a claim, or judging whether evidence proves one |
 | `quest-lifecycle` | the landing guard in [`guards.js`](../../scripts/solve/guards.js), plus [`solve-commands.md`](generated/solve-commands.md) and [`solver-quests.md`](workflow-guidelines/solver-quests.md) | starting, recording, scoping or landing a unit of work |
 | `terminal-proof` | `npm run audit:closed-quest-shape` | closing a unit, or deciding what a closed unit keeps |
 | `record-history` | `npm run audit:quest-log-append-only` and [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) | correcting recorded evidence or maintaining its current summary |

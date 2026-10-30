@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-10-28
+last_reviewed: 2026-10-30
 ---
 
 # Rules
@@ -143,8 +143,8 @@ change touches are known.
 
 ## R19. Implementation success is not proof
 
-**Invariant.** A claim holds only when its declared proof measures it. Working
-locally, reading correct, or passing an unrelated check is not proof.
+**Invariant.** A claim holds only when its declared proof measures it; local success or source inspection is insufficient.
+For a major feature, proof includes a useful user journey through its supported public entrypoint and real production composition.
 **Owner.** `sealed-acceptance`
 **On conflict.** Withhold the unsupported acceptance claim, record the evidence
 gap and perform the investigation or proof that can resolve it.

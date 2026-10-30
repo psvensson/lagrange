@@ -51,93 +51,71 @@ authorizes:
   - solve/changes/global-owner-debt-inventory/inventory.json
 ---
 
-# Stable-core completion for 0.2.9
+# Stable-core corrections for 0.3.1 and completion for 0.3.2
 
-This existing stabilization epic continues from the released 0.2.8 baseline.
-Its original 0.2.7 identity, work-package IDs, Quest seals and evidence remain
-unchanged; the user-approved next completion milestone is **0.2.9**. This is a
-current planning correction, not a new release, runtime fix or acceptance claim.
-Existing subsystem owners retain their contracts.
+Preserve this epic's identity, Q01-Q18 owners, seals and evidence. Approved
+allocation retires future 0.2.9: **0.3.1** selected installation/publication
+corrections; **0.3.2** remaining stable-core/composed acceptance. Historical
+roadmap identity is unchanged.
 
 ## Current coordination summary
 
-| Field | Current observation |
-| --- | --- |
-| Checked | 2026-10-29 against `main` / `v0.2.8` at `add04d91a8ef8d9300a6f9cb1a23003ec4a61cd7`; governing rules/router reviewed 2026-10-28 |
-| Released baseline | [0.2.8](https://github.com/psvensson/lagrange/releases/tag/v0.2.8), following the raft-rs/TX1/FreshMG/SN1 foundation in 0.2.6 |
-| Publication history | [CHANGELOG.md](../../CHANGELOG.md) records 0.2.7's npm-only partial publication after Docker context failure and 0.2.8's forward repair; neither fact closes every Q01-Q18 obligation |
-| Scope authority | User-approved 2026-10-29 single version sequence: residual stable-core obligations belong to 0.2.9; service expansion/Scenario A comparison to 0.4; pilot qualification to 0.5. Community maintenance and edition boundaries remain unchanged |
-| Acceptance owner | [Requirements and work packages](../specs/release-0-2-7-stabilization/requirements.md); this summary indexes the existing contract without changing its predicates |
-| Recorded component completions | The three linked Quests have original solved terminal records: [core/runtime](../quests/release-0-2-7-core-runtime-and-semantics/log.ndjson), [release surface](../quests/release-0-2-7-release-surface-and-packaging/log.ndjson), and [Docker/proof repair](../quests/release-0-2-7-docker-context-and-publish-speedup/log.ndjson). Their bounded claims do not automatically establish full epic acceptance |
-| First directly observed publication blocker | The [0.2.8 publish job](https://github.com/psvensson/lagrange/actions/runs/40859657429/job/123399556166) returned `Forbidden` on Docker Hub description PATCH; its later overview check validates local rendered content, not remote synchronization. Q16 remains an owed publication obligation |
-| Public-path evidence boundary | The [named scenario](../../test/distributed/scenarios/release-0-2-7-stabilization.js) currently checks local comparator/parser/route/receipt/rendering behavior. It does not supply Q17's public transactions, remote failure/recovery or installed-consumer journeys |
-| Residual census | Reconcile Q10/Q11 retained-log coverage and Q14 transaction/read/retry claims with current source and original evidence. The [capability page](../../docs/current-capabilities-and-limitations.md) still excludes control-plane/message-group snapshot compaction. A documented partial-commit limitation requires source/evidence reconciliation; client uncertainty alone is not proof of partial commit |
-| Unmerged work | [Scenario A PR #148](https://github.com/psvensson/lagrange/pull/148), observed at `3b737ce7e1c818194f8188297dd175f6135e271e`, contains relevant SQL/transaction/replication repairs. Its older PR-body proof count and earlier lab receipts are not current-head qualification |
-| Current unit | Documentation and release-allocation reconciliation. No 0.2.9 runtime candidate or certification run is created by this change |
-| Next action / owner | Release integration owner re-censuses outstanding Q01-Q18 obligations against 0.2.8 and relevant WIP, routes the Q16 permission/readback defect to the publication owner, and prepares genuine Q17 composed evidence without broadening prior component seals |
-| Continuation | Next implementation and physical certification are not submitted by this documentation change; the release integration owner retains continuation |
-| Release state | 0.2.8 artifacts are published experimental alpha. 0.2.9 is the current planned milestone and remains unreleased; full stable-core/public-path acceptance is not inferred from artifact publication |
+Checked **2026-10-30 08:02 UTC** on main
+`a43ce6a9fe3c2ffd17fcb084e596a0c709ba88c9`, rule-set 4; adoption uses revision 5
+and supplies no runtime certification. Published baseline is **0.3.0**, source
+`79ac781fcc3a30482492751b9971cb178e3cfdca`. [PR151 and historical run limits](release-0-3-queryable-core.md#current-summary)
+are indexed once in Queryable Core. Preserve delivered raft-rs/TX1/FreshMG/SN1.
 
-The [original verification dossier](release-0-2-7-stabilization/verification-2026-10-28.md),
-[Docker Hub finding](release-0-2-7-stabilization/dockerhub-readme-verification-2026-10-28.md)
-and [planning review](release-0-2-7-stabilization/planning-review-2026-10-28.md)
-remain dated evidence. Current implementation and later observations supersede
-their status snapshots without rewriting those records.
+- **First installed blocker:** [formation run](https://github.com/psvensson/lagrange/actions/runs/40997386220/job/123873699856)
+  failed with `ORIGINAL_ALLOCATION_HOLD` and missing `/app/package-lock.json`;
+  PR151 leaves that interaction unchanged. Published-digest/npm boot are
+  separately unmeasured.
+- **Publication:** [0.3.0 job](https://github.com/psvensson/lagrange/actions/runs/40979217502/job/123814900648)
+  PATCHed Docker Hub. Earlier Forbidden is historical; Q16 still owes failure
+  handling, stale-write prevention and readback.
+- **Public/operating frontier:** the [terminal scenario](../../test/distributed/scenarios/release-0-2-7-stabilization.js)
+  is local, not full Q17. Source/reused-dependency fixtures and refused PG
+  system-table setup need actual artifact/public-owner proof. Q10/Q11 retain
+  control-plane/message-group retention/replay; Q14 reconciles current TX1
+  read/retry/unknown outcomes. Credit existing snapshot/diagnostic/admission fixes.
+- **CI:** [main gate](https://github.com/psvensson/lagrange/actions/runs/41020679400)
+  was in progress at check time. Old receipts/[CI failure](https://github.com/psvensson/lagrange/actions/runs/40978623107/job/123812756682)
+  neither certify nor veto fresh main.
+- **Next owner/action:** release integration assigns bounded startup/provenance
+  work and Q16/Q17 continuation using [first actions](../specs/release-0-3-queryable-core/tasks.md#first-actions).
+  Retain actual failures. 0.3.1/0.3.2 remain planned pending normal release proof.
+
+Solved [core](../quests/release-0-2-7-core-runtime-and-semantics/log.ndjson),
+[packaging](../quests/release-0-2-7-release-surface-and-packaging/log.ndjson) and
+[Docker/proof](../quests/release-0-2-7-docker-context-and-publish-speedup/log.ndjson)
+records receive their bounded credit, not full Q17. Preserve the dated
+[dossier](release-0-2-7-stabilization/verification-2026-10-28.md),
+[Docker finding](release-0-2-7-stabilization/dockerhub-readme-verification-2026-10-28.md)
+and [planning review](release-0-2-7-stabilization/planning-review-2026-10-28.md).
 
 ## Work sequence
 
-Detailed scope, owner paths, falsifiers and acceptance belong only in the
-[specification](../specs/release-0-2-7-stabilization/requirements.md#work-packages).
-The IDs below are work-package IDs, not fabricated Quest records or seals.
-
-| Package | Outcome | Sequence / existing home |
-| --- | --- | --- |
-| Q01 | Preserve or refuse mutation expressions | First correctness repair; query parser/admission/rendering |
-| Q02 | Enforce or refuse declared schema constraints | Query/provisioning interaction; serialize shared parser edits with Q01 |
-| Q03 | One storage-compatible order for split and routing | Successor under split/merge owner; preserve solved numeric-key work |
-| Q04 | Protect internal cluster routes on HTTP ingress | Bootstrap/control ingress owner; independently actionable |
-| Q05 | Ship a complete executable runtime | Existing release/build owners |
-| Q06 | Make npm service authoring work from the installed package | Service compiler and npm packaging owners |
-| Q07 | Repair actual shipped dependency trees | Source, packed consumer and image evidence; coordinate with Q05/Q06 |
-| Q08 | Bound diagnostic history | Existing cutover RS2; durable-store owner |
-| Q09 | Bound inbound admission and eliminate recursive exhaustion | Bounded successor to existing liveness/captured-extent contracts |
-| Q10 | Complete safe retained-log coverage | Data leaders/followers, control-plane and message-group owners; Q11 supplies observation |
-| Q11 | Surface snapshot failure and retained-history debt | Existing cadence and diagnostics owners |
-| Q12 | Retain attributable release-proof evidence | Existing proof authority; preserve valid content-based reuse |
-| Q13 | Reconcile native build provenance | Existing binding/build manifest owner |
-| Q14 | State and rehearse the read/retry/upgrade envelope | Existing capability and pilot-envelope owners |
-| Q15 | Provide a tested private deployment profile | Existing chart/image owners; no enterprise feature expansion |
-| Q16 | Align release metadata, verified Docker Hub README and consumer journeys | Existing publication owner; follows Q05-Q07/Q13-Q15 |
-| Q17 | Certify one composed candidate and published-artifact journeys | Integrates Q01-Q16; release gates remain separate and mandatory |
-| Q18 | Simplify touched decision paths and route residual debt | On-contact work; broad convergence remains with its existing epic |
-
-One writer owns each changing interaction. These packages are work within the
-single 0.2.9 milestone, not independently scheduled release tracks. Shared
-parser/runtime/package edits integrate serially. Each residual implementation
-starts from its existing or explicitly superseding bounded Quest with a
-measuring red witness. Reuse or supersede existing records explicitly; never
-rewrite their seals or infer that an old OPEN board entry means landed code
-is absent. The [ownership map](../specs/release-0-2-7-stabilization/requirements.md#existing-work-and-scope-boundaries)
-identifies the relevant predecessors.
+Use the sole [Q01-Q18 allocation](../specs/release-0-2-7-stabilization/requirements.md#current-version-allocation),
+[scope boundaries](../specs/release-0-2-7-stabilization/requirements.md#existing-work-and-scope-boundaries)
+and shared [J0-J10 pickup index](../specs/release-0-3-queryable-core/tasks.md#package-ownership-and-pickup).
+Q/J labels are packages, not Quest records. Use bounded red witnesses, applicable
+evidence and explicit supersession where needed. Independent work uses defined
+contracts, one interaction writer and ordered integration, without waiting for
+preceding publication. Expansion/comparison stays 0.4; larger pilot proof 0.5.
 
 ## Release acceptance
 
-Q01-Q16 require their declared repair, proof or explicit support-envelope
-decision; documentation alone cannot close a behavior defect. Q17 binds applicable
-pre-publication evidence to one integrated candidate and exercises the genuine
-public service path. Normal release authority then permits publication; Q16
-confirms registry artifacts before final epic closure. Q18 requires narrow
-cleanup and durable routing of broader
-debt, not a whole-project rewrite or zero historical complexity violations.
-
-The named scenario now exists, but its local checks do not provide Q17's full
-composed witness. Q17 must bind `recordedLog` to its actual append-only
-certification Quest log and produce genuine archived terminal evidence,
-including publication confirmation. The production-path scenario, recording
-binding and report remain obligations of Q17; no synthetic Quest, pass receipt
-or manual green oracle is created here. Existing exact-candidate
-release/corpus gates and the
-cutover's separate physical-certification claims retain their own authority.
+The [requirements](../specs/release-0-2-7-stabilization/requirements.md) and
+[journey policy](../../test/guidelines/release-gate.md#major-feature-user-journeys)
+own detail. 0.3.1 accepts selected corrections/claims, leaving full Q17/core open;
+historical inventory adds no blanket gate. Q17 binds installed/public-service
+and pre-publication proof to one candidate; normal authority permits publication,
+then Q16 confirms artifacts. Its certification Quest binds `recordedLog` and
+genuine archived/publication evidence; local scenario checks cannot substitute.
+Q18 means bounded cleanup/durable routing, not zero historical debt. Preserve
+exact-candidate corpus/release and separate cutover physical proof; no synthetic
+terminal record, green oracle or retargeted receipt. Shared [review horizons](release-0-3-queryable-core.md#completion-and-next-review)
+apply. Initial retained-history correctness remains 0.3.2, not deferred pilot work.
 
 ## Decision log
 
@@ -163,3 +141,13 @@ cutover's separate physical-certification claims retain their own authority.
   0.2.9. Record delivered component work and observed Q16/Q17 evidence limits in
   the mutable summary. This update neither publishes 0.2.9 nor certifies a
   runtime, comparative workload or physical operating envelope.
+
+- 2026-10-30: User approved the reviewed working-user-journey candidate and
+  repository adoption. Retire 0.2.9 as a future release while preserving this
+  epic/roadmap identity and all original Q owners, Quest seals and evidence.
+  Allocate the bounded installation/publication correction to 0.3.1 and
+  remaining stable-core/composed acceptance to 0.3.2. Queryable Core consumes
+  those results; 0.4 comparison/service expansion and 0.5 pilot scope retain
+  their owners. Adopt rule-set revision 5 and the canonical major-feature
+  journey policy. Credit v0.3.0/PR151 and retain exact-source evidence limits;
+  this documentation adoption neither certifies nor publishes a runtime.

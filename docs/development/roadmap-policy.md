@@ -3,7 +3,7 @@ scope: governance
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-29
+last_reviewed: 2026-10-30
 ---
 
 > **Canonical source.** Roadmap and edition-scope pointer.
@@ -52,18 +52,26 @@ Use these documents as follows:
 
 ## One ordered version sequence
 
-The user-approved programme (29 October 2026) has one current release milestone
-and an ordered queue. Every planned deliverable, including its decision research,
-documentation and acceptance workload, names one version for initial completion.
+The user-approved programme (revised 30 October 2026) has one current release
+acceptance milestone and an ordered queue. Every planned deliverable, including
+its decision research, documentation and acceptance workload, names one version
+for initial completion.
 The canonical sequence and finite feature allocations live in `agpl-feature-map.md`;
 this policy does not maintain a second feature inventory.
 
 - Do not create independent parallel, cross-cutting or unversioned product tracks.
 - Later milestones identify the extension or stronger guarantee they add; they
   do not defer proof necessary for an earlier milestone's own claim.
+- Independent bounded implementation may proceed concurrently when consumed
+  contracts are defined and owner boundaries do not conflict. One writer owns
+  each changing interaction; dependent changes integrate in order, and the
+  release candidate proves their composition. Early implementation neither
+  advances milestone acceptance nor creates another release track.
 - Existing candidate branches and preparation remain preserved, but their
-  existence does not activate a later release or prove it complete. Reconcile
-  them with the accepted predecessor baseline when their version becomes current.
+  existence does not prove a later release complete. Reconcile them with current
+  owner contracts during integration and with the accepted predecessor baseline
+  for milestone acceptance; do not serialize independent implementation behind
+  the preceding version's publication.
 - A priority or scope change moves the affected deliverable explicitly in the
   feature map, human roadmap and visibility roadmap together, under existing
   user authority. Basic security/correctness required by an earlier release
@@ -74,8 +82,8 @@ this policy does not maintain a second feature inventory.
 - Edition ownership is unchanged by a version allocation. Commercial obligations
   retain their implementation homes even when they share the product sequence.
 
-This release ordering does not create new acceptance gates or alter sealed
-predicates. Use the existing milestone, proof and release owners.
+This release ordering by itself creates no new acceptance stage and alters no
+sealed predicates. Use the existing milestone, proof and release owners.
 
 ## Document Authority Map
 
@@ -158,6 +166,13 @@ Before implementation tasks begin from a roadmap row:
 4. The Quest must name the roadmap row, approved maintenance scope, or explicit
    user request that makes it valid.
 
+For a major product capability, define its useful public journey in the owning
+specification before implementation. Completion follows
+[Major Feature User Journeys](../../test/guidelines/release-gate.md#major-feature-user-journeys)
+under the existing testing/proof owner. That owner holds the evidence detail,
+affected-journey reuse and bounded retrospective reconciliation; this pointer
+creates no second testing policy or acceptance ledger.
+
 ## Roadmap State Policy
 
 Roadmap state is scope and sequence metadata. It is not Solver evidence.
@@ -165,7 +180,8 @@ Roadmap state is scope and sequence metadata. It is not Solver evidence.
 Required workflow:
 
 1. Treat `agpl-feature-map.md` as the stable AGPL feature map: row presence and
-   row order constrain what can be scoped in this repository.
+   assigned version constrain scope and ordered acceptance in this repository;
+   independent implementation follows the concurrency rule above.
 2. Treat `solve/quests/` and its retained evidence as active execution truth;
    the active epic's current summary indexes them without replacing them.
 3. A roadmap row marked available means the capability exists at roadmap scope;
