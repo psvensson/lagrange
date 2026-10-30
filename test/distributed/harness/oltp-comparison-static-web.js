@@ -14,35 +14,31 @@ const DEFAULT_COMPARISON_PROGRESS_MARKDOWN_PATH = 'docs/benchmarks/tidb-comparis
 const DEFAULT_COMPARISON_PROGRESS_HTML_PATH = 'docs/benchmarks/tidb-comparison-progress.html';
 
 function escapeXml(value) {
+  const xmlMap = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;'};
   const str = String(value !== undefined ? value : '');
-  return stringReplace(str, /[&<>"']/gu, (char) => {
-    switch (char) {
-    case '&': return '&amp;';
-    case '<': return '&lt;';
-    case '>': return '&gt;';
-    case '"': return '&quot;';
-    default: return '&#39;';
-    }
-  });
+  return stringReplace(str, /[&<>"']/gu, (c) => xmlMap[c] || '&#39;');
 }
 
 function formatNum(num, digits = 2) {
-  if (typeof num === 'number' && numberIsFinite(num)) {
-    return numberToFixed(num, digits);
-  }
+  if (typeof num === 'number' && numberIsFinite(num)) return numberToFixed(num, digits);
   return '0.00';
 }
 
 function formatSigned(num, digits = 2) {
-  if (typeof num === 'number' && numberIsFinite(num)) {
-    const formatted = numberToFixed(num, digits);
-    return num > 0 ? `+${formatted}` : formatted;
-  }
-  return '0.00';
+  if (typeof num !== 'number' || !numberIsFinite(num)) return '0.00';
+  const formatted = numberToFixed(num, digits);
+  return num > 0 ? `+${formatted}` : formatted;
 }
 
 function shortSha(sha, len = 10) {
   return sha ? stringSlice(String(sha), 0, len) : 'unknown';
+}
+
+function getScenarioBEntries(entries) {
+  return arrayFilter(entries, (e) => {
+    const m = (e.record || e)?.metrics;
+    return Boolean(m?.lagrange?.scenarioBScorecard || m?.tidbTikv?.scenarioBScorecard);
+  });
 }
 
 function renderComparisonProgressSvg(summary) {
@@ -74,19 +70,16 @@ function renderComparisonProgressSvg(summary) {
   const tidbBarW = Math.max(4, Math.min(230, Math.round((tidbOps / maxOps) * 230)));
   const lagBarW = Math.max(4, Math.min(230, Math.round((lagOps / maxOps) * 230)));
 
-  const tP50 = perfRec?.metrics?.tidbTikv?.latencyMs?.p50 ?? 120;
-  const tP95 = perfRec?.metrics?.tidbTikv?.latencyMs?.p95 ?? 210;
-  const tP99 = perfRec?.metrics?.tidbTikv?.latencyMs?.p99 ?? 350;
-  const lP50 = perfRec?.metrics?.lagrange?.latencyMs?.p50 ?? 450;
-  const lP95 = perfRec?.metrics?.lagrange?.latencyMs?.p95 ?? 850;
-  const lP99 = perfRec?.metrics?.lagrange?.latencyMs?.p99 ?? 1200;
+  const tLat = perfRec?.metrics?.tidbTikv?.latencyMs;
+  const lLat = perfRec?.metrics?.lagrange?.latencyMs;
+  const tP50 = tLat?.p50 ?? 120; const tP95 = tLat?.p95 ?? 210; const tP99 = tLat?.p99 ?? 350;
+  const lP50 = lLat?.p50 ?? 450; const lP95 = lLat?.p95 ?? 850; const lP99 = lLat?.p99 ?? 1200;
 
   const maxLat = Math.max(tP99, lP99, 1);
   const scaleLat = (val) => Math.max(4, Math.min(220, Math.round((val / maxLat) * 220)));
 
   const defaultProofs = [
-    {commit: 'initial-admit', passed: 4, req: 33},
-    {commit: 'conflict-wip', passed: 16, req: 33},
+    {commit: 'initial-admit', passed: 4, req: 33}, {commit: 'conflict-wip', passed: 16, req: 33},
     {commit: 'gate-closure', passed: 33, req: 33},
   ];
   const proofItems = entries.length > 0 ?
@@ -115,8 +108,7 @@ function renderComparisonProgressSvg(summary) {
     '  <text x="30" y="36" fill="#f8fafc" font-size="18" font-family="system-ui, sans-serif" font-weight="700">TiDB/TiKV and Lagrange Comparison Progress</text>\n' +
     `  <text x="930" y="36" text-anchor="end" fill="#94a3b8" font-size="12" font-family="monospace">Runs: ${entries.length}</text>\n` +
     '  <rect x="30" y="55" width="280" height="335" rx="8" fill="#1e293b" stroke="#334155"/>\n' +
-    '  <text x="45" y="85" fill="#38bdf8" font-size="14" font-weight="600" font-family="system-ui, sans-serif">Throughput (ops/sec)</text>\n' +
-    '  <text x="45" y="105" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Version &amp; Commit Capacity</text>\n' +
+    '  <text x="45" y="85" fill="#38bdf8" font-size="14" font-weight="600" font-family="system-ui, sans-serif">Throughput (ops/sec)</text>\n  <text x="45" y="105" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Version &amp; Commit Capacity</text>\n' +
     `  <text x="45" y="135" fill="#cbd5e1" font-size="12" font-family="monospace">TiDB ${tidbVer}: ${formatNum(tidbOps)} ops/s</text>\n` +
     `  <rect x="45" y="145" width="${tidbBarW}" height="22" fill="#0284c7" rx="4"/>\n` +
     `  <text x="45" y="195" fill="#cbd5e1" font-size="12" font-family="monospace">Lagrange ${lagVer}: ${formatNum(lagOps)} ops/s</text>\n` +
@@ -126,8 +118,7 @@ function renderComparisonProgressSvg(summary) {
     `  <text x="60" y="305" fill="#38bdf8" font-size="16" font-weight="700" font-family="system-ui, sans-serif">${formatNum(ratio, 3)}x</text>\n` +
     `  <text x="140" y="305" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif">(${formatNum(lagFactor, 2)}x lag factor)</text>\n` +
     '  <rect x="340" y="55" width="280" height="335" rx="8" fill="#1e293b" stroke="#334155"/>\n' +
-    '  <text x="355" y="85" fill="#38bdf8" font-size="14" font-weight="600" font-family="system-ui, sans-serif">Latency (p50 / p95 / p99 ms)</text>\n' +
-    '  <text x="355" y="105" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Distribution Comparison</text>\n' +
+    '  <text x="355" y="85" fill="#38bdf8" font-size="14" font-weight="600" font-family="system-ui, sans-serif">Latency (p50 / p95 / p99 ms)</text>\n  <text x="355" y="105" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Distribution Comparison</text>\n' +
     `  <text x="355" y="135" fill="#cbd5e1" font-size="12" font-family="monospace">TiDB: ${formatNum(tP50)} / ${formatNum(tP95)} / ${formatNum(tP99)}</text>\n` +
     `  <rect x="355" y="145" width="${scaleLat(tP50)}" height="8" fill="#38bdf8" rx="2"/>\n` +
     `  <rect x="355" y="157" width="${scaleLat(tP95)}" height="8" fill="#0284c7" rx="2"/>\n` +
@@ -138,8 +129,7 @@ function renderComparisonProgressSvg(summary) {
     `  <rect x="355" y="234" width="${scaleLat(lP99)}" height="8" fill="#4338ca" rx="2"/>\n` +
     '  <text x="355" y="280" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Cyan/Blue: TiDB | Indigo: Lagrange</text>\n' +
     '  <rect x="650" y="55" width="280" height="335" rx="8" fill="#1e293b" stroke="#334155"/>\n' +
-    '  <text x="665" y="85" fill="#38bdf8" font-size="14" font-weight="600" font-family="system-ui, sans-serif">Semantic Proof Closure (/33)</text>\n' +
-    '  <text x="665" y="105" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">100% Closure Progression</text>\n' +
+    '  <text x="665" y="85" fill="#38bdf8" font-size="14" font-weight="600" font-family="system-ui, sans-serif">Semantic Proof Closure (/33)</text>\n  <text x="665" y="105" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">100% Closure Progression</text>\n' +
     `${proofSvgRows}\n` +
     '</svg>\n';
 }
@@ -178,6 +168,24 @@ function renderComparisonProgressMarkdown(summary) {
     return `| ${r?.recordedAt || 'unknown'} | ${fc} | ${ld} | ${td} | ${rd} | ${fd} | ${pd} |`;
   }), '\n');
 
+  const bEntries = getScenarioBEntries(entries);
+  const bRows = arrayJoin(arrayMap(bEntries, (e) => {
+    const r = e.record || e;
+    const ls = r?.metrics?.lagrange?.scenarioBScorecard;
+    const ts = r?.metrics?.tidbTikv?.scenarioBScorecard;
+    return `| ${r?.recordedAt || 'unknown'} | ${r?.framework?.profileId || 'default'} | ` +
+      `${ls?.crossIslandBytesPerRequest ?? 'n/a'} | ${ts?.crossIslandBytesPerRequest ?? 'n/a'} | ` +
+      `${formatNum(ls?.duringMoveP99Ms)} | ${formatNum(ts?.duringMoveP99Ms)} | ` +
+      `${formatNum(ls?.routingConvergenceMs)} vs ${formatNum(ts?.routingConvergenceMs)} |`;
+  }), '\n');
+  const bSection = bEntries.length > 0 ?
+    '\n## Scenario B distributed risk & movement scorecard\n\n' +
+    '| Recorded (UTC) | Profile | Lagrange Cross-Island Bytes/Req | ' +
+    'TiDB Cross-Island Bytes/Req | Lagrange Move p99 (ms) | TiDB Move p99 (ms) | ' +
+    'Convergence (Lagrange vs TiDB ms) |\n' +
+    '| --- | --- | --- | --- | --- | --- | --- |\n' +
+    `${bRows}\n` : '';
+
   return '# TiDB/TiKV and Lagrange Comparison Progress\n\n' +
     'This page is generated deterministically from [`data/tidb-comparison/history.ndjson`](../../data/tidb-comparison/history.ndjson) and [`data/tidb-comparison/progress-summary.json`](../../data/tidb-comparison/progress-summary.json), persisting results for every combination of comparison framework version/commit, scenario profile, and both compared systems\' versions and commit hashes.\n\n' +
     '- Static HTML dashboard: [`tidb-comparison-progress.html`](tidb-comparison-progress.html)\n' +
@@ -194,7 +202,8 @@ function renderComparisonProgressMarkdown(summary) {
     '## Progress deltas over time\n\n' +
     '| Recorded (UTC) | Framework Commit | Lagrange ops/s Delta (prev / first) | TiDB ops/s Delta (prev / first) | Ratio Delta (prev) | Lag Factor Delta (prev) | TiDB Proofs Delta (prev) |\n' +
     '| --- | --- | --- | --- | --- | --- | --- |\n' +
-    `${deltaRows || '| None recorded | - | - | - | - | - | - |'}\n`;
+    `${deltaRows || '| None recorded | - | - | - | - | - | - |'}\n` +
+    bSection;
 }
 
 function renderComparisonProgressHtml(summary) {
@@ -225,25 +234,40 @@ function renderComparisonProgressHtml(summary) {
     return `        <tr><td>${escapeXml(r?.recordedAt || 'unknown')}</td><td>${lm}</td><td>${llat}</td><td>${tm}</td><td>${tlat}</td><td>${ratio}</td><td>${retries}</td><td>${proofs}</td><td>${deltasStr}</td></tr>`;
   }), '\n');
 
+  const bEntries = getScenarioBEntries(entries);
+  const bTrs = arrayJoin(arrayMap(bEntries, (e) => {
+    const r = e.record || e;
+    const ls = r?.metrics?.lagrange?.scenarioBScorecard;
+    const ts = r?.metrics?.tidbTikv?.scenarioBScorecard;
+    return `        <tr><td>${escapeXml(r?.recordedAt || 'unknown')}</td>` +
+      `<td>${escapeXml(r?.framework?.profileId || 'default')}</td>` +
+      `<td>${escapeXml(ls?.crossIslandBytesPerRequest ?? 'n/a')}</td>` +
+      `<td>${escapeXml(ts?.crossIslandBytesPerRequest ?? 'n/a')}</td>` +
+      `<td>${formatNum(ls?.duringMoveP99Ms)}</td><td>${formatNum(ts?.duringMoveP99Ms)}</td>` +
+      `<td>${formatNum(ls?.routingConvergenceMs)} vs ` +
+      `${formatNum(ts?.routingConvergenceMs)}</td></tr>`;
+  }), '\n');
+  const bCard = bEntries.length > 0 ?
+    '    <div class="card">\n' +
+    '      <h2>Scenario B Distributed Risk &amp; Movement Scorecard</h2>\n' +
+    '      <table class="data-table"><thead><tr><th>Recorded (UTC)</th><th>Profile</th>' +
+    '<th>Lagrange Cross-Island Bytes/Req</th><th>TiDB Cross-Island Bytes/Req</th>' +
+    '<th>Lagrange Move p99 (ms)</th><th>TiDB Move p99 (ms)</th>' +
+    '<th>Convergence (Lagrange vs TiDB ms)</th></tr></thead>\n' +
+    `      <tbody>\n${bTrs}\n      </tbody></table>\n    </div>\n` : '';
+
   return '<!doctype html>\n<html lang="en">\n<head>\n' +
     '  <meta charset="utf-8"/>\n' +
     '  <title>TiDB/TiKV and Lagrange Comparison Progress</title>\n' +
     '  <style>\n' +
     '    :root { --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; }\n' +
-    '    * { box-sizing: border-box; margin: 0; padding: 0; }\n' +
-    '    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }\n' +
-    '    .container { max-width: 1040px; margin: 0 auto; }\n' +
-    '    h1 { font-size: 22px; margin-bottom: 8px; }\n' +
-    '    p.desc { color: var(--muted); font-size: 13px; margin-bottom: 16px; }\n' +
-    '    .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 20px; overflow-x: auto; }\n' +
-    '    .filter-bar { margin-bottom: 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; }\n' +
-    '    .filter-bar input { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; width: 280px; }\n' +
-    '    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; overflow-x: auto; }\n' +
-    '    .card h2 { font-size: 15px; margin-bottom: 12px; color: var(--accent); }\n' +
-    '    table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }\n' +
-    '    table.data-table th, table.data-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }\n' +
-    '    table.data-table th { color: var(--muted); font-weight: 600; }\n' +
-    '    .badge { font-family: monospace; background: #0f172a; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border); }\n' +
+    '    * { box-sizing: border-box; margin: 0; padding: 0; }\n    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }\n' +
+    '    .container { max-width: 1040px; margin: 0 auto; }\n    h1 { font-size: 22px; margin-bottom: 8px; }\n' +
+    '    p.desc { color: var(--muted); font-size: 13px; margin-bottom: 16px; }\n    .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 20px; overflow-x: auto; }\n' +
+    '    .filter-bar { margin-bottom: 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; }\n    .filter-bar input { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; width: 280px; }\n' +
+    '    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; overflow-x: auto; }\n    .card h2 { font-size: 15px; margin-bottom: 12px; color: var(--accent); }\n' +
+    '    table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }\n    table.data-table th, table.data-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }\n' +
+    '    table.data-table th { color: var(--muted); font-weight: 600; }\n    .badge { font-family: monospace; background: #0f172a; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border); }\n' +
     '  </style>\n</head>\n<body>\n' +
     '  <div class="container">\n' +
     '    <h1>TiDB/TiKV and Lagrange Comparison Progress</h1>\n' +
@@ -260,6 +284,7 @@ function renderComparisonProgressHtml(summary) {
     '      <table class="data-table"><thead><tr><th>Recorded (UTC)</th><th>Lagrange ops/s</th><th>Lagrange Latency</th><th>TiDB ops/s</th><th>TiDB Latency</th><th>Ratio</th><th>Retries</th><th>Proofs</th><th>Deltas</th></tr></thead>\n' +
     `      <tbody>\n${progressTrs || '        <tr><td colspan="9">No progression recorded</td></tr>'}\n      </tbody></table>\n` +
     '    </div>\n' +
+    bCard +
     '  </div>\n' +
     '  <script>\n' +
     '    document.getElementById(\'scenario-filter\').addEventListener(\'input\', function(e) {\n' +
@@ -287,14 +312,12 @@ async function writeComparisonStaticWebArtifacts({
   const markdown = renderComparisonProgressMarkdown(summary);
   const html = renderComparisonProgressHtml(summary);
 
-  await mkdir(path.dirname(targetSvgPath), {recursive: true});
-  await writeFile(targetSvgPath, svg, 'utf8');
-
-  await mkdir(path.dirname(targetMarkdownPath), {recursive: true});
-  await writeFile(targetMarkdownPath, markdown, 'utf8');
-
-  await mkdir(path.dirname(targetHtmlPath), {recursive: true});
-  await writeFile(targetHtmlPath, html, 'utf8');
+  const writeTarget = async (p, c) => {
+    await mkdir(path.dirname(p), {recursive: true}); await writeFile(p, c, 'utf8');
+  };
+  await writeTarget(targetSvgPath, svg);
+  await writeTarget(targetMarkdownPath, markdown);
+  await writeTarget(targetHtmlPath, html);
 
   return Object.freeze({
     svg,

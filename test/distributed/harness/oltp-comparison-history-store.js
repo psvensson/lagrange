@@ -102,7 +102,14 @@ function normalizeSystemMetrics(m) {
   const semanticProofs = (p && typeof p === 'object') ? Object.freeze({
     passedCount: typeof p.passedCount === 'number' ? p.passedCount : 0, ...p,
   }) : null;
-  return Object.freeze({opsPerSec, latencyMs, transactions, semanticProofs});
+  const base = {opsPerSec, latencyMs, transactions, semanticProofs};
+  if (m.scenarioBScorecard && typeof m.scenarioBScorecard === 'object') {
+    return Object.freeze({
+      ...base,
+      scenarioBScorecard: Object.freeze({...m.scenarioBScorecard}),
+    });
+  }
+  return Object.freeze(base);
 }
 
 function createComparisonHistoryRecord(input = {}) {
@@ -284,13 +291,29 @@ async function recordComparisonResultToDisk(options = {}) {
   } catch (err) {
     if (!err || err.code !== 'ENOENT') throw err;
   }
+  if (options.skipIfSystemVersionsUnchanged === true && options.forceRerun !== true) {
+    const rec = options.record;
+    const scId = rec?.framework?.scenarioId;
+    const prId = rec?.framework?.profileId;
+    const lVer = rec?.systems?.lagrange?.version;
+    const tVer = rec?.systems?.tidbTikv?.version;
+    const matched = arrayFilter(existingRecords, (r) => r?.framework?.scenarioId === scId &&
+      (!prId || r?.framework?.profileId === prId) &&
+      r?.systems?.lagrange?.version === lVer && r?.systems?.tidbTikv?.version === tVer);
+    if (matched.length > 0) {
+      return Object.freeze({
+        skipped: true, records: existingRecords,
+        summary: buildComparisonProgressSummary(existingRecords),
+      });
+    }
+  }
   const records = upsertComparisonHistoryRecord(existingRecords, options.record);
   const summary = buildComparisonProgressSummary(records);
   await fs.mkdir(path.dirname(path.resolve(ndjsonPath)), {recursive: true});
   await fs.mkdir(path.dirname(path.resolve(summaryPath)), {recursive: true});
   await fs.writeFile(ndjsonPath, serializeComparisonHistoryNdjson(records), 'utf8');
   await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2) + '\n', 'utf8');
-  return Object.freeze({records, summary});
+  return Object.freeze({records, summary, skipped: false});
 }
 
 export {
