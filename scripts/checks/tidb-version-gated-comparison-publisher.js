@@ -40,7 +40,7 @@ const STR_TIDB_COMMIT_SHA = 'pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8';
 const STR_RECORDED_AT = '2026-10-30T16:05:00.000Z';
 const STR_RETRY_POLICY = 'scenario-b-bounded-retry-v1';
 const STR_OPEN_LOOP_PROFILE = 'scenario-b-open-loop-v1';
-const STR_COMPARISON_VIEW = 'architecture-native';
+const STR_COMPARISON_VIEW = 'contract-model-non-comparable';
 const STR_PASS_PREFIX = 'tidb-version-gated-comparison-publisher: PASS';
 
 async function publishVersionGatedComparison() {

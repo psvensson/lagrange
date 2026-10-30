@@ -61,6 +61,10 @@ on:
       - 'docs/benchmarks/README.md'
       - 'docs/benchmarks/index.html'
       - 'solve/epics/multi-system-comparative-benchmark-matrix.md'
+      - 'solve/epics/distributed-scaleout-and-provenance-benchmark-series.md'
+      - 'test/distributed/harness/lagrange-evolution-static-web.js'
+      - 'scripts/checks/distributed-scaleout-provenance-guard.js'
+      - 'docs/benchmarks/lagrange-metrics-evolution.*'
   workflow_dispatch: {}
 
 permissions:
@@ -120,6 +124,8 @@ jobs:
             test/distributed/harness/scenario-c-comparison-static-web.js \
             test/distributed/harness/comparative-landing-svg-renderer.js \
             test/distributed/harness/comparative-landing-page.js \
+            test/distributed/harness/lagrange-evolution-static-web.js \
+            scripts/checks/distributed-scaleout-provenance-guard.js \
             scripts/checks/comparative-benchmark-matrix-guard.js
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js
           node scripts/checks/oltp-comparison-history-store-guard.js
@@ -127,4 +133,5 @@ jobs:
           node scripts/checks/oltp-paired-sweep-runner-guard.js
           node scripts/checks/scenario-b-latency-movement-guard.js
           node scripts/checks/scenario-b-fairness-version-gate-guard.js
+          node scripts/checks/distributed-scaleout-provenance-guard.js
           node scripts/checks/tidb-version-gated-comparison-publisher.js --dry-run
