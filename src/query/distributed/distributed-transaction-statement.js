@@ -9,6 +9,9 @@ import {admitExpectedTransaction, STATEMENT_ADMISSION} from
   '../sql-query-engine-statement-admission.js';
 import {statementTransactionIdentityOf} from
   './distributed-transaction-identity.js';
+import {resolveNowMs} from './distributed-transaction-telemetry.js';
+
+const LOCAL_STR_TYPED_CANCELLED = 'typed_transaction_cancelled';
 
 const distributedTransactionStatementMethods = {
   /**
@@ -51,6 +54,7 @@ const distributedTransactionStatementMethods = {
       if (admission.state === STATEMENT_ADMISSION.REFUSED) {
         return admission.failure;
       }
+      const startedAtMs = resolveNowMs();
       const enlistResult = await this.enlistParticipantsOwned(
         sessionId,
         operation.partitionIds,
@@ -58,7 +62,9 @@ const distributedTransactionStatementMethods = {
       if (enlistResult.success !== true) {
         return enlistResult;
       }
-      await this.recordWriteOperation(sessionId, operation);
+      await this.recordWriteOperation(sessionId, operation, {
+        deferPersistence: true,
+      });
       const tx = this.transactionsBySession.get(sessionId);
       const result = await executeWrite(tx ?
         statementTransactionIdentityOf(tx) : null);
@@ -67,6 +73,10 @@ const distributedTransactionStatementMethods = {
         operation.operationId,
         result,
       );
+      if (tx?.telemetry) {
+        tx.telemetry.statementsMs += Math.max(0, resolveNowMs() - startedAtMs);
+        tx.telemetry.statementCount += 1;
+      }
       return result;
     });
   },
@@ -117,7 +127,7 @@ const distributedTransactionStatementMethods = {
     const rollbackResult = await this.rollback(sessionId);
     return {
       ...rollbackResult,
-      outcome: 'typed_transaction_cancelled',
+      outcome: LOCAL_STR_TYPED_CANCELLED,
       cancellation: true,
     };
   },

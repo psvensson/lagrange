@@ -41,6 +41,7 @@ const COMMIT_MISS_RESOLUTION = Object.freeze({
   UNKNOWN: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
 });
 const PARTICIPANT_COMMIT_OUTCOME_FIELD = 'participantCommitOutcome';
+const SCHEMA_MIGRATION_CUTOVER_SESSION_PREFIX = 'schema-migration-cutover-';
 
 /**
  * Check whether participant failures include a timeout condition.
@@ -381,8 +382,8 @@ const distributedTransactionProtocolMethods = {
       stageOptions.participantKeys = options.participantKeys;
     }
     const typedFailures = new Map();
-    const failedParticipants =
-      await this.workflowCoordinator.executeParticipantStage(
+    const runStageForKeys = (keysOption) =>
+      this.workflowCoordinator.executeParticipantStage(
         tx.workflowId,
         transientStatus,
         successStatus,
@@ -399,8 +400,19 @@ const distributedTransactionProtocolMethods = {
             typedFailures.set(partitionId, participantFailureFieldsOf(error));
             throw error;
           }),
-        stageOptions,
+        keysOption ? {...stageOptions, participantKeys: keysOption} : stageOptions,
       );
+    const resolvedKeys = Array.isArray(options.participantKeys) &&
+      options.participantKeys.length > 0 ?
+      options.participantKeys :
+      Array.from(tx.participants?.keys?.() || []);
+    const useConcurrentStage = resolvedKeys.length > 1 &&
+      !String(tx?.sessionId || '').startsWith(
+        SCHEMA_MIGRATION_CUTOVER_SESSION_PREFIX,
+      );
+    const failedParticipants = useConcurrentStage ?
+      (await Promise.all(resolvedKeys.map((key) => runStageForKeys([key])))).flat() :
+      await runStageForKeys(null);
     return failedParticipants.map((entry) => ({
       partitionId: entry.participantKey,
       error: entry.error,

@@ -52,6 +52,10 @@ import {reportTransactionBudgetSpent} from
   './distributed-transaction-protocol.js';
 import {completePrepareEvidenceOf} from
   './distributed-transaction-prepare-evidence.js';
+import {
+  finalizeTransactionTelemetry,
+  resolveNowMs,
+} from './distributed-transaction-telemetry.js';
 
 const {COMMIT, ROLLBACK} = PARTICIPANT_TRANSACTION_DECISION;
 const PREPARE_SENT_TRANSACTION_STATUS = Object.freeze(new Set([
@@ -91,6 +95,7 @@ function rolledBackCommitFailure(preparation) {
 }
 
 function endTransaction(coordinator, tx) {
+  finalizeTransactionTelemetry(coordinator, tx, tx.status);
   if (coordinator.transactionsBySession.get(tx.sessionId) === tx) {
     coordinator.transactionsBySession.delete(tx.sessionId);
     coordinator.endedTransactions?.record(tx);
@@ -107,7 +112,15 @@ const distributedTransactionDecisionProtocolMethods = {
    * @return {Promise<string>} A TRANSACTION_DECISION_RECORDING state.
    */
   async recordTransactionDecision(tx, decision) {
-    return recordTransactionDecision(this, tx, decision);
+    const startedAtMs = resolveNowMs();
+    this.noteMetadataMutation?.(tx);
+    try {
+      return await recordTransactionDecision(this, tx, decision);
+    } finally {
+      if (tx?.telemetry) {
+        tx.telemetry.decisionPersistMs += Math.max(0, resolveNowMs() - startedAtMs);
+      }
+    }
   },
 
   /**
@@ -122,18 +135,28 @@ const distributedTransactionDecisionProtocolMethods = {
     if (participantKeys.length === 0 && tx.participants.size > 0) {
       return [];
     }
-    return this.executeParticipantStage(
-      tx,
-      PARTICIPANT_STATUS.PREPARING,
-      PARTICIPANT_STATUS.PREPARED,
-      async (partitionId, participant) => retainPrepareEvidence(participant,
-        await this.prepareParticipant(tx.sessionId, partitionId,
-          participantIdentityOf(tx, partitionId))),
-      {
-        participantKeys,
-        skipBudgetEnforcement: options.skipBudgetEnforcement === true,
-      },
-    );
+    const startedAtMs = resolveNowMs();
+    if (tx?.telemetry) {
+      tx.telemetry.prepareConcurrency = participantKeys.length;
+    }
+    try {
+      return await this.executeParticipantStage(
+        tx,
+        PARTICIPANT_STATUS.PREPARING,
+        PARTICIPANT_STATUS.PREPARED,
+        async (partitionId, participant) => retainPrepareEvidence(participant,
+          await this.prepareParticipant(tx.sessionId, partitionId,
+            participantIdentityOf(tx, partitionId))),
+        {
+          participantKeys,
+          skipBudgetEnforcement: options.skipBudgetEnforcement === true,
+        },
+      );
+    } finally {
+      if (tx?.telemetry) {
+        tx.telemetry.preparePhaseMs += Math.max(0, resolveNowMs() - startedAtMs);
+      }
+    }
   },
 
   /**
@@ -241,6 +264,10 @@ const distributedTransactionDecisionProtocolMethods = {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTING);
     }
     const participantKeys = this.getCommitParticipantKeys(tx);
+    const startedAtMs = resolveNowMs();
+    if (tx?.telemetry) {
+      tx.telemetry.commitConcurrency = participantKeys.length;
+    }
     const failedParticipants =
       participantKeys.length === 0 && tx.participants.size > 0 ? [] :
         await this.executeParticipantStage(
@@ -253,6 +280,9 @@ const distributedTransactionDecisionProtocolMethods = {
           }),
           {participantKeys, skipBudgetEnforcement: true},
         );
+    if (tx?.telemetry) {
+      tx.telemetry.commitPhaseMs += Math.max(0, resolveNowMs() - startedAtMs);
+    }
     if (failedParticipants.length > 0) {
       this.reportRefusedCommitDecision(tx, failedParticipants);
       return {
@@ -322,6 +352,7 @@ const distributedTransactionDecisionProtocolMethods = {
     if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     }
+    const startedAtMs = resolveNowMs();
     const rollbackFailures = await this.executeParticipantStage(
       tx,
       PARTICIPANT_STATUS.ROLLING_BACK,
@@ -330,6 +361,9 @@ const distributedTransactionDecisionProtocolMethods = {
         requestOf(partitionId)),
       {participantKeys: this.getRollbackParticipantKeys(tx)},
     );
+    if (tx?.telemetry) {
+      tx.telemetry.rollbackPhaseMs += Math.max(0, resolveNowMs() - startedAtMs);
+    }
     if (rollbackFailures.length > 0) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     } else {

@@ -47,6 +47,10 @@ import {
   PARTICIPANT_TRANSACTION_REPLAY_BOUND as BOUND,
   PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from './partition-participant-transaction-constants.js';
+import {checkAndRecordSessionRowKey} from
+  './partition-participant-transaction-session.js';
+import {readPartitionWriteGeneration} from
+  './partition-participant-transaction-store.js';
 
 const {
   PARTITION_SERVICE_OPERATION,
@@ -55,9 +59,38 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const TEXT_ENCODING = 'utf8';
+const PRAGMA_SCHEMA_VERSION = 'schema_version';
+const ZERO = 0;
+const ONE = 1;
 // The private value that ends a validation: thrown inside its transaction,
 // so better-sqlite3 rolls every replayed and new effect back.
 const VALIDATION_COMPLETE = Object.freeze({validationComplete: true});
+const STAGING_REPLAY_STATS = new WeakMap();
+
+function replayStatsOf(service) {
+  let stats = STAGING_REPLAY_STATS.get(service);
+  if (!stats) {
+    stats = {
+      emptyReadDirectExecutions: ZERO,
+      fastReplayedOperations: ZERO,
+      fullReplayedOperations: ZERO,
+    };
+    STAGING_REPLAY_STATS.set(service, stats);
+  }
+  return stats;
+}
+
+function getStagingReplayStats(service) {
+  return {...replayStatsOf(service)};
+}
+
+function readSchemaVersion(db) {
+  try {
+    return Number(db?.pragma?.(PRAGMA_SCHEMA_VERSION, {simple: true})) || ZERO;
+  } catch (_err) {
+    return ZERO;
+  }
+}
 
 // What a session write's or read's refusal carries.
 function refused(failureCode, fields = {}) {
@@ -85,13 +118,42 @@ function runStaged(service, operation) {
   });
 }
 
-function replayStagedOperations(service, session) {
-  for (const operation of session.operations) {
-    try {
+function replayOneStagedOperation(
+  service,
+  operation,
+  compiledStatement,
+  canFastReplay,
+  stats,
+) {
+  try {
+    if (canFastReplay && compiledStatement) {
+      compiledStatement.run(...operation.params);
+      stats.fastReplayedOperations += ONE;
+    } else {
       runStaged(service, operation);
-    } catch (replayError) {
-      throw Object.freeze({replayDiverged: true, cause: replayError});
+      stats.fullReplayedOperations += ONE;
     }
+  } catch (replayError) {
+    throw Object.freeze({replayDiverged: true, cause: replayError});
+  }
+}
+
+function replayStagedOperations(service, session) {
+  const stats = replayStatsOf(service);
+  const currentGen = readPartitionWriteGeneration(service.db);
+  const currentSchema = readSchemaVersion(service.db);
+  const canFastReplay =
+    currentGen === session.lastValidatedGeneration &&
+    currentSchema === session.lastValidatedSchemaVersion &&
+    Array.isArray(session.compiledOperations);
+  for (let index = ZERO; index < session.operations.length; index += ONE) {
+    replayOneStagedOperation(
+      service,
+      session.operations[index],
+      session.compiledOperations?.[index] ?? null,
+      canFastReplay,
+      stats,
+    );
   }
 }
 
@@ -170,6 +232,10 @@ function stageWrite(service, session, request, params) {
   if (!params.every(isJsonScalar)) {
     return refused(CODE.SESSION_WRITE_PARAM_UNSUPPORTED);
   }
+  const rowKeyCheck = checkAndRecordSessionRowKey(service, session, params);
+  if (rowKeyCheck.conflict) {
+    return refused(CODE.ALREADY_ACTIVE, {detail: rowKeyCheck.rowKey});
+  }
   const classified = classifyTransactionStatement(service.db,
     {tableName: service.tableName, sql: request.sql, params});
   if (!classified.admitted) {
@@ -190,6 +256,11 @@ function stageWrite(service, session, request, params) {
     return failedValidation(service, session, outcome.failure);
   }
   session.operations = operations;
+  if (Array.isArray(session.compiledOperations)) {
+    session.compiledOperations.push(classified.statement);
+  }
+  session.lastValidatedGeneration = readPartitionWriteGeneration(service.db);
+  session.lastValidatedSchemaVersion = readSchemaVersion(service.db);
   session.bytes = bytes;
   return {success: true, provisional: true, changes: outcome.ran.changes,
     lastInsertRowid: outcome.ran.lastInsertRowid};
@@ -201,12 +272,29 @@ function readInSession(service, session, request, params) {
   if (!classified.admitted) {
     return classifierRefusal(classified);
   }
+  const rowBudgetOptions = {
+    deadlineMs: request[QUERY_RESULT_REQUEST_FIELD.DEADLINE_MS],
+    maxBytes: request[QUERY_RESULT_REQUEST_FIELD.MAX_BYTES],
+    maxRows: request[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
+  };
+  if (session.operations.length === ZERO) {
+    try {
+      const rows = collectBoundedSqliteRows(
+        classified.statement,
+        params,
+        rowBudgetOptions,
+      );
+      replayStatsOf(service).emptyReadDirectExecutions += ONE;
+      return {success: true, rows, count: rows.length};
+    } catch (directReadError) {
+      return refused(CODE.STATEMENT_FAILED, {
+        error: String(directReadError?.message ?? directReadError),
+        errorCode: directReadError?.code ?? null,
+      });
+    }
+  }
   const outcome = validateOverReplay(service, session, () =>
-    collectBoundedSqliteRows(classified.statement, params, {
-      deadlineMs: request[QUERY_RESULT_REQUEST_FIELD.DEADLINE_MS],
-      maxBytes: request[QUERY_RESULT_REQUEST_FIELD.MAX_BYTES],
-      maxRows: request[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
-    }));
+    collectBoundedSqliteRows(classified.statement, params, rowBudgetOptions));
   if (outcome.failure?.replayDiverged === true) {
     return doomSession(service, session, outcome.failure);
   }
@@ -242,4 +330,7 @@ function runParticipantSessionStatement(service, session, request) {
     readInSession(service, session, request, params);
 }
 
-export {runParticipantSessionStatement};
+export {
+  getStagingReplayStats,
+  runParticipantSessionStatement,
+};

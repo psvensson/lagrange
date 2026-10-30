@@ -19,6 +19,13 @@ function unavailableRecoveryAuthority() {
   return {state: AUTHORITY.UNAVAILABLE};
 }
 
+function isCertifiedSingleRowUpdate(mutation) {
+  if (mutation?.success !== true) return false;
+  const count = mutation?.partitionResult?.affectedRows ??
+    mutation?.affectedRows ?? mutation?.changes;
+  return Number.isSafeInteger(count) && count === 1;
+}
+
 async function readAuthorityRow(engine, transactionId) {
   const gateway = engine.getControlPlaneSystemTableGateway();
   const result = await gateway?.readAuthoritativeRows?.(TABLES.SQL_TRANSACTIONS,
@@ -56,6 +63,9 @@ const sqlQueryEngineTransactionSetMethods = {
     } catch (error) {
       // A lost answer is resolved by exact authoritative readback below.
       mutation = {success: false, error: error?.message};
+    }
+    if (isCertifiedSingleRowUpdate(mutation)) {
+      return;
     }
     const row = await this.readDistributedTransactionRow(record.transactionId);
     if (!row || row.session_id !== record.sessionId ||

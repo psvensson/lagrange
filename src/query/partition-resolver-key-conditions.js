@@ -10,6 +10,10 @@ const KEY_CONDITION_TYPE = Object.freeze({
   EQUALS: 'equals',
   RANGE: 'range',
   IN: 'in',
+  GTE: 'gte',
+  GT: 'gt',
+  LTE: 'lte',
+  LT: 'lt',
 });
 
 const LOCAL_ERR_MSG = Object.freeze({

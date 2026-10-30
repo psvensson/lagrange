@@ -71,6 +71,42 @@ const ALLOCATING_VERBS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE]);
 const SESSION_HEADS = new Set([...WRITE_VERBS, KEYWORD.SELECT, KEYWORD.WITH]);
 // The private value that ends the ceiling probe's sentinel transaction.
 const PROBE_COMPLETE = Object.freeze({probeComplete: true});
+const PRAGMA_SCHEMA_VERSION = 'schema_version';
+const PLAN_KEY_SEP = '\0';
+const ZERO = 0;
+const ONE = 1;
+const COMPILED_PLAN_STORES = new WeakMap();
+
+function compiledPlanStoreOf(connection) {
+  let store = COMPILED_PLAN_STORES.get(connection);
+  if (!store) {
+    store = {
+      schemaVersion: null,
+      compiledHitCount: ZERO,
+      compiledMissCount: ZERO,
+      entries: new Map(),
+    };
+    COMPILED_PLAN_STORES.set(connection, store);
+  }
+  return store;
+}
+
+function readSchemaVersionOf(connection) {
+  try {
+    return Number(connection?.pragma?.(PRAGMA_SCHEMA_VERSION, {simple: true})) || ZERO;
+  } catch (_err) {
+    return ZERO;
+  }
+}
+
+function getDeterminismClassifierStats(connection) {
+  const store = compiledPlanStoreOf(connection);
+  return {
+    compiledHitCount: store.compiledHitCount,
+    compiledMissCount: store.compiledMissCount,
+    size: store.entries.size,
+  };
+}
 
 function refusal(refusalLayer, detail = null) {
   return Object.freeze({admitted: false, refusalLayer, detail});
@@ -233,6 +269,25 @@ function keyAndCeilingRefusal(db, lexed, {params, tableName}) {
  *   refusalLayer, detail}.
  */
 function classifyTransactionStatement(db, {tableName, sql, params = []}) {
+  const bound = Array.isArray(params) ? params : [];
+  const store = db && typeof db === 'object' ? compiledPlanStoreOf(db) : null;
+  const schemaVersion = store ? readSchemaVersionOf(db) : ZERO;
+  if (store && store.schemaVersion !== schemaVersion) {
+    store.schemaVersion = schemaVersion;
+    store.entries.clear();
+  }
+  const planKey = `${tableName}${PLAN_KEY_SEP}${sql}`;
+  const existingPlan = store?.entries.get(planKey) ?? null;
+  if (existingPlan && existingPlan.paramCount === bound.length) {
+    store.compiledHitCount += ONE;
+    const keyRefused = existingPlan.kind === KIND.WRITE ?
+      keyAndCeilingRefusal(db, existingPlan.lexed, {params: bound, tableName}) :
+      null;
+    return keyRefused ?? existingPlan.admittedOutcome;
+  }
+  if (store) {
+    store.compiledMissCount += ONE;
+  }
   const lexed = resolveNamePositions(lexPartitionStatement(sql));
   const kind = statementKindOf(lexed);
   if (kind === KIND.UNADMITTED) {
@@ -242,7 +297,6 @@ function classifyTransactionStatement(db, {tableName, sql, params = []}) {
   if (textRefusal !== null) {
     return textRefusal;
   }
-  const bound = Array.isArray(params) ? params : [];
   const {statement, program, failure} = compiled(db, sql, bound);
   if (failure !== undefined) {
     return failure;
@@ -254,9 +308,19 @@ function classifyTransactionStatement(db, {tableName, sql, params = []}) {
   if (programRefused !== null) {
     return programRefused;
   }
+  const admittedOutcome = Object.freeze({admitted: true, kind, statement});
+  if (store) {
+    store.entries.set(planKey, {
+      lexed,
+      kind,
+      statement,
+      paramCount: bound.length,
+      admittedOutcome,
+    });
+  }
   const keyRefused = kind === KIND.WRITE ?
     keyAndCeilingRefusal(db, lexed, {params: bound, tableName}) : null;
-  return keyRefused ?? Object.freeze({admitted: true, kind, statement});
+  return keyRefused ?? admittedOutcome;
 }
 
 // --- the leader's self-check ---
@@ -392,6 +456,7 @@ function runDeterminismSelfCheck(db, {tableName, classify = classifyProbe} = {})
 
 export {
   classifyTransactionStatement,
+  getDeterminismClassifierStats,
   runDeterminismSelfCheck,
   transactionStatementKindOf,
 };

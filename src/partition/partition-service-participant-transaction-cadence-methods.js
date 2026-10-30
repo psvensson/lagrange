@@ -4,6 +4,8 @@
 import {trackStuckTransactionHeal} from '../diagnostics/raft-churn-sync-sections.js';
 import {sweepParticipantTransactionHolds} from
   './partition-participant-transaction-session.js';
+import {getStagingReplayStats} from
+  './partition-participant-transaction-staging.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   createPartitionSnapshotCadence,
@@ -79,6 +81,10 @@ const PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS = Object.freeze(
     if (!this.preparedStateHoldTimer) return;
     this.timeSource.clearInterval(this.preparedStateHoldTimer);
     this.preparedStateHoldTimer = null;
+  },
+
+  getStagingReplayStats() {
+    return getStagingReplayStats(this);
   },
 });
 

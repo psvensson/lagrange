@@ -30,6 +30,7 @@ const SESSIONS = new WeakMap();
 // Per partition service: participantId -> when the hold sweep first saw it
 // PREPARED, and whether that hold was reported.
 const PREPARED_HOLDS = new WeakMap();
+const GRANULARITY_ROW_KEY = 'row-key';
 
 function sessionsOf(service) {
   let sessions = SESSIONS.get(service);
@@ -38,6 +39,44 @@ function sessionsOf(service) {
     SESSIONS.set(service, sessions);
   }
   return sessions;
+}
+
+function isRowKeyConcurrencyEnabled(service) {
+  return service?.concurrencyGranularity === GRANULARITY_ROW_KEY ||
+    service?.allowConcurrentParticipantSessions === true;
+}
+
+function hasPreparingParticipantSession(service) {
+  for (const session of SESSIONS.get(service)?.values() ?? []) {
+    if (session.phase === PHASE.PREPARING || session.inFlight === true) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function canAdmitConcurrentParticipantSession(service) {
+  return isRowKeyConcurrencyEnabled(service) &&
+    !isPartitionReserved(service.db) &&
+    !hasPreparingParticipantSession(service);
+}
+
+function checkAndRecordSessionRowKey(service, session, params) {
+  if (!isRowKeyConcurrencyEnabled(service) ||
+      !Array.isArray(params) ||
+      params.length === 0) {
+    return {conflict: false, rowKey: null};
+  }
+  const rowKey = String(params[0]);
+  for (const other of SESSIONS.get(service)?.values() ?? []) {
+    if (other !== session &&
+        other.phase !== PHASE.DOOMED &&
+        other.touchedRowKeys?.has(rowKey)) {
+      return {conflict: true, rowKey};
+    }
+  }
+  session.touchedRowKeys?.add(rowKey);
+  return {conflict: false, rowKey};
 }
 
 /**
@@ -55,8 +94,12 @@ function openParticipantSession(service, identity, base) {
     // Each staged operation as its PREPARE will carry it (decoded from its
     // JSON text), and the encoded bytes of the operations text.
     operations: [],
+    compiledOperations: [],
+    touchedRowKeys: new Set(),
     bytes: 0,
     generationBase: base.generationBase,
+    lastValidatedGeneration: base.generationBase,
+    lastValidatedSchemaVersion: null,
     originIndex: base.originIndex,
     startedAt: service.timeSource.now(),
     phase: PHASE.ACTIVE,
@@ -228,6 +271,8 @@ function sweepParticipantTransactionHolds(service, nowMs) {
 }
 
 export {
+  canAdmitConcurrentParticipantSession,
+  checkAndRecordSessionRowKey,
   discardParticipantSessions,
   endParticipantSession,
   findParticipantSession,

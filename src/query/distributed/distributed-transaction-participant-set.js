@@ -19,6 +19,7 @@ function incompleteParticipantSet() {
 const distributedTransactionParticipantSetMethods = {
   async persistAdmittedParticipantSet(tx, intended) {
     try {
+      this.noteMetadataMutation?.(tx);
       await this.persistTransactionParticipantSet(intended, tx.participantSetText);
     } catch (error) {
       // Another admission/freeze or a lost answer may own the row. Keep this
@@ -73,19 +74,16 @@ const distributedTransactionParticipantSetMethods = {
     }
     const requested = Array.from(new Set(partitionIds || []));
     await this.retainParticipantSet(tx, requested);
-    const newlyEnlisted = [];
-    for (const partitionId of requested) {
+    const newlyEnlisted = requested.filter((partitionId) =>
+      tx.participants.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE);
+    await Promise.all(newlyEnlisted.map(async (partitionId) => {
       const participant = tx.participants.get(partitionId);
-      if (participant.status === PARTICIPANT_STATUS.ACTIVE) continue;
       await this.beginParticipant(sessionId, partitionId, participantIdentityOf(tx, partitionId));
       await this.workflowCoordinator.upsertParticipant(tx.workflowId, {
         ...participant, status: PARTICIPANT_STATUS.ACTIVE, lastError: null,
         updatedAt: this.now()});
-      newlyEnlisted.push(partitionId);
-    }
+    }));
     tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
-    await this.persistParticipants(tx, newlyEnlisted);
     return {success: true, participants: this.getOrderedParticipantIds(tx), newlyEnlisted};
   },
 };

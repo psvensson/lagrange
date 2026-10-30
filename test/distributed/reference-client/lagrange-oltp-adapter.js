@@ -21,6 +21,8 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 10000;
 const PUBLIC_PROTOCOL = 'postgresql';
 const PUBLIC_EXECUTION_PATH = 'public-sql';
 const LOCKING_READ_MODE = 'snapshot-write-conflict';
+const NATIVE_LOCKING_READ_MODE = 'native-for-update';
+const FOR_UPDATE_SUFFIX = ' FOR UPDATE';
 
 const LAGRANGE_OLTP_TRANSLATION_AUDIT = Object.freeze({
   lockingReadMode: LOCKING_READ_MODE,
@@ -176,6 +178,8 @@ const CREATE_SCHEMA = Object.freeze([
     'customer_id INTEGER NOT NULL, home_warehouse_id INTEGER NOT NULL, ' +
     'home_district_id INTEGER NOT NULL, amount_cents BIGINT NOT NULL, ' +
     'PRIMARY KEY (phase, worker_id, sequence_id))',
+  'CREATE INDEX IF NOT EXISTS idx_orders_customer_latest ON orders ' +
+    '(warehouse_id, district_id, customer_id, order_id)',
 ]);
 
 function normalizeEndpoint(endpoint = {}) {
@@ -253,7 +257,9 @@ function isExplicitCommitSerializationAbort(error) {
     error?.code !== 'OUTCOME_UNKNOWN';
 }
 
-function createLagrangeSession(client) {
+function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
+  const useNativeForUpdate = lockingReadMode === NATIVE_LOCKING_READ_MODE;
+  const strippedSet = new Set(LAGRANGE_OLTP_TRANSLATION_AUDIT.strippedStatementIds);
   const session = {
     async transaction(callback) {
       await client.query('BEGIN');
@@ -295,8 +301,11 @@ function createLagrangeSession(client) {
       }
     },
     async execute(statementId, parameters = []) {
-      const sql = SQL[statementId];
-      if (!sql) throw new Error(`Lagrange OLTP unknown statement ${statementId}`);
+      const baseSql = SQL[statementId];
+      if (!baseSql) throw new Error(`Lagrange OLTP unknown statement ${statementId}`);
+      const sql = useNativeForUpdate && strippedSet.has(statementId) ?
+        `${baseSql}${FOR_UPDATE_SUFFIX}` :
+        baseSql;
       const result = await client.query(sql, parameters);
       return {
         rows: Array.isArray(result?.rows) ? result.rows : [],
@@ -543,6 +552,11 @@ async function createLagrangeOltpAdapter(options = {}) {
   const datasetSha256 = hashOltpBaselineDataset(dataset);
   const datasetSummary = summarizeOltpBaselineDataset(dataset);
   const createClient = options.createClient || defaultClientFactory;
+  const resolvedLockingReadMode =
+    typeof options.lockingReadMode === 'string' &&
+    options.lockingReadMode.trim().length > ZERO ?
+      options.lockingReadMode.trim() :
+      LOCKING_READ_MODE;
   const resolvedClientOptions = clientOptions(endpoint, connection);
   const workerClients = [];
   const workerSessions = [];
@@ -556,7 +570,7 @@ async function createLagrangeOltpAdapter(options = {}) {
     for (let index = ZERO; index < config.workers; index += ONE) {
       const client = await openClient(createClient, resolvedClientOptions);
       workerClients.push(client);
-      workerSessions.push(createLagrangeSession(client));
+      workerSessions.push(createLagrangeSession(client, resolvedLockingReadMode));
     }
   } catch (error) {
     const failures = [error];
@@ -585,7 +599,7 @@ async function createLagrangeOltpAdapter(options = {}) {
   return Object.freeze({
     protocol: PUBLIC_PROTOCOL,
     executionPath: PUBLIC_EXECUTION_PATH,
-    lockingReadMode: LOCKING_READ_MODE,
+    lockingReadMode: resolvedLockingReadMode,
     translationAudit: LAGRANGE_OLTP_TRANSLATION_AUDIT,
     datasetSha256,
     datasetSummary,
@@ -618,7 +632,7 @@ async function createLagrangeOltpAdapter(options = {}) {
       return Object.freeze({
         protocol: PUBLIC_PROTOCOL,
         executionPath: PUBLIC_EXECUTION_PATH,
-        lockingReadMode: LOCKING_READ_MODE,
+        lockingReadMode: resolvedLockingReadMode,
         translationAudit: LAGRANGE_OLTP_TRANSLATION_AUDIT,
         datasetSha256,
         datasetSummary,

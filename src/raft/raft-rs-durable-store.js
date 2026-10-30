@@ -22,6 +22,7 @@
 // application's own writes - keeps NORMAL and may be lost to a power loss;
 // it is recomputed from the synced log on restart.
 
+import {performance} from 'node:perf_hooks';
 import {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_COMMIT_DURABILITY,
@@ -312,22 +313,14 @@ class RaftRsDurableStore {
     this.journal = [];
     this.journalWriteCount = 0;
     this.ownTransactionDepth = 0;
+    this.syncCommitCount = 0;
+    this.totalSyncMs = 0;
     this.createRecordTables();
     this.addMembershipGenerationColumns();
   }
 
-  /**
-   * Create the record's tables together, on a database that has none of
-   * them, in one transaction of the store's own (admitted like every write
-   * the store makes): the schema is created whole or not at all, so a
-   * creation that failed part way - a crash, a full disk - leaves no table,
-   * and the next open creates them again. A database holding some of them
-   * therefore holds a record that lost a table: created empty, the table
-   * would make the record read as one that never had that part (its
-   * configuration, its applied index), so it stays missing and every read of
-   * the record fails, naming it, until it is restored.
-   * @private
-   */
+  // Create all record tables atomically when none exist yet; partial records
+  // stay incomplete so readers fail closed naming the missing table.
   createRecordTables() {
     const tablePresent = this.db.prepare(
       RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
@@ -444,12 +437,24 @@ class RaftRsDurableStore {
     durability = RAFT_RS_COMMIT_DURABILITY.CONNECTION_DEFAULT) {
     this.admitWrite();
     this.ownTransactionDepth += 1;
+    const synced = durability === RAFT_RS_COMMIT_DURABILITY.SYNCED;
+    const startedAt = synced ? performance.now() : 0;
     try {
-      return durability === RAFT_RS_COMMIT_DURABILITY.SYNCED ?
-        commitDurably(this.db, work) : this.db.transaction(work)();
+      return synced ? commitDurably(this.db, work) : this.db.transaction(work)();
     } finally {
+      if (synced) {
+        this.syncCommitCount += 1;
+        this.totalSyncMs += Math.max(0, performance.now() - startedAt);
+      }
       this.ownTransactionDepth -= 1;
     }
+  }
+
+  getDurableSyncStats() {
+    return {
+      syncCommitCount: this.syncCommitCount,
+      totalSyncMs: this.totalSyncMs,
+    };
   }
 
   /**

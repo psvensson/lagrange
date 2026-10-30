@@ -63,6 +63,7 @@ import {
 } from './partition-participant-transaction-store.js';
 import {operationResultsOf} from './partition-participant-transaction-apply.js';
 import {
+  canAdmitConcurrentParticipantSession,
   endParticipantSession,
   findParticipantSession,
   openParticipantSession,
@@ -303,8 +304,10 @@ function beginParticipantSession(service, payload) {
   if (session !== null) {
     return existingSessionAnswer(service, payload, session);
   }
-  // One non-terminal participant transaction per partition.
-  if (participantTransactionActive(service)) {
+  // One non-terminal participant transaction per partition by default;
+  // row-key mode admits concurrent ACTIVE sessions when not reserved/preparing.
+  if (participantTransactionActive(service) &&
+      !canAdmitConcurrentParticipantSession(service)) {
     return refusalOf(service, payload, CODE.ALREADY_ACTIVE);
   }
   // The conflict base (design 3.2): read at BEGIN, carried unchanged, with

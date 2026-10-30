@@ -10,6 +10,21 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+### Added
+- **Scenario A transaction coordination fast path & telemetry (`scenario-a-transaction-coordination-fast-path`):**
+  Per-transaction phase and metadata telemetry (`distributed-transaction-telemetry.js`),
+  reduced durable transaction bookkeeping (`sql-query-engine-transaction-set-methods.js`,
+  `distributed-transaction-participant-set.js`, `distributed-transaction-statement.js`),
+  concurrent independent participant `BEGIN`, `PREPARE`, `COMMIT`, and `ROLLBACK`
+  stages (`distributed-transaction-protocol.js`), opt-in row-key-disjoint concurrent
+  participant staging sessions (`partition-participant-transaction-session.js`),
+  pre-validated compiled operation reuse and empty-read direct execution during
+  staging replay (`partition-participant-transaction-staging.js`), composite
+  partition prefix and range pruning (`partition-resolver-composite.js`,
+  `lagrange-oltp-adapter.js`), and `schema_version`-fenced SQLite determinism
+  plan caching plus Raft durable sync telemetry (`partition-transaction-determinism.js`,
+  `raft-rs-durable-store.js`).
+
 ## [0.3.2] — 2026-10-30
 
 Queryable Core 0.3.2 completion release sealing synchronous transactional global
