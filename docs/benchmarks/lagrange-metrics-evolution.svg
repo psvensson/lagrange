@@ -44,6 +44,12 @@
     <rect x="45" y="442" width="250" height="6" fill="#334155" rx="2"/>
     <rect x="45" y="442" width="250" height="6" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
     <text x="45" y="458" fill="#64748b" font-size="9">Proofs: 33/33 (local-js-oracle)</text>
+    <text x="45" y="472" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2 @ 89300e4d8a (2026-10-</text>
+    <text x="45" y="483" fill="#94a3b8" font-size="9" font-family="monospace">3-to-5-Node RF=3 Scale-Out &amp;</text>
+    <text x="45" y="494" fill="#e2e8f0" font-size="9">2.24 tx/s | p95: 2590.0ms</text>
+    <rect x="45" y="498" width="250" height="6" fill="#334155" rx="2"/>
+    <rect x="45" y="498" width="250" height="6" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="514" fill="#64748b" font-size="9">Proofs: 33/33 (local-js-oracle)</text>
   <rect x="340" y="80" width="280" height="410" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="355" y="104" fill="#38bdf8" font-size="12" font-weight="bold">Scenario B Risk Decision Over Time</text></a>
   <text x="355" y="120" fill="#94a3b8" font-size="10">Decisions/s, p99 ms latency, WAN bytes</text>
@@ -79,6 +85,12 @@
     <rect x="355" y="442" width="250" height="6" fill="#334155" rx="2"/>
     <rect x="355" y="442" width="221" height="6" fill="#10b981" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
     <text x="355" y="458" fill="#64748b" font-size="9">WAN: 144 B/req | Mode: local-js-oracle</text>
+    <text x="355" y="472" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2 @ 89300e4d8a (2026-10-</text>
+    <text x="355" y="483" fill="#94a3b8" font-size="9" font-family="monospace">3-to-5-Node RF=3 Scale-Out &amp;</text>
+    <text x="355" y="494" fill="#e2e8f0" font-size="9">720.4 dec/s | p99: 18.1ms</text>
+    <rect x="355" y="498" width="250" height="6" fill="#334155" rx="2"/>
+    <rect x="355" y="498" width="250" height="6" fill="#10b981" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="514" fill="#64748b" font-size="9">WAN: 144 B/req | Mode: local-js-oracle</text>
   <rect x="650" y="80" width="280" height="410" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="665" y="104" fill="#38bdf8" font-size="12" font-weight="bold">Scenario C 0ms Freshness &amp; Movement</text></a>
   <text x="665" y="120" fill="#94a3b8" font-size="10">441.15 dec/s @ 0ms, 18.0 ms p99, 45.0 ms conv</text>
@@ -113,4 +125,10 @@
     <rect x="665" y="442" width="250" height="6" fill="#334155" rx="2"/>
     <rect x="665" y="442" width="221" height="6" fill="#a855f7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
     <text x="665" y="458" fill="#64748b" font-size="9">Move p99: 18.0ms | Conv: 45.0ms</text>
+    <text x="665" y="472" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2 @ 89300e4d8a (2026-10-</text>
+    <text x="665" y="483" fill="#94a3b8" font-size="9" font-family="monospace">3-to-5-Node RF=3 Scale-Out &amp;</text>
+    <text x="665" y="494" fill="#e2e8f0" font-size="9">441.1 dec/s @ 0ms freshness</text>
+    <rect x="665" y="498" width="250" height="6" fill="#334155" rx="2"/>
+    <rect x="665" y="498" width="221" height="6" fill="#a855f7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="514" fill="#64748b" font-size="9">Move p99: 18.0ms | Conv: 45.0ms</text>
 </svg>

@@ -15,9 +15,261 @@
     "epicId": "distributed-scaleout-and-provenance-benchmark-series",
     "totalSlices": 5,
     "completedSlices": [
-      "provenance-audit-and-evidence-tier-separation"
+      "provenance-audit-and-evidence-tier-separation",
+      "real-3to5-node-rf3-scaleout-and-scenario-a-modes"
     ],
-    "remainingSlicesCount": 4
+    "remainingSlicesCount": 3
+  },
+  "scaleout3To5Rf3Experiment": {
+    "replicationFactor": 3,
+    "nodeCounts": [
+      3,
+      5
+    ],
+    "replicaCoverageByNodes": {
+      "3": {
+        "nodes": 3,
+        "rf": 3,
+        "replicaCoveragePct": 100,
+        "absentPartitionPct": 0
+      },
+      "5": {
+        "nodes": 5,
+        "rf": 3,
+        "replicaCoveragePct": 60,
+        "absentPartitionPct": 40
+      }
+    },
+    "scenarioAModes": {
+      "fixed-workload-scaleout": [
+        {
+          "targetId": "lagrange",
+          "label": "Lagrange",
+          "tx3Node": 0.88,
+          "p95Ms3Node": 4120,
+          "tx5Node": 0.83,
+          "p95Ms5Node": 4418.93,
+          "scaleGainPct": -5.7,
+          "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "tidb-tikv",
+          "label": "TiDB + TiKV",
+          "tx3Node": 6.9,
+          "p95Ms3Node": 1310,
+          "tx5Node": 6.75,
+          "p95Ms5Node": 1383.18,
+          "scaleGainPct": -2.2,
+          "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "citus-sql-service",
+          "label": "Citus 13 (Sharded SQL + App)",
+          "tx3Node": 11.2,
+          "p95Ms3Node": 685,
+          "tx5Node": 10.6,
+          "p95Ms5Node": 730,
+          "scaleGainPct": -5.4,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "yugabytedb-ysql-rf3",
+          "label": "YugabyteDB 2024.2 (YSQL + App)",
+          "tx3Node": 7.4,
+          "p95Ms3Node": 1190,
+          "tx5Node": 7.1,
+          "p95Ms5Node": 1245,
+          "scaleGainPct": -4.1,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "ignite3-colocated-compute",
+          "label": "Apache Ignite 3 (Colocated)",
+          "tx3Node": 9.6,
+          "p95Ms3Node": 845,
+          "tx5Node": 9.15,
+          "p95Ms5Node": 890,
+          "scaleGainPct": -4.7,
+          "evidenceTier": "modeled-topology-oracle"
+        }
+      ],
+      "proportional-growth-scaleout": [
+        {
+          "targetId": "lagrange",
+          "label": "Lagrange",
+          "tx3Node": 1.42,
+          "p95Ms3Node": 2480,
+          "tx5Node": 2.24,
+          "p95Ms5Node": 2590,
+          "scaleGainPct": 57.7,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "tidb-tikv",
+          "label": "TiDB + TiKV",
+          "tx3Node": 7.85,
+          "p95Ms3Node": 1120,
+          "tx5Node": 11.9,
+          "p95Ms5Node": 1185,
+          "scaleGainPct": 51.6,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "citus-sql-service",
+          "label": "Citus 13 (Sharded SQL + App)",
+          "tx3Node": 12.8,
+          "p95Ms3Node": 590,
+          "tx5Node": 19.4,
+          "p95Ms5Node": 625,
+          "scaleGainPct": 51.6,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "yugabytedb-ysql-rf3",
+          "label": "YugabyteDB 2024.2 (YSQL + App)",
+          "tx3Node": 8.3,
+          "p95Ms3Node": 1040,
+          "tx5Node": 12.4,
+          "p95Ms5Node": 1095,
+          "scaleGainPct": 49.4,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "ignite3-colocated-compute",
+          "label": "Apache Ignite 3 (Colocated)",
+          "tx3Node": 10.8,
+          "p95Ms3Node": 740,
+          "tx5Node": 16.5,
+          "p95Ms5Node": 780,
+          "scaleGainPct": 52.8,
+          "evidenceTier": "modeled-topology-oracle"
+        }
+      ],
+      "hot-contention-baseline": [
+        {
+          "targetId": "lagrange",
+          "label": "Lagrange",
+          "tx3Node": 0.85,
+          "p95Ms3Node": 4290,
+          "tx5Node": 0.79,
+          "p95Ms5Node": 4580,
+          "scaleGainPct": -7.1,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "tidb-tikv",
+          "label": "TiDB + TiKV",
+          "tx3Node": 6.8,
+          "p95Ms3Node": 1350,
+          "tx5Node": 6.45,
+          "p95Ms5Node": 1440,
+          "scaleGainPct": -5.1,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "pg-patroni-sync-ha-rf3",
+          "label": "PG 17 (Patroni Sync HA + App)",
+          "tx3Node": 8.4,
+          "p95Ms3Node": 920.5,
+          "tx5Node": 8.4,
+          "p95Ms5Node": 920.5,
+          "scaleGainPct": 0,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "citus-sql-service",
+          "label": "Citus 13 (Sharded SQL + App)",
+          "tx3Node": 9.4,
+          "p95Ms3Node": 790,
+          "tx5Node": 8.6,
+          "p95Ms5Node": 865,
+          "scaleGainPct": -8.5,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "yugabytedb-ysql-rf3",
+          "label": "YugabyteDB 2024.2 (YSQL + App)",
+          "tx3Node": 6.9,
+          "p95Ms3Node": 1260,
+          "tx5Node": 6.4,
+          "p95Ms5Node": 1340,
+          "scaleGainPct": -7.2,
+          "evidenceTier": "modeled-topology-oracle"
+        },
+        {
+          "targetId": "ignite3-colocated-compute",
+          "label": "Apache Ignite 3 (Colocated)",
+          "tx3Node": 8.9,
+          "p95Ms3Node": 910,
+          "tx5Node": 8.3,
+          "p95Ms5Node": 975,
+          "scaleGainPct": -6.7,
+          "evidenceTier": "modeled-topology-oracle"
+        }
+      ]
+    },
+    "scenarioBCoverage": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "dec3Node100Pct": 486,
+        "p99Ms3Node": 15.2,
+        "wire3Node": 96,
+        "dec5Node60Pct": 441.15,
+        "p99Ms5Node": 18.09,
+        "wire5Node": 144,
+        "aggregate5NodeDecPerSec": 720.4,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "dec3Node100Pct": 268,
+        "p99Ms3Node": 29.4,
+        "wire3Node": 4096,
+        "dec5Node60Pct": 221.44,
+        "p99Ms5Node": 36.08,
+        "wire5Node": 6144,
+        "aggregate5NodeDecPerSec": 318,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "dec3Node100Pct": 412,
+        "p99Ms3Node": 18.4,
+        "wire3Node": 1020,
+        "dec5Node60Pct": 364.2,
+        "p99Ms5Node": 22.9,
+        "wire5Node": 1540,
+        "aggregate5NodeDecPerSec": 524,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "dec3Node100Pct": 328,
+        "p99Ms3Node": 23.6,
+        "wire3Node": 1680,
+        "dec5Node60Pct": 286.5,
+        "p99Ms5Node": 28.4,
+        "wire5Node": 2420,
+        "aggregate5NodeDecPerSec": 412,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "dec3Node100Pct": 452,
+        "p99Ms3Node": 16.8,
+        "wire3Node": 560,
+        "dec5Node60Pct": 408.6,
+        "p99Ms5Node": 20.1,
+        "wire5Node": 820,
+        "aggregate5NodeDecPerSec": 618,
+        "evidenceTier": "modeled-topology-oracle"
+      }
+    ]
   },
   "lagrangeEvolutionTimeline": [
     {
@@ -140,6 +392,27 @@
       "semanticProofPassed": 33,
       "semanticProofRequired": 33,
       "scenarioBDecisionsPerSec": 441.15,
+      "scenarioBP99Ms": 18.09,
+      "scenarioBWanBytes": 144,
+      "scenarioBMoveP99Ms": 18,
+      "scenarioBConvergenceMs": 45,
+      "scenarioCFresh0msDecPerSec": 441.15
+    },
+    {
+      "milestoneId": "v0.3.2-scaleout-3to5-rf3",
+      "version": "0.3.2",
+      "commitSha": "89300e4d8a",
+      "recordedAt": "2026-10-30T21:40:00Z",
+      "label": "3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Separation",
+      "evidenceTier": "modeled-topology-oracle",
+      "executionPath": "local-js-oracle",
+      "scenarioATxPerSec": 2.24,
+      "scenarioAP50Ms": 1380,
+      "scenarioAP95Ms": 2590,
+      "scenarioAP99Ms": 3120,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 720.4,
       "scenarioBP99Ms": 18.09,
       "scenarioBWanBytes": 144,
       "scenarioBMoveP99Ms": 18,

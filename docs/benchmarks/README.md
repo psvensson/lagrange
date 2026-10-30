@@ -16,6 +16,7 @@ Deterministic multi-system comparative benchmark statistics across PostgreSQL, T
   - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))
   - [YugabyteDB & Apache Ignite 3 Colocated Compute Comparison](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html))
   - [Scenario C: PostgreSQL 17 + Valkey 8 Feature-Store & Freshness Comparison](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html))
+  - [3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Comparison](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html))
 
 ![Multi-system comparative benchmark overview](comparative-overview.svg)
 
@@ -120,6 +121,7 @@ Two distinct measurement boundaries are evaluated:
 | v0.3.0-semantic-closure (`27af74dc7b`) | 0.83 (4418.93 ms) | 33/33 | 0.00 (0.00 ms / 0 B) | 0.00 | `observed-docker-cluster` / `live-cluster-wire` |
 | v0.3.0-scenario-b-model (`2d416de6e5`) | 0.83 (4418.93 ms) | 33/33 | 441.15 (18.09 ms / 144 B) | 0.00 | `modeled-topology-oracle` / `local-js-oracle` |
 | v0.3.2-provenance-matrix (`4dc6db6b93`) | 0.83 (4418.93 ms) | 33/33 | 441.15 (18.09 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
+| v0.3.2-scaleout-3to5-rf3 (`89300e4d8a`) | 2.24 (2590.00 ms) | 33/33 | 720.40 (18.09 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
 
 ## Measurement provenance and evidence-tier separation
 

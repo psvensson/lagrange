@@ -18,6 +18,7 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 | v0.3.0-semantic-closure | 0.3.0 | 27af74dc7b | 2026-10-30 | observed-docker-cluster | live-cluster-wire | 0.83 | 4418.9 | 33/33 | 0.0 | 0.0 |
 | v0.3.0-scenario-b-model | 0.3.0 | 2d416de6e5 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 0.83 | 4418.9 | 33/33 | 441.1 | 0.0 |
 | v0.3.2-provenance-matrix | 0.3.2 | 4dc6db6b93 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 0.83 | 4418.9 | 33/33 | 441.1 | 441.1 |
+| v0.3.2-scaleout-3to5-rf3 | 0.3.2 | 89300e4d8a | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 720.4 | 441.1 |
 
 ## Commit-over-commit delta progression
 
