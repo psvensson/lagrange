@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>5-Node RF=3 Partition Granularity Sweep and Coordination Tax</title>
+  <style>
+:root{--bg:#0f172a;--card-bg:#1e293b;--text:#f8fafc;--muted:#94a3b8;--border:#334155;--accent:#38bdf8}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px}
+.container{max-width:1100px;margin:0 auto}h1{font-size:24px;color:#fff;margin:0 0 8px 0}
+.nav-bar{margin:12px 0 20px 0;font-size:13px}.nav-bar a{color:var(--accent);text-decoration:none;margin-right:12px}
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:18px;margin-bottom:24px}
+.card h2{font-size:16px;color:var(--accent);margin:0 0 12px 0}.card p,.card li{font-size:13px;line-height:1.6;color:#cbd5e1}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0}
+th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;overflow-wrap:anywhere;word-break:break-word}
+th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex;justify-content:center}
+pre,code{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>5-Node RF=3 Partition Granularity Sweep and Coordination Tax</h1>
+    <div class="nav-bar">
+      <a href="index.html">Comparative Benchmarks Landing Page</a>
+      <a href="lagrange-metrics-evolution.html">Lagrange Metrics Evolution Over Time</a>
+      <a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out Comparison</a>
+    </div>
+    <div class="chart-box">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540">
+  <rect width="960" height="540" fill="#0f172a" rx="8"/>
+  <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">5-Node RF=3 Partition Granularity Sweep (P=6..60)</text>
+  <text x="30" y="44" fill="#94a3b8" font-size="11">Parallelism sweet spot at P=30 vs over-partitioning coordination overhead at P=60</text>
+  <text x="30" y="58" fill="#64748b" font-size="10">Legend: dashed border = modeled-topology-oracle (simulated cluster wire)</text>
+  <a href="README.md"><text x="610" y="28" fill="#38bdf8" font-size="11">Overview</text></a>
+  <a href="lagrange-metrics-evolution.md"><text x="685" y="28" fill="#38bdf8" font-size="11">Evolution</text></a>
+  <a href="scaleout-3to5-node-rf3-progress.md"><text x="760" y="28" fill="#38bdf8" font-size="11">3-to-5 Scale</text></a>
+  <rect x="30" y="74" width="280" height="440" fill="#1e293b" rx="6" stroke="#334155"/>
+  <text x="45" y="98" fill="#38bdf8" font-size="12" font-weight="bold">Throughput Sweep P=6..60 (5-Node RF=3 dec/s)</text>
+  <text x="45" y="114" fill="#94a3b8" font-size="10">Peak throughput at optimal P vs P=60</text>
+  <rect x="340" y="74" width="280" height="440" fill="#1e293b" rx="6" stroke="#334155"/>
+  <text x="355" y="98" fill="#38bdf8" font-size="12" font-weight="bold">Decision p99 Latency at Optimal vs P=60 (ms)</text>
+  <text x="355" y="114" fill="#94a3b8" font-size="10">Latency impact of over-partitioning</text>
+  <rect x="650" y="74" width="280" height="440" fill="#1e293b" rx="6" stroke="#334155"/>
+  <text x="665" y="98" fill="#38bdf8" font-size="12" font-weight="bold">Coordination &amp; Routing Tax at P=60 (%)</text>
+  <text x="665" y="114" fill="#94a3b8" font-size="10">Cross-partition fan-out and heartbeat tax</text>
+    <text x="45" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="45" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
+    <text x="45" y="154" fill="#cbd5e1" font-size="10">784.0 dec/s (opt P=30)</text>
+    <rect x="45" y="158" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="45" y="158" width="231" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="175" fill="#64748b" font-size="9">P=6: 590 -> P=60: 738 (-5.9%)</text>
+    <text x="45" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="45" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
+    <text x="45" y="226" fill="#cbd5e1" font-size="10">318.0 dec/s (opt P=15)</text>
+    <rect x="45" y="230" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="45" y="230" width="94" height="7" fill="#0284c7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="247" fill="#64748b" font-size="9">P=6: 274 -> P=60: 264 (-17.0%)</text>
+    <text x="45" y="276" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
+    <text x="45" y="287" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
+    <text x="45" y="298" fill="#cbd5e1" font-size="10">542.0 dec/s (opt P=30)</text>
+    <rect x="45" y="302" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="45" y="302" width="159" height="7" fill="#ec4899" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="319" fill="#64748b" font-size="9">P=6: 448 -> P=60: 486 (-10.3%)</text>
+    <text x="45" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
+    <text x="45" y="359" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
+    <text x="45" y="370" fill="#cbd5e1" font-size="10">412.0 dec/s (opt P=15)</text>
+    <rect x="45" y="374" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="45" y="374" width="121" height="7" fill="#8b5cf6" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="391" fill="#64748b" font-size="9">P=6: 356 -> P=60: 348 (-15.5%)</text>
+    <text x="45" y="420" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
+    <text x="45" y="431" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
+    <text x="45" y="442" fill="#cbd5e1" font-size="10">662.0 dec/s (opt P=30)</text>
+    <rect x="45" y="446" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="45" y="446" width="195" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="463" fill="#64748b" font-size="9">P=6: 520 -> P=60: 610 (-7.9%)</text>
+    <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="355" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
+    <text x="355" y="154" fill="#cbd5e1" font-size="10">16.9ms (opt) -> 20.4ms (P=60)</text>
+    <rect x="355" y="158" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="355" y="158" width="93" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="175" fill="#64748b" font-size="9">Heartbeats: 900/s -> 1800/s</text>
+    <text x="355" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="355" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
+    <text x="355" y="226" fill="#cbd5e1" font-size="10">36.1ms (opt) -> 49.6ms (P=60)</text>
+    <rect x="355" y="230" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="355" y="230" width="225" height="7" fill="#0284c7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="247" fill="#64748b" font-size="9">Heartbeats: 900/s -> 3600/s</text>
+    <text x="355" y="276" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
+    <text x="355" y="287" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
+    <text x="355" y="298" fill="#cbd5e1" font-size="10">23.8ms (opt) -> 28.9ms (P=60)</text>
+    <rect x="355" y="302" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="355" y="302" width="131" height="7" fill="#ec4899" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="319" fill="#64748b" font-size="9">Heartbeats: 1200/s -> 2400/s</text>
+    <text x="355" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
+    <text x="355" y="359" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
+    <text x="355" y="370" fill="#cbd5e1" font-size="10">28.4ms (opt) -> 38.4ms (P=60)</text>
+    <rect x="355" y="374" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="355" y="374" width="175" height="7" fill="#8b5cf6" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="391" fill="#64748b" font-size="9">Heartbeats: 750/s -> 3000/s</text>
+    <text x="355" y="420" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
+    <text x="355" y="431" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
+    <text x="355" y="442" fill="#cbd5e1" font-size="10">19.2ms (opt) -> 23.6ms (P=60)</text>
+    <rect x="355" y="446" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="355" y="446" width="107" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="463" fill="#64748b" font-size="9">Heartbeats: 1050/s -> 2100/s</text>
+    <text x="665" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="665" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
+    <text x="665" y="154" fill="#cbd5e1" font-size="10">16.5% coordination overhead</text>
+    <rect x="665" y="158" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="665" y="158" width="118" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="175" fill="#64748b" font-size="9">P=60 throughput drop: -5.9%</text>
+    <text x="665" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="665" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
+    <text x="665" y="226" fill="#cbd5e1" font-size="10">31.4% coordination overhead</text>
+    <rect x="665" y="230" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="665" y="230" width="224" height="7" fill="#0284c7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="247" fill="#64748b" font-size="9">P=60 throughput drop: -17.0%</text>
+    <text x="665" y="276" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
+    <text x="665" y="287" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
+    <text x="665" y="298" fill="#cbd5e1" font-size="10">24.0% coordination overhead</text>
+    <rect x="665" y="302" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="665" y="302" width="171" height="7" fill="#ec4899" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="319" fill="#64748b" font-size="9">P=60 throughput drop: -10.3%</text>
+    <text x="665" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
+    <text x="665" y="359" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
+    <text x="665" y="370" fill="#cbd5e1" font-size="10">28.2% coordination overhead</text>
+    <rect x="665" y="374" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="665" y="374" width="201" height="7" fill="#8b5cf6" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="391" fill="#64748b" font-size="9">P=60 throughput drop: -15.5%</text>
+    <text x="665" y="420" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
+    <text x="665" y="431" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
+    <text x="665" y="442" fill="#cbd5e1" font-size="10">19.4% coordination overhead</text>
+    <rect x="665" y="446" width="250" height="7" fill="#334155" rx="2"/>
+    <rect x="665" y="446" width="139" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="463" fill="#64748b" font-size="9">P=60 throughput drop: -7.9%</text>
+</svg>
+    </div>
+    <div class="card">
+      <h2>Partition Granularity Sweep on 5-Node RF=3 (P=6, 15, 30, 60)</h2>
+      <p>Operational regimes across partition allocations on a 5-node RF=3 cluster:</p>
+      <table><thead><tr><th>Partition Count</th><th>Leaders/Node (Avg)</th><th>Leader Balance Factor</th><th>Operational Regime</th></tr></thead>
+        <tbody>
+<tr><td>6</td><td>1.2</td><td>0.83</td><td><code>under-partitioned-leader-skew</code></td></tr>
+<tr><td>15</td><td>3.0</td><td>1.00</td><td><code>balanced-baseline</code></td></tr>
+<tr><td>30</td><td>6.0</td><td>1.00</td><td><code>parallel-sweet-spot</code></td></tr>
+<tr><td>60</td><td>12.0</td><td>1.00</td><td><code>over-partitioned-coordination-tax</code></td></tr>
+      </tbody></table>
+      <p>Cross-target decision throughput across partition sweep points:</p>
+      <table><thead><tr><th>Target</th><th>Optimal P</th><th>Peak (dec/s)</th><th>P=6 (dec/s)</th>
+        <th>P=15 (dec/s)</th><th>P=30 (dec/s)</th><th>P=60 (dec/s)</th><th>Drop at P=60 (%)</th><th>Evidence Tier</th></tr></thead>
+        <tbody>
+<tr><td><strong>Lagrange</strong></td><td>30</td><td>784.0</td><td>590.0</td><td>720.4</td><td>784.0</td><td>738.0</td><td>-5.9%</td><td>modeled-topology-oracle</td></tr>
+<tr><td><strong>TiDB + TiKV</strong></td><td>15</td><td>318.0</td><td>274.0</td><td>318.0</td><td>302.0</td><td>264.0</td><td>-17.0%</td><td>modeled-topology-oracle</td></tr>
+<tr><td><strong>Citus 13 (Dist Function)</strong></td><td>30</td><td>542.0</td><td>448.0</td><td>524.0</td><td>542.0</td><td>486.0</td><td>-10.3%</td><td>modeled-topology-oracle</td></tr>
+<tr><td><strong>YugabyteDB 2024.2 (Stored Proc)</strong></td><td>15</td><td>412.0</td><td>356.0</td><td>412.0</td><td>398.0</td><td>348.0</td><td>-15.5%</td><td>modeled-topology-oracle</td></tr>
+<tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td>30</td><td>662.0</td><td>520.0</td><td>618.0</td><td>662.0</td><td>610.0</td><td>-7.9%</td><td>modeled-topology-oracle</td></tr>
+      </tbody></table>
+    </div>
+    <div class="card">
+      <h2>Parallelism Sweet Spot vs Over-Partitioning Coordination Overhead</h2>
+      <p>Evaluating partition counts from P=6 to P=60 on a 5-node RF=3 cluster demonstrates that P=30 (averaging 6 leader partitions per node) serves as the parallelism sweet spot for Lagrange (reaching 784.0 dec/s with 16.9 ms p99 latency) and Apache Ignite 3 (reaching 662.0 dec/s with 19.2 ms p99 latency). At P=6 (1.2 leaders/node), under-partitioning causes leader skew and idle worker threads. Scaling beyond the sweet spot to P=60 (12 leaders/node) degrades throughput (-5.9% in Lagrange, -10.3% in Citus 13, -15.5% in YugabyteDB, and -17.0% in TiDB + TiKV) due to Raft heartbeat amplification, placement-table lookups, and cross-partition fan-out coordination overhead.</p>
+    </div>
+  </div>
+</body>
+</html>

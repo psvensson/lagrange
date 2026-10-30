@@ -16,9 +16,10 @@
     "totalSlices": 5,
     "completedSlices": [
       "provenance-audit-and-evidence-tier-separation",
-      "real-3to5-node-rf3-scaleout-and-scenario-a-modes"
+      "real-3to5-node-rf3-scaleout-and-scenario-a-modes",
+      "partition-granularity-sweep-5node-rf3"
     ],
-    "remainingSlicesCount": 3
+    "remainingSlicesCount": 2
   },
   "scaleout3To5Rf3Experiment": {
     "replicationFactor": 3,
@@ -271,6 +272,251 @@
       }
     ]
   },
+  "partitionGranularitySweepExperiment": {
+    "experimentId": "partition-granularity-sweep-5node-rf3",
+    "nodeCount": 5,
+    "replicationFactor": 3,
+    "replicaCoveragePct": 60,
+    "partitionCounts": [
+      6,
+      15,
+      30,
+      60
+    ],
+    "partitionPoints": [
+      {
+        "partitionCount": 6,
+        "partitionsPerNodeLeaderAvg": 1.2,
+        "leaderBalanceFactor": 0.83,
+        "regime": "under-partitioned-leader-skew"
+      },
+      {
+        "partitionCount": 15,
+        "partitionsPerNodeLeaderAvg": 3,
+        "leaderBalanceFactor": 1,
+        "regime": "balanced-baseline"
+      },
+      {
+        "partitionCount": 30,
+        "partitionsPerNodeLeaderAvg": 6,
+        "leaderBalanceFactor": 1,
+        "regime": "parallel-sweet-spot"
+      },
+      {
+        "partitionCount": 60,
+        "partitionsPerNodeLeaderAvg": 12,
+        "leaderBalanceFactor": 1,
+        "regime": "over-partitioned-coordination-tax"
+      }
+    ],
+    "targets": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "optimalPartitions": 30,
+        "peakDecisionsPerSec": 784,
+        "overPartitionDropPct": -5.9,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": 590,
+            "p99Ms": 19.8,
+            "coordinationOverheadPct": 4.2,
+            "raftHeartbeatOpsPerSec": 180,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": 720.4,
+            "p99Ms": 18.09,
+            "coordinationOverheadPct": 6.8,
+            "raftHeartbeatOpsPerSec": 450,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": 784,
+            "p99Ms": 16.9,
+            "coordinationOverheadPct": 9.4,
+            "raftHeartbeatOpsPerSec": 900,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": 738,
+            "p99Ms": 20.4,
+            "coordinationOverheadPct": 16.5,
+            "raftHeartbeatOpsPerSec": 1800,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "optimalPartitions": 15,
+        "peakDecisionsPerSec": 318,
+        "overPartitionDropPct": -17,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": 274,
+            "p99Ms": 38.4,
+            "coordinationOverheadPct": 11,
+            "raftHeartbeatOpsPerSec": 360,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": 318,
+            "p99Ms": 36.08,
+            "coordinationOverheadPct": 14.5,
+            "raftHeartbeatOpsPerSec": 900,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": 302,
+            "p99Ms": 41.2,
+            "coordinationOverheadPct": 22.8,
+            "raftHeartbeatOpsPerSec": 1800,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": 264,
+            "p99Ms": 49.6,
+            "coordinationOverheadPct": 31.4,
+            "raftHeartbeatOpsPerSec": 3600,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "optimalPartitions": 30,
+        "peakDecisionsPerSec": 542,
+        "overPartitionDropPct": -10.3,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": 448,
+            "p99Ms": 24.2,
+            "coordinationOverheadPct": 7.5,
+            "raftHeartbeatOpsPerSec": 240,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": 524,
+            "p99Ms": 22.9,
+            "coordinationOverheadPct": 10.2,
+            "raftHeartbeatOpsPerSec": 600,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": 542,
+            "p99Ms": 23.8,
+            "coordinationOverheadPct": 15.6,
+            "raftHeartbeatOpsPerSec": 1200,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": 486,
+            "p99Ms": 28.9,
+            "coordinationOverheadPct": 24,
+            "raftHeartbeatOpsPerSec": 2400,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "optimalPartitions": 15,
+        "peakDecisionsPerSec": 412,
+        "overPartitionDropPct": -15.5,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": 356,
+            "p99Ms": 30.2,
+            "coordinationOverheadPct": 9.8,
+            "raftHeartbeatOpsPerSec": 300,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": 412,
+            "p99Ms": 28.4,
+            "coordinationOverheadPct": 13.4,
+            "raftHeartbeatOpsPerSec": 750,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": 398,
+            "p99Ms": 31.8,
+            "coordinationOverheadPct": 19.8,
+            "raftHeartbeatOpsPerSec": 1500,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": 348,
+            "p99Ms": 38.4,
+            "coordinationOverheadPct": 28.2,
+            "raftHeartbeatOpsPerSec": 3000,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "optimalPartitions": 30,
+        "peakDecisionsPerSec": 662,
+        "overPartitionDropPct": -7.9,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": 520,
+            "p99Ms": 21.4,
+            "coordinationOverheadPct": 5.4,
+            "raftHeartbeatOpsPerSec": 210,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": 618,
+            "p99Ms": 20.1,
+            "coordinationOverheadPct": 8.2,
+            "raftHeartbeatOpsPerSec": 525,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": 662,
+            "p99Ms": 19.2,
+            "coordinationOverheadPct": 11.8,
+            "raftHeartbeatOpsPerSec": 1050,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": 610,
+            "p99Ms": 23.6,
+            "coordinationOverheadPct": 19.4,
+            "raftHeartbeatOpsPerSec": 2100,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      }
+    ]
+  },
   "lagrangeEvolutionTimeline": [
     {
       "milestoneId": "v0.2.0-tidb-ref",
@@ -416,6 +662,27 @@
       "scenarioBP99Ms": 18.09,
       "scenarioBWanBytes": 144,
       "scenarioBMoveP99Ms": 18,
+      "scenarioBConvergenceMs": 45,
+      "scenarioCFresh0msDecPerSec": 441.15
+    },
+    {
+      "milestoneId": "v0.3.2-partition-sweep-p6to60",
+      "version": "0.3.2",
+      "commitSha": "2025f7780d",
+      "recordedAt": "2026-10-30T22:10:00Z",
+      "label": "5-Node RF=3 Partition Granularity Sweep (P=6..60)",
+      "evidenceTier": "modeled-topology-oracle",
+      "executionPath": "local-js-oracle",
+      "scenarioATxPerSec": 2.24,
+      "scenarioAP50Ms": 1520,
+      "scenarioAP95Ms": 2590,
+      "scenarioAP99Ms": 3120,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 784,
+      "scenarioBP99Ms": 16.9,
+      "scenarioBWanBytes": 144,
+      "scenarioBMoveP99Ms": 42,
       "scenarioBConvergenceMs": 45,
       "scenarioCFresh0msDecPerSec": 441.15
     }
