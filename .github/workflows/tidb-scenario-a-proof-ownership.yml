@@ -72,6 +72,10 @@ on:
       - 'docs/benchmarks/partition-granularity-sweep-progress.md'
       - 'docs/benchmarks/partition-granularity-sweep-progress.html'
       - 'docs/benchmarks/partition-granularity-sweep-progress.svg'
+      - 'test/distributed/harness/scenario-b-rtt-working-set-static-web.js'
+      - 'docs/benchmarks/scenario-b-rtt-working-set-crossover.md'
+      - 'docs/benchmarks/scenario-b-rtt-working-set-crossover.html'
+      - 'docs/benchmarks/scenario-b-rtt-working-set-crossover.svg'
   workflow_dispatch: {}
 
 permissions:
@@ -135,6 +139,7 @@ jobs:
             test/distributed/harness/scaleout-node-rf-comparison-static-web.js \
             test/distributed/harness/scaleout-series-experiments.js \
             test/distributed/harness/partition-granularity-comparison-static-web.js \
+            test/distributed/harness/scenario-b-rtt-working-set-static-web.js \
             scripts/checks/distributed-scaleout-provenance-guard.js \
             scripts/checks/comparative-benchmark-matrix-guard.js
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js
