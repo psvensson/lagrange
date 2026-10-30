@@ -10,6 +10,47 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-10-30
+
+Queryable Core 0.3.2 completion release sealing synchronous transactional global
+index maintenance (Mode A), end-to-end SQL key-routed read/write journeys (`J2`),
+local and compound secondary index journeys (`J3`), locking read conflict and
+timeout journeys (`J4`), online global secondary index lifecycle and routing
+journeys (`J5`), push-driven live-query subscription journeys (`J6`), PG-wire
+idle rollback notice preservation, comparative OLTP and Scenario B benchmark
+matrix progression artifacts, and solver/publisher proof reuse (epic
+`release-0-3-queryable-core`):
+
+Formation health at cut time: `formation health: 0/20 passed (0%), 0 with a
+starved seed`.
+
+### Added
+- **Queryable Core 0.3.2 journey completion (`J2`–`J6`, `C1`):**
+  Composite partition key resolution (`partition-resolver-composite.js`),
+  global index lifecycle coordinator (`global-index-lifecycle-coordinator.js`
+  and `index-service-global-methods.js`), live-query group helpers
+  (`live-query-group-helpers.js`), Mode A synchronous global index maintenance
+  specification seal (`global-index-maintenance-mode-seal-guard.js`), and
+  end-to-end journey suites (`J2`–`J6`).
+- **Comparative OLTP and Scenario B benchmark progression & matrix (`#158`–`#164`):**
+  Version-gated TiDB and PostgreSQL comparison history store, Scenario B
+  three-island distributed risk decision comparators and fairness gate, and
+  static Markdown, HTML, and SVG comparison progression renderers.
+- **Solver & publisher proof deduplication (`scripts/solve/commands.js`, `scripts/checks/push-gate-change-proof.js`, `scripts/publish-head.js`):**
+  `solve land` records a commit- and base-bound test proof receipt
+  (`lagrange-land-proof.json`) reused by the push gate, `pushGatedHead` skips
+  redundant `.githooks/pre-push` re-entry via `LAGRANGE_GATE_ALREADY_PROVED_SHA`,
+  corpus ratchets execute concurrently, and `dependency-cruiser` import-graph
+  analysis caches verified reports in `<gitCommonDir>/lagrange-import-graph-cache.json`.
+
+### Fixed
+- **PG-wire idle transaction rollback notice preservation (`postgres-wire-adapter.js`):**
+  Preserves the idle-timeout `NoticeResponse` (`25P02` / `57P01`) before closing
+  or resetting the session state, and ensures Scenario A public PG contexts issue
+  explicit `ROLLBACK` before pool release (`oltp-scenario-a-lagrange-public-pg-context.js`).
+- **Runtime container `/proto` asset inclusion (`Dockerfile`):**
+  Copies `/proto` into the production runtime image stage (`J1` repair).
+
 ## [0.3.0] — 2026-10-29
 
 Phase 0.3 Queryable Core release delivering explicit typed partition boundary
@@ -599,7 +640,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/psvensson/lagrange/compare/v0.3.0...v0.3.2
 [0.3.0]: https://github.com/psvensson/lagrange/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/psvensson/lagrange/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/psvensson/lagrange/compare/v0.2.6...v0.2.7

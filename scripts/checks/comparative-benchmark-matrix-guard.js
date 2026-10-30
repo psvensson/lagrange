@@ -13,6 +13,7 @@ import {
   TOTAL_EPIC_SLICES,
   buildMultiSystemComparativeMatrix,
   readMultiSystemComparativeMatrix,
+  writeMultiSystemComparativeMatrix,
 } from '../../test/distributed/harness/comparative-matrix-runner.js';
 import {
   DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH,
@@ -21,14 +22,17 @@ import {
   renderPostgresqlComparisonHtml,
   renderPostgresqlComparisonMarkdown,
   renderPostgresqlComparisonSvg,
+  writePostgresqlComparisonStaticWebArtifacts,
 } from '../../test/distributed/harness/postgresql-comparison-static-web.js';
 import {
+  CANONICAL_DEFAULT_TARGETS,
   DEFAULT_COMPARATIVE_LANDING_HTML_PATH,
   DEFAULT_COMPARATIVE_LANDING_MD_PATH,
   DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH,
   renderComparativeLandingHtml,
   renderComparativeLandingMarkdown,
   renderComparativeOverviewSvg,
+  writeComparativeLandingArtifacts,
 } from '../../test/distributed/harness/comparative-landing-page.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -37,6 +41,7 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 
 const UTF8 = 'utf8';
+const TYPE_FUNCTION = 'function';
 const PASS_MESSAGE = 'comparative-benchmark-matrix-guard: PASS\n';
 const NEWLINE = '\n';
 const FLAG_METRIC = '--metric';
@@ -203,6 +208,11 @@ function verifyHarnessRendererParity(rootDir, matrix) {
   assert.equal(defaultMatrix.schema, MULTI_SYSTEM_MATRIX_SCHEMA);
   assert.equal(defaultMatrix.epicId, EPIC_ID);
   assert.equal(defaultMatrix.totalSlices, TOTAL_EPIC_SLICES);
+
+  assert.equal(Array.isArray(CANONICAL_DEFAULT_TARGETS), true);
+  assert.equal(typeof writeMultiSystemComparativeMatrix, TYPE_FUNCTION);
+  assert.equal(typeof writePostgresqlComparisonStaticWebArtifacts, TYPE_FUNCTION);
+  assert.equal(typeof writeComparativeLandingArtifacts, TYPE_FUNCTION);
 
   const testMatrix = matrix || defaultMatrix;
   const landingMdPath = path.resolve(rootDir, DEFAULT_COMPARATIVE_LANDING_MD_PATH);

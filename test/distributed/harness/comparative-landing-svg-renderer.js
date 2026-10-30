@@ -27,46 +27,79 @@ function barW(v, m, w = 220, min = 4) {
   return Math.max(min, Math.min(w, Math.round((Math.max(0, v) / Math.max(m, 1)) * w)));
 }
 
+const TARGET_COLOR_PREFIXES = Object.freeze([
+  ['lagrange', '#6366f1'],
+  ['tidb', '#0284c7'],
+  ['pg-valkey', '#06b6d4'],
+  ['pg-plpgsql-sync-ha', '#d97706'],
+  ['pg-plpgsql', '#14b8a6'],
+  ['pg-patroni', '#f59e0b'],
+  ['pg', '#10b981'],
+  ['citus-distributed', '#ec4899'],
+  ['citus', '#db2777'],
+  ['yugabyte', '#8b5cf6'],
+  ['ignite', '#ef4444'],
+]);
+
+const FALLBACK_PALETTE = Object.freeze([
+  '#6366f1',
+  '#0284c7',
+  '#10b981',
+  '#f59e0b',
+  '#ec4899',
+  '#8b5cf6',
+]);
+
+const TARGET_LABEL_PREFIXES = Object.freeze([
+  ['pg-plpgsql-sync-ha', 'PG 17 (Patroni HA + PL/pgSQL)'],
+  ['pg-plpgsql', 'PG 17 (Single + PL/pgSQL Fn)'],
+  ['pg-patroni', 'PG 17 (Patroni Sync HA + App)'],
+  ['pg-valkey', 'PG 17 + Valkey Cache'],
+  ['pg', 'PG 17 (Single + App Service)'],
+  ['citus-distributed', 'Citus Distributed RF=3'],
+  ['citus', 'Citus Single-Node'],
+  ['yugabyte', 'YugabyteDB (RF=3)'],
+  ['ignite', 'Apache Ignite 3'],
+  ['tidb', 'TiDB + TiKV'],
+  ['lagrange', 'Lagrange'],
+]);
+
 function getTargetColor(targetId, index = 0) {
   const tid = stringToLowerCase(String(targetId || ''));
-  if (stringStartsWith(tid, 'lagrange')) return '#6366f1';
-  if (stringStartsWith(tid, 'tidb')) return '#0284c7';
-  if (stringStartsWith(tid, 'pg-valkey')) return '#06b6d4';
-  if (stringStartsWith(tid, 'pg-plpgsql-sync-ha')) return '#d97706';
-  if (stringStartsWith(tid, 'pg-plpgsql')) return '#14b8a6';
-  if (stringStartsWith(tid, 'pg-patroni')) return '#f59e0b';
-  if (stringStartsWith(tid, 'pg')) return '#10b981';
-  if (stringStartsWith(tid, 'citus-distributed')) return '#ec4899';
-  if (stringStartsWith(tid, 'citus')) return '#db2777';
-  if (stringStartsWith(tid, 'yugabyte')) return '#8b5cf6';
-  if (stringStartsWith(tid, 'ignite')) return '#ef4444';
-  const palette = ['#6366f1', '#0284c7', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
-  return palette[index % palette.length];
+  for (let i = 0; i < TARGET_COLOR_PREFIXES.length; i += 1) {
+    const entry = TARGET_COLOR_PREFIXES[i];
+    if (stringStartsWith(tid, entry[0])) {
+      return entry[1];
+    }
+  }
+  return FALLBACK_PALETTE[index % FALLBACK_PALETTE.length];
+}
+
+function abbreviateTargetLabel(label) {
+  if (label.length <= 30) {
+    return label;
+  }
+  let shortened = stringReplace(label, /PostgreSQL 17/gu, 'PG 17');
+  shortened = stringReplace(shortened, /Function/gu, 'Fn');
+  shortened = stringReplace(shortened, /Service/gu, 'App');
+  return shortened.length > 30 ? stringSlice(shortened, 0, 30) : shortened;
 }
 
 function shortTargetLabel(target) {
-  if (!target) return '';
+  if (!target) {
+    return '';
+  }
   if (typeof target.shortLabel === 'string' && target.shortLabel.length > 0) {
     return target.shortLabel;
   }
   const tid = stringToLowerCase(String(target.targetId || ''));
-  if (stringStartsWith(tid, 'pg-plpgsql-sync-ha')) return 'PG 17 (Patroni HA + PL/pgSQL)';
-  if (stringStartsWith(tid, 'pg-plpgsql')) return 'PG 17 (Single + PL/pgSQL Fn)';
-  if (stringStartsWith(tid, 'pg-patroni')) return 'PG 17 (Patroni Sync HA + App)';
-  if (stringStartsWith(tid, 'pg-valkey')) return 'PG 17 + Valkey Cache';
-  if (stringStartsWith(tid, 'pg')) return 'PG 17 (Single + App Service)';
-  if (stringStartsWith(tid, 'citus-distributed')) return 'Citus Distributed RF=3';
-  if (stringStartsWith(tid, 'citus')) return 'Citus Single-Node';
-  if (stringStartsWith(tid, 'yugabyte')) return 'YugabyteDB (RF=3)';
-  if (stringStartsWith(tid, 'ignite')) return 'Apache Ignite 3';
-  if (stringStartsWith(tid, 'tidb')) return 'TiDB + TiKV';
-  if (stringStartsWith(tid, 'lagrange')) return 'Lagrange';
-  const label = String(target.label || tid);
-  if (label.length <= 30) return label;
-  let s = stringReplace(label, /PostgreSQL 17/gu, 'PG 17');
-  s = stringReplace(s, /Function/gu, 'Fn');
-  s = stringReplace(s, /Service/gu, 'App');
-  return s.length > 30 ? stringSlice(s, 0, 30) : s;
+  for (let i = 0; i < TARGET_LABEL_PREFIXES.length; i += 1) {
+    const entry = TARGET_LABEL_PREFIXES[i];
+    if (stringStartsWith(tid, entry[0])) {
+      return entry[1];
+    }
+  }
+  return abbreviateTargetLabel(String(target.label || tid));
 }
 
 function getTargets(matrix) {
@@ -295,5 +328,4 @@ export {
   getTxPerSec,
   getWireBytes,
   renderComparativeOverviewSvg,
-  shortTargetLabel,
 };
