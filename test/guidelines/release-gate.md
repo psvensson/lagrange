@@ -11,6 +11,19 @@ last_reviewed: 2026-10-30
 
 # Testing - Scenario And Release-Gate Quests
 
+## Documentation-Only Changes
+
+Documentation-only planning, roadmap and policy changes require the relevant
+documentation, rule-set, roadmap, link and generated-consistency checks, plus
+review against their canonical owners. They do not require runtime,
+distributed, soak or full-system execution merely because they describe those
+systems or future acceptance requirements. Existing evidence remains attributed
+to its actual source and configuration, and unsupported capability or support
+claims remain explicitly unverified. Adopting documentation does not discharge
+sealed feature or release acceptance or create a new whole-corpus receipt.
+Any accompanying change to runtime behavior, executable harnesses or enforced
+acceptance predicates retains its own applicable proof requirements.
+
 ## Separate Acceptance Claims
 
 Keep these verdicts explicit in existing Quest and epic evidence:

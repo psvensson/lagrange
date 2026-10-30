@@ -834,7 +834,10 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
     };
   }
 
-  const baselineIndex = buildHistoricalBaselineIndex(historyReports);
+  const baselineIndex = buildHistoricalBaselineIndex(
+    historyReports,
+    gateConfig.baselineProvider,
+  );
 
   let failedScenarioCount = 0;
   let mitigatedScenarioCount = 0;

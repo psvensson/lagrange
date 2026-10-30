@@ -285,8 +285,14 @@ gets too. `lab fleet` shows who holds each
 machine; set `LAGRANGE_LAB_AGENT` (for example `claude:SESSION`) to name
 yourself in the record.
 
-A head merged through GitHub met neither this hook nor the publisher, so it has
-NO corpus proof until `npm run publish -- --post-merge <sha>` has run for it.
+Documentation-only planning, roadmap and policy changes use the
+[documentation-only proof scope](../../test/guidelines/release-gate.md#documentation-only-changes).
+Their approval requires the applicable documentation checks and review, not a
+new runtime or whole-corpus run. It does not create or transfer a runtime receipt.
+
+For changes that require corpus proof, a head merged through GitHub met neither
+this hook nor the publisher, so it has NO corpus proof until
+`npm run publish -- --post-merge <sha>` has run for it.
 That arm refuses a sha that is not on the first-parent history of origin/main
 or that already holds the whole-corpus receipt, then starts the same detached
 local corpus - the whole corpus, since no local gate proved a cone - which

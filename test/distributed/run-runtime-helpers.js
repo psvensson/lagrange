@@ -141,6 +141,9 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     const configuredMaxRegression = normalizeFiniteNumber(
       configuredGate.maxThroughputRegressionRatio,
     );
+    const configuredBaselineProvider = String(
+      configuredGate.baselineProvider || '',
+    ).trim().toLowerCase();
     const configuredMitigationId = String(
       configuredGate.approvedMitigationId || '',
     ).trim();
@@ -183,6 +186,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           defaultMinimumThroughputRatio >= 0 ?
           defaultMinimumThroughputRatio :
           null),
+      baselineProvider: configuredBaselineProvider ||
+      BENCHMARK_GATE_DEFAULTS.baselineProvider,
       failIfBaselineMissing: configuredGate.failIfBaselineMissing === true ||
       BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing === true,
       approvedMitigationId: configuredMitigationId || null,
@@ -190,10 +195,17 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     };
   }
 
-  function buildHistoricalBaselineIndex(historyReports) {
+  function buildHistoricalBaselineIndex(historyReports, baselineProvider = null) {
     const bySimilarityKey = new Map();
 
     for (const historicalReport of historyReports) {
+      const reportProvider = String(
+        historicalReport?.metadata?.raftProvider || '',
+      ).trim().toLowerCase();
+      if (baselineProvider && reportProvider && reportProvider !== baselineProvider) {
+        continue;
+      }
+
       const scenarioSummaries = Array.isArray(
         historicalReport?.standardSummary?.scenarios,
       ) ?
@@ -216,6 +228,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         }
 
         bySimilarityKey.set(similarityKey, {
+          provider: reportProvider || null,
           reportPath: historicalReport?.path || null,
           reportTimestamp: historicalReport?.timestamp || null,
           scenario: scenarioSummary?.scenario || null,
