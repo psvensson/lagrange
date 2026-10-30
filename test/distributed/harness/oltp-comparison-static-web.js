@@ -113,6 +113,8 @@ function renderComparisonProgressHtml(summary) {
   const progressTrs = arrayJoin(arrayMap(entries, (e) => {
     const r = e.record || e;
     const deltas = e.deltas || e;
+    const scId = r?.framework?.scenarioId || 'scenario-a';
+    const scLink = `<a href="${escapeXml(getScenarioDefinitionHref(scId))}">${escapeXml(scId)}</a>`;
     const lm = `${formatNum(r?.metrics?.lagrange?.opsPerSec)} ops/s`;
     const llat = `${formatNum(r?.metrics?.lagrange?.latencyMs?.p50)} / ${formatNum(r?.metrics?.lagrange?.latencyMs?.p95)} / ${formatNum(r?.metrics?.lagrange?.latencyMs?.p99)} ms`;
     const tm = `${formatNum(r?.metrics?.tidbTikv?.opsPerSec)} ops/s`;
@@ -121,7 +123,7 @@ function renderComparisonProgressHtml(summary) {
     const retries = escapeXml(String(r?.metrics?.tidbTikv?.transactions?.retries ?? 0));
     const proofs = `${r?.metrics?.lagrange?.semanticProofs?.passedCount ?? 0}/${r?.metrics?.lagrange?.semanticProofs?.requiredCount ?? 33} vs ${r?.metrics?.tidbTikv?.semanticProofs?.passedCount ?? 0}/${r?.metrics?.tidbTikv?.semanticProofs?.requiredCount ?? 33}`;
     const deltasStr = `TiDB ops: ${formatSigned(deltas?.tidbOpsPerSecDeltaFromPrev)}, proofs: ${formatSigned(deltas?.tidbSemanticProofsDeltaFromPrev, 0)}`;
-    return `        <tr><td>${escapeXml(r?.recordedAt || 'unknown')}</td><td>${lm}</td><td>${llat}</td><td>${tm}</td><td>${tlat}</td><td>${ratio}</td><td>${retries}</td><td>${proofs}</td><td>${deltasStr}</td></tr>`;
+    return `        <tr><td>${escapeXml(r?.recordedAt || 'unknown')}</td><td>${scLink}</td><td>${lm}</td><td>${llat}</td><td>${tm}</td><td>${tlat}</td><td>${ratio}</td><td>${retries}</td><td>${proofs}</td><td>${deltasStr}</td></tr>`;
   }), '\n');
 
   const bEntries = getScenarioBEntries(entries);
@@ -174,8 +176,8 @@ function renderComparisonProgressHtml(summary) {
     '    </div>\n' +
     '    <div class="card">\n' +
     '      <h2>Performance &amp; Semantic Closure Progression</h2>\n' +
-    '      <table class="data-table"><thead><tr><th>Recorded (UTC)</th><th>Lagrange ops/s</th><th>Lagrange Latency</th><th>TiDB ops/s</th><th>TiDB Latency</th><th>Ratio</th><th>Retries</th><th>Proofs</th><th>Deltas</th></tr></thead>\n' +
-    `      <tbody>\n${progressTrs || '        <tr><td colspan="9">No progression recorded</td></tr>'}\n      </tbody></table>\n` +
+    '      <table class="data-table"><thead><tr><th>Recorded (UTC)</th><th>Scenario</th><th>Lagrange ops/s</th><th>Lagrange Latency</th><th>TiDB ops/s</th><th>TiDB Latency</th><th>Ratio</th><th>Retries</th><th>Proofs</th><th>Deltas</th></tr></thead>\n' +
+    `      <tbody>\n${progressTrs || '        <tr><td colspan="10">No progression recorded</td></tr>'}\n      </tbody></table>\n` +
     '    </div>\n' +
     bCard +
     '  </div>\n' +
