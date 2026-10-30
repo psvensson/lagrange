@@ -34,6 +34,8 @@ Two distinct measurement boundaries are evaluated:
 | TiDB + TiKV v8.5.8 | distributed-sql | 6 (6) | Yes | 6.75 (1383.18 ms) | 221.44 (36.08 ms) | 6144 B | `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
 | PostgreSQL 17 (Single Primary + App Service) 17.2 | relational-single-primary | 2 (2) | No | 14.80 (412.60 ms) | 294.60 (26.40 ms) | 1420 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
 | PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) 17.2-patroni-4.0 | relational-sync-ha | 6 (9) | Yes | 8.40 (920.50 ms) | 218.20 (35.20 ms) | 2680 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) 17.2-plpgsql | relational-server-function | 1 (1) | No | 14.80 (412.60 ms) | 418.40 (17.60 ms) | 320 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) 17.2-patroni-4.0-plpgsql | relational-sync-ha-function | 5 (8) | Yes | 8.40 (920.50 ms) | 316.80 (24.10 ms) | 960 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
 
 ## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
@@ -55,3 +57,11 @@ Two distinct measurement boundaries are evaluated:
 | PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | one-remote-stage | 248.00 | 19.80 | 2 | 2240 B |
 | PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | sequential | 146.00 | 34.60 | 4 | 3640 B |
 | PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | fan-out | 174.00 | 29.80 | 4 | 3560 B |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | local-only | 590.00 | 5.10 | 1 | 256 B |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | one-remote-stage | 442.00 | 10.60 | 1 | 320 B |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | sequential | 312.00 | 17.80 | 1 | 352 B |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | fan-out | 358.00 | 15.40 | 1 | 352 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | local-only | 455.00 | 7.80 | 1 | 768 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | one-remote-stage | 338.00 | 14.90 | 1 | 960 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | sequential | 234.00 | 25.20 | 1 | 1056 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | fan-out | 272.00 | 21.80 | 1 | 1056 B |

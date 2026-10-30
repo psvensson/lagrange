@@ -13,9 +13,7 @@ function createLagrangeTarget() {
     label: 'Lagrange',
     version: '0.3.0',
     category: 'distributed-native',
-    topologyUnits: 3,
-    processCount: 3,
-    rpoZeroSurvivability: true,
+    topologyUnits: 3, processCount: 3, rpoZeroSurvivability: true,
     detailPageMd: 'tidb-comparison-progress.md',
     detailPageHtml: 'tidb-comparison-progress.html',
     scenarioA: {
@@ -24,8 +22,7 @@ function createLagrangeTarget() {
       commitP50Ms: 2269.44,
       commitP95Ms: 4418.93,
       commitP99Ms: 5343.1,
-      semanticProofPassed: 33,
-      semanticProofTotal: 33,
+      semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
       evidenceTier: 'modeled-topology-oracle',
@@ -52,9 +49,7 @@ function createTidbTarget() {
     label: 'TiDB + TiKV',
     version: 'v8.5.8',
     category: 'distributed-sql',
-    topologyUnits: 6,
-    processCount: 6,
-    rpoZeroSurvivability: true,
+    topologyUnits: 6, processCount: 6, rpoZeroSurvivability: true,
     detailPageMd: 'tidb-comparison-progress.md',
     detailPageHtml: 'tidb-comparison-progress.html',
     scenarioA: {
@@ -63,8 +58,7 @@ function createTidbTarget() {
       commitP50Ms: 535.12,
       commitP95Ms: 1383.18,
       commitP99Ms: 1887.96,
-      semanticProofPassed: 33,
-      semanticProofTotal: 33,
+      semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
       evidenceTier: 'modeled-topology-oracle',
@@ -91,9 +85,7 @@ function createPgSingleTarget() {
     label: 'PostgreSQL 17 (Single Primary + App Service)',
     version: '17.2',
     category: 'relational-single-primary',
-    topologyUnits: 2,
-    processCount: 2,
-    rpoZeroSurvivability: false,
+    topologyUnits: 2, processCount: 2, rpoZeroSurvivability: false,
     detailPageMd: 'postgresql-comparison-progress.md',
     detailPageHtml: 'postgresql-comparison-progress.html',
     scenarioA: {
@@ -102,8 +94,7 @@ function createPgSingleTarget() {
       commitP50Ms: 185.4,
       commitP95Ms: 412.6,
       commitP99Ms: 580.2,
-      semanticProofPassed: 33,
-      semanticProofTotal: 33,
+      semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
       evidenceTier: 'modeled-topology-oracle',
@@ -130,9 +121,7 @@ function createPgPatroniTarget() {
     label: 'PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)',
     version: '17.2-patroni-4.0',
     category: 'relational-sync-ha',
-    topologyUnits: 6,
-    processCount: 9,
-    rpoZeroSurvivability: true,
+    topologyUnits: 6, processCount: 9, rpoZeroSurvivability: true,
     detailPageMd: 'postgresql-comparison-progress.md',
     detailPageHtml: 'postgresql-comparison-progress.html',
     scenarioA: {
@@ -141,8 +130,7 @@ function createPgPatroniTarget() {
       commitP50Ms: 390.2,
       commitP95Ms: 920.5,
       commitP99Ms: 1290.8,
-      semanticProofPassed: 33,
-      semanticProofTotal: 33,
+      semanticProofPassed: 33, semanticProofTotal: 33,
     },
     scenarioB: {
       evidenceTier: 'modeled-topology-oracle',
@@ -163,6 +151,78 @@ function createPgPatroniTarget() {
   };
 }
 
+function createPgPlpgsqlSingleTarget() {
+  return {
+    targetId: 'pg-plpgsql-single-primary',
+    label: 'PostgreSQL 17 (Single Primary + PL/pgSQL Function)',
+    version: '17.2-plpgsql',
+    category: 'relational-server-function',
+    topologyUnits: 1, processCount: 1, rpoZeroSurvivability: false,
+    detailPageMd: 'postgresql-comparison-progress.md',
+    detailPageHtml: 'postgresql-comparison-progress.html',
+    scenarioA: {
+      evidenceTier: 'modeled-topology-oracle',
+      throughputTxPerSec: 14.8,
+      commitP50Ms: 185.4,
+      commitP95Ms: 412.6,
+      commitP99Ms: 580.2,
+      semanticProofPassed: 33, semanticProofTotal: 33,
+    },
+    scenarioB: {
+      evidenceTier: 'modeled-topology-oracle',
+      decisionsPerSec: 418.4,
+      p50Ms: 9.8,
+      p95Ms: 14.9,
+      p99Ms: 17.6,
+      wanBytesPerDecision: 320,
+      sqlRoundTripsPerDecision: 1.0,
+      movementContinuityPassed: false,
+      shapes: {
+        'local-only': {decisionsPerSec: 590.0, p99Ms: 5.1, wanBytes: 256, roundTrips: 1},
+        'one-remote-stage': {decisionsPerSec: 442.0, p99Ms: 10.6, wanBytes: 320, roundTrips: 1},
+        'sequential': {decisionsPerSec: 312.0, p99Ms: 17.8, wanBytes: 352, roundTrips: 1},
+        'fan-out': {decisionsPerSec: 358.0, p99Ms: 15.4, wanBytes: 352, roundTrips: 1},
+      },
+    },
+  };
+}
+
+function createPgPlpgsqlPatroniTarget() {
+  return {
+    targetId: 'pg-plpgsql-sync-ha-rf3',
+    label: 'PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function)',
+    version: '17.2-patroni-4.0-plpgsql',
+    category: 'relational-sync-ha-function',
+    topologyUnits: 5, processCount: 8, rpoZeroSurvivability: true,
+    detailPageMd: 'postgresql-comparison-progress.md',
+    detailPageHtml: 'postgresql-comparison-progress.html',
+    scenarioA: {
+      evidenceTier: 'modeled-topology-oracle',
+      throughputTxPerSec: 8.4,
+      commitP50Ms: 390.2,
+      commitP95Ms: 920.5,
+      commitP99Ms: 1290.8,
+      semanticProofPassed: 33, semanticProofTotal: 33,
+    },
+    scenarioB: {
+      evidenceTier: 'modeled-topology-oracle',
+      decisionsPerSec: 316.8,
+      p50Ms: 13.9,
+      p95Ms: 20.8,
+      p99Ms: 24.1,
+      wanBytesPerDecision: 960,
+      sqlRoundTripsPerDecision: 1.0,
+      movementContinuityPassed: true,
+      shapes: {
+        'local-only': {decisionsPerSec: 455.0, p99Ms: 7.8, wanBytes: 768, roundTrips: 1},
+        'one-remote-stage': {decisionsPerSec: 338.0, p99Ms: 14.9, wanBytes: 960, roundTrips: 1},
+        'sequential': {decisionsPerSec: 234.0, p99Ms: 25.2, wanBytes: 1056, roundTrips: 1},
+        'fan-out': {decisionsPerSec: 272.0, p99Ms: 21.8, wanBytes: 1056, roundTrips: 1},
+      },
+    },
+  };
+}
+
 function buildMultiSystemComparativeMatrix(options = {}) {
   const updatedAt = typeof options.updatedAt === 'string' ?
     options.updatedAt : '2026-10-30T16:45:00.000Z';
@@ -170,8 +230,11 @@ function buildMultiSystemComparativeMatrix(options = {}) {
     schema: MULTI_SYSTEM_MATRIX_SCHEMA,
     epicId: EPIC_ID,
     totalSlices: TOTAL_EPIC_SLICES,
-    completedSlices: ['comparative-landing-page-and-postgresql-app-service'],
-    remainingSlicesCount: 4,
+    completedSlices: [
+      'comparative-landing-page-and-postgresql-app-service',
+      'postgresql-plpgsql-server-side-locality-control',
+    ],
+    remainingSlicesCount: 3,
     updatedAt,
     scenarios: [
       {
@@ -192,6 +255,8 @@ function buildMultiSystemComparativeMatrix(options = {}) {
       createTidbTarget(),
       createPgSingleTarget(),
       createPgPatroniTarget(),
+      createPgPlpgsqlSingleTarget(),
+      createPgPlpgsqlPatroniTarget(),
     ],
   };
 }

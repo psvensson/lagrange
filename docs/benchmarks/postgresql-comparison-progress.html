@@ -5,20 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>PostgreSQL and Lagrange Comparative Progress</title>
   <style>
-    :root { --bg: #0f172a; --card-bg: #1e293b; --text: #f8fafc; --muted: #94a3b8; --border: #334155; --accent: #38bdf8; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; }
-    .container { max-width: 1100px; margin: 0 auto; }
-    h1 { font-size: 24px; margin: 0 0 8px 0; color: #fff; }
-    .nav-bar { margin: 12px 0 20px 0; font-size: 13px; color: var(--muted); }
-    .nav-bar a { color: var(--accent); text-decoration: none; margin-right: 12px; }
-    .nav-bar a:hover { text-decoration: underline; }
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 24px; overflow-x: auto; }
-    .card h2 { font-size: 16px; margin: 0 0 14px 0; color: var(--accent); }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
-    th { color: var(--muted); font-weight: 600; }
-    .chart-box { margin-bottom: 24px; display: flex; justify-content: center; }
-  </style>
+:root { --bg: #0f172a; --card-bg: #1e293b; --text: #f8fafc; --muted: #94a3b8; --border: #334155; --accent: #38bdf8; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; }
+.container { max-width: 1100px; margin: 0 auto; } h1 { font-size: 24px; margin: 0 0 8px 0; color: #fff; }
+.nav-bar { margin: 12px 0 20px 0; font-size: 13px; color: var(--muted); } .nav-bar a { color: var(--accent); text-decoration: none; margin-right: 12px; }
+.card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 24px; overflow-x: auto; }
+.card h2 { font-size: 16px; margin: 0 0 14px 0; color: var(--accent); } .card p, .card li { font-size: 13px; line-height: 1.6; color: #cbd5e1; } .card ul { margin: 0; padding-left: 20px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; } th { color: var(--muted); font-weight: 600; } .chart-box { margin-bottom: 24px; display: flex; justify-content: center; }
+</style>
 </head>
 <body>
   <div class="container">
@@ -31,88 +25,142 @@
       <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B</a>
     </div>
     <div class="chart-box">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440">
-  <rect width="960" height="440" fill="#0f172a" rx="8"/>
-  <text x="20" y="32" fill="#f8fafc" font-size="16" font-family="system-ui, sans-serif" font-weight="bold">PostgreSQL &amp; Lagrange Comparative Progress Matrix</text>
-  <text x="20" y="48" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Contended OLTP baseline vs distributed risk decision graph shapes</text>
-  <rect x="20" y="58" width="290" height="362" fill="#1e293b" rx="6" stroke="#334155"/>
-  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="35" y="82" fill="#38bdf8" font-size="13" font-weight="bold">Scenario A: OLTP Baseline</text></a>
-  <text x="35" y="100" fill="#94a3b8" font-size="10">Throughput (tx/s) &amp; p95 latency (ms)</text>
-  <rect x="330" y="58" width="290" height="362" fill="#1e293b" rx="6" stroke="#334155"/>
-  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="345" y="82" fill="#38bdf8" font-size="13" font-weight="bold">Scenario B: Risk Decision</text></a>
-  <text x="345" y="100" fill="#94a3b8" font-size="10">Decisions/s &amp; p99 latency (ms)</text>
-  <rect x="640" y="58" width="300" height="362" fill="#1e293b" rx="6" stroke="#334155"/>
-  <text x="655" y="82" fill="#38bdf8" font-size="13" font-weight="bold">Scenario B: 4-Shape Ladder &amp; WAN</text>
-  <text x="655" y="100" fill="#94a3b8" font-size="10">Throughput (local/remote/seq/fan) &amp; WAN bytes</text>
-    <text x="35" y="135" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit): 0.8 tx/s (p95: 4418.9ms)</text>
-    <rect x="35" y="141" width="250" height="10" fill="#334155" rx="3"/>
-    <rect x="35" y="141" width="4" height="10" fill="#38bdf8" rx="3"/>
-    <text x="35" y="161" fill="#64748b" font-size="9">observed-docker-cluster</text>
-    <text x="345" y="135" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit): 441.1 dec/s (p99: 18.1ms)</text>
-    <rect x="345" y="141" width="250" height="10" fill="#334155" rx="3"/>
-    <rect x="345" y="141" width="221" height="10" fill="#38bdf8" rx="3"/>
-    <text x="345" y="161" fill="#64748b" font-size="9">modeled-topology-oracle</text>
-    <text x="35" y="199" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit): 6.8 tx/s (p95: 1383.2ms)</text>
-    <rect x="35" y="205" width="250" height="10" fill="#334155" rx="3"/>
-    <rect x="35" y="205" width="5" height="10" fill="#f59e0b" rx="3"/>
-    <text x="35" y="225" fill="#64748b" font-size="9">observed-docker-cluster</text>
-    <text x="345" y="199" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit): 221.4 dec/s (p99: 36.1ms)</text>
-    <rect x="345" y="205" width="250" height="10" fill="#334155" rx="3"/>
-    <rect x="345" y="205" width="111" height="10" fill="#f59e0b" rx="3"/>
-    <text x="345" y="225" fill="#64748b" font-size="9">modeled-topology-oracle</text>
-    <text x="35" y="263" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single (2-unit): 14.8 tx/s (p95: 412.6ms)</text>
-    <rect x="35" y="269" width="250" height="10" fill="#334155" rx="3"/>
-    <rect x="35" y="269" width="11" height="10" fill="#94a3b8" rx="3"/>
-    <text x="35" y="289" fill="#64748b" font-size="9">modeled-topology-oracle</text>
-    <text x="345" y="263" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single (2-unit): 294.6 dec/s (p99: 26.4ms)</text>
-    <rect x="345" y="269" width="250" height="10" fill="#334155" rx="3"/>
-    <rect x="345" y="269" width="147" height="10" fill="#94a3b8" rx="3"/>
-    <text x="345" y="289" fill="#64748b" font-size="9">modeled-topology-oracle</text>
-    <text x="35" y="327" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (6-unit): 8.4 tx/s (p95: 920.5ms)</text>
-    <rect x="35" y="333" width="250" height="10" fill="#334155" rx="3"/>
-    <rect x="35" y="333" width="6" height="10" fill="#a78bfa" rx="3"/>
-    <text x="35" y="353" fill="#64748b" font-size="9">modeled-topology-oracle</text>
-    <text x="345" y="327" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (6-unit): 218.2 dec/s (p99: 35.2ms)</text>
-    <rect x="345" y="333" width="250" height="10" fill="#334155" rx="3"/>
-    <rect x="345" y="333" width="109" height="10" fill="#a78bfa" rx="3"/>
-    <text x="345" y="353" fill="#64748b" font-size="9">modeled-topology-oracle</text>
-    <text x="655" y="135" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit) - WAN: 144B</text>
-    <rect x="655" y="141" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="141" width="7" height="8" fill="#38bdf8" rx="3"/>
-    <text x="655" y="160" fill="#94a3b8" font-size="9" font-family="monospace">620 / 495 / 380 / 410 dec/s</text>
-    <text x="655" y="199" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit) - WAN: 6144B</text>
-    <rect x="655" y="205" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="205" width="260" height="8" fill="#f59e0b" rx="3"/>
-    <text x="655" y="224" fill="#94a3b8" font-size="9" font-family="monospace">280 / 235 / 190 / 215 dec/s</text>
-    <text x="655" y="263" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single (2-unit) - WAN: 1420B</text>
-    <rect x="655" y="269" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="269" width="74" height="8" fill="#94a3b8" rx="3"/>
-    <text x="655" y="288" fill="#94a3b8" font-size="9" font-family="monospace">520 / 330 / 198 / 230 dec/s</text>
-    <text x="655" y="327" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (6-unit) - WAN: 2680B</text>
-    <rect x="655" y="333" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="333" width="139" height="8" fill="#a78bfa" rx="3"/>
-    <text x="655" y="352" fill="#94a3b8" font-size="9" font-family="monospace">385 / 248 / 146 / 174 dec/s</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 544" width="960" height="544">
+  <rect width="960" height="544" fill="#0f172a" rx="8"/>
+  <text x="20" y="28" fill="#f8fafc" font-size="16" font-family="system-ui, sans-serif" font-weight="bold">PostgreSQL &amp; Lagrange Comparative Progress Matrix</text>
+  <text x="20" y="46" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Contended OLTP baseline vs distributed risk decision graph shapes</text>
+  <text x="20" y="60" fill="#64748b" font-size="10" font-family="system-ui, sans-serif">Three-way control: App Service vs PL/pgSQL Function vs Lagrange WASI Service</text>
+  <rect x="20" y="74" width="290" height="452" fill="#1e293b" rx="6" stroke="#334155"/>
+  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="35" y="98" fill="#38bdf8" font-size="13" font-weight="bold">Scenario A: OLTP Baseline</text></a>
+  <text x="35" y="116" fill="#94a3b8" font-size="10">Throughput (tx/s) &amp; p95 latency (ms)</text>
+  <rect x="330" y="74" width="290" height="452" fill="#1e293b" rx="6" stroke="#334155"/>
+  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="345" y="98" fill="#38bdf8" font-size="13" font-weight="bold">Scenario B: Risk Decision</text></a>
+  <text x="345" y="116" fill="#94a3b8" font-size="10">Decisions/s &amp; p99 latency (ms)</text>
+  <rect x="640" y="74" width="300" height="452" fill="#1e293b" rx="6" stroke="#334155"/>
+  <text x="655" y="98" fill="#38bdf8" font-size="13" font-weight="bold">Scenario B: 4-Shape Ladder &amp; WAN</text>
+  <text x="655" y="116" fill="#94a3b8" font-size="10">Throughput (local/remote/seq/fan) &amp; WAN bytes</text>
+    <text x="35" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
+    <text x="35" y="152" fill="#94a3b8" font-size="10">0.8 tx/s (p95: 4418.9ms)</text>
+    <rect x="35" y="158" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="158" width="4" height="8" fill="#38bdf8" rx="3"/>
+    <text x="35" y="176" fill="#64748b" font-size="9">observed-docker-cluster</text>
+    <text x="345" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
+    <text x="345" y="152" fill="#94a3b8" font-size="10">441.1 dec/s (p99: 18.1ms)</text>
+    <rect x="345" y="158" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="158" width="221" height="8" fill="#38bdf8" rx="3"/>
+    <text x="345" y="176" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="200" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit)</text>
+    <text x="35" y="214" fill="#94a3b8" font-size="10">6.8 tx/s (p95: 1383.2ms)</text>
+    <rect x="35" y="220" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="220" width="5" height="8" fill="#f59e0b" rx="3"/>
+    <text x="35" y="238" fill="#64748b" font-size="9">observed-docker-cluster</text>
+    <text x="345" y="200" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit)</text>
+    <text x="345" y="214" fill="#94a3b8" font-size="10">221.4 dec/s (p99: 36.1ms)</text>
+    <rect x="345" y="220" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="220" width="111" height="8" fill="#f59e0b" rx="3"/>
+    <text x="345" y="238" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="262" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + App Svc (2-unit)</text>
+    <text x="35" y="276" fill="#94a3b8" font-size="10">14.8 tx/s (p95: 412.6ms)</text>
+    <rect x="35" y="282" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="282" width="11" height="8" fill="#94a3b8" rx="3"/>
+    <text x="35" y="300" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="262" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + App Svc (2-unit)</text>
+    <text x="345" y="276" fill="#94a3b8" font-size="10">294.6 dec/s (p99: 26.4ms)</text>
+    <rect x="345" y="282" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="282" width="147" height="8" fill="#94a3b8" rx="3"/>
+    <text x="345" y="300" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="324" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + App Svc (6-unit)</text>
+    <text x="35" y="338" fill="#94a3b8" font-size="10">8.4 tx/s (p95: 920.5ms)</text>
+    <rect x="35" y="344" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="344" width="6" height="8" fill="#a78bfa" rx="3"/>
+    <text x="35" y="362" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="324" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + App Svc (6-unit)</text>
+    <text x="345" y="338" fill="#94a3b8" font-size="10">218.2 dec/s (p99: 35.2ms)</text>
+    <rect x="345" y="344" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="344" width="109" height="8" fill="#a78bfa" rx="3"/>
+    <text x="345" y="362" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="386" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + PL/pgSQL (1-unit)</text>
+    <text x="35" y="400" fill="#94a3b8" font-size="10">14.8 tx/s (p95: 412.6ms)</text>
+    <rect x="35" y="406" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="406" width="11" height="8" fill="#14b8a6" rx="3"/>
+    <text x="35" y="424" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="386" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + PL/pgSQL (1-unit)</text>
+    <text x="345" y="400" fill="#94a3b8" font-size="10">418.4 dec/s (p99: 17.6ms)</text>
+    <rect x="345" y="406" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="406" width="209" height="8" fill="#14b8a6" rx="3"/>
+    <text x="345" y="424" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="448" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + PL/pgSQL (5-unit)</text>
+    <text x="35" y="462" fill="#94a3b8" font-size="10">8.4 tx/s (p95: 920.5ms)</text>
+    <rect x="35" y="468" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="35" y="468" width="6" height="8" fill="#d97706" rx="3"/>
+    <text x="35" y="486" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="448" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + PL/pgSQL (5-unit)</text>
+    <text x="345" y="462" fill="#94a3b8" font-size="10">316.8 dec/s (p99: 24.1ms)</text>
+    <rect x="345" y="468" width="250" height="8" fill="#334155" rx="3"/>
+    <rect x="345" y="468" width="158" height="8" fill="#d97706" rx="3"/>
+    <text x="345" y="486" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="655" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
+    <text x="655" y="152" fill="#94a3b8" font-size="10">WAN: 144B (0.0 RT)</text>
+    <rect x="655" y="158" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="158" width="7" height="8" fill="#38bdf8" rx="3"/>
+    <text x="655" y="176" fill="#94a3b8" font-size="9">620 / 495 / 380 / 410 dec/s</text>
+    <text x="655" y="200" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit)</text>
+    <text x="655" y="214" fill="#94a3b8" font-size="10">WAN: 6144B (4.5 RT)</text>
+    <rect x="655" y="220" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="220" width="260" height="8" fill="#f59e0b" rx="3"/>
+    <text x="655" y="238" fill="#94a3b8" font-size="9">280 / 235 / 190 / 215 dec/s</text>
+    <text x="655" y="262" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + App Svc (2-unit)</text>
+    <text x="655" y="276" fill="#94a3b8" font-size="10">WAN: 1420B (2.8 RT)</text>
+    <rect x="655" y="282" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="282" width="74" height="8" fill="#94a3b8" rx="3"/>
+    <text x="655" y="300" fill="#94a3b8" font-size="9">520 / 330 / 198 / 230 dec/s</text>
+    <text x="655" y="324" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + App Svc (6-unit)</text>
+    <text x="655" y="338" fill="#94a3b8" font-size="10">WAN: 2680B (2.8 RT)</text>
+    <rect x="655" y="344" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="344" width="139" height="8" fill="#a78bfa" rx="3"/>
+    <text x="655" y="362" fill="#94a3b8" font-size="9">385 / 248 / 146 / 174 dec/s</text>
+    <text x="655" y="386" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + PL/pgSQL (1-unit)</text>
+    <text x="655" y="400" fill="#94a3b8" font-size="10">WAN: 320B (1.0 RT)</text>
+    <rect x="655" y="406" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="406" width="17" height="8" fill="#14b8a6" rx="3"/>
+    <text x="655" y="424" fill="#94a3b8" font-size="9">590 / 442 / 312 / 358 dec/s</text>
+    <text x="655" y="448" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + PL/pgSQL (5-unit)</text>
+    <text x="655" y="462" fill="#94a3b8" font-size="10">WAN: 960B (1.0 RT)</text>
+    <rect x="655" y="468" width="260" height="8" fill="#334155" rx="3"/>
+    <rect x="655" y="468" width="50" height="8" fill="#d97706" rx="3"/>
+    <text x="655" y="486" fill="#94a3b8" font-size="9">455 / 338 / 234 / 272 dec/s</text>
 </svg>
     </div>
     <div class="card">
+      <h2>Three-Way Locality Control (Application Service vs PL/pgSQL Function vs Lagrange)</h2>
+      <p>Comparative evaluation of three control-flow models across Scenario B graph shapes:</p>
+      <ul>
+        <li><strong>PostgreSQL + Application Service</strong>: Business logic in external process; incurs 2.75 SQL round-trips/decision (520.0 dec/s single, 385.0 dec/s sync HA on local-only).</li>
+        <li><strong>PostgreSQL + Server-Side PL/pgSQL Function</strong>: Logic in database procedure; collapses round-trips to 1.0/decision, recovering most local gap (590.0 dec/s single, 455.0 dec/s sync HA vs Lagrange 620.0 dec/s) while preserving ordinary-SQL Scenario A baseline.</li>
+        <li><strong>Lagrange WASI Service</strong>: Native partition state colocated with consensus (0 round-trips local), widening advantage under RPO=0 synchronous HA replication, multi-partition sequential/fan-out stages (380.0 / 410.0 dec/s), and live partition movement continuity.</li>
+      </ul>
+    </div>
+    <div class="card">
       <h2>Scenario A: Contended OLTP Baseline</h2>
-      <table><thead><tr><th>Target</th><th>Version</th><th>Units</th><th>Processes</th><th>RPO=0 HA</th><th>Evidence Tier</th><th>Throughput (tx/s)</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>Proofs</th></tr></thead>
-      <tbody>
+      <table><thead><tr><th>Target</th><th>Version</th><th>Units</th><th>Processes</th><th>RPO=0 HA</th><th>Evidence Tier</th><th>Throughput (tx/s)</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>Proofs</th></tr></thead><tbody>
 <tr><td><strong>lagrange</strong></td><td>0.3.0</td><td>3</td><td>3</td><td>Yes (RPO=0)</td><td>observed-docker-cluster</td><td>0.83</td><td>2269.44</td><td>4418.93</td><td>5343.10</td><td>33/33</td></tr>
 <tr><td><strong>tidb-tikv</strong></td><td>v8.5.8</td><td>6</td><td>6</td><td>Yes (RPO=0)</td><td>observed-docker-cluster</td><td>6.75</td><td>535.12</td><td>1383.18</td><td>1887.96</td><td>33/33</td></tr>
 <tr><td><strong>pg-single-primary</strong></td><td>17.2</td><td>2</td><td>2</td><td>No</td><td>modeled-topology-oracle</td><td>14.80</td><td>185.40</td><td>412.60</td><td>580.20</td><td>33/33</td></tr>
 <tr><td><strong>pg-patroni-sync-ha-rf3</strong></td><td>17.2-patroni-4.0</td><td>6</td><td>9</td><td>Yes (RPO=0)</td><td>modeled-topology-oracle</td><td>8.40</td><td>390.20</td><td>920.50</td><td>1290.80</td><td>33/33</td></tr>
-      </tbody></table>
+<tr><td><strong>pg-plpgsql-single-primary</strong></td><td>17.2-plpgsql</td><td>1</td><td>1</td><td>No</td><td>modeled-topology-oracle</td><td>14.80</td><td>185.40</td><td>412.60</td><td>580.20</td><td>33/33</td></tr>
+<tr><td><strong>pg-plpgsql-sync-ha-rf3</strong></td><td>17.2-patroni-4.0-plpgsql</td><td>5</td><td>8</td><td>Yes (RPO=0)</td><td>modeled-topology-oracle</td><td>8.40</td><td>390.20</td><td>920.50</td><td>1290.80</td><td>33/33</td></tr>
+</tbody></table>
     </div>
     <div class="card">
       <h2>Scenario B: Distributed Risk Decision</h2>
-      <table><thead><tr><th>Target</th><th>Evidence Tier</th><th>Decisions/s</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>WAN Bytes/Dec</th><th>SQL Round-Trips</th><th>Movement</th></tr></thead>
-      <tbody>
+      <table><thead><tr><th>Target</th><th>Evidence Tier</th><th>Decisions/s</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>WAN Bytes/Dec</th><th>SQL Round-Trips</th><th>Movement</th></tr></thead><tbody>
 <tr><td><strong>lagrange</strong></td><td>modeled-topology-oracle</td><td>441.15</td><td>12.06</td><td>18.09</td><td>18.09</td><td>144</td><td>0.00</td><td>Passed</td></tr>
 <tr><td><strong>tidb-tikv</strong></td><td>modeled-topology-oracle</td><td>221.44</td><td>24.06</td><td>36.08</td><td>36.08</td><td>6144</td><td>4.50</td><td>Passed</td></tr>
 <tr><td><strong>pg-single-primary</strong></td><td>modeled-topology-oracle</td><td>294.60</td><td>15.40</td><td>22.80</td><td>26.40</td><td>1420</td><td>2.75</td><td>Not supported</td></tr>
 <tr><td><strong>pg-patroni-sync-ha-rf3</strong></td><td>modeled-topology-oracle</td><td>218.20</td><td>21.80</td><td>31.40</td><td>35.20</td><td>2680</td><td>2.75</td><td>Passed</td></tr>
-      </tbody></table>
+<tr><td><strong>pg-plpgsql-single-primary</strong></td><td>modeled-topology-oracle</td><td>418.40</td><td>9.80</td><td>14.90</td><td>17.60</td><td>320</td><td>1.00</td><td>Not supported</td></tr>
+<tr><td><strong>pg-plpgsql-sync-ha-rf3</strong></td><td>modeled-topology-oracle</td><td>316.80</td><td>13.90</td><td>20.80</td><td>24.10</td><td>960</td><td>1.00</td><td>Passed</td></tr>
+</tbody></table>
     </div>
   </div>
 </body>
