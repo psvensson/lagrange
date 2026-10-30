@@ -211,7 +211,8 @@ function renderComparativeLandingHtml(matrix) {
     '<a href="yugabyte-ignite-comparison-progress.md">YugabyteDB &amp; Ignite 3 (MD)</a> | ' +
     '<a href="scenario-c-feature-store-progress.html">Scenario C: PG + Valkey (HTML)</a> | ' +
     '<a href="scenario-c-feature-store-progress.md">Scenario C (MD)</a> | ' +
-    '<li><a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out &amp; Scenario A 3-Mode Comparison</a> (<a href="scaleout-3to5-node-rf3-progress.md">MD</a>)</li></p>\n' +
+    '<a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out (HTML)</a> | ' +
+    '<a href="scaleout-3to5-node-rf3-progress.md">3-to-5-Node RF=3 Scale-Out (MD)</a></p>\n' +
     `    <div class="chart-box">${svg}</div>\n` +
     '    <div class="filter-bar"><label for="landing-filter">Filter:</label><input type="text" id="landing-filter" placeholder="Filter targets, categories, shapes..."/></div>\n' +
     '    <div class="card">\n' +

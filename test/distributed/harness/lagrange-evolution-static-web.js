@@ -53,6 +53,10 @@ const DEFAULT_TIMELINE = Object.freeze([
   makeMilestone('v0.3.2-provenance-matrix', '0.3.2', '4dc6db6b93', '2026-10-30T20:11:52Z',
     '13-Target Matrix, Scenario C & Provenance Audit', 'modeled-topology-oracle', 'local-js-oracle',
     [0.83, 2269.44, 4418.93, 5343.1], 33, [441.15, 18.09, 144, 18.0, 45.0], 441.15),
+  makeMilestone('v0.3.2-scaleout-3to5-rf3', '0.3.2', '89300e4d8a', '2026-10-30T21:40:00Z',
+    '3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Separation',
+    'modeled-topology-oracle', 'local-js-oracle',
+    [2.24, 1380.0, 2590.0, 3120.0], 33, [720.4, 18.09, 144, 18.0, 45.0], 441.15),
 ]);
 
 const MILESTONE_LABELS = Object.freeze({
@@ -62,6 +66,7 @@ const MILESTONE_LABELS = Object.freeze({
   'v0.3.0-semantic-closure': ['v0.3.0 @ 27af74d (2026-10-30)', '33/33 Semantic Closure'],
   'v0.3.0-scenario-b-model': ['v0.3.0 @ 2d416de (2026-10-30)', '3-Island RF=3 Risk Model'],
   'v0.3.2-provenance-matrix': ['v0.3.2 @ 4dc6db6 (2026-10-30)', '13-Target Matrix & Scen C'],
+  'v0.3.2-scaleout-3to5-rf3': ['v0.3.2 @ 89300e4 (2026-10-30)', '3-to-5-Node RF=3 Scale-Out'],
 });
 
 const COMMIT_DELTAS = Object.freeze([
@@ -71,11 +76,12 @@ const COMMIT_DELTAS = Object.freeze([
   ['v0.3.0-semantic-closure', '27af74dc7b', 'Full 33/33 semantic proof closure reached under contended OLTP.'],
   ['v0.3.0-scenario-b-model', '2d416de6e5', 'Scenario B 3-island RF=3 risk model (441.15 dec/s, 18.09ms p99, 144 B/req WAN).'],
   ['v0.3.2-provenance-matrix', '4dc6db6b93', '13-target comparison matrix, Scenario C (441.15 dec/s @ 0ms), provenance audit.'],
+  ['v0.3.2-scaleout-3to5-rf3', '89300e4d8a', '3-to-5-node RF=3 scale-out (2.24 tx/s proportional, 720.4 dec/s aggregate).'],
 ]);
 
 function getMilestoneLabels(m) {
   return MILESTONE_LABELS[m.id] || [
-    stringSlice(`${m.version} @ ${m.commit} (${stringSlice(String(m.date || ''), 0, 10)})`, 0, 28),
+    `v${m.version} @ ${stringSlice(String(m.commit || ''), 0, 7)} (${stringSlice(String(m.date || ''), 0, 10)})`,
     stringSlice(String(m.description || m.id || ''), 0, 28),
   ];
 }
@@ -104,7 +110,8 @@ function renderMilestoneRow(x, y, [l1, l2], met, sub, barW, col, isDashed) {
 
 function renderPanel(px, href, title, subTitle, timeline, panelType) {
   const innerX = px + 15;
-  const pHeader = `  <rect x="${px}" y="80" width="280" height="410" fill="#1e293b" rx="6" stroke="#334155"/>
+  const panelH = 64 + timeline.length * 56;
+  const pHeader = `  <rect x="${px}" y="80" width="280" height="${panelH}" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="${href}"><text x="${innerX}" y="104" fill="#38bdf8" font-size="12" font-weight="bold">${title}</text></a>
   <text x="${innerX}" y="120" fill="#94a3b8" font-size="10">${subTitle}</text>`;
   const rows = arrayMap(timeline, (m, idx) => {
@@ -121,7 +128,7 @@ function renderPanel(px, href, title, subTitle, timeline, panelType) {
       (isP2 ? `WAN: ${m.scenarioBWanBytes || 0} B/req | Mode: ${m.executionMode}` :
         `Move p99: ${formatNum(m.scenarioBMoveP99Ms, 1)}ms | Conv: ${formatNum(m.scenarioBConvergenceMs, 1)}ms`);
     const val = isP1 ? (m.semanticProofPassed / 33) :
-      (isP2 ? (m.scenarioBDecisionsPerSec / 500) : (m.scenarioCFresh0msDecPerSec / 500));
+      (isP2 ? (m.scenarioBDecisionsPerSec / 750) : (m.scenarioCFresh0msDecPerSec / 500));
     const w = Math.max(val > 0 ? 4 : 0, Math.min(250, Math.round(val * 250)));
     const col = isP1 ? '#38bdf8' : (isP2 ? '#10b981' : '#a855f7');
     const isDashed = isP1 ?
@@ -133,14 +140,15 @@ function renderPanel(px, href, title, subTitle, timeline, panelType) {
 
 export function renderLagrangeEvolutionSvg(matrix) {
   const tl = getTimeline(matrix);
+  const svgH = 160 + tl.length * 56;
   const p1 = renderPanel(30, 'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline',
     'Scenario A OLTP &amp; Proofs Over Time', 'tx/s, p95 ms, and proofs (33 max)', tl, 1);
   const p2 = renderPanel(340, 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision',
     'Scenario B Risk Decision Over Time', 'Decisions/s, p99 ms latency, WAN bytes', tl, 2);
   const p3 = renderPanel(650, 'tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision',
     'Scenario C 0ms Freshness &amp; Movement', '441.15 dec/s @ 0ms, 18.0 ms p99, 45.0 ms conv', tl, 3);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520">
-  <rect width="960" height="520" fill="#0f172a" rx="8"/>
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 ${svgH}" width="960" height="${svgH}">
+  <rect width="960" height="${svgH}" fill="#0f172a" rx="8"/>
   <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">Lagrange Longitudinal Metrics Evolution</text>
   <text x="30" y="46" fill="#94a3b8" font-size="11">Version and commit progression across Scenario A OLTP, Scenario B Risk, and Scenario C Features</text>
   <text x="30" y="62" fill="#64748b" font-size="10">Legend: solid bar = observed-docker-cluster (live wire) | dashed bar = modeled-topology-oracle</text>

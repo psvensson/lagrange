@@ -28,6 +28,7 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 - **v0.3.0-semantic-closure (commit 27af74dc7b)**: Full 33/33 semantic proof closure reached under contended OLTP.
 - **v0.3.0-scenario-b-model (commit 2d416de6e5)**: Scenario B 3-island RF=3 risk model (441.15 dec/s, 18.09ms p99, 144 B/req WAN).
 - **v0.3.2-provenance-matrix (commit 4dc6db6b93)**: 13-target comparison matrix, Scenario C (441.15 dec/s @ 0ms), provenance audit.
+- **v0.3.2-scaleout-3to5-rf3 (commit 89300e4d8a)**: 3-to-5-node RF=3 scale-out (2.24 tx/s proportional, 720.4 dec/s aggregate).
 
 ## Provenance qualification across historical milestones
 
