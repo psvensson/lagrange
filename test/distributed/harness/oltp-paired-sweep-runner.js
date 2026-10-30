@@ -4,6 +4,7 @@ import {buildOltpBaselinePlan} from './oltp-baseline-workload.js';
 import {createComparisonHistoryRecord} from './oltp-comparison-history-store.js';
 import {interleaveOltpWorkerPhase, runOpenLoopOltpStep} from './oltp-open-loop-step-owner.js';
 import {buildScenarioAPairedSweepPlan} from './oltp-paired-sweep-plan.js';
+import {evaluateScenarioSystemVersionGate} from './scenario-b-fairness-gate.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayPush = Function.call.bind(Array.prototype.push);
@@ -117,10 +118,32 @@ async function runScenarioAPairedSweep(options = {}) {
   const resourceIntegrityVerified = options.resourceIntegrityVerified === true;
   const {prepareSystemStep, executeSystemTx} = options;
 
+  let versionGate;
+  if (Array.isArray(options.existingRecords) &&
+      options.systems?.lagrange?.version &&
+      options.systems?.tidbTikv?.version) {
+    versionGate = evaluateScenarioSystemVersionGate({
+      existingRecords: options.existingRecords,
+      scenarioId: options.scenarioId || 'scenario-a-oltp-core',
+      profileId: options.profileId,
+      systems: options.systems,
+      forceRerun: options.forceRerun === true,
+    });
+    if (versionGate.shouldRun === false) {
+      return Object.freeze({
+        runnerVersion: OLTP_PAIRED_SWEEP_RUNNER_VERSION,
+        profile, timingSource, comparable: false,
+        nonComparableReason: versionGate.reason,
+        skipped: true, skippedBecauseSystemVersionsUnchanged: true,
+        versionGate, cachedRecord: versionGate.matchedRecord,
+        executionOrderLog: Object.freeze([]),
+      });
+    }
+  }
+
   const comparisonView = options.comparisonView || COMPARISON_VIEW.ARCHITECTURE_NATIVE;
   const sloConfig = Object.freeze({
-    p99Ms: Number(slo.p99Ms ?? 50),
-    maxErrorRate: Number(slo.maxErrorRate ?? 0.001),
+    p99Ms: Number(slo.p99Ms ?? 50), maxErrorRate: Number(slo.maxErrorRate ?? 0.001),
   });
 
   const sweepPlan = buildScenarioAPairedSweepPlan({
@@ -224,7 +247,8 @@ async function runScenarioAPairedSweep(options = {}) {
   const speedupRatioUnderSlo = (tidbMax > 0) ? Number(numberToFixed(lagMax / tidbMax, 6)) : null;
 
   const comparable = Boolean(
-    timingSource === 'observed' && semanticGatePassed === true && resourceIntegrityVerified === true,
+    timingSource === 'observed' && semanticGatePassed === true &&
+    resourceIntegrityVerified === true,
   );
   const nonComparableReason = comparable ? undefined :
     'Non-comparable evidence: non-live contract model or missing semantic/resource gate evidence ' +
@@ -234,6 +258,8 @@ async function runScenarioAPairedSweep(options = {}) {
   return Object.freeze({
     runnerVersion: OLTP_PAIRED_SWEEP_RUNNER_VERSION,
     profile, timingSource, comparable, nonComparableReason,
+    skipped: false, skippedBecauseSystemVersionsUnchanged: false,
+    ...(versionGate ? {versionGate} : {}),
     sweepPlan, executionOrderLog: Object.freeze(executionOrderLog),
     curves: Object.freeze({lagrange: lagrangeCurve, tidb: tidbCurve}),
     speedupRatioUnderSlo,
@@ -252,18 +278,19 @@ function buildPairedSweepHistoryRecord(options = {}) {
   const tidbSys = options.tidbSystem || {};
   const id = sweepResult.sweepPlan?.identity || {};
   const fwCommit = fw.frameworkCommitSha || 'ea537171a4b66119655b7e1fa73e0cd21500aa41';
+  const mP99 = (c) => c?.bestMedianP99Ms ?? 0;
   const toMetric = (cur) => ({
     opsPerSec: cur?.maxSustainedCommittedPerSecUnderSlo ?? 0,
-    latencyMs: {
-      p50: cur?.bestMedianP99Ms ?? 0,
-      p95: cur?.bestMedianP99Ms ?? 0,
-      p99: cur?.bestMedianP99Ms ?? 0,
-    },
+    latencyMs: {p50: mP99(cur), p95: mP99(cur), p99: mP99(cur)},
     transactions: {measuredAttempted: 0, measuredSucceeded: 0, failed: 0, retries: 0},
     semanticProofs: {passedCount: 0},
   });
-  const defaultView = sweepResult.comparable ? 'architecture-native' : 'contract-model-non-comparable';
+  const defaultView = sweepResult.comparable ?
+    'architecture-native' : 'contract-model-non-comparable';
   const defaultTidbSha = 'pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8';
+  const sysObj = (s, v, c) => ({
+    present: true, version: s.version || v, commitSha: s.commitSha || c,
+  });
   const record = createComparisonHistoryRecord({
     framework: {
       frameworkVersion: fw.frameworkVersion || '0.3.0',
@@ -279,8 +306,8 @@ function buildPairedSweepHistoryRecord(options = {}) {
       comparisonView: fw.comparisonView || defaultView,
     },
     systems: {
-      lagrange: {present: true, version: lagSys.version || '0.3.0', commitSha: lagSys.commitSha || fwCommit},
-      tidbTikv: {present: true, version: tidbSys.version || 'v8.5.8', commitSha: tidbSys.commitSha || defaultTidbSha},
+      lagrange: sysObj(lagSys, '0.3.0', fwCommit),
+      tidbTikv: sysObj(tidbSys, 'v8.5.8', defaultTidbSha),
     },
     recordedAt: options.recordedAt || '2026-10-30T14:50:00.000Z',
     evidenceSource: {

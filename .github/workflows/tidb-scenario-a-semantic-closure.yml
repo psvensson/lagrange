@@ -62,7 +62,9 @@ jobs:
             scripts/checks/oltp-paired-sweep-runner-guard.js \
             test/distributed/harness/scenario-b-latency-group-owner.js \
             test/distributed/harness/scenario-b-movement-subphase.js \
-            scripts/checks/scenario-b-latency-movement-guard.js
+            scripts/checks/scenario-b-latency-movement-guard.js \
+            test/distributed/harness/scenario-b-fairness-gate.js \
+            scripts/checks/scenario-b-fairness-version-gate-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
           node scripts/checks/oltp-scenario-a-new-order-contention-case-guard.js
           node scripts/checks/oltp-scenario-a-visibility-case-guard.js
@@ -80,6 +82,7 @@ jobs:
           node scripts/checks/scenario-b-risk-benchmark-guard.js
           node scripts/checks/oltp-paired-sweep-runner-guard.js
           node scripts/checks/scenario-b-latency-movement-guard.js
+          node scripts/checks/scenario-b-fairness-version-gate-guard.js
 
   semantic-live-gate:
     runs-on: ubuntu-24.04
