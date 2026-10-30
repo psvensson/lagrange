@@ -12,6 +12,7 @@ const OUTPUT_PATH =
   process.env.TIDB_OLTP_EVIDENCE_PATH ||
   'test-output/tidb-reference/oltp-hosted-smoke.json';
 const PASS_PREFIX = 'tidb-oltp-hosted-measurement: PASS ';
+const NEWLINE = '\n';
 
 function controllerEvidence() {
   return {
@@ -40,7 +41,7 @@ async function main() {
       colocatedWithController: true,
     },
   });
-  process.stdout.write(PASS_PREFIX + JSON.stringify(result.summary) + '\n');
+  process.stdout.write(PASS_PREFIX + JSON.stringify(result.summary) + NEWLINE);
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : null;

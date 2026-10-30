@@ -54,12 +54,10 @@ function normalizeStoreCount(value) {
   return count;
 }
 
-function normalizeOptions(options = {}) {
-  const provider = options.provider;
+function validateProviderAndNetwork(provider, network) {
   if (!provider) {
     throw new Error('TiDB reference lifecycle requires provider');
   }
-  const network = options.network;
   if (!network) {
     throw new Error('TiDB reference lifecycle requires network');
   }
@@ -68,19 +66,29 @@ function normalizeOptions(options = {}) {
       'TiDB reference lifecycle requires provider.execInContainer for SQL readiness',
     );
   }
+}
+
+function normalizeImages(images) {
+  return {
+    pd: images?.pd || DEFAULTS.pdImage,
+    tikv: images?.tikv || DEFAULTS.tikvImage,
+    tidb: images?.tidb || DEFAULTS.tidbImage,
+    mysqlClient:
+      images?.mysqlClient || DEFAULTS.mysqlClientImage,
+  };
+}
+
+function normalizeOptions(options = {}) {
+  const provider = options.provider;
+  const network = options.network;
+  validateProviderAndNetwork(provider, network);
   return {
     provider,
     network,
     tikvStoreCount: normalizeStoreCount(options.tikvStoreCount),
     resourceLimits: options.resourceLimits || {},
     readinessResourceLimits: options.readinessResourceLimits || {},
-    images: {
-      pd: options.images?.pd || DEFAULTS.pdImage,
-      tikv: options.images?.tikv || DEFAULTS.tikvImage,
-      tidb: options.images?.tidb || DEFAULTS.tidbImage,
-      mysqlClient:
-        options.images?.mysqlClient || DEFAULTS.mysqlClientImage,
-    },
+    images: normalizeImages(options.images),
     readinessTimeoutMs:
       options.readinessTimeoutMs || DEFAULTS.readinessTimeoutMs,
     readinessPollIntervalMs:
@@ -118,38 +126,66 @@ function boundedLog(value) {
   return text.slice(text.length - DIAGNOSTIC_LOG_MAX_CHARS);
 }
 
-async function collectContainerDiagnostic(provider, watched) {
-  let inspect = null;
-  let inspectError = null;
+async function fetchContainerInspect(provider, containerId) {
   try {
-    inspect = await provider.inspectContainer(watched.containerId);
+    const inspect = await provider.inspectContainer(containerId);
+    return {inspect, inspectError: null};
   } catch (error) {
-    inspectError = String(error?.message || error);
+    return {inspect: null, inspectError: String(error?.message || error)};
   }
+}
 
-  let logs = '';
-  let logError = null;
-  if (typeof provider.getContainerLogs === 'function') {
-    try {
-      logs = boundedLog(await provider.getContainerLogs(
-        watched.containerId,
-        {tail: DIAGNOSTIC_LOG_TAIL_LINES},
-      ));
-    } catch (error) {
-      logError = String(error?.message || error);
-    }
+async function fetchContainerLogs(provider, containerId) {
+  if (typeof provider.getContainerLogs !== 'function') {
+    return {logs: '', logError: null};
   }
+  try {
+    const logs = boundedLog(await provider.getContainerLogs(
+      containerId,
+      {tail: DIAGNOSTIC_LOG_TAIL_LINES},
+    ));
+    return {logs, logError: null};
+  } catch (error) {
+    return {logs: '', logError: String(error?.message || error)};
+  }
+}
 
-  const networks = inspect?.NetworkSettings?.Networks || {};
+function extractNetworkNames(inspect) {
+  const networks = inspect?.NetworkSettings?.Networks;
+  return networks ? Object.keys(networks) : [];
+}
+
+function extractInspectStatus(state) {
+  return {
+    running: state?.Running ?? null,
+    status: state?.Status ?? null,
+    exitCode: state?.ExitCode ?? null,
+  };
+}
+
+function extractInspectErrors(state) {
+  return {
+    oomKilled: state?.OOMKilled ?? null,
+    stateError: state?.Error || null,
+  };
+}
+
+async function collectContainerDiagnostic(provider, watched) {
+  const {inspect, inspectError} = await fetchContainerInspect(
+    provider,
+    watched.containerId,
+  );
+  const {logs, logError} = await fetchContainerLogs(
+    provider,
+    watched.containerId,
+  );
+
   return {
     role: watched.role,
     containerId: watched.containerId,
-    running: inspect?.State?.Running ?? null,
-    status: inspect?.State?.Status ?? null,
-    exitCode: inspect?.State?.ExitCode ?? null,
-    oomKilled: inspect?.State?.OOMKilled ?? null,
-    stateError: inspect?.State?.Error || null,
-    networkNames: Object.keys(networks),
+    ...extractInspectStatus(inspect?.State),
+    ...extractInspectErrors(inspect?.State),
+    networkNames: extractNetworkNames(inspect),
     inspectError,
     logError,
     logs,
@@ -226,6 +262,28 @@ function buildSqlReadinessCommand(endpoint, sql = READINESS_SQL) {
   ];
 }
 
+function formatSqlReadinessDetail(lastError, lastResult) {
+  if (lastError) return lastError.message;
+  const exitCode = lastResult?.exitCode ?? 'unknown';
+  const stdout = JSON.stringify(lastResult?.stdout || '');
+  const stderr = JSON.stringify(lastResult?.stderr || '');
+  return `exit=${exitCode} stdout=${stdout} stderr=${stderr}`;
+}
+
+function isSqlReadinessSuccessful(result) {
+  return result?.exitCode === ZERO &&
+    stringTrim(String(result.stdout || '')) === READY_VALUE;
+}
+
+async function executeSqlReadinessAttempt(provider, clientContainerId, command) {
+  try {
+    const result = await provider.execInContainer(clientContainerId, command);
+    return {result, error: null};
+  } catch (error) {
+    return {result: null, error};
+  }
+}
+
 async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
   const started = Date.now();
   let lastError = null;
@@ -238,28 +296,27 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
   while (Date.now() - started < options.timeoutMs) {
     attempts += 1;
     await assertWatchedContainersRunning(provider, watchedContainers);
-    try {
-      const result = await provider.execInContainer(clientContainerId, command);
-      lastResult = result;
-      if (result?.exitCode === ZERO &&
-          stringTrim(String(result.stdout || '')) === READY_VALUE) {
+    const outcome = await executeSqlReadinessAttempt(
+      provider,
+      clientContainerId,
+      command,
+    );
+    if (outcome.error) {
+      lastError = outcome.error;
+    } else {
+      lastResult = outcome.result;
+      if (isSqlReadinessSuccessful(lastResult)) {
         return {
           attempts,
           sql: readinessSql,
           clientContainerId,
         };
       }
-    } catch (error) {
-      lastError = error;
     }
     await sleep(options.pollIntervalMs);
   }
 
-  const detail = lastError ?
-    lastError.message :
-    `exit=${lastResult?.exitCode ?? 'unknown'} ` +
-      `stdout=${JSON.stringify(lastResult?.stdout || '')} ` +
-      `stderr=${JSON.stringify(lastResult?.stderr || '')}`;
+  const detail = formatSqlReadinessDetail(lastError, lastResult);
   const diagnostics = await collectReadinessDiagnostics(
     provider,
     watchedContainers,

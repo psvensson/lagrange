@@ -54,8 +54,10 @@ import {
   SUBSYSTEM_MANIFEST_PATH,
 } from './test-subsystem-classification-constants.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayJoin = Function.call.bind(Array.prototype.join);
+const arrayIsArray = Array.isArray;
 const regExpTest = Function.call.bind(RegExp.prototype.test);
 const jsonParse = JSON.parse.bind(JSON);
 const objectKeys = Object.keys;
@@ -77,6 +79,7 @@ const FULL_CORPUS_SCRIPT = 'test:all';
 const CLASSIFIED_RUNNER = 'scripts/run-classified-test-files.js';
 const STDIN_FLAG = '--stdin';
 const STDIO_INPUT_THEN_INHERIT = Object.freeze(['pipe', 'inherit', 'inherit']);
+const STDIO_INHERIT = 'inherit';
 const WORKTREE_RANGE_LABEL = 'working tree';
 const PERCENT = 100;
 const EXIT_FAILURE = 1;
@@ -121,6 +124,9 @@ const LABEL_SELECTION = 'selection:';
 const LABEL_MODE = 'test stage:';
 const stringTrim = Function.call.bind(String.prototype.trim);
 const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
+const REV_PARSE_GIT_COMMON_DIR = Object.freeze(['rev-parse', '--git-common-dir']);
+const CHECK_BASE_ENV_NAME = 'LAGRANGE_CHECK_BASE';
+const LAND_PROOF_FILENAME = 'lagrange-land-proof.json';
 const TEXT_ENCODING = 'utf8';
 const LABEL_BECAUSE = 'because:';
 const TESTS_SUFFIX = ' test(s)';
@@ -216,13 +222,97 @@ function renderDecision(range, plan, decision) {
   return arrayJoin(lines, NEWLINE) + NEWLINE;
 }
 
-function runClassifiedCone(tests) {
-  const result = spawnSync(process.execPath, [CLASSIFIED_RUNNER, STDIN_FLAG], {
+function isValidLandProof(proof, head, expectedBase) {
+  return Boolean(
+    proof &&
+    proof.commit === head &&
+    typeof expectedBase === 'string' &&
+    proof.base === expectedBase &&
+    arrayIsArray(proof.tests) &&
+    proof.tests.length > 0,
+  );
+}
+
+function resolveExpectedBase(env, repoRoot) {
+  const rawBase = env[CHECK_BASE_ENV_NAME] ||
+    resolvedCheckRange(null, env, repoRoot).base;
+  return typeof rawBase === 'string' ? stringTrim(rawBase) : null;
+}
+
+function gitCommonDirectory(git, repoRoot) {
+  const common = git([...REV_PARSE_GIT_COMMON_DIR],
+    {cwd: repoRoot, encoding: TEXT_ENCODING});
+  if (common?.status !== EXIT_SUCCESS) return null;
+  const commonDir = stringTrim(String(common.stdout || EMPTY_TEXT));
+  return commonDir.length > 0 ? commonDir : null;
+}
+
+function readLandProofReceipt(receiptPath, readFile, exists) {
+  try {
+    if (!exists(receiptPath)) return null;
+    return jsonParse(readFile(receiptPath, UTF8));
+  } catch (_error) {
+    return null;
+  }
+}
+
+export function readVerifiedLandProof(head, options = {}) {
+  const {
+    git = spawnGit,
+    readFile = fs.readFileSync,
+    exists = fs.existsSync,
+    env = process.env,
+  } = options;
+  if (typeof head !== 'string' || head.length === 0) return null;
+  if (!treeIsCommit(head, {git})) return null;
+  const commonDir = gitCommonDirectory(git, root);
+  if (!commonDir) return null;
+  const receiptPath = path.resolve(root, commonDir, LAND_PROOF_FILENAME);
+  const proof = readLandProofReceipt(receiptPath, readFile, exists);
+  const expectedBase = resolveExpectedBase(env, root);
+  if (isValidLandProof(proof, head, expectedBase)) {
+    return proof;
+  }
+  return null;
+}
+
+function executeClassifiedRunner(testList, options = {}) {
+  const {spawn = spawnSync} = options;
+  const result = spawn(process.execPath, [CLASSIFIED_RUNNER, STDIN_FLAG], {
     cwd: root,
-    input: arrayJoin(tests, NEWLINE) + NEWLINE,
+    input: arrayJoin(testList, NEWLINE) + NEWLINE,
     stdio: [...STDIO_INPUT_THEN_INHERIT],
   });
-  return result.status ?? EXIT_FAILURE;
+  return result?.status ?? EXIT_FAILURE;
+}
+
+export function runClassifiedCone(tests, options = {}) {
+  const {
+    head = headRevision,
+    readProof = readVerifiedLandProof,
+    write = (value) => process.stdout.write(value),
+  } = options;
+  const headSha = head();
+  const landProof = headSha ? readProof(headSha, options) : null;
+  if (landProof) {
+    const unproved = arrayFilter(tests, (t) => !arrayIncludes(landProof.tests, t));
+    if (unproved.length === 0) {
+      write(
+        `${LOG_PREFIX} reusing verified solve-land change proof for ${headSha} ` +
+        `(${tests.length} test(s) already green)${NEWLINE}`,
+      );
+      return EXIT_SUCCESS;
+    }
+    if (unproved.length < tests.length) {
+      const reusedCount = tests.length - unproved.length;
+      write(
+        `${LOG_PREFIX} reusing ${reusedCount} solve-land proved test(s) for ${headSha}; ` +
+        `running ${unproved.length} remaining test(s)${NEWLINE}`,
+      );
+      return executeClassifiedRunner(unproved, options);
+    }
+  }
+  return executeClassifiedRunner(tests, options);
 }
 
 export function provisionDatasetFixtures(options = {}) {
@@ -251,10 +341,45 @@ export function provisionDatasetFixtures(options = {}) {
   return digestCheck.status ?? EXIT_FAILURE;
 }
 
-function runFullCorpus() {
-  const result = spawnSync(NPM, [...NPM_RUN_SILENT, FULL_CORPUS_SCRIPT],
-    {cwd: root, stdio: 'inherit'});
-  return result.status ?? EXIT_FAILURE;
+function readAllClassifiedCorpusTests(planRoot = root, options = {}) {
+  const {readFile = fs.readFileSync} = options;
+  const manifest = jsonParse(readFile(
+    path.join(planRoot, SUBSYSTEM_MANIFEST_PATH), UTF8));
+  return objectKeys(manifest.classes);
+}
+
+function executeFullCorpus(options = {}) {
+  const {spawn = spawnSync} = options;
+  const result = spawn(NPM, [...NPM_RUN_SILENT, FULL_CORPUS_SCRIPT],
+    {cwd: root, stdio: STDIO_INHERIT});
+  return result?.status ?? EXIT_FAILURE;
+}
+
+export function runFullCorpus(options = {}) {
+  const {
+    head = headRevision,
+    readProof = readVerifiedLandProof,
+    write = (value) => process.stdout.write(value),
+  } = options;
+  const headSha = head();
+  const landProof = headSha ? readProof(headSha, options) : null;
+  if (landProof) {
+    const allTests = readAllClassifiedCorpusTests(root, options);
+    const remaining = arrayFilter(allTests, (t) => !arrayIncludes(landProof.tests, t));
+    if (remaining.length === 0) {
+      write(
+        `${LOG_PREFIX} reusing verified solve-land change proof for ${headSha} ` +
+        `(all ${allTests.length} corpus test(s) already green)${NEWLINE}`,
+      );
+      return EXIT_SUCCESS;
+    }
+    write(
+      `${LOG_PREFIX} reusing ${landProof.tests.length} solve-land proved test(s) for ` +
+      `${headSha}; running ${remaining.length} remaining corpus test(s)${NEWLINE}`,
+    );
+    return executeClassifiedRunner(remaining, options);
+  }
+  return executeFullCorpus(options);
 }
 
 // A green whole-corpus run is a fact about this commit, so it is recorded

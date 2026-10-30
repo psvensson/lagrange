@@ -7,6 +7,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {TABLES} from '../constants/index.js';
 import {
+  LIVE_QUERY_AST_TYPE,
   LIVE_QUERY_CONFIG_KEY,
   LIVE_QUERY_CURSOR,
   LIVE_QUERY_DEFAULTS,
@@ -18,68 +19,44 @@ import {
   LIVE_QUERY_OPERATION,
   LIVE_QUERY_SUBSYSTEM,
 } from './live-query-constants.js';
-import {compilePredicate, canonicalizePredicate, extractPartitionKeyValue} from
-  './live-query-service.js';
 import {
-  buildSelectSQL,
+  canonicalizePredicate,
+  extractPartitionKeyValue,
+} from './live-query-service.js';
+import {
   compareVersions,
-  extractReferencedTables,
-  isComplexQuery,
   isPartitionVisibleForRouting,
   resolveActivePartitionVersion,
 } from './live-query-sql-renderer.js';
+import {
+  buildDeleteEvent,
+  buildInsertEvent,
+  buildResetNotification,
+  buildUpdateEvent,
+  checkAndAdvanceFrontier,
+  collectExpiredClientIds,
+  createClientSubscription,
+  executeSnapshotQuery,
+  extractEventVersion,
+  fanOutToClients,
+  isComplexQuery,
+  projectSingleColumn,
+  recordInitialFrontiers,
+  renewClientSubscription,
+  resolveEffectiveRows,
+  resolveExecutionSQL,
+  resolveGroupSql,
+  resolveTableInfo,
+  resolveWhereInfo,
+  shouldSkipBufferedEvent,
+  storeSnapshotRows,
+  subscribeNewPartitions,
+  unsubscribeStalePartitions,
+  updateStoredRowState,
+} from './live-query-group-helpers.js';
 
-const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const LOCAL_NUM_THIRTY_TWO = 32;
-
-function resolveGroupSql(options) {
-  return options.rawSql || options.sql ||
-    (typeof options.parsedQuery === 'string' ? options.parsedQuery : null);
-}
-
-function resolveTableInfo(parsedAst) {
-  const tables = extractReferencedTables(parsedAst);
-  return {
-    tables,
-    table: tables.length > 0 ? tables[0] : null,
-  };
-}
-
-function resolveWhereInfo(parsedAst) {
-  const whereClause = parsedAst?.where ?? null;
-  return {
-    whereClause,
-    predicate: compilePredicate(whereClause),
-  };
-}
-
-function extractEventVersion(change) {
-  return change?.logIndex ?? change?.appliedIndex ??
-    change?.version ?? change?.sequenceNumber ?? null;
-}
-
-function shouldSkipBufferedEvent(frontiers, partitionId, eventVersion, compareFn) {
-  if (!partitionId || eventVersion === null) return false;
-  const frontier = frontiers.get(partitionId);
-  return frontier !== undefined && frontier !== null && compareFn(eventVersion, frontier) <= 0;
-}
-
-function checkAndAdvanceFrontier(frontiers, partitionId, eventVersion, compareFn) {
-  if (!partitionId || eventVersion === null) return true;
-  const frontier = frontiers.get(partitionId);
-  if (frontier !== undefined && frontier !== null) {
-    if (compareFn(eventVersion, frontier) <= 0) return false;
-    frontiers.set(partitionId, eventVersion);
-  }
-  return true;
-}
-
-function extractSubscriptionFrontier(answer, options, partitionId) {
-  return answer?.versionContext?.streamVersion ??
-    answer?.streamVersion ??
-    options?.attachAfterVersion ??
-    options?.partitionFrontiers?.get?.(partitionId);
-}
+const WILDCARD_COLUMN = '*';
 
 /**
  * QueryGroup manages clients with identical queries sharing CDC subscriptions.
@@ -106,13 +83,19 @@ class QueryGroup extends EventEmitter {
     this.nodeId = options.nodeId ?? LIVE_QUERY_DEFAULT_VALUE.UNKNOWN;
     this.deltaFormat = Boolean(options.deltaFormat);
     this.sql = resolveGroupSql(options);
+    this.params = options.params || [];
+    this.groupKey = options.groupKey || null;
+    this.resultSet = new Map();
+    this.refreshInFlight = false;
+    this.refreshPending = false;
+    this.refreshGeneration = 0;
 
     const {tables, table} = resolveTableInfo(this.parsedQuery);
     this.tables = tables;
     this.table = table;
     this.isComplex = isComplexQuery(this.parsedQuery);
 
-    const {whereClause, predicate} = resolveWhereInfo(this.parsedQuery);
+    const {whereClause, predicate} = resolveWhereInfo(this.parsedQuery, this.params);
     this.whereClause = whereClause;
     this.predicate = predicate;
 
@@ -170,15 +153,8 @@ class QueryGroup extends EventEmitter {
    * @return {Object} Client subscription info.
    */
   addClient(client) {
-    const clientId = client.id || uuidv4();
-    const subscription = {
-      client,
-      clientId,
-      lastRenewal: Date.now(),
-      lastSeenHLC: null,
-      ttlMs: this.ttlMs,
-    };
-
+    const subscription = createClientSubscription(client, this.ttlMs);
+    const clientId = subscription.clientId;
     this.clients.set(clientId, subscription);
     this.lastActivityAt = Date.now();
 
@@ -218,19 +194,11 @@ class QueryGroup extends EventEmitter {
   renewClient(clientId, cursor) {
     const subscription = this.clients.get(clientId);
     if (!subscription) return null;
-
-    subscription.lastRenewal = Date.now();
-    if (cursor) {
-      subscription.lastSeenHLC = cursor;
-    }
     this.lastActivityAt = Date.now();
-
+    const renewal = renewClientSubscription(subscription, cursor);
     return {
       queryId: this.queryId,
-      clientId,
-      expiresAt: subscription.lastRenewal + subscription.ttlMs,
-      renewBefore: subscription.lastRenewal +
-        Math.floor(subscription.ttlMs * LOCAL_NUM_ZERO_POINT_SEVEN),
+      ...renewal,
     };
   }
 
@@ -248,13 +216,7 @@ class QueryGroup extends EventEmitter {
    * @return {Array} Array of expired client IDs.
    */
   getExpiredClients() {
-    const expired = [];
-    for (const [clientId, subscription] of this.clients) {
-      if (this.isSubscriptionExpired(subscription)) {
-        expired.push(clientId);
-      }
-    }
-    return expired;
+    return collectExpiredClientIds(this.clients);
   }
 
   /**
@@ -450,18 +412,12 @@ class QueryGroup extends EventEmitter {
 
   _fanOutResult(result, change) {
     this.lastActivityAt = Date.now();
-    for (const [, subscription] of this.clients) {
-      try {
-        if (subscription.client && typeof subscription.client.send === 'function') {
-          subscription.client.send(JSON.stringify(result));
-        }
-        subscription.lastSeenHLC = change.hlc_timestamp || change.hlcTimestamp;
-      } catch (error) {
-        this.logger.warn(LIVE_QUERY_LOG_MSG.FAILED_SEND_CLIENT, {
-          queryId: this.queryId, error: error.message,
-        });
-      }
-    }
+    const hlcTimestamp = change.hlc_timestamp || change.hlcTimestamp;
+    fanOutToClients(this.clients, result, {
+      hlcTimestamp,
+      logger: this.logger,
+      queryId: this.queryId,
+    });
     this.emit(LIVE_QUERY_EMIT.CHANGE, result);
   }
 
@@ -495,51 +451,137 @@ class QueryGroup extends EventEmitter {
   }
 
   _resolveExecutionSQL() {
-    if (this.sql) return this.sql;
-    if (this.sqlQueryEngine?.executor?.buildSelectSQL) {
-      return this.sqlQueryEngine.executor.buildSelectSQL(this.parsedQuery);
-    }
-    return buildSelectSQL(this.parsedQuery);
+    return resolveExecutionSQL(this.sql, this.sqlQueryEngine, this.parsedQuery);
   }
 
   _broadcastReset(resetNotification) {
     this.lastActivityAt = Date.now();
-    for (const [, subscription] of this.clients) {
-      try {
-        if (subscription.client && typeof subscription.client.send === 'function') {
-          subscription.client.send(JSON.stringify(resetNotification));
-        }
-      } catch (error) {
-        this.logger.warn(LIVE_QUERY_LOG_MSG.FAILED_SEND_CLIENT, {
-          queryId: this.queryId, error: error.message,
-        });
-      }
-    }
+    fanOutToClients(this.clients, resetNotification, {
+      logger: this.logger,
+      queryId: this.queryId,
+    });
     this.emit(LIVE_QUERY_EMIT.CHANGE, resetNotification);
     this.emit(LIVE_QUERY_EVENT.RESET, resetNotification);
   }
 
   /**
+   * Check if the query has a star projection.
+   * @return {boolean}
+   */
+  isStarProjection() {
+    const cols = this.parsedQuery?.columns;
+    if (!cols || cols.length === 0) return true;
+    return cols.some((col) =>
+      col.type === LIVE_QUERY_AST_TYPE.STAR || col.star || col === WILDCARD_COLUMN,
+    );
+  }
+
+  /**
+   * Project a row according to parsedQuery.columns.
+   * @param {Object} row - Full table row.
+   * @return {Object} Projected row.
+   */
+  projectRow(row) {
+    if (!row || typeof row !== 'object' || this.isStarProjection()) {
+      return row;
+    }
+    const cols = this.parsedQuery?.columns;
+    if (!cols || cols.length === 0) {
+      return row;
+    }
+    const projected = {};
+    for (const col of cols) {
+      if (!projectSingleColumn(projected, row, col)) {
+        return row;
+      }
+    }
+    return projected;
+  }
+
+  /**
+   * Resolve primary key identity for a row.
+   * @param {Object} row - Row data.
+   * @return {*} Primary key value.
+   */
+  getRowPrimaryKey(row) {
+    if (!row) return null;
+    const pkCol = this.getPartitionKeyColumn() || 'id';
+    return row[pkCol] ?? row.id ?? row.rowid ?? null;
+  }
+
+  /**
+   * Execute the initial snapshot query and record baseline frontiers.
+   * @param {Object} [options]
+   * @return {Promise<Array>} Projected snapshot rows.
+   */
+  async executeInitialQuery(options = {}) {
+    if (!this.sqlQueryEngine) {
+      this.lastResultSet = [];
+      return [];
+    }
+    const sql = this._resolveExecutionSQL();
+    const result = await executeSnapshotQuery(this.sqlQueryEngine, sql, this.params);
+    const rawRows = result.rows ?? result.results ?? [];
+    const projectedRows = rawRows.map((r) => this.projectRow(r));
+    this.lastResultSet = projectedRows;
+
+    storeSnapshotRows(this.resultSet, (r) => this.getRowPrimaryKey(r), rawRows);
+    recordInitialFrontiers(this, options, result.appliedIndex);
+    return projectedRows;
+  }
+
+  /**
+   * Initialize subscriptions and execute initial snapshot with frontier handoff.
+   * @param {Object} params
+   * @param {Function} params.subscribeToPartition
+   * @param {Function} [params.unsubscribeFromPartition]
+   * @param {Object} [params.options]
+   * @return {Promise<Array>} Snapshot rows.
+   */
+  async initialize({subscribeToPartition, unsubscribeFromPartition, options = {}}) {
+    this.startHydration();
+    await this.updatePartitionSubscriptions(
+      subscribeToPartition, unsubscribeFromPartition, options,
+    );
+    const rows = await this.executeInitialQuery(options);
+    this.drainBufferedEvents();
+    this.active = true;
+    return rows;
+  }
+
+  /**
    * Re-execute complex query against sqlQueryEngine and emit reset snapshot.
+   * Serialized and coalesced so stale completions cannot overwrite newer state.
    * @return {Promise<Object|null>} Reset snapshot notification or null.
    */
-  async reexecuteQuery() {
+  async refreshQueryResult() {
     if (!this.sqlQueryEngine) {
       return null;
     }
+    if (this.refreshInFlight) {
+      this.refreshPending = true;
+      return null;
+    }
+    this.refreshInFlight = true;
+    const currentGeneration = ++this.refreshGeneration;
 
     try {
       const sql = this._resolveExecutionSQL();
-      const result = await this.sqlQueryEngine.executeQuery(sql);
-      const newRows = result.rows ?? result.results ?? [];
+      const result = await executeSnapshotQuery(this.sqlQueryEngine, sql, this.params);
+      if (currentGeneration < this.refreshGeneration) {
+        return null;
+      }
+      const rawRows = result.rows ?? result.results ?? [];
+      const newRows = rawRows.map((r) => this.projectRow(r));
       this.lastResultSet = newRows;
+      storeSnapshotRows(this.resultSet, (r) => this.getRowPrimaryKey(r), rawRows);
 
-      const resetNotification = {
-        type: LIVE_QUERY_EVENT.RESET, queryId: this.queryId,
-        rows: newRows, results: newRows,
+      const resetNotification = buildResetNotification({
+        queryId: this.queryId,
+        newRows,
         count: result.count ?? newRows.length,
-      };
-
+        generation: currentGeneration,
+      });
       this._broadcastReset(resetNotification);
       return resetNotification;
     } catch (error) {
@@ -548,60 +590,89 @@ class QueryGroup extends EventEmitter {
         error: error.message,
       });
       return null;
+    } finally {
+      this.refreshInFlight = false;
+      if (this.refreshPending) {
+        this.refreshPending = false;
+        queueMicrotask(() => this.refreshQueryResult());
+      }
     }
+  }
+
+  async reexecuteQuery() {
+    return this.refreshQueryResult();
   }
 
   _makeInsertEvent(row, hlc, useDeltaFormat) {
-    return {
-      type: useDeltaFormat ? LIVE_QUERY_EVENT.ADDED : LIVE_QUERY_EVENT.INSERT,
-      deltaType: LIVE_QUERY_EVENT.ADDED,
-      operation: LIVE_QUERY_OPERATION.INSERT,
+    return buildInsertEvent({
       queryId: this.queryId,
-      row, data: row, hlc,
-    };
+      row: this.projectRow(row),
+      hlc,
+      useDeltaFormat,
+    });
   }
 
   _makeDeleteEvent(row, hlc, useDeltaFormat) {
-    return {
-      type: useDeltaFormat ? LIVE_QUERY_EVENT.REMOVED : LIVE_QUERY_EVENT.DELETE,
-      deltaType: LIVE_QUERY_EVENT.REMOVED,
-      operation: LIVE_QUERY_OPERATION.DELETE,
+    return buildDeleteEvent({
       queryId: this.queryId,
-      row, data: row, old: row, oldData: row, hlc,
-    };
+      row: this.projectRow(row),
+      hlc,
+      useDeltaFormat,
+    });
   }
 
   _makeUpdateEvent(oldRow, newRow, hlc, useDeltaFormat) {
-    return {
-      type: useDeltaFormat ? LIVE_QUERY_EVENT.MODIFIED : LIVE_QUERY_EVENT.UPDATE,
-      deltaType: LIVE_QUERY_EVENT.MODIFIED,
-      operation: LIVE_QUERY_OPERATION.UPDATE,
+    return buildUpdateEvent({
       queryId: this.queryId,
-      old: oldRow, oldData: oldRow, new: newRow, data: newRow, row: newRow, hlc,
-    };
+      oldRow: this.projectRow(oldRow),
+      newRow: this.projectRow(newRow),
+      hlc,
+      useDeltaFormat,
+    });
   }
 
   _evaluateInsert(newRow, hlc, useDeltaFormat) {
-    return (newRow && this.predicate(newRow)) ?
-      this._makeInsertEvent(newRow, hlc, useDeltaFormat) : null;
+    if (!newRow) return null;
+    const pk = this.getRowPrimaryKey(newRow);
+    const matched = this.predicate(newRow);
+    if (matched) {
+      if (pk != null) this.resultSet.set(pk, newRow);
+      return this._makeInsertEvent(newRow, hlc, useDeltaFormat);
+    }
+    if (pk != null) this.resultSet.delete(pk);
+    return null;
   }
 
   _evaluateDelete(oldRow, hlc, useDeltaFormat) {
-    return (oldRow && this.predicate(oldRow)) ?
-      this._makeDeleteEvent(oldRow, hlc, useDeltaFormat) : null;
+    if (!oldRow) return null;
+    const pk = this.getRowPrimaryKey(oldRow);
+    const storedRow = pk != null ? this.resultSet.get(pk) : null;
+    const effectiveRow = storedRow ? {...storedRow, ...oldRow} : oldRow;
+    const matched = storedRow != null || this.predicate(effectiveRow);
+    if (pk != null) this.resultSet.delete(pk);
+    if (matched) {
+      return this._makeDeleteEvent(effectiveRow, hlc, useDeltaFormat);
+    }
+    return null;
   }
 
   _evaluateUpdate(oldRow, newRow, hlc, useDeltaFormat) {
-    const oldMatched = Boolean(oldRow && this.predicate(oldRow));
-    const newMatched = Boolean(newRow && this.predicate(newRow));
+    const pk = this.getRowPrimaryKey(newRow) ?? this.getRowPrimaryKey(oldRow);
+    const storedRow = pk != null ? this.resultSet.get(pk) : null;
+    const {effectiveOld, effectiveNew} = resolveEffectiveRows(storedRow, oldRow, newRow);
+
+    const oldMatched = storedRow != null || Boolean(effectiveOld && this.predicate(effectiveOld));
+    const newMatched = Boolean(effectiveNew && this.predicate(effectiveNew));
+    updateStoredRowState(this.resultSet, pk, newMatched, effectiveNew);
+
     if (!oldMatched && newMatched) {
-      return this._makeInsertEvent(newRow, hlc, useDeltaFormat);
+      return this._makeInsertEvent(effectiveNew, hlc, useDeltaFormat);
     }
     if (oldMatched && !newMatched) {
-      return this._makeDeleteEvent(oldRow, hlc, useDeltaFormat);
+      return this._makeDeleteEvent(effectiveOld, hlc, useDeltaFormat);
     }
     if (oldMatched && newMatched) {
-      return this._makeUpdateEvent(oldRow, newRow, hlc, useDeltaFormat);
+      return this._makeUpdateEvent(effectiveOld, effectiveNew, hlc, useDeltaFormat);
     }
     return null;
   }
@@ -629,50 +700,6 @@ class QueryGroup extends EventEmitter {
     }
   }
 
-  async _unsubscribeStalePartitions(relevantPartitions, unsubscribeFromPartition) {
-    for (const partitionId of Array.from(this.subscribedPartitions)) {
-      if (!relevantPartitions.has(partitionId)) {
-        if (unsubscribeFromPartition) {
-          await unsubscribeFromPartition(partitionId, this.queryId);
-        }
-        this.subscribedPartitions.delete(partitionId);
-        this.cdcHandlers.delete(partitionId);
-        this.partitionFrontiers.delete(partitionId);
-
-        this.logger.debug(LIVE_QUERY_LOG_MSG.UNSUBSCRIBED_PARTITION, {
-          queryId: this.queryId,
-          partitionId,
-        });
-      }
-    }
-  }
-
-  async _subscribeToSinglePartition(partitionId, subscribeToPartition, options) {
-    if (subscribeToPartition) {
-      const handler = (change) => this.onCDCEvent(change, partitionId);
-      this.cdcHandlers.set(partitionId, handler);
-      const answer = await subscribeToPartition(partitionId, this.queryId, handler, options);
-      const frontier = extractSubscriptionFrontier(answer, options, partitionId);
-      if (frontier !== undefined && !this.partitionFrontiers.has(partitionId)) {
-        this.partitionFrontiers.set(partitionId, frontier);
-      }
-    }
-    this.subscribedPartitions.add(partitionId);
-
-    this.logger.debug(LIVE_QUERY_LOG_MSG.SUBSCRIBED_PARTITION, {
-      queryId: this.queryId,
-      partitionId,
-    });
-  }
-
-  async _subscribeNewPartitions(relevantPartitions, subscribeToPartition, options) {
-    for (const partitionId of relevantPartitions) {
-      if (!this.subscribedPartitions.has(partitionId)) {
-        await this._subscribeToSinglePartition(partitionId, subscribeToPartition, options);
-      }
-    }
-  }
-
   /**
    * Update partition subscriptions (for split/merge handling and initial wiring).
    * @param {Function} subscribeToPartition - Function to subscribe to a partition.
@@ -682,8 +709,8 @@ class QueryGroup extends EventEmitter {
    */
   async updatePartitionSubscriptions(subscribeToPartition, unsubscribeFromPartition, options = {}) {
     const relevantPartitions = await this.findPartitionsForQuery();
-    await this._unsubscribeStalePartitions(relevantPartitions, unsubscribeFromPartition);
-    await this._subscribeNewPartitions(relevantPartitions, subscribeToPartition, options);
+    await unsubscribeStalePartitions(this, relevantPartitions, unsubscribeFromPartition);
+    await subscribeNewPartitions(this, relevantPartitions, subscribeToPartition, options);
   }
 
   /**
@@ -691,6 +718,9 @@ class QueryGroup extends EventEmitter {
    * @return {string} Query signature.
    */
   getQuerySignature() {
+    if (this.groupKey) {
+      return this.groupKey;
+    }
     const tablePart = this.tables && this.tables.length > 0 ?
       this.tables.join(',') :
       (this.table || '');
@@ -732,6 +762,7 @@ class QueryGroup extends EventEmitter {
     this.clients.clear();
     this.subscribedPartitions.clear();
     this.cdcHandlers.clear();
+    this.resultSet.clear();
     this.removeAllListeners();
 
     this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_CLEANED_UP, {

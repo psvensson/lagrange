@@ -54,6 +54,58 @@ function getParticipantIds(txState) {
   return [];
 }
 
+function createTwoPartitionUsersEngine() {
+  mockPartitionData.set('p1', []);
+  mockPartitionData.set('p2', []);
+
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [
+      {partition_id: 'p1', table_name: 'users', partition_key_start: null,
+        partition_key_end: 'm'},
+      {partition_id: 'p2', table_name: 'users', partition_key_start: 'm',
+        partition_key_end: null},
+    ],
+  );
+
+  return new SQLQueryEngine({
+    messageRouter: createMockMessageRouter(mockPartitionData),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
+    systemCache: cache,
+  });
+}
+
+/**
+ * Execute statements in a multi-partition transaction and return execution outcome.
+ *
+ * @param {Array<string>} statements - SQL statements to execute after BEGIN.
+ * @return {Promise<Object>} Execution result, active transaction flag, and participant IDs.
+ */
+async function executeTransactionWithStatements(statements) {
+  const engine = createTwoPartitionUsersEngine();
+  const sessionId = `session-${Date.now()}-${Math.random()}`;
+
+  await engine.executeQuery('BEGIN TRANSACTION', [], {sessionId});
+
+  let lastResult = null;
+  for (const sql of statements) {
+    lastResult = await engine.executeQuery(sql, [], {sessionId});
+  }
+
+  const txState = engine.activeTransactions.get(sessionId);
+  const participants = getParticipantIds(txState);
+  const active = engine.hasActiveTransaction(sessionId);
+  mockPartitionData.clear();
+
+  return {
+    engine,
+    sessionId,
+    result: lastResult,
+    participants,
+    active,
+  };
+}
+
 test('Property 47: Cross-partition INSERT enlists all touched partitions', async (t) => {
   /**
    * Property: For any cross-partition INSERT within a transaction,
@@ -63,42 +115,9 @@ test('Property 47: Cross-partition INSERT enlists all touched partitions', async
     fc.asyncProperty(
       crossPartitionKeysArb,
       async ([key1, key2]) => {
-        mockPartitionData.set('p1', []);
-        mockPartitionData.set('p2', []);
-
-        const cache = createMockSystemCache(
-          [{table_name: 'users', primaryKey: 'id'}],
-          [
-            {partition_id: 'p1', table_name: 'users', partition_key_start: null,
-              partition_key_end: 'm'},
-            {partition_id: 'p2', table_name: 'users', partition_key_start: 'm',
-              partition_key_end: null},
-          ],
-        );
-
-        const engine = new SQLQueryEngine({
-          messageRouter: createMockMessageRouter(mockPartitionData),
-          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
-          systemCache: cache,
-        });
-
-        const sessionId = `session-${Date.now()}-${Math.random()}`;
-
-        // Start transaction
-        await engine.executeQuery('BEGIN TRANSACTION', [], {sessionId});
-
-        // Try to insert into multiple partitions
-        // key1 starts with a-c (< m), key2 starts with x-z (>= m)
-        const result = await engine.executeQuery(
+        const {result, participants} = await executeTransactionWithStatements([
           `INSERT INTO users (id, name) VALUES ('${key1}', 'User1'), ('${key2}', 'User2')`,
-          [],
-          {sessionId},
-        );
-
-        const txState = engine.activeTransactions.get(sessionId);
-        const participants = getParticipantIds(txState);
-        mockPartitionData.clear();
-
+        ]);
         return result.success === true &&
                participants.includes('p1') &&
                participants.includes('p2');
@@ -119,48 +138,10 @@ test('Property 47: Cross-partition UPDATE enlists all touched partitions', async
     fc.asyncProperty(
       fc.stringOf(fc.constantFrom(...'abc'), {minLength: 1, maxLength: 2}),
       async (key) => {
-        mockPartitionData.set('p1', []);
-        mockPartitionData.set('p2', []);
-
-        const cache = createMockSystemCache(
-          [{table_name: 'users', primaryKey: 'id'}],
-          [
-            {partition_id: 'p1', table_name: 'users', partition_key_start: null,
-              partition_key_end: 'm'},
-            {partition_id: 'p2', table_name: 'users', partition_key_start: 'm',
-              partition_key_end: null},
-          ],
-        );
-
-        const engine = new SQLQueryEngine({
-          messageRouter: createMockMessageRouter(mockPartitionData),
-          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
-          systemCache: cache,
-        });
-
-        const sessionId = `session-${Date.now()}-${Math.random()}`;
-
-        // Start transaction
-        await engine.executeQuery('BEGIN TRANSACTION', [], {sessionId});
-
-        // First, bind to partition p1 with an insert
-        await engine.executeQuery(
+        const {result, participants} = await executeTransactionWithStatements([
           `INSERT INTO users (id, name) VALUES ('${key}', 'User1')`,
-          [],
-          {sessionId},
-        );
-
-        // Try to update all partitions (no key filter) - should be rejected
-        const result = await engine.executeQuery(
           'UPDATE users SET status = \'active\' WHERE age > 18',
-          [],
-          {sessionId},
-        );
-
-        const txState = engine.activeTransactions.get(sessionId);
-        const participants = getParticipantIds(txState);
-        mockPartitionData.clear();
-
+        ]);
         return result.success === true &&
                participants.includes('p1') &&
                participants.includes('p2');
@@ -181,48 +162,10 @@ test('Property 47: Cross-partition DELETE enlists all touched partitions', async
     fc.asyncProperty(
       fc.stringOf(fc.constantFrom(...'abc'), {minLength: 1, maxLength: 2}),
       async (key) => {
-        mockPartitionData.set('p1', []);
-        mockPartitionData.set('p2', []);
-
-        const cache = createMockSystemCache(
-          [{table_name: 'users', primaryKey: 'id'}],
-          [
-            {partition_id: 'p1', table_name: 'users', partition_key_start: null,
-              partition_key_end: 'm'},
-            {partition_id: 'p2', table_name: 'users', partition_key_start: 'm',
-              partition_key_end: null},
-          ],
-        );
-
-        const engine = new SQLQueryEngine({
-          messageRouter: createMockMessageRouter(mockPartitionData),
-          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
-          systemCache: cache,
-        });
-
-        const sessionId = `session-${Date.now()}-${Math.random()}`;
-
-        // Start transaction
-        await engine.executeQuery('BEGIN TRANSACTION', [], {sessionId});
-
-        // First, bind to partition p1 with an insert
-        await engine.executeQuery(
+        const {result, participants} = await executeTransactionWithStatements([
           `INSERT INTO users (id, name) VALUES ('${key}', 'User1')`,
-          [],
-          {sessionId},
-        );
-
-        // Try to delete from all partitions (no key filter) - should be rejected
-        const result = await engine.executeQuery(
           'DELETE FROM users WHERE age > 18',
-          [],
-          {sessionId},
-        );
-
-        const txState = engine.activeTransactions.get(sessionId);
-        const participants = getParticipantIds(txState);
-        mockPartitionData.clear();
-
+        ]);
         return result.success === true &&
                participants.includes('p1') &&
                participants.includes('p2');
@@ -243,38 +186,9 @@ test('Property 47: Cross-partition writes keep transaction active', async (t) =>
     fc.asyncProperty(
       crossPartitionKeysArb,
       async ([key1, key2]) => {
-        mockPartitionData.set('p1', []);
-        mockPartitionData.set('p2', []);
-
-        const cache = createMockSystemCache(
-          [{table_name: 'users', primaryKey: 'id'}],
-          [
-            {partition_id: 'p1', table_name: 'users', partition_key_start: null,
-              partition_key_end: 'm'},
-            {partition_id: 'p2', table_name: 'users', partition_key_start: 'm',
-              partition_key_end: null},
-          ],
-        );
-
-        const engine = new SQLQueryEngine({
-          messageRouter: createMockMessageRouter(mockPartitionData),
-          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
-          systemCache: cache,
-        });
-
-        const sessionId = `session-${Date.now()}-${Math.random()}`;
-
-        await engine.executeQuery('BEGIN TRANSACTION', [], {sessionId});
-
-        const result = await engine.executeQuery(
+        const {result, active} = await executeTransactionWithStatements([
           `INSERT INTO users (id, name) VALUES ('${key1}', 'User1'), ('${key2}', 'User2')`,
-          [],
-          {sessionId},
-        );
-
-        const active = engine.hasActiveTransaction(sessionId);
-        mockPartitionData.clear();
-
+        ]);
         return result.success === true && active === true;
       },
     ),

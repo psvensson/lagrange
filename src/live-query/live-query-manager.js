@@ -20,13 +20,131 @@ import {
   LIVE_QUERY_SUBSYSTEM,
 } from './live-query-constants.js';
 import {QueryGroup} from './live-query-group.js';
-import {canonicalizePredicate} from './live-query-service.js';
+import {
+  canonicalizePredicate,
+  parseLiveSelect,
+  sortObject,
+} from './live-query-service.js';
 import {
   buildSelectSQL as renderSelectSQL,
   extractReferencedTables,
 } from './live-query-sql-renderer.js';
 
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
+const CANONICAL_SEPARATOR = ',';
+const WILDCARD_COLUMNS = '*';
+const DISTINCT_MODIFIER = 'DISTINCT';
+
+/**
+ * Resolve AST and raw SQL from parsedQuery or options.
+ * @param {Object|string} parsedQuery
+ * @param {Object} options
+ * @param {Object|null} sqlQueryEngine
+ * @return {{ast: Object, rawSql: string|null}}
+ */
+function resolveRegistrationAstAndSql(parsedQuery, options, sqlQueryEngine) {
+  let ast = parsedQuery;
+  let rawSql = options.sql || null;
+  if (typeof parsedQuery === 'string') {
+    const parsedSelect = parseLiveSelect(parsedQuery);
+    rawSql = parsedSelect.sql;
+    if (sqlQueryEngine?.parse) {
+      try {
+        ast = sqlQueryEngine.parse(rawSql);
+      } catch {
+        ast = {from: null, rawSql};
+      }
+    }
+  } else if (parsedQuery?.sql) {
+    rawSql = parsedQuery.sql;
+  }
+  return {ast, rawSql};
+}
+
+/**
+ * Initialize a newly created QueryGroup with subscriptions and snapshot.
+ * @param {LiveQueryManager} manager
+ * @param {QueryGroup} group
+ * @param {Object} client
+ * @param {Object} options
+ * @return {Promise<void>}
+ */
+async function initializeNewGroup(manager, group, client, options) {
+  manager.queryGroups.set(group.groupKey, group);
+  group.startHydration();
+  await group.updatePartitionSubscriptions(
+    manager.subscribeToPartition,
+    manager.unsubscribeFromPartition,
+    options,
+  );
+  await manager.sendSnapshotToClient(group, client, options);
+  group.drainBufferedEvents();
+  group.active = true;
+  manager.logger.info(LIVE_QUERY_LOG_MSG.GROUP_CREATED, {
+    groupKey: group.groupKey,
+    queryId: group.queryId,
+    partitionCount: group.subscribedPartitions.size,
+  });
+}
+
+function recordSnapshotFrontiers(group, options, result) {
+  if (options.attachAfterVersion !== undefined && options.partitionId) {
+    group.partitionFrontiers.set(options.partitionId, options.attachAfterVersion);
+  }
+  if (options.partitionFrontiers) {
+    for (const [pid, ver] of options.partitionFrontiers) {
+      group.partitionFrontiers.set(pid, ver);
+    }
+  }
+  if (result.appliedIndex !== undefined && options.partitionId) {
+    group.partitionFrontiers.set(options.partitionId, result.appliedIndex);
+  }
+}
+
+function resolveSnapshotExecutionSql(manager, group) {
+  if (group.sql) return group.sql;
+  if (manager.sqlQueryEngine?.executor?.buildSelectSQL) {
+    return manager.sqlQueryEngine.executor.buildSelectSQL(group.parsedQuery);
+  }
+  return manager.buildSelectSQL(group.parsedQuery);
+}
+
+function populateSnapshotRows(group, result) {
+  const rawRows = result.rows ?? result.results ?? [];
+  const rows = rawRows.map((r) => (group.projectRow ? group.projectRow(r) : r));
+  group.lastResultSet = rows;
+  if (group.resultSet) {
+    for (const row of rawRows) {
+      const pk = group.getRowPrimaryKey ? group.getRowPrimaryKey(row) : (row.id ?? null);
+      if (pk != null) group.resultSet.set(pk, row);
+    }
+  }
+  return rows;
+}
+
+function canonicalPart(value, fallback = '', isPredicate = false) {
+  if (!value) return fallback;
+  return isPredicate ? canonicalizePredicate(value) : JSON.stringify(sortObject(value));
+}
+
+function canonicalTablesPart(parsedQuery) {
+  const tables = extractReferencedTables(parsedQuery);
+  return tables.length > 0 ? tables.sort().join(CANONICAL_SEPARATOR) : (parsedQuery?.from?.name || '');
+}
+
+function generateCanonicalGroupingParts(parsedQuery, params) {
+  return [
+    canonicalTablesPart(parsedQuery),
+    parsedQuery?.columns ? canonicalPart(parsedQuery.columns) : WILDCARD_COLUMNS,
+    canonicalPart(parsedQuery?.where, '', true),
+    canonicalPart(parsedQuery?.orderBy),
+    canonicalPart(parsedQuery?.limit),
+    canonicalPart(parsedQuery?.groupBy),
+    canonicalPart(parsedQuery?.having, '', true),
+    parsedQuery?.distinct ? DISTINCT_MODIFIER : '',
+    params && params.length > 0 ? canonicalPart(params) : '',
+  ];
+}
 
 /**
  * LiveQueryManager manages all live query subscriptions.
@@ -128,15 +246,28 @@ class LiveQueryManager extends EventEmitter {
   }
 
   /**
+   * Generate canonical grouping key for a query.
+   * @param {Object} parsedQuery - Parsed SELECT query AST.
+   * @param {Array} [params] - Bound query parameters.
+   * @return {string} Canonical grouping key.
+   */
+  generateGroupingKey(parsedQuery, params = []) {
+    if (!parsedQuery) {
+      return '';
+    }
+    return generateCanonicalGroupingParts(parsedQuery, params).join(LIVE_QUERY_CURSOR.SEPARATOR);
+  }
+
+  /**
    * Register a live query for a client.
    * @param {Object} parsedQuery - Parsed SELECT query AST.
    * @param {Object} client - Client connection.
+   * @param {Object} [options] - Registration options.
    * @return {Promise<Object>} Registration result.
    */
   async registerLiveQuery(parsedQuery, client, options = {}) {
     const clientId = client.id || client.clientId;
 
-    // Check client query limit
     const currentCount = this.clientQueryCounts.get(clientId) || 0;
     if (currentCount >= this.maxQueriesPerClient) {
       throw new Error(
@@ -146,83 +277,52 @@ class LiveQueryManager extends EventEmitter {
       );
     }
 
-    // Compute group key across all referenced tables
-    const tables = extractReferencedTables(parsedQuery);
-    const tablePrefix = tables.length > 0 ? tables.join(',') : (parsedQuery?.from?.name || '');
-    const groupKey = `${tablePrefix}${LIVE_QUERY_CURSOR.SEPARATOR}` +
-      `${canonicalizePredicate(parsedQuery?.where)}`;
+    const {ast, rawSql} = resolveRegistrationAstAndSql(
+      parsedQuery, options, this.sqlQueryEngine,
+    );
+    const params = options.params || [];
+    const groupKey = this.generateGroupingKey(ast, params);
 
     let group = this.queryGroups.get(groupKey);
-    let isNewGroup = false;
+    const isNewGroup = !group;
 
     if (group) {
-      // Join existing group
       group.addClient(client);
-
       this.logger.info(LIVE_QUERY_LOG_MSG.CLIENT_JOINED_EXISTING, {
         groupKey,
         queryId: group.queryId,
         clientId,
         clientCount: group.clients.size,
       });
-
-      // Send initial snapshot to joining client
       await this.sendSnapshotToClient(group, client, options);
     } else {
-      // Create new group
       group = new QueryGroup({
-        parsedQuery,
-        rawSql: typeof parsedQuery === 'string' ? parsedQuery : (parsedQuery?.sql || options.sql),
+        parsedQuery: ast,
+        rawSql: rawSql || (ast?.sql || options.sql),
         systemCache: this.systemCache,
         sqlQueryEngine: this.sqlQueryEngine,
         partitionResolver: options.partitionResolver,
         nodeId: this.nodeId,
         deltaFormat: options.deltaFormat ?? false,
+        params,
+        groupKey,
       });
       group.addClient(client);
-      this.queryGroups.set(groupKey, group);
-      isNewGroup = true;
-
-      // Arm subscriptions in buffering mode before snapshot hydration
-      group.startHydration();
-
-      await group.updatePartitionSubscriptions(
-        this.subscribeToPartition,
-        this.unsubscribeFromPartition,
-        options,
-      );
-
-      // Execute snapshot and record frontiers
-      await this.sendSnapshotToClient(group, client, options);
-
-      // Drain buffered CDC events deduplicating version <= attachAfterVersion
-      group.drainBufferedEvents();
-      group.active = true;
-
-      this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_CREATED, {
-        groupKey,
-        queryId: group.queryId,
-        partitionCount: group.subscribedPartitions.size,
-      });
+      await initializeNewGroup(this, group, client, options);
     }
 
-    // Track client subscriptions
     if (!this.clientSubscriptions.has(clientId)) {
       this.clientSubscriptions.set(clientId, new Set());
     }
     this.clientSubscriptions.get(clientId).add(group.queryId);
-
-    // Update client query count
     this.clientQueryCounts.set(clientId, currentCount + 1);
 
-    // Log creation event
     this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTION_CREATED, {
       queryId: group.queryId,
       clientId,
       table: group.table,
       isNewGroup,
     });
-
     this.emit(LIVE_QUERY_EMIT.SUBSCRIPTION_CREATED, {
       queryId: group.queryId,
       clientId,
@@ -237,7 +337,6 @@ class LiveQueryManager extends EventEmitter {
       partitions: Array.from(group.subscribedPartitions),
     };
   }
-
 
   /**
    * Send initial snapshot to a client.
@@ -255,28 +354,10 @@ class LiveQueryManager extends EventEmitter {
     }
 
     try {
-      // Execute the full original query (including WHERE, ORDER BY, LIMIT, JOIN)
-      const sql = group.sql ||
-        (this.sqlQueryEngine.executor?.buildSelectSQL ?
-          this.sqlQueryEngine.executor.buildSelectSQL(group.parsedQuery) :
-          this.buildSelectSQL(group.parsedQuery));
-      const result = await this.sqlQueryEngine.executeQuery(sql);
-
-      const rows = result.rows ?? result.results ?? [];
-      group.lastResultSet = rows;
-
-      // Record frontiers if provided
-      if (options.attachAfterVersion !== undefined && options.partitionId) {
-        group.partitionFrontiers.set(options.partitionId, options.attachAfterVersion);
-      }
-      if (options.partitionFrontiers) {
-        for (const [pid, ver] of options.partitionFrontiers) {
-          group.partitionFrontiers.set(pid, ver);
-        }
-      }
-      if (result.appliedIndex !== undefined && options.partitionId) {
-        group.partitionFrontiers.set(options.partitionId, result.appliedIndex);
-      }
+      const sql = resolveSnapshotExecutionSql(this, group);
+      const result = await this.sqlQueryEngine.executeQuery(sql, group.params || options.params);
+      const rows = populateSnapshotRows(group, result);
+      recordSnapshotFrontiers(group, options, result);
 
       const snapshot = {
         type: LIVE_QUERY_EVENT.SNAPSHOT,
@@ -299,8 +380,6 @@ class LiveQueryManager extends EventEmitter {
         queryId: group.queryId,
         error: error.message,
       });
-
-      // Send error to client
       if (client && typeof client.send === 'function') {
         client.send(JSON.stringify({
           type: LIVE_QUERY_EVENT.ERROR,
@@ -481,7 +560,7 @@ class LiveQueryManager extends EventEmitter {
    * @private
    */
   removeGroup(group) {
-    const groupKey = group.getQuerySignature();
+    const groupKey = group.groupKey || group.getQuerySignature();
     if (this.unsubscribeFromPartition) {
       for (const partitionId of Array.from(group.subscribedPartitions)) {
         try {
@@ -500,6 +579,11 @@ class LiveQueryManager extends EventEmitter {
     }
     group.cleanup();
     this.queryGroups.delete(groupKey);
+    for (const [key, g] of this.queryGroups.entries()) {
+      if (g === group || g.queryId === group.queryId) {
+        this.queryGroups.delete(key);
+      }
+    }
 
     this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_REMOVED, {
       queryId: group.queryId,

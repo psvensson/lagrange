@@ -24,6 +24,10 @@ import {
 } from './run-tidb-reference-lifecycle-live.js';
 import {runTiDbOltpMeasurement} from './tidb-oltp-measurement.js';
 
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+
 const ONE = 1;
 const DEFAULT_CONFIG =
   'test/distributed/config/gcp-tidb-oltp-single-host.json';
@@ -41,6 +45,34 @@ const GCP_TIKV_RESOURCE_LIMITS = Object.freeze({
   cpus: '2.0',
 });
 
+const ARG_CONFIG = '--config';
+const ERROR_CONFIG_PATH_REQUIRED = '--config requires a path';
+const ERROR_GCP_BLOCK_REQUIRED =
+  'TiDB GCP measurement config requires gcp block';
+const ERROR_MUST_PROVISION_HOST =
+  'TiDB GCP measurement must provision its own controlled host';
+const ERROR_EXPECTED_PROVISIONER = 'Expected controlled GCP provisioner';
+const ERROR_MEASUREMENT_CLEANUP_FAILURES =
+  'TiDB GCP measurement/cleanup failures';
+
+const METHOD_CREATE_CONTAINER = 'createContainer';
+const METHOD_EXEC_IN_CONTAINER = 'execInContainer';
+const LOCALHOST_IP = '127.0.0.1';
+const EVENT_ERROR = 'error';
+const EVENT_LISTENING = 'listening';
+const EVENT_CLOSE = 'close';
+const FILE_ENCODING_UTF8 = 'utf8';
+const NEWLINE = '\n';
+const TIDB_CONTAINER_NAME_SUFFIX = '-tidb';
+const EVIDENCE_CLASS_GCP_SINGLE_HOST =
+  'gcp-single-host-controlled-non-comparative';
+const NON_COMPARABLE_REASON =
+  'The machine class and zone are controlled, but PD, TiDB, and all three ' +
+  'TiKV stores still share one VM. Final TiDB/Lagrange comparison requires ' +
+  'one storage replica per VM and the paired topology contract.';
+const EXECUTION_ENVIRONMENT_KIND = 'gcp-single-host-remote-docker';
+const FIREWALL_SCOPE = 'provisioner-runner-ip-plus-vpc';
+
 function controllerEvidence() {
   return {
     operatingSystem: os.platform(),
@@ -56,25 +88,25 @@ function controllerEvidence() {
 function parseArgs(argv) {
   let configPath = DEFAULT_CONFIG;
   for (let index = 0; index < argv.length; index += 1) {
-    if (argv[index] !== '--config') {
+    if (argv[index] !== ARG_CONFIG) {
       throw new Error(`Unsupported argument: ${argv[index]}`);
     }
     index += 1;
-    if (!argv[index]) throw new Error('--config requires a path');
+    if (!argv[index]) throw new Error(ERROR_CONFIG_PATH_REQUIRED);
     configPath = argv[index];
   }
   return {configPath: resolve(process.cwd(), configPath)};
 }
 
 async function loadConfig(configPath) {
-  const config = JSON.parse(await readFile(configPath, 'utf8'));
-  assert.ok(config.gcp, 'TiDB GCP measurement config requires gcp block');
+  const config = JSON.parse(await readFile(configPath, FILE_ENCODING_UTF8));
+  assert.ok(config.gcp, ERROR_GCP_BLOCK_REQUIRED);
   assert.equal(config.gcp.vmCount, EXPECTED_VM_COUNT);
   assert.equal(config.gcp.machineType, EXPECTED_MACHINE_TYPE);
   assert.equal(config.gcp.preemptible, false);
   assert.ok(
     !Array.isArray(config.docker?.hosts) || config.docker.hosts.length === 0,
-    'TiDB GCP measurement must provision its own controlled host',
+    ERROR_MUST_PROVISION_HOST,
   );
   return config;
 }
@@ -85,14 +117,14 @@ function createPublishedSqlProvider(remoteProvider) {
 
   return new Proxy(remoteProvider, {
     get(target, property) {
-      if (property === 'createContainer') {
+      if (property === METHOD_CREATE_CONTAINER) {
         return async (options) => {
           const isTiDb =
             options?.image === TIDB_REFERENCE_DEFAULTS.tidbImage &&
-            String(options?.name || '').endsWith('-tidb');
+            stringEndsWith(String(options?.name || ''), TIDB_CONTAINER_NAME_SUFFIX);
           if (!isTiDb) return createContainer(options);
 
-          const command = (options.command || []).map((arg) =>
+          const command = arrayMap(options.command || [], (arg) =>
             arg === `-P=${TIDB_REFERENCE_DEFAULTS.tidbPort}` ?
               `-P=${TIDB_CONTAINER_SQL_PORT}` : arg);
           const hostConfigExtras = {
@@ -113,13 +145,13 @@ function createPublishedSqlProvider(remoteProvider) {
           // The workload driver is in the controller process. A local TCP
           // forwarder below owns the path from 127.0.0.1:4000 to the remote
           // GCP host's published SQL port. Readiness remains provider-local.
-          return {...container, ip: '127.0.0.1'};
+          return {...container, ip: LOCALHOST_IP};
         };
       }
 
-      if (property === 'execInContainer') {
+      if (property === METHOD_EXEC_IN_CONTAINER) {
         return async (containerId, command) => {
-          const patched = Array.isArray(command) ? command.map((arg) =>
+          const patched = Array.isArray(command) ? arrayMap(command, (arg) =>
             arg === `--port=${TIDB_REFERENCE_DEFAULTS.tidbPort}` ?
               `--port=${TIDB_CONTAINER_SQL_PORT}` : arg) : command;
           return execInContainer(containerId, patched);
@@ -144,26 +176,26 @@ async function startTcpForwarder(remoteHost) {
       sockets.delete(downstream);
       sockets.delete(upstream);
     };
-    downstream.on('error', closeBoth);
-    upstream.on('error', closeBoth);
-    downstream.on('close', () => sockets.delete(downstream));
-    upstream.on('close', () => sockets.delete(upstream));
+    downstream.on(EVENT_ERROR, closeBoth);
+    upstream.on(EVENT_ERROR, closeBoth);
+    downstream.on(EVENT_CLOSE, () => sockets.delete(downstream));
+    upstream.on(EVENT_CLOSE, () => sockets.delete(upstream));
     downstream.pipe(upstream);
     upstream.pipe(downstream);
   });
 
   await new Promise((resolvePromise, rejectPromise) => {
     function onListening() {
-      server.off('error', onError);
+      server.off(EVENT_ERROR, onError);
       resolvePromise();
     }
     function onError(error) {
-      server.off('listening', onListening);
+      server.off(EVENT_LISTENING, onListening);
       rejectPromise(error);
     }
-    server.once('error', onError);
-    server.once('listening', onListening);
-    server.listen(CONTROLLER_LOCAL_SQL_PORT, '127.0.0.1');
+    server.once(EVENT_ERROR, onError);
+    server.once(EVENT_LISTENING, onListening);
+    server.listen(CONTROLLER_LOCAL_SQL_PORT, LOCALHOST_IP);
   });
 
   return {
@@ -183,8 +215,8 @@ async function rewriteEvidenceWithInfrastructure(result, infrastructure) {
   };
   await writeFile(
     result.evidencePath,
-    JSON.stringify(evidence, null, 2) + '\n',
-    'utf8',
+    JSON.stringify(evidence, null, 2) + NEWLINE,
+    FILE_ENCODING_UTF8,
   );
   result.evidence = evidence;
 }
@@ -207,7 +239,7 @@ async function run() {
   try {
     const provisioned = await provisionGcpDockerHosts(inputConfig, true);
     provisioner = provisioned.provisioner;
-    assert.ok(provisioner, 'Expected controlled GCP provisioner');
+    assert.ok(provisioner, ERROR_EXPECTED_PROVISIONER);
     const hosts = provisioned.runConfig.docker?.hosts || [];
     const hostInfo = provisioned.runConfig.docker?.hostInfo || [];
     assert.equal(hosts.length, EXPECTED_VM_COUNT);
@@ -231,15 +263,12 @@ async function run() {
     result = await runTiDbOltpMeasurement({
       provider: benchmarkProvider,
       outputPath: OUTPUT_PATH,
-      evidenceClass: 'gcp-single-host-controlled-non-comparative',
+      evidenceClass: EVIDENCE_CLASS_GCP_SINGLE_HOST,
       comparable: false,
-      nonComparableReason:
-        'The machine class and zone are controlled, but PD, TiDB, and all three ' +
-        'TiKV stores still share one VM. Final TiDB/Lagrange comparison requires ' +
-        'one storage replica per VM and the paired topology contract.',
+      nonComparableReason: NON_COMPARABLE_REASON,
       controllerEvidence: controllerEvidence(),
       executionEnvironment: {
-        kind: 'gcp-single-host-remote-docker',
+        kind: EXECUTION_ENVIRONMENT_KIND,
         controlled: true,
         project: inputConfig.gcp.project,
         zone: inputConfig.gcp.zone,
@@ -253,7 +282,7 @@ async function run() {
           containerPort: TIDB_CONTAINER_SQL_PORT,
           hostPort: GCP_HOST_SQL_PORT,
           controllerLocalPort: CONTROLLER_LOCAL_SQL_PORT,
-          firewallScope: 'provisioner-runner-ip-plus-vpc',
+          firewallScope: FIREWALL_SCOPE,
         },
       },
     });
@@ -288,9 +317,12 @@ async function run() {
     });
   }
 
-  const failures = [primaryError, forwarderError, teardownError].filter(Boolean);
+  const failures = arrayFilter(
+    [primaryError, forwarderError, teardownError],
+    Boolean,
+  );
   if (failures.length > ONE) {
-    throw new AggregateError(failures, 'TiDB GCP measurement/cleanup failures');
+    throw new AggregateError(failures, ERROR_MEASUREMENT_CLEANUP_FAILURES);
   }
   if (failures.length === ONE) throw failures[0];
 
@@ -301,10 +333,10 @@ async function run() {
     machineType: inputConfig.gcp.machineType,
     vmCount: inputConfig.gcp.vmCount,
     costEstimate,
-  }) + '\n');
+  }) + NEWLINE);
 }
 
 run().catch((error) => {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
+  process.stderr.write(`${error.stack || error.message || error}${NEWLINE}`);
   process.exitCode = ONE;
 });

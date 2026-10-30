@@ -13,12 +13,14 @@ import {
   BASE_PK_COLUMN_PREFIX,
   extractBasePrimaryKeyColumnName,
   getGlobalIndexDatasetName,
+  resolveIndexPartitionForEntry,
 } from './global-index-dataset-manager.js';
 import {
   GLOBAL_INDEX_ACCESS_PATH,
   INDEX_REJECTION_REASON,
 } from './index-constants.js';
 import {PartitionResolver} from '../query/partition-resolver.js';
+import {compareRoutingKeys} from '../partition/split-key-comparator.js';
 
 export {
   GLOBAL_INDEX_ACCESS_PATH,
@@ -293,18 +295,131 @@ function extractRowPkValues(idxRow) {
   return pkValues;
 }
 
-function groupPksByBasePartition(indexRows) {
+function isRowMatchingPk(row, pk) {
+  return Object.entries(pk).every(([k, v]) => row[k] === v);
+}
+
+function findMissingPks(pkList, rows) {
+  const missing = [];
+  for (const pk of pkList) {
+    const found = rows.some((row) => isRowMatchingPk(row, pk));
+    if (!found) {
+      missing.push(pk);
+    }
+  }
+  return missing;
+}
+
+function isValueInRange(val, start, end) {
+  if (start !== null && start !== undefined && compareRoutingKeys(val, start) < 0) {
+    return false;
+  }
+  if (end !== null && end !== undefined && compareRoutingKeys(val, end) >= 0) {
+    return false;
+  }
+  return true;
+}
+
+function partitionMatchesPk(partition, pkValues) {
+  const pKey = partition.partition_key || partition.partitionKey;
+  if (!pKey || pkValues[pKey] === undefined) {
+    return false;
+  }
+  const val = pkValues[pKey];
+  const start = partition.partition_key_start !== undefined ?
+    partition.partition_key_start :
+    partition.partitionKeyStart;
+  const end = partition.partition_key_end !== undefined ?
+    partition.partition_key_end :
+    partition.partitionKeyEnd;
+  return isValueInRange(val, start, end);
+}
+
+function matchPartitionByKey(basePartitions, pkValues) {
+  for (const p of basePartitions) {
+    if (partitionMatchesPk(p, pkValues)) {
+      return p.partition_id || p.partitionId;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve the current owning base partition for a row PK.
+ * @param {Object} router
+ * @param {string} tableName
+ * @param {Object} pkValues
+ * @param {string} storedPartitionId
+ * @return {string}
+ */
+function resolveCurrentBasePartitionId(router, tableName, pkValues, storedPartitionId) {
+  if (router && typeof router.resolveBasePartitionId === 'function') {
+    const resolved = router.resolveBasePartitionId(tableName, pkValues, storedPartitionId);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  const basePartitions = router?.getBaseTablePartitions ?
+    router.getBaseTablePartitions(tableName) :
+    [];
+  if (Array.isArray(basePartitions) && basePartitions.length > 0) {
+    const matched = matchPartitionByKey(basePartitions, pkValues);
+    if (matched) {
+      return matched;
+    }
+    const isStoredActive = basePartitions.some(
+      (p) => (p.partition_id || p.partitionId) === storedPartitionId,
+    );
+    if (isStoredActive) {
+      return storedPartitionId;
+    }
+  }
+
+  return storedPartitionId;
+}
+
+/**
+ * Group base row primary keys by target base partition id.
+ * @param {Object[]} indexRows
+ * @param {Object} [router]
+ * @param {string} [tableName]
+ * @return {Map<string, Object[]>}
+ */
+function groupPksByBasePartition(indexRows, router = null, tableName = null) {
   const pksByBasePartition = new Map();
   for (const idxRow of indexRows) {
-    const basePartitionId = idxRow[BASE_PARTITION_ID_COLUMN];
-    if (!basePartitionId) continue;
+    const storedPartitionId = idxRow[BASE_PARTITION_ID_COLUMN];
+    const pkValues = extractRowPkValues(idxRow);
+    const targetPartitionId = (router && tableName) ?
+      resolveCurrentBasePartitionId(router, tableName, pkValues, storedPartitionId) :
+      storedPartitionId;
+    if (!targetPartitionId) continue;
 
-    if (!pksByBasePartition.has(basePartitionId)) {
-      pksByBasePartition.set(basePartitionId, []);
+    if (!pksByBasePartition.has(targetPartitionId)) {
+      pksByBasePartition.set(targetPartitionId, []);
     }
-    pksByBasePartition.get(basePartitionId).push(extractRowPkValues(idxRow));
+    pksByBasePartition.get(targetPartitionId).push(pkValues);
   }
   return pksByBasePartition;
+}
+
+function narrowIndexPartitions(resolvedPartitions, indexPartitions, candidate, conditions) {
+  if (resolvedPartitions.length === indexPartitions.length && indexPartitions.length > 1) {
+    const leadingCol = candidate.columnNames[0];
+    const leadingCond = conditions.get(leadingCol.toLowerCase());
+    if (leadingCond && EQUALITY_OPERATORS.has(leadingCond.operator)) {
+      const targetPart = resolveIndexPartitionForEntry(
+        {[leadingCol]: leadingCond.value},
+        indexPartitions,
+        leadingCol,
+      );
+      if (targetPart) {
+        return [targetPart.partition_id || targetPart.partitionId];
+      }
+    }
+  }
+  return resolvedPartitions;
 }
 
 /**
@@ -316,6 +431,7 @@ export class GlobalIndexReadRouter {
    * @param {Function} [options.getIndexCatalog]
    * @param {Function} [options.getIndexPartitions]
    * @param {Function} [options.getBaseTablePartitions]
+   * @param {Function} [options.resolveBasePartitionId]
    * @param {PartitionResolver} [options.partitionResolver]
    * @param {Function} [options.executeIndexScan]
    * @param {Function} [options.executeBaseFetch]
@@ -326,6 +442,7 @@ export class GlobalIndexReadRouter {
     this.getIndexCatalog = options.getIndexCatalog || (() => []);
     this.getIndexPartitions = options.getIndexPartitions || (() => []);
     this.getBaseTablePartitions = options.getBaseTablePartitions || (() => []);
+    this.resolveBasePartitionId = options.resolveBasePartitionId || null;
     this.partitionResolver = options.partitionResolver || new PartitionResolver();
     this.executeIndexScan = options.executeIndexScan || (async () => []);
     this.executeBaseFetch = options.executeBaseFetch || (async () => []);
@@ -386,7 +503,7 @@ export class GlobalIndexReadRouter {
     const indexPartitions = this.getIndexPartitions(selectedCandidate.indexName) || [];
     const datasetName = getGlobalIndexDatasetName(tableName, selectedCandidate.indexName);
 
-    const resolvedIndexPartitions = this.partitionResolver.resolvePartitions(
+    const initialPartitions = this.partitionResolver.resolvePartitions(
       datasetName,
       whereClause,
       indexPartitions,
@@ -397,6 +514,13 @@ export class GlobalIndexReadRouter {
           partitionKey: selectedCandidate.columnNames[0],
         },
       },
+    );
+
+    const resolvedIndexPartitions = narrowIndexPartitions(
+      initialPartitions,
+      indexPartitions,
+      selectedCandidate,
+      conditions,
     );
 
     const covering = isIndexCovering(
@@ -461,8 +585,63 @@ export class GlobalIndexReadRouter {
    * @return {Promise<Object[]>}
    * @private
    */
+  async _fetchFromOwnerPartition(tableName, ownerId, pk) {
+    const rows = await this.executeBaseFetch({tableName, basePartitionId: ownerId, pkList: [pk]});
+    return Array.isArray(rows) && rows.length > 0 ? rows : null;
+  }
+
+  async _scanOtherPartitionsForPk(tableName, basePartitions, excludedIds, pk) {
+    for (const p of basePartitions) {
+      const pId = p.partition_id || p.partitionId;
+      if (excludedIds.has(pId)) continue;
+      const rows = await this._fetchFromOwnerPartition(tableName, pId, pk);
+      if (rows) return rows;
+    }
+    return null;
+  }
+
+  async _recoverMissingStage2Rows(tableName, missingPks, fetchedRows) {
+    const basePartitions = this.getBaseTablePartitions ?
+      this.getBaseTablePartitions(tableName) :
+      [];
+
+    for (const {pk, attemptedPartitionId} of missingPks) {
+      let ownerId = null;
+      if (typeof this.resolveBasePartitionId === 'function') {
+        ownerId = this.resolveBasePartitionId(tableName, pk, attemptedPartitionId);
+      }
+      if (ownerId && ownerId !== attemptedPartitionId) {
+        const rows = await this._fetchFromOwnerPartition(tableName, ownerId, pk);
+        if (rows) {
+          fetchedRows.push(...rows);
+          continue;
+        }
+      }
+
+      const excluded = new Set([attemptedPartitionId, ownerId].filter(Boolean));
+      const scannedRows = await this._scanOtherPartitionsForPk(
+        tableName,
+        basePartitions,
+        excluded,
+        pk,
+      );
+      if (scannedRows) {
+        fetchedRows.push(...scannedRows);
+      }
+    }
+  }
+
+  /**
+   * Fetch base rows from designated partitions with recovery for migrated rows.
+   * @param {string} tableName
+   * @param {Map<string, Object[]>} pksByBasePartition
+   * @return {Promise<Object[]>}
+   * @private
+   */
   async _fetchRowsFromBasePartitions(tableName, pksByBasePartition) {
     const fetchedRows = [];
+    const missingPks = [];
+
     for (const [basePartitionId, pkList] of pksByBasePartition) {
       const rows = await this.executeBaseFetch({
         tableName,
@@ -471,9 +650,41 @@ export class GlobalIndexReadRouter {
       });
       if (Array.isArray(rows)) {
         fetchedRows.push(...rows);
+        if (rows.length < pkList.length) {
+          const missed = findMissingPks(pkList, rows);
+          for (const pk of missed) {
+            missingPks.push({pk, attemptedPartitionId: basePartitionId});
+          }
+        }
+      } else {
+        for (const pk of pkList) {
+          missingPks.push({pk, attemptedPartitionId: basePartitionId});
+        }
       }
     }
+
+    if (missingPks.length > 0) {
+      await this._recoverMissingStage2Rows(tableName, missingPks, fetchedRows);
+    }
+
     return fetchedRows;
+  }
+
+  /**
+   * Execute Stage 2 base-row lookup for candidate index entries,
+   * resolving base-row placement through its current owner.
+   * @param {Object} context
+   * @param {string} context.tableName
+   * @param {Object[]} context.candidateEntries
+   * @return {Promise<Object[]>}
+   */
+  async executeStage2BaseLookup(context) {
+    const {tableName, candidateEntries} = context;
+    if (!Array.isArray(candidateEntries) || candidateEntries.length === 0) {
+      return [];
+    }
+    const pksByBasePartition = groupPksByBasePartition(candidateEntries, this, tableName);
+    return this._fetchRowsFromBasePartitions(tableName, pksByBasePartition);
   }
 
   /**
@@ -483,7 +694,6 @@ export class GlobalIndexReadRouter {
    * @param {Object} queryContext
    * @param {Object} plan
    * @return {Promise<Object[]>}
-   * @private
    */
   async executeTwoStageIndexQuery(queryContext, plan) {
     const {tableName, whereClause, projectedColumns = null} = queryContext;
@@ -507,8 +717,10 @@ export class GlobalIndexReadRouter {
       return projectCoveringIndexRows(indexRows, projectedColumns);
     }
 
-    // Stage 2: group base PKs by __base_partition_id and fetch
-    const pksByBasePartition = groupPksByBasePartition(indexRows);
-    return this._fetchRowsFromBasePartitions(tableName, pksByBasePartition);
+    // Stage 2: fetch base rows through current owner placement
+    return this.executeStage2BaseLookup({
+      tableName,
+      candidateEntries: indexRows,
+    });
   }
 }

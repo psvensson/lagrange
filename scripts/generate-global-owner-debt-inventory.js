@@ -52,6 +52,7 @@ import {
   packageNameOf,
 } from './global-owner-debt-inventory/dependency-policy.js';
 import {IMPORT_GRAPH_SEAL_PATH} from './checks/impact-proof-cone-constants.js';
+import {spawnGit} from './checks/git-invocation.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = OWNER_DEBT.output;
@@ -66,6 +67,9 @@ const PATH_COMPONENT_NOT_DIRECTORY_ERROR_CODE = 'ENOTDIR';
 const SYMBOLIC_LINK_LOOP_ERROR_CODE = 'ELOOP';
 const PARENT_PATH_SEGMENT = '..';
 const PARENT_PATH_PREFIX = `..${path.sep}`;
+const GIT_ARGUMENTS_COMMON_DIR = Object.freeze(['rev-parse', '--git-common-dir']);
+const GIT_FALLBACK_DIR = '.git';
+const IMPORT_GRAPH_CACHE_FILENAME = 'lagrange-import-graph-cache.json';
 
 function emptyFileDebt(filePath, importDegrees) {
   return {
@@ -752,7 +756,141 @@ function assertEdgeAccounting(degrees, edgeCount, unresolvedCount) {
   }
 }
 
+function getGitCommonDir(root) {
+  try {
+    const result = spawnGit(GIT_ARGUMENTS_COMMON_DIR, {
+      cwd: root,
+      encoding: OWNER_DEBT.encodingUtf8,
+    });
+    if (result.status === 0 && result.stdout) {
+      const output = String(result.stdout).trim();
+      if (output) {
+        return path.resolve(root, output);
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return path.join(root, GIT_FALLBACK_DIR);
+}
+
+function saveImportGraphToGitCommonCache(root, report) {
+  try {
+    const commonDir = getGitCommonDir(root);
+    const destination = path.join(commonDir, IMPORT_GRAPH_CACHE_FILENAME);
+    fs.mkdirSync(path.dirname(destination), {recursive: true});
+    fs.writeFileSync(destination, `${JSON.stringify(report)}\n`);
+  } catch {
+    // best-effort cache persistence
+  }
+}
+
+function tryReadCachedReport(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    const content = fs.readFileSync(filePath, OWNER_DEBT.encodingUtf8);
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+function validateCachedFollowedFiles(root, followedFileDigests) {
+  if (!followedFileDigests || typeof followedFileDigests !== 'object') {
+    return false;
+  }
+  for (const [followedPath, digest] of Object.entries(followedFileDigests)) {
+    const fullPath = path.join(root, followedPath);
+    try {
+      const stat = fs.lstatSync(fullPath);
+      if (stat.isSymbolicLink() || !stat.isFile()) {
+        return false;
+      }
+      if (fileIdentity(root, followedPath).sha256 !== digest) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+function hasValidCachedDigests(cached, sourceDigest, producerInputDigest) {
+  if (cached.schemaVersion !== OWNER_DEBT.importGraphSchemaVersion) return false;
+  if (cached.sourceDigest !== sourceDigest) return false;
+  return cached.producerInputDigest === producerInputDigest;
+}
+
+function hasValidCachedStructure(cached, files) {
+  if (!cached || typeof cached !== 'object') return false;
+  if (!cached.degrees || typeof cached.degrees !== 'object') return false;
+  if (!cached.importers || typeof cached.importers !== 'object') return false;
+  if (!cached.fileDigests || typeof cached.fileDigests !== 'object') return false;
+  if (Array.isArray(files) && Object.keys(cached.fileDigests).length !== files.length) {
+    return false;
+  }
+  return Array.isArray(cached.resolverInputs);
+}
+
+function isCachedResolverValid(root, cached) {
+  try {
+    const resolverDigest = importGraphResolverStateDigest(root, cached.resolverInputs);
+    return resolverDigest === cached.resolverStateDigest;
+  } catch {
+    return false;
+  }
+}
+
+function isValidCachedReport(root, cached, files, sourceDigest, producerInputDigest) {
+  if (!hasValidCachedStructure(cached, files)) return false;
+  if (!hasValidCachedDigests(cached, sourceDigest, producerInputDigest)) return false;
+  if (!isCachedResolverValid(root, cached)) return false;
+  return validateCachedFollowedFiles(root, cached.followedFileDigests);
+}
+
+function reconstructImportGraph(cached) {
+  return {
+    sourceDigest: cached.sourceDigest,
+    producerInputDigest: cached.producerInputDigest,
+    fileDigests: cached.fileDigests,
+    followedFileDigests: cached.followedFileDigests,
+    resolverInputs: cached.resolverInputs,
+    resolverStateDigest: cached.resolverStateDigest,
+    moduleCount: cached.moduleCount,
+    edgeCount: cached.edgeCount,
+    unresolvedCount: cached.unresolvedCount,
+    degrees: new Map(Object.entries(cached.degrees)),
+    importers: new Map(Object.entries(cached.importers)),
+  };
+}
+
+function tryGetCachedImportGraph(root, files, sourceDigest, producerInputDigest) {
+  const candidatePaths = [
+    path.join(root, REPORTS.importGraph),
+    path.join(getGitCommonDir(root), IMPORT_GRAPH_CACHE_FILENAME),
+  ];
+  for (const candidatePath of candidatePaths) {
+    const cached = tryReadCachedReport(candidatePath);
+    if (isValidCachedReport(root, cached, files, sourceDigest, producerInputDigest)) {
+      saveImportGraphToGitCommonCache(root, cached);
+      return reconstructImportGraph(cached);
+    }
+  }
+  return null;
+}
+
 async function buildImportGraph(root, files) {
+  const sourceDigest = javascriptSourceDigest(root, files);
+  const producerInputDigest = javascriptSourceDigest(
+    root, listImportGraphInputFiles(root));
+  const cachedGraph = tryGetCachedImportGraph(
+    root, files, sourceDigest, producerInputDigest);
+  if (cachedGraph !== null) {
+    return cachedGraph;
+  }
   const result = await cruise(SOURCE_DIRECTORIES.map((directory) =>
     path.join(root, directory)), {
     baseDir: root,
@@ -799,10 +937,9 @@ async function buildImportGraph(root, files) {
     file,
     fileIdentity(root, file).sha256,
   ]));
-  return {
-    sourceDigest: javascriptSourceDigest(root, files),
-    producerInputDigest: javascriptSourceDigest(
-      root, listImportGraphInputFiles(root)),
+  const liveGraph = {
+    sourceDigest,
+    producerInputDigest,
     fileDigests,
     followedFileDigests: followedFileDigests(root, modules, fileDigests),
     resolverInputs: sortedResolverInputs,
@@ -813,6 +950,8 @@ async function buildImportGraph(root, files) {
     degrees,
     importers,
   };
+  saveImportGraphToGitCommonCache(root, serializeImportGraph(liveGraph));
+  return liveGraph;
 }
 
 function serializeImportGraph(importGraph) {
@@ -858,12 +997,13 @@ async function refreshImportGraphReport(root, files) {
   fs.mkdirSync(path.dirname(destination), {recursive: true});
   fs.writeFileSync(destination, `${JSON.stringify(report)}\n`);
   writeImportGraphSeal(root, report);
+  saveImportGraphToGitCommonCache(root, report);
   return report;
 }
 
-async function verifyImportGraphReport(root) {
-  const files = listJavaScriptFiles(root);
-  const expected = serializeImportGraph(await buildImportGraph(root, files));
+async function verifyImportGraphReport(root, expectedReport = null) {
+  const expected = expectedReport ??
+    serializeImportGraph(await buildImportGraph(root, listJavaScriptFiles(root)));
   const graphBytes = fs.readFileSync(path.join(root, REPORTS.importGraph));
   const sealBytes = fs.readFileSync(path.join(root, IMPORT_GRAPH_SEAL_PATH));
   const actual = JSON.parse(graphBytes);
@@ -965,8 +1105,9 @@ async function runCli(args = process.argv.slice(2)) {
     return;
   }
   if (args.includes(REFRESH_IMPORT_GRAPH_ONLY_FLAG)) {
-    await refreshImportGraphReport(process.cwd(), listJavaScriptFiles(process.cwd()));
-    const receipt = await verifyImportGraphReport(process.cwd());
+    const report = await refreshImportGraphReport(
+      process.cwd(), listJavaScriptFiles(process.cwd()));
+    const receipt = await verifyImportGraphReport(process.cwd(), report);
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
     return;
   }

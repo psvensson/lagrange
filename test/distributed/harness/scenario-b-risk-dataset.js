@@ -64,6 +64,71 @@ function resolveAccountEventRisk(shapeIndex, eIdx) {
   return {riskPoints: 5, flagged: 0, crossEntityAlert: 0};
 }
 
+function appendAccountEvents(accountEvents, idNum, accountId, shapeIndex, cfg, seed, idx) {
+  for (let eIdx = 0; eIdx < cfg.eventsPerAccount; eIdx += 1) {
+    const {riskPoints, flagged, crossEntityAlert} = resolveAccountEventRisk(shapeIndex, eIdx);
+    accountEvents.push(Object.freeze({
+      eventId: `ae-${idNum}-${eIdx + 1}`,
+      accountId,
+      amountCents: 1000 + ((seed + idx * 31 + eIdx * 17) % 9000),
+      riskPoints,
+      flagged,
+      crossEntityAlert,
+      byteSize: cfg.logicalBytesPerEventRow,
+    }));
+  }
+}
+
+function appendMerchantEvents(merchantEvents, idNum, merchantId, shapeIndex, cfg, seed, idx) {
+  const isHighRisk = shapeIndex === 2 || shapeIndex === 3;
+  const merchantRisk = isHighRisk ? 200 : 10;
+  const chargeback = isHighRisk ? 1 : 0;
+  for (let eIdx = 0; eIdx < cfg.eventsPerMerchant; eIdx += 1) {
+    merchantEvents.push(Object.freeze({
+      eventId: `me-${idNum}-${eIdx + 1}`,
+      merchantId,
+      amountCents: 2000 + ((seed + idx * 19 + eIdx * 13) % 5000),
+      riskPoints: merchantRisk,
+      chargebackFlag: chargeback,
+      byteSize: cfg.logicalBytesPerEventRow,
+    }));
+  }
+}
+
+function appendDeviceEvents(deviceEvents, idNum, deviceId, shapeIndex, cfg) {
+  const devRisk = shapeIndex >= 2 ? 150 : 15;
+  const devFail = shapeIndex >= 2 ? 1 : 0;
+  for (let eIdx = 0; eIdx < cfg.eventsPerDevice; eIdx += 1) {
+    deviceEvents.push(Object.freeze({
+      eventId: `de-${idNum}-${eIdx + 1}`,
+      deviceId,
+      riskPoints: devRisk,
+      failedAuthCount: devFail,
+      byteSize: cfg.logicalBytesPerEventRow,
+    }));
+  }
+}
+
+function appendRelatedAccountEvents(
+  relatedAccountEvents,
+  idNum,
+  relatedAccountId,
+  shapeIndex,
+  cfg,
+) {
+  const relRisk = shapeIndex === 3 ? 250 : 10;
+  const relFlag = shapeIndex === 3 ? 1 : 0;
+  for (let eIdx = 0; eIdx < cfg.eventsPerRelatedAccount; eIdx += 1) {
+    relatedAccountEvents.push(Object.freeze({
+      eventId: `re-${idNum}-${eIdx + 1}`,
+      relatedAccountId,
+      riskPoints: relRisk,
+      flagged: relFlag,
+      byteSize: cfg.logicalBytesPerEventRow,
+    }));
+  }
+}
+
 function generateScenarioBRiskDataset(options = {}) {
   const profileId = options.profileId || 'smoke';
   const seed = Number.isInteger(options.seed) ? options.seed : 20261030;
@@ -92,56 +157,10 @@ function generateScenarioBRiskDataset(options = {}) {
     devices.push(Object.freeze({deviceId, osFamily: idx % 2 === 0 ? 'linux' : 'ios'}));
     relatedAccounts.push(Object.freeze({relatedAccountId, linkedAccountId: accountId}));
 
-    for (let eIdx = 0; eIdx < cfg.eventsPerAccount; eIdx += 1) {
-      const {riskPoints, flagged, crossEntityAlert} = resolveAccountEventRisk(shapeIndex, eIdx);
-      accountEvents.push(Object.freeze({
-        eventId: `ae-${idNum}-${eIdx + 1}`,
-        accountId,
-        amountCents: 1000 + ((seed + idx * 31 + eIdx * 17) % 9000),
-        riskPoints,
-        flagged,
-        crossEntityAlert,
-        byteSize: cfg.logicalBytesPerEventRow,
-      }));
-    }
-
-    const isHighRisk = shapeIndex === 2 || shapeIndex === 3;
-    const merchantRisk = isHighRisk ? 200 : 10;
-    const chargeback = isHighRisk ? 1 : 0;
-    for (let eIdx = 0; eIdx < cfg.eventsPerMerchant; eIdx += 1) {
-      merchantEvents.push(Object.freeze({
-        eventId: `me-${idNum}-${eIdx + 1}`,
-        merchantId,
-        amountCents: 2000 + ((seed + idx * 19 + eIdx * 13) % 5000),
-        riskPoints: merchantRisk,
-        chargebackFlag: chargeback,
-        byteSize: cfg.logicalBytesPerEventRow,
-      }));
-    }
-
-    const devRisk = shapeIndex >= 2 ? 150 : 15;
-    const devFail = shapeIndex >= 2 ? 1 : 0;
-    for (let eIdx = 0; eIdx < cfg.eventsPerDevice; eIdx += 1) {
-      deviceEvents.push(Object.freeze({
-        eventId: `de-${idNum}-${eIdx + 1}`,
-        deviceId,
-        riskPoints: devRisk,
-        failedAuthCount: devFail,
-        byteSize: cfg.logicalBytesPerEventRow,
-      }));
-    }
-
-    const relRisk = shapeIndex === 3 ? 250 : 10;
-    const relFlag = shapeIndex === 3 ? 1 : 0;
-    for (let eIdx = 0; eIdx < cfg.eventsPerRelatedAccount; eIdx += 1) {
-      relatedAccountEvents.push(Object.freeze({
-        eventId: `re-${idNum}-${eIdx + 1}`,
-        relatedAccountId,
-        riskPoints: relRisk,
-        flagged: relFlag,
-        byteSize: cfg.logicalBytesPerEventRow,
-      }));
-    }
+    appendAccountEvents(accountEvents, idNum, accountId, shapeIndex, cfg, seed, idx);
+    appendMerchantEvents(merchantEvents, idNum, merchantId, shapeIndex, cfg, seed, idx);
+    appendDeviceEvents(deviceEvents, idNum, deviceId, shapeIndex, cfg);
+    appendRelatedAccountEvents(relatedAccountEvents, idNum, relatedAccountId, shapeIndex, cfg);
   }
 
   const tables = Object.freeze({
@@ -182,29 +201,20 @@ function generateScenarioBRiskDataset(options = {}) {
   });
 }
 
-function buildScenarioBWorkloadPlan(options = {}) {
-  if (!options?.dataset || !options.dataset.datasetSha256) {
-    throw new Error('options.dataset with datasetSha256 is required');
+function resolveCandidateAccounts(dataset, rawShape) {
+  if (!rawShape || rawShape === 'aggregate-mix') {
+    return dataset.tables.accounts;
   }
-  const dataset = options.dataset;
-  const requestCount = Number.isInteger(options.requestCount) && options.requestCount > 0 ?
-    options.requestCount :
-    8;
-  const rawShape = typeof options.targetGraphShape === 'string' ?
-    stringTrim(options.targetGraphShape) :
-    '';
-
-  let candidateAccounts = dataset.tables.accounts;
-  if (rawShape && rawShape !== 'aggregate-mix') {
-    if (!arrayIncludes(SCENARIO_B_GRAPH_SHAPE_LADDER, rawShape)) {
-      throw new Error(`Unsupported Scenario B target graph shape: ${rawShape}`);
-    }
-    candidateAccounts = arrayFilter(
-      dataset.tables.accounts,
-      (acc) => acc.expectedGraphShape === rawShape,
-    );
+  if (!arrayIncludes(SCENARIO_B_GRAPH_SHAPE_LADDER, rawShape)) {
+    throw new Error(`Unsupported Scenario B target graph shape: ${rawShape}`);
   }
+  return arrayFilter(
+    dataset.tables.accounts,
+    (acc) => acc.expectedGraphShape === rawShape,
+  );
+}
 
+function buildPlanRequests(candidateAccounts, requestCount) {
   const requests = [];
   for (let i = 0; i < requestCount; i += 1) {
     const acc = candidateAccounts[i % candidateAccounts.length];
@@ -220,6 +230,23 @@ function buildScenarioBWorkloadPlan(options = {}) {
       expectedGraphShape: acc.expectedGraphShape,
     }));
   }
+  return requests;
+}
+
+function buildScenarioBWorkloadPlan(options = {}) {
+  if (!options?.dataset || !options.dataset.datasetSha256) {
+    throw new Error('options.dataset with datasetSha256 is required');
+  }
+  const dataset = options.dataset;
+  const requestCount = Number.isInteger(options.requestCount) && options.requestCount > 0 ?
+    options.requestCount :
+    8;
+  const rawShape = typeof options.targetGraphShape === 'string' ?
+    stringTrim(options.targetGraphShape) :
+    '';
+
+  const candidateAccounts = resolveCandidateAccounts(dataset, rawShape);
+  const requests = buildPlanRequests(candidateAccounts, requestCount);
 
   const targetGraphShape = rawShape || 'aggregate-mix';
   const workloadPlanSha256 = createHash('sha256').update(JSON.stringify({

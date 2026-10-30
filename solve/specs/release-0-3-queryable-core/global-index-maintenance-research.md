@@ -5,9 +5,9 @@ documentClass: planning
 
 # Global index maintenance research
 
-Research date: 2026-10-28. Decision status: **R2 unsealed**.
+Research date: 2026-10-28. Decision status: **R2 sealed (2026-10-30) — Mode A (synchronous non-unique TX1 maintenance in 0.3.2; global uniqueness deferred to 1.0)**.
 
-Preserves the secondary index investigation for [0.3 epic](../../epics/release-0-3-queryable-core.md) and [C1 task](tasks.md#c1--planned-global-index-maintenance-mode-seal--design-may-start-early). The [requirements](../global-secondary-indexes/requirements.md#r2--maintenance-consistency-decision-sealed-before-implementation) remain decision authority.
+Preserves the secondary index investigation for [0.3 epic](../../epics/release-0-3-queryable-core.md) and [C1 task](tasks.md#c1--planned-global-index-maintenance-mode-seal--design-may-start-early). The [requirements](../global-secondary-indexes/requirements.md#r2--maintenance-and-consistency-mode-sealed-2026-10-30) remain decision authority.
 
 ## Provisional recommendation and decision boundary
 
@@ -96,6 +96,16 @@ Preserves the secondary index investigation for [0.3 epic](../../epics/release-0
 6. Evaluate concurrent backfill: ensure obsolete entries never resurrect or overwrite newer writes.
 7. Benchmark latency (p50/p95/p99), participant fanout, lock contention, queue age, and fallback rates.
 8. Record findings in C1 task to seal R2.
+
+## 7. Recommended Seal Shape
+
+C1 (`global-index-maintenance-mode-seal`) is now sealed (2026-10-30) and reconciled with `solve/specs/global-secondary-indexes/requirements.md`:
+
+- **Adopted Mode**: **Mode A — Synchronous transactional maintenance in Release 0.3.2 for non-unique global secondary indexes (`CREATE GLOBAL INDEX`), with global uniqueness (`CREATE UNIQUE GLOBAL INDEX`) explicitly deferred to 1.0**.
+- **TX1 Participant Enlistment**: Base-table `INSERT`, `UPDATE`, and `DELETE` synchronously derive index-entry mutations for all global indexes in `[WRITE_ONLY, BACKFILLING, READ_WRITE]` states and enlist affected index partitions as TX1 participants before the participant set freezes. Unavailability of an index partition fails the base transaction with a typed error.
+- **Read Visibility & Completeness**: Planner and read router select an index only when `index_state === 'READ_WRITE'` and the query satisfies a leading equality/range prefix. Indexes in non-readable states (`CREATING`, `WRITE_ONLY`, `BACKFILLING`, `FAILED`, `DROPPING`) fall back deterministically to base-table scatter-gather without returning partial results. Stage-2 base-row lookups resolve current base-row partition ownership dynamically across splits/merges.
+- **Measured Write Cost**: Write-path maintenance records participant fanout and latency overhead for 0, 1, and 2 active global indexes.
+- **Explicit 1.0 Deferral**: `CREATE UNIQUE GLOBAL INDEX` is rejected at admission with `UNSUPPORTED_SQL_FEATURE` (`SQLSTATE 0A000`).
 
 ## Source references
 

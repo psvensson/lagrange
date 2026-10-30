@@ -13,80 +13,153 @@ import {
   resolvePairedOltpRetryDelayMs,
 } from '../../test/distributed/harness/oltp-paired-retry-owner.js';
 
+const objectFreeze = Object.freeze;
+const arrayMap = Function.call.bind(Array.prototype.map);
+
+const ONE = 1;
+const TWO = 2;
 const PASS_LINE = 'oltp-paired-retry-owner-guard: PASS\n';
-const ADAPTER_PATHS = Object.freeze([
+const ENCODING_UTF8 = 'utf8';
+
+const ERROR_FIELD_CODE = 'code';
+const ERROR_FIELD_SQLSTATE = 'sqlState';
+const ERROR_MESSAGE_SERIALIZATION = 'serialization conflict';
+const ERROR_MESSAGE_TRANSPORT = 'transport failure';
+const ERROR_MESSAGE_OTHER = 'other';
+const ERROR_MESSAGE_NO_SLEEP = 'non-retryable failures must not sleep';
+const ERROR_CODE_ECONNRESET = 'ECONNRESET';
+const ERROR_NAME_OLTP = 'OltpPairedTransactionError';
+const SQLSTATE_40001 = '40001';
+
+const OP_RETRY_ONCE = 'retry-once';
+const OP_TERMINAL = 'terminal';
+const POLICY_ID = 'scenario-a-retry-v1';
+
+const START_TIME_100 = 100;
+const INTENDED_TIME_90 = 90;
+const START_TIME_50 = 50;
+const START_TIME_1000 = 1000;
+const INTENDED_TIME_11 = 11;
+const CURRENT_TIME_10 = 10;
+
+const DELAY_5 = 5;
+const DELAY_10 = 10;
+const DELAY_15 = 15;
+const DELAY_20 = 20;
+const DELAY_31 = 31;
+const DELAY_35 = 35;
+const COUNT_3 = 3;
+const COUNT_4 = 4;
+
+const ADAPTER_PATHS = objectFreeze([
   'test/distributed/reference-client/tidb-oltp-adapter.js',
   'test/distributed/reference-client/lagrange-oltp-adapter.js',
 ]);
 
-function serializationError(field = 'code') {
-  const error = new Error('serialization conflict');
+const COMMITTED_OUTCOME = objectFreeze({committed: true});
+const EXPECTED_SLEEPS = objectFreeze([DELAY_5, DELAY_10]);
+const EXPECTED_FAILURES = objectFreeze([
+  OLTP_PAIRED_RETRY_OUTCOME.SERIALIZATION_CONFLICT,
+  OLTP_PAIRED_RETRY_OUTCOME.SERIALIZATION_CONFLICT,
+]);
+
+const EXPECTED_RECORDED_EVENTS = objectFreeze([
+  objectFreeze({delayMs: DELAY_5, sqlState: SQLSTATE_40001}),
+  objectFreeze({delayMs: DELAY_10, sqlState: SQLSTATE_40001}),
+]);
+
+const EXPECTED_RETRY_POLICY = objectFreeze({
+  id: POLICY_ID,
+  maxRetries: COUNT_3,
+  baseDelayMs: DELAY_5,
+  maxDelayMs: DELAY_20,
+  retryableSqlStates: objectFreeze([SQLSTATE_40001]),
+  ambiguousCommitIsFailure: true,
+  adapterRetriesAllowed: false,
+});
+
+const EXPECTED_INITIAL_RETRY_EVIDENCE = objectFreeze({
+  policyId: POLICY_ID,
+  logicalTransactions: 1,
+  attempts: TWO,
+  retries: 1,
+  retryDelayMs: DELAY_5,
+  serializationConflicts: 1,
+  terminalTransactions: 0,
+});
+
+const EXPECTED_TERMINAL_RETRY_EVIDENCE = objectFreeze({
+  policyId: POLICY_ID,
+  logicalTransactions: TWO,
+  attempts: COUNT_3,
+  retries: 1,
+  retryDelayMs: DELAY_5,
+  serializationConflicts: 1,
+  terminalTransactions: 1,
+});
+
+function serializationError(field = ERROR_FIELD_CODE) {
+  const error = new Error(ERROR_MESSAGE_SERIALIZATION);
   error[field] = OLTP_SERIALIZATION_FAILURE_SQLSTATE;
   return error;
 }
 
 async function assertSuccessfulRetryAndRequestClock() {
-  let logicalNow = 100;
+  let logicalNow = START_TIME_100;
   let attempts = 0;
   const sleeps = [];
-  const retryEvents = [];
+  const observedEvents = [];
   const outcome = await executePairedOltpTransactionWithRetry({
-    intendedIssueTimeMs: 90,
+    intendedIssueTimeMs: INTENDED_TIME_90,
     now() {
       return logicalNow;
     },
     async executeAttempt() {
       attempts += 1;
-      logicalNow += 2;
-      if (attempts < 3) throw serializationError('sqlState');
-      return {committed: true};
+      logicalNow += TWO;
+      if (attempts < COUNT_3) throw serializationError(ERROR_FIELD_SQLSTATE);
+      return COMMITTED_OUTCOME;
     },
     async sleep(delayMs) {
       sleeps.push(delayMs);
       logicalNow += delayMs;
     },
     onRetry(event) {
-      retryEvents.push(event);
+      observedEvents.push(event);
     },
   });
 
-  assert.deepEqual(outcome.result, {committed: true});
-  assert.deepEqual(sleeps, [5, 10]);
-  assert.equal(outcome.evidence.attempts, 3);
-  assert.equal(outcome.evidence.retries, 2);
-  assert.equal(outcome.evidence.retryDelayMs, 15);
-  assert.equal(outcome.evidence.requestClockElapsedMs, 31);
+  assert.deepEqual(outcome.result, COMMITTED_OUTCOME);
+  assert.deepEqual(sleeps, EXPECTED_SLEEPS);
+  assert.equal(outcome.evidence.attempts, COUNT_3);
+  assert.equal(outcome.evidence.retries, TWO);
+  assert.equal(outcome.evidence.retryDelayMs, DELAY_15);
+  assert.equal(outcome.evidence.requestClockElapsedMs, DELAY_31);
   assert.deepEqual(
-    outcome.evidence.failures.map(({outcome: value}) => value),
-    [
-      OLTP_PAIRED_RETRY_OUTCOME.SERIALIZATION_CONFLICT,
-      OLTP_PAIRED_RETRY_OUTCOME.SERIALIZATION_CONFLICT,
-    ],
+    arrayMap(outcome.evidence.failures, ({outcome: value}) => value),
+    EXPECTED_FAILURES,
   );
   assert.deepEqual(
-    retryEvents.map(({delayMs, sqlState}) => ({delayMs, sqlState})),
-    [
-      {delayMs: 5, sqlState: '40001'},
-      {delayMs: 10, sqlState: '40001'},
-    ],
+    arrayMap(observedEvents, ({delayMs, sqlState}) => ({delayMs, sqlState})),
+    EXPECTED_RECORDED_EVENTS,
   );
 }
 
 async function assertTerminalNonRetryableFailure() {
-  const cause = new Error('transport failure');
-  cause.code = 'ECONNRESET';
+  const cause = new Error(ERROR_MESSAGE_TRANSPORT);
+  cause.code = ERROR_CODE_ECONNRESET;
   await assert.rejects(
     executePairedOltpTransactionWithRetry({
-      now: () => 50,
+      now: () => START_TIME_50,
       async executeAttempt() {
         throw cause;
       },
       async sleep() {
-        throw new Error('non-retryable failures must not sleep');
+        throw new Error(ERROR_MESSAGE_NO_SLEEP);
       },
     }),
     (error) => {
-      assert.equal(error.name, 'OltpPairedTransactionError');
+      assert.equal(error.name, ERROR_NAME_OLTP);
       assert.equal(error.cause, cause);
       assert.equal(error.sqlState, null);
       assert.equal(error.oltpRetryEvidence.attempts, 1);
@@ -110,39 +183,39 @@ async function assertRetryBudgetExhaustion() {
       async executeAttempt() {
         attempts += 1;
         logicalNow += 1;
-        throw serializationError('code');
+        throw serializationError(ERROR_FIELD_CODE);
       },
       async sleep(delayMs) {
         logicalNow += delayMs;
       },
     }),
     (error) => {
-      assert.equal(error.sqlState, '40001');
-      assert.equal(error.oltpRetryEvidence.attempts, 4);
-      assert.equal(error.oltpRetryEvidence.retries, 3);
-      assert.equal(error.oltpRetryEvidence.retryDelayMs, 35);
-      assert.equal(error.oltpRetryEvidence.failures.length, 4);
+      assert.equal(error.sqlState, SQLSTATE_40001);
+      assert.equal(error.oltpRetryEvidence.attempts, COUNT_4);
+      assert.equal(error.oltpRetryEvidence.retries, COUNT_3);
+      assert.equal(error.oltpRetryEvidence.retryDelayMs, DELAY_35);
+      assert.equal(error.oltpRetryEvidence.failures.length, COUNT_4);
       return true;
     },
   );
-  assert.equal(attempts, 4);
+  assert.equal(attempts, COUNT_4);
 }
 
 async function assertRetryingAdapterEvidence() {
-  let logicalNow = 1000;
+  let logicalNow = START_TIME_1000;
   let firstOperationAttempts = 0;
   const adapter = {
     async executeTransaction(operation) {
-      logicalNow += 2;
-      if (operation.id === 'retry-once') {
+      logicalNow += TWO;
+      if (operation.id === OP_RETRY_ONCE) {
         firstOperationAttempts += 1;
         if (firstOperationAttempts === 1) {
-          throw serializationError('sqlState');
+          throw serializationError(ERROR_FIELD_SQLSTATE);
         }
       }
-      if (operation.id === 'terminal') {
-        const error = new Error('transport failure');
-        error.code = 'ECONNRESET';
+      if (operation.id === OP_TERMINAL) {
+        const error = new Error(ERROR_MESSAGE_TRANSPORT);
+        error.code = ERROR_CODE_ECONNRESET;
         throw error;
       }
       return {id: operation.id, committed: true};
@@ -156,43 +229,27 @@ async function assertRetryingAdapterEvidence() {
   });
 
   assert.deepEqual(
-    await retrying.executeTransaction({id: 'retry-once'}),
-    {id: 'retry-once', committed: true},
+    await retrying.executeTransaction({id: OP_RETRY_ONCE}),
+    {id: OP_RETRY_ONCE, committed: true},
   );
   assert.deepEqual(
     retrying.getRetryEvidence(),
-    {
-      policyId: 'scenario-a-retry-v1',
-      logicalTransactions: 1,
-      attempts: 2,
-      retries: 1,
-      retryDelayMs: 5,
-      serializationConflicts: 1,
-      terminalTransactions: 0,
-    },
+    EXPECTED_INITIAL_RETRY_EVIDENCE,
   );
 
   await assert.rejects(
-    retrying.executeTransaction({id: 'terminal'}),
+    retrying.executeTransaction({id: OP_TERMINAL}),
     /transport failure/u,
   );
   assert.deepEqual(
     retrying.getRetryEvidence(),
-    {
-      policyId: 'scenario-a-retry-v1',
-      logicalTransactions: 2,
-      attempts: 3,
-      retries: 1,
-      retryDelayMs: 5,
-      serializationConflicts: 1,
-      terminalTransactions: 1,
-    },
+    EXPECTED_TERMINAL_RETRY_EVIDENCE,
   );
 }
 
 async function assertAdaptersDoNotOwnRetries() {
   for (const path of ADAPTER_PATHS) {
-    const source = await readFile(path, 'utf8');
+    const source = await readFile(path, ENCODING_UTF8);
     assert.doesNotMatch(
       source,
       /oltp-paired-retry-owner/u,
@@ -207,33 +264,25 @@ async function assertAdaptersDoNotOwnRetries() {
 }
 
 async function main() {
-  assert.deepEqual(OLTP_PAIRED_RETRY_POLICY, {
-    id: 'scenario-a-retry-v1',
-    maxRetries: 3,
-    baseDelayMs: 5,
-    maxDelayMs: 20,
-    retryableSqlStates: ['40001'],
-    ambiguousCommitIsFailure: true,
-    adapterRetriesAllowed: false,
-  });
-  assert.equal(resolvePairedOltpRetryDelayMs(1), 5);
-  assert.equal(resolvePairedOltpRetryDelayMs(2), 10);
-  assert.equal(resolvePairedOltpRetryDelayMs(3), 20);
-  assert.equal(resolvePairedOltpRetryDelayMs(4), 20);
+  assert.deepEqual(OLTP_PAIRED_RETRY_POLICY, EXPECTED_RETRY_POLICY);
+  assert.equal(resolvePairedOltpRetryDelayMs(1), DELAY_5);
+  assert.equal(resolvePairedOltpRetryDelayMs(TWO), DELAY_10);
+  assert.equal(resolvePairedOltpRetryDelayMs(COUNT_3), DELAY_20);
+  assert.equal(resolvePairedOltpRetryDelayMs(COUNT_4), DELAY_20);
   assert.throws(
     () => resolvePairedOltpRetryDelayMs(0),
     /retryNumber >= 1/u,
   );
   assert.equal(
-    classifyOltpAttemptError(serializationError('code')).retryable,
+    classifyOltpAttemptError(serializationError(ERROR_FIELD_CODE)).retryable,
     true,
   );
   assert.equal(
-    classifyOltpAttemptError(serializationError('sqlState')).retryable,
+    classifyOltpAttemptError(serializationError(ERROR_FIELD_SQLSTATE)).retryable,
     true,
   );
   assert.equal(
-    classifyOltpAttemptError(new Error('other')).retryable,
+    classifyOltpAttemptError(new Error(ERROR_MESSAGE_OTHER)).retryable,
     false,
   );
   await assertSuccessfulRetryAndRequestClock();
@@ -243,8 +292,8 @@ async function main() {
   await assertAdaptersDoNotOwnRetries();
   await assert.rejects(
     executePairedOltpTransactionWithRetry({
-      intendedIssueTimeMs: 11,
-      now: () => 10,
+      intendedIssueTimeMs: INTENDED_TIME_11,
+      now: () => CURRENT_TIME_10,
       async executeAttempt() {},
     }),
     /intendedIssueTimeMs <= current time/u,
@@ -258,5 +307,5 @@ async function main() {
 
 main().catch((error) => {
   process.stderr.write(`${error.stack || error.message || error}\n`);
-  process.exitCode = 1;
+  process.exitCode = ONE;
 });

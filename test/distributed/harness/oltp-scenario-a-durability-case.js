@@ -54,81 +54,107 @@ function normalizeSha256(value, label) {
   return digest;
 }
 
+function normalizeFaultTargetObject(rawTarget) {
+  if (!rawTarget || typeof rawTarget !== 'object' || Array.isArray(rawTarget)) {
+    return null;
+  }
+  return rawTarget;
+}
+
+function validateFaultTarget(rawTarget, failures) {
+  const targetObj = normalizeFaultTargetObject(rawTarget);
+  const nodeId = stringTrim(String(targetObj?.nodeId || ''));
+  const role = stringTrim(String(targetObj?.role || ''));
+  const isDataReplica = targetObj?.isDataReplica === true;
+  const pgHostOnly = targetObj?.pgHostOnly === true;
+  if (!nodeId || !role || !isDataReplica || pgHostOnly) {
+    failures.push('pg_host_only_fault_insufficient');
+  }
+  return {nodeId, role, isDataReplica, pgHostOnly};
+}
+
+function validateFaultIncarnations(faultEvidence, failures) {
+  const beforeIncarnation = stringTrim(String(
+    faultEvidence.beforeIncarnation || '',
+  ));
+  const afterIncarnation = stringTrim(String(
+    faultEvidence.afterIncarnation || '',
+  ));
+  if (
+    !beforeIncarnation ||
+    !afterIncarnation ||
+    beforeIncarnation === afterIncarnation
+  ) {
+    failures.push('fault_incarnation_unchanged');
+  }
+  return {beforeIncarnation, afterIncarnation};
+}
+
+function validateFaultStorageContinuity(faultEvidence, failures) {
+  const storageContinuity = stringTrim(String(
+    faultEvidence.storageContinuity || '',
+  ));
+  const retainedObligations = Array.isArray(
+    faultEvidence.retainedObligations,
+  ) ?
+    arrayFilter(
+      arrayMap(
+        faultEvidence.retainedObligations,
+        (item) => stringTrim(String(item || '')),
+      ),
+      Boolean,
+    ) :
+    [];
+  if (
+    storageContinuity !== 'preserved' ||
+    retainedObligations.length === ZERO
+  ) {
+    failures.push('storage_continuity_invalid');
+  }
+  return {storageContinuity, retainedObligations};
+}
+
+function evaluateFaultEvidence(faultEvidence, failures) {
+  if (
+    !faultEvidence ||
+    typeof faultEvidence !== 'object' ||
+    Array.isArray(faultEvidence)
+  ) {
+    failures.push('fault_evidence_missing');
+    return null;
+  }
+  const faultTarget = validateFaultTarget(faultEvidence.faultTarget, failures);
+  const {beforeIncarnation, afterIncarnation} =
+    validateFaultIncarnations(faultEvidence, failures);
+  const {storageContinuity, retainedObligations} =
+    validateFaultStorageContinuity(faultEvidence, failures);
+
+  return {
+    faultTarget,
+    beforeIncarnation,
+    afterIncarnation,
+    storageContinuity,
+    retainedObligations,
+  };
+}
+
+function checkDurabilityFailures(actual, failures) {
+  if (!actual.commitAcknowledged) failures.push('commit_not_acknowledged');
+  if (!actual.paymentPassed) failures.push('transaction_state');
+  if (actual.stateBeforeRestartSha256 !== actual.stateAfterRestartSha256) {
+    failures.push('durability_state');
+  }
+}
+
 function evaluateScenarioADurabilityObservation(observation = {}) {
   const paymentEvaluation = evaluateScenarioAPaymentObservation(
     observation.paymentObservation || {},
   );
   const failures = [];
-  let normalizedFaultEvidence = null;
-
-  if (
-    !observation.faultEvidence ||
-    typeof observation.faultEvidence !== 'object' ||
-    Array.isArray(observation.faultEvidence)
-  ) {
-    failures.push('fault_evidence_missing');
-  } else {
-    const rawTarget = observation.faultEvidence.faultTarget;
-    const targetObj =
-      rawTarget && typeof rawTarget === 'object' && !Array.isArray(rawTarget) ?
-        rawTarget :
-        null;
-    const nodeId = stringTrim(String(targetObj?.nodeId || ''));
-    const role = stringTrim(String(targetObj?.role || ''));
-    const isDataReplica = targetObj?.isDataReplica === true;
-    const pgHostOnly = targetObj?.pgHostOnly === true;
-    if (!nodeId || !role || !isDataReplica || pgHostOnly) {
-      failures.push('pg_host_only_fault_insufficient');
-    }
-
-    const beforeIncarnation = stringTrim(String(
-      observation.faultEvidence.beforeIncarnation || '',
-    ));
-    const afterIncarnation = stringTrim(String(
-      observation.faultEvidence.afterIncarnation || '',
-    ));
-    if (
-      !beforeIncarnation ||
-      !afterIncarnation ||
-      beforeIncarnation === afterIncarnation
-    ) {
-      failures.push('fault_incarnation_unchanged');
-    }
-
-    const storageContinuity = stringTrim(String(
-      observation.faultEvidence.storageContinuity || '',
-    ));
-    const retainedObligations = Array.isArray(
-      observation.faultEvidence.retainedObligations,
-    ) ?
-      arrayFilter(
-        arrayMap(
-          observation.faultEvidence.retainedObligations,
-          (item) => stringTrim(String(item || '')),
-        ),
-        Boolean,
-      ) :
-      [];
-    if (
-      storageContinuity !== 'preserved' ||
-      retainedObligations.length === ZERO
-    ) {
-      failures.push('storage_continuity_invalid');
-    }
-
-    normalizedFaultEvidence = {
-      faultTarget: {
-        nodeId,
-        role,
-        isDataReplica,
-        pgHostOnly,
-      },
-      beforeIncarnation,
-      afterIncarnation,
-      storageContinuity,
-      retainedObligations,
-    };
-  }
+  const normalizedFaultEvidence = evaluateFaultEvidence(
+    observation.faultEvidence,
+    failures,
+  );
 
   const actual = freezeRecord({
     commitAcknowledged: observation.commitAcknowledged === true,
@@ -143,11 +169,7 @@ function evaluateScenarioADurabilityObservation(observation = {}) {
     ),
     faultEvidence: normalizedFaultEvidence,
   });
-  if (!actual.commitAcknowledged) failures.push('commit_not_acknowledged');
-  if (!actual.paymentPassed) failures.push('transaction_state');
-  if (actual.stateBeforeRestartSha256 !== actual.stateAfterRestartSha256) {
-    failures.push('durability_state');
-  }
+  checkDurabilityFailures(actual, failures);
   return freezeRecord({
     passed: failures.length === ZERO,
     failures,

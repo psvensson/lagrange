@@ -7,19 +7,41 @@ import {runOltpBaselineWorkload} from
 import {createTiDbOltpAdapter} from
   '../../test/distributed/reference-client/tidb-oltp-adapter.js';
 
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 const ZERO = 0;
 const ONE = 1;
 const PASS_PREFIX = 'tidb-oltp-loadgen-runner: PASS ';
 const DEFAULT_DATABASE_NAME = 'lagrange_tidb_loadgen';
+const MAX_PORT = 65535;
+const HUNDRED = 100;
+const ORDERS_PER_HUNDRED = 45;
+const HISTORY_PER_HUNDRED = 43;
+const STATUS_PASSED = 'passed';
+const NEWLINE = '\n';
+
+const ENV_TIDB_ENDPOINT_HOST = 'TIDB_ENDPOINT_HOST';
+const ENV_TIDB_ENDPOINT_PORT = 'TIDB_ENDPOINT_PORT';
+const ENV_TIDB_WORKLOAD_JSON = 'TIDB_WORKLOAD_JSON';
+
+const MSG_WORKLOAD_NOT_OBJECT = 'TIDB_WORKLOAD_JSON must decode to an object';
+const MSG_PORT_INVALID = 'TIDB_ENDPOINT_PORT must be a valid TCP port';
+const MSG_TOTAL_DIVISIBLE =
+  'load-generator proof requires warmup + measurement operations per ' +
+  'worker to be divisible by 100';
+const MSG_CONNECTIONS_CHANGED =
+  'persistent worker connection IDs changed during remote workload';
+const MSG_WORKLOAD_AND_CLEANUP_FAILED =
+  'load-generator workload and cleanup both failed';
 
 function requiredEnvironment(name) {
-  const value = String(process.env[name] || '').trim();
+  const value = stringTrim(String(process.env[name] || ''));
   if (!value) throw new Error(`${name} is required`);
   return value;
 }
 
 function workloadOptions() {
-  const raw = requiredEnvironment('TIDB_WORKLOAD_JSON');
+  const raw = requiredEnvironment(ENV_TIDB_WORKLOAD_JSON);
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -27,16 +49,16 @@ function workloadOptions() {
     throw new Error(`TIDB_WORKLOAD_JSON is invalid JSON: ${error.message}`);
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('TIDB_WORKLOAD_JSON must decode to an object');
+    throw new Error(MSG_WORKLOAD_NOT_OBJECT);
   }
   return Object.freeze({...parsed});
 }
 
 function endpoint() {
-  const host = requiredEnvironment('TIDB_ENDPOINT_HOST');
-  const port = Number(requiredEnvironment('TIDB_ENDPOINT_PORT'));
-  if (!Number.isInteger(port) || port < ONE || port > 65535) {
-    throw new Error('TIDB_ENDPOINT_PORT must be a valid TCP port');
+  const host = requiredEnvironment(ENV_TIDB_ENDPOINT_HOST);
+  const port = Number(requiredEnvironment(ENV_TIDB_ENDPOINT_PORT));
+  if (!Number.isInteger(port) || port < ONE || port > MAX_PORT) {
+    throw new Error(MSG_PORT_INVALID);
   }
   return {host, port};
 }
@@ -45,13 +67,10 @@ function expectedMixedOperationCount(perHundred, workload) {
   const totalPerWorker =
     workload.warmupOperationsPerWorker +
     workload.measurementOperationsPerWorker;
-  if (!Number.isInteger(totalPerWorker) || totalPerWorker % 100 !== ZERO) {
-    throw new Error(
-      'load-generator proof requires warmup + measurement operations per ' +
-      'worker to be divisible by 100',
-    );
+  if (!Number.isInteger(totalPerWorker) || totalPerWorker % HUNDRED !== ZERO) {
+    throw new Error(MSG_TOTAL_DIVISIBLE);
   }
-  return perHundred * workload.workers * (totalPerWorker / 100);
+  return perHundred * workload.workers * (totalPerWorker / HUNDRED);
 }
 
 async function main() {
@@ -83,23 +102,23 @@ async function main() {
     assert.deepEqual(
       after.currentConnectionIds,
       before.initialConnectionIds,
-      'persistent worker connection IDs changed during remote workload',
+      MSG_CONNECTIONS_CHANGED,
     );
     assert.equal(after.datasetSha256, before.datasetSha256);
     assert.equal(
       after.stateCounts.orders,
-      expectedMixedOperationCount(45, workload),
+      expectedMixedOperationCount(ORDERS_PER_HUNDRED, workload),
     );
     assert.equal(
       after.stateCounts.history,
-      expectedMixedOperationCount(43, workload),
+      expectedMixedOperationCount(HISTORY_PER_HUNDRED, workload),
     );
 
     result = {
-      status: 'passed',
+      status: STATUS_PASSED,
       endpoint: {
-        host: requiredEnvironment('TIDB_ENDPOINT_HOST'),
-        port: Number(requiredEnvironment('TIDB_ENDPOINT_PORT')),
+        host: requiredEnvironment(ENV_TIDB_ENDPOINT_HOST),
+        port: Number(requiredEnvironment(ENV_TIDB_ENDPOINT_PORT)),
       },
       workerConnectionIds: after.currentConnectionIds,
       datasetSha256: after.datasetSha256,
@@ -121,13 +140,13 @@ async function main() {
   if (primaryError && cleanupError) {
     throw new AggregateError(
       [primaryError, cleanupError],
-      'load-generator workload and cleanup both failed',
+      MSG_WORKLOAD_AND_CLEANUP_FAILED,
     );
   }
   if (primaryError) throw primaryError;
   if (cleanupError) throw cleanupError;
 
-  process.stdout.write(PASS_PREFIX + JSON.stringify(result) + '\n');
+  process.stdout.write(PASS_PREFIX + JSON.stringify(result) + NEWLINE);
 }
 
 main().catch((error) => {

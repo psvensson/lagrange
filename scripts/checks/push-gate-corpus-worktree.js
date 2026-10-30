@@ -38,7 +38,8 @@
 // removed; a failed --gate run first keeps its diagnostics (publish-head.js).
 
 import process from 'node:process';
-import {spawnSync} from 'node:child_process';
+import {Buffer} from 'node:buffer';
+import {spawn, spawnSync} from 'node:child_process';
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -107,6 +108,22 @@ const LOCAL_TEXT = Object.freeze({
   GATE_NOTHING_RETAINED: '[push-gate] no acceptance receipt to retain from the gate checkout\n',
 });
 const stringTrim = Function.call.bind(String.prototype.trim);
+const arrayMap = Function.call.bind(Array.prototype.map);
+
+const EVENT_DATA = 'data';
+const EVENT_ERROR = 'error';
+const EVENT_CLOSE = 'close';
+const STDIO_PIPE = 'pipe';
+const STDIO_IGNORE = 'ignore';
+const OUTPUT_HEADER_PREFIX = '[push-gate-corpus] ';
+const OUTPUT_HEADER_IN = ' (in ';
+const OUTPUT_HEADER_SUFFIX = ')\n';
+const ERROR_PREFIX = '[push-gate-corpus] could not run ';
+const ERROR_COLON = ': ';
+const FAILED_PREFIX = '[push-gate-corpus] ';
+const FAILED_MID = ' failed (exit ';
+const FAILED_SUFFIX = ') on the pushed tree\n';
+const NEWLINE = '\n';
 
 // The corpus gates whose verdicts are only meaningful over the WHOLE tree at
 // one commit: both compare whole-corpus counts against baselines anchored on
@@ -168,34 +185,87 @@ function materializeTreeUnderTest(root, ref, worktreePath = undefined) {
   return snapshot;
 }
 
-// Run every corpus gate inside the snapshot, returning the first failing
-// exit code (0 when all pass). spawnSync so a failing gate yields its code
-// instead of throwing past cleanup.
-function runCorpusGates(worktreePath) {
-  for (const [command, args] of CORPUS_GATE_COMMANDS) {
-    process.stdout.write(
-      `[push-gate-corpus] ${command} ` +
-      `${args.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)} ` +
-      `(in ${worktreePath})\n`);
-    const result = spawnSync(command, args, {
+function executeCorpusCommand(command, args, worktreePath) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
       cwd: worktreePath,
-      stdio: ['ignore', 'inherit', 'inherit'],
+      stdio: [STDIO_IGNORE, STDIO_PIPE, STDIO_PIPE],
     });
-    if (result.error) {
-      process.stderr.write(
-        `[push-gate-corpus] could not run ${command}: ` +
-        `${result.error.message}\n`);
-      return EXIT_GATE_FAILURE;
-    }
-    if (result.status !== 0) {
-      process.stderr.write(
-        `[push-gate-corpus] ${command} ` +
-        `${args.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)} failed ` +
-        `(exit ${result.status}) on the pushed tree\n`);
-      return result.status ?? EXIT_GATE_FAILURE;
-    }
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    child.stdout.on(EVENT_DATA, (chunk) => stdoutChunks.push(chunk));
+    child.stderr.on(EVENT_DATA, (chunk) => stderrChunks.push(chunk));
+    child.on(EVENT_ERROR, (error) => {
+      resolve({
+        command,
+        args,
+        error,
+        status: EXIT_GATE_FAILURE,
+        stdout: Buffer.concat(stdoutChunks),
+        stderr: Buffer.concat(stderrChunks),
+      });
+    });
+    child.on(EVENT_CLOSE, (status) => {
+      resolve({
+        command,
+        args,
+        error: null,
+        status: status ?? 0,
+        stdout: Buffer.concat(stdoutChunks),
+        stderr: Buffer.concat(stderrChunks),
+      });
+    });
+  });
+}
+
+function reportCorpusGateResult(result, worktreePath) {
+  process.stdout.write(
+    `${OUTPUT_HEADER_PREFIX}${result.command} ` +
+    `${result.args.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)}` +
+    `${OUTPUT_HEADER_IN}${worktreePath}${OUTPUT_HEADER_SUFFIX}`,
+  );
+  if (result.stdout.length > 0) {
+    process.stdout.write(result.stdout);
+  }
+  if (result.stderr.length > 0) {
+    process.stderr.write(result.stderr);
+  }
+  if (result.error) {
+    process.stderr.write(
+      `${ERROR_PREFIX}${result.command}${ERROR_COLON}` +
+      `${result.error.message}${NEWLINE}`,
+    );
+    return EXIT_GATE_FAILURE;
+  }
+  if (result.status !== 0) {
+    process.stderr.write(
+      `${FAILED_PREFIX}${result.command} ` +
+      `${result.args.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)}` +
+      `${FAILED_MID}${result.status}${FAILED_SUFFIX}`,
+    );
+    return result.status ?? EXIT_GATE_FAILURE;
   }
   return 0;
+}
+
+// Run corpus gates concurrently inside the snapshot, buffering output
+// per command and flushing in deterministic order, returning the first failing
+// exit code (0 when all pass).
+async function runCorpusGates(worktreePath) {
+  const executions = arrayMap(CORPUS_GATE_COMMANDS, ([command, args]) =>
+    executeCorpusCommand(command, args, worktreePath),
+  );
+  const results = await Promise.all(executions);
+  let firstFailure = 0;
+
+  for (let index = 0; index < results.length; index += 1) {
+    const failure = reportCorpusGateResult(results[index], worktreePath);
+    if (firstFailure === 0) {
+      firstFailure = failure;
+    }
+  }
+
+  return firstFailure;
 }
 
 // proof-authority-integrity: the pushed sha, materialized once, is the only
@@ -304,10 +374,10 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
   }
 }
 
-function gateMaterializedTree(root, ref) {
+async function gateMaterializedTree(root, ref) {
   const worktreePath = materializeTreeUnderTest(root, ref);
   try {
-    return runCorpusGates(worktreePath);
+    return await runCorpusGates(worktreePath);
   } finally {
     removeWorktree(root, worktreePath);
   }
@@ -348,7 +418,7 @@ function validateGateArguments({ref, inPlace, gateSha, refLinesFile, command}) {
   if (gateSha === null && (refLinesFile !== null || command !== null)) usage();
 }
 
-function main(argv) {
+async function main(argv) {
   const parsed = parseGateArguments(argv.slice(2));
   validateGateArguments(parsed);
   const {ref, inPlace, gateSha, refLinesFile, command} = parsed;
@@ -362,8 +432,8 @@ function main(argv) {
     });
   }
   const gateStatus = inPlace ?
-    runCorpusGates(root) :
-    gateMaterializedTree(root, ref);
+    await runCorpusGates(root) :
+    await gateMaterializedTree(root, ref);
   if (gateStatus !== 0) {
     return gateStatus;
   }
@@ -372,7 +442,7 @@ function main(argv) {
 }
 
 try {
-  process.exitCode = main(process.argv);
+  process.exitCode = await main(process.argv);
 } catch (error) {
   process.stderr.write(
     `[push-gate-corpus] error: ${error?.message ?? String(error)}\n`);

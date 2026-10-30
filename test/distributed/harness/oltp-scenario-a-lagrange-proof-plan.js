@@ -120,12 +120,8 @@ function requireText(value, label) {
   return text;
 }
 
-function normalizeFormationCertification(value) {
-  if (value === undefined || value === null) return null;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('formation certification must be an object');
-  }
-  const certification = Object.freeze({
+function parseFormationCertificationRecord(value) {
+  return Object.freeze({
     epicId: requireText(value.epicId, 'formation certification epicId'),
     questId: requireText(value.questId, 'formation certification questId'),
     scenario: requireText(value.scenario, 'formation certification scenario'),
@@ -142,13 +138,18 @@ function normalizeFormationCertification(value) {
       'formation certification artifactSha256',
     )),
   });
+}
 
+function validateFormationCertificationRequirement(certification) {
   if (certification.epicId !== FORMATION_REQUIREMENT.epicId ||
       certification.questId !== FORMATION_REQUIREMENT.questId ||
       certification.scenario !== FORMATION_REQUIREMENT.scenario ||
       certification.metric !== FORMATION_REQUIREMENT.metric) {
     throw new Error('formation certification does not satisfy Scenario A requirement');
   }
+}
+
+function validateFormationCertificationIntegrity(certification) {
   if (certification.status !== 'passed') {
     throw new Error('formation certification must be passed');
   }
@@ -165,6 +166,16 @@ function normalizeFormationCertification(value) {
   if (!SHA256_PATTERN.test(certification.artifactSha256)) {
     throw new Error('formation certification artifactSha256 must be a SHA-256 digest');
   }
+}
+
+function normalizeFormationCertification(value) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('formation certification must be an object');
+  }
+  const certification = parseFormationCertificationRecord(value);
+  validateFormationCertificationRequirement(certification);
+  validateFormationCertificationIntegrity(certification);
   return certification;
 }
 

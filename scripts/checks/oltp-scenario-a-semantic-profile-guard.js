@@ -13,10 +13,16 @@ import {
 } from '../../test/distributed/harness/oltp-scenario-a-semantic-profile.js';
 
 const PASS_LINE = 'oltp-scenario-a-semantic-profile-guard: PASS\n';
+const PROFILE_ID = 'scenario-a-semantic-v1';
+const RETRYABLE_CONFLICT_SQL_STATE = '40001';
+const TERMINAL_FAILURE = 'terminal_failure';
+const DEADLINE_MODE_NONE = 'none-v1';
+const HASH_ALGORITHM = 'sha256';
+const HASH_DIGEST_ENCODING = 'hex';
 
 function assertCoreContract() {
   const profile = OLTP_SCENARIO_A_SEMANTIC_PROFILE;
-  assert.equal(profile.id, 'scenario-a-semantic-v1');
+  assert.equal(profile.id, PROFILE_ID);
   assert.equal(profile.retryPolicyId, OLTP_PAIRED_RETRY_POLICY.id);
   assert.equal(profile.isolation.serializableIsolationRequired, false);
   assert.equal(profile.isolation.dirtyReadsForbidden, true);
@@ -26,16 +32,16 @@ function assertCoreContract() {
   assert.equal(profile.isolation.successfulEffectsExactlyOnce, true);
   assert.equal(profile.isolation.lostSuccessfulWriteForbidden, true);
   assert.equal(profile.isolation.productSpecificLockingMechanismRequired, false);
-  assert.equal(profile.outcomes.retryableConflictSqlState, '40001');
-  assert.equal(profile.outcomes.ambiguousCommit, 'terminal_failure');
+  assert.equal(profile.outcomes.retryableConflictSqlState, RETRYABLE_CONFLICT_SQL_STATE);
+  assert.equal(profile.outcomes.ambiguousCommit, TERMINAL_FAILURE);
   assert.equal(
     profile.outcomes.disconnectBeforeUnambiguousCommit,
-    'terminal_failure',
+    TERMINAL_FAILURE,
   );
   assert.deepEqual(profile.timeout, {
-    benchmarkDeadlineMode: 'none-v1',
+    benchmarkDeadlineMode: DEADLINE_MODE_NONE,
     timeoutMs: null,
-    transportTimeoutOutcome: 'terminal_failure',
+    transportTimeoutOutcome: TERMINAL_FAILURE,
     sloViolationIsFailure: false,
   });
   assert.equal(profile.failureAtomicity.required, true);
@@ -68,9 +74,9 @@ function assertMechanismNeutrality() {
 function assertDigest() {
   const digest = hashScenarioASemanticProfile();
   assert.match(digest, /^[0-9a-f]{64}$/u);
-  const independentlyHashed = createHash('sha256')
+  const independentlyHashed = createHash(HASH_ALGORITHM)
     .update(JSON.stringify(OLTP_SCENARIO_A_SEMANTIC_PROFILE))
-    .digest('hex');
+    .digest(HASH_DIGEST_ENCODING);
   assert.equal(digest, independentlyHashed);
   assert.equal(hashScenarioASemanticProfile(), digest);
 }
@@ -100,9 +106,4 @@ function main() {
   process.stdout.write(PASS_LINE);
 }
 
-try {
-  main();
-} catch (error) {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
-  process.exitCode = 1;
-}
+main();

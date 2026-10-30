@@ -7,6 +7,9 @@ import {
   summarizeOltpBaselineLatencies,
 } from './oltp-baseline-workload.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayMap = Function.call.bind(Array.prototype.map);
+
 const ZERO = 0;
 const ONE = 1;
 const THOUSAND = 1000;
@@ -51,7 +54,7 @@ function buildOpenLoopIssuePlan(
     throw new Error('Open-loop OLTP step requires finite startTimeMs');
   }
   const intervalMs = THOUSAND / rate;
-  return Object.freeze(operations.map((operation, index) => Object.freeze({
+  return Object.freeze(arrayMap(operations, (operation, index) => Object.freeze({
     index,
     operation,
     workerId: workerIdOf(operation),
@@ -63,14 +66,14 @@ function interleaveOltpWorkerPhase(workerPlans, phase = 'measurement') {
   if (!Array.isArray(workerPlans) || workerPlans.length === ZERO) {
     throw new Error('Open-loop OLTP interleave requires worker plans');
   }
-  const queues = workerPlans.map((worker) => {
+  const queues = arrayMap(workerPlans, (worker) => {
     const operations = worker?.[phase];
     if (!Array.isArray(operations)) {
       throw new Error(`Open-loop OLTP worker is missing phase ${phase}`);
     }
     return operations;
   });
-  const maxLength = Math.max(...queues.map((operations) => operations.length));
+  const maxLength = Math.max(...arrayMap(queues, (operations) => operations.length));
   const result = [];
   for (let sequence = ZERO; sequence < maxLength; sequence += ONE) {
     for (const operations of queues) {
@@ -110,9 +113,30 @@ function recordSuccess(entry, issuedAtMs, executionStartedAtMs, outcome) {
   });
 }
 
+function resolveFailureEvidence(error, now) {
+  const evidence = error?.oltpRetryEvidence;
+  const sqlState = error?.sqlState || null;
+  if (!evidence) {
+    return {
+      completedAtMs: now(),
+      attempts: ONE,
+      retries: ZERO,
+      retryDelayMs: ZERO,
+      sqlState,
+    };
+  }
+  return {
+    completedAtMs: evidence.completedAtMs ?? now(),
+    attempts: evidence.attempts ?? ONE,
+    retries: evidence.retries ?? ZERO,
+    retryDelayMs: evidence.retryDelayMs ?? ZERO,
+    sqlState,
+  };
+}
+
 function recordFailure(entry, issuedAtMs, executionStartedAtMs, error, now) {
-  const evidence = error?.oltpRetryEvidence || null;
-  const completedAtMs = evidence?.completedAtMs ?? now();
+  const failureMetrics = resolveFailureEvidence(error, now);
+  const completedAtMs = failureMetrics.completedAtMs;
   return Object.freeze({
     index: entry.index,
     workerId: entry.workerId,
@@ -126,21 +150,21 @@ function recordFailure(entry, issuedAtMs, executionStartedAtMs, error, now) {
     queueDelayMs:
       Math.max(ZERO, executionStartedAtMs - entry.intendedIssueTimeMs),
     latencyMs: Math.max(ZERO, completedAtMs - entry.intendedIssueTimeMs),
-    attempts: evidence?.attempts ?? ONE,
-    retries: evidence?.retries ?? ZERO,
-    retryDelayMs: evidence?.retryDelayMs ?? ZERO,
-    sqlState: error?.sqlState || null,
+    attempts: failureMetrics.attempts,
+    retries: failureMetrics.retries,
+    retryDelayMs: failureMetrics.retryDelayMs,
+    sqlState: failureMetrics.sqlState,
   });
 }
 
 function summarizeStep(issuePlan, records, offeredRatePerSec) {
-  const succeeded = records.filter(({status}) => status === 'succeeded');
+  const succeeded = arrayFilter(records, ({status}) => status === 'succeeded');
   const failed = records.length - succeeded.length;
   const firstIssueMs = issuePlan[ZERO].intendedIssueTimeMs;
   const scheduledWindowMs =
     (issuePlan.length * THOUSAND) / offeredRatePerSec;
   const lastCompletionMs = Math.max(
-    ...records.map(({completedAtMs}) => completedAtMs),
+    ...arrayMap(records, ({completedAtMs}) => completedAtMs),
   );
   const completionWindowMs = Math.max(ZERO, lastCompletionMs - firstIssueMs);
   const accountingWindowMs = Math.max(scheduledWindowMs, completionWindowMs);
@@ -162,16 +186,16 @@ function summarizeStep(issuePlan, records, offeredRatePerSec) {
     completedPerSec: accountingWindowMs > ZERO ?
       succeeded.length / (accountingWindowMs / THOUSAND) : ZERO,
     latency: summarizeOltpBaselineLatencies(
-      succeeded.map(({latencyMs}) => latencyMs),
+      arrayMap(succeeded, ({latencyMs}) => latencyMs),
     ),
     attemptLatency: summarizeOltpBaselineLatencies(
-      records.map(({latencyMs}) => latencyMs),
+      arrayMap(records, ({latencyMs}) => latencyMs),
     ),
     queueDelay: summarizeOltpBaselineLatencies(
-      records.map(({queueDelayMs}) => queueDelayMs),
+      arrayMap(records, ({queueDelayMs}) => queueDelayMs),
     ),
     issueLag: summarizeOltpBaselineLatencies(
-      records.map(({issueLagMs}) => issueLagMs),
+      arrayMap(records, ({issueLagMs}) => issueLagMs),
     ),
     records: Object.freeze([...records]),
   });

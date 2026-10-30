@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
-    "query-sql": 183,
+    "query-sql": 188,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 145,
@@ -21,14 +21,14 @@
     "storage-partition": 208,
     "storage-raft": 148,
     "test-infrastructure": 153,
-    "transactions": 16,
+    "transactions": 17,
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2497,
-  "digest": "fnv1a32-956292e5",
+  "censusSize": 2503,
+  "digest": "fnv1a32-da44c2c5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b2b988fd",
+  "observationDigest": "fnv1a32-59cd5dc6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1028,11 +1028,14 @@
     "test/function/query-then-invoke-continuation.property.test.js": "services-runtime",
     "test/helm/lagrange-node-admin-default-deny.test.js": "release-packaging",
     "test/hlc/hlc.test.js": "runtime-primitives",
+    "test/index-management/global-index-maintenance-mode-seal.test.js": "query-sql",
     "test/index-management/global-secondary-index-lifecycle.test.js": "query-sql",
     "test/index-management/global-secondary-index-routing.test.js": "query-sql",
     "test/index-management/index-maintenance-consistency.property.test.js": "query-sql",
     "test/index-management/index-service.test.js": "query-sql",
     "test/index-management/query-optimizer.test.js": "query-sql",
+    "test/index-management/queryable-core-j3-local-compound-index-journey.test.js": "query-sql",
+    "test/index-management/queryable-core-j5-global-index-journey.test.js": "query-sql",
     "test/integration/admin-cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/artifact-payload-durability.integration.test.js": "services-runtime",
     "test/integration/authoritative-discovery-repair-pressure.integration.test.js": "bootstrap-membership",
@@ -1127,6 +1130,7 @@
     "test/live-query/live-query-service.test.js": "query-sql",
     "test/live-query/live-query-startup-wiring.test.js": "query-sql",
     "test/live-query/partition-aware-subscription.property.test.js": "query-sql",
+    "test/live-query/queryable-core-j6-live-query-journey.test.js": "query-sql",
     "test/logging/log-query-service.test.js": "admin-diagnostics",
     "test/logging/log-retention-service.test.js": "admin-diagnostics",
     "test/logging/log-throttle.test.js": "admin-diagnostics",
@@ -1545,6 +1549,7 @@
     "test/query/query-executor-system-table-leader-fail-open.test.js": "query-sql",
     "test/query/query-executor-warn-throttle.test.js": "query-sql",
     "test/query/query-executor.test.js": "query-sql",
+    "test/query/queryable-core-j2-sql-key-read-journey.test.js": "query-sql",
     "test/query/readiness-routing-denial-observability.test.js": "query-sql",
     "test/query/reduce-by-key.test.js": "query-sql",
     "test/query/reduce-continuation.test.js": "query-sql",
@@ -2371,6 +2376,7 @@
     "test/topology/latency-tree-service.test.js": "convergence-topology",
     "test/topology/topology-anti-entropy-reconciler.test.js": "convergence-topology",
     "test/transaction/cross-partition-rejection.property.test.js": "transactions",
+    "test/transaction/queryable-core-j4-locking-read-journey.test.js": "transactions",
     "test/transaction/session-transaction-isolation.test.js": "transactions",
     "test/transaction/transaction-support.test.js": "transactions",
     "test/transport/address-format-validation.property.test.js": "transport-messaging",
@@ -7858,6 +7864,13 @@
         "LAGRANGE_PROOF_NODE_HOST"
       ]
     },
+    "test/index-management/global-index-maintenance-mode-seal.test.js": {
+      "files": [
+        "scripts/checks/global-index-maintenance-mode-seal-guard.js",
+        "solve/specs/global-secondary-indexes/requirements.md",
+        "solve/specs/release-0-3-queryable-core/global-index-maintenance-research.md"
+      ]
+    },
     "test/index-management/index-maintenance-consistency.property.test.js": {
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
@@ -7900,6 +7913,36 @@
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/index-management/queryable-core-j3-local-compound-index-journey.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-query-planner.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/index-management/queryable-core-j5-global-index-journey.test.js": {
+      "files": [
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/integration/admin-cdc-propagation.integration.test.js": {
@@ -8889,6 +8932,26 @@
         "src/entrypoint-runtime-admin-composition.js",
         "src/lagrange-runtime-startup.js",
         "src/live-query/live-query-startup-wiring.js"
+      ]
+    },
+    "test/live-query/queryable-core-j6-live-query-journey.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/logging/wait-bound-spent.test.js": {
@@ -11882,6 +11945,7 @@
     "test/query/postgres-wire-adapter.test.js": {
       "files": [
         "src/query/pg/postgres-wire-adapter.js",
+        "src/query/query-constants.js",
         "test/helpers/pgwire-auth-handler.js"
       ]
     },
@@ -11917,6 +11981,12 @@
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": {
       "files": [
         "src/partition/partition-write-kernel.js"
+      ]
+    },
+    "test/query/queryable-core-j2-sql-key-read-journey.test.js": {
+      "files": [
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/readiness-routing-denial-observability.test.js": {
@@ -18720,6 +18790,13 @@
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
+      ]
+    },
+    "test/transaction/queryable-core-j4-locking-read-journey.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/transaction/session-transaction-isolation.test.js": {

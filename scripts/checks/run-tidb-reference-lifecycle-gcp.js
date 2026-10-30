@@ -20,14 +20,28 @@ const DEFAULT_CONFIG =
   'test/distributed/config/gcp-tidb-reference-smoke.json';
 const PASS_PREFIX = 'tidb-reference-lifecycle-gcp: PASS ';
 const EXPECTED_VM_COUNT = 1;
+const ARG_CONFIG = '--config';
+const ERROR_CONFIG_PATH_REQUIRED = '--config requires a path';
+const ERROR_GCP_BLOCK_REQUIRED = 'TiDB GCP smoke config requires gcp block';
+const ERROR_EXACTLY_ONE_VM =
+  'TiDB GCP lifecycle smoke currently owns exactly one VM';
+const ERROR_MUST_PROVISION_HOST =
+  'TiDB GCP lifecycle smoke must provision its own host';
+const ERROR_EXPECTED_PROVISIONER =
+  'Expected GCP smoke to provision a Docker host';
+const ERROR_DUAL_FAILURE =
+  'TiDB GCP lifecycle smoke and infrastructure teardown both failed';
+const MODE_GCP_REMOTE_DOCKER = 'gcp-remote-docker';
+const FILE_ENCODING_UTF8 = 'utf8';
+const NEWLINE = '\n';
 
 function parseArgs(argv) {
   let configPath = DEFAULT_CONFIG;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--config') {
+    if (arg === ARG_CONFIG) {
       index += 1;
-      if (!argv[index]) throw new Error('--config requires a path');
+      if (!argv[index]) throw new Error(ERROR_CONFIG_PATH_REQUIRED);
       configPath = argv[index];
       continue;
     }
@@ -37,17 +51,17 @@ function parseArgs(argv) {
 }
 
 async function loadConfig(configPath) {
-  const text = await readFile(configPath, 'utf8');
+  const text = await readFile(configPath, FILE_ENCODING_UTF8);
   const config = JSON.parse(text);
-  assert.ok(config.gcp, 'TiDB GCP smoke config requires gcp block');
+  assert.ok(config.gcp, ERROR_GCP_BLOCK_REQUIRED);
   assert.equal(
     config.gcp.vmCount,
     EXPECTED_VM_COUNT,
-    'TiDB GCP lifecycle smoke currently owns exactly one VM',
+    ERROR_EXACTLY_ONE_VM,
   );
   assert.ok(
     !Array.isArray(config.docker?.hosts) || config.docker.hosts.length === 0,
-    'TiDB GCP lifecycle smoke must provision its own host',
+    ERROR_MUST_PROVISION_HOST,
   );
   return config;
 }
@@ -68,7 +82,7 @@ async function run() {
   try {
     const provisioned = await provisionGcpDockerHosts(inputConfig, true);
     provisioner = provisioned.provisioner;
-    assert.ok(provisioner, 'Expected GCP smoke to provision a Docker host');
+    assert.ok(provisioner, ERROR_EXPECTED_PROVISIONER);
 
     const hosts = provisioned.runConfig.docker?.hosts || [];
     assert.equal(hosts.length, EXPECTED_VM_COUNT);
@@ -88,7 +102,7 @@ async function run() {
 
     result = {
       ...smoke,
-      mode: 'gcp-remote-docker',
+      mode: MODE_GCP_REMOTE_DOCKER,
       project: inputConfig.gcp.project,
       zone: inputConfig.gcp.zone,
       machineType: inputConfig.gcp.machineType,
@@ -110,16 +124,16 @@ async function run() {
   if (primaryError && teardownError) {
     throw new AggregateError(
       [primaryError, teardownError],
-      'TiDB GCP lifecycle smoke and infrastructure teardown both failed',
+      ERROR_DUAL_FAILURE,
     );
   }
   if (primaryError) throw primaryError;
   if (teardownError) throw teardownError;
 
-  process.stdout.write(PASS_PREFIX + JSON.stringify(result) + '\n');
+  process.stdout.write(PASS_PREFIX + JSON.stringify(result) + NEWLINE);
 }
 
 run().catch((error) => {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
+  process.stderr.write(`${error.stack || error.message || error}${NEWLINE}`);
   process.exitCode = 1;
 });

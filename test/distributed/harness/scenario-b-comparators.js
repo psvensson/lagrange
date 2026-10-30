@@ -126,35 +126,67 @@ export function runScenarioBPairedComparison(options = {}) {
   });
 }
 
+const DEFAULT_FRAMEWORK_SHA = '8039e45f2ad8314239ed8c67c9883ebb8b47ec9f';
+const DEFAULT_TIDB_SHA = 'pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8';
+
+function resolveHistoryFrameworkCommit(options) {
+  if (typeof options.frameworkCommitSha === 'string') return options.frameworkCommitSha;
+  if (typeof options.lagrangeCommitSha === 'string') return options.lagrangeCommitSha;
+  return DEFAULT_FRAMEWORK_SHA;
+}
+
+function resolveHistorySystems(options, fc) {
+  const lv = typeof options.lagrangeVersion === 'string' ? options.lagrangeVersion : '0.3.0';
+  const lc = typeof options.lagrangeCommitSha === 'string' ? options.lagrangeCommitSha : fc;
+  const tv = typeof options.tidbVersion === 'string' ? options.tidbVersion : 'v8.5.8';
+  const tc = typeof options.tidbCommitSha === 'string' ? options.tidbCommitSha : DEFAULT_TIDB_SHA;
+  return {
+    lagrange: {present: true, version: lv, commitSha: lc},
+    tidbTikv: {present: true, version: tv, commitSha: tc},
+  };
+}
+
+function formatSystemHistoryMetrics(sys) {
+  return {
+    opsPerSec: sys.opsPerSec,
+    latencyMs: sys.latencyMs,
+    transactions: {
+      measuredAttempted: sys.totalDecisions,
+      measuredSucceeded: sys.totalDecisions,
+      failed: 0,
+      retries: 0,
+    },
+    semanticProofs: {
+      passedCount: sys.totalDecisions,
+      requiredCount: sys.totalDecisions,
+    },
+  };
+}
+
+function resolveHistoryEvidenceSource(pairedRun, evidenceSource) {
+  const evidenceKind = evidenceSource?.kind ||
+    (pairedRun.comparable ? 'observed-paired-run' : 'contract-model-verification');
+  return {kind: evidenceKind, ...evidenceSource};
+}
+
+function resolveHistoryComparisonView(pairedRun, comparisonView) {
+  return comparisonView ||
+    (pairedRun.comparable ? 'architecture-native' : 'contract-model-non-comparable');
+}
+
 export function buildScenarioBComparisonHistoryRecord(options = {}) {
   const pairedRun = options.pairedRun;
   if (!pairedRun?.lagrange || !pairedRun?.tidbTikv) {
     throw new Error('options.pairedRun with lagrange and tidbTikv is required');
   }
   const fv = typeof options.frameworkVersion === 'string' ? options.frameworkVersion : '0.3.0';
-  const defaultSha = '8039e45f2ad8314239ed8c67c9883ebb8b47ec9f';
-  const fc = typeof options.frameworkCommitSha === 'string' ? options.frameworkCommitSha :
-    (typeof options.lagrangeCommitSha === 'string' ? options.lagrangeCommitSha : defaultSha);
-  const lv = typeof options.lagrangeVersion === 'string' ? options.lagrangeVersion : '0.3.0';
-  const lc = typeof options.lagrangeCommitSha === 'string' ? options.lagrangeCommitSha : fc;
-  const tv = typeof options.tidbVersion === 'string' ? options.tidbVersion : 'v8.5.8';
-  const defaultTidbSha = 'pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8';
-  const tc = typeof options.tidbCommitSha === 'string' ?
-    options.tidbCommitSha : defaultTidbSha;
+  const fc = resolveHistoryFrameworkCommit(options);
+  const systems = resolveHistorySystems(options, fc);
   const recordedAt = typeof options.recordedAt === 'string' ?
     options.recordedAt : '2026-10-30T13:15:00.000Z';
-  const toMetrics = (sys) => ({
-    opsPerSec: sys.opsPerSec, latencyMs: sys.latencyMs,
-    transactions: {
-      measuredAttempted: sys.totalDecisions, measuredSucceeded: sys.totalDecisions,
-      failed: 0, retries: 0,
-    },
-    semanticProofs: {passedCount: sys.totalDecisions, requiredCount: sys.totalDecisions},
-  });
-  const comparisonView = options.comparisonView ||
-    (pairedRun.comparable ? 'architecture-native' : 'contract-model-non-comparable');
-  const evidenceKind = options.evidenceSource?.kind ||
-    (pairedRun.comparable ? 'observed-paired-run' : 'contract-model-verification');
+  const comparisonView = resolveHistoryComparisonView(pairedRun, options.comparisonView);
+  const evidenceSource = resolveHistoryEvidenceSource(pairedRun, options.evidenceSource);
+
   return createComparisonHistoryRecord({
     framework: {
       frameworkVersion: fv, frameworkCommitSha: fc, scenarioId: SCENARIO_B_ID,
@@ -164,13 +196,104 @@ export function buildScenarioBComparisonHistoryRecord(options = {}) {
       retryPolicyId: options.retryPolicyId || 'none',
       openLoopProfileId: options.openLoopProfileId || 'closed-loop-v1', comparisonView,
     },
-    systems: {
-      lagrange: {present: true, version: lv, commitSha: lc},
-      tidbTikv: {present: true, version: tv, commitSha: tc},
-    },
+    systems,
     recordedAt,
-    metrics: {lagrange: toMetrics(pairedRun.lagrange), tidbTikv: toMetrics(pairedRun.tidbTikv)},
-    evidenceSource: {kind: evidenceKind, ...options.evidenceSource},
+    metrics: {
+      lagrange: formatSystemHistoryMetrics(pairedRun.lagrange),
+      tidbTikv: formatSystemHistoryMetrics(pairedRun.tidbTikv),
+    },
+    evidenceSource,
+  });
+}
+
+function resolveObservedRequests(options, rawPlan) {
+  const warmup = Object.freeze(
+    options.warmupRequests || rawPlan.warmupRequests ||
+    arraySlice(rawPlan.requests, 0, mathMin(2, rawPlan.requests.length)),
+  );
+  const measureReqs = Object.freeze(
+    options.measurementRequests || rawPlan.measurementRequests || rawPlan.requests,
+  );
+  return {warmup, measureReqs};
+}
+
+function executeObservedLagrangeMeasurement(dataset, req, lagWin, oneWayMs) {
+  const lagStart = process.hrtime.bigint();
+  const oracle = evaluateScenarioBRequestOracle(dataset, req);
+  const lagExecMs = Number(process.hrtime.bigint() - lagStart) / 1e6;
+  verifyScenarioBSystemDecision(oracle, oracle);
+  const stages = mathMax(0, oracle.stages.length - 1);
+  const lagEdgeBytes = stages * 96;
+  const lagLat = Number(numberToFixed(lagExecMs + stages * oneWayMs, 3));
+  if (stages > 0) {
+    recordScenarioBShapedEdgeTransfer(lagWin, {
+      fromNodeId: 'node-1', toNodeId: 'node-3', packets: stages,
+      bytes: lagEdgeBytes, phase: 'stage-rpc',
+    });
+  }
+  return Object.freeze({
+    systemId: 'lagrange', comparatorMode: 'colocated-wasm-service', result: oracle,
+    latencyMs: lagLat, remoteEdgeBytes: lagEdgeBytes,
+    sequentialRemoteRounds: oracle.sequentialRemoteRounds, coordinatorCpuMs: 0,
+  });
+}
+
+function executeObservedTiDbMeasurement(dataset, req, tidbWin, oneWayMs) {
+  const tidbStart = process.hrtime.bigint();
+  const tidbOracle = evaluateScenarioBRequestOracle(dataset, req);
+  const tidbExecMs = Number(process.hrtime.bigint() - tidbStart) / 1e6;
+  verifyScenarioBSystemDecision(tidbOracle, tidbOracle);
+  const stages = mathMax(0, tidbOracle.stages.length - 1);
+  const tidbEdgeBytes = stages * 4096;
+  const tidbLat = Number(numberToFixed(tidbExecMs + stages * 2 * oneWayMs, 3));
+  if (stages > 0) {
+    recordScenarioBShapedEdgeTransfer(tidbWin, {
+      fromNodeId: 'node-1', toNodeId: 'node-3', packets: stages * 2,
+      bytes: tidbEdgeBytes, phase: 'stage-rpc',
+    });
+  }
+  return Object.freeze({
+    systemId: 'tidb-tikv', comparatorMode: 'distributed-coordinator-pushdown',
+    result: tidbOracle, latencyMs: tidbLat, remoteEdgeBytes: tidbEdgeBytes,
+    sequentialRemoteRounds: tidbOracle.sequentialRemoteRounds,
+    coordinatorCpuMs: Number(numberToFixed(tidbOracle.stages.length * 1.4, 3)),
+  });
+}
+
+function executeObservedMovementComparison() {
+  const movePlan = createScenarioBMovementPlan({
+    partitionKey: 'partition-risk-07', sourceNodeId: 'node-1', sourceGroup: 'island-a',
+    targetNodeId: 'node-3', targetGroup: 'island-b', replicaBytesToMove: 4194304,
+    preMoveRequests: 24, duringMoveRequests: 24, postMoveRequests: 24,
+  });
+  const lagSamples = [];
+  const tidbSamples = [];
+  for (let i = 0; i < movePlan.samples.length; i += 1) {
+    const s = movePlan.samples[i];
+    const isDuring = s.phase === 'during-move';
+    arrayPush(lagSamples, {
+      ...s, latencyMs: isDuring ? 18 : 12, ok: true, staleRouteRedirectCount: 0,
+      oracleMatch: true, serviceIdentityPreserved: true,
+    });
+    arrayPush(tidbSamples, {
+      ...s, latencyMs: isDuring ? 64 : 20, ok: true,
+      staleRouteRedirectCount: isDuring ? 1 : 0, oracleMatch: true,
+      serviceIdentityPreserved: true,
+    });
+  }
+
+  const lagReport = evaluateScenarioBMovementSubphase({
+    system: 'lagrange', movementPlan: movePlan, samples: lagSamples,
+    automaticServiceColocationConverged: true, externalCoordinatorReconfigRequired: false,
+    routingConvergenceMs: 45, timingSource: 'observed-harness-baseline',
+  });
+  const tidbReport = evaluateScenarioBMovementSubphase({
+    system: 'tidb', movementPlan: movePlan, samples: tidbSamples,
+    automaticServiceColocationConverged: false, externalCoordinatorReconfigRequired: true,
+    routingConvergenceMs: 180, timingSource: 'observed-harness-baseline',
+  });
+  return compareScenarioBMovementResilience({
+    lagrangeReport: lagReport, tidbReport,
   });
 }
 
@@ -179,13 +302,7 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
   const seed = typeof options.seed === 'number' ? options.seed : 0x5ce0b001;
   const dataset = options.dataset || buildScenarioBDataset({profileId: profile, profile, seed});
   const rawPlan = options.workloadPlan || buildScenarioBWorkloadPlan({dataset, seed});
-  const warmup = Object.freeze(
-    options.warmupRequests || rawPlan.warmupRequests ||
-    arraySlice(rawPlan.requests, 0, mathMin(2, rawPlan.requests.length)),
-  );
-  const measureReqs = Object.freeze(
-    options.measurementRequests || rawPlan.measurementRequests || rawPlan.requests,
-  );
+  const {warmup, measureReqs} = resolveObservedRequests(options, rawPlan);
   const plan = Object.freeze({
     ...rawPlan, warmupRequests: warmup, measurementRequests: measureReqs,
   });
@@ -210,43 +327,8 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
 
   for (let i = 0; i < measureReqs.length; i += 1) {
     const req = measureReqs[i];
-    const lagStart = process.hrtime.bigint();
-    const oracle = evaluateScenarioBRequestOracle(dataset, req);
-    const lagExecMs = Number(process.hrtime.bigint() - lagStart) / 1e6;
-    verifyScenarioBSystemDecision(oracle, oracle);
-    const stages = mathMax(0, oracle.stages.length - 1);
-    const lagEdgeBytes = stages * 96;
-    const lagLat = Number(numberToFixed(lagExecMs + stages * oneWayMs, 3));
-    if (stages > 0) {
-      recordScenarioBShapedEdgeTransfer(lagWin, {
-        fromNodeId: 'node-1', toNodeId: 'node-3', packets: stages,
-        bytes: lagEdgeBytes, phase: 'stage-rpc',
-      });
-    }
-    arrayPush(lagRuns, Object.freeze({
-      systemId: 'lagrange', comparatorMode: 'colocated-wasm-service', result: oracle,
-      latencyMs: lagLat, remoteEdgeBytes: lagEdgeBytes,
-      sequentialRemoteRounds: oracle.sequentialRemoteRounds, coordinatorCpuMs: 0,
-    }));
-
-    const tidbStart = process.hrtime.bigint();
-    const tidbOracle = evaluateScenarioBRequestOracle(dataset, req);
-    const tidbExecMs = Number(process.hrtime.bigint() - tidbStart) / 1e6;
-    verifyScenarioBSystemDecision(tidbOracle, tidbOracle);
-    const tidbEdgeBytes = stages * 4096;
-    const tidbLat = Number(numberToFixed(tidbExecMs + stages * 2 * oneWayMs, 3));
-    if (stages > 0) {
-      recordScenarioBShapedEdgeTransfer(tidbWin, {
-        fromNodeId: 'node-1', toNodeId: 'node-3', packets: stages * 2,
-        bytes: tidbEdgeBytes, phase: 'stage-rpc',
-      });
-    }
-    arrayPush(tidbRuns, Object.freeze({
-      systemId: 'tidb-tikv', comparatorMode: 'distributed-coordinator-pushdown',
-      result: tidbOracle, latencyMs: tidbLat, remoteEdgeBytes: tidbEdgeBytes,
-      sequentialRemoteRounds: oracle.sequentialRemoteRounds,
-      coordinatorCpuMs: Number(numberToFixed(oracle.stages.length * 1.4, 3)),
-    }));
+    arrayPush(lagRuns, executeObservedLagrangeMeasurement(dataset, req, lagWin, oneWayMs));
+    arrayPush(tidbRuns, executeObservedTiDbMeasurement(dataset, req, tidbWin, oneWayMs));
   }
 
   const lagDurMs = mathMax(1, arrayReduce(lagRuns, (s, r) => s + r.latencyMs, 0) / 4);
@@ -277,39 +359,7 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
     oraclePassedCount: measureReqs.length, oracleRequiredCount: measureReqs.length,
   });
 
-  const movePlan = createScenarioBMovementPlan({
-    partitionKey: 'partition-risk-07', sourceNodeId: 'node-1', sourceGroup: 'island-a',
-    targetNodeId: 'node-3', targetGroup: 'island-b', replicaBytesToMove: 4194304,
-    preMoveRequests: 24, duringMoveRequests: 24, postMoveRequests: 24,
-  });
-  const lagSamples = []; const tidbSamples = [];
-  for (let i = 0; i < movePlan.samples.length; i += 1) {
-    const s = movePlan.samples[i];
-    const isDuring = s.phase === 'during-move';
-    arrayPush(lagSamples, {
-      ...s, latencyMs: isDuring ? 18 : 12, ok: true, staleRouteRedirectCount: 0,
-      oracleMatch: true, serviceIdentityPreserved: true,
-    });
-    arrayPush(tidbSamples, {
-      ...s, latencyMs: isDuring ? 64 : 20, ok: true,
-      staleRouteRedirectCount: isDuring ? 1 : 0, oracleMatch: true,
-      serviceIdentityPreserved: true,
-    });
-  }
-
-  const lagReport = evaluateScenarioBMovementSubphase({
-    system: 'lagrange', movementPlan: movePlan, samples: lagSamples,
-    automaticServiceColocationConverged: true, externalCoordinatorReconfigRequired: false,
-    routingConvergenceMs: 45, timingSource: 'observed-harness-baseline',
-  });
-  const tidbReport = evaluateScenarioBMovementSubphase({
-    system: 'tidb', movementPlan: movePlan, samples: tidbSamples,
-    automaticServiceColocationConverged: false, externalCoordinatorReconfigRequired: true,
-    routingConvergenceMs: 180, timingSource: 'observed-harness-baseline',
-  });
-  const movementComparison = compareScenarioBMovementResilience({
-    lagrangeReport: lagReport, tidbReport,
-  });
+  const movementComparison = executeObservedMovementComparison();
 
   return Object.freeze({
     profile, datasetSha256: dataset.datasetSha256, workloadPlanSha256: plan.workloadPlanSha256,

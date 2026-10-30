@@ -82,6 +82,11 @@ function partitionOwesCdc(service) {
   return isTableCdcObligationRecorded(service.tableName);
 }
 
+function partitionHasTransientCdcSubscribers(service) {
+  return !partitionOwesCdc(service) && !service.isShutdown &&
+    (service.cdcSubscribers?.size ?? 0) > 0;
+}
+
 // The write entry the CDC generator reads one applied operation as: the
 // operation's statement and params, the decision's stamp (its HLC is the
 // event's timestamp, part of the command bytes) and the operation's result.
@@ -109,7 +114,12 @@ function operationEntryOf(command, operation, result) {
  * @return {Object|null} Immutable owed row, or no event for a no-op.
  */
 function captureCommittedOperationCdc(service, committed, {operation, result, ordinal}) {
-  if (!partitionOwesCdc(service)) return null;
+  if (!partitionOwesCdc(service)) {
+    if (!partitionHasTransientCdcSubscribers(service)) return null;
+    return Object.freeze({
+      transientEntry: operationEntryOf(committed.command, operation, result),
+    });
+  }
   const {command, index, term} = committed;
   const built = service.syncCDCGeneratorDependencies().buildEvent(
     operationEntryOf(command, operation, result),
@@ -140,7 +150,17 @@ function captureCommittedOperationCdc(service, committed, {operation, result, or
 function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
   const {command, index, term} = committed;
   if (command.splitMirrorOrigin === PARTITION_SPLIT_MIRROR_ORIGIN.SNAPSHOT) return 0;
-  if (!partitionOwesCdc(service)) return 0;
+  if (!partitionOwesCdc(service)) {
+    if (partitionHasTransientCdcSubscribers(service)) {
+      committed.afterCommit(() => {
+        if (!service.isShutdown && (service.cdcSubscribers?.size ?? 0) > 0) {
+          service.trackPendingCDCEvent(
+            service.generateCDCEvent({...command, changes: result.changes}).catch(() => {}));
+        }
+      });
+    }
+    return 0;
+  }
   const built = service.syncCDCGeneratorDependencies().buildEvent(
     {...command, changes: result.changes},
     {suppressNoOpWrite: true, sourceReplica: command.proposedBy});
@@ -163,7 +183,22 @@ function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
  */
 function recordCommittedOperationCdc(service, committed, events) {
   const {command, index} = committed;
-  const recorded = partitionOwesCdc(service) ? events.length : 0;
+  if (!partitionOwesCdc(service)) {
+    if (events.length > 0) {
+      committed.afterCommit(() => {
+        if (service.isShutdown || (service.cdcSubscribers?.size ?? 0) === 0) {
+          return;
+        }
+        for (const event of events) {
+          const entry = event.transientEntry ?? event;
+          service.trackPendingCDCEvent(
+            service.generateCDCEvent(entry).catch(() => {}));
+        }
+      });
+    }
+    return 0;
+  }
+  const recorded = events.length;
   if (recorded === 0) {
     return recorded;
   }

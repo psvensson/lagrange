@@ -305,9 +305,63 @@ function createLiveQueryCacheSubscriptionAdapter(options = {}) {
   };
 }
 
+function resolveEventHlc(rawEvent) {
+  return rawEvent.hlc_timestamp ?? rawEvent.hlcTimestamp ?? rawEvent.timestamp ?? null;
+}
+
+function resolveEventRowData(rawEvent, isDelete) {
+  const oldData = rawEvent.old_data ?? rawEvent.oldData ?? (isDelete ? rawEvent.data : null);
+  const data = isDelete ? null : (rawEvent.data ?? null);
+  return {data, oldData};
+}
+
+/**
+ * Normalize a raw partition CDC event into canonical LiveQuery change shape.
+ * @param {Object} rawEvent
+ * @param {string} partitionId
+ * @return {Object|null}
+ */
+function normalizePartitionCDCEvent(rawEvent, partitionId) {
+  if (!rawEvent) {
+    return null;
+  }
+  const operation = String(rawEvent.operation || '').toUpperCase();
+  const eventPartitionId = rawEvent.partitionId || rawEvent.sourcePartition || partitionId;
+  const isDelete = operation === CDC_OPERATION.DELETE;
+  const {data, oldData} = resolveEventRowData(rawEvent, isDelete);
+
+  return {
+    ...rawEvent,
+    operation,
+    partitionId: eventPartitionId,
+    data,
+    old_data: oldData,
+    oldData,
+    hlc_timestamp: resolveEventHlc(rawEvent),
+    sequenceNumber: rawEvent.sequenceNumber ?? null,
+  };
+}
+
+function getFromProvider(provider, partitionId) {
+  if (typeof provider !== 'function') return null;
+  const container = provider();
+  return container?.get?.(partitionId) || null;
+}
+
+/**
+ * Resolve partition from supplied options.
+ * @param {Object} options
+ * @param {string} partitionId
+ * @return {Object|null}
+ */
 function resolvePartition(options, partitionId) {
-  return options.partitionService?.getPartition?.(partitionId) ||
-    options.partitions?.get?.(partitionId) || null;
+  if (!options || !partitionId) return null;
+  const service = options.partitionService;
+  const direct = service?.getPartition?.(partitionId) || options.partitions?.get?.(partitionId);
+  if (direct) return direct;
+  return getFromProvider(options.partitionServicesProvider, partitionId) ||
+    getFromProvider(options.sqlQueryEngine?.partitionServicesProvider, partitionId) ||
+    null;
 }
 
 async function trySubscribeViaPartition(partition, queryId, handler, subOptions) {
@@ -350,6 +404,9 @@ function createLiveQueryStartupWiring(options = {}) {
     },
   });
 
+  /** @type {Map<string, Function>} */
+  const partitionSubscribers = new Map();
+
   const subscribeToPartition = async (partitionId, queryId, handler, subOptions = {}) => {
     if (typeof options.subscribeToPartition === 'function') {
       return await options.subscribeToPartition(partitionId, queryId, handler, subOptions);
@@ -359,8 +416,17 @@ function createLiveQueryStartupWiring(options = {}) {
         partitionId, queryId, handler, subOptions,
       );
     }
+    const subKey = `${queryId}:${partitionId}`;
+    const wrappedHandler = (rawEvent) => {
+      const normalized = normalizePartitionCDCEvent(rawEvent, partitionId);
+      return handler(normalized);
+    };
+    partitionSubscribers.set(subKey, wrappedHandler);
+
     const partition = resolvePartition(options, partitionId);
-    const subResult = await trySubscribeViaPartition(partition, queryId, handler, subOptions);
+    const subResult = await trySubscribeViaPartition(
+      partition, queryId, wrappedHandler, subOptions,
+    );
     if (subResult.handled) {
       return subResult.result;
     }
@@ -374,10 +440,13 @@ function createLiveQueryStartupWiring(options = {}) {
     if (typeof options.partitionService?.unsubscribeFromPartition === 'function') {
       return await options.partitionService.unsubscribeFromPartition(partitionId, queryId);
     }
-    const partition = options.partitionService?.getPartition?.(partitionId) ||
-      options.partitions?.get?.(partitionId);
+    const subKey = `${queryId}:${partitionId}`;
+    const wrappedHandler = partitionSubscribers.get(subKey);
+    partitionSubscribers.delete(subKey);
+
+    const partition = resolvePartition(options, partitionId);
     if (partition && typeof partition.unsubscribeFromCDC === 'function') {
-      partition.unsubscribeFromCDC(queryId);
+      partition.unsubscribeFromCDC(wrappedHandler || queryId);
     }
     return cacheSubscriptionAdapter.unsubscribeFromPartition(partitionId, queryId);
   };
@@ -386,6 +455,7 @@ function createLiveQueryStartupWiring(options = {}) {
     systemCache: options.systemTableCache || null,
     sqlQueryEngine: options.sqlQueryEngine || null,
     partitionService: options.partitionService || null,
+    partitionServicesProvider: options.partitionServicesProvider || null,
     subscribeToPartition,
     unsubscribeFromPartition,
   });
@@ -396,6 +466,7 @@ function createLiveQueryStartupWiring(options = {}) {
       return;
     }
     shutdownCompleted = true;
+    partitionSubscribers.clear();
     cacheSubscriptionAdapter.shutdown();
     liveQueryManager.shutdown();
   };

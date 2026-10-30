@@ -27,6 +27,14 @@ import {
   TIDB_OLTP_MEASUREMENT_WORKLOAD_OPTIONS,
 } from './tidb-oltp-measurement.js';
 
+const stringTrim = Function.call.bind(String.prototype.trim);
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+
 const ZERO = 0;
 const ONE = 1;
 const EXPECTED_VM_COUNT = 2;
@@ -46,34 +54,64 @@ const TIKV_RESOURCE_LIMITS = Object.freeze({memory: '3g', cpus: '2.0'});
 const READINESS_RESOURCE_LIMITS = Object.freeze({memory: '256m', cpus: '0.5'});
 const LOADGEN_RESOURCE_LIMITS = Object.freeze({memory: '1g', cpus: '2.0'});
 
+const ARG_CONFIG = '--config';
+const ERROR_CONFIG_PATH_REQUIRED = '--config requires a path';
+const ERROR_GCP_BLOCK_REQUIRED = 'TiDB load-generator proof requires gcp block';
+const ERROR_MUST_PROVISION_HOSTS =
+  'load-generator proof must provision fresh controlled hosts';
+const ERROR_EXPECTED_PROVISIONER = 'Expected GCP provisioner';
+const ERROR_LOADGEN_NO_PASS_PREFIX =
+  'load-generator container did not emit a PASS result: ';
+const ERROR_LOADGEN_PROOF_FAILURES = 'TiDB load-generator proof failures';
+
+const METHOD_CREATE_CONTAINER = 'createContainer';
+const METHOD_EXEC_IN_CONTAINER = 'execInContainer';
+const HOST_IP_ANY = '0.0.0.0';
+const NETWORK_HOST = 'host';
+const STATUS_PASSED = 'passed';
+const BENCHMARK_LABEL_LOADGEN_PROOF = 'tidb-oltp-loadgen-proof';
+const DATABASE_NAME_LOADGEN_PROOF = 'lagrange_tidb_loadgen_proof';
+const TIDB_CONTAINER_NAME_SUFFIX = '-tidb';
+const IMAGE_KEY_SUFFIX = 'Image';
+const FILE_ENCODING_UTF8 = 'utf8';
+const NEWLINE = '\n';
+const RUN_ID_SUFFIX_LENGTH = 8;
+const STDOUT_TAIL_LIMIT_FOUR_THOUSAND = 4000;
+const STDERR_TAIL_LIMIT_SIX_THOUSAND = 6000;
+
+const RUNNER_COMMAND = Object.freeze([
+  'node',
+  '/bench/scripts/checks/tidb-oltp-loadgen-runner.js',
+]);
+
 function parseArgs(argv) {
   let configPath = DEFAULT_CONFIG;
   for (let index = ZERO; index < argv.length; index += ONE) {
-    if (argv[index] !== '--config') {
+    if (argv[index] !== ARG_CONFIG) {
       throw new Error(`Unsupported argument: ${argv[index]}`);
     }
     index += ONE;
-    if (!argv[index]) throw new Error('--config requires a path');
+    if (!argv[index]) throw new Error(ERROR_CONFIG_PATH_REQUIRED);
     configPath = argv[index];
   }
   return {configPath: resolve(process.cwd(), configPath)};
 }
 
 async function loadConfig(configPath) {
-  const config = JSON.parse(await readFile(configPath, 'utf8'));
-  assert.ok(config.gcp, 'TiDB load-generator proof requires gcp block');
+  const config = JSON.parse(await readFile(configPath, FILE_ENCODING_UTF8));
+  assert.ok(config.gcp, ERROR_GCP_BLOCK_REQUIRED);
   assert.equal(config.gcp.vmCount, EXPECTED_VM_COUNT);
   assert.equal(config.gcp.machineType, EXPECTED_MACHINE_TYPE);
   assert.equal(config.gcp.preemptible, false);
   assert.ok(
     !Array.isArray(config.docker?.hosts) || config.docker.hosts.length === ZERO,
-    'load-generator proof must provision fresh controlled hosts',
+    ERROR_MUST_PROVISION_HOSTS,
   );
   return config;
 }
 
 function requiredEnvironment(name) {
-  const value = String(process.env[name] || '').trim();
+  const value = stringTrim(String(process.env[name] || ''));
   if (!value) throw new Error(`${name} is required`);
   return value;
 }
@@ -84,15 +122,15 @@ function createPublishedSqlProvider(remoteProvider) {
 
   return new Proxy(remoteProvider, {
     get(target, property) {
-      if (property === 'createContainer') {
+      if (property === METHOD_CREATE_CONTAINER) {
         return async (options) => {
           const isTiDb =
             options?.image === TIDB_REFERENCE_DEFAULTS.tidbImage &&
-            String(options?.name || '').endsWith('-tidb');
+            stringEndsWith(String(options?.name || ''), TIDB_CONTAINER_NAME_SUFFIX);
           if (!isTiDb) return createContainer(options);
           return createContainer({
             ...options,
-            command: (options.command || []).map((argument) =>
+            command: arrayMap(options.command || [], (argument) =>
               argument === `-P=${TIDB_REFERENCE_DEFAULTS.tidbPort}` ?
                 `-P=${TIDB_CONTAINER_SQL_PORT}` : argument),
             hostConfigExtras: {
@@ -100,7 +138,7 @@ function createPublishedSqlProvider(remoteProvider) {
               PortBindings: {
                 ...(options.hostConfigExtras?.PortBindings || {}),
                 [`${TIDB_CONTAINER_SQL_PORT}/tcp`]: [{
-                  HostIp: '0.0.0.0',
+                  HostIp: HOST_IP_ANY,
                   HostPort: String(DB_HOST_SQL_PORT),
                 }],
               },
@@ -108,10 +146,10 @@ function createPublishedSqlProvider(remoteProvider) {
           });
         };
       }
-      if (property === 'execInContainer') {
+      if (property === METHOD_EXEC_IN_CONTAINER) {
         return async (containerId, command) => execInContainer(
           containerId,
-          Array.isArray(command) ? command.map((argument) =>
+          Array.isArray(command) ? arrayMap(command, (argument) =>
             argument === `--port=${TIDB_REFERENCE_DEFAULTS.tidbPort}` ?
               `--port=${TIDB_CONTAINER_SQL_PORT}` : argument) : command,
         );
@@ -123,13 +161,13 @@ function createPublishedSqlProvider(remoteProvider) {
 }
 
 function parseLoadgenResult(stdout) {
-  const line = String(stdout || '')
-    .split(/\r?\n/u)
-    .find((candidate) => candidate.startsWith(LOADGEN_PASS_PREFIX));
+  const lines = stringSplit(String(stdout || ''), /\r?\n/u);
+  const line = arrayFind(lines, (candidate) =>
+    stringStartsWith(candidate, LOADGEN_PASS_PREFIX));
   if (!line) {
     throw new Error(
-      'load-generator container did not emit a PASS result: ' +
-      JSON.stringify(String(stdout || '').slice(-4000)),
+      ERROR_LOADGEN_NO_PASS_PREFIX +
+      JSON.stringify(String(stdout || '').slice(-STDOUT_TAIL_LIMIT_FOUR_THOUSAND)),
     );
   }
   return JSON.parse(line.slice(LOADGEN_PASS_PREFIX.length));
@@ -147,149 +185,188 @@ async function removeContainer(provider, container) {
 
 async function writeEvidence(evidence) {
   await mkdir(path.dirname(OUTPUT_PATH), {recursive: true});
-  await writeFile(OUTPUT_PATH, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
+  await writeFile(OUTPUT_PATH, JSON.stringify(evidence, null, 2) + NEWLINE, FILE_ENCODING_UTF8);
 }
 
-async function run() {
-  const {configPath} = parseArgs(process.argv.slice(2));
-  const inputConfig = await loadConfig(configPath);
-  const loadgenImage = requiredEnvironment('TIDB_OLTP_LOADGEN_IMAGE');
+async function setupBenchmarkInfrastructure(inputConfig, loadgenImage, runId) {
+  const provisioned = await provisionGcpDockerHosts(inputConfig, true);
+  const provisioner = provisioned.provisioner;
+  assert.ok(provisioner, ERROR_EXPECTED_PROVISIONER);
+  const hosts = provisioned.runConfig.docker?.hosts || [];
+  const hostInfo = provisioned.runConfig.docker?.hostInfo || [];
+  assert.equal(hosts.length, EXPECTED_VM_COUNT);
+  assert.equal(hostInfo.length, EXPECTED_VM_COUNT);
 
-  const localProvider = new DockerProvider();
-  await assertTiDbReferenceImagesAvailable(localProvider);
-  assert.ok(
-    await localProvider.inspectImage(loadgenImage),
-    `Expected local load-generator image ${loadgenImage}`,
+  for (const image of [...TIDB_REFERENCE_REQUIRED_IMAGES, loadgenImage]) {
+    await installGcpImage(provisioner, image, true);
+  }
+
+  const dbProvider = new DockerProvider({
+    host: hosts[ZERO],
+    tls: provisioned.runConfig.docker.tls,
+  });
+  const loadgenProvider = new DockerProvider({
+    host: hosts[ONE],
+    tls: provisioned.runConfig.docker.tls,
+  });
+
+  const publishedDbProvider = createPublishedSqlProvider(dbProvider);
+  const benchmarkDbProvider = createTiDbReferenceLifecycleResourceProvider(
+    publishedDbProvider,
+    {tikvResourceLimits: TIKV_RESOURCE_LIMITS},
   );
 
-  const runId = `lagrange-tidb-loadgen-${randomUUID().slice(0, 8)}`;
-  let provisioner = null;
-  let dbProvider = null;
-  let loadgenProvider = null;
-  let dbNetwork = null;
-  let cluster = null;
-  let loadgenContainer = null;
-  let loadgenResult = null;
-  let primaryError = null;
-  const cleanupErrors = [];
-  let hostInfo = [];
-  let loadgenContainerRemoved = false;
-  let databaseClusterStopped = false;
-  let databaseNetworkRemoved = false;
+  const dbNetwork = await benchmarkDbProvider.createNetwork(`${runId}-db-net`, {
+    'lagrange.benchmark': BENCHMARK_LABEL_LOADGEN_PROOF,
+  });
+  const cluster = await startTiDbReferenceCluster({
+    provider: benchmarkDbProvider,
+    network: `${runId}-db-net`,
+    namePrefix: runId,
+    tikvStoreCount: TIKV_STORE_COUNT,
+    resourceLimits: SHARED_DB_RESOURCE_LIMITS,
+    readinessResourceLimits: READINESS_RESOURCE_LIMITS,
+  });
 
+  const loadgenContainer = await loadgenProvider.createContainer({
+    name: `${runId}-loadgen`,
+    image: loadgenImage,
+    network: NETWORK_HOST,
+    hostNetwork: true,
+    resourceLimits: LOADGEN_RESOURCE_LIMITS,
+    labels: {'lagrange.benchmark': BENCHMARK_LABEL_LOADGEN_PROOF},
+    env: {
+      TIDB_ENDPOINT_HOST: hostInfo[ZERO].internalIp,
+      TIDB_ENDPOINT_PORT: String(DB_HOST_SQL_PORT),
+      TIDB_DATABASE_NAME: DATABASE_NAME_LOADGEN_PROOF,
+      TIDB_WORKLOAD_JSON: JSON.stringify(TIDB_OLTP_MEASUREMENT_WORKLOAD_OPTIONS),
+    },
+  });
+
+  return {
+    provisioner,
+    hostInfo,
+    dbProvider,
+    loadgenProvider,
+    dbNetwork,
+    cluster,
+    loadgenContainer,
+  };
+}
+
+async function executeLoadgenWorkload(loadgenProvider, loadgenContainer) {
+  const execution = await loadgenProvider.execInContainer(
+    loadgenContainer.containerId,
+    RUNNER_COMMAND,
+  );
+  if (execution.exitCode !== ZERO) {
+    throw new Error(
+      `load-generator workload failed exit=${execution.exitCode}: ` +
+      String(execution.stderr || execution.stdout || '').slice(-STDERR_TAIL_LIMIT_SIX_THOUSAND),
+    );
+  }
+  const loadgenResult = parseLoadgenResult(execution.stdout);
+  assert.equal(loadgenResult.status, STATUS_PASSED);
+  assert.equal(
+    loadgenResult.workload.measurement.succeeded,
+    TIDB_OLTP_MEASUREMENT_WORKLOAD_OPTIONS.workers *
+      TIDB_OLTP_MEASUREMENT_WORKLOAD_OPTIONS.measurementOperationsPerWorker,
+  );
+  assert.equal(loadgenResult.workload.measurement.failed, ZERO);
+  return loadgenResult;
+}
+
+async function cleanupContainer(provider, container) {
+  if (!provider || !container) return false;
   try {
-    const provisioned = await provisionGcpDockerHosts(inputConfig, true);
-    provisioner = provisioned.provisioner;
-    assert.ok(provisioner, 'Expected GCP provisioner');
-    const hosts = provisioned.runConfig.docker?.hosts || [];
-    hostInfo = provisioned.runConfig.docker?.hostInfo || [];
-    assert.equal(hosts.length, EXPECTED_VM_COUNT);
-    assert.equal(hostInfo.length, EXPECTED_VM_COUNT);
-
-    for (const image of [...TIDB_REFERENCE_REQUIRED_IMAGES, loadgenImage]) {
-      await installGcpImage(provisioner, image, true);
-    }
-
-    dbProvider = new DockerProvider({
-      host: hosts[ZERO],
-      tls: provisioned.runConfig.docker.tls,
-    });
-    loadgenProvider = new DockerProvider({
-      host: hosts[ONE],
-      tls: provisioned.runConfig.docker.tls,
-    });
-
-    const publishedDbProvider = createPublishedSqlProvider(dbProvider);
-    const benchmarkDbProvider = createTiDbReferenceLifecycleResourceProvider(
-      publishedDbProvider,
-      {tikvResourceLimits: TIKV_RESOURCE_LIMITS},
-    );
-
-    dbNetwork = await benchmarkDbProvider.createNetwork(`${runId}-db-net`, {
-      'lagrange.benchmark': 'tidb-oltp-loadgen-proof',
-    });
-    cluster = await startTiDbReferenceCluster({
-      provider: benchmarkDbProvider,
-      network: `${runId}-db-net`,
-      namePrefix: runId,
-      tikvStoreCount: TIKV_STORE_COUNT,
-      resourceLimits: SHARED_DB_RESOURCE_LIMITS,
-      readinessResourceLimits: READINESS_RESOURCE_LIMITS,
-    });
-
-    loadgenContainer = await loadgenProvider.createContainer({
-      name: `${runId}-loadgen`,
-      image: loadgenImage,
-      network: 'host',
-      hostNetwork: true,
-      resourceLimits: LOADGEN_RESOURCE_LIMITS,
-      labels: {'lagrange.benchmark': 'tidb-oltp-loadgen-proof'},
-      env: {
-        TIDB_ENDPOINT_HOST: hostInfo[ZERO].internalIp,
-        TIDB_ENDPOINT_PORT: String(DB_HOST_SQL_PORT),
-        TIDB_DATABASE_NAME: 'lagrange_tidb_loadgen_proof',
-        TIDB_WORKLOAD_JSON: JSON.stringify(TIDB_OLTP_MEASUREMENT_WORKLOAD_OPTIONS),
-      },
-    });
-
-    const execution = await loadgenProvider.execInContainer(
-      loadgenContainer.containerId,
-      ['node', '/bench/scripts/checks/tidb-oltp-loadgen-runner.js'],
-    );
-    if (execution.exitCode !== ZERO) {
-      throw new Error(
-        `load-generator workload failed exit=${execution.exitCode}: ` +
-        String(execution.stderr || execution.stdout || '').slice(-6000),
-      );
-    }
-    loadgenResult = parseLoadgenResult(execution.stdout);
-    assert.equal(loadgenResult.status, 'passed');
-    assert.equal(
-      loadgenResult.workload.measurement.succeeded,
-      TIDB_OLTP_MEASUREMENT_WORKLOAD_OPTIONS.workers *
-        TIDB_OLTP_MEASUREMENT_WORKLOAD_OPTIONS.measurementOperationsPerWorker,
-    );
-    assert.equal(loadgenResult.workload.measurement.failed, ZERO);
+    await removeContainer(provider, container);
+    return true;
   } catch (error) {
-    primaryError = error;
+    return error;
   }
+}
 
-  if (loadgenProvider && loadgenContainer) {
-    try {
-      await removeContainer(loadgenProvider, loadgenContainer);
-      loadgenContainerRemoved = true;
-    } catch (error) {
-      cleanupErrors.push(error);
-    }
+async function cleanupCluster(cluster) {
+  if (!cluster) return false;
+  try {
+    await cluster.stop();
+    return true;
+  } catch (error) {
+    return error;
   }
-  if (cluster) {
-    try {
-      await cluster.stop();
-      databaseClusterStopped = true;
-    } catch (error) {
-      cleanupErrors.push(error);
-    }
-  }
-  if (dbProvider && dbNetwork) {
-    try {
-      await dbProvider.removeNetwork(dbNetwork.id);
-      databaseNetworkRemoved = true;
-    } catch (error) {
-      cleanupErrors.push(error);
-    }
-  }
+}
 
-  let teardownError = null;
-  if (provisioner) {
-    try {
-      await provisioner.destroy();
-    } catch (error) {
-      teardownError = error;
-    }
+async function cleanupNetwork(provider, network) {
+  if (!provider || !network) return false;
+  try {
+    await provider.removeNetwork(network.id);
+    return true;
+  } catch (error) {
+    return error;
   }
-  const costEstimate = provisioner?.estimateCost() || null;
+}
 
-  const allErrors = [primaryError, ...cleanupErrors, teardownError].filter(Boolean);
+async function cleanupProvisioner(provisioner) {
+  if (!provisioner) return null;
+  try {
+    await provisioner.destroy();
+    return null;
+  } catch (error) {
+    return error;
+  }
+}
+
+async function cleanupBenchmarkResources(infra) {
+  const cleanupErrors = [];
+  const containerResult = await cleanupContainer(
+    infra?.loadgenProvider,
+    infra?.loadgenContainer,
+  );
+  const loadgenContainerRemoved = containerResult === true;
+  if (containerResult instanceof Error) cleanupErrors.push(containerResult);
+
+  const clusterResult = await cleanupCluster(infra?.cluster);
+  const databaseClusterStopped = clusterResult === true;
+  if (clusterResult instanceof Error) cleanupErrors.push(clusterResult);
+
+  const networkResult = await cleanupNetwork(
+    infra?.dbProvider,
+    infra?.dbNetwork,
+  );
+  const databaseNetworkRemoved = networkResult === true;
+  if (networkResult instanceof Error) cleanupErrors.push(networkResult);
+
+  const teardownError = await cleanupProvisioner(infra?.provisioner);
+
+  return {
+    cleanupErrors,
+    teardownError,
+    loadgenContainerRemoved,
+    databaseClusterStopped,
+    databaseNetworkRemoved,
+  };
+}
+
+function buildLoadgenEvidence({
+  inputConfig,
+  loadgenImage,
+  provisioner,
+  teardownError,
+  costEstimate,
+  loadgenResult,
+  cleanupRecord,
+  allErrors,
+}) {
+  const images = {
+    ...Object.fromEntries(
+      arrayFilter(
+        Object.entries(TIDB_REFERENCE_DEFAULTS),
+        ([key]) => stringEndsWith(key, IMAGE_KEY_SUFFIX),
+      ),
+    ),
+    loadGenerator: loadgenImage,
+  };
+
   const evidence = {
     schemaVersion: 1,
     scenario: 'tidb-oltp-load-generator-placement-proof',
@@ -322,13 +399,7 @@ async function run() {
       tikv: TIKV_RESOURCE_LIMITS,
       loadGenerator: LOADGEN_RESOURCE_LIMITS,
     },
-    images: {
-      ...Object.fromEntries(
-        Object.entries(TIDB_REFERENCE_DEFAULTS)
-          .filter(([key]) => key.endsWith('Image')),
-      ),
-      loadGenerator: loadgenImage,
-    },
+    images,
     topology: {
       tikvStoreCount: TIKV_STORE_COUNT,
       loadGeneratorOnSeparateVm: true,
@@ -338,22 +409,28 @@ async function run() {
     },
     workload: loadgenResult,
     cleanup: {
-      loadgenContainerRemoved,
-      databaseClusterStopped,
-      databaseNetworkRemoved,
+      loadgenContainerRemoved: cleanupRecord.loadgenContainerRemoved,
+      databaseClusterStopped: cleanupRecord.databaseClusterStopped,
+      databaseNetworkRemoved: cleanupRecord.databaseNetworkRemoved,
       infrastructureDestroyed: Boolean(provisioner) && teardownError === null,
     },
     failure: allErrors.length === ZERO ? null : {
-      messages: allErrors.map((error) => String(error?.message || error)),
+      messages: arrayMap(allErrors, (error) => String(error?.message || error)),
     },
   };
-  await writeEvidence(evidence);
+  return evidence;
+}
 
+function handleProofErrors(allErrors) {
   if (allErrors.length > ONE) {
-    throw new AggregateError(allErrors, 'TiDB load-generator proof failures');
+    throw new AggregateError(allErrors, ERROR_LOADGEN_PROOF_FAILURES);
   }
-  if (allErrors.length === ONE) throw allErrors[ZERO];
+  if (allErrors.length === ONE) {
+    throw allErrors[ZERO];
+  }
+}
 
+function printProofPass(inputConfig, loadgenResult, costEstimate) {
   process.stdout.write(PASS_PREFIX + JSON.stringify({
     evidencePath: OUTPUT_PATH,
     measuredTransactions: loadgenResult.workload.measurement.succeeded,
@@ -366,10 +443,61 @@ async function run() {
     zone: inputConfig.gcp.zone,
     vmCount: inputConfig.gcp.vmCount,
     costEstimate,
-  }) + '\n');
+  }) + NEWLINE);
+}
+
+async function run() {
+  const {configPath} = parseArgs(process.argv.slice(2));
+  const inputConfig = await loadConfig(configPath);
+  const loadgenImage = requiredEnvironment('TIDB_OLTP_LOADGEN_IMAGE');
+
+  const localProvider = new DockerProvider();
+  await assertTiDbReferenceImagesAvailable(localProvider);
+  assert.ok(
+    await localProvider.inspectImage(loadgenImage),
+    `Expected local load-generator image ${loadgenImage}`,
+  );
+
+  const runId = `lagrange-tidb-loadgen-${randomUUID().slice(0, RUN_ID_SUFFIX_LENGTH)}`;
+  let infra = null;
+  let loadgenResult = null;
+  let primaryError = null;
+
+  try {
+    infra = await setupBenchmarkInfrastructure(inputConfig, loadgenImage, runId);
+    loadgenResult = await executeLoadgenWorkload(
+      infra.loadgenProvider,
+      infra.loadgenContainer,
+    );
+  } catch (error) {
+    primaryError = error;
+  }
+
+  const cleanupRecord = await cleanupBenchmarkResources(infra);
+  const costEstimate = infra?.provisioner?.estimateCost() || null;
+  const allErrors = arrayFilter(
+    [primaryError, ...cleanupRecord.cleanupErrors, cleanupRecord.teardownError],
+    Boolean,
+  );
+
+  const evidence = buildLoadgenEvidence({
+    inputConfig,
+    loadgenImage,
+    provisioner: infra?.provisioner,
+    teardownError: cleanupRecord.teardownError,
+    costEstimate,
+    loadgenResult,
+    cleanupRecord,
+    allErrors,
+  });
+  await writeEvidence(evidence);
+
+  handleProofErrors(allErrors);
+
+  printProofPass(inputConfig, loadgenResult, costEstimate);
 }
 
 run().catch((error) => {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
+  process.stderr.write(`${error.stack || error.message || error}${NEWLINE}`);
   process.exitCode = ONE;
 });

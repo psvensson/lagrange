@@ -24,8 +24,11 @@ import {
 import {
   decidePushProof,
   fullCorpusTriggers,
+  readVerifiedLandProof,
   recordCorpusProof,
+  runClassifiedCone,
   runDecision,
+  runFullCorpus,
 } from '../../scripts/checks/push-gate-change-proof.js';
 import {
   OBSERVATION_KIND_FILE,
@@ -808,4 +811,191 @@ test('recording is best effort: the gate never fails on bookkeeping', () => {
       throw new Error('no sha means nothing to record');
     }, write: (value) => unspawned.push(value)}), null);
   assert.deepEqual(unspawned, [], 'no sha, no receipt, no noise');
+});
+
+const landGit = (sha, commonDir = '.git') => (args) => {
+  if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
+    return {status: 0, stdout: `${commonDir}\n`};
+  }
+  if (args[0] === 'rev-parse' && args[1] === 'HEAD') {
+    return {status: 0, stdout: `${sha}\n`};
+  }
+  return {status: 0, stdout: ''};
+};
+
+test('readVerifiedLandProof verifies the solve-land proof against HEAD and base', () => {
+  const head = 'a'.repeat(40);
+  const base = 'b'.repeat(40);
+  const proofPayload = JSON.stringify({
+    commit: head,
+    base,
+    questId: 'test-quest',
+    tests: ['test/a.test.js', 'test/b.test.js'],
+  });
+
+  const verified = readVerifiedLandProof(head, {
+    git: landGit(head),
+    readFile: () => proofPayload,
+    exists: () => true,
+    env: {LAGRANGE_CHECK_BASE: base},
+  });
+  assert.ok(verified !== null);
+  assert.equal(verified.commit, head);
+  assert.equal(verified.base, base);
+  assert.deepEqual(verified.tests, ['test/a.test.js', 'test/b.test.js']);
+
+  assert.equal(readVerifiedLandProof('c'.repeat(40), {
+    git: landGit('c'.repeat(40)),
+    readFile: () => proofPayload,
+    exists: () => true,
+    env: {LAGRANGE_CHECK_BASE: base},
+  }), null, 'receipt commit does not match HEAD');
+
+  assert.equal(readVerifiedLandProof(head, {
+    git: landGit(head),
+    readFile: () => proofPayload,
+    exists: () => true,
+    env: {LAGRANGE_CHECK_BASE: 'f'.repeat(40)},
+  }), null, 'receipt base does not match check base');
+
+  assert.equal(readVerifiedLandProof(head, {
+    git: (args) => (args[0] === 'status' ?
+      {status: 0, stdout: ' M dirty.js\n'} :
+      landGit(head)(args)),
+    readFile: () => proofPayload,
+    exists: () => true,
+    env: {LAGRANGE_CHECK_BASE: base},
+  }), null, 'dirty tree refuses land proof');
+
+  assert.equal(readVerifiedLandProof(head, {
+    git: landGit(head),
+    readFile: () => proofPayload,
+    exists: () => false,
+    env: {LAGRANGE_CHECK_BASE: base},
+  }), null, 'missing receipt returns null');
+
+  assert.equal(readVerifiedLandProof(head, {
+    git: landGit(head),
+    readFile: () => JSON.stringify({commit: head, base, tests: []}),
+    exists: () => true,
+    env: {LAGRANGE_CHECK_BASE: base},
+  }), null, 'empty tests array refuses land proof');
+});
+
+test('runClassifiedCone reuses verified solve-land proof tests for cone', () => {
+  const head = 'a'.repeat(40);
+  const base = 'b'.repeat(40);
+  const landProof = {
+    commit: head,
+    base,
+    questId: 'test-quest',
+    tests: ['test/a.test.js', 'test/b.test.js'],
+  };
+
+  const fullLines = [];
+  const fullSpawned = [];
+  const fullStatus = runClassifiedCone(['test/a.test.js', 'test/b.test.js'], {
+    head: () => head,
+    readProof: () => landProof,
+    spawn: (...args) => fullSpawned.push(args),
+    write: (val) => fullLines.push(val),
+  });
+  assert.equal(fullStatus, 0);
+  assert.equal(fullSpawned.length, 0, 'no tests spawned on full reuse');
+  assert.match(fullLines.join(''), /reusing verified solve-land change proof/u);
+  assert.match(fullLines.join(''), /2 test\(s\) already green/u);
+
+  const partialLines = [];
+  const partialSpawned = [];
+  const partialStatus = runClassifiedCone(['test/a.test.js', 'test/c.test.js'], {
+    head: () => head,
+    readProof: () => landProof,
+    spawn: (cmd, args, opts) => {
+      partialSpawned.push({cmd, args, opts});
+      return {status: 0};
+    },
+    write: (val) => partialLines.push(val),
+  });
+  assert.equal(partialStatus, 0);
+  assert.equal(partialSpawned.length, 1);
+  assert.equal(partialSpawned[0].opts.input, 'test/c.test.js\n');
+  assert.match(partialLines.join(''), /reusing 1 solve-land proved test\(s\)/u);
+  assert.match(partialLines.join(''), /running 1 remaining test\(s\)/u);
+
+  const noProofSpawned = [];
+  runClassifiedCone(['test/a.test.js', 'test/c.test.js'], {
+    head: () => head,
+    readProof: () => null,
+    spawn: (cmd, args, opts) => {
+      noProofSpawned.push({cmd, args, opts});
+      return {status: 0};
+    },
+    write: () => {},
+  });
+  assert.equal(noProofSpawned.length, 1);
+  assert.equal(noProofSpawned[0].opts.input, 'test/a.test.js\ntest/c.test.js\n');
+});
+
+test('runFullCorpus reuses verified solve-land proof tests for corpus', () => {
+  const head = 'a'.repeat(40);
+  const base = 'b'.repeat(40);
+  const manifestData = JSON.stringify({
+    classes: {
+      'test/a.test.js': 'unit',
+      'test/b.test.js': 'unit',
+      'test/c.test.js': 'integration',
+    },
+  });
+
+  const partialLines = [];
+  const partialSpawned = [];
+  const partialStatus = runFullCorpus({
+    head: () => head,
+    readProof: () => ({
+      commit: head,
+      base,
+      tests: ['test/a.test.js', 'test/b.test.js'],
+    }),
+    readFile: () => manifestData,
+    spawn: (cmd, args, opts) => {
+      partialSpawned.push({cmd, args, opts});
+      return {status: 0};
+    },
+    write: (val) => partialLines.push(val),
+  });
+  assert.equal(partialStatus, 0);
+  assert.equal(partialSpawned.length, 1);
+  assert.equal(partialSpawned[0].opts.input, 'test/c.test.js\n');
+  assert.match(partialLines.join(''), /reusing 2 solve-land proved test\(s\)/u);
+  assert.match(partialLines.join(''), /running 1 remaining corpus test\(s\)/u);
+
+  const fullLines = [];
+  const fullSpawned = [];
+  const fullStatus = runFullCorpus({
+    head: () => head,
+    readProof: () => ({
+      commit: head,
+      base,
+      tests: ['test/a.test.js', 'test/b.test.js', 'test/c.test.js'],
+    }),
+    readFile: () => manifestData,
+    spawn: (...args) => fullSpawned.push(args),
+    write: (val) => fullLines.push(val),
+  });
+  assert.equal(fullStatus, 0);
+  assert.equal(fullSpawned.length, 0, 'no tests spawned on full corpus reuse');
+  assert.match(fullLines.join(''), /all 3 corpus test\(s\) already green/u);
+
+  const noProofSpawned = [];
+  runFullCorpus({
+    head: () => head,
+    readProof: () => null,
+    spawn: (cmd, args, opts) => {
+      noProofSpawned.push({cmd, args, opts});
+      return {status: 0};
+    },
+    write: () => {},
+  });
+  assert.equal(noProofSpawned.length, 1);
+  assert.deepEqual(noProofSpawned[0].args, ['run', '-s', 'test:all']);
 });

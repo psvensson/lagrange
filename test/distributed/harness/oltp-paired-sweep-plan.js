@@ -25,6 +25,8 @@ import {
   hashScenarioASemanticProfile,
 } from './oltp-scenario-a-semantic-profile.js';
 
+const arrayMap = Function.call.bind(Array.prototype.map);
+
 const ZERO = 0;
 const ONE = 1;
 const TWO = 2;
@@ -55,7 +57,7 @@ function normalizeRates(values) {
   if (!Array.isArray(values) || values.length < TWO) {
     throw new Error('Scenario A sweep requires at least two offered rates');
   }
-  const rates = values.map((value) =>
+  const rates = arrayMap(values, (value) =>
     positiveNumber(value, 'offeredRatesPerSec entry'));
   for (let index = ONE; index < rates.length; index += ONE) {
     if (rates[index] <= rates[index - ONE]) {

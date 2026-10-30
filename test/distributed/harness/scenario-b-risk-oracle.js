@@ -23,16 +23,11 @@ const STAGE_CONFIG = Object.freeze({
 
 const GRAPH_SHAPES = Object.freeze(['local-only', 'one-remote-stage', 'sequential', 'fan-out']);
 
-export function reduceScenarioBEntityStage(dataset, stageName, entityId) {
-  const config = STAGE_CONFIG[stageName];
-  if (!config) throw new Error(`Unknown stageName: ${stageName}`);
-  const events = dataset?.tables?.[config.tableName];
-  if (!Array.isArray(events)) throw new Error(`Table ${config.tableName} is not an array`);
-  const matchingRows = arrayFilter(events, (row) => row?.[config.idKey] === entityId);
-  if (matchingRows.length === 0) {
-    throw new Error(`No matching rows for stage "${stageName}" and entityId "${entityId}"`);
-  }
+function isRowFlagged(row) {
+  return (row.flagged || row.chargebackFlag || row.failedAuthCount || 0) > 0;
+}
 
+function aggregateMatchingRows(matchingRows) {
   let bytesScanned = 0;
   let sumAmountCents = 0;
   let sumRiskPoints = 0;
@@ -44,9 +39,41 @@ export function reduceScenarioBEntityStage(dataset, stageName, entityId) {
     bytesScanned += (r.byteSize || 0);
     sumAmountCents += (r.amountCents || 0);
     sumRiskPoints += (r.riskPoints || 0);
-    if ((r.flagged || r.chargebackFlag || r.failedAuthCount || 0) > 0) flaggedCount += 1;
+    if (isRowFlagged(r)) flaggedCount += 1;
     if ((r.crossEntityAlert || 0) > 0) crossEntityAlertCount += 1;
   }
+
+  return {
+    bytesScanned,
+    sumAmountCents,
+    sumRiskPoints,
+    flaggedCount,
+    crossEntityAlertCount,
+  };
+}
+
+function getStageEvents(dataset, stageName) {
+  const config = STAGE_CONFIG[stageName];
+  if (!config) throw new Error(`Unknown stageName: ${stageName}`);
+  const events = dataset?.tables?.[config.tableName];
+  if (!Array.isArray(events)) throw new Error(`Table ${config.tableName} is not an array`);
+  return {config, events};
+}
+
+export function reduceScenarioBEntityStage(dataset, stageName, entityId) {
+  const {config, events} = getStageEvents(dataset, stageName);
+  const matchingRows = arrayFilter(events, (row) => row?.[config.idKey] === entityId);
+  if (matchingRows.length === 0) {
+    throw new Error(`No matching rows for stage "${stageName}" and entityId "${entityId}"`);
+  }
+
+  const {
+    bytesScanned,
+    sumAmountCents,
+    sumRiskPoints,
+    flaggedCount,
+    crossEntityAlertCount,
+  } = aggregateMatchingRows(matchingRows);
 
   const rowsScanned = matchingRows.length;
   const scoreBps = sumRiskPoints + (flaggedCount * 25);
@@ -171,12 +198,7 @@ function percentile(sortedNums, p) {
   return sortedNums[index];
 }
 
-export function summarizeScenarioBSystemRun(options = {}) {
-  const {
-    dataset, workloadPlan, systemId, comparatorMode, observedRuns,
-    durationMs = 1000, sloP99Ms = 100, maxErrorRate = 0.01,
-  } = options;
-
+function validateSummarizeOptions(observedRuns, workloadPlan) {
   if (!Array.isArray(observedRuns)) throw new Error('observedRuns must be an array');
   if (!workloadPlan || !Array.isArray(workloadPlan.requests)) {
     throw new Error('workloadPlan.requests must be an array');
@@ -186,66 +208,99 @@ export function summarizeScenarioBSystemRun(options = {}) {
       `observedRuns count (${observedRuns.length}) does not match requests count (${workloadPlan.requests.length})`,
     );
   }
+}
 
-  const shapeStats = {
+function createInitialShapeStats() {
+  return {
     'local-only': {latencies: [], totalEdgeBytes: 0, totalRounds: 0},
     'one-remote-stage': {latencies: [], totalEdgeBytes: 0, totalRounds: 0},
     'sequential': {latencies: [], totalEdgeBytes: 0, totalRounds: 0},
     'fan-out': {latencies: [], totalEdgeBytes: 0, totalRounds: 0},
   };
+}
+
+function extractRunLatency(run) {
+  if (typeof run.latencyMs === 'number') return run.latencyMs;
+  return run.latency || 0;
+}
+
+function extractRunEdgeBytes(run, oracle) {
+  if (typeof run.remoteEdgeBytes === 'number') return run.remoteEdgeBytes;
+  if (typeof run.result?.remoteEdgeBytes === 'number') return run.result.remoteEdgeBytes;
+  const total = oracle.totalEmittedBytes || 0;
+  const stage0 = oracle.stages[0]?.emittedBytes || 0;
+  return Math.max(0, total - stage0);
+}
+
+function extractRunRounds(run, oracle) {
+  if (typeof run.sequentialRemoteRounds === 'number') return run.sequentialRemoteRounds;
+  if (typeof run.result?.sequentialRemoteRounds === 'number') {
+    return run.result.sequentialRemoteRounds;
+  }
+  return oracle.sequentialRemoteRounds;
+}
+
+function extractRunCoordinatorCpu(run) {
+  if (typeof run.coordinatorCpuMs === 'number') return run.coordinatorCpuMs;
+  if (typeof run.result?.coordinatorCpuMs === 'number') {
+    return run.result.coordinatorCpuMs;
+  }
+  return 0;
+}
+
+function processObservedRun(context, i) {
+  const {dataset, workloadPlan, observedRuns, shapeStats, allLatencies} = context;
+  const request = workloadPlan.requests[i];
+  const run = observedRuns[i];
+  if (!run || typeof run !== 'object') throw new Error(`observedRuns[${i}] must be an object`);
+
+  const oracle = evaluateScenarioBRequestOracle(dataset, request);
+  verifyScenarioBDecisionResult(oracle, run.result);
+
+  const shape = run.result.actualGraphShape;
+  const stats = shapeStats[shape] ||
+    (shapeStats[shape] = {latencies: [], totalEdgeBytes: 0, totalRounds: 0});
+
+  const latency = extractRunLatency(run);
+  allLatencies.push(latency);
+  stats.latencies.push(latency);
+
+  const edgeBytes = extractRunEdgeBytes(run, oracle);
+  stats.totalEdgeBytes += edgeBytes;
+
+  const rounds = extractRunRounds(run, oracle);
+  stats.totalRounds += rounds;
+
+  const cpu = extractRunCoordinatorCpu(run);
+
+  return {edgeBytes, rounds, cpu};
+}
+
+function accumulateObservedRuns(dataset, workloadPlan, observedRuns) {
+  const shapeStats = createInitialShapeStats();
+  const allLatencies = [];
   let totalRemoteEdgeBytes = 0;
   let totalSequentialRemoteRounds = 0;
   let totalCoordinatorCpuMs = 0;
-  const allLatencies = [];
 
+  const context = {dataset, workloadPlan, observedRuns, shapeStats, allLatencies};
   for (let i = 0; i < observedRuns.length; i += 1) {
-    const request = workloadPlan.requests[i];
-    const run = observedRuns[i];
-    if (!run || typeof run !== 'object') throw new Error(`observedRuns[${i}] must be an object`);
-
-    const oracle = evaluateScenarioBRequestOracle(dataset, request);
-    verifyScenarioBDecisionResult(oracle, run.result);
-
-    const shape = run.result.actualGraphShape;
-    const stats = shapeStats[shape] ||
-      (shapeStats[shape] = {latencies: [], totalEdgeBytes: 0, totalRounds: 0});
-
-    const latency = typeof run.latencyMs === 'number' ? run.latencyMs : (run.latency || 0);
-    allLatencies.push(latency);
-    stats.latencies.push(latency);
-
-    const edgeBytes = typeof run.remoteEdgeBytes === 'number' ? run.remoteEdgeBytes :
-      (typeof run.result?.remoteEdgeBytes === 'number' ? run.result.remoteEdgeBytes :
-        Math.max(0, (oracle.totalEmittedBytes || 0) - (oracle.stages[0]?.emittedBytes || 0)));
+    const {edgeBytes, rounds, cpu} = processObservedRun(context, i);
     totalRemoteEdgeBytes += edgeBytes;
-    stats.totalEdgeBytes += edgeBytes;
-
-    const rounds = typeof run.sequentialRemoteRounds === 'number' ? run.sequentialRemoteRounds :
-      (typeof run.result?.sequentialRemoteRounds === 'number' ? run.result.sequentialRemoteRounds :
-        oracle.sequentialRemoteRounds);
     totalSequentialRemoteRounds += rounds;
-    stats.totalRounds += rounds;
-
-    const cpu = typeof run.coordinatorCpuMs === 'number' ? run.coordinatorCpuMs :
-      (typeof run.result?.coordinatorCpuMs === 'number' ? run.result.coordinatorCpuMs : 0);
     totalCoordinatorCpuMs += cpu;
   }
 
-  const sortedLatencies = arraySort(arraySlice(allLatencies, 0), (a, b) => a - b);
-  const p50 = percentile(sortedLatencies, 50);
-  const p95 = percentile(sortedLatencies, 95);
-  const p99 = percentile(sortedLatencies, 99);
-  const latencyMs = Object.freeze({p50, p95, p99});
+  return {
+    shapeStats,
+    allLatencies,
+    totalRemoteEdgeBytes,
+    totalSequentialRemoteRounds,
+    totalCoordinatorCpuMs,
+  };
+}
 
-  const opsPerSec = Number(
-    numberToFixed((observedRuns.length * 1000) / Math.max(1, durationMs), 6),
-  );
-  const avgRemoteEdgeBytes = observedRuns.length > 0 ?
-    totalRemoteEdgeBytes / observedRuns.length : 0;
-  const avgSequentialRemoteRounds = observedRuns.length > 0 ?
-    totalSequentialRemoteRounds / observedRuns.length : 0;
-  const sloMet = p99 <= sloP99Ms;
-
+function buildPerShapeSummary(shapeStats) {
   const perShape = {};
   for (let i = 0; i < GRAPH_SHAPES.length; i += 1) {
     const shape = GRAPH_SHAPES[i];
@@ -261,9 +316,45 @@ export function summarizeScenarioBSystemRun(options = {}) {
       avgSequentialRemoteRounds: count > 0 ? stats.totalRounds / count : 0,
     });
   }
+  return perShape;
+}
+
+export function summarizeScenarioBSystemRun(options = {}) {
+  const {
+    dataset, workloadPlan, systemId, comparatorMode, observedRuns,
+    durationMs = 1000, sloP99Ms = 100, maxErrorRate = 0.01,
+  } = options;
+
+  validateSummarizeOptions(observedRuns, workloadPlan);
+
+  const {
+    shapeStats,
+    allLatencies,
+    totalRemoteEdgeBytes,
+    totalSequentialRemoteRounds,
+    totalCoordinatorCpuMs,
+  } = accumulateObservedRuns(dataset, workloadPlan, observedRuns);
+
+  const sortedLatencies = arraySort(arraySlice(allLatencies, 0), (a, b) => a - b);
+  const p50 = percentile(sortedLatencies, 50);
+  const p95 = percentile(sortedLatencies, 95);
+  const p99 = percentile(sortedLatencies, 99);
+  const latencyMs = Object.freeze({p50, p95, p99});
+
+  const opsPerSec = Number(
+    numberToFixed((observedRuns.length * 1000) / Math.max(1, durationMs), 6),
+  );
+  const runCount = observedRuns.length;
+  const avgRemoteEdgeBytes = runCount > 0 ?
+    totalRemoteEdgeBytes / runCount : 0;
+  const avgSequentialRemoteRounds = runCount > 0 ?
+    totalSequentialRemoteRounds / runCount : 0;
+  const sloMet = p99 <= sloP99Ms;
+
+  const perShape = buildPerShapeSummary(shapeStats);
 
   return Object.freeze({
-    systemId, comparatorMode, totalDecisions: observedRuns.length, opsPerSec,
+    systemId, comparatorMode, totalDecisions: runCount, opsPerSec,
     latencyMs, avgRemoteEdgeBytes, avgSequentialRemoteRounds, totalCoordinatorCpuMs,
     errorRate: 0, sloP99Ms, maxErrorRate, sloMet, perShape: Object.freeze(perShape),
   });

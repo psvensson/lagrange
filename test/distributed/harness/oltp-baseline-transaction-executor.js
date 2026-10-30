@@ -1,5 +1,8 @@
 import {OLTP_OPERATION_KIND} from './oltp-baseline-workload.js';
 
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayMap = Function.call.bind(Array.prototype.map);
+
 const ZERO = 0;
 const ONE = 1;
 
@@ -84,8 +87,10 @@ async function executeNewOrder(session, operation) {
       operation.warehouseId,
       operation.districtId,
     ]);
-    const allLocal = operation.lines.every((line) =>
-      line.supplyWarehouseId === operation.warehouseId) ? ONE : ZERO;
+    const allLocal = arrayEvery(
+      operation.lines,
+      (line) => line.supplyWarehouseId === operation.warehouseId,
+    ) ? ONE : ZERO;
     await tx.execute(STATEMENT.ORDER_INSERT, [
       operation.warehouseId,
       operation.districtId,
@@ -196,7 +201,7 @@ async function executeOrderStatus(session, operation) {
       operation.districtId,
       order.order_id,
     ]));
-    const lines = lineRows.map(normalizeOrderStatusLine);
+    const lines = arrayMap(lineRows, normalizeOrderStatusLine);
     return {orderId: Number(order.order_id), lineCount: lines.length, lines};
   });
 }

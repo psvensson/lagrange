@@ -20,33 +20,53 @@ const DEFAULT_GATE_SYSTEMS = objectFreeze({
   tidbTikv: objectFreeze({version: 'v8.5.8', commitSha: DEFAULT_TIDB_SHA}),
 });
 
-export function evaluateScenarioSystemVersionGate(options = {}) {
-  const {
-    existingRecords = [], scenarioId, profileId, systems = {}, forceRerun = false,
-  } = options;
+const DEFAULT_LAGRANGE_LATENCY = objectFreeze({p50: 4.2, p95: 9.5, p99: 14.8});
+const DEFAULT_TIDB_LATENCY = objectFreeze({p50: 14.5, p95: 29.0, p99: 42.0});
 
+function validateScenarioId(scenarioId) {
   if (typeof scenarioId !== 'string' || stringTrim(scenarioId).length === 0) {
     throw new Error('scenarioId must be a non-empty string');
   }
+}
 
-  const lagrangeVersion = typeof systems?.lagrange?.version === 'string' ?
-    stringTrim(systems.lagrange.version) : '';
-  const tidbTikvVersion = typeof systems?.tidbTikv?.version === 'string' ?
-    stringTrim(systems.tidbTikv.version) : '';
+function extractVersion(systemObj) {
+  if (typeof systemObj?.version === 'string') {
+    return stringTrim(systemObj.version);
+  }
+  return '';
+}
 
+function resolveSystemVersions(systems) {
+  const lagrangeVersion = extractVersion(systems?.lagrange);
+  const tidbTikvVersion = extractVersion(systems?.tidbTikv);
   if (!lagrangeVersion || !tidbTikvVersion) {
     throw new Error('systems.lagrange.version and systems.tidbTikv.version must be non-empty');
   }
+  return {lagrangeVersion, tidbTikvVersion};
+}
 
-  const records = Array.isArray(existingRecords) ? existingRecords : [];
+function isRecordMatchingScenario(record, scenarioId, profileId, filterProfile) {
+  if (record?.framework?.scenarioId !== scenarioId) {
+    return false;
+  }
+  if (filterProfile && record?.framework?.profileId !== profileId) {
+    return false;
+  }
+  return true;
+}
+
+function findMatchingRecords(
+  records, scenarioId, profileId, lagrangeVersion, tidbTikvVersion,
+) {
   const filterProfile = typeof profileId === 'string' && stringTrim(profileId).length > 0;
   let latestScenarioRecord;
   let matchedRecord;
 
   for (let i = 0; i < records.length; i += 1) {
     const record = records[i];
-    if (record?.framework?.scenarioId !== scenarioId) continue;
-    if (filterProfile && record?.framework?.profileId !== profileId) continue;
+    if (!isRecordMatchingScenario(record, scenarioId, profileId, filterProfile)) {
+      continue;
+    }
     latestScenarioRecord = record;
     if (
       record?.systems?.lagrange?.version === lagrangeVersion &&
@@ -56,47 +76,94 @@ export function evaluateScenarioSystemVersionGate(options = {}) {
     }
   }
 
-  const matched = Boolean(matchedRecord && forceRerun !== true);
+  return {latestScenarioRecord, matchedRecord};
+}
+
+function buildRunReason(
+  forceRerun, scenarioId, latestScenarioRecord, lagrangeVersion, tidbTikvVersion,
+) {
+  if (forceRerun) {
+    return `Force rerun requested for ${scenarioId}`;
+  }
+  if (latestScenarioRecord) {
+    return `System version changed for ${scenarioId}`;
+  }
+  return `No prior record for ${scenarioId} at lagrange=${lagrangeVersion}, ` +
+    `tidbTikv=${tidbTikvVersion}`;
+}
+
+function buildSkippedGateResult(context) {
+  const {scenarioId, profileId, lagrangeVersion, tidbTikvVersion, matchedRecord} = context;
+  return objectFreeze({
+    shouldRun: false,
+    skippedBecauseSystemVersionsUnchanged: true,
+    scenarioId,
+    profileId: profileId || undefined,
+    lagrangeVersion,
+    tidbTikvVersion,
+    matchedCombinationSha256: matchedRecord.combinationSha256,
+    matchedRecord,
+    reason: `Skipped scenario ${scenarioId}: lagrange (${lagrangeVersion}) and ` +
+      `tidbTikv (${tidbTikvVersion}) versions unchanged`,
+  });
+}
+
+function buildExecutableGateResult(context) {
+  const {
+    scenarioId, profileId, lagrangeVersion, tidbTikvVersion,
+    forceRerun, latestScenarioRecord,
+  } = context;
   const lagrangeVersionChanged = Boolean(
     latestScenarioRecord && latestScenarioRecord?.systems?.lagrange?.version !== lagrangeVersion,
   );
   const tidbTikvVersionChanged = Boolean(
     latestScenarioRecord && latestScenarioRecord?.systems?.tidbTikv?.version !== tidbTikvVersion,
   );
+  return objectFreeze({
+    shouldRun: true,
+    skippedBecauseSystemVersionsUnchanged: false,
+    scenarioId,
+    profileId: profileId || undefined,
+    lagrangeVersion,
+    tidbTikvVersion,
+    lagrangeVersionChanged,
+    tidbTikvVersionChanged,
+    matchedCombinationSha256: undefined,
+    matchedRecord: undefined,
+    reason: buildRunReason(
+      forceRerun, scenarioId, latestScenarioRecord, lagrangeVersion, tidbTikvVersion,
+    ),
+  });
+}
 
-  return objectFreeze(
-    matched ?
-      {
-        shouldRun: false,
-        skippedBecauseSystemVersionsUnchanged: true,
-        scenarioId,
-        profileId: profileId || undefined,
-        lagrangeVersion,
-        tidbTikvVersion,
-        matchedCombinationSha256: matchedRecord.combinationSha256,
-        matchedRecord,
-        reason: `Skipped scenario ${scenarioId}: lagrange (${lagrangeVersion}) and ` +
-          `tidbTikv (${tidbTikvVersion}) versions unchanged`,
-      } :
-      {
-        shouldRun: true,
-        skippedBecauseSystemVersionsUnchanged: false,
-        scenarioId,
-        profileId: profileId || undefined,
-        lagrangeVersion,
-        tidbTikvVersion,
-        lagrangeVersionChanged,
-        tidbTikvVersionChanged,
-        matchedCombinationSha256: undefined,
-        matchedRecord: undefined,
-        reason: forceRerun ?
-          `Force rerun requested for ${scenarioId}` :
-          (latestScenarioRecord ?
-            `System version changed for ${scenarioId}` :
-            `No prior record for ${scenarioId} at lagrange=${lagrangeVersion}, ` +
-            `tidbTikv=${tidbTikvVersion}`),
-      },
+export function evaluateScenarioSystemVersionGate(options = {}) {
+  const {
+    existingRecords = [], scenarioId, profileId, systems = {}, forceRerun = false,
+  } = options;
+
+  validateScenarioId(scenarioId);
+  const {lagrangeVersion, tidbTikvVersion} = resolveSystemVersions(systems);
+  const records = Array.isArray(existingRecords) ? existingRecords : [];
+
+  const {latestScenarioRecord, matchedRecord} = findMatchingRecords(
+    records, scenarioId, profileId, lagrangeVersion, tidbTikvVersion,
   );
+
+  const matched = Boolean(matchedRecord && forceRerun !== true);
+  const context = {
+    scenarioId,
+    profileId,
+    lagrangeVersion,
+    tidbTikvVersion,
+    forceRerun,
+    matchedRecord,
+    latestScenarioRecord,
+  };
+
+  if (matched) {
+    return buildSkippedGateResult(context);
+  }
+  return buildExecutableGateResult(context);
 }
 
 export function evaluateScenarioBFairnessGate(evidence = {}) {
@@ -140,6 +207,96 @@ export function evaluateScenarioBFairnessGate(evidence = {}) {
   });
 }
 
+function resolveLagrangeBytes(edgeSummary) {
+  return edgeSummary?.lagrangeCrossIslandBytesPerRequest ??
+    edgeSummary?.crossIslandBytesPerRequest ?? 192;
+}
+
+function buildLagrangeScorecard(edgeSummary, movementComparison) {
+  const bytes = resolveLagrangeBytes(edgeSummary);
+  const moveP99 = movementComparison?.lagrange?.duringMoveP99Ms ?? 18;
+  const routing = movementComparison?.lagrange?.routingConvergenceMs ?? 45;
+  const advantage = movementComparison?.colocationAdvantage ?? true;
+
+  return objectFreeze({
+    crossIslandBytesPerRequest: Number(bytes),
+    duringMoveP99Ms: Number(moveP99),
+    routingConvergenceMs: Number(routing),
+    colocationAdvantage: Boolean(advantage),
+  });
+}
+
+function buildTiDbScorecard(edgeSummary, movementComparison) {
+  const bytes = edgeSummary?.tidbCrossIslandBytesPerRequest ?? 8192;
+  const moveP99 = movementComparison?.tidb?.duringMoveP99Ms ?? 64;
+  const routing = movementComparison?.tidb?.routingConvergenceMs ?? 180;
+
+  return objectFreeze({
+    crossIslandBytesPerRequest: Number(bytes),
+    duringMoveP99Ms: Number(moveP99),
+    routingConvergenceMs: Number(routing),
+    colocationAdvantage: false,
+  });
+}
+
+function buildFrameworkSection(framework = {}) {
+  return {
+    ...framework,
+    frameworkVersion: framework.frameworkVersion || '0.3.0',
+    frameworkCommitSha: framework.frameworkCommitSha || DEFAULT_FRAMEWORK_SHA,
+    scenarioId: framework.scenarioId || DEFAULT_SCENARIO_ID,
+    profileId: framework.profileId || DEFAULT_PROFILE_ID,
+  };
+}
+
+function buildSystemEntry(sys, defaultVersion, defaultSha) {
+  return {
+    present: true,
+    version: sys?.version || defaultVersion,
+    commitSha: sys?.commitSha || defaultSha,
+  };
+}
+
+function buildSystemsSection(systems = {}) {
+  return {
+    lagrange: buildSystemEntry(systems.lagrange, '0.3.0', DEFAULT_FRAMEWORK_SHA),
+    tidbTikv: buildSystemEntry(systems.tidbTikv, 'v8.5.8', DEFAULT_TIDB_SHA),
+  };
+}
+
+function resolveRecordedAt(recordedAt) {
+  if (typeof recordedAt === 'string') {
+    const trimmed = stringTrim(recordedAt);
+    if (trimmed) return trimmed;
+  }
+  return DEFAULT_RECORDED_AT;
+}
+
+function resolveOpsPerSec(result, defaultOps) {
+  return result?.decisionsPerSec ?? result?.opsPerSec ?? defaultOps;
+}
+
+function buildSystemMetrics(result, scorecard, defaultOps, defaultLatency) {
+  const ops = resolveOpsPerSec(result, defaultOps);
+  const latency = result?.latencyMs || defaultLatency;
+  const transactions = result?.transactions || {
+    measuredAttempted: 64, measuredSucceeded: 64, failed: 0, retries: 0,
+  };
+  const passed = result?.oraclePassedCount ?? 64;
+  const required = result?.oracleRequiredCount ?? 64;
+
+  return {
+    opsPerSec: Number(ops),
+    latencyMs: latency,
+    transactions,
+    semanticProofs: {
+      passedCount: Number(passed),
+      requiredCount: Number(required),
+    },
+    scenarioBScorecard: scorecard,
+  };
+}
+
 export function buildScenarioBScorecardRecord(options = {}) {
   const {
     fairnessReport,
@@ -149,75 +306,31 @@ export function buildScenarioBScorecardRecord(options = {}) {
     movementComparison,
     framework = {},
     systems = {},
-    recordedAt = DEFAULT_RECORDED_AT,
+    recordedAt,
     evidenceSource = {},
   } = options;
 
-  const lagrangeScorecard = objectFreeze({
-    crossIslandBytesPerRequest: Number(
-      edgeSummary?.lagrangeCrossIslandBytesPerRequest ??
-      edgeSummary?.crossIslandBytesPerRequest ?? 192,
-    ),
-    duringMoveP99Ms: Number(movementComparison?.lagrange?.duringMoveP99Ms ?? 18),
-    routingConvergenceMs: Number(movementComparison?.lagrange?.routingConvergenceMs ?? 45),
-    colocationAdvantage: Boolean(movementComparison?.colocationAdvantage ?? true),
-  });
+  const lagrangeScorecard = buildLagrangeScorecard(edgeSummary, movementComparison);
+  const tidbScorecard = buildTiDbScorecard(edgeSummary, movementComparison);
 
-  const tidbScorecard = objectFreeze({
-    crossIslandBytesPerRequest: Number(edgeSummary?.tidbCrossIslandBytesPerRequest ?? 8192),
-    duringMoveP99Ms: Number(movementComparison?.tidb?.duringMoveP99Ms ?? 64),
-    routingConvergenceMs: Number(movementComparison?.tidb?.routingConvergenceMs ?? 180),
-    colocationAdvantage: false,
-  });
+  const evidenceKind = fairnessReport?.comparable ?
+    'observed-paired-run' : 'contract-model-verification';
 
   const record = createComparisonHistoryRecord({
-    framework: {
-      ...framework,
-      frameworkVersion: framework.frameworkVersion || '0.3.0',
-      frameworkCommitSha: framework.frameworkCommitSha || DEFAULT_FRAMEWORK_SHA,
-      scenarioId: framework.scenarioId || DEFAULT_SCENARIO_ID,
-      profileId: framework.profileId || DEFAULT_PROFILE_ID,
-    },
-    systems: {
-      lagrange: {
-        present: true,
-        version: systems.lagrange?.version || '0.3.0',
-        commitSha: systems.lagrange?.commitSha || DEFAULT_FRAMEWORK_SHA,
-      },
-      tidbTikv: {
-        present: true,
-        version: systems.tidbTikv?.version || 'v8.5.8',
-        commitSha: systems.tidbTikv?.commitSha || DEFAULT_TIDB_SHA,
-      },
-    },
-    recordedAt: (typeof recordedAt === 'string' && stringTrim(recordedAt)) || DEFAULT_RECORDED_AT,
+    framework: buildFrameworkSection(framework),
+    systems: buildSystemsSection(systems),
+    recordedAt: resolveRecordedAt(recordedAt),
     evidenceSource: {
-      kind: fairnessReport?.comparable ? 'observed-paired-run' : 'contract-model-verification',
+      kind: evidenceKind,
       ...evidenceSource,
     },
     metrics: {
-      lagrange: {
-        opsPerSec: Number(lagrangeResult?.decisionsPerSec ?? lagrangeResult?.opsPerSec ?? 420),
-        latencyMs: lagrangeResult?.latencyMs || {p50: 4.2, p95: 9.5, p99: 14.8},
-        transactions: lagrangeResult?.transactions ||
-          {measuredAttempted: 64, measuredSucceeded: 64, failed: 0, retries: 0},
-        semanticProofs: {
-          passedCount: Number(lagrangeResult?.oraclePassedCount ?? 64),
-          requiredCount: Number(lagrangeResult?.oracleRequiredCount ?? 64),
-        },
-        scenarioBScorecard: lagrangeScorecard,
-      },
-      tidbTikv: {
-        opsPerSec: Number(tidbResult?.decisionsPerSec ?? tidbResult?.opsPerSec ?? 165),
-        latencyMs: tidbResult?.latencyMs || {p50: 14.5, p95: 29.0, p99: 42.0},
-        transactions: tidbResult?.transactions ||
-          {measuredAttempted: 64, measuredSucceeded: 64, failed: 0, retries: 0},
-        semanticProofs: {
-          passedCount: Number(tidbResult?.oraclePassedCount ?? 64),
-          requiredCount: Number(tidbResult?.oracleRequiredCount ?? 64),
-        },
-        scenarioBScorecard: tidbScorecard,
-      },
+      lagrange: buildSystemMetrics(
+        lagrangeResult, lagrangeScorecard, 420, DEFAULT_LAGRANGE_LATENCY,
+      ),
+      tidbTikv: buildSystemMetrics(
+        tidbResult, tidbScorecard, 165, DEFAULT_TIDB_LATENCY,
+      ),
     },
   });
 
@@ -225,6 +338,37 @@ export function buildScenarioBScorecardRecord(options = {}) {
     ...record,
     comparable: Boolean(fairnessReport?.comparable),
     nonComparableReason: fairnessReport?.nonComparableReason || '',
+  });
+}
+
+function buildSkippedComparisonOutcome(versionGate) {
+  return objectFreeze({
+    skipped: true,
+    skippedBecauseSystemVersionsUnchanged: true,
+    executed: false,
+    versionGate,
+    record: versionGate.matchedRecord,
+  });
+}
+
+async function executeComparisonRun(executeComparison, context) {
+  if (typeof executeComparison === 'function') {
+    return await executeComparison(context);
+  }
+  return {};
+}
+
+function buildComparisonRunRecord(runOutput, fairnessReport, scenarioId, profileId, systems) {
+  return buildScenarioBScorecardRecord({
+    fairnessReport,
+    lagrangeResult: runOutput?.lagrangeResult,
+    tidbResult: runOutput?.tidbResult,
+    edgeSummary: runOutput?.edgeSummary,
+    movementComparison: runOutput?.movementComparison,
+    framework: {...runOutput?.framework, scenarioId, profileId},
+    systems,
+    recordedAt: runOutput?.recordedAt,
+    evidenceSource: runOutput?.evidenceSource,
   });
 }
 
@@ -243,29 +387,16 @@ export async function runScenarioBVersionGatedComparison(options = {}) {
   });
 
   if (versionGate.shouldRun === false) {
-    return objectFreeze({
-      skipped: true,
-      skippedBecauseSystemVersionsUnchanged: true,
-      executed: false,
-      versionGate,
-      record: versionGate.matchedRecord,
-    });
+    return buildSkippedComparisonOutcome(versionGate);
   }
 
-  const runOutput = typeof executeComparison === 'function' ?
-    await executeComparison({scenarioId, profileId, systems}) : {};
+  const runOutput = await executeComparisonRun(
+    executeComparison, {scenarioId, profileId, systems},
+  );
   const fairnessReport = evaluateScenarioBFairnessGate(runOutput?.fairnessEvidence || {});
-  const record = buildScenarioBScorecardRecord({
-    fairnessReport,
-    lagrangeResult: runOutput?.lagrangeResult,
-    tidbResult: runOutput?.tidbResult,
-    edgeSummary: runOutput?.edgeSummary,
-    movementComparison: runOutput?.movementComparison,
-    framework: {...runOutput?.framework, scenarioId, profileId},
-    systems,
-    recordedAt: runOutput?.recordedAt,
-    evidenceSource: runOutput?.evidenceSource,
-  });
+  const record = buildComparisonRunRecord(
+    runOutput, fairnessReport, scenarioId, profileId, systems,
+  );
 
   return objectFreeze({
     skipped: false,

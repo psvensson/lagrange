@@ -23,6 +23,7 @@ const DEFAULT_BATCH_SIZE = 50;
 const LOCAL_STR_BRACKET_OPEN = '[';
 const LOCAL_STR_BRACE_OPEN = '{';
 const LOCAL_STR_ID = 'id';
+const UNKNOWN_INDEX_NAME = 'unknown';
 
 /**
  * Serialize a primary key value or tuple into a durable string checkpoint.
@@ -128,6 +129,28 @@ function computeLastPkValue(rows, basePrimaryKeyColumns) {
     basePrimaryKeyColumns.map((k) => lastRow[k]);
 }
 
+function normalizeBackfillMetadata(indexMetadata) {
+  const indexId = indexMetadata.indexId || indexMetadata.index_id;
+  const tableName = indexMetadata.tableName || indexMetadata.table_name;
+  const indexName = indexMetadata.indexName || indexMetadata.index_name;
+  let columnNames = indexMetadata.columnNames || indexMetadata.column_names;
+  if (typeof columnNames === 'string') {
+    columnNames = JSON.parse(columnNames);
+  }
+  const basePrimaryKeyColumns = indexMetadata.basePrimaryKeyColumns ||
+    indexMetadata.base_primary_key_columns ||
+    [LOCAL_STR_ID];
+
+  return {
+    indexId,
+    tableName,
+    indexName,
+    columnNames: columnNames || [],
+    basePrimaryKeyColumns,
+    state: indexMetadata.state,
+  };
+}
+
 /**
  * Coordinator for resumable global secondary index historical backfills.
  */
@@ -190,6 +213,7 @@ export class GlobalIndexBackfillCoordinator {
    */
   async _processBaseBatchRows(rows, {
     tableName,
+    indexName,
     partitionId,
     basePrimaryKeyColumns,
     columnNames,
@@ -230,13 +254,17 @@ export class GlobalIndexBackfillCoordinator {
         (targetPartition.partition_id || targetPartition.partitionId) :
         null;
 
-      if (targetPartitionId) {
-        if (!entriesByTargetPartition.has(targetPartitionId)) {
-          entriesByTargetPartition.set(targetPartitionId, []);
-        }
-        entriesByTargetPartition.get(targetPartitionId).push(entry);
-        validRowCount++;
+      if (!targetPartitionId) {
+        throw new Error(
+          `Unresolved target index partition for index '${indexName || UNKNOWN_INDEX_NAME}' on base partition '${partitionId}'`,
+        );
       }
+
+      if (!entriesByTargetPartition.has(targetPartitionId)) {
+        entriesByTargetPartition.set(targetPartitionId, []);
+      }
+      entriesByTargetPartition.get(targetPartitionId).push(entry);
+      validRowCount++;
     }
 
     return {entriesByTargetPartition, validRowCount};
@@ -259,6 +287,8 @@ export class GlobalIndexBackfillCoordinator {
         indexId,
         state: GLOBAL_INDEX_STATE.FAILED,
         errorMessage: err.message,
+        lastError: err.message,
+        last_error: err.message,
         updatedAt: Date.now(),
       });
     } catch (saveErr) {
@@ -274,6 +304,7 @@ export class GlobalIndexBackfillCoordinator {
     const {
       indexId,
       tableName,
+      indexName,
       partitionId,
       basePrimaryKeyColumns,
       columnNames,
@@ -297,6 +328,7 @@ export class GlobalIndexBackfillCoordinator {
       rows,
       {
         tableName,
+        indexName,
         partitionId,
         basePrimaryKeyColumns,
         columnNames,
@@ -377,10 +409,11 @@ export class GlobalIndexBackfillCoordinator {
       tableName,
       indexName,
       columnNames,
-      basePrimaryKeyColumns = [LOCAL_STR_ID],
-    } = indexMetadata;
+      basePrimaryKeyColumns,
+      state,
+    } = normalizeBackfillMetadata(indexMetadata);
 
-    await this.ensureBackfillingState(indexId, indexMetadata.state);
+    await this.ensureBackfillingState(indexId, state);
 
     const basePartitions = sortPartitionsDeterministically(
       this.getBaseTablePartitions(tableName),
@@ -407,6 +440,7 @@ export class GlobalIndexBackfillCoordinator {
         const partitionContext = {
           indexId,
           tableName,
+          indexName,
           partitionId,
           basePrimaryKeyColumns,
           columnNames,

@@ -15,8 +15,6 @@ import {QUERY_WALL_TIME_LIMIT_MS} from
   '../../wasm-service/query-budget-constants.js';
 import {
   QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  QUERY_OPERATION,
 } from '../query-constants.js';
 import {
   projectTransactionParticipantFailure,
@@ -79,20 +77,6 @@ function resolveStatementAuthorizationAction(statement) {
 
 function projectPgWireExecutionResult(result) {
   const projected = projectTransactionParticipantFailure(result);
-  if (
-    projected?.success === false &&
-    projected.errorCode === QUERY_ERROR_CODE.NO_TRANSACTION &&
-    String(projected.error || '').includes(
-      QUERY_ERROR_MSG.NO_TRANSACTION_ROLLBACK,
-    )
-  ) {
-    return {
-      ...projected,
-      success: true,
-      operation: QUERY_OPERATION.ROLLBACK,
-      idempotent: true,
-    };
-  }
   if (
     projected?.success === false &&
     projected.errorCode === QUERY_ERROR_CODE.WRITE_CONFLICT

@@ -80,6 +80,32 @@ function buildConnectionConfig() {
   });
 }
 
+async function dispatchPostgresWireScale(seedNode, desiredState) {
+  if (typeof seedNode.scalePostgresWireListener === 'function') {
+    return seedNode.scalePostgresWireListener(desiredState);
+  }
+  const adminApiPort = seedNode.adminApiPort ?? seedNode._adminApiPort ?? PORTS.ADMIN_API;
+  return requestPostgresWireScale({
+    ip: seedNode.ip,
+    adminApiPort,
+  }, desiredState);
+}
+
+function isPostgresWireScaleValid(result) {
+  if (result?.success !== true || result?.outcome !== 'applied') {
+    return false;
+  }
+  return result?.scaleState === undefined || result?.scaleState === 'desired_state_persisted';
+}
+
+function formatPostgresWireScaleFailure(result) {
+  if (result?.error) return result.error;
+  if (result?.errorCode) return result.errorCode;
+  if (result?.outcome) return result.outcome;
+  if (result?.scaleState) return `unexpected scaleState ${result.scaleState}`;
+  return 'unconfirmed';
+}
+
 async function configurePublicPgWire(seedNode, _executionContract) {
   if (!seedNode) {
     throw new Error('Lagrange Scenario A public PG context requires seed node');
@@ -88,22 +114,9 @@ async function configurePublicPgWire(seedNode, _executionContract) {
     replicaCount: POSTGRES_SERVICE_REPLICA_COUNT,
     runtimeConfig: PG_RUNTIME_CONFIG,
   };
-  let result;
-  if (typeof seedNode.scalePostgresWireListener === 'function') {
-    result = await seedNode.scalePostgresWireListener(desiredState);
-  } else {
-    result = await requestPostgresWireScale({
-      ip: seedNode.ip,
-      adminApiPort: seedNode.adminApiPort ?? seedNode._adminApiPort ?? PORTS.ADMIN_API,
-    }, desiredState);
-  }
-  const isValid =
-    result?.success === true &&
-    result?.outcome === 'applied' &&
-    (result?.scaleState === undefined || result?.scaleState === 'desired_state_persisted');
-  if (!isValid) {
-    const reason = result?.error || result?.errorCode || result?.outcome ||
-      (result?.scaleState ? `unexpected scaleState ${result.scaleState}` : 'unconfirmed');
+  const result = await dispatchPostgresWireScale(seedNode, desiredState);
+  if (!isPostgresWireScaleValid(result)) {
+    const reason = formatPostgresWireScaleFailure(result);
     throw new Error(`Lagrange Scenario A public PG wire scale failed: ${reason}`);
   }
 }

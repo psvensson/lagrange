@@ -81,10 +81,7 @@ function retryDelayMs(retryNumber, policy = OLTP_PAIRED_RETRY_POLICY) {
   return Math.min(policy.maxDelayMs, policy.baseDelayMs * TWO ** exponent);
 }
 
-function validatePolicy(policy) {
-  if (!Number.isInteger(policy?.maxRetries) || policy.maxRetries < ZERO) {
-    throw new Error('OLTP paired retry owner requires non-negative maxRetries');
-  }
+function validatePolicyDelays(policy) {
   if (!Number.isFinite(policy?.baseDelayMs) || policy.baseDelayMs < ZERO) {
     throw new Error('OLTP paired retry owner requires non-negative baseDelayMs');
   }
@@ -92,6 +89,13 @@ function validatePolicy(policy) {
       policy.maxDelayMs < policy.baseDelayMs) {
     throw new Error('OLTP paired retry owner requires maxDelayMs >= baseDelayMs');
   }
+}
+
+function validatePolicy(policy) {
+  if (!Number.isInteger(policy?.maxRetries) || policy.maxRetries < ZERO) {
+    throw new Error('OLTP paired retry owner requires non-negative maxRetries');
+  }
+  validatePolicyDelays(policy);
   if (!Array.isArray(policy?.retryableSqlStates) ||
       arraySome(policy.retryableSqlStates, (value) => !normalizeSqlState(value))) {
     throw new Error('OLTP paired retry owner requires valid retryable SQLSTATEs');
@@ -131,7 +135,7 @@ function createTerminalError(cause, evidence) {
   return error;
 }
 
-async function executePairedOltpTransactionWithRetry(options = {}) {
+function resolveRetryContext(options) {
   if (typeof options.executeAttempt !== 'function') {
     throw new Error('OLTP paired retry owner requires executeAttempt');
   }
@@ -147,6 +151,37 @@ async function executePairedOltpTransactionWithRetry(options = {}) {
       'OLTP paired retry owner requires intendedIssueTimeMs <= current time',
     );
   }
+  return {policy, sleep, now, intendedIssueTimeMs};
+}
+
+function recordAttemptFailure(failures, attempts, classification) {
+  failures.push({
+    attempt: attempts,
+    retryable: classification.retryable,
+    outcome: classification.outcome,
+    sqlState: classification.sqlState,
+    ...(classification.commitOutcomeUnknown ?
+      {commitOutcomeUnknown: true} : {}),
+  });
+}
+
+async function applyRetryDelay(options, attempts, retries, classification, policy, sleep) {
+  const delayMs = retryDelayMs(retries, policy);
+  if (typeof options.onRetry === 'function') {
+    options.onRetry(Object.freeze({
+      attempt: attempts,
+      retry: retries,
+      delayMs,
+      sqlState: classification.sqlState,
+      outcome: classification.outcome,
+    }));
+  }
+  if (delayMs > ZERO) await sleep(delayMs);
+  return delayMs;
+}
+
+async function executePairedOltpTransactionWithRetry(options = {}) {
+  const {policy, sleep, now, intendedIssueTimeMs} = resolveRetryContext(options);
 
   let attempts = ZERO;
   let retries = ZERO;
@@ -169,14 +204,7 @@ async function executePairedOltpTransactionWithRetry(options = {}) {
       return Object.freeze({result, evidence});
     } catch (cause) {
       const classification = classifyOltpAttemptError(cause, policy);
-      failures.push({
-        attempt: attempts,
-        retryable: classification.retryable,
-        outcome: classification.outcome,
-        sqlState: classification.sqlState,
-        ...(classification.commitOutcomeUnknown ?
-          {commitOutcomeUnknown: true} : {}),
-      });
+      recordAttemptFailure(failures, attempts, classification);
       if (!classification.retryable || retries >= policy.maxRetries) {
         const evidence = createEvidence({
           policy,
@@ -191,18 +219,15 @@ async function executePairedOltpTransactionWithRetry(options = {}) {
       }
 
       retries += ONE;
-      const delayMs = retryDelayMs(retries, policy);
+      const delayMs = await applyRetryDelay(
+        options,
+        attempts,
+        retries,
+        classification,
+        policy,
+        sleep,
+      );
       totalRetryDelayMs += delayMs;
-      if (typeof options.onRetry === 'function') {
-        options.onRetry(Object.freeze({
-          attempt: attempts,
-          retry: retries,
-          delayMs,
-          sqlState: classification.sqlState,
-          outcome: classification.outcome,
-        }));
-      }
-      if (delayMs > ZERO) await sleep(delayMs);
     }
   }
 }

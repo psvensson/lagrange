@@ -69,6 +69,9 @@ const LAND_LOCK_POLL_MS = 200;
 const LAND_LOCK_TIMEOUT_MS = 90 * 60 * 1000;
 const LAND_LOCK_TIMEOUT_REFUSAL =
   'land: could not acquire landing lock in git common dir; another landing is in progress';
+const LAND_PROOF_FILENAME = 'lagrange-land-proof.json';
+const PROOF_SCOPE_FILENAME = 'proof-scope.json';
+const TEST_OUTPUT_DIR = 'test-output';
 const INVENTORY_REFRESH_PREFIXES = Object.freeze(['src/', 'test/', 'scripts/', 'package']);
 const INT32_BYTES = 4;
 const LOCK_OPEN_MODE = 'wx';
@@ -635,6 +638,37 @@ function commitLanding(root, quest, paths, options) {
   return headSha(root);
 }
 
+function readProofScopeTests(root) {
+  try {
+    const scopePath = path.join(root, TEST_OUTPUT_DIR, PROOF_SCOPE_FILENAME);
+    if (!fs.existsSync(scopePath)) return [];
+    const scope = JSON.parse(fs.readFileSync(scopePath, TEXT_ENCODING));
+    if (Array.isArray(scope?.testPaths)) return scope.testPaths;
+    if (Array.isArray(scope?.tests)) return scope.tests;
+    return [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function recordLandProofReceipt(root, commit, baseBeforeLand, questId, options) {
+  if (options.skipProof || options.runProof) return;
+  try {
+    const tests = readProofScopeTests(root);
+    const receiptPath = path.join(gitCommonDir(root), LAND_PROOF_FILENAME);
+    const payload = JSON.stringify({
+      commit,
+      base: baseBeforeLand,
+      questId,
+      tests,
+      provedAt: Date.now(),
+    }) + LINE_SEPARATOR;
+    fs.writeFileSync(receiptPath, payload, {encoding: TEXT_ENCODING});
+  } catch (_error) {
+    // bookkeeping never fails a landing
+  }
+}
+
 /**
  * Land: every guard, the change proof, the commit, then the terminal entry.
  * Never pushes. `options.log` receives the proof output; `options.runProof`
@@ -674,6 +708,7 @@ function land(root, options) {
   const landingLock = acquireLandingLock(root, options);
   let proven;
   try {
+    const baseBeforeLand = headSha(root);
     proven = proveLanding(root, quest, paths, options);
     // The terminal entry rides in the landing commit; a refused commit takes
     // the entry back out so the quest stays open and land can be retried.
@@ -697,6 +732,7 @@ function land(root, options) {
       unstageLanding(root, quest, paths);
       refuse(`land: the commit was refused, the quest stays open: ${error.message}`);
     }
+    recordLandProofReceipt(root, commit, baseBeforeLand, quest.id, options);
     return {id: quest.id, commit, paths, probe: measured, terminal};
   } finally {
     landingLock.release();

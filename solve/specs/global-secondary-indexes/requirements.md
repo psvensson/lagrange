@@ -1,5 +1,7 @@
 # Requirements: Global Secondary Indexes
 
+status: active — R2 sealed (2026-10-30)
+
 ## Scope and ownership
 
 This contract covers globally routable secondary indexes over user tables:
@@ -15,9 +17,8 @@ It does not own partition placement, Raft replication, CDC transport, the
 2PC coordinator, or SQL parsing — those owners are consumed, not modified,
 except where a requirement below names an explicit extension point.
 
-Rows in this spec constrain implementation scope only once the R2
-consistency decision is sealed; until then the spec is design-preparation
-surface.
+Rows in this spec constrain implementation scope following the C1 seal
+of R2 on 2026-10-30.
 
 Phase 0.3 treats global secondary indexes as access paths. Unique global
 secondary indexes are a Phase 1.0 production-invariant concern because they
@@ -28,8 +29,7 @@ Specialized vector, full-text and spatial search families belong to Phase 2.1
 and retain their distinct storage and semantic contracts. These are queued
 release homes in the [AGPL feature map](../../../docs/development/agpl-feature-map.md),
 not permission to start parallel implementation during current 0.2.9
-stabilization. This version allocation does not seal R2's maintenance decision
-or change any existing acceptance contract.
+stabilization. The R2 maintenance decision is sealed below under C1 (2026-10-30).
 
 ## R1 — Index as a system-managed partitioned dataset
 
@@ -54,33 +54,17 @@ or change any existing acceptance contract.
   `indices` system table (extended, not duplicated), CDC-propagated like
   other system tables.
 
-## R2 — Maintenance consistency decision (sealed before implementation)
+## R2 — Maintenance and Consistency Mode (SEALED 2026-10-30)
 
-- Exactly one default maintenance mode SHALL be sealed before any
-  implementation Quest links this spec: synchronous (index partitions
-  enlisted as 2PC participants in the base write) or asynchronous
-  (CDC-subscription-maintained, reusing the existing delivery and
-  confirmation substrate).
-- If asynchronous is selected:
-  - Index staleness SHALL be bounded and observable: a per-index applied
-    position surface queryable via diagnostics, and a typed answer when a
-    query would read an index behind its base table.
-  - Index maintenance SHALL be idempotent under CDC redelivery and restart.
-    It builds on the wired partition CDC delivery path; the promise-based
-    `CDCConfirmationTracker` is currently test-only and SHALL be
-    production-wired (or replaced by an equivalent confirmation surface)
-    before index maintenance depends on it.
-  - Unique secondary indexes SHALL be out of Phase 0.3 scope; declaring one
-    SHALL fail closed at DDL time. The capability graduates to Phase 1.0 only
-    with a synchronous mode that can enforce uniqueness transactionally.
-- If synchronous is selected: index unavailability SHALL fail the base
-  write with a typed error, never silently skip maintenance; the write-path
-  latency and availability cost SHALL be measured before the mode ships as
-  default.
-- Backfill of pre-existing rows SHALL be a resumable, restart-recoverable
-  workflow with durable progress state, consistent with the schema-migration
-  backfill precedent; an index SHALL NOT become readable before backfill
-  reaches a terminal complete state.
+- **Adopted Decision**: **Mode A — Synchronous transactional maintenance in 0.3.2 for non-unique global secondary indexes (`CREATE GLOBAL INDEX`), with global uniqueness (`CREATE UNIQUE GLOBAL INDEX`) explicitly deferred to 1.0**.
+
+### Sealed Contracts
+
+1. **TX1 Participant Enlistment**: Base-table `INSERT`, `UPDATE`, and `DELETE` statements synchronously derive index-entry mutations for all global indexes in `[WRITE_ONLY, BACKFILLING, READ_WRITE]` states and enlist affected index partitions as TX1 participants before the transaction's participant set is frozen. Write maintenance fails closed with a typed error if any index participant is unavailable.
+2. **Read Visibility & Completeness**: Planner and read router select a global index only when `index_state === 'READ_WRITE'` and the query satisfies a leading equality/range prefix. Indexes in `CREATING`, `WRITE_ONLY`, `BACKFILLING`, `FAILED`, or `DROPPING` states are non-readable and fall back deterministically to base-table scatter-gather without returning partial results. Stage-2 base-row lookups resolve current base-row partition ownership rather than trusting stale stored partition IDs across splits/merges.
+3. **Measured Write Cost**: Write-path maintenance reports participant fanout and latency overhead for 0, 1, and 2 active global indexes.
+4. **Explicit 1.0 Deferral**: `CREATE UNIQUE GLOBAL INDEX` is rejected at admission with `UNSUPPORTED_SQL_FEATURE` (`SQLSTATE 0A000`).
+5. **Resumable Backfill**: Backfill of pre-existing rows SHALL be a resumable, restart-recoverable workflow with durable progress state, consistent with the schema-migration backfill precedent; an index SHALL NOT become readable (`READ_WRITE`) before backfill reaches a terminal complete state. Concurrent mutations during backfill are maintained synchronously in `BACKFILLING` state and protected against obsolete-entry resurrection.
 
 ## R3 — Read path
 
@@ -92,8 +76,7 @@ or change any existing acceptance contract.
   matching an arbitrary non-leading index column is not sufficient to claim a
   routed compound-index access path.
 - A query SHALL use an index only when the index is in a readable terminal
-  state and (for async mode) within its sealed staleness bound for the
-  query's consistency requirement; otherwise the planner SHALL fall back to
+  state (`READ_WRITE`); otherwise the planner SHALL fall back to
   the existing scatter-gather path. Index unavailability degrades
   performance, never correctness.
 - Index reads SHALL narrow to index partitions via the same typed-order
@@ -121,10 +104,9 @@ or change any existing acceptance contract.
   bounds, compound-prefix/range selection, and drop-under-read SHALL each
   have deterministic in-process repros before distributed-harness
   confirmation, per `test/distributed/operational-ground-truth.md`.
-- The distributed proof SHALL include: node failure during backfill, index
-  partition leader loss during maintenance, and (async mode) CDC redelivery
-  after restart — each with the base table remaining correct and the index
-  converging or failing closed.
+- The distributed proof SHALL include: node failure during backfill, and
+  index partition leader loss during maintenance — each with the base table
+  remaining correct and the index converging or failing closed.
 - Comparative evidence SHALL demonstrate the point of the feature: a
   non-PK predicate query and a compound-prefix/range query showing
   index-routed narrowing versus the prior scatter-gather baseline on the same

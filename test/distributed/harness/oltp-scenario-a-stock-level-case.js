@@ -12,6 +12,12 @@ import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 } from './oltp-scenario-a-semantic-gate.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 const ZERO = 0;
 const ONE = 1;
 const SETUP_LINE_COUNT = 5;
@@ -43,7 +49,7 @@ const CLAIMED_PROOF_IDS = freezeRecord([
 ].sort());
 
 function requireRow(rows, predicate, label) {
-  const matches = rows.filter(predicate);
+  const matches = arrayFilter(rows, predicate);
   if (matches.length !== ONE) {
     throw new Error(`Scenario A stock-level expected one ${label} row`);
   }
@@ -58,7 +64,7 @@ function nextStockQuantity(currentQuantity, requestedQuantity) {
 }
 
 function buildSetupOperation(dataset, operation) {
-  const candidates = dataset.stock.filter((row) => {
+  const candidates = arrayFilter(dataset.stock, (row) => {
     if (row.warehouseId !== operation.warehouseId) return false;
     const nextQuantity = nextStockQuantity(row.quantity, SETUP_QUANTITY);
     return row.quantity >= SETUP_QUANTITY + STOCK_ROLLOVER_MARGIN &&
@@ -77,7 +83,7 @@ function buildSetupOperation(dataset, operation) {
     warehouseId: operation.warehouseId,
     districtId: operation.districtId,
     customerId: ONE,
-    lines: candidates.slice(ZERO, SETUP_LINE_COUNT).map((row) => ({
+    lines: arrayMap(candidates.slice(ZERO, SETUP_LINE_COUNT), (row) => ({
       itemId: row.itemId,
       quantity: SETUP_QUANTITY,
       supplyWarehouseId: operation.warehouseId,
@@ -88,7 +94,8 @@ function buildSetupOperation(dataset, operation) {
 function buildScenarioAStockLevelCase() {
   const dataset = buildOltpBaselineDataset(WORKLOAD);
   const plan = buildOltpBaselinePlan(WORKLOAD);
-  const operation = plan.workers[ZERO].measurement.find(
+  const operation = arrayFind(
+    plan.workers[ZERO].measurement,
     ({kind}) => kind === OLTP_OPERATION_KIND.STOCK_LEVEL,
   );
   if (!operation) throw new Error('Scenario A stock-level case has no operation');
@@ -128,7 +135,7 @@ function normalizeInteger(value, label) {
 }
 
 function normalizeSha256(value, label) {
-  const digest = String(value || '').trim().toLowerCase();
+  const digest = stringToLowerCase(stringTrim(String(value || '')));
   if (!SHA256_PATTERN.test(digest)) {
     throw new Error(`${label} must be a SHA-256 digest`);
   }

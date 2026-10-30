@@ -134,11 +134,12 @@ const PRIORITY_AUDIT_SCRIPTS = Object.freeze([
   'test:unused',
   'test:unused:ratchet',
   'test:complexity',
+  'test:complexity:cognitive',
   'test:unused:prod',
   'lint:scripts',
 ]);
-const MAXIMUM_PARALLEL_AUDITS = 4;
-const MAXIMUM_HEAVY_PARALLEL_AUDITS = 2;
+const MAXIMUM_PARALLEL_AUDITS = 8;
+const MAXIMUM_HEAVY_PARALLEL_AUDITS = 4;
 const SERIAL_PARALLEL_AUDITS = 1;
 const PIPE_STREAM_MODE = 'pipe';
 const IGNORE_STREAM_MODE = 'ignore';

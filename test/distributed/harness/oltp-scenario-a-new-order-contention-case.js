@@ -9,6 +9,9 @@ import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 } from './oltp-scenario-a-semantic-gate.js';
 
+const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
+const arrayMap = Function.call.bind(Array.prototype.map);
+
 const ZERO = 0;
 const ONE = 1;
 const CASE_ID = 'scenario-a-new-order-district-contention-v1';
@@ -91,18 +94,19 @@ function nextStockQuantity(currentQuantity, orderedQuantity) {
 }
 
 function expectedStockRows(dataset) {
-  const byItem = new Map(dataset.stock.map((row) => [row.itemId, row]));
-  return OPERATIONS.flatMap((operation) => operation.lines.map((value) => {
-    const initial = byItem.get(value.itemId);
-    return Object.freeze({
-      warehouseId: ONE,
-      itemId: value.itemId,
-      quantity: nextStockQuantity(initial.quantity, value.quantity),
-      ytdQuantity: value.quantity,
-      orderCount: ONE,
-      remoteCount: ZERO,
-    });
-  })).sort((left, right) => left.itemId - right.itemId);
+  const byItem = new Map(arrayMap(dataset.stock, (row) => [row.itemId, row]));
+  return arrayFlatMap(OPERATIONS, (operation) =>
+    arrayMap(operation.lines, (value) => {
+      const initial = byItem.get(value.itemId);
+      return Object.freeze({
+        warehouseId: ONE,
+        itemId: value.itemId,
+        quantity: nextStockQuantity(initial.quantity, value.quantity),
+        ytdQuantity: value.quantity,
+        orderCount: ONE,
+        remoteCount: ZERO,
+      });
+    })).sort((left, right) => left.itemId - right.itemId);
 }
 
 function buildScenarioANewOrderContentionCase() {
@@ -144,12 +148,12 @@ function normalizeInteger(value, label) {
 
 function normalizeIntegerArray(values, label) {
   if (!Array.isArray(values)) throw new Error(`${label} must be an array`);
-  return values.map((value) => normalizeInteger(value, label)).sort((a, b) => a - b);
+  return arrayMap(values, (value) => normalizeInteger(value, label)).sort((a, b) => a - b);
 }
 
 function normalizeStockRows(values) {
   if (!Array.isArray(values)) throw new Error('observation stockRows must be an array');
-  return values.map((row) => ({
+  return arrayMap(values, (row) => ({
     warehouseId: normalizeInteger(row?.warehouseId, 'stock warehouseId'),
     itemId: normalizeInteger(row?.itemId, 'stock itemId'),
     quantity: normalizeInteger(row?.quantity, 'stock quantity'),
@@ -177,12 +181,13 @@ function evaluateScenarioANewOrderContentionObservation(observation = {}) {
       'observation newOrderIds',
     ),
     orderLineCountByOrderId: Object.fromEntries(
-      Object.entries(observation.orderLineCountByOrderId || {})
-        .map(([orderId, count]) => [
+      arrayMap(
+        Object.entries(observation.orderLineCountByOrderId || {}),
+        ([orderId, count]) => [
           String(normalizeInteger(orderId, 'order-line orderId')),
           normalizeInteger(count, 'order-line count'),
-        ])
-        .sort(([left], [right]) => Number(left) - Number(right)),
+        ],
+      ).sort(([left], [right]) => Number(left) - Number(right)),
     ),
     stockRows: normalizeStockRows(observation.stockRows),
   };

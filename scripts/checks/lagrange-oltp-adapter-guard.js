@@ -18,9 +18,73 @@ import {
   createLagrangeOltpAdapter,
 } from '../../test/distributed/reference-client/lagrange-oltp-adapter.js';
 
+const objectFreeze = Object.freeze;
+const objectKeys = Object.keys;
+const objectValues = Object.values;
+const objectEntries = Object.entries;
+const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arraySome = Function.call.bind(Array.prototype.some);
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySlice = Function.call.bind(Array.prototype.slice);
+
+const ONE = 1;
 const ADAPTER_PATH = 'test/distributed/reference-client/lagrange-oltp-adapter.js';
 const PASS_LINE = 'lagrange-oltp-adapter-guard: PASS\n';
-const WORKLOAD = Object.freeze({
+const ENCODING_UTF8 = 'utf8';
+
+const MSG_SQL_CONTRACT = 'Lagrange adapter must implement every shared OLTP statement';
+const MYSQL_PLACEHOLDER = '?';
+const MYSQL_QUOTE = '`';
+const PROTOCOL_POSTGRESQL = 'postgresql';
+const EXECUTION_PATH_PUBLIC_SQL = 'public-sql';
+const LOCKING_MODE_CONFLICT = 'snapshot-write-conflict';
+const MSG_CLIENT_COUNT_INITIAL = 'setup plus exactly two worker clients expected';
+const MSG_CLIENT_REUSE = 'evidence must reuse an existing worker client';
+const MSG_CLIENT_CLEANUP = 'cleanup must use one public SQL client';
+const ERROR_CLIENT_NOT_ALLOWED = 'client must not be created';
+
+const CLIENT_COUNT_INITIAL = 3;
+const CLIENT_COUNT_CLOSED = 4;
+const WORKER_CLIENT_INDEX = 1;
+const CLEANUP_CLIENT_INDEX = 3;
+const PAYMENT_QUERY_COUNT = 6;
+const EXPECTED_TABLE_COUNT = 9;
+
+const ENDPOINT_HOST = '127.0.0.1';
+const ENDPOINT_PORT = 5432;
+const BENCHMARK_USER = 'benchmark';
+const BENCHMARK_DATABASE = 'benchmark';
+
+const PHASE_MEASUREMENT = 'measurement';
+const PAYMENT_AMOUNT_CENTS = 1250;
+const SQL_BEGIN = 'BEGIN';
+const SQL_COMMIT = 'COMMIT';
+const SQL_PREFIX_CREATE_TABLE = 'CREATE TABLE ';
+const SQL_PREFIX_DROP_TABLE = 'DROP TABLE IF EXISTS ';
+const SQL_PREFIX_INSERT_WAREHOUSE = 'INSERT INTO warehouse ';
+const SQL_PREFIX_INSERT_STOCK = 'INSERT INTO stock ';
+
+const WORKER_SESSION_IDS = objectFreeze(['pgwire-worker-1', 'pgwire-worker-2']);
+const EXPECTED_STATE_COUNTS = objectFreeze({
+  orders: 0,
+  newOrders: 0,
+  orderLines: 0,
+  history: 0,
+});
+
+const EXPECTED_PAYMENT_QUERIES = objectFreeze([
+  SQL_BEGIN,
+  LAGRANGE_OLTP_SQL[OLTP_SQL_STATEMENT.WAREHOUSE_PAYMENT],
+  LAGRANGE_OLTP_SQL[OLTP_SQL_STATEMENT.DISTRICT_PAYMENT],
+  LAGRANGE_OLTP_SQL[OLTP_SQL_STATEMENT.CUSTOMER_PAYMENT],
+  LAGRANGE_OLTP_SQL[OLTP_SQL_STATEMENT.HISTORY_INSERT],
+  SQL_COMMIT,
+]);
+
+const WORKLOAD = objectFreeze({
   seed: 12345,
   workers: 2,
   warmupOperationsPerWorker: 0,
@@ -67,13 +131,13 @@ function fakeClientFactory() {
 
 function assertSqlContract() {
   assert.deepEqual(
-    Object.keys(LAGRANGE_OLTP_SQL).sort(),
-    Object.values(OLTP_SQL_STATEMENT).sort(),
-    'Lagrange adapter must implement every shared OLTP statement',
+    objectKeys(LAGRANGE_OLTP_SQL).sort(),
+    objectValues(OLTP_SQL_STATEMENT).sort(),
+    MSG_SQL_CONTRACT,
   );
-  for (const [statementId, sql] of Object.entries(LAGRANGE_OLTP_SQL)) {
-    assert.equal(sql.includes('?'), false, `${statementId} used MySQL placeholders`);
-    assert.equal(sql.includes('`'), false, `${statementId} used MySQL quoting`);
+  for (const [statementId, sql] of objectEntries(LAGRANGE_OLTP_SQL)) {
+    assert.equal(stringIncludes(sql, MYSQL_PLACEHOLDER), false, `${statementId} used MySQL placeholders`);
+    assert.equal(stringIncludes(sql, MYSQL_QUOTE), false, `${statementId} used MySQL quoting`);
     assert.equal(
       /\bFOR\s+UPDATE\b/iu.test(sql),
       false,
@@ -84,7 +148,7 @@ function assertSqlContract() {
 }
 
 async function assertPublicSqlBoundary() {
-  const source = await readFile(ADAPTER_PATH, 'utf8');
+  const source = await readFile(ADAPTER_PATH, ENCODING_UTF8);
   assert.match(source, /import pg from 'pg';/u);
   assert.doesNotMatch(source, /from ['"][^'"]*src\//u);
   assert.doesNotMatch(source, /ctx\.call/u);
@@ -96,17 +160,17 @@ async function assertPublicSqlBoundary() {
 async function assertAdapterLifecycle() {
   const fake = fakeClientFactory();
   const adapter = await createLagrangeOltpAdapter({
-    endpoint: {host: '127.0.0.1', port: 5432},
-    connection: {user: 'benchmark', database: 'benchmark'},
+    endpoint: {host: ENDPOINT_HOST, port: ENDPOINT_PORT},
+    connection: {user: BENCHMARK_USER, database: BENCHMARK_DATABASE},
     workload: WORKLOAD,
     createClient: fake.createClient,
   });
 
-  assert.equal(adapter.protocol, 'postgresql');
-  assert.equal(adapter.executionPath, 'public-sql');
-  assert.equal(adapter.lockingReadMode, 'snapshot-write-conflict');
-  assert.equal(fake.clients.length, 3, 'setup plus exactly two worker clients expected');
-  assert.deepEqual(adapter.workerSessionIds, ['pgwire-worker-1', 'pgwire-worker-2']);
+  assert.equal(adapter.protocol, PROTOCOL_POSTGRESQL);
+  assert.equal(adapter.executionPath, EXECUTION_PATH_PUBLIC_SQL);
+  assert.equal(adapter.lockingReadMode, LOCKING_MODE_CONFLICT);
+  assert.equal(fake.clients.length, CLIENT_COUNT_INITIAL, MSG_CLIENT_COUNT_INITIAL);
+  assert.deepEqual(adapter.workerSessionIds, WORKER_SESSION_IDS);
   assert.equal(
     adapter.datasetSha256,
     hashOltpBaselineDataset(buildOltpBaselineDataset(WORKLOAD)),
@@ -115,25 +179,29 @@ async function assertAdapterLifecycle() {
   const setupClient = fake.clients[0];
   assert.equal(setupClient.ended, true);
   assert.equal(
-    setupClient.queries.filter(({text}) => text.startsWith('CREATE TABLE ')).length,
-    9,
+    arrayFilter(setupClient.queries, ({text}) =>
+      stringStartsWith(text, SQL_PREFIX_CREATE_TABLE)).length,
+    EXPECTED_TABLE_COUNT,
   );
   assert.equal(
-    setupClient.queries.filter(({text}) => text.startsWith('DROP TABLE IF EXISTS ')).length,
-    9,
+    arrayFilter(setupClient.queries, ({text}) =>
+      stringStartsWith(text, SQL_PREFIX_DROP_TABLE)).length,
+    EXPECTED_TABLE_COUNT,
   );
   assert.equal(
-    setupClient.queries.some(({text}) => text.startsWith('INSERT INTO warehouse ')),
+    arraySome(setupClient.queries, ({text}) =>
+      stringStartsWith(text, SQL_PREFIX_INSERT_WAREHOUSE)),
     true,
   );
   assert.equal(
-    setupClient.queries.some(({text}) => text.startsWith('INSERT INTO stock ')),
+    arraySome(setupClient.queries, ({text}) =>
+      stringStartsWith(text, SQL_PREFIX_INSERT_STOCK)),
     true,
   );
 
   await adapter.executeTransaction({
     kind: OLTP_OPERATION_KIND.PAYMENT,
-    phase: 'measurement',
+    phase: PHASE_MEASUREMENT,
     workerId: 1,
     sequence: 1,
     warehouseId: 1,
@@ -141,64 +209,52 @@ async function assertAdapterLifecycle() {
     customerWarehouseId: 1,
     customerDistrictId: 1,
     customerId: 1,
-    amountCents: 1250,
+    amountCents: PAYMENT_AMOUNT_CENTS,
   });
 
-  const worker = fake.clients[1];
+  const worker = fake.clients[WORKER_CLIENT_INDEX];
   assert.deepEqual(
-    worker.queries.slice(0, 6).map(({text}) => text),
-    [
-      'BEGIN',
-      LAGRANGE_OLTP_SQL[OLTP_SQL_STATEMENT.WAREHOUSE_PAYMENT],
-      LAGRANGE_OLTP_SQL[OLTP_SQL_STATEMENT.DISTRICT_PAYMENT],
-      LAGRANGE_OLTP_SQL[OLTP_SQL_STATEMENT.CUSTOMER_PAYMENT],
-      LAGRANGE_OLTP_SQL[OLTP_SQL_STATEMENT.HISTORY_INSERT],
-      'COMMIT',
-    ],
+    arrayMap(arraySlice(worker.queries, 0, PAYMENT_QUERY_COUNT), ({text}) => text),
+    EXPECTED_PAYMENT_QUERIES,
   );
 
   const evidence = await adapter.getEvidence();
-  assert.equal(evidence.protocol, 'postgresql');
-  assert.equal(evidence.executionPath, 'public-sql');
-  assert.equal(evidence.lockingReadMode, 'snapshot-write-conflict');
+  assert.equal(evidence.protocol, PROTOCOL_POSTGRESQL);
+  assert.equal(evidence.executionPath, EXECUTION_PATH_PUBLIC_SQL);
+  assert.equal(evidence.lockingReadMode, LOCKING_MODE_CONFLICT);
   assert.equal(evidence.datasetSha256, adapter.datasetSha256);
-  assert.deepEqual(evidence.stateCounts, {
-    orders: 0,
-    newOrders: 0,
-    orderLines: 0,
-    history: 0,
-  });
-  assert.equal(fake.clients.length, 3, 'evidence must reuse an existing worker client');
+  assert.deepEqual(evidence.stateCounts, EXPECTED_STATE_COUNTS);
+  assert.equal(fake.clients.length, CLIENT_COUNT_INITIAL, MSG_CLIENT_REUSE);
 
   await adapter.close();
-  assert.equal(fake.clients.length, 4, 'cleanup must use one public SQL client');
-  assert.equal(fake.clients.every(({ended}) => ended), true);
+  assert.equal(fake.clients.length, CLIENT_COUNT_CLOSED, MSG_CLIENT_CLEANUP);
+  assert.equal(arrayEvery(fake.clients, ({ended}) => ended), true);
   assert.equal(
-    fake.clients[3].queries.filter(({text}) =>
-      text.startsWith('DROP TABLE IF EXISTS ')).length,
-    9,
+    arrayFilter(fake.clients[CLEANUP_CLIENT_INDEX].queries, ({text}) =>
+      stringStartsWith(text, SQL_PREFIX_DROP_TABLE)).length,
+    EXPECTED_TABLE_COUNT,
   );
 }
 
 async function assertFailClosedConfiguration() {
   await assert.rejects(
     createLagrangeOltpAdapter({
-      endpoint: {host: '127.0.0.1', port: 5432},
-      connection: {database: 'benchmark'},
+      endpoint: {host: ENDPOINT_HOST, port: ENDPOINT_PORT},
+      connection: {database: BENCHMARK_DATABASE},
       workload: WORKLOAD,
       createClient() {
-        throw new Error('client must not be created');
+        throw new Error(ERROR_CLIENT_NOT_ALLOWED);
       },
     }),
     /requires connection\.user/u,
   );
   await assert.rejects(
     createLagrangeOltpAdapter({
-      endpoint: {host: '127.0.0.1', port: 5432},
-      connection: {user: 'benchmark'},
+      endpoint: {host: ENDPOINT_HOST, port: ENDPOINT_PORT},
+      connection: {user: BENCHMARK_USER},
       workload: WORKLOAD,
       createClient() {
-        throw new Error('client must not be created');
+        throw new Error(ERROR_CLIENT_NOT_ALLOWED);
       },
     }),
     /requires connection\.database/u,
@@ -215,5 +271,5 @@ async function main() {
 
 main().catch((error) => {
   process.stderr.write(`${error.stack || error.message || error}\n`);
-  process.exitCode = 1;
+  process.exitCode = ONE;
 });

@@ -8,6 +8,8 @@ import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 } from './oltp-scenario-a-semantic-gate.js';
 
+const arrayFind = Function.call.bind(Array.prototype.find);
+
 const ZERO = 0;
 const CASE_ID = 'scenario-a-visibility-v1';
 const TARGET_WAREHOUSE_ID = 1;
@@ -49,7 +51,8 @@ const STEPS = freezeRecord([
 
 function buildScenarioAVisibilityCase() {
   const dataset = buildOltpBaselineDataset(WORKLOAD);
-  const warehouse = dataset.warehouses.find(
+  const warehouse = arrayFind(
+    dataset.warehouses,
     ({id}) => id === TARGET_WAREHOUSE_ID,
   );
   if (!warehouse) throw new Error('visibility case target warehouse is missing');

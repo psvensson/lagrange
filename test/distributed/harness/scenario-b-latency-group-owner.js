@@ -44,7 +44,7 @@ function resolveOneWayDelay(matrix, fromGroup, toGroup, intraDelay, interDelay) 
   return fromGroup === toGroup ? intraDelay : interDelay;
 }
 
-export function buildScenarioBLatencyGroupTopology(options = {}) {
+function resolveTopologyOptions(options) {
   const topologyProfile = options.topologyProfile ||
     SCENARIO_B_TOPOLOGY_PROFILE.THREE_ISLAND_FIVE_NODE_RF3;
   if (!arrayIncludes(objectValues(SCENARIO_B_TOPOLOGY_PROFILE), topologyProfile)) {
@@ -60,10 +60,18 @@ export function buildScenarioBLatencyGroupTopology(options = {}) {
     options.intraIslandRttMs : 0.4;
   const interIslandRttMs = typeof options.interIslandRttMs === 'number' ?
     options.interIslandRttMs : 12;
-  const intraOneWay = intraIslandRttMs / 2;
-  const interOneWay = interIslandRttMs / 2;
-  const isSingleZone = topologyProfile === SCENARIO_B_TOPOLOGY_PROFILE.SINGLE_ZONE_RF3;
+  return {
+    topologyProfile,
+    coordinatorPlacement,
+    intraIslandRttMs,
+    interIslandRttMs,
+    intraOneWay: intraIslandRttMs / 2,
+    interOneWay: interIslandRttMs / 2,
+    isSingleZone: topologyProfile === SCENARIO_B_TOPOLOGY_PROFILE.SINGLE_ZONE_RF3,
+  };
+}
 
+function buildTopologyNodes(isSingleZone) {
   const latencyGroups = Object.freeze(
     isSingleZone ? ['island-a'] : ['island-a', 'island-b', 'island-c'],
   );
@@ -81,46 +89,79 @@ export function buildScenarioBLatencyGroupTopology(options = {}) {
     arrayPush(nodes, n);
     nodes[nodeId] = n;
   }
-  Object.freeze(nodes);
+  return {latencyGroups, nodes: Object.freeze(nodes)};
+}
 
-  let coordinatorNodes;
-  let distributedCoordinatorFairnessSatisfied = true;
+function resolveCoordinatorNodes(coordinatorPlacement, isSingleZone, nodes) {
   if (coordinatorPlacement === SCENARIO_B_COORDINATOR_PLACEMENT.COLOCATED_LAGRANGE) {
-    coordinatorNodes = Object.freeze(arrayMap(nodes, (n) => n.nodeId));
-  } else if (
+    return {
+      coordinatorNodes: Object.freeze(arrayMap(nodes, (n) => n.nodeId)),
+      distributedCoordinatorFairnessSatisfied: true,
+    };
+  }
+  if (
     coordinatorPlacement === SCENARIO_B_COORDINATOR_PLACEMENT.DISTRIBUTED_ISLAND_TIDB_COORDINATORS
   ) {
-    coordinatorNodes = Object.freeze(isSingleZone ? ['node-1'] : ['node-1', 'node-3', 'node-5']);
-  } else {
-    coordinatorNodes = Object.freeze(['node-1']);
-    distributedCoordinatorFairnessSatisfied = isSingleZone;
+    return {
+      coordinatorNodes: Object.freeze(isSingleZone ? ['node-1'] : ['node-1', 'node-3', 'node-5']),
+      distributedCoordinatorFairnessSatisfied: true,
+    };
   }
+  return {
+    coordinatorNodes: Object.freeze(['node-1']),
+    distributedCoordinatorFairnessSatisfied: isSingleZone,
+  };
+}
 
+function buildNetemLink(fromGroup, toGroup, delays) {
+  const crossIsland = fromGroup !== toGroup;
+  const oneWayDelayMs = crossIsland ? delays.interOneWay : delays.intraOneWay;
+  const rttMs = crossIsland ? delays.interIslandRttMs : delays.intraIslandRttMs;
+  const intraSpec = delays.intraIslandRttMs === 0.4 ? 'delay 0.2ms' : `delay ${delays.intraOneWay}ms`;
+  const tcNetemSpec = crossIsland ? `delay ${delays.interOneWay}ms` : intraSpec;
+  return Object.freeze({
+    fromGroup, toGroup, crossIsland, oneWayDelayMs, rttMs, tcNetemSpec,
+  });
+}
+
+function buildNetemMatrix(latencyGroups, delays) {
   const matrix = [];
   for (let i = 0; i < latencyGroups.length; i += 1) {
     for (let j = 0; j < latencyGroups.length; j += 1) {
       const fromGroup = latencyGroups[i];
       const toGroup = latencyGroups[j];
-      const crossIsland = fromGroup !== toGroup;
-      const oneWayDelayMs = crossIsland ? interOneWay : intraOneWay;
-      const rttMs = crossIsland ? interIslandRttMs : intraIslandRttMs;
-      const intraSpec = intraIslandRttMs === 0.4 ? 'delay 0.2ms' : `delay ${intraOneWay}ms`;
-      const tcNetemSpec = crossIsland ? `delay ${interOneWay}ms` : intraSpec;
-      const link = Object.freeze({
-        fromGroup, toGroup, crossIsland, oneWayDelayMs, rttMs, tcNetemSpec,
-      });
+      const link = buildNetemLink(fromGroup, toGroup, delays);
       arrayPush(matrix, link);
       matrix[`${fromGroup}->${toGroup}`] = link;
     }
   }
-  Object.freeze(matrix);
+  return Object.freeze(matrix);
+}
+
+export function buildScenarioBLatencyGroupTopology(options = {}) {
+  const opts = resolveTopologyOptions(options);
+  const {latencyGroups, nodes} = buildTopologyNodes(opts.isSingleZone);
+  const {
+    coordinatorNodes,
+    distributedCoordinatorFairnessSatisfied,
+  } = resolveCoordinatorNodes(opts.coordinatorPlacement, opts.isSingleZone, nodes);
+  const netemLinkMatrix = buildNetemMatrix(latencyGroups, opts);
 
   return Object.freeze({
-    topologyProfile, coordinatorPlacement, replicationFactor: 3, nodeCount: nodes.length,
-    latencyGroupCount: latencyGroups.length, latencyGroups, nodes, coordinatorNodes,
-    distributedCoordinatorFairnessSatisfied, netemLinkMatrix: matrix,
-    interGroupOneWayDelayMs: isSingleZone ? 0 : interOneWay, intraGroupOneWayDelayMs: intraOneWay,
-    intraIslandRttMs, interIslandRttMs,
+    topologyProfile: opts.topologyProfile,
+    coordinatorPlacement: opts.coordinatorPlacement,
+    replicationFactor: 3,
+    nodeCount: nodes.length,
+    latencyGroupCount: latencyGroups.length,
+    latencyGroups,
+    nodes,
+    coordinatorNodes,
+    distributedCoordinatorFairnessSatisfied,
+    netemLinkMatrix,
+    interGroupOneWayDelayMs: opts.isSingleZone ? 0 : opts.interOneWay,
+    intraGroupOneWayDelayMs: opts.intraOneWay,
+    intraIslandRttMs: opts.intraIslandRttMs,
+    interIslandRttMs: opts.interIslandRttMs,
   });
 }
 
@@ -217,7 +258,7 @@ export function closeScenarioBEdgeAccountingWindow(windowState, options = {}) {
   });
 }
 
-export function evaluateScenarioBLatencyGroupDecisionCost(options = {}) {
+function resolveDecisionCostParams(options) {
   const topology = options.topology;
   if (!topology || typeof topology !== 'object') {
     throw new TypeError('options.topology is required');
@@ -240,54 +281,89 @@ export function evaluateScenarioBLatencyGroupDecisionCost(options = {}) {
     options.decisionPayloadBytes : 384;
   const isSingleZone = topologyProfile === SCENARIO_B_TOPOLOGY_PROFILE.SINGLE_ZONE_RF3;
 
-  const oneWayDelayMs = typeof topology.interGroupOneWayDelayMs === 'number' && !isSingleZone ?
-    topology.interGroupOneWayDelayMs :
-    ((topology.interIslandRttMs || 12) / 2);
+  return {
+    topology,
+    topologyProfile,
+    coordinatorPlacement,
+    shape,
+    stageCount,
+    candidateRowsPerStage,
+    rowBytes,
+    decisionPayloadBytes,
+    isSingleZone,
+  };
+}
 
-  const remoteStages = shape === 'local-only' ?
-    0 : (shape === 'one-remote-stage' ? 1 : Math.max(1, stageCount - 1));
-
-  let crossIslandHops = 0;
-  let crossIslandBytesTransferred = 0;
-  let estimatedNetworkDelayMs = 0;
-
-  if (isSingleZone) {
-    crossIslandHops = 0;
-    crossIslandBytesTransferred = 0;
-    estimatedNetworkDelayMs = 0;
-  } else if (coordinatorPlacement === SCENARIO_B_COORDINATOR_PLACEMENT.COLOCATED_LAGRANGE) {
-    if (shape !== 'local-only') {
-      crossIslandHops = remoteStages;
-      crossIslandBytesTransferred = remoteStages * 96;
-      estimatedNetworkDelayMs = crossIslandHops * oneWayDelayMs;
-    }
-  } else if (
-    coordinatorPlacement === SCENARIO_B_COORDINATOR_PLACEMENT.DISTRIBUTED_ISLAND_TIDB_COORDINATORS
-  ) {
-    if (shape !== 'local-only') {
-      crossIslandHops = remoteStages * 2;
-      crossIslandBytesTransferred = remoteStages * (candidateRowsPerStage * rowBytes);
-      estimatedNetworkDelayMs = crossIslandHops * oneWayDelayMs;
-    }
-  } else if (
-    coordinatorPlacement === SCENARIO_B_COORDINATOR_PLACEMENT.CENTRALIZED_TIDB_COORDINATOR
-  ) {
-    if (shape === 'local-only') {
-      crossIslandHops = 1;
-      crossIslandBytesTransferred = decisionPayloadBytes;
-      estimatedNetworkDelayMs = oneWayDelayMs;
-    } else {
-      crossIslandHops = remoteStages * 2 + 1;
-      const stageBatchBytes = remoteStages * (candidateRowsPerStage * rowBytes);
-      crossIslandBytesTransferred = stageBatchBytes + decisionPayloadBytes;
-      estimatedNetworkDelayMs = crossIslandHops * oneWayDelayMs;
-    }
+function resolveOneWayDelayMs(topology, isSingleZone) {
+  if (typeof topology.interGroupOneWayDelayMs === 'number' && !isSingleZone) {
+    return topology.interGroupOneWayDelayMs;
   }
+  return (topology.interIslandRttMs || 12) / 2;
+}
+
+function resolveRemoteStages(shape, stageCount) {
+  if (shape === 'local-only') return 0;
+  if (shape === 'one-remote-stage') return 1;
+  return Math.max(1, stageCount - 1);
+}
+
+function computePlacementCost(placement, shape, remoteStages, context) {
+  const {candidateRowsPerStage, rowBytes, decisionPayloadBytes, oneWayDelayMs} = context;
+  if (placement === SCENARIO_B_COORDINATOR_PLACEMENT.COLOCATED_LAGRANGE) {
+    if (shape === 'local-only') return {hops: 0, bytes: 0, delayMs: 0};
+    const hops = remoteStages;
+    return {hops, bytes: remoteStages * 96, delayMs: hops * oneWayDelayMs};
+  }
+  if (placement === SCENARIO_B_COORDINATOR_PLACEMENT.DISTRIBUTED_ISLAND_TIDB_COORDINATORS) {
+    if (shape === 'local-only') return {hops: 0, bytes: 0, delayMs: 0};
+    const hops = remoteStages * 2;
+    const bytes = remoteStages * (candidateRowsPerStage * rowBytes);
+    return {hops, bytes, delayMs: hops * oneWayDelayMs};
+  }
+  if (placement === SCENARIO_B_COORDINATOR_PLACEMENT.CENTRALIZED_TIDB_COORDINATOR) {
+    if (shape === 'local-only') {
+      return {hops: 1, bytes: decisionPayloadBytes, delayMs: oneWayDelayMs};
+    }
+    const hops = remoteStages * 2 + 1;
+    const stageBatchBytes = remoteStages * (candidateRowsPerStage * rowBytes);
+    const bytes = stageBatchBytes + decisionPayloadBytes;
+    return {hops, bytes, delayMs: hops * oneWayDelayMs};
+  }
+  return {hops: 0, bytes: 0, delayMs: 0};
+}
+
+function computeCrossIslandDecisionCost(params, remoteStages, oneWayDelayMs) {
+  if (params.isSingleZone) {
+    return {crossIslandHops: 0, crossIslandBytesTransferred: 0, estimatedNetworkDelayMs: 0};
+  }
+  const cost = computePlacementCost(params.coordinatorPlacement, params.shape, remoteStages, {
+    candidateRowsPerStage: params.candidateRowsPerStage,
+    rowBytes: params.rowBytes,
+    decisionPayloadBytes: params.decisionPayloadBytes,
+    oneWayDelayMs,
+  });
+  return {
+    crossIslandHops: cost.hops,
+    crossIslandBytesTransferred: cost.bytes,
+    estimatedNetworkDelayMs: cost.delayMs,
+  };
+}
+
+export function evaluateScenarioBLatencyGroupDecisionCost(options = {}) {
+  const params = resolveDecisionCostParams(options);
+  const oneWayDelayMs = resolveOneWayDelayMs(params.topology, params.isSingleZone);
+  const remoteStages = resolveRemoteStages(params.shape, params.stageCount);
+  const cost = computeCrossIslandDecisionCost(params, remoteStages, oneWayDelayMs);
 
   return Object.freeze({
-    topologyProfile, coordinatorPlacement, shape,
-    distributedCoordinatorFairnessSatisfied: topology.distributedCoordinatorFairnessSatisfied,
-    crossIslandHops, crossIslandBytesTransferred, estimatedNetworkDelayMs,
-    compactFinalDecisionBytes: decisionPayloadBytes,
+    topologyProfile: params.topologyProfile,
+    coordinatorPlacement: params.coordinatorPlacement,
+    shape: params.shape,
+    distributedCoordinatorFairnessSatisfied:
+      params.topology.distributedCoordinatorFairnessSatisfied,
+    crossIslandHops: cost.crossIslandHops,
+    crossIslandBytesTransferred: cost.crossIslandBytesTransferred,
+    estimatedNetworkDelayMs: cost.estimatedNetworkDelayMs,
+    compactFinalDecisionBytes: params.decisionPayloadBytes,
   });
 }

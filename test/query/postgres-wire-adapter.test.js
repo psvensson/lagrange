@@ -10,7 +10,10 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   PostgresWireAdapter,
   PG_SESSION_STATE,
+  projectPgWireExecutionResult,
 } from '../../src/query/pg/postgres-wire-adapter.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from
+  '../../src/query/query-constants.js';
 import {createTestPostgresWireAdapter} from
   '../helpers/pgwire-auth-handler.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
@@ -29,6 +32,17 @@ function createMockSqlCore() {
     },
   };
 }
+
+test('PostgresWireAdapter - preserves idle rollback for the wire outcome owner', (t) => {
+  const failure = {
+    success: false,
+    errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
+    error: QUERY_ERROR_MSG.NO_TRANSACTION_ROLLBACK,
+  };
+  t.same(projectPgWireExecutionResult(failure), failure,
+    'the wire outcome owner receives the typed failure that produces its warning');
+  t.end();
+});
 
 test('PostgresWireAdapter - throws when sqlCore is missing', (t) => {
   t.throws(

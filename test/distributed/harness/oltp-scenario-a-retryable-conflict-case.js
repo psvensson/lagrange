@@ -9,6 +9,9 @@ import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 } from './oltp-scenario-a-semantic-gate.js';
 
+const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 const ZERO = 0;
 const CASE_ID = 'scenario-a-retryable-conflict-v1';
 const CLAIMED_PROOF_IDS = Object.freeze([
@@ -40,7 +43,7 @@ function buildScenarioARetryableConflictCase() {
 }
 
 function normalizeSqlState(value) {
-  return String(value || '').trim().toUpperCase();
+  return stringToUpperCase(stringTrim(String(value || '')));
 }
 
 function evaluateScenarioARetryableConflictObservation(observation = {}) {

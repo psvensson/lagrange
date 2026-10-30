@@ -33,6 +33,10 @@ import {
   assertTiDbReferenceImagesAvailable,
 } from './run-tidb-reference-lifecycle-live.js';
 
+const stringTrim = Function.call.bind(String.prototype.trim);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+
 const ZERO = 0;
 const ONE = 1;
 const EXPECTED_VM_COUNT = 5;
@@ -54,14 +58,43 @@ const SHARED_DB_RESOURCE_LIMITS = Object.freeze({memory: '2g', cpus: '2.0'});
 const TIKV_RESOURCE_LIMITS = Object.freeze({memory: '3g', cpus: '2.0'});
 const CLIENT_RESOURCE_LIMITS = Object.freeze({memory: '256m', cpus: '0.5'});
 
+const ARG_CONFIG = '--config';
+const ERROR_CONFIG_PATH_REQUIRED = '--config requires a path';
+const ERROR_STORAGE_DATA_DISK_REQUIRED =
+  'TiDB physical proof requires storageDataDisk';
+const ERROR_GCP_BLOCK_REQUIRED = 'TiDB physical proof requires gcp block';
+const ERROR_MUST_PROVISION_HOSTS =
+  'TiDB physical proof must provision fresh controlled hosts';
+const ERROR_EXPECTED_PROVISIONER = 'Expected GCP provisioner';
+const ERROR_TIKV_PLACEMENTS_MISMATCH =
+  'TiKV container placements must match the three storage VMs';
+const ERROR_PHYSICAL_PROOF_FAILURES = 'TiDB physical RF3 proof failures';
+
+const DATA_DISK_TYPE_PD_BALANCED = 'pd-balanced';
+const DATA_DISK_SIZE_GB = 100;
+const DATA_DISK_MOUNT_PATH = '/mnt/lagrange-benchmark-data';
+const DATA_DISK_DEVICE_NAME = 'lagrange-benchmark-data';
+
+const SQL_COLUMNS_DEFINITION = 'id BIGINT PRIMARY KEY, value BIGINT NOT NULL';
+const SQL_CLOSE_PAREN = ')';
+const SQL_STATEMENT_SEPARATOR = '; ';
+const SQL_TRAILING_SEMICOLON = ';';
+
+const STATUS_RUNNING = 'running';
+const NETWORK_HOST = 'host';
+const BENCHMARK_LABEL_PHYSICAL_PROOF = 'tidb-reference-gcp-physical-proof';
+const COMMAND_SLEEP = 'sleep';
+const FILE_ENCODING_UTF8 = 'utf8';
+const NEWLINE = '\n';
+
 function parseArgs(argv) {
   let configPath = DEFAULT_CONFIG;
   for (let index = ZERO; index < argv.length; index += ONE) {
-    if (argv[index] !== '--config') {
+    if (argv[index] !== ARG_CONFIG) {
       throw new Error(`Unsupported argument: ${argv[index]}`);
     }
     index += ONE;
-    if (!argv[index]) throw new Error('--config requires a path');
+    if (!argv[index]) throw new Error(ERROR_CONFIG_PATH_REQUIRED);
     configPath = argv[index];
   }
   return {configPath: resolve(process.cwd(), configPath)};
@@ -69,23 +102,23 @@ function parseArgs(argv) {
 
 function assertStorageDataDisk(config) {
   const policy = config.storageDataDisk;
-  assert.ok(policy, 'TiDB physical proof requires storageDataDisk');
-  assert.equal(policy.type, 'pd-balanced');
-  assert.equal(policy.sizeGb, 100);
-  assert.equal(policy.mountPath, '/mnt/lagrange-benchmark-data');
-  assert.equal(policy.deviceName, 'lagrange-benchmark-data');
+  assert.ok(policy, ERROR_STORAGE_DATA_DISK_REQUIRED);
+  assert.equal(policy.type, DATA_DISK_TYPE_PD_BALANCED);
+  assert.equal(policy.sizeGb, DATA_DISK_SIZE_GB);
+  assert.equal(policy.mountPath, DATA_DISK_MOUNT_PATH);
+  assert.equal(policy.deviceName, DATA_DISK_DEVICE_NAME);
   return policy;
 }
 
 async function loadConfig(configPath) {
-  const config = JSON.parse(await readFile(configPath, 'utf8'));
-  assert.ok(config.gcp, 'TiDB physical proof requires gcp block');
+  const config = JSON.parse(await readFile(configPath, FILE_ENCODING_UTF8));
+  assert.ok(config.gcp, ERROR_GCP_BLOCK_REQUIRED);
   assert.equal(config.gcp.vmCount, EXPECTED_VM_COUNT);
   assert.equal(config.gcp.machineType, EXPECTED_MACHINE_TYPE);
   assert.equal(config.gcp.preemptible, false);
   assert.ok(
     !Array.isArray(config.docker?.hosts) || config.docker.hosts.length === ZERO,
-    'TiDB physical proof must provision fresh controlled hosts',
+    ERROR_MUST_PROVISION_HOSTS,
   );
   assertStorageDataDisk(config);
   return config;
@@ -97,11 +130,11 @@ function setupSql() {
     `CREATE DATABASE ${DATABASE_NAME}`,
     `USE ${DATABASE_NAME}`,
     `CREATE TABLE ${TABLE_NAME} (` +
-      'id BIGINT PRIMARY KEY, value BIGINT NOT NULL' +
-      ')',
+      SQL_COLUMNS_DEFINITION +
+      SQL_CLOSE_PAREN,
     `INSERT INTO ${TABLE_NAME} (id, value) VALUES (1, ${PROBE_VALUE})`,
     `SELECT value FROM ${TABLE_NAME} WHERE id = 1`,
-  ].join('; ') + ';';
+  ].join(SQL_STATEMENT_SEPARATOR) + SQL_TRAILING_SEMICOLON;
 }
 
 function cleanupSql() {
@@ -112,7 +145,7 @@ async function removeContainer(provider, container) {
   if (!provider || !container) return false;
   const inspect = await provider.inspectContainerIfExists(container.containerId);
   if (!inspect) return true;
-  if (inspect.State?.Running === true || inspect.State?.Status === 'running') {
+  if (inspect.State?.Running === true || inspect.State?.Status === STATUS_RUNNING) {
     await provider.stopContainer(container.containerId);
   }
   await provider.removeContainer(container.containerId);
@@ -121,7 +154,7 @@ async function removeContainer(provider, container) {
 
 async function writeEvidence(evidence) {
   await mkdir(path.dirname(OUTPUT_PATH), {recursive: true});
-  await writeFile(OUTPUT_PATH, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
+  await writeFile(OUTPUT_PATH, JSON.stringify(evidence, null, 2) + NEWLINE, FILE_ENCODING_UTF8);
 }
 
 function providerFor(host, tls) {
@@ -129,7 +162,7 @@ function providerFor(host, tls) {
 }
 
 function diskByHostIndex(records) {
-  return new Map(records.map((record) => [record.hostIndex, record]));
+  return new Map(arrayMap(records, (record) => [record.hostIndex, record]));
 }
 
 async function collectTiKvStorageEvidence(cluster, disks) {
@@ -188,7 +221,7 @@ async function run() {
   try {
     const provisioned = await provisionGcpDockerHosts(inputConfig, true);
     provisioner = provisioned.provisioner;
-    assert.ok(provisioner, 'Expected GCP provisioner');
+    assert.ok(provisioner, ERROR_EXPECTED_PROVISIONER);
 
     const hosts = provisioned.runConfig.docker?.hosts || [];
     hostInfo = provisioned.runConfig.docker?.hostInfo || [];
@@ -211,13 +244,13 @@ async function run() {
     });
     const disks = diskByHostIndex(dataDisks);
 
-    const providers = hosts.map((host) =>
+    const providers = arrayMap(hosts, (host) =>
       providerFor(host, provisioned.runConfig.docker.tls));
     const control = {
       provider: providers[CONTROL_INDEX],
       host: hostInfo[CONTROL_INDEX].internalIp,
     };
-    const storage = STORAGE_INDEXES.map((index) => {
+    const storage = arrayMap(STORAGE_INDEXES, (index) => {
       const disk = disks.get(index);
       assert.ok(disk, `Missing data disk for storage host ${index}`);
       return {
@@ -238,23 +271,25 @@ async function run() {
       readinessResourceLimits: CLIENT_RESOURCE_LIMITS,
     });
 
-    physicalPlacements = cluster.containers.tikvStores.map(({containerId}) =>
-      cluster.provider.getPhysicalPlacement(containerId));
+    physicalPlacements = arrayMap(
+      cluster.containers.tikvStores,
+      ({containerId}) => cluster.provider.getPhysicalPlacement(containerId),
+    );
     assert.deepEqual(
-      physicalPlacements.map(({host}) => host),
-      storage.map(({host}) => host),
-      'TiKV container placements must match the three storage VMs',
+      arrayMap(physicalPlacements, ({host}) => host),
+      arrayMap(storage, ({host}) => host),
+      ERROR_TIKV_PLACEMENTS_MISMATCH,
     );
     tikvStorageEvidence = await collectTiKvStorageEvidence(cluster, dataDisks);
 
     loadgenClient = await loadgenProvider.createContainer({
       name: `${runId}-loadgen-client`,
       image: TIDB_REFERENCE_DEFAULTS.mysqlClientImage,
-      network: 'host',
+      network: NETWORK_HOST,
       hostNetwork: true,
       resourceLimits: CLIENT_RESOURCE_LIMITS,
-      labels: {'lagrange.benchmark': 'tidb-reference-gcp-physical-proof'},
-      entrypoint: ['sleep'],
+      labels: {'lagrange.benchmark': BENCHMARK_LABEL_PHYSICAL_PROOF},
+      entrypoint: [COMMAND_SLEEP],
       command: [CLIENT_KEEPALIVE_SECONDS],
     });
 
@@ -267,10 +302,10 @@ async function run() {
       ZERO,
       `TiDB physical probe setup failed: ${setup.stderr || setup.stdout}`,
     );
-    queryValue = String(setup.stdout || '').trim();
+    queryValue = stringTrim(String(setup.stdout || ''));
     assert.equal(queryValue, PROBE_VALUE);
 
-    const expectedAddresses = storage.map(({host}) =>
+    const expectedAddresses = arrayMap(storage, ({host}) =>
       `${host}:${TIDB_REFERENCE_PHYSICAL_DEFAULTS.tikvPort}`);
     placementProof = await waitForPhysicalTablePlacement({
       provider: loadgenProvider,
@@ -329,7 +364,10 @@ async function run() {
     }
   }
   const costEstimate = provisioner?.estimateCost() || null;
-  const allErrors = [primaryError, ...cleanupErrors, teardownError].filter(Boolean);
+  const allErrors = arrayFilter(
+    [primaryError, ...cleanupErrors, teardownError],
+    Boolean,
+  );
 
   const evidence = {
     schemaVersion: 2,
@@ -352,7 +390,7 @@ async function run() {
       vmCount: inputConfig.gcp.vmCount,
       roles: [
         {hostIndex: CONTROL_INDEX, role: 'tidb-pd-control'},
-        ...STORAGE_INDEXES.map((hostIndex, index) => ({
+        ...arrayMap(STORAGE_INDEXES, (hostIndex, index) => ({
           hostIndex,
           role: `tikv-storage-${index + ONE}`,
         })),
@@ -368,7 +406,7 @@ async function run() {
     topology: {
       physicalPorts: TIDB_REFERENCE_PHYSICAL_DEFAULTS,
       controlHost: hostInfo[CONTROL_INDEX]?.internalIp || null,
-      storageHosts: STORAGE_INDEXES.map((index) =>
+      storageHosts: arrayMap(STORAGE_INDEXES, (index) =>
         hostInfo[index]?.internalIp || null),
       loadGeneratorHost: hostInfo[LOADGEN_INDEX]?.internalIp || null,
       distinctSystemHosts: 4,
@@ -399,13 +437,13 @@ async function run() {
       infrastructureDestroyed: Boolean(provisioner) && teardownError === null,
     },
     failure: allErrors.length === ZERO ? null : {
-      messages: allErrors.map((error) => String(error?.message || error)),
+      messages: arrayMap(allErrors, (error) => String(error?.message || error)),
     },
   };
   await writeEvidence(evidence);
 
   if (allErrors.length > ONE) {
-    throw new AggregateError(allErrors, 'TiDB physical RF3 proof failures');
+    throw new AggregateError(allErrors, ERROR_PHYSICAL_PROOF_FAILURES);
   }
   if (allErrors.length === ONE) throw allErrors[ZERO];
 
@@ -421,10 +459,10 @@ async function run() {
     zone: inputConfig.gcp.zone,
     vmCount: inputConfig.gcp.vmCount,
     costEstimate,
-  }) + '\n');
+  }) + NEWLINE);
 }
 
 run().catch((error) => {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
+  process.stderr.write(`${error.stack || error.message || error}${NEWLINE}`);
   process.exitCode = ONE;
 });

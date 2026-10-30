@@ -6,32 +6,51 @@ import {
   evaluateScenarioAPaymentObservation,
 } from '../../test/distributed/harness/oltp-scenario-a-payment-case.js';
 
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+
+const EXPECTED_CASE_ID = 'scenario-a-payment-v1';
+const EXPECTED_OPERATION_KIND = 'payment';
+const EXPECTED_PROOF_IDS_COUNT = 5;
+const PROOF_ID_ISOLATION_EXACTLY_ONCE =
+  'isolation:successfulEffectsExactlyOnce';
+const PROOF_ID_DUPLICATE_EFFECT = 'forbidden:duplicate_success_effect';
+const PROOF_ID_PREFIX = 'transaction:payment:';
+const FAILURE_WAREHOUSE_YTD = 'warehouse_ytd';
+const FAILURE_HISTORY_ROW = 'history_row';
+const FAILURE_CUSTOMER_PAYMENT_COUNTERS = 'customer_payment_counters';
+const PASS_MESSAGE = 'oltp-scenario-a-payment-case-guard: PASS';
+
 const definition = buildScenarioAPaymentCase();
 const repeated = buildScenarioAPaymentCase();
 const expected = definition.identity.expected;
 const passingObservation = {...expected};
 
-assert.equal(definition.identity.caseId, 'scenario-a-payment-v1');
-assert.equal(definition.identity.operation.kind, 'payment');
+assert.equal(definition.identity.caseId, EXPECTED_CASE_ID);
+assert.equal(definition.identity.operation.kind, EXPECTED_OPERATION_KIND);
 assert.equal(definition.caseSha256, repeated.caseSha256);
 assert.match(definition.caseSha256, /^[0-9a-f]{64}$/u);
 assert.match(definition.identity.datasetSha256, /^[0-9a-f]{64}$/u);
-assert.equal(OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.length, 5);
+assert.equal(OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.length, EXPECTED_PROOF_IDS_COUNT);
 assert.equal(
-  OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.includes(
-    'isolation:successfulEffectsExactlyOnce',
+  arrayIncludes(
+    OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
+    PROOF_ID_ISOLATION_EXACTLY_ONCE,
   ),
   false,
 );
 assert.equal(
-  OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.includes(
-    'forbidden:duplicate_success_effect',
+  arrayIncludes(
+    OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
+    PROOF_ID_DUPLICATE_EFFECT,
   ),
   false,
 );
 assert.equal(
-  OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.every(
-    (proofId) => proofId.startsWith('transaction:payment:'),
+  arrayEvery(
+    OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
+    (proofId) => stringStartsWith(proofId, PROOF_ID_PREFIX),
   ),
   true,
 );
@@ -47,7 +66,7 @@ const duplicateWarehouseEffect = evaluateScenarioAPaymentObservation({
     expected.warehouseYtdCents + definition.identity.operation.amountCents,
 });
 assert.equal(duplicateWarehouseEffect.passed, false);
-assert.deepEqual(duplicateWarehouseEffect.failures, ['warehouse_ytd']);
+assert.deepEqual(duplicateWarehouseEffect.failures, [FAILURE_WAREHOUSE_YTD]);
 assert.deepEqual(duplicateWarehouseEffect.proofIds, []);
 
 const missingHistory = evaluateScenarioAPaymentObservation({
@@ -55,7 +74,7 @@ const missingHistory = evaluateScenarioAPaymentObservation({
   historyCount: 0,
 });
 assert.equal(missingHistory.passed, false);
-assert.deepEqual(missingHistory.failures, ['history_row']);
+assert.deepEqual(missingHistory.failures, [FAILURE_HISTORY_ROW]);
 assert.deepEqual(missingHistory.proofIds, []);
 
 const wrongCounters = evaluateScenarioAPaymentObservation({
@@ -63,7 +82,7 @@ const wrongCounters = evaluateScenarioAPaymentObservation({
   customerPaymentCount: expected.customerPaymentCount + 1,
 });
 assert.equal(wrongCounters.passed, false);
-assert.deepEqual(wrongCounters.failures, ['customer_payment_counters']);
+assert.deepEqual(wrongCounters.failures, [FAILURE_CUSTOMER_PAYMENT_COUNTERS]);
 assert.deepEqual(wrongCounters.proofIds, []);
 
 assert.throws(
@@ -71,4 +90,4 @@ assert.throws(
   /payment paidCents must be an integer/u,
 );
 
-console.log('oltp-scenario-a-payment-case-guard: PASS');
+console.log(PASS_MESSAGE);

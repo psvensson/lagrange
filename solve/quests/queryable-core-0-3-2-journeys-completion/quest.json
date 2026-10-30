@@ -1,0 +1,23 @@
+{
+  "schema": "solve-quest/2",
+  "id": "queryable-core-0-3-2-journeys-completion",
+  "epic": "release-0-3-queryable-core",
+  "statement": "Complete Queryable Core 0.3.2 user journeys and bounded J1/J7/PG-wire repairs: seal C1 synchronous non-unique TX1 global index maintenance (Mode A, deferring global uniqueness to 1.0); repair Dockerfile runtime package-lock provenance, Scenario A public PG listener scaling via owner API, TiDB retryable-conflict probe guard, and PG-wire idle ROLLBACK WARNING 25P01 preservation; enforce fail-closed partition boundary/key evaluation (J2), fail-closed local/compound index DDL rollback and prefix planning (J3), durable participant locking-read reservations and projection-independent PK extraction (J4), end-to-end synchronous non-unique global index lifecycle/backfill/TX1 maintenance/routing (J5), and push-backed live-query CDC delivery, canonical grouping, and serialized refresh (J6).",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/queryable-core-0-3-2-journeys-completion/evidence/receipt.json",
+      "requiredReceipts": [
+        "c1-global-index-maintenance-mode-seal",
+        "j1-j7-dockerfile-and-scenario-a-public-pg-context",
+        "j2-sql-key-and-read-semantics-journey",
+        "j3-local-and-compound-index-journey",
+        "j4-locking-read-durable-reservation-journey",
+        "j5-synchronous-nonunique-global-index-journey",
+        "j6-live-query-results-journey",
+        "pgwire-idle-rollback-notice-preservation"
+      ]
+    }
+  },
+  "sealedAt": "6089dcf03f886219e7e02e886f557109a98470ee"
+}

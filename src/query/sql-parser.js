@@ -208,12 +208,142 @@ function externalSchemaIdentifier(value) {
 
 const INDEX_ACCESS_METHOD_BTREE = 'btree';
 const ERR_CREATE_INDEX_CONCURRENTLY = 'CREATE INDEX CONCURRENTLY is not supported';
+const ERR_UNIQUE_GLOBAL_INDEX_DEFERRED =
+  'CREATE UNIQUE GLOBAL INDEX is deferred to 1.0 and is not supported in 0.3';
+const VALID_COLUMN_IDENTIFIER_PATTERN =
+  /^(?:[a-zA-Z_][a-zA-Z0-9_]*|"[^"]+"|`[^`]+`)$/;
+const CREATE_GLOBAL_INDEX_HEADER_PATTERN =
+  /^CREATE\s+GLOBAL\s+INDEX\s+(IF\s+NOT\s+EXISTS\s+)?([A-Za-z0-9_".`]+)\s*(?:USING\s+[A-Za-z0-9_]+\s*)?ON\s+([A-Za-z0-9_".`]+)(?:\s+USING\s+[A-Za-z0-9_]+)?$/iu;
+
+const SQL_COMMENT_PREFIX = Object.freeze({
+  LINE: '--',
+  BLOCK: '/*',
+});
+
+const GLOBAL_INDEX_PARSE_ERROR = Object.freeze({
+  EMPTY_COLUMN_LIST: 'Index column list cannot be empty',
+  EXPRESSION_INDEX_UNSUPPORTED: 'Expression indexes are not supported',
+  INVALID_SYNTAX: 'Invalid CREATE GLOBAL INDEX syntax',
+});
 
 function createUnsupportedIndexError(message) {
   const error = new Error(message);
   error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
   error.sqlState = PG_ERROR_CODE.FEATURE_NOT_SUPPORTED;
   return error;
+}
+
+/**
+ * Strip leading SQL comments from a statement.
+ * @param {string} sql - Input SQL statement.
+ * @return {string} SQL without leading comments.
+ */
+function stripLeadingSqlComments(sql) {
+  if (typeof sql !== 'string') return '';
+  let str = sql.trim();
+  while (str.startsWith(SQL_COMMENT_PREFIX.LINE) || str.startsWith(SQL_COMMENT_PREFIX.BLOCK)) {
+    if (str.startsWith(SQL_COMMENT_PREFIX.LINE)) {
+      const idx = str.indexOf('\n');
+      if (idx === -1) return '';
+      str = str.slice(idx + 1).trim();
+    } else {
+      const idx = str.indexOf('*/');
+      if (idx === -1) return '';
+      str = str.slice(idx + 2).trim();
+    }
+  }
+  return str;
+}
+
+/**
+ * Parse and validate column list for CREATE GLOBAL INDEX.
+ * @param {string} columnString - Comma-separated columns.
+ * @return {string[]} Parsed column names.
+ */
+function parseGlobalIndexColumns(columnString) {
+  const trimmed = columnString ? columnString.trim() : '';
+  if (!trimmed) {
+    throw createUnsupportedIndexError(GLOBAL_INDEX_PARSE_ERROR.EMPTY_COLUMN_LIST);
+  }
+  const parts = trimmed.split(',').map((c) => c.trim());
+  if (parts.length === 0 || parts.some((p) => !p)) {
+    throw createUnsupportedIndexError(GLOBAL_INDEX_PARSE_ERROR.EMPTY_COLUMN_LIST);
+  }
+  const columns = [];
+  for (const part of parts) {
+    if (!VALID_COLUMN_IDENTIFIER_PATTERN.test(part)) {
+      throw createUnsupportedIndexError(GLOBAL_INDEX_PARSE_ERROR.EXPRESSION_INDEX_UNSUPPORTED);
+    }
+    columns.push(part.replace(/^["`]|["`]$/g, ''));
+  }
+  return columns;
+}
+
+/**
+ * Validate supported clauses and features in CREATE GLOBAL INDEX.
+ * @param {string} cleanSql - Comment-stripped SQL statement.
+ */
+function assertGlobalIndexFeaturesSupported(cleanSql) {
+  if (/\bCONCURRENTLY\b/iu.test(cleanSql)) {
+    throw createUnsupportedIndexError(ERR_CREATE_INDEX_CONCURRENTLY);
+  }
+  if (/^\s*CREATE\s+(?:UNIQUE\s+|CONCURRENTLY\s+)*UNIQUE\b/iu.test(cleanSql) ||
+      /\bUNIQUE\s+GLOBAL\s+INDEX\b/iu.test(cleanSql)) {
+    throw createUnsupportedIndexError(ERR_UNIQUE_GLOBAL_INDEX_DEFERRED);
+  }
+  const usingMatch = /\bUSING\s+([a-zA-Z0-9_]+)\b/iu.exec(cleanSql);
+  if (usingMatch && usingMatch[1].toLowerCase() !== INDEX_ACCESS_METHOD_BTREE) {
+    throw createUnsupportedIndexError(`Index access method '${usingMatch[1]}' is not supported`);
+  }
+}
+
+/**
+ * Parse CREATE GLOBAL INDEX AST from SQL statement.
+ * @param {string} sql - Input SQL statement.
+ * @return {Object|null} AST node or null.
+ */
+function parseCreateGlobalIndexAst(sql) {
+  const cleanSql = stripLeadingSqlComments(sql);
+  if (!/^\s*CREATE\s+(?:UNIQUE\s+|CONCURRENTLY\s+)*GLOBAL\s+INDEX\b/iu.test(cleanSql)) {
+    return null;
+  }
+  assertGlobalIndexFeaturesSupported(cleanSql);
+
+  const firstParen = cleanSql.indexOf('(');
+  const lastParen = cleanSql.lastIndexOf(')');
+  if (firstParen === -1 || lastParen === -1 || lastParen <= firstParen) {
+    throw createUnsupportedIndexError(GLOBAL_INDEX_PARSE_ERROR.INVALID_SYNTAX);
+  }
+
+  const header = cleanSql.slice(0, firstParen).trim();
+  const headerMatch = header.match(CREATE_GLOBAL_INDEX_HEADER_PATTERN);
+  if (!headerMatch) {
+    throw createUnsupportedIndexError(GLOBAL_INDEX_PARSE_ERROR.INVALID_SYNTAX);
+  }
+
+  const trailing = cleanSql.slice(lastParen + 1).trim();
+  if (trailing && trailing.replace(/USING\s+[a-zA-Z0-9_]+/iu, '').replace(/;/g, '').trim().length > 0) {
+    throw createUnsupportedIndexError(GLOBAL_INDEX_PARSE_ERROR.INVALID_SYNTAX);
+  }
+
+  const columns = parseGlobalIndexColumns(cleanSql.slice(firstParen + 1, lastParen));
+  const ifNotExists = Boolean(headerMatch[1]);
+  const indexName = headerMatch[2].replace(/["`]/g, '');
+  const tableName = headerMatch[3].replace(/["`]/g, '');
+
+  return {
+    type: AST_TYPE.CREATE_INDEX,
+    indexName,
+    tableName,
+    columns,
+    columnNames: columns,
+    unique: false,
+    isGlobal: true,
+    global: true,
+    ifNotExists,
+    indexType: INDEX_ACCESS_METHOD_BTREE,
+    rawSql: sql,
+  };
 }
 
 function assertIndexCreationSupported(sql) {
@@ -251,6 +381,26 @@ function parseDropIndexAst(sql) {
   };
 }
 
+/**
+ * Handle parse error and throw appropriate typed error.
+ * @param {Error} error - Caught error.
+ * @param {string} sql - Original SQL.
+ * @param {Object} logger - Subsystem logger.
+ */
+function handleParseError(error, sql, logger) {
+  const errorMsg = PARSER_ERROR_MSG.SQL_PARSE_ERROR_PREFIX + error.message;
+  logger.error(errorMsg, {sql});
+  if (error.code === QUERY_ERROR_CODE.MULTIPLE_STATEMENTS_UNSUPPORTED ||
+      error.code === QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE) {
+    throw error;
+  }
+  const parseError = new Error(errorMsg);
+  if (error.code === QUERY_ERROR_CODE.EMPTY_STATEMENT) {
+    parseError.code = error.code;
+  }
+  throw parseError;
+}
+
 class SQLParser {
   constructor(sql, options = {}) {
     this.sql = sql;
@@ -283,6 +433,8 @@ class SQLParser {
     if (transactionControl) return transactionControl;
 
     assertIndexCreationSupported(this.sql);
+    const createGlobalIndexAst = parseCreateGlobalIndexAst(this.sql);
+    if (createGlobalIndexAst) return createGlobalIndexAst;
     const dropIndexAst = parseDropIndexAst(this.sql);
     if (dropIndexAst) return dropIndexAst;
 
@@ -311,18 +463,7 @@ class SQLParser {
       validateSelectAstLocking(ast, hasLocking);
       return ast;
     } catch (error) {
-      const errorMsg =
-        PARSER_ERROR_MSG.SQL_PARSE_ERROR_PREFIX + error.message;
-      this.logger.error(errorMsg, {sql: this.sql});
-      if (error.code === QUERY_ERROR_CODE.MULTIPLE_STATEMENTS_UNSUPPORTED ||
-          error.code === QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE) {
-        throw error;
-      }
-      const parseError = new Error(errorMsg);
-      if (error.code === QUERY_ERROR_CODE.EMPTY_STATEMENT) {
-        parseError.code = error.code;
-      }
-      throw parseError;
+      handleParseError(error, this.sql, this.logger);
     }
   }
 

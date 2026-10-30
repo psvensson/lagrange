@@ -7,6 +7,11 @@ import {
   buildLagrangeScenarioAProofPlan,
 } from './oltp-scenario-a-lagrange-proof-plan.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 const ONE = 1;
 const ADMISSION_TYPE = 'lagrange-scenario-a-live-proof';
 const ALLOWED_OPTION_KEYS = Object.freeze([
@@ -30,8 +35,9 @@ function requireOptions(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Lagrange Scenario A live admission requires options');
   }
-  const unknown = Object.keys(value).filter(
-    (key) => !ALLOWED_OPTION_KEYS.includes(key),
+  const unknown = arrayFilter(
+    Object.keys(value),
+    (key) => !arrayIncludes(ALLOWED_OPTION_KEYS, key),
   );
   if (unknown.length > 0) {
     throw new Error(
@@ -42,7 +48,7 @@ function requireOptions(value) {
 }
 
 function requireText(value, label) {
-  const text = String(value || '').trim();
+  const text = stringTrim(String(value || ''));
   if (!text) throw new Error(`${label} is required`);
   return text;
 }
@@ -64,7 +70,7 @@ function buildLagrangeScenarioALiveAdmission(value) {
       'Lagrange Scenario A live proof requires passed formation certification',
     );
   }
-  const proofCase = plan.cases.find(({id}) => id === proofCaseId);
+  const proofCase = arrayFind(plan.cases, ({id}) => id === proofCaseId);
   if (!proofCase) {
     throw new Error(`unknown Lagrange Scenario A proof case ${proofCaseId}`);
   }

@@ -22,6 +22,7 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const optStr = (v, d) => (typeof v === 'string' && stringTrim(v)) ? stringTrim(v) : d;
 const posFinite = (v) => numberIsFinite(v) && v > 0;
 const validLat = (l) => Boolean(l && posFinite(l.p50) && posFinite(l.p95) && posFinite(l.p99));
+const ratio = (a, b) => Number(numberToFixed(a / b, 6));
 
 function normalizeOptionalSha256(value, name) {
   if (value === null || value === undefined || value === '') return null;
@@ -40,8 +41,8 @@ function normalizeSystem(sys, name) {
   return Object.freeze({present: true, version, commitSha});
 }
 
-function buildComparisonCombinationKey(input = {}) {
-  const fw = input.framework || input;
+function normalizeCombinationFramework(rawFw) {
+  const fw = rawFw || {};
   const frameworkVersion = optStr(fw.frameworkVersion, '');
   if (!frameworkVersion) throw new Error('frameworkVersion must be a non-empty string');
   const frameworkCommitSha = stringToLowerCase(optStr(fw.frameworkCommitSha, ''));
@@ -52,56 +53,79 @@ function buildComparisonCombinationKey(input = {}) {
   const profileId = optStr(fw.profileId, '');
   if (!scenarioId || !profileId) throw new Error('scenarioId and profileId are required');
 
-  const normSha = (k) => normalizeOptionalSha256(fw[k], k);
-  const profileSha256 = normSha('profileSha256');
-  const datasetSha256 = normSha('datasetSha256');
-  const workloadPlanSha256 = normSha('workloadPlanSha256');
-  const measurementPlanSha256 = normSha('measurementPlanSha256');
+  const profileSha256 = normalizeOptionalSha256(fw.profileSha256, 'profileSha256');
+  const datasetSha256 = normalizeOptionalSha256(fw.datasetSha256, 'datasetSha256');
+  const workloadPlanSha256 = normalizeOptionalSha256(fw.workloadPlanSha256, 'workloadPlanSha256');
+  const measurementPlanSha256 = normalizeOptionalSha256(fw.measurementPlanSha256, 'measurementPlanSha256');
   const retryPolicyId = optStr(fw.retryPolicyId, 'none');
   const openLoopProfileId = optStr(fw.openLoopProfileId, 'closed-loop-v1');
   const comparisonView = optStr(fw.comparisonView, 'system-default');
 
-  const lagrange = normalizeSystem(input.systems?.lagrange, 'lagrange');
-  const tidbTikv = normalizeSystem(input.systems?.tidbTikv, 'tidbTikv');
+  return Object.freeze({
+    frameworkVersion, frameworkCommitSha, scenarioId, profileId, profileSha256,
+    datasetSha256, workloadPlanSha256, measurementPlanSha256, retryPolicyId,
+    openLoopProfileId, comparisonView,
+  });
+}
+
+function normalizeCombinationSystems(systems) {
+  const lagrange = normalizeSystem(systems?.lagrange, 'lagrange');
+  const tidbTikv = normalizeSystem(systems?.tidbTikv, 'tidbTikv');
   if (!lagrange.present && !tidbTikv.present) {
     throw new Error('At least one of systems.lagrange or systems.tidbTikv must be present');
   }
+  return Object.freeze({lagrange, tidbTikv});
+}
 
-  const sysTag = (s) => (s.present ? `${s.version}@${s.commitSha}` : '-@-');
-  const pSha = profileSha256 || '-';
-  const wSha = workloadPlanSha256 || '-';
-  const mSha = measurementPlanSha256 || '-';
-  const combinationKey = `fw=${frameworkVersion}@${frameworkCommitSha}|scenario=${scenarioId}|` +
-    `profile=${profileId}:${pSha}|workload=${wSha}|measure=${mSha}|view=${comparisonView}|` +
-    `lagrange=${sysTag(lagrange)}|tidb=${sysTag(tidbTikv)}`;
+function formatSystemTag(s) {
+  return s.present ? `${s.version}@${s.commitSha}` : '-@-';
+}
 
+function formatCombinationKey(fw, systems) {
+  const pSha = fw.profileSha256 || '-';
+  const wSha = fw.workloadPlanSha256 || '-';
+  const mSha = fw.measurementPlanSha256 || '-';
+  return `fw=${fw.frameworkVersion}@${fw.frameworkCommitSha}|scenario=${fw.scenarioId}|` +
+    `profile=${fw.profileId}:${pSha}|workload=${wSha}|measure=${mSha}|view=${fw.comparisonView}|` +
+    `lagrange=${formatSystemTag(systems.lagrange)}|tidb=${formatSystemTag(systems.tidbTikv)}`;
+}
+
+function buildComparisonCombinationKey(input = {}) {
+  const framework = normalizeCombinationFramework(input.framework || input);
+  const systems = normalizeCombinationSystems(input.systems);
+  const combinationKey = formatCombinationKey(framework, systems);
   const combinationSha256 = createHash('sha256').update(combinationKey).digest('hex');
   return Object.freeze({
     combinationKey, combinationSha256,
-    framework: Object.freeze({
-      frameworkVersion, frameworkCommitSha, scenarioId, profileId, profileSha256,
-      datasetSha256, workloadPlanSha256, measurementPlanSha256, retryPolicyId,
-      openLoopProfileId, comparisonView,
-    }),
-    systems: Object.freeze({lagrange, tidbTikv}),
+    framework,
+    systems,
+  });
+}
+
+function normalizeLatencyMetrics(l) {
+  if (!l || typeof l !== 'object') return null;
+  return Object.freeze({
+    p50: typeof l.p50 === 'number' ? l.p50 : null,
+    p95: typeof l.p95 === 'number' ? l.p95 : null,
+    p99: typeof l.p99 === 'number' ? l.p99 : null,
+  });
+}
+
+function normalizeSemanticProofMetrics(p) {
+  if (!p || typeof p !== 'object') return null;
+  return Object.freeze({
+    passedCount: typeof p.passedCount === 'number' ? p.passedCount : 0,
+    ...p,
   });
 }
 
 function normalizeSystemMetrics(m) {
   if (!m || typeof m !== 'object') return null;
   const opsPerSec = typeof m.opsPerSec === 'number' ? m.opsPerSec : null;
-  const l = m.latencyMs;
-  const latencyMs = (l && typeof l === 'object') ? Object.freeze({
-    p50: typeof l.p50 === 'number' ? l.p50 : null,
-    p95: typeof l.p95 === 'number' ? l.p95 : null,
-    p99: typeof l.p99 === 'number' ? l.p99 : null,
-  }) : null;
+  const latencyMs = normalizeLatencyMetrics(m.latencyMs);
   const transactions = (m.transactions && typeof m.transactions === 'object') ?
     Object.freeze({...m.transactions}) : null;
-  const p = m.semanticProofs;
-  const semanticProofs = (p && typeof p === 'object') ? Object.freeze({
-    passedCount: typeof p.passedCount === 'number' ? p.passedCount : 0, ...p,
-  }) : null;
+  const semanticProofs = normalizeSemanticProofMetrics(m.semanticProofs);
   const base = {opsPerSec, latencyMs, transactions, semanticProofs};
   if (m.scenarioBScorecard && typeof m.scenarioBScorecard === 'object') {
     return Object.freeze({
@@ -112,6 +136,70 @@ function normalizeSystemMetrics(m) {
   return Object.freeze(base);
 }
 
+function normalizeOptionalNonEmptyString(value) {
+  return (typeof value === 'string' && stringTrim(value)) || null;
+}
+
+function normalizeEvidenceSource(rawSrc) {
+  const src = rawSrc || {};
+  return Object.freeze({
+    kind: optStr(src.kind, 'unspecified'),
+    runId: normalizeOptionalNonEmptyString(src.runId),
+    issueNumber: Number.isInteger(src.issueNumber) ? src.issueNumber : null,
+    url: normalizeOptionalNonEmptyString(src.url),
+    artifactSha256: normalizeOptionalSha256(src.artifactSha256, 'artifactSha256'),
+  });
+}
+
+function computeThroughputComparison(lagrange, tidbTikv) {
+  const hasOps = typeof lagrange?.opsPerSec === 'number' && lagrange.opsPerSec > 0 &&
+    typeof tidbTikv?.opsPerSec === 'number' && tidbTikv.opsPerSec > 0;
+  if (!hasOps) {
+    return {
+      throughputRatioLagrangeToTiDb: null,
+      throughputLagFactorTiDbOverLagrange: null,
+    };
+  }
+  return {
+    throughputRatioLagrangeToTiDb: ratio(lagrange.opsPerSec, tidbTikv.opsPerSec),
+    throughputLagFactorTiDbOverLagrange: ratio(tidbTikv.opsPerSec, lagrange.opsPerSec),
+  };
+}
+
+function computeLatencyComparison(lagrange, tidbTikv) {
+  const lLat = lagrange?.latencyMs;
+  const tLat = tidbTikv?.latencyMs;
+  if (!validLat(lLat) || !validLat(tLat)) {
+    return null;
+  }
+  return Object.freeze({
+    p50: ratio(lLat.p50, tLat.p50),
+    p95: ratio(lLat.p95, tLat.p95),
+    p99: ratio(lLat.p99, tLat.p99),
+  });
+}
+
+function computeSemanticProofDelta(lagrange, tidbTikv) {
+  const hasProofs = typeof lagrange?.semanticProofs?.passedCount === 'number' &&
+    typeof tidbTikv?.semanticProofs?.passedCount === 'number';
+  return hasProofs ?
+    (lagrange.semanticProofs.passedCount - tidbTikv.semanticProofs.passedCount) : null;
+}
+
+function computeComparisonSummary(lagrange, tidbTikv) {
+  const paired = Boolean(lagrange && tidbTikv);
+  const throughput = computeThroughputComparison(lagrange, tidbTikv);
+  const latencyRatioLagrangeOverTiDb = computeLatencyComparison(lagrange, tidbTikv);
+  const semanticProofDeltaLagrangeMinusTiDb = computeSemanticProofDelta(lagrange, tidbTikv);
+  return Object.freeze({
+    paired,
+    throughputRatioLagrangeToTiDb: throughput.throughputRatioLagrangeToTiDb,
+    throughputLagFactorTiDbOverLagrange: throughput.throughputLagFactorTiDbOverLagrange,
+    latencyRatioLagrangeOverTiDb,
+    semanticProofDeltaLagrangeMinusTiDb,
+  });
+}
+
 function createComparisonHistoryRecord(input = {}) {
   const combination = buildComparisonCombinationKey(input);
   const recordedAt = optStr(input.recordedAt, '');
@@ -119,49 +207,22 @@ function createComparisonHistoryRecord(input = {}) {
     throw new Error('recordedAt must be a valid non-empty ISO timestamp string');
   }
 
-  const src = input.evidenceSource || {};
-  const evidenceSource = Object.freeze({
-    kind: optStr(src.kind, 'unspecified'),
-    runId: (typeof src.runId === 'string' && stringTrim(src.runId)) || null,
-    issueNumber: Number.isInteger(src.issueNumber) ? src.issueNumber : null,
-    url: (typeof src.url === 'string' && stringTrim(src.url)) || null,
-    artifactSha256: normalizeOptionalSha256(src.artifactSha256, 'artifactSha256'),
-  });
-
+  const evidenceSource = normalizeEvidenceSource(input.evidenceSource);
   const lagrange = normalizeSystemMetrics(input.metrics?.lagrange);
   const tidbTikv = normalizeSystemMetrics(input.metrics?.tidbTikv);
   const metrics = Object.freeze({lagrange, tidbTikv});
-  const paired = Boolean(lagrange && tidbTikv);
-  const ratio = (a, b) => Number(numberToFixed(a / b, 6));
-  const hasOps = typeof lagrange?.opsPerSec === 'number' && lagrange.opsPerSec > 0 &&
-    typeof tidbTikv?.opsPerSec === 'number' && tidbTikv.opsPerSec > 0;
-  const throughputRatioLagrangeToTiDb = hasOps ?
-    ratio(lagrange.opsPerSec, tidbTikv.opsPerSec) : null;
-  const throughputLagFactorTiDbOverLagrange = hasOps ?
-    ratio(tidbTikv.opsPerSec, lagrange.opsPerSec) : null;
-
-  const lLat = lagrange?.latencyMs;
-  const tLat = tidbTikv?.latencyMs;
-  const hasLatency = validLat(lLat) && validLat(tLat);
-  const latencyRatioLagrangeOverTiDb = hasLatency ? Object.freeze({
-    p50: ratio(lLat.p50, tLat.p50), p95: ratio(lLat.p95, tLat.p95), p99: ratio(lLat.p99, tLat.p99),
-  }) : null;
-
-  const hasProofs = typeof lagrange?.semanticProofs?.passedCount === 'number' &&
-    typeof tidbTikv?.semanticProofs?.passedCount === 'number';
-  const semanticProofDeltaLagrangeMinusTiDb = hasProofs ?
-    (lagrange.semanticProofs.passedCount - tidbTikv.semanticProofs.passedCount) : null;
+  const comparison = computeComparisonSummary(lagrange, tidbTikv);
 
   const payload = {
     schemaVersion: OLTP_COMPARISON_HISTORY_SCHEMA_VERSION,
     combinationKey: combination.combinationKey,
     combinationSha256: combination.combinationSha256,
-    framework: combination.framework, systems: combination.systems,
-    recordedAt, evidenceSource, metrics,
-    comparison: Object.freeze({
-      paired, throughputRatioLagrangeToTiDb, throughputLagFactorTiDbOverLagrange,
-      latencyRatioLagrangeOverTiDb, semanticProofDeltaLagrangeMinusTiDb,
-    }),
+    framework: combination.framework,
+    systems: combination.systems,
+    recordedAt,
+    evidenceSource,
+    metrics,
+    comparison,
   };
   const recordSha256 = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
   return Object.freeze({...payload, recordSha256});
@@ -221,6 +282,85 @@ function calculateDelta(current, baseline) {
     Number(numberToFixed(current - baseline, 6)) : null;
 }
 
+function getLagrangeOps(record) {
+  return record?.metrics?.lagrange?.opsPerSec;
+}
+
+function getTiDbOps(record) {
+  return record?.metrics?.tidbTikv?.opsPerSec;
+}
+
+function getLagrangePassedProofs(record) {
+  return record?.metrics?.lagrange?.semanticProofs?.passedCount;
+}
+
+function getTiDbPassedProofs(record) {
+  return record?.metrics?.tidbTikv?.semanticProofs?.passedCount;
+}
+
+function findScenarioBaselines(sorted, upToIndex, scenarioId, currentRecord) {
+  let prev = null;
+  let first = null;
+  for (let j = 0; j < upToIndex; j += 1) {
+    if (sorted[j].framework.scenarioId === scenarioId) {
+      first = first || sorted[j];
+      prev = sorted[j];
+    }
+  }
+  return {first: first || currentRecord, prev};
+}
+
+function calculateOpsDeltas(record, prev, first) {
+  const lagrangeOps = getLagrangeOps(record);
+  const tidbOps = getTiDbOps(record);
+  return {
+    lagrangeOpsPerSecDeltaFromPrev: calculateDelta(lagrangeOps, getLagrangeOps(prev)),
+    lagrangeOpsPerSecDeltaFromFirst: calculateDelta(lagrangeOps, getLagrangeOps(first)),
+    tidbOpsPerSecDeltaFromPrev: calculateDelta(tidbOps, getTiDbOps(prev)),
+    tidbOpsPerSecDeltaFromFirst: calculateDelta(tidbOps, getTiDbOps(first)),
+  };
+}
+
+function calculateRatioDeltas(record, prev) {
+  const cmp = record?.comparison;
+  const prevC = prev?.comparison;
+  return {
+    throughputRatioDeltaFromPrev:
+      calculateDelta(cmp?.throughputRatioLagrangeToTiDb, prevC?.throughputRatioLagrangeToTiDb),
+    throughputLagFactorDeltaFromPrev: calculateDelta(
+      cmp?.throughputLagFactorTiDbOverLagrange, prevC?.throughputLagFactorTiDbOverLagrange,
+    ),
+  };
+}
+
+function calculateProofDeltas(record, prev) {
+  return {
+    tidbSemanticProofsDeltaFromPrev: calculateDelta(
+      getTiDbPassedProofs(record),
+      getTiDbPassedProofs(prev),
+    ),
+    lagrangeSemanticProofsDeltaFromPrev: calculateDelta(
+      getLagrangePassedProofs(record),
+      getLagrangePassedProofs(prev),
+    ),
+  };
+}
+
+function calculateRecordDeltas(record, prev, first) {
+  return Object.freeze({
+    ...calculateOpsDeltas(record, prev, first),
+    ...calculateRatioDeltas(record, prev),
+    ...calculateProofDeltas(record, prev),
+  });
+}
+
+function buildProgressEntry(record, index, sorted) {
+  const scenarioId = record.framework.scenarioId;
+  const {first, prev} = findScenarioBaselines(sorted, index, scenarioId, record);
+  const deltas = calculateRecordDeltas(record, prev, first);
+  return Object.freeze({...record, deltas, ...deltas});
+}
+
 function buildComparisonProgressSummary(records) {
   if (!Array.isArray(records)) {
     throw new Error('buildComparisonProgressSummary requires an array argument');
@@ -228,48 +368,8 @@ function buildComparisonProgressSummary(records) {
   const validated = arrayMap(records, validateComparisonHistoryRecord);
   const sorted = arraySort(arraySlice(validated), compareRecordsChronologically);
 
-  const entries = [];
-  for (let i = 0; i < sorted.length; i += 1) {
-    const record = sorted[i];
-    const scenarioId = record.framework.scenarioId;
-    let prev = null;
-    let first = null;
-    for (let j = 0; j < i; j += 1) {
-      if (sorted[j].framework.scenarioId === scenarioId) {
-        first = first || sorted[j];
-        prev = sorted[j];
-      }
-    }
-    first = first || record;
-
-    const lagrangeOps = record.metrics?.lagrange?.opsPerSec;
-    const tidbOps = record.metrics?.tidbTikv?.opsPerSec;
-    const prevM = prev?.metrics;
-    const prevC = prev?.comparison;
-    const fM = first?.metrics;
-    const cmp = record.comparison;
-
-    const deltas = Object.freeze({
-      lagrangeOpsPerSecDeltaFromPrev: calculateDelta(lagrangeOps, prevM?.lagrange?.opsPerSec),
-      lagrangeOpsPerSecDeltaFromFirst: calculateDelta(lagrangeOps, fM?.lagrange?.opsPerSec),
-      tidbOpsPerSecDeltaFromPrev: calculateDelta(tidbOps, prevM?.tidbTikv?.opsPerSec),
-      tidbOpsPerSecDeltaFromFirst: calculateDelta(tidbOps, fM?.tidbTikv?.opsPerSec),
-      throughputRatioDeltaFromPrev:
-        calculateDelta(cmp?.throughputRatioLagrangeToTiDb, prevC?.throughputRatioLagrangeToTiDb),
-      throughputLagFactorDeltaFromPrev: calculateDelta(
-        cmp?.throughputLagFactorTiDbOverLagrange, prevC?.throughputLagFactorTiDbOverLagrange,
-      ),
-      tidbSemanticProofsDeltaFromPrev: calculateDelta(
-        record.metrics?.tidbTikv?.semanticProofs?.passedCount,
-        prevM?.tidbTikv?.semanticProofs?.passedCount,
-      ),
-      lagrangeSemanticProofsDeltaFromPrev: calculateDelta(
-        record.metrics?.lagrange?.semanticProofs?.passedCount,
-        prevM?.lagrange?.semanticProofs?.passedCount,
-      ),
-    });
-    entries.push(Object.freeze({...record, deltas, ...deltas}));
-  }
+  const entries = arrayMap(sorted, (record, index) =>
+    buildProgressEntry(record, index, sorted));
 
   const summaryPayload = {
     schemaVersion: OLTP_COMPARISON_HISTORY_SCHEMA_VERSION,
@@ -279,6 +379,41 @@ function buildComparisonProgressSummary(records) {
   const summarySha256 =
     createHash('sha256').update(JSON.stringify(summaryPayload)).digest('hex');
   return Object.freeze({...summaryPayload, summarySha256});
+}
+
+function matchesScenarioAndProfile(framework, scenarioId, profileId) {
+  if (framework?.scenarioId !== scenarioId) return false;
+  return !profileId || framework?.profileId === profileId;
+}
+
+function matchesSystems(systems, lagrangeVersion, tidbVersion) {
+  if (systems?.lagrange?.version !== lagrangeVersion) return false;
+  return systems?.tidbTikv?.version === tidbVersion;
+}
+
+function matchesRecordVersions(record, criteria) {
+  if (!matchesScenarioAndProfile(record?.framework, criteria.scenarioId, criteria.profileId)) {
+    return false;
+  }
+  return matchesSystems(record?.systems, criteria.lagrangeVersion, criteria.tidbVersion);
+}
+
+function findMatchingExistingRecord(existingRecords, record) {
+  const criteria = {
+    scenarioId: record?.framework?.scenarioId,
+    profileId: record?.framework?.profileId,
+    lagrangeVersion: record?.systems?.lagrange?.version,
+    tidbVersion: record?.systems?.tidbTikv?.version,
+  };
+  return arrayFilter(existingRecords, (r) => matchesRecordVersions(r, criteria));
+}
+
+function shouldSkipUnchangedRun(options, existingRecords) {
+  if (options.skipIfSystemVersionsUnchanged !== true || options.forceRerun === true) {
+    return false;
+  }
+  const matched = findMatchingExistingRecord(existingRecords, options.record);
+  return matched.length > 0;
 }
 
 async function recordComparisonResultToDisk(options = {}) {
@@ -291,21 +426,12 @@ async function recordComparisonResultToDisk(options = {}) {
   } catch (err) {
     if (!err || err.code !== 'ENOENT') throw err;
   }
-  if (options.skipIfSystemVersionsUnchanged === true && options.forceRerun !== true) {
-    const rec = options.record;
-    const scId = rec?.framework?.scenarioId;
-    const prId = rec?.framework?.profileId;
-    const lVer = rec?.systems?.lagrange?.version;
-    const tVer = rec?.systems?.tidbTikv?.version;
-    const matched = arrayFilter(existingRecords, (r) => r?.framework?.scenarioId === scId &&
-      (!prId || r?.framework?.profileId === prId) &&
-      r?.systems?.lagrange?.version === lVer && r?.systems?.tidbTikv?.version === tVer);
-    if (matched.length > 0) {
-      return Object.freeze({
-        skipped: true, records: existingRecords,
-        summary: buildComparisonProgressSummary(existingRecords),
-      });
-    }
+  if (shouldSkipUnchangedRun(options, existingRecords)) {
+    return Object.freeze({
+      skipped: true,
+      records: existingRecords,
+      summary: buildComparisonProgressSummary(existingRecords),
+    });
   }
   const records = upsertComparisonHistoryRecord(existingRecords, options.record);
   const summary = buildComparisonProgressSummary(records);

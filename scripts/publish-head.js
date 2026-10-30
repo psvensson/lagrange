@@ -87,6 +87,7 @@ const QUIET_ARGUMENT = '--quiet';
 const DETACH_ARGUMENT = '--detach';
 const FORCE_ARGUMENT = '--force';
 const ENABLED_ENV_VALUE = '1';
+const GATE_ALREADY_PROVED_SHA_ENV = 'LAGRANGE_GATE_ALREADY_PROVED_SHA';
 const BASH_COMMAND = 'bash';
 const PRE_PUSH_HOOK = '.githooks/pre-push';
 const PUSH_COMMAND = 'push';
@@ -489,7 +490,11 @@ function pushGatedHead(run, root, worktree, head, gateEnv, queryCi) {
   }
   checkedGit([PUSH_COMMAND, ORIGIN_REMOTE, HEAD_TO_MAIN_REFSPEC], {
     cwd: worktree,
-    env: {...gateEnv, LAGRANGE_PUSH_SKIP_TESTS: ENABLED_ENV_VALUE},
+    env: {
+      ...gateEnv,
+      LAGRANGE_PUSH_SKIP_TESTS: ENABLED_ENV_VALUE,
+      [GATE_ALREADY_PROVED_SHA_ENV]: head,
+    },
   });
   const remoteAfter = remoteMainSha(root);
   if (remoteAfter !== head) {

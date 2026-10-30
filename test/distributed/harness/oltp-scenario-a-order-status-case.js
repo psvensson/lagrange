@@ -12,6 +12,12 @@ import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 } from './oltp-scenario-a-semantic-gate.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 const ZERO = 0;
 const ONE = 1;
 const SETUP_LINE_COUNT = 5;
@@ -42,7 +48,7 @@ const CLAIMED_PROOF_IDS = freezeRecord([
 ].sort());
 
 function requireRow(rows, predicate, label) {
-  const matches = rows.filter(predicate);
+  const matches = arrayFilter(rows, predicate);
   if (matches.length !== ONE) {
     throw new Error(`Scenario A order-status expected one ${label} row`);
   }
@@ -68,7 +74,7 @@ function buildSetupOperation(operation) {
 }
 
 function buildExpectedLines(dataset, setupOperation) {
-  return setupOperation.lines.map((line, index) => {
+  return arrayMap(setupOperation.lines, (line, index) => {
     const item = requireRow(
       dataset.items,
       (row) => row.itemId === line.itemId,
@@ -88,7 +94,8 @@ function buildExpectedLines(dataset, setupOperation) {
 function buildScenarioAOrderStatusCase() {
   const dataset = buildOltpBaselineDataset(WORKLOAD);
   const plan = buildOltpBaselinePlan(WORKLOAD);
-  const operation = plan.workers[ZERO].measurement.find(
+  const operation = arrayFind(
+    plan.workers[ZERO].measurement,
     ({kind}) => kind === OLTP_OPERATION_KIND.ORDER_STATUS,
   );
   if (!operation) throw new Error('Scenario A order-status case has no operation');
@@ -130,7 +137,7 @@ function normalizeInteger(value, label) {
 }
 
 function normalizeSha256(value, label) {
-  const digest = String(value || '').trim().toLowerCase();
+  const digest = stringToLowerCase(stringTrim(String(value || '')));
   if (!SHA256_PATTERN.test(digest)) {
     throw new Error(`${label} must be a SHA-256 digest`);
   }
@@ -156,7 +163,7 @@ function normalizeLines(value) {
   if (!Array.isArray(value)) {
     throw new Error('order-status lines must be an array');
   }
-  return freezeRecord(value.map(normalizeLine));
+  return freezeRecord(arrayMap(value, normalizeLine));
 }
 
 function evaluateScenarioAOrderStatusObservation(observation = {}) {

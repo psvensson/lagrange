@@ -12,6 +12,10 @@ import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 } from './oltp-scenario-a-semantic-gate.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayMap = Function.call.bind(Array.prototype.map);
+
 const ZERO = 0;
 const ONE = 1;
 const SETUP_LINE_COUNT = 5;
@@ -42,7 +46,7 @@ const CLAIMED_PROOF_IDS = freezeRecord([
 ].sort());
 
 function requireRow(rows, predicate, label) {
-  const matches = rows.filter(predicate);
+  const matches = arrayFilter(rows, predicate);
   if (matches.length !== ONE) {
     throw new Error(`Scenario A delivery expected one ${label} row`);
   }
@@ -114,14 +118,15 @@ function buildExpectedDistrict(dataset, setupOperation, carrierId) {
 function buildScenarioADeliveryCase() {
   const dataset = buildOltpBaselineDataset(WORKLOAD);
   const plan = buildOltpBaselinePlan(WORKLOAD);
-  const operation = plan.workers[ZERO].measurement.find(
+  const operation = arrayFind(
+    plan.workers[ZERO].measurement,
     ({kind}) => kind === OLTP_OPERATION_KIND.DELIVERY,
   );
   if (!operation) throw new Error('Scenario A delivery case has no operation');
   const setupOperations = buildSetupOperations(operation);
   const expected = freezeRecord({
     deliveredOrders: setupOperations.length,
-    districts: setupOperations.map((setupOperation) =>
+    districts: arrayMap(setupOperations, (setupOperation) =>
       buildExpectedDistrict(dataset, setupOperation, operation.carrierId)),
   });
   const identity = freezeRecord({
@@ -172,6 +177,35 @@ function normalizeDistrict(value = {}, index) {
   });
 }
 
+function collectDistrictFailures(actualDistrict, expectedDistrict) {
+  if (!actualDistrict) {
+    return [`district_${expectedDistrict.districtId}_missing`];
+  }
+  const districtFailures = [];
+  if (actualDistrict.orderId !== expectedDistrict.orderId ||
+      actualDistrict.newOrderCount !== ZERO) {
+    districtFailures.push(`district_${expectedDistrict.districtId}_new_order`);
+  }
+  if (actualDistrict.carrierId !== expectedDistrict.carrierId) {
+    districtFailures.push(`district_${expectedDistrict.districtId}_carrier`);
+  }
+  if (actualDistrict.lineCount !== expectedDistrict.lineCount ||
+      actualDistrict.deliveredLineCount !== expectedDistrict.lineCount) {
+    districtFailures.push(`district_${expectedDistrict.districtId}_lines`);
+  }
+  if (actualDistrict.customerId !== expectedDistrict.customerId ||
+      actualDistrict.lineTotalCents !== expectedDistrict.lineTotalCents ||
+      actualDistrict.customerBalanceCents !==
+        expectedDistrict.customerBalanceCents) {
+    districtFailures.push(`district_${expectedDistrict.districtId}_balance`);
+  }
+  if (actualDistrict.customerDeliveryCount !==
+      expectedDistrict.customerDeliveryCount) {
+    districtFailures.push(`district_${expectedDistrict.districtId}_delivery_count`);
+  }
+  return districtFailures;
+}
+
 function evaluateScenarioADeliveryObservation(observation = {}) {
   const definition = buildScenarioADeliveryCase();
   const expected = definition.identity.expected;
@@ -183,7 +217,7 @@ function evaluateScenarioADeliveryObservation(observation = {}) {
       observation.deliveredOrders,
       'delivery deliveredOrders',
     ),
-    districts: observation.districts.map(normalizeDistrict),
+    districts: arrayMap(observation.districts, normalizeDistrict),
   });
   const failures = [];
   if (actual.deliveredOrders !== expected.deliveredOrders ||
@@ -191,34 +225,11 @@ function evaluateScenarioADeliveryObservation(observation = {}) {
     failures.push('delivered_order_count');
   }
   for (const expectedDistrict of expected.districts) {
-    const actualDistrict = actual.districts.find(
+    const actualDistrict = arrayFind(
+      actual.districts,
       ({districtId}) => districtId === expectedDistrict.districtId,
     );
-    if (!actualDistrict) {
-      failures.push(`district_${expectedDistrict.districtId}_missing`);
-      continue;
-    }
-    if (actualDistrict.orderId !== expectedDistrict.orderId ||
-        actualDistrict.newOrderCount !== ZERO) {
-      failures.push(`district_${expectedDistrict.districtId}_new_order`);
-    }
-    if (actualDistrict.carrierId !== expectedDistrict.carrierId) {
-      failures.push(`district_${expectedDistrict.districtId}_carrier`);
-    }
-    if (actualDistrict.lineCount !== expectedDistrict.lineCount ||
-        actualDistrict.deliveredLineCount !== expectedDistrict.lineCount) {
-      failures.push(`district_${expectedDistrict.districtId}_lines`);
-    }
-    if (actualDistrict.customerId !== expectedDistrict.customerId ||
-        actualDistrict.lineTotalCents !== expectedDistrict.lineTotalCents ||
-        actualDistrict.customerBalanceCents !==
-          expectedDistrict.customerBalanceCents) {
-      failures.push(`district_${expectedDistrict.districtId}_balance`);
-    }
-    if (actualDistrict.customerDeliveryCount !==
-        expectedDistrict.customerDeliveryCount) {
-      failures.push(`district_${expectedDistrict.districtId}_delivery_count`);
-    }
+    failures.push(...collectDistrictFailures(actualDistrict, expectedDistrict));
   }
   return freezeRecord({
     passed: failures.length === ZERO,

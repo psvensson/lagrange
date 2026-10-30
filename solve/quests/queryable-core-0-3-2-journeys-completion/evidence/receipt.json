@@ -1,0 +1,77 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "queryable-core-0-3-2-journeys-completion",
+  "status": "pass",
+  "generatedAt": "2026-10-30T11:23:00.000Z",
+  "testFileDigests": {
+    "scripts/checks/global-index-maintenance-mode-seal-guard.js": "9397bbfa1ba7d7a8a2fb5cefadafeaf29e3a2d47ad8c46d186bdc9812520eebb",
+    "scripts/checks/oltp-scenario-a-lagrange-public-pg-context-guard.js": "9a3105d8738c4798fa31e97b96f8a8967de25a104cf7420b11c26b4bcfa1c981",
+    "scripts/checks/tidb-retryable-conflict-probe-guard.js": "4c7acadf84e79b019d3921842763045b652950707a5ef64731bc0866c0a02330",
+    "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js": "42f24ac0613592d02477495dd88a955017e15418384fc734738e55c99973f4f9",
+    "test/index-management/global-index-maintenance-mode-seal.test.js": "24c73b9cb3abbfddb0d2b17fdb46c949744328724e65f94a5114b2ebe0cf4e3e",
+    "test/index-management/queryable-core-j3-local-compound-index-journey.test.js": "237d788085f6e342467d2cb9aeb4497e28f83267a797175be0980f224190f109",
+    "test/index-management/queryable-core-j5-global-index-journey.test.js": "6bbc1f18df97ed08adb62bf4c6f502f46ddbfc7331c454dfe3afb19478079d78",
+    "test/live-query/queryable-core-j6-live-query-journey.test.js": "d41603bfae0f13ee07bfd65b499615c197d734be9663c1d51ed1c2963b11c3cf",
+    "test/query/postgres-wire-adapter.test.js": "879c971d4bc29167e7fb1e6a9b54ebb60b76378b2e80dcbbe349c7c885bbc06e",
+    "test/query/queryable-core-j2-sql-key-read-journey.test.js": "0cc36f0ac247ea712c745891b5135f2dc730e0abbbe6eedc84ac9b3de808a880",
+    "test/transaction/queryable-core-j4-locking-read-journey.test.js": "e0945244e592ba1d05961352cdd93c9b65574768267119227be8762fd82609fc"
+  },
+  "receipts": [
+    {
+      "id": "c1-global-index-maintenance-mode-seal",
+      "passed": true,
+      "command": "node scripts/checks/global-index-maintenance-mode-seal-guard.js && npx mocha test/index-management/global-index-maintenance-mode-seal.test.js --exit",
+      "detail": "C1 Mode A synchronous non-unique TX1 maintenance sealed in requirements.md and research.md; 13 assertions passing in global-index-maintenance-mode-seal.test.js and static guard metric=0",
+      "testFile": "test/index-management/global-index-maintenance-mode-seal.test.js"
+    },
+    {
+      "id": "j1-j7-dockerfile-and-scenario-a-public-pg-context",
+      "passed": true,
+      "command": "node scripts/checks/oltp-scenario-a-lagrange-public-pg-context-guard.js && node scripts/checks/tidb-retryable-conflict-probe-guard.js",
+      "detail": "Dockerfile runtime package-lock provenance verified, Scenario A public PG context listener scaling via seedNode.scalePostgresWireListener verified, tidb-retryable-conflict-probe-guard passing",
+      "testFile": "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js"
+    },
+    {
+      "id": "j2-sql-key-and-read-semantics-journey",
+      "passed": true,
+      "command": "npx tap --disable-coverage test/query/queryable-core-j2-sql-key-read-journey.test.js",
+      "detail": "J2 PartitionResolver fail-closed key/boundary decoding, parameter validation, and SQLite reference comparison across 280 passing assertions",
+      "testFile": "test/query/queryable-core-j2-sql-key-read-journey.test.js"
+    },
+    {
+      "id": "j3-local-and-compound-index-journey",
+      "passed": true,
+      "command": "npx tap --disable-coverage test/index-management/queryable-core-j3-local-compound-index-journey.test.js",
+      "detail": "J3 IndexService partition-scoped UNIQUE DDL, fail-closed rollback (DROP INDEX IF EXISTS) on failure, zero-partition refusal, prefix planner across 72 passing assertions",
+      "testFile": "test/index-management/queryable-core-j3-local-compound-index-journey.test.js"
+    },
+    {
+      "id": "j4-locking-read-durable-reservation-journey",
+      "passed": true,
+      "command": "npx tap --disable-coverage test/transaction/queryable-core-j4-locking-read-journey.test.js",
+      "detail": "J4 durable SQLite locking-read reservations, projection-independent PK extraction, fail-closed candidate reads across 8 suites passing",
+      "testFile": "test/transaction/queryable-core-j4-locking-read-journey.test.js"
+    },
+    {
+      "id": "j5-synchronous-nonunique-global-index-journey",
+      "passed": true,
+      "command": "npx tap --disable-coverage test/index-management/queryable-core-j5-global-index-journey.test.js",
+      "detail": "J5 GlobalIndexLifecycleCoordinator, SQLParser CREATE GLOBAL INDEX admission (0A000 on UNIQUE), synchronous TX1 maintenance, fail-closed backfill, Stage 2 resolution across 123 passing assertions",
+      "testFile": "test/index-management/queryable-core-j5-global-index-journey.test.js"
+    },
+    {
+      "id": "j6-live-query-results-journey",
+      "passed": true,
+      "command": "npx tap --disable-coverage test/live-query/queryable-core-j6-live-query-journey.test.js",
+      "detail": "J6 push-backed live-query CDC subscriber delivery, canonical grouping, serialized refresh, anti-polling verification across 5 passing suites",
+      "testFile": "test/live-query/queryable-core-j6-live-query-journey.test.js"
+    },
+    {
+      "id": "pgwire-idle-rollback-notice-preservation",
+      "passed": true,
+      "command": "npx tap --disable-coverage test/query/postgres-wire-adapter.test.js",
+      "detail": "PostgresWireAdapter preserves typed NO_TRANSACTION failure on idle session rollback so wire outcome owner emits PostgreSQL WARNING 25P01 across 30 passing assertions",
+      "testFile": "test/query/postgres-wire-adapter.test.js"
+    }
+  ]
+}

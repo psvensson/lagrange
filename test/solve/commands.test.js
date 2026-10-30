@@ -282,6 +282,31 @@ test('a path already staged as a deletion still lands', (t) => {
   assert.equal(git(root, ['ls-files', doomed]).trim(), '', 'the deletion is committed');
 });
 
+test('land records a verified land proof receipt when real change proof runs', (t) => {
+  const root = repo(t, {legacy: true});
+  write(root, 'package.json', JSON.stringify({name: 'demo', scripts: {test: 'exit 0'}}));
+  git(root, ['add', 'package.json']);
+  git(root, ['commit', '-q', '-m', 'add package.json']);
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, DOC_FILE, TEXT);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  write(root, 'test-output/proof-scope.json', JSON.stringify({
+    tests: 1,
+    testPaths: ['test/demo.test.js'],
+  }));
+  const baseBefore = git(root, ['rev-parse', 'HEAD']).trim();
+  const landed = land(root, {id: QUEST_ID});
+  const receiptPath = path.join(gitCommonDir(root), 'lagrange-land-proof.json');
+  assert.ok(fs.existsSync(receiptPath), 'lagrange-land-proof.json was written');
+  const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+  assert.equal(receipt.commit, landed.commit);
+  assert.equal(receipt.base, baseBefore);
+  assert.equal(receipt.questId, QUEST_ID);
+  assert.deepEqual(receipt.tests, ['test/demo.test.js']);
+  assert.ok(typeof receipt.provedAt === 'number');
+});
+
 test('probe --epic measures the epic doneWhen', (t) => {
   const root = repo(t);
   const shown = probe(root, {epic: EPIC_ID});

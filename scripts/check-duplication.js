@@ -94,8 +94,10 @@ const RATCHET_TARGETS = [
     // family, RouterMessageHandler and ReplicaLifecycleManager deleted).
     // Callback axis retirement: tightened 44/1383 -> 43/1358 on the checker's
     // hint after deleting the legacy partition_callback axis.
-    baselineCloneGroupCount: 43,
-    baselineDuplicatedLineCount: 1358,
+    // Publisher and corpus-ratchet speedups: tightened 43/1358 -> 42/1331
+    // on the checker's hint.
+    baselineCloneGroupCount: 42,
+    baselineDuplicatedLineCount: 1331,
     strictEligible: true,
   },
   {
@@ -253,8 +255,10 @@ const RATCHET_TARGETS = [
     // hint (the window-pinning tests deleted).
     // Cloud metric runner composition: tightened 24386 -> 24374 on the
     // checker's hint.
-    baselineCloneGroupCount: 650,
-    baselineDuplicatedLineCount: 24370,
+    // Publisher and corpus-ratchet speedups: tightened 650/24370 -> 649/24346
+    // on the checker's hint.
+    baselineCloneGroupCount: 649,
+    baselineDuplicatedLineCount: 24346,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
@@ -333,12 +337,21 @@ const targetName = selectedTarget < 0 ? null : process.argv[selectedTarget + 1];
 if (selectedTarget >= 0 && !RATCHET_TARGETS.some((target) => target.name === targetName)) {
   throw new Error(UNKNOWN_TARGET_ERROR);
 }
-for (const target of RATCHET_TARGETS) {
-  if (targetName && target.name !== targetName) continue;
-  if (strict && target.strictEligible !== true) {
-    continue;
-  }
-  const {totals, sourceStats, reportRelativePath} =
+
+const activeTargets = RATCHET_TARGETS.filter((target) => {
+  if (targetName && target.name !== targetName) return false;
+  if (strict && target.strictEligible !== true) return false;
+  return true;
+});
+
+const parallelMeasurements = (targetName === null && !strict) ?
+  await Promise.all(activeTargets.map((target) => measureTargetDuplication(target))) :
+  null;
+
+for (let index = 0; index < activeTargets.length; index += 1) {
+  const target = activeTargets[index];
+  const {totals, sourceStats, reportRelativePath} = parallelMeasurements ?
+    parallelMeasurements[index] :
     await measureTargetDuplication(target);
 
   if (strict) {

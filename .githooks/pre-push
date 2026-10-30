@@ -285,6 +285,11 @@ if [ -n "${PUSHED_SHA}" ] && [ "${PUSHED_SHA}" != "${ZERO_SHA}" ]; then
 fi
 echo "pre-push: proving ${GATE_HEAD} (ref ${PUSHED_REF:-${LAGRANGE_GATE_PUSHED_REF:-HEAD}}) against main base ${MAIN_REMOTE_SHA:-<publication merge-base>}"
 
+if [ -n "${LAGRANGE_PUSH_SKIP_TESTS:-}" ] && [ "${LAGRANGE_GATE_ALREADY_PROVED_SHA:-}" = "${GATE_HEAD}" ]; then
+  echo "pre-push: ${GATE_HEAD} already proved by gateExactHead — skipping redundant hook re-entry"
+  exit 0
+fi
+
 stage "unused-files" "unused-files check"
 npm run -s test:unused:push
 # Lint the pushed range, TRACKED files only, honoring the same principle as

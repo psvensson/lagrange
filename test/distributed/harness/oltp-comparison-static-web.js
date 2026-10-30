@@ -20,60 +20,225 @@ const DEFAULT_SCENARIO_B_COMPARISON_SVG_PATH = 'docs/benchmarks/tidb-scenario-b-
 const DEFAULT_COMPARISON_PROGRESS_MARKDOWN_PATH = 'docs/benchmarks/tidb-comparison-progress.md';
 const DEFAULT_COMPARISON_PROGRESS_HTML_PATH = 'docs/benchmarks/tidb-comparison-progress.html';
 
-function renderComparisonProgressMarkdown(summary) {
-  const entries = (summary && Array.isArray(summary.entries)) ? summary.entries : [];
-  const matrixRows = arrayJoin(arrayMap(entries, (e) => {
-    const r = e.record || e;
-    const fv = r?.framework?.frameworkVersion || '1.0.0';
-    const fc = shortSha(r?.framework?.frameworkCommitSha);
-    const scId = r?.framework?.scenarioId || 'scenario-a';
-    const sc = `[${scId}](${getScenarioDefinitionHref(scId)}) / ${r?.framework?.profileId || 'default'}`;
-    const lv = `${r?.systems?.lagrange?.version || 'n/a'} (${shortSha(r?.systems?.lagrange?.commitSha)})`;
-    const tv = `${r?.systems?.tidbTikv?.version || 'n/a'} (${shortSha(r?.systems?.tidbTikv?.commitSha)})`;
-    return `| ${r?.recordedAt || 'unknown'} | ${fv} (${fc}) | ${sc} | ${lv} | ${tv} | ${shortSha(r?.combinationSha256, 16)} |`;
-  }), '\n');
+function unwrapRecord(entry) {
+  if (!entry) return undefined;
+  return entry.record || entry;
+}
 
-  const progressionRows = arrayJoin(arrayMap(entries, (e) => {
-    const r = e.record || e;
-    const scId = r?.framework?.scenarioId || 'scenario-a';
-    const sc = `[${scId}](${getScenarioDefinitionHref(scId)})`;
-    const lm = `${formatNum(r?.metrics?.lagrange?.opsPerSec)} (${formatNum(r?.metrics?.lagrange?.latencyMs?.p50)} / ${formatNum(r?.metrics?.lagrange?.latencyMs?.p95)} / ${formatNum(r?.metrics?.lagrange?.latencyMs?.p99)})`;
-    const tm = `${formatNum(r?.metrics?.tidbTikv?.opsPerSec)} (${formatNum(r?.metrics?.tidbTikv?.latencyMs?.p50)} / ${formatNum(r?.metrics?.tidbTikv?.latencyMs?.p95)} / ${formatNum(r?.metrics?.tidbTikv?.latencyMs?.p99)})`;
-    const ratio = `${formatNum(r?.comparison?.throughputRatioLagrangeToTiDb, 3)}x (${formatNum(r?.comparison?.throughputLagFactorTiDbOverLagrange, 2)}x lag)`;
-    const proofs = `${r?.metrics?.lagrange?.semanticProofs?.passedCount ?? 0}/${r?.metrics?.lagrange?.semanticProofs?.requiredCount ?? 33} vs ${r?.metrics?.tidbTikv?.semanticProofs?.passedCount ?? 0}/${r?.metrics?.tidbTikv?.semanticProofs?.requiredCount ?? 33}`;
-    return `| ${r?.recordedAt || 'unknown'} | ${sc} | ${lm} | ${tm} | ${ratio} | ${proofs} |`;
-  }), '\n');
+function getFrameworkSummary(fw) {
+  const version = fw?.frameworkVersion || '1.0.0';
+  const sha = shortSha(fw?.frameworkCommitSha);
+  const scenarioId = fw?.scenarioId || 'scenario-a';
+  const profile = fw?.profileId || 'default';
+  const href = getScenarioDefinitionHref(scenarioId);
+  return {
+    versionSha: `${version} (${sha})`,
+    scenarioId,
+    profile,
+    href,
+  };
+}
 
-  const deltaRows = arrayJoin(arrayMap(entries, (e) => {
-    const r = e.record || e;
-    const deltas = e.deltas || e;
-    const fc = shortSha(r?.framework?.frameworkCommitSha);
-    const ld = `${formatSigned(deltas?.lagrangeOpsPerSecDeltaFromPrev)} / ${formatSigned(deltas?.lagrangeOpsPerSecDeltaFromFirst)}`;
-    const td = `${formatSigned(deltas?.tidbOpsPerSecDeltaFromPrev)} / ${formatSigned(deltas?.tidbOpsPerSecDeltaFromFirst)}`;
-    const rd = formatSigned(deltas?.throughputRatioDeltaFromPrev, 3);
-    const fd = formatSigned(deltas?.throughputLagFactorDeltaFromPrev, 2);
-    const pd = formatSigned(deltas?.tidbSemanticProofsDeltaFromPrev, 0);
-    return `| ${r?.recordedAt || 'unknown'} | ${fc} | ${ld} | ${td} | ${rd} | ${fd} | ${pd} |`;
-  }), '\n');
+function getSystemSummary(sys) {
+  const version = sys?.version || 'n/a';
+  const sha = shortSha(sys?.commitSha);
+  return `${version} (${sha})`;
+}
 
-  const bEntries = getScenarioBEntries(entries);
-  const bRows = arrayJoin(arrayMap(bEntries, (e) => {
-    const r = e.record || e;
-    const ls = r?.metrics?.lagrange?.scenarioBScorecard;
-    const ts = r?.metrics?.tidbTikv?.scenarioBScorecard;
-    return `| ${r?.recordedAt || 'unknown'} | [${r?.framework?.profileId || 'default'}](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | ` +
-      `${ls?.crossIslandBytesPerRequest ?? 'n/a'} | ${ts?.crossIslandBytesPerRequest ?? 'n/a'} | ` +
-      `${formatNum(ls?.duringMoveP99Ms)} | ${formatNum(ts?.duringMoveP99Ms)} | ` +
-      `${formatNum(ls?.routingConvergenceMs)} vs ${formatNum(ts?.routingConvergenceMs)} |`;
-  }), '\n');
-  const bSection = bEntries.length > 0 ?
-    '\n## Scenario B distributed risk & movement scorecard ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))\n\n' +
+function renderMatrixMarkdownRow(e) {
+  const r = unwrapRecord(e);
+  const fw = getFrameworkSummary(r?.framework);
+  const sc = `[${fw.scenarioId}](${fw.href}) / ${fw.profile}`;
+  const lv = getSystemSummary(r?.systems?.lagrange);
+  const tv = getSystemSummary(r?.systems?.tidbTikv);
+  const recorded = r?.recordedAt || 'unknown';
+  const digest = shortSha(r?.combinationSha256, 16);
+  return `| ${recorded} | ${fw.versionSha} | ${sc} | ${lv} | ${tv} | ${digest} |`;
+}
+
+function renderMatrixHtmlRow(e) {
+  const r = unwrapRecord(e);
+  const fw = getFrameworkSummary(r?.framework);
+  const sc = `<a href="${escapeXml(fw.href)}">${escapeXml(fw.scenarioId)}</a> / ${escapeXml(fw.profile)}`;
+  const lv = escapeXml(getSystemSummary(r?.systems?.lagrange));
+  const tv = escapeXml(getSystemSummary(r?.systems?.tidbTikv));
+  const recorded = escapeXml(r?.recordedAt || 'unknown');
+  const digest = escapeXml(shortSha(r?.combinationSha256, 16));
+  const fv = escapeXml(fw.versionSha);
+  const badge = `<span class="badge">${digest}</span>`;
+  return `        <tr><td>${recorded}</td><td>${fv}</td><td>${sc}</td><td>${lv}</td><td>${tv}</td><td>${badge}</td></tr>`;
+}
+
+function formatLatencyTriple(lat) {
+  const p50 = formatNum(lat?.p50);
+  const p95 = formatNum(lat?.p95);
+  const p99 = formatNum(lat?.p99);
+  return `${p50} / ${p95} / ${p99}`;
+}
+
+function formatSystemPerfSummary(metrics) {
+  const ops = formatNum(metrics?.opsPerSec);
+  const triple = formatLatencyTriple(metrics?.latencyMs);
+  return `${ops} (${triple})`;
+}
+
+function formatComparisonRatio(comp) {
+  const ratio = formatNum(comp?.throughputRatioLagrangeToTiDb, 3);
+  const lag = formatNum(comp?.throughputLagFactorTiDbOverLagrange, 2);
+  return `${ratio}x (${lag}x lag)`;
+}
+
+function formatProofCount(proofs, defaultReq = 33) {
+  const passed = proofs?.passedCount ?? 0;
+  const req = proofs?.requiredCount ?? defaultReq;
+  return `${passed}/${req}`;
+}
+
+function formatScenarioProofs(metrics) {
+  const lag = formatProofCount(metrics?.lagrange?.semanticProofs, 33);
+  const tidb = formatProofCount(metrics?.tidbTikv?.semanticProofs, 33);
+  return `${lag} vs ${tidb}`;
+}
+
+function getScenarioLink(scenarioId, isHtml = false) {
+  const scId = scenarioId || 'scenario-a';
+  const href = getScenarioDefinitionHref(scId);
+  if (isHtml) {
+    return `<a href="${escapeXml(href)}">${escapeXml(scId)}</a>`;
+  }
+  return `[${scId}](${href})`;
+}
+
+function renderProgressionMarkdownRow(e) {
+  const r = unwrapRecord(e);
+  const m = r?.metrics;
+  const sc = getScenarioLink(r?.framework?.scenarioId, false);
+  const lm = formatSystemPerfSummary(m?.lagrange);
+  const tm = formatSystemPerfSummary(m?.tidbTikv);
+  const ratio = formatComparisonRatio(r?.comparison);
+  const proofs = formatScenarioProofs(m);
+  const recorded = r?.recordedAt || 'unknown';
+  return `| ${recorded} | ${sc} | ${lm} | ${tm} | ${ratio} | ${proofs} |`;
+}
+
+function formatDeltasSummary(deltas) {
+  const opsDelta = formatSigned(deltas?.tidbOpsPerSecDeltaFromPrev);
+  const proofDelta = formatSigned(deltas?.tidbSemanticProofsDeltaFromPrev, 0);
+  return `TiDB ops: ${opsDelta}, proofs: ${proofDelta}`;
+}
+
+function getProgressionMetricsSummary(metrics) {
+  const lag = metrics?.lagrange;
+  const tidb = metrics?.tidbTikv;
+  return {
+    lm: `${formatNum(lag?.opsPerSec)} ops/s`,
+    llat: `${formatLatencyTriple(lag?.latencyMs)} ms`,
+    tm: `${formatNum(tidb?.opsPerSec)} ops/s`,
+    tlat: `${formatLatencyTriple(tidb?.latencyMs)} ms`,
+    retries: escapeXml(String(tidb?.transactions?.retries ?? 0)),
+    proofs: formatScenarioProofs(metrics),
+  };
+}
+
+function renderProgressionHtmlRow(e) {
+  const r = unwrapRecord(e);
+  const deltas = e.deltas || e;
+  const scLink = getScenarioLink(r?.framework?.scenarioId, true);
+  const p = getProgressionMetricsSummary(r?.metrics);
+  const ratio = formatComparisonRatio(r?.comparison);
+  const deltasStr = formatDeltasSummary(deltas);
+  const recorded = escapeXml(r?.recordedAt || 'unknown');
+  return `        <tr><td>${recorded}</td><td>${scLink}</td><td>${p.lm}</td><td>${p.llat}</td>` +
+    `<td>${p.tm}</td><td>${p.tlat}</td><td>${ratio}</td><td>${p.retries}</td>` +
+    `<td>${p.proofs}</td><td>${deltasStr}</td></tr>`;
+}
+
+function formatDeltaColumns(deltas) {
+  const lp = formatSigned(deltas?.lagrangeOpsPerSecDeltaFromPrev);
+  const lf = formatSigned(deltas?.lagrangeOpsPerSecDeltaFromFirst);
+  const tp = formatSigned(deltas?.tidbOpsPerSecDeltaFromPrev);
+  const tf = formatSigned(deltas?.tidbOpsPerSecDeltaFromFirst);
+  return {
+    ld: `${lp} / ${lf}`,
+    td: `${tp} / ${tf}`,
+    rd: formatSigned(deltas?.throughputRatioDeltaFromPrev, 3),
+    fd: formatSigned(deltas?.throughputLagFactorDeltaFromPrev, 2),
+    pd: formatSigned(deltas?.tidbSemanticProofsDeltaFromPrev, 0),
+  };
+}
+
+function renderDeltaMarkdownRow(e) {
+  const r = unwrapRecord(e);
+  const deltas = e.deltas || e;
+  const fc = shortSha(r?.framework?.frameworkCommitSha);
+  const d = formatDeltaColumns(deltas);
+  const recorded = r?.recordedAt || 'unknown';
+  return `| ${recorded} | ${fc} | ${d.ld} | ${d.td} | ${d.rd} | ${d.fd} | ${d.pd} |`;
+}
+
+function extractScorecardMetrics(sc) {
+  return {
+    bytes: sc?.crossIslandBytesPerRequest ?? 'n/a',
+    moveP99: formatNum(sc?.duringMoveP99Ms),
+    convMs: formatNum(sc?.routingConvergenceMs),
+  };
+}
+
+function extractScenarioBFields(r) {
+  const m = r?.metrics;
+  const ls = extractScorecardMetrics(m?.lagrange?.scenarioBScorecard);
+  const ts = extractScorecardMetrics(m?.tidbTikv?.scenarioBScorecard);
+  return {
+    recorded: r?.recordedAt || 'unknown',
+    profile: r?.framework?.profileId || 'default',
+    ls,
+    ts,
+  };
+}
+
+function renderScenarioBMarkdownRow(e) {
+  const r = unwrapRecord(e);
+  const f = extractScenarioBFields(r);
+  const profLink = `[${f.profile}](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision)`;
+  return `| ${f.recorded} | ${profLink} | ` +
+    `${f.ls.bytes} | ${f.ts.bytes} | ` +
+    `${f.ls.moveP99} | ${f.ts.moveP99} | ` +
+    `${f.ls.convMs} vs ${f.ts.convMs} |`;
+}
+
+function renderScenarioBHtmlRow(e) {
+  const r = unwrapRecord(e);
+  const f = extractScenarioBFields(r);
+  const recorded = escapeXml(f.recorded);
+  const profLink = `<a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">${escapeXml(f.profile)}</a>`;
+  const lBytes = escapeXml(String(f.ls.bytes));
+  const tBytes = escapeXml(String(f.ts.bytes));
+  return `        <tr><td>${recorded}</td>` +
+    `<td>${profLink}</td>` +
+    `<td>${lBytes}</td><td>${tBytes}</td>` +
+    `<td>${f.ls.moveP99}</td><td>${f.ts.moveP99}</td>` +
+    `<td>${f.ls.convMs} vs ${f.ts.convMs}</td></tr>`;
+}
+
+function renderScenarioBMarkdownSection(bEntries) {
+  if (bEntries.length === 0) return '';
+  const bRows = arrayJoin(arrayMap(bEntries, renderScenarioBMarkdownRow), '\n');
+  return '\n## Scenario B distributed risk & movement scorecard ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))\n\n' +
     '![Scenario B distributed risk and movement comparison chart](tidb-scenario-b-comparison.svg)\n\n' +
     '| Recorded (UTC) | Profile | Lagrange Cross-Island Bytes/Req | ' +
     'TiDB Cross-Island Bytes/Req | Lagrange Move p99 (ms) | TiDB Move p99 (ms) | ' +
     'Convergence (Lagrange vs TiDB ms) |\n' +
     '| --- | --- | --- | --- | --- | --- | --- |\n' +
-    `${bRows}\n` : '';
+    `${bRows}\n`;
+}
+
+function renderComparisonProgressMarkdown(summary) {
+  const entries = (summary && Array.isArray(summary.entries)) ? summary.entries : [];
+  const matrixRows = arrayJoin(arrayMap(entries, renderMatrixMarkdownRow), '\n');
+  const progressionRows = arrayJoin(arrayMap(entries, renderProgressionMarkdownRow), '\n');
+  const deltaRows = arrayJoin(arrayMap(entries, renderDeltaMarkdownRow), '\n');
+  const bEntries = getScenarioBEntries(entries);
+  const bSection = renderScenarioBMarkdownSection(bEntries);
 
   return '# TiDB/TiKV and Lagrange Comparison Progress\n\n' +
     'This page is generated deterministically from [`data/tidb-comparison/history.ndjson`](../../data/tidb-comparison/history.ndjson) and [`data/tidb-comparison/progress-summary.json`](../../data/tidb-comparison/progress-summary.json), persisting results for every combination of comparison framework version/commit, scenario profile, and both compared systems\' versions and commit hashes.\n\n' +
@@ -95,59 +260,29 @@ function renderComparisonProgressMarkdown(summary) {
     bSection;
 }
 
-function renderComparisonProgressHtml(summary) {
-  const entries = (summary && Array.isArray(summary.entries)) ? summary.entries : [];
-  const svg = renderComparisonProgressSvg(summary);
-
-  const matrixTrs = arrayJoin(arrayMap(entries, (e) => {
-    const r = e.record || e;
-    const fv = escapeXml(`${r?.framework?.frameworkVersion || '1.0.0'} (${shortSha(r?.framework?.frameworkCommitSha)})`);
-    const scId = r?.framework?.scenarioId || 'scenario-a';
-    const sc = `<a href="${escapeXml(getScenarioDefinitionHref(scId))}">${escapeXml(scId)}</a> / ${escapeXml(r?.framework?.profileId || 'default')}`;
-    const lv = escapeXml(`${r?.systems?.lagrange?.version || 'n/a'} (${shortSha(r?.systems?.lagrange?.commitSha)})`);
-    const tv = escapeXml(`${r?.systems?.tidbTikv?.version || 'n/a'} (${shortSha(r?.systems?.tidbTikv?.commitSha)})`);
-    const dig = `<span class="badge">${escapeXml(shortSha(r?.combinationSha256, 16))}</span>`;
-    return `        <tr><td>${escapeXml(r?.recordedAt || 'unknown')}</td><td>${fv}</td><td>${sc}</td><td>${lv}</td><td>${tv}</td><td>${dig}</td></tr>`;
-  }), '\n');
-
-  const progressTrs = arrayJoin(arrayMap(entries, (e) => {
-    const r = e.record || e;
-    const deltas = e.deltas || e;
-    const scId = r?.framework?.scenarioId || 'scenario-a';
-    const scLink = `<a href="${escapeXml(getScenarioDefinitionHref(scId))}">${escapeXml(scId)}</a>`;
-    const lm = `${formatNum(r?.metrics?.lagrange?.opsPerSec)} ops/s`;
-    const llat = `${formatNum(r?.metrics?.lagrange?.latencyMs?.p50)} / ${formatNum(r?.metrics?.lagrange?.latencyMs?.p95)} / ${formatNum(r?.metrics?.lagrange?.latencyMs?.p99)} ms`;
-    const tm = `${formatNum(r?.metrics?.tidbTikv?.opsPerSec)} ops/s`;
-    const tlat = `${formatNum(r?.metrics?.tidbTikv?.latencyMs?.p50)} / ${formatNum(r?.metrics?.tidbTikv?.latencyMs?.p95)} / ${formatNum(r?.metrics?.tidbTikv?.latencyMs?.p99)} ms`;
-    const ratio = `${formatNum(r?.comparison?.throughputRatioLagrangeToTiDb, 3)}x (${formatNum(r?.comparison?.throughputLagFactorTiDbOverLagrange, 2)}x lag)`;
-    const retries = escapeXml(String(r?.metrics?.tidbTikv?.transactions?.retries ?? 0));
-    const proofs = `${r?.metrics?.lagrange?.semanticProofs?.passedCount ?? 0}/${r?.metrics?.lagrange?.semanticProofs?.requiredCount ?? 33} vs ${r?.metrics?.tidbTikv?.semanticProofs?.passedCount ?? 0}/${r?.metrics?.tidbTikv?.semanticProofs?.requiredCount ?? 33}`;
-    const deltasStr = `TiDB ops: ${formatSigned(deltas?.tidbOpsPerSecDeltaFromPrev)}, proofs: ${formatSigned(deltas?.tidbSemanticProofsDeltaFromPrev, 0)}`;
-    return `        <tr><td>${escapeXml(r?.recordedAt || 'unknown')}</td><td>${scLink}</td><td>${lm}</td><td>${llat}</td><td>${tm}</td><td>${tlat}</td><td>${ratio}</td><td>${retries}</td><td>${proofs}</td><td>${deltasStr}</td></tr>`;
-  }), '\n');
-
-  const bEntries = getScenarioBEntries(entries);
-  const bTrs = arrayJoin(arrayMap(bEntries, (e) => {
-    const r = e.record || e;
-    const ls = r?.metrics?.lagrange?.scenarioBScorecard;
-    const ts = r?.metrics?.tidbTikv?.scenarioBScorecard;
-    return `        <tr><td>${escapeXml(r?.recordedAt || 'unknown')}</td>` +
-      `<td><a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">${escapeXml(r?.framework?.profileId || 'default')}</a></td>` +
-      `<td>${escapeXml(ls?.crossIslandBytesPerRequest ?? 'n/a')}</td>` +
-      `<td>${escapeXml(ts?.crossIslandBytesPerRequest ?? 'n/a')}</td>` +
-      `<td>${formatNum(ls?.duringMoveP99Ms)}</td><td>${formatNum(ts?.duringMoveP99Ms)}</td>` +
-      `<td>${formatNum(ls?.routingConvergenceMs)} vs ` +
-      `${formatNum(ts?.routingConvergenceMs)}</td></tr>`;
-  }), '\n');
-  const bCard = bEntries.length > 0 ?
-    '    <div class="card">\n' +
+function renderScenarioBHtmlCard(summary, bEntries) {
+  if (bEntries.length === 0) return '';
+  const bTrs = arrayJoin(arrayMap(bEntries, renderScenarioBHtmlRow), '\n');
+  return '    <div class="card">\n' +
     '      <h2><a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B Distributed Risk &amp; Movement Scorecard (tidb-distributed-risk-decision)</a></h2>\n' +
     `      <div class="chart-box">${renderScenarioBComparisonSvg(summary)}</div>\n` +
     '      <table class="data-table"><thead><tr><th>Recorded (UTC)</th><th>Profile</th>' +
     '<th>Lagrange Cross-Island Bytes/Req</th><th>TiDB Cross-Island Bytes/Req</th>' +
     '<th>Lagrange Move p99 (ms)</th><th>TiDB Move p99 (ms)</th>' +
     '<th>Convergence (Lagrange vs TiDB ms)</th></tr></thead>\n' +
-    `      <tbody>\n${bTrs}\n      </tbody></table>\n    </div>\n` : '';
+    `      <tbody>\n${bTrs}\n      </tbody></table>\n    </div>\n`;
+}
+
+function renderComparisonProgressHtml(summary) {
+  const entries = (summary && Array.isArray(summary.entries)) ? summary.entries : [];
+  const svg = renderComparisonProgressSvg(summary);
+  const matrixTrs = arrayJoin(arrayMap(entries, renderMatrixHtmlRow), '\n');
+  const progressTrs = arrayJoin(arrayMap(entries, renderProgressionHtmlRow), '\n');
+  const bEntries = getScenarioBEntries(entries);
+  const bCard = renderScenarioBHtmlCard(summary, bEntries);
+
+  const matrixBody = matrixTrs || '        <tr><td colspan="6">No combinations recorded</td></tr>';
+  const progressBody = progressTrs || '        <tr><td colspan="10">No progression recorded</td></tr>';
 
   return '<!doctype html>\n<html lang="en">\n<head>\n' +
     '  <meta charset="utf-8"/>\n' +
@@ -172,12 +307,12 @@ function renderComparisonProgressHtml(summary) {
     '    <div class="card">\n' +
     '      <h2>Version &amp; Commit Combination Matrix</h2>\n' +
     '      <table class="data-table"><thead><tr><th>Recorded (UTC)</th><th>Framework</th><th>Scenario / Profile</th><th>Lagrange</th><th>TiDB/TiKV</th><th>Digest</th></tr></thead>\n' +
-    `      <tbody>\n${matrixTrs || '        <tr><td colspan="6">No combinations recorded</td></tr>'}\n      </tbody></table>\n` +
+    `      <tbody>\n${matrixBody}\n      </tbody></table>\n` +
     '    </div>\n' +
     '    <div class="card">\n' +
     '      <h2>Performance &amp; Semantic Closure Progression</h2>\n' +
     '      <table class="data-table"><thead><tr><th>Recorded (UTC)</th><th>Scenario</th><th>Lagrange ops/s</th><th>Lagrange Latency</th><th>TiDB ops/s</th><th>TiDB Latency</th><th>Ratio</th><th>Retries</th><th>Proofs</th><th>Deltas</th></tr></thead>\n' +
-    `      <tbody>\n${progressTrs || '        <tr><td colspan="10">No progression recorded</td></tr>'}\n      </tbody></table>\n` +
+    `      <tbody>\n${progressBody}\n      </tbody></table>\n` +
     '    </div>\n' +
     bCard +
     '  </div>\n' +

@@ -15,11 +15,61 @@ import {
   '../../test/distributed/harness/benchmark-resource-live-observation-authority.js';
 import {runTiDbOltpAdapterSmoke} from './run-tidb-oltp-adapter-live.js';
 
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+
 const ZERO = 0;
 const ONE = 1;
 const NANOSECONDS_PER_SECOND = 1_000_000_000;
-const MEMORY_SAMPLE_INTERVAL_MS = 1000;
+const MILLISECONDS_PER_SECOND = 1000;
+const MEMORY_SAMPLE_INTERVAL_MS = MILLISECONDS_PER_SECOND;
 const RESOURCE_SIDE_ID = 'tidb';
+
+const COMPONENT_PD = 'pd';
+const COMPONENT_TIDB = 'tidb';
+const ROLE_PLACEMENT_DRIVER = 'placement-driver';
+const ROLE_SQL_SERVER = 'sql-server';
+const TIKV_PREFIX = 'tikv-';
+const ROLE_TIKV_STORE = 'tikv-store';
+const ROLE_UNKNOWN = 'unknown';
+
+const MSG_RESOURCE_SAMPLES_START_END = 'Expected start and end resource samples';
+
+const METHOD_DOCKER_WINDOW_SAMPLES =
+  'docker-provider-window-samples-plus-resource-live-authority-v1';
+const TRIGGER_START = 'after-warmup-before-measurement-timer';
+const TRIGGER_END = 'after-measurement-timer-before-cleanup';
+const MEASUREMENT_BOUNDARY_NOTE =
+  'Sampled Docker counters conservatively bracket the timed transaction ' +
+  'window by endpoint-snapshot overhead. Authority snapshots provide ' +
+  'identity, limits, storage endpoints, digest, and cleanup proof.';
+
+const FIELD_CPU_CORE_SECONDS = 'cpuCoreSeconds';
+const FIELD_NETWORK_CONTAINER_INTERFACE_BYTES =
+  'networkContainerInterfaceBytes';
+const FIELD_BLOCK_READ_BYTES = 'blockReadBytes';
+const FIELD_BLOCK_WRITE_BYTES = 'blockWriteBytes';
+const FIELD_BLOCK_OPERATIONS = 'blockOperations';
+
+const MSG_REQUIRES_PROVIDER = 'TiDB OLTP measurement requires provider';
+const MSG_REQUIRES_OUTPUT_PATH = 'TiDB OLTP measurement requires outputPath';
+const DEFAULT_SOURCE_REVISION = 'local-measurement';
+const STATUS_PASSED = 'passed';
+const MSG_EXPECTED_RESOURCE_OBSERVATION =
+  'Expected resource observation to start';
+const MSG_EXPECTED_SAMPLED_WINDOW =
+  'Expected sampled resource window to complete';
+const MSG_EXPECTED_REPEATED_MEMORY = 'Expected repeated memory samples';
+const EXPECTED_COMPONENT_COUNT = 5;
+
+const EVIDENCE_SCHEMA_VERSION = 3;
+const SCENARIO_TIDB_OLTP_BASELINE = 'tidb-oltp-baseline';
+const DEFAULT_NON_COMPARABLE_REASON =
+  'Not registered as comparative evidence.';
+const NEWLINE = '\n';
+const ENCODING_UTF8 = 'utf8';
+const JSON_INDENT = 2;
 
 const WORKLOAD_OPTIONS = Object.freeze({
   seed: 20260911,
@@ -46,7 +96,7 @@ async function inspectImageIdentity(provider, tag) {
 
 async function imageIdentities(provider, images) {
   const entries = await Promise.all(
-    Object.entries(images).map(async ([role, tag]) => [
+    arrayMap(Object.entries(images), async ([role, tag]) => [
       role,
       await inspectImageIdentity(provider, tag),
     ]),
@@ -57,19 +107,19 @@ async function imageIdentities(provider, images) {
 function resourceComponents(cluster) {
   return [
     {
-      componentId: 'pd',
+      componentId: COMPONENT_PD,
       sideId: RESOURCE_SIDE_ID,
       containerId: cluster.containers.pd.containerId,
       storagePath: DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
     },
-    ...cluster.containers.tikvStores.map((container, index) => ({
-      componentId: `tikv-${index + ONE}`,
+    ...arrayMap(cluster.containers.tikvStores, (container, index) => ({
+      componentId: `${TIKV_PREFIX}${index + ONE}`,
       sideId: RESOURCE_SIDE_ID,
       containerId: container.containerId,
       storagePath: DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
     })),
     {
-      componentId: 'tidb',
+      componentId: COMPONENT_TIDB,
       sideId: RESOURCE_SIDE_ID,
       containerId: cluster.containers.tidb.containerId,
       storagePath: DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
@@ -78,17 +128,19 @@ function resourceComponents(cluster) {
 }
 
 function componentRole(componentId) {
-  if (componentId === 'pd') return 'placement-driver';
-  if (componentId === 'tidb') return 'sql-server';
-  if (componentId.startsWith('tikv-')) return 'tikv-store';
-  return 'unknown';
+  if (componentId === COMPONENT_PD) return ROLE_PLACEMENT_DRIVER;
+  if (componentId === COMPONENT_TIDB) return ROLE_SQL_SERVER;
+  if (stringStartsWith(componentId, TIKV_PREFIX)) return ROLE_TIKV_STORE;
+  return ROLE_UNKNOWN;
 }
 
 async function captureWindowSample(provider, components) {
-  const entries = await Promise.all(components.map(async (component) => [
-    component.componentId,
-    await provider.getContainerStats(component.containerId),
-  ]));
+  const entries = await Promise.all(
+    arrayMap(components, async (component) => [
+      component.componentId,
+      await provider.getContainerStats(component.containerId),
+    ]),
+  );
   return {
     capturedAtMs: Date.now(),
     components: Object.fromEntries(entries),
@@ -97,7 +149,7 @@ async function captureWindowSample(provider, components) {
 
 function memorySampleProjection(sample) {
   const componentBytes = Object.fromEntries(
-    Object.entries(sample.components).map(([componentId, stats]) => [
+    arrayMap(Object.entries(sample.components), ([componentId, stats]) => [
       componentId,
       stats.memoryUsageBytes,
     ]),
@@ -128,7 +180,7 @@ function timeWeightedAverage(samples, valueFor) {
 }
 
 function summarizeMemory(samples, components) {
-  const projected = samples.map(memorySampleProjection);
+  const projected = arrayMap(samples, memorySampleProjection);
   const componentSummary = {};
   for (const component of components) {
     const componentId = component.componentId;
@@ -138,7 +190,7 @@ function summarizeMemory(samples, components) {
         (sample) => sample.componentBytes[componentId],
       ),
       peakBytes: Math.max(
-        ...projected.map((sample) => sample.componentBytes[componentId]),
+        ...arrayMap(projected, (sample) => sample.componentBytes[componentId]),
       ),
     };
   }
@@ -148,7 +200,7 @@ function summarizeMemory(samples, components) {
     components: componentSummary,
     topology: {
       averageBytes: timeWeightedAverage(projected, (sample) => sample.totalBytes),
-      peakBytes: Math.max(...projected.map((sample) => sample.totalBytes)),
+      peakBytes: Math.max(...arrayMap(projected, (sample) => sample.totalBytes)),
     },
     samples: projected,
   };
@@ -159,7 +211,7 @@ async function startWindowSampler(provider, components) {
   let stopped = false;
   let timer = null;
   let pending = null;
-  let failure = null;
+  let samplingError = null;
 
   async function sample() {
     samples.push(await captureWindowSample(provider, components));
@@ -170,7 +222,7 @@ async function startWindowSampler(provider, components) {
     try {
       await sample();
     } catch (error) {
-      failure = error;
+      samplingError = error;
       stopped = true;
       return;
     }
@@ -191,9 +243,9 @@ async function startWindowSampler(provider, components) {
       stopped = true;
       if (timer !== null) clearTimeout(timer);
       if (pending !== null) await pending;
-      if (failure) throw failure;
+      if (samplingError) throw samplingError;
       await sample();
-      assert.ok(samples.length >= 2, 'Expected start and end resource samples');
+      assert.ok(samples.length >= 2, MSG_RESOURCE_SAMPLES_START_END);
       return {
         samples,
         memory: summarizeMemory(samples, components),
@@ -219,7 +271,8 @@ function blockOperations(stats) {
 }
 
 function authorityObservationFor(calibration, componentId) {
-  const observation = calibration.artifact.payload.components.find(
+  const observation = arrayFind(
+    calibration.artifact.payload.components,
     (candidate) => candidate.componentId === componentId,
   );
   assert.ok(observation, `Missing resource authority observation for ${componentId}`);
@@ -305,30 +358,28 @@ function projectResourceAccounting(
   assert.equal(calibration.artifact.payload.cleanupVerified, true);
   const first = sampled.samples[ZERO];
   const last = sampled.samples.at(-ONE);
-  const componentRows = components.map((component) => componentWindowProjection(
-    component,
-    first,
-    last,
-    sampled.memory.components[component.componentId],
-    calibration,
-  ));
-  const elapsedSeconds = measurementElapsedMs / 1000;
-  const cpuCoreSeconds = sumField(componentRows, 'cpuCoreSeconds');
+  const componentRows = arrayMap(components, (component) =>
+    componentWindowProjection(
+      component,
+      first,
+      last,
+      sampled.memory.components[component.componentId],
+      calibration,
+    ));
+  const elapsedSeconds = measurementElapsedMs / MILLISECONDS_PER_SECOND;
+  const cpuCoreSeconds = sumField(componentRows, FIELD_CPU_CORE_SECONDS);
   return {
-    method: 'docker-provider-window-samples-plus-resource-live-authority-v1',
+    method: METHOD_DOCKER_WINDOW_SAMPLES,
     measurementBoundary: {
       setupExcluded: true,
       warmupExcluded: true,
       startHookOutsideWorkloadTimer: true,
       endHookOutsideWorkloadTimer: true,
-      startTrigger: 'after-warmup-before-measurement-timer',
-      endTrigger: 'after-measurement-timer-before-cleanup',
+      startTrigger: TRIGGER_START,
+      endTrigger: TRIGGER_END,
       measuredTransactionWindow: transactionWindow,
       workloadElapsedMs: measurementElapsedMs,
-      note:
-        'Sampled Docker counters conservatively bracket the timed transaction ' +
-        'window by endpoint-snapshot overhead. Authority snapshots provide ' +
-        'identity, limits, storage endpoints, digest, and cleanup proof.',
+      note: MEASUREMENT_BOUNDARY_NOTE,
     },
     authorityArtifact: calibration.artifact,
     memorySampling: sampled.memory,
@@ -344,10 +395,10 @@ function projectResourceAccounting(
       memoryAverageBytes: sampled.memory.topology.averageBytes,
       memoryPeakBytes: sampled.memory.topology.peakBytes,
       networkContainerInterfaceBytes:
-        sumField(componentRows, 'networkContainerInterfaceBytes'),
-      blockReadBytes: sumField(componentRows, 'blockReadBytes'),
-      blockWriteBytes: sumField(componentRows, 'blockWriteBytes'),
-      blockOperations: sumField(componentRows, 'blockOperations'),
+        sumField(componentRows, FIELD_NETWORK_CONTAINER_INTERFACE_BYTES),
+      blockReadBytes: sumField(componentRows, FIELD_BLOCK_READ_BYTES),
+      blockWriteBytes: sumField(componentRows, FIELD_BLOCK_WRITE_BYTES),
+      blockOperations: sumField(componentRows, FIELD_BLOCK_OPERATIONS),
       provisionedCpuCores: componentRows.reduce(
         (sum, component) => sum + component.provisioned.cpuCores,
         ZERO,
@@ -362,15 +413,15 @@ function projectResourceAccounting(
 
 async function runTiDbOltpMeasurement(options = {}) {
   const provider = options.provider;
-  assert.ok(provider, 'TiDB OLTP measurement requires provider');
+  assert.ok(provider, MSG_REQUIRES_PROVIDER);
   const outputPath = options.outputPath;
-  assert.ok(outputPath, 'TiDB OLTP measurement requires outputPath');
+  assert.ok(outputPath, MSG_REQUIRES_OUTPUT_PATH);
   const workloadOptions = Object.freeze({
     ...WORKLOAD_OPTIONS,
     ...(options.workloadOptions || {}),
   });
   const sourceRevision =
-    options.sourceRevision || process.env.GITHUB_SHA || 'local-measurement';
+    options.sourceRevision || process.env.GITHUB_SHA || DEFAULT_SOURCE_REVISION;
 
   let observationSession = null;
   let observedComponents = null;
@@ -407,7 +458,7 @@ async function runTiDbOltpMeasurement(options = {}) {
     measurementHooks,
   });
 
-  assert.equal(run.status, 'passed');
+  assert.equal(run.status, STATUS_PASSED);
   assert.equal(run.workload.measurement.failed, ZERO);
   assert.equal(
     run.workload.measurement.succeeded,
@@ -416,9 +467,9 @@ async function runTiDbOltpMeasurement(options = {}) {
   assert.ok(run.workload.opsPerSec > ZERO);
   assert.ok(run.workload.latency.count > ZERO);
   assert.match(run.workload.measurementPlanSha256, /^[a-f0-9]{64}$/u);
-  assert.ok(observationSession, 'Expected resource observation to start');
-  assert.ok(sampledWindow, 'Expected sampled resource window to complete');
-  assert.ok(sampledWindow.memory.sampleCount >= 2, 'Expected repeated memory samples');
+  assert.ok(observationSession, MSG_EXPECTED_RESOURCE_OBSERVATION);
+  assert.ok(sampledWindow, MSG_EXPECTED_SAMPLED_WINDOW);
+  assert.ok(sampledWindow.memory.sampleCount >= 2, MSG_EXPECTED_REPEATED_MEMORY);
 
   const finalization =
     await finalizeBenchmarkResourceLiveObservation(observationSession);
@@ -426,7 +477,7 @@ async function runTiDbOltpMeasurement(options = {}) {
     finalization.receipt,
     finalization.authorization,
   );
-  assert.equal(calibration.artifact.payload.components.length, 5);
+  assert.equal(calibration.artifact.payload.components.length, EXPECTED_COMPONENT_COUNT);
 
   const resourceAccounting = projectResourceAccounting(
     calibration,
@@ -437,12 +488,12 @@ async function runTiDbOltpMeasurement(options = {}) {
   );
 
   const evidence = {
-    schemaVersion: 3,
-    scenario: 'tidb-oltp-baseline',
+    schemaVersion: EVIDENCE_SCHEMA_VERSION,
+    scenario: SCENARIO_TIDB_OLTP_BASELINE,
     evidenceClass: options.evidenceClass,
     comparable: options.comparable === true,
     nonComparableReason: options.comparable === true ? null :
-      String(options.nonComparableReason || 'Not registered as comparative evidence.'),
+      String(options.nonComparableReason || DEFAULT_NON_COMPARABLE_REASON),
     generatedAt: new Date().toISOString(),
     source: {
       gitSha: process.env.GITHUB_SHA || null,
@@ -470,7 +521,11 @@ async function runTiDbOltpMeasurement(options = {}) {
   };
 
   await mkdir(path.dirname(outputPath), {recursive: true});
-  await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
+  await writeFile(
+    outputPath,
+    JSON.stringify(evidence, null, JSON_INDENT) + NEWLINE,
+    ENCODING_UTF8,
+  );
 
   return {
     evidencePath: outputPath,

@@ -196,7 +196,7 @@ function evaluatePhysicalPlacement(options = {}) {
   };
 }
 
-async function waitForPhysicalTablePlacement(options = {}) {
+function resolvePlacementOptions(options = {}) {
   const provider = options.provider;
   if (!provider || typeof provider.execInContainer !== 'function') {
     throw new Error('TiDB physical placement proof requires provider.execInContainer');
@@ -216,6 +216,75 @@ async function waitForPhysicalTablePlacement(options = {}) {
   );
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  return {
+    provider,
+    clientContainerId,
+    endpoint,
+    replicaTarget,
+    expectedAddresses,
+    timeoutMs,
+    pollIntervalMs,
+  };
+}
+
+async function executePlacementAttempt(provider, clientContainerId, endpoint, options) {
+  const lastStoreResult = await provider.execInContainer(
+    clientContainerId,
+    mysqlCommand(endpoint, storeStatusSql()),
+  );
+  const lastPeerResult = await provider.execInContainer(
+    clientContainerId,
+    mysqlCommand(
+      endpoint,
+      regionPeerPlacementSql(options.databaseName, options.tableName),
+    ),
+  );
+  return {lastStoreResult, lastPeerResult};
+}
+
+function evaluatePlacementAttempt(
+  lastStoreResult,
+  lastPeerResult,
+  expectedAddresses,
+  replicaTarget,
+) {
+  if (lastStoreResult?.exitCode !== ZERO || lastPeerResult?.exitCode !== ZERO) {
+    return null;
+  }
+  return evaluatePhysicalPlacement({
+    stores: parseStoreRows(lastStoreResult.stdout),
+    peers: parsePeerRows(lastPeerResult.stdout),
+    expectedAddresses,
+    replicaTarget,
+  });
+}
+
+function formatPlacementTimeoutError(
+  timeoutMs,
+  lastStoreResult,
+  lastPeerResult,
+  lastEvaluation,
+) {
+  const storesExit = lastStoreResult?.exitCode ?? 'unknown';
+  const peersExit = lastPeerResult?.exitCode ?? 'unknown';
+  const evaluation = JSON.stringify(lastEvaluation);
+  return new Error(
+    `TiDB physical table placement did not converge within ${timeoutMs}ms; ` +
+    `storesExit=${storesExit} peersExit=${peersExit} evaluation=${evaluation}`,
+  );
+}
+
+async function waitForPhysicalTablePlacement(options = {}) {
+  const {
+    provider,
+    clientContainerId,
+    endpoint,
+    replicaTarget,
+    expectedAddresses,
+    timeoutMs,
+    pollIntervalMs,
+  } = resolvePlacementOptions(options);
+
   const started = Date.now();
   let attempts = ZERO;
   let lastEvaluation = null;
@@ -224,24 +293,22 @@ async function waitForPhysicalTablePlacement(options = {}) {
 
   while (Date.now() - started < timeoutMs) {
     attempts += ONE;
-    lastStoreResult = await provider.execInContainer(
+    const attemptResults = await executePlacementAttempt(
+      provider,
       clientContainerId,
-      mysqlCommand(endpoint, storeStatusSql()),
+      endpoint,
+      options,
     );
-    lastPeerResult = await provider.execInContainer(
-      clientContainerId,
-      mysqlCommand(
-        endpoint,
-        regionPeerPlacementSql(options.databaseName, options.tableName),
-      ),
+    lastStoreResult = attemptResults.lastStoreResult;
+    lastPeerResult = attemptResults.lastPeerResult;
+    const evaluation = evaluatePlacementAttempt(
+      lastStoreResult,
+      lastPeerResult,
+      expectedAddresses,
+      replicaTarget,
     );
-    if (lastStoreResult?.exitCode === ZERO && lastPeerResult?.exitCode === ZERO) {
-      lastEvaluation = evaluatePhysicalPlacement({
-        stores: parseStoreRows(lastStoreResult.stdout),
-        peers: parsePeerRows(lastPeerResult.stdout),
-        expectedAddresses,
-        replicaTarget,
-      });
+    if (evaluation) {
+      lastEvaluation = evaluation;
       if (lastEvaluation.ready) {
         return {...lastEvaluation, attempts};
       }
@@ -249,11 +316,11 @@ async function waitForPhysicalTablePlacement(options = {}) {
     await sleep(pollIntervalMs);
   }
 
-  throw new Error(
-    `TiDB physical table placement did not converge within ${timeoutMs}ms; ` +
-    `storesExit=${lastStoreResult?.exitCode ?? 'unknown'} ` +
-    `peersExit=${lastPeerResult?.exitCode ?? 'unknown'} ` +
-    `evaluation=${JSON.stringify(lastEvaluation)}`,
+  throw formatPlacementTimeoutError(
+    timeoutMs,
+    lastStoreResult,
+    lastPeerResult,
+    lastEvaluation,
   );
 }
 

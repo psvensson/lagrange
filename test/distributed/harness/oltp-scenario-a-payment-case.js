@@ -12,6 +12,9 @@ import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 } from './oltp-scenario-a-semantic-gate.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+
 const ZERO = 0;
 const ONE = 1;
 const CASE_ID = 'scenario-a-payment-v1';
@@ -41,7 +44,7 @@ const CLAIMED_PROOF_IDS = freezeRecord([
 ].sort());
 
 function requireRow(rows, predicate, label) {
-  const matches = rows.filter(predicate);
+  const matches = arrayFilter(rows, predicate);
   if (matches.length !== ONE) {
     throw new Error(`Scenario A payment case expected one ${label} row`);
   }
@@ -51,7 +54,8 @@ function requireRow(rows, predicate, label) {
 function buildScenarioAPaymentCase() {
   const dataset = buildOltpBaselineDataset(WORKLOAD);
   const plan = buildOltpBaselinePlan(WORKLOAD);
-  const operation = plan.workers[ZERO].measurement.find(
+  const operation = arrayFind(
+    plan.workers[ZERO].measurement,
     ({kind}) => kind === OLTP_OPERATION_KIND.PAYMENT,
   );
   if (!operation) throw new Error('Scenario A payment case has no payment operation');

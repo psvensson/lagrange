@@ -11,6 +11,10 @@ import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 } from './oltp-scenario-a-semantic-gate.js';
 
+const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 const ZERO = 0;
 const ONE = 1;
 const CASE_ID = 'scenario-a-failure-atomicity-v1';
@@ -85,7 +89,7 @@ function buildScenarioAFailureAtomicityCase() {
 }
 
 function normalizeSha256(value, label) {
-  const digest = String(value || '').trim().toLowerCase();
+  const digest = stringToLowerCase(stringTrim(String(value || '')));
   if (!SHA256_PATTERN.test(digest)) {
     throw new Error(`${label} must be a SHA-256 digest`);
   }
@@ -109,7 +113,7 @@ function evaluateScenarioAFailureAtomicityObservation(observation = {}) {
   });
   const failures = [];
   if (!actual.terminalFailureObserved) failures.push('terminal_failure_missing');
-  if (!actual.errorMessage.includes(expected.terminalErrorSubstring)) {
+  if (!stringIncludes(actual.errorMessage, expected.terminalErrorSubstring)) {
     failures.push('unexpected_error');
   }
   if (actual.stateBeforeSha256 !== actual.stateAfterSha256) {

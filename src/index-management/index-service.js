@@ -17,14 +17,49 @@ import {
   INDEX_DEFAULTS,
   INDEX_ERROR_MSG,
   INDEX_LOG_MSG,
+  INDEX_READABLE_STATE,
   INDEX_SUBSYSTEM,
   INDEX_TYPE,
 } from './index-constants.js';
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {indexServiceCdcHandler} from './index-service-cdc-handler.js';
 import {indexServicePartitionMethods} from './index-service-partition-methods.js';
+import {indexServiceGlobalMethods} from './index-service-global-methods.js';
 
 const LOCAL_STR_CRITICAL = 'critical';
+
+function resolvePartitionServiceInstance(service, partitionId) {
+  if (!service) return null;
+  if (typeof service.getPartition === 'function') {
+    const p = service.getPartition(partitionId);
+    if (p) return p;
+  }
+  if (service.partitionId === partitionId) {
+    return service;
+  }
+  return null;
+}
+
+function resolveEnginePartitionInstance(engine, partitionId) {
+  if (!engine) return null;
+  if (typeof engine.partitionServicesProvider === 'function') {
+    const provided = engine.partitionServicesProvider(partitionId);
+    const p = (provided instanceof Map || typeof provided?.get === 'function') ?
+      provided.get(partitionId) : provided;
+    if (p) return p;
+  }
+  if (typeof engine.getPartitionService === 'function') {
+    return engine.getPartitionService(partitionId);
+  }
+  return null;
+}
+
+function wrapPartitionInstance(instance, partitionRow) {
+  if (!instance) return partitionRow;
+  return Object.assign(Object.create(instance), partitionRow || {}, {
+    executeQuery: (s, params) => instance.executeQuery(s, params),
+  });
+}
 
 function resolveOptionIndexName(options) {
   const raw = options.indexName || options.name || null;
@@ -74,6 +109,9 @@ class IndexService {
     this.partitionService = options.partitionService || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
+    this.requirePartitionMaterialization =
+      Boolean(options.requirePartitionMaterialization);
+    this.globalIndexCoordinator = options.globalIndexCoordinator || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -87,6 +125,7 @@ class IndexService {
 
     // Track indices by table for quick lookup
     this.indexCache = new Map(); // tableId -> Map(indexName -> indexMetadata)
+    this.indices = new Map(); // indexName -> indexMetadata
 
     this.initialized = false;
   }
@@ -134,18 +173,21 @@ class IndexService {
         const indexMetadata = {
           indexId: index.index_id,
           tableId: index.table_id,
+          tableName: index.table_name || null,
           indexName: index.index_name,
           columnNames: JSON.parse(
             index.column_names || STRING.EMPTY_JSON_ARRAY,
           ),
           indexType: index.index_type || INDEX_TYPE.BTREE,
-          unique: Boolean(index.is_unique),
+          unique: Boolean(index.unique || index.is_unique),
+          state: index.state || INDEX_READABLE_STATE.READY,
           createdAt: index.created_at,
         };
 
         this.indexCache.get(tableId).set(
           index.index_name, indexMetadata,
         );
+        this.indices.set(index.index_name, indexMetadata);
       }
 
       this.logger.debug(INDEX_LOG_MSG.INDICES_LOADED, {
@@ -167,6 +209,31 @@ class IndexService {
   resolveTableIdFromCache(tableName) {
     const table = this.systemTableCache?.get?.(TABLES.TABLES, tableName);
     return table?.table_id || table?.tableId || null;
+  }
+
+  _hasEngineTableInfo(name) {
+    if (typeof this.sqlQueryEngine?.getTableInfo === 'function') {
+      return Boolean(this.sqlQueryEngine.getTableInfo(name));
+    }
+    return false;
+  }
+
+  _hasCachedTableConfig(name) {
+    if (typeof this.systemTableCache?.get === 'function') {
+      return Boolean(this.systemTableCache.get(TABLES.TABLES, name));
+    }
+    return false;
+  }
+
+  /**
+   * Check whether a table is formally configured in engine or system cache.
+   * @param {string} tableId - Table ID.
+   * @param {string} tableName - Table name.
+   * @return {boolean} True if table exists in engine or system cache.
+   */
+  isRealTableConfigured(tableId, tableName) {
+    const name = tableName || tableId;
+    return this._hasEngineTableInfo(name) || this._hasCachedTableConfig(name);
   }
 
   /**
@@ -277,10 +344,13 @@ class IndexService {
         {
           index_id: indexId,
           table_id: tableId,
+          table_name: metadata.tableName || null,
           index_name: indexName,
           column_names: JSON.stringify(columnNames),
           index_type: indexType,
           is_unique: unique ? 1 : 0,
+          unique: unique ? 1 : 0,
+          state: metadata.state || INDEX_READABLE_STATE.READY,
           created_at: createdAt,
         },
         {
@@ -292,13 +362,26 @@ class IndexService {
   }
 
   /**
+   * Record created index into cache maps.
+   * @param {Object} indexMetadata - Index metadata.
+   * @private
+   */
+  _recordCreatedIndex(indexMetadata) {
+    this._cacheIndexMetadata(indexMetadata);
+  }
+
+  /**
    * Create a new index on a table.
    * Requirements: 12.1, 12.2
-   * @param {Object} options - Index creation options.
+   * @param {Object|string} sqlOrAst - Index creation options, AST, or DDL.
+   * @param {Object} [options={}] - Additional options.
    * @return {Promise<Object>} Created index metadata.
    */
-  async createIndex(options) {
-    const normalized = await this.normalizeCreateIndexOptions(options);
+  async createIndex(sqlOrAst, options = {}) {
+    if (this._isGlobalIndexCreation(sqlOrAst, options)) {
+      return this._createGlobalIndexEntry(sqlOrAst, options);
+    }
+    const normalized = await this.normalizeCreateIndexOptions(sqlOrAst);
     const {tableId, tableName, indexName, columnNames, indexType, unique, ifNotExists} = normalized;
 
     this.assertCreateIndexParamsValid(tableId, indexName, columnNames);
@@ -323,16 +406,21 @@ class IndexService {
     const indexId = `idx-${uuidv4()}`;
     const createdAt = Date.now();
     const indexMetadata = {
-      indexId, tableId, tableName, indexName, columnNames, indexType, unique, createdAt,
+      indexId,
+      tableId,
+      tableName,
+      indexName,
+      columnNames,
+      indexType,
+      unique,
+      state: INDEX_READABLE_STATE.READY,
+      createdAt,
     };
 
-    await this.persistIndexMetadata(indexMetadata);
     await this.createSQLiteIndex(tableId, tableName, indexName, columnNames, {unique});
+    await this.persistIndexMetadata(indexMetadata);
 
-    if (!this.indexCache.has(tableId)) {
-      this.indexCache.set(tableId, new Map());
-    }
-    this.indexCache.get(tableId).set(indexName, indexMetadata);
+    this._recordCreatedIndex(indexMetadata);
 
     this.logger.info(INDEX_LOG_MSG.INDEX_CREATED, {indexId, tableId, indexName});
     return indexMetadata;
@@ -345,14 +433,21 @@ class IndexService {
    * @private
    */
   async getPartitionsForTable(tableId) {
+    if (typeof this.sqlQueryEngine?.getTablePartitions === 'function') {
+      const enginePartitions = this.sqlQueryEngine.getTablePartitions(tableId);
+      if (Array.isArray(enginePartitions) && enginePartitions.length > 0) {
+        return enginePartitions;
+      }
+    }
+
     const partitions = [];
 
     let partitionRecords = [];
     if (this.canReadMetadata()) {
       const result = await this.getControlPlaneSystemTableGateway().readRows(
         TABLES.PARTITIONS,
-        'SELECT * FROM partitions WHERE table_id = ?',
-        [tableId],
+        'SELECT * FROM partitions WHERE table_id = ? OR table_name = ?',
+        [tableId, tableId],
       );
       partitionRecords = result.rows || [];
     }
@@ -369,6 +464,16 @@ class IndexService {
     return partitions;
   }
 
+  async getPartitionRow(partitionId) {
+    if (!this.canReadMetadata()) return null;
+    const result = await this.getControlPlaneSystemTableGateway().readRows(
+      TABLES.PARTITIONS,
+      'SELECT * FROM partitions WHERE partition_id = ?',
+      [partitionId],
+    );
+    return result.rows?.[0] || null;
+  }
+
   /**
    * Get a partition by ID.
    * @param {string} partitionId - Partition ID.
@@ -376,29 +481,14 @@ class IndexService {
    * @private
    */
   async getPartition(partitionId) {
-    let partitionRow = null;
-    if (this.canReadMetadata()) {
-      const result = await this.getControlPlaneSystemTableGateway().readRows(
-        TABLES.PARTITIONS,
-        'SELECT * FROM partitions WHERE partition_id = ?',
-        [partitionId],
-      );
-      partitionRow = result.rows?.[0] || null;
+    const partitionRow = await this.getPartitionRow(partitionId);
+    const serviceInstance = resolvePartitionServiceInstance(this.partitionService, partitionId);
+    if (serviceInstance) {
+      return wrapPartitionInstance(serviceInstance, partitionRow);
     }
-    if (this.partitionService) {
-      if (typeof this.partitionService.getPartition === 'function') {
-        const p = this.partitionService.getPartition(partitionId);
-        if (p) {
-          return Object.assign(Object.create(p), partitionRow || {}, {
-            executeQuery: (s, params) => p.executeQuery(s, params),
-          });
-        }
-      }
-      if (this.partitionService.partitionId === partitionId) {
-        return Object.assign(Object.create(this.partitionService), partitionRow || {}, {
-          executeQuery: (s, params) => this.partitionService.executeQuery(s, params),
-        });
-      }
+    const engineInstance = resolveEnginePartitionInstance(this.sqlQueryEngine, partitionId);
+    if (engineInstance) {
+      return wrapPartitionInstance(engineInstance, partitionRow);
     }
     return partitionRow;
   }
@@ -449,6 +539,38 @@ class IndexService {
   }
 
   /**
+   * Remove local index storage from persistent system table and SQLite.
+   * @param {Object} indexMetadata - Cached index metadata.
+   * @param {string} resolvedTableId - Resolved table ID.
+   * @param {string} indexName - Index name.
+   * @private
+   */
+  async _removeLocalIndexStorage(indexMetadata, resolvedTableId, indexName) {
+    await this.deleteIndexMetadata(indexMetadata, resolvedTableId, indexName);
+    await this.dropSQLiteIndex(resolvedTableId, indexName);
+  }
+
+  /**
+   * Drop a local partition-level index from metadata and SQLite.
+   * @param {string} indexName - Index name.
+   * @param {Object} indexMetadata - Cached index metadata.
+   * @param {string|null} tableId - Table ID.
+   * @return {Promise<boolean>} True if dropped.
+   * @private
+   */
+  async _dropLocalIndexEntry(indexName, indexMetadata, tableId) {
+    const resolvedTableId = indexMetadata.tableId || tableId;
+    await this._removeLocalIndexStorage(indexMetadata, resolvedTableId, indexName);
+    this._removeIndexFromCache(indexName, resolvedTableId);
+    this.logger.info(INDEX_LOG_MSG.INDEX_DROPPED, {
+      indexId: indexMetadata.indexId,
+      tableId: resolvedTableId,
+      indexName,
+    });
+    return true;
+  }
+
+  /**
    * Drop an index from a table.
    * Supports dropIndex(tableId, indexName), dropIndex(ast), dropIndex({indexName, ifExists}).
    * @param {string|Object} arg1 - Table ID or AST / options object.
@@ -464,36 +586,21 @@ class IndexService {
 
     this.logger.info(INDEX_LOG_MSG.DROPPING_INDEX, {tableId, indexName});
 
-    let indexMetadata = tableId ? this.getIndex(tableId, indexName) : null;
-    if (!indexMetadata) {
-      indexMetadata = await this.findIndexByName(indexName);
+    const indexMetadata = (tableId ? this.getIndex(tableId, indexName) : null) ||
+      (await this.findIndexByName(indexName));
+
+    if (this._isGlobalIndexDrop(indexMetadata, indexName)) {
+      return this._dropGlobalIndexEntry(indexName, indexMetadata, tableId, {ifExists});
     }
 
     if (!indexMetadata) {
       if (ifExists) {
         return true;
       }
-      throw new Error(
-        `${INDEX_ERROR_MSG.INDEX_NOT_FOUND_PREFIX}${indexName}` +
-        (tableId ? `${INDEX_ERROR_MSG.INDEX_NOT_FOUND_MIDDLE}${tableId}` : '') +
-        INDEX_ERROR_MSG.INDEX_NOT_FOUND_SUFFIX,
-      );
+      this._throwIndexNotFound(indexName, tableId);
     }
 
-    const resolvedTableId = indexMetadata.tableId || tableId;
-    await this.deleteIndexMetadata(indexMetadata, resolvedTableId, indexName);
-    await this.dropSQLiteIndex(resolvedTableId, indexName);
-
-    if (this.indexCache.has(resolvedTableId)) {
-      this.indexCache.get(resolvedTableId).delete(indexName);
-    }
-
-    this.logger.info(INDEX_LOG_MSG.INDEX_DROPPED, {
-      indexId: indexMetadata.indexId,
-      tableId: resolvedTableId,
-      indexName,
-    });
-    return true;
+    return this._dropLocalIndexEntry(indexName, indexMetadata, tableId);
   }
 
   /**
@@ -510,16 +617,26 @@ class IndexService {
   }
 
   /**
-   * Get index metadata by table ID and index name.
-   * @param {string} tableId - Table ID.
-   * @param {string} indexName - Index name.
+   * Get index metadata by table ID and index name, or by index name alone.
+   * @param {string} tableId - Table ID or index name.
+   * @param {string} [indexName] - Index name.
    * @return {Object|null} Index metadata or null.
    */
   getIndex(tableId, indexName) {
-    if (!this.indexCache.has(tableId)) {
-      return null;
+    if (indexName !== undefined) {
+      if (this.indexCache.has(tableId)) {
+        const found = this.indexCache.get(tableId).get(indexName);
+        if (found) return found;
+      }
+      return this.indices?.get(indexName) || null;
     }
-    return this.indexCache.get(tableId).get(indexName) || null;
+    const byName = this.indices?.get(tableId) || this.getIndexByName(tableId);
+    if (byName) return byName;
+    if (this.globalIndexCoordinator?.getCatalogRecord) {
+      const cat = this.globalIndexCoordinator.getCatalogRecord(tableId);
+      if (cat) return this._catalogToMetadata(cat);
+    }
+    return null;
   }
 
   /**
@@ -538,52 +655,25 @@ class IndexService {
   }
 
   /**
-   * Find index metadata by name across memory cache and persistent system table.
-   * @param {string} indexName - Index name.
-   * @return {Promise<Object|null>} Index metadata or null.
-   */
-  async findIndexByName(indexName) {
-    const cached = this.getIndexByName(indexName);
-    if (cached) return cached;
-    if (this.canReadMetadata()) {
-      try {
-        const result = await this.getControlPlaneSystemTableGateway().readRows(
-          TABLES.INDICES,
-          'SELECT * FROM indices WHERE index_name = ?',
-          [indexName],
-        );
-        const row = result.rows?.[0];
-        if (row) {
-          return {
-            indexId: row.index_id,
-            tableId: row.table_id,
-            indexName: row.index_name,
-            columnNames: JSON.parse(row.column_names || STRING.EMPTY_JSON_ARRAY),
-            indexType: row.index_type || INDEX_TYPE.BTREE,
-            unique: Boolean(row.is_unique),
-            createdAt: row.created_at,
-          };
-        }
-      } catch (err) {
-        this.logger.debug(INDEX_LOG_MSG.FIND_INDEX_FAILED, {
-          indexName,
-          error: err?.message,
-        });
-      }
-    }
-    return null;
-  }
-
-  /**
    * Get all indices for a table.
-   * @param {string} tableId - Table ID.
+   * @param {string} tableId - Table ID or table name.
    * @return {Array<Object>} Array of index metadata.
    */
   getIndicesForTable(tableId) {
-    if (!this.indexCache.has(tableId)) {
-      return [];
+    const results = [];
+    if (this.indexCache.has(tableId)) {
+      results.push(...this.indexCache.get(tableId).values());
     }
-    return Array.from(this.indexCache.get(tableId).values());
+    if (this.globalIndexCoordinator?.getIndexesForTable) {
+      const globalIndexes = this.globalIndexCoordinator.getIndexesForTable(tableId);
+      for (const gi of globalIndexes) {
+        const name = gi.index_name || gi.indexName;
+        if (!results.some((r) => r.indexName === name)) {
+          results.push(this._catalogToMetadata(gi));
+        }
+      }
+    }
+    return results;
   }
 
   /**
@@ -653,6 +743,7 @@ class IndexService {
   async shutdown() {
     this.logger.info(INDEX_LOG_MSG.SHUTTING_DOWN);
     this.indexCache.clear();
+    this.indices?.clear();
     this.initialized = false;
   }
 }
@@ -661,6 +752,7 @@ Object.assign(
   IndexService.prototype,
   indexServiceCdcHandler,
   indexServicePartitionMethods,
+  indexServiceGlobalMethods,
 );
 
 export {IndexService, IndexType};
