@@ -20,11 +20,20 @@ import {
   DEFAULT_COMPARISON_PROGRESS_HTML_PATH,
   DEFAULT_COMPARISON_PROGRESS_MARKDOWN_PATH,
   DEFAULT_COMPARISON_PROGRESS_SVG_PATH,
+  DEFAULT_SCENARIO_B_COMPARISON_SVG_PATH,
   renderComparisonProgressHtml,
   renderComparisonProgressMarkdown,
   renderComparisonProgressSvg,
+  renderScenarioBComparisonSvg,
   writeComparisonStaticWebArtifacts,
 } from '../../test/distributed/harness/oltp-comparison-static-web.js';
+import {
+  escapeXml,
+  formatNum,
+  formatSigned,
+  shortSha,
+  getScenarioBEntries,
+} from '../../test/distributed/harness/oltp-comparison-svg-renderer.js';
 
 const stringIncludes = Function.call.bind(String.prototype.includes);
 
@@ -58,6 +67,41 @@ const DOCS_README_PATH = 'docs/README.md';
 const LINK_MD = 'tidb-comparison-progress.md';
 const LINK_HTML = 'tidb-comparison-progress.html';
 const MIN_COMBINATIONS = 4;
+const TMP_SCENARIO_B_SVG_NAME = 'scenario-b.svg';
+const MARKER_RISK_DECISIONS = 'Risk Decisions/sec';
+const MARKER_WAN_TRAFFIC = 'Cross-Island WAN Traffic';
+const MARKER_SCENARIO_B_SVG_FILE = 'tidb-scenario-b-comparison.svg';
+const ESCAPE_XML_INPUT = '<test & "val\'>';
+const ESCAPE_XML_EXPECTED = '&lt;test &amp; &quot;val&#39;&gt;';
+const NUM_FORMAT_INPUT = 12.3456;
+const NUM_FORMAT_EXPECTED = '12.35';
+const SIGNED_POS_INPUT = 5.2;
+const SIGNED_POS_EXPECTED = '+5.20';
+const SIGNED_NEG_INPUT = -3.1;
+const SIGNED_NEG_EXPECTED = '-3.10';
+const SHA_INPUT = '0123456789abcdef';
+const SHA_EXPECTED_LEN = 8;
+const SHA_EXPECTED = '01234567';
+const SCENARIO_B_FULL_ID = 'tidb-distributed-risk-decision';
+
+function verifySvgRendererHelpers() {
+  assert.equal(escapeXml(ESCAPE_XML_INPUT), ESCAPE_XML_EXPECTED);
+  assert.equal(formatNum(NUM_FORMAT_INPUT), NUM_FORMAT_EXPECTED);
+  assert.equal(formatSigned(SIGNED_POS_INPUT), SIGNED_POS_EXPECTED);
+  assert.equal(formatSigned(SIGNED_NEG_INPUT), SIGNED_NEG_EXPECTED);
+  assert.equal(shortSha(SHA_INPUT, SHA_EXPECTED_LEN), SHA_EXPECTED);
+  const sampleEntries = [
+    {framework: {scenarioId: SCENARIO_A}},
+    {
+      record: {
+        framework: {scenarioId: SCENARIO_B_FULL_ID},
+        metrics: {lagrange: {scenarioBScorecard: {}}},
+      },
+    },
+  ];
+  const bEntries = getScenarioBEntries(sampleEntries);
+  assert.equal(bEntries.length, 1);
+}
 
 function makeCombinationInput(overrides = {}) {
   return {
@@ -136,6 +180,7 @@ async function verifyEndToEndDiskAndStaticWeb() {
     const tmpNdjson = path.join(tmpDir, TMP_NDJSON_NAME);
     const tmpSummary = path.join(tmpDir, TMP_SUMMARY_NAME);
     const tmpSvg = path.join(tmpDir, TMP_SVG_NAME);
+    const tmpScenarioBSvg = path.join(tmpDir, TMP_SCENARIO_B_SVG_NAME);
     const tmpMd = path.join(tmpDir, TMP_MD_NAME);
     const tmpHtml = path.join(tmpDir, TMP_HTML_NAME);
 
@@ -155,10 +200,12 @@ async function verifyEndToEndDiskAndStaticWeb() {
     const webResult = await writeComparisonStaticWebArtifacts({
       summary: diskResult.summary,
       svgPath: tmpSvg,
+      scenarioBSvgPath: tmpScenarioBSvg,
       markdownPath: tmpMd,
       htmlPath: tmpHtml,
     });
     assert.equal(typeof webResult.svg === 'string', true);
+    assert.equal(typeof webResult.scenarioBSvg === 'string', true);
     assert.equal(typeof webResult.markdown === 'string', true);
     assert.equal(typeof webResult.html === 'string', true);
   } finally {
@@ -180,12 +227,22 @@ async function verifyCommittedDataAndWebArtifacts() {
   assert.equal(JSON.stringify(summary, null, 2) + NEWLINE, rawSummary);
 
   const rawSvg = await fs.readFile(DEFAULT_COMPARISON_PROGRESS_SVG_PATH, UTF8);
+  const rawScenarioBSvg = await fs.readFile(DEFAULT_SCENARIO_B_COMPARISON_SVG_PATH, UTF8);
   const rawMd = await fs.readFile(DEFAULT_COMPARISON_PROGRESS_MARKDOWN_PATH, UTF8);
   const rawHtml = await fs.readFile(DEFAULT_COMPARISON_PROGRESS_HTML_PATH, UTF8);
 
   assert.equal(renderComparisonProgressSvg(summary), rawSvg);
+  assert.equal(renderScenarioBComparisonSvg(summary), rawScenarioBSvg);
   assert.equal(renderComparisonProgressMarkdown(summary), rawMd);
   assert.equal(renderComparisonProgressHtml(summary), rawHtml);
+
+  assert.equal(stringIncludes(rawSvg, MARKER_RISK_DECISIONS), true);
+  assert.equal(stringIncludes(rawSvg, MARKER_WAN_TRAFFIC), true);
+  assert.equal(stringIncludes(rawScenarioBSvg, MARKER_RISK_DECISIONS), true);
+  assert.equal(stringIncludes(rawScenarioBSvg, MARKER_WAN_TRAFFIC), true);
+  assert.equal(stringIncludes(rawMd, MARKER_SCENARIO_B_SVG_FILE), true);
+  assert.equal(stringIncludes(rawHtml, MARKER_RISK_DECISIONS), true);
+  assert.equal(stringIncludes(rawHtml, MARKER_WAN_TRAFFIC), true);
 
   const rootReadme = await fs.readFile(README_PATH, UTF8);
   const docsReadme = await fs.readFile(DOCS_README_PATH, UTF8);
@@ -196,6 +253,7 @@ async function verifyCommittedDataAndWebArtifacts() {
 }
 
 const runGuard = async () => {
+  verifySvgRendererHelpers();
   await verifyCombinationKeySensitivities();
   await verifyUpsertSemantics();
   await verifyEndToEndDiskAndStaticWeb();
