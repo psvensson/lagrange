@@ -4,9 +4,10 @@
   "totalSlices": 5,
   "completedSlices": [
     "comparative-landing-page-and-postgresql-app-service",
-    "postgresql-plpgsql-server-side-locality-control"
+    "postgresql-plpgsql-server-side-locality-control",
+    "citus-colocated-tables-and-distributed-functions"
   ],
-  "remainingSlicesCount": 3,
+  "remainingSlicesCount": 2,
   "updatedAt": "2026-10-30T16:45:00.000Z",
   "scenarios": [
     {
@@ -355,6 +356,120 @@
             "p99Ms": 21.8,
             "wanBytes": 1056,
             "roundTrips": 1
+          }
+        }
+      }
+    },
+    {
+      "targetId": "citus-sql-service",
+      "label": "Citus 13 (Sharded SQL RF=3 + App Service)",
+      "shortLabel": "Citus 13 (Sharded SQL + App)",
+      "version": "13.0-pg17",
+      "category": "sharded-postgresql-sql",
+      "topologyUnits": 5,
+      "processCount": 5,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "citus-comparison-progress.md",
+      "detailPageHtml": "citus-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "modeled-topology-oracle",
+        "throughputTxPerSec": 11.2,
+        "commitP50Ms": 280.4,
+        "commitP95Ms": 685,
+        "commitP99Ms": 960.4,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33
+      },
+      "scenarioB": {
+        "evidenceTier": "modeled-topology-oracle",
+        "decisionsPerSec": 256.4,
+        "p50Ms": 18.2,
+        "p95Ms": 27.6,
+        "p99Ms": 31.8,
+        "wanBytesPerDecision": 3120,
+        "sqlRoundTripsPerDecision": 3,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 468,
+            "p99Ms": 8.9,
+            "wanBytes": 1120,
+            "roundTrips": 1
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 276,
+            "p99Ms": 18.4,
+            "wanBytes": 2480,
+            "roundTrips": 2
+          },
+          "sequential": {
+            "decisionsPerSec": 164,
+            "p99Ms": 33.8,
+            "wanBytes": 4480,
+            "roundTrips": 4
+          },
+          "fan-out": {
+            "decisionsPerSec": 196,
+            "p99Ms": 28.4,
+            "wanBytes": 4400,
+            "roundTrips": 3
+          }
+        }
+      }
+    },
+    {
+      "targetId": "citus-distributed-function",
+      "label": "Citus 13 (Colocated Tables + Distributed Function RF=3)",
+      "shortLabel": "Citus 13 (Dist Function)",
+      "version": "13.0-pg17-udf",
+      "category": "sharded-postgresql-colocated-udf",
+      "topologyUnits": 4,
+      "processCount": 4,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "citus-comparison-progress.md",
+      "detailPageHtml": "citus-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "modeled-topology-oracle",
+        "throughputTxPerSec": 11.2,
+        "commitP50Ms": 280.4,
+        "commitP95Ms": 685,
+        "commitP99Ms": 960.4,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33
+      },
+      "scenarioB": {
+        "evidenceTier": "modeled-topology-oracle",
+        "decisionsPerSec": 364.2,
+        "p50Ms": 13.4,
+        "p95Ms": 20.1,
+        "p99Ms": 22.9,
+        "wanBytesPerDecision": 1540,
+        "sqlRoundTripsPerDecision": 1.75,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 605,
+            "p99Ms": 4.8,
+            "wanBytes": 280,
+            "roundTrips": 1
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 382,
+            "p99Ms": 14.6,
+            "wanBytes": 1240,
+            "roundTrips": 2
+          },
+          "sequential": {
+            "decisionsPerSec": 228,
+            "p99Ms": 26.8,
+            "wanBytes": 2360,
+            "roundTrips": 3
+          },
+          "fan-out": {
+            "decisionsPerSec": 268,
+            "p99Ms": 23.4,
+            "wanBytes": 2280,
+            "roundTrips": 2
           }
         }
       }

@@ -69,6 +69,7 @@ jobs:
             scripts/checks/tidb-version-gated-comparison-publisher.js \
             test/distributed/harness/comparative-matrix-runner.js \
             test/distributed/harness/postgresql-comparison-static-web.js \
+            test/distributed/harness/citus-comparison-static-web.js \
             test/distributed/harness/comparative-landing-svg-renderer.js \
             test/distributed/harness/comparative-landing-page.js \
             scripts/checks/comparative-benchmark-matrix-guard.js

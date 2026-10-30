@@ -45,11 +45,13 @@ on:
       - 'data/tidb-comparison/multi-system-matrix.json'
       - 'test/distributed/harness/comparative-matrix-runner.js'
       - 'test/distributed/harness/postgresql-comparison-static-web.js'
+      - 'test/distributed/harness/citus-comparison-static-web.js'
       - 'test/distributed/harness/comparative-landing-svg-renderer.js'
       - 'test/distributed/harness/comparative-landing-page.js'
       - 'docs/benchmarks/postgresql-comparison-progress.svg'
       - 'docs/benchmarks/postgresql-comparison-progress.md'
       - 'docs/benchmarks/postgresql-comparison-progress.html'
+      - 'docs/benchmarks/citus-comparison-progress.*'
       - 'docs/benchmarks/comparative-overview.svg'
       - 'docs/benchmarks/README.md'
       - 'docs/benchmarks/index.html'
@@ -108,6 +110,7 @@ jobs:
             scripts/checks/tidb-version-gated-comparison-publisher.js \
             test/distributed/harness/comparative-matrix-runner.js \
             test/distributed/harness/postgresql-comparison-static-web.js \
+            test/distributed/harness/citus-comparison-static-web.js \
             test/distributed/harness/comparative-landing-svg-renderer.js \
             test/distributed/harness/comparative-landing-page.js \
             scripts/checks/comparative-benchmark-matrix-guard.js
