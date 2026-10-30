@@ -27,6 +27,10 @@ on:
       - 'docs/benchmarks/tidb-comparison-progress.svg'
       - 'docs/benchmarks/tidb-comparison-progress.md'
       - 'docs/benchmarks/tidb-comparison-progress.html'
+      - 'test/distributed/harness/scenario-b-risk-dataset.js'
+      - 'test/distributed/harness/scenario-b-risk-oracle.js'
+      - 'test/distributed/harness/scenario-b-comparators.js'
+      - 'scripts/checks/scenario-b-risk-benchmark-guard.js'
   workflow_dispatch: {}
 
 permissions:
@@ -65,6 +69,11 @@ jobs:
             test/distributed/harness/oltp-comparison-history-store.js \
             scripts/checks/oltp-scenario-a-proof-ownership-guard.js \
             scripts/checks/oltp-comparison-history-store-guard.js \
-            test/distributed/harness/oltp-comparison-static-web.js
+            test/distributed/harness/oltp-comparison-static-web.js \
+            test/distributed/harness/scenario-b-risk-dataset.js \
+            test/distributed/harness/scenario-b-risk-oracle.js \
+            test/distributed/harness/scenario-b-comparators.js \
+            scripts/checks/scenario-b-risk-benchmark-guard.js
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js
           node scripts/checks/oltp-comparison-history-store-guard.js
+          node scripts/checks/scenario-b-risk-benchmark-guard.js
