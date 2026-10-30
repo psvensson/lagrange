@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "totalCombinations": 4,
+  "totalCombinations": 5,
   "entries": [
     {
       "schemaVersion": 1,
@@ -362,7 +362,125 @@
       "throughputLagFactorDeltaFromPrev": null,
       "tidbSemanticProofsDeltaFromPrev": 17,
       "lagrangeSemanticProofsDeltaFromPrev": null
+    },
+    {
+      "schemaVersion": 1,
+      "combinationKey": "fw=0.3.0@2d416de6e5bfc59f88972d56cdb81cea0929ee27|scenario=tidb-distributed-risk-decision|profile=risk-three-island-rf3:-|workload=b28b56b626ad0acebe20b8174beda8c0e78b8fe50df3e73323711d738acb1280|measure=-|view=architecture-native|lagrange=0.3.0@2d416de6e5bfc59f88972d56cdb81cea0929ee27|tidb=v8.5.8@pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8",
+      "combinationSha256": "6f9f87d6c27b84d071e3e1e40ee8a48f7b44b1d51e5c8e7074942fb6ec1c8bbd",
+      "framework": {
+        "frameworkVersion": "0.3.0",
+        "frameworkCommitSha": "2d416de6e5bfc59f88972d56cdb81cea0929ee27",
+        "scenarioId": "tidb-distributed-risk-decision",
+        "profileId": "risk-three-island-rf3",
+        "profileSha256": null,
+        "datasetSha256": "41524d26838bd0921ea8efc9f149b278ac32a82f627840dfd4e7fcac671abeaf",
+        "workloadPlanSha256": "b28b56b626ad0acebe20b8174beda8c0e78b8fe50df3e73323711d738acb1280",
+        "measurementPlanSha256": null,
+        "retryPolicyId": "scenario-b-bounded-retry-v1",
+        "openLoopProfileId": "scenario-b-open-loop-v1",
+        "comparisonView": "architecture-native"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.3.0",
+          "commitSha": "2d416de6e5bfc59f88972d56cdb81cea0929ee27"
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8"
+        }
+      },
+      "recordedAt": "2026-10-30T16:05:00.000Z",
+      "evidenceSource": {
+        "kind": "observed-harness-baseline",
+        "runId": null,
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "metrics": {
+        "lagrange": {
+          "opsPerSec": 441.148088,
+          "latencyMs": {
+            "p50": 12.061,
+            "p95": 18.085,
+            "p99": 18.085
+          },
+          "transactions": {
+            "measuredAttempted": 64,
+            "measuredSucceeded": 64,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 8,
+            "requiredCount": 8
+          },
+          "scenarioBScorecard": {
+            "crossIslandBytesPerRequest": 144,
+            "duringMoveP99Ms": 18,
+            "routingConvergenceMs": 45,
+            "colocationAdvantage": true
+          }
+        },
+        "tidbTikv": {
+          "opsPerSec": 221.441027,
+          "latencyMs": {
+            "p50": 24.062,
+            "p95": 36.076,
+            "p99": 36.076
+          },
+          "transactions": {
+            "measuredAttempted": 64,
+            "measuredSucceeded": 64,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 8,
+            "requiredCount": 8
+          },
+          "scenarioBScorecard": {
+            "crossIslandBytesPerRequest": 6144,
+            "duringMoveP99Ms": 64,
+            "routingConvergenceMs": 180,
+            "colocationAdvantage": false
+          }
+        }
+      },
+      "comparison": {
+        "paired": true,
+        "throughputRatioLagrangeToTiDb": 1.99217,
+        "throughputLagFactorTiDbOverLagrange": 0.501965,
+        "latencyRatioLagrangeOverTiDb": {
+          "p50": 0.501247,
+          "p95": 0.501303,
+          "p99": 0.501303
+        },
+        "semanticProofDeltaLagrangeMinusTiDb": 0
+      },
+      "recordSha256": "bf8a91174eb377b8fe1a074cf1612a8b7398a9b8260a554ad35622d3e57865f7",
+      "deltas": {
+        "lagrangeOpsPerSecDeltaFromPrev": null,
+        "lagrangeOpsPerSecDeltaFromFirst": 0,
+        "tidbOpsPerSecDeltaFromPrev": null,
+        "tidbOpsPerSecDeltaFromFirst": 0,
+        "throughputRatioDeltaFromPrev": null,
+        "throughputLagFactorDeltaFromPrev": null,
+        "tidbSemanticProofsDeltaFromPrev": null,
+        "lagrangeSemanticProofsDeltaFromPrev": null
+      },
+      "lagrangeOpsPerSecDeltaFromPrev": null,
+      "lagrangeOpsPerSecDeltaFromFirst": 0,
+      "tidbOpsPerSecDeltaFromPrev": null,
+      "tidbOpsPerSecDeltaFromFirst": 0,
+      "throughputRatioDeltaFromPrev": null,
+      "throughputLagFactorDeltaFromPrev": null,
+      "tidbSemanticProofsDeltaFromPrev": null,
+      "lagrangeSemanticProofsDeltaFromPrev": null
     }
   ],
-  "summarySha256": "63e5165000ba444daa7a777fe590f0aaef54d60fbe039caf149b2d43680a8617"
+  "summarySha256": "858a276d66e53f021ec53d76f28caf39655fb5439aed775c337962e491bfba77"
 }

@@ -1,0 +1,59 @@
+name: tidb-version-gated-comparison
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'test/distributed/harness/tidb-reference-lifecycle.js'
+      - 'test/distributed/harness/scenario-b-*.js'
+      - 'test/distributed/harness/oltp-comparison-*.js'
+      - 'scripts/checks/tidb-version-gated-comparison-publisher.js'
+      - 'data/tidb-comparison/**'
+      - '.github/workflows/tidb-version-gated-comparison.yml'
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'test/distributed/harness/tidb-reference-lifecycle.js'
+      - 'test/distributed/harness/scenario-b-*.js'
+      - 'test/distributed/harness/oltp-comparison-*.js'
+      - 'scripts/checks/tidb-version-gated-comparison-publisher.js'
+      - 'data/tidb-comparison/**'
+      - '.github/workflows/tidb-version-gated-comparison.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tidb-version-gated-comparison-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version-gated-comparison:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v4.1.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run version-gated comparison publisher dry-run
+        run: node scripts/checks/tidb-version-gated-comparison-publisher.js --dry-run
+
+      - name: Verify history store guard
+        run: node scripts/checks/oltp-comparison-history-store-guard.js
+
+      - name: Verify Scenario B fairness version-gate guard
+        run: node scripts/checks/scenario-b-fairness-version-gate-guard.js

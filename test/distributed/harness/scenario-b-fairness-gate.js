@@ -264,6 +264,7 @@ export async function runScenarioBVersionGatedComparison(options = {}) {
     framework: {...runOutput?.framework, scenarioId, profileId},
     systems,
     recordedAt: runOutput?.recordedAt,
+    evidenceSource: runOutput?.evidenceSource,
   });
 
   return objectFreeze({
