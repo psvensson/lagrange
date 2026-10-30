@@ -71,7 +71,8 @@ function renderComparativeLandingMarkdown(matrix) {
     '  - [YugabyteDB & Apache Ignite 3 Colocated Compute Comparison](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html))\n' +
     '  - [Scenario C: PostgreSQL 17 + Valkey 8 Feature-Store & Freshness Comparison](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html))\n' +
     '  - [3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Comparison](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html))\n' +
-    '  - [5-Node RF=3 Partition Granularity Sweep (P=6..60)](partition-granularity-sweep-progress.md) ([HTML](partition-granularity-sweep-progress.html))\n\n' +
+    '  - [5-Node RF=3 Partition Granularity Sweep (P=6..60)](partition-granularity-sweep-progress.md) ([HTML](partition-granularity-sweep-progress.html))\n' +
+    '  - [Scenario B Network RTT Crossover & Working-Set Growth](scenario-b-rtt-working-set-crossover.md) ([HTML](scenario-b-rtt-working-set-crossover.html))\n\n' +
     '![Multi-system comparative benchmark overview](comparative-overview.svg)\n\n' +
     'Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg) | [TiDB comparison progress chart](tidb-comparison-progress.svg)\n\n' +
     '## Evidence-tier and measurement boundary qualification\n\n' +
@@ -212,8 +213,8 @@ function renderComparativeLandingHtml(matrix) {
     '<a href="scenario-c-feature-store-progress.md">Scenario C (MD)</a> | ' +
     '<a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out (HTML)</a> | ' +
     '<a href="scaleout-3to5-node-rf3-progress.md">3-to-5-Node RF=3 Scale-Out (MD)</a> | ' +
-    '<a href="partition-granularity-sweep-progress.html">5-Node RF=3 Partition Granularity Sweep (P=6..60) (HTML)</a> | ' +
-    '<a href="partition-granularity-sweep-progress.md">(Markdown)</a></p>\n' +
+    '<a href="partition-granularity-sweep-progress.html">5-Node RF=3 Partition Granularity Sweep (P=6..60) (HTML)</a> | <a href="partition-granularity-sweep-progress.md">(Markdown)</a> | ' +
+    '<a href="scenario-b-rtt-working-set-crossover.html">Scenario B Network RTT Crossover &amp; Working-Set Growth (HTML)</a> | <a href="scenario-b-rtt-working-set-crossover.md">(Markdown)</a></p>\n' +
     `    <div class="chart-box">${svg}</div>\n` +
     '    <div class="filter-bar"><label for="landing-filter">Filter:</label><input type="text" id="landing-filter" placeholder="Filter targets, categories, shapes..."/></div>\n' +
     '    <div class="card">\n' +

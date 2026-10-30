@@ -18,6 +18,7 @@ Deterministic multi-system comparative benchmark statistics across PostgreSQL, T
   - [Scenario C: PostgreSQL 17 + Valkey 8 Feature-Store & Freshness Comparison](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html))
   - [3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Comparison](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html))
   - [5-Node RF=3 Partition Granularity Sweep (P=6..60)](partition-granularity-sweep-progress.md) ([HTML](partition-granularity-sweep-progress.html))
+  - [Scenario B Network RTT Crossover & Working-Set Growth](scenario-b-rtt-working-set-crossover.md) ([HTML](scenario-b-rtt-working-set-crossover.html))
 
 ![Multi-system comparative benchmark overview](comparative-overview.svg)
 
@@ -124,6 +125,7 @@ Two distinct measurement boundaries are evaluated:
 | v0.3.2-provenance-matrix (`4dc6db6b93`) | 0.83 (4418.93 ms) | 33/33 | 441.15 (18.09 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
 | v0.3.2-scaleout-3to5-rf3 (`89300e4d8a`) | 2.24 (2590.00 ms) | 33/33 | 720.40 (18.09 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
 | v0.3.2-partition-sweep-p6to60 (`2025f7780d`) | 2.24 (2590.00 ms) | 33/33 | 784.00 (16.90 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
+| v0.3.2-rtt-working-set-crossover (`bdee84d5fc`) | 2.24 (2590.00 ms) | 33/33 | 368.00 (21.80 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
 
 ## Measurement provenance and evidence-tier separation
 

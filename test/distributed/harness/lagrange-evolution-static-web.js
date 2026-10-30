@@ -12,15 +12,12 @@ export const DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH = 'docs/benchmarks/lagrange-met
 export const DEFAULT_LAGRANGE_EVOLUTION_MD_PATH = 'docs/benchmarks/lagrange-metrics-evolution.md';
 export const DEFAULT_LAGRANGE_EVOLUTION_HTML_PATH = 'docs/benchmarks/lagrange-metrics-evolution.html';
 
-const HTML_PAGE_STYLE = `<style>
-:root{--bg:#0f172a;--card-bg:#1e293b;--text:#f8fafc;--muted:#94a3b8;--border:#334155;--accent:#38bdf8}
+const HTML_PAGE_STYLE = `<style>:root{--bg:#0f172a;--card-bg:#1e293b;--text:#f8fafc;--muted:#94a3b8;--border:#334155;--accent:#38bdf8}
 body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px}
 .container{max-width:1100px;margin:0 auto}h1{font-size:24px;color:#fff}.nav-bar{margin:12px 0 20px 0}
-.nav-bar a{color:var(--accent);margin-right:12px}.card{background:var(--card-bg);border-radius:8px;
-border:1px solid var(--border);padding:18px;margin-bottom:24px}.card h2{font-size:16px;color:var(--accent)}
-.card p,.card li{font-size:13px;line-height:1.6;color:#cbd5e1}th{color:var(--muted);font-weight:600}
-table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 10px;text-align:left;
-border-bottom:1px solid var(--border)}.chart-box{margin-bottom:24px;display:flex}</style>`;
+.nav-bar a{color:var(--accent);margin-right:12px}.card{background:var(--card-bg);border-radius:8px;border:1px solid var(--border);padding:18px;margin-bottom:24px}
+.card h2{font-size:16px;color:var(--accent)}.card p,.card li{font-size:13px;line-height:1.6;color:#cbd5e1}th{color:var(--muted);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}.chart-box{margin-bottom:24px;display:flex}</style>`;
 
 function makeMilestone(id, ver, commit, date, desc, tier, mode, a, proofs, b, decC) {
   return Object.freeze({
@@ -34,31 +31,30 @@ function makeMilestone(id, ver, commit, date, desc, tier, mode, a, proofs, b, de
   });
 }
 
+const o = 'observed-docker-cluster';
+const m = 'modeled-topology-oracle';
+const w = 'live-cluster-wire';
+const l = 'local-js-oracle';
+
 const DEFAULT_TIMELINE = Object.freeze([
   makeMilestone('v0.2.0-tidb-ref', '0.2.0', 'b0b2f9abcc', '2026-09-12T20:07:34Z',
-    'TiDB Reference Baseline Established', 'observed-docker-cluster', 'live-cluster-wire',
-    [0.0, 0.0, 0.0, 0.0], 0, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
+    'TiDB Reference Baseline Established', o, w, [0.0, 0.0, 0.0, 0.0], 0, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
   makeMilestone('v0.3.0-lab-paired', '0.3.0', '8039e45f2a', '2026-10-29T18:53:52Z',
-    '5-Node Lab Paired Scenario A Baseline', 'observed-docker-cluster', 'live-cluster-wire',
-    [0.83, 2269.44, 4418.93, 5343.1], 4, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
+    '5-Node Lab Paired Scenario A Baseline', o, w, [0.83, 2269.44, 4418.93, 5343.1], 4, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
   makeMilestone('v0.3.0-conflict-retry', '0.3.0', '66d054c9c9', '2026-10-30T11:45:00Z',
-    'Retryable Conflict & Visibility Gate', 'observed-docker-cluster', 'live-cluster-wire',
-    [0.83, 2269.44, 4418.93, 5343.1], 16, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
+    'Retryable Conflict & Visibility Gate', o, w, [0.83, 2269.44, 4418.93, 5343.1], 16, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
   makeMilestone('v0.3.0-semantic-closure', '0.3.0', '27af74dc7b', '2026-10-30T12:11:36Z',
-    'Full 33/33 Semantic Proof Closure', 'observed-docker-cluster', 'live-cluster-wire',
-    [0.83, 2269.44, 4418.93, 5343.1], 33, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
+    'Full 33/33 Semantic Proof Closure', o, w, [0.83, 2269.44, 4418.93, 5343.1], 33, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
   makeMilestone('v0.3.0-scenario-b-model', '0.3.0', '2d416de6e5', '2026-10-30T16:05:00Z',
-    'Scenario B 3-Island RF=3 Risk & Movement Model', 'modeled-topology-oracle', 'local-js-oracle',
-    [0.83, 2269.44, 4418.93, 5343.1], 33, [441.15, 18.09, 144, 18.0, 45.0], 0.0),
+    'Scenario B 3-Island RF=3 Risk & Movement Model', m, l, [0.83, 2269.44, 4418.93, 5343.1], 33, [441.15, 18.09, 144, 18.0, 45.0], 0.0),
   makeMilestone('v0.3.2-provenance-matrix', '0.3.2', '4dc6db6b93', '2026-10-30T20:11:52Z',
-    '13-Target Matrix, Scenario C & Provenance Audit', 'modeled-topology-oracle', 'local-js-oracle',
-    [0.83, 2269.44, 4418.93, 5343.1], 33, [441.15, 18.09, 144, 18.0, 45.0], 441.15),
+    '13-Target Matrix, Scenario C & Provenance Audit', m, l, [0.83, 2269.44, 4418.93, 5343.1], 33, [441.15, 18.09, 144, 18.0, 45.0], 441.15),
   makeMilestone('v0.3.2-scaleout-3to5-rf3', '0.3.2', '89300e4d8a', '2026-10-30T21:40:00Z',
-    '3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Separation', 'modeled-topology-oracle', 'local-js-oracle',
-    [2.24, 1380.0, 2590.0, 3120.0], 33, [720.4, 18.09, 144, 18.0, 45.0], 441.15),
+    '3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Separation', m, l, [2.24, 1380.0, 2590.0, 3120.0], 33, [720.4, 18.09, 144, 18.0, 45.0], 441.15),
   makeMilestone('v0.3.2-partition-sweep-p6to60', '0.3.2', '2025f7780d', '2026-10-30T22:10:00Z',
-    '5-Node RF=3 Partition Granularity Sweep (P=6..60)', 'modeled-topology-oracle', 'local-js-oracle',
-    [2.24, 1520.0, 2590.0, 3120.0], 33, [784.0, 16.9, 144, 42.0, 45.0], 441.15),
+    '5-Node RF=3 Partition Granularity Sweep (P=6..60)', m, l, [2.24, 1520.0, 2590.0, 3120.0], 33, [784.0, 16.9, 144, 42.0, 45.0], 441.15),
+  makeMilestone('v0.3.2-rtt-working-set-crossover', '0.3.2', 'bdee84d5fc', '2026-10-30T23:00:00Z',
+    'Scenario B RTT Crossover (0.2..30ms) & Heavy-Correlation Working Set', m, l, [2.24, 1520.0, 2590.0, 3120.0], 33, [368.0, 21.8, 144, 42.0, 45.0], 441.15),
 ]);
 
 const MILESTONE_LABELS = Object.freeze({
@@ -70,6 +66,7 @@ const MILESTONE_LABELS = Object.freeze({
   'v0.3.2-provenance-matrix': ['v0.3.2 @ 4dc6db6 (2026-10-30)', '13-Target Matrix & Scen C'],
   'v0.3.2-scaleout-3to5-rf3': ['v0.3.2 @ 89300e4 (2026-10-30)', '3-to-5-Node RF=3 Scale-Out'],
   'v0.3.2-partition-sweep-p6to60': ['0.3.2@2025f778 (P=6..60)', 'Partition Sweep (784 dec/s)'],
+  'v0.3.2-rtt-working-set-crossover': ['0.3.2@bdee84d5 (RTT/WS)', 'RTT & Working-Set Crossover'],
 });
 
 const COMMIT_DELTAS = Object.freeze([
@@ -81,6 +78,7 @@ const COMMIT_DELTAS = Object.freeze([
   ['v0.3.2-provenance-matrix', '4dc6db6b93', '13-target comparison matrix, Scenario C (441.15 dec/s @ 0ms), provenance audit.'],
   ['v0.3.2-scaleout-3to5-rf3', '89300e4d8a', '3-to-5-node RF=3 scale-out (2.24 tx/s proportional, 720.4 dec/s aggregate).'],
   ['v0.3.2-partition-sweep-p6to60', '2025f7780d', 'Peak 784.0 dec/s at P=30 (6 leaders/node) vs -5.9% coordination drop at P=60'],
+  ['v0.3.2-rtt-working-set-crossover', 'bdee84d5fc', 'RTT 0.2..30ms crossover (168 dec/s @ 10ms) & heavy 2048-event working set (368 dec/s, 144 B)'],
 ]);
 
 function getMilestoneLabels(m) {
@@ -112,6 +110,28 @@ function renderMilestoneRow(x, y, [l1, l2], met, sub, barW, col, isDashed) {
     <text x="${x}" y="${y + 42}" fill="#64748b" font-size="9">${escapeXml(sub)}</text>`;
 }
 
+function getPanelInfo(m, panelType) {
+  if (panelType === 1) {
+    return {
+      met: `${formatNum(m.scenarioATxPerSec, 2)} tx/s | p95: ${formatNum(m.scenarioAP95Ms, 1)}ms`,
+      sub: `Proofs: ${m.semanticProofPassed}/${m.semanticProofRequired || 33} (${m.executionMode})`,
+      val: m.semanticProofPassed / 33, col: '#38bdf8', isDashed: m.executionMode !== 'live-cluster-wire',
+    };
+  }
+  if (panelType === 2) {
+    return {
+      met: `${formatNum(m.scenarioBDecisionsPerSec, 1)} dec/s | p99: ${formatNum(m.scenarioBP99Ms, 1)}ms`,
+      sub: `WAN: ${m.scenarioBWanBytes || 0} B/req | Mode: ${m.executionMode}`,
+      val: m.scenarioBDecisionsPerSec / 800, col: '#10b981', isDashed: m.executionMode === 'local-js-oracle',
+    };
+  }
+  return {
+    met: `${formatNum(m.scenarioCFresh0msDecPerSec, 1)} dec/s @ 0ms freshness`,
+    sub: `Move p99: ${formatNum(m.scenarioBMoveP99Ms, 1)}ms | Conv: ${formatNum(m.scenarioBConvergenceMs, 1)}ms`,
+    val: m.scenarioCFresh0msDecPerSec / 500, col: '#a855f7', isDashed: m.executionMode === 'local-js-oracle',
+  };
+}
+
 function renderPanel(px, href, title, subTitle, timeline, panelType) {
   const innerX = px + 15;
   const panelH = 64 + timeline.length * 56;
@@ -121,22 +141,8 @@ function renderPanel(px, href, title, subTitle, timeline, panelType) {
   const rows = arrayMap(timeline, (m, idx) => {
     const y = 136 + idx * 56;
     const labels = getMilestoneLabels(m);
-    const isP1 = panelType === 1;
-    const isP2 = panelType === 2;
-    const met = isP1 ?
-      `${formatNum(m.scenarioATxPerSec, 2)} tx/s | p95: ${formatNum(m.scenarioAP95Ms, 1)}ms` :
-      (isP2 ? `${formatNum(m.scenarioBDecisionsPerSec, 1)} dec/s | p99: ${formatNum(m.scenarioBP99Ms, 1)}ms` :
-        `${formatNum(m.scenarioCFresh0msDecPerSec, 1)} dec/s @ 0ms freshness`);
-    const sub = isP1 ?
-      `Proofs: ${m.semanticProofPassed}/${m.semanticProofRequired || 33} (${m.executionMode})` :
-      (isP2 ? `WAN: ${m.scenarioBWanBytes || 0} B/req | Mode: ${m.executionMode}` :
-        `Move p99: ${formatNum(m.scenarioBMoveP99Ms, 1)}ms | Conv: ${formatNum(m.scenarioBConvergenceMs, 1)}ms`);
-    const val = isP1 ? (m.semanticProofPassed / 33) :
-      (isP2 ? (m.scenarioBDecisionsPerSec / 800) : (m.scenarioCFresh0msDecPerSec / 500));
+    const {met, sub, val, col, isDashed} = getPanelInfo(m, panelType);
     const w = Math.max(val > 0 ? 4 : 0, Math.min(250, Math.round(val * 250)));
-    const col = isP1 ? '#38bdf8' : (isP2 ? '#10b981' : '#a855f7');
-    const isDashed = isP1 ?
-      m.executionMode !== 'live-cluster-wire' : m.executionMode === 'local-js-oracle';
     return renderMilestoneRow(innerX, y, labels, met, sub, w, col, isDashed);
   });
   return `${pHeader}\n${arrayJoin(rows, '\n')}`;
@@ -168,14 +174,12 @@ function renderTables(timeline) {
   const trM = arrayJoin(arrayMap(timeline, (m) =>
     `| ${m.id} | ${m.version} | ${m.commit} | ${stringSlice(String(m.date || ''), 0, 10)} | ` +
     `${m.evidenceTier} | ${m.executionMode} | ${f(m.scenarioATxPerSec, 2)} | ${f(m.scenarioAP95Ms, 1)} | ` +
-    `${m.semanticProofPassed}/${m.semanticProofRequired || 33} | ${f(m.scenarioBDecisionsPerSec, 1)} | ` +
-    `${f(m.scenarioCFresh0msDecPerSec, 1)} |`), '\n');
+    `${m.semanticProofPassed}/${m.semanticProofRequired || 33} | ${f(m.scenarioBDecisionsPerSec, 1)} | ${f(m.scenarioCFresh0msDecPerSec, 1)} |`), '\n');
   const htM = arrayJoin(arrayMap(timeline, (m) =>
     `<tr><td><strong>${escapeXml(m.id)}</strong></td><td>${escapeXml(m.version)}</td>` +
     `<td><code>${escapeXml(m.commit)}</code></td><td>${stringSlice(String(m.date || ''), 0, 10)}</td>` +
     `<td>${escapeXml(m.evidenceTier)}</td><td>${escapeXml(m.executionMode)}</td><td>${f(m.scenarioATxPerSec, 2)}</td>` +
-    `<td>${f(m.scenarioAP95Ms, 1)}</td><td>${m.semanticProofPassed}/${m.semanticProofRequired || 33}</td>` +
-    `<td>${f(m.scenarioBDecisionsPerSec, 1)}</td><td>${f(m.scenarioCFresh0msDecPerSec, 1)}</td></tr>`), '\n');
+    `<td>${f(m.scenarioAP95Ms, 1)}</td><td>${m.semanticProofPassed}/${m.semanticProofRequired || 33}</td><td>${f(m.scenarioBDecisionsPerSec, 1)}</td><td>${f(m.scenarioCFresh0msDecPerSec, 1)}</td></tr>`), '\n');
   return {trM, htM};
 }
 
@@ -240,10 +244,7 @@ export function renderLagrangeEvolutionHtml(matrix) {
         <tbody>\n${htM}\n        </tbody>
       </table>
     </div>
-    <div class="card">
-      <h2>Commit-Over-Commit Delta Progression</h2>
-      <ul>\n${htD}\n      </ul>
-    </div>
+    <div class="card"><h2>Commit-Over-Commit Delta Progression</h2><ul>\n${htD}\n      </ul></div>
     <div class="card">
       <h2>Provenance Qualification Across Historical Milestones</h2>
       <p>Historical progression explicitly distinguishes physical cluster measurements from modeled topological projections:</p>

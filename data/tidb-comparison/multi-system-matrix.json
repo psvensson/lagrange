@@ -17,9 +17,10 @@
     "completedSlices": [
       "provenance-audit-and-evidence-tier-separation",
       "real-3to5-node-rf3-scaleout-and-scenario-a-modes",
-      "partition-granularity-sweep-5node-rf3"
+      "partition-granularity-sweep-5node-rf3",
+      "scenario-b-rtt-crossover-and-working-set-growth"
     ],
-    "remainingSlicesCount": 2
+    "remainingSlicesCount": 1
   },
   "scaleout3To5Rf3Experiment": {
     "replicationFactor": 3,
@@ -517,6 +518,291 @@
       }
     ]
   },
+  "scenarioBRttWorkingSetExperiment": {
+    "experimentId": "scenario-b-rtt-crossover-and-working-set-growth",
+    "nodeCount": 5,
+    "replicationFactor": 3,
+    "rttPointsMs": [
+      0.2,
+      2,
+      10,
+      30
+    ],
+    "sequentialRttSeries": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "localOnly02msDecPerSec": 628,
+        "localOnly02msP99Ms": 4,
+        "oneWayHopsSequential": 2,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": 540,
+            "p99Ms": 7.8,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": 380,
+            "p99Ms": 22.4,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": 168,
+            "p99Ms": 52.4,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": 68,
+            "p99Ms": 134,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "localOnly02msDecPerSec": 618,
+        "localOnly02msP99Ms": 4.3,
+        "oneWayHopsSequential": 6,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": 495,
+            "p99Ms": 8.9,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": 274,
+            "p99Ms": 22.8,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": 108,
+            "p99Ms": 74.6,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": 41,
+            "p99Ms": 208,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "localOnly02msDecPerSec": 612,
+        "localOnly02msP99Ms": 4.6,
+        "oneWayHopsSequential": 6,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": 440,
+            "p99Ms": 10.8,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": 228,
+            "p99Ms": 26.8,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": 86,
+            "p99Ms": 92.4,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": 32,
+            "p99Ms": 262,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      },
+      {
+        "targetId": "pg-plpgsql-sync-ha-rf3",
+        "label": "PG 17 Patroni + PL/pgSQL",
+        "localOnly02msDecPerSec": 510,
+        "localOnly02msP99Ms": 6.8,
+        "oneWayHopsSequential": 6,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": 395,
+            "p99Ms": 12.4,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": 234,
+            "p99Ms": 25.2,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": 82,
+            "p99Ms": 96,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": 30,
+            "p99Ms": 274,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "localOnly02msDecPerSec": 472,
+        "localOnly02msP99Ms": 8.6,
+        "oneWayHopsSequential": 6,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": 340,
+            "p99Ms": 14.8,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": 184,
+            "p99Ms": 34.6,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": 68,
+            "p99Ms": 114,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": 24,
+            "p99Ms": 328,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "localOnly02msDecPerSec": 345,
+        "localOnly02msP99Ms": 12.4,
+        "oneWayHopsSequential": 12,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": 295,
+            "p99Ms": 18.2,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": 190,
+            "p99Ms": 48.6,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": 54,
+            "p99Ms": 148,
+            "evidenceTier": "modeled-topology-oracle"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": 19,
+            "p99Ms": 412,
+            "evidenceTier": "modeled-topology-oracle"
+          }
+        ]
+      }
+    ],
+    "workingSetComparison": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "moderateDecPerSec": 441.15,
+        "moderateP99Ms": 18.09,
+        "moderateWanBytes": 144,
+        "heavyDecPerSec": 368,
+        "heavyP99Ms": 21.8,
+        "heavyWanBytes": 144,
+        "throughputDropPct": -16.6,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "moderateDecPerSec": 408.6,
+        "moderateP99Ms": 20.1,
+        "moderateWanBytes": 820,
+        "heavyDecPerSec": 312,
+        "heavyP99Ms": 26.4,
+        "heavyWanBytes": 1140,
+        "throughputDropPct": -23.6,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "moderateDecPerSec": 364.2,
+        "moderateP99Ms": 22.9,
+        "moderateWanBytes": 1540,
+        "heavyDecPerSec": 246,
+        "heavyP99Ms": 34.2,
+        "heavyWanBytes": 4860,
+        "throughputDropPct": -32.5,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "pg-plpgsql-sync-ha-rf3",
+        "label": "PG 17 Patroni + PL/pgSQL",
+        "moderateDecPerSec": 316.8,
+        "moderateP99Ms": 24.1,
+        "moderateWanBytes": 960,
+        "heavyDecPerSec": 198,
+        "heavyP99Ms": 39.6,
+        "heavyWanBytes": 1420,
+        "throughputDropPct": -37.5,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "moderateDecPerSec": 286.5,
+        "moderateP99Ms": 28.4,
+        "moderateWanBytes": 2420,
+        "heavyDecPerSec": 176,
+        "heavyP99Ms": 46.8,
+        "heavyWanBytes": 8400,
+        "throughputDropPct": -38.6,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "moderateDecPerSec": 221.44,
+        "moderateP99Ms": 36.08,
+        "moderateWanBytes": 6144,
+        "heavyDecPerSec": 118,
+        "heavyP99Ms": 68.4,
+        "heavyWanBytes": 24576,
+        "throughputDropPct": -46.7,
+        "evidenceTier": "modeled-topology-oracle"
+      }
+    ]
+  },
   "lagrangeEvolutionTimeline": [
     {
       "milestoneId": "v0.2.0-tidb-ref",
@@ -681,6 +967,27 @@
       "semanticProofRequired": 33,
       "scenarioBDecisionsPerSec": 784,
       "scenarioBP99Ms": 16.9,
+      "scenarioBWanBytes": 144,
+      "scenarioBMoveP99Ms": 42,
+      "scenarioBConvergenceMs": 45,
+      "scenarioCFresh0msDecPerSec": 441.15
+    },
+    {
+      "milestoneId": "v0.3.2-rtt-working-set-crossover",
+      "version": "0.3.2",
+      "commitSha": "bdee84d5fc",
+      "recordedAt": "2026-10-30T23:00:00Z",
+      "label": "Scenario B RTT Crossover (0.2..30ms) & Heavy-Correlation Working Set",
+      "evidenceTier": "modeled-topology-oracle",
+      "executionPath": "local-js-oracle",
+      "scenarioATxPerSec": 2.24,
+      "scenarioAP50Ms": 1520,
+      "scenarioAP95Ms": 2590,
+      "scenarioAP99Ms": 3120,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 368,
+      "scenarioBP99Ms": 21.8,
       "scenarioBWanBytes": 144,
       "scenarioBMoveP99Ms": 42,
       "scenarioBConvergenceMs": 45,

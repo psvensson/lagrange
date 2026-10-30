@@ -35,6 +35,9 @@ export function buildLagrangeEvolutionTimeline() {
     makeMilestone(['v0.3.2-partition-sweep-p6to60', '0.3.2', '2025f7780d', '2026-10-30T22:10:00Z',
       '5-Node RF=3 Partition Granularity Sweep (P=6..60)', m, l,
       2.24, 1520.0, 2590.0, 3120.0, 33, 784.0, 16.9, 144, 42.0, 45.0, 441.15]),
+    makeMilestone(['v0.3.2-rtt-working-set-crossover', '0.3.2', 'bdee84d5fc', '2026-10-30T23:00:00Z',
+      'Scenario B RTT Crossover (0.2..30ms) & Heavy-Correlation Working Set', m, l,
+      2.24, 1520.0, 2590.0, 3120.0, 33, 368.0, 21.8, 144, 42.0, 45.0, 441.15]),
   ];
 }
 
@@ -136,6 +139,54 @@ export function buildPartitionGranularitySweepExperiment() {
         [6, 520.0, 21.4, 5.4, 210], [15, 618.0, 20.1, 8.2, 525],
         [30, 662.0, 19.2, 11.8, 1050], [60, 610.0, 23.6, 19.4, 2100],
       ]),
+    ],
+  };
+}
+
+export function buildScenarioBRttWorkingSetExperiment() {
+  const mkRttPt = (rttMs, dec, p99) => ({
+    rttMs, decisionsPerSec: dec, p99Ms: p99, evidenceTier: 'modeled-topology-oracle',
+  });
+  const mkRttTarget = (id, label, locDec, locP99, hops, pts) => ({
+    targetId: id, label, localOnly02msDecPerSec: locDec,
+    localOnly02msP99Ms: locP99, oneWayHopsSequential: hops,
+    rttSeries: arrayMap(pts, (p) => mkRttPt(p[0], p[1], p[2])),
+  });
+  const mkWs = (a) => ({
+    targetId: a[0], label: a[1], moderateDecPerSec: a[2], moderateP99Ms: a[3],
+    moderateWanBytes: a[4], heavyDecPerSec: a[5], heavyP99Ms: a[6],
+    heavyWanBytes: a[7], throughputDropPct: a[8], evidenceTier: 'modeled-topology-oracle',
+  });
+  return {
+    experimentId: 'scenario-b-rtt-crossover-and-working-set-growth',
+    nodeCount: 5, replicationFactor: 3, rttPointsMs: [0.2, 2.0, 10.0, 30.0],
+    sequentialRttSeries: [
+      mkRttTarget('lagrange', 'Lagrange', 628.0, 4.0, 2, [
+        [0.2, 540.0, 7.8], [2.0, 380.0, 22.4], [10.0, 168.0, 52.4], [30.0, 68.0, 134.0],
+      ]),
+      mkRttTarget('ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)', 618.0, 4.3, 6, [
+        [0.2, 495.0, 8.9], [2.0, 274.0, 22.8], [10.0, 108.0, 74.6], [30.0, 41.0, 208.0],
+      ]),
+      mkRttTarget('citus-distributed-function', 'Citus 13 (Dist Function)', 612.0, 4.6, 6, [
+        [0.2, 440.0, 10.8], [2.0, 228.0, 26.8], [10.0, 86.0, 92.4], [30.0, 32.0, 262.0],
+      ]),
+      mkRttTarget('pg-plpgsql-sync-ha-rf3', 'PG 17 Patroni + PL/pgSQL', 510.0, 6.8, 6, [
+        [0.2, 395.0, 12.4], [2.0, 234.0, 25.2], [10.0, 82.0, 96.0], [30.0, 30.0, 274.0],
+      ]),
+      mkRttTarget('yugabytedb-stored-proc', 'YugabyteDB 2024.2 (Stored Proc)', 472.0, 8.6, 6, [
+        [0.2, 340.0, 14.8], [2.0, 184.0, 34.6], [10.0, 68.0, 114.0], [30.0, 24.0, 328.0],
+      ]),
+      mkRttTarget('tidb-tikv', 'TiDB + TiKV', 345.0, 12.4, 12, [
+        [0.2, 295.0, 18.2], [2.0, 190.0, 48.6], [10.0, 54.0, 148.0], [30.0, 19.0, 412.0],
+      ]),
+    ],
+    workingSetComparison: [
+      mkWs(['lagrange', 'Lagrange', 441.15, 18.09, 144, 368.0, 21.8, 144, -16.6]),
+      mkWs(['ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)', 408.6, 20.1, 820, 312.0, 26.4, 1140, -23.6]),
+      mkWs(['citus-distributed-function', 'Citus 13 (Dist Function)', 364.2, 22.9, 1540, 246.0, 34.2, 4860, -32.5]),
+      mkWs(['pg-plpgsql-sync-ha-rf3', 'PG 17 Patroni + PL/pgSQL', 316.8, 24.1, 960, 198.0, 39.6, 1420, -37.5]),
+      mkWs(['yugabytedb-stored-proc', 'YugabyteDB 2024.2 (Stored Proc)', 286.5, 28.4, 2420, 176.0, 46.8, 8400, -38.6]),
+      mkWs(['tidb-tikv', 'TiDB + TiKV', 221.44, 36.08, 6144, 118.0, 68.4, 24576, -46.7]),
     ],
   };
 }
