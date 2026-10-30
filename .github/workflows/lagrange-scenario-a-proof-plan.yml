@@ -3,8 +3,7 @@ name: lagrange-scenario-a-proof-plan
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-lagrange-proof-plan-staging
+      - main
     paths:
       - '.github/workflows/lagrange-scenario-a-proof-plan.yml'
       - 'test/distributed/harness/oltp-scenario-a-comparison-systems.js'

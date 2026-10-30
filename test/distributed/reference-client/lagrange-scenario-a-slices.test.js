@@ -15,6 +15,9 @@ import {
   buildScenarioANewOrderContentionCase,
 } from '../harness/oltp-scenario-a-new-order-contention-case.js';
 import {
+  buildScenarioAVisibilityCase,
+} from '../harness/oltp-scenario-a-visibility-case.js';
+import {
   buildScenarioAPaymentCase,
 } from '../harness/oltp-scenario-a-payment-case.js';
 import {
@@ -49,6 +52,10 @@ import {
   preStart as preStartContention,
   run as runContention,
 } from '../scenarios/scenario-a-new-order-contention-lagrange.js';
+import {
+  preStart as preStartVisibility,
+  run as runVisibility,
+} from '../scenarios/scenario-a-visibility-lagrange.js';
 import {
   preStart as preStartPayment,
   run as runPayment,
@@ -271,6 +278,7 @@ async function testRetryableConflictProbe() {
 async function testPreStartTokens() {
   const scenarios = [
     {id: 'new-order-contention', preStart: preStartContention},
+    {id: 'visibility', preStart: preStartVisibility},
     {id: 'payment', preStart: preStartPayment},
     {id: 'order-status', preStart: preStartOrderStatus},
     {id: 'delivery', preStart: preStartDelivery},
@@ -327,6 +335,39 @@ async function testScenarioRunContracts() {
       outputPath: '/tmp/test-contention.json',
     });
     assert.equal(result.status, 'passed');
+  }
+
+  // Visibility
+  {
+    const admission = makeAdmission('visibility');
+    const caseDef = buildScenarioAVisibilityCase();
+    const result = await runVisibility(fakeCluster, {
+      admission,
+      prepareContext: () => fakeMockContext(admission),
+      createAdapter: async () => ({
+        executionPath: 'public-sql',
+        protocol: 'postgresql',
+        lockingReadMode: 'snapshot-write-conflict',
+        datasetSha256: caseDef.identity.datasetSha256,
+        close: async () => {},
+      }),
+      runProbe: async () => ({
+        initialValue: caseDef.identity.expected.initialValue,
+        writerPendingValue: caseDef.identity.expected.writerPendingValue ??
+          caseDef.identity.expected.writerOwnWriteValue,
+        observerPendingValue: caseDef.identity.expected.observerPendingValue ??
+          caseDef.identity.expected.observerUncommittedValue,
+        writerAfterRollbackValue: caseDef.identity.expected.writerAfterRollbackValue,
+        observerAfterRollbackValue: caseDef.identity.expected.observerAfterRollbackValue,
+        initialWriterValue: caseDef.identity.expected.initialValue,
+        initialObserverValue: caseDef.identity.expected.initialValue,
+        writerOwnWriteValue: caseDef.identity.expected.writerOwnWriteValue,
+        observerUncommittedValue: caseDef.identity.expected.observerUncommittedValue,
+      }),
+      outputPath: '/tmp/test-visibility.json',
+    });
+    assert.equal(result.status, 'passed');
+    assert.equal(result.proofIds.length, 3);
   }
 
   // 2. Payment
@@ -510,7 +551,21 @@ async function testScenarioRunContracts() {
         executeTransaction: async () => ({paidCents: payment.identity.expected.paidCents}),
         close: async () => {},
       }),
-      restartCluster: async () => {},
+      restartCluster: async () => ({
+        faultTarget: {
+          nodeId: 'node-1',
+          role: 'data-replica',
+          isDataReplica: true,
+          pgHostOnly: false,
+        },
+        beforeIncarnation: 'inc-1',
+        afterIncarnation: 'inc-2',
+        storageContinuity: 'preserved',
+        retainedObligations: [
+          'committed_payment_rows',
+          'full_oltp_state_sha256',
+        ],
+      }),
       observePayment: async () => ({
         warehouseYtdCents: payment.identity.expected.warehouseYtdCents,
         districtYtdCents: payment.identity.expected.districtYtdCents,
@@ -524,6 +579,64 @@ async function testScenarioRunContracts() {
       outputPath: '/tmp/test-durability.json',
     });
     assert.equal(result.status, 'passed');
+
+    await assert.rejects(
+      runDurability(fakeCluster, {
+        admission,
+        prepareContext: () => fakeMockContext(admission),
+        createAdapter: async () => ({
+          executionPath: 'public-sql',
+          protocol: 'postgresql',
+          lockingReadMode: 'snapshot-write-conflict',
+          datasetSha256: caseDef.identity.datasetSha256,
+          executeTransaction: async () => ({paidCents: payment.identity.expected.paidCents}),
+          close: async () => {},
+        }),
+        restartCluster: async () => {},
+        observePayment: async () => ({
+          warehouseYtdCents: payment.identity.expected.warehouseYtdCents,
+          districtYtdCents: payment.identity.expected.districtYtdCents,
+          customerBalanceCents: payment.identity.expected.customerBalanceCents,
+          customerYtdPaymentCents: payment.identity.expected.customerYtdPaymentCents,
+          customerPaymentCount: payment.identity.expected.customerPaymentCount,
+          historyCount: payment.identity.expected.historyCount,
+          historyAmountCents: payment.identity.expected.historyAmountCents,
+        }),
+        observeSnapshot: async () => ({stateSha256: DUMMY_STATE_SHA}),
+        outputPath: '/tmp/test-durability-noop.json',
+      }),
+      /fault_evidence_missing/u,
+    );
+
+    await assert.rejects(
+      runDurability({
+        getNodes: () => [{id: 'node-1', ip: '127.0.0.1', bootIncarnation: 'inc-same'}],
+        restartNode: async () => {},
+      }, {
+        admission,
+        prepareContext: () => fakeMockContext(admission),
+        createAdapter: async () => ({
+          executionPath: 'public-sql',
+          protocol: 'postgresql',
+          lockingReadMode: 'snapshot-write-conflict',
+          datasetSha256: caseDef.identity.datasetSha256,
+          executeTransaction: async () => ({paidCents: payment.identity.expected.paidCents}),
+          close: async () => {},
+        }),
+        observePayment: async () => ({
+          warehouseYtdCents: payment.identity.expected.warehouseYtdCents,
+          districtYtdCents: payment.identity.expected.districtYtdCents,
+          customerBalanceCents: payment.identity.expected.customerBalanceCents,
+          customerYtdPaymentCents: payment.identity.expected.customerYtdPaymentCents,
+          customerPaymentCount: payment.identity.expected.customerPaymentCount,
+          historyCount: payment.identity.expected.historyCount,
+          historyAmountCents: payment.identity.expected.historyAmountCents,
+        }),
+        observeSnapshot: async () => ({stateSha256: DUMMY_STATE_SHA}),
+        outputPath: '/tmp/test-durability-unchanged-incarnation.json',
+      }),
+      /fault_incarnation_unchanged/u,
+    );
   }
 }
 

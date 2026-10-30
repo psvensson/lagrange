@@ -1,15 +1,7 @@
 #!/usr/bin/env node
 
-import {createHash, randomUUID} from 'node:crypto';
-import {mkdir, writeFile} from 'node:fs/promises';
-import path from 'node:path';
-
 import {DockerProvider} from
   '../../test/distributed/harness/docker-provider.js';
-import {
-  TIDB_REFERENCE_DEFAULTS,
-  startTiDbReferenceCluster,
-} from '../../test/distributed/harness/tidb-reference-lifecycle.js';
 import {
   executePairedOltpTransactionWithRetry,
 } from '../../test/distributed/harness/oltp-paired-retry-owner.js';
@@ -23,68 +15,37 @@ import {
   OLTP_SCENARIO_A_SYSTEM,
 } from '../../test/distributed/harness/oltp-scenario-a-comparison-systems.js';
 import {
-  OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS,
-} from '../../test/distributed/harness/oltp-scenario-a-semantic-gate.js';
-import {
-  createTiDbOltpAdapter,
-} from '../../test/distributed/reference-client/tidb-oltp-adapter.js';
-import {
   observeTiDbPaymentState,
 } from '../../test/distributed/reference-client/tidb-payment-observer.js';
+import {
+  cleanupTiDbLive,
+  createTiDbLiveDatabaseName,
+  createTiDbLiveRunId,
+  finalizeLiveExecution,
+  recordLiveSemanticEvidence,
+  runLiveMain,
+  startTiDbLiveEnvironment,
+} from '../../test/distributed/harness/tidb-scenario-a-live-harness.js';
 
-const ZERO = 0;
-const ONE = 1;
-const TIKV_STORE_COUNT = 3;
-const OUTPUT_PATH =
-  process.env.TIDB_SCENARIO_A_PAYMENT_EVIDENCE_PATH ||
-  'test-output/tidb-reference/scenario-a-payment-tidb.json';
+const SCENARIO_NAME = 'payment';
+const EVIDENCE_ID = 'tidb-payment-v1';
+const BENCHMARK_LABEL_KEY = 'lagrange.benchmark';
+const BENCHMARK_LABEL_VALUE = 'scenario-a-payment-tidb';
 const LABELS = Object.freeze({
-  'lagrange.benchmark': 'scenario-a-payment-tidb',
+  [BENCHMARK_LABEL_KEY]: BENCHMARK_LABEL_VALUE,
 });
-const DATABASE_RESOURCE_LIMITS = Object.freeze({memory: '2g', cpus: '2.0'});
-const CLIENT_RESOURCE_LIMITS = Object.freeze({memory: '256m', cpus: '0.5'});
-
-function uniqueRunId() {
-  return `lagrange-tidb-payment-${process.pid}-${randomUUID().slice(0, 8)}`;
-}
-
-function canonicalPayloadDigest(payload) {
-  return createHash('sha256')
-    .update(JSON.stringify(payload))
-    .digest('hex');
-}
-
-async function cleanup(provider, state) {
-  const failures = [];
-  if (state.adapter) {
-    try {
-      await state.adapter.close();
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (state.cluster) {
-    try {
-      await state.cluster.stop();
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (state.networkId) {
-    try {
-      await provider.removeNetwork(state.networkId);
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (failures.length > ZERO) {
-    throw new AggregateError(failures, 'TiDB payment proof cleanup failed');
-  }
-}
+const DEFAULT_OUTPUT_PATH =
+  'test-output/tidb-reference/scenario-a-payment-tidb.json';
+const OUTPUT_PATH =
+  process.env.TIDB_SCENARIO_A_PAYMENT_EVIDENCE_PATH || DEFAULT_OUTPUT_PATH;
+const NON_COMPARABLE_REASON =
+  'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.';
+const PASS_PREFIX = 'tidb-scenario-a-payment-live: PASS ';
+const NEWLINE = '\n';
 
 async function runTiDbPaymentProof(options = {}) {
   const provider = options.provider || new DockerProvider();
-  const runId = options.runId || uniqueRunId();
+  const runId = options.runId || createTiDbLiveRunId(SCENARIO_NAME);
   const outputPath = options.outputPath || OUTPUT_PATH;
   const definition = buildScenarioAPaymentCase();
   const state = {
@@ -97,29 +58,15 @@ async function runTiDbPaymentProof(options = {}) {
   let evidence = null;
 
   try {
-    const network = await provider.createNetwork(state.networkName, LABELS);
-    state.networkId = network.id;
-    state.cluster = await startTiDbReferenceCluster({
+    const {endpoint} = await startTiDbLiveEnvironment({
       provider,
-      network: state.networkName,
-      namePrefix: runId,
-      tikvStoreCount: TIKV_STORE_COUNT,
-      resourceLimits: DATABASE_RESOURCE_LIMITS,
-      readinessResourceLimits: CLIENT_RESOURCE_LIMITS,
-    });
-    const host = String(state.cluster.containers.tidb.ip || '').trim();
-    if (!host) throw new Error('TiDB payment proof requires TiDB container IP');
-    const endpoint = {host, port: TIDB_REFERENCE_DEFAULTS.tidbPort};
-    const databaseName =
-      `lagrange_tidb_payment_${randomUUID().replace(/-/gu, '').slice(0, 12)}`;
-    state.adapter = await createTiDbOltpAdapter({
-      endpoint,
-      databaseName,
+      state,
+      runId,
+      labels: LABELS,
+      databaseName: createTiDbLiveDatabaseName(SCENARIO_NAME),
       workload: OLTP_SCENARIO_A_PAYMENT_WORKLOAD,
+      expectedDatasetSha256: definition.identity.datasetSha256,
     });
-    if (state.adapter.datasetSha256 !== definition.identity.datasetSha256) {
-      throw new Error('TiDB payment proof dataset identity mismatch');
-    }
 
     const retryOutcome = await executePairedOltpTransactionWithRetry({
       executeAttempt: () =>
@@ -137,7 +84,7 @@ async function runTiDbPaymentProof(options = {}) {
     const evaluation = evaluateScenarioAPaymentObservation(observation);
     const payload = Object.freeze({
       schemaVersion: 1,
-      evidenceId: 'tidb-payment-v1',
+      evidenceId: EVIDENCE_ID,
       system: OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV,
       caseId: definition.identity.caseId,
       caseSha256: definition.caseSha256,
@@ -148,67 +95,47 @@ async function runTiDbPaymentProof(options = {}) {
       evaluation,
       images: state.cluster.images,
       comparable: false,
-      nonComparableReason:
-        'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.',
+      nonComparableReason: NON_COMPARABLE_REASON,
     });
-    const artifactSha256 = canonicalPayloadDigest(payload);
-    evidence = Object.freeze({
-      ...payload,
-      proofRecord: Object.freeze({
-        evidenceId: payload.evidenceId,
-        system: payload.system,
-        status: evaluation.passed ?
-          OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED :
-          OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.FAILED,
-        artifactSha256,
-        proofIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-      }),
-      artifactSha256,
+    evidence = await recordLiveSemanticEvidence({
+      outputPath,
+      payload,
+      evaluation,
+      proofIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
+      scenarioName: SCENARIO_NAME,
     });
-    await mkdir(path.dirname(outputPath), {recursive: true});
-    await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
-    if (!evaluation.passed) {
-      throw new Error(
-        `TiDB payment semantic proof failed: ${evaluation.failures.join(',')}`,
-      );
-    }
   } catch (error) {
     primaryError = error;
   }
 
   let cleanupError = null;
   try {
-    await cleanup(provider, state);
+    await cleanupTiDbLive(provider, state);
   } catch (error) {
     cleanupError = error;
   }
-  if (primaryError && cleanupError) {
-    throw new AggregateError(
-      [primaryError, cleanupError],
-      'TiDB payment proof and cleanup both failed',
-    );
-  }
-  if (primaryError) throw primaryError;
-  if (cleanupError) throw cleanupError;
+
+  finalizeLiveExecution({
+    primaryError,
+    cleanupError,
+    scenarioName: SCENARIO_NAME,
+  });
   return evidence;
 }
 
 async function main() {
   const evidence = await runTiDbPaymentProof();
   process.stdout.write(
-    'tidb-scenario-a-payment-live: PASS ' +
+    PASS_PREFIX +
     JSON.stringify({
       artifactSha256: evidence.artifactSha256,
-      retries: Number(evidence.retryEvidence?.retries || ZERO),
+      retries: Number(evidence.retryEvidence?.retries || 0),
       paidCents: evidence.observation.paidCents,
-    }) + '\n',
+    }) + NEWLINE,
   );
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
-  process.exitCode = ONE;
-});
+runLiveMain(main);
 
 export {
   runTiDbPaymentProof,

@@ -4,8 +4,13 @@ const TIKV_DATA_DIR = '/var/lib/tikv';
 const DATA_DIR_PREFIX = '--data-dir=';
 const SAFE_PATH_PATTERN = /^\/[A-Za-z0-9._/-]+$/u;
 
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arraySome = Function.call.bind(Array.prototype.some);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 function normalizePath(value, label) {
-  const path = String(value || '').trim();
+  const path = stringTrim(String(value || ''));
   if (!SAFE_PATH_PATTERN.test(path)) {
     throw new Error(`${label} must be an absolute safe path`);
   }
@@ -15,13 +20,13 @@ function normalizePath(value, label) {
 function appendBind(hostConfigExtras, bind) {
   const current = Array.isArray(hostConfigExtras?.Binds) ?
     hostConfigExtras.Binds : [];
-  if (current.includes(bind)) return {...hostConfigExtras, Binds: [...current]};
+  if (arrayIncludes(current, bind)) return {...hostConfigExtras, Binds: [...current]};
   return {...hostConfigExtras, Binds: [...current, bind]};
 }
 
 function appendDataDir(command, containerPath) {
   const current = Array.isArray(command) ? [...command] : [];
-  if (current.some((argument) => String(argument).startsWith(DATA_DIR_PREFIX))) {
+  if (arraySome(current, (argument) => stringStartsWith(String(argument), DATA_DIR_PREFIX))) {
     throw new Error('TiKV persistent storage refuses an existing --data-dir');
   }
   current.push(`${DATA_DIR_PREFIX}${containerPath}`);
@@ -77,15 +82,14 @@ function tikvPersistentStorageEvidence(inspect, options = {}) {
     hostPath,
     containerPath,
     bind,
-    bindPresent: binds.includes(bind),
+    bindPresent: arrayIncludes(binds, bind),
     dataDirArgument,
-    dataDirPresent: command.includes(dataDirArgument),
-    valid: binds.includes(bind) && command.includes(dataDirArgument),
+    dataDirPresent: arrayIncludes(command, dataDirArgument),
+    valid: arrayIncludes(binds, bind) && arrayIncludes(command, dataDirArgument),
   });
 }
 
 export {
-  TIKV_DATA_DIR as TIDB_REFERENCE_TIKV_DATA_DIR,
   createTiKvPersistentStorageProvider,
   tikvPersistentStorageEvidence,
 };

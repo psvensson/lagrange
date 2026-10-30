@@ -26,6 +26,9 @@ const READINESS_CLIENT_KEEPALIVE_SECONDS = '300';
 const DIAGNOSTIC_LOG_TAIL_LINES = 80;
 const DIAGNOSTIC_LOG_MAX_CHARS = 6000;
 
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 function buildReadinessSql(tikvStoreCount = DEFAULTS.tikvStoreCount) {
   return 'SELECT CASE WHEN ' +
     '(SELECT COUNT(*) FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS ' +
@@ -110,7 +113,7 @@ function tikvStoreNames(namePrefix, storeCount) {
 }
 
 function boundedLog(value) {
-  const text = String(value || '').trim();
+  const text = stringTrim(String(value || ''));
   if (text.length <= DIAGNOSTIC_LOG_MAX_CHARS) return text;
   return text.slice(text.length - DIAGNOSTIC_LOG_MAX_CHARS);
 }
@@ -239,7 +242,7 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
       const result = await provider.execInContainer(clientContainerId, command);
       lastResult = result;
       if (result?.exitCode === ZERO &&
-          String(result.stdout || '').trim() === READY_VALUE) {
+          stringTrim(String(result.stdout || '')) === READY_VALUE) {
         return {
           attempts,
           sql: readinessSql,
@@ -286,7 +289,7 @@ async function stopTiDbReferenceCluster(provider, created) {
     }
   }
   if (failures.length > ZERO) {
-    const message = failures.map((error) => error.message).join('; ');
+    const message = arrayMap(failures, (error) => error.message).join('; ');
     throw new Error(`TiDB reference cleanup failed: ${message}`);
   }
 }
@@ -320,7 +323,7 @@ async function startTiKvStores(options, names, created, runningOptions) {
 function watchedTopology(pd, tikvStores, tidb) {
   return [
     {role: 'pd', containerId: pd.containerId},
-    ...tikvStores.map((tikv, index) => ({
+    ...arrayMap(tikvStores, (tikv, index) => ({
       role: `tikv-${index + ONE}`,
       containerId: tikv.containerId,
     })),
@@ -461,13 +464,8 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
 
 export {
   DEFAULTS as TIDB_REFERENCE_DEFAULTS,
-  READINESS_SQL as TIDB_REFERENCE_READINESS_SQL,
   buildReadinessSql as buildTiDbReferenceReadinessSql,
-  buildSqlReadinessCommand as buildTiDbReferenceSqlReadinessCommand,
-  collectReadinessDiagnostics as collectTiDbReferenceReadinessDiagnostics,
-  normalizeOptions as normalizeTiDbReferenceLifecycleOptions,
   startTiDbReferenceCluster,
   stopTiDbReferenceCluster,
-  waitForContainerRunning as waitForTiDbReferenceContainerRunning,
   waitForSqlReady as waitForTiDbReferenceSqlReady,
 };

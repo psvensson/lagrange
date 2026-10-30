@@ -3,9 +3,7 @@ name: lagrange-scenario-a-contention-live
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-new-order-contention-lagrange-live-staging
-      - benchmark/tidb-lagrange-scenario-a-integration
+      - main
     paths:
       - '.github/workflows/lagrange-scenario-a-contention-live.yml'
       - 'test/distributed/config/local-benchmark-3node-timeout180.json'
@@ -19,7 +17,7 @@ on:
       - 'test/distributed/reference-client/lagrange-new-order-contention-observer.js'
   pull_request:
     branches:
-      - benchmark/tidb-reference-scenarios
+      - main
     paths:
       - '.github/workflows/lagrange-scenario-a-contention-live.yml'
       - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'

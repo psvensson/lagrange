@@ -1,15 +1,7 @@
 #!/usr/bin/env node
 
-import {createHash, randomUUID} from 'node:crypto';
-import {mkdir, writeFile} from 'node:fs/promises';
-import path from 'node:path';
-
 import {DockerProvider} from
   '../../test/distributed/harness/docker-provider.js';
-import {
-  TIDB_REFERENCE_DEFAULTS,
-  startTiDbReferenceCluster,
-} from '../../test/distributed/harness/tidb-reference-lifecycle.js';
 import {
   executePairedOltpTransactionWithRetry,
 } from '../../test/distributed/harness/oltp-paired-retry-owner.js';
@@ -24,34 +16,46 @@ import {
   OLTP_SCENARIO_A_SYSTEM,
 } from '../../test/distributed/harness/oltp-scenario-a-comparison-systems.js';
 import {
-  OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS,
-} from '../../test/distributed/harness/oltp-scenario-a-semantic-gate.js';
-import {
-  createTiDbOltpAdapter,
-} from '../../test/distributed/reference-client/tidb-oltp-adapter.js';
-import {
   observeTiDbNewOrderContentionState,
 } from '../../test/distributed/reference-client/tidb-new-order-contention-observer.js';
+import {
+  cleanupTiDbLive,
+  createTiDbLiveDatabaseName,
+  createTiDbLiveRunId,
+  finalizeLiveExecution,
+  recordLiveSemanticEvidence,
+  runLiveMain,
+  startTiDbLiveEnvironment,
+} from '../../test/distributed/harness/tidb-scenario-a-live-harness.js';
 
-const ZERO = 0;
-const ONE = 1;
-const TIKV_STORE_COUNT = 3;
-const OUTPUT_PATH =
-  process.env.TIDB_SCENARIO_A_CONTENTION_EVIDENCE_PATH ||
-  'test-output/tidb-reference/scenario-a-new-order-contention-tidb.json';
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayReduce = Function.call.bind(Array.prototype.reduce);
+
+const SCENARIO_NAME = 'contention';
+const SCENARIO_DISPLAY_NAME = 'new-order contention';
+const EVIDENCE_ID = 'tidb-new-order-contention-v1';
+const STATUS_COMMITTED = 'committed';
+const STATUS_FAILED = 'failed';
+const DEFAULT_ERROR_NAME = 'Error';
+const BENCHMARK_LABEL_KEY = 'lagrange.benchmark';
+const BENCHMARK_LABEL_VALUE = 'scenario-a-new-order-contention-tidb';
 const LABELS = Object.freeze({
-  'lagrange.benchmark': 'scenario-a-new-order-contention-tidb',
+  [BENCHMARK_LABEL_KEY]: BENCHMARK_LABEL_VALUE,
 });
-const DATABASE_RESOURCE_LIMITS = Object.freeze({memory: '2g', cpus: '2.0'});
-const CLIENT_RESOURCE_LIMITS = Object.freeze({memory: '256m', cpus: '0.5'});
-
-function uniqueRunId() {
-  return `lagrange-tidb-contention-${process.pid}-${randomUUID().slice(0, 8)}`;
-}
+const DEFAULT_OUTPUT_PATH =
+  'test-output/tidb-reference/scenario-a-new-order-contention-tidb.json';
+const OUTPUT_PATH =
+  process.env.TIDB_SCENARIO_A_CONTENTION_EVIDENCE_PATH || DEFAULT_OUTPUT_PATH;
+const NON_COMPARABLE_REASON =
+  'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.';
+const PASS_PREFIX = 'tidb-scenario-a-new-order-contention-live: PASS ';
+const NEWLINE = '\n';
 
 function errorProjection(error) {
   return {
-    name: String(error?.name || 'Error'),
+    name: String(error?.name || DEFAULT_ERROR_NAME),
     message: String(error?.message || error),
     sqlState: typeof error?.sqlState === 'string' ? error.sqlState : null,
     retryEvidence: error?.oltpRetryEvidence || null,
@@ -64,7 +68,7 @@ async function executeLogicalRequest(adapter, operation) {
       executeAttempt: () => adapter.executeTransaction(operation),
     });
     return Object.freeze({
-      status: 'committed',
+      status: STATUS_COMMITTED,
       workerId: operation.workerId,
       result: outcome.result,
       retryEvidence: outcome.evidence,
@@ -72,7 +76,7 @@ async function executeLogicalRequest(adapter, operation) {
     });
   } catch (error) {
     return Object.freeze({
-      status: 'failed',
+      status: STATUS_FAILED,
       workerId: operation.workerId,
       result: null,
       retryEvidence: error?.oltpRetryEvidence || null,
@@ -82,47 +86,15 @@ async function executeLogicalRequest(adapter, operation) {
 }
 
 function itemIds() {
-  return OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS
-    .flatMap((operation) => operation.lines.map(({itemId}) => itemId));
-}
-
-function canonicalPayloadDigest(payload) {
-  return createHash('sha256')
-    .update(JSON.stringify(payload))
-    .digest('hex');
-}
-
-async function cleanup(provider, state) {
-  const failures = [];
-  if (state.adapter) {
-    try {
-      await state.adapter.close();
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (state.cluster) {
-    try {
-      await state.cluster.stop();
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (state.networkId) {
-    try {
-      await provider.removeNetwork(state.networkId);
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (failures.length > ZERO) {
-    throw new AggregateError(failures, 'TiDB contention proof cleanup failed');
-  }
+  return arrayFlatMap(
+    OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS,
+    (operation) => arrayMap(operation.lines, ({itemId}) => itemId),
+  );
 }
 
 async function runTiDbNewOrderContentionProof(options = {}) {
   const provider = options.provider || new DockerProvider();
-  const runId = options.runId || uniqueRunId();
+  const runId = options.runId || createTiDbLiveRunId(SCENARIO_NAME);
   const outputPath = options.outputPath || OUTPUT_PATH;
   const definition = buildScenarioANewOrderContentionCase();
   const state = {
@@ -135,44 +107,30 @@ async function runTiDbNewOrderContentionProof(options = {}) {
   let evidence = null;
 
   try {
-    const network = await provider.createNetwork(state.networkName, LABELS);
-    state.networkId = network.id;
-    state.cluster = await startTiDbReferenceCluster({
+    const {endpoint} = await startTiDbLiveEnvironment({
       provider,
-      network: state.networkName,
-      namePrefix: runId,
-      tikvStoreCount: TIKV_STORE_COUNT,
-      resourceLimits: DATABASE_RESOURCE_LIMITS,
-      readinessResourceLimits: CLIENT_RESOURCE_LIMITS,
-    });
-    const host = String(state.cluster.containers.tidb.ip || '').trim();
-    if (!host) throw new Error('TiDB contention proof requires TiDB container IP');
-    const endpoint = {
-      host,
-      port: TIDB_REFERENCE_DEFAULTS.tidbPort,
-    };
-    const databaseName =
-      `lagrange_tidb_contention_${randomUUID().replace(/-/gu, '').slice(0, 12)}`;
-    state.adapter = await createTiDbOltpAdapter({
-      endpoint,
-      databaseName,
+      state,
+      runId,
+      labels: LABELS,
+      databaseName: createTiDbLiveDatabaseName(SCENARIO_NAME),
       workload: OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_WORKLOAD,
+      expectedDatasetSha256: definition.identity.datasetSha256,
     });
-    if (state.adapter.datasetSha256 !== definition.identity.datasetSha256) {
-      throw new Error('TiDB contention proof dataset identity mismatch');
-    }
 
     const logicalResults = await Promise.all(
-      OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS.map((operation) =>
-        executeLogicalRequest(state.adapter, operation)),
+      arrayMap(
+        OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS,
+        (operation) => executeLogicalRequest(state.adapter, operation),
+      ),
     );
     const observedState = await observeTiDbNewOrderContentionState({
       endpoint,
       databaseName: state.adapter.databaseName,
       itemIds: itemIds(),
     });
-    const logicalCommitted = logicalResults.filter(
-      ({status}) => status === 'committed',
+    const logicalCommitted = arrayFilter(
+      logicalResults,
+      ({status}) => status === STATUS_COMMITTED,
     ).length;
     const evaluation = evaluateScenarioANewOrderContentionObservation({
       logicalCommitted,
@@ -180,7 +138,7 @@ async function runTiDbNewOrderContentionProof(options = {}) {
     });
     const payload = Object.freeze({
       schemaVersion: 1,
-      evidenceId: 'tidb-new-order-contention-v1',
+      evidenceId: EVIDENCE_ID,
       system: OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV,
       caseId: definition.identity.caseId,
       caseSha256: definition.caseSha256,
@@ -193,71 +151,51 @@ async function runTiDbNewOrderContentionProof(options = {}) {
       evaluation,
       images: state.cluster.images,
       comparable: false,
-      nonComparableReason:
-        'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.',
+      nonComparableReason: NON_COMPARABLE_REASON,
     });
-    const artifactSha256 = canonicalPayloadDigest(payload);
-    evidence = Object.freeze({
-      ...payload,
-      proofRecord: Object.freeze({
-        evidenceId: payload.evidenceId,
-        system: payload.system,
-        status: evaluation.passed ?
-          OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED :
-          OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.FAILED,
-        artifactSha256,
-        proofIds: OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_PROOF_IDS,
-      }),
-      artifactSha256,
+    evidence = await recordLiveSemanticEvidence({
+      outputPath,
+      payload,
+      evaluation,
+      proofIds: OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_PROOF_IDS,
+      scenarioName: SCENARIO_DISPLAY_NAME,
     });
-    await mkdir(path.dirname(outputPath), {recursive: true});
-    await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
-    if (!evaluation.passed) {
-      throw new Error(
-        `TiDB new-order contention semantic proof failed: ${evaluation.failures.join(',')}`,
-      );
-    }
   } catch (error) {
     primaryError = error;
   }
 
   let cleanupError = null;
   try {
-    await cleanup(provider, state);
+    await cleanupTiDbLive(provider, state);
   } catch (error) {
     cleanupError = error;
   }
 
-  if (primaryError && cleanupError) {
-    throw new AggregateError(
-      [primaryError, cleanupError],
-      'TiDB contention proof and cleanup both failed',
-    );
-  }
-  if (primaryError) throw primaryError;
-  if (cleanupError) throw cleanupError;
+  finalizeLiveExecution({
+    primaryError,
+    cleanupError,
+    scenarioName: SCENARIO_NAME,
+  });
   return evidence;
 }
 
 async function main() {
   const evidence = await runTiDbNewOrderContentionProof();
   process.stdout.write(
-    'tidb-scenario-a-new-order-contention-live: PASS ' +
+    PASS_PREFIX +
     JSON.stringify({
       artifactSha256: evidence.artifactSha256,
-      retries: evidence.logicalResults.reduce(
-        (sum, result) => sum + Number(result.retryEvidence?.retries || ZERO),
-        ZERO,
+      retries: arrayReduce(
+        evidence.logicalResults,
+        (sum, result) => sum + Number(result.retryEvidence?.retries || 0),
+        0,
       ),
       orderIds: evidence.observation.orderIds,
-    }) + '\n',
+    }) + NEWLINE,
   );
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
-  process.exitCode = ONE;
-});
+runLiveMain(main);
 
 export {
   runTiDbNewOrderContentionProof,

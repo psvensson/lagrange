@@ -9,6 +9,12 @@ const RETRY_OUTCOME = Object.freeze({
   TERMINAL_FAILURE: 'terminal_failure',
 });
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySome = Function.call.bind(Array.prototype.some);
+const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
+
 const OLTP_PAIRED_RETRY_POLICY = Object.freeze({
   id: 'scenario-a-retry-v1',
   maxRetries: 3,
@@ -21,7 +27,7 @@ const OLTP_PAIRED_RETRY_POLICY = Object.freeze({
 
 function normalizeSqlState(value) {
   if (typeof value !== 'string') return null;
-  const normalized = value.toUpperCase();
+  const normalized = stringToUpperCase(value);
   return SQLSTATE_PATTERN.test(normalized) ? normalized : null;
 }
 
@@ -33,12 +39,27 @@ function resolveSqlState(error) {
   return null;
 }
 
+function isOutcomeUnknownError(error) {
+  return error?.commitOutcomeUnknown === true ||
+    error?.outcome === 'OUTCOME_UNKNOWN' ||
+    error?.code === 'OUTCOME_UNKNOWN' ||
+    error?.errorCode === 'OUTCOME_UNKNOWN';
+}
+
 function classifyOltpAttemptError(
   error,
   policy = OLTP_PAIRED_RETRY_POLICY,
 ) {
   const sqlState = resolveSqlState(error);
-  if (policy.retryableSqlStates.includes(sqlState)) {
+  if (isOutcomeUnknownError(error)) {
+    return Object.freeze({
+      retryable: false,
+      outcome: RETRY_OUTCOME.TERMINAL_FAILURE,
+      commitOutcomeUnknown: true,
+      sqlState,
+    });
+  }
+  if (arrayIncludes(policy.retryableSqlStates, sqlState)) {
     return Object.freeze({
       retryable: true,
       outcome: RETRY_OUTCOME.SERIALIZATION_CONFLICT,
@@ -72,7 +93,7 @@ function validatePolicy(policy) {
     throw new Error('OLTP paired retry owner requires maxDelayMs >= baseDelayMs');
   }
   if (!Array.isArray(policy?.retryableSqlStates) ||
-      policy.retryableSqlStates.some((value) => !normalizeSqlState(value))) {
+      arraySome(policy.retryableSqlStates, (value) => !normalizeSqlState(value))) {
     throw new Error('OLTP paired retry owner requires valid retryable SQLSTATEs');
   }
 }
@@ -87,7 +108,7 @@ function createEvidence(options) {
     attempts: options.attempts,
     retries: options.retries,
     retryDelayMs: options.retryDelayMs,
-    failures: Object.freeze(options.failures.map((failure) =>
+    failures: Object.freeze(arrayMap(options.failures, (failure) =>
       Object.freeze({...failure}))),
     intendedIssueTimeMs: options.intendedIssueTimeMs,
     completedAtMs: options.completedAtMs,
@@ -104,6 +125,9 @@ function createTerminalError(cause, evidence) {
   error.name = 'OltpPairedTransactionError';
   error.sqlState = resolveSqlState(cause);
   error.oltpRetryEvidence = evidence;
+  if (cause?.commitOutcomeUnknown === true || isOutcomeUnknownError(cause)) {
+    error.commitOutcomeUnknown = true;
+  }
   return error;
 }
 
@@ -150,6 +174,8 @@ async function executePairedOltpTransactionWithRetry(options = {}) {
         retryable: classification.retryable,
         outcome: classification.outcome,
         sqlState: classification.sqlState,
+        ...(classification.commitOutcomeUnknown ?
+          {commitOutcomeUnknown: true} : {}),
       });
       if (!classification.retryable || retries >= policy.maxRetries) {
         const evidence = createEvidence({
@@ -190,6 +216,7 @@ function createRetryAccumulator(policy) {
     retryDelayMs: ZERO,
     serializationConflicts: ZERO,
     terminalTransactions: ZERO,
+    outcomeUnknownTransactions: ZERO,
   };
 }
 
@@ -198,14 +225,33 @@ function accumulateEvidence(accumulator, evidence, terminal) {
   accumulator.attempts += evidence.attempts;
   accumulator.retries += evidence.retries;
   accumulator.retryDelayMs += evidence.retryDelayMs;
-  accumulator.serializationConflicts += evidence.failures.filter(
+  accumulator.serializationConflicts += arrayFilter(
+    evidence.failures,
     ({outcome}) => outcome === RETRY_OUTCOME.SERIALIZATION_CONFLICT,
   ).length;
   if (terminal) accumulator.terminalTransactions += ONE;
+  if (arraySome(evidence.failures, (f) => f.commitOutcomeUnknown === true)) {
+    accumulator.outcomeUnknownTransactions += ONE;
+  }
 }
 
 function freezeAccumulator(accumulator) {
-  return Object.freeze({...accumulator});
+  const result = {
+    policyId: accumulator.policyId,
+    logicalTransactions: accumulator.logicalTransactions,
+    attempts: accumulator.attempts,
+    retries: accumulator.retries,
+    retryDelayMs: accumulator.retryDelayMs,
+    serializationConflicts: accumulator.serializationConflicts,
+    terminalTransactions: accumulator.terminalTransactions,
+  };
+  Object.defineProperty(result, 'outcomeUnknownTransactions', {
+    value: accumulator.outcomeUnknownTransactions,
+    enumerable: accumulator.outcomeUnknownTransactions > ZERO,
+    writable: false,
+    configurable: false,
+  });
+  return Object.freeze(result);
 }
 
 function createPairedRetryingOltpAdapter(adapter, options = {}) {
@@ -254,5 +300,4 @@ export {
   createPairedRetryingOltpAdapter,
   executePairedOltpTransactionWithRetry,
   retryDelayMs as resolvePairedOltpRetryDelayMs,
-  resolveSqlState as resolveOltpSqlState,
 };

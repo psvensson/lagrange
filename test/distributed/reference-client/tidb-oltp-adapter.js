@@ -1,5 +1,3 @@
-import mysql from 'mysql2/promise';
-
 import {
   buildOltpBaselineDataset,
   hashOltpBaselineDataset,
@@ -19,6 +17,14 @@ const DEFAULT_DATABASE_NAME = 'lagrange_tidb_oltp';
 const DEFAULT_CONNECT_TIMEOUT_MS = 10000;
 const INSERT_BATCH_SIZE = 250;
 const DATABASE_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/u;
+const LOCKING_READ_MODE = 'pessimistic-for-update';
+
+const TIDB_OLTP_TRANSLATION_AUDIT = Object.freeze({
+  lockingReadMode: LOCKING_READ_MODE,
+  forUpdateStripped: false,
+  nativeLockingReadProved: true,
+  strippedStatementIds: Object.freeze([]),
+});
 
 const SQL = Object.freeze({
   [OLTP_SQL_STATEMENT.DISTRICT_NEXT_ORDER_FOR_UPDATE]:
@@ -170,14 +176,23 @@ function normalizeResult(result) {
   };
 }
 
+function isExplicitCommitSerializationAbort(error) {
+  const code = String(
+    error?.sqlState || error?.sqlstate || error?.code || '',
+  ).toUpperCase();
+  return code === '40001' &&
+    error?.commitOutcomeUnknown !== true &&
+    error?.outcome !== 'OUTCOME_UNKNOWN' &&
+    error?.code !== 'OUTCOME_UNKNOWN';
+}
+
 function createTiDbSession(connection) {
   const session = {
     async transaction(callback) {
       await connection.beginTransaction();
+      let result;
       try {
-        const result = await callback(session);
-        await connection.commit();
-        return result;
+        result = await callback(session);
       } catch (error) {
         try {
           await connection.rollback();
@@ -188,6 +203,28 @@ function createTiDbSession(connection) {
           );
         }
         throw error;
+      }
+
+      try {
+        await connection.commit();
+        return result;
+      } catch (commitError) {
+        if (isExplicitCommitSerializationAbort(commitError)) {
+          try {
+            await connection.rollback();
+          } catch {
+            // best-effort rollback, ignore if already aborted
+          }
+          if (commitError && typeof commitError === 'object') {
+            commitError.commitAborted = true;
+          }
+          throw commitError;
+        }
+        if (commitError && typeof commitError === 'object') {
+          commitError.commitPhase = true;
+          commitError.commitOutcomeUnknown = true;
+        }
+        throw commitError;
       }
     },
     async execute(statementId, parameters = []) {
@@ -380,11 +417,16 @@ async function dropDatabase(connect, endpoint, databaseName) {
   }
 }
 
+async function defaultConnectionFactory(options) {
+  const mysql = await import('mysql2/promise');
+  return (mysql.default || mysql).createConnection(options);
+}
+
 async function createTiDbOltpAdapter(options = {}) {
   const endpoint = normalizeEndpoint(options.endpoint);
   const config = resolveOltpBaselineConfig(options.workload || {});
   const databaseName = validateDatabaseName(options.databaseName);
-  const connect = options.createConnection || mysql.createConnection;
+  const connect = options.createConnection || defaultConnectionFactory;
   const dataset = buildOltpBaselineDataset(options.workload || {});
   const datasetSha256 = hashOltpBaselineDataset(dataset);
   const datasetSummary = summarizeOltpBaselineDataset(dataset);
@@ -429,6 +471,7 @@ async function createTiDbOltpAdapter(options = {}) {
     datasetSha256,
     datasetSummary,
     workerConnectionIds: Object.freeze([...initialConnectionIds]),
+    translationAudit: TIDB_OLTP_TRANSLATION_AUDIT,
     async executeTransaction(operation) {
       if (closed) throw new Error('TiDB OLTP adapter is closed');
       const workerIndex = Number(operation?.workerId) - ONE;
@@ -465,6 +508,7 @@ async function createTiDbOltpAdapter(options = {}) {
         datasetSummary,
         initialConnectionIds: [...initialConnectionIds],
         currentConnectionIds,
+        translationAudit: TIDB_OLTP_TRANSLATION_AUDIT,
         stateCounts: await queryStateCounts(workerConnections[ZERO]),
       };
     },
@@ -492,6 +536,7 @@ async function createTiDbOltpAdapter(options = {}) {
 }
 
 export {
-  DEFAULT_DATABASE_NAME as TIDB_OLTP_DEFAULT_DATABASE_NAME,
+  TIDB_OLTP_TRANSLATION_AUDIT,
   createTiDbOltpAdapter,
+  createTiDbSession,
 };

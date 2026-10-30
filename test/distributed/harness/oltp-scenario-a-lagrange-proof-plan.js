@@ -4,12 +4,27 @@ import {
 import {
   OLTP_SCENARIO_A_PROOF_CASES,
 } from './oltp-scenario-a-proof-cases.js';
+import {
+  OLTP_SCENARIO_A_SEMANTIC_PROFILE,
+  hashScenarioASemanticProfile,
+} from './oltp-scenario-a-semantic-profile.js';
+import {
+  OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
+} from './oltp-scenario-a-semantic-gate.js';
 
 const ZERO = 0;
 const MIN_CERTIFICATION_STREAK = 3;
 const GIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
 const SRC_FINGERPRINT_PATTERN = /^[0-9a-f]{16}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringIndexOf = Function.call.bind(String.prototype.indexOf);
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 const FORMATION_REQUIREMENT = Object.freeze({
   epicId: 'formation-seed-decoupling',
@@ -29,8 +44,78 @@ const PUBLIC_EXECUTION_CONTRACT = Object.freeze({
   lockingReadMode: 'snapshot-write-conflict',
 });
 
+const CORE_MILESTONE = '0.3.2';
+const COMPARATIVE_MILESTONE = '0.4';
+const COMPARATIVE_OWNER = 'RM-0.4-scenario-a-comparison';
+const COMPARATIVE_REASON =
+  'Both-system semanticEquivalent gate and paired offered-load sweep belong to 0.4 comparative qualification';
+const PROFILE_ID = OLTP_SCENARIO_A_SEMANTIC_PROFILE.id;
+const PROFILE_SHA256 = hashScenarioASemanticProfile();
+
+const PROOF_ID_TO_CASE_ID = new Map();
+for (const proofCase of OLTP_SCENARIO_A_PROOF_CASES) {
+  for (const proofId of proofCase.proofIds) {
+    PROOF_ID_TO_CASE_ID.set(proofId, proofCase.id);
+  }
+}
+
+function buildProofAccounting(options = {}) {
+  const proofs = Array.isArray(options.proofs) ? options.proofs : null;
+  const lagrangeProofs = proofs ?
+    arrayFilter(proofs, (candidate) =>
+      candidate && candidate.system === OLTP_SCENARIO_A_SYSTEM.LAGRANGE) :
+    null;
+
+  const accounting = arrayMap(OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS, (proofId) => {
+    const colonIndex = stringIndexOf(proofId, ':');
+    const category = proofId.slice(0, colonIndex);
+    const predicate = proofId.slice(colonIndex + 1);
+    const caseId = PROOF_ID_TO_CASE_ID.get(proofId);
+    if (!caseId) {
+      throw new Error(`Unmapped proofId in proof cases: ${proofId}`);
+    }
+    const scenarioModule = `test/distributed/scenarios/scenario-a-${caseId}-lagrange.js`;
+
+    let receiptStatus = 'pending_live_execution';
+    let receiptArtifactSha256 = null;
+
+    if (lagrangeProofs) {
+      const match = arrayFind(
+        lagrangeProofs,
+        (candidate) =>
+          Array.isArray(candidate.proofIds) && arrayIncludes(candidate.proofIds, proofId),
+      );
+      if (match) {
+        receiptStatus = match.status === 'passed' ? 'passed' : 'failed';
+        receiptArtifactSha256 = match.artifactSha256 || null;
+      }
+    }
+
+    return Object.freeze({
+      proofId,
+      category,
+      predicate,
+      caseId,
+      scenarioModule,
+      profileId: PROFILE_ID,
+      profileSha256: PROFILE_SHA256,
+      coreMilestone: CORE_MILESTONE,
+      coreGuaranteeRequired: true,
+      comparativeMilestone: COMPARATIVE_MILESTONE,
+      comparativeOwner: COMPARATIVE_OWNER,
+      comparativeReason: COMPARATIVE_REASON,
+      receiptStatus,
+      receiptArtifactSha256,
+    });
+  });
+
+  return Object.freeze(accounting);
+}
+
+const LAGRANGE_SCENARIO_A_PROOF_ACCOUNTING = buildProofAccounting();
+
 function requireText(value, label) {
-  const text = String(value || '').trim();
+  const text = stringTrim(String(value || ''));
   if (!text) throw new Error(`${label} is required`);
   return text;
 }
@@ -47,16 +132,15 @@ function normalizeFormationCertification(value) {
     metric: requireText(value.metric, 'formation certification metric'),
     status: requireText(value.status, 'formation certification status'),
     consecutive: Number(value.consecutive),
-    coreHeadSha: requireText(value.coreHeadSha, 'formation certification coreHeadSha')
-      .toLowerCase(),
-    srcFingerprint: requireText(
+    coreHeadSha: stringToLowerCase(requireText(value.coreHeadSha, 'formation certification coreHeadSha')),
+    srcFingerprint: stringToLowerCase(requireText(
       value.srcFingerprint,
       'formation certification srcFingerprint',
-    ).toLowerCase(),
-    artifactSha256: requireText(
+    )),
+    artifactSha256: stringToLowerCase(requireText(
       value.artifactSha256,
       'formation certification artifactSha256',
-    ).toLowerCase(),
+    )),
   });
 
   if (certification.epicId !== FORMATION_REQUIREMENT.epicId ||
@@ -93,13 +177,18 @@ function buildLagrangeScenarioAProofPlan(options = {}) {
     options.formationCertification,
   );
   const liveEnabled = formationCertification !== null;
-  const cases = Object.freeze(OLTP_SCENARIO_A_PROOF_CASES.map((proofCase) =>
+  const cases = Object.freeze(arrayMap(OLTP_SCENARIO_A_PROOF_CASES, (proofCase) =>
     Object.freeze({
       id: proofCase.id,
       system: OLTP_SCENARIO_A_SYSTEM.LAGRANGE,
       proofIds: proofCase.proofIds,
+      scenarioModule: `test/distributed/scenarios/scenario-a-${proofCase.id}-lagrange.js`,
       ...PUBLIC_EXECUTION_CONTRACT,
     })));
+
+  const proofAccounting = Array.isArray(options.proofs) ?
+    buildProofAccounting(options) :
+    LAGRANGE_SCENARIO_A_PROOF_ACCOUNTING;
 
   return Object.freeze({
     system: OLTP_SCENARIO_A_SYSTEM.LAGRANGE,
@@ -116,11 +205,13 @@ function buildLagrangeScenarioAProofPlan(options = {}) {
       reason: 'formation-certification-required',
     }),
     cases,
+    proofAccounting,
   });
 }
 
 export {
   FORMATION_REQUIREMENT as LAGRANGE_SCENARIO_A_FORMATION_REQUIREMENT,
   PUBLIC_EXECUTION_CONTRACT as LAGRANGE_SCENARIO_A_PUBLIC_EXECUTION_CONTRACT,
+  LAGRANGE_SCENARIO_A_PROOF_ACCOUNTING,
   buildLagrangeScenarioAProofPlan,
 };

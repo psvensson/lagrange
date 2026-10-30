@@ -3,8 +3,7 @@ name: tidb-scenario-a-durability-contract
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-durability-case-staging
+      - main
     paths:
       - '.github/workflows/tidb-scenario-a-durability-contract.yml'
       - 'test/distributed/harness/oltp-scenario-a-payment-case.js'

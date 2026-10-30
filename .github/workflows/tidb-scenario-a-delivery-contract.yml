@@ -3,9 +3,7 @@ name: tidb-scenario-a-delivery-contract
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-delivery-case-staging
-      - benchmark/scenario-a-delivery-reconcile
+      - main
     paths:
       - '.github/workflows/tidb-scenario-a-delivery-contract.yml'
       - 'test/distributed/harness/oltp-baseline-dataset.js'

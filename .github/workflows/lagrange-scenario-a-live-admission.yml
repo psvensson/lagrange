@@ -3,9 +3,7 @@ name: lagrange-scenario-a-live-admission
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-lagrange-live-admission-staging
-      - benchmark/lagrange-scenario-a-visibility-20261028
+      - main
     paths:
       - '.github/workflows/lagrange-scenario-a-live-admission.yml'
       - 'test/distributed/harness/oltp-scenario-a-comparison-systems.js'

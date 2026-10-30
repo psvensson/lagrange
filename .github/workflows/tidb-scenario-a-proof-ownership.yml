@@ -3,12 +3,7 @@ name: tidb-scenario-a-proof-ownership
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/payment-proof-ownership-repair
-      - benchmark/stock-proof-ownership-staging
-      - benchmark/delivery-proof-ownership-repair
-      - benchmark/scenario-a-tidb-semantic-closure
-      - benchmark/scenario-a-lagrange-proof-plan-staging
+      - main
     paths:
       - '.github/workflows/tidb-scenario-a-proof-ownership.yml'
       - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'

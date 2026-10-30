@@ -3,8 +3,7 @@ name: tidb-scenario-a-durability-live
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-durability-tidb-live-staging
+      - main
     paths:
       - '.github/workflows/tidb-scenario-a-durability-live.yml'
       - 'scripts/checks/run-tidb-scenario-a-durability-live.js'

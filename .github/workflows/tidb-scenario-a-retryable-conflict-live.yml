@@ -1,22 +1,6 @@
 name: tidb-scenario-a-retryable-conflict-live
 
 on:
-  push:
-    branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-retryable-conflict-tidb-live-staging
-    paths:
-      - '.github/workflows/tidb-scenario-a-retryable-conflict-live.yml'
-      - 'scripts/checks/run-tidb-scenario-a-retryable-conflict-live.js'
-      - 'scripts/checks/oltp-scenario-a-retryable-conflict-case-guard.js'
-      - 'scripts/checks/tidb-retryable-conflict-probe-guard.js'
-      - 'test/distributed/harness/oltp-paired-retry-owner.js'
-      - 'test/distributed/harness/oltp-scenario-a-comparison-systems.js'
-      - 'test/distributed/harness/oltp-scenario-a-retryable-conflict-case.js'
-      - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
-      - 'test/distributed/harness/tidb-reference-lifecycle.js'
-      - 'test/distributed/reference-client/tidb-oltp-adapter.js'
-      - 'test/distributed/reference-client/tidb-retryable-conflict-probe.js'
   workflow_dispatch: {}
 
 permissions:

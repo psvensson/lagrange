@@ -28,7 +28,7 @@
   "censusSize": 2497,
   "digest": "fnv1a32-956292e5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cdf09b34",
+  "observationDigest": "fnv1a32-b2b988fd",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7654,11 +7654,14 @@
     "test/distributed/reference-client/lagrange-scenario-a-slices.test.js": {
       "files": [
         "Dockerfile",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
         "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
         "test/test-helpers/participant-protocol-double.js"
       ],
       "directories": [
@@ -7672,14 +7675,18 @@
         "LAGRANGE_SCENARIO_A_FAILURE_ATOMICITY_EVIDENCE_PATH",
         "LAGRANGE_SCENARIO_A_ORDER_STATUS_EVIDENCE_PATH",
         "LAGRANGE_SCENARIO_A_PAYMENT_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_STOCK_LEVEL_EVIDENCE_PATH"
+        "LAGRANGE_SCENARIO_A_STOCK_LEVEL_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_VISIBILITY_EVIDENCE_PATH"
       ]
     },
     "test/distributed/reference-client/lagrange-visibility-probe.test.js": {
       "files": [
         "Dockerfile",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "src"

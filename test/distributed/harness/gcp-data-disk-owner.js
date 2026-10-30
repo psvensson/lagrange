@@ -11,6 +11,14 @@ const RESOURCE_NAME_PATTERN = /^[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$/u;
 const SAFE_TOKEN_PATTERN = /^[A-Za-z0-9._/-]+$/u;
 const SAFE_DISK_TYPE_PATTERN = /^[a-z0-9-]+$/u;
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySome = Function.call.bind(Array.prototype.some);
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 function runGcloud(args) {
   return execFileSync('gcloud', args, {
     encoding: 'utf8',
@@ -27,7 +35,7 @@ function normalizePositiveInteger(value, label, fallback) {
 }
 
 function normalizeResourceName(value, label) {
-  const text = String(value || '').trim();
+  const text = stringTrim(String(value || ''));
   if (!RESOURCE_NAME_PATTERN.test(text)) {
     throw new Error(`${label} must be a valid GCP resource name`);
   }
@@ -35,7 +43,7 @@ function normalizeResourceName(value, label) {
 }
 
 function normalizeSafeToken(value, label) {
-  const text = String(value || '').trim();
+  const text = stringTrim(String(value || ''));
   if (!text || !SAFE_TOKEN_PATTERN.test(text)) {
     throw new Error(`${label} contains unsupported characters`);
   }
@@ -47,17 +55,17 @@ function normalizeMountPath(value) {
     value ?? DEFAULT_MOUNT_PATH,
     'GCP data disk mountPath',
   );
-  if (!mountPath.startsWith('/')) {
+  if (!stringStartsWith(mountPath, '/')) {
     throw new Error('GCP data disk mountPath must be absolute');
   }
-  if (mountPath.split('/').includes('..')) {
+  if (arrayIncludes(stringSplit(mountPath, '/'), '..')) {
     throw new Error('GCP data disk mountPath must not traverse parents');
   }
   return mountPath;
 }
 
 function normalizeDiskType(value) {
-  const type = String(value ?? DEFAULT_TYPE).trim();
+  const type = stringTrim(String(value ?? DEFAULT_TYPE));
   if (!SAFE_DISK_TYPE_PATTERN.test(type)) {
     throw new Error('GCP data disk type contains unsupported characters');
   }
@@ -68,7 +76,7 @@ function normalizeHostInfo(hostInfo) {
   if (!Array.isArray(hostInfo) || hostInfo.length === ZERO) {
     throw new Error('GCP data disk owner requires non-empty hostInfo');
   }
-  return hostInfo.map((host, index) => {
+  return arrayMap(hostInfo, (host, index) => {
     const internalIp = normalizeSafeToken(
       host?.internalIp,
       `GCP data disk hostInfo[${index}].internalIp`,
@@ -81,8 +89,8 @@ function normalizeHostIndexes(hostIndexes, hostCount) {
   if (!Array.isArray(hostIndexes) || hostIndexes.length === ZERO) {
     throw new Error('GCP data disk owner requires hostIndexes');
   }
-  const normalized = hostIndexes.map((value) => Number(value));
-  if (normalized.some((value) =>
+  const normalized = arrayMap(hostIndexes, (value) => Number(value));
+  if (arraySome(normalized, (value) =>
     !Number.isInteger(value) || value < ZERO || value >= hostCount)) {
     throw new Error('GCP data disk hostIndexes must identify provisioned hosts');
   }
@@ -166,7 +174,10 @@ class GcpDataDiskOwner {
       `--filter=networkInterfaces.networkIP=${internalIp}`,
       '--format=value(name)',
     ]);
-    const names = String(output || '').trim().split(/\r?\n/u).filter(Boolean);
+    const names = arrayFilter(
+      stringSplit(stringTrim(String(output || '')), /\r?\n/u),
+      Boolean,
+    );
     if (names.length !== ONE) {
       throw new Error(
         `Expected one GCP VM for internal IP ${internalIp}, got ${names.length}`,
@@ -235,7 +246,7 @@ class GcpDataDiskOwner {
         ]);
         this._ssh(vmName, mountCommand(policy.deviceName, policy.mountPath));
       }
-      return this._attached.map((record) => Object.freeze({...record}));
+      return arrayMap(this._attached, (record) => Object.freeze({...record}));
     } catch (error) {
       let cleanupError = null;
       try {
@@ -292,7 +303,6 @@ class GcpDataDiskOwner {
 }
 
 export {
-  DEFAULT_DEVICE_NAME as GCP_DATA_DISK_DEFAULT_DEVICE_NAME,
   DEFAULT_MOUNT_PATH as GCP_DATA_DISK_DEFAULT_MOUNT_PATH,
   DEFAULT_SIZE_GB as GCP_DATA_DISK_DEFAULT_SIZE_GB,
   DEFAULT_TYPE as GCP_DATA_DISK_DEFAULT_TYPE,

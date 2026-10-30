@@ -3,8 +3,7 @@ name: tidb-scenario-a-retryable-conflict-contract
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-retryable-conflict-case-staging
+      - main
     paths:
       - '.github/workflows/tidb-scenario-a-retryable-conflict-contract.yml'
       - 'test/distributed/harness/oltp-paired-retry-owner.js'

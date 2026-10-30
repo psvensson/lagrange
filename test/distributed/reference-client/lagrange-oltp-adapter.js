@@ -22,6 +22,19 @@ const PUBLIC_PROTOCOL = 'postgresql';
 const PUBLIC_EXECUTION_PATH = 'public-sql';
 const LOCKING_READ_MODE = 'snapshot-write-conflict';
 
+const LAGRANGE_OLTP_TRANSLATION_AUDIT = Object.freeze({
+  lockingReadMode: LOCKING_READ_MODE,
+  forUpdateStripped: true,
+  nativeLockingReadProved: false,
+  strippedStatementIds: Object.freeze([
+    OLTP_SQL_STATEMENT.DISTRICT_NEXT_ORDER_FOR_UPDATE,
+    OLTP_SQL_STATEMENT.STOCK_QUANTITY_FOR_UPDATE,
+    OLTP_SQL_STATEMENT.DELIVERY_OLDEST_NEW_ORDER_FOR_UPDATE,
+    OLTP_SQL_STATEMENT.DELIVERY_ORDER_FOR_UPDATE,
+    OLTP_SQL_STATEMENT.DELIVERY_LINES_FOR_UPDATE,
+  ]),
+});
+
 const SQL = Object.freeze({
   [OLTP_SQL_STATEMENT.DISTRICT_NEXT_ORDER_FOR_UPDATE]:
     'SELECT next_order_id FROM district ' +
@@ -230,14 +243,23 @@ async function closeClients(clients) {
   }
 }
 
+function isExplicitCommitSerializationAbort(error) {
+  const code = String(
+    error?.sqlState || error?.sqlstate || error?.code || '',
+  ).toUpperCase();
+  return code === '40001' &&
+    error?.commitOutcomeUnknown !== true &&
+    error?.outcome !== 'OUTCOME_UNKNOWN' &&
+    error?.code !== 'OUTCOME_UNKNOWN';
+}
+
 function createLagrangeSession(client) {
   const session = {
     async transaction(callback) {
       await client.query('BEGIN');
+      let result;
       try {
-        const result = await callback(session);
-        await client.query('COMMIT');
-        return result;
+        result = await callback(session);
       } catch (error) {
         try {
           await client.query('ROLLBACK');
@@ -248,6 +270,28 @@ function createLagrangeSession(client) {
           );
         }
         throw error;
+      }
+
+      try {
+        await client.query('COMMIT');
+        return result;
+      } catch (commitError) {
+        if (isExplicitCommitSerializationAbort(commitError)) {
+          try {
+            await client.query('ROLLBACK');
+          } catch {
+            // best-effort rollback, ignore if already aborted
+          }
+          if (commitError && typeof commitError === 'object') {
+            commitError.commitAborted = true;
+          }
+          throw commitError;
+        }
+        if (commitError && typeof commitError === 'object') {
+          commitError.commitPhase = true;
+          commitError.commitOutcomeUnknown = true;
+        }
+        throw commitError;
       }
     },
     async execute(statementId, parameters = []) {
@@ -542,6 +586,7 @@ async function createLagrangeOltpAdapter(options = {}) {
     protocol: PUBLIC_PROTOCOL,
     executionPath: PUBLIC_EXECUTION_PATH,
     lockingReadMode: LOCKING_READ_MODE,
+    translationAudit: LAGRANGE_OLTP_TRANSLATION_AUDIT,
     datasetSha256,
     datasetSummary,
     workerSessionIds,
@@ -574,6 +619,7 @@ async function createLagrangeOltpAdapter(options = {}) {
         protocol: PUBLIC_PROTOCOL,
         executionPath: PUBLIC_EXECUTION_PATH,
         lockingReadMode: LOCKING_READ_MODE,
+        translationAudit: LAGRANGE_OLTP_TRANSLATION_AUDIT,
         datasetSha256,
         datasetSummary,
         workerSessionIds,
@@ -605,5 +651,7 @@ async function createLagrangeOltpAdapter(options = {}) {
 
 export {
   SQL as LAGRANGE_OLTP_SQL,
+  LAGRANGE_OLTP_TRANSLATION_AUDIT,
   createLagrangeOltpAdapter,
+  createLagrangeSession,
 };

@@ -1,15 +1,6 @@
 name: tidb-scenario-a-semantic-closure
 
 on:
-  push:
-    branches:
-      - benchmark/scenario-a-tidb-semantic-closure
-    paths:
-      - '.github/workflows/tidb-scenario-a-semantic-closure.yml'
-      - '.github/workflows/tidb-scenario-a-proof-ownership.yml'
-      - 'scripts/checks/**'
-      - 'test/distributed/harness/**'
-      - 'test/distributed/reference-client/**'
   workflow_dispatch: {}
 
 permissions:
