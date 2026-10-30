@@ -41,6 +41,19 @@ on:
       - 'test/distributed/harness/scenario-b-fairness-gate.js'
       - 'scripts/checks/scenario-b-fairness-version-gate-guard.js'
       - 'scripts/checks/tidb-version-gated-comparison-publisher.js'
+      - 'scripts/checks/comparative-benchmark-matrix-guard.js'
+      - 'data/tidb-comparison/multi-system-matrix.json'
+      - 'test/distributed/harness/comparative-matrix-runner.js'
+      - 'test/distributed/harness/postgresql-comparison-static-web.js'
+      - 'test/distributed/harness/comparative-landing-svg-renderer.js'
+      - 'test/distributed/harness/comparative-landing-page.js'
+      - 'docs/benchmarks/postgresql-comparison-progress.svg'
+      - 'docs/benchmarks/postgresql-comparison-progress.md'
+      - 'docs/benchmarks/postgresql-comparison-progress.html'
+      - 'docs/benchmarks/comparative-overview.svg'
+      - 'docs/benchmarks/README.md'
+      - 'docs/benchmarks/index.html'
+      - 'solve/epics/multi-system-comparative-benchmark-matrix.md'
   workflow_dispatch: {}
 
 permissions:
@@ -92,7 +105,12 @@ jobs:
             scripts/checks/scenario-b-latency-movement-guard.js \
             test/distributed/harness/scenario-b-fairness-gate.js \
             scripts/checks/scenario-b-fairness-version-gate-guard.js \
-            scripts/checks/tidb-version-gated-comparison-publisher.js
+            scripts/checks/tidb-version-gated-comparison-publisher.js \
+            test/distributed/harness/comparative-matrix-runner.js \
+            test/distributed/harness/postgresql-comparison-static-web.js \
+            test/distributed/harness/comparative-landing-svg-renderer.js \
+            test/distributed/harness/comparative-landing-page.js \
+            scripts/checks/comparative-benchmark-matrix-guard.js
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js
           node scripts/checks/oltp-comparison-history-store-guard.js
           node scripts/checks/scenario-b-risk-benchmark-guard.js

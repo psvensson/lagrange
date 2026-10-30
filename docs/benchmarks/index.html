@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Comparative Benchmark Statistics - Multi-System Overview</title>
+  <style>
+    :root { --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+    a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+    .container { max-width: 1040px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    p.desc { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+    .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 20px; overflow-x: auto; }
+    .filter-bar { margin-bottom: 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .filter-bar input { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; width: 280px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; overflow-x: auto; }
+    .card h2 { font-size: 15px; margin-bottom: 12px; color: var(--accent); }
+    table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.data-table th, table.data-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+    table.data-table th { color: var(--muted); font-weight: 600; }
+    .badge { font-family: monospace; background: #0f172a; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border); }
+    .badge-green { color: #10b981; border-color: #10b981; }
+    .badge-red { color: #ef4444; border-color: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Comparative Benchmark Statistics</h1>
+    <p class="desc">Multi-system executive performance and topology comparison across PostgreSQL, TiDB/TiKV, and Lagrange.</p>
+    <p class="desc">Specifications &amp; Detail: <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline">Scenario A</a> | <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B</a> | <a href="tidb-reference-paired-owner.md">Paired Benchmark Owner</a> | <a href="tidb-comparison-progress.html">TiDB Progress</a> | <a href="postgresql-comparison-progress.html">PostgreSQL Progress</a></p>
+    <div class="chart-box"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 780" width="960" height="780" role="img" aria-label="Lagrange Comparative Benchmark Statistics - Multi-System Overview">
+  <rect width="960" height="780" fill="#0f172a" rx="12"/>
+  <text x="30" y="32" fill="#f8fafc" font-size="18" font-weight="700" font-family="system-ui, sans-serif">Lagrange Comparative Benchmark Statistics - Multi-System Overview</text>
+  <text x="30" y="52" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif">Targets: Lagrange, TiDB + TiKV, PostgreSQL 17 (Single Primary + App Service), PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | Legend: solid = observed-docker-cluster, dashed = modeled-topology-oracle</text>
+  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="30" y="80" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">Scenario A - Contended OLTP Baseline (tidb-oltp-baseline) &amp; Topology Footprint</text></a>
+  <rect x="30" y="92" width="280" height="315" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="45" y="120" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario A Throughput (tx/sec)</text>
+  <text x="45" y="138" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Contended OLTP Capacity</text>
+    <text x="45" y="157" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange: 0.83 tx/s</text>
+    <rect x="45" y="163" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="45" y="163" width="12" height="12" fill="#6366f1" rx="3"/>
+    <text x="45" y="212" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV: 6.75 tx/s</text>
+    <rect x="45" y="218" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="45" y="218" width="100" height="12" fill="#0284c7" rx="3"/>
+    <text x="45" y="267" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Single Primary + App Service): 14.80 tx/s</text>
+    <rect x="45" y="273" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="45" y="273" width="220" height="12" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="322" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Patroni Sync HA RF=3 + App Service): 8.40 tx/s</text>
+    <rect x="45" y="328" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="45" y="328" width="125" height="12" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="340" y="92" width="280" height="315" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="355" y="120" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario A Commit Latency p95 (ms)</text>
+  <text x="355" y="138" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Commit Tail Distribution</text>
+    <text x="355" y="157" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange: 4418.93 ms</text>
+    <rect x="355" y="163" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="355" y="163" width="220" height="12" fill="#6366f1" rx="3"/>
+    <text x="355" y="212" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV: 1383.18 ms</text>
+    <rect x="355" y="218" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="355" y="218" width="69" height="12" fill="#0284c7" rx="3"/>
+    <text x="355" y="267" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Single Primary + App Service): 412.60 ms</text>
+    <rect x="355" y="273" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="355" y="273" width="21" height="12" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="322" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Patroni Sync HA RF=3 + App Service): 920.50 ms</text>
+    <rect x="355" y="328" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="355" y="328" width="46" height="12" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="650" y="92" width="280" height="315" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="665" y="120" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Whole-Topology Units &amp; Processes</text>
+  <text x="665" y="138" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Footprint &amp; RPO=0 HA Survival</text>
+    <text x="665" y="157" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange: 3u / 3p</text>
+    <rect x="665" y="163" width="140" height="12" fill="#334155" rx="3"/>
+    <rect x="665" y="163" width="47" height="12" fill="#6366f1" rx="3"/>
+    <rect x="815" y="161" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
+    <text x="852" y="172" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
+    <text x="665" y="212" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV: 6u / 6p</text>
+    <rect x="665" y="218" width="140" height="12" fill="#334155" rx="3"/>
+    <rect x="665" y="218" width="93" height="12" fill="#0284c7" rx="3"/>
+    <rect x="815" y="216" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
+    <text x="852" y="227" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
+    <text x="665" y="267" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Single Primary + App Service): 2u / 2p</text>
+    <rect x="665" y="273" width="140" height="12" fill="#334155" rx="3"/>
+    <rect x="665" y="273" width="31" height="12" fill="#10b981" rx="3"/>
+    <rect x="815" y="271" width="75" height="15" fill="#0f172a" rx="3" stroke="#ef4444"/>
+    <text x="852" y="282" fill="#ef4444" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: NO</text>
+    <text x="665" y="322" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Patroni Sync HA RF=3 + App Service): 6u / 9p</text>
+    <rect x="665" y="328" width="140" height="12" fill="#334155" rx="3"/>
+    <rect x="665" y="328" width="140" height="12" fill="#f59e0b" rx="3"/>
+    <rect x="815" y="326" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
+    <text x="852" y="337" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
+  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="430" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision)</text></a>
+  <rect x="30" y="442" width="280" height="315" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="45" y="470" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Risk Decisions/sec</text>
+  <text x="45" y="488" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Throughput (higher is better)</text>
+    <text x="45" y="507" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange: 441.15 dec/s</text>
+    <rect x="45" y="513" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="45" y="513" width="220" height="12" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="562" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV: 221.44 dec/s</text>
+    <rect x="45" y="568" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="45" y="568" width="110" height="12" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="617" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Single Primary + App Service): 294.60 dec/s</text>
+    <rect x="45" y="623" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="45" y="623" width="147" height="12" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="672" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Patroni Sync HA RF=3 + App Service): 218.20 dec/s</text>
+    <rect x="45" y="678" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="45" y="678" width="109" height="12" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="340" y="442" width="280" height="315" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="355" y="470" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Decision p99 Latency (ms)</text>
+  <text x="355" y="488" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Decision Tail + Shape Markers</text>
+    <text x="355" y="507" fill="#cbd5e1" font-size="10" font-family="monospace">Lagrange: 18.09 ms [loc: 4.20ms | seq: 22.40ms]</text>
+    <rect x="355" y="513" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="355" y="513" width="110" height="12" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="562" fill="#cbd5e1" font-size="10" font-family="monospace">TiDB + TiKV: 36.08 ms [loc: 16.50ms | seq: 48.60ms]</text>
+    <rect x="355" y="568" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="355" y="568" width="220" height="12" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="617" fill="#cbd5e1" font-size="10" font-family="monospace">PostgreSQL 17 (Single Primary + App Service): 26.40 ms [loc: 7.40ms | seq: 24.80ms]</text>
+    <rect x="355" y="623" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="355" y="623" width="161" height="12" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="672" fill="#cbd5e1" font-size="10" font-family="monospace">PostgreSQL 17 (Patroni Sync HA RF=3 + App Service): 35.20 ms [loc: 11.20ms | seq: 34.60ms]</text>
+    <rect x="355" y="678" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="355" y="678" width="215" height="12" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="650" y="442" width="280" height="315" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="665" y="470" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Wire / WAN Traffic per Decision (bytes)</text>
+  <text x="665" y="488" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Network Payload (lower is better)</text>
+    <text x="665" y="507" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange: 144 B/dec</text>
+    <rect x="665" y="513" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="665" y="513" width="5" height="12" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="562" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV: 6144 B/dec</text>
+    <rect x="665" y="568" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="665" y="568" width="220" height="12" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="617" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Single Primary + App Service): 1420 B/dec</text>
+    <rect x="665" y="623" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="665" y="623" width="51" height="12" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="672" fill="#cbd5e1" font-size="11" font-family="monospace">PostgreSQL 17 (Patroni Sync HA RF=3 + App Service): 2680 B/dec</text>
+    <rect x="665" y="678" width="220" height="12" fill="#334155" rx="3"/>
+    <rect x="665" y="678" width="96" height="12" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+</svg>
+</div>
+    <div class="filter-bar"><label for="landing-filter">Filter:</label><input type="text" id="landing-filter" placeholder="Filter targets, categories, shapes..."/></div>
+    <div class="card">
+      <h2>Executive Multi-System Comparison Matrix</h2>
+      <table class="data-table"><thead><tr><th>System</th><th>Category</th><th>Topology (Procs)</th><th>RPO=0</th><th>Scenario A tx/s (p95)</th><th>Scenario B dec/s (p99)</th><th>Wire Bytes</th><th>Tier</th><th>Detail Page</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Lagrange</strong> <span class="badge">0.3.0</span></td><td>distributed-native</td><td>3 units (3 procs)</td><td><span class="badge badge-green">Yes</span></td><td>0.83 tx/s (4418.93 ms)</td><td>441.15 dec/s (18.09 ms)</td><td>144 B</td><td><span class="badge">observed-docker-cluster</span></td><td><a href="tidb-comparison-progress.html">tidb-comparison-progress.md</a></td></tr>
+        <tr><td><strong>TiDB + TiKV</strong> <span class="badge">v8.5.8</span></td><td>distributed-sql</td><td>6 units (6 procs)</td><td><span class="badge badge-green">Yes</span></td><td>6.75 tx/s (1383.18 ms)</td><td>221.44 dec/s (36.08 ms)</td><td>6144 B</td><td><span class="badge">observed-docker-cluster</span></td><td><a href="tidb-comparison-progress.html">tidb-comparison-progress.md</a></td></tr>
+        <tr><td><strong>PostgreSQL 17 (Single Primary + App Service)</strong> <span class="badge">17.2</span></td><td>relational-single-primary</td><td>2 units (2 procs)</td><td><span class="badge badge-red">No</span></td><td>14.80 tx/s (412.60 ms)</td><td>294.60 dec/s (26.40 ms)</td><td>1420 B</td><td><span class="badge">modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
+        <tr><td><strong>PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)</strong> <span class="badge">17.2-patroni-4.0</span></td><td>relational-sync-ha</td><td>6 units (9 procs)</td><td><span class="badge badge-green">Yes</span></td><td>8.40 tx/s (920.50 ms)</td><td>218.20 dec/s (35.20 ms)</td><td>2680 B</td><td><span class="badge">modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
+      </tbody></table>
+    </div>
+    <div class="card">
+      <h2>Scenario B Workload-Shape Progression</h2>
+      <table class="data-table"><thead><tr><th>System</th><th>Graph Shape</th><th>Decisions/sec</th><th>Latency p99 (ms)</th><th>Round Trips</th><th>Wire Bytes</th></tr></thead>
+      <tbody>
+        <tr><td>Lagrange</td><td><span class="badge">local-only</span></td><td>620.00</td><td>4.20</td><td>0</td><td>0 B</td></tr>
+        <tr><td>Lagrange</td><td><span class="badge">one-remote-stage</span></td><td>495.00</td><td>14.80</td><td>1</td><td>96 B</td></tr>
+        <tr><td>Lagrange</td><td><span class="badge">sequential</span></td><td>380.00</td><td>22.40</td><td>2</td><td>192 B</td></tr>
+        <tr><td>Lagrange</td><td><span class="badge">fan-out</span></td><td>410.00</td><td>18.10</td><td>1</td><td>192 B</td></tr>
+        <tr><td>TiDB + TiKV</td><td><span class="badge">local-only</span></td><td>280.00</td><td>16.50</td><td>2</td><td>2048 B</td></tr>
+        <tr><td>TiDB + TiKV</td><td><span class="badge">one-remote-stage</span></td><td>235.00</td><td>32.10</td><td>4</td><td>4096 B</td></tr>
+        <tr><td>TiDB + TiKV</td><td><span class="badge">sequential</span></td><td>190.00</td><td>48.60</td><td>6</td><td>6144 B</td></tr>
+        <tr><td>TiDB + TiKV</td><td><span class="badge">fan-out</span></td><td>215.00</td><td>38.20</td><td>5</td><td>6144 B</td></tr>
+        <tr><td>PostgreSQL 17 (Single Primary + App Service)</td><td><span class="badge">local-only</span></td><td>520.00</td><td>7.40</td><td>1</td><td>640 B</td></tr>
+        <tr><td>PostgreSQL 17 (Single Primary + App Service)</td><td><span class="badge">one-remote-stage</span></td><td>330.00</td><td>14.20</td><td>2</td><td>1180 B</td></tr>
+        <tr><td>PostgreSQL 17 (Single Primary + App Service)</td><td><span class="badge">sequential</span></td><td>198.00</td><td>24.80</td><td>4</td><td>1960 B</td></tr>
+        <tr><td>PostgreSQL 17 (Single Primary + App Service)</td><td><span class="badge">fan-out</span></td><td>230.00</td><td>21.50</td><td>4</td><td>1900 B</td></tr>
+        <tr><td>PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)</td><td><span class="badge">local-only</span></td><td>385.00</td><td>11.20</td><td>1</td><td>1280 B</td></tr>
+        <tr><td>PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)</td><td><span class="badge">one-remote-stage</span></td><td>248.00</td><td>19.80</td><td>2</td><td>2240 B</td></tr>
+        <tr><td>PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)</td><td><span class="badge">sequential</span></td><td>146.00</td><td>34.60</td><td>4</td><td>3640 B</td></tr>
+        <tr><td>PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)</td><td><span class="badge">fan-out</span></td><td>174.00</td><td>29.80</td><td>4</td><td>3560 B</td></tr>
+      </tbody></table>
+    </div>
+  </div>
+  <script>
+    document.getElementById('landing-filter').addEventListener('input', function(e) {
+      var q = e.target.value.toLowerCase();
+      var rows = document.querySelectorAll('table.data-table tbody tr');
+      for (var i = 0; i < rows.length; i++) {
+        rows[i].style.display = rows[i].textContent.toLowerCase().indexOf(q) === -1 ? 'none' : '';
+      }
+    });
+  </script>
+</body>
+</html>

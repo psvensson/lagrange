@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 import {
   DEFAULT_COMPARISON_HISTORY_NDJSON_PATH,
@@ -35,6 +36,7 @@ import {
   shortSha,
   getScenarioBEntries,
 } from '../../test/distributed/harness/oltp-comparison-svg-renderer.js';
+import {runComparativeBenchmarkMatrixGuard} from './comparative-benchmark-matrix-guard.js';
 
 const stringIncludes = Function.call.bind(String.prototype.includes);
 
@@ -89,6 +91,12 @@ const SCENARIO_SEMANTIC_ID = 'scenario-a-semantic-closure';
 const HREF_SCENARIO_A = 'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline';
 const HREF_SCENARIO_B = 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision';
 const HREF_SEMANTIC_GATE = 'tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate';
+const PARENT_DIR = '..';
+const REPO_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  PARENT_DIR,
+  PARENT_DIR,
+);
 
 function verifySvgRendererHelpers() {
   assert.equal(escapeXml(ESCAPE_XML_INPUT), ESCAPE_XML_EXPECTED);
@@ -268,6 +276,7 @@ async function verifyCommittedDataAndWebArtifacts() {
   assert.equal(stringIncludes(rootReadme, LINK_HTML), true);
   assert.equal(stringIncludes(docsReadme, LINK_MD), true);
   assert.equal(stringIncludes(docsReadme, LINK_HTML), true);
+  await runComparativeBenchmarkMatrixGuard(REPO_ROOT);
 }
 
 const runGuard = async () => {
