@@ -12,6 +12,7 @@ Deterministic multi-system comparative benchmark statistics across PostgreSQL, T
   - [TiDB / TiKV & Lagrange Comparison Progress](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html))
   - [PostgreSQL Single-Primary & Patroni Sync-HA Comparison](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html))
   - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))
+  - [YugabyteDB & Apache Ignite 3 Colocated Compute Comparison](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html))
 
 ![Multi-system comparative benchmark overview](comparative-overview.svg)
 
@@ -39,8 +40,13 @@ Two distinct measurement boundaries are evaluated:
 | PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) 17.2-patroni-4.0-plpgsql | relational-sync-ha-function | 5 (8) | Yes | 8.40 (920.50 ms) | 316.80 (24.10 ms) | 960 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
 | Citus 13 (Sharded SQL RF=3 + App Service) 13.0-pg17 | sharded-postgresql-sql | 5 (5) | Yes | 11.20 (685.00 ms) | 256.40 (31.80 ms) | 3120 B | `modeled-topology-oracle` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
 | Citus 13 (Colocated Tables + Distributed Function RF=3) 13.0-pg17-udf | sharded-postgresql-colocated-udf | 4 (4) | Yes | 11.20 (685.00 ms) | 364.20 (22.90 ms) | 1540 B | `modeled-topology-oracle` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) 2024.2.1 | distributed-sql-ysql | 4 (7) | Yes | 7.40 (1190.00 ms) | 234.80 (34.20 ms) | 3840 B | `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) 2024.2.1-proc | distributed-sql-stored-proc | 3 (6) | Yes | 7.40 (1190.00 ms) | 286.50 (28.40 ms) | 2420 B | `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
+| Apache Ignite 3 (JobTarget.colocated RF=3) 3.0.0 | distributed-colocated-compute-grid | 3 (3) | Yes | 9.60 (845.00 ms) | 408.60 (20.10 ms) | 820 B | `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
 
 ## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
+
+![Scenario B Per-Shape Locality Crossover](scenario-b-shape-crossover.svg)
 
 | System / Configuration | Graph Shape | Decisions/sec | Latency p99 (ms) | Round Trips | Wire Bytes |
 | --- | --- | --- | --- | --- | --- |
@@ -76,3 +82,15 @@ Two distinct measurement boundaries are evaluated:
 | Citus 13 (Colocated Tables + Distributed Function RF=3) | one-remote-stage | 382.00 | 14.60 | 2 | 1240 B |
 | Citus 13 (Colocated Tables + Distributed Function RF=3) | sequential | 228.00 | 26.80 | 3 | 2360 B |
 | Citus 13 (Colocated Tables + Distributed Function RF=3) | fan-out | 268.00 | 23.40 | 2 | 2280 B |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | local-only | 390.00 | 12.80 | 1 | 1280 B |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | one-remote-stage | 248.00 | 22.60 | 2 | 2640 B |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | sequential | 142.00 | 42.40 | 4 | 5120 B |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | fan-out | 159.20 | 35.80 | 3 | 5040 B |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | local-only | 455.00 | 9.40 | 1 | 640 B |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | one-remote-stage | 298.00 | 18.80 | 2 | 1840 B |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | sequential | 184.00 | 34.60 | 3 | 3680 B |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | fan-out | 209.00 | 29.20 | 3 | 3520 B |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | local-only | 612.00 | 4.50 | 1 | 180 B |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | one-remote-stage | 432.00 | 12.40 | 2 | 640 B |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | sequential | 274.00 | 22.80 | 3 | 1280 B |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | fan-out | 316.40 | 19.60 | 2 | 1180 B |

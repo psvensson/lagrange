@@ -67,7 +67,10 @@ function renderComparativeLandingMarkdown(matrix) {
     '- Detail pages:\n' +
     '  - [TiDB / TiKV & Lagrange Comparison Progress](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html))\n' +
     '  - [PostgreSQL Single-Primary & Patroni Sync-HA Comparison](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html))\n' +
-    '  - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))\n\n' +
+    '  - [Citus Colocated Tables & Distributed Functions Comparison](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html))\n' +
+    '  - [YugabyteDB & Apache Ignite 3 Colocated Compute Comparison]' +
+    '(yugabyte-ignite-comparison-progress.md) ' +
+    '([HTML](yugabyte-ignite-comparison-progress.html))\n\n' +
     '![Multi-system comparative benchmark overview](comparative-overview.svg)\n\n' +
     'Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg) | [TiDB comparison progress chart](tidb-comparison-progress.svg)\n\n' +
     '## Evidence-tier and measurement boundary qualification\n\n' +
@@ -82,6 +85,7 @@ function renderComparativeLandingMarkdown(matrix) {
     '| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n' +
     `${matrixRows}\n\n` +
     '## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))\n\n' +
+    '![Scenario B Per-Shape Locality Crossover](scenario-b-shape-crossover.svg)\n\n' +
     '| System / Configuration | Graph Shape | Decisions/sec | Latency p99 (ms) | Round Trips | Wire Bytes |\n' +
     '| --- | --- | --- | --- | --- | --- |\n' +
     `${shapeRows}\n`;
@@ -170,7 +174,9 @@ function renderComparativeLandingHtml(matrix) {
     '<a href="tidb-comparison-progress.html">TiDB Progress</a> | ' +
     '<a href="postgresql-comparison-progress.html">PostgreSQL Progress</a> | ' +
     '<a href="citus-comparison-progress.html">Citus Distributed Functions (HTML)</a> | ' +
-    '<a href="citus-comparison-progress.md">Citus Detail (MD)</a></p>\n' +
+    '<a href="citus-comparison-progress.md">Citus Detail (MD)</a> | ' +
+    '<a href="yugabyte-ignite-comparison-progress.html">YugabyteDB &amp; Ignite 3 (HTML)</a> | ' +
+    '<a href="yugabyte-ignite-comparison-progress.md">YugabyteDB &amp; Ignite 3 (MD)</a></p>\n' +
     `    <div class="chart-box">${svg}</div>\n` +
     '    <div class="filter-bar"><label for="landing-filter">Filter:</label><input type="text" id="landing-filter" placeholder="Filter targets, categories, shapes..."/></div>\n' +
     '    <div class="card">\n' +
@@ -180,6 +186,8 @@ function renderComparativeLandingHtml(matrix) {
     '    </div>\n' +
     '    <div class="card">\n' +
     '      <h2>Scenario B Workload-Shape Progression</h2>\n' +
+    '      <div class="chart-box"><img src="scenario-b-shape-crossover.svg" ' +
+    'alt="Scenario B Per-Shape Locality Crossover" /></div>\n' +
     '      <table class="data-table"><thead><tr><th>System</th><th>Graph Shape</th><th>Decisions/sec</th><th>Latency p99 (ms)</th><th>Round Trips</th><th>Wire Bytes</th></tr></thead>\n' +
     `      <tbody>\n${shapeTrs}\n      </tbody></table>\n` +
     '    </div>\n' +

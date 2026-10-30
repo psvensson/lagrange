@@ -3,11 +3,12 @@
   "epicId": "multi-system-comparative-benchmark-matrix",
   "totalSlices": 5,
   "completedSlices": [
-    "comparative-landing-page-and-postgresql-app-service",
-    "postgresql-plpgsql-server-side-locality-control",
-    "citus-colocated-tables-and-distributed-functions"
+    "epic-and-postgresql-app-service-baseline",
+    "postgresql-plpgsql-server-functions-control",
+    "citus-colocated-tables-and-distributed-functions",
+    "yugabytedb-distributed-sql-and-apache-ignite3-colocated-compute"
   ],
-  "remainingSlicesCount": 2,
+  "remainingSlicesCount": 1,
   "updatedAt": "2026-10-30T16:45:00.000Z",
   "scenarios": [
     {
@@ -469,6 +470,177 @@
             "decisionsPerSec": 268,
             "p99Ms": 23.4,
             "wanBytes": 2280,
+            "roundTrips": 2
+          }
+        }
+      }
+    },
+    {
+      "targetId": "yugabytedb-ysql-rf3",
+      "label": "YugabyteDB 2024.2 (YSQL RF=3 + App Service)",
+      "shortLabel": "YugabyteDB 2024.2 (YSQL + App)",
+      "version": "2024.2.1",
+      "category": "distributed-sql-ysql",
+      "topologyUnits": 4,
+      "processCount": 7,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "yugabyte-ignite-comparison-progress.md",
+      "detailPageHtml": "yugabyte-ignite-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "modeled-topology-oracle",
+        "throughputTxPerSec": 7.4,
+        "commitP50Ms": 392,
+        "commitP95Ms": 1190,
+        "commitP99Ms": 1480,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33
+      },
+      "scenarioB": {
+        "evidenceTier": "modeled-topology-oracle",
+        "decisionsPerSec": 234.8,
+        "p50Ms": 19.8,
+        "p95Ms": 30.4,
+        "p99Ms": 34.2,
+        "wanBytesPerDecision": 3840,
+        "sqlRoundTripsPerDecision": 3,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 390,
+            "p99Ms": 12.8,
+            "wanBytes": 1280,
+            "roundTrips": 1
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 248,
+            "p99Ms": 22.6,
+            "wanBytes": 2640,
+            "roundTrips": 2
+          },
+          "sequential": {
+            "decisionsPerSec": 142,
+            "p99Ms": 42.4,
+            "wanBytes": 5120,
+            "roundTrips": 4
+          },
+          "fan-out": {
+            "decisionsPerSec": 159.2,
+            "p99Ms": 35.8,
+            "wanBytes": 5040,
+            "roundTrips": 3
+          }
+        }
+      }
+    },
+    {
+      "targetId": "yugabytedb-stored-proc",
+      "label": "YugabyteDB 2024.2 (YSQL Stored Procedure RF=3)",
+      "shortLabel": "YugabyteDB 2024.2 (Stored Proc)",
+      "version": "2024.2.1-proc",
+      "category": "distributed-sql-stored-proc",
+      "topologyUnits": 3,
+      "processCount": 6,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "yugabyte-ignite-comparison-progress.md",
+      "detailPageHtml": "yugabyte-ignite-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "modeled-topology-oracle",
+        "throughputTxPerSec": 7.4,
+        "commitP50Ms": 392,
+        "commitP95Ms": 1190,
+        "commitP99Ms": 1480,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33
+      },
+      "scenarioB": {
+        "evidenceTier": "modeled-topology-oracle",
+        "decisionsPerSec": 286.5,
+        "p50Ms": 16.4,
+        "p95Ms": 25.1,
+        "p99Ms": 28.4,
+        "wanBytesPerDecision": 2420,
+        "sqlRoundTripsPerDecision": 2.25,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 455,
+            "p99Ms": 9.4,
+            "wanBytes": 640,
+            "roundTrips": 1
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 298,
+            "p99Ms": 18.8,
+            "wanBytes": 1840,
+            "roundTrips": 2
+          },
+          "sequential": {
+            "decisionsPerSec": 184,
+            "p99Ms": 34.6,
+            "wanBytes": 3680,
+            "roundTrips": 3
+          },
+          "fan-out": {
+            "decisionsPerSec": 209,
+            "p99Ms": 29.2,
+            "wanBytes": 3520,
+            "roundTrips": 3
+          }
+        }
+      }
+    },
+    {
+      "targetId": "ignite3-colocated-compute",
+      "label": "Apache Ignite 3 (JobTarget.colocated RF=3)",
+      "shortLabel": "Apache Ignite 3 (Colocated)",
+      "version": "3.0.0",
+      "category": "distributed-colocated-compute-grid",
+      "topologyUnits": 3,
+      "processCount": 3,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "yugabyte-ignite-comparison-progress.md",
+      "detailPageHtml": "yugabyte-ignite-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "modeled-topology-oracle",
+        "throughputTxPerSec": 9.6,
+        "commitP50Ms": 315,
+        "commitP95Ms": 845,
+        "commitP99Ms": 1120,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33
+      },
+      "scenarioB": {
+        "evidenceTier": "modeled-topology-oracle",
+        "decisionsPerSec": 408.6,
+        "p50Ms": 11.6,
+        "p95Ms": 17.8,
+        "p99Ms": 20.1,
+        "wanBytesPerDecision": 820,
+        "sqlRoundTripsPerDecision": 1.5,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 612,
+            "p99Ms": 4.5,
+            "wanBytes": 180,
+            "roundTrips": 1
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 432,
+            "p99Ms": 12.4,
+            "wanBytes": 640,
+            "roundTrips": 2
+          },
+          "sequential": {
+            "decisionsPerSec": 274,
+            "p99Ms": 22.8,
+            "wanBytes": 1280,
+            "roundTrips": 3
+          },
+          "fan-out": {
+            "decisionsPerSec": 316.4,
+            "p99Ms": 19.6,
+            "wanBytes": 1180,
             "roundTrips": 2
           }
         }
