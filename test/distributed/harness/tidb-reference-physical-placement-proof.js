@@ -5,6 +5,13 @@ const DEFAULT_TIMEOUT_MS = 90000;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/u;
 
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySome = Function.call.bind(Array.prototype.some);
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -63,18 +70,18 @@ function regionPeerPlacementSql(databaseName, tableName) {
 }
 
 function parseStoreRows(stdout) {
-  const text = String(stdout || '').trim();
+  const text = stringTrim(String(stdout || ''));
   if (!text) return [];
-  return text.split(/\r?\n/u).filter(Boolean).map((line) => {
-    const [storeId, address, state] = line.trim().split(/\s+/u);
+  return arrayMap(arrayFilter(stringSplit(text, /\r?\n/u), Boolean), (line) => {
+    const [storeId, address, state] = stringSplit(stringTrim(line), /\s+/u);
     return {storeId, address, state};
   });
 }
 
 function parsePeerRows(stdout) {
-  const text = String(stdout || '').trim();
+  const text = stringTrim(String(stdout || ''));
   if (!text) return [];
-  return text.split(/\r?\n/u).filter(Boolean).map((line) => {
+  return arrayMap(arrayFilter(stringSplit(text, /\r?\n/u), Boolean), (line) => {
     const [
       regionId,
       peerId,
@@ -83,7 +90,7 @@ function parsePeerRows(stdout) {
       isLearner,
       isLeader,
       status,
-    ] = line.trim().split(/\s+/u);
+    ] = stringSplit(stringTrim(line), /\s+/u);
     return {
       regionId,
       peerId,
@@ -104,8 +111,8 @@ function normalizeExpectedAddresses(addresses, replicaTarget) {
   if (!Array.isArray(addresses)) {
     throw new Error('TiDB physical placement expected addresses must be an array');
   }
-  const normalized = sortedUnique(addresses.map((value) => String(value).trim()));
-  if (normalized.length !== replicaTarget || normalized.some((value) => !value)) {
+  const normalized = sortedUnique(arrayMap(addresses, (value) => stringTrim(String(value))));
+  if (normalized.length !== replicaTarget || arraySome(normalized, (value) => !value)) {
     throw new Error(
       `TiDB physical placement requires ${replicaTarget} distinct expected addresses`,
     );
@@ -119,9 +126,10 @@ function groupPeerRows(rows) {
     if (!grouped.has(row.regionId)) grouped.set(row.regionId, []);
     grouped.get(row.regionId).push(row);
   }
-  return [...grouped.entries()]
-    .map(([regionId, peers]) => ({regionId, peers}))
-    .sort((left, right) => String(left.regionId).localeCompare(String(right.regionId)));
+  return arrayMap(
+    [...grouped.entries()],
+    ([regionId, peers]) => ({regionId, peers}),
+  ).sort((left, right) => String(left.regionId).localeCompare(String(right.regionId)));
 }
 
 function evaluatePhysicalPlacement(options = {}) {
@@ -137,15 +145,15 @@ function evaluatePhysicalPlacement(options = {}) {
   const peerRows = Array.isArray(options.peers) ? options.peers : [];
 
   const upStoreAddresses = sortedUnique(
-    stores.filter(({state}) => state === 'Up').map(({address}) => address),
+    arrayMap(arrayFilter(stores, ({state}) => state === 'Up'), ({address}) => address),
   );
   const storesReady =
     upStoreAddresses.length === replicaTarget &&
     JSON.stringify(upStoreAddresses) === JSON.stringify(expectedAddresses);
 
-  const regions = groupPeerRows(peerRows).map(({regionId, peers}) => {
-    const addresses = sortedUnique(peers.map(({address}) => address));
-    const storeIds = sortedUnique(peers.map(({storeId}) => storeId));
+  const regions = arrayMap(groupPeerRows(peerRows), ({regionId, peers}) => {
+    const addresses = sortedUnique(arrayMap(peers, ({address}) => address));
+    const storeIds = sortedUnique(arrayMap(peers, ({storeId}) => storeId));
     const learnerCount = peers.reduce(
       (sum, peer) => sum + (peer.isLearner === ONE ? ONE : ZERO),
       ZERO,
@@ -179,7 +187,7 @@ function evaluatePhysicalPlacement(options = {}) {
   });
 
   return {
-    ready: storesReady && regions.length > ZERO && regions.every(({ready}) => ready),
+    ready: storesReady && regions.length > ZERO && arrayEvery(regions, ({ready}) => ready),
     replicaTarget,
     expectedAddresses,
     storesReady,
@@ -193,7 +201,7 @@ async function waitForPhysicalTablePlacement(options = {}) {
   if (!provider || typeof provider.execInContainer !== 'function') {
     throw new Error('TiDB physical placement proof requires provider.execInContainer');
   }
-  const clientContainerId = String(options.clientContainerId || '').trim();
+  const clientContainerId = stringTrim(String(options.clientContainerId || ''));
   if (!clientContainerId) {
     throw new Error('TiDB physical placement proof requires clientContainerId');
   }
@@ -250,12 +258,6 @@ async function waitForPhysicalTablePlacement(options = {}) {
 }
 
 export {
-  DEFAULT_REPLICA_TARGET as TIDB_REFERENCE_PHYSICAL_REPLICA_TARGET,
-  evaluatePhysicalPlacement,
   mysqlCommand as buildTiDbPhysicalMysqlCommand,
-  parsePeerRows as parseTiDbPhysicalPeerRows,
-  parseStoreRows as parseTiDbPhysicalStoreRows,
-  regionPeerPlacementSql as buildTiDbPhysicalRegionPeerPlacementSql,
-  storeStatusSql as buildTiDbPhysicalStoreStatusSql,
   waitForPhysicalTablePlacement,
 };

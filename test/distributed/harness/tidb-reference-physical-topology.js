@@ -18,8 +18,13 @@ const PHYSICAL_DEFAULTS = Object.freeze({
   tikvPort: 8090,
 });
 
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringReplace = Function.call.bind(String.prototype.replace);
+const stringReplaceAll = Function.call.bind(String.prototype.replaceAll);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 function normalizeHost(value, label) {
-  const host = String(value || '').trim();
+  const host = stringTrim(String(value || ''));
   if (!host) throw new Error(`${label} requires host`);
   return host;
 }
@@ -95,7 +100,7 @@ function normalizePlacement(value, label) {
 function normalizeTopology(options = {}) {
   const control = normalizePlacement(options.control, 'TiDB physical control');
   const storage = Array.isArray(options.storage) ?
-    options.storage.map((placement, index) => normalizePlacement(
+    arrayMap(options.storage, (placement, index) => normalizePlacement(
       placement,
       `TiDB physical storage ${index + ONE}`,
     )) :
@@ -107,17 +112,17 @@ function normalizeTopology(options = {}) {
     );
   }
 
-  const hosts = [control.host, ...storage.map(({host}) => host)];
+  const hosts = [control.host, ...arrayMap(storage, ({host}) => host)];
   if (new Set(hosts).size !== hosts.length) {
     throw new Error('TiDB physical topology requires distinct physical hosts');
   }
 
-  const providers = [control.provider, ...storage.map(({provider}) => provider)];
+  const providers = [control.provider, ...arrayMap(storage, ({provider}) => provider)];
   if (new Set(providers).size !== providers.length) {
     throw new Error('TiDB physical topology requires distinct Docker providers');
   }
 
-  const namePrefix = String(options.namePrefix || 'tidb-physical').trim();
+  const namePrefix = stringTrim(String(options.namePrefix || 'tidb-physical'));
   if (!namePrefix) throw new Error('TiDB physical topology requires namePrefix');
 
   return Object.freeze({
@@ -135,16 +140,16 @@ function withoutNetworkMode(hostConfigExtras = {}) {
 
 function replaceArgument(command, from, to) {
   if (!Array.isArray(command)) return command;
-  return command.map((argument) => String(argument).replaceAll(from, to));
+  return arrayMap(command, (argument) => stringReplaceAll(String(argument), from, to));
 }
 
 function replaceExactArgument(command, from, to) {
   if (!Array.isArray(command)) return command;
-  return command.map((argument) => String(argument) === from ? to : argument);
+  return arrayMap(command, (argument) => String(argument) === from ? to : argument);
 }
 
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return stringReplace(value, /[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 function tikvIndex(namePrefix, name) {
@@ -398,7 +403,7 @@ async function startTiDbReferencePhysicalCluster(options = {}) {
     provider,
     physicalTopology: {
       controlHost: topology.control.host,
-      storageHosts: topology.storage.map(({host}) => host),
+      storageHosts: arrayMap(topology.storage, ({host}) => host),
       distinctSystemHosts: REQUIRED_STORAGE_HOSTS + ONE,
       ports: topology.ports,
     },
@@ -422,7 +427,5 @@ async function startTiDbReferencePhysicalCluster(options = {}) {
 
 export {
   PHYSICAL_DEFAULTS as TIDB_REFERENCE_PHYSICAL_DEFAULTS,
-  REQUIRED_STORAGE_HOSTS as TIDB_REFERENCE_PHYSICAL_STORAGE_HOSTS,
-  createTiDbReferencePhysicalRoutingProvider,
   startTiDbReferencePhysicalCluster,
 };

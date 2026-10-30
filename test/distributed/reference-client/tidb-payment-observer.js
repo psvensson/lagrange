@@ -1,7 +1,10 @@
-import mysql from 'mysql2/promise';
-
 const ONE = 1;
 const MAX_PORT = 65535;
+
+async function defaultCreateConnection(options) {
+  const mysql = await import('mysql2/promise');
+  return (mysql.default || mysql).createConnection(options);
+}
 
 function normalizeEndpoint(value = {}) {
   const host = String(value.host || '').trim();
@@ -40,7 +43,7 @@ async function observeTiDbPaymentState(options = {}) {
   if (!operation || typeof operation !== 'object') {
     throw new Error('TiDB payment observer requires operation');
   }
-  const connect = options.createConnection || mysql.createConnection;
+  const connect = options.createConnection || defaultCreateConnection;
   const connection = await connect(connectionOptions(endpoint, databaseName));
   try {
     const [warehouseRows] = await connection.execute(

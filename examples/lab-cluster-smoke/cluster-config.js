@@ -23,7 +23,8 @@ const RELEASE_0_2_6_SUT = Object.freeze({
 const SCENARIO_A_GATE_FACTS = Object.freeze({
   coreHeadSha: '7f80bcb656e8b3cb5297cb3170b93b8dfeca3b03',
   requiredConsecutiveColdFormations: 3,
-  semanticProofIdsImplemented: 3,
+  semanticProofIdsImplemented: 33,
+  semanticProofIdsExecutedLive: 3,
   semanticProofIdsRequired: 33,
   scenarioAGatesBypassed: false,
   comparable: false,
@@ -436,6 +437,9 @@ function generateClusterSpec(options = {}) {
     scenarioAGateFacts: normalized.profile === PROFILE.SCENARIO_A_DEV_FORMATION ?
       SCENARIO_A_GATE_FACTS :
       null,
+    sourceExecutionModel:
+      'staged-source-tree-with-shared-or-installed-node-modules',
+    tarballInstalledByFixture: false,
     allowWildcardRestBind: normalized.allowWildcardRestBind,
     logicalNodes: normalized.memberCount,
     physicalHosts: 1,

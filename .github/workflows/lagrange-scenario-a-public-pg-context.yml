@@ -3,11 +3,11 @@ name: lagrange-scenario-a-public-pg-context
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-lagrange-public-pg-context-staging
+      - main
     paths:
       - '.github/workflows/lagrange-scenario-a-public-pg-context.yml'
       - 'src/diagnostics/source-fingerprint.js'
+      - 'test/distributed/harness/cluster-node-owner-operations.js'
       - 'test/distributed/harness/constants.js'
       - 'test/distributed/harness/oltp-scenario-a-lagrange-live-admission.js'
       - 'test/distributed/harness/oltp-scenario-a-lagrange-runtime-preflight.js'

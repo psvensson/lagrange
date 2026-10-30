@@ -67,11 +67,8 @@ import {
 describe('cluster-config: C1b specification and options validation', () => {
   it('enforces C1b 5-key port schema with wildcard rest bind and loopback admin/transport', () => {
     const {spec, fixtureMetadata} = generateClusterSpec({
-      profile: PROFILE.RELEASE_0_2_6_SMOKE,
-      memberCount: 3,
-      basePort: 19000,
-      allowWildcardRestBind: true,
-      enablePg: false,
+      profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3,
+      basePort: 19000, allowWildcardRestBind: true, enablePg: false,
     });
 
     assert.equal(spec.protocol, 'lab3-process-cluster/v1');
@@ -121,28 +118,21 @@ describe('cluster-config: C1b specification and options validation', () => {
   it('requires allowWildcardRestBind: true before emitting 0.0.0.0 REST bind for release-0.2.6-smoke', () => {
     assert.throws(
       () => generateClusterSpec({
-        profile: PROFILE.RELEASE_0_2_6_SMOKE,
-        memberCount: 3,
-        allowWildcardRestBind: false,
+        profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3, allowWildcardRestBind: false,
       }),
       /allowWildcardRestBind: true is required before emitting 0\.0\.0\.0 REST bind/,
     );
 
     assert.throws(
-      () => generateClusterSpec({
-        profile: PROFILE.RELEASE_0_2_6_SMOKE,
-        memberCount: 3,
-      }),
+      () => generateClusterSpec({profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3}),
       /allowWildcardRestBind: true is required before emitting 0\.0\.0\.0 REST bind/,
     );
   });
 
   it('enforces exact per-member env variables and strictly omits NODE_ID', () => {
     const {spec} = generateClusterSpec({
-      profile: PROFILE.RELEASE_0_2_6_SMOKE,
-      memberCount: 3,
-      basePort: 20000,
-      allowWildcardRestBind: true,
+      profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3,
+      basePort: 20000, allowWildcardRestBind: true,
     });
 
     for (let i = 0; i < spec.members.length; i += 1) {
@@ -164,12 +154,8 @@ describe('cluster-config: C1b specification and options validation', () => {
 
   it('emits C1b auxiliaryPorts reservation and handoff metadata when enablePg is true', () => {
     const {spec, fixtureMetadata} = generateClusterSpec({
-      profile: PROFILE.RELEASE_0_2_6_SMOKE,
-      memberCount: 3,
-      basePort: 21000,
-      pgPort: 21099,
-      allowWildcardRestBind: true,
-      enablePg: true,
+      profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3,
+      basePort: 21000, pgPort: 21099, allowWildcardRestBind: true, enablePg: true,
     });
 
     assert.equal(spec.auxiliaryPorts.length, 1);
@@ -186,11 +172,7 @@ describe('cluster-config: C1b specification and options validation', () => {
     assert.equal(fixtureMetadata.enablePg, true);
     assert.equal(fixtureMetadata.pgPort, 21099);
     assert.deepEqual(fixtureMetadata.pgConfig, {
-      host: '127.0.0.1',
-      port: 21099,
-      authMode: 'trust',
-      tlsMode: 'disable',
-      replicaCount: 1,
+      host: '127.0.0.1', port: 21099, authMode: 'trust', tlsMode: 'disable', replicaCount: 1,
     });
   });
 
@@ -238,9 +220,7 @@ describe('cluster-config: C1b specification and options validation', () => {
 
   it('guarantees overallTimeoutMs is strictly less than observerTimeoutSeconds * 1000', () => {
     const {spec, fixtureMetadata} = generateClusterSpec({
-      profile: PROFILE.RELEASE_0_2_6_SMOKE,
-      memberCount: 3,
-      allowWildcardRestBind: true,
+      profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3, allowWildcardRestBind: true,
     });
     assert.ok(
       fixtureMetadata.stabilityWindow.overallTimeoutMs < spec.observer.timeoutSeconds * 1000,
@@ -251,11 +231,8 @@ describe('cluster-config: C1b specification and options validation', () => {
   it('rejects configuration if overallTimeoutMs >= observerTimeoutSeconds * 1000', () => {
     assert.throws(
       () => generateClusterSpec({
-        profile: PROFILE.RELEASE_0_2_6_SMOKE,
-        memberCount: 3,
-        allowWildcardRestBind: true,
-        overallTimeoutMs: 640000,
-        observerTimeoutSeconds: 630,
+        profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3, allowWildcardRestBind: true,
+        overallTimeoutMs: 640000, observerTimeoutSeconds: 630,
       }),
       /overallTimeoutMs must be strictly less than observerTimeoutSeconds \* 1000/,
     );
@@ -280,18 +257,17 @@ describe('cluster-config: C1b specification and options validation', () => {
 });
 
 describe('fixture profiles: release-0.2.6-smoke vs scenario-a-dev-formation separation', () => {
+  const STAGED_SOURCE_MODEL =
+    'staged-source-tree-with-shared-or-installed-node-modules';
+
   it('binds release-0.2.6-smoke to exact 0.2.6 tarball hashes and head', () => {
     const validated = validateClusterConfigOptions({
-      profile: PROFILE.RELEASE_0_2_6_SMOKE,
-      memberCount: 3,
-      allowWildcardRestBind: true,
+      profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3, allowWildcardRestBind: true,
     });
     assert.equal(validated.profile, PROFILE.RELEASE_0_2_6_SMOKE);
 
     const {fixtureMetadata} = generateClusterSpec({
-      profile: PROFILE.RELEASE_0_2_6_SMOKE,
-      memberCount: 3,
-      allowWildcardRestBind: true,
+      profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3, allowWildcardRestBind: true,
     });
 
     assert.equal(fixtureMetadata.profile, PROFILE.RELEASE_0_2_6_SMOKE);
@@ -304,31 +280,32 @@ describe('fixture profiles: release-0.2.6-smoke vs scenario-a-dev-formation sepa
     );
     assert.equal(fixtureMetadata.sut.tarballBytes, 4650101);
     assert.equal(fixtureMetadata.scenarioAGateFacts, null);
+    assert.equal(fixtureMetadata.sourceExecutionModel, STAGED_SOURCE_MODEL);
+    assert.equal(fixtureMetadata.tarballInstalledByFixture, false);
   });
 
   it('binds scenario-a-dev-formation to exact commit 7f80bcb6 and records gate facts without fabrication', () => {
     const {fixtureMetadata} = generateClusterSpec({
-      profile: PROFILE.SCENARIO_A_DEV_FORMATION,
-      memberCount: 5,
-      allowWildcardRestBind: true,
+      profile: PROFILE.SCENARIO_A_DEV_FORMATION, memberCount: 5, allowWildcardRestBind: true,
     });
 
     assert.equal(fixtureMetadata.profile, PROFILE.SCENARIO_A_DEV_FORMATION);
     assert.equal(fixtureMetadata.sut.coreHeadSha, '7f80bcb656e8b3cb5297cb3170b93b8dfeca3b03');
     assert.deepEqual(fixtureMetadata.scenarioAGateFacts, SCENARIO_A_GATE_FACTS);
     assert.equal(fixtureMetadata.scenarioAGateFacts.requiredConsecutiveColdFormations, 3);
-    assert.equal(fixtureMetadata.scenarioAGateFacts.semanticProofIdsImplemented, 3);
+    assert.equal(fixtureMetadata.scenarioAGateFacts.semanticProofIdsImplemented, 33);
+    assert.equal(fixtureMetadata.scenarioAGateFacts.semanticProofIdsExecutedLive, 3);
     assert.equal(fixtureMetadata.scenarioAGateFacts.semanticProofIdsRequired, 33);
     assert.equal(fixtureMetadata.scenarioAGateFacts.scenarioAGatesBypassed, false);
     assert.equal(fixtureMetadata.scenarioAGateFacts.comparable, false);
     assert.equal(fixtureMetadata.logicalNodes, 5);
+    assert.equal(fixtureMetadata.sourceExecutionModel, STAGED_SOURCE_MODEL);
+    assert.equal(fixtureMetadata.tarballInstalledByFixture, false);
   });
 
   it('buildLabJob integrates spec with driver: process-cluster envelope', () => {
     const job = buildLabJob({
-      profile: PROFILE.RELEASE_0_2_6_SMOKE,
-      memberCount: 3,
-      allowWildcardRestBind: true,
+      profile: PROFILE.RELEASE_0_2_6_SMOKE, memberCount: 3, allowWildcardRestBind: true,
     });
 
     assert.equal(job.driver, 'process-cluster');
@@ -348,17 +325,10 @@ describe('wait-seed.js: joiner contact liveness wrapper', () => {
 
   it('parses CLI arguments accurately', () => {
     const parsed = parseWaitSeedCliArgs([
-      '--seed-livez-url',
-      'http://127.0.0.1:18080/livez',
-      '--deadline-ms',
-      '10000',
-      '--interval-ms',
-      '100',
-      '--',
-      'node',
-      'src/sea-entry.js',
-      '--data-dir',
-      'member-data',
+      '--seed-livez-url', 'http://127.0.0.1:18080/livez',
+      '--deadline-ms', '10000',
+      '--interval-ms', '100',
+      '--', 'node', 'src/sea-entry.js', '--data-dir', 'member-data',
     ]);
 
     assert.equal(parsed.seedLivezUrl, 'http://127.0.0.1:18080/livez');
@@ -451,25 +421,16 @@ describe('wait-seed.js: joiner contact liveness wrapper', () => {
 describe('observe-cluster.js: readiness predicates, stability window, and byte budgets', () => {
   it('evaluates passing readiness samples against actual 0.2.6 schemas', () => {
     const knownNodeIdentities = new Map();
+    const readyMember = (name, id) => ({
+      member: {name},
+      livez: {ok: true, status: 200, body: {alive: true, nodeId: id}},
+      startupz: {ok: true, status: 200, body: {started: true, phase: 'TRAFFIC_READY', state: 'join_ready'}},
+      readyz: {ok: true, status: 200, body: {ready: true, phase: 'TRAFFIC_READY', state: 'join_ready'}},
+    });
     const sample = [
-      {
-        member: {name: 'node-1'},
-        livez: {ok: true, status: 200, body: {alive: true, nodeId: 'node-id-1'}},
-        startupz: {ok: true, status: 200, body: {started: true, phase: 'TRAFFIC_READY', state: 'join_ready'}},
-        readyz: {ok: true, status: 200, body: {ready: true, phase: 'TRAFFIC_READY', state: 'join_ready'}},
-      },
-      {
-        member: {name: 'node-2'},
-        livez: {ok: true, status: 200, body: {alive: true, nodeId: 'node-id-2'}},
-        startupz: {ok: true, status: 200, body: {started: true, phase: 'TRAFFIC_READY', state: 'join_ready'}},
-        readyz: {ok: true, status: 200, body: {ready: true, phase: 'TRAFFIC_READY', state: 'join_ready'}},
-      },
-      {
-        member: {name: 'node-3'},
-        livez: {ok: true, status: 200, body: {alive: true, nodeId: 'node-id-3'}},
-        startupz: {ok: true, status: 200, body: {started: true, phase: 'TRAFFIC_READY', state: 'join_ready'}},
-        readyz: {ok: true, status: 200, body: {ready: true, phase: 'TRAFFIC_READY', state: 'join_ready'}},
-      },
+      readyMember('node-1', 'node-id-1'),
+      readyMember('node-2', 'node-id-2'),
+      readyMember('node-3', 'node-id-3'),
     ];
 
     const evalResult = evaluateReadinessSample(sample, knownNodeIdentities);
@@ -635,10 +596,7 @@ describe('observe-cluster.js: readiness predicates, stability window, and byte b
     const parsed = parseObserveClusterCliArgs([
       '--members-json',
       JSON.stringify([{name: 'node-1', restPort: 18080, adminWsPort: 18081, transportWsPort: 18082}]),
-      '--window-ms', '5000',
-      '--enable-pg',
-      '--pg-port', '15432',
-      '--oltp-comparison',
+      '--window-ms', '5000', '--enable-pg', '--pg-port', '15432', '--oltp-comparison',
     ]);
     assert.equal(parsed.enablePg, true);
     assert.equal(parsed.pgPort, 15432);
@@ -838,6 +796,30 @@ describe('observe-cluster.js: readiness predicates, stability window, and byte b
 });
 
 describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
+  class SimpleAdminWsClient {
+    async connect() {}
+    async query() {
+      return {rows: [{service_id: 'sys-postgres-wire'}]};
+    }
+    async close() {}
+  }
+
+  class SimplePgClient {
+    async connect() {}
+    async query(sql) {
+      return sql === 'SELECT 1 AS ok' ? {rows: [{ok: 1}]} : {};
+    }
+    async end() {}
+  }
+
+  const mockScaleSuccess = () => ({
+    status: 200,
+    json: async () => ({
+      success: true, outcome: 'applied', serviceId: 'sys-postgres-wire',
+      scaleState: 'desired_state_persisted',
+    }),
+  });
+
   it('returns NOT_REQUESTED and executes zero queries when enablePg is not true', async () => {
     let wsConnectCalled = false;
     class MockAdminWsClient {
@@ -845,12 +827,7 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
         wsConnectCalled = true;
       }
     }
-
-    const outcome = await runPgSmoke({
-      enablePg: false,
-      AdminWsClientClass: MockAdminWsClient,
-    });
-
+    const outcome = await runPgSmoke({enablePg: false, AdminWsClientClass: MockAdminWsClient});
     assert.equal(outcome.status, 'NOT_REQUESTED');
     assert.equal(outcome.ok, true);
     assert.equal(wsConnectCalled, false);
@@ -871,14 +848,9 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
       async connect() {}
       async close() {}
     }
-
-    // Invalid port (out of range)
     await assert.rejects(
       async () => runPgSmoke({
-        enablePg: true,
-        pgPort: 999999,
-        seedAdminWsPort: 18081,
-        seedRestPort: 18080,
+        enablePg: true, pgPort: 999999, seedAdminWsPort: 18081, seedRestPort: 18080,
         AdminWsClientClass: MockAdminWsClient,
       }),
       /Valid pgPort \(1024\.\.65535\) is required/,
@@ -896,16 +868,12 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
         queries.push(sql);
         if (sql.includes('SELECT service_id')) {
           return {
-            rows: [
-              {
-                service_id: 'sys-postgres-wire',
-                service_name: 'sys-postgres-wire',
-                replica_count: 0,
-                status: 'NOT_STARTED',
-                runtime_config: JSON.stringify({host: '127.0.0.1', authMode: 'trust', tlsMode: 'disable'}),
-                updated_at: '2026-10-28T12:00:00Z',
-              },
-            ],
+            rows: [{
+              service_id: 'sys-postgres-wire', service_name: 'sys-postgres-wire',
+              replica_count: 0, status: 'NOT_STARTED',
+              runtime_config: JSON.stringify({host: '127.0.0.1', authMode: 'trust', tlsMode: 'disable'}),
+              updated_at: '2026-10-28T12:00:00Z',
+            }],
           };
         }
         return {affectedRows: 1};
@@ -915,8 +883,15 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
       }
     }
 
+    let scaleUrlCalled = null;
+    let scalePayloadSent = null;
     let discoveryUrlCalled = null;
-    const mockFetch = async (url) => {
+    const mockFetch = async (url, options = {}) => {
+      if (url.includes('/api/admin/services/sys-postgres-wire/scale')) {
+        scaleUrlCalled = url;
+        scalePayloadSent = options.body ? JSON.parse(options.body) : null;
+        return mockScaleSuccess();
+      }
       if (url.includes('/api/admin/discovery/services')) {
         discoveryUrlCalled = url;
         return {
@@ -925,11 +900,8 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
             services: [{
               serviceIds: ['sys-postgres-wire'],
               replicas: [{
-                serviceId: 'sys-postgres-wire',
-                nodeId: 'node-prod-1',
-                address: '127.0.0.1',
-                port: 15432,
-                healthStatus: 'healthy',
+                serviceId: 'sys-postgres-wire', nodeId: 'node-prod-1', address: '127.0.0.1',
+                port: 15432, healthStatus: 'healthy',
                 readiness: {serviceReady: true, workloadReady: true, status: 'ready'},
                 benchmarkAdmission: {admitted: true, status: 'admitted'},
               }],
@@ -946,9 +918,7 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
       }
       async connect() {}
       async query(sql) {
-        if (sql === 'SELECT 1 AS ok') {
-          return {rows: [{ok: 1}]};
-        }
+        if (sql === 'SELECT 1 AS ok') return {rows: [{ok: 1}]};
         throw new Error(`Unexpected SQL: ${sql}`);
       }
       async end() {
@@ -967,64 +937,61 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
     assert.equal(outcome.originalServiceDefinition.service_id, 'sys-postgres-wire');
     assert.equal(outcome.originalServiceDefinition.service_name, 'sys-postgres-wire');
     assert.equal(outcome.originalServiceDefinition.replica_count, 0);
-
-    // Verify discovery fetched on seedAdminWsPort (18081), NOT seedRestPort (18080)
+    assert.equal(
+      scaleUrlCalled,
+      'http://127.0.0.1:18081/api/admin/services/sys-postgres-wire/scale',
+    );
+    assert.deepEqual(scalePayloadSent, {
+      replicaCount: 1,
+      runtimeConfig: {host: '127.0.0.1', port: 15432, authMode: 'trust', tlsMode: 'disable'},
+    });
     assert.equal(
       discoveryUrlCalled,
       'http://127.0.0.1:18081/api/admin/discovery/services?serviceId=sys-postgres-wire',
     );
-
-    // Verify SQL mutations executed
-    assert.equal(queries.length, 3);
+    assert.equal(queries.length, 1);
     assert.equal(
       queries[0],
       'SELECT service_id, service_name, replica_count, status, runtime_config, updated_at ' +
       'FROM service_definitions WHERE service_id = \'sys-postgres-wire\'',
     );
-    assert.match(queries[1], /UPDATE service_definitions SET runtime_config = '.*' WHERE service_id = 'sys-postgres-wire'/);
-    assert.match(queries[2], /UPDATE service_definitions SET replica_count = 1 WHERE service_id = 'sys-postgres-wire'/);
-
-    // Verify discovery attribution and readiness
+    assert.ok(
+      !queries.some((q) => q.includes('UPDATE service_definitions')),
+      'Should never execute raw UPDATE service_definitions SQL',
+    );
+    assert.equal(outcome.desiredStateMutation.replicaCount, 1);
+    assert.equal(outcome.desiredStateMutation.scaleResult.outcome, 'applied');
     assert.equal(outcome.discoveredReplica.nodeId, 'node-prod-1');
     assert.equal(outcome.discoveredReplica.port, 15432);
     assert.equal(outcome.discoveredReplica.healthStatus, 'healthy');
     assert.equal(outcome.discoveredReplica.workloadReadinessStatus, 'READY');
     assert.equal(outcome.queryResult.ok, 1);
-
     assert.equal(wsClosed, true);
     assert.equal(pgClientClosed, true);
   });
 
   it('rejects replica endpoint placed on unowned or unexpected nodeId', async () => {
-    class MockAdminWsClient {
-      async connect() {}
-      async query() {
-        return {rows: [{service_id: 'sys-postgres-wire'}]};
-      }
-      async close() {}
-    }
-
-    const mockFetch = async () => ({
-      status: 200,
-      json: async () => ({
-        services: [{
-          serviceIds: ['sys-postgres-wire'],
-          replicas: [{
-            serviceId: 'sys-postgres-wire',
-            nodeId: 'foreign-rogue-node',
-            address: '127.0.0.1',
-            port: 15432,
-            healthStatus: 'healthy',
+    const mockFetch = async (url) => {
+      if (url.includes('/api/admin/services/sys-postgres-wire/scale')) return mockScaleSuccess();
+      return {
+        status: 200,
+        json: async () => ({
+          services: [{
+            serviceIds: ['sys-postgres-wire'],
+            replicas: [{
+              serviceId: 'sys-postgres-wire', nodeId: 'foreign-rogue-node',
+              address: '127.0.0.1', port: 15432, healthStatus: 'healthy',
+            }],
           }],
-        }],
-      }),
-    });
+        }),
+      };
+    };
 
     await assert.rejects(
       async () => runPgSmoke({
         enablePg: true, pgPort: 15432, seedAdminWsPort: 18081, seedRestPort: 18080,
         activeNodeIds: new Set(['node-1', 'node-2', 'node-3']),
-        AdminWsClientClass: MockAdminWsClient, fetchFn: mockFetch,
+        AdminWsClientClass: SimpleAdminWsClient, fetchFn: mockFetch,
         discoveryTimeoutMs: 500, discoveryIntervalMs: 50,
       }),
       /PostgreSQL wire endpoint placed on unexpected\/unowned nodeId: foreign-rogue-node/,
@@ -1032,43 +999,27 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
   });
 
   it('records workloadReadinessStatus: NOT_READY if workloadReady is false, without claiming load readiness', async () => {
-    class MockAdminWsClient {
-      async connect() {}
-      async query() {
-        return {rows: [{service_id: 'sys-postgres-wire'}]};
-      }
-      async close() {}
-    }
-
-    const mockFetch = async () => ({
-      status: 200,
-      json: async () => ({
-        services: [{
-          serviceIds: ['sys-postgres-wire'],
-          replicas: [{
-            serviceId: 'sys-postgres-wire',
-            nodeId: 'node-1',
-            address: '127.0.0.1',
-            port: 15432,
-            healthStatus: 'healthy',
-            readiness: {serviceReady: true, workloadReady: false},
+    const mockFetch = async (url) => {
+      if (url.includes('/api/admin/services/sys-postgres-wire/scale')) return mockScaleSuccess();
+      return {
+        status: 200,
+        json: async () => ({
+          services: [{
+            serviceIds: ['sys-postgres-wire'],
+            replicas: [{
+              serviceId: 'sys-postgres-wire', nodeId: 'node-1', address: '127.0.0.1',
+              port: 15432, healthStatus: 'healthy',
+              readiness: {serviceReady: true, workloadReady: false},
+            }],
           }],
-        }],
-      }),
-    });
-
-    class MockPgClient {
-      async connect() {}
-      async query() {
-        return {rows: [{ok: 1}]};
-      }
-      async end() {}
-    }
+        }),
+      };
+    };
 
     const outcome = await runPgSmoke({
       enablePg: true, pgPort: 15432, seedAdminWsPort: 18081, seedRestPort: 18080,
-      activeNodeIds: ['node-1'], AdminWsClientClass: MockAdminWsClient,
-      PgClientClass: MockPgClient, fetchFn: mockFetch,
+      activeNodeIds: ['node-1'], AdminWsClientClass: SimpleAdminWsClient,
+      PgClientClass: SimplePgClient, fetchFn: mockFetch,
     });
 
     assert.equal(outcome.ok, true);
@@ -1094,7 +1045,12 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
       simulatedTime += ms;
     };
 
-    const mockFetch = async () => {
+    const scaleCalls = [];
+    const mockFetch = async (url) => {
+      if (url.includes('/api/admin/services/sys-postgres-wire/scale')) {
+        scaleCalls.push(url);
+        return mockScaleSuccess();
+      }
       pollCount += 1;
       return {
         status: 200,
@@ -1110,26 +1066,20 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
       };
     };
 
-    class MockPgClient {
-      async connect() {}
-      async query(sql) {
-        return sql === 'SELECT 1 AS ok' ? {rows: [{ok: 1}]} : {};
-      }
-      async end() {}
-    }
-
     const outcome = await runPgSmoke({
       enablePg: true, pgPort: 15432, seedAdminWsPort: 18081, seedRestPort: 18080,
       activeNodeIds: ['node-1'], AdminWsClientClass: MockAdminWsClient,
-      PgClientClass: MockPgClient, fetchFn: mockFetch, discoveryIntervalMs: 3000,
+      PgClientClass: SimplePgClient, fetchFn: mockFetch, discoveryIntervalMs: 3000,
       desiredStateWakeIntervalMs: 5000, nowFn, sleepFn,
     });
 
     assert.equal(outcome.ok, true);
-    const replicaWakeQueries = executedQueries.filter((q) =>
-      q.includes('UPDATE service_definitions SET replica_count = 1 WHERE service_id = \'sys-postgres-wire\''),
+    assert.ok(scaleCalls.length >= 2, 'Expected periodic re-wake scale POST during discovery');
+    assert.equal(executedQueries.length, 1);
+    assert.ok(
+      !executedQueries.some((q) => q.includes('UPDATE service_definitions')),
+      'Should never execute raw UPDATE service_definitions SQL',
     );
-    assert.ok(replicaWakeQueries.length >= 2, 'Expected periodic re-wake query during discovery');
   });
 
   it('runPgSmoke with oltpComparison: true proceeds directly to runOltpComparisonFn without blocking on tableless workloadReady', async () => {
@@ -1150,6 +1100,7 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
 
     let discoveryCalls = 0;
     const mockFetch = async (url) => {
+      if (url.includes('/api/admin/services/sys-postgres-wire/scale')) return mockScaleSuccess();
       if (url.includes('/api/admin/discovery/services')) {
         discoveryCalls += 1;
         return {
@@ -1158,11 +1109,8 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
             services: [{
               serviceId: 'sys-postgres-wire',
               replicas: [{
-                serviceId: 'sys-postgres-wire',
-                nodeId: 'node-prod-1',
-                address: '127.0.0.1',
-                port: 15432,
-                healthStatus: 'healthy',
+                serviceId: 'sys-postgres-wire', nodeId: 'node-prod-1',
+                address: '127.0.0.1', port: 15432, healthStatus: 'healthy',
                 readiness: {workloadReady: false},
               }],
             }],
@@ -1212,11 +1160,50 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
     assert.equal(oltpComparisonCalledWith?.user, 'postgres');
     assert.equal(oltpComparisonCalledWith?.database, 'postgres');
     assert.deepEqual(outcome.oltpComparison, {
-      workloadResult: {totalTransactions: 400},
-      retryEvidence: {totalRetries: 0},
+      workloadResult: {totalTransactions: 400}, retryEvidence: {totalRetries: 0},
     });
     assert.equal(wsClosed, true);
     assert.equal(pgClientClosed, true);
+  });
+
+  it('rejects when sys-postgres-wire scale operation fails with non-200 HTTP status', async () => {
+    const mockFetch = async (url) => {
+      if (url.includes('/api/admin/services/sys-postgres-wire/scale')) {
+        return {status: 500, json: async () => ({error: 'internal server error'})};
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    };
+
+    await assert.rejects(
+      async () => runPgSmoke({
+        enablePg: true, pgPort: 15432, seedAdminWsPort: 18081, seedRestPort: 18080,
+        activeNodeIds: ['node-1'], AdminWsClientClass: SimpleAdminWsClient, fetchFn: mockFetch,
+      }),
+      /Failed to scale sys-postgres-wire: HTTP 500/,
+    );
+  });
+
+  it('rejects when sys-postgres-wire scale operation returns refusal or unconfirmed answer', async () => {
+    const mockFetch = async (url) => {
+      if (url.includes('/api/admin/services/sys-postgres-wire/scale')) {
+        return {
+          status: 200,
+          json: async () => ({
+            success: false, outcome: 'refused',
+            errorCode: 'POSTGRES_WIRE_SCALE_REQUEST_INVALID', error: 'refused',
+          }),
+        };
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    };
+
+    await assert.rejects(
+      async () => runPgSmoke({
+        enablePg: true, pgPort: 15432, seedAdminWsPort: 18081, seedRestPort: 18080,
+        activeNodeIds: ['node-1'], AdminWsClientClass: SimpleAdminWsClient, fetchFn: mockFetch,
+      }),
+      /sys-postgres-wire scale operation failed or was refused/,
+    );
   });
 
   it('runLiveLagrangeScenarioAComparison executes adapter, retries, workload, and semantic probes', async () => {
@@ -1233,35 +1220,29 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
       executeTransaction: async () => {},
       getEvidence: async () => ({stateCounts: {orders: 200}}),
       close: async (opts) => {
-        adapterClosed = true;
-        adapterCloseOptions = opts;
+        adapterClosed = true; adapterCloseOptions = opts;
       },
     };
-
     const mockRetryingAdapter = {
       executeTransaction: async () => {},
       getRetryEvidence: () => ({retriedTransactions: 0}),
     };
-
     const mockCreateAdapter = async (opts) => {
       assert.equal(opts.endpoint.port, 15432);
       assert.equal(opts.connection.database, 'testdb');
       return mockAdapter;
     };
-
     const mockCreatePairedAdapter = (adapter) => {
       assert.equal(adapter, mockAdapter);
       pairedRetryingCreated = true;
       return mockRetryingAdapter;
     };
-
     const mockRunWorkload = async (retryingAdapter, workloadOptions) => {
       assert.equal(retryingAdapter, mockRetryingAdapter);
       assert.equal(workloadOptions.seed, 20260911);
       baselineWorkloadRan = true;
       return {tps: 120};
     };
-
     const mockRunVisibility = async (opts) => {
       assert.equal(opts.endpoint.port, 15432);
       assert.equal(opts.warehouseId, 1);
@@ -1269,7 +1250,6 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
       visibilityRan = true;
       return {visibilityProofId: 1, ok: true};
     };
-
     const mockInduceConflict = async (opts) => {
       assert.equal(opts.endpoint.port, 15432);
       assert.equal(opts.warehouseId, 1);
@@ -1293,7 +1273,6 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
     assert.equal(retryableConflictRan, true);
     assert.equal(adapterClosed, true);
     assert.deepEqual(adapterCloseOptions, {dropTables: false});
-
     assert.equal(result.datasetSha256, 'mock-dataset-sha');
     assert.deepEqual(result.datasetSummary, {warehouses: 2});
     assert.deepEqual(result.workloadResult, {tps: 120});
@@ -1445,14 +1424,11 @@ describe('process-cluster worker staging and live job emission', () => {
 
   it('build-lab-job CLI parser accurately handles --host, --source-*, --client-work, and --metadata-output', () => {
     const parsed = parseBuildLabJobCliArgs([
-      '--profile', 'release-0.2.6-smoke',
-      '--host', 'tv-dator',
+      '--profile', 'release-0.2.6-smoke', '--host', 'tv-dator',
       '--source-repo', 'psvensson/lagrange',
       '--source-ref', 'refs/heads/feat/lab-cluster-smoke-20261028',
       '--source-sha', 'ede2fded9c353d20fdbf37e8f741388a4954a3e8',
-      '--client-work',
-      '--metadata-output', '/tmp/meta.json',
-      '--allow-wildcard-rest-bind',
+      '--client-work', '--metadata-output', '/tmp/meta.json', '--allow-wildcard-rest-bind',
     ]);
 
     assert.equal(parsed.options.host, 'tv-dator');

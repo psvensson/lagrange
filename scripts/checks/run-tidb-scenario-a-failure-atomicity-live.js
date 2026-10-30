@@ -1,15 +1,7 @@
 #!/usr/bin/env node
 
-import {createHash, randomUUID} from 'node:crypto';
-import {mkdir, writeFile} from 'node:fs/promises';
-import path from 'node:path';
-
 import {DockerProvider} from
   '../../test/distributed/harness/docker-provider.js';
-import {
-  TIDB_REFERENCE_DEFAULTS,
-  startTiDbReferenceCluster,
-} from '../../test/distributed/harness/tidb-reference-lifecycle.js';
 import {
   OLTP_PAIRED_RETRY_OUTCOME,
   executePairedOltpTransactionWithRetry,
@@ -24,85 +16,63 @@ import {
   OLTP_SCENARIO_A_SYSTEM,
 } from '../../test/distributed/harness/oltp-scenario-a-comparison-systems.js';
 import {
-  OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS,
-} from '../../test/distributed/harness/oltp-scenario-a-semantic-gate.js';
-import {
-  createTiDbOltpAdapter,
-} from '../../test/distributed/reference-client/tidb-oltp-adapter.js';
-import {
   observeTiDbOltpStateSnapshot,
 } from '../../test/distributed/reference-client/tidb-oltp-state-snapshot.js';
+import {
+  cleanupTiDbLive,
+  createTiDbLiveDatabaseName,
+  createTiDbLiveRunId,
+  finalizeLiveExecution,
+  recordLiveSemanticEvidence,
+  runLiveMain,
+  startTiDbLiveEnvironment,
+} from '../../test/distributed/harness/tidb-scenario-a-live-harness.js';
 
-const ZERO = 0;
-const ONE = 1;
-const TIKV_STORE_COUNT = 3;
+const SCENARIO_NAME = 'failure-atomicity';
+const EVIDENCE_ID = 'tidb-failure-atomicity-v1';
+const BENCHMARK_LABEL_KEY = 'lagrange.benchmark';
+const BENCHMARK_LABEL_VALUE = 'scenario-a-failure-atomicity-tidb';
+const LABELS = Object.freeze({
+  [BENCHMARK_LABEL_KEY]: BENCHMARK_LABEL_VALUE,
+});
+const DEFAULT_OUTPUT_PATH =
+  'test-output/tidb-reference/scenario-a-failure-atomicity-tidb.json';
 const OUTPUT_PATH =
   process.env.TIDB_SCENARIO_A_FAILURE_ATOMICITY_EVIDENCE_PATH ||
-  'test-output/tidb-reference/scenario-a-failure-atomicity-tidb.json';
-const LABELS = Object.freeze({
-  'lagrange.benchmark': 'scenario-a-failure-atomicity-tidb',
-});
-const DATABASE_RESOURCE_LIMITS = Object.freeze({memory: '2g', cpus: '2.0'});
-const CLIENT_RESOURCE_LIMITS = Object.freeze({memory: '256m', cpus: '0.5'});
-
-function uniqueRunId() {
-  return `lagrange-tidb-failure-atomicity-${process.pid}-${randomUUID().slice(0, 8)}`;
-}
-
-function canonicalPayloadDigest(payload) {
-  return createHash('sha256')
-    .update(JSON.stringify(payload))
-    .digest('hex');
-}
+  DEFAULT_OUTPUT_PATH;
+const NON_COMPARABLE_REASON =
+  'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.';
+const ERROR_RETRY_EVIDENCE_REQUIRED =
+  'TiDB failure-atomicity proof requires paired retry evidence';
+const ERROR_TERMINAL_MUST_NOT_RETRY =
+  'TiDB failure-atomicity terminal request must not be retried';
+const ERROR_NOT_CLASSIFIED_TERMINAL =
+  'TiDB failure-atomicity request was not classified terminal';
+const PASS_PREFIX = 'tidb-scenario-a-failure-atomicity-live: PASS ';
+const NEWLINE = '\n';
 
 function requireTerminalRetryEvidence(error) {
-  const evidence = error?.oltpRetryEvidence;
-  if (!evidence) {
-    throw new Error('TiDB failure-atomicity proof requires paired retry evidence');
+  const retryEvidence = error?.oltpRetryEvidence;
+  if (!retryEvidence) {
+    throw new Error(ERROR_RETRY_EVIDENCE_REQUIRED);
   }
-  if (Number(evidence.retries) !== ZERO || Number(evidence.attempts) !== ONE) {
-    throw new Error('TiDB failure-atomicity terminal request must not be retried');
+  if (Number(retryEvidence.retries) !== 0 ||
+      Number(retryEvidence.attempts) !== 1) {
+    throw new Error(ERROR_TERMINAL_MUST_NOT_RETRY);
   }
-  if (!Array.isArray(evidence.failures) || evidence.failures.length !== ONE ||
-      evidence.failures[ZERO].outcome !==
+  if (!Array.isArray(retryEvidence.failures) ||
+      retryEvidence.failures.length !== 1 ||
+      retryEvidence.failures[0].outcome !==
         OLTP_PAIRED_RETRY_OUTCOME.TERMINAL_FAILURE ||
-      evidence.failures[ZERO].retryable !== false) {
-    throw new Error('TiDB failure-atomicity request was not classified terminal');
+      retryEvidence.failures[0].retryable !== false) {
+    throw new Error(ERROR_NOT_CLASSIFIED_TERMINAL);
   }
-  return evidence;
-}
-
-async function cleanup(provider, state) {
-  const failures = [];
-  if (state.adapter) {
-    try {
-      await state.adapter.close();
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (state.cluster) {
-    try {
-      await state.cluster.stop();
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (state.networkId) {
-    try {
-      await provider.removeNetwork(state.networkId);
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (failures.length > ZERO) {
-    throw new AggregateError(failures, 'TiDB failure-atomicity proof cleanup failed');
-  }
+  return retryEvidence;
 }
 
 async function runTiDbFailureAtomicityProof(options = {}) {
   const provider = options.provider || new DockerProvider();
-  const runId = options.runId || uniqueRunId();
+  const runId = options.runId || createTiDbLiveRunId(SCENARIO_NAME);
   const outputPath = options.outputPath || OUTPUT_PATH;
   const definition = buildScenarioAFailureAtomicityCase();
   const state = {
@@ -115,31 +85,15 @@ async function runTiDbFailureAtomicityProof(options = {}) {
   let evidence = null;
 
   try {
-    const network = await provider.createNetwork(state.networkName, LABELS);
-    state.networkId = network.id;
-    state.cluster = await startTiDbReferenceCluster({
+    const {endpoint} = await startTiDbLiveEnvironment({
       provider,
-      network: state.networkName,
-      namePrefix: runId,
-      tikvStoreCount: TIKV_STORE_COUNT,
-      resourceLimits: DATABASE_RESOURCE_LIMITS,
-      readinessResourceLimits: CLIENT_RESOURCE_LIMITS,
-    });
-    const host = String(state.cluster.containers.tidb.ip || '').trim();
-    if (!host) {
-      throw new Error('TiDB failure-atomicity proof requires TiDB container IP');
-    }
-    const endpoint = {host, port: TIDB_REFERENCE_DEFAULTS.tidbPort};
-    const databaseName =
-      `lagrange_tidb_failure_atomicity_${randomUUID().replace(/-/gu, '').slice(0, 12)}`;
-    state.adapter = await createTiDbOltpAdapter({
-      endpoint,
-      databaseName,
+      state,
+      runId,
+      labels: LABELS,
+      databaseName: createTiDbLiveDatabaseName(SCENARIO_NAME),
       workload: OLTP_SCENARIO_A_FAILURE_ATOMICITY_WORKLOAD,
+      expectedDatasetSha256: definition.identity.datasetSha256,
     });
-    if (state.adapter.datasetSha256 !== definition.identity.datasetSha256) {
-      throw new Error('TiDB failure-atomicity proof dataset identity mismatch');
-    }
 
     const before = await observeTiDbOltpStateSnapshot({
       endpoint,
@@ -168,8 +122,8 @@ async function runTiDbFailureAtomicityProof(options = {}) {
     });
     const evaluation = evaluateScenarioAFailureAtomicityObservation(observation);
     const payload = Object.freeze({
-      schemaVersion: ONE,
-      evidenceId: 'tidb-failure-atomicity-v1',
+      schemaVersion: 1,
+      evidenceId: EVIDENCE_ID,
       system: OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV,
       caseId: definition.identity.caseId,
       caseSha256: definition.caseSha256,
@@ -182,70 +136,50 @@ async function runTiDbFailureAtomicityProof(options = {}) {
       evaluation,
       images: state.cluster.images,
       comparable: false,
-      nonComparableReason:
-        'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.',
+      nonComparableReason: NON_COMPARABLE_REASON,
     });
-    const artifactSha256 = canonicalPayloadDigest(payload);
-    evidence = Object.freeze({
-      ...payload,
-      proofRecord: Object.freeze({
-        evidenceId: payload.evidenceId,
-        system: payload.system,
-        status: evaluation.passed ?
-          OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED :
-          OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.FAILED,
-        artifactSha256,
-        proofIds: OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
-      }),
-      artifactSha256,
+    evidence = await recordLiveSemanticEvidence({
+      outputPath,
+      payload,
+      evaluation,
+      proofIds: OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
+      scenarioName: SCENARIO_NAME,
     });
-    await mkdir(path.dirname(outputPath), {recursive: true});
-    await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
-    if (!evaluation.passed) {
-      throw new Error(
-        `TiDB failure-atomicity semantic proof failed: ${evaluation.failures.join(',')}`,
-      );
-    }
   } catch (error) {
     primaryError = error;
   }
 
   let cleanupError = null;
   try {
-    await cleanup(provider, state);
+    await cleanupTiDbLive(provider, state);
   } catch (error) {
     cleanupError = error;
   }
-  if (primaryError && cleanupError) {
-    throw new AggregateError(
-      [primaryError, cleanupError],
-      'TiDB failure-atomicity proof and cleanup both failed',
-    );
-  }
-  if (primaryError) throw primaryError;
-  if (cleanupError) throw cleanupError;
+
+  finalizeLiveExecution({
+    primaryError,
+    cleanupError,
+    scenarioName: SCENARIO_NAME,
+  });
   return evidence;
 }
 
 async function main() {
   const evidence = await runTiDbFailureAtomicityProof();
   process.stdout.write(
-    'tidb-scenario-a-failure-atomicity-live: PASS ' +
+    PASS_PREFIX +
     JSON.stringify({
       artifactSha256: evidence.artifactSha256,
-      attempts: Number(evidence.retryEvidence?.attempts || ZERO),
-      retries: Number(evidence.retryEvidence?.retries || ZERO),
+      attempts: Number(evidence.retryEvidence?.attempts || 0),
+      retries: Number(evidence.retryEvidence?.retries || 0),
       stateUnchanged:
         evidence.observation.stateBeforeSha256 ===
         evidence.observation.stateAfterSha256,
-    }) + '\n',
+    }) + NEWLINE,
   );
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
-  process.exitCode = ONE;
-});
+runLiveMain(main);
 
 export {
   runTiDbFailureAtomicityProof,

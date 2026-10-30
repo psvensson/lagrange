@@ -1,10 +1,13 @@
-import mysql from 'mysql2/promise';
-
 const ZERO = 0;
 const ONE = 1;
 const MAX_PORT = 65535;
 const DEADLOCK_TIMEOUT_MS = 15000;
 const CYCLE_ARM_DELAY_MS = 100;
+
+async function defaultCreateConnection(options) {
+  const mysql = await import('mysql2/promise');
+  return (mysql.default || mysql).createConnection(options);
+}
 
 function normalizeEndpoint(value = {}) {
   const host = String(value.host || '').trim();
@@ -88,7 +91,7 @@ async function induceTiDbRetryableConflict(options = {}) {
   const endpoint = normalizeEndpoint(options.endpoint);
   const databaseName = String(options.databaseName || '').trim();
   if (!databaseName) throw new Error('TiDB conflict probe requires databaseName');
-  const connect = options.createConnection || mysql.createConnection;
+  const connect = options.createConnection || defaultCreateConnection;
   const cycleArmDelayMs = Number.isFinite(options.cycleArmDelayMs) ?
     Math.max(ZERO, Number(options.cycleArmDelayMs)) : CYCLE_ARM_DELAY_MS;
   const timeoutMs = Number.isFinite(options.timeoutMs) ?

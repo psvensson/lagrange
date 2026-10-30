@@ -16,6 +16,11 @@ const CLAIMED_PROOF_IDS = Object.freeze([
   'isolation:successfulCommitDurable',
 ].sort());
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 function freezeRecord(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) freezeRecord(child);
@@ -42,7 +47,7 @@ function buildScenarioADurabilityCase() {
 }
 
 function normalizeSha256(value, label) {
-  const digest = String(value || '').trim().toLowerCase();
+  const digest = stringToLowerCase(stringTrim(String(value || '')));
   if (!SHA256_PATTERN.test(digest)) {
     throw new Error(`${label} must be a SHA-256 digest`);
   }
@@ -53,6 +58,78 @@ function evaluateScenarioADurabilityObservation(observation = {}) {
   const paymentEvaluation = evaluateScenarioAPaymentObservation(
     observation.paymentObservation || {},
   );
+  const failures = [];
+  let normalizedFaultEvidence = null;
+
+  if (
+    !observation.faultEvidence ||
+    typeof observation.faultEvidence !== 'object' ||
+    Array.isArray(observation.faultEvidence)
+  ) {
+    failures.push('fault_evidence_missing');
+  } else {
+    const rawTarget = observation.faultEvidence.faultTarget;
+    const targetObj =
+      rawTarget && typeof rawTarget === 'object' && !Array.isArray(rawTarget) ?
+        rawTarget :
+        null;
+    const nodeId = stringTrim(String(targetObj?.nodeId || ''));
+    const role = stringTrim(String(targetObj?.role || ''));
+    const isDataReplica = targetObj?.isDataReplica === true;
+    const pgHostOnly = targetObj?.pgHostOnly === true;
+    if (!nodeId || !role || !isDataReplica || pgHostOnly) {
+      failures.push('pg_host_only_fault_insufficient');
+    }
+
+    const beforeIncarnation = stringTrim(String(
+      observation.faultEvidence.beforeIncarnation || '',
+    ));
+    const afterIncarnation = stringTrim(String(
+      observation.faultEvidence.afterIncarnation || '',
+    ));
+    if (
+      !beforeIncarnation ||
+      !afterIncarnation ||
+      beforeIncarnation === afterIncarnation
+    ) {
+      failures.push('fault_incarnation_unchanged');
+    }
+
+    const storageContinuity = stringTrim(String(
+      observation.faultEvidence.storageContinuity || '',
+    ));
+    const retainedObligations = Array.isArray(
+      observation.faultEvidence.retainedObligations,
+    ) ?
+      arrayFilter(
+        arrayMap(
+          observation.faultEvidence.retainedObligations,
+          (item) => stringTrim(String(item || '')),
+        ),
+        Boolean,
+      ) :
+      [];
+    if (
+      storageContinuity !== 'preserved' ||
+      retainedObligations.length === ZERO
+    ) {
+      failures.push('storage_continuity_invalid');
+    }
+
+    normalizedFaultEvidence = {
+      faultTarget: {
+        nodeId,
+        role,
+        isDataReplica,
+        pgHostOnly,
+      },
+      beforeIncarnation,
+      afterIncarnation,
+      storageContinuity,
+      retainedObligations,
+    };
+  }
+
   const actual = freezeRecord({
     commitAcknowledged: observation.commitAcknowledged === true,
     paymentPassed: paymentEvaluation.passed,
@@ -64,8 +141,8 @@ function evaluateScenarioADurabilityObservation(observation = {}) {
       observation.stateAfterRestartSha256,
       'durability stateAfterRestartSha256',
     ),
+    faultEvidence: normalizedFaultEvidence,
   });
-  const failures = [];
   if (!actual.commitAcknowledged) failures.push('commit_not_acknowledged');
   if (!actual.paymentPassed) failures.push('transaction_state');
   if (actual.stateBeforeRestartSha256 !== actual.stateAfterRestartSha256) {

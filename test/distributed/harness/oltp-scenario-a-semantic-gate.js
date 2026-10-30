@@ -16,6 +16,13 @@ const STATUS = Object.freeze({
 });
 const SYSTEMS = Object.freeze(Object.values(OLTP_SCENARIO_A_SYSTEM));
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySome = Function.call.bind(Array.prototype.some);
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 function requiredSystemProofIds() {
   const profile = OLTP_SCENARIO_A_SEMANTIC_PROFILE;
   const ids = [];
@@ -40,17 +47,23 @@ function requiredSystemProofIds() {
   return Object.freeze([...ids].sort());
 }
 
+const CANONICAL_PROOF_COUNT = 33;
 const REQUIRED_SYSTEM_PROOF_IDS = requiredSystemProofIds();
+if (REQUIRED_SYSTEM_PROOF_IDS.length !== CANONICAL_PROOF_COUNT) {
+  throw new Error(
+    `expected ${CANONICAL_PROOF_COUNT} Scenario A semantic proofs, got ${REQUIRED_SYSTEM_PROOF_IDS.length}`,
+  );
+}
 const REQUIRED_SYSTEM_PROOF_SET = new Set(REQUIRED_SYSTEM_PROOF_IDS);
 
 function requireText(value, label) {
-  const text = String(value || '').trim();
+  const text = stringTrim(String(value || ''));
   if (!text) throw new Error(`${label} is required`);
   return text;
 }
 
 function requireSha256(value, label) {
-  const digest = requireText(value, label).toLowerCase();
+  const digest = stringToLowerCase(requireText(value, label));
   if (!SHA256_PATTERN.test(digest)) {
     throw new Error(`${label} must be a SHA-256 digest`);
   }
@@ -59,7 +72,7 @@ function requireSha256(value, label) {
 
 function normalizeSystem(value) {
   const system = requireText(value, 'semantic proof system');
-  if (!SYSTEMS.includes(system)) {
+  if (!arrayIncludes(SYSTEMS, system)) {
     throw new Error(`unsupported semantic proof system ${system}`);
   }
   return system;
@@ -67,7 +80,7 @@ function normalizeSystem(value) {
 
 function normalizeStatus(value) {
   const status = requireText(value, 'semantic proof status');
-  if (!Object.values(STATUS).includes(status)) {
+  if (!arrayIncludes(Object.values(STATUS), status)) {
     throw new Error(`unsupported semantic proof status ${status}`);
   }
   return status;
@@ -77,7 +90,7 @@ function normalizeProofIds(values) {
   if (!Array.isArray(values) || values.length === ZERO) {
     throw new Error('semantic proof requires proofIds');
   }
-  const ids = values.map((value) => requireText(value, 'semantic proof id'));
+  const ids = arrayMap(values, (value) => requireText(value, 'semantic proof id'));
   if (new Set(ids).size !== ids.length) {
     throw new Error('semantic proof contains duplicate proofIds');
   }
@@ -104,7 +117,7 @@ function normalizeProof(value = {}) {
 
 function normalizeProofs(values = []) {
   if (!Array.isArray(values)) throw new Error('semantic proofs must be an array');
-  const proofs = values.map(normalizeProof).sort((left, right) =>
+  const proofs = arrayMap(values, normalizeProof).sort((left, right) =>
     `${left.system}:${left.evidenceId}`.localeCompare(
       `${right.system}:${right.evidenceId}`,
     ));
@@ -130,11 +143,12 @@ function normalizeProofs(values = []) {
 function systemSummary(system, proofs) {
   const passed = new Set();
   const failed = new Set();
-  for (const proof of proofs.filter((candidate) => candidate.system === system)) {
+  for (const proof of arrayFilter(proofs, (candidate) => candidate.system === system)) {
     const destination = proof.status === STATUS.PASSED ? passed : failed;
     for (const proofId of proof.proofIds) destination.add(proofId);
   }
-  const missing = REQUIRED_SYSTEM_PROOF_IDS.filter(
+  const missing = arrayFilter(
+    REQUIRED_SYSTEM_PROOF_IDS,
     (proofId) => !passed.has(proofId) && !failed.has(proofId),
   );
   return Object.freeze({
@@ -153,12 +167,14 @@ function hashGateEvidence(value) {
 function buildScenarioASemanticGateEvidence(options = {}) {
   const proofs = normalizeProofs(options.proofs || []);
   const systems = Object.fromEntries(
-    SYSTEMS.map((system) => [system, systemSummary(system, proofs)]),
+    arrayMap(SYSTEMS, (system) => [system, systemSummary(system, proofs)]),
   );
-  const hasFailure = Object.values(systems).some(
+  const hasFailure = arraySome(
+    Object.values(systems),
     ({failedProofIds}) => failedProofIds.length > ZERO,
   );
-  const hasMissing = Object.values(systems).some(
+  const hasMissing = arraySome(
+    Object.values(systems),
     ({missingProofIds}) => missingProofIds.length > ZERO,
   );
   const semanticEquivalent = !hasFailure && !hasMissing;

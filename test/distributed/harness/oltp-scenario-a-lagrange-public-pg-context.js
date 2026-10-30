@@ -1,9 +1,13 @@
 import {
   CONVERGENCE_DEFAULTS,
+  PORTS,
   REQUEST_CELL_AUTH,
   SCENARIO_TIMING_DEFAULTS,
   TIMEOUTS,
 } from './constants.js';
+import {
+  requestPostgresWireScale,
+} from './cluster-node-owner-operations.js';
 import {
   verifyLagrangeScenarioALiveAdmission,
 } from './oltp-scenario-a-lagrange-live-admission.js';
@@ -22,12 +26,18 @@ const PG_RUNTIME_CONFIG = Object.freeze({
 });
 const ALLOWED_OPTION_KEYS = Object.freeze(['admission', 'cluster']);
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const stringReplace = Function.call.bind(String.prototype.replace);
+
 function requireOptions(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Lagrange Scenario A public PG context requires options');
   }
-  const unknown = Object.keys(value).filter(
-    (key) => !ALLOWED_OPTION_KEYS.includes(key),
+  const unknown = arrayFilter(
+    Object.keys(value),
+    (key) => !arrayIncludes(ALLOWED_OPTION_KEYS, key),
   );
   if (unknown.length > ZERO) {
     throw new Error(
@@ -53,7 +63,7 @@ function sleep(ms) {
 }
 
 function sqlLiteral(value) {
-  const escaped = String(value).replace(/'/gu, String.fromCharCode(39, 39));
+  const escaped = stringReplace(String(value), /'/gu, String.fromCharCode(39, 39));
   return `'${escaped}'`;
 }
 
@@ -70,25 +80,36 @@ function buildConnectionConfig() {
   });
 }
 
-async function configurePublicPgWire(seedNode, executionContract) {
-  if (!seedNode || typeof seedNode.query !== 'function') {
-    throw new Error('Lagrange Scenario A public PG context requires queryable seed node');
+async function configurePublicPgWire(seedNode, _executionContract) {
+  if (!seedNode) {
+    throw new Error('Lagrange Scenario A public PG context requires seed node');
   }
-  const runtimeConfig = JSON.stringify(PG_RUNTIME_CONFIG);
-  await seedNode.query(
-    'UPDATE service_definitions SET runtime_config = ' +
-      sqlLiteral(runtimeConfig) +
-      ' WHERE service_id = ' + sqlLiteral(executionContract.serviceId),
-  );
-  await seedNode.query(
-    'UPDATE service_definitions SET replica_count = ' +
-      POSTGRES_SERVICE_REPLICA_COUNT +
-      ' WHERE service_id = ' + sqlLiteral(executionContract.serviceId),
-  );
+  const desiredState = {
+    replicaCount: POSTGRES_SERVICE_REPLICA_COUNT,
+    runtimeConfig: PG_RUNTIME_CONFIG,
+  };
+  let result;
+  if (typeof seedNode.scalePostgresWireListener === 'function') {
+    result = await seedNode.scalePostgresWireListener(desiredState);
+  } else {
+    result = await requestPostgresWireScale({
+      ip: seedNode.ip,
+      adminApiPort: seedNode.adminApiPort ?? seedNode._adminApiPort ?? PORTS.ADMIN_API,
+    }, desiredState);
+  }
+  const isValid =
+    result?.success === true &&
+    result?.outcome === 'applied' &&
+    (result?.scaleState === undefined || result?.scaleState === 'desired_state_persisted');
+  if (!isValid) {
+    const reason = result?.error || result?.errorCode || result?.outcome ||
+      (result?.scaleState ? `unexpected scaleState ${result.scaleState}` : 'unconfirmed');
+    throw new Error(`Lagrange Scenario A public PG wire scale failed: ${reason}`);
+  }
 }
 
 function resolveHealthyPublicPgEndpoint(rows, nodes, executionContract) {
-  const row = rows.find((candidate) => {
+  const row = arrayFind(rows, (candidate) => {
     const port = Number(candidate?.port);
     return candidate?.service_id === executionContract.serviceId &&
       candidate?.protocol === executionContract.protocol &&
@@ -98,7 +119,7 @@ function resolveHealthyPublicPgEndpoint(rows, nodes, executionContract) {
   });
   if (!row) return null;
   const nodeId = String(row.node_id || '');
-  const node = nodes.find((candidate) => candidate.id === nodeId);
+  const node = arrayFind(nodes, (candidate) => candidate.id === nodeId);
   if (!node?.ip) return null;
   return Object.freeze({
     endpoint: Object.freeze({host: node.ip, port: Number(row.port)}),
@@ -141,7 +162,7 @@ async function prepareLagrangeScenarioAPublicPgContext(value) {
   if (!Array.isArray(nodes) || nodes.length < ONE) {
     throw new Error('Lagrange Scenario A public PG context requires cluster nodes');
   }
-  const seedNode = nodes.find((node) => node.role === 'seed') || nodes[ZERO];
+  const seedNode = arrayFind(nodes, (node) => node.role === 'seed') || nodes[ZERO];
 
   await cluster.waitForConvergence({
     targetVoterCount: nodes.length,

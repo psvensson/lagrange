@@ -3,8 +3,7 @@ name: tidb-scenario-a-visibility-contract
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-visibility-case-staging
+      - main
     paths:
       - '.github/workflows/tidb-scenario-a-visibility-contract.yml'
       - 'test/distributed/harness/oltp-baseline-dataset.js'

@@ -5,6 +5,10 @@ const COMPARISON_VIEW = Object.freeze({
   MATCHED_TOTAL_BUDGET: 'matched-total-budget',
 });
 
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 function normalizePositiveInteger(value, label) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < 1) {
@@ -30,14 +34,14 @@ function normalizeNonNegativeNumber(value, label) {
 }
 
 function normalizeText(value, label) {
-  const text = String(value || '').trim();
+  const text = stringTrim(String(value || ''));
   if (!text) throw new Error(`${label} is required`);
   return text;
 }
 
 function normalizeView(value) {
   const view = normalizeText(value, 'comparison view');
-  if (!Object.values(COMPARISON_VIEW).includes(view)) {
+  if (!arrayIncludes(Object.values(COMPARISON_VIEW), view)) {
     throw new Error(`unsupported comparison view ${view}`);
   }
   return view;
@@ -153,10 +157,10 @@ function normalizeComparativeSystemBudget(value = {}) {
   }
 
   const vmRoles = Array.isArray(value.vmRoles) ?
-    value.vmRoles.map(normalizeVmRole) : [];
+    arrayMap(value.vmRoles, normalizeVmRole) : [];
   if (vmRoles.length < 1) throw new Error(`${system} requires VM roles`);
   const diskRoles = Array.isArray(value.diskRoles) ?
-    value.diskRoles.map(normalizeDiskRole) : [];
+    arrayMap(value.diskRoles, normalizeDiskRole) : [];
 
   return Object.freeze({
     system,
@@ -173,12 +177,13 @@ function normalizeComparativeSystemBudget(value = {}) {
 }
 
 function canonical(value) {
-  if (Array.isArray(value)) return value.map(canonical);
+  if (Array.isArray(value)) return arrayMap(value, canonical);
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, nested]) => [key, canonical(nested)]),
+    arrayMap(
+      Object.entries(value).sort(([left], [right]) => left.localeCompare(right)),
+      ([key, nested]) => [key, canonical(nested)],
+    ),
   );
 }
 
@@ -211,7 +216,6 @@ function assertMatchedTotalBudget(leftValue, rightValue) {
 
 export {
   COMPARISON_VIEW,
-  REQUIRED_REPLICATION_FACTOR,
   assertMatchedTotalBudget,
   normalizeComparativeSystemBudget,
 };

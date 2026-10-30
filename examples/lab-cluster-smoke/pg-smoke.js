@@ -223,22 +223,37 @@ async function runPgSmoke(options = {}) {
       );
     }
 
-    // 4. Execute escaped SQL mutations
-    const escapedConfig = escapeSqlStringLiteral(runtimeConfigJson);
-    const updateConfigSql =
-      `UPDATE service_definitions SET runtime_config = ${escapedConfig} WHERE service_id = 'sys-postgres-wire'`;
-    const updateReplicasSql =
-      'UPDATE service_definitions SET replica_count = 1 WHERE service_id = \'sys-postgres-wire\'';
-
-    const configUpdateRes = await adminClient.query(updateConfigSql);
-    const replicaUpdateRes = await adminClient.query(updateReplicasSql);
+    // 4. Scale sys-postgres-wire via admin owner operation
+    const scaleUrl =
+      `http://127.0.0.1:${seedAdminWsPort}/api/admin/services/sys-postgres-wire/scale`;
+    const scalePayload = JSON.stringify({
+      replicaCount: 1,
+      runtimeConfig: runtimeConfigObj,
+    });
+    const scaleResponse = await fetchFn(scaleUrl, {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: scalePayload,
+    });
+    if (!scaleResponse || scaleResponse.status !== 200) {
+      throw new Error(
+        `Failed to scale sys-postgres-wire: HTTP ${scaleResponse?.status || 'no response'}`,
+      );
+    }
+    const scaleBody = typeof scaleResponse.json === 'function' ?
+      await scaleResponse.json() :
+      null;
+    if (!scaleBody || scaleBody.success !== true || scaleBody.outcome !== 'applied') {
+      throw new Error(
+        `sys-postgres-wire scale operation failed or was refused: ${JSON.stringify(scaleBody)}`,
+      );
+    }
     let lastDesiredStateWakeAtMs = nowFn();
 
     desiredStateMutation = {
       runtimeConfig: runtimeConfigObj,
       replicaCount: 1,
-      configUpdateResult: configUpdateRes,
-      replicaUpdateResult: replicaUpdateRes,
+      scaleResult: scaleBody,
       appliedAtMs: nowFn(),
     };
 
@@ -303,7 +318,11 @@ async function runPgSmoke(options = {}) {
 
       if (nowFn() - lastDesiredStateWakeAtMs >= desiredStateWakeIntervalMs) {
         try {
-          await adminClient.query(updateReplicasSql);
+          await fetchFn(scaleUrl, {
+            method: 'POST',
+            headers: {'content-type': 'application/json'},
+            body: scalePayload,
+          });
         } catch {
           // ignore transient wake error while polling
         }

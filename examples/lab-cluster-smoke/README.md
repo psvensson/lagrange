@@ -2,7 +2,7 @@
 
 This directory provides project-owned cluster configuration, joiner coordination,
 readiness observation, and PostgreSQL wire verification fixtures for Lagrange
-cluster smoke testing in Lagrange lab.
+cluster smoke testing in Lagrange lab (originally authored in PR #151).
 
 ## 1. Objective and Bounded Claims
 
@@ -11,6 +11,11 @@ The fixtures here exercise genuine Lagrange processes formed into a single-host 
 - Formation: Three processes (default for release smoke) or five processes (default for
   Scenario A development formation) running on ONE physical host (`logicalNodes: 3`,
   `physicalHosts: 1`, `failureDomains: 1`).
+- Execution Model: The fixture launches source processes from the staged tree and may
+  reuse shared or installed `node_modules` (`sourceExecutionModel:
+  'staged-source-tree-with-shared-or-installed-node-modules'`). Release-profile
+  metadata alone does not install or verify a named tarball
+  (`tarballInstalledByFixture: false`).
 - Bounded Scope: Startup, contact liveness, product readiness probes, and optional
   PostgreSQL wire query smoke (`SELECT 1`), followed by original resource cleanup.
 - Non-Claims:
@@ -28,6 +33,8 @@ Two distinct profiles are supported:
 
 - Target: Published `lagrange-server@0.2.6` (`gitHead: a1e26f6de84433a3913c2ef855d1b787e926d7eb`).
 - Tarball Integrity: SHA-256 `742393020d9229215b1381a0f426ca7c45a19da04df7cd6202a63c73dbddfa74`, 4650101 bytes.
+  Note that release-profile metadata alone does not install or verify a named tarball;
+  the fixture executes from the staged source tree.
 - REST Bind Exposure: Released `lagrange-server@0.2.6` binds REST to `0.0.0.0` (all host interfaces)
   while connect addresses use loopback `127.0.0.1`. The fixture requires explicit caller consent via
   `allowWildcardRestBind: true` before generating this configuration.
@@ -37,8 +44,9 @@ Two distinct profiles are supported:
 
 - Target: Scenario A development commit `7f80bcb656e8b3cb5297cb3170b93b8dfeca3b03`.
 - Gate Facts: Records explicit facts (`requiredConsecutiveColdFormations: 3`,
-  `semanticProofIdsImplemented: 3`, `semanticProofIdsRequired: 33`,
-  `scenarioAGatesBypassed: false`, `comparable: false`).
+  `semanticProofIdsImplemented: 33`, `semanticProofIdsExecutedLive: 3`,
+  `semanticProofIdsRequired: 33`, `scenarioAGatesBypassed: false`,
+  `comparable: false`).
 - Isolation: Does NOT fabricate Scenario A admission JSON and does NOT mix `0.2.6` release
   tarball code with commit `7f80bcb656e8b3cb5297cb3170b93b8dfeca3b03`.
 - Default Formation: 5 processes (`node-1` through `node-5`).
@@ -63,8 +71,9 @@ All fixture components are self-contained ES modules:
   Enforces a 64 KiB per-response budget and 4 MiB aggregate diagnostic budget with explicit omission records.
 - `examples/lab-cluster-smoke/pg-smoke.js`:
   Optional PostgreSQL wire activation verifier. When `enablePg === true`, queries original
-  `sys-postgres-wire` definition, validates desired `runtime_config` against descriptor rules, executes
-  escaped SQL mutations over admin websocket, polls service discovery for a healthy replica on an active
+  `sys-postgres-wire` definition, validates desired `runtime_config` against descriptor rules,
+  scales `sys-postgres-wire` via `POST /api/admin/services/sys-postgres-wire/scale` (never raw
+  `UPDATE service_definitions` SQL), polls service discovery for a healthy replica on an active
   node, checks workload readiness status, and runs `SELECT 1` via `pg.Client`.
 - `examples/lab-cluster-smoke/build-lab-job.js`:
   CLI and programmatic builder for C1b `driver: "process-cluster"` job request envelopes.

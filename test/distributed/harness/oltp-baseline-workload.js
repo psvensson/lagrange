@@ -9,6 +9,9 @@ const MAX_NEW_ORDER_LINES = 15;
 const MAX_ERROR_SAMPLES_PER_KIND = 3;
 const WORKLOAD_NAME = 'oltp-baseline-v1';
 const DEFAULT_SEED = 0x5eed5eed;
+
+const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
+const arrayMap = Function.call.bind(Array.prototype.map);
 const PHASE_SALT = Object.freeze({
   warmup: 0x13579bdf,
   measurement: 0x2468ace0,
@@ -196,7 +199,7 @@ function generateOperation(kind, context) {
       ...operation,
       districtId,
       customerId: randomInteger(rng, ONE, scale.customersPerDistrict),
-      lines: itemIds.map((itemId) => ({
+      lines: arrayMap(itemIds, (itemId) => ({
         itemId,
         quantity: randomInteger(rng, ONE, 10),
         supplyWarehouseId: chooseRemoteWarehouse(
@@ -253,7 +256,7 @@ function generateOperation(kind, context) {
 function buildWorkerPlan(config, workerIndex, phase, count) {
   const rng = createSeededRng(deriveSeed(config.seed, workerIndex, phase));
   const kinds = buildOperationKinds(count, rng);
-  return kinds.map((kind, sequence) => generateOperation(kind, {
+  return arrayMap(kinds, (kind, sequence) => generateOperation(kind, {
     rng,
     scale: config.scale,
     phase,
@@ -283,7 +286,7 @@ function buildOltpBaselinePlan(rawOptions = {}) {
 }
 
 function hashMeasurementPlan(plan) {
-  const measurement = plan.workers.map((worker) => worker.measurement);
+  const measurement = arrayMap(plan.workers, (worker) => worker.measurement);
   return createHash('sha256')
     .update(JSON.stringify(measurement))
     .digest('hex');
@@ -332,7 +335,7 @@ function emptyKindMetrics() {
 
 function createMetricsAccumulator() {
   return Object.fromEntries(
-    OPERATION_KINDS.map((kind) => [kind, emptyKindMetrics()]),
+    arrayMap(OPERATION_KINDS, (kind) => [kind, emptyKindMetrics()]),
   );
 }
 
@@ -379,15 +382,15 @@ function totalField(metrics, field) {
 }
 
 function flattenSuccessfulLatencies(metrics) {
-  return OPERATION_KINDS.flatMap((kind) => metrics[kind].latencies);
+  return arrayFlatMap(OPERATION_KINDS, (kind) => metrics[kind].latencies);
 }
 
 function collectErrorSamples(metrics) {
-  return OPERATION_KINDS.flatMap((kind) => metrics[kind].errorSamples);
+  return arrayFlatMap(OPERATION_KINDS, (kind) => metrics[kind].errorSamples);
 }
 
 function publicOperationMetrics(metrics) {
-  return Object.fromEntries(OPERATION_KINDS.map((kind) => [kind, {
+  return Object.fromEntries(arrayMap(OPERATION_KINDS, (kind) => [kind, {
     attempted: metrics[kind].attempted,
     succeeded: metrics[kind].succeeded,
     failed: metrics[kind].failed,
@@ -399,7 +402,7 @@ function publicOperationMetrics(metrics) {
 async function runPhase(adapter, workerPlans, now) {
   const metrics = createMetricsAccumulator();
   const started = now();
-  await Promise.all(workerPlans.map((operations) =>
+  await Promise.all(arrayMap(workerPlans, (operations) =>
     executeWorker(adapter, operations, metrics, now)));
   const elapsedMs = Math.max(ZERO, now() - started);
   return {metrics, elapsedMs};
@@ -465,7 +468,7 @@ async function runOltpBaselineWorkload(adapter, rawOptions = {}) {
 
   const warmup = await runPhase(
     adapter,
-    plan.workers.map((worker) => worker.warmup),
+    arrayMap(plan.workers, (worker) => worker.warmup),
     now,
   );
   const warmupFailed = totalField(warmup.metrics, 'failed');
@@ -479,7 +482,7 @@ async function runOltpBaselineWorkload(adapter, rawOptions = {}) {
 
   const measured = await runMeasuredPhase(
     adapter,
-    plan.workers.map((worker) => worker.measurement),
+    arrayMap(plan.workers, (worker) => worker.measurement),
     now,
     onMeasurementStart,
     onMeasurementEnd,
@@ -517,10 +520,8 @@ async function runOltpBaselineWorkload(adapter, rawOptions = {}) {
 }
 
 export {
-  DEFAULTS as OLTP_BASELINE_DEFAULTS,
   OPERATION_KIND as OLTP_OPERATION_KIND,
   OPERATION_MIX as OLTP_OPERATION_MIX,
-  WORKLOAD_NAME as OLTP_BASELINE_WORKLOAD_NAME,
   buildOltpBaselinePlan,
   hashMeasurementPlan as hashOltpBaselineMeasurementPlan,
   resolveOltpBaselineConfig,

@@ -3,8 +3,7 @@ name: tidb-scenario-a-payment-live
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-payment-tidb-live-staging
+      - main
     paths:
       - '.github/workflows/tidb-scenario-a-payment-live.yml'
       - 'scripts/checks/run-tidb-scenario-a-payment-live.js'

@@ -3,8 +3,7 @@ name: lagrange-scenario-a-runtime-preflight
 on:
   push:
     branches:
-      - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-lagrange-runtime-preflight-staging
+      - main
     paths:
       - '.github/workflows/lagrange-scenario-a-runtime-preflight.yml'
       - 'src/diagnostics/source-fingerprint.js'
