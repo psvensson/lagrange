@@ -7,9 +7,12 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {
   AuthoritativeNodeEvidenceReconciler,
 } from '../../src/control-plane/authoritative-node-evidence-reconciler.js';
+import {ControlPlaneReadinessService} from
+  '../../src/control-plane/control-plane-readiness-service.js';
 import {
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
   ControlPlaneSystemTableGateway,
@@ -456,4 +459,69 @@ test('AuthoritativeNodeEvidenceReconciler keeps the full cooldown for ' +
     1,
     'non-bypass repair inside the normal cooldown is still skipped',
   );
+});
+
+test('ControlPlaneReadinessService resolves writable cacheMutationTarget from ' +
+  'cdcIntegrationService when given read-only cache', async (t) => {
+  const nodeId = 'node-read-only-cache-resolve';
+  const writableCache = new SystemTableCache();
+  const readOnlyCache = createReadOnlyCache(writableCache);
+  const cdcIntegrationService = {
+    cacheMutationTarget: writableCache,
+    executeAuthoritativeSystemTableRead: async () => ({success: true, rows: []}),
+  };
+
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId,
+    systemTableCache: writableCache,
+    cdcIntegrationService,
+  });
+
+  // Sync with read-only proxy targets as occurs during startup attachSqlRuntimeToStartupOwner
+  readinessService.syncOwnerDependencies({
+    systemTableCache: readOnlyCache,
+    cacheMutationTarget: readOnlyCache,
+    cdcIntegrationService,
+  });
+
+  t.equal(
+    readinessService.cacheMutationTarget,
+    writableCache,
+    'cacheMutationTarget resolves to writable cache instead of read-only proxy',
+  );
+
+  const reconciler = readinessService.authoritativeNodeEvidenceReconciler;
+  t.ok(reconciler, 'reconciler exists');
+  t.equal(
+    reconciler.cacheMutationTarget,
+    writableCache,
+    'reconciler cacheMutationTarget is synced to writable cache',
+  );
+
+  // canRepairNodeEvidence() must return true and must NOT throw a read-only cache violation
+  let canRepair = false;
+  t.doesNotThrow(() => {
+    canRepair = reconciler.canRepairNodeEvidence();
+  }, 'canRepairNodeEvidence does not throw read-only cache violation');
+  t.equal(canRepair, true, 'canRepairNodeEvidence returns true');
+});
+
+test('AuthoritativeNodeEvidenceReconciler.canRepairNodeEvidence does not throw ' +
+  'when cacheMutationTarget is a ReadOnlySystemTableCache proxy', async (t) => {
+  const writableCache = new SystemTableCache();
+  const readOnlyCache = createReadOnlyCache(writableCache);
+  const reconciler = new AuthoritativeNodeEvidenceReconciler({
+    nodeId: 'node-ro-guard',
+    authoritativeReadinessRepairLane: TEST_AUTHORITATIVE_REPAIR_LANE,
+    cacheMutationTarget: readOnlyCache,
+    cdcIntegrationService: {
+      executeAuthoritativeSystemTableRead: async () => ({success: true, rows: []}),
+    },
+  });
+
+  let canRepair = true;
+  t.doesNotThrow(() => {
+    canRepair = reconciler.canRepairNodeEvidence();
+  }, 'evaluating canRepairNodeEvidence with read-only proxy does not trigger get trap');
+  t.equal(canRepair, false, 'canRepairNodeEvidence returns false when target is not writable');
 });

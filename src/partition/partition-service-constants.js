@@ -553,6 +553,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   CDC_EVENT_FAILED: 'Failed to generate CDC event for committed entry',
   APPLY_COMMITTED_FAILED: 'Failed to apply committed entry',
   NOT_INITIALIZED: 'PartitionService not initialized',
+  PREPARE_CONFLICT: 'Prepare failed due to write conflict',
+  TRANSACTION_ALREADY_ACTIVE: 'Transaction already active',
   WRITE_DEFERRED_USER_TRANSACTION_OPEN:
     'Write deferred: a user transaction holds the partition connection',
   SERVING_ADMISSION_FENCED_FOR_REMOVAL:

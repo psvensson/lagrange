@@ -8,6 +8,10 @@
     "@pulumi/pulumi": {
       "owner": "test/distributed/harness/gcp-provisioner.js",
       "reason": "GCP distributed-test provisioning; loaded dynamically only when provision() runs, so an ordinary checkout imports the provisioner without it"
+    },
+    "mysql2": {
+      "owner": "test/distributed/reference-client/tidb-oltp-adapter.js",
+      "reason": "TiDB distributed-test reference client; isolated into test/distributed/reference-client/package.json"
     }
   }
 }

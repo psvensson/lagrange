@@ -385,43 +385,58 @@ export function extractDataFromParameterizedSQL(
       return {};
     }
 
-    // Extract column names from SET clause
-    const setColumns = setMatch[1].split(
-      PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-    ).map((part) => {
-      const match = part.trim().match(/^(\w+)\s*=/);
-      return match ? match[1] : null;
-    }).filter(Boolean);
-
-    // Extract column names from WHERE clause
-    // Handle parentheses around the WHERE clause: WHERE (col = ?)
-    const whereColumns = whereMatch ?
-      extractConjunctiveWhereColumns(whereMatch[1]) :
-      [];
-
-    const allColumns = [...setColumns, ...whereColumns];
-    if (allColumns.length !== params.length) {
-      logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_UPDATE_MISMATCH, {
-        columns: allColumns.length,
-        params: params.length,
-      });
-      return {};
-    }
-
     // Build data object while preserving UPDATE semantics:
     // SET-column values are authoritative; WHERE-only columns backfill keys.
     const data = {};
     let paramIndex = 0;
-    for (const column of setColumns) {
-      data[column] = params[paramIndex];
-      paramIndex += 1;
-    }
-    for (const column of whereColumns) {
-      const value = params[paramIndex];
-      paramIndex += 1;
-      if (!Object.prototype.hasOwnProperty.call(data, column)) {
-        data[column] = value;
+
+    const setParts = setMatch[1].split(
+      PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
+    );
+    for (const part of setParts) {
+      const match = part.trim().match(/^(\w+)\s*=\s*([\s\S]+)$/);
+      if (match) {
+        const column = match[1];
+        const rhs = match[2];
+        const paramCount = (rhs.match(/\?/g) || []).length;
+        if (paramCount === 1 && rhs.trim() === PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK) {
+          data[column] = params[paramIndex];
+        }
+        paramIndex += paramCount;
       }
+    }
+
+    if (whereMatch) {
+      const whereParts = whereMatch[1].trim().split(/\s+AND\s+/i);
+      for (const conjunct of whereParts) {
+        const part = conjunct.trim().replace(/^\(+|\)+$/g, '');
+        const match = part.match(/^(\w+)\s*=\s*([\s\S]+)$/);
+        if (match) {
+          const column = match[1];
+          const rhs = match[2];
+          const paramCount = (rhs.match(/\?/g) || []).length;
+          if (paramCount > 0) {
+            const value = params[paramIndex];
+            paramIndex += paramCount;
+            if (!Object.prototype.hasOwnProperty.call(data, column)) {
+              data[column] = value;
+            }
+          } else {
+            const value = parseValue(rhs.trim());
+            if (!Object.prototype.hasOwnProperty.call(data, column)) {
+              data[column] = value;
+            }
+          }
+        }
+      }
+    }
+
+    if (paramIndex !== params.length) {
+      logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_UPDATE_MISMATCH, {
+        columns: paramIndex,
+        params: params.length,
+      });
+      return {};
     }
 
     logger?.debug?.(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_UPDATE, {

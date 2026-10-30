@@ -99,6 +99,60 @@ class ReadOnlySystemTableCache {
   }
 
   /**
+   * Get all applied schema versions map.
+   * @return {Object}
+   */
+  getAppliedSchemaVersions() {
+    return typeof this._cache.getAppliedSchemaVersions === 'function' ?
+      this._cache.getAppliedSchemaVersions() :
+      {};
+  }
+
+  /**
+   * Get the table mutation version generation counter for one table.
+   * @param {string} tableName - Name of the system table.
+   * @return {number}
+   */
+  getTableMutationVersion(tableName) {
+    return this._cache.getTableMutationVersion(tableName);
+  }
+
+  /**
+   * Get a shared (un-cloned read-only) record by key from a table.
+   * @param {string} tableName - Name of the system table.
+   * @param {string} key - Primary key of the record.
+   * @return {Object|undefined} The record or undefined if not found.
+   */
+  getShared(tableName, key) {
+    return typeof this._cache.getShared === 'function' ?
+      this._cache.getShared(tableName, key) :
+      this._cache.get(tableName, key);
+  }
+
+  /**
+   * Filter records matching a predicate using shared read-only rows.
+   * @param {string} tableName - Name of the system table.
+   * @param {Function} predicate - Function that returns true for matching records.
+   * @return {Array<Object>} Array of matching records.
+   */
+  filterShared(tableName, predicate) {
+    return typeof this._cache.filterShared === 'function' ?
+      this._cache.filterShared(tableName, predicate) :
+      this._cache.filter(tableName, predicate);
+  }
+
+  /**
+   * Get all records from a table as shared read-only rows.
+   * @param {string} tableName - Name of the system table.
+   * @return {Array<Object>} Array of all records in the table.
+   */
+  getAllShared(tableName) {
+    return typeof this._cache.getAllShared === 'function' ?
+      this._cache.getAllShared(tableName) :
+      this._cache.getAll(tableName);
+  }
+
+  /**
    * Get the last local wall-clock apply time for one table.
    * @param {string} tableName - Name of the system table.
    * @return {number|null}

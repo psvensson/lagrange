@@ -392,6 +392,7 @@ class PostgresWireRuntimeModule {
         return;
       }
       connections.add(socket);
+      socket.setNoDelay?.(true);
       const handler = new PgWireProtocolHandler({
         adapter,
         socket,
