@@ -1,0 +1,368 @@
+{
+  "schemaVersion": 1,
+  "totalCombinations": 4,
+  "entries": [
+    {
+      "schemaVersion": 1,
+      "combinationKey": "fw=0.2.0@b0b2f9abcc000000000000000000000000000000|scenario=tidb-oltp-baseline|profile=oltp-baseline-v1:-|workload=ea8d77ab9c14591504cf2aff30d7d7d50b00c6ed4b08ae82499f4969bb79ce15|measure=ea8d77ab9c14591504cf2aff30d7d7d50b00c6ed4b08ae82499f4969bb79ce15|view=system-default|lagrange=-@-|tidb=v8.5.8@pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8",
+      "combinationSha256": "a7953090e8e5010233a661858604071aa2f39423674a580a687443256e91954a",
+      "framework": {
+        "frameworkVersion": "0.2.0",
+        "frameworkCommitSha": "b0b2f9abcc000000000000000000000000000000",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "oltp-baseline-v1",
+        "profileSha256": null,
+        "datasetSha256": "2497cf622e380eafad5cb67193332440abd9ac6552084c065038959267d40982",
+        "workloadPlanSha256": "ea8d77ab9c14591504cf2aff30d7d7d50b00c6ed4b08ae82499f4969bb79ce15",
+        "measurementPlanSha256": "ea8d77ab9c14591504cf2aff30d7d7d50b00c6ed4b08ae82499f4969bb79ce15",
+        "retryPolicyId": "none",
+        "openLoopProfileId": "closed-loop-v1",
+        "comparisonView": "system-default"
+      },
+      "systems": {
+        "lagrange": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8"
+        }
+      },
+      "recordedAt": "2026-09-12T20:07:34.061Z",
+      "evidenceSource": {
+        "kind": "github-actions-gcp",
+        "runId": "34715058174",
+        "issueNumber": null,
+        "url": "https://github.com/psvensson/lagrange/actions/runs/34715058174",
+        "artifactSha256": null
+      },
+      "metrics": {
+        "lagrange": null,
+        "tidbTikv": {
+          "opsPerSec": 6.747866,
+          "latencyMs": {
+            "p50": 535.12,
+            "p95": 1383.18,
+            "p99": 1887.96
+          },
+          "transactions": {
+            "measuredAttempted": 2000,
+            "measuredSucceeded": 2000,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 11,
+            "requiredCount": 33
+          }
+        }
+      },
+      "comparison": {
+        "paired": false,
+        "throughputRatioLagrangeToTiDb": null,
+        "throughputLagFactorTiDbOverLagrange": null,
+        "latencyRatioLagrangeOverTiDb": null,
+        "semanticProofDeltaLagrangeMinusTiDb": null
+      },
+      "recordSha256": "ae6bd0386ece94749f2f78ab2bf5783d5bb3105a10df6b872bc4571eeece9024",
+      "deltas": {
+        "lagrangeOpsPerSecDeltaFromPrev": null,
+        "lagrangeOpsPerSecDeltaFromFirst": null,
+        "tidbOpsPerSecDeltaFromPrev": null,
+        "tidbOpsPerSecDeltaFromFirst": 0,
+        "throughputRatioDeltaFromPrev": null,
+        "throughputLagFactorDeltaFromPrev": null,
+        "tidbSemanticProofsDeltaFromPrev": null,
+        "lagrangeSemanticProofsDeltaFromPrev": null
+      },
+      "lagrangeOpsPerSecDeltaFromPrev": null,
+      "lagrangeOpsPerSecDeltaFromFirst": null,
+      "tidbOpsPerSecDeltaFromPrev": null,
+      "tidbOpsPerSecDeltaFromFirst": 0,
+      "throughputRatioDeltaFromPrev": null,
+      "throughputLagFactorDeltaFromPrev": null,
+      "tidbSemanticProofsDeltaFromPrev": null,
+      "lagrangeSemanticProofsDeltaFromPrev": null
+    },
+    {
+      "schemaVersion": 1,
+      "combinationKey": "fw=0.3.0@8039e45f2ad8314239ed8c67c9883ebb8b47ec9f|scenario=tidb-oltp-baseline|profile=oltp-baseline-v1:-|workload=4add526c3bf3e6144573ed150563418d9cbc14f4c260cca4e4ec5f4bc82bb912|measure=4add526c3bf3e6144573ed150563418d9cbc14f4c260cca4e4ec5f4bc82bb912|view=system-default|lagrange=0.3.0@8039e45f2ad8314239ed8c67c9883ebb8b47ec9f|tidb=v8.5.8@pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8",
+      "combinationSha256": "bf82fab206b7901b74e8429da99d69ab945b475b9b4077b8227ef365e4f877de",
+      "framework": {
+        "frameworkVersion": "0.3.0",
+        "frameworkCommitSha": "8039e45f2ad8314239ed8c67c9883ebb8b47ec9f",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "oltp-baseline-v1",
+        "profileSha256": null,
+        "datasetSha256": "250a1f7c7bf53f297e741a1707db4bca3408e13a93299ca2ed7678051924eebc",
+        "workloadPlanSha256": "4add526c3bf3e6144573ed150563418d9cbc14f4c260cca4e4ec5f4bc82bb912",
+        "measurementPlanSha256": "4add526c3bf3e6144573ed150563418d9cbc14f4c260cca4e4ec5f4bc82bb912",
+        "retryPolicyId": "scenario-a-retry-v1",
+        "openLoopProfileId": "closed-loop-v1",
+        "comparisonView": "system-default"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.3.0",
+          "commitSha": "8039e45f2ad8314239ed8c67c9883ebb8b47ec9f"
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8"
+        }
+      },
+      "recordedAt": "2026-10-29T18:53:52.000Z",
+      "evidenceSource": {
+        "kind": "lagrange-lab-5node",
+        "runId": null,
+        "issueNumber": 2643,
+        "url": "https://github.com/psvensson/lagrange-lab/issues/2643",
+        "artifactSha256": null
+      },
+      "metrics": {
+        "lagrange": {
+          "opsPerSec": 0.826056,
+          "latencyMs": {
+            "p50": 2269.44,
+            "p95": 4418.93,
+            "p99": 5343.1
+          },
+          "transactions": {
+            "measuredAttempted": 200,
+            "measuredSucceeded": 200,
+            "failed": 0,
+            "retries": 11
+          },
+          "semanticProofs": {
+            "passedCount": 4,
+            "requiredCount": 33
+          }
+        },
+        "tidbTikv": {
+          "opsPerSec": 6.747866,
+          "latencyMs": {
+            "p50": 535.12,
+            "p95": 1383.18,
+            "p99": 1887.96
+          },
+          "transactions": {
+            "measuredAttempted": 2000,
+            "measuredSucceeded": 2000,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 11,
+            "requiredCount": 33
+          }
+        }
+      },
+      "comparison": {
+        "paired": true,
+        "throughputRatioLagrangeToTiDb": 0.122417,
+        "throughputLagFactorTiDbOverLagrange": 8.168775,
+        "latencyRatioLagrangeOverTiDb": {
+          "p50": 4.240993,
+          "p95": 3.194761,
+          "p99": 2.830092
+        },
+        "semanticProofDeltaLagrangeMinusTiDb": -7
+      },
+      "recordSha256": "6cca9aa074d27031c65efcfa38655e55d77bdcb2729cf4bdc52352ec4e06bfde",
+      "deltas": {
+        "lagrangeOpsPerSecDeltaFromPrev": null,
+        "lagrangeOpsPerSecDeltaFromFirst": null,
+        "tidbOpsPerSecDeltaFromPrev": 0,
+        "tidbOpsPerSecDeltaFromFirst": 0,
+        "throughputRatioDeltaFromPrev": null,
+        "throughputLagFactorDeltaFromPrev": null,
+        "tidbSemanticProofsDeltaFromPrev": 0,
+        "lagrangeSemanticProofsDeltaFromPrev": null
+      },
+      "lagrangeOpsPerSecDeltaFromPrev": null,
+      "lagrangeOpsPerSecDeltaFromFirst": null,
+      "tidbOpsPerSecDeltaFromPrev": 0,
+      "tidbOpsPerSecDeltaFromFirst": 0,
+      "throughputRatioDeltaFromPrev": null,
+      "throughputLagFactorDeltaFromPrev": null,
+      "tidbSemanticProofsDeltaFromPrev": 0,
+      "lagrangeSemanticProofsDeltaFromPrev": null
+    },
+    {
+      "schemaVersion": 1,
+      "combinationKey": "fw=0.3.0@66d054c9c9e3546b576fc5fe96db8911ce4431a4|scenario=scenario-a-semantic-closure|profile=scenario-a-semantic-v1:-|workload=-|measure=-|view=semantic-closure|lagrange=-@-|tidb=v8.5.8@pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8",
+      "combinationSha256": "b7bc651037235b53779f8f2175d3d161ddb56ab1e96f8b59687ec5f38aba412e",
+      "framework": {
+        "frameworkVersion": "0.3.0",
+        "frameworkCommitSha": "66d054c9c9e3546b576fc5fe96db8911ce4431a4",
+        "scenarioId": "scenario-a-semantic-closure",
+        "profileId": "scenario-a-semantic-v1",
+        "profileSha256": null,
+        "datasetSha256": null,
+        "workloadPlanSha256": null,
+        "measurementPlanSha256": null,
+        "retryPolicyId": "scenario-a-retry-v1",
+        "openLoopProfileId": "scenario-a-open-loop-v1",
+        "comparisonView": "semantic-closure"
+      },
+      "systems": {
+        "lagrange": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8"
+        }
+      },
+      "recordedAt": "2026-10-30T11:45:00.000Z",
+      "evidenceSource": {
+        "kind": "github-actions-live",
+        "runId": "41049637923",
+        "issueNumber": null,
+        "url": "https://github.com/psvensson/lagrange/actions/runs/41049637923",
+        "artifactSha256": null
+      },
+      "metrics": {
+        "lagrange": null,
+        "tidbTikv": {
+          "opsPerSec": 6.747866,
+          "latencyMs": {
+            "p50": 535.12,
+            "p95": 1383.18,
+            "p99": 1887.96
+          },
+          "transactions": {
+            "measuredAttempted": 4,
+            "measuredSucceeded": 4,
+            "failed": 0,
+            "retries": 1
+          },
+          "semanticProofs": {
+            "passedCount": 16,
+            "requiredCount": 33
+          }
+        }
+      },
+      "comparison": {
+        "paired": false,
+        "throughputRatioLagrangeToTiDb": null,
+        "throughputLagFactorTiDbOverLagrange": null,
+        "latencyRatioLagrangeOverTiDb": null,
+        "semanticProofDeltaLagrangeMinusTiDb": null
+      },
+      "recordSha256": "66d08c67e9e356288b2f5c80288a3639f125912a0939e652f31ece4cccd1bff0",
+      "deltas": {
+        "lagrangeOpsPerSecDeltaFromPrev": null,
+        "lagrangeOpsPerSecDeltaFromFirst": null,
+        "tidbOpsPerSecDeltaFromPrev": null,
+        "tidbOpsPerSecDeltaFromFirst": 0,
+        "throughputRatioDeltaFromPrev": null,
+        "throughputLagFactorDeltaFromPrev": null,
+        "tidbSemanticProofsDeltaFromPrev": null,
+        "lagrangeSemanticProofsDeltaFromPrev": null
+      },
+      "lagrangeOpsPerSecDeltaFromPrev": null,
+      "lagrangeOpsPerSecDeltaFromFirst": null,
+      "tidbOpsPerSecDeltaFromPrev": null,
+      "tidbOpsPerSecDeltaFromFirst": 0,
+      "throughputRatioDeltaFromPrev": null,
+      "throughputLagFactorDeltaFromPrev": null,
+      "tidbSemanticProofsDeltaFromPrev": null,
+      "lagrangeSemanticProofsDeltaFromPrev": null
+    },
+    {
+      "schemaVersion": 1,
+      "combinationKey": "fw=0.3.0@27af74dc7ba7637662fd8d9c11f3b60bcc30d5ac|scenario=scenario-a-semantic-closure|profile=scenario-a-semantic-v1:-|workload=-|measure=-|view=semantic-closure|lagrange=-@-|tidb=v8.5.8@pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8",
+      "combinationSha256": "d9bd6c6b6bbf07d59cf2aca81ed0860c3e2d0b12948b305f63eadb5b645c3506",
+      "framework": {
+        "frameworkVersion": "0.3.0",
+        "frameworkCommitSha": "27af74dc7ba7637662fd8d9c11f3b60bcc30d5ac",
+        "scenarioId": "scenario-a-semantic-closure",
+        "profileId": "scenario-a-semantic-v1",
+        "profileSha256": null,
+        "datasetSha256": null,
+        "workloadPlanSha256": null,
+        "measurementPlanSha256": null,
+        "retryPolicyId": "scenario-a-retry-v1",
+        "openLoopProfileId": "scenario-a-open-loop-v1",
+        "comparisonView": "semantic-closure"
+      },
+      "systems": {
+        "lagrange": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8"
+        }
+      },
+      "recordedAt": "2026-10-30T12:11:36.102Z",
+      "evidenceSource": {
+        "kind": "github-actions-semantic-closure",
+        "runId": "41051724266",
+        "issueNumber": null,
+        "url": "https://github.com/psvensson/lagrange/actions/runs/41051724266",
+        "artifactSha256": "df6ad1ba4c4ceecaa5c66699254a16466134f5ffd4ed75fb7ee043a7d4069a5d"
+      },
+      "metrics": {
+        "lagrange": null,
+        "tidbTikv": {
+          "opsPerSec": 6.747866,
+          "latencyMs": {
+            "p50": 535.12,
+            "p95": 1383.18,
+            "p99": 1887.96
+          },
+          "transactions": {
+            "measuredAttempted": 9,
+            "measuredSucceeded": 9,
+            "failed": 0,
+            "retries": 2
+          },
+          "semanticProofs": {
+            "passedCount": 33,
+            "requiredCount": 33
+          }
+        }
+      },
+      "comparison": {
+        "paired": false,
+        "throughputRatioLagrangeToTiDb": null,
+        "throughputLagFactorTiDbOverLagrange": null,
+        "latencyRatioLagrangeOverTiDb": null,
+        "semanticProofDeltaLagrangeMinusTiDb": null
+      },
+      "recordSha256": "0157b6d79ab0fd8145d979778cffca841ea4906a2d0fd99209cd35f31b7c6d64",
+      "deltas": {
+        "lagrangeOpsPerSecDeltaFromPrev": null,
+        "lagrangeOpsPerSecDeltaFromFirst": null,
+        "tidbOpsPerSecDeltaFromPrev": 0,
+        "tidbOpsPerSecDeltaFromFirst": 0,
+        "throughputRatioDeltaFromPrev": null,
+        "throughputLagFactorDeltaFromPrev": null,
+        "tidbSemanticProofsDeltaFromPrev": 17,
+        "lagrangeSemanticProofsDeltaFromPrev": null
+      },
+      "lagrangeOpsPerSecDeltaFromPrev": null,
+      "lagrangeOpsPerSecDeltaFromFirst": null,
+      "tidbOpsPerSecDeltaFromPrev": 0,
+      "tidbOpsPerSecDeltaFromFirst": 0,
+      "throughputRatioDeltaFromPrev": null,
+      "throughputLagFactorDeltaFromPrev": null,
+      "tidbSemanticProofsDeltaFromPrev": 17,
+      "lagrangeSemanticProofsDeltaFromPrev": null
+    }
+  ],
+  "summarySha256": "63e5165000ba444daa7a777fe590f0aaef54d60fbe039caf149b2d43680a8617"
+}
