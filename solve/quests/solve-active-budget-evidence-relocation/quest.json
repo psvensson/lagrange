@@ -1,0 +1,27 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solve-active-budget-evidence-relocation",
+  "class": "fix",
+  "statement": "Restore solve active-state headroom by relocating one committed frozen raw membership-epoch inventory to the existing verified evidence store. Preserve exact source bytes, historical records and proof references; no budget or policy changes. Use existing relocation owner upload, independent re-download, manifest and source-blob verification before exact-path removal.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/solve-active-budget-evidence-relocation/evidence/receipt.json",
+      "requiredReceipts": [
+        "verified-relocation",
+        "active-footprint-headroom"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "preservation",
+      "statement": "Relocate only the root-reviewed single historical raw dump from exact pushed source6089dcf03; preserve quest records/logs/sealed required proof artifacts and historical docs. No history rewrite, archive in git, budget raise or new storage owner."
+    },
+    {
+      "id": "verification",
+      "statement": "Existing relocation owner must verify downloaded bundle, manifest and each member against source-commit blob before removal; retain indexed URL/hash/size/source/add-commit records and measure at least250000bytes active headroom below unchanged20MiB budget."
+    }
+  ],
+  "sealedAt": "6089dcf03f886219e7e02e886f557109a98470ee"
+}

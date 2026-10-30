@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "solve-active-budget-evidence-relocation--overflow-membership-inventory-6089dcf03-2026-10-30.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/solve-active-budget-evidence-relocation--overflow-membership-inventory-6089dcf03-2026-10-30.tar.gz",
+      "bundleSha256": "a3d842a48cc684628166d063a5ad83095abb897e6f420d9a3d3f7498cd2024ce",
+      "sourceCommit": "6089dcf03f886219e7e02e886f557109a98470ee",
+      "shard": "relocation-inventory/solve-active-budget-evidence-relocation--overflow-membership-inventory-6089dcf03-2026-10-30.json",
+      "shardSha256": "ab32043e4dd1f176f934519d823f883780bec60b67abcae51855ab7a21d5fe99",
+      "verifiedAt": "2026-10-30T10:25:25.707Z",
+      "downloadedSha256": "a3d842a48cc684628166d063a5ad83095abb897e6f420d9a3d3f7498cd2024ce",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 1,
+      "results": "1",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

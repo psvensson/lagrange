@@ -1,0 +1,52 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "questId": "solve-active-budget-evidence-relocation",
+  "receipts": [
+    {
+      "id": "verified-relocation",
+      "passed": true,
+      "sourceCommit": "6089dcf03f886219e7e02e886f557109a98470ee",
+      "member": {
+        "path": "solve/epics/formation-seed-decoupling/evidence/overflow-budget-audit-verified-packet-2026-09-20/historical/membership-epoch-domain-inventory.json",
+        "bytes": 298445,
+        "sha256": "d6865886a9e05c83bebf77bd48566d9b2f1eabd8d7c8fff1cc3a2ce38609b563",
+        "addedCommit": "f3f33086d106fb58138937b602998a02f419146b"
+      },
+      "bundle": {
+        "sha256": "a3d842a48cc684628166d063a5ad83095abb897e6f420d9a3d3f7498cd2024ce",
+        "bytes": 24174,
+        "asset": "solve-active-budget-evidence-relocation--overflow-membership-inventory-6089dcf03-2026-10-30.tar.gz",
+        "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/solve-active-budget-evidence-relocation--overflow-membership-inventory-6089dcf03-2026-10-30.tar.gz"
+      },
+      "inventory": "solve/changes/evidence-relocation/solve-active-budget-evidence-relocation/relocation-inventory.json",
+      "oldPathRecovered": true,
+      "freshRecovery": {
+        "downloadedSha256": "a3d842a48cc684628166d063a5ad83095abb897e6f420d9a3d3f7498cd2024ce",
+        "extracted": true,
+        "manifestMatches": true,
+        "unexpectedMembers": [],
+        "members": 1,
+        "results": "1",
+        "mismatches": []
+      },
+      "ownerProof": {
+        "command": "LAGRANGE_LANE_JOBS_CAP=1 npm run test:file -- test/solve/evidence-store.test.js test/scripts/evidence-relocation.test.js test/scripts/evidence-relocation-acceptance.test.js",
+        "files": 3,
+        "assertions": 25,
+        "passed": 3,
+        "failed": 0
+      }
+    },
+    {
+      "id": "active-footprint-headroom",
+      "passed": true,
+      "budgetBytes": 20971520,
+      "minimumHeadroomBytes": 250000,
+      "beforeActiveBytes": 20971346,
+      "afterActiveBytes": 20679172,
+      "headroomBytes": 292348,
+      "measurementBaseCommit": "20f228526e10237dc1757f5ae51eb83b4b096ae5"
+    }
+  ]
+}
