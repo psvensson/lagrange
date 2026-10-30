@@ -57,7 +57,12 @@ jobs:
             test/distributed/harness/scenario-b-risk-dataset.js \
             test/distributed/harness/scenario-b-risk-oracle.js \
             test/distributed/harness/scenario-b-comparators.js \
-            scripts/checks/scenario-b-risk-benchmark-guard.js
+            scripts/checks/scenario-b-risk-benchmark-guard.js \
+            test/distributed/harness/oltp-paired-sweep-runner.js \
+            scripts/checks/oltp-paired-sweep-runner-guard.js \
+            test/distributed/harness/scenario-b-latency-group-owner.js \
+            test/distributed/harness/scenario-b-movement-subphase.js \
+            scripts/checks/scenario-b-latency-movement-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
           node scripts/checks/oltp-scenario-a-new-order-contention-case-guard.js
           node scripts/checks/oltp-scenario-a-visibility-case-guard.js
@@ -73,6 +78,8 @@ jobs:
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js
           node scripts/checks/oltp-comparison-history-store-guard.js
           node scripts/checks/scenario-b-risk-benchmark-guard.js
+          node scripts/checks/oltp-paired-sweep-runner-guard.js
+          node scripts/checks/scenario-b-latency-movement-guard.js
 
   semantic-live-gate:
     runs-on: ubuntu-24.04
