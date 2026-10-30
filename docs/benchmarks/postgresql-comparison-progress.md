@@ -17,25 +17,25 @@ Comparative evaluation of Lagrange against PostgreSQL 17 configurations across S
 
 | Target | Version | Units | Processes | RPO=0 HA | Evidence Tier | Throughput (tx/s) | p50 (ms) | p95 (ms) | p99 (ms) | Proofs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | 0.1.0-alpha.4 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 185.75 | 7.42 | 18.60 | 26.40 | 33/33 |
-| tidb-tikv | v8.5.8 | 6 | 6 | Yes (RPO=0) | observed-docker-cluster | 53.78 | 24.15 | 56.40 | 78.90 | 33/33 |
-| pg-single-primary | 17.2 | 2 | 2 | No (data-loss window) | modeled-topology-oracle | 312.40 | 3.10 | 7.80 | 12.40 | 33/33 |
-| pg-patroni-sync-ha-rf3 | 17.2-patroni-4.0 | 6 | 9 | Yes (RPO=0) | modeled-topology-oracle | 142.60 | 9.80 | 23.40 | 34.20 | 33/33 |
+| lagrange | 0.3.0 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 0.83 | 2269.44 | 4418.93 | 5343.10 | 33/33 |
+| tidb-tikv | v8.5.8 | 6 | 6 | Yes (RPO=0) | observed-docker-cluster | 6.75 | 535.12 | 1383.18 | 1887.96 | 33/33 |
+| pg-single-primary | 17.2 | 2 | 2 | No (data-loss window) | modeled-topology-oracle | 14.80 | 185.40 | 412.60 | 580.20 | 33/33 |
+| pg-patroni-sync-ha-rf3 | 17.2-patroni-4.0 | 6 | 9 | Yes (RPO=0) | modeled-topology-oracle | 8.40 | 390.20 | 920.50 | 1290.80 | 33/33 |
 
 ## Scenario B risk decision and graph-shape comparison ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
 | Target | Evidence Tier | Decisions/s | p50 (ms) | p95 (ms) | p99 (ms) | WAN Bytes/Dec | SQL Round-Trips | Movement Continuity |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | modeled-topology-oracle | 412.80 | 3.80 | 9.40 | 14.20 | 384 | 0.00 | Passed |
-| tidb-tikv | modeled-topology-oracle | 138.40 | 14.60 | 31.20 | 42.70 | 4860 | 4.50 | Passed |
-| pg-single-primary | modeled-topology-oracle | 294.60 | 5.40 | 13.80 | 19.60 | 1420 | 2.75 | Not supported |
-| pg-patroni-sync-ha-rf3 | modeled-topology-oracle | 218.20 | 7.90 | 18.60 | 27.40 | 2680 | 2.75 | Passed |
+| lagrange | modeled-topology-oracle | 441.15 | 12.06 | 18.09 | 18.09 | 144 | 0.00 | Passed |
+| tidb-tikv | modeled-topology-oracle | 221.44 | 24.06 | 36.08 | 36.08 | 6144 | 4.50 | Passed |
+| pg-single-primary | modeled-topology-oracle | 294.60 | 15.40 | 22.80 | 26.40 | 1420 | 2.75 | Not supported |
+| pg-patroni-sync-ha-rf3 | modeled-topology-oracle | 218.20 | 21.80 | 31.40 | 35.20 | 2680 | 2.75 | Passed |
 
 ## Scenario B four-shape latency and throughput ladder
 
 | Target | Local-Only | One Remote Stage | Sequential | Fan-Out |
 | --- | --- | --- | --- | --- |
-| lagrange | 640.0 dec/s, p99 6.2ms, 0B, 1RT | 465.0 dec/s, p99 11.8ms, 256B, 2RT | 342.0 dec/s, p99 16.4ms, 512B, 3RT | 398.0 dec/s, p99 14.9ms, 640B, 2RT |
-| tidb-tikv | 245.0 dec/s, p99 19.4ms, 1840B, 2RT | 162.0 dec/s, p99 32.6ms, 3920B, 4RT | 98.0 dec/s, p99 54.8ms, 6480B, 6RT | 118.0 dec/s, p99 46.2ms, 5940B, 5RT |
+| lagrange | 620.0 dec/s, p99 4.2ms, 0B, 0RT | 495.0 dec/s, p99 14.8ms, 96B, 1RT | 380.0 dec/s, p99 22.4ms, 192B, 2RT | 410.0 dec/s, p99 18.1ms, 192B, 1RT |
+| tidb-tikv | 280.0 dec/s, p99 16.5ms, 2048B, 2RT | 235.0 dec/s, p99 32.1ms, 4096B, 4RT | 190.0 dec/s, p99 48.6ms, 6144B, 6RT | 215.0 dec/s, p99 38.2ms, 6144B, 5RT |
 | pg-single-primary | 520.0 dec/s, p99 7.4ms, 640B, 1RT | 330.0 dec/s, p99 14.2ms, 1180B, 2RT | 198.0 dec/s, p99 24.8ms, 1960B, 4RT | 230.0 dec/s, p99 21.5ms, 1900B, 4RT |
 | pg-patroni-sync-ha-rf3 | 385.0 dec/s, p99 11.2ms, 1280B, 1RT | 248.0 dec/s, p99 19.8ms, 2240B, 2RT | 146.0 dec/s, p99 34.6ms, 3640B, 4RT | 174.0 dec/s, p99 29.8ms, 3560B, 4RT |

@@ -1,3 +1,5 @@
+import {buildMultiSystemComparativeMatrix} from './comparative-matrix-runner.js';
+
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const numberIsFinite = Number.isFinite;
@@ -8,108 +10,7 @@ const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 
 const DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH = 'docs/benchmarks/comparative-overview.svg';
 
-const CANONICAL_DEFAULT_TARGETS = Object.freeze([
-  {
-    targetId: 'lagrange',
-    label: 'Lagrange',
-    version: '0.3.0',
-    category: 'co-located-compute',
-    topologyUnits: 3,
-    processCount: 3,
-    rpoZeroSurvivability: true,
-    evidenceTier: 'observed-docker-cluster',
-    detailPageMd: 'tidb-comparison-progress.md',
-    detailPageHtml: 'tidb-comparison-progress.html',
-    scenarioA: {txPerSec: 0.83, p95Ms: 4418.93, evidenceTier: 'observed-docker-cluster'},
-    scenarioB: {
-      decisionsPerSec: 441.15,
-      p99Ms: 18.09,
-      wireBytesPerDecision: 144,
-      evidenceTier: 'observed-docker-cluster',
-      shapes: {
-        'local-only': {decisionsPerSec: 620.0, p99Ms: 4.2, roundTrips: 0, wireBytes: 0},
-        'one-remote-stage': {decisionsPerSec: 495.0, p99Ms: 14.8, roundTrips: 1, wireBytes: 96},
-        'sequential': {decisionsPerSec: 380.0, p99Ms: 22.4, roundTrips: 2, wireBytes: 192},
-        'fan-out': {decisionsPerSec: 410.0, p99Ms: 18.1, roundTrips: 1, wireBytes: 192},
-      },
-    },
-  },
-  {
-    targetId: 'tidb-tikv',
-    label: 'TiDB / TiKV',
-    version: 'v8.5.8',
-    category: 'distributed-sql',
-    topologyUnits: 6,
-    processCount: 8,
-    rpoZeroSurvivability: true,
-    evidenceTier: 'observed-docker-cluster',
-    detailPageMd: 'tidb-comparison-progress.md',
-    detailPageHtml: 'tidb-comparison-progress.html',
-    scenarioA: {txPerSec: 6.75, p95Ms: 1383.18, evidenceTier: 'observed-docker-cluster'},
-    scenarioB: {
-      decisionsPerSec: 221.44,
-      p99Ms: 36.08,
-      wireBytesPerDecision: 6144,
-      evidenceTier: 'observed-docker-cluster',
-      shapes: {
-        'local-only': {decisionsPerSec: 280.0, p99Ms: 16.5, roundTrips: 1, wireBytes: 2048},
-        'one-remote-stage': {decisionsPerSec: 235.0, p99Ms: 32.1, roundTrips: 2, wireBytes: 4096},
-        'sequential': {decisionsPerSec: 190.0, p99Ms: 48.6, roundTrips: 3, wireBytes: 6144},
-        'fan-out': {decisionsPerSec: 215.0, p99Ms: 38.2, roundTrips: 2, wireBytes: 6144},
-      },
-    },
-  },
-  {
-    targetId: 'pg-single-primary',
-    label: 'PostgreSQL (single-primary)',
-    version: '16.4',
-    category: 'single-primary-rdbms',
-    topologyUnits: 1,
-    processCount: 1,
-    rpoZeroSurvivability: false,
-    evidenceTier: 'observed-docker-cluster',
-    detailPageMd: 'postgresql-comparison-progress.md',
-    detailPageHtml: 'postgresql-comparison-progress.html',
-    scenarioA: {txPerSec: 12.4, p95Ms: 85.0, evidenceTier: 'observed-docker-cluster'},
-    scenarioB: {
-      decisionsPerSec: 185.0,
-      p99Ms: 42.0,
-      wireBytesPerDecision: 7168,
-      evidenceTier: 'observed-docker-cluster',
-      shapes: {
-        'local-only': {decisionsPerSec: 240.0, p99Ms: 18.0, roundTrips: 1, wireBytes: 2560},
-        'one-remote-stage': {decisionsPerSec: 195.0, p99Ms: 38.0, roundTrips: 2, wireBytes: 5120},
-        'sequential': {decisionsPerSec: 155.0, p99Ms: 55.0, roundTrips: 3, wireBytes: 7168},
-        'fan-out': {decisionsPerSec: 175.0, p99Ms: 45.0, roundTrips: 2, wireBytes: 7168},
-      },
-    },
-  },
-  {
-    targetId: 'pg-patroni-sync-ha-rf3',
-    label: 'PostgreSQL (Patroni sync-HA RF=3)',
-    version: '16.4',
-    category: 'clustered-ha-rdbms',
-    topologyUnits: 3,
-    processCount: 7,
-    rpoZeroSurvivability: true,
-    evidenceTier: 'modeled-topology-oracle',
-    detailPageMd: 'postgresql-comparison-progress.md',
-    detailPageHtml: 'postgresql-comparison-progress.html',
-    scenarioA: {txPerSec: 5.1, p95Ms: 245.0, evidenceTier: 'modeled-topology-oracle'},
-    scenarioB: {
-      decisionsPerSec: 142.0,
-      p99Ms: 58.0,
-      wireBytesPerDecision: 8192,
-      evidenceTier: 'modeled-topology-oracle',
-      shapes: {
-        'local-only': {decisionsPerSec: 190.0, p99Ms: 26.0, roundTrips: 1, wireBytes: 3072},
-        'one-remote-stage': {decisionsPerSec: 150.0, p99Ms: 52.0, roundTrips: 2, wireBytes: 6144},
-        'sequential': {decisionsPerSec: 118.0, p99Ms: 74.0, roundTrips: 3, wireBytes: 8192},
-        'fan-out': {decisionsPerSec: 135.0, p99Ms: 62.0, roundTrips: 2, wireBytes: 8192},
-      },
-    },
-  },
-]);
+const CANONICAL_DEFAULT_TARGETS = Object.freeze(buildMultiSystemComparativeMatrix().targets);
 
 function escapeXml(value) {
   const xmlMap = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;'};

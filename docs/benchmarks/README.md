@@ -30,23 +30,23 @@ Two distinct measurement boundaries are evaluated:
 
 | System / Configuration | Category | Topology Units (Processes) | RPO=0 Host-Loss Survival | [Scenario A](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) tx/sec (p95 ms) | [Scenario B](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) decisions/sec (p99 ms) | WAN / Wire Bytes per Decision | Evidence Tier | Detail Page |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.1.0-alpha.4 | distributed-native | 3 (3) | Yes | 185.75 (18.60 ms) | 412.80 (14.20 ms) | 384 B | `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
-| TiDB + TiKV v8.5.8 | distributed-sql | 6 (6) | Yes | 53.78 (56.40 ms) | 138.40 (42.70 ms) | 4860 B | `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
-| PostgreSQL 17 (Single Primary + App Service) 17.2 | relational-single-primary | 2 (2) | No | 312.40 (7.80 ms) | 294.60 (19.60 ms) | 1420 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) 17.2-patroni-4.0 | relational-sync-ha | 6 (9) | Yes | 142.60 (23.40 ms) | 218.20 (27.40 ms) | 2680 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| Lagrange 0.3.0 | distributed-native | 3 (3) | Yes | 0.83 (4418.93 ms) | 441.15 (18.09 ms) | 144 B | `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
+| TiDB + TiKV v8.5.8 | distributed-sql | 6 (6) | Yes | 6.75 (1383.18 ms) | 221.44 (36.08 ms) | 6144 B | `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
+| PostgreSQL 17 (Single Primary + App Service) 17.2 | relational-single-primary | 2 (2) | No | 14.80 (412.60 ms) | 294.60 (26.40 ms) | 1420 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) 17.2-patroni-4.0 | relational-sync-ha | 6 (9) | Yes | 8.40 (920.50 ms) | 218.20 (35.20 ms) | 2680 B | `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
 
 ## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
 | System / Configuration | Graph Shape | Decisions/sec | Latency p99 (ms) | Round Trips | Wire Bytes |
 | --- | --- | --- | --- | --- | --- |
-| Lagrange | local-only | 640.00 | 6.20 | 1 | 0 B |
-| Lagrange | one-remote-stage | 465.00 | 11.80 | 2 | 256 B |
-| Lagrange | sequential | 342.00 | 16.40 | 3 | 512 B |
-| Lagrange | fan-out | 398.00 | 14.90 | 2 | 640 B |
-| TiDB + TiKV | local-only | 245.00 | 19.40 | 2 | 1840 B |
-| TiDB + TiKV | one-remote-stage | 162.00 | 32.60 | 4 | 3920 B |
-| TiDB + TiKV | sequential | 98.00 | 54.80 | 6 | 6480 B |
-| TiDB + TiKV | fan-out | 118.00 | 46.20 | 5 | 5940 B |
+| Lagrange | local-only | 620.00 | 4.20 | 0 | 0 B |
+| Lagrange | one-remote-stage | 495.00 | 14.80 | 1 | 96 B |
+| Lagrange | sequential | 380.00 | 22.40 | 2 | 192 B |
+| Lagrange | fan-out | 410.00 | 18.10 | 1 | 192 B |
+| TiDB + TiKV | local-only | 280.00 | 16.50 | 2 | 2048 B |
+| TiDB + TiKV | one-remote-stage | 235.00 | 32.10 | 4 | 4096 B |
+| TiDB + TiKV | sequential | 190.00 | 48.60 | 6 | 6144 B |
+| TiDB + TiKV | fan-out | 215.00 | 38.20 | 5 | 6144 B |
 | PostgreSQL 17 (Single Primary + App Service) | local-only | 520.00 | 7.40 | 1 | 640 B |
 | PostgreSQL 17 (Single Primary + App Service) | one-remote-stage | 330.00 | 14.20 | 2 | 1180 B |
 | PostgreSQL 17 (Single Primary + App Service) | sequential | 198.00 | 24.80 | 4 | 1960 B |

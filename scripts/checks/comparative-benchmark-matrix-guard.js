@@ -174,19 +174,26 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
   assert.equal(stringIncludes(docsReadme, LINK_BENCHMARKS_INDEX), true);
 }
 
-function verifyHarnessRendererParity(matrix) {
+function verifyHarnessRendererParity(rootDir, matrix) {
   const defaultMatrix = buildMultiSystemComparativeMatrix();
   assert.equal(defaultMatrix.schema, MULTI_SYSTEM_MATRIX_SCHEMA);
   assert.equal(defaultMatrix.epicId, EPIC_ID);
   assert.equal(defaultMatrix.totalSlices, TOTAL_EPIC_SLICES);
 
   const testMatrix = matrix || defaultMatrix;
-  assert.ok(renderPostgresqlComparisonMarkdown(testMatrix));
-  assert.ok(renderPostgresqlComparisonHtml(testMatrix));
-  assert.ok(renderPostgresqlComparisonSvg(testMatrix));
-  assert.ok(renderComparativeLandingMarkdown(testMatrix));
-  assert.ok(renderComparativeLandingHtml(testMatrix));
-  assert.ok(renderComparativeOverviewSvg(testMatrix));
+  const landingMdPath = path.resolve(rootDir, DEFAULT_COMPARATIVE_LANDING_MD_PATH);
+  const landingHtmlPath = path.resolve(rootDir, DEFAULT_COMPARATIVE_LANDING_HTML_PATH);
+  const landingSvgPath = path.resolve(rootDir, DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH);
+  const pgMdPath = path.resolve(rootDir, DEFAULT_POSTGRESQL_PROGRESS_MD_PATH);
+  const pgHtmlPath = path.resolve(rootDir, DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH);
+  const pgSvgPath = path.resolve(rootDir, DEFAULT_POSTGRESQL_PROGRESS_SVG_PATH);
+
+  assert.equal(renderPostgresqlComparisonMarkdown(testMatrix), fs.readFileSync(pgMdPath, UTF8));
+  assert.equal(renderPostgresqlComparisonHtml(testMatrix), fs.readFileSync(pgHtmlPath, UTF8));
+  assert.equal(renderPostgresqlComparisonSvg(testMatrix), fs.readFileSync(pgSvgPath, UTF8));
+  assert.equal(renderComparativeLandingMarkdown(testMatrix), fs.readFileSync(landingMdPath, UTF8));
+  assert.equal(renderComparativeLandingHtml(testMatrix), fs.readFileSync(landingHtmlPath, UTF8));
+  assert.equal(renderComparativeOverviewSvg(testMatrix), fs.readFileSync(landingSvgPath, UTF8));
 }
 
 export async function runComparativeBenchmarkMatrixGuard(rootDir = REPO_ROOT) {
@@ -195,8 +202,8 @@ export async function runComparativeBenchmarkMatrixGuard(rootDir = REPO_ROOT) {
   assert.equal(fs.existsSync(matrixPath), true, `Matrix file must exist: ${matrixPath}`);
   const matrix = await readMultiSystemComparativeMatrix({rootDir, matrixPath});
   verifyComparativeMatrix(matrix);
-  verifyHarnessRendererParity(matrix);
   verifyBenchmarkDocumentsAndLinks(rootDir);
+  verifyHarnessRendererParity(rootDir, matrix);
 
   return {
     ok: true,
