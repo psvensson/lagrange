@@ -32,9 +32,9 @@ Edition ownership and implementation-home rules live in `edition-matrix.md`.
 ## Version Sequence
 
 Publication and milestone acceptance follow one ordered sequence after the
-published 0.3.0 baseline:
+published 0.4.0 experimental-alpha baseline:
 
-`0.3.1 -> 0.3.2 -> 0.4 -> 0.5 -> 0.6 -> 0.7 -> 0.8 -> 0.9 -> 1.0 -> 1.1 -> 1.2 -> 2.0 -> 2.1`
+`0.4.0 (published) -> 0.4.1 -> 0.5 -> 0.6 -> 0.7 -> 0.8 -> 0.9 -> 1.0 -> 1.1 -> 1.2 -> 2.0 -> 2.1`
 
 Every planned feature has one primary version home below. Earlier capabilities
 are prerequisites reused by later milestones. Phase 0.1 and Phase 0.2 retain
@@ -44,11 +44,14 @@ implementation in this repository. Version placement is delivery order, not a
 calendar promise, runtime claim or Quest completion receipt.
 
 The former future 0.2.9 is retired. Its stable row IDs remain below under their
-current 0.3.1 or 0.3.2 allocation. The existing stabilization and Queryable Core
-epics retain their identities and acceptance ownership; publication of 0.3.0
-does not discharge unfinished axes or historical seals.
+current 0.4.1 or 0.5 allocation. Unfinished 0.3.1/0.3.2/0.4 obligations are
+explicitly carried forward: bounded current correctness and claim repairs to
+0.4.1; remaining feature, developer-journey and comparison completion to 0.5.
+The existing stabilization, Queryable Core, service and comparison epics retain
+their identities and acceptance ownership. Publication of 0.4.0 does not
+discharge unfinished axes or historical seals.
 
-Independent bounded implementation, including 0.4 and 0.5 work, may proceed
+Independent bounded implementation, including 0.4.1 and 0.5 work, may proceed
 concurrently when consumed contracts are defined. One writer owns each changing
 interaction, dependent changes integrate in order, and the release candidate
 proves their composition. Early implementation neither advances milestone
@@ -88,7 +91,7 @@ Two rules keep the ids durable:
   of its rows first becomes a Quest link target. Tables without active Quest links
   may omit the column until they need it; this is intentional, not drift.
 
-When a feature moves to an earlier delivery milestone, its existing row ID is
+When a feature moves to another delivery milestone, its existing row ID is
 preserved. The containing milestone supplies the current version assignment;
 the version-shaped ID prefix records its original identity. In particular,
 `RM-2.0-minimal-deployment-surface` remains the historical ID for the substrate
@@ -162,7 +165,8 @@ was pruned) for historical context only.
 Original component scope: multi-partition coordination, session staged
 read-your-own-writes, partition-write-generation conflict detection and
 recovery/timeout machinery. Current public transaction behavior and remaining
-composed evidence are reconciled in 0.3.2.
+composed evidence are reconciled in 0.5; bounded defects in current promised
+behavior belong to 0.4.1.
 
 ### 2. Schema Migration Workflow
 
@@ -195,7 +199,7 @@ composed evidence are reconciled in 0.3.2.
 | CDC diagnostics | ✅ |
 
 The existing live-subscription row covers the cache-backed observation surface.
-Generic application-table live queries have their own Phase 0.3.2 row.
+Generic application-table live queries have their own Phase 0.5 row.
 
 ### 4. Failure Simulations
 
@@ -234,14 +238,14 @@ currently satisfied. This roadmap records the criteria and sequence only.
 
 This section preserves the scope of the earlier 0.2 release foundation.
 Released changes are recorded in `CHANGELOG.md`; residual stabilization belongs
-to 0.3.1/0.3.2 as allocated below, useful service expansion to 0.4, and managed
+to 0.4.1/0.5 as allocated below, useful service expansion to 0.5, and managed
 OCI execution to 0.6.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
 | `RM-0.2-five-node-convergence` | Five-node cold formation and runtime-service initial placement | ✅ | Formation, table creation, and initial service placement complete without stalled control-plane or service operations |
 | `RM-0.2-topology-safety` | Topology-operation safety closure | ✅ | Authoritative operation-ledger release, safe surplus removal, and ready-lease candidate admission retain their safety invariants |
-| `RM-0.2-snapshot-integration` | Compacted-follower snapshot catch-up integration | ✅ | Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log` compaction (`SN1`), and follower catch-up landed in `0.2.6`; subsequent retention corrections belong to 0.3.2, pilot log/recovery qualification to 0.5, and customer backup/PITR to the external 1.0 product |
+| `RM-0.2-snapshot-integration` | Compacted-follower snapshot catch-up integration | ✅ | Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log` compaction (`SN1`), and follower catch-up landed in `0.2.6`; bounded current correctness repairs belong to 0.4.1, remaining composed retention and pilot log/recovery qualification to 0.5, and customer backup/PITR to the external 1.0 product |
 | `RM-0.2-release-verification` | Core release verification | ✅ | Historical release checks include the tagged but unpublished `0.2.0` candidate and published `0.2.5`/`0.2.6` releases, as recorded in `CHANGELOG.md`; each current release claim still requires its own exact-candidate evidence |
 
 ### Phase 0.2 Exit Criteria
@@ -257,18 +261,19 @@ OCI execution to 0.6.
 
 Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log`
 compaction (`SN1`), and follower catch-up shipped in `0.2.6`, while
-the remaining bounded-log corrections are assigned to 0.3.2 and pilot-scale
-log/recovery qualification to 0.5. Customer backup/PITR is an external 1.0
-product. The existing bounded distributed service journey is consumed by 0.3.2;
-service expansion and qualified multi-machine comparison belong to 0.4, OCI
-execution to 0.6, and advanced automatic data-affinity/cost-aware placement to 2.0.
+bounded defects in current log guarantees are assigned to 0.4.1; remaining
+composed retention and pilot-scale log/recovery qualification belong to 0.5.
+Customer backup/PITR is an external 1.0 product. The existing bounded distributed
+service journey, service expansion and qualified multi-machine comparison belong
+to 0.5, OCI execution to 0.6, and advanced automatic data-affinity/cost-aware
+placement to 2.0.
 
 Phase 0.5 deployment CLI, Docker Compose, WASM CLI, and onboarding work is not
 part of the 0.2 release gate.
 
 ---
 
-## Released 0.3.0 — Implementation Baseline
+## Phase 0.3 — Released Implementation Baseline
 
 Credit the released 0.3.0 implementation and PR #151's merged Scenario A
 framework/runtime corrections when assigning remaining work. Release history is
@@ -277,36 +282,65 @@ owners. Historical branch execution and implemented proof-ID coverage do not
 certify the merged candidate. Planned rows below describe remaining completion
 scope, not a finding that every underlying component is absent.
 
-## Phase 0.3.1 — Installed-Product And Claim Corrections
+## Released 0.4.0 — Published Alpha Baseline
+
+0.4.0 is published. Credit its delivered implementation, including the
+JSON-object HTTP-body correction, and reuse applicable evidence. Publication
+does not close the entire former 0.4 practical-service/comparison milestone.
+The version allocations below supersede unfinished 0.3.1/0.3.2/0.4 assignments
+without replacing their acceptance owners or marking planned rows complete.
+
+## Phase 0.4.1 — Bounded Correctness And Claim Repairs
 
 Complete the selected installed-startup, artifact/publication and truthful-claim
 corrections through the existing stabilization and bounded feature owners. Adopt
 the standing major-feature user-journey rule through its testing owner and
 reconcile the advertised capability inventory using existing records. This
 bounded reconciliation does not make every historical capability a new gate.
+For the published 0.4.0 baseline, repair silent generic-result truncation and
+enforce byte bounds before oversized partials consume the protected resource;
+repair stale assertions and unsupported claim text. Credit the repaired
+JSON-object HTTP body. Full URL/raw-byte HTTP preservation, awaiting application
+handlers and Hono authoring belong to the 0.5 standard HTTP contract.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
-| RM-0.2.9-published-operating-contract | Usable artifacts and exact-candidate operating contract | 🔲 | Bounded installed-startup/artifact/publication corrections, genuine supported-use consumer checks and accurate read/transaction/retry/recovery declarations. Existing owner: `solve/epics/release-0-2-7-stabilization.md`. Full composed stable-core and service acceptance remains 0.3.2; no new service-envelope features are included. |
+| RM-0.2.9-published-operating-contract | Usable artifacts and exact-candidate operating contract | 🔲 | Bounded installed-startup/artifact/publication and current-result correctness repairs, genuine supported-use consumer checks, stale-assertion repair and accurate read/transaction/retry/recovery/comparison declarations. Existing stabilization and feature owners retain their work; stabilization owner: `solve/epics/release-0-2-7-stabilization.md`. Full composed stable-core and service acceptance remains 0.5; no new HTTP/service-envelope features are included. |
 
-### Phase 0.3.1 Exit Criteria
+### Phase 0.4.1 Exit Criteria
 
 The selected correction scope passes through actual supported distributions,
 public claims match the measured envelope, and existing publication/consumer
 requirements are satisfied. Independently proved bounded feature corrections
 may ship here. The remaining Queryable Core axes, full distributed service
-journey and inherited stable-core obligations stay open for 0.3.2. This release
+journey and inherited stable-core obligations stay open for 0.5. A generic call
+returns every admitted contribution or an explicit bound error; no implicit
+result slice establishes success. Full comparative qualification remains 0.5,
+while false performance claims are corrected here. This release
 does not discharge all of stabilization Q17. Versions are assigned through
 `RELEASE.md`; this scope map is not a release receipt.
 
 ---
 
-## Phase 0.3.2 — Queryable Core Completion
+## Phase 0.5 — Standard HTTP Services And Pilot-Ready Operation
+
+Complete the remaining Queryable Core, practical-service, developer-journey and
+comparison obligations, together with Hono/Fetch authoring and the existing
+secure pilot operating envelope. This is the first pilot boundary; 0.9
+integrates the complete service product and 1.0 adds production support
+guarantees. Historical row prefixes are preserved identities, not separate
+current version assignments.
+This is an allocation of unfinished acceptance, not a new query-feature
+authorization or a claim that implemented index, locking-read or live-query
+components are absent. Preserve delivered implementations and accepted proof;
+the Hono change does not reopen them or enlarge their scope.
+
+### 1. Queryable Core Completion
 
 *"Ordinary SQL reaches the right data efficiently without physical-partition knowledge."*
 
-Consume delivered 0.3.0/PR151 work and the bounded 0.3.1 corrections. Start with the
-admitted key/row-identity and read-visibility contracts shared by routing,
+Consume delivered work through 0.4.0 and the bounded 0.4.1 corrections. Start with
+the admitted key/row-identity and read-visibility contracts shared by routing,
 indexes, locking candidate discovery and live-query startup. Then complete
 ordered access paths, locking reads and live results through their existing
 owners. The superseded `solve/epics/query-access-path-ladder.md` is historical
@@ -334,7 +368,7 @@ The former `RM-1.0-qs-typed-key-ordering`,
 `RM-1.0-qs-pk-partition-narrowing`, `RM-1.0-qs-local-index-ddl` and
 `RM-1.0-qs-global-secondary-indexes` IDs remain retired historical references.
 
-Global-index maintenance completion belongs to 0.3.2. Current research provisionally
+Global-index maintenance completion belongs to 0.5. Current research provisionally
 favors synchronous TX1 maintenance for ordinary non-unique indexes, conditional
 on a proved read contract and measured write/fanout/contention cost. Reconcile
 and explicitly seal or supersede the existing maintenance decision through its
@@ -356,7 +390,7 @@ split/merge/leader transitions preserve continuity or issue an explicit reset.
 No new global snapshot, serializability or general incremental-view guarantee
 is implied by these rows.
 
-### Phase 0.3.2 Exit Criteria
+#### Queryable Core Acceptance
 
 - Declared-key lifecycle: admitted non-`id`/compound schemas preserve row identity
   through writes, narrowed reads, real boundaries/topology and restart.
@@ -377,46 +411,58 @@ is implied by these rows.
   journey pass through their own owners on the integrated candidate.
 - Existing exact-candidate release and published-consumer requirements pass;
   current declarations match measured support. Only the existing certification
-  process discharges outstanding axes. Full comparison remains 0.4.
+  process discharges outstanding axes. Full comparison also belongs to 0.5,
+  through its existing comparison owner rather than duplicated query acceptance.
 
 ---
 
-## Phase 0.4 — Practical and Demonstrated Service Core
+### 2. Standard HTTP And Practical Services
 
 *"The existing WASM service path handles useful workloads and has reproducible evidence."*
 
-Extend the public code-first WASM / HTTP-to-distributed-call path after the
-queryable core. This milestone owns the service-envelope work previously left
-inside an open-ended 0.2 phase. Bounded input paging is scoped to this call
-contract; general multi-stage exchange and backpressure belong to 2.0.
+Use Hono through a standard Fetch `Request -> Promise<Response>` application
+entrypoint and an explicit request-scoped Lagrange SDK. Hono owns HTTP routing,
+middleware and responses; existing runtime owners enforce service identity,
+registered operation authority, invocation context and resource bounds. The
+canonical scaffold, compiler and documentation replace the custom handler DSL
+without retaining a second executable authoring path. The standard HTTP owner
+owns that adapter and cutover; existing execution owners retain selector,
+paging, partial and multi-operation acceptance.
+
+This milestone carries unfinished practical-service and comparison work from
+0.4. Bounded input paging is scoped to this call contract; general multi-stage
+exchange and backpressure belong to 2.0. Source-level Hono compatibility does
+not establish arbitrary WASI HTTP component or Node middleware compatibility.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
+| RM-0.5-standard-http-service-api | Standard Fetch HTTP entrypoint and Hono authoring | 🔲 | Awaited Fetch requests/responses, bounded URL/header/body preservation, request-scoped explicit Lagrange calls and one canonical module-bundled authoring path. Prove the pinned WASM toolchain and host-enforced authority; no global client or runtime local-file deployment fallback. Owner: `solve/epics/standard-http-service-api.md`; contract: `solve/specs/standard-http-service-api/requirements.md`. |
 | RM-0.4-call-selector-narrowing | Safe selector narrowing from call arguments | 🔲 | Canonical admission/planning derives only authorized data dependencies; no callback-local partition policy. Contract: `architecture/minimal-deployment-surface.md`. |
 | RM-0.4-call-bounded-input | Inputs beyond one shard batch | 🔲 | Explicit bounded paging/streaming with continuation, cancellation and resource ownership through the existing call path. |
 | RM-0.4-call-structured-partials | Bounded structured partials | 🔲 | Extend the scalar result envelope with a sealed bounded representation and owned reduction/error semantics. |
-| RM-0.4-call-multi-operation | Multi-operation service dispatch | 🔲 | Complete compiler/export/binding dispatch beyond the one-operation component limit through existing service owners. Scope: `solve/epics/code-first-service-compiler.md`. |
+| RM-0.4-call-multi-operation | Multi-operation service dispatch | 🔲 | Complete compiler/export/binding dispatch beyond the one-operation component limit through the existing execution owner in `solve/epics/pilot-readiness-and-public-proof.md`; consume the standard HTTP authoring contract. The superseded code-first compiler epic is historical rationale, not a second active API owner. |
 | RM-0.4-wasm-public-comparison | Public multi-machine WASM service evidence | 🔲 | Reproducible public service path, named workload/hardware and a strong conventional baseline; claims identify the measured supported configuration. Scope: `solve/epics/comparative-workload-efficiency-evidence.md`, `solve/epics/developer-journey-and-measured-comparisons.md`, and `solve/specs/developer-journey-and-measured-comparisons/requirements.md`. |
 | RM-0.4-scenario-a-comparison | Complete TiDB/TiKV Scenario A comparison | 🔲 | Complete the agreed ordinary-application semantic/retry/failure profile and controlled comparison, not only a preliminary visibility slice. Reuse the approved comparison program and require equivalent declared semantics. |
 
-### Phase 0.4 Exit Criteria
+#### Service And Comparison Acceptance
 
 A public multi-machine service exercises selectors, larger bounded inputs,
 structured partials and multi-operation dispatch with honest failure/resource
-semantics. Both the WASM/conventional comparison and full Scenario A publish
-reproducible method, results and limits; preparation or a partial semantic gate
-alone does not close the milestone.
+semantics through Hono/Fetch and explicit request-scoped calls. The existing
+developer-journey owner proves build, publish, registered-identity deployment,
+stable public invocation and update. Deployment reads the registered immutable
+artifact; nodes never load local source or local artifact files.
+
+Both the WASM/conventional comparison and full Scenario A publish reproducible
+method, actual GCP or registered physical-lab results and limits. The service
+comparison consumes the accepted standard HTTP/execution contracts. Scenario A
+retains its ordinary-SQL owner, can progress independently of Hono and remains
+assigned to this same 0.5 release. Modeled results, preparation or a partial
+semantic gate alone do not close either comparison; a valid slower result can.
 
 ---
 
-## Phase 0.5 — Pilot-Ready Security and Operations
-
-A developer can try the 0.3.2 query and 0.4 service capabilities through a secure,
-observable deployment with a supported pilot operating envelope. This is the
-first pilot boundary; 0.9 integrates the complete service product and 1.0 adds
-production support guarantees.
-
-### 1. Cluster Deployment Experience
+### 3. Cluster Deployment Experience
 
 | Id | Item | Roadmap state |
 |----|------|--------|
@@ -435,7 +481,7 @@ release pipeline packages it. Further hardening of the chart stays tied to a
 deployment description that covers values surface, networking, storage,
 bootstrap flow, and upgrade behavior before more task expansion begins.
 
-### 2. Developer Workflow
+### 4. Developer Workflow
 
 | Id | Item | Roadmap state |
 |----|------|--------|
@@ -455,12 +501,12 @@ in `CHANGELOG.md`. The rows above require coherent installed-consumer pilot
 journeys, not another WASM command family. Stable `cli-wasm` row IDs do not
 prescribe a namespace beside the canonical service CLI.
 
-The 0.5 onboarding and operator surface should make the 0.3.2 access paths easy
+The 0.5 onboarding and operator surface should make the completed access paths easy
 to inspect: index definitions/state and build failures belong in ordinary
 SQL/catalog diagnostics, and examples should demonstrate indexed access without
 requiring callers to understand partition internals.
 
-### 3. Service Development Inner Loop
+### 5. Service Development Inner Loop
 
 Fast iteration for WASM service authors through the existing artifact model.
 Native container development/logging is assigned to 0.6 alongside real OCI
@@ -469,14 +515,14 @@ authority.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|--------|-------|
-| — | `lagrange service dev-install` zero-ceremony path | 🔲 | Point at local dir, CLI wraps in OCI layout, installs without registry push or full manifest |
+| — | `lagrange service dev-install` zero-ceremony path | 🔲 | Build from local source using development defaults, then consume the canonical publish and registered-identity deployment path; no second loader or node-side local-file lookup |
 | `RM-0.5-il-service-init-scaffold` | Existing `lagrange service init` scaffold | ✅ | Shipped authoring scaffold recorded in `CHANGELOG.md` Q05-Q07; complete pilot workflow qualification remains in the rows above |
-| — | WASM hot reload in dev mode | 🔲 | File watcher detects changes, rebuilds module, swaps in running cluster without full install cycle |
-| — | Dev-mode manifest defaults | 🔲 | Minimal required fields for local development; full manifest only required for registry publish |
+| — | WASM hot reload in dev mode | 🔲 | File watcher rebuilds and publishes an immutable revision, then requests canonical activation at the stable endpoint; no mutable module swap outside lifecycle ownership |
+| — | Dev-mode manifest defaults | 🔲 | Minimal author input derives the same complete validated artifact manifest and authority used by publication and deployment |
 | — | In-process WASM debugging preserved | ✅ | DAP, breakpoints, DWARF, snapshots, replay all work because `wasm_component` loads in-process regardless of OCI packaging |
 | — | Service dev example walkthrough | 🔲 | End-to-end example: create, dev-install, iterate, debug, publish |
 
-### 4. Debugging Tools
+### 6. Debugging Tools
 
 | Item | Roadmap state |
 |------|--------|
@@ -490,13 +536,13 @@ authority.
 | Query execution tracing | 🔲 |
 | EXPLAIN EXECUTION | 🔲 |
 
-### 5. Pilot Operating Contract
+### 7. Pilot Operating Contract
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
 | RM-0.5-pilot-transport-security | Authenticated and encrypted node transport | 🔲 | Protect the supported transport before pilot use. Enterprise identity, RBAC and tenant policy remain the external 1.2 milestone. Contract: `docs/security.md`. |
 | RM-0.5-pilot-pg-authentication | Pilot PostgreSQL authentication and TLS | 🔲 | Qualify the selected driver/authentication profile, including SCRAM where required; preserve explicit trust/password/TLS limits. Enterprise identity integration remains 1.2. Contract: `architecture/postgres-wire.md`. |
-| RM-0.5-pilot-recovery-envelope | Bounded logs and pilot recovery certification | 🔲 | Qualify message-group compaction and multi-machine soak/recovery using the delivered mechanisms and 0.3.2's completed initial retention obligations. Name supported topology, capacity and fault cases; do not defer initial pilot proof to 0.9. Contract: `docs/operations-readiness.md`. |
+| RM-0.5-pilot-recovery-envelope | Bounded logs and pilot recovery certification | 🔲 | Qualify message-group compaction and multi-machine soak/recovery using delivered mechanisms and the inherited retention obligations completed by the stabilization owner. Name supported topology, capacity and fault cases; do not defer initial pilot proof to 0.9. Contract: `docs/operations-readiness.md`. |
 | RM-0.5-pilot-migration-upgrades | Pilot migration, upgrade and exit procedures | 🔲 | Data load, shadowing, cutover, rollback/exit and supported release-pair upgrade/downgrade rehearsals. Customer backup/PITR implementation remains external in 1.0. Contract: `docs/migration.md`. |
 | RM-0.5-pilot-driver-certification | Named PostgreSQL-driver and SQL profiles | 🔲 | Certify the declared current subset and necessary metadata through actual drivers. Broader catalogs, window functions, sequences and index syntax are assigned to 1.1. Contract: `architecture/postgres-wire.md`. |
 | RM-0.5-pilot-operational-view | One public operating and diagnostics view | 🔲 | Correlate requests, shard runs, partials, placement, retries and typed failures; expose index state/build failures and live-query dependencies/frontiers/maintenance mode. Basic diagnostics remain Community; advanced exporters remain external. |
@@ -512,7 +558,9 @@ A developer can run a cluster, connect with `psql`, create tables, deploy WASM,
 run distributed execution, and observe results within 30 minutes. The same
 supported profile has authenticated/encrypted node communication, a measured
 pilot capacity envelope, recovery and upgrade/rollback evidence, and actionable
-SQL/service diagnostics.
+SQL/service diagnostics. Queryable Core, standard HTTP/practical-service and
+both comparison obligations above retain their own acceptance owners; satisfying
+one does not close the others or waive this operating envelope.
 
 The 0.6 milestone consumes working `lagrange cluster init`, `lagrange node start`,
 `lagrange cluster join`, a local-cluster tutorial and aligned public package/CLI
@@ -681,7 +729,7 @@ are 1.2 in their external implementation homes.
 | Item | Roadmap state | Scope notes |
 |------|---------------|-------------|
 | Unique global secondary indexes | 🔲 | Enforce global uniqueness transactionally through synchronous maintenance, with typed refusal when the invariant cannot be maintained. |
-| Transactional uniqueness participation | 🔲 | Extend the selected 0.3.2 maintenance/read contract with uniqueness reservation and correctness; do not defer all synchronous non-unique maintenance to this phase. |
+| Transactional uniqueness participation | 🔲 | Extend the selected 0.5 maintenance/read contract with uniqueness reservation and correctness; do not defer all synchronous non-unique maintenance to this phase. |
 | Production index rebuild/backfill guarantees | 🔲 | Restart/failover-safe rebuild with measured pressure, bounded operating impact and a supported recovery envelope. |
 | Index write-amplification and capacity envelope | 🔲 | Publish representative write/read/rebuild costs for supported compound/global-index profiles. |
 | Supported ordered-key/NULL/type/collation contract | 🔲 | Stabilize the production subset exposed through PG metadata and constraints; broader compatibility is 1.1. |
@@ -720,7 +768,7 @@ Implemented, tested, certified and commercially supported remain distinct claims
 | Partial indexes | 🔲 | Predicate-scoped index membership and matching rules. |
 | Expression indexes | 🔲 | Stable expression identity and evaluation semantics before planner use. |
 | `INCLUDE` / covering syntax and index-only scans | 🔲 | Separate key/payload columns and prove visibility for base-row-free reads. |
-| Richer collation and operator semantics | 🔲 | Expand the deliberately bounded 0.3.2/1.0 ordered-key contract. |
+| Richer collation and operator semantics | 🔲 | Expand the deliberately bounded 0.5/1.0 ordered-key contract. |
 | Broader PostgreSQL index DDL | 🔲 | Compatible options and concurrent-build behavior where supported by the lifecycle contract. |
 
 ### Phase 1.1 Exit Criteria
@@ -760,9 +808,9 @@ then qualify the full Scenario B comparison against that supported contract.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
-| RM-2.0-multi-stage-execution | Multi-stage plans and streaming exchange | 🔲 | Streaming exchange, backpressure, deeper composition and concurrent invocations on one Cell through existing owners; 0.4 bounded call input remains a prerequisite. |
+| RM-2.0-multi-stage-execution | Multi-stage plans and streaming exchange | 🔲 | Streaming exchange, backpressure, deeper composition and concurrent invocations on one Cell through existing owners; 0.5 bounded call input remains a prerequisite. |
 | RM-2.0-planner-pushdown | Planner-initiated execution and richer SDKs | 🔲 | Query-planner pushdown and richer typed/generated operation handles across WASM and native providers. |
-| RM-2.0-cost-based-planning | Statistics and cost-based access planning | 🔲 | Cardinality estimates, cost-based optimizer/index selection, index intersection/union and bitmap-style plans, hints and index advisor tooling. The conservative 0.3.2 planner remains the correctness foundation. |
+| RM-2.0-cost-based-planning | Statistics and cost-based access planning | 🔲 | Cardinality estimates, cost-based optimizer/index selection, index intersection/union and bitmap-style plans, hints and index advisor tooling. The conservative Queryable Core planner completed in 0.5 remains the correctness foundation. |
 | RM-2.0-scenario-b-comparison | Complete Scenario B comparison | 🔲 | Full compute-at-data comparison using the approved workload and equivalent declared semantics; early evidence does not substitute for this complete acceptance. Scope: `solve/epics/comparative-workload-efficiency-evidence.md`. |
 
 ### 2. Advanced Provider and Placement Behavior
@@ -773,7 +821,7 @@ then qualify the full Scenario B comparison against that supported contract.
 | Activation-cost-aware placement | 🔲 | Image presence, warm runtime/WASM materialization cost, partition locality, admission/readiness and developer feedback through existing placement authority. Spec: `solve/specs/activation-cost-aware-placement/`. |
 | Advanced network operating policies | 🔲 | Adaptive timing or mixed-transport policy builds on the measured sole-transport contracts from 0.7/0.8; this does not reopen their delivery or routing ownership. |
 | Keyed invocation routing | 🔲 | Canonical actor-key extraction and transport-neutral rendezvous routing; seal a fixed-shard/epoch ownership contract. Spec: `solve/specs/request-invocation-partitioning/`. |
-| Non-request source completion | 🔲 | Complete CDC, timer, once, boot and planner-pushdown invocation through existing desired-state/Cell owners; consume the call path already established in 0.4/0.6. Plan: `solve/epics/minimal-deployment-surface.md`. |
+| Non-request source completion | 🔲 | Complete CDC, timer, once, boot and planner-pushdown invocation through existing desired-state/Cell owners; consume the call path already established in 0.5/0.6. Plan: `solve/epics/minimal-deployment-surface.md`. |
 
 ### 3. Advanced External Service API
 

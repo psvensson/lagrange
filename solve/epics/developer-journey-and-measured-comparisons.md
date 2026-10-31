@@ -43,7 +43,7 @@ authorizes:
   - .github/workflows
 ---
 
-# 0.4: One deployment path, a complete developer journey, and measured comparisons
+# One deployment path, a complete developer journey, and measured comparisons
 
 ## Decision
 
@@ -58,11 +58,14 @@ This memo does not duplicate their plan or certify the product.
 
 ## Release home and authority
 
-Initial completion belongs to the existing 0.4 Practical and Demonstrated
-Service Core milestone, using RM-0.4-wasm-public-comparison and consuming
-RM-0.4-scenario-a-comparison plus the existing service owners. It is not a new
-parallel track or an assertion that a package named 0.4.0 completed acceptance.
-Full 0.5 pilot operations and 0.6 OCI runtime qualification keep their owners.
+The post-0.4.0 amendment assigns remaining full journey/comparison acceptance to
+0.5, retaining RM-0.4-wasm-public-comparison and consuming
+RM-0.4-scenario-a-comparison plus the existing service owners. Bounded current
+claim/guard repairs target 0.4.1 and do not wait for the measurement campaign.
+The new [Hono contract](../specs/standard-http-service-api/requirements.md) owns
+the HTTP application boundary; this epic keeps artifact, revision, onboarding
+and measurement ownership. Existing pilot and 0.6 OCI qualification keep their
+owners. Publication of 0.4.0 does not discharge unfinished acceptance.
 
 This decision supersedes active comparison acceptance that permits modeled
 product results, and deployment guidance permitting local artifact sources,
@@ -71,17 +74,25 @@ records remain intact; successor work records the correction explicitly.
 
 ## Current summary
 
-- Governing source: dc07efb142f33b04e457d1abbfcc4baabdf9ede0.
-- Steering basis: AGENTS.md and rules/router last reviewed 2026-10-30.
+- Governing source: 07206ba1c8bb396f4eb097a753915bb34580d824 (v0.4.0).
+- Steering basis: rule-set revision 5; rules/router reviewed 2026-10-30.
 - Last checked: 2026-10-31.
-- Published-release observation: GitHub latest 0.3.3; main package 0.4.0.
-- Work state: planning only; no implementation Quest or measurement is started.
-- First demonstrated blocker: comparison generators manufacture values and
-  completion; deployment has multiple artifact sources and optional-store paths.
-- Next action: the integration owner begins P0 in the linked requirements, then
-  seals bounded successor Quests in its stated order.
+- Published release: GitHub v0.4.0, 2026-10-31 at 14:16:56 UTC.
+- Delivered source: canonical artifact ingestion/identity-only deployment,
+  required payload storage, stable binding revisions and JSON-object body repair;
+  comparison renderers now expose missing measurements. Reuse this work.
+- Evidence limit: the retained J1/J2 composition test builds a component but
+  executes imported JavaScript under Node and simulates restart with shared
+  in-process storage. Its summary does not establish a real WASM/remote journey.
+- First remaining blocker: composed public runtime/remote fault evidence and
+  complete original physical comparison measurements are not established by the
+  inspected composition receipt; some publication/guard claims still disagree.
+- Next action: refresh P0's claim inventory; preserve P1/P2 implementation and
+  acquire missing J1/J2 evidence with the Hono successor; continue P4-P7 through
+  the existing measurement owners. Do not restart already delivered work.
 - Continuation owner: the agent assigned this epic's integration role.
-- The absent planned acceptance receipt is intentional and cannot mean done.
+- The existing acceptance Quest/receipt remains evidence of its recorded scope;
+  this amendment neither rewrites its seal nor certifies stronger acceptance.
 
 ## Decision log
 
@@ -102,4 +113,10 @@ records remain intact; successor work records the correction explicitly.
 - 2026-10-31: Use the current executable epic schema, which requires status and
   doneWhen. The conflicting no-status prose in solve/epics/README.md is a routed
   workflow-documentation finding, not permission to fork or repair the Solver here.
+- 2026-10-31: Post-release source review credits the 0.4.0 artifact/revision/body
+  repairs. Peter's selected Hono successor owns the future Fetch/SDK boundary;
+  J1/J3 consume it, while J2 and all artifact/comparison semantics remain here.
+  Full remaining acceptance is carried to 0.5; current bounded claim repairs
+  target 0.4.1. Existing logs, sealed acceptance and old receipt claims are not
+  rewritten or promoted to real compiled/multi-host observations.
 

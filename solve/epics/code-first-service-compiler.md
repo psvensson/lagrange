@@ -160,3 +160,11 @@ ABI); 9–10 are product surface over a proven core.
   example builder. In-flight uncommitted work in `src/partition`,
   `src/rebalancer`, and `src/logging` is unrelated and out of bounds for
   every rung.
+
+- 2026-10-31: Peter selected Hono for the successor application API. The
+  [standard HTTP service requirements](../specs/standard-http-service-api/requirements.md)
+  own the 0.5 Fetch entry, scoped client and service capability boundary; the
+  existing pilot Q5 owner retains canonical multi-operation dispatch. This
+  explicitly supersedes this historical memo's per-handler DSL and continuing
+  compatibility prescriptions for new work. Recorded compiler outcomes and
+  their original acceptance remain unchanged.

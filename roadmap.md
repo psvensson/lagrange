@@ -15,13 +15,14 @@ they add. Independent bounded implementation may proceed concurrently when its
 consumed contracts are defined. One writer owns each changing interaction;
 dependent changes integrate in order and publication follows one release train.
 
-The latest GitHub published release is **0.3.3**, and the current development
-source on main is **0.4.0 (experimental alpha)**. **0.4 (Practical and
-demonstrated service core) is the active milestone**, incorporating the remaining
-0.3.1/0.3.2 queryable-core obligations along with the complete developer-journey
-and measured-comparison obligations. The package version 0.4.0 on main does not
-imply that 0.4 milestone acceptance is complete. Version targets express scope
-and priority, not shipping dates or claims of current support.
+The published baseline is **0.4.0 (experimental alpha)**. Publication does not
+complete every obligation previously allocated to the 0.4 milestone.
+**0.4.1 is the next bounded correctness and claim-repair release**; **0.5 owns
+the remaining Queryable Core, practical service, developer-journey and measured
+comparison obligations, together with standard HTTP authoring and pilot
+qualification**. Existing acceptance owners and applicable evidence carry
+forward. Version targets express scope and priority, not shipping dates or
+claims of current support.
 Use [Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md)
 for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 
@@ -29,10 +30,9 @@ for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 
 | Version | Milestone | Completion outcome |
 | --- | --- | --- |
-| 0.3.1 | Installed-product and claim corrections | Selected artifact/startup/publication repairs work for their advertised use; declarations identify remaining incomplete features. |
-| 0.3.2 | Queryable Core completion | Ordinary SQL, indexes, locking reads and live results have working public journeys on one candidate, with inherited stable-core and bounded service evidence. |
-| 0.4 | Practical and demonstrated service core | Active milestone incorporating remaining 0.3.1/0.3.2 queryable-core deliverables, the complete developer journey, and reproducible multi-machine measured comparisons. |
-| 0.5 | Pilot-ready operation | A secure deployment can be installed, operated, recovered and evaluated within a measured pilot envelope. |
+| 0.4.0 | Published implementation baseline | Released alpha implementation; outstanding feature and comparison acceptance remains explicit. |
+| 0.4.1 | Bounded correctness and claim repairs | Complete admitted generic results or refuse them explicitly, enforce byte bounds, repair stale checks and align published claims with measured support. |
+| 0.5 | Standard HTTP services and pilot-ready operation | Hono/Fetch authoring, remaining query and practical-service journeys, reproducible measured comparisons, and a secure, recoverable pilot envelope. |
 | 0.6 | Native OCI Call Cells | Real managed native services execute functions at the data through the same service model. |
 | 0.7 | Transport independence and NATS | Complete NATS-only cluster operation and effective Raft timing profiles follow a measured transport baseline. |
 | 0.8 | Veilid-only networking | The complete cluster workload works over Veilid alone within a measured envelope. |
@@ -48,11 +48,11 @@ ordinary public entrypoint and real production composition. Existing applicable
 evidence is reused; a bounded repair can complete while a wider feature remains
 open with a named owner. Publication alone does not complete a feature.
 
-Target the bounded 0.3.1 correction candidate in the next several working days,
+Target the bounded 0.4.1 correction candidate in the next several working days,
 subject to its acceptance. Review the integrated candidate, passing journeys and
 first blockers by 6 November 2026; use observed repair, review and integration
-throughput by 13 November to set or revise 0.3.2 and 0.4 windows. These are review
-horizons, not shipping promises or waiting periods. Independent 0.4 and 0.5 work
+throughput by 13 November to set or revise the 0.5 window. These are review
+horizons, not shipping promises or waiting periods. Independent 0.4.1 and 0.5 work
 can advance without creating another release sequence.
 
 ## Released - 0.1 Internal coherence
@@ -87,17 +87,31 @@ baseline for completing Queryable Core. Credit its delivered implementation
 without inferring that every public journey or inherited stabilization obligation
 passed. [PR #151](https://github.com/psvensson/lagrange/pull/151) subsequently
 merged the Scenario A framework and runtime corrections onto main. That work is
-part of the next candidate; historical branch receipts do not certify it.
+carried into later implementation baselines; historical branch receipts do not
+certify the current milestone.
 
-## Milestone - 0.3.1 Installed-product and claim corrections
+## Released - 0.4.0 Implementation baseline
 
-0.3.1 addressed selected installed-startup, artifact and publication corrections.
-With the published release at 0.3.3 and development on main at 0.4.0, remaining
-queryable-core and stabilization obligations are carried forward into the active
-0.4 milestone. A new evaluator must be able to install a supported distribution,
-boot it, create/read data and restart within the advertised correction-release
-scope. Check the installed authoring package through its documented build and
-basic deployment path.
+[0.4.0](https://github.com/psvensson/lagrange/releases/tag/v0.4.0) is the published
+alpha baseline, including its JSON-object HTTP-body correction. Preserve the
+delivered implementation and its applicable evidence. Release publication is
+separate from completing the broader practical-service and comparison promises.
+Those unfinished obligations, including inherited 0.3.1/0.3.2 work, retain their
+existing acceptance owners under the 0.4.1 and 0.5 allocations below.
+
+## Next - 0.4.1 Bounded correctness and claim repairs
+
+Repair current admitted behavior before broadening the service API. Generic
+reduction must include every admitted contribution or return an explicit bound
+error; an internal result limit must not silently discard contributions. Apply
+byte bounds before oversized partials consume the protected resource. Correct
+stale assertions and claim text, including comparative claims without qualified
+physical evidence. These are bounded repairs, not a new HTTP or query API.
+
+A new evaluator must be able to install a supported distribution, boot it,
+create/read data and restart within the advertised correction-release scope.
+Check the installed authoring package through its documented build and basic
+deployment path, reusing applicable evidence.
 
 Verify immutable published artifact identities, consumer startup and Docker Hub
 documentation readback, including honest pending or failed publication outcomes.
@@ -105,18 +119,28 @@ Correct current capability and operating declarations, and adopt the standing
 major-feature user-journey requirement. Reuse valid evidence and shared setup;
 the retrospective inventory does not make every historical feature a new gate.
 
-Independently proved bounded SQL or feature repairs may ship here. This release
-does not close all Queryable Core axes, the full distributed service journey or
-the remaining stable-core acceptance. Those obligations remain visible for
-0.3.2 with their original owners and evidence.
+Independently proved corrections to current SQL or feature guarantees may ship
+here. This release does not close all Queryable Core axes, the full distributed
+service journey, standard HTTP authoring or the remaining stable-core acceptance.
+Those obligations remain visible in 0.5 with their original owners and evidence.
 
-## Milestone - 0.3.2 Queryable Core completion
+## Planned - 0.5 Standard HTTP services and pilot-ready operation
+
+Complete the remaining query and service promises through their existing owners
+and qualify them together within the pilot operating envelope. This allocation
+supersedes the unfinished 0.3.1/0.3.2/0.4 version assignments; it does not erase
+their evidence or count publication as acceptance.
+This moves unfinished acceptance, not delivered implementation. Existing index,
+locking-read and live-query components and accepted proof remain credited; the
+HTTP-authoring change adds no new Queryable Core feature scope.
+
+### Queryable Core completion
 
 Ordinary SQL should reach the right data efficiently without physical-partition
-knowledge. Remaining 0.3.2 Queryable Core obligations - including routing, indexes,
-locking reads, and live queries - are carried forward and incorporated into the
-active 0.4 milestone. First define the supported key/row-identity and read-visibility
-contracts shared by routing, indexes, locking reads and live-query startup.
+knowledge. Remaining Queryable Core obligations include routing, indexes,
+locking reads and live queries. First define the supported key/row-identity and
+read-visibility contracts shared by routing, indexes, locking reads and
+live-query startup.
 Consume what stabilization actually delivered rather than repeat completed
 ordering or transaction repairs. Changing an access path must preserve the
 query's promised result semantics; this does not imply global snapshot isolation
@@ -142,7 +166,7 @@ The milestone has four outcomes:
    Startup, reconnect and topology changes preserve a proven result/frontier
    boundary or produce an explicit reset.
 
-0.3.2 owns completion of the global-index maintenance decision and its proof.
+0.5 owns completion of the global-index maintenance decision and its proof.
 Current research favors synchronous TX1 maintenance for ordinary non-unique
 indexes, conditional on read completeness and measured contention, fanout and
 write-availability cost.
@@ -161,33 +185,48 @@ Completion is demonstrated through declared-key lifecycle, indexed query and
 build recovery, public locking-transaction, and remote live-view journeys on one
 identified candidate. The existing stabilization owners also complete remaining
 SQL/retry/unknown-outcome, internal-ingress, retained-history, diagnostic and
-queue-bound obligations, plus the existing bounded public distributed WASI
-service journey. Its service contract does not gain 0.4's expanded features here.
+queue-bound obligations. The existing bounded public distributed WASI service
+journey remains a distinct acceptance obligation within the expanded service
+scope below.
 
 Use the merged Scenario A workload as a current-candidate semantic regression
-with honest performance observations. Full comparative qualification remains
-0.4; defects in the current promised SQL/transaction behavior cannot be deferred
-to that comparison. Relevant restart, concurrency, topology and pressure cases
+with honest performance observations. Full comparative qualification is also
+assigned to 0.5 through its existing owner and can advance independently of
+HTTP-framework work. Defects in current promised SQL/transaction behavior belong
+to the bounded 0.4.1 repair scope rather than waiting for that comparison.
+Relevant restart, concurrency, topology and pressure cases
 must preserve useful progress and cleanup through the actual public owners. See
 [PostgreSQL Locking Reads](architecture/postgres-locking-reads.md),
 [Live Query Data Plane](architecture/live-query-data-plane.md), and
 [Execution Semantics](docs/execution-semantics.md).
 
-## Active - 0.4 Practical and demonstrated service core
+### Standard HTTP authoring and practical services
 
-0.4 is the active milestone on main (package source 0.4.0, experimental alpha;
-latest GitHub published release is 0.3.3). Package version 0.4.0 on main does not
-imply 0.4 acceptance is complete. This milestone incorporates the complete
-developer-journey and measured-comparison obligations alongside the remaining
-0.3.1/0.3.2 queryable-core deliverables.
+Use the established Hono framework through a standard Fetch
+`Request -> Promise<Response>` entrypoint. Hono owns routing, middleware and
+HTTP responses. A request-scoped Lagrange SDK makes distributed calls explicit;
+service identity, registered operation authority, deadlines, cancellation and
+resource bounds remain enforced by the runtime. Replace the custom HTTP handler
+DSL in the canonical scaffold and documentation; do not retain two executable
+authoring paths.
 
-Make the code-first WASM service path useful for larger inputs and richer
-operations, then measure the declared configuration reproducibly.
+Prove the adapter with the pinned WASM toolchain before expanding framework
+compatibility claims. This is a source-level Hono integration, not a claim that
+arbitrary WASI HTTP components or Node middleware already run. Preserve full
+admitted URLs, request bytes and headers, awaited responses and typed failures
+through a bounded HTTP envelope. Initial buffering and concurrency limits must
+be explicit.
+
+Complete the practical service work carried from 0.4 through its existing
+execution owners, then measure the supported configuration reproducibly.
 
 - Narrow selectors safely from call arguments.
 - Page or stream inputs beyond one bounded shard batch through an explicit
   contract with bounded memory, cancellation and pressure behavior.
 - Support bounded structured partials and multi-operation service dispatch.
+- Complete a fresh-developer build, publish, deploy, invoke and update journey
+  through a stable public endpoint. Deployment consumes a registered immutable
+  artifact identity; nodes do not load local source or local artifact files.
 - Publish multi-machine public HTTP-to-distributed-service measurements and a
   controlled conventional-baseline comparison for the supported workload.
 - Complete the common Scenario A semantic proof and publish the first qualified
@@ -195,14 +234,18 @@ operations, then measure the declared configuration reproducibly.
   durability, full resource accounting and repeated paired measurements.
 
 A valid slower Lagrange result still completes the comparative measurement.
-Claims name their source, workload, topology and limitations. These measurements
-do not substitute for 0.5's full secure pilot/failure certification. Input paging
-within one operation belongs here; multi-stage exchange and the complete dynamic
+Use actual GCP or registered physical-lab runs; modeled results cannot establish
+comparative performance. The service comparison depends on the accepted HTTP
+and execution paths; the ordinary-SQL Scenario A comparison retains its separate
+owner and does not depend on Hono. Claims name their source, workload, topology
+and limitations. These measurements and the secure pilot/failure certification
+remain distinct obligations within 0.5. Input paging within one operation
+belongs here; multi-stage exchange and the complete dynamic
 Scenario B comparison belong to 2.0. See
 [Execution Semantics](docs/execution-semantics.md) and the
 [comparative workload contract](https://github.com/psvensson/lagrange/blob/a43ce6a9fe3c2ffd17fcb084e596a0c709ba88c9/docs/benchmarks/tidb-reference-scenarios.md).
 
-## Planned - 0.5 Pilot-ready operation
+### Pilot-ready operation
 
 A developer can install, load data, deploy a service, connect supported SQL
 clients, diagnose failure and rehearse recovery within a measured pilot profile.
@@ -213,8 +256,9 @@ clients, diagnose failure and rehearse recovery within a measured pilot profile.
 - Document and exercise data load, shadowing, cutover, rollback and exit tooling.
 - Certify named PostgreSQL-driver/SQL profiles, supported release-pair upgrade
   and downgrade procedures, and a topology/capacity/failure-domain envelope.
-- Qualify the bounded retained-log and message-group mechanisms completed in
-  0.3.2 under the declared pilot topology, load, soak and recovery profile.
+- Complete the inherited bounded retained-log obligations and qualify the
+  delivered message-group mechanisms under the declared pilot topology, load,
+  soak and recovery profile.
 - Provide one operational view of requests, shard runs, placement, retries and
   failures, plus index build/state and live-query dependency/frontier diagnostics.
 
@@ -328,7 +372,7 @@ Support named configurations with explicit, evidenced guarantees:
 
 Completion requires representative certification on named hardware/workloads and
 measured recovery objectives. Support names the qualified transport profiles and
-distinguishes availability from certification. 0.3.2 may already supply synchronous
+distinguishes availability from certification. 0.5 may already supply synchronous
 non-unique maintenance; 1.0 adds uniqueness and production guarantees. Installed
 services consume the 0.6/0.9 lifecycle and gain production compatibility,
 diagnostics, support and operating guarantees.

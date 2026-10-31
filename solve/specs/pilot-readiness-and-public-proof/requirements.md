@@ -1,178 +1,288 @@
 # Requirements: Pilot Readiness and Public-Path Proof
 
-Epic: [`solve/epics/pilot-readiness-and-public-proof.md`](../../epics/pilot-readiness-and-public-proof.md).
-Design decisions cited below as D1–D12 are the epic's binding decisions and are
-authoritative; this spec restates them as per-Quest requirements and does not
-override them.
+Epic: [pilot-readiness-and-public-proof](../../epics/pilot-readiness-and-public-proof.md).
+Design decisions D1–D12 and the epic's dated 2026-10-31 supersession govern
+this planning contract.
 
-## Release allocation
+## Release allocation and current baseline
 
-The epic's [current release allocation](../../epics/pilot-readiness-and-public-proof.md#current-release-allocation)
-places the service envelope and representative public-path proof in 0.4 and the
-complete operational pilot boundary in 0.5. Q11 still depends on Q7's
-authenticated/encrypted node transport and the other prerequisites in the
-existing ladder. Neither 0.4 service measurements nor the separately owned
-Scenario A SQL comparison can substitute for that 0.5 certification. Known
-current SQL and transaction defects remain 0.2.9 stabilization obligations;
-completion of the common semantic benchmark contract and paired comparison is
-0.4 work. These are queued version homes after current 0.2.9 stabilization;
-all sealed Quest acceptance terms and edition boundaries remain unchanged.
+The exact reviewed release is v0.4.0 at
+`07206ba1c8bb396f4eb097a753915bb34580d824`, published on 2026-10-31.
+The release contains canonical artifact publication/store activation, binding
+version pinning and JSON-object request-body normalization. It does not by
+itself complete this epic's service envelope or public-path certification.
+
+The single sequence is:
+
+1. **0.4.1 bounded correctness:** reject aggregate partial count/byte overflow
+   instead of returning a truncated generic reduction; enforce the SQL byte
+   budget before a local batch is fully retained. These repairs consume the
+   current operation contract and do not reopen ordinary SQL optimization.
+2. **0.5 service and pilot milestone:** this epic retains Q2 typed selectors,
+   Q3 explicit paged accumulation, Q4 structured partials and Q5 canonical
+   multi-operation dispatch. The
+   [standard HTTP service API](../standard-http-service-api/requirements.md)
+   owns Hono/Fetch ingress, async guest integration and its bounded sequential
+   request-scoped SDK client. The owners integrate into one supported path.
+3. Q7–Q12 remain this epic's operational pilot work with their existing
+   dependencies. Q11 cannot pass without Q7 and the other declared prerequisites.
+   Existing accepted prerequisites, including Q6, are consumed rather than
+   reopened. Later OCI and deeper concurrent composition retain their owners.
+
+This revision explicitly supersedes conflicting Q2–Q5 planning clauses:
+parallel v1 compatibility paths, a custom per-handler routing/call DSL,
+disjoint semantic group keys, implicit page combine, whole-batch run repeated
+per page, and read-committed keyset continuity. It does not rewrite historical
+Quest statements, logs or verdicts. The older source audit and decision log
+remain dated evidence.
 
 ## Scope and claim rule
 
-This spec covers the twelve Community/AGPL Quests that take the code-first
-public WASM service path from a bounded demo contract to a pilot-ready,
-publicly provable product surface. Every capability lands on the one canonical
-execution path (D1) through its existing owner (D11), is reachable from
-code-first authoring (D2), and is proven on the public path with reproducible
-receipts (D6, D7). Documentation alone never closes a Quest (D10), and every
-success path ships with its failure cases (D12).
+Every capability uses the canonical Binding resolver, invocation lifecycle,
+partition-host execution, partial coordinator and reducer through their existing
+owners (D1, D11). Code-first authoring must reach the capability through the
+normal generate/build/publish/deploy journey (D2). Runtime activation consumes
+sealed artifact bytes from the replicated payload store; local author files
+may be used during build/publication, never as a deployment/runtime fallback.
 
-Out of scope for this repository, per D8/D9 and `edition-matrix.md`:
-commercial backup/restore/PITR, enterprise SSO/RBAC/tenancy/policy providers,
-secrets/KMS integrations, and cross-region durability. Cryptographic node
-transport is explicitly NOT external — it is core cluster safety (D8).
+Commercial backup/restore/PITR, enterprise SSO/RBAC/tenancy, secrets/KMS and
+cross-region durability retain the boundaries in `edition-matrix.md`.
+Cryptographic node trust is Community/AGPL cluster safety. Capability reports
+and management outcomes must never claim implemented operations from synthetic
+defaults; correcting a false positive does not authorize a new backup product.
 
-Seven Quests carry their own detailed design spec as a sibling document in
-this directory (named per section below); this requirements file is the
-epic-level contract each of those specs must satisfy. Each Quest's acceptance
-bar is its sealed `doneWhen`: the named `scenario-harness` scenario green three
-consecutive times on live evidence.
+Existing sealed Quest acceptance remains binding. Q2–Q5 are proposed slots:
+their scenario names and gates below must become actual bounded Quest records
+and meaningful red witnesses before implementation. A proposed gate is not a
+run, a sealed verdict or a promise of performance. The epic's existing
+front-matter probe remains its recorded gate and is not rewritten here.
+
+A major feature's evidence must exercise real production composition: the
+generated compiled component, actual WASI worker/call bridge, canonical
+deployment and request ingress, and independent multi-node data hosts. Building
+a component and then importing its source into a handwritten dispatcher does
+not prove its runtime behavior. A second store owner sharing an in-process
+database does not prove a node restart, replication or leader loss. Receipts
+must retain exact source/artifact digests, original logs, actual host identities,
+workload, failure points and observed outcomes. Modelled timings and claims
+copied from earlier releases cannot satisfy a current measured result.
 
 ## Public path baseline
 
-Quest: `public-path-multinode-baseline` (Q1, gate).
+Quest: `public-path-multinode-baseline` (Q1, existing gate).
 
 - A named baseline scenario SHALL compile a code-first JavaScript service into
-  a genuine WASI component, deploy it only through generated lifecycle
-  records, and invoke it through authenticated HTTP on a cluster whose data
-  partitions live on at least two nodes.
-- The harness SHALL record per-host local row reads, partial bytes, final
-  bytes, latency distributions (p50/p95/p99), CPU, peak memory, retries, and
-  topology, and SHALL prove result parity against an independent oracle — not
-  against the service under test.
-- No internal `native_js` or legacy-callback substitution can satisfy the
-  scenario (D1, D6); shard rows SHALL be proven read locally on at least two
-  partition-host nodes with no raw shard-table query delivery across the
-  message router.
-- The scenario SHALL fail if the WASM path is replaced by `native_js`, if both
-  partitions land on one host, if metrics are synthetic, or if parity is
-  self-referential (red-on-revert).
-- The emitted report schema (digests, topology, local-read proof, latency
-  percentiles, bytes by channel, CPU, peak memory, retries, fidelity `live`)
-  SHALL be stable enough for the scale/failure certification Quest to consume
-  unchanged (D7).
+  a genuine WASI component, publish and deploy it through the canonical
+  lifecycle/payload-store owners, and invoke it through authenticated HTTP on
+  a cluster whose data partitions live on at least two independent nodes.
+- The harness SHALL record per-host local row reads, partial/final bytes,
+  latency distributions (p50/p95/p99), CPU, peak memory, retries and topology,
+  and prove result parity against an independent oracle.
+- Actual production composition SHALL execute the compiled artifact. No
+  internal native-JavaScript path, source-imported handler, handwritten
+  dispatcher or legacy callback substitution can satisfy the scenario.
+  Shard rows SHALL be read locally on at least two partition hosts without
+  raw shard-table query delivery through the message router.
+- Replacing WASI with direct JavaScript, placing all data on one host,
+  substituting modelled measurements or making the oracle self-referential
+  SHALL fail the relevant witness.
+- The original report schema and exact-head provenance SHALL be retained for
+  Q11 to consume. Missing proof is unverified; source inspection or a later
+  summary cannot manufacture a passing result.
 
-Acceptance: `scenario-harness` scenario `public-path-multinode-baseline`,
-3 consecutive, metric `priority`. Non-goal: no new harness machinery — the
-scenario registry, harness runner, and service pipeline remain the owners
-(D11); this Quest is evidence substrate, not runtime change.
+Existing acceptance: `scenario-harness` scenario
+`public-path-multinode-baseline`, 3 consecutive, metric `priority`.
+The scenario registry, harness and service pipeline remain the owners.
+This is public-path evidence substrate, not permission to build a new harness.
 
 ## Typed selector narrowing
 
-Quest: `call-selector-typed-parameter-narrowing` (Q2, gate).
+Quest slot: `call-selector-typed-parameter-narrowing` (Q2, proposed gate).
 
-- A distributed operation SHALL be able to declare typed selector parameters
-  whose values come from the authorized invocation arguments and bind through
-  the canonical SQL parameter path; the Binding remains the owner of statement
-  shape and permitted parameters (D3, D11).
-- Partition planning and local SQL SHALL use the same normalized parameter
-  set, with byte-identical values at planner and partition-host executor; SQL
-  text remains immutable and parameters participate in Binding digest/version
-  fencing.
-- Unknown or type-invalid parameters SHALL fail before dispatch. The caller
-  cannot choose a table, column, operator, tenant, or arbitrary SQL; no SQL
-  template-string interpolation is enabled (D3).
-- The code-first compiler SHALL generate the declaration without exposing raw
-  Binding names or SQL concatenation (D2); raw Binding JSON tests are
-  diagnostic only and cannot satisfy `doneWhen` (D6).
-- Semantics for nulls, numbers, strings, ranges, and missing values SHALL be
-  defined and tested; restoring full scatter (removing narrowing) SHALL fail
-  the local-read/rows-scanned metric (red-on-revert, D12).
+- A distributed operation SHALL declare typed parameter slots for a fixed
+  selector. Authorized invocation arguments supply values, not SQL syntax,
+  identifiers, operators or tenant authority. No string concatenation is
+  enabled.
+- The existing planner SHALL normalize the typed vector once. The same
+  canonical parameter bytes, slot order and digest SHALL reach partition
+  selection, every local SQL execution and each page/retry. The partition
+  host SHALL bind them through the existing SQL parameter mechanism, rather
+  than re-deriving values from JSON or passing an empty parameter list.
+- Selector/parameter schema belongs to the immutable operation/Binding
+  generation; invocation values belong to its invocation/attempt identity.
+  Both SHALL be fenced appropriately. A value change is a new invocation,
+  not an in-place change to an existing page or retry.
+- Missing, unknown, invalid, out-of-range and disallowed values SHALL fail
+  before dispatch. Null, booleans, finite numeric types, text, ranges and
+  empty values SHALL have explicit declaration and binding semantics.
+  Caller data cannot impersonate platform-derived tenant/principal values.
+- The compiler and generated SDK/types SHALL expose the declaration without
+  raw Binding names or arbitrary SQL. The real public journey SHALL narrow
+  rows before guest execution and prove results against an independent oracle.
+- The witness SHALL detect restored full scatter, divergent planner/executor
+  values, changed retry values, wrong-type/null handling and stale schema.
 
-Acceptance: `scenario-harness` scenario
-`call-selector-typed-parameter-narrowing`, 3 consecutive, metric `priority`.
-Non-goal: no second planner or alternate statement builder.
+Ordinary SQL and locking-read parameter support already exist on v0.4.0.
+They are reused; Q2 closes the service-selector plumbing and admission gap.
+It does not reopen their completed access-path/query optimization work.
+
+Proposed acceptance: scenario `call-selector-typed-parameter-narrowing`,
+3 consecutive, metric `priority`, sealed on actual public-path evidence
+before implementation. No second planner or statement builder.
 
 ## Paged execution
 
-Quest: `call-shard-paged-execution` (Q3, gate). Detailed design spec:
-`paged-execution.md` in this directory (required before implementation by the
-Quest's `spec-before-code` constraint: cursor model, snapshot behavior across
-pages, component ABI, partial limits, cancellation/deadline cleanup, ambiguous
-retry, movement between pages, retained coordination state).
+Quest slot: `call-shard-paged-execution` (Q3, proposed gate). Full contract:
+[paged-execution.md](paged-execution.md).
 
-- A call shard whose declared selector exceeds one batch SHALL execute through
-  a bounded deterministic page protocol owned by the existing call batch
-  executor; the invoker and reduce coordinator keep orchestration and
-  completion ownership (D11).
-- Every page SHALL have stable invocation/shard/page identity, advance a
-  monotonic cursor, honor the one absolute deadline and resource budgets,
-  apply backpressure, journal replay safely, and contribute to one complete
-  result without materializing the full shard or silently skipping rows (D4).
-- Silently raising `BATCH_ROW_BOUND` or other defaults until a test passes is
-  a failing result (D4).
-- The live scenario SHALL cover inputs well above 4096 rows per selected shard
-  with no lost or duplicate rows, retry and restart, replica movement between
-  pages, deadline exhaustion, backpressure, and an independent oracle;
-  removing page identity, cursor persistence, or the memory bound SHALL fail
-  deterministically (D12).
+- All inputs SHALL use one explicit bounded init/step/finish accumulator
+  lifecycle, including the single-page case. State schema and bounds are
+  declared; no host-invented combine law or repeated arbitrary whole-batch
+  run is permitted.
+- Each shard attempt SHALL read one stable retained read view. A keyset cursor
+  gives position within that view, not continuity under read-committed changes.
+  If the backend cannot supply the required view, admission SHALL refuse.
+  The actual per-shard consistency scope SHALL be stated without claiming an
+  unavailable cluster-wide snapshot.
+- A resumable transition SHALL commit cursor, recoverable accumulator bytes,
+  counters, read-view identity and accepted page identity atomically under the
+  same attempt fence. Persisting only a cursor and digest is insufficient.
+- If exact view/state/commit custody is lost, the invocation owner SHALL
+  discard the whole attempt, fence all its contributions, and return a typed
+  outcome or retry the entire invocation within its original deadline. It
+  SHALL NOT resume a new view from an old cursor or mix old and new shard state.
+- Row, early SQL byte, page, state, aggregate partial and retention limits SHALL
+  apply before unbounded materialization. At most one page transition per
+  shard is in flight; existing dispatch owners retain concurrency control.
+- Independent multi-node evidence SHALL cover inputs well above 4096 rows per
+  shard, uneven pages, concurrent data changes, ambiguous commits, duplicate
+  deliveries, restart/movement, deadline/cancellation and bounded retention.
+  Exact-boundary and single-page inputs SHALL traverse the same model.
 
-Acceptance: `scenario-harness` scenario `call-shard-paged-execution`,
-3 consecutive, metric `priority`.
+Proposed acceptance: scenario `call-shard-paged-execution`, 3 consecutive,
+metric `priority`. Stable-view, atomic-progress or whole-attempt-discard
+weakening must fail the corresponding red witness. Defaults are not raised
+to make the workload pass.
 
 ## Structured partials
 
-Quest: `call-bounded-structured-partials` (Q4). Detailed design spec:
-`structured-partials.md` in this directory.
+Quest slot: `call-bounded-structured-partials` (Q4). Full contract:
+[structured-partials.md](structured-partials.md).
 
-- The call coordination contract SHALL accept a versioned canonical structured
-  partial value with a closed type grammar — null, boolean, safe integer,
-  finite float, string, bounded list, bounded record with lexical field order —
-  and explicit byte/count budgets (D5).
-- One canonical encoding owner SHALL exist (canonical binary or canonical
-  JSON); guests and hosts agree on it, replay is byte-stable, and reducer
-  input is deterministic. The routing contract and reduce coordinator remain
-  the validation/merge owners — no second partial codec (D11).
-- Malformed, oversized, prototype-polluting, or non-canonical values SHALL
-  fail closed; duplicate cross-shard keys SHALL keep the disjoint-keys
-  fail-closed semantic for the first release (no silent merge or
-  double-counting) unless an algebraic merge contract is separately specified
-  (D5).
-- Backward compatibility: previously valid numeric-key partials SHALL continue
-  to validate and reduce unchanged; the account-summary example moves to one
-  structured record per shard. Generated editor types SHALL be exposed from
-  the code-first compiler (D2).
+- The operation SHALL declare typed finite-JSON values and state using one
+  versioned canonical codec: null, boolean, bounded finite numbers, strings,
+  arrays and records with explicit schema and resource limits.
+- Runtime delivery identity SHALL be separate from the application group
+  key. Distinct authorized deliveries with the same group key SHALL be
+  preserved. Identical replay SHALL be idempotent; conflicting replay or a
+  stale attempt SHALL fail closed.
+- The coordinator SHALL supply every admitted contribution in a specified
+  deterministic shard/emission order. The application reducer owns grouping,
+  aggregation and explicit top-K. No implicit merge law, numeric ranking or
+  generic truncation is allowed.
+- Per-value, per-shard and aggregate count/byte/depth limits SHALL be enforced
+  by the shared codec and existing coordination owners before excessive
+  retention. Overflow SHALL prevent successful reduction of a subset.
+- Numeric values remain a subset of the canonical grammar, with one wire
+  contract. Old bare-number encoding is not a parallel compatibility path.
+  Generated types and artifacts SHALL migrate through Q5's canonical cutover.
+- The real account-summary journey SHALL include the same account group on
+  multiple shards, structured sum/count contributions and independent total/
+  weighted-average parity, plus replay, malformed input and aggregate-overflow
+  attacks. A numeric-only single-shard demonstration is insufficient.
 
-Acceptance: `scenario-harness` scenario `call-bounded-structured-partials`,
-3 consecutive, metric `priority`.
+Proposed acceptance: scenario `call-bounded-structured-partials`,
+3 consecutive, metric `priority`; actual Quest and meaningful red witness
+required before runtime implementation.
 
-## Service cell v2 default
+## One canonical multi-operation service target
 
-Quest: `service-cell-v2-default-multi-operation` (Q5).
+Quest slot: `service-cell-v2-default-multi-operation` (Q5).
 
-- The default code-first generate/build/deploy pipeline SHALL emit the
-  current handler-aware service-cell and Binding contract: at least two
-  distributed operations and multiple HTTP handlers in one component, each
-  call routed by immutable operation identity, with generated per-handler
-  least-authority policies.
-- This is default-cutover plus compatibility work, not new mechanism work
-  (epic decision log, 2026-08-07): the v2 mechanism is landed and SOLVED; the
-  service-source contract, entry generator, deployment-record generator, and
-  `CallCellInvoker` remain the owners (D11).
-- The v2 path SHALL be the live default of the public CLI, evidenced by a
-  fresh code-first multi-operation service building and invoking through the
-  default commands; a flag that leaves v1 as the live default is an unfinished
-  cutover and cannot outlive the session.
-- Previously deployed v1 artifacts SHALL remain invocable with their existing
-  behavior on the same node, without a second runtime path (D1, D11).
-- Cross-operation confusion, stale handler or operation IDs, and per-handler
-  policy escalation SHALL fail closed; the passing shape is a service exposing
-  two routes that call different operations plus a route authorized for only
-  one (D12).
+- The public default generate/build/publish/deploy pipeline SHALL target the
+  one current generic operation-dispatch contract. A fresh service SHALL
+  support both an HTTP-only component with zero distributed operations and a
+  component with at least two immutable operation identities. An empty
+  operation declaration must build and run without a fabricated no-op operation.
+- Existing service-source, entry-generation, deployment-record, Binding and
+  call-invoker owners SHALL perform the cutover. Reuse the landed v2
+  substrate; do not invent a second dispatch mechanism.
+- The old target SHALL cease to be an executable alternate path. Unsupported
+  old artifacts SHALL produce a typed upgrade/rebuild requirement through the
+  same admission owner. There is no v1 flag, compatibility runtime or fallback
+  that outlives the cutover.
+- HTTP authoring SHALL use the Hono/Fetch contract in
+  [standard-http-service-api/requirements.md](../standard-http-service-api/requirements.md).
+  This epic SHALL NOT preserve a per-handler route descriptor, `calls` list
+  or injected `call/json` handler dialect.
+- The Hono epic owns the request-scoped SDK, authorization boundary, async
+  adapter and bounded sequential calls with unique child identities. Q5 owns
+  operation-ID correctness below that client. The same compiled public
+  journey SHALL prove their interaction without duplicating either owner.
+- A service with multiple routes and operations SHALL preserve the declared
+  call authority, Binding generation, deadline and caller context. Unknown,
+  stale, forged or unauthorized operation identities SHALL fail closed.
+  Route middleware is not a replacement for the canonical capability gate.
+- A separate HTTP-only artifact with zero operations SHALL build, publish,
+  deploy and answer a normal Hono request through the compiled runtime. A
+  health route inside a service that also has operations does not prove this.
+- The public journey SHALL build and publish a compiled artifact, remove the
+  publisher's source directory, deploy by artifact identity from a clean
+  client and invoke/update the same endpoint through the actual runtime.
+  Cross-node activation and restart proof require independent nodes and real
+  process failure, not another owner over the same fixture database.
 
-Acceptance: `scenario-harness` scenario
-`service-cell-v2-default-multi-operation`, 3 consecutive, metric `priority`.
+Proposed acceptance: scenario `service-cell-v2-default-multi-operation`,
+3 consecutive, metric `priority`, integrated with the Hono epic's public
+journey. Its Quest must seal a bounded meaningful red witness; this planning
+revision grants no implementation or measured-readiness claim.
+
+### Direct public call identity and replay — 0.5
+
+This is a bounded integration obligation of Q5 through the existing service
+lifecycle SQL contract, CLI and CallCellInvoker. It is not a second transport,
+invocation owner or idempotency store.
+
+- Public `CALL BINDING` SHALL accept an optional explicit invocation key.
+  The CLI and existing SQL payload grammar SHALL preserve it to the canonical
+  invocation owner; generated operation clients SHALL use the same contract.
+- In the direct-call namespace, lookup uses authenticated tenant, principal
+  and the supplied key. Operation identity, immutable Binding/artifact
+  generation, canonical typed arguments and relevant authorization context
+  form the stored intent to compare; changing them must not create a new lookup
+  namespace that silently bypasses conflict detection. The owner SHALL persist
+  admission and replay state through its existing durable mechanisms before
+  treating a delivery as accepted. Current authentication and operation grants
+  are checked before returning retained results.
+- Repeating the same key and intent within its declared retention window
+  SHALL observe the original invocation: pending/uncertain, failed or complete
+  as applicable. A changed argument, explicitly selected operation/generation
+  or authority under the same key SHALL return a typed conflict, not start
+  another execution. A retry of the same logical target consumes its recorded
+  immutable generation, even if the deployment's ready revision has advanced;
+  only a newly admitted key resolves the new revision.
+- Retry SHALL retain the original deadline, outcome uncertainty and effect
+  obligations. A lost reply is not permission to re-mint identity or infer
+  rollback. Caller cancellation does not establish that admitted work had no
+  effect. The API SHALL not promise exactly-once physical execution.
+- The owning contract SHALL declare finite replay/result/tombstone retention
+  and key-expiry behavior before implementation. The supported retry window
+  and behavior after it expires SHALL be visible to callers; an expired key
+  cannot silently be advertised as a protected replay. Resource cleanup
+  follows the existing invocation lifetime owner.
+- Omitting a key retains ordinary invocation admission. A timeout/lost answer
+  without a key SHALL preserve an explicit unknown-outcome warning and no
+  general automatic-retry guarantee.
+- HTTP method, URL, headers and body belong only to the Hono HTTP layer's
+  request-intent comparison. SQL callers SHALL not fabricate an HTTP request,
+  and the shared operation owner SHALL not maintain a second HTTP-specific
+  idempotency store.
+
+Public SQL/CLI evidence SHALL exercise same-intent retry, changed-intent
+conflict, lost reply, process restart, retained pending/completed outcome and
+expiry/cleanup on independent nodes. The Hono journey consumes this same
+invocation identity behavior; source-level payload acceptance alone cannot
+satisfy the integration obligation.
 
 ## Learner promotion progress
 
