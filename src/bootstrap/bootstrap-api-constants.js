@@ -12,6 +12,9 @@ const BOOTSTRAP_API_ROUTE = Object.freeze({
   BOOTSTRAP: '/bootstrap',
   REGISTER_SERVICE: '/register-service',
   CLUSTER_STATE: '/cluster/state',
+  MANAGEMENT_FACTS: '/management/v1/facts',
+  MANAGEMENT_OPERATIONS: '/management/v1/operations',
+  MANAGEMENT_OPERATION_BY_ID: '/management/v1/operations/:operationId',
 });
 
 const BOOTSTRAP_API_HEALTH_STATUS = 'healthy';
