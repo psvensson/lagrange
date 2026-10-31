@@ -15,6 +15,10 @@ import {
 import {
   buildLiveMovementAndScenarioCScalingExperiment, buildScaleout3To5Rf3Experiment,
 } from './comparative-matrix-runner.js';
+import {
+  DEFAULT_SCENARIO_SETUP_BREAKDOWN_SVG_PATH, renderScenarioSetupBreakdownHtmlSection,
+  renderScenarioSetupBreakdownMarkdownSection, renderScenarioSetupBreakdownSvg,
+} from './scenario-setup-breakdown-renderer.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayJoin = Function.call.bind(Array.prototype.join);
@@ -107,6 +111,7 @@ function renderComparativeLandingMarkdown(matrix) {
   const matrixRows = renderExecutiveMatrixRowsMd(targets);
   const scaleoutSection = renderScaleoutSummaryMarkdownSection(scaleoutExp);
   const scenCSection = renderScenarioCSummaryMarkdownSection(targets, jointExp);
+  const setupSection = renderScenarioSetupBreakdownMarkdownSection(matrix);
   const shapeRows = renderShapesRowsMd(targets);
   const milestoneRows = renderMilestoneRowsMd(matrix?.lagrangeEvolutionTimeline);
   const provRows = renderProvenanceRowsMd(targets);
@@ -129,6 +134,7 @@ function renderComparativeLandingMarkdown(matrix) {
     `${matrixRows}\n\n` +
     `${scaleoutSection}\n\n` +
     `${scenCSection}\n\n` +
+    `${setupSection}\n\n` +
     '## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))\n\n' +
     '![Scenario B Per-Shape Locality Crossover](scenario-b-shape-crossover.svg)\n\n' +
     '| System / Configuration | Graph Shape | Decisions/sec | Latency p99 (ms) | Round Trips | Wire Bytes |\n' +
@@ -155,6 +161,7 @@ function renderComparativeLandingHtml(matrix) {
   const matrixTrs = renderExecutiveMatrixRowsHtml(targets);
   const scaleoutCard = renderScaleoutSummaryHtmlSection(scaleoutExp);
   const scenCCard = renderScenarioCSummaryHtmlSection(targets, jointExp);
+  const setupCard = renderScenarioSetupBreakdownHtmlSection(matrix);
   const shapeTrs = renderShapesRowsHtml(targets);
   const milestoneTrs = renderMilestoneRowsHtml(matrix?.lagrangeEvolutionTimeline);
   const provTrs = renderProvenanceRowsHtml(targets);
@@ -188,6 +195,7 @@ function renderComparativeLandingHtml(matrix) {
     '    </div>\n' +
     `${scaleoutCard}\n` +
     `${scenCCard}\n` +
+    `${setupCard}\n` +
     '    <div class="card">\n' +
     '      <h2>Scenario B Workload-Shape Progression</h2>\n' +
     '      <div class="chart-box"><img src="scenario-b-shape-crossover.svg" alt="Scenario B Per-Shape Locality Crossover"/></div>\n' +
@@ -218,20 +226,23 @@ function renderComparativeLandingHtml(matrix) {
 async function writeComparativeLandingArtifacts(options = {}) {
   const matrix = options.matrix || options;
   const svgPath = options.svgPath || DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH;
+  const setupSvgPath = options.setupSvgPath || DEFAULT_SCENARIO_SETUP_BREAKDOWN_SVG_PATH;
   const markdownPath = options.markdownPath || DEFAULT_COMPARATIVE_LANDING_MD_PATH;
   const htmlPath = options.htmlPath || DEFAULT_COMPARATIVE_LANDING_HTML_PATH;
-  for (const p of [svgPath, markdownPath, htmlPath]) {
+  for (const p of [svgPath, setupSvgPath, markdownPath, htmlPath]) {
     await mkdir(path.dirname(p), {recursive: true});
   }
   await writeFile(svgPath, renderComparativeOverviewSvg(matrix), 'utf8');
+  await writeFile(setupSvgPath, renderScenarioSetupBreakdownSvg(matrix), 'utf8');
   await writeFile(markdownPath, renderComparativeLandingMarkdown(matrix), 'utf8');
   await writeFile(htmlPath, renderComparativeLandingHtml(matrix), 'utf8');
-  return {svgPath, markdownPath, htmlPath};
+  return {svgPath, setupSvgPath, markdownPath, htmlPath};
 }
 
 export {
   CANONICAL_DEFAULT_TARGETS, DEFAULT_COMPARATIVE_LANDING_HTML_PATH,
   DEFAULT_COMPARATIVE_LANDING_MD_PATH, DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH,
-  renderComparativeLandingHtml, renderComparativeLandingMarkdown,
-  renderComparativeOverviewSvg, writeComparativeLandingArtifacts,
+  DEFAULT_SCENARIO_SETUP_BREAKDOWN_SVG_PATH, renderComparativeLandingHtml,
+  renderComparativeLandingMarkdown, renderComparativeOverviewSvg,
+  renderScenarioSetupBreakdownSvg, writeComparativeLandingArtifacts,
 };

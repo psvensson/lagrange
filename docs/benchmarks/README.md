@@ -114,6 +114,48 @@ decision load. Detailed analysis: [Scenario C Feature-Store Comparison](scenario
 | PG 17 + Valkey 8 (Sync) | 310.00 | 890.00 | 1620.00 | 1.85% | 640.0s | 118.0s | 3 |
 | PG 17 + Valkey 8 (Async) | 0.00 | 0.00 | 2180.00 | 11.40% | 820.0s | 165.0s | 4 |
 
+## Scenario setup diagrams and where time is spent (Scenario A, B, and C latency breakdown)
+
+![Scenario A, B, and C Setup Topology and Phase Latency Breakdown](scenario-setup-time-breakdown.svg)
+
+### Scenario A Contended OLTP Latency Breakdown (p95 ms)
+
+| Target | Wire (ms) | Parse/Plan (ms) | Lock Wait (ms) | 2PC Prepare (ms) | Quorum Fsync (ms) | Apply (ms) | Total p95 (ms) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| PG 17 Single Primary + App | 12.0 | 14.0 | 142.0 | 0.0 | 218.6 | 26.0 | 412.6 |
+| Citus 13 Sharded RF=3 + App | 14.0 | 22.0 | 198.0 | 145.0 | 268.0 | 38.0 | 685.0 |
+| PG 17 Patroni Sync HA RF=3 | 14.0 | 16.0 | 210.0 | 0.0 | 638.5 | 42.0 | 920.5 |
+| TiDB + TiKV RF=3 (6-unit) | 16.0 | 28.0 | 340.0 | 312.0 | 615.2 | 72.0 | 1383.2 |
+| Lagrange 0.4.0 (5-Node RF=3 Fast-Path) | 15.0 | 24.0 | 395.0 | 286.0 | 692.0 | 78.0 | 1490.0 |
+| Lagrange 0.3.0 (3-Node Lab Baseline) | 18.0 | 35.0 | 2180.0 | 680.0 | 1385.9 | 120.0 | 4418.9 |
+
+### Scenario B Distributed Risk Decision Latency Breakdown (p99 ms)
+
+| Target | Ingress (ms) | Reducer (ms) | WAN Wait (ms) | Wire Decode (ms) | Steady p99 (ms) | Move Delta (ms) | WAN Bytes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Lagrange 0.4.0 (Colocated WASI ctx.call) | 1.8 | 15.8 | 4.0 | 0.8 | 22.4 | 4.0 | 144 |
+| Apache Ignite 3 (JobTarget.colocated) | 2.0 | 12.4 | 6.2 | 2.2 | 22.8 | 15.8 | 820 |
+| PG 17 Patroni + PL/pgSQL Function | 2.0 | 16.4 | 4.0 | 2.8 | 25.2 | 0.0 | 960 |
+| Citus 13 (Colocated Dist Function) | 2.2 | 13.0 | 8.0 | 3.6 | 26.8 | 57.2 | 1540 |
+| YugabyteDB 2024.2 (YSQL Stored Proc) | 2.4 | 15.2 | 11.4 | 5.6 | 34.6 | 27.4 | 2420 |
+| TiDB + TiKV (App-Orchestrated SQL) | 2.6 | 10.2 | 24.0 | 11.8 | 48.6 | 43.8 | 6144 |
+
+### Scenario C Streaming Feature Evaluation & Freshness Breakdown
+
+| Target | Ingest Quorum (ms) | Prop Lag (ms) | Compute (ms) | 0ms Fresh (dec/s) | 5x Scale (dec/s) | Backfill (s) | Downtime (s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Lagrange (In-Partition Rollup + Epoch-Lazy Opt) | 2.2 | 0.0 | 1.4 | 684.0 | 2860.0 | 2.4 | 0.0 |
+| Lagrange 0.4.0 (On-Read Raw Window Scan) | 2.2 | 0.0 | 7.8 | 441.2 | 1840.0 | 0.0 | 0.0 |
+| PG 17 Patroni + PL/pgSQL (On-Read Scan) | 3.4 | 0.0 | 11.2 | 316.8 | 480.0 | 0.0 | 0.0 |
+| PG 17 + Valkey 8 (Sync Write-Through) | 3.4 | 4.2 | 3.4 | 310.0 | 890.0 | 185.0 | 185.0 |
+| PG 17 + Valkey 8 (Async CDC Stream) | 3.4 | 65.0 | 2.6 | 0.0 | 0.0 | 240.0 | 240.0 |
+
+### Latency and Architecture Breakdown Analysis
+
+- **Why rule-change backfill cost makes the scenarios look more similar**: In `v0.4.0`, Lagrange and `PG 17 + PL/pgSQL` achieve `0.0 s` rule-change backfill by evaluating features on-demand over raw events (`O(W)` scan, `7.8 ms` compute), making Lagrange's Scenario C throughput (`441.2 dec/s`) identical to Scenario B while `PG + Valkey` pays `185-820 s` network backfill downtime that erodes its `O(1)` cache read lead under regular rule updates.
+- **How Lagrange improves Scenario C (`684.0 dec/s` at `1x`, `2860.0 dec/s` at `5x`, `0.0 s` decision downtime)**: (a) In-partition Raft-apply delta rollups (`1.4 ms` `O(1)` local accumulator read at `0 ms` SLA), (b) decomposable 1-minute micro-bucket sketches (`0.0 s` backfill for window/weight changes), and (c) `feature_epoch`-watermarked lazy on-read cutover + local page-cache background warming (`2.4 s` local replay with `0.0 s` decision downtime and `0 B` network backfill).
+
+
 ## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
 ![Scenario B Per-Shape Locality Crossover](scenario-b-shape-crossover.svg)

@@ -31,8 +31,9 @@ import {
 import {
   CANONICAL_DEFAULT_TARGETS, DEFAULT_COMPARATIVE_LANDING_HTML_PATH,
   DEFAULT_COMPARATIVE_LANDING_MD_PATH, DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH,
-  renderComparativeLandingHtml, renderComparativeLandingMarkdown,
-  renderComparativeOverviewSvg, writeComparativeLandingArtifacts,
+  DEFAULT_SCENARIO_SETUP_BREAKDOWN_SVG_PATH, renderComparativeLandingHtml,
+  renderComparativeLandingMarkdown, renderComparativeOverviewSvg,
+  renderScenarioSetupBreakdownSvg, writeComparativeLandingArtifacts,
 } from '../../test/distributed/harness/comparative-landing-page.js';
 import {
   DEFAULT_SCENARIO_C_PROGRESS_HTML_PATH, DEFAULT_SCENARIO_C_PROGRESS_MD_PATH,
@@ -65,16 +66,13 @@ const REQUIRED_TARGET_IDS = Object.freeze([
   TARGET_YUGABYTE_YSQL, TARGET_YUGABYTE_PROC, TARGET_IGNITE_COMPUTE,
   TARGET_PG_VALKEY_SYNC, TARGET_PG_VALKEY_ASYNC,
 ]);
-const EXPECTED_COMPLETED_SLICES = 5;
-const EXPECTED_REMAINING_SLICES = 0;
+const EXPECTED_COMPLETED_SLICES = 5; const EXPECTED_REMAINING_SLICES = 0;
 const MARKER_LOCALITY_CONTROL_MD = 'Three-way locality control'; const MARKER_LOCALITY_CONTROL_HTML = 'Three-Way Locality Control';
 const MARKER_CITUS_LOCALITY_MD = 'Entity-locality progression'; const MARKER_CITUS_LOCALITY_HTML = 'Entity-Locality Progression';
 const MARKER_IGNITE_COLOCATED_MD = 'Colocated compute comparison'; const MARKER_IGNITE_COLOCATED_HTML = 'Colocated Compute Comparison';
 const MARKER_SCENARIO_C_FRESHNESS_MD = 'Feature-freshness SLA tradeoff'; const MARKER_SCENARIO_C_FRESHNESS_HTML = 'Feature-Freshness SLA Tradeoff';
-const SHAPE_LOCAL_ONLY = 'local-only';
-const SHAPE_ONE_REMOTE = 'one-remote-stage';
-const SHAPE_SEQUENTIAL = 'sequential';
-const SHAPE_FAN_OUT = 'fan-out';
+const SHAPE_LOCAL_ONLY = 'local-only'; const SHAPE_ONE_REMOTE = 'one-remote-stage';
+const SHAPE_SEQUENTIAL = 'sequential'; const SHAPE_FAN_OUT = 'fan-out';
 const REQUIRED_SHAPE_IDS = Object.freeze([
   SHAPE_LOCAL_ONLY, SHAPE_ONE_REMOTE, SHAPE_SEQUENTIAL, SHAPE_FAN_OUT,
 ]);
@@ -87,6 +85,7 @@ const LINK_CITUS_PROGRESS = 'citus-comparison-progress.md';
 const LINK_YUGABYTE_IGNITE_PROGRESS = 'yugabyte-ignite-comparison-progress.md';
 const LINK_SCENARIO_C_PROGRESS = 'scenario-c-feature-store-progress.md';
 const LINK_CROSSOVER_SVG = 'scenario-b-shape-crossover.svg';
+const LINK_SETUP_BREAKDOWN_SVG = 'scenario-setup-time-breakdown.svg';
 const README_PATH = 'README.md'; const DOCS_README_PATH = 'docs/README.md';
 const LINK_BENCHMARKS_README = 'benchmarks/README.md'; const LINK_BENCHMARKS_INDEX = 'benchmarks/index.html';
 const ERR_TARGETS_MISSING = 'All required targets must be present';
@@ -129,13 +128,14 @@ function verifyComparativeMatrix(matrix) {
 function verifyBenchmarkDocumentsAndLinks(rootDir) {
   const docRelPaths = [
     DEFAULT_COMPARATIVE_LANDING_MD_PATH, DEFAULT_COMPARATIVE_LANDING_HTML_PATH,
-    DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH, DEFAULT_POSTGRESQL_PROGRESS_MD_PATH,
-    DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH, DEFAULT_POSTGRESQL_PROGRESS_SVG_PATH,
-    DEFAULT_CITUS_PROGRESS_MD_PATH, DEFAULT_CITUS_PROGRESS_HTML_PATH,
-    DEFAULT_CITUS_PROGRESS_SVG_PATH, DEFAULT_YUGABYTE_IGNITE_PROGRESS_MD_PATH,
-    DEFAULT_YUGABYTE_IGNITE_PROGRESS_HTML_PATH, DEFAULT_YUGABYTE_IGNITE_PROGRESS_SVG_PATH,
-    DEFAULT_SCENARIO_C_PROGRESS_MD_PATH, DEFAULT_SCENARIO_C_PROGRESS_HTML_PATH,
-    DEFAULT_SCENARIO_C_PROGRESS_SVG_PATH, DEFAULT_SCENARIO_B_CROSSOVER_SVG_PATH,
+    DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH, DEFAULT_SCENARIO_SETUP_BREAKDOWN_SVG_PATH,
+    DEFAULT_POSTGRESQL_PROGRESS_MD_PATH, DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH,
+    DEFAULT_POSTGRESQL_PROGRESS_SVG_PATH, DEFAULT_CITUS_PROGRESS_MD_PATH,
+    DEFAULT_CITUS_PROGRESS_HTML_PATH, DEFAULT_CITUS_PROGRESS_SVG_PATH,
+    DEFAULT_YUGABYTE_IGNITE_PROGRESS_MD_PATH, DEFAULT_YUGABYTE_IGNITE_PROGRESS_HTML_PATH,
+    DEFAULT_YUGABYTE_IGNITE_PROGRESS_SVG_PATH, DEFAULT_SCENARIO_C_PROGRESS_MD_PATH,
+    DEFAULT_SCENARIO_C_PROGRESS_HTML_PATH, DEFAULT_SCENARIO_C_PROGRESS_SVG_PATH,
+    DEFAULT_SCENARIO_B_CROSSOVER_SVG_PATH,
   ];
   const contents = {};
   for (const relPath of docRelPaths) {
@@ -162,7 +162,7 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
   for (const link of [
     LINK_TIDB_PROGRESS, LINK_POSTGRES_PROGRESS, LINK_CITUS_PROGRESS,
     LINK_YUGABYTE_IGNITE_PROGRESS, LINK_SCENARIO_C_PROGRESS, LINK_CROSSOVER_SVG,
-    LINK_SCENARIO_C,
+    LINK_SETUP_BREAKDOWN_SVG, LINK_SCENARIO_C,
   ]) {
     assert.equal(stringIncludes(landingMd, link), true);
     assert.equal(stringIncludes(landingHtml, link), true);
@@ -237,6 +237,7 @@ function verifyHarnessRendererParity(rootDir, matrix) {
     [renderComparativeLandingMarkdown, DEFAULT_COMPARATIVE_LANDING_MD_PATH],
     [renderComparativeLandingHtml, DEFAULT_COMPARATIVE_LANDING_HTML_PATH],
     [renderComparativeOverviewSvg, DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH],
+    [renderScenarioSetupBreakdownSvg, DEFAULT_SCENARIO_SETUP_BREAKDOWN_SVG_PATH],
   ]) {
     assert.equal(renderer(testMatrix), fs.readFileSync(path.resolve(rootDir, relPath), UTF8));
   }
