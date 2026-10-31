@@ -38,7 +38,8 @@ Implementation rule:
 | Cluster deployment experience | Community | AGPL repo | 0.5 | AGPL feature map (agent steering) | Yes | Community operator UX |
 | Developer workflow and debugging | Community | AGPL repo | 0.5 | AGPL feature map (agent steering) | Yes | Community developer experience |
 | System service foundations | Community | AGPL repo | 0.6 minimum; 0.9 complete lifecycle; 1.0 support | AGPL feature map (agent steering) | Yes | Shared substrate remains in scope here even when it enables paid services |
-| Backup / Restore / PITR | Pro | External / commercial | 1.0 | Cross-edition visibility plus external paid backlog | No | First-party paid system service |
+| Coordinated cluster backup and restore (L3 / BYOC) | Community | AGPL repo | 0.5 | AGPL feature map (agent steering) | Yes | On-demand cluster-consistent snapshot export and restore via `management-v1` L3 for BYOC and pilot recovery |
+| Automated backup scheduling and continuous PITR | Pro | External / commercial | 1.0 | Cross-edition visibility plus external paid backlog | No | Scheduled backups, continuous WAL/log PITR, and managed retention |
 | PostgreSQL compatibility | Community | AGPL repo | 0.4.1 bounded current repairs; 0.5 unfinished inherited semantics and driver certification; 1.1 breadth | AGPL feature map (agent steering) | Yes | Community database compatibility |
 | Security and tenancy | Enterprise | External / commercial | 1.2 | Cross-edition visibility plus external paid backlog | No | Tenant isolation, RBAC, enterprise security controls |
 | Cross-region replication | Enterprise | External / commercial | 1.2 | Cross-edition visibility plus external paid backlog | No | Enterprise durability and replication feature set |

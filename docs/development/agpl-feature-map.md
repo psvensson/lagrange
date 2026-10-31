@@ -492,13 +492,15 @@ bootstrap flow, and upgrade behavior before more task expansion begins.
 | `RM-0.5-dw-wasm-manifest` | WASM deployment via manifest | ✅ |
 | `RM-0.5-dw-cli-wasm-publish` | Qualified WASM publication workflow | 🔲 |
 | `RM-0.5-dw-cli-wasm-deploy` | Qualified WASM service deployment workflow | 🔲 |
-| `RM-0.5-dw-cli-wasm-scale` | Qualified WASM service scaling workflow | 🔲 |
+| `RM-0.5-dw-cli-wasm-scale` | Policy-driven WASM service scaling workflow | 🔲 |
 | `RM-0.5-dw-getting-started` | Complete pilot getting-started journey | 🔲 |
 
 The existing service init/generate/build/deploy and lifecycle commands are
 implementation material, with the 0.2.7 authoring/package corrections recorded
 in `CHANGELOG.md`. The rows above require coherent installed-consumer pilot
-journeys, not another WASM command family. Stable `cli-wasm` row IDs do not
+journeys, not another WASM command family. Service scaling in 0.5 is strictly
+policy-driven (reconciler placement and demand-driven activation leases; no
+manual `lagrange service scale` CLI command). Stable `cli-wasm` row IDs do not
 prescribe a namespace beside the canonical service CLI.
 
 The 0.5 onboarding and operator surface should make the completed access paths easy
@@ -515,12 +517,11 @@ authority.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|--------|-------|
-| — | `lagrange service dev-install` zero-ceremony path | 🔲 | Build from local source using development defaults, then consume the canonical publish and registered-identity deployment path; no second loader or node-side local-file lookup |
 | `RM-0.5-il-service-init-scaffold` | Existing `lagrange service init` scaffold | ✅ | Shipped authoring scaffold recorded in `CHANGELOG.md` Q05-Q07; complete pilot workflow qualification remains in the rows above |
-| — | WASM hot reload in dev mode | 🔲 | File watcher rebuilds and publishes an immutable revision, then requests canonical activation at the stable endpoint; no mutable module swap outside lifecycle ownership |
-| — | Dev-mode manifest defaults | 🔲 | Minimal author input derives the same complete validated artifact manifest and authority used by publication and deployment |
-| — | In-process WASM debugging preserved | ✅ | DAP, breakpoints, DWARF, snapshots, replay all work because `wasm_component` loads in-process regardless of OCI packaging |
-| — | Service dev example walkthrough | 🔲 | End-to-end example: create, dev-install, iterate, debug, publish |
+| `RM-0.5-il-wasm-hot-reload` | WASM hot reload in dev mode (`lagrange service watch`) | 🔲 | File watcher runs the canonical `generate -> build -> publish -> deploy` pipeline through `ArtifactPayloadStore` and activates the new immutable revision at the stable endpoint; `lagrange service dev-install` is retired so no local-file runtime bypass exists |
+| `RM-0.5-il-dev-manifest-defaults` | Dev-mode manifest defaults | 🔲 | Minimal author input derives the same complete validated artifact manifest and authority used by publication and deployment |
+| `RM-0.5-il-in-process-debugging` | In-process WASM debugging preserved | ✅ | DAP, breakpoints, DWARF, snapshots, replay all work because `wasm_component` loads in-process regardless of OCI packaging |
+| `RM-0.5-il-service-dev-walkthrough` | Service dev example walkthrough | 🔲 | End-to-end example: create, watch (`generate -> build -> publish -> deploy`), iterate, debug, publish |
 
 ### 6. Debugging Tools
 
@@ -540,10 +541,10 @@ authority.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
-| RM-0.5-pilot-transport-security | Authenticated and encrypted node transport | 🔲 | Protect the supported transport before pilot use. Enterprise identity, RBAC and tenant policy remain the external 1.2 milestone. Contract: `docs/security.md`. |
-| RM-0.5-pilot-pg-authentication | Pilot PostgreSQL authentication and TLS | 🔲 | Qualify the selected driver/authentication profile, including SCRAM where required; preserve explicit trust/password/TLS limits. Enterprise identity integration remains 1.2. Contract: `architecture/postgres-wire.md`. |
+| RM-0.5-pilot-transport-security | Authenticated and encrypted node transport | 🔲 | Pluggable `ClusterTrustProvider` (built-in `_raft_cp` Issuing CA default + external cert file override), `lgr_join_v1_<base64url>` join token with CA SHA-256 fingerprint and CSR enrollment, hierarchical SAN URI `lagrange://<clusterId>/node/<nodeId>` (extensible to `/service/.../cell/...` for 0.6 OCI) plus signed `IDENTIFY` envelope for 0.7/0.8, and composable `cluster init` / `cluster join` / idempotent `node start`. Contract: `solve/specs/pilot-readiness-and-public-proof/node-transport-security.md`. |
+| RM-0.5-pilot-pg-authentication | Pilot PostgreSQL authentication and TLS | 🔲 | Full PostgreSQL authentication in 0.5: `SCRAM-SHA-256`, `SCRAM-SHA-256-PLUS` (TLS channel binding `tls-server-end-point`), `cert` (mTLS client cert verification), `password` over TLS, loopback `trust`, and durable role/verifier management. Enterprise SSO/OIDC remains 1.2. Contract: `solve/specs/pilot-readiness-and-public-proof/node-transport-security.md`. |
 | RM-0.5-pilot-recovery-envelope | Bounded logs and pilot recovery certification | 🔲 | Qualify message-group compaction and multi-machine soak/recovery using delivered mechanisms and the inherited retention obligations completed by the stabilization owner. Name supported topology, capacity and fault cases; do not defer initial pilot proof to 0.9. Contract: `docs/operations-readiness.md`. |
-| RM-0.5-pilot-migration-upgrades | Pilot migration, upgrade and exit procedures | 🔲 | Data load, shadowing, cutover, rollback/exit and supported release-pair upgrade/downgrade rehearsals. Customer backup/PITR implementation remains external in 1.0. Contract: `docs/migration.md`. |
+| RM-0.5-pilot-migration-upgrades | Pilot migration, upgrade, coordinated backup/restore (L3) and exit procedures | 🔲 | Data load, shadowing, cutover, rollback/exit, coordinated on-demand cluster Backup/Restore (`management-v1` L3 in Community/AGPL Core for BYOC), and supported release-pair upgrade/downgrade rehearsals. Commercial automated backup scheduling, continuous PITR, and cross-region DR remain external in 1.0/1.2. Contract: `docs/migration.md`. |
 | RM-0.5-pilot-driver-certification | Named PostgreSQL-driver and SQL profiles | 🔲 | Certify the declared current subset and necessary metadata through actual drivers. Broader catalogs, window functions, sequences and index syntax are assigned to 1.1. Contract: `architecture/postgres-wire.md`. |
 | RM-0.5-pilot-operational-view | One public operating and diagnostics view | 🔲 | Correlate requests, shard runs, partials, placement, retries and typed failures; expose index state/build failures and live-query dependencies/frontiers/maintenance mode. Basic diagnostics remain Community; advanced exporters remain external. |
 

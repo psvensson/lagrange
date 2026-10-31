@@ -1,121 +1,82 @@
-# Detailed design: Node transport authenticated encryption
+---
+audience: development
+documentClass: planning
+---
 
-Quest: `node-transport-authenticated-encryption` (Q7, gate). Requirements
-contract: [`requirements.md`](requirements.md) "Node transport security".
-Epic:
-[`solve/epics/pilot-readiness-and-public-proof.md`](../../epics/pilot-readiness-and-public-proof.md);
-binding decisions cited as D1–D12.
+# Node Transport Security, Cluster Trust, and PostgreSQL Authentication (Q7)
 
-Verified baseline: the message router is a plain `ws` `WebSocketServer`
-(`src/transport/message-router-server-lifecycle.js`); the IDENTIFY handshake
-accepts self-declared node identity guarded only by admission toggles and the
-boot-incarnation fence; TLS exists in the repo only for pgwire.
+Epic: [pilot-readiness-and-public-proof](../../epics/pilot-readiness-and-public-proof.md)
+Parent requirements: [requirements.md](requirements.md)
+Roadmap rows: `RM-0.5-pilot-transport-security`, `RM-0.5-pilot-pg-authentication`,
+`RM-0.5-cde-cluster-init`, `RM-0.5-cde-cluster-join`, `RM-0.5-cde-node-start`
 
-## Owner boundaries touched
+## 1. Locked-in architectural decisions (2026-10-31)
 
-- `src/transport/message-router-server-lifecycle.js` — server start/stop;
-  gains the TLS server composition (wss). Stays the one server owner.
-- `src/transport/message-router-connection-authority.js` — dial/accept and
-  IDENTIFY authority; gains the peer-certificate identity check before
-  MessageRouter adoption.
-- `src/transport/message-router-admission-controls.js` and
-  `src/bootstrap/owners/bootstrap-join-admission-owner.js` — admission record
-  the certificate identity is bound to.
-- `src/transport/bulk-transfer-channel.js` (with
-  `src/raft/bulk-connection-transfer-socket.js`) — the second per-peer
-  WebSocket (`channel: bulk`) shares the same trust owner: join, reconnect,
-  bulk snapshot, and ordinary channels use one TLS composition (D11).
-- `src/bootstrap/cluster-incarnation-fence.js` — boot incarnation remains an
-  IDENTIFY-level fence; certificates deliberately do not encode incarnation.
-- `src/bootstrap/phases/seed-registration-phase.js` — mints `clusterId`
-  today; the cluster CA is minted alongside it.
-- Precedent (not the owner): `src/runtime/pgwire-tls-context.js` shows the
-  house pattern for loading TLS material outside `runtime_config` into a
-  `tls.SecureContext`; node transport gets its own trust owner, not a pgwire
-  dependency.
+| Axis | Locked-in choice | Summary |
+| --- | --- | --- |
+| 5A. Cluster CA & trust root | **A3: Pluggable `ClusterTrustProvider`** | Built-in `_raft_cp` Issuing CA by default (zero-dependency out-of-the-box mTLS), with external cert-file override (`--tls-ca-cert`, `--tls-cert`, `--tls-key`) for Kubernetes cert-manager / Vault PKI / SPIFFE |
+| 5B. First-node & join enrollment | **B1: Join token with CA fingerprint + CSR** | `lgr_join_v1_<base64url>` embeds cluster ID, seed endpoint, CA SHA-256 fingerprint, and one-time HMAC secret; joiner generates its Ed25519 key locally, pins the seed TLS cert to the CA fingerprint, and submits a CSR (`POST /bootstrap/enroll`) |
+| 5C. Peer identity & rotation | **5C: Hierarchical SAN URI + signed `IDENTIFY`** | X.509 SAN URI `lagrange://<clusterId>/node/<nodeId>` (extensible to `/service/<serviceId>/revision/<revisionId>/cell/<cellId>` for 0.6 OCI) plus an Ed25519-signed `IDENTIFY` envelope binding `bootIncarnationId` and `membershipEpoch` (reusable in 0.7 NATS and 0.8 Veilid) |
+| 5D. Operator CLI contract | **D2: Composable `init` / `join` + idempotent `start`** | `lagrange cluster init` (initializes seed state/CA and prints join token), `lagrange cluster join` (enrolls via CSR and writes node bundle), and `lagrange node start` (idempotent daemon entrypoint with optional `--init` / `--join-token` flags for containers) |
+| 4. PostgreSQL authentication | **Full PostgreSQL auth in 0.5** | `SCRAM-SHA-256`, `SCRAM-SHA-256-PLUS` (`tls-server-end-point`), `cert` (mTLS client cert verification), `password` over TLS, loopback `trust`, and durable role/verifier management |
 
-## Contract shape
+## 2. Pluggable `ClusterTrustProvider` (`A3`)
 
-### Trust model
+1. **Built-in `_raft_cp` Issuing CA (default mode):**
+   - On `lagrange cluster init`, the seed node generates an Ed25519 Cluster Root / Issuing CA and a seed node leaf certificate (`lagrange://<clusterId>/node/<seedNodeId>`), persisting the local node trust bundle under `<dataDir>/tls/` (`ca.crt`, `node.crt`, `node.key` with `0600` permissions) and replicating the CA record and issued node certificate serials/fingerprints in `_raft_cp`.
+   - Zero external PKI tooling is required for local multi-node, Docker Compose, or single-binary evaluations.
+2. **External PKI file/dir mode (`--tls-ca-cert`, `--tls-cert`, `--tls-key`):**
+   - When external certificate paths are configured, `ClusterTrustProvider` loads the CA bundle, leaf certificate, and private key from disk and watches for atomic rotation (such as Kubernetes `Secret` symlink swaps from `cert-manager` or SPIFFE/Vault agents) to reload `tls.SecureContext` in place without dropping active connections.
+   - In 1.2 (Enterprise), `ClusterTrustProvider` can be backed by cloud KMS/HSM (`AWS KMS`, `GCP Cloud KMS`, `Vault PKI`) without changing transport or routing code.
 
-- **Cluster CA.** One CA per cluster, minted by the seed at cluster creation
-  next to `clusterId`. The CA signs per-node certificates only; it is the
-  sole trust anchor for node-to-node transport.
-- **Per-node certificate.** Issued through the admission flow when a join is
-  granted. Identity is encoded in the certificate (SAN URI):
-  `lagrange://<clusterId>/<nodeId>`. The certificate binds *logical* node
-  identity — never a network address — so address changes are preserved
-  without accepting identity changes.
-- **mTLS everywhere.** Both directions of every node channel present and
-  verify certificates chained to the cluster CA. Verification happens before
-  MessageRouter adoption; an unauthenticated socket never reaches IDENTIFY
-  dispatch.
-- **Identity binding.** Three identities must agree or the connection is
-  refused: TLS peer certificate identity, IDENTIFY-declared identity, and
-  the admission record. Boot incarnation stays in IDENTIFY (certificates
-  survive restarts; the incarnation fence still kills stale processes).
+## 3. Bootstrap trust & CSR enrollment (`B1`)
 
-### Bootstrap and first-node trust
+1. **Join token format (`lgr_join_v1_<base64url>`):**
+   - Contains JSON payload `{v: 1, clusterId, seedUrl, caSha256, tokenId, secret, expiresAtMs}`.
+   - Stored in `_raft_cp` (`cluster_join_tokens` table) with single-use or bounded-TTL semantics and explicit revocation support.
+2. **Zero-trust TLS pinning and CSR exchange:**
+   - The joining node generates its own Ed25519 private key (`node.key`) locally; private keys never traverse the network.
+   - The joiner connects to `seedUrl` over HTTPS, verifying that the server certificate chain is signed by the CA whose SHA-256 digest matches `caSha256` from the join token (preventing MITM on untrusted networks).
+   - The joiner submits `POST /bootstrap/enroll` with `{tokenId, secret, nodeId, publicKeyPem, csrProofSignature}`.
+   - The seed validates the token in `_raft_cp`, records the node's `publicKeyFingerprint` and `issuedCertSerial` in the durable node admission record, and returns `{caCertPem, nodeCertPem, clusterId, membershipEpoch}`.
 
-The seed self-issues its certificate from the CA it minted. A joining node
-receives the CA bundle and its own certificate through the admission flow;
-the operator-provided join material carries the CA fingerprint so the
-joiner's first contact verifies the seed before trusting anything it is
-handed. Exact join-material format is **open** (below); the invariant is
-sealed: no node adopts a peer it cannot cryptographically attribute to the
-cluster CA, including on first contact.
+## 4. Peer identity binding, `IDENTIFY` handshake, and rotation (`5C`)
 
-### Rotation
+1. **Hierarchical X.509 SAN URI:**
+   - Every node certificate carries `subjectAltName = URI:lagrange://<clusterId>/node/<nodeId>`.
+   - In 0.6 (`RM-0.6-native-oci-call-cells`), the same CA and `ClusterTrustProvider` issue short-lived workload certificates with `URI:lagrange://<clusterId>/service/<serviceId>/revision/<revisionId>/cell/<cellId>` to authenticate the OCI container broker stream.
+2. **Transport-agnostic signed `IDENTIFY` envelope:**
+   - Every inter-node channel (`WebSocketServerTransport`, `WebSocketClientPool`, `BulkTransferService`, and future 0.7 NATS / 0.8 Veilid channels) exchanges an Ed25519-signed `IDENTIFY` frame immediately upon connection establishment:
+     `{clusterId, nodeId, bootIncarnationId, membershipEpoch, certSerial, timestampMs, nonce, signature}`.
+   - `MessageRouter` refuses adoption until both the TLS peer certificate SAN URI (`lagrange://<clusterId>/node/<nodeId>`) and the `IDENTIFY` signature match the claimed `nodeId`, `clusterId`, and active `membershipEpoch`.
+   - Address changes (`host:port`) preserve identity only when presented with a valid certificate and `IDENTIFY` signature for that `nodeId`.
+3. **Hitless rotation & revocation:**
+   - Certificates renew before expiry (`--tls-cert-ttl-ms`, default 30 days in built-in CA mode; configurable down to seconds in tests).
+   - Both `WebSocketServerTransport` and `WebSocketClientPool` hot-reload `tls.SecureContext` on rotation.
+   - Compromised or decommissioned nodes are added to the `_raft_cp` revocation list (`revokedCertSerials`), immediately rejecting new handshakes and terminating existing sockets for that serial.
+4. **Plaintext restriction:**
+   - Production default requires `tlsMode: 'mtls'`.
+   - Plaintext (`--insecure-local-dev`) is refused unless the bind address is loopback (`127.0.0.1` / `::1`) or an explicit test harness flag is set.
 
-- Certificates are rotated by issuing a successor over the already
-  authenticated channel before expiry; an overlap window accepts old and new.
-- Rotation swaps the `SecureContext` on the existing server and redials
-  clients on the same composition — it never opens a second listener,
-  per-channel trust model, or parallel transport path (D11).
-- Expiry and trust-state diagnostics (fingerprint, notAfter, last verify
-  failure reason) are exposed; private keys and secrets are never logged.
+## 5. Operator CLI contract (`D2`)
 
-### Insecure mode containment
+1. `lagrange cluster init --data-dir <dir> [--cluster-id <id>] [--listen <addr>]`:
+   - Initializes `<dir>`, bootstraps the `_raft_cp` Issuing CA and seed node certificate (or validates external `--tls-*` files), writes `<dir>/node-config.json`, and outputs the `lgr_join_v1_...` join token.
+2. `lagrange cluster join --data-dir <dir> --join-token <token> [--node-id <id>] [--listen <addr>]`:
+   - Generates the node's local Ed25519 keypair, completes CSR enrollment against the seed pinned by `caSha256`, writes `<dir>/tls/{ca.crt,node.crt,node.key}` and `<dir>/node-config.json`.
+3. `lagrange node start --data-dir <dir> [--init | --join-token <token>]`:
+   - Starts the node daemon from `<dir>/node-config.json`.
+   - When `--init` or `--join-token` is supplied and `<dir>/node-config.json` does not yet exist, runs the corresponding `init` or `join` step idempotently before starting (enabling single-command Docker Compose and Kubernetes StatefulSet entrypoints).
 
-Plaintext transport becomes test-only or an explicit local-development mode
-that can only bind loopback — it cannot bind externally by accident. The
-default production composition refuses plaintext outright.
+## 6. Full PostgreSQL wire authentication (`RM-0.5-pilot-pg-authentication`)
 
-## Failure semantics (D12)
-
-All refusals happen before MessageRouter adoption, with typed operator-
-readable reasons and no secret material in logs. Required attack cases,
-each red in the multi-node scenario:
-
-- Unknown CA / untrusted chain; expired certificate.
-- Wrong-cluster certificate (`clusterId` mismatch in SAN).
-- Stolen certificate with mismatched node identity (cert nodeId ≠ IDENTIFY
-  nodeId, or ≠ admission record).
-- Plaintext downgrade attempt against a secure listener.
-- Rotation during load: connections stay up or reconnect under the same
-  identity; no window accepts an unauthenticated peer.
-- The mTLS-green baseline: multi-node scenarios (join, reconnect, bulk
-  snapshot, ordinary traffic) pass under mTLS.
-
-## Non-goals and edition boundaries
-
-- Core cluster safety, lands in the AGPL runtime (D8): nodes must be unable
-  to trust an unauthenticated peer in every edition.
-- External per `edition-matrix.md`: OIDC/SAML, customer RBAC, policy
-  providers, secrets/KMS integration, hostile multi-tenancy (D8); no
-  backup/cross-region coupling (D9).
-- No parallel transport stack, no per-channel trust model (D11).
-- pgwire client-facing TLS is out of scope here; only node-to-node transport.
-
-## Open decisions left to the Quest
-
-- Join-material format: how the CA fingerprint and one-time credential reach
-  the joining operator (token shape, delivery, single-use enforcement).
-- CA key custody: online on the seed vs operator-held; certificate lifetime
-  and overlap-window defaults.
-- Revocation strategy: short-lived certificates (recommended — rotation is
-  already required) vs an explicit revocation list.
-- On-disk key material location and permissions (following the
-  `pgwire-tls-context.js` outside-`runtime_config` pattern).
-- Whether the admission record stores the certificate fingerprint or the
-  full leaf for audit.
+1. **`SCRAM-SHA-256` and `SCRAM-SHA-256-PLUS`:**
+   - Full RFC 5802 / RFC 7677 SASL handshake (`AuthenticationSASL` -> `SASLInitialResponse` -> `AuthenticationSASLContinue` -> `SASLResponse` -> `AuthenticationSASLFinal`) with `tls-server-end-point` channel binding when TLS is active.
+   - Role credentials are stored as salted PBKDF2-HMAC-SHA256 `StoredKey` and `ServerKey` verifiers (`SCRAM-SHA-256$<iterations>:<salt>$<StoredKey>:<ServerKey>`) in the durable system catalog, never plaintext passwords.
+2. **`cert` (mTLS client certificate authentication):**
+   - Verifies the client TLS certificate against the configured client CA and maps the certificate Subject CN or SAN URI to the authenticated PostgreSQL role and tenant context.
+3. **`password` (cleartext over TLS) and loopback `trust`:**
+   - `password` mode is permitted only over an active TLS connection unless explicitly overridden for local testing.
+   - `trust` mode is restricted to loopback (`127.0.0.1` / `::1`) local development.
+4. **Required negative controls:**
+   - Wrong password, wrong SCRAM server signature, channel-binding mismatch, untrusted/expired client certificate, wrong-CA node certificate, stolen node certificate with mismatched `nodeId`, and plaintext connection attempts against an `mtls`/`scram-sha-256` listener must all fail closed with deterministic error codes.

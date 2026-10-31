@@ -45,11 +45,13 @@ normal generate/build/publish/deploy journey (D2). Runtime activation consumes
 sealed artifact bytes from the replicated payload store; local author files
 may be used during build/publication, never as a deployment/runtime fallback.
 
-Commercial backup/restore/PITR, enterprise SSO/RBAC/tenancy, secrets/KMS and
-cross-region durability retain the boundaries in `edition-matrix.md`.
-Cryptographic node trust is Community/AGPL cluster safety. Capability reports
+Commercial automated backup scheduling, continuous PITR, enterprise SSO/RBAC/tenancy,
+secrets/KMS and cross-region durability retain the boundaries in `edition-matrix.md`.
+Coordinated on-demand cluster Backup/Restore (`management-v1` L3 for BYOC) and
+cryptographic node trust are Community/AGPL cluster capabilities in 0.5. Capability reports
 and management outcomes must never claim implemented operations from synthetic
-defaults; correcting a false positive does not authorize a new backup product.
+defaults; correcting a false positive in 0.4.1 is separate from wiring real
+partition-backed L3 Backup/Restore in 0.5.
 
 Existing sealed Quest acceptance remains binding. Q2–Q5 are proposed slots:
 their scenario names and gates below must become actual bounded Quest records
@@ -316,9 +318,12 @@ Acceptance: `scenario-harness` scenario `learner-promotion-progress-proof`,
 ## Node transport security
 
 Quest: `node-transport-authenticated-encryption` (Q7, gate). Detailed design
-spec: `node-transport-security.md` in this directory (cluster CA, per-node
-certificate and rotation model, bootstrap/first-node trust, identity binding
-to admission record and boot incarnation).
+spec: [node-transport-security.md](node-transport-security.md) in this directory
+(pluggable `ClusterTrustProvider` with `_raft_cp` Issuing CA default + external
+PKI override, `lgr_join_v1` fingerprint-pinned CSR enrollment, hierarchical SAN
+URI `lagrange://<clusterId>/node/<nodeId>` + signed `IDENTIFY` handshake,
+composable `cluster init` / `cluster join` / `node start` CLI, and full
+PostgreSQL `SCRAM-SHA-256` / `SCRAM-SHA-256-PLUS` / `cert` / TLS authentication).
 
 - Node transport SHALL use one canonical TLS server/client composition with
   cryptographic peer authentication bound to cluster identity and logical
