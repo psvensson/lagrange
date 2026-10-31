@@ -271,6 +271,12 @@ const AUTHORING_DESCRIPTOR_KIND = Object.freeze({
   DISTRIBUTED_OPERATION: 'distributed_operation',
   REQUEST_HANDLER: 'request_handler',
 });
+const FETCH_HANDLER_ID = 'fetch';
+const DEFAULT_REQUEST_ORIGIN = 'http://localhost';
+const DEFAULT_REQUEST_PATH = '/';
+const DEFAULT_REQUEST_METHOD = 'GET';
+const HEAD_REQUEST_METHOD = 'HEAD';
+const SET_COOKIE_HEADER = 'set-cookie';
 const HTTP_STATUS = Object.freeze({
   NOT_FOUND: 404,
   OK: 200,
@@ -297,10 +303,27 @@ function generatedCallBindingName(serviceName, operationId) {
   return \`\${serviceName}\${CALL_BINDING_INFIX}\${kebabId}\`;
 }
 
+function decodeBase64Bytes(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function encodeBase64Bytes(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 const OPERATION_ID_BY_DESCRIPTOR = (() => {
   const byDescriptor = new Map();
-  for (const [operationId, descriptor] of Object.entries(service.operations)) {
-    if (descriptor.kind !== AUTHORING_DESCRIPTOR_KIND.DISTRIBUTED_OPERATION) {
+  for (const [operationId, descriptor] of Object.entries(service.operations || {})) {
+    if (descriptor?.kind !== AUTHORING_DESCRIPTOR_KIND.DISTRIBUTED_OPERATION) {
       continue;
     }
     byDescriptor.set(descriptor, operationId);
@@ -310,8 +333,8 @@ const OPERATION_ID_BY_DESCRIPTOR = (() => {
 
 const HANDLER_TABLE = (() => {
   const table = new Map();
-  for (const [handlerId, handler] of Object.entries(service.handlers)) {
-    if (handler.kind !== AUTHORING_DESCRIPTOR_KIND.REQUEST_HANDLER) continue;
+  for (const [handlerId, handler] of Object.entries(service.handlers || {})) {
+    if (handler?.kind !== AUTHORING_DESCRIPTOR_KIND.REQUEST_HANDLER) continue;
     table.set(handlerId, handler);
   }
   return table;
@@ -333,20 +356,28 @@ function jsonResponse(value, status = HTTP_STATUS.OK) {
   };
 }
 
+function resolveBindingNameForOperationRef(operationRef, declaredSet) {
+  if (typeof operationRef === 'string') {
+    if (OPERATION_TABLE.has(operationRef)) {
+      return generatedCallBindingName(service.name, operationRef);
+    }
+    return operationRef;
+  }
+  const operationId = OPERATION_ID_BY_DESCRIPTOR.get(operationRef);
+  if (!operationId || (declaredSet && !declaredSet.has(operationRef))) {
+    throw new Error(UNDECLARED_OPERATION_CODE);
+  }
+  return generatedCallBindingName(service.name, operationId);
+}
+
 function createHandlerContext(handler) {
   const declared = new Set(handler.calls);
   return {
     call(operationRef, callArguments) {
-      let bindingName;
-      if (typeof operationRef === 'string') {
-        bindingName = operationRef;
-      } else {
-        if (!declared.has(operationRef)) {
-          throw new Error(UNDECLARED_OPERATION_CODE);
-        }
-        bindingName = generatedCallBindingName(
-          service.name, OPERATION_ID_BY_DESCRIPTOR.get(operationRef));
-      }
+      const bindingName = resolveBindingNameForOperationRef(
+        operationRef,
+        declared,
+      );
       return JSON.parse(
         callBinding(bindingName, JSON.stringify(callArguments)),
       );
@@ -355,12 +386,89 @@ function createHandlerContext(handler) {
   };
 }
 
-export function handleRequest(handlerId, requestJson) {
+function createFetchEnv(envelope) {
+  const callOperation = async (operationRef, callArguments = {}) => {
+    const bindingName = resolveBindingNameForOperationRef(operationRef, null);
+    try {
+      return JSON.parse(
+        callBinding(bindingName, JSON.stringify(callArguments)),
+      );
+    } catch (caught) {
+      const payload = caught?.payload;
+      const wrapped = new Error(
+        payload?.message ?? String(caught?.message ?? caught),
+      );
+      wrapped.code = payload?.code ?? caught?.code ?? null;
+      wrapped.retryable = Boolean(payload?.retryable ?? caught?.retryable);
+      wrapped.payload = payload ?? null;
+      throw wrapped;
+    }
+  };
+  return {
+    call: callOperation,
+    deadlineMs: envelope.deadlineMs ?? null,
+    lagrange: {
+      call: callOperation,
+    },
+    principal: envelope.principal ?? null,
+    tenantId: envelope.tenantId ?? null,
+  };
+}
+
+function toWebRequest(envelope) {
+  const method = envelope.method || DEFAULT_REQUEST_METHOD;
+  const url = envelope.url ||
+    \`\${DEFAULT_REQUEST_ORIGIN}\${envelope.path || DEFAULT_REQUEST_PATH}\`;
+  const headers = new Headers();
+  for (const [name, value] of envelope.headers || []) {
+    headers.append(name, value);
+  }
+  let body;
+  if (method !== DEFAULT_REQUEST_METHOD && method !== HEAD_REQUEST_METHOD) {
+    if (typeof envelope.bodyBase64 === 'string') {
+      body = decodeBase64Bytes(envelope.bodyBase64);
+    } else if (typeof envelope.body === 'string') {
+      body = new TextEncoder().encode(envelope.body);
+    }
+  }
+  return new Request(url, {body, headers, method});
+}
+
+async function fromWebResponse(response) {
+  const responseBytes = new Uint8Array(await response.arrayBuffer());
+  const headers = [];
+  const setCookies = typeof response.headers.getSetCookie === 'function' ?
+    response.headers.getSetCookie() :
+    [];
+  for (const cookie of setCookies) {
+    headers.push([SET_COOKIE_HEADER, cookie]);
+  }
+  for (const [name, value] of response.headers.entries()) {
+    if (name.toLowerCase() === SET_COOKIE_HEADER && setCookies.length > 0) {
+      continue;
+    }
+    headers.push([name, value]);
+  }
+  return {
+    body: new TextDecoder().decode(responseBytes),
+    bodyBase64: encodeBase64Bytes(responseBytes),
+    headers,
+    status: response.status,
+  };
+}
+
+export async function handleRequest(handlerId, requestJson) {
+  if (handlerId === FETCH_HANDLER_ID && typeof service.fetch === 'function') {
+    const envelope = JSON.parse(requestJson);
+    const webRequest = toWebRequest(envelope);
+    const response = await service.fetch(webRequest, createFetchEnv(envelope));
+    return JSON.stringify(await fromWebResponse(response));
+  }
   const handler = HANDLER_TABLE.get(handlerId);
   if (!handler) return typedRefusal(UNKNOWN_HANDLER_CODE, handlerId);
   const request = JSON.parse(requestJson);
   return JSON.stringify(
-    handler.handle(request, createHandlerContext(handler)),
+    await handler.handle(request, createHandlerContext(handler)),
   );
 }
 

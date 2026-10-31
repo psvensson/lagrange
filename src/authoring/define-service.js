@@ -31,14 +31,34 @@ function deepFreeze(value) {
   return value;
 }
 
-function defineService({name, version, operations, handlers}) {
-  return deepFreeze({
-    handlers,
+function defineService({
+  name,
+  version,
+  operations,
+  fetch,
+  mount,
+  dependencies,
+  handlers,
+} = {}) {
+  const descriptor = {
     kind: AUTHORING_DESCRIPTOR_KIND.SERVICE_DEFINITION,
     name,
     operations,
     version,
-  });
+  };
+  if (fetch !== undefined) {
+    descriptor.fetch = fetch;
+  }
+  if (mount !== undefined) {
+    descriptor.mount = mount;
+  }
+  if (dependencies !== undefined) {
+    descriptor.dependencies = dependencies;
+  }
+  if (handlers !== undefined || fetch === undefined) {
+    descriptor.handlers = handlers;
+  }
+  return deepFreeze(descriptor);
 }
 
 export {AUTHORING_DESCRIPTOR_KIND, deepFreeze, defineService};

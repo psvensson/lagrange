@@ -13,6 +13,7 @@ doneWhen:
     certification: true
 quests:
   - h1-pinned-hono-component-proof
+  - h2-hono-source-ir-deployment-cutover
 authorizes:
   - src/authoring
   - src/service

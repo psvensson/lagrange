@@ -16,7 +16,7 @@
     "query-sql": 190,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 149,
+    "services-runtime": 150,
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2511,
-  "digest": "fnv1a32-cee48b92",
+  "censusSize": 2512,
+  "digest": "fnv1a32-44d603c7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8fc9bb1f",
+  "observationDigest": "fnv1a32-667b0828",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2311,6 +2311,7 @@
     "test/service/data-local-owner-boundaries.test.js": "services-runtime",
     "test/service/external-service-manifest.test.js": "services-runtime",
     "test/service/h1-pinned-hono-component-proof.test.js": "services-runtime",
+    "test/service/h2-hono-source-ir-deployment-cutover.test.js": "services-runtime",
     "test/service/handler-aware-runtime-invocation.test.js": "services-runtime",
     "test/service/installable-service-artifact-resolver.test.js": "services-runtime",
     "test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js": "services-runtime",
@@ -18327,6 +18328,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/service/call-activation-lease-owner.js",
         "src/service/call-partition-topology.js"
+      ]
+    },
+    "test/service/h2-hono-source-ir-deployment-cutover.test.js": {
+      "directories": [
+        "test/service"
       ]
     },
     "test/service/handler-aware-runtime-invocation.test.js": {

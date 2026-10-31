@@ -17,6 +17,7 @@ const AUTHORING_DIRECTORY =
 const EXPECTED_MODULES = Object.freeze([
   'define-service.js',
   'distributed-operation.js',
+  'index.js',
   'request-handler.js',
   'sql-template.js',
 ]);

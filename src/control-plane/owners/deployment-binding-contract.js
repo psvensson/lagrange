@@ -8,6 +8,12 @@ import {
   normalizeExternalServiceManifest,
 } from '../../service/external-service-manifest.js';
 import {COLUMN} from '../../constants/columns.js';
+import {
+  canonicalizeAdmittedRequestUrlWithFailure,
+  matchesMountPathPrefix,
+  mountsOverlap,
+  normalizeMountRequestSource,
+} from './deployment-binding-request-mount.js';
 
 const DEPLOYMENT_BINDING_SCHEMA_VERSION = 2;
 const DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 = 3;
@@ -128,9 +134,7 @@ const SOURCE_FIELDS = Object.freeze({
   ]),
   [DEPLOYMENT_BINDING_SOURCE_KIND.ONCE]: Object.freeze(['kind']),
   [DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN]: Object.freeze(['kind', 'name']),
-  [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]: Object.freeze([
-    'kind', 'method', 'path',
-  ]),
+  [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]: Object.freeze(['kind']),
   [DEPLOYMENT_BINDING_SOURCE_KIND.TIME]: Object.freeze([
     'kind', 'interval_ms',
   ]),
@@ -139,31 +143,19 @@ const SOURCE_FIELDS = Object.freeze({
 const SOURCE_OPTIONAL_FIELDS = Object.freeze({
   [DEPLOYMENT_BINDING_SOURCE_KIND.CALL]: Object.freeze(['statement']),
   [DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN]: Object.freeze(['statement']),
+  [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]: Object.freeze([
+    'host', 'method', 'path', 'path_prefix',
+  ]),
 });
 
 const STATEMENT_LIMITS = Object.freeze({minimum: 1});
-
-const ROOT_FIELDS = Object.freeze([
-  'schema_version', 'name', 'target', 'source', 'budgets',
-]);
-const TARGET_FIELDS = Object.freeze([
-  'package_id', 'manifest_digest', 'export_name',
-]);
-// v3 targets: interface + handler_id replace the developer-supplied
-// export_name (the fixed export is derived through the interface mapping
-// owner, never authored).
-const TARGET_FIELDS_V3 = Object.freeze([
-  'package_id', 'manifest_digest', 'interface', 'handler_id',
-]);
+const ROOT_FIELDS = Object.freeze(['schema_version', 'name', 'target', 'source', 'budgets']);
+const TARGET_FIELDS = Object.freeze(['package_id', 'manifest_digest', 'export_name']);
+const TARGET_FIELDS_V3 = Object.freeze(['package_id', 'manifest_digest', 'interface', 'handler_id']);
 const HANDLER_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9]{0,127}$/u;
 const CHANGE_OPERATIONS = Object.freeze(['delete', 'insert', 'update']);
-const REQUEST_METHODS = Object.freeze([
-  'DELETE', 'GET', 'PATCH', 'POST', 'PUT',
-]);
-const TIME_INTERVAL_LIMITS = Object.freeze({
-  minimum: 1,
-  maximum: 86400000,
-});
+const REQUEST_METHODS = Object.freeze(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
+const TIME_INTERVAL_LIMITS = Object.freeze({minimum: 1, maximum: 86400000});
 
 const NAME_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
 const PACKAGE_ID_PATTERN = /^service-package-[0-9a-f]{64}$/u;
@@ -334,13 +326,29 @@ function normalizeTargetV3(target, sourceKind) {
   };
 }
 
+function failInvalidSourceField(message = DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD) {
+  fail(
+    DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
+    DEPLOYMENT_BINDING_PATH.SOURCE,
+    message,
+  );
+}
+
 function normalizeRequestSource(source) {
-  if (!REQUEST_METHODS.includes(source.method) ||
-      typeof source.path !== 'string' ||
-      !HTTP_PATH_PATTERN.test(source.path)) {
-    fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
-      DEPLOYMENT_BINDING_PATH.SOURCE,
-      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
+  if (source.path_prefix !== undefined) {
+    return normalizeMountRequestSource(
+      source,
+      REQUEST_METHODS,
+      failInvalidSourceField,
+    );
+  }
+  if (
+    source.host !== undefined ||
+    !REQUEST_METHODS.includes(source.method) ||
+    typeof source.path !== 'string' ||
+    !HTTP_PATH_PATTERN.test(source.path)
+  ) {
+    failInvalidSourceField();
   }
   return {kind: source.kind, method: source.method, path: source.path};
 }
@@ -549,10 +557,7 @@ function deriveBindingVersionId(bindingId, generation = DEPLOYMENT_BINDING_GENER
       DEPLOYMENT_BINDING_PATH.BINDING,
       DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
   }
-  return `binding-version-${digest({
-    bindingId,
-    generation,
-  })}`;
+  return `binding-version-${digest({bindingId, generation})}`;
 }
 
 // The row's export_name is the fixed export the invocation path
@@ -565,13 +570,9 @@ function declarationExportName(declaration) {
 }
 
 function parseBuildBindingRowArguments(
-  declarationOrOptions,
-  securityContext,
-  createdAt,
-  generationArg,
+  declarationOrOptions, securityContext, createdAt, generationArg,
 ) {
-  if (declarationOrOptions?.declaration &&
-      !declarationOrOptions.schema_version) {
+  if (declarationOrOptions?.declaration && !declarationOrOptions.schema_version) {
     const opts = declarationOrOptions;
     const context = opts.securityContext ?
       validateSecurityContext(opts.securityContext) :
@@ -581,40 +582,26 @@ function parseBuildBindingRowArguments(
         tenantId: opts.tenantId,
       });
     return {
-      context,
-      declaration: opts.declaration,
-      explicitBindingId: opts.bindingId,
+      context, declaration: opts.declaration, explicitBindingId: opts.bindingId,
       generation: opts.generation ?? DEPLOYMENT_BINDING_GENERATION,
       time: opts.createdAt,
     };
   }
   return {
     context: validateSecurityContext(securityContext),
-    declaration: declarationOrOptions,
-    explicitBindingId: undefined,
-    generation: generationArg,
-    time: createdAt,
+    declaration: declarationOrOptions, explicitBindingId: undefined,
+    generation: generationArg, time: createdAt,
   };
 }
 
 function buildBindingRow(
-  declarationOrOptions,
-  securityContext,
-  createdAt,
+  declarationOrOptions, securityContext, createdAt,
   generationArg = DEPLOYMENT_BINDING_GENERATION,
 ) {
-  const {
-    context,
-    declaration,
-    explicitBindingId,
-    generation,
-    time,
-  } = parseBuildBindingRowArguments(
-    declarationOrOptions,
-    securityContext,
-    createdAt,
-    generationArg,
-  );
+  const {context, declaration, explicitBindingId, generation, time} =
+    parseBuildBindingRowArguments(
+      declarationOrOptions, securityContext, createdAt, generationArg,
+    );
 
   if (!Number.isSafeInteger(time) || time < 0) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
@@ -763,6 +750,14 @@ function isDeploymentBindingCellSourceKind(sourceKind) {
   return DEPLOYMENT_BINDING_CELL_SOURCE_KINDS.has(sourceKind);
 }
 
+function canonicalizeAdmittedRequestUrl(rawInput, options = {}) {
+  return canonicalizeAdmittedRequestUrlWithFailure(
+    rawInput,
+    options,
+    failInvalidSourceField,
+  );
+}
+
 export {
   DEPLOYMENT_BINDING_ERROR_CODE,
   DEPLOYMENT_BINDING_MESSAGE,
@@ -777,12 +772,15 @@ export {
   bindingRowsMatch,
   buildBindingRow,
   canonicalJson,
+  canonicalizeAdmittedRequestUrl,
   declarationExportName,
   deriveBindingId,
   deriveBindingVersionId,
   expectedSourceInterface,
   inspectBindingRow,
   isDeploymentBindingCellSourceKind,
+  matchesMountPathPrefix,
+  mountsOverlap,
   normalizeDeploymentBinding,
   normalizeStoredDeploymentBinding,
   projectBinding,

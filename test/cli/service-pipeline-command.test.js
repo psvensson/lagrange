@@ -49,8 +49,8 @@ async function createProject(root) {
   const authoringSource = await readFile(
     new URL('../../src/authoring/index.js', EXAMPLE_DIRECTORY), 'utf8')
     .catch(() => null);
-  assert.equal(authoringSource, null,
-    'the authoring library must not grow an index barrel unnoticed');
+  assert.equal(typeof authoringSource, 'string',
+    'the authoring library exposes src/authoring/index.js for lagrange-server/authoring');
   const rewritten = exampleService
     .replaceAll('../../src/authoring/', './authoring/');
   await mkdir(path.join(root, 'authoring'), {recursive: true});
