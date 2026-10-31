@@ -13,6 +13,7 @@ import {
   BOOTSTRAP_API_ROUTE,
 } from './bootstrap-api-constants.js';
 import {installBootstrapApiMethods} from './bootstrap-api-method-installer.js';
+import {ManagementV1Owner} from './owners/management-v1-owner.js';
 
 const LOCAL_STR_METRICS_BOOTSTRAP_API_HEALTH_INITIALIZIN = 'metrics.bootstrap_api.health.initializing';
 const REQUEST_CELL_HTTP_METHODS = Object.freeze([
@@ -188,6 +189,13 @@ const bootstrapApiServerMethods = {
       return this.getClusterState();
     });
 
+    this.fastify.get(BOOTSTRAP_API_ROUTE.MANAGEMENT_FACTS, async (request, reply) =>
+      this.getManagementV1Owner().handleGetFactsRequest(request, reply));
+    this.fastify.post(BOOTSTRAP_API_ROUTE.MANAGEMENT_OPERATIONS, async (request, reply) =>
+      this.getManagementV1Owner().handlePostOperationRequest(request, reply));
+    this.fastify.get(BOOTSTRAP_API_ROUTE.MANAGEMENT_OPERATION_BY_ID, async (request, reply) =>
+      this.getManagementV1Owner().handleGetOperationStatusRequest(request, reply));
+
     for (const method of REQUEST_CELL_HTTP_METHODS) {
       for (const url of REQUEST_CELL_HTTP_ROUTES) {
         this.fastify.route({
@@ -243,6 +251,15 @@ const bootstrapApiServerMethods = {
     });
     reply.code(HTTP_STATUS.GONE);
     throw new Error(BOOTSTRAP_API_ERROR.REGISTER_NODE_UNSUPPORTED);
+  },
+
+  getManagementV1Owner() {
+    if (!this.managementV1Owner) {
+      this.managementV1Owner = new ManagementV1Owner({
+        getClusterId: () => this.getClusterId?.() || this.seedNodeId,
+      });
+    }
+    return this.managementV1Owner;
   },
 };
 
