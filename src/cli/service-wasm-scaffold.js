@@ -288,17 +288,16 @@ export function handleAmountSummary(request, {call, json}, operation) {
     return json({error: 'invalid_request_body'}, HTTP_STATUS_BAD_REQUEST);
   }
   const rawAccountId = body.accountId ?? null;
+  /** @type {number | null} */
   let accountId = null;
-  if (rawAccountId !== null) {
-    const isInteger = typeof rawAccountId === 'number' ?
-      Number.isSafeInteger(rawAccountId) && rawAccountId >= 0 :
-      (typeof rawAccountId === 'string' && /^\\d+$/.test(rawAccountId.trim()));
-    if (!isInteger) {
-      return json({error: 'invalid_account_id'}, HTTP_STATUS_BAD_REQUEST);
-    }
-    accountId = typeof rawAccountId === 'number' ?
-      rawAccountId :
-      Number.parseInt(rawAccountId, 10);
+  if (typeof rawAccountId === 'number' &&
+    Number.isSafeInteger(rawAccountId) && rawAccountId >= 0) {
+    accountId = rawAccountId;
+  } else if (typeof rawAccountId === 'string' &&
+    /^\\d+$/.test(rawAccountId.trim())) {
+    accountId = Number.parseInt(rawAccountId, 10);
+  } else if (rawAccountId !== null) {
+    return json({error: 'invalid_account_id'}, HTTP_STATUS_BAD_REQUEST);
   }
   const summary = call(operation, {accountId});
   return json(summary, HTTP_STATUS_OK);

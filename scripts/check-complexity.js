@@ -132,9 +132,9 @@ const TARGET_THRESHOLD = 12;
 // checker's hint after extracting seed node registration row construction in
 // bootstrap-service-control-plane-runtime-methods.js.
 // 2026-10-31: tightened 1738 -> 1737 on the checker's hint.
-// 2026-10-31 (developer-journey-and-measured-comparisons): tightened 1737 -> 1734
+// 2026-10-31 (developer-journey-and-measured-comparisons): tightened 1737 -> 1735
 // on the checker's hint after decomposing comparison renderers and route resolvers.
-const BASELINE_COUNT = 1734;
+const BASELINE_COUNT = 1735;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

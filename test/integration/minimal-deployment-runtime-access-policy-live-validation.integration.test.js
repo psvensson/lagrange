@@ -362,6 +362,11 @@ describe('minimal deployment runtime access production path', () => {
 
       const {artifact, bindingInput} = createCurrentBindingArtifact();
       assert.equal(artifact.manifest.schema_version, 3);
+      setup.systemMetadataOwners.deploymentBindingOwner.artifactPayloadStore = {
+        async findSealedPayloadByArtifactDigest() {
+          return {found: true};
+        },
+      };
       const recordedArtifact =
         await setup.systemMetadataOwners.serviceInstallCatalogOwner
           .recordPackage({

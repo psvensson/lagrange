@@ -206,14 +206,31 @@ function createFixture(options = {}) {
     manifestDigest: manifestDigest(componentManifest),
     packageId: PACKAGE_ID,
   };
+  const payloadDigest = `sha256:${createHash('sha256')
+    .update(componentBytes)
+    .digest('hex')}`;
   const commandOwner = new ServiceLifecycleCommandOwner({
+    artifactPayloadStore: {
+      async findSealedPayloadByArtifactDigest(artifactDigest) {
+        return {
+          found: true,
+          payload: {artifactDigest, payloadDigest},
+        };
+      },
+      async getSealedPayload() {
+        return {
+          artifactDigest: ARTIFACT_DIGEST,
+          bytes: componentBytes,
+          mediaType: 'application/wasm',
+          payloadDigest,
+        };
+      },
+    },
     artifactResolver: {
       async loadComponentPayload() {
         return {
           bytes: componentBytes,
-          payloadDigest: `sha256:${createHash('sha256')
-            .update(componentBytes)
-            .digest('hex')}`,
+          payloadDigest,
         };
       },
     },

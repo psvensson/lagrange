@@ -760,6 +760,11 @@ describe('minimal deployment call-cell invocation live wiring', () => {
     });
 
     const artifact = createCallArtifact();
+    setup.systemMetadataOwners.deploymentBindingOwner.artifactPayloadStore = {
+      async findSealedPayloadByArtifactDigest() {
+        return {found: true};
+      },
+    };
     const recordedPackage =
         await setup.systemMetadataOwners.serviceInstallCatalogOwner
           .recordPackage({

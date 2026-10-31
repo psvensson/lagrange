@@ -18,7 +18,6 @@ import {describe, it} from 'node:test';
 import {RUNTIME_KIND} from '../../src/constants/runtime.js';
 import {
   ARTIFACT_SIGNATURE_POLICY_MODE,
-  INSTALLABLE_ARTIFACT_SOURCE_KIND,
   InstallableServiceArtifactResolver,
 } from '../../src/service/installable-service-artifact-resolver.js';
 import {
@@ -228,12 +227,19 @@ function externalManifest(receipt) {
 
 async function resolveReceipt(receipt) {
   const resolver = new InstallableServiceArtifactResolver();
+  const manifestHash =
+    receipt.topManifestDescriptor.digest.replace(/^sha256:/u, '');
+  const descriptorBytes = await readFile(
+    path.join(receipt.layoutPath, 'blobs', 'sha256', manifestHash),
+  );
   return resolver.resolve({
-    manifest: externalManifest(receipt),
-    source: {
-      kind: INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
-      location: receipt.layoutPath,
+    descriptor: {
+      digest: receipt.topManifestDescriptor.digest,
+      mediaType: receipt.topManifestDescriptor.mediaType,
+      size: receipt.topManifestDescriptor.sizeBytes,
     },
+    descriptorBytes,
+    manifest: externalManifest(receipt),
     signaturePolicy: {mode: ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED},
   });
 }

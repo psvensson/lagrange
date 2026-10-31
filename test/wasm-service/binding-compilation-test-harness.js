@@ -268,6 +268,11 @@ function createBindingCompilationKit(config) {
       controlPlaneSystemTableGateway: gateway,
       now: () => config.nowMs,
     });
+    owners.deploymentBindingOwner.artifactPayloadStore = {
+      async findSealedPayloadByArtifactDigest() {
+        return {found: true};
+      },
+    };
     const value = config.buildManifest(sourceKind);
     const packageId = deriveTenantPackageId(value, config.tenantId);
     const package_ = await owners.serviceInstallCatalogOwner.recordPackage({
