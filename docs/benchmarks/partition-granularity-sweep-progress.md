@@ -22,12 +22,12 @@ Throughput and latency sweep across all evaluated systems:
 
 | Target | Optimal P | Peak (dec/s) | P=6 (dec/s) | P=15 (dec/s) | P=30 (dec/s) | P=60 (dec/s) | Drop at P=60 (%) | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 30 | 784.0 | 590.0 | 720.4 | 784.0 | 738.0 | -5.9% | modeled-topology-oracle |
-| TiDB + TiKV | 15 | 318.0 | 274.0 | 318.0 | 302.0 | 264.0 | -17.0% | modeled-topology-oracle |
-| Citus 13 (Dist Function) | 30 | 542.0 | 448.0 | 524.0 | 542.0 | 486.0 | -10.3% | modeled-topology-oracle |
-| YugabyteDB 2024.2 (Stored Proc) | 15 | 412.0 | 356.0 | 412.0 | 398.0 | 348.0 | -15.5% | modeled-topology-oracle |
-| Apache Ignite 3 (Colocated) | 30 | 662.0 | 520.0 | 618.0 | 662.0 | 610.0 | -7.9% | modeled-topology-oracle |
+| Lagrange | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
+| TiDB + TiKV | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
+| Citus 13 (Dist Function) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
+| YugabyteDB 2024.2 (Stored Proc) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
+| Apache Ignite 3 (Colocated) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
 
 ## Parallelism sweet spot vs over-partitioning coordination overhead
 
-Evaluating partition counts from P=6 to P=60 on a 5-node RF=3 cluster demonstrates that P=30 (averaging 6 leader partitions per node) serves as the parallelism sweet spot for Lagrange (reaching 784.0 dec/s with 16.9 ms p99 latency) and Apache Ignite 3 (reaching 662.0 dec/s with 19.2 ms p99 latency). At P=6 (1.2 leaders/node), under-partitioning causes leader skew and idle worker threads. Scaling beyond the sweet spot to P=60 (12 leaders/node) degrades throughput (-5.9% in Lagrange, -10.3% in Citus 13, -15.5% in YugabyteDB, and -17.0% in TiDB + TiKV) due to Raft heartbeat amplification, placement-table lookups, and cross-partition fan-out coordination overhead.
+Evaluating partition counts from P=6 to P=60 on a 5-node RF=3 cluster identifies the operational regimes where leadership responsibility is distributed across cluster nodes. Measurement of throughput sweet spots and cross-partition coordination overhead across candidate targets requires admitted GCP or lab execution receipts.

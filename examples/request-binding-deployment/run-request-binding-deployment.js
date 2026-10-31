@@ -10,7 +10,7 @@
  */
 
 import assert from 'node:assert/strict';
-import {mkdtemp, rm} from 'node:fs/promises';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -146,12 +146,22 @@ async function request(node, pathName, body, options = {}) {
   };
 }
 
-async function deploy(node, receipt) {
+async function deploy(node, receipt, paths) {
   await executeSql(
     node,
     AUDIT_TABLE_DDL,
   );
   const manifest = buildManifest(receipt);
+  const componentBytes = await readFile(paths.componentPath);
+  await executeSql(
+    node,
+    'PUBLISH SERVICE ARTIFACT $1',
+    [JSON.stringify({
+      artifact_digest: manifest.artifact.digest,
+      bytes: componentBytes.toString('base64'),
+      media_type: manifest.artifact.media_type || 'application/wasm',
+    })],
+  );
   const installed = await executeSql(
     node,
     'INSTALL SERVICE $1',
@@ -185,7 +195,7 @@ async function exerciseDeployment(node) {
   const unmatched = await request(
     node,
     '/examples/request-binding-unmatched',
-    'write',
+    {},
   );
   const afterUnmatched = await auditRows(node);
   assert.equal(unmatched.status, HTTP_STATUS_NOT_FOUND);
@@ -193,7 +203,7 @@ async function exerciseDeployment(node) {
   assert.deepEqual(afterUnmatched, beforeUnmatched);
   const unmatchedInvocationCount = Number(unmatched.body.invoked);
 
-  const matched = await request(node, EXAMPLE.PATH, 'write');
+  const matched = await request(node, EXAMPLE.PATH, {action: 'write'});
   assert.equal(matched.status, HTTP_STATUS_ACCEPTED, JSON.stringify(matched));
   assert.equal(
     matched.headers[COMPONENT_RESPONSE_HEADER],
@@ -209,7 +219,7 @@ async function exerciseDeployment(node) {
     [EXPECTED_AUDIT_ROW],
   );
 
-  const denied = await request(node, EXAMPLE.PATH, 'deny');
+  const denied = await request(node, EXAMPLE.PATH, {action: 'deny'});
   assert.equal(denied.body.invoked, true);
   assert.match(denied.body.error, /table slot 1/u);
   assert.deepEqual(await auditRows(node), afterMatched);
@@ -243,7 +253,7 @@ async function runRequestBindingDeploymentExample(options = {}) {
       path.join(temporaryRoot, NODE_DATA_DIRECTORY),
       {wsPort: options.wsPort},
     );
-    const deployment = await deploy(node, receipt);
+    const deployment = await deploy(node, receipt, paths);
     const observations = await exerciseDeployment(node);
     const report = {
       artifact: {

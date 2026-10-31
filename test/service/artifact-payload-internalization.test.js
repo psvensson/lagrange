@@ -17,7 +17,6 @@ import {createHash} from 'node:crypto';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  ARTIFACT_PAYLOAD_ERROR_CODE,
   ArtifactPayloadStoreError,
 } from '../../src/service/artifact-payload-store.js';
 import {
@@ -91,10 +90,6 @@ function wasmManifest() {
 
 function installPayload(overrides = {}) {
   return {
-    artifact_source: {
-      kind: FIXTURE_LITERAL.SOURCE_KIND,
-      location: FIXTURE_LITERAL.LOCATION,
-    },
     config: {replicas: 2},
     idempotency_key: FIXTURE_LITERAL.IDEMPOTENCY_KEY,
     manifest: wasmManifest(),
@@ -221,11 +216,19 @@ function createInstallFixture(options = {}) {
     createFixtureStore(events, options);
   if (store) {
     owner.artifactPayloadStore = store;
+    if (!options.unsealed) {
+      store.putPayload({
+        artifactDigest: ARTIFACT_DIGEST,
+        bytes: PAYLOAD_BYTES,
+        mediaType: EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT,
+        payloadDigest: PAYLOAD_DIGEST,
+      });
+    }
   }
   return {artifactResolver, catalogOwner, events, owner, store};
 }
 
-test('install with the store seals the payload before any catalog row',
+test('install with sealed store succeeds and writes catalog rows',
   async (t) => {
     const fixture = createInstallFixture();
     const result = await fixture.owner.execute(
@@ -233,36 +236,20 @@ test('install with the store seals the payload before any catalog row',
       installPayload(),
       SECURITY_CONTEXT,
     );
-    t.equal(result.success, true, 'the install succeeds as today');
+    t.equal(result.success, true, 'the install succeeds');
     t.equal(result.rows[0].operation_status, FIXTURE_LITERAL.DURABLE);
     t.equal(result.rows[0].rollout_state,
       FIXTURE_LITERAL.RECORDED_NOT_RUNNING);
-    t.same(fixture.events, [
-      FIXTURE_EVENT.PUT_PAYLOAD,
+    t.same(fixture.events.filter((e) => e !== FIXTURE_EVENT.PUT_PAYLOAD), [
       FIXTURE_EVENT.RECORD_PACKAGE,
       FIXTURE_EVENT.RECORD_REVISION,
       FIXTURE_EVENT.REQUEST_INSTALLATION,
-    ], 'the payload is sealed BEFORE the first catalog row is written');
-    t.equal(fixture.store.puts[0].alreadySealed, false);
-    t.equal(fixture.store.puts[0].payloadDigest, PAYLOAD_DIGEST);
-    t.same(fixture.artifactResolver.acquireCalls[0], {
-      location: FIXTURE_LITERAL.LOCATION,
-      payloadDescriptor: {
-        digest: PAYLOAD_DIGEST,
-        mediaType: EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT,
-        size: PAYLOAD_BYTES.length,
-      },
-      sourceKind: FIXTURE_LITERAL.SOURCE_KIND,
-    }, 'bytes ride the resolver acquisition surface');
+    ], 'catalog rows are written');
   });
 
-test('a store putPayload failure fails the INSTALL typed with zero rows',
+test('unsealed artifact fails the INSTALL with ARTIFACT_NOT_SEALED',
   async (t) => {
-    const putFailure = new ArtifactPayloadStoreError(
-      ARTIFACT_PAYLOAD_ERROR_CODE.QUERY_FAILED,
-      FIXTURE_LITERAL.PUT_FAILURE_MESSAGE,
-    );
-    const fixture = createInstallFixture({putFailure});
+    const fixture = createInstallFixture({unsealed: true});
     const result = await fixture.owner.execute(
       SERVICE_LIFECYCLE_COMMAND.INSTALL,
       installPayload(),
@@ -270,20 +257,13 @@ test('a store putPayload failure fails the INSTALL typed with zero rows',
     );
     t.equal(result.success, false, 'the INSTALL fails');
     t.equal(result.errorCode,
-      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
-      'the failure is the typed artifact rejection');
-    t.equal(result.detail.ownerCode,
-      ARTIFACT_PAYLOAD_ERROR_CODE.QUERY_FAILED,
-      'the store failure code rides along as ownerCode');
-    t.equal(result.error, FIXTURE_LITERAL.PUT_FAILURE_MESSAGE,
-      'the typed store message is preserved on the failure record');
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_NOT_SEALED,
+      'the failure is ARTIFACT_NOT_SEALED');
     t.equal(fixture.catalogOwner.writtenRowCount(), 0,
       'no package, revision, or installation row is written');
-    t.same(fixture.events, [FIXTURE_EVENT.PUT_PAYLOAD],
-      'the failure happened at the seal step, before any catalog write');
   });
 
-test('a byte-identical reinstall converges on alreadySealed and succeeds',
+test('a byte-identical reinstall succeeds',
   async (t) => {
     const fixture = createInstallFixture();
     const first = await fixture.owner.execute(
@@ -298,13 +278,9 @@ test('a byte-identical reinstall converges on alreadySealed and succeeds',
     );
     t.equal(first.success, true);
     t.equal(second.success, true, 'the reinstall still succeeds');
-    t.equal(fixture.store.puts.length, 2);
-    t.equal(fixture.store.puts[0].alreadySealed, false);
-    t.equal(fixture.store.puts[1].alreadySealed, true,
-      'the second byte-identical put is the idempotent sealed replay');
   });
 
-test('no attached store keeps the install unchanged with no store calls',
+test('no attached store fails install with STORE_UNAVAILABLE',
   async (t) => {
     const fixture = createInstallFixture({withoutStore: true});
     const result = await fixture.owner.execute(
@@ -312,14 +288,23 @@ test('no attached store keeps the install unchanged with no store calls',
       installPayload(),
       SECURITY_CONTEXT,
     );
-    t.equal(result.success, true);
-    t.equal(fixture.artifactResolver.acquireCalls.length, 0,
-      'no payload bytes are acquired');
-    t.same(fixture.events, [
-      FIXTURE_EVENT.RECORD_PACKAGE,
-      FIXTURE_EVENT.RECORD_REVISION,
-      FIXTURE_EVENT.REQUEST_INSTALLATION,
-    ], 'only the pre-store catalog writes happen');
+    t.equal(result.success, false);
+    t.equal(result.errorCode,
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.STORE_UNAVAILABLE,
+      'store unavailable error is returned');
+    t.equal(fixture.catalogOwner.writtenRowCount(), 0,
+      'no catalog writes happen without store');
+  });
+
+test('internalizeResolvedArtifact without store throws STORE_UNAVAILABLE',
+  async (t) => {
+    try {
+      await internalizeResolvedArtifact({store: null});
+      t.fail('should have thrown');
+    } catch (error) {
+      t.ok(error instanceof ArtifactPayloadStoreError);
+      t.equal(error.code, 'artifact_payload_store_unavailable');
+    }
   });
 
 test('internalizeResolvedArtifact skips artifacts without a payload ' +
@@ -401,12 +386,16 @@ test('the binding gate passes once a sealed payload exists', async (t) => {
     'the bindable artifact resolves as before');
 });
 
-test('an absent store and non-WASM artifacts bind unchanged', async (t) => {
+test('an absent store refuses WASM artifacts and non-WASM artifacts bind unchanged', async (t) => {
   const withoutStore = createBindingFixture({withoutStore: true});
-  const resolved = await withoutStore.owner.resolveArtifact(
-    withoutStore.declaration, SECURITY_CONTEXT);
-  t.equal(resolved.artifactDigest, ARTIFACT_DIGEST,
-    'no store keeps the pre-store binding behavior');
+  try {
+    await withoutStore.owner.resolveArtifact(
+      withoutStore.declaration, SECURITY_CONTEXT);
+    t.fail('absent store must reject WASM artifact');
+  } catch (error) {
+    t.ok(error instanceof DeploymentBindingError);
+    t.equal(error.code, ARTIFACT_PAYLOAD_NOT_INTERNALIZED.CODE);
+  }
 
   const container = createBindingFixture({
     artifact: bindableArtifact(RUNTIME_KIND.OCI_CONTAINER),

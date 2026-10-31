@@ -62,21 +62,57 @@ function filterTargets(matrix, allowedIds) {
 }
 
 function renderSvgBarRow(x, y, lbl, met, w, col, sub, barW = 250, subCol = '#64748b') {
+  const fillBar = w > 0 ?
+    `\n    <rect x="${x}" y="${y + 20}" width="${w}" height="8" fill="${col}" rx="3"/>` : '';
   return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${lbl}</text>
     <text x="${x}" y="${y + 14}" fill="#94a3b8" font-size="10">${met}</text>
-    <rect x="${x}" y="${y + 20}" width="${barW}" height="8" fill="#334155" rx="3"/>
-    <rect x="${x}" y="${y + 20}" width="${w}" height="8" fill="${col}" rx="3"/>
+    <rect x="${x}" y="${y + 20}" width="${barW}" height="8" fill="#334155" rx="3"/>${fillBar}
     <text x="${x}" y="${y + 38}" fill="${subCol}" font-size="9">${sub}</text>`;
 }
 
 function computeScaledBarWidth(val, maxVal, maxPx) {
-  return Math.max(4, Math.min(maxPx, Math.round(((val || 0) / maxVal) * maxPx)));
+  if (typeof val !== 'number' || !Number.isFinite(val) || val <= 0) return 0;
+  return Math.max(4, Math.min(maxPx, Math.round((val / maxVal) * maxPx)));
 }
 
 function formatLadderDecisionsSummary(shapes) {
   const s = shapes || {};
-  return `${fmtNum(s['local-only']?.decisionsPerSec, 0)} / ${fmtNum(s['one-remote-stage']?.decisionsPerSec, 0)} / ` +
-    `${fmtNum(s['sequential']?.decisionsPerSec, 0)} / ${fmtNum(s['fan-out']?.decisionsPerSec, 0)} dec/s`;
+  if (typeof s['local-only']?.decisionsPerSec === 'number') {
+    return `${fmtNum(s['local-only']?.decisionsPerSec, 0)} / ${fmtNum(s['one-remote-stage']?.decisionsPerSec, 0)} / ` +
+      `${fmtNum(s['sequential']?.decisionsPerSec, 0)} / ${fmtNum(s['fan-out']?.decisionsPerSec, 0)} dec/s`;
+  }
+  return `[${s['local-only']?.status || 'not measured'}]`;
+}
+
+function renderYbSvgRowA(y, lbl, a, col) {
+  const hasA = typeof a.throughputTxPerSec === 'number' && Number.isFinite(a.throughputTxPerSec);
+  const wA = computeScaledBarWidth(a.throughputTxPerSec, 20, 250);
+  const aMet = hasA ?
+    `${fmtNum(a.throughputTxPerSec, 1)} tx/s (p95: ${fmtNum(a.commitP95Ms, 1)}ms)` :
+    `[${a.status || 'not measured'}]`;
+  return renderSvgBarRow(35, y, lbl, aMet, wA, col, escapeXml(a.evidenceTier || 'not-measured'));
+}
+
+function renderYbSvgRowB(y, lbl, b, col) {
+  const hasB = typeof b.decisionsPerSec === 'number' && Number.isFinite(b.decisionsPerSec);
+  const wB = computeScaledBarWidth(b.decisionsPerSec, 500, 250);
+  const bMet = hasB ?
+    `${fmtNum(b.decisionsPerSec, 1)} dec/s (p99: ${fmtNum(b.p99Ms, 1)}ms)` :
+    `[${b.status || 'not measured'}]`;
+  return renderSvgBarRow(345, y, lbl, bMet, wB, col, escapeXml(b.evidenceTier || 'not-measured'));
+}
+
+function renderYbSvgRowWan(y, lbl, b, col) {
+  const hasWan = typeof b.wanBytesPerDecision === 'number' &&
+    Number.isFinite(b.wanBytesPerDecision);
+  const wan = hasWan ? b.wanBytesPerDecision : null;
+  const rt = (typeof b.sqlRoundTripsPerDecision === 'number' &&
+      Number.isFinite(b.sqlRoundTripsPerDecision)) ?
+    fmtNum(b.sqlRoundTripsPerDecision, 1) : null;
+  const wW = computeScaledBarWidth(wan, 7000, 260);
+  const ladMet = formatLadderDecisionsSummary(b.shapes);
+  const wanLabel = hasWan ? `WAN: ${wan}B (${rt} RT)` : `[${b.status || 'not measured'}]`;
+  return renderSvgBarRow(655, y, lbl, wanLabel, wW, col, ladMet, 260, '#94a3b8');
 }
 
 function renderSingleTargetSvgRow(t, idx) {
@@ -85,17 +121,10 @@ function renderSingleTargetSvgRow(t, idx) {
   const lbl = escapeXml(TARGET_SHORT_LABELS[t.targetId] || t.shortLabel || t.label);
   const a = t.scenarioA || {};
   const b = t.scenarioB || {};
-  const wA = computeScaledBarWidth(a.throughputTxPerSec, 20, 250);
-  const wB = computeScaledBarWidth(b.decisionsPerSec, 500, 250);
-  const aMet = `${fmtNum(a.throughputTxPerSec, 1)} tx/s (p95: ${fmtNum(a.commitP95Ms, 1)}ms)`;
-  const bMet = `${fmtNum(b.decisionsPerSec, 1)} dec/s (p99: ${fmtNum(b.p99Ms, 1)}ms)`;
-  const wan = b.wanBytesPerDecision || 0;
-  const rt = fmtNum(b.sqlRoundTripsPerDecision, 1);
-  const wW = computeScaledBarWidth(wan, 7000, 260);
-  const ladMet = formatLadderDecisionsSummary(b.shapes);
-  return `${renderSvgBarRow(35, y, lbl, aMet, wA, col, escapeXml(a.evidenceTier || 'modeled'))}\n` +
-    `${renderSvgBarRow(345, y, lbl, bMet, wB, col, escapeXml(b.evidenceTier || 'modeled'))}\n` +
-    `${renderSvgBarRow(655, y, lbl, `WAN: ${wan}B (${rt} RT)`, wW, col, ladMet, 260, '#94a3b8')}`;
+  const r1 = renderYbSvgRowA(y, lbl, a, col);
+  const r2 = renderYbSvgRowB(y, lbl, b, col);
+  const r3 = renderYbSvgRowWan(y, lbl, b, col);
+  return `${r1}\n${r2}\n${r3}`;
 }
 
 function renderSvgRows(targets) {
@@ -142,44 +171,112 @@ function renderScenarioBShapeCrossoverSvg(matrix) {
   ]);
 }
 
+function formatTargetShapesMd(t, fS) {
+  const b = t.scenarioB || {};
+  const s = b.shapes || {};
+  const st = b.status;
+  const l = fS(s['local-only'], st);
+  const r = fS(s['one-remote-stage'], st);
+  const sq = fS(s['sequential'], st);
+  const fo = fS(s['fan-out'], st);
+  return `| ${t.targetId} | ${l} | ${r} | ${sq} | ${fo} |`;
+}
+
+function formatTargetShapesHtml(t, fH) {
+  const b = t.scenarioB || {};
+  const s = b.shapes || {};
+  const st = b.status;
+  const l = fH(s['local-only'], st);
+  const r = fH(s['one-remote-stage'], st);
+  const sq = fH(s['sequential'], st);
+  const fo = fH(s['fan-out'], st);
+  return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
+    `<td>${l}</td><td>${r}</td><td>${sq}</td><td>${fo}</td></tr>`;
+}
+
 function renderTables(targets) {
-  const fS = (sh) => `${fmtNum(sh?.decisionsPerSec, 1)} dec/s, p99 ${fmtNum(sh?.p99Ms, 1)}ms, ` +
-    `${sh?.wanBytes ?? 0}B, ${sh?.roundTrips ?? 0}RT`;
-  const fH = (sh) => `${fmtNum(sh?.decisionsPerSec, 1)} dec/s (${fmtNum(sh?.p99Ms, 1)}ms, ` +
-    `${sh?.wanBytes ?? 0}B, ${sh?.roundTrips ?? 0}RT)`;
+  const fS = (sh, parentStatus) => {
+    if (sh?.decisionsPerSec != null) {
+      return `${fmtNum(sh.decisionsPerSec, 1)} dec/s, p99 ${fmtNum(sh.p99Ms, 1)}ms, ` +
+        `${sh.wanBytes ?? 0}B, ${sh.roundTrips ?? 0}RT`;
+    }
+    return `[${sh?.status || parentStatus || 'not measured'}]`;
+  };
+  const fH = (sh, parentStatus) => {
+    if (sh?.decisionsPerSec != null) {
+      return `${fmtNum(sh.decisionsPerSec, 1)} dec/s (${fmtNum(sh.p99Ms, 1)}ms, ` +
+        `${sh.wanBytes ?? 0}B, ${sh.roundTrips ?? 0}RT)`;
+    }
+    return `<span class="badge">${escapeXml(sh?.status || parentStatus || 'not measured')}</span>`;
+  };
   const r = (fn) => arrayJoin(arrayMap(targets, fn), '\n');
   return {
-    trA: r((t) => `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ${t.processCount} | ` +
-      `${t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No (data-loss window)'} | ${t.scenarioA?.evidenceTier} | ` +
-      `${fmtNum(t.scenarioA?.throughputTxPerSec, 2)} | ${fmtNum(t.scenarioA?.commitP50Ms, 2)} | ` +
-      `${fmtNum(t.scenarioA?.commitP95Ms, 2)} | ${fmtNum(t.scenarioA?.commitP99Ms, 2)} | ` +
-      `${t.scenarioA?.semanticProofPassed ?? 0}/33 |`),
-    trB: r((t) => `| ${t.targetId} | ${t.scenarioB?.evidenceTier} | ` +
-      `${fmtNum(t.scenarioB?.decisionsPerSec, 2)} | ${fmtNum(t.scenarioB?.p50Ms, 2)} | ` +
-      `${fmtNum(t.scenarioB?.p95Ms, 2)} | ${fmtNum(t.scenarioB?.p99Ms, 2)} | ` +
-      `${t.scenarioB?.wanBytesPerDecision ?? 0} | ${fmtNum(t.scenarioB?.sqlRoundTripsPerDecision, 2)} | ` +
-      `${t.scenarioB?.movementContinuityPassed ? 'Passed' : 'Not supported'} |`),
-    trS: r((t) => `| ${t.targetId} | ${fS(t.scenarioB?.shapes?.['local-only'])} | ` +
-      `${fS(t.scenarioB?.shapes?.['one-remote-stage'])} | ${fS(t.scenarioB?.shapes?.['sequential'])} | ` +
-      `${fS(t.scenarioB?.shapes?.['fan-out'])} |`),
-    htA: r((t) => `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${escapeXml(t.version)}</td>` +
-      `<td>${t.topologyUnits}</td><td>${t.processCount}</td>` +
-      `<td>${t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No'}</td><td>${escapeXml(t.scenarioA?.evidenceTier)}</td>` +
-      `<td>${fmtNum(t.scenarioA?.throughputTxPerSec, 2)}</td>` +
-      `<td>${fmtNum(t.scenarioA?.commitP50Ms, 2)}</td><td>${fmtNum(t.scenarioA?.commitP95Ms, 2)}</td>` +
-      `<td>${fmtNum(t.scenarioA?.commitP99Ms, 2)}</td><td>${t.scenarioA?.semanticProofPassed ?? 0}/33</td></tr>`),
-    htB: r((t) => `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
-      `<td>${escapeXml(t.scenarioB?.evidenceTier)}</td>` +
-      `<td>${fmtNum(t.scenarioB?.decisionsPerSec, 2)}</td><td>${fmtNum(t.scenarioB?.p50Ms, 2)}</td>` +
-      `<td>${fmtNum(t.scenarioB?.p95Ms, 2)}</td><td>${fmtNum(t.scenarioB?.p99Ms, 2)}</td>` +
-      `<td>${t.scenarioB?.wanBytesPerDecision ?? 0}</td>` +
-      `<td>${fmtNum(t.scenarioB?.sqlRoundTripsPerDecision, 2)}</td>` +
-      `<td>${t.scenarioB?.movementContinuityPassed ? 'Passed' : 'Not supported'}</td></tr>`),
-    htS: r((t) => `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
-      `<td>${fH(t.scenarioB?.shapes?.['local-only'])}</td>` +
-      `<td>${fH(t.scenarioB?.shapes?.['one-remote-stage'])}</td>` +
-      `<td>${fH(t.scenarioB?.shapes?.['sequential'])}</td>` +
-      `<td>${fH(t.scenarioB?.shapes?.['fan-out'])}</td></tr>`),
+    trA: r((t) => {
+      const a = t.scenarioA || {};
+      const rpo = t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No (data-loss window)';
+      if (a.throughputTxPerSec != null) {
+        return `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ${t.processCount} | ` +
+          `${rpo} | ${a.evidenceTier} | ` +
+          `${fmtNum(a.throughputTxPerSec, 2)} | ${fmtNum(a.commitP50Ms, 2)} | ` +
+          `${fmtNum(a.commitP95Ms, 2)} | ${fmtNum(a.commitP99Ms, 2)} | ` +
+          `${a.semanticProofPassed ?? 0}/33 |`;
+      }
+      const st = `[${a.status || 'not measured'}]`;
+      return `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ${t.processCount} | ` +
+        `${rpo} | ${a.evidenceTier} | ${st} | ${st} | ${st} | ${st} | ${a.semanticProofPassed ?? 0}/33 |`;
+    }),
+    trB: r((t) => {
+      const b = t.scenarioB || {};
+      const mov = b.movementContinuityPassed ? 'Passed' : (b.status ? `[${b.status}]` : 'Not supported');
+      if (b.decisionsPerSec != null) {
+        return `| ${t.targetId} | ${b.evidenceTier} | ` +
+          `${fmtNum(b.decisionsPerSec, 2)} | ${fmtNum(b.p50Ms, 2)} | ` +
+          `${fmtNum(b.p95Ms, 2)} | ${fmtNum(b.p99Ms, 2)} | ` +
+          `${b.wanBytesPerDecision ?? 0} | ${fmtNum(b.sqlRoundTripsPerDecision, 2)} | ${mov} |`;
+      }
+      const st = `[${b.status || 'not measured'}]`;
+      return `| ${t.targetId} | ${b.evidenceTier} | ${st} | ${st} | ${st} | ${st} | ${st} | ${st} | ${mov} |`;
+    }),
+    trS: r((t) => formatTargetShapesMd(t, fS)),
+    htA: r((t) => {
+      const a = t.scenarioA || {};
+      const rpo = t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No';
+      if (a.throughputTxPerSec != null) {
+        return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${escapeXml(t.version)}</td>` +
+          `<td>${t.topologyUnits}</td><td>${t.processCount}</td>` +
+          `<td>${rpo}</td><td>${escapeXml(a.evidenceTier)}</td>` +
+          `<td>${fmtNum(a.throughputTxPerSec, 2)}</td>` +
+          `<td>${fmtNum(a.commitP50Ms, 2)}</td><td>${fmtNum(a.commitP95Ms, 2)}</td>` +
+          `<td>${fmtNum(a.commitP99Ms, 2)}</td><td>${a.semanticProofPassed ?? 0}/33</td></tr>`;
+      }
+      const badge = `<span class="badge">${escapeXml(a.status || 'not measured')}</span>`;
+      return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${escapeXml(t.version)}</td>` +
+        `<td>${t.topologyUnits}</td><td>${t.processCount}</td>` +
+        `<td>${rpo}</td><td>${escapeXml(a.evidenceTier)}</td>` +
+        `<td>${badge}</td><td>${badge}</td><td>${badge}</td><td>${badge}</td>` +
+        `<td>${a.semanticProofPassed ?? 0}/33</td></tr>`;
+    }),
+    htB: r((t) => {
+      const b = t.scenarioB || {};
+      const mov = b.movementContinuityPassed ? 'Passed' :
+        (b.status ? `<span class="badge">${escapeXml(b.status)}</span>` : 'Not supported');
+      if (b.decisionsPerSec != null) {
+        return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
+          `<td>${escapeXml(b.evidenceTier)}</td>` +
+          `<td>${fmtNum(b.decisionsPerSec, 2)}</td><td>${fmtNum(b.p50Ms, 2)}</td>` +
+          `<td>${fmtNum(b.p95Ms, 2)}</td><td>${fmtNum(b.p99Ms, 2)}</td>` +
+          `<td>${b.wanBytesPerDecision ?? 0}</td>` +
+          `<td>${fmtNum(b.sqlRoundTripsPerDecision, 2)}</td>` +
+          `<td>${mov}</td></tr>`;
+      }
+      const badge = `<span class="badge">${escapeXml(b.status || 'not measured')}</span>`;
+      return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
+        `<td>${escapeXml(b.evidenceTier)}</td>` +
+        `<td>${badge}</td><td>${badge}</td><td>${badge}</td><td>${badge}</td>` +
+        `<td>${badge}</td><td>${badge}</td>` +
+        `<td>${mov}</td></tr>`;
+    }),
+    htS: r((t) => formatTargetShapesHtml(t, fH)),
   };
 }
 
@@ -198,16 +295,16 @@ Comparative evaluation of Lagrange against YugabyteDB 2024.2 and Apache Ignite 3
 
 ## Distributed SQL replication and tablet RPC comparison
 YugabyteDB 2024.2 distributes SQL execution over DocDB tablet storage using per-tablet Raft consensus (RF=3):
-- **App service vs stored procedure boundary**: Running SQL from an external service (\`yugabytedb-ysql-rf3\`, 4 units) incurs repeated app-to-TServer SQL round-trips (3.0 avg RT, 3840B WAN bytes, 234.8 dec/s). Pushing decision logic into a YSQL stored procedure (\`yugabytedb-stored-proc\`, 3 units) eliminates external SQL round-trips, reducing round-trips to 2.25 and WAN bytes to 2420B, raising throughput to 286.5 dec/s.
-- **Cross-tablet RPC overhead**: Even with stored procedures, transactions spanning account, merchant, and device tables must coordinate across tablet leaders. On multi-hop graph shapes, remote tablet RPCs limit throughput (142.0 dec/s on sequential, 159.2 dec/s on fan-out for YSQL; 184.0 dec/s and 209.0 dec/s for stored procedure).
-- **Contended OLTP baseline**: In Scenario A, tablet Raft replication and distributed transaction status records yield 7.4 tx/s (commit p95 1190.0 ms), reflecting cross-tablet 2PC commit latency.
+- **App service vs stored procedure boundary**: Running SQL from an external service (\`yugabytedb-ysql-rf3\`, 4 units) incurs repeated app-to-TServer SQL round-trips. Pushing decision logic into a YSQL stored procedure (\`yugabytedb-stored-proc\`, 3 units) eliminates external SQL round-trips.
+- **Cross-tablet RPC overhead**: Even with stored procedures, transactions spanning account, merchant, and device tables must coordinate across tablet leaders.
+- **Contended OLTP baseline**: In Scenario A, tablet Raft replication and distributed transaction status records evaluate cross-tablet 2PC commit latency.
 
 ## Colocated compute comparison (Apache Ignite 3 vs Citus vs Lagrange)
 Evaluating colocated compute grid execution (\`JobTarget.colocated\`) in Apache Ignite 3 against Citus distributed functions and Lagrange native WASI actor state:
-- **Single-locality parity**: On \`local-only\` decisions where compute executes directly on the partition primary, Apache Ignite 3 reaches 612.0 dec/s (4.5 ms p99, 180B WAN bytes), closely matching Citus distributed functions (605.0 dec/s, 4.8 ms p99) and Lagrange (620.0 dec/s, 4.2 ms p99).
-- **Cross-partition compute dispatch**: In cross-partition shapes (\`one-remote-stage\`, \`sequential\`, \`fan-out\`), Ignite 3 dispatches compute jobs via binary protocol (640B to 1280B WAN bytes), delivering 432.0 dec/s remote, 274.0 dec/s sequential, and 316.4 dec/s fan-out. Ignite 3 outperforms Citus distributed functions (228.0 dec/s sequential, 268.0 dec/s fan-out) by avoiding relational query re-planning across worker nodes.
-- **Per-shape crossover dynamics**: On \`sequential\`, single-primary Patroni HA (234.0 dec/s) crosses over Citus (228.0 dec/s) and YugabyteDB stored procedures (184.0 dec/s), because serial multi-hop network round-trips penalize distributed tablet/shard RPCs more than local execution on an HA primary. TiDB (190.0 dec/s) also crosses over YugabyteDB stored procedures (184.0 dec/s) due to TiKV coprocessor pushdown.
-- **Lagrange native actor advantage**: Lagrange colocates compute directly with partition consensus state, maintaining 495.0 dec/s (\`one-remote-stage\`), 380.0 dec/s (\`sequential\`), and 410.0 dec/s (\`fan-out\`) while preserving live partition movement continuity.
+- **Single-locality control**: On \`local-only\` decisions where compute executes directly on the partition primary, evaluating Apache Ignite 3 (\`ignite3-colocated-compute\`), Citus distributed functions, and Lagrange.
+- **Cross-partition compute dispatch**: In cross-partition shapes (\`one-remote-stage\`, \`sequential\`, \`fan-out\`), Ignite 3 dispatches compute jobs via binary protocol across cluster nodes.
+- **Per-shape crossover dynamics**: Multi-hop shapes evaluate the trade-off between serial RPC hops, coprocessor pushdown, and in-process execution.
+- **Lagrange native actor state**: Lagrange colocates compute directly with partition consensus state; comparative performance claims await admitted GCP/lab measurements.
 
 | Target | Local-Only | One Remote Stage | Sequential | Fan-Out |
 | --- | --- | --- | --- | --- |
@@ -248,10 +345,10 @@ function renderYugabyteIgniteComparisonHtml(matrix) {
     <div class="chart-box">\n${renderScenarioBShapeCrossoverSvg(matrix)}    </div>
     <div class="card"><h2>Distributed SQL Replication and Tablet RPC Comparison</h2>
       <p>YugabyteDB 2024.2 distributes SQL over DocDB tablet storage using per-tablet Raft (RF=3):</p>
-      <ul><li><strong>App service vs stored procedure</strong>: <code>yugabytedb-ysql-rf3</code> incurs repeated app-to-TServer SQL round-trips (3.0 avg RT, 3840B WAN bytes, 234.8 dec/s). Stored procedures (<code>yugabytedb-stored-proc</code>) eliminate external hops (2.25 RT, 2420B, 286.5 dec/s).</li><li><strong>Cross-tablet RPC overhead</strong>: Remote tablet RPCs limit multi-hop shape throughput (142.0 dec/s sequential, 159.2 dec/s fan-out for YSQL; 184.0 and 209.0 dec/s for stored procedure).</li><li><strong>Contended OLTP baseline</strong>: Tablet Raft replication yields 7.4 tx/s (commit p95 1190.0 ms).</li></ul></div>
+      <ul><li><strong>App service vs stored procedure</strong>: <code>yugabytedb-ysql-rf3</code> incurs repeated app-to-TServer SQL round-trips. Stored procedures (<code>yugabytedb-stored-proc</code>) eliminate external hops.</li><li><strong>Cross-tablet RPC overhead</strong>: Remote tablet RPCs evaluate multi-hop shape throughput.</li><li><strong>Contended OLTP baseline</strong>: Tablet Raft replication evaluates cross-tablet 2PC commit latency.</li></ul></div>
     <div class="card"><h2>Colocated Compute Comparison (Apache Ignite 3 vs Citus vs Lagrange)</h2>
       <p>Evaluating colocated compute grid execution (<code>JobTarget.colocated</code>) in Apache Ignite 3 against Citus distributed functions and Lagrange native WASI actor state:</p>
-      <ul><li><strong>Single-locality parity</strong>: On <code>local-only</code> decisions, Apache Ignite 3 reaches 612.0 dec/s (4.5 ms p99, 180B WAN bytes), closely matching Citus distributed functions (605.0 dec/s) and Lagrange (620.0 dec/s).</li><li><strong>Cross-partition compute dispatch</strong>: In cross-partition shapes, Ignite 3 dispatches compute jobs via binary protocol (640B to 1280B WAN bytes), delivering 432.0 dec/s remote, 274.0 dec/s sequential, and 316.4 dec/s fan-out, outperforming Citus distributed functions.</li><li><strong>Per-shape crossover</strong>: On <code>sequential</code>, Patroni HA (234.0 dec/s) crosses over Citus (228.0 dec/s) and YB stored proc (184.0 dec/s), while TiDB (190.0 dec/s) crosses over YB stored proc due to TiKV coprocessor pushdown.</li><li><strong>Lagrange native advantage</strong>: Lagrange maintains 495.0 dec/s remote, 380.0 dec/s sequential, and 410.0 dec/s fan-out with live partition movement continuity.</li></ul>
+      <ul><li><strong>Single-locality control</strong>: On <code>local-only</code> decisions, evaluating Apache Ignite 3 (<code>ignite3-colocated-compute</code>), Citus distributed functions, and Lagrange.</li><li><strong>Cross-partition compute dispatch</strong>: In cross-partition shapes, Ignite 3 dispatches compute jobs via binary protocol across cluster nodes.</li><li><strong>Per-shape crossover</strong>: Multi-hop shapes evaluate the trade-off between serial RPC hops, coprocessor pushdown, and in-process execution.</li><li><strong>Lagrange native advantage</strong>: Lagrange native actor state maintains colocated compute; comparative performance claims await admitted GCP/lab measurements.</li></ul>
       <table><thead><tr><th>Target</th><th>Local-Only</th><th>One Remote Stage</th><th>Sequential</th><th>Fan-Out</th></tr></thead><tbody>\n${htS}\n</tbody></table></div>
     <div class="card"><h2>Scenario A: Contended OLTP Baseline</h2>
       <table><thead><tr><th>Target</th><th>Version</th><th>Units</th><th>Processes</th><th>RPO=0 HA</th><th>Evidence Tier</th><th>Throughput (tx/s)</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>Proofs</th></tr></thead><tbody>\n${htA}\n</tbody></table></div>

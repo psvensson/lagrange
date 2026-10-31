@@ -20,6 +20,7 @@ import {
   runBuild,
   runDeploy,
   runGenerate,
+  runPublish,
 } from '../../src/cli/service-pipeline-command.js';
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {
@@ -334,6 +335,7 @@ function createMovieLensServicePipeline() {
       }),
     runDeploy,
     runGenerate,
+    runPublish,
   };
 }
 
@@ -356,10 +358,18 @@ async function deployMovieLensCallBinding({
   await pipeline.runBuild({projectDirectory, writeOutput});
   const session = await openSession({queryRows, target, sleep});
   try {
+    const publishFn = pipeline.runPublish || runPublish;
+    const published = await publishFn({
+      createSqlClient: () => session,
+      projectDirectory,
+      writeOutput,
+    });
     const deployed = await pipeline.runDeploy({
       createSqlClient: () => session,
       idempotencyKey: IDEMPOTENCY_KEY,
       projectDirectory,
+      receiptPath: published?.receiptPath,
+      registration: published?.registration,
       writeOutput,
     });
     return {

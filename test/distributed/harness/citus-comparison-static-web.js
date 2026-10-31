@@ -57,24 +57,60 @@ function getCitusComparisonTargets(matrix) {
 }
 
 function renderSvgBarRow(x, y, [l1, l2], met, w, col, sub, barW = 250, subCol = '#64748b') {
+  const fillBar = w > 0 ?
+    `\n    <rect x="${x}" y="${y + 30}" width="${w}" height="8" fill="${col}" rx="3"/>` : '';
   return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${l1}</text>
     <text x="${x}" y="${y + 12}" fill="#94a3b8" font-size="10" font-family="monospace">${l2}</text>
     <text x="${x}" y="${y + 24}" fill="#cbd5e1" font-size="10">${met}</text>
-    <rect x="${x}" y="${y + 30}" width="${barW}" height="8" fill="#334155" rx="3"/>
-    <rect x="${x}" y="${y + 30}" width="${w}" height="8" fill="${col}" rx="3"/>
+    <rect x="${x}" y="${y + 30}" width="${barW}" height="8" fill="#334155" rx="3"/>${fillBar}
     <text x="${x}" y="${y + 48}" fill="${subCol}" font-size="9">${sub}</text>`;
 }
 
 function computeScaledBarWidth(val, maxVal, maxPx) {
-  return Math.max(4, Math.min(maxPx, Math.round(((val || 0) / maxVal) * maxPx)));
+  if (typeof val !== 'number' || !Number.isFinite(val) || val <= 0) return 0;
+  return Math.max(4, Math.min(maxPx, Math.round((val / maxVal) * maxPx)));
 }
 
 function formatLadderDecisionsSummary(shapes) {
   const s = shapes || {};
-  return `${fmtNum(s['local-only']?.decisionsPerSec, 0)} / ` +
-    `${fmtNum(s['one-remote-stage']?.decisionsPerSec, 0)} / ` +
-    `${fmtNum(s['sequential']?.decisionsPerSec, 0)} / ` +
-    `${fmtNum(s['fan-out']?.decisionsPerSec, 0)} dec/s`;
+  if (typeof s['local-only']?.decisionsPerSec === 'number') {
+    return `${fmtNum(s['local-only']?.decisionsPerSec, 0)} / ` +
+      `${fmtNum(s['one-remote-stage']?.decisionsPerSec, 0)} / ` +
+      `${fmtNum(s['sequential']?.decisionsPerSec, 0)} / ` +
+      `${fmtNum(s['fan-out']?.decisionsPerSec, 0)} dec/s`;
+  }
+  return `[${s['local-only']?.status || 'not measured'}]`;
+}
+
+function renderScenarioASvgRow(y, lines, a, col) {
+  const hasA = typeof a.throughputTxPerSec === 'number' && Number.isFinite(a.throughputTxPerSec);
+  const wA = computeScaledBarWidth(a.throughputTxPerSec, 20, 250);
+  const aMet = hasA ?
+    `${fmtNum(a.throughputTxPerSec, 1)} tx/s (p95: ${fmtNum(a.commitP95Ms, 1)}ms)` :
+    `[${a.status || 'not measured'}]`;
+  return renderSvgBarRow(35, y, lines, aMet, wA, col, escapeXml(a.evidenceTier || 'not-measured'));
+}
+
+function renderScenarioBSvgRow(y, lines, b, col) {
+  const hasB = typeof b.decisionsPerSec === 'number' && Number.isFinite(b.decisionsPerSec);
+  const wB = computeScaledBarWidth(b.decisionsPerSec, 500, 250);
+  const bMet = hasB ?
+    `${fmtNum(b.decisionsPerSec, 1)} dec/s (p99: ${fmtNum(b.p99Ms, 1)}ms)` :
+    `[${b.status || 'not measured'}]`;
+  return renderSvgBarRow(345, y, lines, bMet, wB, col, escapeXml(b.evidenceTier || 'not-measured'));
+}
+
+function renderScenarioBWanSvgRow(y, lines, b, col) {
+  const hasWan = typeof b.wanBytesPerDecision === 'number' &&
+    Number.isFinite(b.wanBytesPerDecision);
+  const wan = hasWan ? b.wanBytesPerDecision : null;
+  const rt = (typeof b.sqlRoundTripsPerDecision === 'number' &&
+      Number.isFinite(b.sqlRoundTripsPerDecision)) ?
+    fmtNum(b.sqlRoundTripsPerDecision, 1) : null;
+  const wW = computeScaledBarWidth(wan, 7000, 260);
+  const ladMet = formatLadderDecisionsSummary(b.shapes);
+  const wanLabel = hasWan ? `WAN: ${wan}B (${rt} RT)` : `[${b.status || 'not measured'}]`;
+  return renderSvgBarRow(655, y, lines, wanLabel, wW, col, ladMet, 260, '#94a3b8');
 }
 
 function renderSingleTargetSvgRows(t, idx) {
@@ -83,17 +119,9 @@ function renderSingleTargetSvgRows(t, idx) {
   const lines = TARGET_STACKED_LABELS[t.targetId] || [t.label, ''];
   const a = t.scenarioA || {};
   const b = t.scenarioB || {};
-  const wA = computeScaledBarWidth(a.throughputTxPerSec, 20, 250);
-  const wB = computeScaledBarWidth(b.decisionsPerSec, 500, 250);
-  const aMet = `${fmtNum(a.throughputTxPerSec, 1)} tx/s (p95: ${fmtNum(a.commitP95Ms, 1)}ms)`;
-  const bMet = `${fmtNum(b.decisionsPerSec, 1)} dec/s (p99: ${fmtNum(b.p99Ms, 1)}ms)`;
-  const r1 = renderSvgBarRow(35, y, lines, aMet, wA, col, escapeXml(a.evidenceTier || 'modeled'));
-  const r2 = renderSvgBarRow(345, y, lines, bMet, wB, col, escapeXml(b.evidenceTier || 'modeled'));
-  const wan = b.wanBytesPerDecision || 0;
-  const rt = fmtNum(b.sqlRoundTripsPerDecision, 1);
-  const wW = computeScaledBarWidth(wan, 7000, 260);
-  const ladMet = formatLadderDecisionsSummary(b.shapes);
-  const r3 = renderSvgBarRow(655, y, lines, `WAN: ${wan}B (${rt} RT)`, wW, col, ladMet, 260, '#94a3b8');
+  const r1 = renderScenarioASvgRow(y, lines, a, col);
+  const r2 = renderScenarioBSvgRow(y, lines, b, col);
+  const r3 = renderScenarioBWanSvgRow(y, lines, b, col);
   return `${r1}\n${r2}\n${r3}`;
 }
 
@@ -127,46 +155,83 @@ function renderTables(targets) {
   const trA = arrayJoin(arrayMap(targets, (t) => {
     const a = t.scenarioA || {};
     const rpo = t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No (data-loss window)';
+    const proofs = `${a.semanticProofPassed ?? 0}/33`;
+    if (a.throughputTxPerSec != null) {
+      return `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ${t.processCount} | ${rpo} | ` +
+        `${a.evidenceTier} | ${fmtNum(a.throughputTxPerSec, 2)} | ${fmtNum(a.commitP50Ms, 2)} | ` +
+        `${fmtNum(a.commitP95Ms, 2)} | ${fmtNum(a.commitP99Ms, 2)} | ${proofs} |`;
+    }
+    const st = `[${a.status || 'not measured'}]`;
     return `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ${t.processCount} | ${rpo} | ` +
-      `${a.evidenceTier} | ${fmtNum(a.throughputTxPerSec, 2)} | ${fmtNum(a.commitP50Ms, 2)} | ` +
-      `${fmtNum(a.commitP95Ms, 2)} | ${fmtNum(a.commitP99Ms, 2)} | ${a.semanticProofPassed ?? 0}/33 |`;
+      `${a.evidenceTier} | ${st} | ${st} | ${st} | ${st} | ${proofs} |`;
   }), '\n');
   const trB = arrayJoin(arrayMap(targets, (t) => {
     const b = t.scenarioB || {};
-    const mov = b.movementContinuityPassed ? 'Passed' : 'Not supported';
-    return `| ${t.targetId} | ${b.evidenceTier} | ${fmtNum(b.decisionsPerSec, 2)} | ` +
-      `${fmtNum(b.p50Ms, 2)} | ${fmtNum(b.p95Ms, 2)} | ${fmtNum(b.p99Ms, 2)} | ` +
-      `${b.wanBytesPerDecision ?? 0} | ${fmtNum(b.sqlRoundTripsPerDecision, 2)} | ${mov} |`;
+    const mov = b.movementContinuityPassed ? 'Passed' : (b.status ? `[${b.status}]` : 'Not supported');
+    if (b.decisionsPerSec != null) {
+      return `| ${t.targetId} | ${b.evidenceTier} | ${fmtNum(b.decisionsPerSec, 2)} | ` +
+        `${fmtNum(b.p50Ms, 2)} | ${fmtNum(b.p95Ms, 2)} | ${fmtNum(b.p99Ms, 2)} | ` +
+        `${b.wanBytesPerDecision ?? 0} | ${fmtNum(b.sqlRoundTripsPerDecision, 2)} | ${mov} |`;
+    }
+    const st = `[${b.status || 'not measured'}]`;
+    return `| ${t.targetId} | ${b.evidenceTier} | ${st} | ${st} | ${st} | ${st} | ${st} | ${st} | ${mov} |`;
   }), '\n');
   const trS = arrayJoin(arrayMap(targets, (t) => {
     const s = t.scenarioB?.shapes || {};
-    const fmt = (sh) => `${fmtNum(sh?.decisionsPerSec, 1)} dec/s, p99 ${fmtNum(sh?.p99Ms, 1)}ms, ` +
-      `${sh?.wanBytes ?? 0}B, ${sh?.roundTrips ?? 0}RT`;
+    const fmt = (sh) => {
+      if (sh?.decisionsPerSec != null) {
+        return `${fmtNum(sh.decisionsPerSec, 1)} dec/s, p99 ${fmtNum(sh.p99Ms, 1)}ms, ` +
+          `${sh.wanBytes ?? 0}B, ${sh.roundTrips ?? 0}RT`;
+      }
+      return `[${sh?.status || t.scenarioB?.status || 'not measured'}]`;
+    };
     return `| ${t.targetId} | ${fmt(s['local-only'])} | ${fmt(s['one-remote-stage'])} | ` +
       `${fmt(s['sequential'])} | ${fmt(s['fan-out'])} |`;
   }), '\n');
   const htA = arrayJoin(arrayMap(targets, (t) => {
     const a = t.scenarioA || {};
     const rpo = t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No';
+    if (a.throughputTxPerSec != null) {
+      return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${escapeXml(t.version)}</td>` +
+        `<td>${t.topologyUnits}</td><td>${t.processCount}</td><td>${rpo}</td>` +
+        `<td>${escapeXml(a.evidenceTier)}</td><td>${fmtNum(a.throughputTxPerSec, 2)}</td>` +
+        `<td>${fmtNum(a.commitP50Ms, 2)}</td><td>${fmtNum(a.commitP95Ms, 2)}</td>` +
+        `<td>${fmtNum(a.commitP99Ms, 2)}</td><td>${a.semanticProofPassed ?? 0}/33</td></tr>`;
+    }
+    const badge = `<span class="badge">${escapeXml(a.status || 'not measured')}</span>`;
     return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${escapeXml(t.version)}</td>` +
       `<td>${t.topologyUnits}</td><td>${t.processCount}</td><td>${rpo}</td>` +
-      `<td>${escapeXml(a.evidenceTier)}</td><td>${fmtNum(a.throughputTxPerSec, 2)}</td>` +
-      `<td>${fmtNum(a.commitP50Ms, 2)}</td><td>${fmtNum(a.commitP95Ms, 2)}</td>` +
-      `<td>${fmtNum(a.commitP99Ms, 2)}</td><td>${a.semanticProofPassed ?? 0}/33</td></tr>`;
+      `<td>${escapeXml(a.evidenceTier)}</td><td>${badge}</td>` +
+      `<td>${badge}</td><td>${badge}</td>` +
+      `<td>${badge}</td><td>${a.semanticProofPassed ?? 0}/33</td></tr>`;
   }), '\n');
   const htB = arrayJoin(arrayMap(targets, (t) => {
     const b = t.scenarioB || {};
-    const mov = b.movementContinuityPassed ? 'Passed' : 'Not supported';
+    const mov = b.movementContinuityPassed ? 'Passed' :
+      (b.status ? `<span class="badge">${escapeXml(b.status)}</span>` : 'Not supported');
+    if (b.decisionsPerSec != null) {
+      return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
+        `<td>${escapeXml(b.evidenceTier)}</td><td>${fmtNum(b.decisionsPerSec, 2)}</td>` +
+        `<td>${fmtNum(b.p50Ms, 2)}</td><td>${fmtNum(b.p95Ms, 2)}</td><td>${fmtNum(b.p99Ms, 2)}</td>` +
+        `<td>${b.wanBytesPerDecision ?? 0}</td><td>${fmtNum(b.sqlRoundTripsPerDecision, 2)}</td>` +
+        `<td>${mov}</td></tr>`;
+    }
+    const badge = `<span class="badge">${escapeXml(b.status || 'not measured')}</span>`;
     return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
-      `<td>${escapeXml(b.evidenceTier)}</td><td>${fmtNum(b.decisionsPerSec, 2)}</td>` +
-      `<td>${fmtNum(b.p50Ms, 2)}</td><td>${fmtNum(b.p95Ms, 2)}</td><td>${fmtNum(b.p99Ms, 2)}</td>` +
-      `<td>${b.wanBytesPerDecision ?? 0}</td><td>${fmtNum(b.sqlRoundTripsPerDecision, 2)}</td>` +
+      `<td>${escapeXml(b.evidenceTier)}</td><td>${badge}</td>` +
+      `<td>${badge}</td><td>${badge}</td><td>${badge}</td>` +
+      `<td>${badge}</td><td>${badge}</td>` +
       `<td>${mov}</td></tr>`;
   }), '\n');
   const htS = arrayJoin(arrayMap(targets, (t) => {
     const s = t.scenarioB?.shapes || {};
-    const fmt = (sh) => `${fmtNum(sh?.decisionsPerSec, 1)} dec/s (${fmtNum(sh?.p99Ms, 1)}ms, ` +
-      `${sh?.wanBytes ?? 0}B, ${sh?.roundTrips ?? 0}RT)`;
+    const fmt = (sh) => {
+      if (sh?.decisionsPerSec != null) {
+        return `${fmtNum(sh.decisionsPerSec, 1)} dec/s (${fmtNum(sh.p99Ms, 1)}ms, ` +
+          `${sh.wanBytes ?? 0}B, ${sh.roundTrips ?? 0}RT)`;
+      }
+      return `<span class="badge">${escapeXml(sh?.status || t.scenarioB?.status || 'not measured')}</span>`;
+    };
     return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${fmt(s['local-only'])}</td>` +
       `<td>${fmt(s['one-remote-stage'])}</td><td>${fmt(s['sequential'])}</td>` +
       `<td>${fmt(s['fan-out'])}</td></tr>`;
@@ -193,15 +258,15 @@ Citus distributed tables require explicit distribution keys and colocation group
 - **Account entity colocation**: \`accounts\` and \`account_history\` share distribution key \`account_id\` with \`colocate_with => 'accounts'\`, ensuring account mutations and history appends execute within identical worker shards.
 - **Merchant entity colocation**: \`merchants\` and \`merchant_history\` use distribution key \`merchant_id\` with \`colocate_with => 'merchants'\`, isolating merchant aggregation and balance checks to colocated merchant shards.
 - **Device entity colocation**: \`devices\` and \`device_history\` use distribution key \`device_id\` with \`colocate_with => 'devices'\`, ensuring device fingerprinting and velocity checks run locally within device shards.
-- **Topology & durability boundary**: Citus coordinator routes queries across 4 worker nodes (RF=3 HA). Sharded SQL via coordinator (\`citus-sql-service\`, 5 units) incurs coordinator planning and multi-hop execution latency (11.2 tx/s, 256.4 dec/s).
+- **Topology & durability boundary**: Citus coordinator routes queries across 4 worker nodes (RF=3 HA), evaluating sharded SQL via coordinator (\`citus-sql-service\`) against colocated distributed functions (\`citus-distributed-function\`).
 
 ## Entity-locality progression (create_distributed_function vs Lagrange)
 
 Evaluating server-side distributed function pushdown (\`create_distributed_function\`) against Lagrange native WASI actor execution across Scenario B graph shapes:
 
-- **Single-locality parity**: On \`local-only\` decisions where account, merchant, and device states are colocated or access is single-entity, \`citus-distributed-function\` routes directly to the shard worker, achieving 605.0 dec/s (4.8 ms p99) and nearly matching Lagrange's 620.0 dec/s (4.2 ms p99).
-- **Cross-entity routing overhead**: As workflow stages span multiple entities (\`one-remote-stage\`, \`sequential\`, \`fan-out\`), Citus distributed functions incur cross-shard SQL hops (1240B to 2360B WAN bytes, 1.75 avg round-trips), dropping throughput to 382.0 dec/s (\`one-remote-stage\`), 228.0 dec/s (\`sequential\`), and 268.0 dec/s (\`fan-out\`).
-- **Lagrange native actor advantage**: Lagrange colocates execution with partition consensus state (0 local round-trips), maintaining 495.0 dec/s (\`one-remote-stage\`), 380.0 dec/s (\`sequential\`), and 410.0 dec/s (\`fan-out\`). Lagrange's advantage widens under cross-entity stages and live partition movement continuity.
+- **Single-locality control**: On \`local-only\` decisions where account, merchant, and device states are colocated or access is single-entity, \`citus-distributed-function\` routes directly to the shard worker, collapsing multi-statement SQL hops.
+- **Cross-entity routing overhead**: As workflow stages span multiple entities (\`one-remote-stage\`, \`sequential\`, \`fan-out\`), Citus distributed functions evaluate cross-shard query routing across worker nodes.
+- **Lagrange native actor state**: Lagrange colocates execution directly with partition consensus state. Comparative performance claims across systems await admitted GCP/lab measurements.
 
 | Target | Local-Only | One Remote Stage | Sequential | Fan-Out |
 | --- | --- | --- | --- | --- |
@@ -247,12 +312,12 @@ function renderCitusComparisonHtml(matrix) {
     <div class="card">
       <h2>Colocated Shard Topology &amp; Distribution-Key Faithfulness</h2>
       <p>Citus distributed tables require explicit distribution keys and colocation groups to execute without cross-worker hops:</p>
-      <ul><li><strong>Account colocation</strong>: <code>accounts</code> and <code>account_history</code> share distribution key <code>account_id</code> (<code>colocate_with =&gt; &#39;accounts&#39;</code>).</li><li><strong>Merchant colocation</strong>: <code>merchants</code> and <code>merchant_history</code> use distribution key <code>merchant_id</code> (<code>colocate_with =&gt; &#39;merchants&#39;</code>).</li><li><strong>Device colocation</strong>: <code>devices</code> and <code>device_history</code> use distribution key <code>device_id</code> (<code>colocate_with =&gt; &#39;devices&#39;</code>).</li><li><strong>Sharded SQL vs UDF</strong>: <code>citus-sql-service</code> incurs coordinator routing latency (256.4 dec/s); <code>citus-distributed-function</code> pushes execution directly to worker shards (364.2 dec/s overall, 605.0 dec/s local-only).</li></ul>
+      <ul><li><strong>Account colocation</strong>: <code>accounts</code> and <code>account_history</code> share distribution key <code>account_id</code> (<code>colocate_with =&gt; &#39;accounts&#39;</code>).</li><li><strong>Merchant colocation</strong>: <code>merchants</code> and <code>merchant_history</code> use distribution key <code>merchant_id</code> (<code>colocate_with =&gt; &#39;merchants&#39;</code>).</li><li><strong>Device colocation</strong>: <code>devices</code> and <code>device_history</code> use distribution key <code>device_id</code> (<code>colocate_with =&gt; &#39;devices&#39;</code>).</li><li><strong>Sharded SQL vs UDF</strong>: evaluating coordinator routing in <code>citus-sql-service</code> against worker shard pushdown in <code>citus-distributed-function</code>.</li></ul>
     </div>
     <div class="card">
       <h2>Entity-Locality Progression (create_distributed_function vs Lagrange)</h2>
-      <p>Progression across 4 graph shapes showing single-locality parity and cross-entity scaling:</p>
-      <ul><li><strong>Local-only parity</strong>: <code>citus-distributed-function</code> reaches 605.0 dec/s (p99 4.8ms), nearly matching Lagrange&#39;s 620.0 dec/s (p99 4.2ms).</li><li><strong>Cross-entity fan-out</strong>: As stages span remote entities, Citus incurs inter-worker hops (382.0 dec/s remote, 228.0 dec/s sequential, 268.0 dec/s fan-out).</li><li><strong>Lagrange native advantage</strong>: Lagrange native actor state maintains higher throughput across sequential (380.0 dec/s) and fan-out (410.0 dec/s) with live movement continuity.</li></ul>
+      <p>Progression across 4 graph shapes showing single-locality and cross-entity scaling:</p>
+      <ul><li><strong>Local-only control</strong>: <code>citus-distributed-function</code> routes directly to the shard worker, collapsing multi-statement round-trips.</li><li><strong>Cross-entity fan-out</strong>: As stages span remote entities, Citus incurs inter-worker hops.</li><li><strong>Lagrange native actor state</strong>: Lagrange native actor state colocates execution directly with partition consensus; comparative performance claims await admitted GCP/lab measurements.</li></ul>
       <table><thead><tr><th>Target</th><th>Local-Only</th><th>One Remote Stage</th><th>Sequential</th><th>Fan-Out</th></tr></thead><tbody>\n${htS}\n</tbody></table>
     </div>
     <div class="card">

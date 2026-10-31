@@ -75,6 +75,9 @@ import {
 import {
   bindServiceLifecycleCommandOwnerToSqlRuntime,
 } from './service-lifecycle-command-owner-binding.js';
+import {
+  attachArtifactPayloadStore,
+} from './artifact-payload-store-setup.js';
 
 /**
  * Subsystem identifier for logging.
@@ -142,6 +145,14 @@ function createAndWireServiceLifecycleCommandOwner(
   sqlQueryEngine.setRuntimeAccessPolicyOwner(
     systemMetadataOwners.runtimeAccessPolicyOwner,
   );
+  if (sqlQueryEngine) {
+    attachArtifactPayloadStore({
+      deploymentBindingOwner: systemMetadataOwners.deploymentBindingOwner,
+      logger: options.logger,
+      serviceLifecycleCommandOwner: commandOwner,
+      sqlQueryEngine,
+    });
+  }
   if (options.wasmComponentDriver) {
     options.wasmComponentDriver.setArtifactLoader(
       (target) => commandOwner.loadComponentArtifact(target),

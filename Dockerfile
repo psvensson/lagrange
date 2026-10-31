@@ -24,7 +24,7 @@ WORKDIR /app
 
 COPY --from=builder --chown=10001:10001 /data /data
 COPY --from=builder /app/node_modules ./node_modules
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY src/ ./src/
 COPY wit/ ./wit/
 # The vendored raft-rs binding at its layout root beside src/, where the

@@ -12,7 +12,7 @@
  */
 
 import assert from 'node:assert/strict';
-import {mkdtemp, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -253,12 +253,21 @@ function withPackageId(binding, packageId) {
 // binding (both request routes and the call), and one CONFIGURE SERVICE
 // ACCESS per generated access policy. The example does not re-implement
 // any deployment contract - it replays the compiler's records.
-async function deploy(node, receipt, records) {
+async function deploy(node, receipt, records, paths) {
+  const componentBytes = await readFile(paths.componentPath);
+  await executeSql(
+    node,
+    'PUBLISH SERVICE ARTIFACT $1',
+    [JSON.stringify({
+      artifact_digest: records.manifest.artifact.digest,
+      bytes: componentBytes.toString('base64'),
+      media_type: records.manifest.artifact.media_type || 'application/wasm',
+    })],
+  );
   const installed = await executeSql(
     node,
     'INSTALL SERVICE $1',
     [JSON.stringify({
-      artifact_source: {kind: 'local_oci_layout', location: receipt.layoutPath},
       config: {},
       idempotency_key: SERVICE.IDEMPOTENCY_KEY,
       manifest: records.manifest,
@@ -617,7 +626,7 @@ async function runCallBindingAccountSummaryExample(options = {}) {
     logPhase('splitting the ledger partition on its id median');
     const partitions = await splitLedgerPartition(node, created.partitionId);
     logPhase('INSTALL SERVICE + generated CREATE BINDINGs + SERVICE ACCESS');
-    const deployment = await deploy(node, receipt, records);
+    const deployment = await deploy(node, receipt, records, paths);
     logPhase('waiting for both request Cells and the call Cell');
     const observations =
       await exerciseDeployment(node, rows, partitions, deployment);

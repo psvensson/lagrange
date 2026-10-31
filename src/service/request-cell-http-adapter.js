@@ -28,6 +28,9 @@ const IDEMPOTENCY_HEADER = 'idempotency-key';
 const RESPONSE_CONTENT_TYPE = 'content-type';
 const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
 const REQUEST_CELL_URL_ORIGIN = 'http://request-cell.local';
+const HTTP_STATUS_BAD_REQUEST = 400;
+const INVALID_JSON_BODY_MESSAGE = 'Request body must be a valid JSON object';
+const NON_OBJECT_JSON_BODY_MESSAGE = 'Request body must be a JSON object';
 const FORWARDED_REQUEST_HEADERS = Object.freeze([
   'accept',
   'content-type',
@@ -76,9 +79,53 @@ function normalizedRequestHeaders(headers = {}) {
   return selected;
 }
 
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function normalizeHttpRequestBody(rawBody) {
+  if (rawBody === undefined || rawBody === null) {
+    return null;
+  }
+  if (typeof rawBody === 'string') {
+    if (rawBody.trim().length === 0) {
+      return null;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(rawBody);
+    } catch (cause) {
+      throw createRoutingFailure(
+        REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_REQUEST,
+        INVALID_JSON_BODY_MESSAGE,
+        {cause, httpStatus: HTTP_STATUS_BAD_REQUEST},
+      );
+    }
+    if (!isPlainObject(parsed)) {
+      throw createRoutingFailure(
+        REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_REQUEST,
+        NON_OBJECT_JSON_BODY_MESSAGE,
+        {httpStatus: HTTP_STATUS_BAD_REQUEST},
+      );
+    }
+    return parsed;
+  }
+  if (isPlainObject(rawBody)) {
+    return rawBody;
+  }
+  throw createRoutingFailure(
+    REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_REQUEST,
+    NON_OBJECT_JSON_BODY_MESSAGE,
+    {httpStatus: HTTP_STATUS_BAD_REQUEST},
+  );
+}
+
 function normalizeHttpRequest(request, method, path) {
+  const body = normalizeHttpRequestBody(request.body);
   return Object.freeze({
-    body: request.body ?? null,
+    body: body ? Object.freeze({...body}) : null,
     headers: Object.freeze(normalizedRequestHeaders(request.headers)),
     method,
     path,

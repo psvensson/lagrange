@@ -100,12 +100,8 @@ function buildManifest(receipt, definition = EXAMPLE) {
   };
 }
 
-function buildInstallPayload(manifest, receipt, definition = EXAMPLE) {
+function buildInstallPayload(manifest, _receipt, definition = EXAMPLE) {
   return {
-    artifact_source: {
-      kind: BUILD.ARTIFACT_SOURCE_KIND,
-      location: receipt.layoutPath,
-    },
     config: {},
     idempotency_key: definition.IDEMPOTENCY_KEY,
     manifest,

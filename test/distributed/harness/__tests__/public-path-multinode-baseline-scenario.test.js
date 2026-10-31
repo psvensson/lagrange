@@ -309,6 +309,15 @@ function buildStubCluster(state) {
           }),
           runDeploy: replayDeploy,
           runGenerate: async () => ({}),
+          runPublish: async () => ({
+            receiptPath:
+              '/tmp/artifacts/public-path-baseline/.lagrange/publish-receipt.json',
+            registration: {
+              artifactDigest: BUILD_DIGEST,
+              manifest: {artifact: {digest: BUILD_DIGEST}},
+              packageId: PACKAGE_ID,
+            },
+          }),
         },
         prepareProject: async () => ({
           artifactsRoot: '/tmp/artifacts',

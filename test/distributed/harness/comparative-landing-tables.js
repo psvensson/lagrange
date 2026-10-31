@@ -17,43 +17,104 @@ function isRpoZero(t) {
   return Boolean(t.rpoZeroSurvivability === true || t.rpoZeroSurvivability === 'Yes' || t.rpoZeroSurvivability === 'true');
 }
 
+function formatScenCMd(c) {
+  if (!c) return 'n/a';
+  if (c.freshDecisionsPerSec0ms != null) {
+    return `${formatNum(c.freshDecisionsPerSec0ms)} (${formatNum(c.staleDecisionRatePct)}% / ${formatNum(c.ruleChangeBackfillSec, 1)}s)`;
+  }
+  return `[${c.status || 'not measured'}]`;
+}
+
+function formatScenAMd(t) {
+  if (t.scenarioA?.throughputTxPerSec != null) {
+    return `${formatNum(getTxPerSec(t))} (${formatNum(getP95(t))} ms)`;
+  }
+  return `[${t.scenarioA?.status || 'not measured'}]`;
+}
+
+function formatScenBMd(t) {
+  if (t.scenarioB?.decisionsPerSec != null) {
+    return `${formatNum(getDecisionsPerSec(t))} (${formatNum(getP99(t))} ms)`;
+  }
+  return `[${t.scenarioB?.status || 'not measured'}]`;
+}
+
+function formatDetailMd(t) {
+  if (t.detailPageMd && t.detailPageHtml) {
+    return `[${t.detailPageMd}](${t.detailPageMd}) ([HTML](${t.detailPageHtml}))`;
+  }
+  if (t.detailPageMd) {
+    return `[${t.detailPageMd}](${t.detailPageMd})`;
+  }
+  return 'n/a';
+}
+
 function renderExecutiveMarkdownRow(t) {
   const tierA = getEvidenceTier(t, 'scenarioA');
   const tierB = getEvidenceTier(t, 'scenarioB');
   const rpoText = isRpoZero(t) ? 'Yes' : 'No';
-  const c = t.scenarioC || {};
-  const scenC = `${formatNum(c.freshDecisionsPerSec0ms ?? 0)} ` +
-    `(${formatNum(c.staleDecisionRatePct ?? 0)}% / ${formatNum(c.ruleChangeBackfillSec ?? 0, 1)}s)`;
-  const detail = (t.detailPageMd && t.detailPageHtml) ?
-    `[${t.detailPageMd}](${t.detailPageMd}) ([HTML](${t.detailPageHtml}))` :
-    (t.detailPageMd ? `[${t.detailPageMd}](${t.detailPageMd})` : 'n/a');
+  const scenC = formatScenCMd(t.scenarioC);
+  const scenA = formatScenAMd(t);
+  const scenB = formatScenBMd(t);
+  const wireBytes = getWireBytes(t) != null ?
+    `${getWireBytes(t)} B` : `[${t.scenarioB?.status || 'not measured'}]`;
+  const detail = formatDetailMd(t);
   return `| ${t.label} ${t.version} | ${t.category || 'n/a'} | ${t.topologyUnits ?? 1} (${t.processCount ?? 1}) | ` +
-    `${rpoText} | ${formatNum(getTxPerSec(t))} (${formatNum(getP95(t))} ms) | ` +
-    `${formatNum(getDecisionsPerSec(t))} (${formatNum(getP99(t))} ms) | ${scenC} | ` +
-    `${getWireBytes(t)} B | A: \`${tierA}\` / B: \`${tierB}\` | ${detail} |`;
+    `${rpoText} | ${scenA} | ${scenB} | ${scenC} | ` +
+    `${wireBytes} | A: \`${tierA}\` / B: \`${tierB}\` | ${detail} |`;
 }
 
 function renderExecutiveMatrixRowsMd(targets) {
   return arrayJoin(arrayMap(targets, renderExecutiveMarkdownRow), '\n');
 }
 
+function formatScenCHtml(c) {
+  if (!c) return 'n/a';
+  if (c.freshDecisionsPerSec0ms != null) {
+    return `${formatNum(c.freshDecisionsPerSec0ms)} dec/s (${formatNum(c.staleDecisionRatePct)}% / ${formatNum(c.ruleChangeBackfillSec, 1)}s)`;
+  }
+  return `<span class="badge">${escapeXml(c.status || 'not measured')}</span>`;
+}
+
+function formatScenAHtml(t) {
+  if (t.scenarioA?.throughputTxPerSec != null) {
+    return `${formatNum(getTxPerSec(t))} tx/s (${formatNum(getP95(t))} ms)`;
+  }
+  return `<span class="badge">${escapeXml(t.scenarioA?.status || 'not measured')}</span>`;
+}
+
+function formatScenBHtml(t) {
+  if (t.scenarioB?.decisionsPerSec != null) {
+    return `${formatNum(getDecisionsPerSec(t))} dec/s (${formatNum(getP99(t))} ms)`;
+  }
+  return `<span class="badge">${escapeXml(t.scenarioB?.status || 'not measured')}</span>`;
+}
+
+function formatDetailHtml(t) {
+  if (t.detailPageMd && t.detailPageHtml) {
+    return `<a href="${escapeXml(t.detailPageHtml)}">${escapeXml(t.detailPageMd)}</a>`;
+  }
+  return 'n/a';
+}
+
 function renderExecutiveHtmlRow(t) {
   const tierA = getEvidenceTier(t, 'scenarioA');
   const tierB = getEvidenceTier(t, 'scenarioB');
   const rpoZero = isRpoZero(t);
-  const c = t.scenarioC || {};
-  const scenC = `${formatNum(c.freshDecisionsPerSec0ms ?? 0)} dec/s ` +
-    `(${formatNum(c.staleDecisionRatePct ?? 0)}% / ${formatNum(c.ruleChangeBackfillSec ?? 0, 1)}s)`;
-  const detail = (t.detailPageMd && t.detailPageHtml) ?
-    `<a href="${escapeXml(t.detailPageHtml)}">${escapeXml(t.detailPageMd)}</a>` : 'n/a';
+  const scenC = formatScenCHtml(t.scenarioC);
+  const scenA = formatScenAHtml(t);
+  const scenB = formatScenBHtml(t);
+  const wireBytes = getWireBytes(t) != null ?
+    `${getWireBytes(t)} B` : `<span class="badge">${escapeXml(t.scenarioB?.status || 'not measured')}</span>`;
+  const detail = formatDetailHtml(t);
   return '        <tr>' +
     `<td><strong>${escapeXml(t.label)}</strong> <span class="badge">${escapeXml(t.version)}</span></td>` +
     `<td>${escapeXml(t.category || 'n/a')}</td><td>${t.topologyUnits ?? 1} units (${t.processCount ?? 1} procs)</td>` +
     `<td><span class="badge ${rpoZero ? 'badge-green' : 'badge-red'}">${rpoZero ? 'Yes' : 'No'}</span></td>` +
-    `<td>${formatNum(getTxPerSec(t))} tx/s (${formatNum(getP95(t))} ms)</td>` +
-    `<td>${formatNum(getDecisionsPerSec(t))} dec/s (${formatNum(getP99(t))} ms)</td>` +
+    `<td>${scenA}</td>` +
+    `<td>${scenB}</td>` +
     `<td>${scenC}</td>` +
-    `<td>${getWireBytes(t)} B</td><td><span class="badge">A: ${escapeXml(tierA)}</span> <span class="badge">B: ${escapeXml(tierB)}</span></td>` +
+    `<td>${wireBytes}</td><td><span class="badge">A: ${escapeXml(tierA)}</span> <span class="badge">B: ${escapeXml(tierB)}</span></td>` +
     `<td>${detail}</td></tr>`;
 }
 
@@ -64,7 +125,11 @@ function renderExecutiveMatrixRowsHtml(targets) {
 function renderShapeMarkdownRows(t) {
   return arrayJoin(arrayMap(SHAPES, (s) => {
     const sh = t.scenarioB?.shapes?.[s] || {};
-    return `| ${t.label} | ${s} | ${formatNum(sh.decisionsPerSec ?? 0)} | ${formatNum(sh.p99Ms ?? 0)} | ${sh.roundTrips ?? sh.sqlRoundTripsPerDecision ?? 0} | ${sh.wanBytes ?? sh.wireBytes ?? 0} B |`;
+    if (sh.decisionsPerSec != null) {
+      return `| ${t.label} | ${s} | ${formatNum(sh.decisionsPerSec)} | ${formatNum(sh.p99Ms)} | ${sh.roundTrips ?? 0} | ${sh.wanBytes ?? 0} B |`;
+    }
+    const st = `[${sh.status || 'not measured'}]`;
+    return `| ${t.label} | ${s} | ${st} | ${st} | ${st} | ${st} |`;
   }), '\n');
 }
 
@@ -75,7 +140,11 @@ function renderShapesRowsMd(targets) {
 function renderShapeHtmlRows(t) {
   return arrayJoin(arrayMap(SHAPES, (s) => {
     const sh = t.scenarioB?.shapes?.[s] || {};
-    return `        <tr><td>${escapeXml(t.label)}</td><td><span class="badge">${s}</span></td><td>${formatNum(sh.decisionsPerSec ?? 0)}</td><td>${formatNum(sh.p99Ms ?? 0)}</td><td>${sh.roundTrips ?? sh.sqlRoundTripsPerDecision ?? 0}</td><td>${sh.wanBytes ?? sh.wireBytes ?? 0} B</td></tr>`;
+    if (sh.decisionsPerSec != null) {
+      return `        <tr><td>${escapeXml(t.label)}</td><td><span class="badge">${s}</span></td><td>${formatNum(sh.decisionsPerSec)}</td><td>${formatNum(sh.p99Ms)}</td><td>${sh.roundTrips ?? 0}</td><td>${sh.wanBytes ?? 0} B</td></tr>`;
+    }
+    const b = `<span class="badge">${escapeXml(sh.status || 'not measured')}</span>`;
+    return `        <tr><td>${escapeXml(t.label)}</td><td><span class="badge">${s}</span></td><td>${b}</td><td>${b}</td><td>${b}</td><td>${b}</td></tr>`;
   }), '\n');
 }
 
@@ -84,7 +153,19 @@ function renderShapesRowsHtml(targets) {
 }
 
 function renderEvolutionMarkdownRow(m) {
-  return `| ${m.milestoneId} (\`${m.commitSha}\`) | ${formatNum(m.scenarioATxPerSec)} (${formatNum(m.scenarioAP95Ms)} ms) | ${m.semanticProofPassed}/${m.semanticProofRequired} | ${formatNum(m.scenarioBDecisionsPerSec)} (${formatNum(m.scenarioBP99Ms)} ms / ${m.scenarioBWanBytes} B) | ${formatNum(m.scenarioCFresh0msDecPerSec)} | \`${m.evidenceTier}\` / \`${m.executionPath}\` |`;
+  const scenA = m.scenarioATxPerSec != null ?
+    `${formatNum(m.scenarioATxPerSec)} (${formatNum(m.scenarioAP95Ms)} ms)` :
+    `[${m.status || 'not measured'}]`;
+  const proofs = m.semanticProofPassed != null ?
+    `${m.semanticProofPassed}/${m.semanticProofRequired}` :
+    `[${m.status || 'not measured'}]`;
+  const scenB = m.scenarioBDecisionsPerSec != null ?
+    `${formatNum(m.scenarioBDecisionsPerSec)} (${formatNum(m.scenarioBP99Ms)} ms / ${m.scenarioBWanBytes} B)` :
+    `[${m.status || 'not measured'}]`;
+  const scenC = m.scenarioCFresh0msDecPerSec != null ?
+    `${formatNum(m.scenarioCFresh0msDecPerSec)}` :
+    `[${m.status || 'not measured'}]`;
+  return `| ${m.milestoneId} (\`${m.commitSha}\`) | ${scenA} | ${proofs} | ${scenB} | ${scenC} | \`${m.evidenceTier}\` / \`${m.executionPath}\` |`;
 }
 
 function renderMilestoneRowsMd(timeline) {
@@ -92,12 +173,24 @@ function renderMilestoneRowsMd(timeline) {
 }
 
 function renderEvolutionHtmlRow(m) {
+  const scenA = m.scenarioATxPerSec != null ?
+    `${formatNum(m.scenarioATxPerSec)} tx/s (${formatNum(m.scenarioAP95Ms)} ms)` :
+    `<span class="badge">${escapeXml(m.status || 'not measured')}</span>`;
+  const proofs = m.semanticProofPassed != null ?
+    `<span class="badge">${m.semanticProofPassed}/${m.semanticProofRequired}</span>` :
+    `<span class="badge">${escapeXml(m.status || 'not measured')}</span>`;
+  const scenB = m.scenarioBDecisionsPerSec != null ?
+    `${formatNum(m.scenarioBDecisionsPerSec)} dec/s (${formatNum(m.scenarioBP99Ms)} ms / ${m.scenarioBWanBytes} B)` :
+    `<span class="badge">${escapeXml(m.status || 'not measured')}</span>`;
+  const scenC = m.scenarioCFresh0msDecPerSec != null ?
+    `${formatNum(m.scenarioCFresh0msDecPerSec)} dec/s` :
+    `<span class="badge">${escapeXml(m.status || 'not measured')}</span>`;
   return '        <tr>' +
     `<td><strong>${escapeXml(m.milestoneId)}</strong> <span class="badge">${escapeXml(m.commitSha)}</span></td>` +
-    `<td>${formatNum(m.scenarioATxPerSec)} tx/s (${formatNum(m.scenarioAP95Ms)} ms)</td>` +
-    `<td><span class="badge">${m.semanticProofPassed}/${m.semanticProofRequired}</span></td>` +
-    `<td>${formatNum(m.scenarioBDecisionsPerSec)} dec/s (${formatNum(m.scenarioBP99Ms)} ms / ${m.scenarioBWanBytes} B)</td>` +
-    `<td>${formatNum(m.scenarioCFresh0msDecPerSec)} dec/s</td>` +
+    `<td>${scenA}</td>` +
+    `<td>${proofs}</td>` +
+    `<td>${scenB}</td>` +
+    `<td>${scenC}</td>` +
     `<td><span class="badge">${escapeXml(m.evidenceTier)}</span> <span class="badge">${escapeXml(m.executionPath)}</span></td></tr>`;
 }
 
@@ -141,13 +234,18 @@ function renderScaleoutSummaryMarkdownRows(scaleoutExp) {
   const covB = scaleoutExp?.scenarioBCoverage || [];
   return arrayJoin(arrayMap(propA, (a, idx) => {
     const b = covB[idx] || {};
-    const gainPrefix = (a.scaleGainPct ?? 0) >= 0 ? '+' : '';
-    return `| ${a.label} | ${formatNum(a.tx3Node)} (${formatNum(a.p95Ms3Node, 1)} ms) | ` +
-      `${formatNum(a.tx5Node)} (${formatNum(a.p95Ms5Node, 1)} ms) | ` +
-      `${gainPrefix}${formatNum(a.scaleGainPct, 1)}% | ` +
-      `${formatNum(b.dec3Node100Pct, 1)} | ` +
-      `${formatNum(b.dec5Node60Pct, 1)} (${formatNum(b.p99Ms5Node, 1)} ms) | ` +
-      `${formatNum(b.aggregate5NodeDecPerSec, 1)} (${b.wire5Node ?? 0} B) |`;
+    if (a.tx3Node != null) {
+      const gainPrefix = (a.scaleGainPct ?? 0) >= 0 ? '+' : '';
+      return `| ${a.label} | ${formatNum(a.tx3Node)} (${formatNum(a.p95Ms3Node, 1)} ms) | ` +
+        `${formatNum(a.tx5Node)} (${formatNum(a.p95Ms5Node, 1)} ms) | ` +
+        `${gainPrefix}${formatNum(a.scaleGainPct, 1)}% | ` +
+        `${formatNum(b.dec3Node100Pct, 1)} | ` +
+        `${formatNum(b.dec5Node60Pct, 1)} (${formatNum(b.p99Ms5Node, 1)} ms) | ` +
+        `${formatNum(b.aggregate5NodeDecPerSec, 1)} (${b.wire5Node ?? 0} B) |`;
+    }
+    const stA = `[${a.status || 'not measured'}]`;
+    const stB = `[${b.status || 'not measured'}]`;
+    return `| ${a.label} | ${stA} | ${stA} | ${stA} | ${stB} | ${stB} | ${stB} |`;
   }), '\n');
 }
 
@@ -156,15 +254,22 @@ function renderScaleoutSummaryHtmlRows(scaleoutExp) {
   const covB = scaleoutExp?.scenarioBCoverage || [];
   return arrayJoin(arrayMap(propA, (a, idx) => {
     const b = covB[idx] || {};
-    const gainPrefix = (a.scaleGainPct ?? 0) >= 0 ? '+' : '';
+    if (a.tx3Node != null) {
+      const gainPrefix = (a.scaleGainPct ?? 0) >= 0 ? '+' : '';
+      return '        <tr>' +
+        `<td><strong>${escapeXml(a.label)}</strong></td>` +
+        `<td>${formatNum(a.tx3Node)} (${formatNum(a.p95Ms3Node, 1)} ms)</td>` +
+        `<td>${formatNum(a.tx5Node)} (${formatNum(a.p95Ms5Node, 1)} ms)</td>` +
+        `<td>${gainPrefix}${formatNum(a.scaleGainPct, 1)}%</td>` +
+        `<td>${formatNum(b.dec3Node100Pct, 1)}</td>` +
+        `<td>${formatNum(b.dec5Node60Pct, 1)} (${formatNum(b.p99Ms5Node, 1)} ms)</td>` +
+        `<td>${formatNum(b.aggregate5NodeDecPerSec, 1)} (${b.wire5Node ?? 0} B)</td></tr>`;
+    }
+    const badgeA = `<td><span class="badge">${escapeXml(a.status || 'not measured')}</span></td>`;
+    const badgeB = `<td><span class="badge">${escapeXml(b.status || 'not measured')}</span></td>`;
     return '        <tr>' +
       `<td><strong>${escapeXml(a.label)}</strong></td>` +
-      `<td>${formatNum(a.tx3Node)} (${formatNum(a.p95Ms3Node, 1)} ms)</td>` +
-      `<td>${formatNum(a.tx5Node)} (${formatNum(a.p95Ms5Node, 1)} ms)</td>` +
-      `<td>${gainPrefix}${formatNum(a.scaleGainPct, 1)}%</td>` +
-      `<td>${formatNum(b.dec3Node100Pct, 1)}</td>` +
-      `<td>${formatNum(b.dec5Node60Pct, 1)} (${formatNum(b.p99Ms5Node, 1)} ms)</td>` +
-      `<td>${formatNum(b.aggregate5NodeDecPerSec, 1)} (${b.wire5Node ?? 0} B)</td></tr>`;
+      `${badgeA}${badgeA}${badgeA}${badgeB}${badgeB}${badgeB}</tr>`;
   }), '\n');
 }
 
@@ -176,12 +281,19 @@ function renderScenarioAModesMarkdownRows(scaleoutExp) {
     const list = modes[modeKey] || [];
     for (let j = 0; j < list.length; j += 1) {
       const item = list[j];
-      const gainPrefix = (item.scaleGainPct ?? 0) >= 0 ? '+' : '';
-      rows.push(
-        `| ${modeLabel} | ${item.label} | ${formatNum(item.tx3Node)} (${formatNum(item.p95Ms3Node, 1)} ms) | ` +
-        `${formatNum(item.tx5Node)} (${formatNum(item.p95Ms5Node, 1)} ms) | ` +
-        `${gainPrefix}${formatNum(item.scaleGainPct, 1)}% | \`${item.evidenceTier}\` |`,
-      );
+      if (item.tx3Node != null) {
+        const gainPrefix = (item.scaleGainPct ?? 0) >= 0 ? '+' : '';
+        rows.push(
+          `| ${modeLabel} | ${item.label} | ${formatNum(item.tx3Node)} (${formatNum(item.p95Ms3Node, 1)} ms) | ` +
+          `${formatNum(item.tx5Node)} (${formatNum(item.p95Ms5Node, 1)} ms) | ` +
+          `${gainPrefix}${formatNum(item.scaleGainPct, 1)}% | \`${item.evidenceTier}\` |`,
+        );
+      } else {
+        const st = `[${item.status || 'not measured'}]`;
+        rows.push(
+          `| ${modeLabel} | ${item.label} | ${st} | ${st} | ${st} | \`${item.evidenceTier}\` |`,
+        );
+      }
     }
   }
   return arrayJoin(rows, '\n');
@@ -195,15 +307,25 @@ function renderScenarioAModesHtmlRows(scaleoutExp) {
     const list = modes[modeKey] || [];
     for (let j = 0; j < list.length; j += 1) {
       const item = list[j];
-      const gainPrefix = (item.scaleGainPct ?? 0) >= 0 ? '+' : '';
-      rows.push(
-        '        <tr>' +
-        `<td>${escapeXml(modeLabel)}</td><td><strong>${escapeXml(item.label)}</strong></td>` +
-        `<td>${formatNum(item.tx3Node)} (${formatNum(item.p95Ms3Node, 1)} ms)</td>` +
-        `<td>${formatNum(item.tx5Node)} (${formatNum(item.p95Ms5Node, 1)} ms)</td>` +
-        `<td>${gainPrefix}${formatNum(item.scaleGainPct, 1)}%</td>` +
-        `<td><span class="badge">${escapeXml(item.evidenceTier)}</span></td></tr>`,
-      );
+      if (item.tx3Node != null) {
+        const gainPrefix = (item.scaleGainPct ?? 0) >= 0 ? '+' : '';
+        rows.push(
+          '        <tr>' +
+          `<td>${escapeXml(modeLabel)}</td><td><strong>${escapeXml(item.label)}</strong></td>` +
+          `<td>${formatNum(item.tx3Node)} (${formatNum(item.p95Ms3Node, 1)} ms)</td>` +
+          `<td>${formatNum(item.tx5Node)} (${formatNum(item.p95Ms5Node, 1)} ms)</td>` +
+          `<td>${gainPrefix}${formatNum(item.scaleGainPct, 1)}%</td>` +
+          `<td><span class="badge">${escapeXml(item.evidenceTier)}</span></td></tr>`,
+        );
+      } else {
+        const badge = `<td><span class="badge">${escapeXml(item.status || 'not measured')}</span></td>`;
+        rows.push(
+          '        <tr>' +
+          `<td>${escapeXml(modeLabel)}</td><td><strong>${escapeXml(item.label)}</strong></td>` +
+          `${badge}${badge}${badge}` +
+          `<td><span class="badge">${escapeXml(item.evidenceTier)}</span></td></tr>`,
+        );
+      }
     }
   }
   return arrayJoin(rows, '\n');

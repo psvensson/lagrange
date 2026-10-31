@@ -21,7 +21,7 @@
  *      confidence-adjusted top-10 reference result.
  *   3. A REAL WASI call-Binding service (`movielens--call--topn`) is built
  *      and deployed through the public code-first service pipeline
- *      (`runGenerate` -> `runBuild` -> `runDeploy`), where replica capacity
+ *      (`runGenerate` -> `runBuild` -> `runPublish` -> `runDeploy`), where replica capacity
  *      is system-policy output. Each `CALL BINDING` invocation fans out the
  *      Binding-declared grouped SQL across partition-local shards, records
  *      leased partial snapshots in `call_cell_reduce_slots`, and atomically

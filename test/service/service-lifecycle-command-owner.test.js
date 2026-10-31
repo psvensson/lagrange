@@ -146,7 +146,6 @@ function manifest(version = '1.0.0', digest = DIGEST_A) {
 
 function installPayload(overrides = {}) {
   return {
-    artifact_source: {kind: 'remote_oci'},
     config: {replicas: 2},
     idempotency_key: 'install-analytics-worker',
     manifest: manifest(),
@@ -169,14 +168,34 @@ function createOwnerFixture(options = {}) {
     controlPlaneSystemTableGateway: gateway,
     now: () => now++,
   }).serviceInstallCatalogOwner;
+  const artifactPayloadStore = options.artifactPayloadStore || {
+    async findSealedPayloadByArtifactDigest(artifactDigest) {
+      return {
+        found: true,
+        payload: {
+          artifactDigest,
+          chunkCount: 1,
+          createdAt: 1000,
+          mediaType: CONTAINER_MEDIA_TYPE,
+          payloadDigest: artifactDigest,
+          sealedAt: 1000,
+          totalSize: 1024,
+        },
+      };
+    },
+    async putPayload() {
+      return {alreadySealed: true};
+    },
+  };
   const artifactResolver = options.artifactResolver ||
     new FixtureArtifactResolver();
   const owner = new ServiceLifecycleCommandOwner({
+    artifactPayloadStore,
     artifactResolver,
     catalogOwner,
     signaturePolicy: SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   });
-  return {artifactResolver, catalogOwner, gateway, owner};
+  return {artifactPayloadStore, artifactResolver, catalogOwner, gateway, owner};
 }
 
 describe('service lifecycle command and catalog composition', () => {
@@ -247,7 +266,7 @@ describe('service lifecycle command and catalog composition', () => {
     assert.equal(changedSource.success, false);
     assert.equal(
       changedSource.errorCode,
-      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.IDEMPOTENCY_CONFLICT,
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_SOURCE_RETIRED,
     );
     assert.equal(fixture.artifactResolver.calls.length, 1);
     assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_INSTALLATIONS), 1);

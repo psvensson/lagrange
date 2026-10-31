@@ -26,10 +26,10 @@ const MILESTONE_LABELS = Object.freeze({
   'v0.3.0-scenario-b-model': ['v0.3.0 @ 2d416de (2026-10-30)', '3-Island RF=3 Risk Model'],
   'v0.3.2-provenance-matrix': ['v0.3.2 @ 4dc6db6 (2026-10-30)', '13-Target Matrix & Scen C'],
   'v0.3.2-scaleout-3to5-rf3': ['v0.3.2 @ 89300e4 (2026-10-30)', '3-to-5-Node RF=3 Scale-Out'],
-  'v0.3.2-partition-sweep-p6to60': ['0.3.2@2025f778 (P=6..60)', 'Partition Sweep (784 dec/s)'],
+  'v0.3.2-partition-sweep-p6to60': ['0.3.2@2025f778 (P=6..60)', 'Partition Sweep (P=6..60)'],
   'v0.3.2-rtt-working-set-crossover': ['0.3.2@bdee84d5 (RTT/WS)', 'RTT & Working-Set Crossover'],
   'v0.3.2-live-movement-scenario-c-scale': ['0.3.2@72c76c66 (5x/Move)', 'Live Move & 5x Scenario C'],
-  'v0.3.3-tx-fast-path-5node-summary': ['0.3.3@b41d4cce (FastPath)', 'v0.3.3 Fast-Path & 5n (3.84 tx/s)'],
+  'v0.3.3-tx-fast-path-5node-summary': ['0.3.3@b41d4cce (FastPath)', 'v0.3.3 Fast-Path & 5n Summary'],
   'v0.4.0-scaleout-scenario-c-release': ['0.4.0@7565d8c0 (Release)', 'v0.4.0 5n & Scen C Summary'],
 });
 
@@ -38,14 +38,14 @@ const COMMIT_DELTAS = Object.freeze([
   ['v0.3.0-lab-paired', '8039e45f2a', '5-node paired cluster brings Scenario A online (0.83 tx/s, 4/33 proofs).'],
   ['v0.3.0-conflict-retry', '66d054c9c9', 'Retryable conflict handling and visibility gate expand proofs to 16/33.'],
   ['v0.3.0-semantic-closure', '27af74dc7b', 'Full 33/33 semantic proof closure reached under contended OLTP.'],
-  ['v0.3.0-scenario-b-model', '2d416de6e5', 'Scenario B 3-island RF=3 risk model (441.15 dec/s, 18.09ms p99, 144 B/req WAN).'],
-  ['v0.3.2-provenance-matrix', '4dc6db6b93', '13-target comparison matrix, Scenario C (441.15 dec/s @ 0ms), provenance audit.'],
-  ['v0.3.2-scaleout-3to5-rf3', '89300e4d8a', '3-to-5-node RF=3 scale-out (2.24 tx/s proportional, 720.4 dec/s aggregate).'],
-  ['v0.3.2-partition-sweep-p6to60', '2025f7780d', 'Peak 784.0 dec/s at P=30 (6 leaders/node) vs -5.9% coordination drop at P=60'],
-  ['v0.3.2-rtt-working-set-crossover', 'bdee84d5fc', 'RTT 0.2..30ms crossover (168 dec/s @ 10ms) & heavy 2048-event working set (368 dec/s, 144 B)'],
-  ['v0.3.2-live-movement-scenario-c-scale', '72c76c6629', 'Zero-stall live move (26.4 ms during-move p99) & 5x Scenario C (1840 fresh dec/s @ 0ms)'],
-  ['v0.3.3-tx-fast-path-5node-summary', 'b41d4ccec4', 'v0.3.3 Scenario A tx coordination fast-path (3.84 tx/s 5-node proportional, 1490ms p95) & 5-node summary.'],
-  ['v0.4.0-scaleout-scenario-c-release', '7565d8c09a', 'v0.4.0 release with 5-node RF=3 and Scenario C summary statistics on the landing page.'],
+  ['v0.3.0-scenario-b-model', '2d416de6e5', 'Scenario B 3-island RF=3 risk model withdrawn pending live GCP/lab measurement.'],
+  ['v0.3.2-provenance-matrix', '4dc6db6b93', '13-target comparison matrix and Scenario C provenance audit.'],
+  ['v0.3.2-scaleout-3to5-rf3', '89300e4d8a', '3-to-5-node RF=3 scale-out experiment framework.'],
+  ['v0.3.2-partition-sweep-p6to60', '2025f7780d', '5-node RF=3 partition granularity sweep framework (P=6..60).'],
+  ['v0.3.2-rtt-working-set-crossover', 'bdee84d5fc', 'Scenario B RTT crossover and heavy working-set comparison framework.'],
+  ['v0.3.2-live-movement-scenario-c-scale', '72c76c6629', 'Live partition movement and 5x Scenario C scaling framework.'],
+  ['v0.3.3-tx-fast-path-5node-summary', 'b41d4ccec4', 'v0.3.3 Scenario A tx coordination fast-path and 5-node summary.'],
+  ['v0.4.0-scaleout-scenario-c-release', '7565d8c09a', 'v0.4.0 release with 5-node RF=3 and Scenario C framework.'],
 ]);
 
 function getMilestoneLabels(m) {
@@ -77,26 +77,51 @@ function renderMilestoneRow(x, y, [l1, l2], met, sub, barW, col, isDashed) {
     <text x="${x}" y="${y + 42}" fill="#64748b" font-size="9">${escapeXml(sub)}</text>`;
 }
 
-function getPanelInfo(m, panelType) {
-  if (panelType === 1) {
-    return {
-      met: `${formatNum(m.scenarioATxPerSec, 2)} tx/s | p95: ${formatNum(m.scenarioAP95Ms, 1)}ms`,
-      sub: `Proofs: ${m.semanticProofPassed}/${m.semanticProofRequired || 33} (${m.executionMode})`,
-      val: m.semanticProofPassed / 33, col: '#38bdf8', isDashed: m.executionMode !== 'live-cluster-wire',
-    };
-  }
-  if (panelType === 2) {
-    return {
-      met: `${formatNum(m.scenarioBDecisionsPerSec, 1)} dec/s | p99: ${formatNum(m.scenarioBP99Ms, 1)}ms`,
-      sub: `WAN: ${m.scenarioBWanBytes || 0} B/req | Mode: ${m.executionMode}`,
-      val: m.scenarioBDecisionsPerSec / 800, col: '#10b981', isDashed: m.executionMode === 'local-js-oracle',
-    };
-  }
+function getPanel1Info(m) {
+  const tx = m.scenarioATxPerSec !== null ? `${formatNum(m.scenarioATxPerSec, 2)} tx/s` : '[not measured]';
+  const p95 = m.scenarioAP95Ms !== null ? `p95: ${formatNum(m.scenarioAP95Ms, 1)}ms` : '[not measured]';
+  const proofs = m.semanticProofPassed !== null ?
+    `${m.semanticProofPassed}/${m.semanticProofRequired || 33}` : '[not measured]';
   return {
-    met: `${formatNum(m.scenarioCFresh0msDecPerSec, 1)} dec/s @ 0ms freshness`,
-    sub: `Move p99: ${formatNum(m.scenarioBMoveP99Ms, 1)}ms | Conv: ${formatNum(m.scenarioBConvergenceMs, 1)}ms`,
-    val: m.scenarioCFresh0msDecPerSec / 500, col: '#a855f7', isDashed: m.executionMode === 'local-js-oracle',
+    met: `${tx} | ${p95}`,
+    sub: `Proofs: ${proofs} (${m.executionMode})`,
+    val: m.semanticProofPassed !== null ? m.semanticProofPassed / 33 : 0,
+    col: '#38bdf8', isDashed: m.executionMode !== 'live-cluster-wire',
   };
+}
+
+function getPanel2Info(m) {
+  const dec = m.scenarioBDecisionsPerSec !== null ?
+    `${formatNum(m.scenarioBDecisionsPerSec, 1)} dec/s` : '[not measured]';
+  const p99 = m.scenarioBP99Ms !== null ? `p99: ${formatNum(m.scenarioBP99Ms, 1)}ms` : '[not measured]';
+  const wan = m.scenarioBWanBytes !== null ? `${m.scenarioBWanBytes} B/req` : '[not measured]';
+  return {
+    met: `${dec} | ${p99}`,
+    sub: `WAN: ${wan} | Mode: ${m.executionMode}`,
+    val: (typeof m.scenarioBDecisionsPerSec === 'number') ? m.scenarioBDecisionsPerSec / 800 : 0,
+    col: '#10b981', isDashed: m.executionMode !== 'live-cluster-wire',
+  };
+}
+
+function getPanel3Info(m) {
+  const fresh = m.scenarioCFresh0msDecPerSec !== null ?
+    `${formatNum(m.scenarioCFresh0msDecPerSec, 1)} dec/s @ 0ms` : '[not measured]';
+  const moveP99 = m.scenarioBMoveP99Ms !== null ?
+    `Move p99: ${formatNum(m.scenarioBMoveP99Ms, 1)}ms` : '[not measured]';
+  const conv = m.scenarioBConvergenceMs !== null ?
+    `Conv: ${formatNum(m.scenarioBConvergenceMs, 1)}ms` : '[not measured]';
+  return {
+    met: fresh,
+    sub: `${moveP99} | ${conv}`,
+    val: (typeof m.scenarioCFresh0msDecPerSec === 'number') ? m.scenarioCFresh0msDecPerSec / 500 : 0,
+    col: '#a855f7', isDashed: m.executionMode !== 'live-cluster-wire',
+  };
+}
+
+function getPanelInfo(m, panelType) {
+  if (panelType === 1) return getPanel1Info(m);
+  if (panelType === 2) return getPanel2Info(m);
+  return getPanel3Info(m);
 }
 
 function renderPanel(px, href, title, subTitle, timeline, panelType) {
@@ -123,7 +148,7 @@ export function renderLagrangeEvolutionSvg(matrix) {
   const p2 = renderPanel(340, 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision',
     'Scenario B Risk Decision Over Time', 'Decisions/s, p99 ms latency, WAN bytes', tl, 2);
   const p3 = renderPanel(650, 'tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision',
-    'Scenario C 0ms Freshness &amp; Movement', '441.15 dec/s @ 0ms, 18.0 ms p99, 45.0 ms conv', tl, 3);
+    'Scenario C 0ms Freshness &amp; Movement', '0ms freshness SLA, live movement, routing convergence', tl, 3);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 ${svgH}" width="960" height="${svgH}">
   <rect width="960" height="${svgH}" fill="#0f172a" rx="8"/>
   <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">Lagrange Longitudinal Metrics Evolution</text>
@@ -138,15 +163,23 @@ ${p1}\n${p2}\n${p3}
 
 function renderTables(timeline) {
   const f = formatNum;
-  const trM = arrayJoin(arrayMap(timeline, (m) =>
-    `| ${m.id} | ${m.version} | ${m.commit} | ${stringSlice(String(m.date || ''), 0, 10)} | ` +
-    `${m.evidenceTier} | ${m.executionMode} | ${f(m.scenarioATxPerSec, 2)} | ${f(m.scenarioAP95Ms, 1)} | ` +
-    `${m.semanticProofPassed}/${m.semanticProofRequired || 33} | ${f(m.scenarioBDecisionsPerSec, 1)} | ${f(m.scenarioCFresh0msDecPerSec, 1)} |`), '\n');
-  const htM = arrayJoin(arrayMap(timeline, (m) =>
-    `<tr><td><strong>${escapeXml(m.id)}</strong></td><td>${escapeXml(m.version)}</td>` +
-    `<td><code>${escapeXml(m.commit)}</code></td><td>${stringSlice(String(m.date || ''), 0, 10)}</td>` +
-    `<td>${escapeXml(m.evidenceTier)}</td><td>${escapeXml(m.executionMode)}</td><td>${f(m.scenarioATxPerSec, 2)}</td>` +
-    `<td>${f(m.scenarioAP95Ms, 1)}</td><td>${m.semanticProofPassed}/${m.semanticProofRequired || 33}</td><td>${f(m.scenarioBDecisionsPerSec, 1)}</td><td>${f(m.scenarioCFresh0msDecPerSec, 1)}</td></tr>`), '\n');
+  const trM = arrayJoin(arrayMap(timeline, (m) => {
+    const proofs = m.semanticProofPassed !== null ? `${m.semanticProofPassed}/${m.semanticProofRequired || 33}` : '[not measured]';
+    return `| ${m.id} | ${m.version} | ${m.commit} | ${stringSlice(String(m.date || ''), 0, 10)} | ` +
+      `${m.evidenceTier} | ${m.executionMode} | ${f(m.scenarioATxPerSec, 2)} | ${f(m.scenarioAP95Ms, 1)} | ` +
+      `${proofs} | ${f(m.scenarioBDecisionsPerSec, 1)} | ${f(m.scenarioCFresh0msDecPerSec, 1)} |`;
+  }), '\n');
+  const htM = arrayJoin(arrayMap(timeline, (m) => {
+    const proofs = m.semanticProofPassed !== null ? `${m.semanticProofPassed}/${m.semanticProofRequired || 33}` : '<span class="badge">not measured</span>';
+    const aTx = m.scenarioATxPerSec !== null ? f(m.scenarioATxPerSec, 2) : '<span class="badge">not measured</span>';
+    const aP95 = m.scenarioAP95Ms !== null ? f(m.scenarioAP95Ms, 1) : '<span class="badge">not measured</span>';
+    const bDec = m.scenarioBDecisionsPerSec !== null ? f(m.scenarioBDecisionsPerSec, 1) : '<span class="badge">not measured</span>';
+    const cFresh = m.scenarioCFresh0msDecPerSec !== null ? f(m.scenarioCFresh0msDecPerSec, 1) : '<span class="badge">not measured</span>';
+    return `<tr><td><strong>${escapeXml(m.id)}</strong></td><td>${escapeXml(m.version)}</td>` +
+      `<td><code>${escapeXml(m.commit)}</code></td><td>${stringSlice(String(m.date || ''), 0, 10)}</td>` +
+      `<td>${escapeXml(m.evidenceTier)}</td><td>${escapeXml(m.executionMode)}</td><td>${aTx}</td>` +
+      `<td>${aP95}</td><td>${proofs}</td><td>${bDec}</td><td>${cFresh}</td></tr>`;
+  }), '\n');
   return {trM, htM};
 }
 

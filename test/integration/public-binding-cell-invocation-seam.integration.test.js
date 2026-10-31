@@ -101,7 +101,6 @@ const SERVICE_IDENTITY = Object.freeze({
 const MODIFIED_VERSION = '1.0.1';
 const INSTALL_IDEMPOTENCY_KEY = 'install-images-seam-ratings-v1';
 const MODIFIED_INSTALL_IDEMPOTENCY_KEY = 'install-images-seam-ratings-v1-0-1';
-const LOCAL_OCI_LAYOUT_SOURCE = 'local_oci_layout';
 const OPERATION_STATUS = Object.freeze({
   DURABLE: 'durable',
   REPLAYED: 'replayed',
@@ -256,12 +255,8 @@ function accessPolicy(bindingName) {
   };
 }
 
-function installPayload(artifact, manifest, idempotencyKey) {
+function installPayload(manifest, idempotencyKey) {
   return {
-    artifact_source: {
-      kind: LOCAL_OCI_LAYOUT_SOURCE,
-      location: artifact.layoutPath,
-    },
     config: {},
     idempotency_key: idempotencyKey,
     manifest,
@@ -401,8 +396,14 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   });
 
   await t.test('Artifact identity is immutable', async (st) => {
+    const componentBytes = await readFile(path.join(root, 'component.wasm'));
+    await runLifecycle(client, LIFECYCLE_SQL.PUBLISH_SERVICE_ARTIFACT, {
+      artifact_digest: artifact.manifest.artifact.digest,
+      bytes: componentBytes.toString('base64'),
+      media_type: artifact.manifest.artifact.media_type || 'application/wasm',
+    });
     const install = installPayload(
-      artifact, artifact.manifest, INSTALL_IDEMPOTENCY_KEY);
+      artifact.manifest, INSTALL_IDEMPOTENCY_KEY);
     const [installed] = await runLifecycle(
       client, LIFECYCLE_SQL.INSTALL_SERVICE, install);
     st.equal(installed.operation_status, OPERATION_STATUS.DURABLE);
@@ -424,7 +425,7 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       client,
       LIFECYCLE_SQL.INSTALL_SERVICE,
       installPayload(
-        artifact, modified.manifest, MODIFIED_INSTALL_IDEMPOTENCY_KEY),
+        modified.manifest, MODIFIED_INSTALL_IDEMPOTENCY_KEY),
     );
     st.not(modifiedInstall.package_id, installed.package_id,
       'a modified manifest is a different immutable package');
@@ -467,8 +468,15 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       const changed = await observeFailure(runLifecycle(
         client,
         LIFECYCLE_SQL.CREATE_BINDING,
-        callBindingPayload(
-          BINDING_NAME.OWNED_RANGE, UNBOUNDED_STATEMENT, artifact),
+        {
+          ...callBindingPayload(
+            BINDING_NAME.OWNED_RANGE, UNBOUNDED_STATEMENT, artifact),
+          source: {
+            kind: CALL_SOURCE_KIND,
+            name: 'conflicting_source_name',
+            statement: UNBOUNDED_STATEMENT,
+          },
+        },
       ));
       st.ok(changed, 'a changed declaration under the same name is refused');
       st.comment(`pg receives on changed Binding: ${JSON.stringify(changed)}`);

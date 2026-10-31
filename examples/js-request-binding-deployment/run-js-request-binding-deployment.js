@@ -12,7 +12,7 @@
  */
 
 import assert from 'node:assert/strict';
-import {mkdtemp, rm} from 'node:fs/promises';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -60,9 +60,19 @@ async function ledgerRows(node) {
   }));
 }
 
-async function deploy(node, receipt) {
+async function deploy(node, receipt, paths) {
   await executeSql(node, LEDGER_TABLE_DDL);
   const manifest = buildManifest(receipt, JS_EXAMPLE);
+  const componentBytes = await readFile(paths.componentPath);
+  await executeSql(
+    node,
+    'PUBLISH SERVICE ARTIFACT $1',
+    [JSON.stringify({
+      artifact_digest: manifest.artifact.digest,
+      bytes: componentBytes.toString('base64'),
+      media_type: manifest.artifact.media_type || 'application/wasm',
+    })],
+  );
   const installed = await executeSql(
     node,
     'INSTALL SERVICE $1',
@@ -142,7 +152,7 @@ async function runJsRequestBindingDeploymentExample(options = {}) {
       path.join(temporaryRoot, NODE_DATA_DIRECTORY),
       {wsPort: EXAMPLE_WS_PORT},
     );
-    const deployment = await deploy(node, receipt);
+    const deployment = await deploy(node, receipt, paths);
     const observations = await exerciseDeployment(node);
     const report = {
       artifact: {

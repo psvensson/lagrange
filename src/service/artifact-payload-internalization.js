@@ -18,9 +18,13 @@
  * artifact without a payloadDescriptor — an OCI container — is skipped.
  */
 
+import {ArtifactPayloadStoreError} from './artifact-payload-store.js';
+
+const STORE_UNAVAILABLE_CODE = 'artifact_payload_store_unavailable';
+const STORE_UNAVAILABLE_MESSAGE = 'artifact payload store is unavailable';
+
 const INTERNALIZATION_SKIP_REASON = Object.freeze({
   NO_PAYLOAD_DESCRIPTOR: 'no_payload_descriptor',
-  STORE_ABSENT: 'store_absent',
 });
 
 function skipped(reason) {
@@ -43,7 +47,10 @@ async function internalizeResolvedArtifact(options = {}) {
   const artifact = resolved?.artifact || null;
   const payloadDescriptor = artifact?.payloadDescriptor || null;
   if (!store) {
-    return skipped(INTERNALIZATION_SKIP_REASON.STORE_ABSENT);
+    throw new ArtifactPayloadStoreError(
+      STORE_UNAVAILABLE_CODE,
+      STORE_UNAVAILABLE_MESSAGE,
+    );
   }
   if (!payloadDescriptor) {
     return skipped(INTERNALIZATION_SKIP_REASON.NO_PAYLOAD_DESCRIPTOR);
@@ -71,7 +78,7 @@ async function internalizeResolvedArtifact(options = {}) {
 /**
  * Command-owner seam: internalize the freshly resolved INSTALL/UPGRADE
  * artifact through the owner's attached store and resolver. An absent
- * store performs no store interaction at all (existing behavior).
+ * store throws STORE_UNAVAILABLE.
  *
  * @param {object} owner ServiceLifecycleCommandOwner instance carrying
  *   artifactResolver and (optionally) artifactPayloadStore
@@ -80,7 +87,25 @@ async function internalizeResolvedArtifact(options = {}) {
  */
 async function internalizeInstallPayload(owner, resolvedArtifact) {
   if (!owner.artifactPayloadStore) {
-    return skipped(INTERNALIZATION_SKIP_REASON.STORE_ABSENT);
+    throw new ArtifactPayloadStoreError(
+      STORE_UNAVAILABLE_CODE,
+      STORE_UNAVAILABLE_MESSAGE,
+    );
+  }
+  const artifact = resolvedArtifact?.artifact;
+  if (artifact?.digest &&
+      typeof owner.artifactPayloadStore.findSealedPayloadByArtifactDigest === 'function') {
+    const existing = await owner.artifactPayloadStore
+      .findSealedPayloadByArtifactDigest(artifact.digest);
+    if (existing?.found) {
+      return Object.freeze({
+        alreadySealed: true,
+        chunkCount: existing.payload.chunkCount,
+        internalized: true,
+        payloadDigest: existing.payload.payloadDigest,
+        totalSize: existing.payload.totalSize,
+      });
+    }
   }
   return internalizeResolvedArtifact({
     acquireBytes: (target) =>

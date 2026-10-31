@@ -50,11 +50,12 @@ function getSeriesPt(series, p) {
 
 function renderSvgItem(x, y, [l1, l2], metric, valW, color, sub) {
   const dash = ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"';
+  const fillBar = valW > 0 ?
+    `\n    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"${dash}/>` : '';
   return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${l1}</text>
     <text x="${x}" y="${y + 11}" fill="#94a3b8" font-size="10" font-family="monospace">${l2}</text>
     <text x="${x}" y="${y + 22}" fill="#cbd5e1" font-size="10">${metric}</text>
-    <rect x="${x}" y="${y + 26}" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"${dash}/>
+    <rect x="${x}" y="${y + 26}" width="250" height="7" fill="#334155" rx="2"/>${fillBar}
     <text x="${x}" y="${y + 43}" fill="#64748b" font-size="9">${sub}</text>`;
 }
 
@@ -63,31 +64,42 @@ function renderSvgPanels(exp) {
   const r1 = arrayJoin(arrayMap(exp.targets, (t, i) => {
     const s6 = getSeriesPt(t.series, 6);
     const s60 = getSeriesPt(t.series, 60);
-    const w = Math.max(4, Math.min(250, Math.round((t.peakDecisionsPerSec / 850) * 250)));
-    const sub = `P=6: ${f(s6.decisionsPerSec, 0)} -> P=60: ${f(s60.decisionsPerSec, 0)} ` +
-      `(${f(t.overPartitionDropPct, 1)}%)`;
+    const hasPeak = typeof t.peakDecisionsPerSec === 'number' &&
+      Number.isFinite(t.peakDecisionsPerSec);
+    const met = hasPeak ?
+      `${f(t.peakDecisionsPerSec, 1)} dec/s (opt P=${t.optimalPartitions})` :
+      `[${t.status || 'not measured'}]`;
+    const w = hasPeak ?
+      Math.max(4, Math.min(250, Math.round((t.peakDecisionsPerSec / 850) * 250))) : 0;
+    const sub = hasPeak ?
+      `P=6: ${f(s6.decisionsPerSec, 0)} -> P=60: ${f(s60.decisionsPerSec, 0)} (${f(t.overPartitionDropPct, 1)}%)` :
+      `[${t.status || 'not measured'}]`;
     return renderSvgItem(45, 132 + i * 72, TARGET_LABELS[t.targetId] || [t.label, ''],
-      `${f(t.peakDecisionsPerSec, 1)} dec/s (opt P=${t.optimalPartitions})`, w,
-      TARGET_COLORS[t.targetId] || '#94a3b8', sub);
+      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', sub);
   }), '\n');
   const r2 = arrayJoin(arrayMap(exp.targets, (t, i) => {
     const sOpt = getSeriesPt(t.series, t.optimalPartitions);
     const s60 = getSeriesPt(t.series, 60);
-    const w = Math.max(4, Math.min(250, Math.round((s60.p99Ms / 55) * 250)));
-    const sub = `Heartbeats: ${sOpt.raftHeartbeatOpsPerSec || 0}/s -> ` +
-      `${s60.raftHeartbeatOpsPerSec || 0}/s`;
+    const hasP99 = typeof s60.p99Ms === 'number' && Number.isFinite(s60.p99Ms);
+    const met = hasP99 ?
+      `${f(sOpt.p99Ms, 1)}ms (opt) -> ${f(s60.p99Ms, 1)}ms (P=60)` :
+      `[${t.status || 'not measured'}]`;
+    const w = hasP99 ? Math.max(4, Math.min(250, Math.round((s60.p99Ms / 55) * 250))) : 0;
+    const sub = hasP99 ?
+      `Heartbeats: ${sOpt.raftHeartbeatOpsPerSec || 0}/s -> ${s60.raftHeartbeatOpsPerSec || 0}/s` :
+      `[${t.status || 'not measured'}]`;
     return renderSvgItem(355, 132 + i * 72, TARGET_LABELS[t.targetId] || [t.label, ''],
-      `${f(sOpt.p99Ms, 1)}ms (opt) -> ${f(s60.p99Ms, 1)}ms (P=60)`, w,
-      TARGET_COLORS[t.targetId] || '#94a3b8', sub);
+      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', sub);
   }), '\n');
   const r3 = arrayJoin(arrayMap(exp.targets, (t, i) => {
     const s60 = getSeriesPt(t.series, 60);
-    const coordPct = s60.coordinationOverheadPct || 0;
-    const w = Math.max(4, Math.min(250, Math.round((coordPct / 35) * 250)));
+    const hasCoord = typeof s60.coordinationOverheadPct === 'number' && Number.isFinite(s60.coordinationOverheadPct);
+    const coordPct = hasCoord ? s60.coordinationOverheadPct : 0;
+    const met = hasCoord ? `${f(s60.coordinationOverheadPct, 1)}% coordination overhead` : `[${t.status || 'not measured'}]`;
+    const w = hasCoord ? Math.max(4, Math.min(250, Math.round((coordPct / 35) * 250))) : 0;
+    const sub = hasCoord ? `P=60 throughput drop: ${f(t.overPartitionDropPct, 1)}%` : `[${t.status || 'not measured'}]`;
     return renderSvgItem(665, 132 + i * 72, TARGET_LABELS[t.targetId] || [t.label, ''],
-      `${f(s60.coordinationOverheadPct, 1)}% coordination overhead`, w,
-      TARGET_COLORS[t.targetId] || '#94a3b8',
-      `P=60 throughput drop: ${f(t.overPartitionDropPct, 1)}%`);
+      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', sub);
   }), '\n');
   return `${r1}\n${r2}\n${r3}`;
 }
@@ -133,21 +145,30 @@ function renderTables(exp) {
     const s15 = getSeriesPt(t.series, 15);
     const s30 = getSeriesPt(t.series, 30);
     const s60 = getSeriesPt(t.series, 60);
-    const tier = s60.evidenceTier || 'modeled-topology-oracle';
-    return `| ${t.label} | ${t.optimalPartitions} | ${f(t.peakDecisionsPerSec, 1)} | ` +
+    const tier = s60.evidenceTier || 'not measured';
+    const optP = t.optimalPartitions !== null ? t.optimalPartitions : '[not measured]';
+    const drop = t.overPartitionDropPct !== null ? `${f(t.overPartitionDropPct, 1)}%` : '[not measured]';
+    return `| ${t.label} | ${optP} | ${f(t.peakDecisionsPerSec, 1)} | ` +
       `${f(s6.decisionsPerSec, 1)} | ${f(s15.decisionsPerSec, 1)} | ${f(s30.decisionsPerSec, 1)} | ` +
-      `${f(s60.decisionsPerSec, 1)} | ${f(t.overPartitionDropPct, 1)}% | ${tier} |`;
+      `${f(s60.decisionsPerSec, 1)} | ${drop} | ${tier} |`;
   }), '\n');
   const htTgt = arrayJoin(arrayMap(exp.targets, (t) => {
     const s6 = getSeriesPt(t.series, 6);
     const s15 = getSeriesPt(t.series, 15);
     const s30 = getSeriesPt(t.series, 30);
     const s60 = getSeriesPt(t.series, 60);
-    return `<tr><td><strong>${escapeXml(t.label)}</strong></td><td>${t.optimalPartitions}</td>` +
-      `<td>${f(t.peakDecisionsPerSec, 1)}</td><td>${f(s6.decisionsPerSec, 1)}</td>` +
-      `<td>${f(s15.decisionsPerSec, 1)}</td><td>${f(s30.decisionsPerSec, 1)}</td>` +
-      `<td>${f(s60.decisionsPerSec, 1)}</td><td>${f(t.overPartitionDropPct, 1)}%</td>` +
-      `<td>${escapeXml(s60.evidenceTier || 'modeled-topology-oracle')}</td></tr>`;
+    const optP = t.optimalPartitions !== null ? t.optimalPartitions : '<span class="badge">not measured</span>';
+    const peak = t.peakDecisionsPerSec !== null ? f(t.peakDecisionsPerSec, 1) : '<span class="badge">not measured</span>';
+    const v6 = s6.decisionsPerSec !== null ? f(s6.decisionsPerSec, 1) : '<span class="badge">not measured</span>';
+    const v15 = s15.decisionsPerSec !== null ? f(s15.decisionsPerSec, 1) : '<span class="badge">not measured</span>';
+    const v30 = s30.decisionsPerSec !== null ? f(s30.decisionsPerSec, 1) : '<span class="badge">not measured</span>';
+    const v60 = s60.decisionsPerSec !== null ? f(s60.decisionsPerSec, 1) : '<span class="badge">not measured</span>';
+    const drop = t.overPartitionDropPct !== null ? `${f(t.overPartitionDropPct, 1)}%` : '<span class="badge">not measured</span>';
+    return `<tr><td><strong>${escapeXml(t.label)}</strong></td><td>${optP}</td>` +
+      `<td>${peak}</td><td>${v6}</td>` +
+      `<td>${v15}</td><td>${v30}</td>` +
+      `<td>${v60}</td><td>${drop}</td>` +
+      `<td>${escapeXml(s60.evidenceTier || 'not measured')}</td></tr>`;
   }), '\n');
   return {mdReg, htReg, mdTgt, htTgt};
 }
@@ -160,14 +181,9 @@ export function renderPartitionGranularityComparisonMarkdown(matrix) {
     '[Lagrange Metrics Evolution Over Time](lagrange-metrics-evolution.md) | ' +
     '[3-to-5-Node RF=3 Scale-Out Comparison](scaleout-3to5-node-rf3-progress.md)';
   const desc = 'Evaluating partition counts from P=6 to P=60 on a 5-node RF=3 cluster ' +
-    'demonstrates that P=30 (averaging 6 leader partitions per node) serves as the ' +
-    'parallelism sweet spot for Lagrange (reaching 784.0 dec/s with 16.9 ms p99 latency) ' +
-    'and Apache Ignite 3 (reaching 662.0 dec/s with 19.2 ms p99 latency). At P=6 ' +
-    '(1.2 leaders/node), under-partitioning causes leader skew and idle worker threads. ' +
-    'Scaling beyond the sweet spot to P=60 (12 leaders/node) degrades throughput ' +
-    '(-5.9% in Lagrange, -10.3% in Citus 13, -15.5% in YugabyteDB, and -17.0% in TiDB + TiKV) ' +
-    'due to Raft heartbeat amplification, placement-table lookups, and cross-partition ' +
-    'fan-out coordination overhead.';
+    'identifies the operational regimes where leadership responsibility is distributed across cluster nodes. ' +
+    'Measurement of throughput sweet spots and cross-partition coordination overhead across candidate targets ' +
+    'requires admitted GCP or lab execution receipts.';
   return `# 5-Node RF=3 Partition Granularity Sweep and Coordination Tax
 
 Comparative evaluation of partition granularity scaling from P=6 to P=60 on a 5-node cluster under RF=3 replication,
@@ -202,14 +218,9 @@ export function renderPartitionGranularityComparisonHtml(matrix) {
     buildPartitionGranularitySweepExperiment();
   const {htReg, htTgt} = renderTables(exp);
   const desc = 'Evaluating partition counts from P=6 to P=60 on a 5-node RF=3 cluster ' +
-    'demonstrates that P=30 (averaging 6 leader partitions per node) serves as the ' +
-    'parallelism sweet spot for Lagrange (reaching 784.0 dec/s with 16.9 ms p99 latency) ' +
-    'and Apache Ignite 3 (reaching 662.0 dec/s with 19.2 ms p99 latency). At P=6 ' +
-    '(1.2 leaders/node), under-partitioning causes leader skew and idle worker threads. ' +
-    'Scaling beyond the sweet spot to P=60 (12 leaders/node) degrades throughput ' +
-    '(-5.9% in Lagrange, -10.3% in Citus 13, -15.5% in YugabyteDB, and -17.0% in TiDB + TiKV) ' +
-    'due to Raft heartbeat amplification, placement-table lookups, and cross-partition ' +
-    'fan-out coordination overhead.';
+    'identifies the operational regimes where leadership responsibility is distributed across cluster nodes. ' +
+    'Measurement of throughput sweet spots and cross-partition coordination overhead across candidate targets ' +
+    'requires admitted GCP or lab execution receipts.';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

@@ -10,6 +10,8 @@ import {
   runBuild,
   runDeploy,
   runGenerate,
+  runInspect,
+  runPublish,
 } from './service-pipeline-command.js';
 
 // The build/deploy dependencies load behind one literal dynamic import
@@ -32,6 +34,8 @@ const PIPELINE_COMMAND = Object.freeze({
   BUILD: 'build',
   DEPLOY: 'deploy',
   GENERATE: 'generate',
+  INSPECT: 'inspect',
+  PUBLISH: 'publish',
 });
 const PIPELINE_FLAG = Object.freeze({
   IDEMPOTENCY_KEY: '--idempotency-key',
@@ -161,11 +165,23 @@ async function runServicePipelineCommand(argv, dependencyOverrides = {}) {
         projectDirectory: command.projectDirectory,
         writeOutput: dependencies.writeOutput,
       });
+    } else if (command.command === PIPELINE_COMMAND.INSPECT) {
+      await runInspect({
+        createSqlClient: dependencies.createSqlClient,
+        projectDirectory: command.projectDirectory,
+        writeOutput: dependencies.writeOutput,
+      });
+    } else if (command.command === PIPELINE_COMMAND.PUBLISH) {
+      await runPublish({
+        createSqlClient: dependencies.createSqlClient,
+        projectDirectory: command.projectDirectory,
+        writeOutput: dependencies.writeOutput,
+      });
     } else {
       await runDeploy({
         createSqlClient: dependencies.createSqlClient,
         idempotencyKey: command.idempotencyKey,
-        projectDirectory: command.projectDirectory,
+        target: command.projectDirectory,
         writeOutput: dependencies.writeOutput,
       });
     }

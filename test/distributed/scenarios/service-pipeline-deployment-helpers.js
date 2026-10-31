@@ -22,6 +22,7 @@ import {
   runBuild,
   runDeploy,
   runGenerate,
+  runPublish,
 } from '../../../src/cli/service-pipeline-command.js';
 import {
   ServiceLocalOciLayoutBuilder,
@@ -121,6 +122,7 @@ function createServicePipeline() {
     }),
     runDeploy,
     runGenerate,
+    runPublish,
   };
 }
 
@@ -253,29 +255,31 @@ async function connectFirstReachable(adminNode, candidates, settings,
 
 /**
  * Deploy the generated records over an authenticated PostgreSQL-wire
- * session; the layout path is translated to the path the node containers
- * see through the scenario-artifacts bind mount.
+ * session by publishing the sealed payload and deploying with immutable identities.
  * @param {{adminNode: Object, nodes: Array<Object>, options: Object}} target
  *   - Where to open the lifecycle client (openLifecycleSqlClient arguments).
  * @param {{pipeline: Object, runId: string, writeOutput: Function}} deps
  * @param {{artifactsRoot: string, projectDirectory: string}} paths
- * @param {string} layoutPath - Host path of the built layout.
+ * @param {string} [layoutPath] - Optional legacy path argument (ignored in identity-only deploy).
  * @return {Promise<Object>} The pipeline deploy result.
  */
-async function deployThroughPipeline(target, deps, paths, layoutPath) {
-  const containerLayoutPath = path.posix.join(
-    SCENARIO_ARTIFACTS.CONTAINER_PATH,
-    path.relative(paths.artifactsRoot, layoutPath)
-      .split(path.sep).join(path.posix.sep),
-  );
+async function deployThroughPipeline(target, deps, paths, layoutPath = undefined) {
+  void layoutPath;
   const sqlClient = await openLifecycleSqlClient(
     target.adminNode, target.nodes, target.options);
   try {
+    const publishFn = deps.pipeline.runPublish || runPublish;
+    const publishResult = await publishFn({
+      createSqlClient: () => sqlClient,
+      projectDirectory: paths.projectDirectory,
+      writeOutput: deps.writeOutput,
+    });
     return await deps.pipeline.runDeploy({
       createSqlClient: () => sqlClient,
       idempotencyKey: deps.runId,
-      layoutPath: containerLayoutPath,
       projectDirectory: paths.projectDirectory,
+      receiptPath: publishResult?.receiptPath,
+      registration: publishResult?.registration,
       writeOutput: deps.writeOutput,
     });
   } finally {

@@ -6,7 +6,7 @@
     "architecture-governance": 21,
     "bootstrap-membership": 328,
     "cdc-metadata": 67,
-    "cli-tooling": 97,
+    "cli-tooling": 98,
     "control-plane": 224,
     "convergence-topology": 78,
     "distributed-harness": 182,
@@ -16,7 +16,7 @@
     "query-sql": 190,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 145,
+    "services-runtime": 148,
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2505,
-  "digest": "fnv1a32-5f531ab7",
+  "censusSize": 2509,
+  "digest": "fnv1a32-136322e3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-165e639a",
+  "observationDigest": "fnv1a32-4beabfad",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -442,6 +442,7 @@
     "test/cli/service-init-wasm-scaffold.test.js": "cli-tooling",
     "test/cli/service-install-lifecycle-cli.test.js": "cli-tooling",
     "test/cli/service-pipeline-command.test.js": "cli-tooling",
+    "test/cli/service-wasm-scaffold.test.js": "cli-tooling",
     "test/cli/sql/dangerous-query-detection.property.test.js": "cli-tooling",
     "test/cli/sql/escape-clears-input.property.test.js": "cli-tooling",
     "test/cli/sql/live-query-event-color-mapping.property.test.js": "cli-tooling",
@@ -1061,6 +1062,7 @@
     "test/integration/cross-node-replica-placement.integration.test.js": "placement-rebalance",
     "test/integration/data-local-call-missing-cell-activation.integration.test.js": "services-runtime",
     "test/integration/debug-join-flow.test.js": "admin-diagnostics",
+    "test/integration/developer-journey-j1-j2-j3.integration.test.js": "services-runtime",
     "test/integration/failure-scenarios.integration.test.js": "distributed-harness",
     "test/integration/http-to-call-composition.integration.test.js": "services-runtime",
     "test/integration/insert-or-ignore-raft-replay.integration.test.js": "storage-raft",
@@ -2316,7 +2318,9 @@
     "test/service/minimal-deployment-request-cell-routing.test.js": "services-runtime",
     "test/service/minimal-deployment-single-contract-owner-guard.test.js": "services-runtime",
     "test/service/replicated-service-topology.test.js": "services-runtime",
+    "test/service/request-binding-route-resolver.test.js": "services-runtime",
     "test/service/request-cell-call-bridge.test.js": "services-runtime",
+    "test/service/request-cell-http-adapter.test.js": "services-runtime",
     "test/service/service-compiler-editor-typings.test.js": "services-runtime",
     "test/service/service-consensus-creation-intent.test.js": "services-runtime",
     "test/service/service-consensus-creation-recovery.integration.test.js": "services-runtime",
@@ -3936,15 +3940,12 @@
     },
     "test/cli/service-install-lifecycle-cli.test.js": {
       "files": [
-        "Dockerfile",
-        "README.md",
         "src/cli/service-command-router.js",
         "src/cli/service-lifecycle-command.js",
         "src/cli/service-lifecycle-sql-client.js",
         "src/cli/service-project-build-input.js",
         "src/cli/service-project-scaffold.js",
-        "src/sea-entry.js",
-        "src/service/service-local-oci-layout-builder.js"
+        "src/sea-entry.js"
       ]
     },
     "test/cli/service-pipeline-command.test.js": {
@@ -18391,6 +18392,14 @@
         "src/control-plane/owners/service-install-catalog-contract.js",
         "src/runtime/request-cell-runtime-contract.js",
         "src/service/external-service-manifest.js"
+      ]
+    },
+    "test/service/request-binding-route-resolver.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/unified-service-lifecycle.js",
+        "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/service/request-binding-route-resolver.js"
       ]
     },
     "test/service/request-cell-call-bridge.test.js": {

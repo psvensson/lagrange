@@ -251,7 +251,7 @@ async () => withProject(async (project) => {
     ['generate', project], recordingDependencies().dependencies),
   SUCCESS_EXIT_CODE);
 
-  const expectedArtifactPath = await markProjectBuilt(project);
+  await markProjectBuilt(project);
   const {calls, dependencies, output, errors} = recordingDependencies();
   const exit = await runServicePipelineCommand(
     ['deploy', project, '--idempotency-key', 'deploy-test-1'],
@@ -271,12 +271,10 @@ async () => withProject(async (project) => {
     (statement) => statement === 'CONFIGURE SERVICE ACCESS $1'),
   `policies ride the access grammar: ${policyStatements}`);
 
-  // INSTALL carries the generated manifest with the local layout source.
+  // INSTALL carries the generated manifest with no artifact source (identity-only).
   const install = calls[0].payload;
   assert.equal(install.manifest.name, 'account-summary');
-  assert.deepEqual(install.artifact_source, {
-    kind: 'local_oci_layout', location: expectedArtifactPath,
-  });
+  assert.equal(install.artifact_source, undefined);
   assert.equal(install.idempotency_key, 'deploy-test-1');
 
   // Every CREATE BINDING payload substitutes the INSTALL-returned
@@ -360,6 +358,38 @@ async () => withProject(async (project) => {
   assert.equal(exit, FAILURE_EXIT_CODE);
   assert.equal(output.length, 0);
   assert.match(errors.at(-1), /CREATE BINDING rejected/u);
+}));
+
+test('publish uploads component wasm and seals payload via ' +
+  'PUBLISH SERVICE ARTIFACT $1',
+async () => withProject(async (project) => {
+  assert.equal(await runServicePipelineCommand(
+    ['generate', project], recordingDependencies().dependencies),
+  SUCCESS_EXIT_CODE);
+  await markProjectBuilt(project);
+  const wasmPath = path.join(project, '.lagrange', 'component.wasm');
+  await writeFile(wasmPath, Buffer.from('mock-wasm-binary-component'));
+
+  const {calls, dependencies, output, errors} = recordingDependencies();
+  const exit = await runServicePipelineCommand(
+    ['publish', project],
+    dependencies);
+  assert.equal(exit, SUCCESS_EXIT_CODE, errors.join('\n'));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].statement, 'PUBLISH SERVICE ARTIFACT $1');
+  assert.equal(calls[0].payload.media_type, 'application/wasm');
+
+  const receiptPath = path.join(
+    project, '.lagrange', 'publish-receipt.json');
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+  assert.equal(receipt.service, 'account-summary');
+  assert.match(receipt.packageId, /^service-package-[0-9a-f]{64}$/);
+  assert.ok(receipt.artifactDigest);
+
+  const summary = JSON.parse(output.at(-1));
+  assert.equal(summary.service, 'account-summary');
+  assert.match(summary.packageId, /^service-package-[0-9a-f]{64}$/);
+  assert.equal(summary.receipt, receiptPath);
 }));
 
 test('malformed pipeline argv exits with usage before touching ' +

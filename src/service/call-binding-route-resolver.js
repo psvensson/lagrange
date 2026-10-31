@@ -8,12 +8,8 @@ import {
   projectBinding,
 } from '../control-plane/owners/deployment-binding-contract.js';
 import {
-  deriveRequestServiceDefinitionId,
-} from
-  '../control-plane/owners/request-binding-service-definition-contract.js';
-import {
-  isActiveDefinitionForBinding,
-  isReadyRuntimeActual,
+  filterGenerationalBindingCandidates,
+  findActiveReadyBindingCandidate,
 } from './binding-route-actuals.js';
 import {
   CALL_CELL_ROUTE_CLASSIFICATION,
@@ -100,9 +96,10 @@ class CallBindingRouteResolver {
     const rows =
       cache.getAll(SYSTEM_TABLE_NAME.SERVICE_BINDINGS) || [];
     const matches = [];
+    const tenantId = request.securityContext?.tenantId ?? request.tenantId;
     for (const row of rows) {
       if (
-        row?.tenant_id !== request.securityContext.tenantId ||
+        row?.tenant_id !== tenantId ||
         row?.source_kind !== DEPLOYMENT_BINDING_SOURCE_KIND.CALL
       ) {
         continue;
@@ -135,38 +132,29 @@ class CallBindingRouteResolver {
         ROUTE_RESOLVER_ERROR.ROUTE_NOT_FOUND,
       );
     }
-    if (bindings.length > 1) {
+
+    const {ambiguous, candidates} =
+      filterGenerationalBindingCandidates(bindings, request, cache);
+    if (ambiguous) {
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.ROUTE_AMBIGUOUS,
         ROUTE_RESOLVER_ERROR.ROUTE_AMBIGUOUS,
       );
     }
 
-    const binding = bindings[0];
-    const statement = binding.declaration.source.statement;
-    if (typeof statement !== 'string' || statement.length === 0) {
-      throw createCallRoutingFailure(
-        CALL_CELL_ROUTE_ERROR_CODE.NOT_INVOCABLE,
-        ROUTE_RESOLVER_ERROR.NOT_INVOCABLE,
-      );
-    }
-    const serviceId =
-      deriveRequestServiceDefinitionId(binding.bindingVersionId);
-    const definition = cache.get(
-      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
-      serviceId,
+    const active = findActiveReadyBindingCandidate(
+      candidates,
+      cache,
+      DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
     );
-    const actuals =
-      (cache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [])
-        .filter((actual) => isReadyRuntimeActual(actual, serviceId));
-    if (
-      !isActiveDefinitionForBinding(
-        definition,
-        binding,
-        DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
-      ) ||
-      actuals.length === 0
-    ) {
+    if (!active.found) {
+      if (candidates.length > 0 &&
+          candidates.every((c) => !c.declaration.source.statement)) {
+        throw createCallRoutingFailure(
+          CALL_CELL_ROUTE_ERROR_CODE.NOT_INVOCABLE,
+          ROUTE_RESOLVER_ERROR.NOT_INVOCABLE,
+        );
+      }
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
         ROUTE_RESOLVER_ERROR.ROUTE_UNAVAILABLE,
@@ -174,18 +162,22 @@ class CallBindingRouteResolver {
       );
     }
 
-    // Data-local selection: a dispatch that resolved its shard's host
-    // node restricts selection to ready Cell actuals ON that node. The
-    // distinct typed refusal (never plain ROUTE_UNAVAILABLE) is the
-    // activation trigger — a co-located Cell can be activated, whereas a
-    // Binding with no ready Cell anywhere cannot execute at all.
+    const {chosenActuals, chosenBinding, chosenDefinition, serviceId} = active;
+    const statement = chosenBinding.declaration.source.statement;
+    if (typeof statement !== 'string' || statement.length === 0) {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.NOT_INVOCABLE,
+        ROUTE_RESOLVER_ERROR.NOT_INVOCABLE,
+      );
+    }
+
     const hostNodeId = typeof request.hostNodeId === 'string' &&
       request.hostNodeId.length > 0 ?
       request.hostNodeId :
       null;
     const selectable = hostNodeId ?
-      actuals.filter((candidate) => candidate.node_id === hostNodeId) :
-      actuals;
+      chosenActuals.filter((candidate) => candidate.node_id === hostNodeId) :
+      chosenActuals;
     if (selectable.length === 0) {
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
@@ -195,9 +187,11 @@ class CallBindingRouteResolver {
     }
     const actual = selectActual(selectable, request.invocationId);
     return Object.freeze({
-      bindingDigest: definition.binding_digest,
-      bindingVersionId: binding.bindingVersionId,
-      handlerId: resolvedHandlerId(binding),
+      bindingDigest: chosenDefinition.binding_digest,
+      bindingId: chosenBinding.bindingId,
+      bindingVersionId: chosenBinding.bindingVersionId,
+      generation: chosenBinding.generation,
+      handlerId: resolvedHandlerId(chosenBinding),
       hostNodeId,
       name: request.name,
       nodeId: actual.node_id,
@@ -207,12 +201,15 @@ class CallBindingRouteResolver {
       targetAddress:
         `${actual.node_id}/service/runtime-service-handler`,
       targetNodeId: actual.node_id,
-      tenantId: binding.tenantId,
+      tenantId: chosenBinding.tenantId,
     });
   }
 
   assertSelectedRoute(request, expectedRoute) {
-    const current = this.resolve(request);
+    const current = this.resolve({
+      ...request,
+      bindingVersionId: expectedRoute?.bindingVersionId,
+    });
     const fields = [
       'bindingDigest',
       'bindingVersionId',

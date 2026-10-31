@@ -8,11 +8,11 @@ documentClass: current
 You have a service that pulls rows out of the database to compute a small
 answer. This tutorial moves that hot path into a Lagrange service - a
 partition function and a reducer authored together in one component - and
-invokes it through the CALL binding, today's public data-local invocation
-surface.
+invokes it through the current code-first authoring API and canonical deployment
+lifecycle.
 
 The example is a movie-ranking endpoint over the MovieLens 100k dataset. It
-is useful because it has a strong conventional implementation: a database can
+is useful because it provides a realistic, honest comparison: a database can
 compute `AVG` and `COUNT` per movie efficiently, and an application service
 can apply a Bayesian confidence adjustment and choose the top ten. The
 comparison therefore does not depend on an intentionally bad baseline.
@@ -33,13 +33,41 @@ The formula deliberately mixes data operations and application policy:
 
 - `AVG` and `COUNT` are natural database work;
 - the prior and confidence penalty are application choices;
-- the formula should be versioned, tested, and deployed like code; and
+- the formula should be versioned, tested, and deployed like application code; and
 - only the top candidates need to leave each shard.
 
-## Baseline: A Good Conventional Service
+## Comparing All Three Baselines Honestly
 
-A reasonable implementation asks the database to group first. It does not
-pull all raw ratings into Node.js.
+To evaluate data-local computation fairly, compare three possible implementations:
+
+### Baseline 1: Full Scoring and Selection Inside SQL
+
+If the scoring algorithm is purely mathematical and supported by standard SQL functions,
+the entire operation can be expressed in a single SQL query:
+
+```sql
+SELECT movie_id,
+       ((AVG(rating) * COUNT(*) + 3.5 * 25) / (COUNT(*) + 25)) -
+       (0.5 / SQRT(COUNT(*))) AS score
+FROM ratings
+GROUP BY movie_id
+ORDER BY score DESC
+LIMIT 10;
+```
+
+**Evaluation:**
+- When an arithmetic calculation can be completely expressed in standard SQL and the policy
+  rarely changes, plain SQL top-N is extremely efficient.
+- The storage engine aggregates rows, calculates scores, maintains a top-10 heap, and returns
+  **only 10 rows** over the network.
+- *When plain SQL is sufficient:* If the logic requires no custom libraries, no external lookups,
+  and no versioned business models, plain SQL top-N is often the best choice. Lagrange does not
+  force you to rewrite simple SQL queries into WASM.
+
+### Baseline 2: SQL Aggregation Plus Application Policy
+
+A common conventional architecture asks the database to group first, while the application
+service computes the Bayesian adjustment:
 
 ```js
 export async function topMovies(pool, policy) {
@@ -68,473 +96,272 @@ export async function topMovies(pool, policy) {
 }
 ```
 
-This is already much better than transferring every rating. The database
-returns one aggregate per movie rather than one row per rating.
+**Evaluation:**
+- This avoids transferring every raw rating (100,000 rows).
+- However, the database must return an aggregate row for **every movie** (~1,682 movies in MovieLens 100k)
+  across the network to the application server.
+- The application server scores all candidates and immediately discards ~1,672 of them to keep 10.
 
-But the boundary is still fixed:
+### Baseline 3: Lagrange Partition Functions and Reduction
 
-```text
-all database partitions
-  → grouped aggregate for every movie
-  → one application process
-  → score every movie
-  → sort all candidates
-  → keep ten
-```
+With Lagrange, the application scoring policy executes directly beside each data partition.
+Each partition leader scores its local ratings and emits only its local top 10 candidates.
+The reducer then merges at most `num_shards × 10` candidates to produce the global top 10.
 
-The application receives many candidates that it immediately discards. It
-also owns a database pool and executes the policy at whichever service
-replica happened to receive the request.
+**When Code-First Partition Functions Help:**
+- **Custom or evolving policy:** When scoring logic involves proprietary algorithms, complex rules,
+  or custom libraries that cannot be written in SQL or stored procedures.
+- **Developer workflow:** When business logic needs to be authored in JavaScript/TypeScript,
+  unit-tested on developer laptops (`npm test`), and deployed through CI/CD pipelines without
+  requiring database administrator permissions or custom server extension installations.
+- **Bounded network exchange:** When computing custom logic near each partition eliminates the need
+  to stream thousands or millions of intermediate aggregates across the network.
 
-## Packaging Alone Does Not Change This
+---
 
-The same service can be compiled to WASM and deployed on Lagrange. That
-improves packaging, isolation, lifecycle, and policy-controlled placement.
+## Authoring the Service with the Code-First API
 
-It does **not** automatically change the algorithm. If the deployed service
-still issues the same grouped query and receives every movie aggregate, the
-same result set crosses the database/service boundary.
+Lagrange uses a code-first JavaScript API (`defineService`, `distributed`, `http.post`, `sql`).
+You author one service descriptor declaring the HTTP endpoint and the data-local operation.
 
-This distinction matters:
+### `lagrange.service.js`
 
-> Portable deployment changes where an existing program can run. A hot-path
-> rewrite changes what must move between storage and computation.
+```javascript
+import {defineService} from './authoring/define-service.js';
+import {distributed} from './authoring/distributed-operation.js';
+import {http} from './authoring/request-handler.js';
+import {sql} from './authoring/sql-template.js';
 
-## Choose The Extraction Boundary
+const PRIOR_MEAN = 3.5;
+const PRIOR_WEIGHT = 25;
+const CONFIDENCE_PENALTY = 0.5;
+const TOP_K_LIMIT = 10;
 
-Do not rewrite the whole API service. Keep concerns that are not data-local
-in the outer application:
-
-```text
-HTTP API service
-  ├─ authentication
-  ├─ request validation
-  ├─ response caching policy
-  ├─ external calls
-  └─ rank movies against the ratings data   ← extract this
-```
-
-Extract only the final operation. Its contract is small:
-
-```js
-{
-  priorMean: 3.5,
-  priorWeight: 25,
-  confidencePenalty: 0.5,
-  limit: 10
-}
-```
-
-The output is at most ten ranked candidates.
-
-On today's surface, the split falls out of the Binding contract:
-
-- the **data selector** is a single-table SELECT declared once, on the
-  Binding - not per call;
-- the **policy** rides in the `arguments` of each invocation;
-- the **result** is whatever the reducer returns.
-
-## The Service You Author
-
-One component, two exports, side by side in one source file. This code
-matches the shipped `call-cell` WIT ABI - the same world exercised by the
-repository's live call-path integration tests. (The canonical world file
-is the committed authoring artifact at `wit/world.wit`.)
-
-### Partition function
-
-`run` receives the Binding statement's rows for one shard, as a typed batch,
-fetched locally on the node hosting that shard. It groups, scores, and emits
-only its local top candidates:
-
-```js
-import {emit} from 'lagrange:cell/call-context';
-
-function col(row, name) {
-  for (const column of row.columns) {
-    if (column.name === name) return column.val;
-  }
-  return {tag: 'null-value'};
-}
-
-export function run(batch, argumentsJson) {
-  const policy = JSON.parse(argumentsJson);
-
-  // Group this shard's raw ratings by movie.
+/**
+ * Partition-local execution: groups rows locally on the partition leader host,
+ * calculates the Bayesian score for local movies, and emits only the local top K candidates.
+ */
+function rankRun(rows, runArguments, {emit}) {
+  const limit = runArguments?.limit ?? TOP_K_LIMIT;
   const groups = new Map();
-  for (const row of batch) {
-    const movieId = col(row, 'movie_id');
-    const rating = col(row, 'rating');
-    if (movieId.tag !== 'integer' || rating.tag !== 'real') continue;
-    const key = String(movieId.val);
-    const group = groups.get(key) ?? {sum: 0, count: 0};
-    group.sum += rating.val;
+
+  // 1. Group local rows on this partition leader
+  for (const row of rows) {
+    const movieId = Number(row.movie_id);
+    const rating = Number(row.rating);
+    const group = groups.get(movieId) ?? {sum: 0, count: 0};
+    group.sum += rating;
     group.count += 1;
-    groups.set(key, group);
+    groups.set(movieId, group);
   }
 
-  // Apply the application policy locally.
+  // 2. Score candidates locally
   const candidates = [];
   for (const [movieId, {sum, count}] of groups) {
     const average = sum / count;
     const bayesianMean =
-      (average * count + policy.priorMean * policy.priorWeight) /
-      (count + policy.priorWeight);
+      (average * count + PRIOR_MEAN * PRIOR_WEIGHT) / (count + PRIOR_WEIGHT);
     const score =
-      bayesianMean - policy.confidencePenalty / Math.sqrt(count);
+      bayesianMean - CONFIDENCE_PENALTY / Math.sqrt(count);
     candidates.push({movieId, score});
   }
+
+  // 3. Sort local candidates
   candidates.sort((left, right) => right.score - left.score);
 
-  // Publish only the local top K as numeric partials.
-  for (const {movieId, score} of candidates.slice(0, policy.limit)) {
-    emit(movieId, JSON.stringify(score));
+  // 4. Emit ONLY the local top K as numeric partials under shard-disjoint keys
+  for (const candidate of candidates.slice(0, limit)) {
+    emit(`score:${candidate.movieId}`, candidate.score);
   }
-  return JSON.stringify({considered: candidates.length});
+
+  return {considered: candidates.length};
 }
-```
 
-Partials leave through `emit(key, partialJson)`, not the return value. Two
-contract rules shape the code:
+/**
+ * Global reduction: merges candidate partials from all shards and returns the global top K.
+ */
+function rankReduce(partials, runArguments) {
+  const limit = runArguments?.limit ?? TOP_K_LIMIT;
+  const candidates = [];
 
-- **Numeric partials only.** The coordination gate accepts one finite number
-  per group key. The Bayesian score is exactly that. A partial carrying
-  `{sum, count}` structs is future work - see
-  [What Is Not Yet There](#what-is-not-yet-there).
-- **Shard-disjoint group keys.** All ratings for one movie must live on one
-  shard (here: ratings partitioned by movie id). Two shards emitting the
-  same movie id is a typed refusal, never a silent double count.
+  for (const [key, score] of partials) {
+    const [, movieId] = String(key).split(':');
+    candidates.push({movieId: Number(movieId), score: Number(score)});
+  }
 
-### Reducer
-
-`reduce` is the second export in the same component. It receives every
-shard's published partials - already validated for completeness and merged
-deterministically - and picks the winners:
-
-```js
-export function reduce(partials, argumentsJson) {
-  const policy = JSON.parse(argumentsJson);
-  return JSON.stringify(
-    partials
-      .map(([movieId, partial]) => ({movieId, score: JSON.parse(partial)}))
-      .sort((left, right) => right.score - left.score)
-      .slice(0, policy.limit));
+  candidates.sort((left, right) => right.score - left.score);
+  return candidates.slice(0, limit);
 }
-```
 
-With `R` participating shards and a requested limit `K`, the reducer
-receives at most `R × K` candidates. The grouped-SQL baseline returns one
-aggregate per movie.
+// Declare the distributed operation with a literal SQL selector
+const rankTopMovies = distributed({
+  statement: sql`SELECT movie_id, rating FROM ratings`,
+  run: rankRun,
+  reduce: rankReduce,
+});
 
-## Install, Bind, Invoke
-
-The lifecycle rides the same authenticated pgwire session used for ordinary
-SQL. Build the component (ComponentizeJS compiles the JavaScript above
-against the `call-cell` world), then:
-
-```sql
-INSTALL SERVICE $1;   -- $1 = the manifest JSON (digest-pinned artifact)
-CREATE BINDING $1;    -- $1 = the binding JSON below
-```
-
-The Binding declares the data selector and budgets:
-
-```json
-{
-  "schema_version": 2,
-  "name": "rank-movies",
-  "target": {
-    "package_id": "<derived from manifest>",
-    "manifest_digest": "sha256:…",
-    "export_name": "run"
+export default defineService({
+  name: 'movie-ranking',
+  version: '0.1.0',
+  operations: {
+    rankTopMovies,
   },
-  "source": {
-    "kind": "call",
-    "name": "rank-movies",
-    "statement": "SELECT movie_id, rating FROM ratings"
+  handlers: {
+    topMovies: http.post('/movies/top', {
+      calls: [rankTopMovies],
+      handle: (request, context) => {
+        const body = typeof request.body === 'string' && request.body ?
+          JSON.parse(request.body) : (request.body || {});
+        const results = context.call(rankTopMovies, {limit: body.limit ?? 10});
+        return context.json(results, 200);
+      },
+    }),
   },
-  "budgets": {
-    "cpu_time_ms": 1000,
-    "wall_time_ms": 10000,
-    "memory_bytes": 67108864,
-    "input_bytes": 65536,
-    "output_bytes": 65536,
-    "context_bytes": 4096
-  }
-}
+});
 ```
 
-The statement must be a single-table SELECT; a call Binding without a
-statement registers durably but refuses invocation typed
-(`call_cell_not_invocable`).
+### Key Contract Rules
 
-The outer service - or any client on an authenticated pgwire session with
-the `pgwire.binding.call` action - then invokes it with one literal
-statement and one JSON string parameter:
+1. **Plain Object Rows:** Rows passed into `run(rows, args, {emit})` are plain JavaScript objects
+   with properties matching the SELECT statement (`row.movie_id`, `row.rating`). No low-level
+   WIT wrappers or tag decoding are needed.
+2. **Numeric Partials Only:** Every value passed to `emit(key, value)` must be a finite number.
+   The Bayesian score is emitted directly.
+3. **Shard-Disjoint Keys:** Ratings partitioned by movie ID ensure that all ratings for a given
+   movie reside on one shard, avoiding key collisions. Emitting the same key from multiple shards
+   is rejected by the coordinator.
+4. **Fixed SELECT Statements:** The selector `sql`SELECT movie_id, rating FROM ratings`` is fixed
+   at deployment time. Dynamic parameters (such as `limit`) are passed via call arguments.
 
-```sql
-CALL BINDING $1
+---
+
+## Canonical Build, Publish, and Deploy Lifecycle
+
+Deploying the service follows the canonical three-step lifecycle:
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+flowchart LR
+  SRC["Source Code<br/>lagrange.service.js"] -->|npm run build| WASM[".lagrange/component.wasm"]
+  WASM -->|lagrange service publish .| STORE["Replicated<br/>ArtifactPayloadStore"]
+  STORE -->|returns &lt;package-id&gt;| PUB["Package ID"]
+  PUB -->|lagrange service deploy --package-id &lt;id&gt;| ACT["Active Deployment"]
+
+  classDef default fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef accent fill:#dcfce7,stroke:#166534,color:#052e16
+  classDef store fill:#fef3c7,stroke:#b45309,color:#451a03
+  class STORE store
+  class ACT accent
 ```
 
-```json
-{
-  "schema_version": 2,
-  "name": "rank-movies",
-  "arguments": {
-    "priorMean": 3.5,
-    "priorWeight": 25,
-    "confidencePenalty": 0.5,
-    "limit": 10
-  }
-}
+### 1. Build the Component
+
+```bash
+npm run build
 ```
 
-The response is one row `{name, result}` where `result` is the reducer's
-JSON - the final ten. Unknown payload fields are refused; tenant identity
-comes from the session, never the payload.
+This generates `.lagrange/component.wasm` along with deterministic deployment records under `.lagrange/deployment/`.
 
-Two honest operational notes:
+### 2. Publish the Artifact
 
-- **Batch bounds are real.** Each shard batch is bounded (default 4096
-  rows, per-deployment tunable). A full 100k-rating scan needs raised
-  tunables or narrower selection; an oversized batch refuses typed
-  (`call_cell_batch_bound_exceeded`) rather than degrading.
-- **Emit budget is real.** Default 64 `emit` calls per invocation - which
-  is why the partition function emits its top `K`, not every movie.
+```bash
+npx lagrange service publish .
+```
 
-## Before And After
-
-### Conventional grouped-query path
+The CLI connects to the cluster's replicated `ArtifactPayloadStore`, validates the component
+descriptor, and seals the artifact bytes. Upon completion, it outputs the registered immutable
+package ID:
 
 ```text
-request
-  → arbitrary service replica
-  → database coordinator
-  → all relevant partitions compute AVG and COUNT
-  → one aggregate per movie crosses into the service
-  → service scores and sorts every movie
-  → ten results
+Published artifact package: pkg_01jbc45d6e7f8a9b0c1d2e3f4a
 ```
 
-### Data-local call path
+### 3. Deploy by Registered Identity
 
-```text
-CALL BINDING $1
-  → the Binding statement resolves to current partitions (no rows fetched)
-  → run() executes on each partition-host node
-      → local grouping over the shard's own replica
-      → local policy scoring
-      → emits local top ten
-  → at most shards × ten numeric partials cross the exchange
-  → completeness gate, then reduce() once under a dedicated lease
-  → one atomic snapshot → ten results
+Deploy the service to the cluster using the immutable package ID:
+
+```bash
+npx lagrange service deploy --package-id pkg_01jbc45d6e7f8a9b0c1d2e3f4a --idempotency-key deploy-key-v1
 ```
 
-Raft and distributed routing still exist. The improvement is not magical
-local execution; it is the removal of avoidable intermediate movement and
-the application/database boundary around each shard's useful work. In the
-two-node integration proof of this path, shard-table rows crossing the wire
-measure exactly zero - the network carries partials and the result.
+The deployment command requires only cluster credentials, the registered package ID, and an
+idempotency key. It does not read local files or container mounts.
 
-## What Exactly Improves
+---
 
-### Transfer shape
+## Invoking the Service
+
+### Over Authenticated HTTP
+
+```bash
+curl -fsS -u postgres:lagrange-dev-password \
+  -H 'content-type: application/json' \
+  -d '{"limit": 10}' \
+  http://127.0.0.1:8080/movies/top
+```
+
+Response:
+
+```json
+[
+  {"movieId": 318, "score": 4.41},
+  {"movieId": 858, "score": 4.38},
+  {"movieId": 50,  "score": 4.34},
+  {"movieId": 527, "score": 4.31},
+  {"movieId": 1198,"score": 4.29},
+  {"movieId": 260, "score": 4.28},
+  {"movieId": 1196,"score": 4.26},
+  {"movieId": 1210,"score": 4.24},
+  {"movieId": 589, "score": 4.22},
+  {"movieId": 2028,"score": 4.21}
+]
+```
+
+### Over Authenticated PostgreSQL Wire
+
+You can also invoke the distributed operation directly over PostgreSQL wire:
+
+```sql
+CALL BINDING 'movie-ranking--call--rank-top-movies' (
+  '{"limit": 10}'
+);
+```
+
+---
+
+## What Improves
+
+### Transfer Shape
 
 Let:
+- `N` be the total number of ratings (100,000);
+- `M` be the number of distinct movies (1,682);
+- `R` be the number of participating shards (e.g. 6); and
+- `K` be the requested top-N limit (10).
 
-- `N` be the number of matching raw rows;
-- `M` be the number of grouped movies;
-- `R` be the number of participating shards; and
-- `K` be the requested result count.
+| Implementation | Values Crossing Database/Service Boundary | MovieLens 100k Count |
+| --- | --- | ---: |
+| Naive Application Aggregation | `N` raw rows | 100,000 rows |
+| Grouped SQL Baseline | `M` aggregate rows | 1,682 rows |
+| Full SQL Top-N | `K` final rows | 10 rows |
+| Lagrange Partition Reduction | At most `R × K` numeric partials | ≤ 60 partials |
 
-Then the dominant boundary shapes are:
+### Latency and Efficiency
 
-| Implementation | Values crossing the main database/service boundary |
-| --- | ---: |
-| Naive application aggregation | approximately `N` rows |
-| Good grouped SQL baseline | approximately `M` aggregates |
-| Data-local function and bounded reduce | at most `R × K` candidates |
+- **Reduced Serialization:** Instead of serializing, transmitting, and parsing 1,682 movie
+  aggregate objects, only `R × K` numbers cross the network to the reducer.
+- **Parallel Local Execution:** Shards on distinct partition leaders execute in parallel,
+  utilizing multi-core storage nodes effectively.
+- **Honest Boundary:** If an arithmetic computation is simple and static, plain SQL top-N
+  is the simplest solution. Lagrange is designed for workloads where business logic, application
+  libraries, or multi-step transformations require custom code to execute near data.
 
-For top-ten ranking, `K` is fixed even as the dataset grows. `R` grows with
-the partition shape, while `N` and usually `M` grow with the data.
-
-### Latency
-
-The rewrite can reduce latency when:
-
-- service-to-database network time is material;
-- per-shard work is substantial relative to coordination;
-- intermediate result serialization is significant;
-- the reducer input is much smaller than the grouped result; and
-- execution is placed on or near suitable replicas.
-
-It can fail to help when the dataset is tiny, one indexed query already
-returns only ten rows, startup dominates, or the partition-local code
-consumes more CPU than the transfer it removes. Shard dispatch is parallel
-and bounded (default 8 concurrent runs) across distinct host nodes; shards
-on one host serialize, so the win compounds transfer shape, locality, and -
-when partitions span nodes - overlapping shard execution.
-
-Do not present a speedup ratio from the local demo. PostgreSQL and Lagrange
-use different startup, topology, storage, and process arrangements there.
-The demo compares correctness, transfer shape, and placement evidence.
-Performance claims require repeated steady-state samples on controlled
-deployments.
-
-### Operations
-
-The outer service no longer needs to know:
-
-- shard endpoints;
-- partition maps;
-- leader locations;
-- the number of service workers matching the data layout; or
-- how to redeploy those workers after splits and moves.
-
-The function Artifact is immutable, the Binding defines invocation intent,
-and Cells are system-policy output. When an invocation targets a partition
-whose node has no ready Cell, the invoker publishes a bounded activation
-lease and the placement planner pins compute there - activation is a
-mechanism, not an error.
-
-### Security
-
-The partition function receives only declared capabilities. It does not
-inherit a broad network environment and a database credential capable of
-reaching unrelated tables.
-
-On the call path, the security context (tenant, principal, frozen roles) is
-derived from the authenticated pgwire session on the server side; the
-payload cannot claim an identity, and unknown payload fields are refused.
-Undeclared access is denied at the component boundary.
-
-### Failure semantics
-
-A generic service process may fail after an unknown set of external side
-effects. The call path carries its contract explicitly today:
-
-- a minted invocation identity, fanned out per shard and reduce with a
-  durable idempotency fence - a replayed dispatch never re-executes;
-- a caller deadline enforced end to end, re-checked inside the component
-  invoke barrier;
-- typed failure codes classified `terminal | retryable | ambiguous`;
-  retries happen only for retryable failures where the component provably
-  did not run;
-- partition and replica movement surfacing as the typed retryable
-  `call_cell_target_stale` - never a wrong result; and
-- exactly-once **visibility**: one atomic result snapshot per complete
-  partial set, with a witness naming the contributing replicas.
-
-The full contract is in [Execution Semantics](../execution-semantics.md).
-
-## How Placement Learns
-
-Lagrange attributes successful service-issued statements to the partitions
-they actually execute against. That evidence is aggregated into placement
-weights:
-
-- a read credits every node with an active replica because any can
-  potentially serve it locally;
-- a write credits the leader's node because the write must reach the
-  leader; and
-- latency-group weights provide a coarser "avoid crossing this domain"
-  signal.
-
-The rebalancer applies the weights with an incumbent-retention term so
-small changes do not cause constant movement. This is a slow topology
-decision. Read-locality routing is a separate fast per-query decision. The
-call path adds a direct fast mechanism on top: activation leases pin
-compute onto the exact nodes an invocation needs, and an expired lease
-stops pinning so the normal surplus cure reclaims the replica.
-
-The full mechanism is documented in
-[Process: Data Affinity](../../architecture/process-data-affinity.md).
-
-## Run The Existing Proof
-
-From the repository root:
-
-```sh
-npm install
-npm run demo:movielens
-```
-
-The comparison runs:
-
-1. PostgreSQL grouped SQL;
-2. Lagrange distributed grouped SQL; and
-3. a replicated Lagrange service performing disjoint-shard scoring and
-   bounded reduction.
-
-It verifies that all three produce the same ordered top ten. It also
-records placement evidence and the service's convergence toward the data it
-accesses.
-
-The MovieLens demo (`examples/service-data-affinity/lagrange.service.js`)
-compiles and deploys an installed code-first WASI `call` Binding across a
-three-node local cluster and measures partition-local fanout, reduction, and
-affinity-driven Cell movement. Check the
-[examples index](../../examples/README.md) for the full set of runnable
-service examples, and see
-[`examples/js-request-binding-deployment`](../../examples/js-request-binding-deployment/README.md)
-for the smallest end-to-end deployment of a ComponentizeJS-built component
-through the identical lifecycle SQL.
-
-## A Migration Checklist
-
-For one candidate hot path:
-
-1. Record the existing SQL calls, returned rows, transferred bytes, and
-   latency.
-2. Identify the smallest operation whose inputs and output form a stable
-   contract.
-3. Keep authentication, external calls, and presentation logic outside.
-4. Check the operation fits today's contract: a single-table SELECT as the
-   selector, one finite number per group key as the partial, group keys
-   disjoint across shards, batches within the configured bounds.
-5. Author `run` and `reduce` together in one component against the
-   `call-cell` world; declare the selector on the Binding.
-6. Declare the minimum table and capability access.
-7. Compare correctness against the existing implementation.
-8. Measure warm steady-state p50, p95, p99, bytes moved, CPU, and retries.
-9. Inspect placement evidence and decision dimensions rather than assuming
-   co-location.
-10. Migrate another hot path only when the first one shows a meaningful
-    win.
-
-This incremental approach makes Lagrange adoption a sequence of measurable
-extractions, not an all-or-nothing application rewrite.
-
-## What Is Not Yet There
-
-Intended API, honestly labeled - none of this is a supported surface today:
-
-- **Per-call data selection.** The selector is fixed on the Binding. A
-  caller cannot narrow it per invocation (`WHERE movie_id BETWEEN $a AND
-  $b`); today you vary `arguments`, not the SQL.
-- **Structured partials.** One finite number per group key. Emitting
-  `{sum, count}` and computing the average in the reducer is future work.
-- **Concurrent runs per Cell.** Shard dispatch is parallel and bounded
-  (default 8 concurrent runs), but shards on one host node serialize - a
-  Cell runs one invocation at a time.
-- **A `ctx.call()`-style client.** The intended in-process sugar
-  (`lagrange.call({data, function, reduce, arguments})`) does not exist;
-  the external surface is `CALL BINDING $1` over pgwire, and deployed
-  request handlers invoke declared call Bindings through the
-  `callBinding` host import.
-- **Deeper nested calls.** A request handler can make one authorized
-  nested call; the call-world `call-bounded` import is declared in the
-  WIT world but always denied by the host.
-- **`pushdown`.** Declared-only; no routing surface can select it.
+---
 
 ## Continue
 
-- [Execution Semantics](../execution-semantics.md) - the invocation
-  contract in full: retries, idempotency, budgets, movement, visibility.
+- [JavaScript Service Reference](../reference/javascript-service-reference.md)
+- [Execution Semantics](../execution-semantics.md)
 - [The Lagrange Native Programming Model](../native-programming-model.md)
-  - the concepts behind this tutorial.
 - [Minimal Deployment Surface](../../architecture/minimal-deployment-surface.md)
-  - the sealed design contract for Artifact, Binding, Cell, and the call
-  surface.
-- [Process: Data Affinity](../../architecture/process-data-affinity.md) -
-  how placement follows access evidence.
+- [MovieLens Affinity Example](../../examples/service-data-affinity/README.md)

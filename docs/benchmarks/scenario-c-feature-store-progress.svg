@@ -20,74 +20,62 @@
   <text x="655" y="128" fill="#64748b" font-size="9">Operational pipeline count</text>
     <text x="35" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="35" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
-    <text x="35" y="170" fill="#cbd5e1" font-size="10">441.1 dec/s (0.00% stale)</text>
+    <text x="35" y="170" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="35" y="176" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="176" width="221" height="8" fill="#38bdf8" rx="3"/>
-    <text x="35" y="194" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
+    <text x="35" y="194" fill="#64748b" font-size="9">Tier: none</text>
     <text x="345" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="345" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
-    <text x="345" y="170" fill="#cbd5e1" font-size="10">441.1 dec/s (p99: 18.1ms)</text>
+    <text x="345" y="170" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="345" y="176" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="176" width="184" height="8" fill="#38bdf8" rx="3"/>
-    <text x="345" y="194" fill="#64748b" font-size="9">100ms: 441.1 dec/s</text>
+    <text x="345" y="194" fill="#64748b" font-size="9">[not measured]</text>
     <text x="655" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="655" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
-    <text x="655" y="170" fill="#cbd5e1" font-size="10">Backfill: 0s (Restart: 3.2s)</text>
+    <text x="655" y="170" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="655" y="176" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="176" width="4" height="8" fill="#38bdf8" rx="3"/>
-    <text x="655" y="194" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: 3.2s</text>
+    <text x="655" y="194" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: [not measured]</text>
     <text x="35" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="35" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
-    <text x="35" y="242" fill="#cbd5e1" font-size="10">316.8 dec/s (0.00% stale)</text>
+    <text x="35" y="242" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="35" y="248" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="248" width="158" height="8" fill="#d97706" rx="3"/>
-    <text x="35" y="266" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
+    <text x="35" y="266" fill="#64748b" font-size="9">Tier: none</text>
     <text x="345" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="345" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
-    <text x="345" y="242" fill="#cbd5e1" font-size="10">316.8 dec/s (p99: 24.1ms)</text>
+    <text x="345" y="242" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="345" y="248" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="248" width="132" height="8" fill="#d97706" rx="3"/>
-    <text x="345" y="266" fill="#64748b" font-size="9">100ms: 316.8 dec/s</text>
+    <text x="345" y="266" fill="#64748b" font-size="9">[not measured]</text>
     <text x="655" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="655" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
-    <text x="655" y="242" fill="#cbd5e1" font-size="10">Backfill: 0s (Restart: 8.5s)</text>
+    <text x="655" y="242" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="655" y="248" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="248" width="4" height="8" fill="#d97706" rx="3"/>
-    <text x="655" y="266" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: 8.5s</text>
+    <text x="655" y="266" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: [not measured]</text>
     <text x="35" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
     <text x="35" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
-    <text x="35" y="314" fill="#cbd5e1" font-size="10">310.0 dec/s (0.42% stale)</text>
+    <text x="35" y="314" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="35" y="320" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="320" width="155" height="8" fill="#10b981" rx="3"/>
-    <text x="35" y="338" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
+    <text x="35" y="338" fill="#64748b" font-size="9">Tier: none</text>
     <text x="345" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
     <text x="345" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
-    <text x="345" y="314" fill="#cbd5e1" font-size="10">485.0 dec/s (p99: 16.2ms)</text>
+    <text x="345" y="314" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="345" y="320" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="320" width="202" height="8" fill="#10b981" rx="3"/>
-    <text x="345" y="338" fill="#64748b" font-size="9">100ms: 462.4 dec/s</text>
+    <text x="345" y="338" fill="#64748b" font-size="9">[not measured]</text>
     <text x="655" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
     <text x="655" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
-    <text x="655" y="314" fill="#cbd5e1" font-size="10">Backfill: 185s (Restart: 42.0s)</text>
+    <text x="655" y="314" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="655" y="320" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="320" width="192" height="8" fill="#10b981" rx="3"/>
-    <text x="655" y="338" fill="#94a3b8" font-size="9">3 pipeline(s) | Recovery: 42.0s</text>
+    <text x="655" y="338" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: [not measured]</text>
     <text x="35" y="362" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Async</text>
     <text x="35" y="374" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (9-u)</text>
-    <text x="35" y="386" fill="#cbd5e1" font-size="10">0.0 dec/s (6.80% stale)</text>
+    <text x="35" y="386" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="35" y="392" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="392" width="4" height="8" fill="#8b5cf6" rx="3"/>
-    <text x="35" y="410" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
+    <text x="35" y="410" fill="#64748b" font-size="9">Tier: none</text>
     <text x="345" y="362" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Async</text>
     <text x="345" y="374" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (9-u)</text>
-    <text x="345" y="386" fill="#cbd5e1" font-size="10">538.0 dec/s (p99: 12.4ms)</text>
+    <text x="345" y="386" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="345" y="392" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="392" width="224" height="8" fill="#8b5cf6" rx="3"/>
-    <text x="345" y="410" fill="#64748b" font-size="9">100ms: 492.0 dec/s</text>
+    <text x="345" y="410" fill="#64748b" font-size="9">[not measured]</text>
     <text x="655" y="362" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Async</text>
     <text x="655" y="374" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (9-u)</text>
-    <text x="655" y="386" fill="#cbd5e1" font-size="10">Backfill: 240s (Restart: 58.0s)</text>
+    <text x="655" y="386" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="655" y="392" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="392" width="250" height="8" fill="#8b5cf6" rx="3"/>
-    <text x="655" y="410" fill="#94a3b8" font-size="9">4 pipeline(s) | Recovery: 58.0s</text>
+    <text x="655" y="410" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: [not measured]</text>
 </svg>

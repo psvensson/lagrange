@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict';
 import {createHash, generateKeyPairSync, sign} from 'node:crypto';
-import {mkdtemp, mkdir, rm, writeFile} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
-import path from 'node:path';
 import {describe, it} from 'node:test';
 
 import {RUNTIME_KIND} from '../../src/constants/runtime.js';
@@ -81,19 +78,6 @@ function makeExternalManifest({
   };
 }
 
-function remoteProvider(resultOrError) {
-  return {
-    async resolveDescriptor() {
-      if (resultOrError instanceof Error) throw resultOrError;
-      return resultOrError;
-    },
-  };
-}
-
-function source(kind, location = undefined) {
-  return {kind, ...(location === undefined ? {} : {location})};
-}
-
 function policy(mode, trustedKeys = undefined) {
   return {
     mode,
@@ -124,37 +108,57 @@ function signDigest(privateKey, artifactDigest, keyId = 'publisher-main') {
   return {algorithm: 'ed25519', key_id: keyId, value};
 }
 
-async function writeOciLayout(t, descriptor, bytes, options = {}) {
-  const root = await mkdtemp(path.join(tmpdir(), 'lagrange-oci-layout-'));
-  t.after(() => rm(root, {recursive: true, force: true}));
-  await mkdir(path.join(root, 'blobs', 'sha256'), {recursive: true});
-  await writeFile(path.join(root, 'oci-layout'), JSON.stringify({
-    imageLayoutVersion: options.layoutVersion || '1.0.0',
-  }));
-  await writeFile(path.join(root, 'index.json'), JSON.stringify({
-    schemaVersion: options.indexSchemaVersion ?? 2,
-    manifests: options.manifests || [descriptor],
-  }));
-  await writeFile(
-    path.join(root, 'blobs', 'sha256', descriptor.digest.slice(7)),
-    bytes,
-  );
-  return root;
-}
-
 describe('installable service artifact owner', () => {
-  it('resolves a remote container and verifies its required signature', async () => {
+  it('refuses local_oci_layout and remote_oci sources with SOURCE_UNSUPPORTED', async () => {
     const bytes = makeOciManifest();
     const descriptor = makeDescriptor(bytes);
-    const identity = createSigningIdentity();
-    const signature = signDigest(identity.privateKey, descriptor.digest);
-    const resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor, bytes}),
+    const resolver = new InstallableServiceArtifactResolver();
+    const manifest = makeExternalManifest({descriptor});
+    const signaturePolicy = policy(ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED);
+
+    const localResult = await resolver.resolve({
+      manifest,
+      signaturePolicy,
+      source: {
+        kind: INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
+        location: '/tmp/retired',
+      },
     });
+    assert.equal(rejectionCode(localResult),
+      INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_UNSUPPORTED);
+
+    const remoteResult = await resolver.resolve({
+      manifest,
+      signaturePolicy,
+      source: {kind: INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI},
+    });
+    assert.equal(rejectionCode(remoteResult),
+      INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_UNSUPPORTED);
+  });
+
+  it('resolves sealed payload without external sources and verifies required signature', async () => {
+    const payloadBytes = Buffer.from('wasm-sealed-payload');
+    const payloadDigest = digest(payloadBytes);
+    const artifactDigest = `sha256:${'e'.repeat(64)}`;
+    const identity = createSigningIdentity();
+    const signature = signDigest(identity.privateKey, artifactDigest);
+    const resolver = new InstallableServiceArtifactResolver();
+
+    const manifest = makeExternalManifest({
+      descriptor: {digest: artifactDigest},
+      runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
+      signature,
+    });
+    const sealedPayload = {
+      artifactDigest,
+      mediaType: EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT,
+      payloadDigest,
+      totalSize: payloadBytes.length,
+    };
 
     const result = await resolver.resolve({
-      manifest: makeExternalManifest({descriptor, signature}),
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
+      manifest,
+      sealedPayload,
       signaturePolicy: policy(
         ARTIFACT_SIGNATURE_POLICY_MODE.REQUIRED,
         {'publisher-main': identity.publicKeyPem},
@@ -162,206 +166,31 @@ describe('installable service artifact owner', () => {
     });
 
     assert.equal(result.status, 'resolved');
-    assert.equal(result.artifact.digest, descriptor.digest);
-    assert.equal(result.artifact.payloadMediaType, OCI_IMAGE_MANIFEST_MEDIA_TYPE);
+    assert.equal(result.artifact.digest, artifactDigest);
+    assert.equal(result.artifact.payloadDescriptor.digest, payloadDigest);
+    assert.equal(result.artifact.payloadDescriptor.size, payloadBytes.length);
     assert.equal(result.artifact.signature.status, 'verified');
   });
 
-  it('resolves a real local OCI layout with a WASM payload descriptor', async (t) => {
+  it('resolves descriptor bytes and verifies matching descriptor', async () => {
     const bytes = makeOciManifest({wasm: true});
     const descriptor = makeDescriptor(bytes);
-    const root = await writeOciLayout(t, descriptor, bytes);
     const resolver = new InstallableServiceArtifactResolver();
 
     const result = await resolver.resolve({
+      descriptor,
+      descriptorBytes: bytes,
       manifest: makeExternalManifest({
         descriptor,
         runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
       }),
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT, root),
-      signaturePolicy: policy(
-        ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT,
-      ),
+      signaturePolicy: policy(ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT),
     });
 
     assert.equal(result.status, 'resolved');
-    assert.equal(result.artifact.sourceKind,
-      INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT);
-    assert.equal(result.artifact.payloadMediaType,
-      EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT);
-    assert.equal(result.artifact.payloadDescriptor.size, 128);
+    assert.equal(result.artifact.digest, descriptor.digest);
+    assert.equal(result.artifact.payloadMediaType, EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT);
     assert.equal(result.artifact.signature.status, 'unsigned_allowed');
-  });
-
-  it('loads and re-verifies the manifest-pinned local Component payload',
-    async (t) => {
-      const payload = Buffer.from('genuine-component-payload');
-      const bytes = makeOciManifest({wasm: true, wasmPayload: payload});
-      const descriptor = makeDescriptor(bytes);
-      const root = await writeOciLayout(t, descriptor, bytes);
-      const payloadDigest = digest(payload);
-      const payloadPath = path.join(
-        root,
-        'blobs',
-        'sha256',
-        payloadDigest.slice(7),
-      );
-      await writeFile(payloadPath, payload);
-      const manifest = makeExternalManifest({
-        descriptor,
-        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
-      });
-      const resolver = new InstallableServiceArtifactResolver();
-      const resolved = await resolver.resolve({
-        manifest,
-        signaturePolicy: policy(
-          ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT,
-        ),
-        source: source(
-          INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
-          root,
-        ),
-      });
-      assert.equal(resolved.status, 'resolved');
-
-      const loaded = await resolver.loadComponentPayload({
-        artifactDigest: descriptor.digest,
-        manifest,
-      });
-      assert.deepEqual(loaded.bytes, payload);
-      assert.equal(loaded.payloadDigest, payloadDigest);
-
-      await writeFile(payloadPath, Buffer.from('tampered-component'));
-      await assert.rejects(
-        () => resolver.loadComponentPayload({
-          artifactDigest: descriptor.digest,
-          manifest,
-        }),
-        (error) =>
-          error.code === INSTALLABLE_ARTIFACT_ERROR_CODE.DIGEST_MISMATCH,
-      );
-    },
-  );
-
-  it('reacquires a remote Component payload after resolver restart',
-    async () => {
-      const payload = Buffer.from('remote-genuine-component');
-      const bytes = makeOciManifest({wasm: true, wasmPayload: payload});
-      const descriptor = makeDescriptor(bytes);
-      const payloadDescriptor = {
-        digest: digest(payload),
-        mediaType: EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT,
-        size: payload.length,
-      };
-      const provider = {
-        async resolveDescriptor(request) {
-          return request.digest === descriptor.digest ?
-            {bytes, descriptor} :
-            {bytes: payload, descriptor: payloadDescriptor};
-        },
-      };
-      const manifest = makeExternalManifest({
-        descriptor,
-        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
-      });
-      const installerResolver = new InstallableServiceArtifactResolver({
-        remoteProvider: provider,
-      });
-      const resolved = await installerResolver.resolve({
-        manifest,
-        signaturePolicy: policy(
-          ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT,
-        ),
-        source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
-      });
-      assert.equal(resolved.status, 'resolved');
-
-      const restartedResolver = new InstallableServiceArtifactResolver({
-        remoteProvider: provider,
-      });
-      const loaded = await restartedResolver.loadComponentPayload({
-        artifactDigest: descriptor.digest,
-        manifest,
-      });
-      assert.deepEqual(loaded.bytes, payload);
-      assert.equal(loaded.payloadDigest, payloadDescriptor.digest);
-    },
-  );
-
-  it('loads a locally installed Component from the durable restart cache',
-    async (t) => {
-      const payload = Buffer.from('cached-local-component');
-      const bytes = makeOciManifest({wasm: true, wasmPayload: payload});
-      const descriptor = makeDescriptor(bytes);
-      const root = await writeOciLayout(t, descriptor, bytes);
-      const payloadDigest = digest(payload);
-      await writeFile(
-        path.join(root, 'blobs', 'sha256', payloadDigest.slice(7)),
-        payload,
-      );
-      const cacheDir = await mkdtemp(
-        path.join(tmpdir(), 'lagrange-component-cache-'),
-      );
-      t.after(() => rm(cacheDir, {recursive: true, force: true}));
-      const manifest = makeExternalManifest({
-        descriptor,
-        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
-      });
-      const installer = new InstallableServiceArtifactResolver({
-        componentCacheDir: cacheDir,
-      });
-      const resolved = await installer.resolve({
-        manifest,
-        signaturePolicy: policy(
-          ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT,
-        ),
-        source: source(
-          INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
-          root,
-        ),
-      });
-      assert.equal(resolved.status, 'resolved');
-      await rm(root, {recursive: true, force: true});
-
-      const restarted = new InstallableServiceArtifactResolver({
-        componentCacheDir: cacheDir,
-      });
-      const loaded = await restarted.loadComponentPayload({
-        artifactDigest: descriptor.digest,
-        manifest,
-      });
-      assert.deepEqual(loaded.bytes, payload);
-      assert.equal(loaded.payloadDigest, payloadDigest);
-    },
-  );
-
-  it('routes remote and local acquisition through the same normalized result', async (t) => {
-    const bytes = makeOciManifest();
-    const descriptor = makeDescriptor(bytes);
-    const root = await writeOciLayout(t, descriptor, bytes);
-    const resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor, bytes}),
-    });
-    const manifest = makeExternalManifest({descriptor});
-    const signaturePolicy = policy(ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED);
-
-    const remote = await resolver.resolve({
-      manifest,
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
-      signaturePolicy,
-    });
-    const local = await resolver.resolve({
-      manifest,
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT, root),
-      signaturePolicy,
-    });
-
-    assert.equal(remote.status, 'resolved');
-    assert.equal(local.status, 'resolved');
-    assert.deepEqual(
-      {...remote.artifact, sourceKind: null, location: null},
-      {...local.artifact, sourceKind: null, location: null},
-    );
   });
 
   it('rejects descriptor bytes whose computed digest does not match', async () => {
@@ -369,13 +198,12 @@ describe('installable service artifact owner', () => {
     const descriptor = makeDescriptor(bytes);
     const tampered = Buffer.from(bytes);
     tampered[tampered.length - 2] ^= 1;
-    const resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor, bytes: tampered}),
-    });
+    const resolver = new InstallableServiceArtifactResolver();
 
     const result = await resolver.resolve({
+      descriptor,
+      descriptorBytes: tampered,
       manifest: makeExternalManifest({descriptor}),
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
       signaturePolicy: policy(ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED),
     });
 
@@ -386,37 +214,36 @@ describe('installable service artifact owner', () => {
   it('rejects descriptor size mismatch and bounded-size overflow', async () => {
     const bytes = makeOciManifest();
     const descriptor = makeDescriptor(bytes, {size: bytes.length + 1});
-    let resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor, bytes}),
-    });
+    let resolver = new InstallableServiceArtifactResolver();
     const request = {
+      descriptor,
+      descriptorBytes: bytes,
       manifest: makeExternalManifest({descriptor}),
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
       signaturePolicy: policy(ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED),
     };
     assert.equal(rejectionCode(await resolver.resolve(request)),
       INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_SIZE_MISMATCH);
 
     resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor: {...descriptor, size: bytes.length}, bytes}),
       maxDescriptorBytes: bytes.length - 1,
     });
-    assert.equal(rejectionCode(await resolver.resolve(request)),
-      INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_TOO_LARGE);
+    assert.equal(rejectionCode(await resolver.resolve({
+      ...request,
+      descriptor: {...descriptor, size: bytes.length},
+    })), INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_TOO_LARGE);
   });
 
   it('rejects container/WASM media mismatch and malformed OCI manifests', async () => {
     const containerBytes = makeOciManifest();
     const descriptor = makeDescriptor(containerBytes);
-    let resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor, bytes: containerBytes}),
-    });
+    let resolver = new InstallableServiceArtifactResolver();
     const request = {
+      descriptor,
+      descriptorBytes: containerBytes,
       manifest: makeExternalManifest({
         descriptor,
         runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
       }),
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
       signaturePolicy: policy(ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED),
     };
     assert.equal(rejectionCode(await resolver.resolve(request)),
@@ -424,59 +251,23 @@ describe('installable service artifact owner', () => {
 
     const invalidBytes = Buffer.from('{"schemaVersion":2}');
     const invalidDescriptor = makeDescriptor(invalidBytes);
-    resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor: invalidDescriptor, bytes: invalidBytes}),
-    });
+    resolver = new InstallableServiceArtifactResolver();
     assert.equal(rejectionCode(await resolver.resolve({
       ...request,
+      descriptor: invalidDescriptor,
+      descriptorBytes: invalidBytes,
       manifest: makeExternalManifest({descriptor: invalidDescriptor}),
     })), INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_MANIFEST_INVALID);
-  });
-
-  it('rejects invalid layouts and layouts without the pinned descriptor', async (t) => {
-    const bytes = makeOciManifest();
-    const descriptor = makeDescriptor(bytes);
-    const badVersionRoot = await writeOciLayout(
-      t, descriptor, bytes, {layoutVersion: '2.0.0'},
-    );
-    const missingRoot = await writeOciLayout(
-      t, descriptor, bytes, {manifests: []},
-    );
-    const invalidIndexRoot = await writeOciLayout(
-      t, descriptor, bytes, {indexSchemaVersion: 1},
-    );
-    const resolver = new InstallableServiceArtifactResolver();
-    const base = {
-      manifest: makeExternalManifest({descriptor}),
-      signaturePolicy: policy(ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED),
-    };
-
-    assert.equal(rejectionCode(await resolver.resolve({
-      ...base,
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
-        badVersionRoot),
-    })), INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID);
-    assert.equal(rejectionCode(await resolver.resolve({
-      ...base,
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
-        missingRoot),
-    })), INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_NOT_FOUND);
-    assert.equal(rejectionCode(await resolver.resolve({
-      ...base,
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
-        invalidIndexRoot),
-    })), INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID);
   });
 
   it('requires an explicit valid signature policy', async () => {
     const bytes = makeOciManifest();
     const descriptor = makeDescriptor(bytes);
-    const resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor, bytes}),
-    });
+    const resolver = new InstallableServiceArtifactResolver();
     const base = {
+      descriptor,
+      descriptorBytes: bytes,
       manifest: makeExternalManifest({descriptor}),
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
     };
 
     assert.equal(rejectionCode(await resolver.resolve(base)),
@@ -491,11 +282,10 @@ describe('installable service artifact owner', () => {
     const bytes = makeOciManifest();
     const descriptor = makeDescriptor(bytes);
     const identity = createSigningIdentity();
-    const resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor, bytes}),
-    });
+    const resolver = new InstallableServiceArtifactResolver();
     const base = {
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
+      descriptor,
+      descriptorBytes: bytes,
       signaturePolicy: policy(
         ARTIFACT_SIGNATURE_POLICY_MODE.REQUIRED,
         {'publisher-main': identity.publicKeyPem},
@@ -525,12 +315,11 @@ describe('installable service artifact owner', () => {
     const bytes = makeOciManifest();
     const descriptor = makeDescriptor(bytes);
     const signature = {algorithm: 'unknown', key_id: 'key', value: 'not-base64'};
-    const resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider({descriptor, bytes}),
-    });
+    const resolver = new InstallableServiceArtifactResolver();
     const base = {
+      descriptor,
+      descriptorBytes: bytes,
       manifest: makeExternalManifest({descriptor, signature}),
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
     };
 
     assert.equal(rejectionCode(await resolver.resolve({
@@ -547,30 +336,5 @@ describe('installable service artifact owner', () => {
     });
     assert.equal(disabled.status, 'resolved');
     assert.equal(disabled.artifact.signature.status, 'verification_disabled');
-  });
-
-  it('rejects unsupported sources and converts provider failures to typed errors', async () => {
-    const bytes = makeOciManifest();
-    const descriptor = makeDescriptor(bytes);
-    let resolver = new InstallableServiceArtifactResolver();
-    const base = {
-      manifest: makeExternalManifest({descriptor}),
-      signaturePolicy: policy(ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED),
-    };
-    assert.equal(rejectionCode(await resolver.resolve({
-      ...base,
-      source: source('memory'),
-    })), INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_UNSUPPORTED);
-
-    resolver = new InstallableServiceArtifactResolver({
-      remoteProvider: remoteProvider(new Error('credential leaked in detail')),
-    });
-    const failed = await resolver.resolve({
-      ...base,
-      source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
-    });
-    assert.equal(rejectionCode(failed),
-      INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED);
-    assert.equal(JSON.stringify(failed).includes('credential leaked'), false);
   });
 });

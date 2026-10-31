@@ -1,20 +1,8 @@
-import {tmpdir} from 'node:os';
-import path from 'node:path';
-
-import {RUNTIME_KIND} from '../constants/runtime.js';
 import {validateExternalServiceManifest} from
   '../service/external-service-manifest.js';
-import {ServiceLocalOciLayoutBuilder} from
-  '../service/service-local-oci-layout-builder.js';
 import {createServiceLifecycleSqlClient} from
   './service-lifecycle-sql-client.js';
-import {
-  createServiceProjectBuildInput,
-  materializeFinalServiceManifest,
-  readBoundedJsonFile,
-  readServiceManifestTemplate,
-  validateExistingFinalServiceManifest,
-} from './service-project-build-input.js';
+import {readBoundedJsonFile} from './service-project-build-input.js';
 
 const SERVICE_COMMAND_EXIT_CODE = Object.freeze({
   SUCCESS: 0,
@@ -37,15 +25,9 @@ const SERVICE_LIFECYCLE_SQL = Object.freeze({
 const SERVICE_LIFECYCLE_FLAG = Object.freeze({
   CONFIG: '--config',
   IDEMPOTENCY_KEY: '--idempotency-key',
-  OUTPUT_ROOT: '--output-root',
-  PLATFORM: '--platform',
-  SOURCE_DATE_EPOCH: '--source-date-epoch',
 });
 const SERVICE_NAME_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
-const PLATFORM_PATTERN = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?$/u;
-const NONNEGATIVE_INTEGER_PATTERN = /^(?:0|[1-9][0-9]*)$/u;
 const MAXIMUM_IDEMPOTENCY_KEY_LENGTH = 256;
-const DEFAULT_OUTPUT_DIRECTORY = 'lagrange-service-oci-layouts';
 const SERVICE_LIFECYCLE_USAGE_ERROR_NAME = 'ServiceLifecycleUsageError';
 const SERVICE_LIFECYCLE_TOKEN = Object.freeze({
   MISSING_OPTION: '(missing)',
@@ -53,27 +35,26 @@ const SERVICE_LIFECYCLE_TOKEN = Object.freeze({
   VALUE_OPTION_PREFIX: '--',
 });
 const SERVICE_LIFECYCLE_USAGE_MESSAGE = Object.freeze({
+  DEV_INSTALL_RETIRED:
+    'dev-install has been retired; use lagrange service build, publish, and deploy instead',
   IDEMPOTENCY_KEY_LENGTH:
     '--idempotency-key must contain 1 to 256 characters',
   IDEMPOTENCY_KEY_REQUIRED: '--idempotency-key is required',
   LIFECYCLE_COMMAND_REQUIRED: 'one lifecycle command is required',
   LIST_ARGUMENTS_FORBIDDEN: 'list does not accept arguments',
-  PLATFORM_INVALID:
-    '--platform must be an explicit os/architecture[/variant] value',
   SERVICE_NAME_INVALID:
     'service name must match the external service manifest contract',
-  SOURCE_DATE_EPOCH_INVALID:
-    '--source-date-epoch must be a nonnegative integer',
-  SOURCE_DATE_EPOCH_UNSAFE: '--source-date-epoch must be a safe integer',
   STATUS_ARGUMENT_INVALID: 'status accepts one service name',
 });
 const SERVICE_LIFECYCLE_RESULT_MESSAGE = Object.freeze({
   CONFIG_INVALID: 'service config must be a JSON object',
+  MUTATION_INVALID_ROW_COUNT: 'mutation returned an invalid row count',
   RESULT_ROWS_INVALID: 'PostgreSQL lifecycle result must contain rows',
   ROW_FIELDS_INVALID: 'PostgreSQL lifecycle row has an invalid field set',
   ROW_INVALID: 'PostgreSQL lifecycle rows must be objects',
   ROW_SERVICE_NAME_INVALID:
     'PostgreSQL lifecycle row is missing service_name',
+  STATUS_NO_SERVICE: 'status returned no service',
 });
 const MUTATION_ROW_FIELDS = Object.freeze(new Set([
   'action',
@@ -155,26 +136,11 @@ function serviceName(value) {
   return value;
 }
 
-function sourceDateEpoch(value) {
-  if (!NONNEGATIVE_INTEGER_PATTERN.test(value || '')) {
-    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.SOURCE_DATE_EPOCH_INVALID);
-  }
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.SOURCE_DATE_EPOCH_UNSAFE);
-  }
-  return parsed;
-}
-
-function platform(value) {
-  if (!PLATFORM_PATTERN.test(value || '')) {
-    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.PLATFORM_INVALID);
-  }
-  return value;
-}
-
 function parseLifecycleCommand(argv) {
   const command = argv[0];
+  if (command === SERVICE_LIFECYCLE_COMMAND.DEV_INSTALL) {
+    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.DEV_INSTALL_RETIRED);
+  }
   if (!Object.values(SERVICE_LIFECYCLE_COMMAND).includes(command)) {
     usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.LIFECYCLE_COMMAND_REQUIRED);
   }
@@ -185,18 +151,11 @@ function parseLifecycleCommand(argv) {
     return {command};
   }
   const target = requiredPositional(argv[1],
-    command === SERVICE_LIFECYCLE_COMMAND.INSTALL ? 'manifest file' :
-      (command === SERVICE_LIFECYCLE_COMMAND.DEV_INSTALL ?
-        'project directory' : 'service name'));
+    command === SERVICE_LIFECYCLE_COMMAND.INSTALL ? 'manifest file' : 'service name');
   const allowedFlags = new Set();
   if (command === SERVICE_LIFECYCLE_COMMAND.INSTALL) {
-    allowedFlags.add(SERVICE_LIFECYCLE_FLAG.IDEMPOTENCY_KEY);
     allowedFlags.add(SERVICE_LIFECYCLE_FLAG.CONFIG);
-  } else if (command === SERVICE_LIFECYCLE_COMMAND.DEV_INSTALL) {
     allowedFlags.add(SERVICE_LIFECYCLE_FLAG.IDEMPOTENCY_KEY);
-    allowedFlags.add(SERVICE_LIFECYCLE_FLAG.PLATFORM);
-    allowedFlags.add(SERVICE_LIFECYCLE_FLAG.SOURCE_DATE_EPOCH);
-    allowedFlags.add(SERVICE_LIFECYCLE_FLAG.OUTPUT_ROOT);
   } else if (command === SERVICE_LIFECYCLE_COMMAND.REMOVE) {
     allowedFlags.add(SERVICE_LIFECYCLE_FLAG.IDEMPOTENCY_KEY);
   }
@@ -214,63 +173,61 @@ function parseLifecycleCommand(argv) {
       serviceName: serviceName(target),
     };
   }
-  if (command === SERVICE_LIFECYCLE_COMMAND.INSTALL) {
-    return {
-      command,
-      configPath: options.get(SERVICE_LIFECYCLE_FLAG.CONFIG),
-      idempotencyKey: idempotencyKey(options),
-      manifestPath: target,
-    };
-  }
-  const selectedPlatform = platform(options.get(SERVICE_LIFECYCLE_FLAG.PLATFORM));
   return {
     command,
+    configPath: options.get(SERVICE_LIFECYCLE_FLAG.CONFIG),
     idempotencyKey: idempotencyKey(options),
-    outputRoot: options.get(SERVICE_LIFECYCLE_FLAG.OUTPUT_ROOT) ||
-      path.join(tmpdir(), DEFAULT_OUTPUT_DIRECTORY),
-    platform: selectedPlatform,
-    projectPath: target,
-    sourceDateEpoch: sourceDateEpoch(
-      options.get(SERVICE_LIFECYCLE_FLAG.SOURCE_DATE_EPOCH),
-    ),
+    manifestPath: target,
   };
+}
+
+function assertRowCount(rows, command) {
+  if (command !== SERVICE_LIFECYCLE_COMMAND.LIST && rows.length !== 1) {
+    const label = command === SERVICE_LIFECYCLE_COMMAND.STATUS ?
+      SERVICE_LIFECYCLE_RESULT_MESSAGE.STATUS_NO_SERVICE :
+      SERVICE_LIFECYCLE_RESULT_MESSAGE.MUTATION_INVALID_ROW_COUNT;
+    throw new Error(label);
+  }
+}
+
+function validateRowField(field, value, expectedFields) {
+  const nullableFailureId = expectedFields === STATUS_ROW_FIELDS &&
+    field === 'latest_failure_id' && value === null;
+  if (!expectedFields.has(field) ||
+      (!nullableFailureId && typeof value !== 'string')) {
+    throw new Error(`PostgreSQL lifecycle row field is invalid: ${field}`);
+  }
+}
+
+function validateRow(row, expectedFields) {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) {
+    throw new Error(SERVICE_LIFECYCLE_RESULT_MESSAGE.ROW_INVALID);
+  }
+  const rowFields = Object.keys(row);
+  if (rowFields.length !== expectedFields.size ||
+      [...expectedFields].some((field) => !Object.hasOwn(row, field))) {
+    throw new Error(SERVICE_LIFECYCLE_RESULT_MESSAGE.ROW_FIELDS_INVALID);
+  }
+  for (const [field, value] of Object.entries(row)) {
+    validateRowField(field, value, expectedFields);
+  }
+  if (!SERVICE_NAME_PATTERN.test(row.service_name || '')) {
+    throw new Error(
+      SERVICE_LIFECYCLE_RESULT_MESSAGE.ROW_SERVICE_NAME_INVALID,
+    );
+  }
 }
 
 function validateRows(result, command) {
   if (!result || !Array.isArray(result.rows)) {
     throw new Error(SERVICE_LIFECYCLE_RESULT_MESSAGE.RESULT_ROWS_INVALID);
   }
-  if (command !== SERVICE_LIFECYCLE_COMMAND.LIST && result.rows.length !== 1) {
-    const label = command === SERVICE_LIFECYCLE_COMMAND.STATUS ?
-      'status returned no service' : 'mutation returned an invalid row count';
-    throw new Error(label);
-  }
+  assertRowCount(result.rows, command);
   const expectedFields = command === SERVICE_LIFECYCLE_COMMAND.INSTALL ||
-      command === SERVICE_LIFECYCLE_COMMAND.DEV_INSTALL ||
       command === SERVICE_LIFECYCLE_COMMAND.REMOVE ?
     MUTATION_ROW_FIELDS : STATUS_ROW_FIELDS;
   for (const row of result.rows) {
-    if (!row || typeof row !== 'object' || Array.isArray(row)) {
-      throw new Error(SERVICE_LIFECYCLE_RESULT_MESSAGE.ROW_INVALID);
-    }
-    const rowFields = Object.keys(row);
-    if (rowFields.length !== expectedFields.size ||
-        [...expectedFields].some((field) => !Object.hasOwn(row, field))) {
-      throw new Error(SERVICE_LIFECYCLE_RESULT_MESSAGE.ROW_FIELDS_INVALID);
-    }
-    for (const [field, value] of Object.entries(row)) {
-      const nullableFailureId = expectedFields === STATUS_ROW_FIELDS &&
-        field === 'latest_failure_id' && value === null;
-      if (!expectedFields.has(field) ||
-          (!nullableFailureId && typeof value !== 'string')) {
-        throw new Error(`PostgreSQL lifecycle row field is invalid: ${field}`);
-      }
-    }
-    if (!SERVICE_NAME_PATTERN.test(row.service_name || '')) {
-      throw new Error(
-        SERVICE_LIFECYCLE_RESULT_MESSAGE.ROW_SERVICE_NAME_INVALID,
-      );
-    }
+    validateRow(row, expectedFields);
   }
   return result.rows;
 }
@@ -286,8 +243,7 @@ function writeProcessLine(stream, line) {
 
 function dependenciesFor(overrides) {
   return {
-    createLocalOciLayoutBuilder: overrides.createLocalOciLayoutBuilder ||
-      (() => new ServiceLocalOciLayoutBuilder()),
+    createLocalOciLayoutBuilder: overrides.createLocalOciLayoutBuilder || (() => {}),
     createSqlClient: overrides.createSqlClient ||
       (() => createServiceLifecycleSqlClient()),
     writeError: overrides.writeError ||
@@ -332,7 +288,6 @@ async function runInstall(command, dependencies) {
     }
   }
   const payload = {
-    artifact_source: {kind: 'remote_oci'},
     ...(config === undefined ? {} : {config}),
     idempotency_key: command.idempotencyKey,
     manifest,
@@ -340,61 +295,9 @@ async function runInstall(command, dependencies) {
   return {rows: await executeSql(command.command, payload, dependencies)};
 }
 
-async function runDevInstall(command, dependencies) {
-  const templateInput = await readServiceManifestTemplate(command.projectPath);
-  try {
-    await validateExistingFinalServiceManifest(templateInput);
-    const buildInput = await createServiceProjectBuildInput(
-      command.projectPath,
-      command.outputRoot,
-      templateInput,
-    );
-    let buildReceipt;
-    try {
-      const builder = dependencies.createLocalOciLayoutBuilder();
-      buildReceipt = await builder.build({
-        container: {
-          contextPath: buildInput.contextPath,
-          dockerfilePath: buildInput.dockerfilePath,
-          sourceFingerprint: buildInput.sourceFingerprint,
-        },
-        outputRoot: command.outputRoot,
-        platform: command.platform,
-        runtimeKind: RUNTIME_KIND.OCI_CONTAINER,
-        sourceDateEpoch: command.sourceDateEpoch,
-      });
-    } finally {
-      await buildInput.cleanup();
-    }
-    const finalized = await materializeFinalServiceManifest(
-      templateInput,
-      buildReceipt.topManifestDescriptor.digest,
-    );
-    const payload = {
-      artifact_source: {
-        kind: 'local_oci_layout',
-        location: buildReceipt.layoutPath,
-      },
-      idempotency_key: command.idempotencyKey,
-      manifest: finalized.manifest,
-    };
-    const rows = await executeSql(command.command, payload, dependencies);
-    return {
-      buildReceipt,
-      finalManifestPath: finalized.finalManifestPath,
-      rows,
-    };
-  } finally {
-    await templateInput.close();
-  }
-}
-
 async function executeLifecycleCommand(command, dependencies) {
   if (command.command === SERVICE_LIFECYCLE_COMMAND.INSTALL) {
     return runInstall(command, dependencies);
-  }
-  if (command.command === SERVICE_LIFECYCLE_COMMAND.DEV_INSTALL) {
-    return runDevInstall(command, dependencies);
   }
   if (command.command === SERVICE_LIFECYCLE_COMMAND.LIST) {
     return {rows: await executeSql(command.command, null, dependencies)};

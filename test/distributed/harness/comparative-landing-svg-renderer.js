@@ -18,11 +18,12 @@ function escapeXml(value) {
 }
 
 function formatNum(num, digits = 2) {
-  return (typeof num === 'number' && numberIsFinite(num)) ? numberToFixed(num, digits) : '0.00';
+  return (typeof num === 'number' && numberIsFinite(num)) ? numberToFixed(num, digits) : '[not measured]';
 }
 
-function barW(v, m, w = 220, min = 4) {
-  return Math.max(min, Math.min(w, Math.round((Math.max(0, v) / Math.max(m, 1)) * w)));
+function barW(v, m, w = 220) {
+  if (typeof v !== 'number' || !numberIsFinite(v) || v <= 0) return 0;
+  return Math.min(w, Math.round((v / Math.max(m, 1)) * w));
 }
 
 const TARGET_COLOR_PREFIXES = Object.freeze([
@@ -82,24 +83,31 @@ function getTargets(matrix) {
 }
 
 function getTxPerSec(t) {
-  return t.scenarioA?.throughputTxPerSec ?? t.scenarioA?.txPerSec ?? t.scenarioA?.opsPerSec ?? 0;
+  const v = t.scenarioA?.throughputTxPerSec ?? t.scenarioA?.txPerSec ?? t.scenarioA?.opsPerSec;
+  return (typeof v === 'number' && numberIsFinite(v)) ? v : null;
 }
 function getP95(t) {
-  return t.scenarioA?.commitP95Ms ?? t.scenarioA?.p95Ms ??
-    t.scenarioA?.latencyMs?.p95 ?? t.scenarioA?.p95 ?? 0;
+  const v = t.scenarioA?.commitP95Ms ?? t.scenarioA?.p95Ms ??
+    t.scenarioA?.latencyMs?.p95 ?? t.scenarioA?.p95;
+  return (typeof v === 'number' && numberIsFinite(v)) ? v : null;
 }
 function getDecisionsPerSec(t) {
-  return t.scenarioB?.decisionsPerSec ?? t.scenarioB?.opsPerSec ?? 0;
+  const v = t.scenarioB?.decisionsPerSec ?? t.scenarioB?.opsPerSec;
+  return (typeof v === 'number' && numberIsFinite(v)) ? v : null;
 }
 function getP99(t) {
-  return t.scenarioB?.p99Ms ?? t.scenarioB?.latencyMs?.p99 ?? t.scenarioB?.p99 ?? 0;
+  const v = t.scenarioB?.p99Ms ?? t.scenarioB?.latencyMs?.p99 ?? t.scenarioB?.p99;
+  return (typeof v === 'number' && numberIsFinite(v)) ? v : null;
 }
 function getWireBytes(t) {
-  return t.scenarioB?.wanBytesPerDecision ?? t.scenarioB?.wireBytesPerDecision ??
-    t.scenarioB?.crossIslandBytesPerRequest ?? t.scenarioB?.wireBytes ?? 0;
+  const b = t.scenarioB?.wanBytesPerDecision ?? t.scenarioB?.wireBytesPerDecision ??
+    t.scenarioB?.crossIslandBytesPerRequest ?? t.scenarioB?.wireBytes;
+  return (typeof b === 'number' && numberIsFinite(b)) ? b : null;
 }
 function getEvidenceTier(t, scenario = 'scenarioA') {
-  return t[scenario]?.evidenceTier ?? t.evidenceTier ?? 'observed-docker-cluster';
+  const s = t[scenario];
+  if (s?.evidenceTier && s.evidenceTier !== 'none') return s.evidenceTier;
+  return s?.status || 'not measured';
 }
 
 function renderCard(x, y, title, subtitle, content, cardHeight = 315) {
@@ -114,18 +122,28 @@ function renderCard(x, y, title, subtitle, content, cardHeight = 315) {
 function renderMetricBars(targets, {x, yBase, getValue, formatVal, maxVal, scenario}) {
   return arrayJoin(arrayMap(targets, (t, i) => {
     const y = yBase + 68 + i * 54;
+    const val = getValue(t);
+    const isMeasured = typeof val === 'number' && numberIsFinite(val);
     const dash = getEvidenceTier(t, scenario) === 'modeled-topology-oracle' ?
       ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"' : '';
+    const w = isMeasured ? barW(val, maxVal, 220) : 0;
+    const status = t[scenario]?.status || t.status || 'not measured';
+    const textVal = isMeasured ? formatVal(val, t) : `[${status}]`;
+    const fillRect = w > 0 ?
+      `\n    <rect x="${x}" y="${y + 18}" width="${w}" height="11" fill="${getTargetColor(t.targetId, i)}" rx="3"${dash}/>` : '';
     return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${escapeXml(shortTargetLabel(t))}</text>\n` +
-      `    <text x="${x}" y="${y + 13}" fill="#94a3b8" font-size="10" font-family="monospace">${escapeXml(formatVal(getValue(t), t))}</text>\n` +
-      `    <rect x="${x}" y="${y + 18}" width="220" height="11" fill="#334155" rx="3"/>\n` +
-      `    <rect x="${x}" y="${y + 18}" width="${barW(getValue(t), maxVal, 220)}" height="11" fill="${getTargetColor(t.targetId, i)}" rx="3"${dash}/>`;
+      `    <text x="${x}" y="${y + 13}" fill="${isMeasured ? '#94a3b8' : '#64748b'}" font-size="10" font-family="monospace">${escapeXml(textVal)}</text>\n` +
+      `    <rect x="${x}" y="${y + 18}" width="220" height="11" fill="#334155" rx="3"/>` + fillRect;
   }), '\n');
 }
 
 function renderCardMetric(targets, {x, yBase, title, sub, getVal, fmt, scen = 'scenarioC', h = 330}) {
+  const vals = arrayMap(targets, (t) => {
+    const v = getVal(t);
+    return (typeof v === 'number' && numberIsFinite(v)) ? v : 0;
+  });
   return renderCard(x, yBase, title, sub, renderMetricBars(targets, {
-    x: x + 15, yBase, getValue: getVal, maxVal: Math.max(...arrayMap(targets, getVal), 1),
+    x: x + 15, yBase, getValue: getVal, maxVal: Math.max(...vals, 1),
     scenario: scen, formatVal: fmt,
   }), h);
 }
@@ -151,15 +169,17 @@ function renderPanel5Bars(targets, yBase, maxP99) {
   return arrayJoin(arrayMap(targets, (t, i) => {
     const y = yBase + 68 + i * 54;
     const p99 = getP99(t);
+    const isMeasured = typeof p99 === 'number' && numberIsFinite(p99);
     const dash = getEvidenceTier(t, 'scenarioB') === 'modeled-topology-oracle' ?
       ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"' : '';
-    const sh = t.scenarioB?.shapes;
-    const note = (sh?.['local-only']?.p99Ms !== undefined && sh?.['sequential']?.p99Ms !== undefined) ?
-      ` (loc ${formatNum(sh['local-only'].p99Ms, 1)} | seq ${formatNum(sh['sequential'].p99Ms, 1)})` : '';
+    const w = isMeasured ? barW(p99, maxP99, 220) : 0;
+    const status = t.scenarioB?.status || t.status || 'not measured';
+    const textVal = isMeasured ? `${formatNum(p99)} ms` : `[${status}]`;
+    const fillRect = w > 0 ?
+      `\n    <rect x="355" y="${y + 18}" width="${w}" height="11" fill="${getTargetColor(t.targetId, i)}" rx="3"${dash}/>` : '';
     return `    <text x="355" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${escapeXml(shortTargetLabel(t))}</text>\n` +
-      `    <text x="355" y="${y + 13}" fill="#94a3b8" font-size="10" font-family="monospace">${formatNum(p99)} ms${note}</text>\n` +
-      `    <rect x="355" y="${y + 18}" width="220" height="11" fill="#334155" rx="3"/>\n` +
-      `    <rect x="355" y="${y + 18}" width="${barW(p99, maxP99, 220)}" height="11" fill="${getTargetColor(t.targetId, i)}" rx="3"${dash}/>`;
+      `    <text x="355" y="${y + 13}" fill="${isMeasured ? '#94a3b8' : '#64748b'}" font-size="10" font-family="monospace">${escapeXml(textVal)}</text>\n` +
+      `    <rect x="355" y="${y + 18}" width="220" height="11" fill="#334155" rx="3"/>` + fillRect;
   }), '\n');
 }
 
@@ -185,11 +205,14 @@ function renderRow2(targets, yBase = 470, cardHeight = 330) {
   });
   const p5 = renderCard(340, yBase, 'Scenario B Decision p99 Latency (ms)',
     'Decision Tail + Shape Markers', renderPanel5Bars(targets, yBase,
-      Math.max(...arrayMap(targets, getP99), 1)), cardHeight);
+      Math.max(...arrayMap(targets, (t) => {
+        const v = getP99(t);
+        return (typeof v === 'number' && numberIsFinite(v)) ? v : 0;
+      }), 1)), cardHeight);
   const p6 = renderCardMetric(targets, {
     x: 650, yBase, title: 'Wire / WAN Traffic per Decision (bytes)',
     sub: 'Network Payload (lower is better)', getVal: getWireBytes,
-    scen: 'scenarioB', fmt: (v) => `${v} B/dec`, h: cardHeight,
+    scen: 'scenarioB', fmt: (v) => (v != null ? `${v} B/dec` : '[not measured]'), h: cardHeight,
   });
   return `${p4}\n${p5}\n${p6}`;
 }
@@ -197,18 +220,24 @@ function renderRow2(targets, yBase = 470, cardHeight = 330) {
 function renderRow3(targets, yBase = 836, cardHeight = 330) {
   const cards = [
     {x: 30, t: 'Scenario C 0ms Freshness (dec/sec)', s: 'Zero-Staleness Capacity',
-      g: (t) => t.scenarioC?.freshDecisionsPerSec0ms ?? 0,
-      f: (v, t) => `${formatNum(v)} dec/s (${formatNum(t.scenarioC?.staleDecisionRatePct ?? 0)}% stale)`},
+      g: (t) => t.scenarioC?.freshDecisionsPerSec0ms ?? null,
+      f: (v, t) => (v != null ? `${formatNum(v)} dec/s` : `[${t.scenarioC?.status || 'not measured'}]`)},
     {x: 340, t: 'Scenario C 1000ms SLA (dec/sec)', s: 'Relaxed Freshness Capacity',
-      g: (t) => t.scenarioC?.freshDecisionsPerSec1000ms ?? 0,
-      f: (v, t) =>
-        `${formatNum(v)} dec/s (100ms: ${formatNum(t.scenarioC?.freshDecisionsPerSec100ms ?? 0)})`},
+      g: (t) => t.scenarioC?.freshDecisionsPerSec1000ms ?? null,
+      f: (v, t) => (v != null ? `${formatNum(v)} dec/s` : `[${t.scenarioC?.status || 'not measured'}]`)},
     {x: 650, t: 'Rule-Change Backfill &amp; Recovery (sec)', s: 'Operational Overhead (lower is better)',
-      g: (t) => (t.scenarioC?.ruleChangeBackfillSec ?? 0) +
-        (t.scenarioC?.cacheRestartRecoverySec ?? 0),
-      f: (_v, t) => `BF ${formatNum(t.scenarioC?.ruleChangeBackfillSec ?? 0, 1)}s | ` +
-        `Rec ${formatNum(t.scenarioC?.cacheRestartRecoverySec ?? 0, 1)}s ` +
-        `(${t.scenarioC?.operationalPipelines ?? 1}p)`},
+      g: (t) => ((t.scenarioC?.ruleChangeBackfillSec != null &&
+        t.scenarioC?.cacheRestartRecoverySec != null) ?
+        (t.scenarioC.ruleChangeBackfillSec + t.scenarioC.cacheRestartRecoverySec) : null),
+      f: (_v, t) => {
+        if (t.scenarioC?.ruleChangeBackfillSec != null &&
+            t.scenarioC?.cacheRestartRecoverySec != null) {
+          const bf = formatNum(t.scenarioC.ruleChangeBackfillSec, 1);
+          const rec = formatNum(t.scenarioC.cacheRestartRecoverySec, 1);
+          return `BF ${bf}s | Rec ${rec}s`;
+        }
+        return `[${t.scenarioC?.status || 'not measured'}]`;
+      }},
   ];
   return arrayJoin(arrayMap(cards, (c) => renderCardMetric(targets, {
     x: c.x, yBase, title: c.t, sub: c.s, getVal: c.g, fmt: c.f, h: cardHeight,
@@ -256,7 +285,7 @@ function renderComparativeOverviewSvg(matrix) {
     'Lagrange Comparative Benchmark Statistics - Multi-System Overview</text>\n' +
     subtitleSvg +
     `  <text x="30" y="${legendY}" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">` +
-    'Legend: solid bar = observed-docker-cluster | dashed bar = modeled-topology-oracle</text>\n' +
+    'Legend: solid bar = observed GCP/lab execution | [not measured] = awaiting original GCP/lab receipt</text>\n' +
     `${r1}${renderRow1(targets, r1Y, cardHeight)}\n` +
     `${r2}${renderRow2(targets, r2Y, cardHeight)}\n` +
     `${r3}${renderRow3(targets, r3Y, cardHeight)}\n` +

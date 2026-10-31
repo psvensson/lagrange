@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {captureSelectionRequest, requireInstance} from
   '../control-plane/owners/service-instance-contract.js';
 /**
@@ -13,7 +14,7 @@ import {SERVICE_LIFECYCLE_ID_KIND, deriveServiceLifecycleId as derivedId,
 
 import {SERVICE_INSTALL_DESIRED_STATE} from
   '../control-plane/owners/index.js';
-import {deriveTenantPackageId} from
+import {canonicalJson, deriveTenantPackageId, sha256Json} from
   '../control-plane/owners/service-install-catalog-contract.js';
 import {SERVICE_LIFECYCLE_COMMAND as SERVICE_LIFECYCLE_SQL_COMMAND} from
   './service-lifecycle-command-contract.js';
@@ -41,10 +42,20 @@ const SERVICE_LIFECYCLE_OPERATION_STATUS = Object.freeze({
 const SERVICE_LIFECYCLE_COMMAND_MESSAGE = Object.freeze({
   ACCESS_POLICY_OWNER_REQUIRED:
     'runtime access policy owner is required for access configuration',
+  ARTIFACT_DIGEST_INVALID: 'artifact_digest must match sha256:<64 hex>',
   ARTIFACT_REJECTED: 'installable service artifact was rejected',
+  ARTIFACT_SOURCE_RETIRED:
+    'artifact_source has been retired; deployment consumes registered immutable identities and sealed payloads only',
+  ARTIFACT_STORE_REQUIRED_DEPLOY:
+    'artifact payload store is required for deployment',
+  ARTIFACT_STORE_REQUIRED_PUBLISH:
+    'artifact payload store is required for publishing artifacts',
   CATALOG_PACKAGE_MISSING: 'catalog revision references a missing package',
   CATALOG_REVISION_MISSING:
     'catalog installation references a missing revision',
+  CHUNK_COUNT_MISMATCH: 'chunk count does not match declared chunk_count',
+  CHUNK_DIGEST_MISMATCH: 'chunk digest mismatch',
+  CHUNK_SIZE_MISMATCH: 'chunk size does not match declared size',
   CONFIG_INVALID: 'service revision config must be a JSON object',
   DEPENDENCIES_REQUIRED: 'catalog and artifact owners are required',
   IDEMPOTENCY_CONFLICT:
@@ -52,6 +63,8 @@ const SERVICE_LIFECYCLE_COMMAND_MESSAGE = Object.freeze({
   IDEMPOTENCY_KEY_INVALID:
     'idempotency_key must be a bounded non-empty string',
   MANIFEST_REJECTED: 'external service manifest was rejected',
+  PAYLOAD_DIGEST_MISMATCH:
+    'payload_digest does not match computed digest of bytes',
   SECURITY_CONTEXT_INVALID:
     'authenticated tenant, principal, and roles are required',
   SERVICE_NAME_INVALID:
@@ -59,6 +72,8 @@ const SERVICE_LIFECYCLE_COMMAND_MESSAGE = Object.freeze({
   SERVICE_NOT_FOUND: 'service has no catalog installation to remove',
   SIGNATURE_POLICY_REQUIRED:
     'service lifecycle owner requires an explicit signature policy',
+  TOTAL_SIZE_MISMATCH:
+    'declared total_size does not match assembled byte size',
   UNSUPPORTED_COMMAND: 'service lifecycle command is unsupported',
 });
 
@@ -79,6 +94,18 @@ const SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY = Object.freeze({
 
 const SERVICE_NAME_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 256;
+const ARTIFACT_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const BASE64_ENCODING = 'base64';
+const SHA256_ALGORITHM = 'sha256';
+const DEFAULT_MEDIA_TYPE = 'application/wasm';
+const PUBLISH_ACTION_CHECK = 'check';
+
+const PUBLISH_COMMAND_PATH = Object.freeze({
+  ARTIFACT_DIGEST: '/payload/artifact_digest',
+  CHUNKS: '/payload/chunks',
+  PAYLOAD_DIGEST: '/payload/payload_digest',
+  TOTAL_SIZE: '/payload/total_size',
+});
 
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -179,9 +206,10 @@ function normalizeConfig(config) {
 function buildIntentIdentity(command, payload, securityContext, manifest) {
   const config = normalizeConfig(payload.config);
   const packageId = deriveTenantPackageId(manifest, securityContext.tenantId);
+  const manifestDigest = sha256Json(canonicalJson(manifest));
   const revisionId = derivedId(SERVICE_LIFECYCLE_ID_KIND.REVISION, {
-    artifactSource: canonicalize(payload.artifact_source),
     config,
+    manifestDigest,
     packageId,
   });
   const serviceDefinitionId = deriveServiceDefinitionId(securityContext.tenantId, manifest.name);
@@ -295,6 +323,136 @@ function latestByServiceDefinition(installations) {
   return [...latest.values()];
 }
 
+function validatePublishDigest(artifactDigest) {
+  if (typeof artifactDigest !== 'string' ||
+      !ARTIFACT_DIGEST_PATTERN.test(artifactDigest)) {
+    commandFailure(
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+      SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+      PUBLISH_COMMAND_PATH.ARTIFACT_DIGEST,
+      SERVICE_LIFECYCLE_COMMAND_MESSAGE.ARTIFACT_DIGEST_INVALID,
+    );
+  }
+}
+
+function isPublishCheckAction(payload) {
+  if (payload.action === PUBLISH_ACTION_CHECK) return true;
+  return !payload.bytes && !payload.chunks && !payload.chunk_bytes;
+}
+
+async function handlePublishCheck(command, store, artifactDigest) {
+  const existing = await store
+    .findSealedPayloadByArtifactDigest(artifactDigest);
+  if (existing?.found) {
+    return successResult(command, [{
+      already_sealed: true,
+      artifact_digest: artifactDigest,
+      chunk_count: existing.payload.chunkCount,
+      media_type: existing.payload.mediaType,
+      payload_digest: existing.payload.payloadDigest,
+      sealed_at: String(existing.payload.sealedAt),
+      total_size: existing.payload.totalSize,
+    }], 0);
+  }
+  commandFailure(
+    SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_NOT_SEALED,
+    SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+    PUBLISH_COMMAND_PATH.ARTIFACT_DIGEST,
+    `artifact '${artifactDigest}' is not sealed in artifact payload store`,
+  );
+}
+
+function decodePublishChunk(chunk, index) {
+  if (chunk.chunk_number !== index) {
+    commandFailure(
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+      SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+      `/payload/chunks/${index}/chunk_number`,
+      `chunk out of order: expected ${index}, got ${chunk.chunk_number}`,
+    );
+  }
+  const chunkBuf = Buffer.isBuffer(chunk.chunk_bytes) ?
+    chunk.chunk_bytes :
+    Buffer.from(String(chunk.chunk_bytes), BASE64_ENCODING);
+  if (chunk.chunk_size !== undefined && chunkBuf.length !== chunk.chunk_size) {
+    commandFailure(
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+      SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+      `/payload/chunks/${index}/chunk_size`,
+      SERVICE_LIFECYCLE_COMMAND_MESSAGE.CHUNK_SIZE_MISMATCH,
+    );
+  }
+  const digest = `sha256:${createHash(SHA256_ALGORITHM).update(chunkBuf).digest('hex')}`;
+  if (chunk.chunk_digest && digest !== chunk.chunk_digest) {
+    commandFailure(
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+      SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+      `/payload/chunks/${index}/chunk_digest`,
+      SERVICE_LIFECYCLE_COMMAND_MESSAGE.CHUNK_DIGEST_MISMATCH,
+    );
+  }
+  return chunkBuf;
+}
+
+function assemblePublishChunks(chunks, declaredCount) {
+  if (declaredCount !== undefined && chunks.length !== declaredCount) {
+    commandFailure(
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+      SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+      PUBLISH_COMMAND_PATH.CHUNKS,
+      SERVICE_LIFECYCLE_COMMAND_MESSAGE.CHUNK_COUNT_MISMATCH,
+    );
+  }
+  const decodedSlices = [];
+  for (let i = 0; i < chunks.length; i += 1) {
+    decodedSlices.push(decodePublishChunk(chunks[i], i));
+  }
+  return Buffer.concat(decodedSlices);
+}
+
+function resolvePublishBuffer(payload) {
+  if (Array.isArray(payload.chunks)) {
+    return assemblePublishChunks(payload.chunks, payload.chunk_count);
+  }
+  const rawBytes = payload.bytes ?? payload.chunk_bytes;
+  return Buffer.isBuffer(rawBytes) ?
+    rawBytes :
+    Buffer.from(String(rawBytes), BASE64_ENCODING);
+}
+
+function verifyPublishBuffer(buffer, totalSize, declaredDigest) {
+  if (totalSize !== undefined && buffer.length !== totalSize) {
+    commandFailure(
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+      SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+      PUBLISH_COMMAND_PATH.TOTAL_SIZE,
+      SERVICE_LIFECYCLE_COMMAND_MESSAGE.TOTAL_SIZE_MISMATCH,
+    );
+  }
+  const computedDigest = `sha256:${createHash(SHA256_ALGORITHM).update(buffer).digest('hex')}`;
+  if (declaredDigest && declaredDigest !== computedDigest) {
+    commandFailure(
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+      SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+      PUBLISH_COMMAND_PATH.PAYLOAD_DIGEST,
+      SERVICE_LIFECYCLE_COMMAND_MESSAGE.PAYLOAD_DIGEST_MISMATCH,
+    );
+  }
+  return declaredDigest || computedDigest;
+}
+
+function formatPublishResult(command, sealed, artifactDigest, mediaType) {
+  return successResult(command, [{
+    already_sealed: sealed.alreadySealed === true,
+    artifact_digest: artifactDigest,
+    chunk_count: sealed.chunkCount,
+    media_type: mediaType,
+    payload_digest: sealed.payloadDigest,
+    sealed_at: String(sealed.sealedAt),
+    total_size: sealed.totalSize,
+  }], sealed.alreadySealed ? 0 : 1);
+}
+
 class ServiceLifecycleCommandOwner {
   constructor(options = {}) {
     if (!options.catalogOwner || !options.artifactResolver) {
@@ -310,6 +468,7 @@ class ServiceLifecycleCommandOwner {
     this.runtimeAccessPolicyOwner = options.runtimeAccessPolicyOwner || null;
     this.callCellInvoker = options.callCellInvoker || null;
     this.artifactResolver = options.artifactResolver;
+    this.artifactPayloadStore = options.artifactPayloadStore || null;
     this.signaturePolicy = validateSignaturePolicy(options.signaturePolicy);
   }
 
@@ -323,6 +482,8 @@ class ServiceLifecycleCommandOwner {
         return await this.submitBinding(command, payload, context);
       case SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING:
         return await this.invokeCallBinding(command, payload, context);
+      case SERVICE_LIFECYCLE_SQL_COMMAND.PUBLISH_ARTIFACT:
+        return await this.publishArtifact(command, payload, context);
       case SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL:
       case SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE:
         return await this.submitArtifactIntent(command, payload, context);
@@ -430,10 +591,18 @@ class ServiceLifecycleCommandOwner {
     );
   }
 
-  async resolveArtifact(manifest, artifactSource) {
+  async resolveArtifact(manifest, artifactSource, sealedPayload) {
+    if (artifactSource !== undefined && artifactSource !== null) {
+      commandFailure(
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_SOURCE_RETIRED,
+        SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+        SERVICE_LIFECYCLE_COMMAND_PATH.ARTIFACT_SOURCE,
+        SERVICE_LIFECYCLE_COMMAND_MESSAGE.ARTIFACT_SOURCE_RETIRED,
+      );
+    }
     const result = await this.artifactResolver.resolve({
       manifest,
-      source: artifactSource,
+      sealedPayload,
       signaturePolicy: this.signaturePolicy,
     });
     if (result?.status !== SERVICE_LIFECYCLE_OWNER_RESULT_STATUS.RESOLVED) {
@@ -446,6 +615,40 @@ class ServiceLifecycleCommandOwner {
       );
     }
     return result;
+  }
+
+  async publishArtifact(command, payload) {
+    if (!this.artifactPayloadStore) {
+      commandFailure(
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.STORE_UNAVAILABLE,
+        SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
+        SERVICE_LIFECYCLE_COMMAND_PATH.DEPENDENCIES,
+        SERVICE_LIFECYCLE_COMMAND_MESSAGE.ARTIFACT_STORE_REQUIRED_PUBLISH,
+      );
+    }
+    const artifactDigest = payload?.artifact_digest;
+    validatePublishDigest(artifactDigest);
+    if (isPublishCheckAction(payload)) {
+      return await handlePublishCheck(
+        command,
+        this.artifactPayloadStore,
+        artifactDigest,
+      );
+    }
+    const buffer = resolvePublishBuffer(payload);
+    const payloadDigest = verifyPublishBuffer(
+      buffer,
+      payload.total_size,
+      payload.payload_digest,
+    );
+    const mediaType = payload.media_type || DEFAULT_MEDIA_TYPE;
+    const sealed = await this.artifactPayloadStore.putPayload({
+      artifactDigest,
+      bytes: buffer,
+      mediaType,
+      payloadDigest,
+    });
+    return formatPublishResult(command, sealed, artifactDigest, mediaType);
   }
 
   async loadComponentArtifact(target) {
@@ -493,6 +696,22 @@ class ServiceLifecycleCommandOwner {
   }
 
   async submitArtifactIntent(command, payload, securityContext) {
+    if (payload.artifact_source !== undefined) {
+      commandFailure(
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_SOURCE_RETIRED,
+        SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+        SERVICE_LIFECYCLE_COMMAND_PATH.ARTIFACT_SOURCE,
+        SERVICE_LIFECYCLE_COMMAND_MESSAGE.ARTIFACT_SOURCE_RETIRED,
+      );
+    }
+    if (!this.artifactPayloadStore) {
+      commandFailure(
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.STORE_UNAVAILABLE,
+        SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
+        SERVICE_LIFECYCLE_COMMAND_PATH.DEPENDENCIES,
+        SERVICE_LIFECYCLE_COMMAND_MESSAGE.ARTIFACT_STORE_REQUIRED_DEPLOY,
+      );
+    }
     const manifest = this.normalizeManifest(payload);
     const identity = buildIntentIdentity(
       command, payload, securityContext, manifest,
@@ -501,8 +720,18 @@ class ServiceLifecycleCommandOwner {
     if (replay.state === SERVICE_LIFECYCLE_REPLAY_STATE.REPLAYED) {
       return replay.result;
     }
+    const sealedLookup = await this.artifactPayloadStore
+      .findSealedPayloadByArtifactDigest(manifest.artifact.digest);
+    if (!sealedLookup?.found) {
+      commandFailure(
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_NOT_SEALED,
+        SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+        SERVICE_LIFECYCLE_COMMAND_PATH.ARTIFACT_SOURCE,
+        `artifact '${manifest.artifact.digest}' is not sealed in artifact payload store`,
+      );
+    }
     const resolvedArtifact = await this.resolveArtifact(
-      manifest, payload.artifact_source,
+      manifest, null, sealedLookup.payload,
     );
     await internalizeInstallPayload(this, resolvedArtifact);
     await this.catalogOwner.recordPackage({

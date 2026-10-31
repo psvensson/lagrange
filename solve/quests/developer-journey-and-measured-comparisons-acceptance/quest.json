@@ -1,0 +1,42 @@
+{
+  "schema": "solve-quest/2",
+  "id": "developer-journey-and-measured-comparisons-acceptance",
+  "class": "product",
+  "epic": "developer-journey-and-measured-comparisons",
+  "statement": "Implement one canonical artifact ingestion and identity-only deployment mechanism (PUBLISH SERVICE ARTIFACT and lagrange service publish), monotonic service binding revision updates with in-flight request pinning and canonical JSON request-body delivery, end-to-end developer journeys (J1, J2, J3) and existing-Kubernetes/cloud deployment guides, pure evidence-projection comparison renderers with original-evidence admission, and reconcile capabilities, roadmaps, and superseded benchmark epics.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/developer-journey-and-measured-comparisons-acceptance/evidence/receipt.json",
+      "requiredReceipts": [
+        "current-claims-and-version",
+        "canonical-artifact-ingestion",
+        "stable-service-update",
+        "generated-service-http-journey",
+        "fresh-developer-walkthrough",
+        "measured-comparison-coverage",
+        "reproducible-public-results",
+        "documentation-coherence"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "canonical-artifact-ingestion-and-identity-only-deploy",
+      "statement": "Retire artifact_source on INSTALL and UPGRADE, remove Tier 1 disk cache and Tier 3 external repair, require replicated artifactPayloadStore, and ingest artifacts exclusively through PUBLISH SERVICE ARTIFACT $1 and lagrange service publish."
+    },
+    {
+      "id": "stable-service-revision-and-json-request-contract",
+      "statement": "Version bindings monotonically by generation on (tenant_id, binding_name), route new requests to the highest ready generation while pinning in-flight requests, and normalize HTTP JSON object and empty bodies to a single request envelope."
+    },
+    {
+      "id": "pure-comparison-renderers-and-original-evidence-admission",
+      "statement": "Remove modeled, oracle, and constant-derived numbers from all static comparison renderers, enforce validateOriginalReceiptAdmission in comparative-matrix-runner.js, and update comparative-benchmark-matrix-guard.js and distributed-scaleout-provenance-guard.js."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Spawn an independent subagent verifier to audit the diff and test evidence before landing, and record its approval with --verifier subagent:<id> --verdict approve."
+    }
+  ],
+  "sealedAt": "8f1d0085aa2287ac133b9dd7049bc30e556de5c3"
+}

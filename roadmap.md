@@ -15,11 +15,13 @@ they add. Independent bounded implementation may proceed concurrently when its
 consumed contracts are defined. One writer owns each changing interaction;
 dependent changes integrate in order and publication follows one release train.
 
-The released baseline is **0.3.0, experimental alpha**, checked on 30 October
-2026. **0.3.1 is the bounded correction milestone; 0.3.2 owns full Queryable Core
-completion.** The former future 0.2.9 obligations move into those two releases
-through their existing owners. Version targets express scope and priority, not
-shipping dates or claims of current support.
+The latest GitHub published release is **0.3.3**, and the current development
+source on main is **0.4.0 (experimental alpha)**. **0.4 (Practical and
+demonstrated service core) is the active milestone**, incorporating the remaining
+0.3.1/0.3.2 queryable-core obligations along with the complete developer-journey
+and measured-comparison obligations. The package version 0.4.0 on main does not
+imply that 0.4 milestone acceptance is complete. Version targets express scope
+and priority, not shipping dates or claims of current support.
 Use [Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md)
 for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 
@@ -29,7 +31,7 @@ for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 | --- | --- | --- |
 | 0.3.1 | Installed-product and claim corrections | Selected artifact/startup/publication repairs work for their advertised use; declarations identify remaining incomplete features. |
 | 0.3.2 | Queryable Core completion | Ordinary SQL, indexes, locking reads and live results have working public journeys on one candidate, with inherited stable-core and bounded service evidence. |
-| 0.4 | Practical and demonstrated service core | Useful bounded service execution and reproducible multi-machine evidence, including the first qualified Scenario A SQL comparison. |
+| 0.4 | Practical and demonstrated service core | Active milestone incorporating remaining 0.3.1/0.3.2 queryable-core deliverables, the complete developer journey, and reproducible multi-machine measured comparisons. |
 | 0.5 | Pilot-ready operation | A secure deployment can be installed, operated, recovered and evaluated within a measured pilot envelope. |
 | 0.6 | Native OCI Call Cells | Real managed native services execute functions at the data through the same service model. |
 | 0.7 | Transport independence and NATS | Complete NATS-only cluster operation and effective Raft timing profiles follow a measured transport baseline. |
@@ -87,13 +89,15 @@ passed. [PR #151](https://github.com/psvensson/lagrange/pull/151) subsequently
 merged the Scenario A framework and runtime corrections onto main. That work is
 part of the next candidate; historical branch receipts do not certify it.
 
-## Current - 0.3.1 Installed-product and claim corrections
+## Milestone - 0.3.1 Installed-product and claim corrections
 
-Complete the selected installed-startup, artifact and publication corrections
-through the existing stabilization owners. A new evaluator must be able to
-install a supported distribution, boot it, create/read data and restart within
-the advertised correction-release scope. Check the installed authoring package
-through its documented build and basic deployment path.
+0.3.1 addressed selected installed-startup, artifact and publication corrections.
+With the published release at 0.3.3 and development on main at 0.4.0, remaining
+queryable-core and stabilization obligations are carried forward into the active
+0.4 milestone. A new evaluator must be able to install a supported distribution,
+boot it, create/read data and restart within the advertised correction-release
+scope. Check the installed authoring package through its documented build and
+basic deployment path.
 
 Verify immutable published artifact identities, consumer startup and Docker Hub
 documentation readback, including honest pending or failed publication outcomes.
@@ -106,10 +110,12 @@ does not close all Queryable Core axes, the full distributed service journey or
 the remaining stable-core acceptance. Those obligations remain visible for
 0.3.2 with their original owners and evidence.
 
-## Next - 0.3.2 Queryable Core completion
+## Milestone - 0.3.2 Queryable Core completion
 
 Ordinary SQL should reach the right data efficiently without physical-partition
-knowledge. First define the supported key/row-identity and read-visibility
+knowledge. Remaining 0.3.2 Queryable Core obligations - including routing, indexes,
+locking reads, and live queries - are carried forward and incorporated into the
+active 0.4 milestone. First define the supported key/row-identity and read-visibility
 contracts shared by routing, indexes, locking reads and live-query startup.
 Consume what stabilization actually delivered rather than repeat completed
 ordering or transaction repairs. Changing an access path must preserve the
@@ -167,7 +173,13 @@ must preserve useful progress and cleanup through the actual public owners. See
 [Live Query Data Plane](architecture/live-query-data-plane.md), and
 [Execution Semantics](docs/execution-semantics.md).
 
-## Planned - 0.4 Practical and demonstrated service core
+## Active - 0.4 Practical and demonstrated service core
+
+0.4 is the active milestone on main (package source 0.4.0, experimental alpha;
+latest GitHub published release is 0.3.3). Package version 0.4.0 on main does not
+imply 0.4 acceptance is complete. This milestone incorporates the complete
+developer-journey and measured-comparison obligations alongside the remaining
+0.3.1/0.3.2 queryable-core deliverables.
 
 Make the code-first WASM service path useful for larger inputs and richer
 operations, then measure the declared configuration reproducibly.

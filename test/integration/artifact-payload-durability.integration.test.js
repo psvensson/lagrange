@@ -58,8 +58,6 @@ import {
   EXTERNAL_SERVICE_MEDIA_TYPE,
 } from '../../src/service/external-service-manifest.js';
 import {
-  INSTALLABLE_ARTIFACT_ERROR_CODE,
-  INSTALLABLE_ARTIFACT_SOURCE_KIND,
   InstallableServiceArtifactResolver,
 } from '../../src/service/installable-service-artifact-resolver.js';
 import {SERVICE_LIFECYCLE_COMMAND} from
@@ -92,8 +90,6 @@ const CACHE_DIR = Object.freeze({
   STORELESS: 'cache-node-3',
   TAMPERED: 'cache-node-4',
 });
-const CACHE_BLOB_SUFFIX = '.wasm';
-const CACHE_METADATA_SUFFIX = '.json';
 const FILE_NOT_FOUND_CODE = 'ENOENT';
 const OPAQUE_FAILURE = 'replicated write failed: participant failure';
 const PARAM_PATTERN = /\$(\d+)/g;
@@ -111,8 +107,6 @@ const CATALOG_PRIMARY_KEY = Object.freeze({
   [TABLES.SERVICE_INSTALLATIONS]: 'installation_id',
   [TABLES.SERVICE_INSTALL_FAILURES]: 'failure_id',
 });
-const REMOTE_PROVIDER_MISSING_PATTERN =
-  /remote OCI provider is not configured/u;
 const SELECT_PAYLOAD_ROWS_SQL =
   'SELECT payload_digest, artifact_digest, media_type, total_size, ' +
   'chunk_count, state FROM artifact_payloads';
@@ -272,12 +266,8 @@ function serviceManifest(artifactDigest) {
   };
 }
 
-function installPayload(artifactDigest, layoutRoot) {
+function installPayload(artifactDigest) {
   return {
-    artifact_source: {
-      kind: INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
-      location: layoutRoot,
-    },
     config: {replicas: REPLICA_COUNT},
     idempotency_key: IDEMPOTENCY_KEY,
     manifest: serviceManifest(artifactDigest),
@@ -419,14 +409,23 @@ describe('artifact payload durability across nodes', () => {
       now: () => Date.now(),
     }).serviceInstallCatalogOwner;
 
-    // Node 1 (install node): real INSTALL SERVICE through the real
-    // command owner over the real resolver, cache, and store.
+    // Node 1 (install node): publish artifact then INSTALL SERVICE
+    // through the real command owner over the store.
     const installNodeOwner = composeNodeOwner(
       fixture.catalogOwner, fixture.cacheDir.NODE_ONE, fixture.store,
     );
+    await installNodeOwner.execute(
+      SERVICE_LIFECYCLE_COMMAND.PUBLISH_ARTIFACT,
+      {
+        artifact_digest: fixture.artifactDigest,
+        bytes: fixture.componentBytes,
+        media_type: WASM_MEDIA_TYPE,
+      },
+      SECURITY_CONTEXT,
+    );
     fixture.installResult = await installNodeOwner.execute(
       SERVICE_LIFECYCLE_COMMAND.INSTALL,
-      installPayload(fixture.artifactDigest, fixture.layoutRoot),
+      installPayload(fixture.artifactDigest),
       SECURITY_CONTEXT,
     );
     const packageId = fixture.installResult.rows?.[0]?.package_id;
@@ -555,43 +554,24 @@ describe('artifact payload durability across nodes', () => {
     }
   });
 
-  it('atomically populates the fresh node cache with the ' +
-    'content-addressed files', async () => {
-    const cacheFiles = await listCacheFiles(fixture.cacheDir.NODE_TWO);
-    const payloadBlobName = fixture.payloadDescriptor.digest
-      .slice(SHA256_PREFIX_LENGTH) + CACHE_BLOB_SUFFIX;
-    const metadataName = fixture.artifactDigest
-      .slice(SHA256_PREFIX_LENGTH) + CACHE_METADATA_SUFFIX;
-    assert.ok(cacheFiles.includes(payloadBlobName),
-      'the content-addressed payload blob is cached on the fresh node');
-    assert.ok(cacheFiles.includes(metadataName),
-      'the artifact metadata pointer is cached on the fresh node');
-    assert.deepEqual(cacheFiles.filter((name) =>
-      !name.endsWith(CACHE_BLOB_SUFFIX) &&
-      !name.endsWith(CACHE_METADATA_SUFFIX)), [],
-    'no temporary files remain — the populate was atomic');
-    const metadata = JSON.parse(await readFile(
-      path.join(fixture.cacheDir.NODE_TWO, metadataName), 'utf8',
-    ));
-    assert.equal(metadata.artifactDigest, fixture.artifactDigest);
-    assert.equal(metadata.payloadDescriptor.digest,
-      fixture.payloadDescriptor.digest,
-      'the cached metadata pins the same payload descriptor identity');
-  });
+  it('does not touch the filesystem when loading from canonical store',
+    async () => {
+      const cacheFiles = await listCacheFiles(fixture.cacheDir.NODE_TWO);
+      assert.deepEqual(cacheFiles, [],
+        'no files are cached on disk — the store is read directly into memory');
+    });
 
-  it('refuses typed through the resolver repair path when no store is ' +
-    'attached and the external source is gone', async () => {
+  it('refuses typed STORE_UNAVAILABLE when no store is attached and never ' +
+    'falls back', async () => {
     const storelessOwner = composeNodeOwner(
       fixture.catalogOwner, fixture.cacheDir.STORELESS, null,
     );
     await assert.rejects(
       () => storelessOwner.loadComponentArtifact(fixture.loadTarget),
       (error) =>
-        error.code === INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED &&
-        REMOTE_PROVIDER_MISSING_PATTERN.test(error.message),
-      'without the store, the loader falls through to external repair, ' +
-        'whose typed remote-provider-missing refusal is the honest ' +
-        '"repair source absent" outcome',
+        error instanceof ArtifactPayloadStoreError &&
+        error.code === 'artifact_payload_store_unavailable',
+      'without the store, the loader fails closed typed with STORE_UNAVAILABLE',
     );
     assert.deepEqual(
       await listCacheFiles(fixture.cacheDir.STORELESS), [],
@@ -599,8 +579,7 @@ describe('artifact payload durability across nodes', () => {
     );
   });
 
-  it('fails typed CHUNK_DIGEST_MISMATCH on a tampered chunk and never ' +
-    'populates the fresh cache', async () => {
+  it('fails typed CHUNK_DIGEST_MISMATCH on a tampered chunk', async () => {
     const chunkRow = fixture.database
       .prepare(SELECT_FIRST_CHUNK_SQL)
       .get(fixture.payloadDescriptor.digest);
@@ -628,18 +607,5 @@ describe('artifact payload durability across nodes', () => {
       await listCacheFiles(fixture.cacheDir.TAMPERED), [],
       'a failed verification never populates the node cache',
     );
-
-    // Resolution-order proof: node 2's already-populated cache still
-    // serves verified bytes although the store is now tampered — the
-    // node-local cache is consulted BEFORE the internal store.
-    const cachedNodeOwner = composeNodeOwner(
-      fixture.catalogOwner, fixture.cacheDir.NODE_TWO, fixture.store,
-    );
-    const cachedLoad = await cachedNodeOwner.loadComponentArtifact(
-      fixture.loadTarget,
-    );
-    assert.equal(sha256Of(cachedLoad.bytes),
-      fixture.payloadDescriptor.digest,
-      'the populated node cache serves the component ahead of the store');
   });
 });

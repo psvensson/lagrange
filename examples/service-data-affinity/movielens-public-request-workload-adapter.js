@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
 
 import {
   BENCHMARK_DURABILITY_CONTRACT,
@@ -179,6 +181,35 @@ async function loadPackedRatings(ports, dataset) {
 async function deployWorkload(ports, artifactReceipt) {
   const manifest =
     buildMovielensPublicRequestManifest(artifactReceipt);
+  let bytes = artifactReceipt.componentBytes;
+  if (!bytes && artifactReceipt.payloadDescriptors?.[0] && artifactReceipt.layoutPath) {
+    try {
+      const blobHash = artifactReceipt.payloadDescriptors[0].digest.replace(
+        /^sha256:/u,
+        '',
+      );
+      const blobPath = path.join(
+        artifactReceipt.layoutPath,
+        'blobs',
+        'sha256',
+        blobHash,
+      );
+      bytes = await readFile(blobPath);
+    } catch {
+      // ignore
+    }
+  }
+  if (bytes) {
+    await executeSql(
+      ports,
+      'PUBLISH SERVICE ARTIFACT $1',
+      [JSON.stringify({
+        artifact_digest: manifest.artifact.digest,
+        bytes: Buffer.isBuffer(bytes) ? bytes.toString('base64') : bytes,
+        media_type: manifest.artifact.media_type || 'application/wasm',
+      })],
+    );
+  }
   const installed = await executeSql(
     ports,
     'INSTALL SERVICE $1',
@@ -665,6 +696,7 @@ async function runMovielensPublicRequestWorkload(options) {
   });
   const replay = await prepared.replayOperation(first);
   const drainReceipt = await prepared.drainOperations();
+  const readyCell = prepared.deployment.readyCell;
   const deployment = Object.freeze({
     binding: prepared.deployment.binding,
     bindingReceipt: Object.freeze({
@@ -673,7 +705,18 @@ async function runMovielensPublicRequestWorkload(options) {
     }),
     manifest: prepared.deployment.manifest,
     packageId: prepared.deployment.packageId,
-    readyCell: prepared.deployment.readyCell,
+    readyCell: Object.freeze({
+      bindingDigest: readyCell.bindingDigest,
+      bindingVersionId: readyCell.bindingVersionId,
+      method: readyCell.method,
+      nodeId: readyCell.nodeId,
+      path: readyCell.path,
+      replicaId: readyCell.replicaId,
+      serviceId: readyCell.serviceId,
+      targetAddress: readyCell.targetAddress,
+      targetNodeId: readyCell.targetNodeId,
+      tenantId: readyCell.tenantId,
+    }),
   });
   return Object.freeze({
     authentication: prepared.authentication,

@@ -12,18 +12,18 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 
 | Milestone | Version | Commit | Date | Evidence Tier | Execution Mode | Scenario A (tx/s) | p95 (ms) | Proofs | Scenario B (dec/s) | Scenario C (dec/s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| v0.2.0-tidb-ref | 0.2.0 | b0b2f9abcc | 2026-09-12 | observed-docker-cluster | live-cluster-wire | 0.00 | 0.0 | 0/33 | 0.0 | 0.0 |
-| v0.3.0-lab-paired | 0.3.0 | 8039e45f2a | 2026-10-29 | observed-docker-cluster | live-cluster-wire | 0.83 | 4418.9 | 4/33 | 0.0 | 0.0 |
-| v0.3.0-conflict-retry | 0.3.0 | 66d054c9c9 | 2026-10-30 | observed-docker-cluster | live-cluster-wire | 0.83 | 4418.9 | 16/33 | 0.0 | 0.0 |
-| v0.3.0-semantic-closure | 0.3.0 | 27af74dc7b | 2026-10-30 | observed-docker-cluster | live-cluster-wire | 0.83 | 4418.9 | 33/33 | 0.0 | 0.0 |
-| v0.3.0-scenario-b-model | 0.3.0 | 2d416de6e5 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 0.83 | 4418.9 | 33/33 | 441.1 | 0.0 |
-| v0.3.2-provenance-matrix | 0.3.2 | 4dc6db6b93 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 0.83 | 4418.9 | 33/33 | 441.1 | 441.1 |
-| v0.3.2-scaleout-3to5-rf3 | 0.3.2 | 89300e4d8a | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 720.4 | 441.1 |
-| v0.3.2-partition-sweep-p6to60 | 0.3.2 | 2025f7780d | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 784.0 | 441.1 |
-| v0.3.2-rtt-working-set-crossover | 0.3.2 | bdee84d5fc | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 368.0 | 441.1 |
-| v0.3.2-live-movement-scenario-c-scale | 0.3.2 | 72c76c6629 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 1840.0 | 1840.0 |
-| v0.3.3-tx-fast-path-5node-summary | 0.3.3 | b41d4ccec4 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 3.84 | 1490.0 | 33/33 | 720.4 | 1840.0 |
-| v0.4.0-scaleout-scenario-c-release | 0.4.0 | 7565d8c09a | 2026-10-31 | modeled-topology-oracle | local-js-oracle | 3.84 | 1490.0 | 33/33 | 720.4 | 1840.0 |
+| v0.2.0-tidb-ref | 0.2.0 | b0b2f9abcc | 2026-09-12 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.0-lab-paired | 0.3.0 | 8039e45f2a | 2026-10-29 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.0-conflict-retry | 0.3.0 | 66d054c9c9 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.0-semantic-closure | 0.3.0 | 27af74dc7b | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.0-scenario-b-model | 0.3.0 | 2d416de6e5 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.2-provenance-matrix | 0.3.2 | 4dc6db6b93 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.2-scaleout-3to5-rf3 | 0.3.2 | 89300e4d8a | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.2-partition-sweep-p6to60 | 0.3.2 | 2025f7780d | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.2-rtt-working-set-crossover | 0.3.2 | bdee84d5fc | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.2-live-movement-scenario-c-scale | 0.3.2 | 72c76c6629 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.3.3-tx-fast-path-5node-summary | 0.3.3 | b41d4ccec4 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.4.0-scaleout-scenario-c-release | 0.4.0 | 7565d8c09a | 2026-10-31 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
 
 ## Commit-over-commit delta progression
 
@@ -31,14 +31,14 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 - **v0.3.0-lab-paired (commit 8039e45f2a)**: 5-node paired cluster brings Scenario A online (0.83 tx/s, 4/33 proofs).
 - **v0.3.0-conflict-retry (commit 66d054c9c9)**: Retryable conflict handling and visibility gate expand proofs to 16/33.
 - **v0.3.0-semantic-closure (commit 27af74dc7b)**: Full 33/33 semantic proof closure reached under contended OLTP.
-- **v0.3.0-scenario-b-model (commit 2d416de6e5)**: Scenario B 3-island RF=3 risk model (441.15 dec/s, 18.09ms p99, 144 B/req WAN).
-- **v0.3.2-provenance-matrix (commit 4dc6db6b93)**: 13-target comparison matrix, Scenario C (441.15 dec/s @ 0ms), provenance audit.
-- **v0.3.2-scaleout-3to5-rf3 (commit 89300e4d8a)**: 3-to-5-node RF=3 scale-out (2.24 tx/s proportional, 720.4 dec/s aggregate).
-- **v0.3.2-partition-sweep-p6to60 (commit 2025f7780d)**: Peak 784.0 dec/s at P=30 (6 leaders/node) vs -5.9% coordination drop at P=60
-- **v0.3.2-rtt-working-set-crossover (commit bdee84d5fc)**: RTT 0.2..30ms crossover (168 dec/s @ 10ms) & heavy 2048-event working set (368 dec/s, 144 B)
-- **v0.3.2-live-movement-scenario-c-scale (commit 72c76c6629)**: Zero-stall live move (26.4 ms during-move p99) & 5x Scenario C (1840 fresh dec/s @ 0ms)
-- **v0.3.3-tx-fast-path-5node-summary (commit b41d4ccec4)**: v0.3.3 Scenario A tx coordination fast-path (3.84 tx/s 5-node proportional, 1490ms p95) & 5-node summary.
-- **v0.4.0-scaleout-scenario-c-release (commit 7565d8c09a)**: v0.4.0 release with 5-node RF=3 and Scenario C summary statistics on the landing page.
+- **v0.3.0-scenario-b-model (commit 2d416de6e5)**: Scenario B 3-island RF=3 risk model withdrawn pending live GCP/lab measurement.
+- **v0.3.2-provenance-matrix (commit 4dc6db6b93)**: 13-target comparison matrix and Scenario C provenance audit.
+- **v0.3.2-scaleout-3to5-rf3 (commit 89300e4d8a)**: 3-to-5-node RF=3 scale-out experiment framework.
+- **v0.3.2-partition-sweep-p6to60 (commit 2025f7780d)**: 5-node RF=3 partition granularity sweep framework (P=6..60).
+- **v0.3.2-rtt-working-set-crossover (commit bdee84d5fc)**: Scenario B RTT crossover and heavy working-set comparison framework.
+- **v0.3.2-live-movement-scenario-c-scale (commit 72c76c6629)**: Live partition movement and 5x Scenario C scaling framework.
+- **v0.3.3-tx-fast-path-5node-summary (commit b41d4ccec4)**: v0.3.3 Scenario A tx coordination fast-path and 5-node summary.
+- **v0.4.0-scaleout-scenario-c-release (commit 7565d8c09a)**: v0.4.0 release with 5-node RF=3 and Scenario C framework.
 
 ## Provenance qualification across historical milestones
 

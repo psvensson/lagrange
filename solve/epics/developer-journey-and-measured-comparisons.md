@@ -8,20 +8,14 @@ doneWhen:
   probe: test-receipt
   args:
     file: solve/quests/developer-journey-and-measured-comparisons-acceptance/evidence/receipt.json
-    requiredReceipts:
-      - current-claims-and-version
-      - canonical-artifact-ingestion
-      - stable-service-update
-      - generated-service-http-journey
-      - fresh-developer-walkthrough
-      - measured-comparison-coverage
-      - reproducible-public-results
-      - documentation-coherence
-quests: []
+quests:
+  - developer-journey-and-measured-comparisons-acceptance
 authorizes:
+  - Dockerfile
   - README.md
-  - roadmap.md
+  - roadmap*
   - CHANGELOG.md
+  - charts
   - architecture
   - docs
   - examples
@@ -30,12 +24,16 @@ authorizes:
   - src/service
   - src/bootstrap/shared
   - src/control-plane/owners
+  - src/query/pg/postgres-wire-adapter.js
   - src/query/service-lifecycle-sql-contract.js
   - src/query/sql-query-engine-service-lifecycle-execution.js
+  - src/runtime/pgwire-result-mapper.js
   - src/wasm-service
   - data/tidb-comparison
   - scripts/checks
+  - scripts/check-complexity.js
   - scripts/check-current-capabilities.js
+  - scripts/check-unused-exports.js
   - scripts/generate-current-capabilities-doc.js
   - scripts/check-documentation-current-state.js
   - test

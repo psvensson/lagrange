@@ -1,15 +1,9 @@
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
 import {
-  link,
-  lstat,
-  mkdir,
   mkdtemp,
   readFile,
-  rename,
   rm,
   symlink,
-  truncate,
   writeFile,
 } from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -18,24 +12,10 @@ import {describe, it} from 'node:test';
 
 import {parse} from 'espree';
 
-import {RUNTIME_KIND} from '../../src/constants/runtime.js';
 import {createServiceProject} from
   '../../src/cli/service-project-scaffold.js';
 import {createServiceLifecycleSqlClient} from
   '../../src/cli/service-lifecycle-sql-client.js';
-import {
-  validateExternalServiceManifest,
-} from '../../src/service/external-service-manifest.js';
-import {
-  OCI_CONTAINER_LAYER_MEDIA_TYPES,
-  OCI_IMAGE_CONFIG_MEDIA_TYPE,
-  OCI_IMAGE_LAYOUT_VERSION,
-  OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-  OCI_IMAGE_SCHEMA_VERSION,
-  canonicalOciJsonBytes,
-} from '../../src/service/oci-image-layout-contract.js';
-import {ServiceLocalOciLayoutBuilder} from
-  '../../src/service/service-local-oci-layout-builder.js';
 import {runEntrypoint} from '../../src/test-helpers/run-entrypoint.js';
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '../..');
@@ -61,18 +41,11 @@ const LIFECYCLE_OWNER_LOADER = 'loadServiceLifecycleCommand';
 const PIPELINE_OWNER_SPECIFIER = './service-pipeline-router.js';
 const PIPELINE_OWNER_LOADER = 'loadServicePipelineCommand';
 const PLATFORM = 'linux/amd64';
-const SOURCE_DATE_EPOCH = 1_700_000_000;
-const IDEMPOTENCY_KEY = 'dev-install-weather-service';
+const IDEMPOTENCY_KEY = 'install-weather-service';
 const INSTALL_SQL = 'INSTALL SERVICE $1';
-const FINAL_MANIFEST_NAME = 'lagrange-service.json';
 const MANIFEST_TEMPLATE_NAME = 'lagrange-service.template.json';
-const OCI_LAYOUT_NAME = 'oci-layout';
-const OCI_INDEX_NAME = 'index.json';
-const OCI_LAYER_MEDIA_TYPE = OCI_CONTAINER_LAYER_MEDIA_TYPES[0];
-const SHA256_PREFIX_LENGTH = 'sha256:'.length;
 const VALID_DIGEST = `sha256:${'a'.repeat(64)}`;
 const OVERSIZED_INPUT_BYTES = (4 * 1024 * 1024) + 1;
-const IGNORED_SPARSE_BYTES = 65 * 1024 * 1024;
 const SUCCESS_EXIT_CODE = 0;
 const FAILURE_EXIT_CODE = 1;
 const USAGE_EXIT_CODE = 2;
@@ -104,56 +77,6 @@ function mutationRow(serviceName = 'weather-service') {
     service_definition_id: `definition-${serviceName}`,
     service_name: serviceName,
   };
-}
-
-function sha256(bytes) {
-  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-}
-
-function descriptor(bytes, mediaType) {
-  return {digest: sha256(bytes), mediaType, size: bytes.length};
-}
-
-async function writeBlob(layoutPath, bytes) {
-  const digest = sha256(bytes);
-  const blobDirectory = path.join(layoutPath, 'blobs', 'sha256');
-  await mkdir(blobDirectory, {recursive: true});
-  await writeFile(
-    path.join(blobDirectory, digest.slice(SHA256_PREFIX_LENGTH)),
-    bytes,
-  );
-}
-
-async function writeContainerLayout(layoutPath, platform) {
-  const [os, architecture] = platform.split('/');
-  const configBytes = canonicalOciJsonBytes({architecture, os});
-  const layerBytes = Buffer.from('service-cli-deterministic-layer');
-  const config = descriptor(configBytes, OCI_IMAGE_CONFIG_MEDIA_TYPE);
-  const layer = descriptor(layerBytes, OCI_LAYER_MEDIA_TYPE);
-  const manifestBytes = canonicalOciJsonBytes({
-    config,
-    layers: [layer],
-    mediaType: OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-    schemaVersion: OCI_IMAGE_SCHEMA_VERSION,
-  });
-  const top = descriptor(manifestBytes, OCI_IMAGE_MANIFEST_MEDIA_TYPE);
-
-  await Promise.all([
-    writeBlob(layoutPath, configBytes),
-    writeBlob(layoutPath, layerBytes),
-    writeBlob(layoutPath, manifestBytes),
-  ]);
-  await writeFile(
-    path.join(layoutPath, OCI_LAYOUT_NAME),
-    canonicalOciJsonBytes({imageLayoutVersion: OCI_IMAGE_LAYOUT_VERSION}),
-  );
-  await writeFile(
-    path.join(layoutPath, OCI_INDEX_NAME),
-    canonicalOciJsonBytes({
-      manifests: [{...top, platform: {architecture, os}}],
-      schemaVersion: OCI_IMAGE_SCHEMA_VERSION,
-    }),
-  );
 }
 
 function collectOwnedDynamicLoader(node, imports) {
@@ -558,408 +481,88 @@ describe('service lifecycle CLI contract', () => {
         }), FAILURE_EXIT_CODE);
       }
       assert.equal(sqlCreations, 0);
-
-      let builderCreations = 0;
-      assert.equal(await runServiceLifecycleCommand([
-        'dev-install',
-        projectPath,
-        '--idempotency-key',
-        'project-output-root',
-        '--platform',
-        PLATFORM,
-        '--source-date-epoch',
-        String(SOURCE_DATE_EPOCH),
-        '--output-root',
-        projectPath,
-      ], {
-        createLocalOciLayoutBuilder() {
-          builderCreations += 1;
-          throw new Error('invalid output root must fail before build');
-        },
-        createSqlClient() {
-          sqlCreations += 1;
-          throw new Error('invalid output root must fail before SQL');
-        },
-        writeError: () => {},
-        writeOutput: () => assert.fail('invalid output root must not print'),
-      }), FAILURE_EXIT_CODE);
-      assert.equal(builderCreations, 0);
-      assert.equal(sqlCreations, 0);
-
-      await symlink(
-        validManifestPath,
-        path.join(projectPath, 'linked-source.json'),
-      );
-      assert.equal(await runServiceLifecycleCommand([
-        'dev-install',
-        projectPath,
-        '--idempotency-key',
-        'linked-source',
-        '--platform',
-        PLATFORM,
-        '--source-date-epoch',
-        String(SOURCE_DATE_EPOCH),
-        '--output-root',
-        path.join(root, 'linked-source-output'),
-      ], {
-        createLocalOciLayoutBuilder() {
-          builderCreations += 1;
-          throw new Error('linked source must fail before build');
-        },
-        createSqlClient() {
-          sqlCreations += 1;
-          throw new Error('linked source must fail before SQL');
-        },
-        writeError: () => {},
-        writeOutput: () => assert.fail('linked source must not print success'),
-      }), FAILURE_EXIT_CODE);
-      assert.equal(builderCreations, 0);
-      assert.equal(sqlCreations, 0);
     });
 
-  it('fails builder and post-build local-write errors before SQL or output',
-    async (t) => {
-      const {runServiceLifecycleCommand} = await loadLifecycleCommandOwner();
-      const root = await temporaryRoot(t);
-      const projectPath = path.join(root, 'failure-service');
-      const finalManifestPath = path.join(projectPath, FINAL_MANIFEST_NAME);
-      createServiceProject(projectPath);
-      const baseArgv = [
-        'dev-install',
-        projectPath,
-        '--platform',
-        PLATFORM,
-        '--source-date-epoch',
-        String(SOURCE_DATE_EPOCH),
-        '--output-root',
-        path.join(root, 'failure-output'),
-      ];
-      let buildCalls = 0;
-      let sqlCreations = 0;
-      let outputCalls = 0;
-      const errors = [];
-      const dependencies = (build) => ({
-        createLocalOciLayoutBuilder: () => ({build}),
-        createSqlClient() {
-          sqlCreations += 1;
-          throw new Error('local failure must occur before SQL');
-        },
-        writeError: (line) => errors.push(line),
-        writeOutput() {
-          outputCalls += 1;
-        },
-      });
+  it('rejects dev-install with usage error explaining it has been retired', async () => {
+    const {runServiceLifecycleCommand} = await loadLifecycleCommandOwner();
+    const errors = [];
+    const exitCode = await runServiceLifecycleCommand(
+      ['dev-install', 'some-project'],
+      {writeError: (line) => errors.push(line)},
+    );
+    assert.equal(exitCode, USAGE_EXIT_CODE);
+    assert.match(
+      errors.join('\n'),
+      /dev-install has been retired; use lagrange service build, publish, and deploy instead/iu,
+    );
+  });
 
-      assert.equal(await runServiceLifecycleCommand([
-        ...baseArgv.slice(0, 2),
-        '--idempotency-key',
-        'builder-failure',
-        ...baseArgv.slice(2),
-      ], dependencies(async () => {
-        buildCalls += 1;
-        throw new Error('injected builder failure');
-      })), FAILURE_EXIT_CODE);
-      await assert.rejects(lstat(finalManifestPath), {code: 'ENOENT'});
+  it('composes install through external service manifest and stable identity-only INSTALL intent', async (t) => {
+    const {runServiceLifecycleCommand} = await loadLifecycleCommandOwner();
+    const root = await temporaryRoot(t);
+    const validManifest = {
+      schema_version: 3,
+      name: 'weather-service',
+      version: '1.0.0',
+      exports: [{name: 'serve', interface: 'request_v1'}],
+      artifact: {
+        type: 'oci',
+        ref: `registry.example.test/weather-service@${VALID_DIGEST}`,
+        digest: VALID_DIGEST,
+        media_type: 'application/vnd.oci.image.manifest.v1+json',
+      },
+      runtime: {kind: 'oci_container'},
+    };
+    const manifestPath = path.join(root, 'manifest.json');
+    await writeFile(manifestPath, JSON.stringify(validManifest));
 
-      assert.equal(await runServiceLifecycleCommand([
-        ...baseArgv.slice(0, 2),
-        '--idempotency-key',
-        'local-write-failure',
-        ...baseArgv.slice(2),
-      ], dependencies(async () => {
-        buildCalls += 1;
-        await mkdir(finalManifestPath);
-        return {
-          layoutPath: path.join(root, 'failure-output', 'layout'),
-          topManifestDescriptor: {digest: VALID_DIGEST},
-        };
-      })), FAILURE_EXIT_CODE);
+    const config = {replicas: 3, timeout_ms: 5000};
+    const configPath = path.join(root, 'config.json');
+    await writeFile(configPath, JSON.stringify(config));
 
-      assert.equal(buildCalls, 2);
-      assert.equal(sqlCreations, 0);
-      assert.equal(outputCalls, 0);
-      assert.match(errors.join('\n'), /builder failure/iu);
-      assert.match(errors.join('\n'), /ordinary bounded file/iu);
+    const sqlCalls = [];
+    const serverRow = Object.freeze({
+      ...mutationRow(),
+      operation_id: 'operation-install',
     });
-
-  it('pins the project directory across build and final-manifest publication',
-    async (t) => {
-      const {runServiceLifecycleCommand} = await loadLifecycleCommandOwner();
-      const root = await temporaryRoot(t);
-      const projectPath = path.join(root, 'race-service');
-      const movedProjectPath = path.join(root, 'moved-race-service');
-      const victimPath = path.join(root, 'victim');
-      createServiceProject(projectPath);
-      await mkdir(victimPath);
-
-      let buildCalls = 0;
-      let sqlCreations = 0;
-      const errors = [];
-      const exitCode = await runServiceLifecycleCommand([
-        'dev-install',
-        projectPath,
-        '--idempotency-key',
-        'project-parent-swap',
-        '--platform',
-        PLATFORM,
-        '--source-date-epoch',
-        String(SOURCE_DATE_EPOCH),
-        '--output-root',
-        path.join(root, 'race-output'),
-      ], {
-        createLocalOciLayoutBuilder: () => ({
-          async build() {
-            buildCalls += 1;
-            await rename(projectPath, movedProjectPath);
-            await symlink(victimPath, projectPath);
-            return {
-              layoutPath: path.join(root, 'race-output', 'layout'),
-              topManifestDescriptor: {digest: VALID_DIGEST},
-            };
-          },
-        }),
-        createSqlClient() {
-          sqlCreations += 1;
-          throw new Error('project identity race must fail before SQL');
+    const serializedOutput = [];
+    const dependencies = {
+      createSqlClient: () => ({
+        async execute(statement, parameters) {
+          sqlCalls.push({parameters, statement});
+          return {rows: [serverRow]};
         },
-        writeError: (line) => errors.push(line),
-        writeOutput: () => assert.fail('project identity race must not print'),
-      });
+      }),
+      writeOutput: (line) => serializedOutput.push(line),
+    };
 
-      assert.equal(exitCode, FAILURE_EXIT_CODE);
-      assert.equal(buildCalls, 1);
-      assert.equal(sqlCreations, 0);
-      assert.match(errors.join('\n'), /project identity changed/iu);
-      await assert.rejects(
-        lstat(path.join(victimPath, FINAL_MANIFEST_NAME)),
-        {code: 'ENOENT'},
-      );
-      await assert.rejects(
-        lstat(path.join(movedProjectPath, FINAL_MANIFEST_NAME)),
-        {code: 'ENOENT'},
-      );
+    const argv = [
+      'install',
+      manifestPath,
+      '--idempotency-key',
+      IDEMPOTENCY_KEY,
+      '--config',
+      configPath,
+    ];
+
+    assert.equal(
+      await runServiceLifecycleCommand(argv, dependencies),
+      SUCCESS_EXIT_CODE,
+    );
+
+    assert.equal(sqlCalls.length, 1);
+    assert.equal(sqlCalls[0].statement, INSTALL_SQL);
+    assert.equal(sqlCalls[0].parameters.length, 1);
+    const payload = JSON.parse(sqlCalls[0].parameters[0]);
+    assert.deepEqual(payload, {
+      config,
+      idempotency_key: IDEMPOTENCY_KEY,
+      manifest: validManifest,
     });
+    assert.equal(payload.artifact_source, undefined);
 
-  it('composes dev-install through the S5b builder and stable INSTALL intent',
-    async (t) => {
-      const {runServiceLifecycleCommand} = await loadLifecycleCommandOwner();
-      const root = await temporaryRoot(t);
-      const projectPath = path.join(root, 'weather-service');
-      const outputRoot = path.join(root, 'oci-output');
-      const finalManifestPath = path.join(projectPath, FINAL_MANIFEST_NAME);
-      createServiceProject(projectPath);
-      const ignoredDependencyDirectory = path.join(projectPath, 'node_modules');
-      const ignoredDependencyPath = path.join(
-        ignoredDependencyDirectory,
-        'ignored.bin',
-      );
-      await mkdir(ignoredDependencyDirectory);
-      await writeFile(ignoredDependencyPath, '');
-      await truncate(ignoredDependencyPath, IGNORED_SPARSE_BYTES);
-
-      const exporterCalls = [];
-      const exporter = {
-        async exportLayout(request) {
-          exporterCalls.push(request);
-          assert.notEqual(request.contextPath, projectPath);
-          assert.equal(
-            request.dockerfilePath,
-            path.join(request.contextPath, 'Dockerfile'),
-          );
-          const snapshotDockerfile = await lstat(request.dockerfilePath);
-          assert.equal(snapshotDockerfile.isFile(), true);
-          assert.equal(snapshotDockerfile.isSymbolicLink(), false);
-
-          const relativeServerPath = path.join('src', 'server.js');
-          const projectServerPath = path.join(projectPath, relativeServerPath);
-          const snapshotServerPath = path.join(
-            request.contextPath,
-            relativeServerPath,
-          );
-          const originalSource = await readFile(projectServerPath);
-          await writeFile(projectServerPath, 'concurrent source mutation\n');
-          try {
-            assert.deepEqual(
-              await readFile(snapshotServerPath),
-              originalSource,
-            );
-            await writeContainerLayout(request.outputPath, request.platform);
-          } finally {
-            await writeFile(projectServerPath, originalSource);
-          }
-        },
-      };
-      const buildRequests = [];
-      const builder = new ServiceLocalOciLayoutBuilder({
-        containerExporter: exporter,
-      });
-      const originalBuild = builder.build.bind(builder);
-      builder.build = async (request) => {
-        buildRequests.push(request);
-        return originalBuild(request);
-      };
-      const sqlCalls = [];
-      const serverRow = Object.freeze({
-        ...mutationRow(),
-        operation_id: 'operation-dev-install',
-      });
-      const serializedOutput = [];
-      const dependencies = {
-        createLocalOciLayoutBuilder: () => builder,
-        createSqlClient: () => ({
-          async execute(statement, parameters) {
-            sqlCalls.push({parameters, statement});
-            return {rows: [serverRow]};
-          },
-        }),
-        writeOutput: (line) => serializedOutput.push(line),
-      };
-      const argv = [
-        'dev-install',
-        projectPath,
-        '--idempotency-key',
-        IDEMPOTENCY_KEY,
-        '--platform',
-        PLATFORM,
-        '--source-date-epoch',
-        String(SOURCE_DATE_EPOCH),
-        '--output-root',
-        outputRoot,
-      ];
-
-      assert.equal(
-        await runServiceLifecycleCommand(argv, dependencies),
-        SUCCESS_EXIT_CODE,
-      );
-      const firstFinalManifestBytes = await readFile(finalManifestPath);
-      assert.equal(
-        await runServiceLifecycleCommand(argv, dependencies),
-        SUCCESS_EXIT_CODE,
-      );
-      assert.deepEqual(
-        await readFile(finalManifestPath),
-        firstFinalManifestBytes,
-      );
-
-      assert.equal(buildRequests.length, 2);
-      for (const request of buildRequests) {
-        assert.equal(request.runtimeKind, RUNTIME_KIND.OCI_CONTAINER);
-        assert.equal(request.outputRoot, outputRoot);
-        assert.equal(request.platform, PLATFORM);
-        assert.equal(request.sourceDateEpoch, SOURCE_DATE_EPOCH);
-        assert.notEqual(request.container.contextPath, projectPath);
-        assert.equal(
-          request.container.dockerfilePath,
-          path.join(request.container.contextPath, 'Dockerfile'),
-        );
-        assert.match(
-          request.container.sourceFingerprint,
-          /^sha256:[0-9a-f]{64}$/u,
-        );
-      }
-      assert.equal(
-        buildRequests[1].container.sourceFingerprint,
-        buildRequests[0].container.sourceFingerprint,
-      );
-      assert.equal(exporterCalls.length, 2);
-
-      const finalManifest = JSON.parse(await readFile(finalManifestPath, 'utf8'));
-      const templateManifest = JSON.parse(await readFile(
-        path.join(projectPath, MANIFEST_TEMPLATE_NAME),
-        'utf8',
-      ));
-      assert.equal(validateExternalServiceManifest(finalManifest).valid, true);
-      assert.equal(Object.hasOwn(templateManifest.artifact, 'digest'), false);
-      assert.equal(
-        finalManifest.artifact.digest,
-        JSON.parse(serializedOutput[0]).buildReceipt
-          .topManifestDescriptor.digest,
-      );
-
-      assert.equal(sqlCalls.length, 2);
-      assert.deepEqual(sqlCalls[1], sqlCalls[0]);
-      assert.equal(sqlCalls[0].statement, INSTALL_SQL);
-      assert.equal(sqlCalls[0].parameters.length, 1);
-      const payload = JSON.parse(sqlCalls[0].parameters[0]);
-      assert.deepEqual(payload, {
-        artifact_source: {
-          kind: 'local_oci_layout',
-          location: JSON.parse(serializedOutput[0]).buildReceipt.layoutPath,
-        },
-        idempotency_key: IDEMPOTENCY_KEY,
-        manifest: finalManifest,
-      });
-
-      assert.equal(serializedOutput.length, 2);
-      assert.equal(serializedOutput[1], serializedOutput[0]);
-      const output = JSON.parse(serializedOutput[0]);
-      assert.deepEqual(output.rows, [serverRow]);
-      assert.equal(output.finalManifestPath, finalManifestPath);
-      assert.equal(output.buildReceipt.platform, PLATFORM);
-      assert.equal(output.buildReceipt.sourceDateEpoch, SOURCE_DATE_EPOCH);
-
-      const ignoredReadmePath = path.join(projectPath, 'README.md');
-      await writeFile(ignoredReadmePath, 'ignored documentation change\n');
-      const ignoredArgv = argv.map((value) =>
-        value === IDEMPOTENCY_KEY ? `${IDEMPOTENCY_KEY}-ignored` : value);
-      assert.equal(
-        await runServiceLifecycleCommand(ignoredArgv, dependencies),
-        SUCCESS_EXIT_CODE,
-      );
-      assert.equal(
-        buildRequests[2].container.sourceFingerprint,
-        buildRequests[0].container.sourceFingerprint,
-      );
-
-      const originalServerSource = await readFile(
-        path.join(projectPath, 'src', 'server.js'),
-      );
-      await writeFile(
-        path.join(projectPath, 'src', 'server.js'),
-        Buffer.concat([originalServerSource, Buffer.from('\n// changed\n')]),
-      );
-      const changedArgv = argv.map((value) =>
-        value === IDEMPOTENCY_KEY ? `${IDEMPOTENCY_KEY}-changed` : value);
-      assert.equal(
-        await runServiceLifecycleCommand(changedArgv, dependencies),
-        SUCCESS_EXIT_CODE,
-      );
-      assert.notEqual(
-        buildRequests[3].container.sourceFingerprint,
-        buildRequests[0].container.sourceFingerprint,
-      );
-
-      const callsBeforeExistingOutputAttacks = {
-        build: buildRequests.length,
-        output: serializedOutput.length,
-        sql: sqlCalls.length,
-      };
-      const externalManifestTarget = path.join(root, 'external-manifest.json');
-      const hardLinkedManifestTarget = path.join(
-        root,
-        'hard-linked-manifest.json',
-      );
-      await writeFile(externalManifestTarget, '{}\n');
-      await writeFile(hardLinkedManifestTarget, firstFinalManifestBytes);
-      const existingOutputAttacks = [
-        async () => writeFile(finalManifestPath, '{"different":true}\n'),
-        async () => symlink(externalManifestTarget, finalManifestPath),
-        async () => link(hardLinkedManifestTarget, finalManifestPath),
-        async () => mkdir(finalManifestPath),
-      ];
-      for (const prepareAttack of existingOutputAttacks) {
-        await rm(finalManifestPath, {recursive: true, force: true});
-        await prepareAttack();
-        assert.equal(
-          await runServiceLifecycleCommand(argv, dependencies),
-          FAILURE_EXIT_CODE,
-        );
-        assert.equal(buildRequests.length, callsBeforeExistingOutputAttacks.build);
-        assert.equal(sqlCalls.length, callsBeforeExistingOutputAttacks.sql);
-        assert.equal(
-          serializedOutput.length,
-          callsBeforeExistingOutputAttacks.output,
-        );
-      }
-    });
+    assert.equal(serializedOutput.length, 1);
+    const output = JSON.parse(serializedOutput[0]);
+    assert.deepEqual(output.rows, [serverRow]);
+  });
 });

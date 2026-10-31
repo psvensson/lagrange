@@ -200,6 +200,8 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
   async invoke({
     name,
     argumentsJson,
+    bindingVersionId,
+    callerServiceId,
     securityContext,
     deadlineMs,
     batch,
@@ -239,6 +241,8 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
           );
         }
         const route = this._routeResolver.resolve({
+          bindingVersionId,
+          callerServiceId,
           hostNodeId,
           invocationId,
           name,

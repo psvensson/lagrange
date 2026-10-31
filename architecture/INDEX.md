@@ -34,10 +34,42 @@ of Raft's replicated state-machine execution. Cells are disposable execution
 instances, not per-service consensus groups. Durable service state belongs in
 ordinary replicated tables. See [Vocabulary](../docs/vocabulary.md).
 
-Do not conflate three mechanisms: distributed calls require leader-local input;
-ordinary SQL reads may select other eligible replicas; placement affinity
-changes where service instances live over time. The latter two do not replace
-the call path's locality requirement.
+Internal collaborators such as `replicaContext.queryExecutor` are engine-internal
+bridge interfaces connecting host drivers to the query runtime, not public application
+APIs. Application developers author services exclusively using the guest-safe authoring
+library ([JavaScript Service Reference](../docs/reference/javascript-service-reference.md)).
+
+### Three Locality Mechanisms
+
+Do not conflate the three distinct locality mechanisms:
+
+1. **Leader-local distributed calls**: For a distributed operation, `run()` executes
+   synchronously on the host holding the targeted partition's active leader replica,
+   evaluating directly against local storage with zero network row transfer.
+2. **Read-locality routing**: Fast, per-query read routing for ordinary SQL reads
+   (`service_definitions.read_locality`) that directs queries to an eligible local or
+   low-latency replica.
+3. **Placement affinity**: A slower, topology-level feedback loop where the Cell rebalancer
+   continuously migrates runtime service Cells toward hosts with high observed partition access.
+
+The latter two do not replace the distributed call path's leader-local execution requirement.
+
+### Formation Health and Diagnostic Status
+
+Cluster health and diagnostic status must be interpreted within the context of consensus
+quorum envelopes rather than raw node counts:
+
+- **Health Probes**: `/livez` verifies process liveness; `/startupz` checks bootstrap schema
+  and worker initialization; `/readyz` confirms quorum consensus readiness for queries.
+- **Write-Health States**:
+  - `healthy`: All partition Raft groups maintain active majorities and quorum reserve.
+  - `background_backlog_contained`: Non-critical background telemetry, heartbeat replication,
+    or CDC backlog is contained, while critical consensus writes proceed normally.
+  - `critical_write_unhealthy`: A required consensus quorum is lost or impaired; writes
+    fail closed rather than accepting uncommitted changes on an isolated partition.
+- **Interpreting Status**: In a three-voter group (RF = 3), a majority of two voters commits
+  writes. A single offline node preserves full quorum health; conversely, a raw node presence
+  ratio does not guarantee health if Raft leader elections are unresolved.
 
 ## Current architecture
 

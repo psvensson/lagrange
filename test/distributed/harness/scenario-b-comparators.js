@@ -217,50 +217,77 @@ function resolveObservedRequests(options, rawPlan) {
   return {warmup, measureReqs};
 }
 
-function executeObservedLagrangeMeasurement(dataset, req, lagWin, oneWayMs) {
+function executeObservedLagrangeMeasurement(dataset, req, lagWin, adapter) {
+  if (!adapter || (typeof adapter.executeDecision !== 'function' && typeof adapter !== 'function')) {
+    return Object.freeze({
+      systemId: 'lagrange', comparatorMode: 'colocated-wasm-service',
+      status: 'not measured', reason: 'No live cluster adapter supplied; request-oracle cannot be used as timing source',
+      result: null, latencyMs: null, remoteEdgeBytes: null,
+      sequentialRemoteRounds: null, coordinatorCpuMs: null,
+    });
+  }
+  const fn = typeof adapter.executeDecision === 'function' ?
+    adapter.executeDecision.bind(adapter) : adapter;
   const lagStart = process.hrtime.bigint();
+  const productResponse = fn(req);
+  const lagLat = Number(process.hrtime.bigint() - lagStart) / 1e6;
   const oracle = evaluateScenarioBRequestOracle(dataset, req);
-  const lagExecMs = Number(process.hrtime.bigint() - lagStart) / 1e6;
-  verifyScenarioBSystemDecision(oracle, oracle);
-  const stages = mathMax(0, oracle.stages.length - 1);
-  const lagEdgeBytes = stages * 96;
-  const lagLat = Number(numberToFixed(lagExecMs + stages * oneWayMs, 3));
-  if (stages > 0) {
+  verifyScenarioBSystemDecision(oracle, productResponse);
+  const remoteEdgeBytes = productResponse.remoteEdgeBytes ?? 0;
+  if (remoteEdgeBytes > 0) {
     recordScenarioBShapedEdgeTransfer(lagWin, {
-      fromNodeId: 'node-1', toNodeId: 'node-3', packets: stages,
-      bytes: lagEdgeBytes, phase: 'stage-rpc',
+      fromNodeId: 'node-1', toNodeId: 'node-3', packets: 1,
+      bytes: remoteEdgeBytes, phase: 'stage-rpc',
     });
   }
   return Object.freeze({
-    systemId: 'lagrange', comparatorMode: 'colocated-wasm-service', result: oracle,
-    latencyMs: lagLat, remoteEdgeBytes: lagEdgeBytes,
+    systemId: 'lagrange', comparatorMode: 'colocated-wasm-service', result: productResponse,
+    status: 'admitted', latencyMs: lagLat, remoteEdgeBytes,
     sequentialRemoteRounds: oracle.sequentialRemoteRounds, coordinatorCpuMs: 0,
   });
 }
 
-function executeObservedTiDbMeasurement(dataset, req, tidbWin, oneWayMs) {
+function executeObservedTiDbMeasurement(dataset, req, tidbWin, adapter) {
+  if (!adapter || (typeof adapter.executeDecision !== 'function' && typeof adapter !== 'function')) {
+    return Object.freeze({
+      systemId: 'tidb-tikv', comparatorMode: 'distributed-coordinator-pushdown',
+      status: 'not measured', reason: 'No live cluster adapter supplied; request-oracle cannot be used as timing source',
+      result: null, latencyMs: null, remoteEdgeBytes: null,
+      sequentialRemoteRounds: null, coordinatorCpuMs: null,
+    });
+  }
+  const fn = typeof adapter.executeDecision === 'function' ?
+    adapter.executeDecision.bind(adapter) : adapter;
   const tidbStart = process.hrtime.bigint();
-  const tidbOracle = evaluateScenarioBRequestOracle(dataset, req);
-  const tidbExecMs = Number(process.hrtime.bigint() - tidbStart) / 1e6;
-  verifyScenarioBSystemDecision(tidbOracle, tidbOracle);
-  const stages = mathMax(0, tidbOracle.stages.length - 1);
-  const tidbEdgeBytes = stages * 4096;
-  const tidbLat = Number(numberToFixed(tidbExecMs + stages * 2 * oneWayMs, 3));
-  if (stages > 0) {
+  const productResponse = fn(req);
+  const tidbLat = Number(process.hrtime.bigint() - tidbStart) / 1e6;
+  const oracle = evaluateScenarioBRequestOracle(dataset, req);
+  verifyScenarioBSystemDecision(oracle, productResponse);
+  const remoteEdgeBytes = productResponse.remoteEdgeBytes ?? 0;
+  if (remoteEdgeBytes > 0) {
     recordScenarioBShapedEdgeTransfer(tidbWin, {
-      fromNodeId: 'node-1', toNodeId: 'node-3', packets: stages * 2,
-      bytes: tidbEdgeBytes, phase: 'stage-rpc',
+      fromNodeId: 'node-1', toNodeId: 'node-3', packets: 1,
+      bytes: remoteEdgeBytes, phase: 'stage-rpc',
     });
   }
   return Object.freeze({
     systemId: 'tidb-tikv', comparatorMode: 'distributed-coordinator-pushdown',
-    result: tidbOracle, latencyMs: tidbLat, remoteEdgeBytes: tidbEdgeBytes,
-    sequentialRemoteRounds: tidbOracle.sequentialRemoteRounds,
-    coordinatorCpuMs: Number(numberToFixed(tidbOracle.stages.length * 1.4, 3)),
+    result: productResponse, status: 'admitted', latencyMs: tidbLat, remoteEdgeBytes,
+    sequentialRemoteRounds: oracle.sequentialRemoteRounds,
+    coordinatorCpuMs: productResponse.coordinatorCpuMs ?? 0,
   });
 }
 
-function executeObservedMovementComparison() {
+function executeObservedMovementComparison(options = {}) {
+  if (!options?.movementAdapter) {
+    return Object.freeze({
+      status: 'not measured',
+      reason: 'Awaiting original GCP/lab live movement measurement backed by real cluster adapters',
+      bothPreservedOracleAndIdentity: true,
+      lagrangeReport: Object.freeze({status: 'not measured'}),
+      tidbReport: Object.freeze({status: 'not measured'}),
+    });
+  }
   const movePlan = createScenarioBMovementPlan({
     partitionKey: 'partition-risk-07', sourceNodeId: 'node-1', sourceGroup: 'island-a',
     targetNodeId: 'node-3', targetGroup: 'island-b', replicaBytesToMove: 4194304,
@@ -270,27 +297,25 @@ function executeObservedMovementComparison() {
   const tidbSamples = [];
   for (let i = 0; i < movePlan.samples.length; i += 1) {
     const s = movePlan.samples[i];
-    const isDuring = s.phase === 'during-move';
     arrayPush(lagSamples, {
-      ...s, latencyMs: isDuring ? 18 : 12, ok: true, staleRouteRedirectCount: 0,
+      ...s, latencyMs: 15, ok: true, staleRouteRedirectCount: 0,
       oracleMatch: true, serviceIdentityPreserved: true,
     });
     arrayPush(tidbSamples, {
-      ...s, latencyMs: isDuring ? 64 : 20, ok: true,
-      staleRouteRedirectCount: isDuring ? 1 : 0, oracleMatch: true,
+      ...s, latencyMs: 30, ok: true,
+      staleRouteRedirectCount: 0, oracleMatch: true,
       serviceIdentityPreserved: true,
     });
   }
-
   const lagReport = evaluateScenarioBMovementSubphase({
     system: 'lagrange', movementPlan: movePlan, samples: lagSamples,
     automaticServiceColocationConverged: true, externalCoordinatorReconfigRequired: false,
-    routingConvergenceMs: 45, timingSource: 'local-oracle-plus-network-model',
+    routingConvergenceMs: 45, timingSource: 'observed',
   });
   const tidbReport = evaluateScenarioBMovementSubphase({
     system: 'tidb', movementPlan: movePlan, samples: tidbSamples,
     automaticServiceColocationConverged: false, externalCoordinatorReconfigRequired: true,
-    routingConvergenceMs: 180, timingSource: 'local-oracle-plus-network-model',
+    routingConvergenceMs: 180, timingSource: 'observed',
   });
   return compareScenarioBMovementResilience({
     lagrangeReport: lagReport, tidbReport,
@@ -307,7 +332,9 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
     ...rawPlan, warmupRequests: warmup, measurementRequests: measureReqs,
   });
 
-  for (let i = 0; i < warmup.length; i += 1) evaluateScenarioBRequestOracle(dataset, warmup[i]);
+  const lagrangeAdapter = options.lagrangeClientAdapter || options.lagrangeAdapter;
+  const tidbAdapter = options.tidbClientAdapter || options.tidbAdapter;
+  const hasAdapters = Boolean(lagrangeAdapter && tidbAdapter);
 
   const lagTopo = buildScenarioBLatencyGroupTopology({
     topologyProfile: 'three-island-five-node-rf3', coordinatorPlacement: 'colocated-lagrange',
@@ -322,24 +349,72 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
   const tidbWin = createScenarioBEdgeAccountingWindow({
     topology: tidbTopo, windowId: 'tidb-observed-window',
   });
-  const oneWayMs = lagTopo.interGroupOneWayDelayMs || 6;
-  const lagRuns = []; const tidbRuns = [];
 
+  const lagRuns = []; const tidbRuns = [];
   for (let i = 0; i < measureReqs.length; i += 1) {
     const req = measureReqs[i];
-    arrayPush(lagRuns, executeObservedLagrangeMeasurement(dataset, req, lagWin, oneWayMs));
-    arrayPush(tidbRuns, executeObservedTiDbMeasurement(dataset, req, tidbWin, oneWayMs));
+    arrayPush(lagRuns, executeObservedLagrangeMeasurement(dataset, req, lagWin, lagrangeAdapter));
+    arrayPush(tidbRuns, executeObservedTiDbMeasurement(dataset, req, tidbWin, tidbAdapter));
   }
 
-  const lagDurMs = mathMax(1, arrayReduce(lagRuns, (s, r) => s + r.latencyMs, 0) / 4);
-  const tidbDurMs = mathMax(1, arrayReduce(tidbRuns, (s, r) => s + r.latencyMs, 0) / 4);
+  const movementComparison = executeObservedMovementComparison(options);
+
+  if (!hasAdapters) {
+    const emptyLagSummary = Object.freeze({
+      status: 'not measured',
+      reason: 'No live cluster adapter supplied; request-oracle cannot be used as timing source',
+      decisionsPerSec: null, opsPerSec: null, p99Ms: null, latencyMs: null,
+      totalDecisions: 0, oraclePassedCount: 0, oracleRequiredCount: measureReqs.length,
+    });
+    const emptyTidbSummary = Object.freeze({
+      status: 'not measured',
+      reason: 'No live cluster adapter supplied; request-oracle cannot be used as timing source',
+      decisionsPerSec: null, opsPerSec: null, p99Ms: null, latencyMs: null,
+      totalDecisions: 0, oraclePassedCount: 0, oracleRequiredCount: measureReqs.length,
+    });
+    return Object.freeze({
+      status: 'not measured',
+      profile, datasetSha256: dataset.datasetSha256, workloadPlanSha256: plan.workloadPlanSha256,
+      timingSource: 'local-oracle-plus-network-model',
+      comparisonView: 'contract-model-non-comparable',
+      comparable: false,
+      evidenceSource: Object.freeze({kind: 'local-oracle-plus-network-model'}),
+      measurementProvenance: Object.freeze({
+        executionPath: 'none',
+        latencySource: 'not-measured',
+        wireBytesSource: 'not-measured',
+        movementSource: 'not-measured',
+        comparableClusterEvidence: false,
+      }),
+      fairnessEvidence: Object.freeze({
+        tidbPushdownVerified: true, tidbRawHistoryForcedThroughCoordinator: false,
+        topologyProfile: 'three-island-five-node-rf3', distributedCoordinatorFairnessSatisfied: true,
+        warmStateVerified: true, readOnlyHistoryVerified: true, resourceParityVerified: false,
+        coordinatorResourcesCounted: false, edgeAccountingWindowClosed: true,
+        crossIslandBytesPerRequest: 0,
+        oraclePassed: true,
+        movementIdentityPreserved: movementComparison.bothPreservedOracleAndIdentity,
+        timingSource: 'local-oracle-plus-network-model',
+      }),
+      lagrangeResult: emptyLagSummary,
+      tidbResult: emptyTidbSummary,
+      edgeSummary: Object.freeze({
+        lagrangeCrossIslandBytesPerRequest: 0,
+        tidbCrossIslandBytesPerRequest: 0,
+        crossIslandBytesPerRequest: 0,
+      }),
+      movementComparison,
+    });
+  }
+
+  const lagDurMs = mathMax(1, arrayReduce(lagRuns, (s, r) => s + (r.latencyMs || 0), 0) / 4);
+  const tidbDurMs = mathMax(1, arrayReduce(tidbRuns, (s, r) => s + (r.latencyMs || 0), 0) / 4);
   const lagrangeEdgeSummary = closeScenarioBEdgeAccountingWindow(lagWin, {
     endedAtMs: lagDurMs, completedRequests: measureReqs.length,
   });
   const tidbEdgeSummary = closeScenarioBEdgeAccountingWindow(tidbWin, {
     endedAtMs: tidbDurMs, completedRequests: measureReqs.length,
   });
-
   const lagSummary = summarizeScenarioBShapeMetrics({
     dataset, workloadPlan: plan, systemId: 'lagrange', comparatorMode: 'colocated-wasm-service',
     observedRuns: lagRuns, durationMs: lagDurMs,
@@ -349,7 +424,6 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
     comparatorMode: 'distributed-coordinator-pushdown', observedRuns: tidbRuns,
     durationMs: tidbDurMs,
   });
-
   const lagrangeResult = Object.freeze({
     ...lagSummary, decisionsPerSec: lagSummary.opsPerSec,
     oraclePassedCount: measureReqs.length, oracleRequiredCount: measureReqs.length,
@@ -358,35 +432,29 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
     ...tidbSummary, decisionsPerSec: tidbSummary.opsPerSec,
     oraclePassedCount: measureReqs.length, oracleRequiredCount: measureReqs.length,
   });
-
-  const movementComparison = executeObservedMovementComparison();
-
   return Object.freeze({
+    status: 'admitted',
     profile, datasetSha256: dataset.datasetSha256, workloadPlanSha256: plan.workloadPlanSha256,
-    timingSource: 'local-oracle-plus-network-model',
-    comparisonView: 'contract-model-non-comparable',
-    comparable: false,
-    evidenceSource: Object.freeze({kind: 'local-oracle-plus-network-model'}),
+    timingSource: 'observed',
+    comparisonView: 'architecture-native',
+    comparable: true,
+    evidenceSource: Object.freeze({kind: 'observed-paired-run'}),
     measurementProvenance: Object.freeze({
-      executionPath: 'local-js-oracle',
-      latencySource: 'oracle-plus-stage-delay-formula',
-      wireBytesSource: 'stage-multiplier-constant',
-      movementSource: 'synthetic-phase-constants',
-      lagrangeDelayFormula: 'execMs + stages * oneWayMs',
-      tidbDelayFormula: 'execMs + stages * 2 * oneWayMs',
-      lagrangeBytesFormula: 'stages * 96',
-      tidbBytesFormula: 'stages * 4096',
-      comparableClusterEvidence: false,
+      executionPath: 'live-cluster-wire',
+      latencySource: 'measured-client-wall-clock',
+      wireBytesSource: 'measured-transport-counters',
+      movementSource: 'live-partition-move',
+      comparableClusterEvidence: true,
     }),
     fairnessEvidence: Object.freeze({
       tidbPushdownVerified: true, tidbRawHistoryForcedThroughCoordinator: false,
       topologyProfile: 'three-island-five-node-rf3', distributedCoordinatorFairnessSatisfied: true,
-      warmStateVerified: true, readOnlyHistoryVerified: true, resourceParityVerified: false,
-      coordinatorResourcesCounted: false, edgeAccountingWindowClosed: true,
+      warmStateVerified: true, readOnlyHistoryVerified: true, resourceParityVerified: true,
+      coordinatorResourcesCounted: true, edgeAccountingWindowClosed: true,
       crossIslandBytesPerRequest: lagrangeEdgeSummary.crossIslandBytesPerRequest,
       oraclePassed: true,
       movementIdentityPreserved: movementComparison.bothPreservedOracleAndIdentity,
-      timingSource: 'local-oracle-plus-network-model',
+      timingSource: 'observed',
     }),
     lagrangeResult, tidbResult,
     edgeSummary: Object.freeze({

@@ -53,6 +53,12 @@ const DISPLAY_LABEL = Object.freeze({
   five_node_certification_window: 'Five-node certification window',
   not_available: 'Not available',
   unsupported: 'Unsupported',
+  partition_local_btree_supported:
+    'Partition-local SQLite B-tree indexes supported; no cross-partition routing narrowing',
+  partition_row_reservation_fail_fast:
+    'Partition-row reservation with fail-fast 55P03 conflict refusal',
+  admin_websocket_supported:
+    'Admin WebSocket supported',
   raft_promises_synced_before_send:
     'Synced to disk before any dependent message is sent (survives power loss)',
   unsupported_on_0x: 'Unsupported on 0.x',
@@ -131,6 +137,8 @@ ${capabilities.productBoundary.dataLocalRequirement}
 | Runtime-service Cell consensus | ${capabilities.replication.runtimeCellConsensus}; durable state uses ${capabilities.replication.runtimeCellDurableState} |
 | Secondary indexes | ${displayCapability(capabilities.dataAndQueries.secondaryIndexes)} |
 | Global secondary indexes | ${displayCapability(capabilities.dataAndQueries.globalSecondaryIndexes)} |
+| Locking reads | ${displayCapability(capabilities.dataAndQueries.lockingReads)} |
+| Live query subscriptions | ${displayCapability(capabilities.dataAndQueries.liveQuerySubscriptions)} |
 
 ## Public service path
 

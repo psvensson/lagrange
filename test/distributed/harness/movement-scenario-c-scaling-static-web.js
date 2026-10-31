@@ -45,38 +45,43 @@ function getExperiment(matrix) {
 
 function renderSvgItem(x, y, [l1, l2], metric, valW, color, sub) {
   const dash = ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"';
+  const fillBar = valW > 0 ?
+    `\n    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"${dash}/>` : '';
   return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${l1}</text>
     <text x="${x}" y="${y + 11}" fill="#94a3b8" font-size="10" font-family="monospace">${l2}</text>
     <text x="${x}" y="${y + 22}" fill="#cbd5e1" font-size="10">${escapeXml(metric)}</text>
-    <rect x="${x}" y="${y + 26}" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"${dash}/>
+    <rect x="${x}" y="${y + 26}" width="250" height="7" fill="#334155" rx="2"/>${fillBar}
     <text x="${x}" y="${y + 43}" fill="#64748b" font-size="9">${escapeXml(sub)}</text>`;
 }
 
 function renderSvgPanels(exp) {
   const f = formatNum;
   const r1 = arrayJoin(arrayMap(exp.liveMovementPhases, (m, i) => {
-    const w = Math.max(4, Math.min(250, Math.round(((m.duringMoveP99Ms || 0) / 100) * 250)));
+    const w = (typeof m.duringMoveP99Ms === 'number') ?
+      Math.max(4, Math.min(250, Math.round((m.duringMoveP99Ms / 100) * 250))) : 0;
     const sub = `Convergence: ${f(m.routingConvergenceMs, 0)}ms | Stall: ${f(m.writeStallMs, 0)}ms`;
+    const label = (typeof m.duringMoveP99Ms === 'number') ?
+      `During: ${f(m.duringMoveP99Ms, 1)}ms (Pre: ${f(m.preMoveP99Ms, 1)}ms)` : '[not measured]';
     return renderSvgItem(45, 132 + i * 72, TARGET_LABELS[m.targetId] || [m.label, ''],
-      `During: ${f(m.duringMoveP99Ms, 1)}ms (Pre: ${f(m.preMoveP99Ms, 1)}ms)`, w,
-      TARGET_COLORS[m.targetId] || '#94a3b8', sub);
+      label, w, TARGET_COLORS[m.targetId] || '#94a3b8', sub);
   }), '\n');
   const r2 = arrayJoin(arrayMap(exp.scenarioCJointScaling, (s, i) => {
-    const w = Math.max(s.scale5xFresh0msDecPerSec > 0 ? 4 : 0,
-      Math.min(250, Math.round(((s.scale5xFresh0msDecPerSec || 0) / 2200) * 250)));
+    const w = (typeof s.scale5xFresh0msDecPerSec === 'number' && s.scale5xFresh0msDecPerSec > 0) ?
+      Math.max(4, Math.min(250, Math.round((s.scale5xFresh0msDecPerSec / 2200) * 250))) : 0;
     const sub = `1x: ${f(s.scale1xFresh0msDecPerSec, 0)} dec/s | Stale: ${f(s.staleDecisionRatePct, 2)}%`;
+    const label = (typeof s.scale5xFresh0msDecPerSec === 'number') ?
+      `0ms: ${f(s.scale5xFresh0msDecPerSec, 0)} | 1k: ${f(s.scale5xFresh1000msDecPerSec, 0)} dec/s` : '[not measured]';
     return renderSvgItem(355, 132 + i * 72, TARGET_LABELS[s.targetId] || [s.label, ''],
-      `0ms: ${f(s.scale5xFresh0msDecPerSec, 0)} | 1k: ${f(s.scale5xFresh1000msDecPerSec, 0)} dec/s`, w,
-      TARGET_COLORS[s.targetId] || '#94a3b8', sub);
+      label, w, TARGET_COLORS[s.targetId] || '#94a3b8', sub);
   }), '\n');
   const r3 = arrayJoin(arrayMap(exp.scenarioCJointScaling, (s, i) => {
-    const w = Math.max(s.ruleChangeBackfillSec > 0 ? 4 : 0,
-      Math.min(250, Math.round(((s.ruleChangeBackfillSec || 0) / 900) * 250)));
+    const w = (typeof s.ruleChangeBackfillSec === 'number' && s.ruleChangeBackfillSec > 0) ?
+      Math.max(4, Math.min(250, Math.round((s.ruleChangeBackfillSec / 900) * 250))) : 0;
     const sub = `Pipelines: ${s.operationalPipelines} | Stale: ${f(s.staleDecisionRatePct, 2)}%`;
+    const label = (typeof s.ruleChangeBackfillSec === 'number') ?
+      `Backfill: ${f(s.ruleChangeBackfillSec, 0)}s | Rec: ${f(s.cacheRestartRecoverySec, 1)}s` : '[not measured]';
     return renderSvgItem(665, 132 + i * 72, TARGET_LABELS[s.targetId] || [s.label, ''],
-      `Backfill: ${f(s.ruleChangeBackfillSec, 0)}s | Rec: ${f(s.cacheRestartRecoverySec, 1)}s`, w,
-      TARGET_COLORS[s.targetId] || '#94a3b8', sub);
+      label, w, TARGET_COLORS[s.targetId] || '#94a3b8', sub);
   }), '\n');
   return `${r1}\n${r2}\n${r3}`;
 }
@@ -111,27 +116,45 @@ ${renderSvgPanels(exp)}
 
 function renderTables(exp) {
   const f = formatNum;
-  const mdMv = arrayJoin(arrayMap(exp.liveMovementPhases, (m) =>
-    `| ${m.label} | ${f(m.preMoveP99Ms, 2)} | ${f(m.duringMoveP99Ms, 1)} | ` +
-    `${f(m.postMoveP99Ms, 1)} | ${f(m.routingConvergenceMs, 1)} | ${f(m.writeStallMs, 1)} | ` +
-    `${m.zeroLossIdentityVerified ? 'Yes' : 'No'} | ${m.evidenceTier} |`), '\n');
-  const htMv = arrayJoin(arrayMap(exp.liveMovementPhases, (m) =>
-    `<tr><td><strong>${escapeXml(m.label)}</strong></td><td>${f(m.preMoveP99Ms, 2)}</td>` +
-    `<td>${f(m.duringMoveP99Ms, 1)}</td><td>${f(m.postMoveP99Ms, 1)}</td>` +
-    `<td>${f(m.routingConvergenceMs, 1)}</td><td>${f(m.writeStallMs, 1)}</td>` +
-    `<td>${m.zeroLossIdentityVerified ? 'Yes' : 'No'}</td><td>${escapeXml(m.evidenceTier)}</td></tr>`), '\n');
+  const mdMv = arrayJoin(arrayMap(exp.liveMovementPhases, (m) => {
+    const verified = m.zeroLossIdentityVerified !== null ? (m.zeroLossIdentityVerified ? 'Yes' : 'No') : '[not measured]';
+    return `| ${m.label} | ${f(m.preMoveP99Ms, 2)} | ${f(m.duringMoveP99Ms, 1)} | ` +
+      `${f(m.postMoveP99Ms, 1)} | ${f(m.routingConvergenceMs, 1)} | ${f(m.writeStallMs, 1)} | ` +
+      `${verified} | ${m.evidenceTier} |`;
+  }), '\n');
+  const htMv = arrayJoin(arrayMap(exp.liveMovementPhases, (m) => {
+    const pre = m.preMoveP99Ms !== null ? f(m.preMoveP99Ms, 2) : '<span class="badge">not measured</span>';
+    const dur = m.duringMoveP99Ms !== null ? f(m.duringMoveP99Ms, 1) : '<span class="badge">not measured</span>';
+    const post = m.postMoveP99Ms !== null ? f(m.postMoveP99Ms, 1) : '<span class="badge">not measured</span>';
+    const conv = m.routingConvergenceMs !== null ? f(m.routingConvergenceMs, 1) : '<span class="badge">not measured</span>';
+    const stall = m.writeStallMs !== null ? f(m.writeStallMs, 1) : '<span class="badge">not measured</span>';
+    const verified = m.zeroLossIdentityVerified !== null ? (m.zeroLossIdentityVerified ? 'Yes' : 'No') : '<span class="badge">not measured</span>';
+    return `<tr><td><strong>${escapeXml(m.label)}</strong></td><td>${pre}</td>` +
+      `<td>${dur}</td><td>${post}</td>` +
+      `<td>${conv}</td><td>${stall}</td>` +
+      `<td>${verified}</td><td>${escapeXml(m.evidenceTier)}</td></tr>`;
+  }), '\n');
 
-  const mdSc = arrayJoin(arrayMap(exp.scenarioCJointScaling, (s) =>
-    `| ${s.label} | ${f(s.scale1xFresh0msDecPerSec, 1)} | ${f(s.scale5xFresh0msDecPerSec, 1)} | ` +
-    `${f(s.scale5xFresh1000msDecPerSec, 1)} | ${f(s.staleDecisionRatePct, 2)}% | ` +
-    `${f(s.ruleChangeBackfillSec, 1)} | ${f(s.cacheRestartRecoverySec, 1)} | ${s.operationalPipelines} | ` +
-    `${s.evidenceTier} |`), '\n');
-  const htSc = arrayJoin(arrayMap(exp.scenarioCJointScaling, (s) =>
-    `<tr><td><strong>${escapeXml(s.label)}</strong></td><td>${f(s.scale1xFresh0msDecPerSec, 1)}</td>` +
-    `<td>${f(s.scale5xFresh0msDecPerSec, 1)}</td><td>${f(s.scale5xFresh1000msDecPerSec, 1)}</td>` +
-    `<td>${f(s.staleDecisionRatePct, 2)}%</td><td>${f(s.ruleChangeBackfillSec, 1)}</td>` +
-    `<td>${f(s.cacheRestartRecoverySec, 1)}</td><td>${s.operationalPipelines}</td>` +
-    `<td>${escapeXml(s.evidenceTier)}</td></tr>`), '\n');
+  const mdSc = arrayJoin(arrayMap(exp.scenarioCJointScaling, (s) => {
+    const stale = s.staleDecisionRatePct !== null ? `${f(s.staleDecisionRatePct, 2)}%` : '[not measured]';
+    return `| ${s.label} | ${f(s.scale1xFresh0msDecPerSec, 1)} | ${f(s.scale5xFresh0msDecPerSec, 1)} | ` +
+      `${f(s.scale5xFresh1000msDecPerSec, 1)} | ${stale} | ` +
+      `${f(s.ruleChangeBackfillSec, 1)} | ${f(s.cacheRestartRecoverySec, 1)} | ${s.operationalPipelines} | ` +
+      `${s.evidenceTier} |`;
+  }), '\n');
+  const htSc = arrayJoin(arrayMap(exp.scenarioCJointScaling, (s) => {
+    const s1x = s.scale1xFresh0msDecPerSec !== null ? f(s.scale1xFresh0msDecPerSec, 1) : '<span class="badge">not measured</span>';
+    const s5x0 = s.scale5xFresh0msDecPerSec !== null ? f(s.scale5xFresh0msDecPerSec, 1) : '<span class="badge">not measured</span>';
+    const s5x1k = s.scale5xFresh1000msDecPerSec !== null ? f(s.scale5xFresh1000msDecPerSec, 1) : '<span class="badge">not measured</span>';
+    const stale = s.staleDecisionRatePct !== null ? `${f(s.staleDecisionRatePct, 2)}%` : '<span class="badge">not measured</span>';
+    const backfill = s.ruleChangeBackfillSec !== null ? f(s.ruleChangeBackfillSec, 1) : '<span class="badge">not measured</span>';
+    const rec = s.cacheRestartRecoverySec !== null ? f(s.cacheRestartRecoverySec, 1) : '<span class="badge">not measured</span>';
+    return `<tr><td><strong>${escapeXml(s.label)}</strong></td><td>${s1x}</td>` +
+      `<td>${s5x0}</td><td>${s5x1k}</td>` +
+      `<td>${stale}</td><td>${backfill}</td>` +
+      `<td>${rec}</td><td>${s.operationalPipelines}</td>` +
+      `<td>${escapeXml(s.evidenceTier)}</td></tr>`;
+  }), '\n');
 
   const mdOb = arrayJoin(arrayMap(exp.operatingBoundaryMap, (b) =>
     `| ${b.regimeId} | ${b.workloadDescription} | ${b.winningSystem} | ${b.architecturalReason} |`), '\n');
@@ -143,22 +166,17 @@ function renderTables(exp) {
 }
 
 const DESC_MV = 'Evaluating partition movement under steady background load demonstrates ' +
-  'the impact of dynamic rebalancing on tail latency. Lagrange achieves zero-stall ' +
-  'partition handoffs with epoch forwarding, holding during-move p99 latency to 26.4 ms ' +
-  'with 45 ms routing convergence. Multi-node distributed SQL databases experience ' +
-  'significant latency spikes (up to 92.4 ms for TiDB and 84.0 ms for Citus) and write ' +
-  'stalls ranging from 14 ms to 65 ms during range split and migration.';
+  'the impact of dynamic rebalancing on tail latency, write stalls, and routing convergence. ' +
+  'Modeled pause times have been withdrawn; empirical movement measurements require original ' +
+  'GCP or lab execution receipts under verifiable cluster telemetry.';
 
 const DESC_SC = 'Scaling Scenario C workloads 5x across simultaneous ingestion, active entities, ' +
-  'and decision evaluation tests state freshness guarantees. Under a 0 ms freshness SLA, ' +
-  'Lagrange scales linearly from 441.2 to 1840.0 decisions/sec with zero stale decisions and ' +
-  '0 s rule-change backfill. Redis/Valkey cache-aside systems achieve high throughput only ' +
-  'by relaxing freshness (tolerating 1.85% to 11.4% stale reads) while incurring 640 s to ' +
-  '820 s rule-change backfill penalties.';
+  'and decision evaluation tests state freshness guarantees and recovery pipelines. ' +
+  'Published comparative scaling and backfill numbers require admitted GCP or lab execution receipts ' +
+  'with end-to-end receipt digests.';
 
-const DESC_OB = 'No single distributed data architecture dominates across all workloads. The ' +
-  'operating-boundary map delineates where each architecture maintains fundamental ' +
-  'structural advantages based on consensus scope, colocation, and staleness tolerance.';
+const DESC_OB = 'The operating-boundary map delineates architectural trade-offs across candidate systems. ' +
+  'Rigorous competitive performance claims require admitted GCP or lab benchmark measurements.';
 
 const NAV_MD = '- Navigation: [Comparative Benchmarks Landing Page](README.md) | ' +
   '[Lagrange Metrics Evolution Over Time](lagrange-metrics-evolution.md) | ' +

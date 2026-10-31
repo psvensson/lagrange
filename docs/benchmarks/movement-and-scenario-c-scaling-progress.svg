@@ -19,92 +19,77 @@
   <text x="665" y="114" fill="#94a3b8" font-size="10">Cold cache restart recovery &amp; backfill delay</text>
     <text x="45" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="45" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="45" y="154" fill="#cbd5e1" font-size="10">During: 26.4ms (Pre: 18.1ms)</text>
+    <text x="45" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="158" width="66" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="175" fill="#64748b" font-size="9">Convergence: 45ms | Stall: 0ms</text>
+    <text x="45" y="175" fill="#64748b" font-size="9">Convergence: [not measured]ms | Stall: [not measured]ms</text>
     <text x="45" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="45" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Colocated Compute (RF=3)</text>
-    <text x="45" y="226" fill="#cbd5e1" font-size="10">During: 38.6ms (Pre: 20.1ms)</text>
+    <text x="45" y="226" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="230" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="230" width="97" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="247" fill="#64748b" font-size="9">Convergence: 120ms | Stall: 14ms</text>
+    <text x="45" y="247" fill="#64748b" font-size="9">Convergence: [not measured]ms | Stall: [not measured]ms</text>
     <text x="45" y="276" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
     <text x="45" y="287" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
-    <text x="45" y="298" fill="#cbd5e1" font-size="10">During: 84.0ms (Pre: 22.9ms)</text>
+    <text x="45" y="298" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="302" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="302" width="210" height="7" fill="#ec4899" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="319" fill="#64748b" font-size="9">Convergence: 380ms | Stall: 65ms</text>
+    <text x="45" y="319" fill="#64748b" font-size="9">Convergence: [not measured]ms | Stall: [not measured]ms</text>
     <text x="45" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="45" y="359" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
-    <text x="45" y="370" fill="#cbd5e1" font-size="10">During: 62.0ms (Pre: 28.4ms)</text>
+    <text x="45" y="370" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="374" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="374" width="155" height="7" fill="#8b5cf6" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="391" fill="#64748b" font-size="9">Convergence: 240ms | Stall: 28ms</text>
+    <text x="45" y="391" fill="#64748b" font-size="9">Convergence: [not measured]ms | Stall: [not measured]ms</text>
     <text x="45" y="420" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="45" y="431" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="45" y="442" fill="#cbd5e1" font-size="10">During: 92.4ms (Pre: 36.1ms)</text>
+    <text x="45" y="442" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="446" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="446" width="231" height="7" fill="#0284c7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="463" fill="#64748b" font-size="9">Convergence: 310ms | Stall: 35ms</text>
+    <text x="45" y="463" fill="#64748b" font-size="9">Convergence: [not measured]ms | Stall: [not measured]ms</text>
     <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="355" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="355" y="154" fill="#cbd5e1" font-size="10">0ms: 1840 | 1k: 1840 dec/s</text>
+    <text x="355" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="158" width="209" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="175" fill="#64748b" font-size="9">1x: 441 dec/s | Stale: 0.00%</text>
+    <text x="355" y="175" fill="#64748b" font-size="9">1x: [not measured] dec/s | Stale: [not measured]%</text>
     <text x="355" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="355" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Colocated Compute (RF=3)</text>
-    <text x="355" y="226" fill="#cbd5e1" font-size="10">0ms: 1590 | 1k: 1590 dec/s</text>
+    <text x="355" y="226" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="230" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="230" width="181" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="247" fill="#64748b" font-size="9">1x: 409 dec/s | Stale: 0.00%</text>
+    <text x="355" y="247" fill="#64748b" font-size="9">1x: [not measured] dec/s | Stale: [not measured]%</text>
     <text x="355" y="276" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="355" y="287" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="355" y="298" fill="#cbd5e1" font-size="10">0ms: 480 | 1k: 480 dec/s</text>
+    <text x="355" y="298" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="302" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="302" width="55" height="7" fill="#f59e0b" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="319" fill="#64748b" font-size="9">1x: 317 dec/s | Stale: 0.00%</text>
+    <text x="355" y="319" fill="#64748b" font-size="9">1x: [not measured] dec/s | Stale: [not measured]%</text>
     <text x="355" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8</text>
     <text x="355" y="359" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (RF=3)</text>
-    <text x="355" y="370" fill="#cbd5e1" font-size="10">0ms: 890 | 1k: 1620 dec/s</text>
+    <text x="355" y="370" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="374" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="374" width="101" height="7" fill="#10b981" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="391" fill="#64748b" font-size="9">1x: 310 dec/s | Stale: 1.85%</text>
+    <text x="355" y="391" fill="#64748b" font-size="9">1x: [not measured] dec/s | Stale: [not measured]%</text>
     <text x="355" y="420" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8</text>
     <text x="355" y="431" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (RF=3)</text>
-    <text x="355" y="442" fill="#cbd5e1" font-size="10">0ms: 0 | 1k: 2180 dec/s</text>
+    <text x="355" y="442" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="446" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="446" width="0" height="7" fill="#a855f7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="463" fill="#64748b" font-size="9">1x: 0 dec/s | Stale: 11.40%</text>
+    <text x="355" y="463" fill="#64748b" font-size="9">1x: [not measured] dec/s | Stale: [not measured]%</text>
     <text x="665" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="665" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="665" y="154" fill="#cbd5e1" font-size="10">Backfill: 0s | Rec: 3.2s</text>
+    <text x="665" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="158" width="0" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="175" fill="#64748b" font-size="9">Pipelines: 1 | Stale: 0.00%</text>
+    <text x="665" y="175" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
     <text x="665" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="665" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Colocated Compute (RF=3)</text>
-    <text x="665" y="226" fill="#cbd5e1" font-size="10">Backfill: 28s | Rec: 14.5s</text>
+    <text x="665" y="226" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="230" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="230" width="8" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="247" fill="#64748b" font-size="9">Pipelines: 2 | Stale: 0.00%</text>
+    <text x="665" y="247" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
     <text x="665" y="276" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="665" y="287" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="665" y="298" fill="#cbd5e1" font-size="10">Backfill: 0s | Rec: 8.5s</text>
+    <text x="665" y="298" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="302" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="302" width="0" height="7" fill="#f59e0b" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="319" fill="#64748b" font-size="9">Pipelines: 1 | Stale: 0.00%</text>
+    <text x="665" y="319" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
     <text x="665" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8</text>
     <text x="665" y="359" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (RF=3)</text>
-    <text x="665" y="370" fill="#cbd5e1" font-size="10">Backfill: 640s | Rec: 118.0s</text>
+    <text x="665" y="370" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="374" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="374" width="178" height="7" fill="#10b981" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="391" fill="#64748b" font-size="9">Pipelines: 3 | Stale: 1.85%</text>
+    <text x="665" y="391" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
     <text x="665" y="420" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8</text>
     <text x="665" y="431" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (RF=3)</text>
-    <text x="665" y="442" fill="#cbd5e1" font-size="10">Backfill: 820s | Rec: 165.0s</text>
+    <text x="665" y="442" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="446" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="446" width="228" height="7" fill="#a855f7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="463" fill="#64748b" font-size="9">Pipelines: 4 | Stale: 11.40%</text>
+    <text x="665" y="463" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
 </svg>

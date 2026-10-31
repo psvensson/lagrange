@@ -24,11 +24,17 @@
  * external-service-manifest validator before writing it back.
  */
 
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
 import {RUNTIME_KIND} from '../constants/runtime.js';
+import {
+  canonicalJson,
+  deriveTenantPackageId,
+  sha256Json,
+} from '../control-plane/owners/service-install-catalog-contract.js';
 import {
   validateExternalServiceManifest,
 } from '../service/external-service-manifest.js';
@@ -57,9 +63,11 @@ const SERVICE_PIPELINE_STAGE = Object.freeze({
   COMPONENTIZE: 'componentize',
   DEPLOY: 'deploy',
   GENERATE: 'generate',
+  INSPECT: 'inspect',
   NORMALIZE: 'normalize',
   RECORDS: 'records',
 });
+const ACTIVE_STATE = 'active';
 
 const SERVICE_PIPELINE_COMMAND_ERROR_CODE = Object.freeze({
   BUILD_FAILED: 'BUILD_FAILED',
@@ -91,6 +99,7 @@ const BINDINGS_FILE = 'bindings.json';
 const ACCESS_POLICY_FILE = 'access-policy.json';
 const DEPLOYMENT_SUBDIRECTORY = 'deployment';
 const JSON_INDENT = 2;
+const JSON_EXTENSION = '.json';
 const TEXT_ENCODING = 'utf8';
 
 // The grammar statements deploy replays; the payloads are the generated
@@ -102,7 +111,6 @@ const DEPLOY_SQL = Object.freeze({
   CREATE_BINDING: 'CREATE BINDING $1',
   INSTALL: 'INSTALL SERVICE $1',
 });
-const LOCAL_OCI_ARTIFACT_SOURCE_KIND = 'local_oci_layout';
 const EMPTY_POLICY_TABLES = Object.freeze([]);
 const EMPTY_POLICY_CALLS = Object.freeze([]);
 const ACCESS_POLICY_SCHEMA_VERSION = 2;
@@ -119,8 +127,13 @@ const SERVICE_PIPELINE_MESSAGE = Object.freeze({
     'componentize failed (run `lagrange service generate` first): ',
   DEPLOY_BUILD_REQUIRED:
     'deploy requires a built service artifact (run `lagrange service build` first)',
+  DEPLOY_REGISTRATION_REQUIRED:
+    'deploy requires registered immutable identities (run `lagrange service publish` first or provide registration)',
   IDEMPOTENCY_KEY_REQUIRED: '--idempotency-key is required',
+  INSPECT_SERVICE_NAME_REQUIRED: 'service name is required for inspect',
   NO_PACKAGE_ID: 'INSTALL SERVICE returned no package_id row',
+  PUBLISH_BUILD_REQUIRED:
+    'publish requires a built service artifact (run `lagrange service build` first)',
 });
 
 class ServicePipelineError extends Error {
@@ -213,15 +226,17 @@ async function runGenerate({projectDirectory, writeOutput}) {
       SERVICE_PIPELINE_STAGE.GENERATE,
       `typings emission failed: ${error.message}`, error);
   });
-  await writeOutput(JSON.stringify({
-    bindings: result.records.bindings.map((binding) => binding.name),
-    entry: entry.outputPath,
-    handlers: ir.handlers.map((handler) => handler.id),
-    operations: ir.operations.map((operation) => operation.id),
-    service: ir.name,
-    typings: typings.outputPath,
-    written: [entry.outputPath, typings.outputPath, ...written],
-  }));
+  if (typeof writeOutput === 'function') {
+    await writeOutput(JSON.stringify({
+      bindings: result.records.bindings.map((binding) => binding.name),
+      entry: entry.outputPath,
+      handlers: ir.handlers.map((handler) => handler.id),
+      operations: ir.operations.map((operation) => operation.id),
+      service: ir.name,
+      typings: typings.outputPath,
+      written: [entry.outputPath, typings.outputPath, ...written],
+    }));
+  }
   return {ir, records: result.records};
 }
 
@@ -391,6 +406,9 @@ function withPackageId(binding, packageId) {
   };
 }
 
+const PUBLISH_SQL = 'PUBLISH SERVICE ARTIFACT $1';
+const RECEIPT_FILE = 'publish-receipt.json';
+
 async function executeDeployStatement(execute, statement, payload, stage) {
   try {
     return await execute(statement, [JSON.stringify(payload)]);
@@ -401,71 +419,217 @@ async function executeDeployStatement(execute, statement, payload, stage) {
   }
 }
 
-async function runDeploy({
+async function runPublish({
   createSqlClient,
-  idempotencyKey,
   projectDirectory,
   writeOutput,
 }) {
+  const stage = SERVICE_PIPELINE_STAGE.BUILD;
+  const manifestPath = deploymentFile(projectDirectory, MANIFEST_FILE);
+  const manifest = await readJsonFile(manifestPath, stage);
+  if (manifest.artifact?.digest === PLACEHOLDER_DIGEST) {
+    throw pipelineFailure(
+      stage,
+      SERVICE_PIPELINE_MESSAGE.PUBLISH_BUILD_REQUIRED,
+    );
+  }
+  const componentPath = path.join(
+    projectDirectory, LAGRANGE_DIRECTORY, COMPONENT_FILE);
+  let componentBytes;
+  try {
+    componentBytes = await readFile(componentPath);
+  } catch (error) {
+    throw pipelineFailure(
+      stage,
+      `cannot read built component ${componentPath}: ${error.message}`,
+      error,
+    );
+  }
+  const bindings = await readJsonFile(
+    deploymentFile(projectDirectory, BINDINGS_FILE), stage);
+  const accessPolicies = await readJsonFile(
+    deploymentFile(projectDirectory, ACCESS_POLICY_FILE), stage);
+
+  const payloadDigest = `sha256:${createHash('sha256').update(componentBytes).digest('hex')}`;
+  const artifactDigest = manifest.artifact.digest;
+  const manifestDigest = sha256Json(canonicalJson(manifest));
+
+  const sqlClient = createSqlClient();
+  const execute = (statement, parameters) =>
+    sqlClient.execute(statement, parameters);
+
+  const publishPayload = {
+    artifact_digest: artifactDigest,
+    bytes: componentBytes.toString('base64'),
+    manifest,
+    media_type: manifest.artifact.media_type || 'application/wasm',
+    payload_digest: payloadDigest,
+    total_size: componentBytes.length,
+  };
+
+  await executeDeployStatement(
+    execute,
+    PUBLISH_SQL,
+    publishPayload,
+    stage,
+  );
+
+  const packageId = deriveTenantPackageId(manifest, 'default');
+  const receipt = {
+    accessPolicies,
+    artifactDigest,
+    bindings,
+    config: {},
+    manifest,
+    manifestDigest,
+    packageId,
+    service: manifest.name,
+  };
+
+  const receiptPath = path.join(
+    projectDirectory, LAGRANGE_DIRECTORY, RECEIPT_FILE);
+  await writeFile(
+    receiptPath,
+    `${JSON.stringify(receipt, null, JSON_INDENT)}\n`,
+    TEXT_ENCODING,
+  );
+
+  if (typeof writeOutput === 'function') {
+    await writeOutput(JSON.stringify({
+      artifactDigest,
+      manifestDigest,
+      packageId,
+      receipt: receiptPath,
+      service: manifest.name,
+    }));
+  }
+  return receipt;
+}
+
+async function resolveDeployRegistration(registration, candidate, stage) {
+  if (registration) return registration;
+  if (!candidate) return null;
+  const receiptPath = candidate.endsWith('.json') ?
+    candidate :
+    path.join(candidate, LAGRANGE_DIRECTORY, RECEIPT_FILE);
+  try {
+    return JSON.parse(await readFile(receiptPath, TEXT_ENCODING));
+  } catch (_receiptError) {
+    try {
+      const manifestCandidate = await readJsonFile(
+        deploymentFile(candidate, MANIFEST_FILE), stage);
+      const bindingsCandidate = await readJsonFile(
+        deploymentFile(candidate, BINDINGS_FILE), stage);
+      const policiesCandidate = await readJsonFile(
+        deploymentFile(candidate, ACCESS_POLICY_FILE), stage);
+      return {
+        accessPolicies: policiesCandidate,
+        bindings: bindingsCandidate,
+        manifest: manifestCandidate,
+      };
+    } catch (_candidateError) {
+      return null;
+    }
+  }
+}
+
+function assertDeployRegistration(effectiveManifest, effectiveBindings, stage) {
+  if (!effectiveManifest || !effectiveBindings) {
+    throw pipelineFailure(
+      stage,
+      SERVICE_PIPELINE_MESSAGE.DEPLOY_REGISTRATION_REQUIRED,
+    );
+  }
+  if (effectiveManifest.artifact?.digest === PLACEHOLDER_DIGEST) {
+    throw pipelineFailure(
+      stage,
+      SERVICE_PIPELINE_MESSAGE.DEPLOY_BUILD_REQUIRED,
+    );
+  }
+}
+
+async function createBindings(execute, effectiveBindings, packageId, stage) {
+  const created = [];
+  for (const binding of effectiveBindings) {
+    await executeDeployStatement(
+      execute, DEPLOY_SQL.CREATE_BINDING, withPackageId(binding, packageId),
+      stage);
+    created.push(binding.name);
+  }
+  return created;
+}
+
+function resolveEffectiveRegistration(deployRegistration, options) {
+  const reg = deployRegistration || {};
+  return {
+    accessPolicies: reg.accessPolicies || options.accessPolicies || [],
+    bindings: reg.bindings || options.bindings || null,
+    config: options.config || reg.config || {},
+    manifest: reg.manifest || options.manifest || null,
+  };
+}
+
+function resolveDeployPackageId(installed, deployRegistration, optionsPackageId) {
+  const rowPackageId = installed.rows?.[0]?.package_id;
+  const packageId = rowPackageId ||
+    deployRegistration?.packageId ||
+    optionsPackageId ||
+    null;
+  if (typeof packageId !== PACKAGE_ID_TYPE) {
+    throw pipelineFailure(
+      SERVICE_PIPELINE_STAGE.DEPLOY,
+      SERVICE_PIPELINE_MESSAGE.NO_PACKAGE_ID,
+    );
+  }
+  return packageId;
+}
+
+async function runDeploy(options = {}) {
+  const idempotencyKey = options.idempotencyKey;
   if (typeof idempotencyKey !== 'string' || idempotencyKey.length === 0) {
     throw pipelineFailure(
       SERVICE_PIPELINE_STAGE.DEPLOY,
       SERVICE_PIPELINE_MESSAGE.IDEMPOTENCY_KEY_REQUIRED);
   }
   const stage = SERVICE_PIPELINE_STAGE.DEPLOY;
-  const manifest = await readJsonFile(
-    deploymentFile(projectDirectory, MANIFEST_FILE), stage);
-  const bindings = await readJsonFile(
-    deploymentFile(projectDirectory, BINDINGS_FILE), stage);
-  const accessPolicies = await readJsonFile(
-    deploymentFile(projectDirectory, ACCESS_POLICY_FILE), stage);
-  if (manifest.artifact?.digest === PLACEHOLDER_DIGEST) {
-    throw pipelineFailure(
-      stage,
-      SERVICE_PIPELINE_MESSAGE.DEPLOY_BUILD_REQUIRED,
-    );
-  }
-  const layoutPath = path.join(
-    projectDirectory,
-    LAGRANGE_DIRECTORY,
-    manifest.artifact.digest.slice('sha256:'.length),
-  );
-  const sqlClient = createSqlClient();
+  const candidate = options.target || options.projectDirectory || null;
+  const deployRegistration = await resolveDeployRegistration(
+    options.registration, candidate, stage);
+
+  const effective = resolveEffectiveRegistration(deployRegistration, options);
+  assertDeployRegistration(effective.manifest, effective.bindings, stage);
+
+  const sqlClient = options.createSqlClient();
   const execute = (statement, parameters) =>
     sqlClient.execute(statement, parameters);
 
   const installed = await executeDeployStatement(
     execute, DEPLOY_SQL.INSTALL, {
-      artifact_source: {
-        kind: LOCAL_OCI_ARTIFACT_SOURCE_KIND,
-        location: layoutPath,
-      },
-      config: {},
+      config: effective.config,
       idempotency_key: idempotencyKey,
-      manifest,
+      manifest: effective.manifest,
     }, stage);
-  const packageId = installed.rows?.[0]?.package_id;
-  if (typeof packageId !== PACKAGE_ID_TYPE) {
-    throw pipelineFailure(
-      stage, SERVICE_PIPELINE_MESSAGE.NO_PACKAGE_ID);
-  }
+  const packageId = resolveDeployPackageId(
+    installed, deployRegistration, options.packageId);
 
-  const created = [];
-  for (const binding of bindings) {
-    await executeDeployStatement(
-      execute, DEPLOY_SQL.CREATE_BINDING, withPackageId(binding, packageId),
-      stage);
-    created.push(binding.name);
-  }
+  const created = await createBindings(
+    execute, effective.bindings, packageId, stage);
   const configured = await configureAccessPolicies(
-    execute, bindings, accessPolicies, stage);
-  await writeOutput(JSON.stringify({
+    execute, effective.bindings, effective.accessPolicies, stage);
+  if (typeof options.writeOutput === 'function') {
+    await options.writeOutput(JSON.stringify({
+      bindings: created,
+      packageId,
+      policies: configured,
+      service: effective.manifest.name,
+    }));
+  }
+  return {
     bindings: created,
     packageId,
     policies: configured,
-    service: manifest.name,
-  }));
-  return {bindings: created, packageId, policies: configured};
+    service: effective.manifest.name,
+  };
 }
 
 // The access-policy phase: replay every record's policy, then complete
@@ -501,10 +665,93 @@ async function configureAccessPolicies(
   return configured;
 }
 
+const INSPECT_SQL = 'SHOW SERVICE $1';
+
+async function readServiceNameFromReceipt(receiptPath) {
+  try {
+    const parsed = JSON.parse(await readFile(receiptPath, TEXT_ENCODING));
+    return parsed.service || parsed.manifest?.name || null;
+  } catch (_receiptError) {
+    return null;
+  }
+}
+
+function resolveRegistrationServiceName(serviceName, registration) {
+  if (serviceName) return serviceName;
+  if (registration?.service) return registration.service;
+  return registration?.manifest?.name || null;
+}
+
+function resolveCandidateReceiptPath(candidate) {
+  if (candidate.endsWith(JSON_EXTENSION)) return candidate;
+  return path.join(candidate, LAGRANGE_DIRECTORY, RECEIPT_FILE);
+}
+
+async function resolveInspectServiceName(
+  serviceName,
+  registration,
+  candidate,
+  stage,
+) {
+  const resolved = resolveRegistrationServiceName(serviceName, registration);
+  if (resolved) return resolved;
+  if (!candidate) return null;
+  const receiptPath = resolveCandidateReceiptPath(candidate);
+  const fromReceipt = await readServiceNameFromReceipt(receiptPath);
+  if (fromReceipt) return fromReceipt;
+  try {
+    const manifestCandidate = await readJsonFile(
+      deploymentFile(candidate, MANIFEST_FILE), stage);
+    return manifestCandidate?.name || path.basename(candidate);
+  } catch (_manifestError) {
+    return path.basename(candidate);
+  }
+}
+
+function isInspectReady(statusRow) {
+  return statusRow?.rollout_state === ACTIVE_STATE ||
+    statusRow?.desired_state === ACTIVE_STATE;
+}
+
+async function runInspect(options = {}) {
+  const stage = SERVICE_PIPELINE_STAGE.INSPECT;
+  const candidate = options.target || options.projectDirectory || null;
+  const effectiveName = await resolveInspectServiceName(
+    options.serviceName, options.registration, candidate, stage);
+  if (!effectiveName) {
+    throw pipelineFailure(
+      stage,
+      SERVICE_PIPELINE_MESSAGE.INSPECT_SERVICE_NAME_REQUIRED,
+    );
+  }
+
+  const sqlClient = options.createSqlClient();
+  const result = await executeDeployStatement(
+    (statement, parameters) => sqlClient.execute(statement, parameters),
+    INSPECT_SQL,
+    {service_name: effectiveName},
+    stage,
+  );
+  const rows = result?.rows || [];
+  const statusRow = rows[0] || null;
+  const ready = isInspectReady(statusRow);
+  const inspection = {
+    ready,
+    row: statusRow,
+    rows,
+    service: effectiveName,
+  };
+  if (typeof options.writeOutput === 'function') {
+    await options.writeOutput(JSON.stringify(inspection));
+  }
+  return inspection;
+}
+
 export {
   SERVICE_PIPELINE_COMMAND_ERROR_CODE,
-  ServicePipelineError,
   runBuild,
   runDeploy,
   runGenerate,
+  runInspect,
+  runPublish,
 };

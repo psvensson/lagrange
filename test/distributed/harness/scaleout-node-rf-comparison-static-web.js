@@ -48,36 +48,52 @@ th { color: var(--muted); font-weight: 600; } .chart-box { margin-bottom: 24px; 
 
 function renderSvgItem(x, y, [l1, l2], metric, valW, color, isModeled, sub) {
   const dash = isModeled ? ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"' : '';
+  const fillBar = valW > 0 ?
+    `\n    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"${dash}/>` : '';
   return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${l1}</text>
     <text x="${x}" y="${y + 11}" fill="#94a3b8" font-size="10" font-family="monospace">${l2}</text>
     <text x="${x}" y="${y + 22}" fill="#cbd5e1" font-size="10">${metric}</text>
-    <rect x="${x}" y="${y + 26}" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"${dash}/>
+    <rect x="${x}" y="${y + 26}" width="250" height="7" fill="#334155" rx="2"/>${fillBar}
     <text x="${x}" y="${y + 43}" fill="#64748b" font-size="9">${sub}</text>`;
 }
 
 function renderSvgPanels(exp) {
-  const pA = exp.scenarioAModes['proportional-growth-scaleout'];
-  const pB = exp.scenarioBCoverage;
+  const pA = exp.scenarioAModes['proportional-growth-scaleout'] || [];
+  const pB = exp.scenarioBCoverage || [];
   const f = formatNum;
-  const r1 = arrayJoin(arrayMap(pA, (t, i) => renderSvgItem(45, 132 + i * 53,
-    TARGET_LABELS[t.targetId] || [t.label, ''],
-    `${f(t.tx3Node, 2)} -> ${f(t.tx5Node, 2)} tx/s (+${f(t.scaleGainPct, 1)}%)`,
-    Math.max(4, Math.min(250, Math.round((t.tx5Node / 22) * 250))),
-    TARGET_COLORS[t.targetId] || '#94a3b8', true,
-    `p95: ${f(t.p95Ms3Node, 0)}ms -> ${f(t.p95Ms5Node, 0)}ms (modeled)`)), '\n');
-  const r2 = arrayJoin(arrayMap(pB, (t, i) => renderSvgItem(355, 132 + i * 53,
-    TARGET_LABELS[t.targetId] || [t.label, ''],
-    `${f(t.dec3Node100Pct, 1)} -> ${f(t.dec5Node60Pct, 1)} dec/s (60%)`,
-    Math.max(4, Math.min(250, Math.round((t.dec5Node60Pct / 500) * 250))),
-    TARGET_COLORS[t.targetId] || '#94a3b8', true,
-    `5n p99: ${f(t.p99Ms5Node, 1)}ms | WAN: ${t.wire5Node} B/dec`)), '\n');
-  const r3 = arrayJoin(arrayMap(pB, (t, i) => renderSvgItem(665, 132 + i * 53,
-    TARGET_LABELS[t.targetId] || [t.label, ''],
-    `${f(t.aggregate5NodeDecPerSec, 1)} dec/s cluster aggregate`,
-    Math.max(4, Math.min(250, Math.round((t.aggregate5NodeDecPerSec / 800) * 250))),
-    TARGET_COLORS[t.targetId] || '#94a3b8', true,
-    `cluster aggregate at 5 nodes | ${t.wire5Node} B/dec`)), '\n');
+  const r1 = arrayJoin(arrayMap(pA, (t, i) => {
+    const hasTx = typeof t.tx5Node === 'number' && Number.isFinite(t.tx5Node);
+    const met = hasTx ? `${f(t.tx3Node, 2)} -> ${f(t.tx5Node, 2)} tx/s (+${f(t.scaleGainPct, 1)}%)` : `[${t.status || 'not measured'}]`;
+    const w = hasTx ? Math.max(4, Math.min(250, Math.round((t.tx5Node / 22) * 250))) : 0;
+    const sub = hasTx ? `p95: ${f(t.p95Ms3Node, 0)}ms -> ${f(t.p95Ms5Node, 0)}ms` : `[${t.status || 'not measured'}]`;
+    return renderSvgItem(45, 132 + i * 53,
+      TARGET_LABELS[t.targetId] || [t.label, ''],
+      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', true, sub);
+  }), '\n');
+  const r2 = arrayJoin(arrayMap(pB, (t, i) => {
+    const hasDec = typeof t.dec5Node60Pct === 'number' && Number.isFinite(t.dec5Node60Pct);
+    const met = hasDec ? `${f(t.dec3Node100Pct, 1)} -> ${f(t.dec5Node60Pct, 1)} dec/s (60%)` : `[${t.status || 'not measured'}]`;
+    const w = hasDec ? Math.max(4, Math.min(250, Math.round((t.dec5Node60Pct / 500) * 250))) : 0;
+    const sub = hasDec ? `5n p99: ${f(t.p99Ms5Node, 1)}ms | WAN: ${t.wire5Node} B/dec` : `[${t.status || 'not measured'}]`;
+    return renderSvgItem(355, 132 + i * 53,
+      TARGET_LABELS[t.targetId] || [t.label, ''],
+      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', true, sub);
+  }), '\n');
+  const r3 = arrayJoin(arrayMap(pB, (t, i) => {
+    const hasAgg = typeof t.aggregate5NodeDecPerSec === 'number' &&
+      Number.isFinite(t.aggregate5NodeDecPerSec);
+    const met = hasAgg ?
+      `${f(t.aggregate5NodeDecPerSec, 1)} dec/s cluster aggregate` :
+      `[${t.status || 'not measured'}]`;
+    const w = hasAgg ?
+      Math.max(4, Math.min(250, Math.round((t.aggregate5NodeDecPerSec / 800) * 250))) : 0;
+    const sub = hasAgg ?
+      `cluster aggregate at 5 nodes | ${t.wire5Node} B/dec` :
+      `[${t.status || 'not measured'}]`;
+    return renderSvgItem(665, 132 + i * 53,
+      TARGET_LABELS[t.targetId] || [t.label, ''],
+      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', true, sub);
+  }), '\n');
   return `${r1}\n${r2}\n${r3}`;
 }
 
@@ -122,25 +138,51 @@ function renderTables(exp) {
   add('Proportional-Growth Scale-Out', 'proportional-growth-scaleout');
   add('Hot-Contention Baseline', 'hot-contention-baseline');
 
-  const mdA = r(mList, (t) =>
-    `| ${t.mName} | ${t.label} | ${f(t.tx3Node, 2)} | ${f(t.p95Ms3Node, 1)} | ` +
-    `${f(t.tx5Node, 2)} | ${f(t.p95Ms5Node, 1)} | ${t.scaleGainPct >= 0 ? '+' : ''}${f(t.scaleGainPct, 1)}% | ` +
-    `${t.evidenceTier} |`);
-  const htA = r(mList, (t) =>
-    `<tr><td>${escapeXml(t.mName)}</td><td><strong>${escapeXml(t.label)}</strong></td>` +
-    `<td>${f(t.tx3Node, 2)}</td><td>${f(t.p95Ms3Node, 1)}</td><td>${f(t.tx5Node, 2)}</td>` +
-    `<td>${f(t.p95Ms5Node, 1)}</td><td>${t.scaleGainPct >= 0 ? '+' : ''}${f(t.scaleGainPct, 1)}%</td>` +
-    `<td>${escapeXml(t.evidenceTier)}</td></tr>`);
+  const mdA = r(mList, (t) => {
+    if (t.tx5Node != null) {
+      return `| ${t.mName} | ${t.label} | ${f(t.tx3Node, 2)} | ${f(t.p95Ms3Node, 1)} | ` +
+        `${f(t.tx5Node, 2)} | ${f(t.p95Ms5Node, 1)} | ${t.scaleGainPct >= 0 ? '+' : ''}${f(t.scaleGainPct, 1)}% | ` +
+        `${t.evidenceTier} |`;
+    }
+    const st = `[${t.status || 'not measured'}]`;
+    return `| ${t.mName} | ${t.label} | ${st} | ${st} | ${st} | ${st} | ${st} | ${t.evidenceTier} |`;
+  });
+  const htA = r(mList, (t) => {
+    if (t.tx5Node != null) {
+      return `<tr><td>${escapeXml(t.mName)}</td><td><strong>${escapeXml(t.label)}</strong></td>` +
+        `<td>${f(t.tx3Node, 2)}</td><td>${f(t.p95Ms3Node, 1)}</td><td>${f(t.tx5Node, 2)}</td>` +
+        `<td>${f(t.p95Ms5Node, 1)}</td><td>${t.scaleGainPct >= 0 ? '+' : ''}${f(t.scaleGainPct, 1)}%</td>` +
+        `<td>${escapeXml(t.evidenceTier)}</td></tr>`;
+    }
+    const badge = `<span class="badge">${escapeXml(t.status || 'not measured')}</span>`;
+    return `<tr><td>${escapeXml(t.mName)}</td><td><strong>${escapeXml(t.label)}</strong></td>` +
+      `<td>${badge}</td><td>${badge}</td><td>${badge}</td>` +
+      `<td>${badge}</td><td>${badge}</td>` +
+      `<td>${escapeXml(t.evidenceTier)}</td></tr>`;
+  });
 
-  const mdB = r(exp.scenarioBCoverage, (t) =>
-    `| ${t.label} | ${f(t.dec3Node100Pct, 1)} | ${f(t.p99Ms3Node, 1)} | ` +
-    `${f(t.dec5Node60Pct, 1)} | ${f(t.p99Ms5Node, 1)} | ${t.wire5Node} | ` +
-    `${f(t.aggregate5NodeDecPerSec, 1)} | ${t.evidenceTier} |`);
-  const htB = r(exp.scenarioBCoverage, (t) =>
-    `<tr><td><strong>${escapeXml(t.label)}</strong></td><td>${f(t.dec3Node100Pct, 1)}</td>` +
-    `<td>${f(t.p99Ms3Node, 1)}</td><td>${f(t.dec5Node60Pct, 1)}</td><td>${f(t.p99Ms5Node, 1)}</td>` +
-    `<td>${t.wire5Node}</td><td>${f(t.aggregate5NodeDecPerSec, 1)}</td>` +
-    `<td>${escapeXml(t.evidenceTier)}</td></tr>`);
+  const mdB = r(exp.scenarioBCoverage, (t) => {
+    if (t.dec5Node60Pct != null) {
+      return `| ${t.label} | ${f(t.dec3Node100Pct, 1)} | ${f(t.p99Ms3Node, 1)} | ` +
+        `${f(t.dec5Node60Pct, 1)} | ${f(t.p99Ms5Node, 1)} | ${t.wire5Node} | ` +
+        `${f(t.aggregate5NodeDecPerSec, 1)} | ${t.evidenceTier} |`;
+    }
+    const st = `[${t.status || 'not measured'}]`;
+    return `| ${t.label} | ${st} | ${st} | ${st} | ${st} | ${st} | ${st} | ${t.evidenceTier} |`;
+  });
+  const htB = r(exp.scenarioBCoverage, (t) => {
+    if (t.dec5Node60Pct != null) {
+      return `<tr><td><strong>${escapeXml(t.label)}</strong></td><td>${f(t.dec3Node100Pct, 1)}</td>` +
+        `<td>${f(t.p99Ms3Node, 1)}</td><td>${f(t.dec5Node60Pct, 1)}</td><td>${f(t.p99Ms5Node, 1)}</td>` +
+        `<td>${t.wire5Node}</td><td>${f(t.aggregate5NodeDecPerSec, 1)}</td>` +
+        `<td>${escapeXml(t.evidenceTier)}</td></tr>`;
+    }
+    const badge = `<span class="badge">${escapeXml(t.status || 'not measured')}</span>`;
+    return `<tr><td><strong>${escapeXml(t.label)}</strong></td>` +
+      `<td>${badge}</td><td>${badge}</td><td>${badge}</td><td>${badge}</td>` +
+      `<td>${badge}</td><td>${badge}</td>` +
+      `<td>${escapeXml(t.evidenceTier)}</td></tr>`;
+  });
 
   return {mdCov, htCov, mdA, htA, mdB, htB};
 }
@@ -173,9 +215,11 @@ ${mdCov}
 ## Scenario A three-mode scale-out separation (fixed, proportional, hot-contention)
 
 Evaluating scale-out across three distinct operational workload models reveals critical scaling differences:
-- Fixed-Workload Scale-Out: Total offered load is kept constant while node count expands from 3 to 5 nodes. Additional Raft/consensus coordination slightly reduces net throughput (-2.2% to -5.7%).
-- Proportional-Growth Scale-Out: Offered load expands proportionally with node capacity (+66.7%). Distributed engines scale effectively (+49.4% to +61.3% gain), with Lagrange 0.3.3 advancing to 3.84 tx/s (1490.0 ms p95).
-- Hot-Contention Baseline: Single-partition or single-key serialization bottlenecks cannot scale by adding nodes (-5.1% to -8.5% scale gain, Patroni sync HA flat at 0.0%).
+- Fixed-Workload Scale-Out: Total offered load is kept constant while node count expands from 3 to 5 nodes. Evaluates distributed coordination overhead.
+- Proportional-Growth Scale-Out: Offered load expands proportionally with node capacity (+66.7%). Evaluates distributed engine throughput scaling.
+- Hot-Contention Baseline: Single-partition or single-key serialization bottlenecks under scale-out.
+
+Comparative performance claims await admitted GCP/lab measurements.
 
 | Mode | Target | 3-Node (tx/s) | 3-Node p95 (ms) | 5-Node (tx/s) | 5-Node p95 (ms) | Scale Gain % | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -184,8 +228,7 @@ ${mdA}
 ## Scenario B partial replica-coverage comparison at 5 nodes (RF=3)
 
 Under 60% replica coverage at 5 nodes, individual node throughput reflects the 40% remote stage hop,
-yet total cluster aggregate capacity expands. Lagrange achieves 441.2 dec/s per node (18.1ms p99) and
-720.4 dec/s cluster aggregate capacity with only 144 B/dec WAN transfer.
+while total cluster aggregate capacity evaluates distributed state scaling. Comparative performance claims await admitted GCP/lab measurements.
 
 | Target | 3-Node (100%) dec/s | 3-Node p99 (ms) | 5-Node (60%) dec/s | 5-Node p99 (ms) | 5-Node WAN (B) | Aggregate dec/s | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- |

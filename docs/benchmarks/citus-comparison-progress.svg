@@ -14,92 +14,77 @@
   <text x="655" y="116" fill="#94a3b8" font-size="10">Throughput (local/remote/seq/fan) &amp; WAN bytes</text>
     <text x="35" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="35" y="150" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Service</text>
-    <text x="35" y="162" fill="#cbd5e1" font-size="10">0.8 tx/s (p95: 4418.9ms)</text>
+    <text x="35" y="162" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="35" y="168" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="168" width="10" height="8" fill="#38bdf8" rx="3"/>
-    <text x="35" y="186" fill="#64748b" font-size="9">observed-docker-cluster</text>
+    <text x="35" y="186" fill="#64748b" font-size="9">none</text>
     <text x="345" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="345" y="150" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Service</text>
-    <text x="345" y="162" fill="#cbd5e1" font-size="10">441.1 dec/s (p99: 18.1ms)</text>
+    <text x="345" y="162" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="345" y="168" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="168" width="221" height="8" fill="#38bdf8" rx="3"/>
-    <text x="345" y="186" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="186" fill="#64748b" font-size="9">none</text>
     <text x="655" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="655" y="150" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Service</text>
-    <text x="655" y="162" fill="#cbd5e1" font-size="10">WAN: 144B (0.0 RT)</text>
+    <text x="655" y="162" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="655" y="168" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="168" width="5" height="8" fill="#38bdf8" rx="3"/>
-    <text x="655" y="186" fill="#94a3b8" font-size="9">620 / 495 / 380 / 410 dec/s</text>
+    <text x="655" y="186" fill="#94a3b8" font-size="9">[not measured]</text>
     <text x="35" y="208" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV (6-unit)</text>
     <text x="35" y="220" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL RF=3</text>
-    <text x="35" y="232" fill="#cbd5e1" font-size="10">6.8 tx/s (p95: 1383.2ms)</text>
+    <text x="35" y="232" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="35" y="238" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="238" width="84" height="8" fill="#f59e0b" rx="3"/>
-    <text x="35" y="256" fill="#64748b" font-size="9">observed-docker-cluster</text>
+    <text x="35" y="256" fill="#64748b" font-size="9">none</text>
     <text x="345" y="208" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV (6-unit)</text>
     <text x="345" y="220" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL RF=3</text>
-    <text x="345" y="232" fill="#cbd5e1" font-size="10">221.4 dec/s (p99: 36.1ms)</text>
+    <text x="345" y="232" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="345" y="238" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="238" width="111" height="8" fill="#f59e0b" rx="3"/>
-    <text x="345" y="256" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="256" fill="#64748b" font-size="9">none</text>
     <text x="655" y="208" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV (6-unit)</text>
     <text x="655" y="220" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL RF=3</text>
-    <text x="655" y="232" fill="#cbd5e1" font-size="10">WAN: 6144B (4.5 RT)</text>
+    <text x="655" y="232" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="655" y="238" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="238" width="228" height="8" fill="#f59e0b" rx="3"/>
-    <text x="655" y="256" fill="#94a3b8" font-size="9">280 / 235 / 190 / 215 dec/s</text>
+    <text x="655" y="256" fill="#94a3b8" font-size="9">[not measured]</text>
     <text x="35" y="278" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="35" y="290" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
-    <text x="35" y="302" fill="#cbd5e1" font-size="10">8.4 tx/s (p95: 920.5ms)</text>
+    <text x="35" y="302" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="35" y="308" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="308" width="105" height="8" fill="#d97706" rx="3"/>
-    <text x="35" y="326" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="326" fill="#64748b" font-size="9">none</text>
     <text x="345" y="278" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="345" y="290" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
-    <text x="345" y="302" fill="#cbd5e1" font-size="10">316.8 dec/s (p99: 24.1ms)</text>
+    <text x="345" y="302" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="345" y="308" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="308" width="158" height="8" fill="#d97706" rx="3"/>
-    <text x="345" y="326" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="326" fill="#64748b" font-size="9">none</text>
     <text x="655" y="278" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="655" y="290" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
-    <text x="655" y="302" fill="#cbd5e1" font-size="10">WAN: 960B (1.0 RT)</text>
+    <text x="655" y="302" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="655" y="308" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="308" width="36" height="8" fill="#d97706" rx="3"/>
-    <text x="655" y="326" fill="#94a3b8" font-size="9">455 / 338 / 234 / 272 dec/s</text>
+    <text x="655" y="326" fill="#94a3b8" font-size="9">[not measured]</text>
     <text x="35" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 SQL (5-unit)</text>
     <text x="35" y="360" fill="#94a3b8" font-size="10" font-family="monospace">Sharded SQL + App Svc</text>
-    <text x="35" y="372" fill="#cbd5e1" font-size="10">11.2 tx/s (p95: 685.0ms)</text>
+    <text x="35" y="372" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="35" y="378" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="378" width="140" height="8" fill="#a855f7" rx="3"/>
-    <text x="35" y="396" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="396" fill="#64748b" font-size="9">none</text>
     <text x="345" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 SQL (5-unit)</text>
     <text x="345" y="360" fill="#94a3b8" font-size="10" font-family="monospace">Sharded SQL + App Svc</text>
-    <text x="345" y="372" fill="#cbd5e1" font-size="10">256.4 dec/s (p99: 31.8ms)</text>
+    <text x="345" y="372" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="345" y="378" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="378" width="128" height="8" fill="#a855f7" rx="3"/>
-    <text x="345" y="396" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="396" fill="#64748b" font-size="9">none</text>
     <text x="655" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 SQL (5-unit)</text>
     <text x="655" y="360" fill="#94a3b8" font-size="10" font-family="monospace">Sharded SQL + App Svc</text>
-    <text x="655" y="372" fill="#cbd5e1" font-size="10">WAN: 3120B (3.0 RT)</text>
+    <text x="655" y="372" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="655" y="378" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="378" width="116" height="8" fill="#a855f7" rx="3"/>
-    <text x="655" y="396" fill="#94a3b8" font-size="9">468 / 276 / 164 / 196 dec/s</text>
+    <text x="655" y="396" fill="#94a3b8" font-size="9">[not measured]</text>
     <text x="35" y="418" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 UDF (4-unit)</text>
     <text x="35" y="430" fill="#94a3b8" font-size="10" font-family="monospace">Colocated + Dist Function</text>
-    <text x="35" y="442" fill="#cbd5e1" font-size="10">11.2 tx/s (p95: 685.0ms)</text>
+    <text x="35" y="442" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="35" y="448" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="448" width="140" height="8" fill="#ec4899" rx="3"/>
-    <text x="35" y="466" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="466" fill="#64748b" font-size="9">none</text>
     <text x="345" y="418" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 UDF (4-unit)</text>
     <text x="345" y="430" fill="#94a3b8" font-size="10" font-family="monospace">Colocated + Dist Function</text>
-    <text x="345" y="442" fill="#cbd5e1" font-size="10">364.2 dec/s (p99: 22.9ms)</text>
+    <text x="345" y="442" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="345" y="448" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="448" width="182" height="8" fill="#ec4899" rx="3"/>
-    <text x="345" y="466" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="466" fill="#64748b" font-size="9">none</text>
     <text x="655" y="418" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 UDF (4-unit)</text>
     <text x="655" y="430" fill="#94a3b8" font-size="10" font-family="monospace">Colocated + Dist Function</text>
-    <text x="655" y="442" fill="#cbd5e1" font-size="10">WAN: 1540B (1.8 RT)</text>
+    <text x="655" y="442" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="655" y="448" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="448" width="57" height="8" fill="#ec4899" rx="3"/>
-    <text x="655" y="466" fill="#94a3b8" font-size="9">605 / 382 / 228 / 268 dec/s</text>
+    <text x="655" y="466" fill="#94a3b8" font-size="9">[not measured]</text>
 </svg>

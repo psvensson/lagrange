@@ -125,7 +125,7 @@ export const SUBSYSTEM_RULES = Object.freeze([
   {id: 'integration-control-plane', pattern: /^test\/integration\/(?!.*(cdc|bootstrap)).*(control-plane|convergence|control-snapshot|preflight)/, subsystem: SUBSYSTEM_CONTROL_PLANE},
   {id: 'integration-partition', pattern: /^test\/integration\/(?!.*(rebalance|replica-count)).*(managed-split|create-table-partition|learner)/, subsystem: SUBSYSTEM_STORAGE_PARTITION},
   {id: 'integration-query', pattern: /^test\/integration\/.*(sql-workflow|table-read-path|system-writes|leader-metadata|application-database|public-consumer-contract)/, subsystem: SUBSYSTEM_QUERY_SQL},
-  {id: 'integration-services', pattern: /^test\/integration\/(?!.*(cdc|bootstrap|rebalance|pgwire|websocket|multi-node|npm-package)).*(service|cell|call-composition|artifact-payload|http-to-call)/, subsystem: SUBSYSTEM_SERVICES_RUNTIME},
+  {id: 'integration-services', pattern: /^test\/integration\/(?!.*(cdc|bootstrap|rebalance|pgwire|websocket|multi-node|npm-package)).*(service|cell|call-composition|artifact-payload|http-to-call|developer-journey)/, subsystem: SUBSYSTEM_SERVICES_RUNTIME},
   {id: 'integration-transport', pattern: /^test\/integration\/(?!.*(cdc|replica-handler)).*(websocket|message-group|ack-delivery|load-channel|owner-read-transport)/, subsystem: SUBSYSTEM_TRANSPORT_MESSAGING},
   {id: 'integration-release', pattern: /^test\/integration\/.*(npm-package)/, subsystem: SUBSYSTEM_RELEASE_PACKAGING},
   {id: 'integration-convergence', pattern: /^test\/integration\/(?!.*(rebalance|admission)).*(benchmark|strict-)/, subsystem: SUBSYSTEM_CONVERGENCE_TOPOLOGY},

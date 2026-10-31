@@ -2,13 +2,9 @@
 
 **Run the data-heavy parts of a service where its data already lives.**
 
-Lagrange combines a distributed SQL database and a WebAssembly (WASM) service
-runtime. WebAssembly is a portable code format; here it runs service functions
-on the server, not in a browser.
-
-Instead of putting the database on one set of machines and application workers
-on another, every Lagrange node can hold database partitions **and** run service
-code.
+Lagrange combines a distributed SQL database and a WebAssembly (WASI) service
+runtime. Every Lagrange node can hold database partitions **and** run service
+code near data.
 
 ```text
                  Lagrange cluster
@@ -26,257 +22,62 @@ code.
         * = that partition's leader replica
 ```
 
-When a service needs data from several partitions, Lagrange can run the
-relevant function separately on the nodes holding those partitions. Rather
-than fetching all selected rows into an application worker, it sends back
-smaller intermediate results and combines them.
+Instead of pulling large volumes of database rows across the network into
+application servers, Lagrange runs partition-local functions (`run()`) on the
+nodes holding the data, emits small numeric intermediate partials, and combines
+them in a global reducer (`reduce()`).
 
-That is the main idea.
+---
 
-## What "distributed database" means here
+## Audience and Workload Fit
 
-A Lagrange database does not live on one server.
+Lagrange is designed for **backend engineers, distributed systems teams, and data platform architects** building services where network transfer between database and application tiers is the primary bottleneck.
 
-A table is divided into **partitions**, each owning a range of its primary
-keys. Each partition has its own [Raft consensus group](https://raft.github.io/)
-and normally three **replicas** on different nodes. Each replica has its own
-SQLite database; there is no shared SQLite file.
+### Workload Fit
 
-Raft elects a leader and agrees the order of writes within that partition.
-In a three-voter group, a majority of two must agree before a write commits.
-Different partitions can have different leaders and make progress independently.
+Lagrange is a strong fit when an application:
+- Reads large volumes of data to return a compact result (`data examined >> result returned`).
+- Applies scoring, Bayesian ranking, feature extraction, filtering, or validation across partitions.
+- Manually shards database queries in application code and manages fan-out and merging.
+- Needs to deploy and test business logic in versioned application code (with `npm test` and CI/CD) without installing database extensions or stored procedures.
 
-With three nodes and three replicas, every node holds every partition in the
-illustration above. On larger clusters, different partitions can have different
-sets of replica hosts.
+### Non-Fit and When Plain SQL Is Better
 
-Applications do not need to know which machine currently owns a partition.
-Lagrange routes database and service work to the right nodes and handles
-partition movement and replica changes.
+Lagrange is **not** a good fit for:
+- Pure API orchestration with negligible database queries.
+- **Queries where standard SQL is already optimal:** When a query can be cleanly expressed as an indexed SQL query or a standard `SELECT ... GROUP BY ... ORDER BY ... LIMIT K`, the database engine already computes the result and top-N heap locally and returns only the final rows. Moving such queries into WASM functions adds complexity without benefit. Measure against plain SQL first.
+- Complex multi-table transactions requiring distributed cross-partition locking snapshots.
 
-This storage layer is part of Lagrange. Lagrange is **not** a compute layer
-installed on top of an existing PostgreSQL cluster.
+---
 
-It speaks a subset of the **PostgreSQL wire protocol**: the network protocol
-used by PostgreSQL clients. That helps existing clients connect; it does not
-mean full PostgreSQL SQL, extension, or application compatibility.
-See [partitioning](architecture/process-partitioning.md) and
-[current capabilities](docs/current-capabilities-and-limitations.md).
+## Bounded Evaluation Commitment and Version Truth
 
-## What runs where
+Lagrange is experimental alpha software under active development:
 
-A Lagrange service is currently compiled to a **WASM component**: portable
-executable code with explicit interfaces for what it provides and may call.
+- **Version Status:** Version `0.3.3` is the latest tagged GitHub release. Version `0.4.0` is the active development source on the `main` branch.
+- **Comparison Integrity:** Comparative claims (against PostgreSQL, TiDB/TiKV, or Citus) are based on real physical execution on lab or GCP environments. Modeled comparisons and synthetic latency estimates are excluded.
+- **Integrated Storage:** Lagrange provides its own partitioned SQLite and Raft consensus storage layer; it is not a compute proxy installed on top of existing external databases.
 
-WASM is the supported execution provider today, not a separate application
-API. Planned OCI execution must preserve the same service model - handlers,
-distributed operations, calls, routing, budgets, retries, and reduction - while
-changing only provider concerns such as packaging, isolation, and the final
-runtime adapter.
+---
 
-In source, an endpoint and its data-heavy operation can live together.
-This abbreviated example declares the operation and calls it from a handler:
+## Immediate Capabilities and Limits
 
-```js
-const summarize = distributed({
-  statement: sql`
-    SELECT id, account_id, amount_cents
-    FROM account_activity
-  `,
-  run: summarizeRun,
-  reduce: summarizeReduce,
-});
+The current public interface is intentionally focused and fails closed:
 
-function handle(request, {call, json}) {
-  return json(call(summarize, {
-    accountId: request.body.accountId,
-  }));
-}
-```
+- **Supported Language:** JavaScript is the supported code-first language today (compiled to WASI via ComponentizeJS). Future execution provider policies (including OCI containers) are detailed in [Minimal Deployment Surface](architecture/minimal-deployment-surface.md).
+- **SQL Selectors:** Distributed operations require a literal single-table `SELECT` statement fixed at deployment. No dynamic string interpolation is permitted.
+- **Shard Input Bounds:** Each partition shard evaluates up to a default limit of 4,096 rows per batch.
+- **Partials:** Emitted partial values must be finite numbers (`Number.isFinite(value)`). At most 64 emits per shard and 1,024 coordinated partials per invocation are permitted under shard-disjoint keys.
+- **PostgreSQL Compatibility:** Lagrange speaks a subset of the PostgreSQL wire protocol for client connectivity, not drop-in PostgreSQL. Secondary indexes, multi-statement scripts, and user-table CDC event streaming (`CDC_EVENT_STREAM_DISABLED`) are unsupported.
+- **Network and Resilience:** Inter-node transport assumes a trusted private network. Supported rolling upgrades and automated backup/PITR are not yet supported product contracts.
 
-Here, `statement` selects the input rows; `run` processes each partition's
-rows; `reduce` combines the emitted results. `call` invokes that declared
-operation, and `json` builds the HTTP response. The
-[complete service](examples/call-binding-account-summary/lagrange.service.js)
-includes the imports, route declaration, and function bodies.
+See [Current Capabilities and Limitations](docs/current-capabilities-and-limitations.md) for full details.
 
-**In this example, `accountId` filters inside `run()`, not inside SQL.** The
-fixed selector has no `WHERE`, so it selects all of the table's partitions.
-Each local batch must fit the input limits: 4,096 rows by default, plus byte
-and deadline limits. This is not an unbounded scan.
-
-Physically, one request can execute in several places:
-
-```text
-POST /accounts/summary
-          |
-          v
-   service handler
-          |
-          | call(summarize)
-          v
-    Lagrange finds the
-    relevant partitions
-          |
-     +----+----+----+
-     |         |    |
-     v         v    v
-   node A    node B node C
-   run()     run()  run()
-   local     local  local
-   rows      rows   rows
-     |         |    |
-     +----+----+----+
-          |
-     small partials
-          |
-          v
-       reduce()
-          |
-          v
-      one result
-```
-
-For each selected partition, `run()` executes on the leader's node and reads
-its local storage. The raw selected rows are not sent to another application
-worker for this computation.
-
-`run()` emits **partials**: small intermediate results, currently numeric
-values under partition-disjoint keys. For example, two partitions might emit
-counts of 2 and 1 and totals of 3,000 and 500 cents. `reduce()` returns a count
-of 3 and a total of 3,500 cents. See the
-[worked example](docs/native-programming-model.md#worked-example).
-
-Reduction waits for every required partition. A failed partition fails the
-call; it is not silently omitted. Retries do not promise exactly-once function
-execution. The [execution contract](docs/execution-semantics.md) explains the
-difference between executing code and publishing one complete result.
-
-So code that looks like one service in the repository can be spread across the
-cluster when it executes.
-
-> **One service in source. Distributed execution when useful.**
-
-## Which languages can I use?
-
-**Today, the supported code-first language is JavaScript.**
-
-`lagrange service init` creates a JavaScript project. The build produces a WASI
-component, not a Node.js process. Existing code must fit the component's host
-interfaces; arbitrary Node.js APIs are not automatically available.
-
-**WASI** is the WebAssembly System Interface. **WIT** is the interface definition
-language used to describe a component's imports and exports. Together with the
-[Component Model](https://component-model.bytecodealliance.org/), these provide
-a language-neutral execution boundary.
-
-First-class TypeScript, Rust, Go, and Python SDKs are future directions, not
-currently supported authoring paths. A compatible toolchain is necessary, but
-a language also needs Lagrange's interfaces and deployment tooling.
-
-## Why do this?
-
-Consider an operation that examines 10 GB to produce a 20 KB answer. These
-numbers illustrate the workload shape; they are not a Lagrange benchmark or
-supported scan size.
-
-When application workers need the raw rows, the path looks like this:
-
-```text
-database partitions -> many rows -> application computation -> small answer
-```
-
-With data-local computation:
-
-```text
-partition + run() -> small partials -> reduce() -> small answer
-```
-
-The useful shape is:
-
-```text
-data examined >> result returned
-```
-
-This can reduce database-to-application transfer and replace application-owned
-shard routing, fan-out, and merging. It does not remove Raft replication,
-coordination traffic, or the final reducer. Storage and service work also
-compete for resources on the same hosts.
-
-SQL engines already filter and aggregate near data. The account-summary demo
-is deliberately easy to check, not proof that a sum requires WASM. When an
-indexed or grouped SQL query already returns the final small answer cheaply,
-moving code beside the data may buy little. Measure against that baseline.
-
-[Related systems](docs/related-systems.md) explains the connections to
-PostgreSQL functions, TiKV coprocessors, and Durable Objects, including where
-each analogy stops. See [evaluation](docs/evaluate.md) for the measurement plan.
-
-## What is required?
-
-The relevant data must be stored in Lagrange, and the data-local operation must
-be deployed as a WASM service with `run()` and `reduce()`. An existing application
-can call its HTTP endpoint; the application does not manage shard routing.
-
-PostgreSQL-wire compatibility is an integration aid, not what makes execution
-local. Running SQL or deploying an endpoint alone does not demonstrate the
-data-local computation path.
-
-## The adoption ladder
-
-You do not need to rewrite an application all at once.
-
-### 1. Put representative data in Lagrange
-
-Test the schema and queries using the supported PostgreSQL wire subset.
-This evaluates the SQL layer, not yet the data-local service mechanism.
-
-### 2. Deploy and call a service endpoint
-
-Build and deploy the account-summary component, then call its health endpoint.
-That route makes no distributed call, so it lets you inspect deployment,
-authentication, and request routing separately.
-
-The current default component still declares one distributed operation, even
-when a handler does not call it. Do not remove that operation to make a
-request-only project. WASM by itself is not the optimization.
-
-### 3. Exercise the data-heavy operation
-
-Call the summary endpoint and trace:
-
-```text
-run(rows, arguments)        <- beside each selected partition
-reduce(partials, arguments) <- combines the complete result
-```
-
-For a real evaluation, extract one expensive operation and keep unrelated
-application code outside. A new application can go directly to this model.
-
-The relevant data must be loaded into Lagrange. There is no supported
-PostgreSQL migration, change data capture (CDC) ingestion, backup, or
-point-in-time recovery product surface yet. Keep the existing system of record
-until a pilot proves parity, cutover, rollback, and recovery.
-See [Migration and adoption](docs/migration.md).
-
-## A good first workload
-
-Lagrange is interesting when an existing service:
-
-- reads a lot of rows to return a small answer;
-- filters, scores, validates, transforms or aggregates data;
-- manually fans out over database shards;
-- performs several database round trips against the same data;
-- runs workers mainly to merge results from shards; or
-- spends meaningful money moving data between database and compute tiers.
-
-It is less interesting when the work is mostly external API calls, when a
-normal indexed query already produces the answer cheaply, or when the required
-SQL semantics are outside Lagrange's current envelope.
+---
 
 ## Try it
 
-The current end-to-end example needs Node.js 22.12 or newer:
+Run the end-to-end account-summary demonstration (requires Node.js 22.12 or newer):
 
 ```bash
 git clone https://github.com/psvensson/lagrange
@@ -286,96 +87,95 @@ npm run demo:account-summary
 ```
 
 The demo:
+1. Compiles [`examples/call-binding-account-summary/lagrange.service.js`](examples/call-binding-account-summary/lagrange.service.js) into a genuine WASI component;
+2. Starts an ephemeral node, creates a table, and splits it into two partitions;
+3. Deploys the service over PostgreSQL-wire lifecycle SQL;
+4. Invokes the HTTP endpoint `POST /amounts/summary`;
+5. Executes `run()` locally across partition leaders (emitting 8 numeric partials with 0 raw rows transferred across the network); and
+6. Reduces the partials into a single JSON summary report.
 
-1. builds a real WASI component from [`lagrange.service.js`](examples/call-binding-account-summary/lagrange.service.js) (169 lines);
-2. starts Lagrange;
-3. creates and splits a 150-row table into two partitions;
-4. deploys the service;
-5. calls its HTTP endpoint;
-6. runs the partition functions against local data (emitting 8 numeric partials across 2 shards with 0 raw rows sent to the reducer); and
-7. checks the combined result and prints a JSON report including a `locality` execution summary.
+### Scaffold Your Own Service
 
-Both partitions are on one machine in this demo, so it proves the execution
-path rather than cluster-scale performance.
-
-To start a service project:
+Create a new service project using the CLI:
 
 ```bash
-npm install --global lagrange-server
-
-lagrange service init my-service
+npx lagrange service init my-service
 cd my-service
-
 npm test
 npm run build
 ```
 
-`npm run build` runs `lagrange service generate . && lagrange service build .`
-to emit the component entry, editor typings (`runtime-types.d.ts`), and
-`.lagrange/` deployment records and compile `.lagrange/component.wasm`.
-Deployment needs a running cluster and authenticated PostgreSQL-wire lifecycle
-configuration. The generated project README contains the exact `deploy`
-command.
+The build script compiles your source into `.lagrange/component.wasm` and generates deterministic deployment records under `.lagrange/deployment/`.
 
-See [First hour](docs/tutorials/first-hour.md) for the complete walkthrough.
+To deploy to a running cluster:
 
-## Current status
+```bash
+# 1. Publish into the replicated ArtifactPayloadStore (returns <package-id>)
+npx lagrange service publish .
 
-Lagrange is experimental alpha software.
+# 2. Deploy by registered immutable identity (no local files needed)
+npx lagrange service deploy --package-id <package-id> --idempotency-key deploy-key-v1
+```
 
-The data-local service path works, but its current public interface is
-intentionally narrow. Among the important limits today:
+See [First Hour With Lagrange](docs/tutorials/first-hour.md) for the complete walkthrough.
 
-- a distributed operation uses one fixed single-table `SELECT`;
-- each partition read is bounded; no streaming or paging of a larger input;
-- partial results are currently numeric and bounded;
-- one HTTP request can make one distributed call;
-- distributed reads do not form one global cross-partition snapshot;
-- the current distributed call path is read-only for user tables;
-- PostgreSQL compatibility is a subset, not drop-in PostgreSQL;
-- secondary indexes are not supported;
-- external change data capture (CDC) streaming on user tables is disabled and unsupported in the initial stable core (`CDC_EVENT_STREAM_DISABLED`);
-- node-to-node transport currently assumes a trusted private network; and
-- backup/restore, rolling upgrades, and production service-level objectives
-  (SLOs) are not yet supported product contracts.
+### Deploy on Kubernetes and Run Cloud Benchmarks
 
-See [Current capabilities and limitations](docs/current-capabilities-and-limitations.md)
-for the exact current envelope.
+If you have an existing Kubernetes cluster or cloud VMs:
+- **Kubernetes (Helm)**: Deploy via `helm install lagrange charts/lagrange-node --set image.tag=0.3.3 --set joiners.replicas=2` and deploy WASI services over SQL without pod volume mounts.
+- **Cloud Benchmarks**: Run Scenario A (contended OLTP), Scenario B (locality/RTT), Scenario C (freshness), and MovieLens against your own GCP project or lab servers via `npm run distributed:gcp` or `--gcp-template`.
 
-## Read next
+See [Kubernetes Deployment and Cloud Benchmarks](docs/kubernetes-and-cloud-benchmarks.md).
 
-- [First hour](docs/tutorials/first-hour.md) - run the example
-- [Programming model](docs/native-programming-model.md) - write handlers,
-  `run()` and `reduce()`
-- [Execution semantics](docs/execution-semantics.md) - placement, retries and
-  consistency
-- [Migration and adoption](docs/migration.md) - introduce Lagrange into an
-  existing system
-- [Evaluate Lagrange](docs/evaluate.md) - decide whether a workload is a good
-  fit
-- [Comparative benchmark statistics](docs/benchmarks/README.md) - multi-system graphical summaries and comparisons across PostgreSQL, TiDB/TiKV, and Lagrange ([interactive HTML landing page](docs/benchmarks/index.html))
-- [TiDB/TiKV and Lagrange comparison progress](docs/benchmarks/tidb-comparison-progress.md) - versioned OLTP throughput, latency, and semantic proof history ([interactive HTML dashboard](docs/benchmarks/tidb-comparison-progress.html))
-- [Security](docs/security.md) - current trust and authentication model
-- [Architecture](architecture/INDEX.md) - internals
-- [Documentation index](docs/README.md) - the complete documentation map
+---
 
-## Repository layout
+## Troubleshooting and Diagnostics
 
-If you are exploring the checkout, only a few directories are needed to evaluate
-or author services:
+Lagrange exposes health probes and diagnostic streams on dedicated ports:
 
-- [`examples/call-binding-account-summary/`](examples/call-binding-account-summary/README.md) - the flagship code-first service (`lagrange.service.js`) and its self-contained demo harness
-- [`examples/service-data-affinity/`](examples/service-data-affinity/README.md) - 3-node MovieLens Top-N distributed `call`-Binding and placement-affinity study
-- [`docs/`](docs/README.md) - tutorials, programming model, evaluation guides, and capability ledger
-- `src/authoring/` and `src/service/` - guest-safe service authoring API and WASI service compiler
-- `src/runtime/`, `src/query/`, and `src/raft/` - partition storage, SQL/distributed-reduce engine, and consensus runtime
-- [`architecture/`](architecture/INDEX.md) and `test/` - system model, formal specs, and verification suites
+- **HTTP REST / Ingress (`REST_API_PORT=8080`):**
+  - `curl -fsS http://127.0.0.1:8080/livez` - Node process liveness.
+  - `curl -fsS http://127.0.0.1:8080/startupz` - Core service startup and schema initialization.
+  - `curl -fsS http://127.0.0.1:8080/readyz` - Cluster quorum readiness and request acceptance.
+- **Admin WebSocket (`ADMIN_WS_PORT=8081`):**
+  - Diagnostic stream at `ws://127.0.0.1:8081/api/admin/stream` for real-time events, cluster status, and CDC logs.
+- **Transport WebSocket (`TRANSPORT_WS_PORT=8082`):**
+  - Inter-node Raft consensus and replica synchronization.
+- **PostgreSQL Wire Protocol (`PGPORT=5432`):**
+  - Standard SQL ingress and lifecycle management (`SHOW SERVICE '<name>'`).
 
-## License and contributions
+For detailed authoring rules, see [JavaScript Service Reference](docs/reference/javascript-service-reference.md).
+
+---
+
+## Read Next
+
+- [First Hour With Lagrange](docs/tutorials/first-hour.md) - Complete step-by-step developer walkthrough
+- [Kubernetes and Cloud Benchmarks](docs/kubernetes-and-cloud-benchmarks.md) - Helm chart guide, credential config, and cloud benchmark matrix
+- [JavaScript Service Reference](docs/reference/javascript-service-reference.md) - Authoring API, typings, and limits
+- [Rewrite A Hot Path For Lagrange](docs/tutorials/rewrite-a-hot-path.md) - MovieLens top-N three-baseline tutorial
+- [The Lagrange Native Programming Model](docs/native-programming-model.md) - Handlers, `run()`, and `reduce()`
+- [Execution Semantics](docs/execution-semantics.md) - Placement, retries, and visibility guarantees
+- [Evaluating Lagrange](docs/evaluate.md) - Workload evaluation checklist
+- [Migration and Adoption](docs/migration.md) - Introducing Lagrange into an architecture
+- [Security](docs/security.md) - Trust model and capability boundaries
+- [Architecture Index](architecture/INDEX.md) - Cluster internals and system model
+
+---
+
+## Repository Layout
+
+- [`examples/call-binding-account-summary/`](examples/call-binding-account-summary/README.md) - Flagship code-first service and demonstration
+- [`examples/service-data-affinity/`](examples/service-data-affinity/README.md) - 5-node MovieLens Top-N affinity study
+- [`docs/`](docs/README.md) - Tutorials, guides, and reference manuals
+- `src/authoring/` and `src/service/` - Guest-safe authoring API and WASI compiler
+- `src/runtime/`, `src/query/`, and `src/raft/` - Storage engine, distributed query planner, and consensus
+- [`architecture/`](architecture/INDEX.md) - System model, contract definitions, and invariants
+
+---
+
+## License and Contributions
 
 Lagrange is licensed under AGPL-3.0-only. See [LICENSE](LICENSE).
 
-The source is public but the repository is closed to outside pull requests.
-Bug reports are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Agents working on the repository start at [AGENTS.md](AGENTS.md).
+The repository source is public; external pull requests are currently closed. Bug reports and feedback are welcome at [CONTRIBUTING.md](CONTRIBUTING.md). Agents working on the repository begin at [AGENTS.md](AGENTS.md).

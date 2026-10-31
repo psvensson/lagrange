@@ -396,7 +396,7 @@ contract; general multi-stage exchange and backpressure belong to 2.0.
 | RM-0.4-call-bounded-input | Inputs beyond one shard batch | 🔲 | Explicit bounded paging/streaming with continuation, cancellation and resource ownership through the existing call path. |
 | RM-0.4-call-structured-partials | Bounded structured partials | 🔲 | Extend the scalar result envelope with a sealed bounded representation and owned reduction/error semantics. |
 | RM-0.4-call-multi-operation | Multi-operation service dispatch | 🔲 | Complete compiler/export/binding dispatch beyond the one-operation component limit through existing service owners. Scope: `solve/epics/code-first-service-compiler.md`. |
-| RM-0.4-wasm-public-comparison | Public multi-machine WASM service evidence | 🔲 | Reproducible public service path, named workload/hardware and a strong conventional baseline; claims identify the measured supported configuration. Scope: `solve/epics/comparative-workload-efficiency-evidence.md`. |
+| RM-0.4-wasm-public-comparison | Public multi-machine WASM service evidence | 🔲 | Reproducible public service path, named workload/hardware and a strong conventional baseline; claims identify the measured supported configuration. Scope: `solve/epics/comparative-workload-efficiency-evidence.md`, `solve/epics/developer-journey-and-measured-comparisons.md`, and `solve/specs/developer-journey-and-measured-comparisons/requirements.md`. |
 | RM-0.4-scenario-a-comparison | Complete TiDB/TiKV Scenario A comparison | 🔲 | Complete the agreed ordinary-application semantic/retry/failure profile and controlled comparison, not only a preliminary visibility slice. Reuse the approved comparison program and require equivalent declared semantics. |
 
 ### Phase 0.4 Exit Criteria

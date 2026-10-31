@@ -59,7 +59,7 @@ const CHECKED_FILE_PATHS = Object.freeze([
 ]);
 
 const EXPECTED_STATUS = Object.freeze({
-  SECONDARY_INDEXES: 'unsupported',
+  SECONDARY_INDEXES: 'partition_local_btree_supported',
   PARTITION_BACKEND: 'raft_rs_wasm',
   SNAPSHOT_ACTIVE: 'active_sqlite_partition_path',
   SNAPSHOT_PROOF: 'active_raft_rs_compaction_and_catchup_suites',
@@ -73,6 +73,7 @@ const EXPECTED_STATUS = Object.freeze({
 });
 
 const AUDIT_MARKER = Object.freeze({
+  NO_GLOBAL_SECONDARY_INDEX: 'no global secondary index support',
   SECONDARY_INDEX_ID: 'secondary-indexes',
   SECONDARY_INDEX_CONTRADICTION:
     'secondary-index capability contradicts the active architecture',
@@ -209,7 +210,7 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
   const partitioning = readText(PARTITIONING_ARCHITECTURE_PATH, root);
   addProblem(problems,
     partitioning.includes('column named `id`') &&
-      partitioning.includes('no secondary index support'),
+      partitioning.includes(AUDIT_MARKER.NO_GLOBAL_SECONDARY_INDEX),
     'partition-routing limitations lost their current architecture evidence');
   addProblem(problems,
     capabilities.dataAndQueries.secondaryIndexes ===

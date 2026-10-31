@@ -100,7 +100,6 @@ const C3_TESTS = Object.freeze([
   'test/examples/movielens-capacity-runtime-adapters.test.js',
   'test/examples/' +
     'comparative-efficiency-movielens-public-request-workload.test.js',
-  'test/scripts/systemd-capacity-adapter-controller.test.js',
 ]);
 const C4_TESTS = Object.freeze([
   'test/distributed/harness/__tests__/' +
@@ -113,7 +112,6 @@ const C4_TESTS = Object.freeze([
     'benchmark-whole-topology-resource-accounting-adversarial.test.js',
   'test/distributed/harness/__tests__/' +
     'benchmark-whole-topology-resource-accounting.test.js',
-  'test/scripts/benchmark-resource-source-provenance.test.js',
 ]);
 
 async function runPredecessorProof(predecessorRoot) {

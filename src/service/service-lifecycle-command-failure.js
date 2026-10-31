@@ -25,7 +25,9 @@ const SERVICE_LIFECYCLE_COMMAND_FAILED_MESSAGE =
 
 const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
   ACCESS_POLICY_REJECTED: 'service_lifecycle_access_policy_rejected',
+  ARTIFACT_NOT_SEALED: 'service_lifecycle_artifact_not_sealed',
   ARTIFACT_REJECTED: 'service_lifecycle_artifact_rejected',
+  ARTIFACT_SOURCE_RETIRED: 'service_lifecycle_artifact_source_retired',
   CATALOG_REJECTED: 'service_lifecycle_catalog_rejected',
   BINDING_REJECTED: 'service_lifecycle_binding_rejected',
   CALL_INVOCATION_FAILED: 'service_lifecycle_call_invocation_failed',
@@ -36,8 +38,11 @@ const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
   INVALID_SECURITY_CONTEXT: 'service_lifecycle_invalid_security_context',
   INVALID_SERVICE_NAME: 'service_lifecycle_invalid_service_name',
   MANIFEST_REJECTED: 'service_lifecycle_manifest_rejected',
+  PAYLOAD_MISSING: 'service_lifecycle_payload_missing',
   SERVICE_NOT_FOUND: 'service_lifecycle_service_not_found',
   SIGNATURE_POLICY_INVALID: 'service_lifecycle_signature_policy_invalid',
+  SOURCE_UNSUPPORTED: 'service_lifecycle_source_unsupported',
+  STORE_UNAVAILABLE: 'service_lifecycle_store_unavailable',
   UNSUPPORTED_COMMAND: 'service_lifecycle_unsupported_command',
 });
 
@@ -73,6 +78,10 @@ const SERVICE_LIFECYCLE_COMMAND_PATH = Object.freeze({
 const SERVICE_LIFECYCLE_COMMAND_LITERAL = Object.freeze({
   ERROR_NAME: 'ServiceLifecycleCommandError',
 });
+
+const LOCAL_STR_ARTIFACT_PAYLOAD_STORE_UNAVAILABLE =
+  'artifact_payload_store_unavailable';
+const LOCAL_STR_ARTIFACT_PAYLOAD_MISSING = 'artifact_payload_missing';
 
 class ServiceLifecycleCommandError extends Error {
   constructor(code, stage, path, message, detail = {}) {
@@ -119,8 +128,25 @@ function classifyDelegatedFailure(error, command) {
     };
   }
   if (error instanceof ArtifactPayloadStoreError) {
-    return {code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
-      known: true, stage: SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT};
+    if (error.code === LOCAL_STR_ARTIFACT_PAYLOAD_STORE_UNAVAILABLE) {
+      return {
+        code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.STORE_UNAVAILABLE,
+        known: true,
+        stage: SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
+      };
+    }
+    if (error.code === LOCAL_STR_ARTIFACT_PAYLOAD_MISSING) {
+      return {
+        code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.PAYLOAD_MISSING,
+        known: true,
+        stage: SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+      };
+    }
+    return {
+      code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+      known: true,
+      stage: SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+    };
   }
   return unclassifiedFailure(command);
 }

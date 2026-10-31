@@ -53,7 +53,7 @@ const DTS_FRAGMENT = Object.freeze({
   PARTIALS_TYPE: 'readonly (readonly [string, unknown])[]',
   READONLY_PREFIX: 'readonly ',
   REQUEST_NAME: 'ServiceRequest',
-  REQUEST_BODY_FIELD: '  readonly body: unknown;',
+  REQUEST_BODY_FIELD: '  readonly body: Record<string, unknown> | null;',
   REQUEST_HEADERS_FIELD:
     '  readonly headers: Readonly<Record<string, string>>;',
   REQUEST_METHOD_FIELD: '  readonly method: string;',
@@ -80,7 +80,7 @@ const GENERATED_DOC = Object.freeze({
     'operations that handler declared in calls.',
   REGENERATE: 'regenerate with',
   REQUEST: 'The serialized request envelope every http handler receives; ' +
-    'body is unknown so handlers must narrow before use.',
+    'body is a JSON record or null when absent.',
   TITLE: 'GENERATED editor typings (lagrange service generate).',
 });
 

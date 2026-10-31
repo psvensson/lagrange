@@ -39,6 +39,7 @@ const REQUEST_CALL_BRIDGE_MAX_NESTED_CALLS_DEFAULT = 1;
 const REQUEST_CALL_BRIDGE_CHILD_ORDINAL = 1;
 const REQUEST_CALL_BRIDGE_CHILD_DEPTH = 1;
 const REQUEST_CALL_BRIDGE_DEADLINE_DEFAULT_MS = 30000; // ends-on: the host-call response arrives
+const LOCAL_STR_CALLER_SERVICE_ID = 'callerServiceId';
 
 const REQUEST_CALL_BRIDGE_CONTRACT_MESSAGE = Object.freeze({
   INVOKER_REQUIRED:
@@ -246,14 +247,23 @@ function createRequestCellCallBridge(options = {}) {
     });
     const deadlineMs = resolveBridgeDeadline(
       invocation.deadlineMs, deadlineDefaultMs);
-    try {
-      return await callCellInvoker.invoke({
-        argumentsJson,
-        deadlineMs,
-        invocationId: childInvocationId,
-        name,
-        securityContext,
+    const invokeRequest = {
+      argumentsJson,
+      deadlineMs,
+      invocationId: childInvocationId,
+      name,
+      securityContext,
+    };
+    if (sourceServiceId) {
+      Object.defineProperty(invokeRequest, LOCAL_STR_CALLER_SERVICE_ID, {
+        configurable: true,
+        enumerable: false,
+        value: sourceServiceId,
+        writable: true,
       });
+    }
+    try {
+      return await callCellInvoker.invoke(invokeRequest);
     } catch (error) {
       logger?.debug?.(REQUEST_CALL_BRIDGE_DELEGATED_FAILURE_LOG, {
         callChain,

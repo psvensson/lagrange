@@ -90,10 +90,27 @@ the immutable installation identity under `.lagrange/`. The current supported
 provider produces a WASI component Cell. Provider-specific packaging under
 `.lagrange/` is a toolchain detail and is not part of the deploy command.
 
+## Publish
+
+```bash
+lagrange service publish .
+```
+
+Publish uploads and seals the built component artifact into the cluster's
+replicated `ArtifactPayloadStore`. It validates the component descriptor,
+streams the payload chunks, verifies the SHA-256 digest, and returns a
+registered immutable package identity (`package_id`).
+
 ## Deploy
 
 ```bash
 lagrange service deploy . --idempotency-key <unique-key>
+```
+
+Or deploy by registered immutable identity from any client without local project files:
+
+```bash
+lagrange service deploy --package-id <package-id> --idempotency-key <unique-key>
 ```
 
 Deploy sends the generated records through authenticated PostgreSQL-wire

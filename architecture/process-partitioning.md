@@ -100,14 +100,12 @@ Three limitations to know before you rely on narrowing:
 - **Conflicting `AND` conditions are last-writer-wins** on condition type, so
   `pk > 10 AND pk = 5` can resolve differently from its reverse.
 
-There is also no secondary index support at all today. `CREATE INDEX` parses,
-but the statement dispatcher has no case for it and rejects it as an
-unsupported statement; the subsystem that would build a SQLite index on every
-partition (`src/index-management/`) exists but is not wired into the runtime.
-Even once wired, a local index only speeds up the per-partition scan — it does
-nothing to narrow the partition set, so a query filtered on an indexed non-key
-column still touches every partition. Taken together with the `id` limitation
-above, this is the dominant factor in query cost on a large table.
+`CREATE INDEX` and `DROP INDEX` build and drop partition-local SQLite indexes on
+each partition via `IndexService` to accelerate local partition scans, but there
+is no global secondary index support and secondary indexes do not narrow
+partition routing (queries filtering only on non-`id` indexed columns still
+scatter to all partitions). Taken together with the `id` limitation above, this is
+the dominant factor in query cost on a large table.
 
 ## Growing: the managed split, stage by stage
 

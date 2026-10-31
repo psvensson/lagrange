@@ -120,12 +120,13 @@ function createBindingDeclaration(artifact, overrides = {}) {
 }
 
 function createCallDeploymentRows(overrides = {}) {
-  const artifact = createArtifact();
+  const artifact = overrides.artifact || createArtifact();
   const declaration = createBindingDeclaration(artifact, overrides);
   const bindingRow = buildBindingRow(
     declaration,
     SECURITY_CONTEXT,
     overrides.createdAt || 1,
+    overrides.generation || 1,
   );
   const binding = projectBinding(bindingRow);
   const compiled = buildRequestBindingServiceDefinition(bindingRow, artifact);
@@ -455,5 +456,127 @@ describe('CallBindingRouteResolver data-local host selection', () => {
         error.classification === CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE,
       'no ready Cell on the host node is the distinct activation trigger',
     );
+  });
+});
+
+describe('CallBindingRouteResolver generational revision transition', () => {
+  test('traffic stays on prior ready generation until new generation is ready, pins in-flight, and prefers caller revision', () => {
+    const artifact1 = createArtifact();
+    const manifest2 = {
+      ...createManifest(),
+      artifact: {
+        ...createManifest().artifact,
+        digest: `sha256:${'e'.repeat(64)}`,
+      },
+      version: '1.0.1',
+    };
+    const artifact2 = {
+      ...createArtifact(),
+      artifactDigest: `sha256:${'e'.repeat(64)}`,
+      manifest: manifest2,
+      manifestDigest: sha256(canonicalJson(manifest2)),
+      packageId: `service-package-${'f'.repeat(64)}`,
+    };
+
+    const gen1 = createCallDeploymentRows({
+      artifact: artifact1,
+      createdAt: 100,
+      generation: 1,
+      statement: CALL_STATEMENT,
+    });
+    const gen2 = createCallDeploymentRows({
+      artifact: artifact2,
+      createdAt: 200,
+      generation: 2,
+      statement: CALL_STATEMENT,
+    });
+
+    const cache = new MutableSystemTableCache();
+    // Register both generations in bindings and definitions
+    cache.set(
+      SYSTEM_TABLE_NAME.SERVICE_BINDINGS,
+      gen1.bindingRow.binding_version_id,
+      gen1.bindingRow,
+    );
+    cache.set(
+      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
+      gen1.definition.service_id,
+      gen1.definition,
+    );
+    cache.set(
+      SYSTEM_TABLE_NAME.SERVICE_BINDINGS,
+      gen2.bindingRow.binding_version_id,
+      gen2.bindingRow,
+    );
+    cache.set(
+      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
+      gen2.definition.service_id,
+      gen2.definition,
+    );
+
+    // Only gen1 has a ready runtime Cell
+    cache.set(
+      SYSTEM_TABLE_NAME.SERVICES,
+      `${gen1.definition.service_id}-r1`,
+      createActualRow(gen1.definition, `${gen1.definition.service_id}-r1`, NODE_A),
+    );
+
+    const resolver = new CallBindingRouteResolver({
+      systemTableCache: cache,
+    });
+
+    // 1. When gen2 has no ready Cell, gen1 is resolved
+    const routeBefore = resolveWith(resolver);
+    assert.equal(routeBefore.bindingVersionId, gen1.bindingRow.binding_version_id);
+    assert.equal(routeBefore.serviceId, gen1.definition.service_id);
+
+    // 2. Now activate gen2's Cell
+    cache.set(
+      SYSTEM_TABLE_NAME.SERVICES,
+      `${gen2.definition.service_id}-r1`,
+      createActualRow(gen2.definition, `${gen2.definition.service_id}-r1`, NODE_B),
+    );
+
+    // New requests select gen2
+    const routeAfter = resolveWith(resolver);
+    assert.equal(routeAfter.bindingVersionId, gen2.bindingRow.binding_version_id);
+    assert.equal(routeAfter.serviceId, gen2.definition.service_id);
+
+    // 3. In-flight requests pinned via bindingVersionId continue to select gen1
+    const pinnedRoute = resolver.resolve({
+      bindingVersionId: gen1.bindingRow.binding_version_id,
+      invocationId: 'call-invocation-pinned',
+      name: CALL_BINDING_NAME,
+      securityContext: SECURITY_CONTEXT,
+    });
+    assert.equal(pinnedRoute.bindingVersionId, gen1.bindingRow.binding_version_id);
+    assert.equal(pinnedRoute.serviceId, gen1.definition.service_id);
+
+    // assertSelectedRoute with expectedRoute pinned to gen1 preserves gen1
+    const asserted = resolver.assertSelectedRoute({
+      invocationId: 'call-invocation-pinned',
+      name: CALL_BINDING_NAME,
+      securityContext: SECURITY_CONTEXT,
+    }, routeBefore);
+    assert.equal(asserted.bindingVersionId, gen1.bindingRow.binding_version_id);
+
+    // 4. Caller matching: if callerServiceId points to a definition matching gen1
+    const callerDefId = 'caller-service-def';
+    cache.set(
+      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
+      callerDefId,
+      {
+        manifest_digest: artifact1.manifestDigest,
+        package_id: artifact1.packageId,
+        service_id: callerDefId,
+      },
+    );
+    const callerRoute = resolver.resolve({
+      callerServiceId: callerDefId,
+      invocationId: 'call-invocation-caller',
+      name: CALL_BINDING_NAME,
+      securityContext: SECURITY_CONTEXT,
+    });
+    assert.equal(callerRoute.bindingVersionId, gen1.bindingRow.binding_version_id);
   });
 });

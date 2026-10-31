@@ -1,0 +1,78 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "developer-journey-and-measured-comparisons-acceptance",
+  "status": "pass",
+  "generatedAt": "2026-10-31T12:15:00.000Z",
+  "testFileDigests": {
+    "docs/current-capabilities.json": "ceedfe2ca22995344ebebe19c49180c3400b22f207352c37ec1c7e51bf2ece9e",
+    "docs/current-capabilities-and-limitations.md": "cb5f04a267eb4c49f12bfacf4ffcd1ed32bf10640f688a7a7bb09cf604007654",
+    "docs/kubernetes-and-cloud-benchmarks.md": "49f59e596849e46f270e4dcb3b97fa3b79bff9d7b162674221443b0eb72b413c",
+    "docs/reference/javascript-service-reference.md": "4896926e339fc76735f539bc3366f741add5d1fd7b92f575dc0243e396dc08da",
+    "docs/tutorials/first-hour.md": "56002607084b0bc50228409463eaf88f1420047d434d137c24c4d42ea27bcb3a",
+    "docs/tutorials/rewrite-a-hot-path.md": "77f3b533c72730523ebd98d1a012ef92b020dd153a15fb3b0cddc298965ed37a",
+    "docs/service-deployment-guide.md": "47d5e3f2ab844a6091f4e9e6e472f84170349d89ad7d95bd1b6ee3062f8a606d",
+    "src/service/service-lifecycle-command-owner.js": "ae67d858b2e5842570d6d8ceaa177ae3d0839acaa9e5458a5135b26bd74c8932",
+    "src/cli/service-pipeline-command.js": "ec476cc850af01d61fb09f0efc3f6b325125003922b2c845deb1fcdb91896ccc",
+    "src/control-plane/owners/deployment-binding-contract.js": "9f78e095f2a7906ff7faa006c400fb9c458738a93f7b0763f1f7774819a64710",
+    "src/service/request-binding-route-resolver.js": "b074f0810790a553b1da7ab79fe9b2f32429491941beaef5ad7cc9ba046b44e0",
+    "src/service/call-binding-route-resolver.js": "8ccf7cd0da3e5cfbd2212d944f77dc31baa96a81bc0ccb26f1b6629d912040a8",
+    "src/service/request-cell-http-adapter.js": "ea29192144d50cbffcc2fb23ca400052e0d908bfea6a17701a08f3d7c6b8f37c",
+    "test/integration/developer-journey-j1-j2-j3.integration.test.js": "d12a2228b3d88be5e43cbf3158cb7b48f86392cea31ff3e70d4a046776565006",
+    "test/integration/artifact-payload-durability.integration.test.js": "3007e7ab3bd70f0ed562781926c70b75302244153872963b6e4887256f789cf9",
+    "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "db528bc868f05d853aa70314f7a1a0d6dc8678f50a35326f44a9ab2cc02dcdc5",
+    "test/distributed/harness/comparative-matrix-runner.js": "ccbc881cf414f07f368ea3ab74ab4ab6d050ab631cef4a99520ba039e32aa2a8",
+    "scripts/checks/comparative-benchmark-matrix-guard.js": "fcc17a22c86d55b191ad2ea20f9c996ba235a9beac360d5afe8a7029b1b97a8d",
+    "scripts/checks/distributed-scaleout-provenance-guard.js": "4e4208a39309624cfd2849b86bd290eb65e7c04d1870c18d3c575a67539e720e",
+    "data/tidb-comparison/multi-system-matrix.json": "29f8ce0ce4da42944d546af8bdb221ff2f6857602982b51bdc46cef5c142b884"
+  },
+  "receipts": [
+    {
+      "id": "current-claims-and-version",
+      "passed": true,
+      "command": "npm run audit:current-capabilities && npm run audit:roadmap-authority",
+      "summary": "Reconciled docs/current-capabilities.json and docs/current-capabilities-and-limitations.md with Queryable Core 0.3.2/0.3.3/0.4.0 capabilities (secondary indexes, synchronous Mode A global indexes, locking reads, live-query CDC push), strengthened scripts/check-current-capabilities.js, aligned roadmap.md, docs/development/product-roadmap.md, and docs/development/agpl-feature-map.md, and recorded supersession in multi-system-comparative-benchmark-matrix.md and distributed-scaleout-and-provenance-benchmark-series.md."
+    },
+    {
+      "id": "canonical-artifact-ingestion",
+      "passed": true,
+      "command": "node --test test/service/service-lifecycle-command-owner.test.js test/service/artifact-payload-internalization.test.js test/service/installable-service-artifact-resolver.test.js test/integration/artifact-payload-durability.integration.test.js test/integration/service-install-lifecycle-cli-pgwire.integration.test.js",
+      "summary": "Implemented PUBLISH SERVICE ARTIFACT $1 / PUBLISH ARTIFACT $1 and lagrange service publish <project-directory>, retired artifact_source on INSTALL and UPGRADE, retired dev-install, removed Tier 1 disk cache and Tier 3 external repair, enforced mandatory replicated artifactPayloadStore, and verified J2 remote publish/deploy/restart durability across accepting-node and artifact-leader loss."
+    },
+    {
+      "id": "stable-service-update",
+      "passed": true,
+      "command": "node --test test/control-plane/deployment-binding-owner.test.js test/service/call-binding-route-resolver.test.js test/service/request-binding-route-resolver.test.js test/integration/developer-journey-j1-j2-j3.integration.test.js",
+      "summary": "Implemented monotonic generation versioning on (tenant_id, binding_name) in DeploymentBindingOwner, highest-ready-generation selection in RequestBindingRouteResolver and CallBindingRouteResolver, in-flight request revision pinning across concurrent updates, and fallback to the prior ready generation when a newer revision fails or is not yet ready."
+    },
+    {
+      "id": "generated-service-http-journey",
+      "passed": true,
+      "command": "node --test test/service/request-cell-http-adapter.test.js test/cli/service-init-wasm-scaffold.test.js test/integration/developer-journey-j1-j2-j3.integration.test.js",
+      "summary": "Normalized HTTP JSON object and empty request bodies once in RequestCellHttpAdapter (refusing malformed JSON and non-object JSON arrays/primitives with HTTP 400 invalid_request_envelope), unified scaffold and runtime around a single request.body decoder, and verified real CLI-generated service invocation with account filtering, invalid-body refusal, and live same-endpoint code update."
+    },
+    {
+      "id": "fresh-developer-walkthrough",
+      "passed": true,
+      "command": "node --test test/integration/developer-journey-j1-j2-j3.integration.test.js test/examples/minimal-deployment-request-binding-example.test.js && npm run demo:account-summary",
+      "summary": "Verified end-to-end J1 (generate, build, publish, deploy, readiness inspect, HTTP invoke across two account IDs, code change, same-endpoint update, reset), J2 (remote client publish, source deletion, clean second client identity-only deploy, cross-node activation and node restart), and J3 motivating 3-way workload comparison."
+    },
+    {
+      "id": "measured-comparison-coverage",
+      "passed": true,
+      "command": "node scripts/run-comparative-efficiency-movielens-public-request-workload.js && node scripts/checks/run-comparative-efficiency-movielens-paired-runtime-adapters-guard.js && node scripts/checks/comparative-benchmark-matrix-guard.js",
+      "summary": "Collected fresh measured 0.3/0.4 comparison evidence for MovieLens public-request workload (sha256:1efd95c28bcdaa3c7dde1632913bffaef044770d41cd2196df03fdef9aae1287, report 3a0f156bb2cb4be77143bce33f5315aca6134f5d3df2eeb9b77ea0c79708af99), paired runtime adapters (report ec6c78140c4d1536e032e4367343c0646c9ae496d4b6611b1f99d10d56f04e45), 9 live TiDB/TiKV Scenario A workloads (test-output/tidb-reference/scenario-a-*-tidb.json), and 3-node home-lab Scenario A execution (test-output/report.json, sha256:79f358dd7035adef38b2e499e0b7025ec4e70b13da2c0d1f092b40ac329baf91), while explicitly marking unmeasured multi-system cells as not measured."
+    },
+    {
+      "id": "reproducible-public-results",
+      "passed": true,
+      "command": "node scripts/checks/comparative-benchmark-matrix-guard.js && node scripts/checks/distributed-scaleout-provenance-guard.js && node --test test/distributed/harness/__tests__/comparative-matrix-runner.test.js",
+      "summary": "Enforced validateOriginalReceiptAdmission in comparative-matrix-runner.js (rejecting non-GCP/lab targets, oracle-only timing, missing raw data, digest mismatches, single-host multi-container claims, unrecorded attempts, and synthetic RTT formulas), removed all modeled/oracle/constant numbers from all 12 static comparison renderers, and verified exact regeneration parity across data/tidb-comparison/multi-system-matrix.json and docs/benchmarks/."
+    },
+    {
+      "id": "documentation-coherence",
+      "passed": true,
+      "command": "npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:cli-docs && npm run audit:service-portability-claims",
+      "summary": "Updated README.md, docs/tutorials/first-hour.md, docs/tutorials/rewrite-a-hot-path.md, docs/service-deployment-guide.md, charts/lagrange-node/README.md, architecture/INDEX.md, architecture/system-model.md, and examples/service-data-affinity/README.md, and added docs/reference/javascript-service-reference.md and docs/kubernetes-and-cloud-benchmarks.md covering existing Kubernetes cluster deployment and bring-your-own-cloud benchmark execution."
+    }
+  ]
+}

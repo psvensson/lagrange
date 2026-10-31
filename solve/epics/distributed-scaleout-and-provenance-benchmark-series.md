@@ -1,6 +1,6 @@
 ---
 id: distributed-scaleout-and-provenance-benchmark-series
-status: done
+status: superseded
 proof: deterministic
 roadmapRow: null
 doneWhen:
@@ -56,9 +56,15 @@ Scenario C (`streaming-feature-risk-decision`).
   under dynamic topology changes.
 - Explicit evidence-tier qualification on every scorecard, chart, and artifact.
 
+## Current summary
+
+- Status: superseded. Active comparison acceptance based on modeled/oracle/constant generators and deterministic guards is superseded by `solve/epics/developer-journey-and-measured-comparisons.md` (`D1`, `V03`–`V06`).
+- Historical records: Preserved as historical observations; active comparison claims require original GCP/lab measurements under the successor epic.
+
 ## Decision log
 
 - 2026-10-30: Defined the distributed scale-out and provenance benchmark series epic with five
   focused quests. Established strict evidence-tier qualification distinguishing observed live
   cluster runs from local contract models. Reclassified Scenario B comparator baseline as
   `local-oracle-plus-network-model` with non-comparable provenance badging.
+- 2026-10-31: Superseded by `solve/epics/developer-journey-and-measured-comparisons.md` (`D1`, `V03`–`V06`). Active comparison acceptance based on modeled/oracle/constant generators and deterministic guards is superseded by original GCP/lab measurement admission; historical records remain preserved as historical observations.

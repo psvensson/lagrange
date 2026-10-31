@@ -62,7 +62,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-10-27 (sn1-tx1-freshmg-composition): tightened 1396 -> 1391 on the
 // checker hint after composing SN1 snapshot/compaction, TX1 admission, and
 // FreshMG source-removal fence.
-const BASELINE_UNUSED_EXPORT_COUNT = 1391;
+// 2026-10-31 (developer-journey-and-measured-comparisons): tightened 1391 -> 1390
+// on the checker hint after retiring dev-install and dead lifecycle error classes.
+const BASELINE_UNUSED_EXPORT_COUNT = 1390;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

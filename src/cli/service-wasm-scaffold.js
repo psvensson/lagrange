@@ -274,6 +274,7 @@ function handlerSource() {
  * collaborators are faked in test/handler.test.js.
  */
 
+const HTTP_STATUS_BAD_REQUEST = 400;
 const HTTP_STATUS_OK = 200;
 
 /**
@@ -282,10 +283,24 @@ const HTTP_STATUS_OK = 200;
  * @param {import('../runtime-types.d.ts').OperationHandles['summarizeAmounts']} operation
  */
 export function handleAmountSummary(request, {call, json}, operation) {
-  const rawBody = typeof request.body === 'string' && request.body ?
-    request.body : '{}';
-  const body = JSON.parse(rawBody);
-  const summary = call(operation, {accountId: body.accountId ?? null});
+  const body = request?.body ?? {};
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    return json({error: 'invalid_request_body'}, HTTP_STATUS_BAD_REQUEST);
+  }
+  const rawAccountId = body.accountId ?? null;
+  let accountId = null;
+  if (rawAccountId !== null) {
+    const isInteger = typeof rawAccountId === 'number' ?
+      Number.isSafeInteger(rawAccountId) && rawAccountId >= 0 :
+      (typeof rawAccountId === 'string' && /^\\d+$/.test(rawAccountId.trim()));
+    if (!isInteger) {
+      return json({error: 'invalid_account_id'}, HTTP_STATUS_BAD_REQUEST);
+    }
+    accountId = typeof rawAccountId === 'number' ?
+      rawAccountId :
+      Number.parseInt(rawAccountId, 10);
+  }
+  const summary = call(operation, {accountId});
   return json(summary, HTTP_STATUS_OK);
 }
 `;
@@ -302,28 +317,62 @@ import {handleAmountSummary} from '../src/handler.js';
 test('handleAmountSummary invokes the operation and wraps the result', () => {
   const calls = [];
   const operation = {kind: 'distributed_operation'};
-  const expectedSummary = {
+  const summarySeven = {
     accountId: 7,
     contributingShards: 2,
     totalCents: 42,
     transactions: 2,
   };
+  const summaryFortyTwo = {
+    accountId: 42,
+    contributingShards: 2,
+    totalCents: 100,
+    transactions: 1,
+  };
   const context = {
     call(operationRef, callArguments) {
       calls.push([operationRef, callArguments]);
-      return expectedSummary;
+      return callArguments.accountId === 42 ? summaryFortyTwo : summarySeven;
     },
     json(value, status) {
       return {body: JSON.stringify(value), status};
     },
   };
 
-  const response = handleAmountSummary(
-    {body: JSON.stringify({accountId: 7})}, context, operation);
+  // 1. Parsed object body with first account ID
+  const responseOne = handleAmountSummary(
+    {body: {accountId: 7}}, context, operation);
+  assert.deepEqual(calls[0], [operation, {accountId: 7}]);
+  assert.equal(responseOne.status, 200);
+  assert.deepEqual(JSON.parse(responseOne.body), summarySeven);
 
-  assert.deepEqual(calls, [[operation, {accountId: 7}]]);
-  assert.equal(response.status, 200);
-  assert.deepEqual(JSON.parse(response.body), expectedSummary);
+  // 2. Parsed object body with distinct second account ID
+  const responseTwo = handleAmountSummary(
+    {body: {accountId: 42}}, context, operation);
+  assert.deepEqual(calls[1], [operation, {accountId: 42}]);
+  assert.equal(responseTwo.status, 200);
+  assert.deepEqual(JSON.parse(responseTwo.body), summaryFortyTwo);
+
+  // 3. Empty / null body
+  const responseEmpty = handleAmountSummary(
+    {body: null}, context, operation);
+  assert.equal(responseEmpty.status, 200);
+
+  // 4. Invalid body shape or invalid accountId returns 400
+  const responseInvalidBody = handleAmountSummary(
+    {body: [1, 2, 3]}, context, operation);
+  assert.equal(responseInvalidBody.status, 400);
+  assert.deepEqual(
+    JSON.parse(responseInvalidBody.body),
+    {error: 'invalid_request_body'},
+  );
+  const responseInvalidAccount = handleAmountSummary(
+    {body: {accountId: {nested: true}}}, context, operation);
+  assert.equal(responseInvalidAccount.status, 400);
+  assert.deepEqual(
+    JSON.parse(responseInvalidAccount.body),
+    {error: 'invalid_account_id'},
+  );
 });
 `;
 }
@@ -500,8 +549,11 @@ function createWasmServiceProject(targetArgument) {
   });
 }
 
+const runInit = createWasmServiceProject;
+
 export {
   ServiceWasmScaffoldError,
   WASM_PROJECT_ERROR_CODE,
   createWasmServiceProject,
+  runInit,
 };

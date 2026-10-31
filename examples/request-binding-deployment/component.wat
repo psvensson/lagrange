@@ -57,13 +57,13 @@
       (param $request-length i32)
       (result i32)
       local.get $request-length
-      i32.const 9
+      i32.const 19
       i32.gt_u
       if
         ;; The request body selects one of two paths. The denial path attempts
         ;; read(slot 1, key 7); the normal path uses declared slot 0.
         local.get $request
-        i32.const 9
+        i32.const 19
         i32.add
         i32.load8_u
         i32.const 100

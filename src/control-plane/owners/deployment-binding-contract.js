@@ -543,10 +543,15 @@ function deriveBindingId(tenantId, bindingName) {
   return `binding-${digest({bindingName, tenantId})}`;
 }
 
-function deriveBindingVersionId(bindingId) {
+function deriveBindingVersionId(bindingId, generation = DEPLOYMENT_BINDING_GENERATION) {
+  if (!Number.isSafeInteger(generation) || generation < 1) {
+    fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
+      DEPLOYMENT_BINDING_PATH.BINDING,
+      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
+  }
   return `binding-version-${digest({
     bindingId,
-    generation: DEPLOYMENT_BINDING_GENERATION,
+    generation,
   })}`;
 }
 
@@ -559,21 +564,77 @@ function declarationExportName(declaration) {
     declaration.target.export_name;
 }
 
-function buildBindingRow(declaration, securityContext, createdAt) {
-  const context = validateSecurityContext(securityContext);
-  if (!Number.isSafeInteger(createdAt) || createdAt < 0) {
+function parseBuildBindingRowArguments(
+  declarationOrOptions,
+  securityContext,
+  createdAt,
+  generationArg,
+) {
+  if (declarationOrOptions?.declaration &&
+      !declarationOrOptions.schema_version) {
+    const opts = declarationOrOptions;
+    const context = opts.securityContext ?
+      validateSecurityContext(opts.securityContext) :
+      validateSecurityContext({
+        principal: opts.createdBy ?? 'system',
+        roles: opts.roles ?? [],
+        tenantId: opts.tenantId,
+      });
+    return {
+      context,
+      declaration: opts.declaration,
+      explicitBindingId: opts.bindingId,
+      generation: opts.generation ?? DEPLOYMENT_BINDING_GENERATION,
+      time: opts.createdAt,
+    };
+  }
+  return {
+    context: validateSecurityContext(securityContext),
+    declaration: declarationOrOptions,
+    explicitBindingId: undefined,
+    generation: generationArg,
+    time: createdAt,
+  };
+}
+
+function buildBindingRow(
+  declarationOrOptions,
+  securityContext,
+  createdAt,
+  generationArg = DEPLOYMENT_BINDING_GENERATION,
+) {
+  const {
+    context,
+    declaration,
+    explicitBindingId,
+    generation,
+    time,
+  } = parseBuildBindingRowArguments(
+    declarationOrOptions,
+    securityContext,
+    createdAt,
+    generationArg,
+  );
+
+  if (!Number.isSafeInteger(time) || time < 0) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
       DEPLOYMENT_BINDING_PATH.CREATED_AT,
       DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
   }
-  const bindingId = deriveBindingId(context.tenantId, declaration.name);
+  if (!Number.isSafeInteger(generation) || generation < 1) {
+    fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
+      DEPLOYMENT_BINDING_PATH.BINDING,
+      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
+  }
+  const bindingId = explicitBindingId ??
+    deriveBindingId(context.tenantId, declaration.name);
   const normalizedBinding = canonicalJson(declaration);
   return deepFreeze({
-    binding_version_id: deriveBindingVersionId(bindingId),
+    binding_version_id: deriveBindingVersionId(bindingId, generation),
     binding_id: bindingId,
     tenant_id: context.tenantId,
     binding_name: declaration.name,
-    generation: DEPLOYMENT_BINDING_GENERATION,
+    generation,
     binding_digest: `sha256:${createHash(HASH_ALGORITHM)
       .update(normalizedBinding)
       .digest(HASH_ENCODING)}`,
@@ -583,7 +644,7 @@ function buildBindingRow(declaration, securityContext, createdAt) {
     source_kind: declaration.source.kind,
     normalized_binding: normalizedBinding,
     created_by: context.principal,
-    created_at: createdAt,
+    created_at: time,
   });
 }
 
@@ -638,10 +699,11 @@ function bindingRowMatchesDeclaration(row, declaration) {
   const expectedDigest = `sha256:${createHash(HASH_ALGORITHM)
     .update(row.normalized_binding)
     .digest(HASH_ENCODING)}`;
+  const validGeneration = Number.isSafeInteger(row.generation) && row.generation >= 1;
   const exactValues = [
-    [row.generation, DEPLOYMENT_BINDING_GENERATION],
+    [validGeneration, true],
     [row.binding_id, bindingId],
-    [row.binding_version_id, deriveBindingVersionId(bindingId)],
+    [row.binding_version_id, deriveBindingVersionId(bindingId, row.generation)],
     [row.binding_name, declaration.name],
     [row.binding_digest, expectedDigest],
     [row.package_id, declaration.target.package_id],
@@ -719,6 +781,7 @@ export {
   deriveBindingId,
   deriveBindingVersionId,
   expectedSourceInterface,
+  inspectBindingRow,
   isDeploymentBindingCellSourceKind,
   normalizeDeploymentBinding,
   normalizeStoredDeploymentBinding,

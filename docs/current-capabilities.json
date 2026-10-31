@@ -39,8 +39,10 @@
       "admin WebSocket",
       "PostgreSQL wire"
     ],
-    "secondaryIndexes": "unsupported",
-    "globalSecondaryIndexes": false
+    "secondaryIndexes": "partition_local_btree_supported",
+    "globalSecondaryIndexes": false,
+    "lockingReads": "partition_row_reservation_fail_fast",
+    "liveQuerySubscriptions": "admin_websocket_supported"
   },
   "replication": {
     "partitionConsensus": "raft",
@@ -151,7 +153,7 @@
     {
       "id": "secondary-indexes",
       "area": "Indexes",
-      "summary": "CREATE INDEX is unsupported and no secondary-index runtime path is active."
+      "summary": "Partition-local B-tree secondary indexes (CREATE INDEX / DROP INDEX) are created and maintained per partition SQLite database via IndexService to accelerate local partition scans, while global secondary indexes across partitions are unsupported and secondary indexes do not narrow cross-partition routing (queries without id still scatter)."
     },
     {
       "id": "sql-write-outcome-unknown",
@@ -211,7 +213,7 @@
     {
       "id": "postgres-wire-restricted-dialect",
       "area": "PostgreSQL compatibility",
-      "summary": "The listener speaks the PostgreSQL wire protocol with a restricted SQL dialect; ORM and psql meta-command compatibility are not claimed. Statements drivers commonly send at startup or for introspection fail: SHOW <setting>, SET, RESET, DISCARD ALL, DEALLOCATE, version(), current_database(), current_setting(), pg_catalog tables, plain EXPLAIN, CREATE INDEX, DROP TABLE, WITH ... SELECT/INSERT/DELETE, IN (subquery) and VALUES (...) as a query."
+      "summary": "The listener speaks the PostgreSQL wire protocol with a restricted SQL dialect; ORM and psql meta-command compatibility are not claimed. Statements drivers commonly send at startup or for introspection fail: SHOW <setting>, SET, RESET, DISCARD ALL, DEALLOCATE, version(), current_database(), current_setting(), pg_catalog tables, plain EXPLAIN, DROP TABLE, WITH ... SELECT/INSERT/DELETE, IN (subquery) and VALUES (...) as a query."
     },
     {
       "id": "sql-multiple-statements",
@@ -259,9 +261,14 @@
       "summary": "INSERT ... ON CONFLICT DO NOTHING is supported (translating to INSERT OR IGNORE) and skips conflicting rows as PostgreSQL does. INSERT ... ON CONFLICT DO UPDATE is refused before mutation with SQLSTATE 0A000 (UNSUPPORTED_SQL_FEATURE); use ON CONFLICT DO NOTHING or a separate UPDATE statement."
     },
     {
+      "id": "sql-locking-reads",
+      "area": "Transactions",
+      "summary": "SELECT ... FOR UPDATE provides partition-row reservation with fail-fast 55P03 conflict refusal, rollback release, and session budget timeout; it does not provide full serializable isolation or waiting lock queues."
+    },
+    {
       "id": "external-cdc-user-tables",
       "area": "Streaming & CDC",
-      "summary": "External CDC consumption on user tables (subscribeTable, subscribeTables, and CDCManager user-table streaming) is disabled and unsupported in the initial stable core (CDC_EVENT_STREAM_DISABLED, Decision D2), while internal replicated projection and message-group CDC obligations operate through the internal durable occurrence ledger. Evidenced in docs/migration.md, architecture/postgres-wire.md, and src/cdc/cdc-integration-service.js."
+      "summary": "Live-query subscriptions over Admin WebSocket are active, while external CDC consumption on user tables (subscribeTable, subscribeTables, and CDCManager user-table streaming) remains disabled and unsupported in the initial stable core (CDC_EVENT_STREAM_DISABLED, Decision D2); internal replicated projection and message-group CDC obligations operate through the internal durable occurrence ledger. Evidenced in docs/migration.md, architecture/postgres-wire.md, and src/cdc/cdc-integration-service.js."
     },
     {
       "id": "node-transport-security",

@@ -29,6 +29,10 @@ const ARTIFACT_PAYLOAD_LOADER_MESSAGE = Object.freeze({
     'the sealed payload does not belong to the requested artifact digest',
   MEDIA_TYPE_NOT_WASM:
     'the sealed payload media type is not the wasm component media type',
+  PAYLOAD_MISSING:
+    'no sealed payload found for the requested artifact digest',
+  STORE_UNAVAILABLE:
+    'artifact payload store is unavailable',
 });
 
 // Verified store read (owner side only — one truth per decision, no
@@ -65,86 +69,29 @@ async function readVerifiedSealedPayloadIfFound(store, target) {
   return {found: true, payloadDigest, sealed};
 }
 
-// Node-copy population (disposable side only): atomically persist the
-// already-verified sealed bytes into the node-local content-addressed
-// cache (temp file + rename inside persist) so the next activation is
-// a local hit. The cache is a copy of the store's truth, never an
-// alternative source for the decision above.
-async function persistVerifiedNodeCopy(componentCache, target, verified) {
-  if (componentCache) {
-    await componentCache.persist(
-      target.artifactDigest,
-      {
-        digest: verified.payloadDigest,
-        mediaType: verified.sealed.mediaType,
-        size: verified.sealed.totalSize,
-      },
-      verified.sealed.bytes,
+const STORE_UNAVAILABLE_CODE = 'artifact_payload_store_unavailable';
+
+async function loadComponentPayloadThroughStore(owner, target) {
+  const store = owner?.artifactPayloadStore;
+  if (!store) {
+    throw new ArtifactPayloadStoreError(
+      STORE_UNAVAILABLE_CODE,
+      ARTIFACT_PAYLOAD_LOADER_MESSAGE.STORE_UNAVAILABLE,
+      {artifactDigest: target?.artifactDigest},
+    );
+  }
+  const verified = await readVerifiedSealedPayloadIfFound(store, target);
+  if (!verified.found) {
+    throw new ArtifactPayloadStoreError(
+      ARTIFACT_PAYLOAD_ERROR_CODE.PAYLOAD_MISSING,
+      ARTIFACT_PAYLOAD_LOADER_MESSAGE.PAYLOAD_MISSING,
+      {artifactDigest: target?.artifactDigest},
     );
   }
   return {
     bytes: verified.sealed.bytes,
     payloadDigest: verified.payloadDigest,
   };
-}
-
-/**
- * Load one component payload through the cache -> internal store ->
- * external repair chain.
- *
- * @param {object} owner ServiceLifecycleCommandOwner instance carrying
- *   artifactResolver and (optionally) artifactPayloadStore
- * @param {object} target the loadComponentArtifact payload request
- *   {artifactDigest, manifest}
- * @return {Promise<object>} {bytes, payloadDigest} — the exact shape
- *   the resolver's loadComponentPayload returns
- */
-const TYPE_FUNCTION = 'function';
-
-// Composition gate for the node-copy surface: a resolver assembled
-// without a component cache (bare test fixtures, cacheless deployments)
-// simply has no tier-1 copy and no tier-2 populate step.
-function nodeCopySurface(resolver) {
-  const componentCache = resolver.componentCache;
-  return typeof componentCache?.load === TYPE_FUNCTION &&
-    typeof componentCache?.persist === TYPE_FUNCTION ?
-    componentCache :
-    null;
-}
-
-// Tier 1 — the disposable node-local copy. A hit is the same immutable
-// content-addressed payload (re-verified on load), never an alternative
-// truth: on a miss the chain falls through to the owning store.
-async function probeNodeCopyTier(componentCache, target) {
-  if (!componentCache) {
-    return {found: false};
-  }
-  const cached = await componentCache.load(target.artifactDigest);
-  return cached ?
-    {found: true, payload: cached} :
-    {found: false};
-}
-
-async function loadComponentPayloadThroughStore(owner, target) {
-  const resolver = owner.artifactResolver;
-  const componentCache = nodeCopySurface(resolver);
-  const nodeCopy = await probeNodeCopyTier(componentCache, target);
-  if (nodeCopy.found) {
-    return nodeCopy.payload;
-  }
-  // Tier 2 — the cluster-owned internal store (the durable owner after
-  // installation), composition-gated. Verification happens entirely on
-  // the store side; only already-verified bytes reach the node copy.
-  const store = owner.artifactPayloadStore;
-  if (store) {
-    const verified = await readVerifiedSealedPayloadIfFound(store, target);
-    if (verified.found) {
-      return persistVerifiedNodeCopy(componentCache, target, verified);
-    }
-  }
-  // Tier 3 — external repair through the resolver; its typed
-  // remote-provider-missing refusal is the honest repair-absent outcome.
-  return resolver.loadComponentPayload(target);
 }
 
 export {loadComponentPayloadThroughStore};

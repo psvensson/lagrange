@@ -336,17 +336,31 @@ not turn followers into write authorities. The exact write modes, CDC emission,
 snapshot behaviour, and repair path are in
 [Process: Replication](process-replication.md).
 
-## 5. Placement and routing act on two timescales
+## 5. Three distinct locality mechanisms
 
-The phrase “compute moves to the data” covers two separate mechanisms.
+The phrase “compute moves to the data” covers three distinct mechanisms operating
+at different timescales and execution layers:
 
-| Mechanism | Question | Timescale |
-| --- | --- | --- |
-| **Placement affinity** | Where should this service's Cells live? | Topology time: slower, structural |
-| **Read-locality routing** | Which eligible replica should serve this read? | Request time: fast, per query |
+| Mechanism | Question | Timescale | Invocation / Trigger |
+| --- | --- | --- | --- |
+| **Leader-local distributed calls** | Which node holds the active leader replica for this shard? | Execution time: synchronous, per shard batch | `context.call()` / `CALL BINDING` |
+| **Read-locality routing** | Which eligible replica should serve this read query? | Request time: fast, per SQL query | Inbound SQL `SELECT` / `read_locality` |
+| **Placement affinity** | Where should this service's Cells live in the cluster? | Topology time: slower, structural rebalancing | Rebalancer loop using `service_partition_access` |
 
-Placement affinity learns from actual service-to-partition access. That evidence
-is combined with load, capacity, spread, failure, and policy constraints.
+1. **Leader-local distributed calls**: For a distributed operation, `run()` executes
+   synchronously on the host holding the targeted partition's active leader replica.
+   The function queries the leader's local SQLite database directly with zero row transfer
+   over the network. Partials emitted by `run()` are then transmitted to the reducer.
+2. **Read-locality routing**: Fast request-time routing for ordinary SQL reads
+   (`service_definitions.read_locality`). When a service or client issues a standard SQL
+   `SELECT`, routing selects among eligible in-sync replicas (such as a local replica or a
+   replica within the same latency group) to minimize read latency.
+3. **Placement affinity**: A longer-term topological feedback loop. The cluster attributes
+   successful service-issued statements in `service_partition_access`, combining access
+   evidence with node capacity, failure domains, and incumbent retention to continuously
+   rebalance Cell placement toward the nodes holding the data those services access most.
+
+Placement affinity learns from actual service-to-partition access:
 
 ```mermaid
 %%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
@@ -355,7 +369,8 @@ flowchart LR
     direction LR
     TRAFFIC["Real service traffic"]:::ext --> OBS["Service → partition access evidence"]:::move
     OBS --> CACHE["CDC-fed cluster view"]:::move
-    CACHE --> SCORE["Affinity + load + capacity + policy"]:::ctrl
+    SCORE["Affinity + load + capacity + policy"]:::ctrl
+    CACHE --> SCORE
     SCORE --> PLAN["Placement plan and durable operation"]:::ctrl
     PLAN --> PLACE["Cells and replicas reconciled"]:::svc
     PLACE --> LOCAL["More local execution when constraints allow"]:::data
@@ -377,6 +392,16 @@ incumbent stability, or another safety constraint wins.
 Read [Process: Data Affinity](process-data-affinity.md) for the evidence feed and
 [Process: Rebalancing](process-rebalancing.md) for movement decisions and
 operation safety.
+
+### Internal driver interfaces versus application APIs
+
+Internal collaborators such as `replicaContext.queryExecutor` are substrate bridge
+interfaces connecting the service runtime lifecycle (`ServiceRuntimeLifecycle`) to
+the underlying SQL query engine. They are strictly internal driver boundaries and
+must not be confused with application APIs. Application services are authored
+exclusively using the guest-safe authoring primitives (`defineService`, `distributed`,
+`http.get`/`http.post`, `sql`) documented in the
+[JavaScript Service Reference](../docs/reference/javascript-service-reference.md).
 
 ## 6. The metadata control loop
 
@@ -433,7 +458,34 @@ path. In particular, current externally installed WASI workloads use
 Binding-derived `runtime_service` Cells; legacy `wasm_service` classes are not a
 fourth active placement and consensus model.
 
-## 8. Invariants that organise the code
+## 8. Formation health and diagnostic status interpretation
+
+Cluster health and operational readiness are evaluated across distinct layers.
+A single metric or raw count of running nodes is insufficient to establish cluster
+status:
+
+### Health Probes
+
+- **Liveness (`/livez`)**: Confirms that the host process is running and its loopback HTTP listener responds.
+- **Startup (`/startupz`)**: Confirms that node bootstrap has completed, system schemas are hydrated, and local consensus state machines have initialized.
+- **Readiness (`/readyz`)**: Confirms that the node has formed or joined the cluster, acquired partition leases, and is actively serving SQL and service requests.
+
+### Write-Health States
+
+The control plane write-health owner continuously computes one explicit state:
+
+- **`healthy`**: All active partition groups possess established leaders, majority voter quorums, and replication reserves.
+- **`background_backlog_contained`**: Non-critical background telemetry, heartbeat replication, or CDC drain queues experience transient pressure, but critical state-machine commits and Raft consensus majorities remain fully functional.
+- **`critical_write_unhealthy`**: A required consensus quorum is impaired, leaderless, or partitioned; write operations fail closed immediately with typed errors rather than committing on an isolated minority.
+
+### Interpreting Quorum and Status Ratios
+
+Consensus health follows Raft quorum majorities rather than simple node presence:
+
+- In a cluster with replication factor 3 (`RF = 3`), any majority of two voters forms an active quorum capable of committing writes and serving linearizable reads. The loss of a single node in a 3-node or 5-node cluster does not represent an operational outage or failed release.
+- Conversely, a cluster with 100% of processes running may still be unready if network partitions, leader election deadlocks, or unapplied logs prevent quorum consensus. Diagnostic evaluation must always check partition leader status and voter quorum health rather than relying on unexplained node count ratios.
+
+## 9. Invariants that organise the code
 
 The architecture is easier to navigate when these contracts are treated as
 hard boundaries:

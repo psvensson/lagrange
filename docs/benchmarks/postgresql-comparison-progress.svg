@@ -13,93 +13,75 @@
   <text x="655" y="98" fill="#38bdf8" font-size="13" font-weight="bold">Scenario B: 4-Shape Ladder &amp; WAN</text>
   <text x="655" y="116" fill="#94a3b8" font-size="10">Throughput (local/remote/seq/fan) &amp; WAN bytes</text>
     <text x="35" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
-    <text x="35" y="152" fill="#94a3b8" font-size="10">0.8 tx/s (p95: 4418.9ms)</text>
+    <text x="35" y="152" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="35" y="158" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="158" width="4" height="8" fill="#38bdf8" rx="3"/>
-    <text x="35" y="176" fill="#64748b" font-size="9">observed-docker-cluster</text>
+    <text x="35" y="176" fill="#64748b" font-size="9">none</text>
     <text x="345" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
-    <text x="345" y="152" fill="#94a3b8" font-size="10">441.1 dec/s (p99: 18.1ms)</text>
+    <text x="345" y="152" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="345" y="158" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="158" width="221" height="8" fill="#38bdf8" rx="3"/>
-    <text x="345" y="176" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="176" fill="#64748b" font-size="9">none</text>
     <text x="35" y="200" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit)</text>
-    <text x="35" y="214" fill="#94a3b8" font-size="10">6.8 tx/s (p95: 1383.2ms)</text>
+    <text x="35" y="214" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="35" y="220" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="220" width="5" height="8" fill="#f59e0b" rx="3"/>
-    <text x="35" y="238" fill="#64748b" font-size="9">observed-docker-cluster</text>
+    <text x="35" y="238" fill="#64748b" font-size="9">none</text>
     <text x="345" y="200" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit)</text>
-    <text x="345" y="214" fill="#94a3b8" font-size="10">221.4 dec/s (p99: 36.1ms)</text>
+    <text x="345" y="214" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="345" y="220" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="220" width="111" height="8" fill="#f59e0b" rx="3"/>
-    <text x="345" y="238" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="238" fill="#64748b" font-size="9">none</text>
     <text x="35" y="262" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + App Svc (2-unit)</text>
-    <text x="35" y="276" fill="#94a3b8" font-size="10">14.8 tx/s (p95: 412.6ms)</text>
+    <text x="35" y="276" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="35" y="282" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="282" width="11" height="8" fill="#94a3b8" rx="3"/>
-    <text x="35" y="300" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="300" fill="#64748b" font-size="9">none</text>
     <text x="345" y="262" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + App Svc (2-unit)</text>
-    <text x="345" y="276" fill="#94a3b8" font-size="10">294.6 dec/s (p99: 26.4ms)</text>
+    <text x="345" y="276" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="345" y="282" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="282" width="147" height="8" fill="#94a3b8" rx="3"/>
-    <text x="345" y="300" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="300" fill="#64748b" font-size="9">none</text>
     <text x="35" y="324" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + App Svc (6-unit)</text>
-    <text x="35" y="338" fill="#94a3b8" font-size="10">8.4 tx/s (p95: 920.5ms)</text>
+    <text x="35" y="338" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="35" y="344" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="344" width="6" height="8" fill="#a78bfa" rx="3"/>
-    <text x="35" y="362" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="362" fill="#64748b" font-size="9">none</text>
     <text x="345" y="324" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + App Svc (6-unit)</text>
-    <text x="345" y="338" fill="#94a3b8" font-size="10">218.2 dec/s (p99: 35.2ms)</text>
+    <text x="345" y="338" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="345" y="344" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="344" width="109" height="8" fill="#a78bfa" rx="3"/>
-    <text x="345" y="362" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="362" fill="#64748b" font-size="9">none</text>
     <text x="35" y="386" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + PL/pgSQL (1-unit)</text>
-    <text x="35" y="400" fill="#94a3b8" font-size="10">14.8 tx/s (p95: 412.6ms)</text>
+    <text x="35" y="400" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="35" y="406" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="406" width="11" height="8" fill="#14b8a6" rx="3"/>
-    <text x="35" y="424" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="424" fill="#64748b" font-size="9">none</text>
     <text x="345" y="386" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + PL/pgSQL (1-unit)</text>
-    <text x="345" y="400" fill="#94a3b8" font-size="10">418.4 dec/s (p99: 17.6ms)</text>
+    <text x="345" y="400" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="345" y="406" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="406" width="209" height="8" fill="#14b8a6" rx="3"/>
-    <text x="345" y="424" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="424" fill="#64748b" font-size="9">none</text>
     <text x="35" y="448" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + PL/pgSQL (5-unit)</text>
-    <text x="35" y="462" fill="#94a3b8" font-size="10">8.4 tx/s (p95: 920.5ms)</text>
+    <text x="35" y="462" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="35" y="468" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="468" width="6" height="8" fill="#d97706" rx="3"/>
-    <text x="35" y="486" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="35" y="486" fill="#64748b" font-size="9">none</text>
     <text x="345" y="448" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + PL/pgSQL (5-unit)</text>
-    <text x="345" y="462" fill="#94a3b8" font-size="10">316.8 dec/s (p99: 24.1ms)</text>
+    <text x="345" y="462" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="345" y="468" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="468" width="158" height="8" fill="#d97706" rx="3"/>
-    <text x="345" y="486" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <text x="345" y="486" fill="#64748b" font-size="9">none</text>
     <text x="655" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
-    <text x="655" y="152" fill="#94a3b8" font-size="10">WAN: 144B (0.0 RT)</text>
+    <text x="655" y="152" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="655" y="158" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="158" width="7" height="8" fill="#38bdf8" rx="3"/>
-    <text x="655" y="176" fill="#94a3b8" font-size="9">620 / 495 / 380 / 410 dec/s</text>
+    <text x="655" y="176" fill="#94a3b8" font-size="9">[not measured]</text>
     <text x="655" y="200" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit)</text>
-    <text x="655" y="214" fill="#94a3b8" font-size="10">WAN: 6144B (4.5 RT)</text>
+    <text x="655" y="214" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="655" y="220" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="220" width="260" height="8" fill="#f59e0b" rx="3"/>
-    <text x="655" y="238" fill="#94a3b8" font-size="9">280 / 235 / 190 / 215 dec/s</text>
+    <text x="655" y="238" fill="#94a3b8" font-size="9">[not measured]</text>
     <text x="655" y="262" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + App Svc (2-unit)</text>
-    <text x="655" y="276" fill="#94a3b8" font-size="10">WAN: 1420B (2.8 RT)</text>
+    <text x="655" y="276" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="655" y="282" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="282" width="74" height="8" fill="#94a3b8" rx="3"/>
-    <text x="655" y="300" fill="#94a3b8" font-size="9">520 / 330 / 198 / 230 dec/s</text>
+    <text x="655" y="300" fill="#94a3b8" font-size="9">[not measured]</text>
     <text x="655" y="324" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + App Svc (6-unit)</text>
-    <text x="655" y="338" fill="#94a3b8" font-size="10">WAN: 2680B (2.8 RT)</text>
+    <text x="655" y="338" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="655" y="344" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="344" width="139" height="8" fill="#a78bfa" rx="3"/>
-    <text x="655" y="362" fill="#94a3b8" font-size="9">385 / 248 / 146 / 174 dec/s</text>
+    <text x="655" y="362" fill="#94a3b8" font-size="9">[not measured]</text>
     <text x="655" y="386" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + PL/pgSQL (1-unit)</text>
-    <text x="655" y="400" fill="#94a3b8" font-size="10">WAN: 320B (1.0 RT)</text>
+    <text x="655" y="400" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="655" y="406" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="406" width="17" height="8" fill="#14b8a6" rx="3"/>
-    <text x="655" y="424" fill="#94a3b8" font-size="9">590 / 442 / 312 / 358 dec/s</text>
+    <text x="655" y="424" fill="#94a3b8" font-size="9">[not measured]</text>
     <text x="655" y="448" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + PL/pgSQL (5-unit)</text>
-    <text x="655" y="462" fill="#94a3b8" font-size="10">WAN: 960B (1.0 RT)</text>
+    <text x="655" y="462" fill="#94a3b8" font-size="10">[not measured]</text>
     <rect x="655" y="468" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="468" width="50" height="8" fill="#d97706" rx="3"/>
-    <text x="655" y="486" fill="#94a3b8" font-size="9">455 / 338 / 234 / 272 dec/s</text>
+    <text x="655" y="486" fill="#94a3b8" font-size="9">[not measured]</text>
 </svg>

@@ -24,9 +24,10 @@ ways:
    replicas executes `AVG` and `COUNT` per movie.
 2. **Lagrange distributed grouped SQL** - the same grouped query runs across
    Lagrange partitions.
-3. **A replicated Lagrange service** - two service replicas apply a
-   confidence-adjusted Bayesian ranking on disjoint movie-id shards. Each
-   publishes at most ten candidates; one replica merges at most twenty.
+3. **A replicated Lagrange service** - three service replicas (`SERVICE_REPLICA_COUNT = 3`)
+   apply a confidence-adjusted Bayesian ranking on disjoint movie-id shards across
+   six data partitions (`PARTITION_COUNT = 6`, `RF = 3`) on a five-node cluster (`NODE_COUNT = 5`).
+   Each replica publishes at most ten candidates; the reducer merges at most thirty candidates.
 
 All three paths use the same ranking formula and return the same ordered top
 ten.
@@ -44,7 +45,7 @@ Start with these files:
   service using `defineService`, `distributed`, and `sql`;
 - [`movie-ranking.js`](movie-ranking.js) - the ranking policy itself;
 - [`affinity-demo-binding-service.js`](affinity-demo-binding-service.js) -
-  the deployment helper that runs `runGenerate` -> `runBuild` -> `runDeploy`
+  the deployment helper that runs `runGenerate` -> `runBuild` -> `runPublish` -> `runDeploy`
   and invokes `CALL BINDING $1` over authenticated pgwire;
 - [`run-comparison.js`](run-comparison.js) - the small top-level orchestrator
   that requires result parity and keeps unlike latency measurements separate;
@@ -176,8 +177,10 @@ The report keeps unlike measurements separate:
 | Lagrange grouped SQL | one aggregate per movie | none |
 | Lagrange replicated service | shard scans remain behind service executors | at most `replicas × topN` candidates |
 
-For this run, `replicas = 2` and `topN = 10`, so the service merge receives at
-most twenty candidates.
+For this run, the topology is configured with `NODE_COUNT = 5`, `PARTITION_COUNT = 6`,
+`RF = 3`, and `SERVICE_REPLICA_COUNT = 3`. With `topN = 10`, each service replica
+evaluates its partition-local shards and emits at most ten candidates, so the
+service merge receives at most thirty (`3 × 10 = 30`) candidates across all shards.
 
 This bound matters as data grows. Let:
 
@@ -299,6 +302,14 @@ Check four things in order:
 4. **Affinity** - attributed partition access produces placement evidence and
    the service converges toward a better weighted node set.
 
+> [!NOTE]
+> **Locality Counts as Derived Explanatory Accounting (`V19`):**
+> Locality counts, row tallies, and transfer comparisons reported by the demo represent
+> *derived explanatory accounting* (an analytical ledger calculated from schema row sizes,
+> partition boundaries, and partial emit counts) rather than physical network interface byte
+> counters. They explain algorithmic boundary volume differences; verified comparative
+> network claims require physical socket byte counters on dedicated multi-host testbeds.
+
 Startup, loading, and topology differ between PostgreSQL and Lagrange. The
 demo therefore does not print a PostgreSQL-versus-Lagrange speedup ratio. Such
 a ratio would be misleading.
@@ -323,7 +334,7 @@ This demo compiles and deploys
 [`examples/service-data-affinity/lagrange.service.js`](lagrange.service.js)
 (`defineService` / `distributed`) as a genuine [WASI](https://wasi.dev/)
 `call` Binding (`movielens--call--topn`) through the public
-`runGenerate` -> `runBuild` -> `runDeploy` pipeline (`INSTALL SERVICE` and
+`runGenerate` -> `runBuild` -> `runPublish` -> `runDeploy` pipeline (`INSTALL SERVICE` and
 `CREATE BINDING`), and invokes `CALL BINDING $1` over an authenticated
 PostgreSQL-wire session while the rebalancer moves the runtime service Cells
 toward partition leader hosts.
@@ -334,7 +345,7 @@ The remaining boundaries are explicit:
   exposing an outer HTTP `request` Binding (for a composed HTTP `request`
   Binding + `call` Binding example, see
   [call-binding-account-summary](../call-binding-account-summary/README.md));
-- all three Lagrange nodes and the PostgreSQL baseline run as local processes
+- all five Lagrange nodes (`NODE_COUNT = 5`) and the PostgreSQL baseline run as local processes
   on one machine, so this is a correctness, transfer-shape, and placement
   study rather than a multi-machine production benchmark; and
 - the `pushdown` Binding kind still has no public invocation adapter, and

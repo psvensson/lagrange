@@ -205,12 +205,55 @@ function manifestWithExports(exports_) {
 
 function installPayload(overrides = {}) {
   return JSON.stringify({
-    artifact_source: {kind: 'remote_oci'},
     config: {replicas: 2},
     idempotency_key: 'install-analytics-worker',
     manifest: manifest(),
     ...overrides,
   });
+}
+
+function createFixturePayloadStore() {
+  const sealedPayloads = new Map();
+  function seed(digest) {
+    sealedPayloads.set(digest, Object.freeze({
+      artifactDigest: digest,
+      chunkCount: 1,
+      createdAt: 1000,
+      mediaType: CONTAINER_MEDIA_TYPE,
+      payloadDigest: digest,
+      sealedAt: 1000,
+      totalSize: 1024,
+    }));
+  }
+  seed(DIGEST_A);
+  seed(DIGEST_B);
+  return {
+    async putPayload(request) {
+      const alreadySealed = sealedPayloads.has(request.artifactDigest);
+      if (!alreadySealed) {
+        sealedPayloads.set(request.artifactDigest, Object.freeze({
+          artifactDigest: request.artifactDigest,
+          chunkCount: request.chunkCount || 1,
+          createdAt: 1000,
+          mediaType: request.mediaType,
+          payloadDigest: request.payloadDigest,
+          sealedAt: 1000,
+          totalSize: request.bytes ? request.bytes.length : (request.totalSize || 0),
+        }));
+      }
+      return Object.freeze({
+        alreadySealed,
+        chunkCount: request.chunkCount || 1,
+        payloadDigest: request.payloadDigest,
+        sealedAt: 1000,
+        totalSize: request.bytes ? request.bytes.length : (request.totalSize || 0),
+      });
+    },
+    async findSealedPayloadByArtifactDigest(artifactDigest) {
+      const payload = sealedPayloads.get(artifactDigest);
+      return payload ? {found: true, payload} : {found: false};
+    },
+  };
 }
 
 function createSystemCache() {
@@ -238,7 +281,10 @@ function createEngineFixture(options = {}) {
   const bindingOwner = systemMetadataOwners.deploymentBindingOwner;
   const artifactResolver = options.artifactResolver ||
     new FixtureArtifactResolver();
+  const artifactPayloadStore = options.artifactPayloadStore !== undefined ?
+    options.artifactPayloadStore : createFixturePayloadStore();
   const commandOwner = new ServiceLifecycleCommandOwner({
+    artifactPayloadStore,
     artifactResolver,
     bindingOwner,
     catalogOwner,
@@ -1008,4 +1054,101 @@ describe('service lifecycle SQL durable owner route', () => {
         second.rows[0].service_definition_id,
       );
     });
+
+  it('rejects INSTALL with artifact_source with ARTIFACT_SOURCE_RETIRED', async () => {
+    const fixture = createEngineFixture();
+    const adapter = await createAuthenticatedAdapter(fixture.engine);
+    const retiredPayload = JSON.stringify({
+      artifact_source: {kind: 'local_oci_layout', location: '/tmp/retired'},
+      idempotency_key: 'install-retired',
+      manifest: manifest(),
+    });
+    const result = await adapter.execute(
+      'session-1', 'INSTALL SERVICE $1', [retiredPayload],
+    );
+    assert.equal(result.success, false);
+    assert.equal(
+      result.errorCode,
+      SERVICE_LIFECYCLE_SQL_ERROR_CODE.ARTIFACT_SOURCE_RETIRED,
+    );
+  });
+
+  it('rejects INSTALL when artifact payload store is missing with STORE_UNAVAILABLE', async () => {
+    const fixture = createEngineFixture({artifactPayloadStore: null});
+    const adapter = await createAuthenticatedAdapter(fixture.engine);
+    const result = await adapter.execute(
+      'session-1', 'INSTALL SERVICE $1', [installPayload()],
+    );
+    assert.equal(result.success, false);
+    assert.equal(
+      result.errorCode,
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.STORE_UNAVAILABLE,
+    );
+  });
+
+  it('rejects INSTALL when artifact digest is not sealed with ARTIFACT_NOT_SEALED', async () => {
+    const fixture = createEngineFixture();
+    const adapter = await createAuthenticatedAdapter(fixture.engine);
+    const unsealedDigest = `sha256:${'c'.repeat(64)}`;
+    const result = await adapter.execute(
+      'session-1',
+      'INSTALL SERVICE $1',
+      [installPayload({manifest: manifest('1.0.0', unsealedDigest)})],
+    );
+    assert.equal(result.success, false);
+    assert.equal(
+      result.errorCode,
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_NOT_SEALED,
+    );
+  });
+
+  it('publishes and seals artifact over PUBLISH SERVICE ARTIFACT $1', async () => {
+    const fixture = createEngineFixture();
+    const payloadBytes = Buffer.from('wasm-bytes-to-publish');
+    const digest = `sha256:${'d'.repeat(64)}`;
+    const publishPayload = JSON.stringify({
+      artifact_digest: digest,
+      bytes: payloadBytes.toString('base64'),
+      media_type: 'application/wasm',
+    });
+    const execution = await fixture.engine.tryExecuteServiceLifecycleSql(
+      'PUBLISH SERVICE ARTIFACT $1',
+      [publishPayload],
+      {
+        securityContext: {
+          tenantId: 'system',
+          principal: 'service-operator',
+          roles: ['service-operator'],
+        },
+        sessionId: 'session-1',
+      },
+    );
+    assert.equal(execution.disposition, 'handled');
+    const result = execution.result;
+    assert.equal(result.success, true);
+    assert.equal(result.rows[0].artifact_digest, digest);
+    assert.equal(result.rows[0].already_sealed, false);
+
+    // Verify it is now sealed in store
+    const lookup = await fixture.commandOwner.artifactPayloadStore
+      .findSealedPayloadByArtifactDigest(digest);
+    assert.equal(lookup.found, true);
+
+    // Replay publish returns already_sealed: true
+    const replayExecution = await fixture.engine.tryExecuteServiceLifecycleSql(
+      'PUBLISH SERVICE ARTIFACT $1',
+      [publishPayload],
+      {
+        securityContext: {
+          tenantId: 'system',
+          principal: 'service-operator',
+          roles: ['service-operator'],
+        },
+        sessionId: 'session-1',
+      },
+    );
+    assert.equal(replayExecution.disposition, 'handled');
+    assert.equal(replayExecution.result.success, true);
+    assert.equal(replayExecution.result.rows[0].already_sealed, true);
+  });
 });

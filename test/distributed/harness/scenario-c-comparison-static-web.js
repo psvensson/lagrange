@@ -62,37 +62,67 @@ function filterTargets(matrix, allowedIds) {
 }
 
 function renderSvgBarRow(x, y, [l1, l2], met, w, col, sub, barW = 250, subCol = '#64748b') {
+  const fillBar = w > 0 ?
+    `\n    <rect x="${x}" y="${y + 30}" width="${w}" height="8" fill="${col}" rx="3"/>` : '';
   return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${l1}</text>
     <text x="${x}" y="${y + 12}" fill="#94a3b8" font-size="10" font-family="monospace">${l2}</text>
     <text x="${x}" y="${y + 24}" fill="#cbd5e1" font-size="10">${met}</text>
-    <rect x="${x}" y="${y + 30}" width="${barW}" height="8" fill="#334155" rx="3"/>
-    <rect x="${x}" y="${y + 30}" width="${w}" height="8" fill="${col}" rx="3"/>
+    <rect x="${x}" y="${y + 30}" width="${barW}" height="8" fill="#334155" rx="3"/>${fillBar}
     <text x="${x}" y="${y + 48}" fill="${subCol}" font-size="9">${sub}</text>`;
 }
 
+function renderScenarioCRow1(y, lines, c, col) {
+  const hasD0 = typeof c.freshDecisionsPerSec0ms === 'number' &&
+    Number.isFinite(c.freshDecisionsPerSec0ms);
+  const d0 = hasD0 ? c.freshDecisionsPerSec0ms : null;
+  const w1 = hasD0 ? Math.max(4, Math.min(250, Math.round((d0 / 500) * 250))) : 0;
+  const m1 = hasD0 ?
+    `${fmtNum(d0)} dec/s (${fmtNum(c.staleDecisionRatePct, 2)}% stale)` :
+    `[${c.status || 'not measured'}]`;
+  return renderSvgBarRow(35, y, lines, m1, w1, col, `Tier: ${c.evidenceTier || 'not-measured'}`);
+}
+
+function renderScenarioCRow2(y, lines, b, c, col) {
+  const hasD1k = typeof c.freshDecisionsPerSec1000ms === 'number' &&
+    Number.isFinite(c.freshDecisionsPerSec1000ms);
+  const d1k = hasD1k ? c.freshDecisionsPerSec1000ms : null;
+  const w2 = hasD1k ? Math.max(4, Math.min(250, Math.round((d1k / 600) * 250))) : 0;
+  const m2 = hasD1k ?
+    `${fmtNum(d1k)} dec/s (p99: ${fmtNum(b.p99Ms)}ms)` :
+    `[${c.status || 'not measured'}]`;
+  const sub2 = hasD1k ?
+    `100ms: ${fmtNum(c.freshDecisionsPerSec100ms)} dec/s` :
+    `[${c.status || 'not measured'}]`;
+  return renderSvgBarRow(345, y, lines, m2, w2, col, sub2);
+}
+
+function renderScenarioCRow3(y, lines, c, col) {
+  const hasBf = typeof c.ruleChangeBackfillSec === 'number' &&
+    Number.isFinite(c.ruleChangeBackfillSec);
+  const bf = hasBf ? c.ruleChangeBackfillSec : null;
+  const w3 = hasBf ? Math.max(4, Math.min(260, Math.round((bf / 250) * 260))) : 0;
+  const m3 = hasBf ?
+    `Backfill: ${fmtNum(bf, 0)}s (Restart: ${fmtNum(c.cacheRestartRecoverySec)}s)` :
+    `[${c.status || 'not measured'}]`;
+  const recov = hasBf ? `${fmtNum(c.cacheRestartRecoverySec)}s` : `[${c.status || 'not measured'}]`;
+  const s3 = `${c.operationalPipelines || 1} pipeline(s) | Recovery: ${recov}`;
+  return renderSvgBarRow(655, y, lines, m3, w3, col, s3, 260, '#94a3b8');
+}
+
+function renderSingleScenarioCTargetSvgRow(t, idx) {
+  const y = 146 + idx * 72;
+  const col = TARGET_COLORS[t.targetId] || '#94a3b8';
+  const lines = TARGET_STACKED_LABELS[t.targetId] || [t.label, ''];
+  const b = t.scenarioB || {};
+  const c = t.scenarioC || {};
+  const r1 = renderScenarioCRow1(y, lines, c, col);
+  const r2 = renderScenarioCRow2(y, lines, b, c, col);
+  const r3 = renderScenarioCRow3(y, lines, c, col);
+  return `${r1}\n${r2}\n${r3}`;
+}
+
 function renderSvgRows(targets) {
-  return arrayJoin(arrayMap(targets, (t, idx) => {
-    const y = 146 + idx * 72;
-    const col = TARGET_COLORS[t.targetId] || '#94a3b8';
-    const lines = TARGET_STACKED_LABELS[t.targetId] || [t.label, ''];
-    const b = t.scenarioB || {};
-    const c = t.scenarioC || {};
-    const d0 = c.freshDecisionsPerSec0ms || 0;
-    const w1 = Math.max(4, Math.min(250, Math.round((d0 / 500) * 250)));
-    const m1 = `${fmtNum(d0)} dec/s (${fmtNum(c.staleDecisionRatePct, 2)}% stale)`;
-    const r1 = renderSvgBarRow(35, y, lines, m1, w1, col, `Tier: ${c.evidenceTier || 'modeled'}`);
-    const d1k = c.freshDecisionsPerSec1000ms || 0;
-    const w2 = Math.max(4, Math.min(250, Math.round((d1k / 600) * 250)));
-    const m2 = `${fmtNum(d1k)} dec/s (p99: ${fmtNum(b.p99Ms)}ms)`;
-    const r2 = renderSvgBarRow(345, y, lines, m2, w2, col, `100ms: ${fmtNum(c.freshDecisionsPerSec100ms)} dec/s`);
-    const bf = c.ruleChangeBackfillSec || 0;
-    const w3 = Math.max(4, Math.min(260, Math.round((bf / 250) * 260)));
-    const m3 = `Backfill: ${fmtNum(bf, 0)}s (Restart: ${fmtNum(c.cacheRestartRecoverySec)}s)`;
-    const s3 = `${c.operationalPipelines} pipeline(s) | Recovery: ` +
-      `${fmtNum(c.cacheRestartRecoverySec)}s`;
-    const r3 = renderSvgBarRow(655, y, lines, m3, w3, col, s3, 260, '#94a3b8');
-    return `${r1}\n${r2}\n${r3}`;
-  }), '\n');
+  return arrayJoin(arrayMap(targets, renderSingleScenarioCTargetSvgRow), '\n');
 }
 
 function renderScenarioCComparisonSvg(matrix) {
@@ -131,31 +161,66 @@ function renderTables(targets) {
   const r = (fn) => arrayJoin(arrayMap(targets, fn), '\n');
   const f = fmtNum;
   return {
-    trC: r((t) => `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ` +
-      `${t.scenarioC?.operationalPipelines} | ${f(t.scenarioC?.freshDecisionsPerSec0ms)} | ` +
-      `${f(t.scenarioC?.freshDecisionsPerSec100ms)} | ` +
-      `${f(t.scenarioC?.freshDecisionsPerSec1000ms)} | ` +
-      `${f(t.scenarioC?.staleDecisionRatePct, 2)}% | ` +
-      `${f(t.scenarioC?.ruleChangeBackfillSec)}s | ${f(t.scenarioC?.cacheRestartRecoverySec)}s |`),
-    trCtx: r((t) => `| ${t.targetId} | ${t.topologyUnits} | ${t.processCount} | ` +
-      `${t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No'} | ${f(t.scenarioA?.throughputTxPerSec)} | ` +
-      `${f(t.scenarioB?.decisionsPerSec)} | ${f(t.scenarioB?.p99Ms)} | ` +
-      `${t.scenarioB?.wanBytesPerDecision ?? 0} |`),
-    htC: r((t) => `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
-      `<td>${escapeXml(t.version)}</td><td>${t.topologyUnits}</td>` +
-      `<td>${t.scenarioC?.operationalPipelines}</td>` +
-      `<td>${f(t.scenarioC?.freshDecisionsPerSec0ms)}</td>` +
-      `<td>${f(t.scenarioC?.freshDecisionsPerSec100ms)}</td>` +
-      `<td>${f(t.scenarioC?.freshDecisionsPerSec1000ms)}</td>` +
-      `<td>${f(t.scenarioC?.staleDecisionRatePct, 2)}%</td>` +
-      `<td>${f(t.scenarioC?.ruleChangeBackfillSec)}s</td>` +
-      `<td>${f(t.scenarioC?.cacheRestartRecoverySec)}s</td></tr>`),
-    htCtx: r((t) => `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
-      `<td>${t.topologyUnits}</td><td>${t.processCount}</td>` +
-      `<td>${t.rpoZeroSurvivability ? 'Yes' : 'No'}</td>` +
-      `<td>${f(t.scenarioA?.throughputTxPerSec)}</td>` +
-      `<td>${f(t.scenarioB?.decisionsPerSec)}</td><td>${f(t.scenarioB?.p99Ms)}</td>` +
-      `<td>${t.scenarioB?.wanBytesPerDecision ?? 0}</td></tr>`),
+    trC: r((t) => {
+      const c = t.scenarioC;
+      if (c?.freshDecisionsPerSec0ms != null) {
+        return `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ` +
+          `${c.operationalPipelines} | ${f(c.freshDecisionsPerSec0ms)} | ` +
+          `${f(c.freshDecisionsPerSec100ms)} | ` +
+          `${f(c.freshDecisionsPerSec1000ms)} | ` +
+          `${f(c.staleDecisionRatePct, 2)}% | ` +
+          `${f(c.ruleChangeBackfillSec)}s | ${f(c.cacheRestartRecoverySec)}s |`;
+      }
+      const st = `[${c?.status || 'not measured'}]`;
+      return `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ` +
+        `${c?.operationalPipelines || 1} | ${st} | ${st} | ${st} | ${st} | ${st} | ${st} |`;
+    }),
+    trCtx: r((t) => {
+      const a = t.scenarioA || {};
+      const b = t.scenarioB || {};
+      const rpo = t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No';
+      const aMet = a.throughputTxPerSec != null ? f(a.throughputTxPerSec) : `[${a.status || 'not measured'}]`;
+      const bMet = b.decisionsPerSec != null ? f(b.decisionsPerSec) : `[${b.status || 'not measured'}]`;
+      const bP99 = b.p99Ms != null ? f(b.p99Ms) : `[${b.status || 'not measured'}]`;
+      const bWan = b.wanBytesPerDecision != null ? `${b.wanBytesPerDecision}` : `[${b.status || 'not measured'}]`;
+      return `| ${t.targetId} | ${t.topologyUnits} | ${t.processCount} | ` +
+        `${rpo} | ${aMet} | ${bMet} | ${bP99} | ${bWan} |`;
+    }),
+    htC: r((t) => {
+      const c = t.scenarioC;
+      if (c?.freshDecisionsPerSec0ms != null) {
+        return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
+          `<td>${escapeXml(t.version)}</td><td>${t.topologyUnits}</td>` +
+          `<td>${c.operationalPipelines}</td>` +
+          `<td>${f(c.freshDecisionsPerSec0ms)}</td>` +
+          `<td>${f(c.freshDecisionsPerSec100ms)}</td>` +
+          `<td>${f(c.freshDecisionsPerSec1000ms)}</td>` +
+          `<td>${f(c.staleDecisionRatePct, 2)}%</td>` +
+          `<td>${f(c.ruleChangeBackfillSec)}s</td>` +
+          `<td>${f(c.cacheRestartRecoverySec)}s</td></tr>`;
+      }
+      const badge = `<span class="badge">${escapeXml(c?.status || 'not measured')}</span>`;
+      return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
+        `<td>${escapeXml(t.version)}</td><td>${t.topologyUnits}</td>` +
+        `<td>${c?.operationalPipelines || 1}</td>` +
+        `<td>${badge}</td><td>${badge}</td><td>${badge}</td><td>${badge}</td>` +
+        `<td>${badge}</td><td>${badge}</td></tr>`;
+    }),
+    htCtx: r((t) => {
+      const a = t.scenarioA || {};
+      const b = t.scenarioB || {};
+      const rpo = t.rpoZeroSurvivability ? 'Yes' : 'No';
+      const aBadge = a.throughputTxPerSec != null ? f(a.throughputTxPerSec) : `<span class="badge">${escapeXml(a.status || 'not measured')}</span>`;
+      const bBadge = b.decisionsPerSec != null ? f(b.decisionsPerSec) : `<span class="badge">${escapeXml(b.status || 'not measured')}</span>`;
+      const p99Badge = b.p99Ms != null ? f(b.p99Ms) : `<span class="badge">${escapeXml(b.status || 'not measured')}</span>`;
+      const wanBadge = b.wanBytesPerDecision != null ? `${b.wanBytesPerDecision}` : `<span class="badge">${escapeXml(b.status || 'not measured')}</span>`;
+      return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td>` +
+        `<td>${t.topologyUnits}</td><td>${t.processCount}</td>` +
+        `<td>${rpo}</td>` +
+        `<td>${aBadge}</td>` +
+        `<td>${bBadge}</td><td>${p99Badge}</td>` +
+        `<td>${wanBadge}</td></tr>`;
+    }),
   };
 }
 
@@ -175,20 +240,13 @@ across sync write-through and async CDC streaming under explicit freshness SLAs.
 ![PostgreSQL 17 + Valkey 8 feature store and Lagrange comparative progress chart](scenario-c-feature-store-progress.svg)
 
 ## Feature-freshness SLA tradeoff (0 ms read-your-writes vs 1000 ms relaxed staleness)
-- **0 ms strict read-your-writes**: Lagrange delivers 441.2 dec/s (0.0% stale) via transactional
-  state; PG Patroni HA reaches 316.8 dec/s (0.0% stale). Sync write-through reaches 310.0 dec/s
-  (0.42% stale); async CDC yields 0.0 dec/s (6.8% stale) due to replication lag.
-- **1000 ms relaxed staleness**: Precomputed Valkey caching bypasses relational bottlenecks:
-  async CDC reaches 538.0 dec/s (12.4ms p99) and sync reaches 485.0 dec/s (16.2ms p99),
-  exceeding Lagrange (441.2 dec/s, 18.1ms p99).
+- **0 ms strict read-your-writes**: Evaluates strict transactional visibility across continuous streaming ingestion.
+- **1000 ms relaxed staleness**: Precomputed Valkey caching decouples decision evaluation from relational storage transactions.
 
 ## Rule-change agility, backfill downtime, and operational footprint
-- **Rule-change backfill cost**: 185.0s (sync) to 240.0s (async) backfill downtime. Lagrange and
-  PostgreSQL functions require 0.0s because features evaluate on demand over raw event state.
-- **Cache-node restart recovery**: Valkey restart and warm-up takes 42.0s (sync) to 58.0s (async);
-  Lagrange recovers in 3.2s via Raft log replay.
-- **Operational pipeline count**: Lagrange operates 1 unified pipeline. Relational + Valkey
-  requires 3 (sync) or 4 (async CDC) pipelines.
+- **Rule-change backfill cost**: Evaluates offline/online index and feature backfill requirements across relational and in-memory caches.
+- **Cache-node restart recovery**: Evaluates cache warm-up vs log-replay recovery duration.
+- **Operational pipeline count**: Evaluates unified streaming actor execution against multi-tier caching architectures (evaluating \`pg-valkey-sync-write-through\` and \`pg-valkey-async-stream\`). Comparative performance claims await admitted GCP/lab measurements.
 
 ## Scenario C feature store and freshness-bounded risk decision comparison
 
@@ -226,20 +284,13 @@ function renderScenarioCComparisonHtml(matrix) {
     <div class="chart-box">\n${renderScenarioCComparisonSvg(matrix)}    </div>
     <div class="card">
       <h2>Feature-Freshness SLA Tradeoff (0 ms Read-Your-Writes vs 1000 ms Relaxed Staleness)</h2>
-      <ul><li><strong>0 ms read-your-writes</strong>: Lagrange delivers 441.2 dec/s (0.0% stale).
-        PG Patroni HA reaches 316.8 dec/s (0.0% stale). Sync write-through reaches 310.0 dec/s
-        (0.42% stale). Async CDC yields 0.0 dec/s (6.8% stale) due to replication lag.</li>
-      <li><strong>1000 ms relaxed staleness</strong>: Valkey caching decouples decisions:
-        async CDC reaches 538.0 dec/s (12.4ms p99), sync reaches 485.0 dec/s (16.2ms p99),
-        exceeding Lagrange (441.2 dec/s, 18.1ms p99).</li></ul></div>
+      <ul><li><strong>0 ms read-your-writes</strong>: Evaluates strict transactional visibility across streaming ingestion.</li>
+      <li><strong>1000 ms relaxed staleness</strong>: Valkey caching decouples decision evaluation from relational storage transactions.</li></ul></div>
     <div class="card">
       <h2>Rule-Change Agility, Backfill Downtime, and Operational Footprint</h2>
-      <ul><li><strong>Rule-change backfill</strong>: 185.0s (sync) to 240.0s (async CDC) backfill.
-        Lagrange and PG functions require 0.0s because features evaluate on demand.</li>
-      <li><strong>Cache restart recovery</strong>: Valkey restart takes 42.0s (sync) to 58.0s
-        (async); Lagrange recovers in 3.2s via Raft log replay.</li>
-      <li><strong>Operational pipelines</strong>: Lagrange operates 1 binary pipeline.
-        Relational + Valkey requires 3 (sync) or 4 (async CDC) pipelines.</li></ul>
+      <ul><li><strong>Rule-change backfill</strong>: Evaluates operational rule backfill requirements across architectures.</li>
+      <li><strong>Cache restart recovery</strong>: Evaluates cache warm-up vs log replay duration.</li>
+      <li><strong>Operational pipelines</strong>: Evaluates unified streaming actor execution against multi-tier caching architectures (evaluating <code>pg-valkey-sync-write-through</code> and <code>pg-valkey-async-stream</code>); comparative performance claims await admitted GCP/lab measurements.</li></ul>
       <table><thead><tr><th>Target</th><th>Version</th><th>Units</th><th>Pipelines</th>
         <th>0 ms SLA</th><th>100 ms SLA</th><th>1000 ms SLA</th><th>Stale</th>
         <th>Backfill</th><th>Recovery</th></tr></thead><tbody>\n${htC}\n</tbody></table></div>

@@ -19,6 +19,7 @@ const ZERO = 0;
 const ONE = 1;
 const HEALTHY = 'healthy';
 const POSTGRES_SERVICE_REPLICA_COUNT = 1;
+const DEFAULT_BENCHMARK_CONVERGENCE_TIMEOUT_MS = 300000;
 const PG_RUNTIME_CONFIG = Object.freeze({
   host: '0.0.0.0',
   authMode: 'password',
@@ -165,6 +166,17 @@ async function discoverPublicPgWireEndpoint(cluster, seedNode, executionContract
   throw new Error('Timed out waiting for healthy public PostgreSQL wire endpoint');
 }
 
+function resolveBenchmarkConvergenceTimeoutMs(cluster) {
+  const configuredTimeoutMs = Number(
+    cluster._config?.benchmark?.convergenceTimeoutMs ??
+      DEFAULT_BENCHMARK_CONVERGENCE_TIMEOUT_MS,
+  );
+  return Number.isInteger(configuredTimeoutMs) &&
+    configuredTimeoutMs > TIMEOUTS.SCENARIO_DEFAULT ?
+    configuredTimeoutMs :
+    TIMEOUTS.SCENARIO_DEFAULT;
+}
+
 async function prepareLagrangeScenarioAPublicPgContext(value) {
   const options = requireOptions(value);
   const cluster = requireCluster(options.cluster);
@@ -179,7 +191,7 @@ async function prepareLagrangeScenarioAPublicPgContext(value) {
 
   await cluster.waitForConvergence({
     targetVoterCount: nodes.length,
-    settleTimeoutMs: TIMEOUTS.SCENARIO_DEFAULT,
+    settleTimeoutMs: resolveBenchmarkConvergenceTimeoutMs(cluster),
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
   });
   await configurePublicPgWire(seedNode, executionContract);

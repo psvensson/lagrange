@@ -10,6 +10,7 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {TABLES} from '../../src/constants/index.js';
+import {RUNTIME_KIND} from '../../src/constants/runtime.js';
 import {
   DEPLOYMENT_BINDING_ERROR_CODE,
   DEPLOYMENT_BINDING_SOURCE_INTERFACE,
@@ -20,6 +21,10 @@ import {
   deriveBindingVersionId,
   normalizeDeploymentBinding,
 } from '../../src/control-plane/owners/deployment-binding-contract.js';
+import {
+  ARTIFACT_PAYLOAD_NOT_INTERNALIZED,
+  DeploymentBindingOwner,
+} from '../../src/control-plane/owners/deployment-binding-owner.js';
 import {
   SERVICE_INSTALL_CATALOG_ERROR_CODE,
   ServiceInstallCatalogError,
@@ -715,4 +720,157 @@ describe('deployment Binding system-table owner', () => {
       );
     },
   );
+
+  test('V08: refuses WASM component binding without payload store or unsealed payload',
+    async () => {
+      const gateway = new DurableBindingGateway();
+      const owners = createOwners(gateway);
+      const catalog = owners.serviceInstallCatalogOwner;
+
+      const wasmManifest = {
+        ...manifest(),
+        artifact: {
+          ...manifest().artifact,
+          media_type: 'application/wasm',
+        },
+        runtime: {kind: RUNTIME_KIND.WASM_COMPONENT},
+      };
+      const wasmResolved = {
+        ...resolvedArtifact(),
+        artifact: {
+          ...resolvedArtifact().artifact,
+          payloadMediaType: 'application/wasm',
+        },
+      };
+      const packageId = deriveTenantPackageId(wasmManifest, TENANT);
+      const package_ = await catalog.recordPackage({
+        manifest: wasmManifest,
+        packageId,
+        resolvedArtifact: wasmResolved,
+      });
+
+      // Case 1: missing store
+      const ownerWithoutStore = new DeploymentBindingOwner({
+        catalogOwner: catalog,
+        controlPlaneSystemTableGateway: gateway,
+      });
+      await assert.rejects(
+        ownerWithoutStore.createBinding(
+          bindingInput({...package_, manifest: wasmManifest}),
+          SECURITY_CONTEXT,
+        ),
+        (error) => {
+          assert.ok(error instanceof DeploymentBindingError);
+          assert.equal(error.code, ARTIFACT_PAYLOAD_NOT_INTERNALIZED.CODE);
+          return true;
+        },
+      );
+
+      // Case 2: store returns found: false
+      const ownerWithUnsealed = new DeploymentBindingOwner({
+        artifactPayloadStore: {
+          findSealedPayloadByArtifactDigest: async () => ({found: false}),
+        },
+        catalogOwner: catalog,
+        controlPlaneSystemTableGateway: gateway,
+      });
+      await assert.rejects(
+        ownerWithUnsealed.createBinding(
+          bindingInput({...package_, manifest: wasmManifest}),
+          SECURITY_CONTEXT,
+        ),
+        (error) => {
+          assert.ok(error instanceof DeploymentBindingError);
+          assert.equal(error.code, ARTIFACT_PAYLOAD_NOT_INTERNALIZED.CODE);
+          return true;
+        },
+      );
+
+      // Case 3: store returns found: true
+      const ownerWithSealed = new DeploymentBindingOwner({
+        artifactPayloadStore: {
+          findSealedPayloadByArtifactDigest: async () => ({found: true}),
+        },
+        catalogOwner: catalog,
+        controlPlaneSystemTableGateway: gateway,
+      });
+      const admitted = await ownerWithSealed.createBinding(
+        bindingInput({...package_, manifest: wasmManifest}),
+        SECURITY_CONTEXT,
+      );
+      assert.equal(admitted.generation, 1);
+      assert.equal(admitted.replayed, false);
+    });
+
+  test('V09: transitions to next generation on changed code while preserving stable endpoint and pins highest generation in getBindingByName',
+    async () => {
+      const gateway = new DurableBindingGateway();
+      const owners = createOwners(gateway);
+      const catalog = owners.serviceInstallCatalogOwner;
+      const owner = owners.deploymentBindingOwner;
+
+      const package1 = await seedPackage(catalog);
+      const input1 = bindingInput(package1);
+      const gen1 = await owner.createBinding(input1, SECURITY_CONTEXT);
+      assert.equal(gen1.generation, 1);
+      assert.equal(
+        gen1.bindingVersionId,
+        deriveBindingVersionId(gen1.bindingId, 1),
+      );
+
+      // Deploy second revision with changed code / package
+      const manifest2 = {
+        ...manifest(),
+        artifact: {
+          ...manifest().artifact,
+          digest: `sha256:${'b'.repeat(64)}`,
+        },
+        version: '1.0.1',
+      };
+      const packageId2 = deriveTenantPackageId(manifest2, TENANT);
+      const package2 = await catalog.recordPackage({
+        manifest: manifest2,
+        packageId: packageId2,
+        resolvedArtifact: {
+          ...resolvedArtifact(),
+          artifact: {
+            ...resolvedArtifact().artifact,
+            digest: `sha256:${'b'.repeat(64)}`,
+          },
+        },
+      });
+
+      const input2 = bindingInput({...package2, manifest: manifest2});
+      const gen2 = await owner.createBinding(input2, SECURITY_CONTEXT);
+      assert.equal(gen2.generation, 2);
+      assert.equal(gen2.bindingId, gen1.bindingId);
+      assert.equal(
+        gen2.bindingVersionId,
+        deriveBindingVersionId(gen1.bindingId, 2),
+      );
+      assert.equal(gen2.replayed, false);
+      assert.notEqual(gen2.bindingVersionId, gen1.bindingVersionId);
+
+      // getBindingByName returns latest (gen2)
+      const latest = await owner.getBindingByName(
+        'orders-api', SECURITY_CONTEXT);
+      assert.equal(latest.generation, 2);
+      assert.equal(latest.bindingVersionId, gen2.bindingVersionId);
+
+      // Replay gen2 returns replayed: true
+      const replayGen2 = await owner.createBinding(input2, SECURITY_CONTEXT);
+      assert.equal(replayGen2.generation, 2);
+      assert.equal(replayGen2.replayed, true);
+      assert.equal(replayGen2.bindingVersionId, gen2.bindingVersionId);
+
+      // Changing route path under the same binding name is refused with BINDING_CONFLICT
+      await assert.rejects(
+        owner.createBinding({
+          ...input2,
+          source: {...input2.source, path: '/other-endpoint'},
+        }, SECURITY_CONTEXT),
+        (error) => assertBindingCode(
+          error, DEPLOYMENT_BINDING_ERROR_CODE.BINDING_CONFLICT),
+      );
+    });
 });

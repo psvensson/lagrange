@@ -237,18 +237,20 @@ class CallCellInvoker {
   // invoker never places anything itself; it only signals and waits.
   async _dispatchShardRun(request, telemetry) {
     const dispatch = () => this._statementAdapter.invoke({
-      name: request.name,
       argumentsJson: request.argumentsJson,
-      securityContext: request.securityContext,
-      deadlineMs: request.deadlineMs,
+      bindingVersionId: request.resolution.bindingVersionId,
       callCell: this._callCellBudgets,
-      hostNodeId: request.shard.hostTopology?.hostNodeId,
-      partitionFence: request.shard.hostTopology,
-      partitionId: request.shard.partitionId,
+      callerServiceId: request.callerServiceId,
+      deadlineMs: request.deadlineMs,
       exportName: RUN_EXPORT,
-      slotId: request.slotId,
+      hostNodeId: request.shard.hostTopology?.hostNodeId,
       invocationId: createCallSlotInvocationId(
         request.invocationId, request.slotId),
+      name: request.name,
+      partitionFence: request.shard.hostTopology,
+      partitionId: request.shard.partitionId,
+      securityContext: request.securityContext,
+      slotId: request.slotId,
     });
     const hostNodeId = request.shard.hostTopology?.hostNodeId;
     // The activation window never outlives the caller's own deadline: a
@@ -377,9 +379,10 @@ class CallCellInvoker {
   }
 
   async _invokeWithTelemetry(
-    {name, argumentsJson, securityContext, deadlineMs,
+    {name, argumentsJson, callerServiceId, securityContext, deadlineMs,
       invocationId: suppliedInvocationId}, telemetry, executionEvidence) {
     const resolution = this._routeResolver.resolve({
+      callerServiceId,
       invocationId: `${RESOLVE_PROBE_PREFIX}${name}`,
       name,
       securityContext,
@@ -461,6 +464,7 @@ class CallCellInvoker {
         this._runShardSlot(slotRequest, telemetry, executionEvidence),
       slots: batches.map((shard, slotIndex) => ({
         argumentsJson,
+        callerServiceId,
         deadlineMs,
         invocationId,
         name,
@@ -520,6 +524,8 @@ class CallCellInvoker {
     const reduceStartedAt = Date.now();
     const reduceInvocationId = createCallReduceInvocationId(invocationId);
     const reduceRoute = this._routeResolver.resolve({
+      bindingVersionId: resolution.bindingVersionId,
+      callerServiceId,
       invocationId: reduceInvocationId,
       name,
       securityContext,
@@ -530,15 +536,17 @@ class CallCellInvoker {
       reduceLeaseSlotId,
     );
     const reduceDelivery = await this._statementAdapter.invoke({
-      name,
       argumentsJson,
-      securityContext,
-      deadlineMs,
+      bindingVersionId: resolution.bindingVersionId,
       callCell: this._callCellBudgets,
-      partials: partials.map(([groupKey, aggValue]) =>
-        [String(groupKey), JSON.stringify(aggValue)]),
+      callerServiceId,
+      deadlineMs,
       exportName: REDUCE_EXPORT,
       invocationId: reduceInvocationId,
+      name,
+      partials: partials.map(([groupKey, aggValue]) =>
+        [String(groupKey), JSON.stringify(aggValue)]),
+      securityContext,
     });
     const reducedBy = reduceDelivery.replicaId ?? reduceRoute.replicaId;
     if (reducedBy !== reduceRoute.replicaId) {

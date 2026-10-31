@@ -18,110 +18,92 @@
   <text x="665" y="114" fill="#94a3b8" font-size="10">2048-event working set scaling drop</text>
     <text x="45" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="45" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="45" y="154" fill="#cbd5e1" font-size="10">10ms: 168 dec/s (0.2ms: 540)</text>
+    <text x="45" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="158" width="210" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="175" fill="#64748b" font-size="9">30ms: 68 dec/s | 2 sequential hops</text>
+    <text x="45" y="175" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 2 sequential hops</text>
     <text x="45" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="45" y="213" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
-    <text x="45" y="224" fill="#cbd5e1" font-size="10">10ms: 108 dec/s (0.2ms: 495)</text>
+    <text x="45" y="224" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="228" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="228" width="135" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="245" fill="#64748b" font-size="9">30ms: 41 dec/s | 6 sequential hops</text>
+    <text x="45" y="245" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 6 sequential hops</text>
     <text x="45" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
     <text x="45" y="283" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
-    <text x="45" y="294" fill="#cbd5e1" font-size="10">10ms: 86 dec/s (0.2ms: 440)</text>
+    <text x="45" y="294" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="298" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="298" width="108" height="7" fill="#ec4899" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="315" fill="#64748b" font-size="9">30ms: 32 dec/s | 6 sequential hops</text>
+    <text x="45" y="315" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 6 sequential hops</text>
     <text x="45" y="342" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="45" y="353" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="45" y="364" fill="#cbd5e1" font-size="10">10ms: 82 dec/s (0.2ms: 395)</text>
+    <text x="45" y="364" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="368" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="368" width="103" height="7" fill="#f59e0b" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="385" fill="#64748b" font-size="9">30ms: 30 dec/s | 6 sequential hops</text>
+    <text x="45" y="385" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 6 sequential hops</text>
     <text x="45" y="412" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="45" y="423" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
-    <text x="45" y="434" fill="#cbd5e1" font-size="10">10ms: 68 dec/s (0.2ms: 340)</text>
+    <text x="45" y="434" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="438" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="438" width="85" height="7" fill="#8b5cf6" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="455" fill="#64748b" font-size="9">30ms: 24 dec/s | 6 sequential hops</text>
+    <text x="45" y="455" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 6 sequential hops</text>
     <text x="45" y="482" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="45" y="493" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="45" y="504" fill="#cbd5e1" font-size="10">10ms: 54 dec/s (0.2ms: 295)</text>
+    <text x="45" y="504" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="45" y="508" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="508" width="68" height="7" fill="#0284c7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="525" fill="#64748b" font-size="9">30ms: 19 dec/s | 12 sequential hops</text>
+    <text x="45" y="525" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 12 sequential hops</text>
     <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="355" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="355" y="154" fill="#cbd5e1" font-size="10">52.4ms p99 @ 10ms RTT</text>
+    <text x="355" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="158" width="82" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="175" fill="#64748b" font-size="9">Local: 4.0ms | 30ms: 134.0ms</text>
+    <text x="355" y="175" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
     <text x="355" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="355" y="213" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
-    <text x="355" y="224" fill="#cbd5e1" font-size="10">74.6ms p99 @ 10ms RTT</text>
+    <text x="355" y="224" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="228" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="228" width="117" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="245" fill="#64748b" font-size="9">Local: 4.3ms | 30ms: 208.0ms</text>
+    <text x="355" y="245" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
     <text x="355" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
     <text x="355" y="283" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
-    <text x="355" y="294" fill="#cbd5e1" font-size="10">92.4ms p99 @ 10ms RTT</text>
+    <text x="355" y="294" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="298" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="298" width="144" height="7" fill="#ec4899" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="315" fill="#64748b" font-size="9">Local: 4.6ms | 30ms: 262.0ms</text>
+    <text x="355" y="315" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
     <text x="355" y="342" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="355" y="353" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="355" y="364" fill="#cbd5e1" font-size="10">96.0ms p99 @ 10ms RTT</text>
+    <text x="355" y="364" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="368" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="368" width="150" height="7" fill="#f59e0b" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="385" fill="#64748b" font-size="9">Local: 6.8ms | 30ms: 274.0ms</text>
+    <text x="355" y="385" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
     <text x="355" y="412" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="355" y="423" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
-    <text x="355" y="434" fill="#cbd5e1" font-size="10">114.0ms p99 @ 10ms RTT</text>
+    <text x="355" y="434" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="438" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="438" width="178" height="7" fill="#8b5cf6" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="455" fill="#64748b" font-size="9">Local: 8.6ms | 30ms: 328.0ms</text>
+    <text x="355" y="455" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
     <text x="355" y="482" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="355" y="493" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="355" y="504" fill="#cbd5e1" font-size="10">148.0ms p99 @ 10ms RTT</text>
+    <text x="355" y="504" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="355" y="508" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="508" width="231" height="7" fill="#0284c7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="525" fill="#64748b" font-size="9">Local: 12.4ms | 30ms: 412.0ms</text>
+    <text x="355" y="525" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
     <text x="665" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="665" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="665" y="154" fill="#cbd5e1" font-size="10">368.0 dec/s (-16.6%)</text>
+    <text x="665" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="158" width="230" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="175" fill="#64748b" font-size="9">WAN: 144 B/req | p99: 21.8ms</text>
+    <text x="665" y="175" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
     <text x="665" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="665" y="213" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
-    <text x="665" y="224" fill="#cbd5e1" font-size="10">312.0 dec/s (-23.6%)</text>
+    <text x="665" y="224" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="228" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="228" width="195" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="245" fill="#64748b" font-size="9">WAN: 1140 B/req | p99: 26.4ms</text>
+    <text x="665" y="245" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
     <text x="665" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
     <text x="665" y="283" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
-    <text x="665" y="294" fill="#cbd5e1" font-size="10">246.0 dec/s (-32.5%)</text>
+    <text x="665" y="294" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="298" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="298" width="154" height="7" fill="#ec4899" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="315" fill="#64748b" font-size="9">WAN: 4860 B/req | p99: 34.2ms</text>
+    <text x="665" y="315" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
     <text x="665" y="342" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="665" y="353" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="665" y="364" fill="#cbd5e1" font-size="10">198.0 dec/s (-37.5%)</text>
+    <text x="665" y="364" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="368" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="368" width="124" height="7" fill="#f59e0b" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="385" fill="#64748b" font-size="9">WAN: 1420 B/req | p99: 39.6ms</text>
+    <text x="665" y="385" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
     <text x="665" y="412" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="665" y="423" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
-    <text x="665" y="434" fill="#cbd5e1" font-size="10">176.0 dec/s (-38.6%)</text>
+    <text x="665" y="434" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="438" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="438" width="110" height="7" fill="#8b5cf6" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="455" fill="#64748b" font-size="9">WAN: 8400 B/req | p99: 46.8ms</text>
+    <text x="665" y="455" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
     <text x="665" y="482" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="665" y="493" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="665" y="504" fill="#cbd5e1" font-size="10">118.0 dec/s (-46.7%)</text>
+    <text x="665" y="504" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="508" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="508" width="74" height="7" fill="#0284c7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="525" fill="#64748b" font-size="9">WAN: 24576 B/req | p99: 68.4ms</text>
+    <text x="665" y="525" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
 </svg>

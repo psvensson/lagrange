@@ -18,6 +18,7 @@ const SERVICE_COMMAND = Object.freeze({
   INIT: 'init',
   INSTALL: 'install',
   LIST: 'list',
+  PUBLISH: 'publish',
   REMOVE: 'remove',
   STATUS: 'status',
 });
@@ -48,6 +49,7 @@ const SERVICE_HELP = `Usage:
   lagrange service init <directory>
   lagrange service generate <project-directory>
   lagrange service build <project-directory>
+  lagrange service publish <project-directory>
   lagrange service deploy <project-directory> --idempotency-key <key>
   lagrange service install <manifest-file> --idempotency-key <key> [--config <json-file>]
   lagrange service list
@@ -58,6 +60,7 @@ Commands:
   init <directory>                 Create a code-first service project (lagrange.service.js)
   generate <project-directory>     Compile the service into generated deployment records
   build <project-directory>        Build the generated service artifact
+  publish <project-directory>      Publish and seal the service artifact into the artifact store
   deploy <project-directory>       Deploy the built project through the service lifecycle
   install <manifest-file>          Install a prebuilt artifact from a manifest
   list                             List installed service catalog rows
@@ -79,6 +82,7 @@ const SERVICE_PIPELINE_COMMANDS = Object.freeze(new Set([
   SERVICE_COMMAND.BUILD,
   SERVICE_COMMAND.DEPLOY,
   SERVICE_COMMAND.GENERATE,
+  SERVICE_COMMAND.PUBLISH,
 ]));
 const loadServiceLifecycleCommand = () =>
   import('./service-lifecycle-command.js');

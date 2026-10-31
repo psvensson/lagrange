@@ -31,7 +31,7 @@ No status in this roadmap substitutes for that evidence.
 | --- | --- | --- |
 | 0.3.1 | Bounded installed-product, publication and claim corrections after 0.3.0 | Community |
 | 0.3.2 | Complete Queryable Core and inherited stable-core/public-service acceptance | Community |
-| 0.4 | Practical service core and a qualified ordinary-SQL comparison | Community |
+| 0.4 | Practical service core, complete developer journey, and a qualified ordinary-SQL comparison (active milestone on main 0.4.0) | Community |
 | 0.5 | Pilot-ready security, deployment and operations | Community |
 | 0.6 | Safe managed OCI activation and native Call Cells | Community |
 | 0.7 | Transport independence, NATS-only operation and effective static timing | Community |
@@ -43,9 +43,11 @@ No status in this roadmap substitutes for that evidence.
 | 2.0 | Deeper execution, optimizer, advanced artifact storage and full Scenario B | Community |
 | 2.1 | Specialized search and data-local processing services | Community search substrate; AI edition remains unclassified |
 
-The released baseline is 0.3.0. The former future 0.2.9 is retired; its unfinished
-obligations are allocated below to 0.3.1 or 0.3.2 through their existing owners
-and stable roadmap IDs. The standing major-feature
+The latest GitHub published release is 0.3.3, and the active development source on
+main is 0.4.0 (experimental alpha). Active development works toward 0.4 milestone
+acceptance (incorporating remaining 0.3.1/0.3.2 queryable-core deliverables alongside
+developer-journey and measured-comparison obligations); package version 0.4.0 on
+main does not imply 0.4 acceptance is complete. The standing major-feature
 [user-journey rule](../../test/guidelines/release-gate.md#major-feature-user-journeys)
 governs useful public outcomes; this visibility document does not certify them.
 
@@ -77,10 +79,11 @@ qualification on that candidate.
 
 ## Phase 0.3.1 - Installed-Product And Claim Corrections
 
-The existing stabilization and bounded feature owners complete the selected
-correction slice. Shared setup and valid existing evidence are reused. This
-release does not discharge the whole Queryable Core epic, stabilization Q17 or
-the full distributed service milestone.
+The latest GitHub published release is 0.3.3, while active development on main is
+0.4.0 working toward 0.4 acceptance. The existing stabilization and bounded feature
+owners complete the selected correction slice. Shared setup and valid existing
+evidence are reused. This release does not discharge the whole Queryable Core epic,
+stabilization Q17 or the full distributed service milestone.
 
 | Requirement | Edition | Release outcome |
 | --- | --- | --- |
@@ -95,9 +98,10 @@ Completion claims still require the existing proof and release authorities.
 
 ## Phase 0.3.2 - Queryable Core Completion
 
-The existing Queryable Core epic owns its feature acceptance and consumes
-stabilization, service and comparison evidence through their existing owners.
-Credit delivered components; prove the claimed combination on one candidate.
+Remaining 0.3.2 Queryable Core obligations are incorporated into the active 0.4
+milestone on main. The existing Queryable Core epic owns its feature acceptance
+and consumes stabilization, service and comparison evidence through their existing
+owners. Credit delivered components; prove the claimed combination on one candidate.
 
 | Requirement | Edition | Release outcome |
 | --- | --- | --- |
@@ -130,6 +134,11 @@ consumers. Full qualified comparison remains 0.4; a current promised SQL or
 transaction defect cannot be deferred as an optional benchmark improvement.
 
 ## Phase 0.4 - Practical And Demonstrated Service Core
+
+Phase 0.4 is the active milestone for main source 0.4.0 (experimental alpha; latest
+GitHub published release is 0.3.3). Package version 0.4.0 on main does not imply
+0.4 acceptance is complete. This milestone incorporates developer-journey,
+measured-comparison, and remaining queryable-core obligations.
 
 | Requirement | Edition | Release outcome |
 | --- | --- | --- |

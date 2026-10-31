@@ -53,17 +53,26 @@ const NAV_HTML = '    <p class="desc">Specifications &amp; Detail: ' +
 function renderScenarioCSummaryMarkdownSection(targets, jointExp) {
   const t1 = arrayJoin(arrayMap(arrayFilter(targets, (t) => Boolean(t.scenarioC)), (t) => {
     const c = t.scenarioC;
-    return `| ${t.label} | ${formatNum(c.freshDecisionsPerSec0ms ?? 0)} | ` +
-      `${formatNum(c.freshDecisionsPerSec100ms ?? 0)} | ` +
-      `${formatNum(c.freshDecisionsPerSec1000ms ?? 0)} | ${formatNum(c.staleDecisionRatePct ?? 0)}% | ` +
-      `${formatNum(c.ruleChangeBackfillSec ?? 0, 1)}s | ` +
-      `${formatNum(c.cacheRestartRecoverySec ?? 0, 1)}s | ${c.operationalPipelines ?? 1} |`;
+    if (c.freshDecisionsPerSec0ms != null) {
+      return `| ${t.label} | ${formatNum(c.freshDecisionsPerSec0ms)} | ` +
+        `${formatNum(c.freshDecisionsPerSec100ms ?? 0)} | ` +
+        `${formatNum(c.freshDecisionsPerSec1000ms ?? 0)} | ${formatNum(c.staleDecisionRatePct ?? 0)}% | ` +
+        `${formatNum(c.ruleChangeBackfillSec ?? 0, 1)}s | ` +
+        `${formatNum(c.cacheRestartRecoverySec ?? 0, 1)}s | ${c.operationalPipelines ?? 1} |`;
+    }
+    const st = `[${c.status || 'not measured'}]`;
+    return `| ${t.label} | ${st} | ${st} | ${st} | ${st} | ${st} | ${st} | ${c.operationalPipelines ?? 1} |`;
   }), '\n');
-  const t2 = arrayJoin(arrayMap(jointExp?.scenarioCJointScaling || [], (i) =>
-    `| ${i.label} | ${formatNum(i.scale1xFresh0msDecPerSec)} | ${formatNum(i.scale5xFresh0msDecPerSec)} | ` +
-    `${formatNum(i.scale5xFresh1000msDecPerSec)} | ${formatNum(i.staleDecisionRatePct)}% | ` +
-    `${formatNum(i.ruleChangeBackfillSec, 1)}s | ${formatNum(i.cacheRestartRecoverySec, 1)}s | ` +
-    `${i.operationalPipelines} |`), '\n');
+  const t2 = arrayJoin(arrayMap(jointExp?.scenarioCJointScaling || [], (i) => {
+    if (i.scale1xFresh0msDecPerSec != null) {
+      return `| ${i.label} | ${formatNum(i.scale1xFresh0msDecPerSec)} | ${formatNum(i.scale5xFresh0msDecPerSec)} | ` +
+        `${formatNum(i.scale5xFresh1000msDecPerSec)} | ${formatNum(i.staleDecisionRatePct)}% | ` +
+        `${formatNum(i.ruleChangeBackfillSec, 1)}s | ${formatNum(i.cacheRestartRecoverySec, 1)}s | ` +
+        `${i.operationalPipelines} |`;
+    }
+    const st = `[${i.status || 'not measured'}]`;
+    return `| ${i.label} | ${st} | ${st} | ${st} | ${st} | ${st} | ${st} | ${i.operationalPipelines} |`;
+  }), '\n');
   return '## Scenario C streaming-feature-risk-decision summary (freshness SLA, staleness & 5x joint scale)\n\n' +
     'Scenario C evaluates streaming feature store staleness SLAs, operational rule backfill and\n' +
     'cache restart recovery overhead, and 5x joint scaling across ingestion, entity tracking, and\n' +
@@ -80,18 +89,29 @@ function renderScenarioCSummaryMarkdownSection(targets, jointExp) {
 function renderScenarioCSummaryHtmlSection(targets, jointExp) {
   const t1 = arrayJoin(arrayMap(arrayFilter(targets, (t) => Boolean(t.scenarioC)), (t) => {
     const c = t.scenarioC;
+    if (c.freshDecisionsPerSec0ms != null) {
+      return '        <tr>' +
+        `<td><strong>${escapeXml(t.label)}</strong></td><td>${formatNum(c.freshDecisionsPerSec0ms)}</td>` +
+        `<td>${formatNum(c.freshDecisionsPerSec100ms ?? 0)}</td><td>${formatNum(c.freshDecisionsPerSec1000ms ?? 0)}</td>` +
+        `<td>${formatNum(c.staleDecisionRatePct ?? 0)}%</td><td>${formatNum(c.ruleChangeBackfillSec ?? 0, 1)}s</td>` +
+        `<td>${formatNum(c.cacheRestartRecoverySec ?? 0, 1)}s</td><td>${c.operationalPipelines ?? 1}</td></tr>`;
+    }
+    const st = `<span class="badge">${escapeXml(c.status || 'not measured')}</span>`;
     return '        <tr>' +
-      `<td><strong>${escapeXml(t.label)}</strong></td><td>${formatNum(c.freshDecisionsPerSec0ms ?? 0)}</td>` +
-      `<td>${formatNum(c.freshDecisionsPerSec100ms ?? 0)}</td><td>${formatNum(c.freshDecisionsPerSec1000ms ?? 0)}</td>` +
-      `<td>${formatNum(c.staleDecisionRatePct ?? 0)}%</td><td>${formatNum(c.ruleChangeBackfillSec ?? 0, 1)}s</td>` +
-      `<td>${formatNum(c.cacheRestartRecoverySec ?? 0, 1)}s</td><td>${c.operationalPipelines ?? 1}</td></tr>`;
+      `<td><strong>${escapeXml(t.label)}</strong></td><td>${st}</td><td>${st}</td><td>${st}</td><td>${st}</td><td>${st}</td><td>${st}</td><td>${c.operationalPipelines ?? 1}</td></tr>`;
   }), '\n');
-  const t2 = arrayJoin(arrayMap(jointExp?.scenarioCJointScaling || [], (i) =>
-    '        <tr>' +
-    `<td><strong>${escapeXml(i.label)}</strong></td><td>${formatNum(i.scale1xFresh0msDecPerSec)}</td>` +
-    `<td>${formatNum(i.scale5xFresh0msDecPerSec)}</td><td>${formatNum(i.scale5xFresh1000msDecPerSec)}</td>` +
-    `<td>${formatNum(i.staleDecisionRatePct)}%</td><td>${formatNum(i.ruleChangeBackfillSec, 1)}s</td>` +
-    `<td>${formatNum(i.cacheRestartRecoverySec, 1)}s</td><td>${i.operationalPipelines}</td></tr>`), '\n');
+  const t2 = arrayJoin(arrayMap(jointExp?.scenarioCJointScaling || [], (i) => {
+    if (i.scale1xFresh0msDecPerSec != null) {
+      return '        <tr>' +
+        `<td><strong>${escapeXml(i.label)}</strong></td><td>${formatNum(i.scale1xFresh0msDecPerSec)}</td>` +
+        `<td>${formatNum(i.scale5xFresh0msDecPerSec)}</td><td>${formatNum(i.scale5xFresh1000msDecPerSec)}</td>` +
+        `<td>${formatNum(i.staleDecisionRatePct)}%</td><td>${formatNum(i.ruleChangeBackfillSec, 1)}s</td>` +
+        `<td>${formatNum(i.cacheRestartRecoverySec, 1)}s</td><td>${i.operationalPipelines}</td></tr>`;
+    }
+    const st = `<span class="badge">${escapeXml(i.status || 'not measured')}</span>`;
+    return '        <tr>' +
+      `<td><strong>${escapeXml(i.label)}</strong></td><td>${st}</td><td>${st}</td><td>${st}</td><td>${st}</td><td>${st}</td><td>${st}</td><td>${i.operationalPipelines}</td></tr>`;
+  }), '\n');
   return '    <div class="card">\n' +
     '      <h2>Scenario C Streaming-Feature-Risk-Decision Summary (Freshness SLA, Staleness &amp; 5x Joint Scale)</h2>\n' +
     '      <p class="desc">Scenario C evaluates streaming feature store staleness SLAs, operational rule backfill and cache restart recovery overhead, and 5x joint scaling across ingestion, entity tracking, and decision load. Detailed analysis: <a href="scenario-c-feature-store-progress.html">Scenario C Feature-Store Comparison</a> (<a href="scenario-c-feature-store-progress.md">MD</a>) and <a href="movement-and-scenario-c-scaling-progress.html">Live Partition Movement &amp; Scenario C 5x Joint Scaling</a> (<a href="movement-and-scenario-c-scaling-progress.md">MD</a>).</p>\n' +

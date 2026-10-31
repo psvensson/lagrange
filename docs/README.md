@@ -20,6 +20,8 @@ Use the shortest path that answers the question in front of you.
 
 - [First hour](tutorials/first-hour.md) - run the code-first account-summary
   proof and scaffold a service
+- [Deploy on Kubernetes and run cloud benchmarks](kubernetes-and-cloud-benchmarks.md) -
+  deploy via Helm to an existing k8s cluster, configure credentials, and run cloud comparison suites
 - [Account-summary example](../examples/call-binding-account-summary/README.md)
   - one HTTP endpoint, one distributed operation, two partitions, authorization,
   and replay
@@ -40,6 +42,8 @@ Use the shortest path that answers the question in front of you.
 
 ## Measure a workload
 
+- [Cloud comparison benchmarks](kubernetes-and-cloud-benchmarks.md#part-2-running-all-comparison-scenarios-in-your-own-cloud-or-lab) -
+  execute Scenario A (OLTP), B (locality), C (freshness), and MovieLens on your cloud infrastructure
 - [Performance and network-cost measurement](performance-and-cost-estimation.md)
   - formulas and a measurement worksheet without product-wide speedup claims
 - [Infrastructure capacity measurement](infrastructure-cost-estimation.md) -
@@ -55,6 +59,8 @@ Use the shortest path that answers the question in front of you.
 
 ## Operate a cluster
 
+- [Kubernetes deployment with Helm](kubernetes-and-cloud-benchmarks.md#part-1-deploying-lagrange-on-an-existing-kubernetes-cluster-chartslagrange-node) -
+  StatefulSet topology, secret management, port-forwarding, and service lifecycle
 - [Bootstrap and readiness probes](bootstrap-readiness-probes.md)
 - [Listener port model](listener-port-model.md)
 - [Storage capacity operations](storage-capacity-operations.md)

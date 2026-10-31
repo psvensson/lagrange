@@ -4,13 +4,14 @@ import {
   DEPLOYMENT_BINDING_ERROR_CODE,
   DEPLOYMENT_BINDING_MESSAGE,
   DEPLOYMENT_BINDING_PATH,
+  DEPLOYMENT_BINDING_SOURCE_KIND,
   DeploymentBindingError,
   bindDeploymentArtifact,
   bindingRowsMatch,
   buildBindingRow,
   canonicalJson,
   deriveBindingId,
-  deriveBindingVersionId,
+  inspectBindingRow,
   normalizeDeploymentBinding,
   projectBinding,
   rebindStoredDeploymentArtifact,
@@ -31,6 +32,20 @@ const ARTIFACT_PAYLOAD_NOT_INTERNALIZED = Object.freeze({
   MESSAGE: 'artifact payload is not internalized in the cluster payload ' +
     'store; migrate or import the artifact payload before binding',
 });
+
+function bindingSourceIdentitiesMatch(latestSource, requestedSource) {
+  if (latestSource.kind !== requestedSource.kind) return false;
+  switch (latestSource.kind) {
+  case DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST:
+    return latestSource.method === requestedSource.method &&
+      latestSource.path === requestedSource.path;
+  case DEPLOYMENT_BINDING_SOURCE_KIND.CALL:
+  case DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN:
+    return latestSource.name === requestedSource.name;
+  default:
+    return true;
+  }
+}
 
 class DeploymentBindingOwner extends SystemMetadataOwnerBase {
   static OWNER_NAME = DEPLOYMENT_BINDING_OWNER_NAME;
@@ -102,16 +117,38 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
     return artifact;
   }
 
-  // Composition-gated: no attached store keeps the pre-store behavior;
-  // non-WASM artifacts stay out of scope (brief §1 "OCI Containers").
+  async readBindingRowsByName(tenantId, bindingName, options = {}) {
+    let rows;
+    if (this.getGateway()) {
+      const result = await this.listRows(options);
+      rows = Array.isArray(result) ? result : (result?.rows || []);
+    } else if (this.getSystemTableCache()?.getAll) {
+      rows = this.getSystemTableCache().getAll(this.getTableName()) || [];
+    } else {
+      rows = [];
+    }
+    return rows
+      .filter((row) =>
+        row?.tenant_id === tenantId && row?.binding_name === bindingName)
+      .sort((a, b) => (a.generation || 0) - (b.generation || 0));
+  }
+
+  // Composition-gated: WASM artifacts require a sealed payload in the
+  // cluster payload store. Non-WASM artifacts stay out of scope.
   async assertPayloadInternalized(artifact) {
-    if (!this.artifactPayloadStore ||
-        artifact.manifest?.runtime?.kind !== RUNTIME_KIND.WASM_COMPONENT) {
+    if (artifact.manifest?.runtime?.kind !== RUNTIME_KIND.WASM_COMPONENT) {
       return;
+    }
+    if (!this.artifactPayloadStore) {
+      throw new DeploymentBindingError(
+        ARTIFACT_PAYLOAD_NOT_INTERNALIZED.CODE,
+        DEPLOYMENT_BINDING_PATH.TARGET,
+        ARTIFACT_PAYLOAD_NOT_INTERNALIZED.MESSAGE,
+      );
     }
     const sealed = await this.artifactPayloadStore
       .findSealedPayloadByArtifactDigest(artifact.artifactDigest);
-    if (sealed.found !== true) {
+    if (sealed?.found !== true) {
       throw new DeploymentBindingError(
         ARTIFACT_PAYLOAD_NOT_INTERNALIZED.CODE,
         DEPLOYMENT_BINDING_PATH.TARGET,
@@ -136,10 +173,62 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
     const normalized = normalizeDeploymentBinding(input);
     const artifact = await this.resolveArtifact(normalized, context);
     const declaration = bindDeploymentArtifact(normalized, artifact);
-    const row = buildBindingRow(declaration, context, this.timestamp());
-    return this.runSerialized(row.binding_version_id, async () => {
-      const existing = await this.readBindingRow(row.binding_version_id);
-      if (existing) return this.assertReplay(existing, row);
+    const bindingId = deriveBindingId(context.tenantId, declaration.name);
+
+    return this.runSerialized(bindingId, async () => {
+      const existingRows = await this.readBindingRowsByName(
+        context.tenantId, declaration.name, options);
+
+      if (existingRows.length > 0) {
+        const latest = existingRows[existingRows.length - 1];
+        const latestInspected = inspectBindingRow(latest);
+        const requestedSameGen = buildBindingRow(
+          declaration, context, latest.created_at, latest.generation);
+
+        if (bindingRowsMatch(latest, requestedSameGen)) {
+          return projectBinding(latest, true);
+        }
+
+        if (!bindingSourceIdentitiesMatch(
+          latestInspected.declaration.source,
+          declaration.source,
+        )) {
+          throw new DeploymentBindingError(
+            DEPLOYMENT_BINDING_ERROR_CODE.BINDING_CONFLICT,
+            DEPLOYMENT_BINDING_PATH.NAME,
+            DEPLOYMENT_BINDING_MESSAGE.BINDING_IMMUTABLE,
+          );
+        }
+
+        const nextGeneration = latest.generation + 1;
+        const newRow = buildBindingRow(
+          declaration, context, this.timestamp(), nextGeneration);
+
+        try {
+          await this.insertRow(newRow, options);
+        } catch (error) {
+          const recovered = await this.readBindingRowsByName(
+            context.tenantId, declaration.name, options);
+          const match = recovered.find((r) => bindingRowsMatch(r, newRow));
+          if (match) return projectBinding(match, true);
+          throw error;
+        }
+
+        const persisted = await this.readBindingRow(newRow.binding_version_id);
+        if (!persisted) {
+          throw new DeploymentBindingError(
+            DEPLOYMENT_BINDING_ERROR_CODE.CORRUPT_RECORD,
+            DEPLOYMENT_BINDING_PATH.BINDING,
+            DEPLOYMENT_BINDING_MESSAGE.CORRUPT_RECORD,
+          );
+        }
+        this.assertReplay(persisted, newRow);
+        return projectBinding(persisted, false);
+      }
+
+      const initialGeneration = 1;
+      const row = buildBindingRow(
+        declaration, context, this.timestamp(), initialGeneration);
       try {
         await this.insertRow(row, options);
       } catch (error) {
@@ -147,6 +236,7 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
         if (recovered) return this.assertReplay(recovered, row);
         throw error;
       }
+
       const persisted = await this.readBindingRow(row.binding_version_id);
       if (!persisted) {
         throw new DeploymentBindingError(
@@ -162,9 +252,10 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
 
   async getBindingByName(bindingName, securityContext) {
     const context = validateSecurityContext(securityContext);
-    const bindingId = deriveBindingId(context.tenantId, bindingName);
-    const row = await this.readBindingRow(deriveBindingVersionId(bindingId));
-    if (!row) return null;
+    const rows = await this.readBindingRowsByName(
+      context.tenantId, bindingName);
+    if (rows.length === 0) return null;
+    const row = rows[rows.length - 1];
     const binding = projectBinding(row);
     if (binding.tenantId !== context.tenantId) return null;
     const artifact = await this.resolveArtifact(binding.declaration, context);

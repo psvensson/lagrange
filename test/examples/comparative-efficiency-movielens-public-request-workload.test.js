@@ -192,7 +192,8 @@ describe('MovieLens public request workload contract', () => {
     const access = buildMovielensPublicRequestAccessPayload();
 
     assert.equal(manifest.runtime.kind, 'wasm_component');
-    assert.equal(install.artifact_source.kind, 'local_oci_layout');
+    assert.equal(install.artifact_source, undefined);
+    assert.equal(install.idempotency_key, MOVIELENS_PUBLIC_REQUEST.IDEMPOTENCY_KEY);
     assert.deepEqual(binding.source, {
       kind: 'request',
       method: MOVIELENS_PUBLIC_REQUEST.METHOD,

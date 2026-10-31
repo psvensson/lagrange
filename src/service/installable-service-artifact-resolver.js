@@ -6,8 +6,6 @@
  */
 
 import {createHash, createPublicKey, verify as verifySignature} from 'node:crypto';
-import {readFile, stat} from 'node:fs/promises';
-import path from 'node:path';
 
 import {RUNTIME_KIND} from '../constants/runtime.js';
 import {
@@ -15,7 +13,6 @@ import {
   validateExternalServiceManifest,
 } from './external-service-manifest.js';
 import {
-  OCI_IMAGE_LAYOUT_VERSION,
   OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 } from './oci-image-layout-contract.js';
 import {InstallableComponentCache} from './installable-component-cache.js';
@@ -23,6 +20,7 @@ import {InstallableComponentCache} from './installable-component-cache.js';
 const INSTALLABLE_ARTIFACT_SOURCE_KIND = Object.freeze({
   LOCAL_OCI_LAYOUT: 'local_oci_layout',
   REMOTE_OCI: 'remote_oci',
+  SEALED_STORE: 'sealed_store',
 });
 
 const ARTIFACT_SIGNATURE_POLICY_MODE = Object.freeze({
@@ -57,12 +55,9 @@ const SIGNATURE_STATUS = Object.freeze({
 
 const DEFAULT_MAX_DESCRIPTOR_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_COMPONENT_BYTES = 256 * 1024 * 1024;
-const MAX_LAYOUT_MARKER_BYTES = 4 * 1024;
-const MAX_INDEX_BYTES = 1024 * 1024;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const ED25519_SIGNATURE_BYTES = 64;
-const SHA256_PREFIX_LENGTH = 7;
 const SIGNATURE_DOMAIN = 'lagrange.installable-service-artifact.v1';
 
 const ARTIFACT_RESOLUTION_STATUS = Object.freeze({
@@ -112,6 +107,7 @@ const INSTALLABLE_ARTIFACT_PATH = Object.freeze({
 });
 
 const INSTALLABLE_ARTIFACT_MESSAGE = Object.freeze({
+  COMPONENT_PAYLOAD_NOT_FOUND: 'no component payload found for artifact digest',
   CONTAINER_MEDIA_TYPE_MISMATCH:
     'container artifact media type does not match the OCI descriptor',
   DESCRIPTOR_DIGEST_MISMATCH:
@@ -154,6 +150,8 @@ const INSTALLABLE_ARTIFACT_MESSAGE = Object.freeze({
   WASM_LAYER_INVALID:
     'WASM artifact must contain exactly one application/wasm layer',
 });
+
+const LOCAL_STR_SEALED_STORE_LOCATION = 'cluster://artifact_payloads';
 
 class ArtifactResolutionFailure extends Error {
   constructor(code, pathValue, message) {
@@ -198,33 +196,6 @@ function sha256(bytes) {
   return `sha256:${createHash(OCI_LAYOUT_ENTRY.SHA256)
     .update(bytes)
     .digest(ARTIFACT_DATA_ENCODING.HEX)}`;
-}
-
-function normalizeBytes(value) {
-  if (Buffer.isBuffer(value)) return Buffer.from(value);
-  if (value instanceof Uint8Array) return Buffer.from(value);
-  fail(
-    INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_RESULT_INVALID,
-    INSTALLABLE_ARTIFACT_PATH.SOURCE_BYTES,
-    INSTALLABLE_ARTIFACT_MESSAGE.SOURCE_BYTES_REQUIRED,
-  );
-}
-
-function createComponentCacheRegistration(
-  manifest,
-  acquisition,
-  verified,
-  readBytes,
-  resolutions,
-) {
-  return {
-    artifactDigest: manifest.artifact.digest,
-    location: acquisition.location,
-    payloadDescriptor: verified.payloadDescriptor,
-    readBytes,
-    resolutions,
-    sourceKind: acquisition.sourceKind,
-  };
 }
 
 function validateSignaturePolicy(signaturePolicy) {
@@ -428,46 +399,6 @@ function resolvePayload(manifest, ociManifest, descriptor) {
   };
 }
 
-async function readBounded(file, maximumBytes, oversizedCode, pathValue) {
-  let fileStat;
-  try {
-    fileStat = await stat(file);
-  } catch (_error) {
-    fail(
-      INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-      pathValue,
-      INSTALLABLE_ARTIFACT_MESSAGE.FILE_UNREADABLE,
-    );
-  }
-  if (!fileStat.isFile()) {
-    fail(
-      INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-      pathValue,
-      INSTALLABLE_ARTIFACT_MESSAGE.FILE_NOT_REGULAR,
-    );
-  }
-  if (fileStat.size > maximumBytes) {
-    fail(oversizedCode, pathValue, INSTALLABLE_ARTIFACT_MESSAGE.FILE_TOO_LARGE);
-  }
-  try {
-    return await readFile(file);
-  } catch (_error) {
-    fail(
-      INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-      pathValue,
-      INSTALLABLE_ARTIFACT_MESSAGE.FILE_UNREADABLE,
-    );
-  }
-}
-
-async function readJson(file, maximumBytes, code, pathValue) {
-  const bytes = await readBounded(file, maximumBytes, code, pathValue);
-  try {
-    return JSON.parse(bytes.toString(ARTIFACT_DATA_ENCODING.UTF8));
-  } catch (_error) {
-    fail(code, pathValue, INSTALLABLE_ARTIFACT_MESSAGE.LAYOUT_METADATA_INVALID);
-  }
-}
 class InstallableServiceArtifactResolver {
   constructor(options = {}) {
     this.remoteProvider = options.remoteProvider || null;
@@ -494,6 +425,13 @@ class InstallableServiceArtifactResolver {
 
   async resolve(request = {}) {
     try {
+      if (request.source) {
+        fail(
+          INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_UNSUPPORTED,
+          INSTALLABLE_ARTIFACT_PATH.SOURCE_KIND,
+          `artifact source kind '${request.source.kind}' is retired; deployment consumes registered immutable identities and sealed payloads only`,
+        );
+      }
       const manifestResult = validateExternalServiceManifest(request.manifest);
       if (!manifestResult.valid) {
         const first = manifestResult.errors[0];
@@ -505,36 +443,73 @@ class InstallableServiceArtifactResolver {
       }
       const manifest = manifestResult.manifest;
       const signaturePolicy = validateSignaturePolicy(request.signaturePolicy);
-      const acquisition = await this.acquire(manifest, request.source);
-      const verified = this.verifyDescriptor(manifest, acquisition);
       const signature = verifyArtifactSignature(
         manifest.artifact,
         signaturePolicy,
       );
-      const registration = createComponentCacheRegistration(
-        manifest,
-        acquisition,
-        verified,
-        (resolved) => this.acquireComponentBytes(resolved),
-        this.resolvedComponents,
-      );
-      await this.componentCache.register(registration);
+      let payloadDescriptor = null;
+      let descriptor = null;
+      let payloadMediaType = manifest.artifact.media_type;
+      if (request.sealedPayload) {
+        payloadDescriptor = {
+          digest: request.sealedPayload.payloadDigest,
+          mediaType: request.sealedPayload.mediaType,
+          size: request.sealedPayload.totalSize,
+        };
+        descriptor = {
+          digest: manifest.artifact.digest,
+          mediaType: OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+          size: request.sealedPayload.totalSize,
+        };
+        payloadMediaType = request.sealedPayload.mediaType;
+      } else if (request.descriptorBytes && request.descriptor) {
+        descriptor = validateOciDescriptor(
+          request.descriptor,
+          INSTALLABLE_ARTIFACT_PATH.SOURCE_DESCRIPTOR,
+        );
+        const verified = this.verifyDescriptor(manifest, {
+          bytes: request.descriptorBytes,
+          descriptor,
+        });
+        payloadDescriptor = verified.payloadDescriptor;
+        payloadMediaType = verified.payloadMediaType;
+      } else {
+        const size = manifest.artifact.size_bytes ?? 0;
+        payloadDescriptor = {
+          digest: manifest.artifact.digest,
+          mediaType: payloadMediaType,
+          size,
+        };
+        descriptor = {
+          digest: manifest.artifact.digest,
+          mediaType: OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+          size,
+        };
+      }
       return deepFreeze({
         status: ARTIFACT_RESOLUTION_STATUS.RESOLVED,
         artifact: {
-          sourceKind: acquisition.sourceKind,
-          location: acquisition.location,
+          sourceKind: INSTALLABLE_ARTIFACT_SOURCE_KIND.SEALED_STORE,
+          location: LOCAL_STR_SEALED_STORE_LOCATION,
           digest: manifest.artifact.digest,
-          descriptorMediaType: acquisition.descriptor.mediaType,
-          payloadMediaType: verified.payloadMediaType,
-          descriptor: {...acquisition.descriptor},
-          payloadDescriptor: verified.payloadDescriptor,
+          descriptorMediaType: descriptor.mediaType,
+          payloadMediaType,
+          descriptor: {...descriptor},
+          payloadDescriptor,
           signature,
         },
       });
     } catch (error) {
       return rejected(error);
     }
+  }
+
+  async acquire(_manifest, _source) {
+    fail(
+      INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_UNSUPPORTED,
+      INSTALLABLE_ARTIFACT_PATH.SOURCE_KIND,
+      INSTALLABLE_ARTIFACT_MESSAGE.SOURCE_KIND_UNSUPPORTED,
+    );
   }
 
   async loadComponentPayload(request = {}) {
@@ -555,225 +530,20 @@ class InstallableServiceArtifactResolver {
         INSTALLABLE_ARTIFACT_MESSAGE.DESCRIPTOR_DIGEST_MISMATCH,
       );
     }
-    let resolved = this.resolvedComponents.get(request.artifactDigest);
-    if (!resolved) {
-      const cached = await this.componentCache.load(request.artifactDigest);
-      if (cached) return cached;
-      const acquisition = await this.acquireRemote(
-        manifest,
-        manifest.artifact.ref,
-      );
-      const verified = this.verifyDescriptor(manifest, acquisition);
-      resolved = {
-        location: acquisition.location,
-        payloadDescriptor: verified.payloadDescriptor,
-        sourceKind: acquisition.sourceKind,
+    const resolved = this.resolvedComponents.get(request.artifactDigest);
+    if (resolved?.bytes) {
+      return {
+        bytes: resolved.bytes,
+        payloadDigest: resolved.payloadDescriptor.digest,
       };
-      this.resolvedComponents.set(request.artifactDigest, resolved);
     }
-    const bytes = await this.acquireComponentBytes(resolved);
-    return {
-      bytes,
-      payloadDigest: resolved.payloadDescriptor.digest,
-    };
-  }
-
-  async acquireComponentBytes(resolved) {
-    const descriptor = validateOciDescriptor(
-      resolved.payloadDescriptor,
-      INSTALLABLE_ARTIFACT_PATH.SOURCE_DESCRIPTOR,
+    const cached = await this.componentCache.load(request.artifactDigest);
+    if (cached) return cached;
+    throw new ArtifactResolutionFailure(
+      INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_NOT_FOUND,
+      INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR,
+      INSTALLABLE_ARTIFACT_MESSAGE.COMPONENT_PAYLOAD_NOT_FOUND,
     );
-    let bytes;
-    if (resolved.sourceKind ===
-        INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT) {
-      bytes = await readBounded(
-        path.join(
-          resolved.location,
-          OCI_LAYOUT_ENTRY.BLOBS,
-          OCI_LAYOUT_ENTRY.SHA256,
-          descriptor.digest.slice(SHA256_PREFIX_LENGTH),
-        ),
-        this.maxComponentBytes,
-        INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_TOO_LARGE,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE_BLOBS,
-      );
-    } else {
-      const result = await this.acquireRemoteBlob(resolved, descriptor);
-      bytes = result.bytes;
-    }
-    if (bytes.length !== descriptor.size ||
-        bytes.length > this.maxComponentBytes ||
-        sha256(bytes) !== descriptor.digest) {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.DIGEST_MISMATCH,
-        INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR_DIGEST,
-        INSTALLABLE_ARTIFACT_MESSAGE.DESCRIPTOR_DIGEST_MISMATCH,
-      );
-    }
-    return bytes;
-  }
-
-  async acquireRemoteBlob(resolved, descriptor) {
-    if (!this.remoteProvider ||
-        typeof this.remoteProvider.resolveDescriptor !== 'function') {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE,
-        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_PROVIDER_MISSING,
-      );
-    }
-    let result;
-    try {
-      result = await this.remoteProvider.resolveDescriptor({
-        digest: descriptor.digest,
-        maxBytes: this.maxComponentBytes,
-        reference: resolved.location,
-      });
-    } catch (_error) {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE,
-        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_ACQUISITION_FAILED,
-      );
-    }
-    const returnedDescriptor = validateOciDescriptor(
-      result?.descriptor,
-      INSTALLABLE_ARTIFACT_PATH.SOURCE_DESCRIPTOR,
-    );
-    if (returnedDescriptor.digest !== descriptor.digest ||
-        returnedDescriptor.size !== descriptor.size ||
-        returnedDescriptor.mediaType !== descriptor.mediaType) {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_RESULT_INVALID,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE_DESCRIPTOR,
-        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_PROVIDER_INVALID,
-      );
-    }
-    return {bytes: normalizeBytes(result.bytes)};
-  }
-
-  async acquire(manifest, source) {
-    const kind = source?.kind;
-    const location = source?.location || manifest.artifact.ref;
-    if (kind === INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI) {
-      return this.acquireRemote(manifest, location);
-    }
-    if (kind === INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT) {
-      return this.acquireLocal(manifest, location);
-    }
-    fail(
-      INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_UNSUPPORTED,
-      INSTALLABLE_ARTIFACT_PATH.SOURCE_KIND,
-      INSTALLABLE_ARTIFACT_MESSAGE.SOURCE_KIND_UNSUPPORTED,
-    );
-  }
-
-  async acquireRemote(manifest, location) {
-    if (!this.remoteProvider ||
-        typeof this.remoteProvider.resolveDescriptor !== 'function') {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE,
-        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_PROVIDER_MISSING,
-      );
-    }
-    let result;
-    try {
-      result = await this.remoteProvider.resolveDescriptor({
-        reference: location,
-        digest: manifest.artifact.digest,
-        maxBytes: this.maxDescriptorBytes,
-      });
-    } catch (_error) {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE,
-        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_ACQUISITION_FAILED,
-      );
-    }
-    if (!result || typeof result !== 'object') {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_RESULT_INVALID,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE,
-        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_PROVIDER_INVALID,
-      );
-    }
-    return {
-      sourceKind: INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI,
-      location,
-      descriptor: validateOciDescriptor(
-        result.descriptor,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE_DESCRIPTOR,
-      ),
-      bytes: normalizeBytes(result.bytes),
-    };
-  }
-
-  async acquireLocal(manifest, location) {
-    if (typeof location !== 'string' || location.length === 0) {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE_LOCATION,
-        INSTALLABLE_ARTIFACT_MESSAGE.LAYOUT_PATH_REQUIRED,
-      );
-    }
-    const root = path.resolve(location);
-    const marker = await readJson(
-      path.join(root, OCI_LAYOUT_ENTRY.LAYOUT),
-      MAX_LAYOUT_MARKER_BYTES,
-      INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-      INSTALLABLE_ARTIFACT_PATH.SOURCE_LAYOUT,
-    );
-    if (marker?.imageLayoutVersion !== OCI_IMAGE_LAYOUT_VERSION) {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE_LAYOUT_VERSION,
-        INSTALLABLE_ARTIFACT_MESSAGE.LAYOUT_VERSION_UNSUPPORTED,
-      );
-    }
-    const index = await readJson(
-      path.join(root, OCI_LAYOUT_ENTRY.INDEX),
-      MAX_INDEX_BYTES,
-      INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-      INSTALLABLE_ARTIFACT_PATH.SOURCE_INDEX,
-    );
-    if (index?.schemaVersion !== 2 || !Array.isArray(index.manifests)) {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE_INDEX,
-        INSTALLABLE_ARTIFACT_MESSAGE.INDEX_INVALID,
-      );
-    }
-    const matches = index.manifests.filter((entry) =>
-      entry?.digest === manifest.artifact.digest);
-    if (matches.length !== 1) {
-      fail(
-        INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_NOT_FOUND,
-        INSTALLABLE_ARTIFACT_PATH.SOURCE_INDEX_MANIFESTS,
-        INSTALLABLE_ARTIFACT_MESSAGE.INDEX_DESCRIPTOR_NOT_UNIQUE,
-      );
-    }
-    const descriptor = validateOciDescriptor(
-      matches[0],
-      INSTALLABLE_ARTIFACT_PATH.SOURCE_INDEX_MANIFESTS,
-    );
-    const bytes = await readBounded(
-      path.join(
-        root,
-        OCI_LAYOUT_ENTRY.BLOBS,
-        OCI_LAYOUT_ENTRY.SHA256,
-        descriptor.digest.slice(SHA256_PREFIX_LENGTH),
-      ),
-      this.maxDescriptorBytes,
-      INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_TOO_LARGE,
-      INSTALLABLE_ARTIFACT_PATH.SOURCE_BLOBS,
-    );
-    return {
-      sourceKind: INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
-      location: root,
-      descriptor,
-      bytes,
-    };
   }
 
   verifyDescriptor(manifest, acquisition) {

@@ -8,12 +8,8 @@ import {
   projectBinding,
 } from '../control-plane/owners/deployment-binding-contract.js';
 import {
-  deriveRequestServiceDefinitionId,
-} from
-  '../control-plane/owners/request-binding-service-definition-contract.js';
-import {
-  isActiveDefinitionForBinding,
-  isReadyRuntimeActual,
+  filterGenerationalBindingCandidates,
+  findActiveReadyBindingCandidate,
 } from './binding-route-actuals.js';
 import {
   REQUEST_CELL_ROUTE_CLASSIFICATION,
@@ -43,8 +39,11 @@ function selectActual(actuals, invocationId) {
     (left, right) =>
       String(left.service_id).localeCompare(String(right.service_id)),
   );
+  if (!invocationId) {
+    return ordered[0];
+  }
   const selectionHash = createHash(HASH_ALGORITHM)
-    .update(invocationId)
+    .update(String(invocationId))
     .digest(HASH_ENCODING);
   const selection = Number.parseInt(selectionHash.slice(0, 12), 16);
   return ordered[selection % ordered.length];
@@ -78,9 +77,10 @@ class RequestBindingRouteResolver {
     const rows =
       cache.getAll(SYSTEM_TABLE_NAME.SERVICE_BINDINGS) || [];
     const matches = [];
+    const tenantId = request.securityContext?.tenantId ?? request.tenantId;
     for (const row of rows) {
       if (
-        row?.tenant_id !== request.securityContext.tenantId ||
+        row?.tenant_id !== tenantId ||
         row?.source_kind !== DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST
       ) {
         continue;
@@ -116,38 +116,22 @@ class RequestBindingRouteResolver {
         ROUTE_RESOLVER_ERROR.ROUTE_NOT_FOUND,
       );
     }
-    if (bindings.length > 1) {
+
+    const {ambiguous, candidates} =
+      filterGenerationalBindingCandidates(bindings, request, cache);
+    if (ambiguous) {
       throw createRoutingFailure(
         REQUEST_CELL_ROUTE_ERROR_CODE.ROUTE_AMBIGUOUS,
         ROUTE_RESOLVER_ERROR.ROUTE_AMBIGUOUS,
       );
     }
 
-    const binding = bindings[0];
-    // v3 handler-aware routing: the bound handler id travels with the
-    // route so the request path can pass it to the fixed
-    // handle-request export. v2 bindings carry no handler id (null).
-    const handlerId =
-      binding.declaration.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 ?
-        binding.declaration.target.handler_id :
-        null;
-    const serviceId =
-      deriveRequestServiceDefinitionId(binding.bindingVersionId);
-    const definition = cache.get(
-      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
-      serviceId,
+    const active = findActiveReadyBindingCandidate(
+      candidates,
+      cache,
+      DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
     );
-    const actuals =
-      (cache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [])
-        .filter((actual) => isReadyRuntimeActual(actual, serviceId));
-    if (
-      !isActiveDefinitionForBinding(
-        definition,
-        binding,
-        DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
-      ) ||
-      actuals.length === 0
-    ) {
+    if (!active.found) {
       throw createRoutingFailure(
         REQUEST_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
         ROUTE_RESOLVER_ERROR.ROUTE_UNAVAILABLE,
@@ -155,25 +139,37 @@ class RequestBindingRouteResolver {
       );
     }
 
-    const actual = selectActual(actuals, request.invocationId);
+    const {chosenActuals, chosenBinding, chosenDefinition, serviceId} = active;
+    const chosenActual = selectActual(chosenActuals, request.invocationId);
+    const handlerId =
+      chosenBinding.declaration.schema_version ===
+      DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 ?
+        chosenBinding.declaration.target.handler_id :
+        null;
+
     return Object.freeze({
-      bindingDigest: definition.binding_digest,
-      bindingVersionId: binding.bindingVersionId,
+      bindingDigest: chosenDefinition.binding_digest,
+      bindingId: chosenBinding.bindingId,
+      bindingVersionId: chosenBinding.bindingVersionId,
+      generation: chosenBinding.generation,
       handlerId,
       method: request.method,
-      nodeId: actual.node_id,
+      nodeId: chosenActual.node_id,
       path: request.path,
-      replicaId: actual.service_id,
+      replicaId: chosenActual.service_id,
       serviceId,
       targetAddress:
-        `${actual.node_id}/service/runtime-service-handler`,
-      targetNodeId: actual.node_id,
-      tenantId: binding.tenantId,
+        `${chosenActual.node_id}/service/runtime-service-handler`,
+      targetNodeId: chosenActual.node_id,
+      tenantId: chosenBinding.tenantId,
     });
   }
 
   assertSelectedRoute(request, expectedRoute) {
-    const current = this.resolve(request);
+    const current = this.resolve({
+      ...request,
+      bindingVersionId: expectedRoute?.bindingVersionId,
+    });
     const fields = [
       'bindingDigest',
       'bindingVersionId',

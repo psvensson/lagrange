@@ -131,7 +131,27 @@ async function createCreationSqliteFixture(t, options = {}) {
   // not a fixture hash or a nonexistent identity-helper export. This seed is
   // component catalog intent only: resolver evidence is explicit fixture data,
   // no artifact payload store, native service or activation is provided.
+  const artifactPayloadStore = {
+    async findSealedPayloadByArtifactDigest(artifactDigest) {
+      return {
+        found: true,
+        payload: {
+          artifactDigest,
+          chunkCount: 1,
+          createdAt: 1000,
+          mediaType: 'application/wasm',
+          payloadDigest: artifactDigest,
+          sealedAt: 1000,
+          totalSize: 1024,
+        },
+      };
+    },
+    async putPayload() {
+      return {alreadySealed: true};
+    },
+  };
   const commandOwner = new ServiceLifecycleCommandOwner({
+    artifactPayloadStore,
     catalogOwner: primary.catalog,
     signaturePolicy: SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
     artifactResolver: {async resolve() {
@@ -140,7 +160,7 @@ async function createCreationSqliteFixture(t, options = {}) {
     }},
   });
   const installed = await commandOwner.execute(SERVICE_LIFECYCLE_COMMAND.INSTALL,
-    {manifest, config: {definition: DEFINITION}, artifact_source: {kind: 'remote_oci'},
+    {manifest, config: {definition: DEFINITION},
       idempotency_key: 'creation-component-seed'},
     {tenantId: TENANT, principal: 'creation-fixture', roles: ['service-operator']});
   assert.equal(installed.success, true, JSON.stringify(installed));

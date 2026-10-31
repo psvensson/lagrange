@@ -55,8 +55,8 @@ describe('minimal deployment request Binding example contract', () => {
     const binding = buildBindingPayload(PACKAGE_ID, manifest);
     const accessPayload = buildAccessPayload();
 
-    assert.equal(install.artifact_source.kind, 'local_oci_layout');
-    assert.equal(install.artifact_source.location, receipt.layoutPath);
+    assert.equal(install.artifact_source, undefined);
+    assert.equal(install.idempotency_key, EXAMPLE.IDEMPOTENCY_KEY);
     assert.equal(binding.schema_version, 2);
     assert.deepEqual(binding.source, {
       kind: 'request',

@@ -115,9 +115,9 @@ test('generate emits a deterministic runtime-types.d.ts covering ' +
   // Handler context binds call() to the declared handle.
   assert.match(first, /export interface HandlerContext/);
   assert.match(first, /call\(operation: OperationHandles\["summarizeAmounts"\]/);
-  // Request envelope: body is unknown so handlers must narrow before use.
+  // Request envelope: body is a parsed JSON object or null so handlers must narrow before use.
   assert.match(first, /export interface ServiceRequest/);
-  assert.match(first, /readonly body: unknown/);
+  assert.match(first, /readonly body: Record<string, unknown> \| null/);
   // Per-handler contexts narrowed to each handler's declared calls.
   assert.match(first, /export interface HandlerContexts/);
   assert.match(first, /readonly "amountSummary": \{/);
@@ -234,8 +234,8 @@ export {readBody};
   await writeFile(path.join(target, 'probe-bad-body.mjs'), bad);
   const badResult = runTsc(target, 'probe-bad-body.mjs');
   assert.notEqual(badResult.status, 0,
-    'unnarrowed body access must fail tsc (body is unknown)');
-  assert.match(badResult.stdout, /unknown/);
+    'unnarrowed body access must fail tsc (body may be null)');
+  assert.match(badResult.stdout, /unknown|null/);
 
   const clean = probeModule(`
 /** @param {ServiceRequest} request */

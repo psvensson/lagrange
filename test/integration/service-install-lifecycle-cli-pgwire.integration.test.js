@@ -312,7 +312,6 @@ describe('shipped service lifecycle CLI over production PG-wire', () => {
     assert.equal(requests.length, 4);
 
     const installPayload = {
-      artifact_source: {kind: 'remote_oci'},
       config: {replicas: 2},
       idempotency_key: IDEMPOTENCY_KEY,
       manifest: manifest(),

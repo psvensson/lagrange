@@ -21,10 +21,12 @@ const SERVICE_LIFECYCLE_EXECUTION_DISPOSITION = Object.freeze({
 });
 
 const SERVICE_LIFECYCLE_SQL_ERROR_CODE = Object.freeze({
+  ARTIFACT_SOURCE_RETIRED: 'service_lifecycle_artifact_source_retired',
   INVALID_GRAMMAR: 'service_lifecycle_invalid_grammar',
   INVALID_PARAMETER: 'service_lifecycle_invalid_parameter',
   INVALID_PAYLOAD: 'service_lifecycle_invalid_payload',
   PAYLOAD_TOO_LARGE: 'service_lifecycle_payload_too_large',
+  SOURCE_UNSUPPORTED: 'service_lifecycle_source_unsupported',
 });
 
 const SERVICE_LIFECYCLE_SQL_ERROR_PATH = Object.freeze({
@@ -34,6 +36,8 @@ const SERVICE_LIFECYCLE_SQL_ERROR_PATH = Object.freeze({
 });
 
 const SERVICE_LIFECYCLE_SQL_MESSAGE = Object.freeze({
+  ARTIFACT_SOURCE_RETIRED:
+    'artifact_source has been retired; deployment consumes registered immutable identities and sealed payloads only',
   GRAMMAR_UNSUPPORTED:
     'service lifecycle SQL does not match the supported parameterized grammar',
   JSON_PARAMETER_REQUIRED:
@@ -61,6 +65,11 @@ const MUTATION_PAYLOAD_FIELDS = Object.freeze({
   [SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL]: Object.freeze([
     'artifact_source', 'config', 'idempotency_key', 'manifest',
   ]),
+  [SERVICE_LIFECYCLE_SQL_COMMAND.PUBLISH_ARTIFACT]: Object.freeze([
+    'action', 'artifact_digest', 'bytes', 'chunk_bytes', 'chunk_count',
+    'chunk_digest', 'chunk_number', 'chunks', 'descriptor', 'manifest',
+    'media_type', 'payload_digest', 'total_size',
+  ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE]: Object.freeze([
     'artifact_source', 'config', 'idempotency_key', 'manifest',
   ]),
@@ -83,10 +92,13 @@ const REQUIRED_PAYLOAD_FIELDS = Object.freeze({
     'schema_version', 'name', 'target', 'source', 'budgets',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL]: Object.freeze([
-    'artifact_source', 'idempotency_key', 'manifest',
+    'idempotency_key', 'manifest',
+  ]),
+  [SERVICE_LIFECYCLE_SQL_COMMAND.PUBLISH_ARTIFACT]: Object.freeze([
+    'artifact_digest',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE]: Object.freeze([
-    'artifact_source', 'idempotency_key', 'manifest',
+    'idempotency_key', 'manifest',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.REMOVE]: Object.freeze([
     'idempotency_key', 'service_name',
@@ -96,7 +108,7 @@ const REQUIRED_PAYLOAD_FIELDS = Object.freeze({
   ]),
 });
 
-const MAX_LIFECYCLE_PAYLOAD_BYTES = 1024 * 1024;
+const MAX_LIFECYCLE_PAYLOAD_BYTES = 64 * 1024 * 1024;
 
 const COMMAND_PREFIX = Object.freeze([
   Object.freeze({
@@ -114,6 +126,10 @@ const COMMAND_PREFIX = Object.freeze([
   Object.freeze({
     pattern: /^\s*INSTALL\b/iu,
     command: SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL,
+  }),
+  Object.freeze({
+    pattern: /^\s*PUBLISH\s+(?:SERVICE\s+)?ARTIFACT\b/iu,
+    command: SERVICE_LIFECYCLE_SQL_COMMAND.PUBLISH_ARTIFACT,
   }),
   Object.freeze({
     pattern: /^\s*UPGRADE\b/iu,
@@ -138,6 +154,8 @@ const EXACT_STATEMENT = Object.freeze({
     /^\s*CREATE\s+BINDING\s+\$1\s*;?\s*$/iu,
   [SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL]:
     /^\s*INSTALL\s+SERVICE\s+\$1\s*;?\s*$/iu,
+  [SERVICE_LIFECYCLE_SQL_COMMAND.PUBLISH_ARTIFACT]:
+    /^\s*PUBLISH\s+(?:SERVICE\s+)?ARTIFACT\s+\$1\s*;?\s*$/iu,
   [SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE]:
     /^\s*UPGRADE\s+SERVICE\s+\$1\s*;?\s*$/iu,
   [SERVICE_LIFECYCLE_SQL_COMMAND.REMOVE]:
@@ -232,6 +250,15 @@ function parsePayloadParameter(parameters) {
 }
 
 function validatePayloadShape(command, payload) {
+  if ((command === SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL ||
+       command === SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE) &&
+      payload.artifact_source !== undefined) {
+    sqlFailure(
+      SERVICE_LIFECYCLE_SQL_ERROR_CODE.ARTIFACT_SOURCE_RETIRED,
+      `${SERVICE_LIFECYCLE_SQL_ERROR_PATH.PAYLOAD}/artifact_source`,
+      SERVICE_LIFECYCLE_SQL_MESSAGE.ARTIFACT_SOURCE_RETIRED,
+    );
+  }
   const allowed = MUTATION_PAYLOAD_FIELDS[command];
   const required = REQUIRED_PAYLOAD_FIELDS[command];
   for (const field of Object.keys(payload)) {

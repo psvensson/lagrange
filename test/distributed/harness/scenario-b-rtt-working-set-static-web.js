@@ -10,6 +10,7 @@ import {
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 export const DEFAULT_RTT_WORKING_SET_SVG_PATH =
   'docs/benchmarks/scenario-b-rtt-working-set-crossover.svg';
@@ -57,11 +58,12 @@ function getSeriesPt(series, rttMs) {
 
 function renderSvgItem(x, y, [l1, l2], metric, valW, color, sub) {
   const dash = ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"';
+  const fillBar = valW > 0 ?
+    `\n    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"${dash}/>` : '';
   return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${l1}</text>
     <text x="${x}" y="${y + 11}" fill="#94a3b8" font-size="10" font-family="monospace">${l2}</text>
     <text x="${x}" y="${y + 22}" fill="#cbd5e1" font-size="10">${escapeXml(metric)}</text>
-    <rect x="${x}" y="${y + 26}" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"${dash}/>
+    <rect x="${x}" y="${y + 26}" width="250" height="7" fill="#334155" rx="2"/>${fillBar}
     <text x="${x}" y="${y + 43}" fill="#64748b" font-size="9">${escapeXml(sub)}</text>`;
 }
 
@@ -71,27 +73,35 @@ function renderSvgPanels(exp) {
     const s02 = getSeriesPt(t.rttSeries, 0.2);
     const s10 = getSeriesPt(t.rttSeries, 10.0);
     const s30 = getSeriesPt(t.rttSeries, 30.0);
-    const w = Math.max(4, Math.min(250, Math.round(((s10.decisionsPerSec || 0) / 200) * 250)));
+    const w = (typeof s10.decisionsPerSec === 'number') ?
+      Math.max(4, Math.min(250, Math.round((s10.decisionsPerSec / 200) * 250))) : 0;
     const sub = `30ms: ${f(s30.decisionsPerSec, 0)} dec/s | ${t.oneWayHopsSequential} sequential hops`;
+    const label = (typeof s10.decisionsPerSec === 'number') ?
+      `10ms: ${f(s10.decisionsPerSec, 0)} dec/s (0.2ms: ${f(s02.decisionsPerSec, 0)})` : '[not measured]';
     return renderSvgItem(45, 132 + i * 70, TARGET_LABELS[t.targetId] || [t.label, ''],
-      `10ms: ${f(s10.decisionsPerSec, 0)} dec/s (0.2ms: ${f(s02.decisionsPerSec, 0)})`, w,
-      TARGET_COLORS[t.targetId] || '#94a3b8', sub);
+      label, w, TARGET_COLORS[t.targetId] || '#94a3b8', sub);
   }), '\n');
   const r2 = arrayJoin(arrayMap(exp.sequentialRttSeries, (t, i) => {
     const s10 = getSeriesPt(t.rttSeries, 10.0);
     const s30 = getSeriesPt(t.rttSeries, 30.0);
-    const w = Math.max(4, Math.min(250, Math.round(((s10.p99Ms || 0) / 160) * 250)));
+    const w = (typeof s10.p99Ms === 'number') ?
+      Math.max(4, Math.min(250, Math.round((s10.p99Ms / 160) * 250))) : 0;
     const sub = `Local: ${f(t.localOnly02msP99Ms, 1)}ms | 30ms: ${f(s30.p99Ms, 1)}ms`;
+    const label = (typeof s10.p99Ms === 'number') ?
+      `${f(s10.p99Ms, 1)}ms p99 @ 10ms RTT` : '[not measured]';
     return renderSvgItem(355, 132 + i * 70, TARGET_LABELS[t.targetId] || [t.label, ''],
-      `${f(s10.p99Ms, 1)}ms p99 @ 10ms RTT`, w,
-      TARGET_COLORS[t.targetId] || '#94a3b8', sub);
+      label, w, TARGET_COLORS[t.targetId] || '#94a3b8', sub);
   }), '\n');
   const r3 = arrayJoin(arrayMap(exp.workingSetComparison, (w, i) => {
-    const barW = Math.max(4, Math.min(250, Math.round(((w.heavyDecPerSec || 0) / 400) * 250)));
-    const sub = `WAN: ${w.heavyWanBytes} B/req | p99: ${f(w.heavyP99Ms, 1)}ms`;
+    const barW = (typeof w.heavyDecPerSec === 'number') ?
+      Math.max(4, Math.min(250, Math.round((w.heavyDecPerSec / 400) * 250))) : 0;
+    const wan = w.heavyWanBytes !== null ? `${w.heavyWanBytes} B/req` : '[not measured]';
+    const sub = `WAN: ${wan} | p99: ${f(w.heavyP99Ms, 1)}ms`;
+    const drop = w.throughputDropPct !== null ? `(${f(w.throughputDropPct, 1)}%)` : '';
+    const label = (typeof w.heavyDecPerSec === 'number') ?
+      stringTrim(`${f(w.heavyDecPerSec, 1)} dec/s ${drop}`) : '[not measured]';
     return renderSvgItem(665, 132 + i * 70, TARGET_LABELS[w.targetId] || [w.label, ''],
-      `${f(w.heavyDecPerSec, 1)} dec/s (${f(w.throughputDropPct, 1)}%)`, barW,
-      TARGET_COLORS[w.targetId] || '#94a3b8', sub);
+      label, barW, TARGET_COLORS[w.targetId] || '#94a3b8', sub);
   }), '\n');
   return `${r1}\n${r2}\n${r3}`;
 }
@@ -130,7 +140,7 @@ function renderTables(exp) {
     const s20 = getSeriesPt(t.rttSeries, 2.0);
     const s10 = getSeriesPt(t.rttSeries, 10.0);
     const s30 = getSeriesPt(t.rttSeries, 30.0);
-    const tier = s10.evidenceTier || 'modeled-topology-oracle';
+    const tier = s10.evidenceTier || 'not measured';
     return `| ${t.label} | ${t.oneWayHopsSequential} | ${f(t.localOnly02msDecPerSec, 1)} | ` +
       `${f(s02.decisionsPerSec, 1)} | ${f(s20.decisionsPerSec, 1)} | ${f(s10.decisionsPerSec, 1)} | ${f(s30.decisionsPerSec, 1)} | ${tier} |`;
   }), '\n');
@@ -139,23 +149,38 @@ function renderTables(exp) {
     const s20 = getSeriesPt(t.rttSeries, 2.0);
     const s10 = getSeriesPt(t.rttSeries, 10.0);
     const s30 = getSeriesPt(t.rttSeries, 30.0);
-    const tier = s10.evidenceTier || 'modeled-topology-oracle';
+    const tier = s10.evidenceTier || 'not measured';
+    const loc = t.localOnly02msDecPerSec !== null ? f(t.localOnly02msDecPerSec, 1) : '<span class="badge">not measured</span>';
+    const v02 = s02.decisionsPerSec !== null ? f(s02.decisionsPerSec, 1) : '<span class="badge">not measured</span>';
+    const v20 = s20.decisionsPerSec !== null ? f(s20.decisionsPerSec, 1) : '<span class="badge">not measured</span>';
+    const v10 = s10.decisionsPerSec !== null ? f(s10.decisionsPerSec, 1) : '<span class="badge">not measured</span>';
+    const v30 = s30.decisionsPerSec !== null ? f(s30.decisionsPerSec, 1) : '<span class="badge">not measured</span>';
     return `<tr><td><strong>${escapeXml(t.label)}</strong></td><td>${t.oneWayHopsSequential}</td>` +
-      `<td>${f(t.localOnly02msDecPerSec, 1)}</td><td>${f(s02.decisionsPerSec, 1)}</td>` +
-      `<td>${f(s20.decisionsPerSec, 1)}</td><td>${f(s10.decisionsPerSec, 1)}</td>` +
-      `<td>${f(s30.decisionsPerSec, 1)}</td><td>${escapeXml(tier)}</td></tr>`;
+      `<td>${loc}</td><td>${v02}</td>` +
+      `<td>${v20}</td><td>${v10}</td>` +
+      `<td>${v30}</td><td>${escapeXml(tier)}</td></tr>`;
   }), '\n');
 
   const mdWs = arrayJoin(arrayMap(exp.workingSetComparison, (w) => {
-    const tier = w.evidenceTier || 'modeled-topology-oracle';
-    return `| ${w.label} | ${f(w.moderateDecPerSec, 1)} | ${f(w.moderateP99Ms, 1)} | ${w.moderateWanBytes} | ` +
-      `${f(w.heavyDecPerSec, 1)} | ${f(w.heavyP99Ms, 1)} | ${w.heavyWanBytes} | ${f(w.throughputDropPct, 1)}% | ${tier} |`;
+    const tier = w.evidenceTier || 'not measured';
+    const modWan = w.moderateWanBytes !== null ? `${w.moderateWanBytes}` : '[not measured]';
+    const hvyWan = w.heavyWanBytes !== null ? `${w.heavyWanBytes}` : '[not measured]';
+    const drop = w.throughputDropPct !== null ? `${f(w.throughputDropPct, 1)}%` : '[not measured]';
+    return `| ${w.label} | ${f(w.moderateDecPerSec, 1)} | ${f(w.moderateP99Ms, 1)} | ${modWan} | ` +
+      `${f(w.heavyDecPerSec, 1)} | ${f(w.heavyP99Ms, 1)} | ${hvyWan} | ${drop} | ${tier} |`;
   }), '\n');
   const htWs = arrayJoin(arrayMap(exp.workingSetComparison, (w) => {
-    const tier = w.evidenceTier || 'modeled-topology-oracle';
-    return `<tr><td><strong>${escapeXml(w.label)}</strong></td><td>${f(w.moderateDecPerSec, 1)}</td>` +
-      `<td>${f(w.moderateP99Ms, 1)}</td><td>${w.moderateWanBytes}</td><td>${f(w.heavyDecPerSec, 1)}</td>` +
-      `<td>${f(w.heavyP99Ms, 1)}</td><td>${w.heavyWanBytes}</td><td>${f(w.throughputDropPct, 1)}%</td>` +
+    const tier = w.evidenceTier || 'not measured';
+    const modDec = w.moderateDecPerSec !== null ? f(w.moderateDecPerSec, 1) : '<span class="badge">not measured</span>';
+    const modP99 = w.moderateP99Ms !== null ? f(w.moderateP99Ms, 1) : '<span class="badge">not measured</span>';
+    const modWan = w.moderateWanBytes !== null ? `${w.moderateWanBytes}` : '<span class="badge">not measured</span>';
+    const hvyDec = w.heavyDecPerSec !== null ? f(w.heavyDecPerSec, 1) : '<span class="badge">not measured</span>';
+    const hvyP99 = w.heavyP99Ms !== null ? f(w.heavyP99Ms, 1) : '<span class="badge">not measured</span>';
+    const hvyWan = w.heavyWanBytes !== null ? `${w.heavyWanBytes}` : '<span class="badge">not measured</span>';
+    const drop = w.throughputDropPct !== null ? `${f(w.throughputDropPct, 1)}%` : '<span class="badge">not measured</span>';
+    return `<tr><td><strong>${escapeXml(w.label)}</strong></td><td>${modDec}</td>` +
+      `<td>${modP99}</td><td>${modWan}</td><td>${hvyDec}</td>` +
+      `<td>${hvyP99}</td><td>${hvyWan}</td><td>${drop}</td>` +
       `<td>${escapeXml(tier)}</td></tr>`;
   }), '\n');
   return {mdRtt, htRtt, mdWs, htWs};
@@ -169,16 +194,13 @@ export function renderScenarioBRttWorkingSetMarkdown(matrix) {
     '[3-to-5-Node RF=3 Scale-Out Comparison](scaleout-3to5-node-rf3-progress.md) | ' +
     '[5-Node RF=3 Partition Granularity Sweep](partition-granularity-sweep-progress.md)';
   const descRtt = 'Evaluating network latency scaling from 0.2 ms LAN to 30 ms cross-region WAN ' +
-    'highlights the performance penalty of multi-hop sequential orchestration. Lagrange executes ' +
-    'with only 2 one-way hops, maintaining 168.0 dec/s at 10 ms RTT and 68.0 dec/s at 30 ms RTT. ' +
-    'In contrast, distributed SQL databases requiring 6 to 12 sequential hops suffer steep drops, ' +
-    'with TiDB + TiKV dropping to 54.0 dec/s at 10 ms and 19.0 dec/s at 30 ms.';
+    'highlights the architectural overhead of multi-hop sequential orchestration across distributed nodes. ' +
+    'Simulated network delay additions have been withdrawn in favor of live-wire client adapters; ' +
+    'comparative RTT crossover curves require admitted GCP or lab execution receipts.';
   const descWs = 'Increasing historical state from a moderate 64-event history to a heavy-correlation ' +
-    '2048-event working set demonstrates the wire efficiency of compute-near-data architectures. ' +
-    'Lagrange evaluates policies in-process, incurring zero additional WAN transfer (144 B wire bytes ' +
-    'under both workloads) and dropping only -16.6% (368.0 dec/s). Relational and distributed SQL systems ' +
-    'must transmit event history across tiers, scaling wire bytes to 4.8 KB - 24.5 KB and experiencing ' +
-    '-32.5% to -46.7% throughput reductions.';
+    '2048-event working set evaluates the wire efficiency and serialization overhead of candidate architectures. ' +
+    'Empirical throughput and byte transmission measurements require original GCP or lab execution receipts ' +
+    'under verifiable host placement and network accounting.';
   return `# Scenario B Network RTT Crossover and Working-Set Growth
 
 Comparative evaluation of network round-trip time scaling and working-set expansion under Scenario B distributed risk decisions.
@@ -209,16 +231,13 @@ export function renderScenarioBRttWorkingSetHtml(matrix) {
   const exp = getExperiment(matrix);
   const {htRtt, htWs} = renderTables(exp);
   const descRtt = 'Evaluating network latency scaling from 0.2 ms LAN to 30 ms cross-region WAN ' +
-    'highlights the performance penalty of multi-hop sequential orchestration. Lagrange executes ' +
-    'with only 2 one-way hops, maintaining 168.0 dec/s at 10 ms RTT and 68.0 dec/s at 30 ms RTT. ' +
-    'In contrast, distributed SQL databases requiring 6 to 12 sequential hops suffer steep drops, ' +
-    'with TiDB + TiKV dropping to 54.0 dec/s at 10 ms and 19.0 dec/s at 30 ms.';
+    'highlights the architectural overhead of multi-hop sequential orchestration across distributed nodes. ' +
+    'Simulated network delay additions have been withdrawn in favor of live-wire client adapters; ' +
+    'comparative RTT crossover curves require admitted GCP or lab execution receipts.';
   const descWs = 'Increasing historical state from a moderate 64-event history to a heavy-correlation ' +
-    '2048-event working set demonstrates the wire efficiency of compute-near-data architectures. ' +
-    'Lagrange evaluates policies in-process, incurring zero additional WAN transfer (144 B wire bytes ' +
-    'under both workloads) and dropping only -16.6% (368.0 dec/s). Relational and distributed SQL systems ' +
-    'must transmit event history across tiers, scaling wire bytes to 4.8 KB - 24.5 KB and experiencing ' +
-    '-32.5% to -46.7% throughput reductions.';
+    '2048-event working set evaluates the wire efficiency and serialization overhead of candidate architectures. ' +
+    'Empirical throughput and byte transmission measurements require original GCP or lab execution receipts ' +
+    'under verifiable host placement and network accounting.';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

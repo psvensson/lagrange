@@ -60,50 +60,81 @@ function getPostgresqlComparisonTargets(matrix) {
 }
 
 function renderCardRow(x, y, lbl, met, w, col, tier) {
+  const fillBar = w > 0 ?
+    `\n    <rect x="${x}" y="${y + 20}" width="${w}" height="8" fill="${col}" rx="3"/>` : '';
   return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${lbl}</text>
     <text x="${x}" y="${y + 14}" fill="#94a3b8" font-size="10">${met}</text>
-    <rect x="${x}" y="${y + 20}" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="${x}" y="${y + 20}" width="${w}" height="8" fill="${col}" rx="3"/>
+    <rect x="${x}" y="${y + 20}" width="250" height="8" fill="#334155" rx="3"/>${fillBar}
     <text x="${x}" y="${y + 38}" fill="#64748b" font-size="9">${tier}</text>`;
 }
 
-function renderSvgPanel1And2(targets) {
-  return arrayJoin(arrayMap(targets, (t, idx) => {
-    const y = 138 + idx * 62;
-    const col = TARGET_COLORS[t.targetId] || '#94a3b8';
-    const lbl = escapeXml(TARGET_SHORT_LABELS[t.targetId] || t.label);
-    const a = t.scenarioA || {};
-    const b = t.scenarioB || {};
-    const wA = Math.max(4, Math.min(250, Math.round(((a.throughputTxPerSec || 0) / 350) * 250)));
-    const wB = Math.max(4, Math.min(250, Math.round(((b.decisionsPerSec || 0) / 500) * 250)));
-    const aMet = `${fmtNum(a.throughputTxPerSec, 1)} tx/s (p95: ${fmtNum(a.commitP95Ms, 1)}ms)`;
-    const bMet = `${fmtNum(b.decisionsPerSec, 1)} dec/s (p99: ${fmtNum(b.p99Ms, 1)}ms)`;
-    const r1 = renderCardRow(35, y, lbl, aMet, wA, col, escapeXml(a.evidenceTier || 'modeled'));
-    const r2 = renderCardRow(345, y, lbl, bMet, wB, col, escapeXml(b.evidenceTier || 'modeled'));
-    return `${r1}\n${r2}`;
-  }), '\n');
+function renderPgTargetCardRowA(y, lbl, a, col) {
+  const hasA = typeof a.throughputTxPerSec === 'number' && Number.isFinite(a.throughputTxPerSec);
+  const wA = hasA ?
+    Math.max(4, Math.min(250, Math.round(((a.throughputTxPerSec || 0) / 350) * 250))) : 0;
+  const aMet = hasA ?
+    `${fmtNum(a.throughputTxPerSec, 1)} tx/s (p95: ${fmtNum(a.commitP95Ms, 1)}ms)` :
+    `[${a.status || 'not measured'}]`;
+  return renderCardRow(35, y, lbl, aMet, wA, col, escapeXml(a.evidenceTier || 'not-measured'));
 }
 
-function renderSvgPanel3(targets) {
-  return arrayJoin(arrayMap(targets, (t, idx) => {
-    const y = 138 + idx * 62;
-    const col = TARGET_COLORS[t.targetId] || '#94a3b8';
-    const lbl = escapeXml(TARGET_SHORT_LABELS[t.targetId] || t.label);
-    const b = t.scenarioB || {};
-    const wan = b.wanBytesPerDecision || 0;
-    const rt = fmtNum(b.sqlRoundTripsPerDecision, 1);
-    const wW = Math.max(4, Math.min(260, Math.round((wan / 5000) * 260)));
-    const s = b.shapes || {};
-    const ladMet = `${fmtNum(s['local-only']?.decisionsPerSec, 0)} / ` +
+function renderPgTargetCardRowB(y, lbl, b, col) {
+  const hasB = typeof b.decisionsPerSec === 'number' && Number.isFinite(b.decisionsPerSec);
+  const wB = hasB ?
+    Math.max(4, Math.min(250, Math.round(((b.decisionsPerSec || 0) / 500) * 250))) : 0;
+  const bMet = hasB ?
+    `${fmtNum(b.decisionsPerSec, 1)} dec/s (p99: ${fmtNum(b.p99Ms, 1)}ms)` :
+    `[${b.status || 'not measured'}]`;
+  return renderCardRow(345, y, lbl, bMet, wB, col, escapeXml(b.evidenceTier || 'not-measured'));
+}
+
+function renderSinglePgTargetPanels1And2(t, idx) {
+  const y = 138 + idx * 62;
+  const col = TARGET_COLORS[t.targetId] || '#94a3b8';
+  const lbl = escapeXml(TARGET_SHORT_LABELS[t.targetId] || t.label);
+  const r1 = renderPgTargetCardRowA(y, lbl, t.scenarioA || {}, col);
+  const r2 = renderPgTargetCardRowB(y, lbl, t.scenarioB || {}, col);
+  return `${r1}\n${r2}`;
+}
+
+function renderSvgPanel1And2(targets) {
+  return arrayJoin(arrayMap(targets, renderSinglePgTargetPanels1And2), '\n');
+}
+
+function formatLadderShapesSummary(shapes, fallbackStatus) {
+  const s = shapes || {};
+  if (typeof s['local-only']?.decisionsPerSec === 'number') {
+    return `${fmtNum(s['local-only']?.decisionsPerSec, 0)} / ` +
       `${fmtNum(s['one-remote-stage']?.decisionsPerSec, 0)} / ` +
       `${fmtNum(s['sequential']?.decisionsPerSec, 0)} / ` +
       `${fmtNum(s['fan-out']?.decisionsPerSec, 0)} dec/s`;
-    return `    <text x="655" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${lbl}</text>
-    <text x="655" y="${y + 14}" fill="#94a3b8" font-size="10">WAN: ${wan}B (${rt} RT)</text>
-    <rect x="655" y="${y + 20}" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="${y + 20}" width="${wW}" height="8" fill="${col}" rx="3"/>
+  }
+  return `[${fallbackStatus || 'not measured'}]`;
+}
+
+function renderSinglePgTargetPanel3(t, idx) {
+  const y = 138 + idx * 62;
+  const col = TARGET_COLORS[t.targetId] || '#94a3b8';
+  const lbl = escapeXml(TARGET_SHORT_LABELS[t.targetId] || t.label);
+  const b = t.scenarioB || {};
+  const hasWan = typeof b.wanBytesPerDecision === 'number' && Number.isFinite(b.wanBytesPerDecision);
+  const wan = hasWan ? b.wanBytesPerDecision : null;
+  const rt = (typeof b.sqlRoundTripsPerDecision === 'number' &&
+      Number.isFinite(b.sqlRoundTripsPerDecision)) ?
+    fmtNum(b.sqlRoundTripsPerDecision, 1) : null;
+  const wW = hasWan ? Math.max(4, Math.min(260, Math.round((wan / 5000) * 260))) : 0;
+  const wanMet = hasWan ? `WAN: ${wan}B (${rt} RT)` : `[${b.status || 'not measured'}]`;
+  const ladMet = formatLadderShapesSummary(b.shapes, b.status);
+  const fillBar = wW > 0 ?
+    `\n    <rect x="655" y="${y + 20}" width="${wW}" height="8" fill="${col}" rx="3"/>` : '';
+  return `    <text x="655" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${lbl}</text>
+    <text x="655" y="${y + 14}" fill="#94a3b8" font-size="10">${wanMet}</text>
+    <rect x="655" y="${y + 20}" width="260" height="8" fill="#334155" rx="3"/>${fillBar}
     <text x="655" y="${y + 38}" fill="#94a3b8" font-size="9">${ladMet}</text>`;
-  }), '\n');
+}
+
+function renderSvgPanel3(targets) {
+  return arrayJoin(arrayMap(targets, renderSinglePgTargetPanel3), '\n');
 }
 
 function renderPostgresqlComparisonSvg(matrix) {
@@ -135,27 +166,41 @@ function renderScenarioATableRows(targets) {
     const a = t.scenarioA || {};
     const rpo = t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No (data-loss window)';
     const proofs = `${a.semanticProofPassed ?? 0}/${a.semanticProofTotal ?? 33}`;
+    if (a.throughputTxPerSec != null) {
+      return `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ${t.processCount} | ${rpo} | ` +
+        `${a.evidenceTier} | ${fmtNum(a.throughputTxPerSec, 2)} | ${fmtNum(a.commitP50Ms, 2)} | ` +
+        `${fmtNum(a.commitP95Ms, 2)} | ${fmtNum(a.commitP99Ms, 2)} | ${proofs} |`;
+    }
+    const st = `[${a.status || 'not measured'}]`;
     return `| ${t.targetId} | ${t.version} | ${t.topologyUnits} | ${t.processCount} | ${rpo} | ` +
-      `${a.evidenceTier} | ${fmtNum(a.throughputTxPerSec, 2)} | ${fmtNum(a.commitP50Ms, 2)} | ` +
-      `${fmtNum(a.commitP95Ms, 2)} | ${fmtNum(a.commitP99Ms, 2)} | ${proofs} |`;
+      `${a.evidenceTier} | ${st} | ${st} | ${st} | ${st} | ${proofs} |`;
   }), '\n');
 }
 
 function renderScenarioBTableRows(targets) {
   return arrayJoin(arrayMap(targets, (t) => {
     const b = t.scenarioB || {};
-    const mov = b.movementContinuityPassed ? 'Passed' : 'Not supported';
-    return `| ${t.targetId} | ${b.evidenceTier} | ${fmtNum(b.decisionsPerSec, 2)} | ` +
-      `${fmtNum(b.p50Ms, 2)} | ${fmtNum(b.p95Ms, 2)} | ${fmtNum(b.p99Ms, 2)} | ` +
-      `${b.wanBytesPerDecision ?? 0} | ${fmtNum(b.sqlRoundTripsPerDecision, 2)} | ${mov} |`;
+    const mov = b.movementContinuityPassed ? 'Passed' : (b.status ? `[${b.status}]` : 'Not supported');
+    if (b.decisionsPerSec != null) {
+      return `| ${t.targetId} | ${b.evidenceTier} | ${fmtNum(b.decisionsPerSec, 2)} | ` +
+        `${fmtNum(b.p50Ms, 2)} | ${fmtNum(b.p95Ms, 2)} | ${fmtNum(b.p99Ms, 2)} | ` +
+        `${b.wanBytesPerDecision ?? 0} | ${fmtNum(b.sqlRoundTripsPerDecision, 2)} | ${mov} |`;
+    }
+    const st = `[${b.status || 'not measured'}]`;
+    return `| ${t.targetId} | ${b.evidenceTier} | ${st} | ${st} | ${st} | ${st} | ${st} | ${st} | ${mov} |`;
   }), '\n');
 }
 
 function renderShapeTableRows(targets) {
   return arrayJoin(arrayMap(targets, (t) => {
     const s = t.scenarioB?.shapes || {};
-    const fmt = (sh) => `${fmtNum(sh?.decisionsPerSec, 1)} dec/s, p99 ${fmtNum(sh?.p99Ms, 1)}ms, ` +
-      `${sh?.wanBytes ?? 0}B, ${sh?.roundTrips ?? 0}RT`;
+    const fmt = (sh) => {
+      if (sh?.decisionsPerSec != null) {
+        return `${fmtNum(sh.decisionsPerSec, 1)} dec/s, p99 ${fmtNum(sh.p99Ms, 1)}ms, ` +
+          `${sh.wanBytes ?? 0}B, ${sh.roundTrips ?? 0}RT`;
+      }
+      return `[${sh?.status || t.scenarioB?.status || 'not measured'}]`;
+    };
     return `| ${t.targetId} | ${fmt(s['local-only'])} | ${fmt(s['one-remote-stage'])} | ` +
       `${fmt(s['sequential'])} | ${fmt(s['fan-out'])} |`;
   }), '\n');
@@ -184,9 +229,9 @@ Comparative evaluation of Lagrange against PostgreSQL 17 configurations across S
 
 Comparative evaluation of three distinct control-flow models across Scenario B graph shapes:
 
-- **PostgreSQL + Application Service** (\`pg-single-primary\` / \`pg-patroni-sync-ha-rf3\`): Executes business logic in an external application service tier, issuing SQL queries across client/database network boundaries (2.75 round-trips per decision). Reaches 520.0 dec/s (single-primary) and 385.0 dec/s (sync-HA) on \`local-only\`, dropping sharply on multi-hop \`sequential\` (198.0 dec/s) and \`fan-out\` (230.0 dec/s).
-- **PostgreSQL + Server-Side PL/pgSQL Function** (\`pg-plpgsql-single-primary\` / \`pg-plpgsql-sync-ha-rf3\`): Colocates decision logic inside PostgreSQL procedures, collapsing multi-statement SQL round-trips to 1.0 per decision. Recovers most of the client/DB round-trip gap on single-locality (\`local-only\`) work (590.0 dec/s single-primary, 455.0 dec/s sync-HA vs Lagrange 620.0 dec/s) while keeping Scenario A separate on the ordinary-SQL transaction baseline (14.8 tx/s single-primary, 8.4 tx/s sync-HA).
-- **Lagrange WASI Service** (\`lagrange\`): Colocates execution directly with partition ownership and consensus state machines (0 round-trips local). While PL/pgSQL recovers single-locality work, Lagrange advantage widens under RPO=0 synchronous HA replication, multi-partition \`sequential\` (380.0 dec/s) and \`fan-out\` (410.0 dec/s) stages, and live partition movement continuity.
+- **PostgreSQL + Application Service** (\`pg-single-primary\` / \`pg-patroni-sync-ha-rf3\`): Executes business logic in an external application service tier, issuing SQL queries across client/database network boundaries.
+- **PostgreSQL + Server-Side PL/pgSQL Function** (\`pg-plpgsql-single-primary\` / \`pg-plpgsql-sync-ha-rf3\`): Colocates decision logic inside PostgreSQL procedures, collapsing multi-statement SQL round-trips while keeping Scenario A separate on the ordinary-SQL transaction baseline.
+- **Lagrange WASI Service** (\`lagrange\`): Colocates execution directly with partition ownership and consensus state machines. Comparative performance claims across systems await admitted GCP/lab measurements.
 
 ## Scenario A OLTP baseline comparison ([tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline))
 
@@ -211,17 +256,34 @@ ${renderShapeTableRows(targets)}
 function renderHtmlTableRows(targets) {
   const trA = arrayJoin(arrayMap(targets, (t) => {
     const a = t.scenarioA || {};
+    const rpo = t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No';
+    if (a.throughputTxPerSec != null) {
+      return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${escapeXml(t.version)}</td>` +
+        `<td>${t.topologyUnits}</td><td>${t.processCount}</td><td>${rpo}</td>` +
+        `<td>${escapeXml(a.evidenceTier)}</td><td>${fmtNum(a.throughputTxPerSec, 2)}</td><td>${fmtNum(a.commitP50Ms, 2)}</td>` +
+        `<td>${fmtNum(a.commitP95Ms, 2)}</td><td>${fmtNum(a.commitP99Ms, 2)}</td><td>${a.semanticProofPassed ?? 0}/33</td></tr>`;
+    }
+    const badge = `<span class="badge">${escapeXml(a.status || 'not measured')}</span>`;
     return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${escapeXml(t.version)}</td>` +
-      `<td>${t.topologyUnits}</td><td>${t.processCount}</td><td>${t.rpoZeroSurvivability ? 'Yes (RPO=0)' : 'No'}</td>` +
-      `<td>${escapeXml(a.evidenceTier)}</td><td>${fmtNum(a.throughputTxPerSec, 2)}</td><td>${fmtNum(a.commitP50Ms, 2)}</td>` +
-      `<td>${fmtNum(a.commitP95Ms, 2)}</td><td>${fmtNum(a.commitP99Ms, 2)}</td><td>${a.semanticProofPassed ?? 0}/33</td></tr>`;
+      `<td>${t.topologyUnits}</td><td>${t.processCount}</td><td>${rpo}</td>` +
+      `<td>${escapeXml(a.evidenceTier)}</td><td>${badge}</td><td>${badge}</td>` +
+      `<td>${badge}</td><td>${badge}</td><td>${a.semanticProofPassed ?? 0}/33</td></tr>`;
   }), '\n');
   const trB = arrayJoin(arrayMap(targets, (t) => {
     const b = t.scenarioB || {};
+    const mov = b.movementContinuityPassed ? 'Passed' :
+      (b.status ? `<span class="badge">${escapeXml(b.status)}</span>` : 'Not supported');
+    if (b.decisionsPerSec != null) {
+      return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${escapeXml(b.evidenceTier)}</td>` +
+        `<td>${fmtNum(b.decisionsPerSec, 2)}</td><td>${fmtNum(b.p50Ms, 2)}</td><td>${fmtNum(b.p95Ms, 2)}</td>` +
+        `<td>${fmtNum(b.p99Ms, 2)}</td><td>${b.wanBytesPerDecision ?? 0}</td>` +
+        `<td>${fmtNum(b.sqlRoundTripsPerDecision, 2)}</td><td>${mov}</td></tr>`;
+    }
+    const badge = `<span class="badge">${escapeXml(b.status || 'not measured')}</span>`;
     return `<tr><td><strong>${escapeXml(t.targetId)}</strong></td><td>${escapeXml(b.evidenceTier)}</td>` +
-      `<td>${fmtNum(b.decisionsPerSec, 2)}</td><td>${fmtNum(b.p50Ms, 2)}</td><td>${fmtNum(b.p95Ms, 2)}</td>` +
-      `<td>${fmtNum(b.p99Ms, 2)}</td><td>${b.wanBytesPerDecision ?? 0}</td>` +
-      `<td>${fmtNum(b.sqlRoundTripsPerDecision, 2)}</td><td>${b.movementContinuityPassed ? 'Passed' : 'Not supported'}</td></tr>`;
+      `<td>${badge}</td><td>${badge}</td><td>${badge}</td>` +
+      `<td>${badge}</td><td>${badge}</td>` +
+      `<td>${badge}</td><td>${mov}</td></tr>`;
   }), '\n');
   return {trA, trB};
 }
@@ -252,9 +314,9 @@ function renderPostgresqlComparisonHtml(matrix) {
       <h2>Three-Way Locality Control (Application Service vs PL/pgSQL Function vs Lagrange)</h2>
       <p>Comparative evaluation of three control-flow models across Scenario B graph shapes:</p>
       <ul>
-        <li><strong>PostgreSQL + Application Service</strong>: Business logic in external process; incurs 2.75 SQL round-trips/decision (520.0 dec/s single, 385.0 dec/s sync HA on local-only).</li>
-        <li><strong>PostgreSQL + Server-Side PL/pgSQL Function</strong>: Logic in database procedure; collapses round-trips to 1.0/decision, recovering most local gap (590.0 dec/s single, 455.0 dec/s sync HA vs Lagrange 620.0 dec/s) while preserving ordinary-SQL Scenario A baseline.</li>
-        <li><strong>Lagrange WASI Service</strong>: Native partition state colocated with consensus (0 round-trips local), widening advantage under RPO=0 synchronous HA replication, multi-partition sequential/fan-out stages (380.0 / 410.0 dec/s), and live partition movement continuity.</li>
+        <li><strong>PostgreSQL + Application Service</strong>: Business logic in external process; issues SQL queries across client/database network boundaries (evaluating <code>pg-single-primary</code> and <code>pg-patroni-sync-ha-rf3</code>).</li>
+        <li><strong>PostgreSQL + Server-Side PL/pgSQL Function</strong>: Logic in database procedure; collapses multi-statement round-trips while preserving ordinary-SQL Scenario A baseline (evaluating <code>pg-plpgsql-single-primary</code> and <code>pg-plpgsql-sync-ha-rf3</code>).</li>
+        <li><strong>Lagrange WASI Service</strong>: Native partition state colocated with consensus; comparative performance claims await admitted GCP/lab measurements.</li>
       </ul>
     </div>
     <div class="card">

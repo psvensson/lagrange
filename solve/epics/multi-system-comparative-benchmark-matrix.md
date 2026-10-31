@@ -1,6 +1,6 @@
 ---
 id: multi-system-comparative-benchmark-matrix
-status: done
+status: superseded
 proof: deterministic
 roadmapRow: null
 doneWhen:
@@ -56,6 +56,11 @@ WAN round-trips, measuring both losses and parity alongside advantages.
 - Explicit evidence-tier qualification (`observed-docker-cluster` vs `modeled-topology-oracle`)
   on every table and chart.
 
+## Current summary
+
+- Status: superseded. Active comparison acceptance based on modeled/oracle/constant generators and deterministic guards is superseded by `solve/epics/developer-journey-and-measured-comparisons.md` (`D1`, `V03`–`V06`).
+- Historical records: Preserved as historical observations; active comparison claims require original GCP/lab measurements under the successor epic.
+
 ## Decision log
 
 - 2026-10-30: Defined the five-slice comparative program order (Slice 1: landing page and
@@ -64,3 +69,4 @@ WAN round-trips, measuring both losses and parity alongside advantages.
   Slice 5: Scenario C PostgreSQL + Valkey freshness-bounded risk). Established the comparative
   statistics landing page and per-target detail pages as the persistent publication structure.
 - 2026-10-30: Completed all five comparative benchmark slices across PostgreSQL 17, PL/pgSQL server functions, Citus 13 distributed functions, YugabyteDB 2024.2, Apache Ignite 3 colocated compute, and Scenario C PostgreSQL 17 + Valkey 8 freshness-bounded risk decisions (remainingSlicesCount = 0).
+- 2026-10-31: Superseded by `solve/epics/developer-journey-and-measured-comparisons.md` (`D1`, `V03`–`V06`). Active comparison acceptance based on modeled/oracle/constant generators and deterministic guards is superseded by original GCP/lab measurement admission; historical records remain preserved as historical observations.
