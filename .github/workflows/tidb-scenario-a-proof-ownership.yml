@@ -50,6 +50,7 @@ on:
       - 'test/distributed/harness/scenario-c-comparison-static-web.js'
       - 'test/distributed/harness/comparative-landing-svg-renderer.js'
       - 'test/distributed/harness/comparative-landing-tables.js'
+      - 'test/distributed/harness/scenario-setup-breakdown-renderer.js'
       - 'test/distributed/harness/comparative-landing-page.js'
       - 'docs/benchmarks/postgresql-comparison-progress.svg'
       - 'docs/benchmarks/postgresql-comparison-progress.md'
@@ -59,6 +60,7 @@ on:
       - 'docs/benchmarks/scenario-c-feature-store-progress.*'
       - 'docs/benchmarks/scenario-b-shape-crossover.svg'
       - 'docs/benchmarks/comparative-overview.svg'
+      - 'docs/benchmarks/scenario-setup-time-breakdown.svg'
       - 'docs/benchmarks/README.md'
       - 'docs/benchmarks/index.html'
       - 'solve/epics/multi-system-comparative-benchmark-matrix.md'
@@ -140,6 +142,7 @@ jobs:
             test/distributed/harness/scenario-c-comparison-static-web.js \
             test/distributed/harness/comparative-landing-svg-renderer.js \
             test/distributed/harness/comparative-landing-tables.js \
+            test/distributed/harness/scenario-setup-breakdown-renderer.js \
             test/distributed/harness/comparative-landing-page.js \
             test/distributed/harness/lagrange-evolution-static-web.js \
             test/distributed/harness/scaleout-node-rf-comparison-static-web.js \

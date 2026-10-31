@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 780" width="960" height="780">
+  <rect width="960" height="780" fill="#0f172a" rx="8"/>
+  <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">Scenario Setup Topology &amp; Phase Latency Breakdown</text>
+  <text x="30" y="46" fill="#94a3b8" font-size="11">Where time is spent: client wire, SQL parse/plan, lock wait, 2PC prepare, quorum fsync, and stage forward</text>
+  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="630" y="28" fill="#38bdf8" font-size="11">Scenario A</text></a>
+  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="720" y="28" fill="#38bdf8" font-size="11">Scenario B</text></a>
+  <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="810" y="28" fill="#38bdf8" font-size="11">Scenario C</text></a>
+  <rect x="20" y="60" width="920" height="222" fill="#1e293b" rx="6" stroke="#334155"/>
+  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="35" y="84" fill="#38bdf8" font-size="13" font-weight="bold">Scenario A: Contended OLTP Baseline (2PC &amp; Quorum Latency)</text></a>
+  <text x="460" y="84" fill="#94a3b8" font-size="9">Legend: lock wait (amber) | 2PC prep (pink) | raft quorum (blue) | apply (green)</text>
+  <rect x="35" y="100" width="85" height="36" fill="#0f172a" rx="4" stroke="#475569"/>
+  <text x="77.5" y="115" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">Client App</text>
+  <text x="77.5" y="127" fill="#94a3b8" font-size="8" text-anchor="middle">128 workers</text>
+  <text x="130" y="122" fill="#38bdf8" font-size="12" text-anchor="middle">-&gt;</text>
+  <rect x="140" y="100" width="95" height="36" fill="#0f172a" rx="4" stroke="#475569"/>
+  <text x="187.5" y="115" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">Coordinator</text>
+  <text x="187.5" y="127" fill="#94a3b8" font-size="8" text-anchor="middle">SQL Parse/Plan</text>
+  <text x="245" y="122" fill="#38bdf8" font-size="12" text-anchor="middle">-&gt;</text>
+  <rect x="255" y="100" width="95" height="36" fill="#0f172a" rx="4" stroke="#475569"/>
+  <text x="302.5" y="115" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">2PC Quorum</text>
+  <text x="302.5" y="127" fill="#94a3b8" font-size="8" text-anchor="middle">Raft + Storage</text>
+  <text x="35" y="158" fill="#94a3b8" font-size="9">Topology: 3-5 Nodes, RF=3, single/multi partition</text>
+  <text x="35" y="174" fill="#cbd5e1" font-size="9">Contention: lock serialization dominates p95 tail</text>
+  <text x="35" y="190" fill="#94a3b8" font-size="9">Fast-Path: overlapping stages reduce 2PC wait</text>
+  <text x="365" y="125" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Single Primary + App</text>
+  <rect x="590" y="117" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="117" width="1" height="10" fill="#64748b"/><rect x="591" y="117" width="1" height="10" fill="#94a3b8"/><rect x="592" y="117" width="8" height="10" fill="#f59e0b"/><rect x="600" y="117" width="12" height="10" fill="#0284c7"/><rect x="612" y="117" width="1" height="10" fill="#10b981"/>
+  <text x="840" y="125" fill="#e2e8f0" font-size="9" font-family="monospace">412.6 ms</text>
+  <text x="365" y="152" fill="#cbd5e1" font-size="9" font-family="monospace">Citus 13 Sharded RF=3 + App</text>
+  <rect x="590" y="144" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="144" width="1" height="10" fill="#64748b"/><rect x="591" y="144" width="1" height="10" fill="#94a3b8"/><rect x="592" y="144" width="11" height="10" fill="#f59e0b"/><rect x="603" y="144" width="8" height="10" fill="#ec4899"/><rect x="611" y="144" width="14" height="10" fill="#0284c7"/><rect x="625" y="144" width="2" height="10" fill="#10b981"/>
+  <text x="840" y="152" fill="#e2e8f0" font-size="9" font-family="monospace">685.0 ms</text>
+  <text x="365" y="179" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Patroni Sync HA RF=3</text>
+  <rect x="590" y="171" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="171" width="1" height="10" fill="#64748b"/><rect x="591" y="171" width="1" height="10" fill="#94a3b8"/><rect x="592" y="171" width="11" height="10" fill="#f59e0b"/><rect x="603" y="171" width="34" height="10" fill="#0284c7"/><rect x="637" y="171" width="2" height="10" fill="#10b981"/>
+  <text x="840" y="179" fill="#e2e8f0" font-size="9" font-family="monospace">920.5 ms</text>
+  <text x="365" y="206" fill="#cbd5e1" font-size="9" font-family="monospace">TiDB + TiKV RF=3 (6-unit)</text>
+  <rect x="590" y="198" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="198" width="1" height="10" fill="#64748b"/><rect x="591" y="198" width="1" height="10" fill="#94a3b8"/><rect x="592" y="198" width="18" height="10" fill="#f59e0b"/><rect x="610" y="198" width="17" height="10" fill="#ec4899"/><rect x="627" y="198" width="33" height="10" fill="#0284c7"/><rect x="660" y="198" width="4" height="10" fill="#10b981"/>
+  <text x="840" y="206" fill="#e2e8f0" font-size="9" font-family="monospace">1383.2 ms</text>
+  <text x="365" y="233" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3 Fast-Path)</text>
+  <rect x="590" y="225" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="225" width="1" height="10" fill="#64748b"/><rect x="591" y="225" width="1" height="10" fill="#94a3b8"/><rect x="592" y="225" width="21" height="10" fill="#f59e0b"/><rect x="613" y="225" width="15" height="10" fill="#ec4899"/><rect x="628" y="225" width="37" height="10" fill="#0284c7"/><rect x="665" y="225" width="4" height="10" fill="#10b981"/>
+  <text x="840" y="233" fill="#e2e8f0" font-size="9" font-family="monospace">1490.0 ms</text>
+  <text x="365" y="260" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.3.0 (3-Node Lab Baseline)</text>
+  <rect x="590" y="252" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="252" width="1" height="10" fill="#64748b"/><rect x="591" y="252" width="2" height="10" fill="#94a3b8"/><rect x="593" y="252" width="116" height="10" fill="#f59e0b"/><rect x="709" y="252" width="36" height="10" fill="#ec4899"/><rect x="745" y="252" width="74" height="10" fill="#0284c7"/><rect x="819" y="252" width="6" height="10" fill="#10b981"/>
+  <text x="840" y="260" fill="#e2e8f0" font-size="9" font-family="monospace">4418.9 ms</text>
+  <rect x="20" y="294" width="920" height="222" fill="#1e293b" rx="6" stroke="#334155"/>
+  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="35" y="318" fill="#38bdf8" font-size="13" font-weight="bold">Scenario B: Distributed Risk Decision &amp; Partition Movement (p99 Latency)</text></a>
+  <text x="500" y="318" fill="#94a3b8" font-size="9">Legend: ingress (slate) | reducer (green) | WAN (amber) | decode (pink)</text>
+  <rect x="35" y="334" width="85" height="36" fill="#0f172a" rx="4" stroke="#475569"/>
+  <text x="77.5" y="349" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">Event Ingress</text>
+  <text x="77.5" y="361" fill="#94a3b8" font-size="8" text-anchor="middle">Parallel stream</text>
+  <text x="130" y="356" fill="#38bdf8" font-size="12" text-anchor="middle">-&gt;</text>
+  <rect x="140" y="334" width="95" height="36" fill="#0f172a" rx="4" stroke="#475569"/>
+  <text x="187.5" y="349" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">WASI Engine</text>
+  <text x="187.5" y="361" fill="#94a3b8" font-size="8" text-anchor="middle">Colocated eval</text>
+  <text x="245" y="356" fill="#38bdf8" font-size="12" text-anchor="middle">-&gt;</text>
+  <rect x="255" y="334" width="95" height="36" fill="#0f172a" rx="4" stroke="#475569"/>
+  <text x="302.5" y="349" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">Stage Forward</text>
+  <text x="302.5" y="361" fill="#94a3b8" font-size="8" text-anchor="middle">WAN 144 B cont.</text>
+  <text x="35" y="392" fill="#94a3b8" font-size="9">Topology: 3-island WAN (0.2..30ms RTT), RF=3</text>
+  <text x="35" y="408" fill="#cbd5e1" font-size="9">Execution: forward-only compact 48 B continuation</text>
+  <text x="35" y="424" fill="#94a3b8" font-size="9">Movement: zero-stall epoch-forwarded handoff</text>
+  <text x="365" y="359" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (Colocated WASI ctx.call)</text>
+  <rect x="590" y="351" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="351" width="9" height="10" fill="#64748b"/><rect x="599" y="351" width="76" height="10" fill="#10b981"/><rect x="675" y="351" width="19" height="10" fill="#f59e0b"/><rect x="694" y="351" width="4" height="10" fill="#ec4899"/>
+  <text x="840" y="359" fill="#e2e8f0" font-size="9" font-family="monospace">22.4 ms (+4.0ms mv)</text>
+  <text x="365" y="386" fill="#cbd5e1" font-size="9" font-family="monospace">Apache Ignite 3 (JobTarget.colocated)</text>
+  <rect x="590" y="378" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="378" width="10" height="10" fill="#64748b"/><rect x="600" y="378" width="60" height="10" fill="#10b981"/><rect x="660" y="378" width="30" height="10" fill="#f59e0b"/><rect x="690" y="378" width="11" height="10" fill="#ec4899"/>
+  <text x="840" y="386" fill="#e2e8f0" font-size="9" font-family="monospace">22.8 ms (+15.8ms mv)</text>
+  <text x="365" y="413" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Patroni + PL/pgSQL Function</text>
+  <rect x="590" y="405" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="405" width="10" height="10" fill="#64748b"/><rect x="600" y="405" width="79" height="10" fill="#10b981"/><rect x="679" y="405" width="19" height="10" fill="#f59e0b"/><rect x="698" y="405" width="13" height="10" fill="#ec4899"/>
+  <text x="840" y="413" fill="#e2e8f0" font-size="9" font-family="monospace">25.2 ms</text>
+  <text x="365" y="440" fill="#cbd5e1" font-size="9" font-family="monospace">Citus 13 (Colocated Dist Function)</text>
+  <rect x="590" y="432" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="432" width="11" height="10" fill="#64748b"/><rect x="601" y="432" width="62" height="10" fill="#10b981"/><rect x="663" y="432" width="38" height="10" fill="#f59e0b"/><rect x="701" y="432" width="17" height="10" fill="#ec4899"/>
+  <text x="840" y="440" fill="#e2e8f0" font-size="9" font-family="monospace">26.8 ms (+57.2ms mv)</text>
+  <text x="365" y="467" fill="#cbd5e1" font-size="9" font-family="monospace">YugabyteDB 2024.2 (YSQL Stored Proc)</text>
+  <rect x="590" y="459" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="459" width="12" height="10" fill="#64748b"/><rect x="602" y="459" width="73" height="10" fill="#10b981"/><rect x="675" y="459" width="55" height="10" fill="#f59e0b"/><rect x="730" y="459" width="27" height="10" fill="#ec4899"/>
+  <text x="840" y="467" fill="#e2e8f0" font-size="9" font-family="monospace">34.6 ms (+27.4ms mv)</text>
+  <text x="365" y="494" fill="#cbd5e1" font-size="9" font-family="monospace">TiDB + TiKV (App-Orchestrated SQL)</text>
+  <rect x="590" y="486" width="240" height="10" fill="#334155" rx="2"/>
+  <rect x="590" y="486" width="12" height="10" fill="#64748b"/><rect x="602" y="486" width="49" height="10" fill="#10b981"/><rect x="651" y="486" width="115" height="10" fill="#f59e0b"/><rect x="766" y="486" width="57" height="10" fill="#ec4899"/>
+  <text x="840" y="494" fill="#e2e8f0" font-size="9" font-family="monospace">48.6 ms (+43.8ms mv)</text>
+  <rect x="20" y="528" width="920" height="238" fill="#1e293b" rx="6" stroke="#334155"/>
+  <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="35" y="552" fill="#38bdf8" font-size="13" font-weight="bold">Scenario C: Streaming Feature Risk Decision &amp; Freshness Tradeoff</text></a>
+  <text x="540" y="552" fill="#94a3b8" font-size="9">Bar: fresh 0ms decisions/s | label: backfill downtime</text>
+  <rect x="35" y="568" width="85" height="36" fill="#0f172a" rx="4" stroke="#475569"/>
+  <text x="77.5" y="583" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">CDC Events</text>
+  <text x="77.5" y="595" fill="#94a3b8" font-size="8" text-anchor="middle">Live ingestion</text>
+  <text x="130" y="590" fill="#38bdf8" font-size="12" text-anchor="middle">-&gt;</text>
+  <rect x="140" y="568" width="95" height="36" fill="#0f172a" rx="4" stroke="#475569"/>
+  <text x="187.5" y="583" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">Delta Rollup</text>
+  <text x="187.5" y="595" fill="#94a3b8" font-size="8" text-anchor="middle">Micro-buckets</text>
+  <text x="245" y="590" fill="#38bdf8" font-size="12" text-anchor="middle">-&gt;</text>
+  <rect x="255" y="568" width="95" height="36" fill="#0f172a" rx="4" stroke="#475569"/>
+  <text x="302.5" y="583" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">0ms Decision</text>
+  <text x="302.5" y="595" fill="#94a3b8" font-size="8" text-anchor="middle">Freshness SLA</text>
+  <text x="35" y="626" fill="#94a3b8" font-size="9">SLA: 0ms read-your-writes vs 100-1000ms stale cache</text>
+  <text x="35" y="642" fill="#cbd5e1" font-size="9">In-Partition: 1.4ms O(1) rollup accumulator read</text>
+  <text x="35" y="658" fill="#94a3b8" font-size="9">Rule Change: 0.0s backfill downtime vs 185-240s Redis</text>
+  <text x="365" y="593" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange (In-Partition Rollup + Epoch-Lazy Opt)</text>
+  <rect x="590" y="585" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="585" width="235" height="10" fill="#38bdf8" rx="2"/>
+  <text x="840" y="593" fill="#e2e8f0" font-size="9" font-family="monospace">684.0 d/s [0s backfill]</text>
+  <text x="365" y="625" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (On-Read Raw Window Scan)</text>
+  <rect x="590" y="617" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="617" width="151" height="10" fill="#38bdf8" rx="2"/>
+  <text x="840" y="625" fill="#e2e8f0" font-size="9" font-family="monospace">441.2 d/s [0s backfill]</text>
+  <text x="365" y="657" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Patroni + PL/pgSQL (On-Read Scan)</text>
+  <rect x="590" y="649" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="649" width="109" height="10" fill="#10b981" rx="2"/>
+  <text x="840" y="657" fill="#e2e8f0" font-size="9" font-family="monospace">316.8 d/s [0s backfill]</text>
+  <text x="365" y="689" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 + Valkey 8 (Sync Write-Through)</text>
+  <rect x="590" y="681" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="681" width="106" height="10" fill="#10b981" rx="2"/>
+  <text x="840" y="689" fill="#e2e8f0" font-size="9" font-family="monospace">310.0 d/s [185s backfill]</text>
+  <text x="365" y="721" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 + Valkey 8 (Async CDC Stream)</text>
+  <rect x="590" y="713" width="240" height="10" fill="#334155" rx="2"/>
+  <text x="840" y="721" fill="#e2e8f0" font-size="9" font-family="monospace">0.0 d/s [240s backfill]</text>
+</svg>
