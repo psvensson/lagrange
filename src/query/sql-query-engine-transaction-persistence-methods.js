@@ -45,6 +45,11 @@ const SQL_TRANSACTION_COALESCING_PREFIX = 'sql-transaction:';
 const SQL_TRANSACTION_PARTICIPANT_COALESCING_PREFIX =
   'sql-transaction-participant:';
 const SQL_WRITE_OPERATION_COALESCING_PREFIX = 'sql-write-operation:';
+const TRANSIENT_PARTICIPANT_STATUSES = Object.freeze(new Set([
+  'PREPARING',
+  'COMMITTING',
+  'ROLLING_BACK',
+]));
 const SQL_TRANSACTION_ROW_READ_SQL = `SELECT * FROM ${TABLES.SQL_TRANSACTIONS} ` +
   'WHERE transaction_id = ?';
 // Identity and creation content never change after the insert. Status,
@@ -329,6 +334,10 @@ const sqlQueryEngineTransactionPersistenceMethods = {
   async persistDistributedTransactionParticipantRow(record) {
     if (!this.canPersistDistributedTransactionState()) {
       throw persistenceUnavailableError();
+    }
+    if (TRANSIENT_PARTICIPANT_STATUSES.has(record?.status) &&
+        !record?.lastError) {
+      return;
     }
     const participantId = trimmedString(record?.participantId);
     const transactionId = trimmedString(record?.transactionId);

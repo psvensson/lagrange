@@ -64,11 +64,14 @@ import {
 import {operationResultsOf} from './partition-participant-transaction-apply.js';
 import {
   canAdmitConcurrentParticipantSession,
+  canAdvanceRowKeySessionGeneration,
+  clearPreparedParticipantRowKeys,
   endParticipantSession,
   findParticipantSession,
   openParticipantSession,
   participantRoutingSessionCollision,
   participantTransactionActive,
+  stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
 import {runParticipantSessionStatement} from
   './partition-participant-transaction-staging.js';
@@ -342,6 +345,9 @@ async function proposeSealedPrepare(service, payload, session) {
     session.inFlight = false;
   }
   if (!keepsSealedSession(answer)) {
+    if (answer?.success !== true) {
+      clearPreparedParticipantRowKeys(service, session.identity.participantId);
+    }
     endParticipantSession(service, session);
   }
   return answer;
@@ -349,7 +355,12 @@ async function proposeSealedPrepare(service, payload, session) {
 
 function sealSession(service, payload, session) {
   // Advisory: the apply is the authority over the carried base.
-  if (readPartitionWriteGeneration(service.db) !== session.generationBase) {
+  const currentGeneration = readPartitionWriteGeneration(service.db);
+  if (currentGeneration !== session.generationBase &&
+      canAdvanceRowKeySessionGeneration(service, session, currentGeneration)) {
+    session.generationBase = currentGeneration;
+  }
+  if (currentGeneration !== session.generationBase) {
     endParticipantSession(service, session);
     return refusalOf(service, payload, CODE.PREPARE_REFUSED,
       {refusalCause: CAUSE.CONFLICT, ...participantOutcomeOf(null)});
@@ -362,6 +373,12 @@ function sealSession(service, payload, session) {
   if (refused !== null) {
     return refused;
   }
+  stagePreparedParticipantRowKeys(
+    service,
+    session.identity.participantId,
+    session.touchedRowKeys,
+    session.hasUnscopedWrite,
+  );
   session.phase = PHASE.PREPARING;
   session.sealed = command;
   return null;

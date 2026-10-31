@@ -1,0 +1,28 @@
+{
+  "schema": "solve-quest/2",
+  "id": "scenario-a-deep-stack-throughput-and-latency",
+  "epic": "scenario-a-deep-stack-throughput-and-latency",
+  "statement": "Implement the five Scenario A deep-stack throughput and latency optimizations: (1) propagate bound params into SELECT ... FOR UPDATE reservation checks, merge WHERE equality-bound PK columns with projected row columns in resolveCanonicalPkTuples, and preserve params/orderBy/limit in queryMatchingPkRows; (2) skip redundant retainParticipantSet mutations when the participant set is unchanged and skip transient pre-RPC participant status writes (PREPARING, COMMITTING, ROLLING_BACK) in persistDistributedTransactionParticipantRow; (3) batch concurrently queued proposals per Ready cycle in RaftRsRuntimeOwner and expose batching telemetry in RaftRsDurableStore; (4) extract canonical primary-key row identities for INSERT/UPDATE/DELETE in checkAndRecordSessionRowKey and allow row-key-disjoint sessions to PREPARE and COMMIT across intermediate disjoint commits on the same partition; and (5) validate disjoint-row staged writes in O(1) without O(N^2) prefix replay when generation and schema_version are unchanged.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/scenario-a-deep-stack-throughput-and-latency-guard.js --metric",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "preserve-cas-and-prepared-evidence-authority",
+      "statement": "Participant-set CAS writes still execute whenever the participant set changes or freezes, and PREPARED participant rows with prepared_digest, prepare_index, and prepare_term are durably persisted before recording a COMMIT decision."
+    },
+    {
+      "id": "preserve-raft-ready-persistence-ordering",
+      "statement": "Batched proposals in RaftRsRuntimeOwner are persisted in a single Ready cycle with synchronous durability before outbound messages are sent or advance_ready is invoked."
+    },
+    {
+      "id": "preserve-row-key-conflict-and-read-your-own-writes",
+      "statement": "Concurrent sessions touching overlapping row keys are deterministically refused on staging or PREPARE with 40001 conflict semantics, and same-row staged writes and session SELECTs still replay prior session operations."
+    }
+  ],
+  "sealedAt": "b41d4ccec4b2236bd2223c24cea07ed7d2a2c3c2"
+}

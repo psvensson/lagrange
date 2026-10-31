@@ -134,6 +134,16 @@ function resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions)
   return partitionIdOfCandidate(candidatePartitions?.[0]);
 }
 
+function extractMergedPkTuple(row, pkColumns, whereEqualities) {
+  const rowObj = row && typeof row === 'object' ? row : {};
+  const values = pkColumns.map((col) => {
+    const fromRow = extractRowPkValues(rowObj, [col]);
+    if (fromRow !== null) return fromRow[0];
+    return whereEqualities.get(col.toLowerCase());
+  });
+  return values.some((v) => v === undefined || v === null) ? null : values;
+}
+
 /**
  * Resolve canonical primary key tuples for selected rows.
  * @param {Object} engine - SQL query engine.
@@ -150,6 +160,14 @@ async function resolveCanonicalPkTuples(engine, ctx) {
 
   const wherePk = extractPkFromWhereClause(ast.where, pkColumns, params);
   if (wherePk && rows.length === 1) return [wherePk];
+
+  const whereEqualities = collectAndEqualities(ast.where, params);
+  if (whereEqualities.size > 0 && rows.length > 0) {
+    const mergedTuples = rows.map((row) => extractMergedPkTuple(row, pkColumns, whereEqualities));
+    if (mergedTuples.every((tuple) => tuple !== null)) {
+      return mergedTuples;
+    }
+  }
 
   const statement = {ast, whereClause: ast.where, params, sessionId, queryOptions};
   const pkRows = await queryMatchingPkRows(
@@ -733,6 +751,20 @@ function createCandidateReadError(readResult) {
   return err;
 }
 
+function buildMatchingPkSelectAst(target, statement) {
+  const {tableName, pkColumns} = target;
+  const ast = statement.ast;
+  return {
+    type: LOCKING_READ_AST_TYPE.SELECT,
+    columns: pkColumns.map((col) => ({type: QUERY_AST_NODE.COLUMN_REF, column: col})),
+    from: {type: QUERY_AST_NODE.TABLE, name: tableName},
+    where: extractWriteWhereClause(statement),
+    ...(ast?.orderBy ? {orderBy: ast.orderBy} : {}),
+    ...(ast?.limit !== undefined ? {limit: ast.limit} : {}),
+    ...(ast?.offset !== undefined ? {offset: ast.offset} : {}),
+  };
+}
+
 /**
  * Query matching primary key rows for an UPDATE, DELETE, or non-projected SELECT.
  * Fails closed if the query execution fails or throws.
@@ -747,17 +779,10 @@ async function queryMatchingPkRows(engine, target, statement) {
     return [];
   }
 
-  const {tableName, pkColumns, candidatePartitions} = target;
-  const selectAst = {
-    type: 'SELECT',
-    columns: pkColumns.map((col) => ({type: 'column_ref', column: col})),
-    from: {type: 'table', name: tableName},
-    where: extractWriteWhereClause(statement),
-  };
-
+  const selectAst = buildMatchingPkSelectAst(target, statement);
   const readResult = await queryExecutor.executeSelect(
     selectAst,
-    candidatePartitions,
+    target.candidatePartitions,
     statement.params || [],
     {
       sessionId: statement.sessionId,

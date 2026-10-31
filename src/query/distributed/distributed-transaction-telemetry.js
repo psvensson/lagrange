@@ -33,6 +33,7 @@ function createTransactionTelemetry(transactionId, sessionId) {
     totalMs: ZERO,
     metadataMutations: ZERO,
     metadataReads: ZERO,
+    skippedParticipantSetMutations: ZERO,
     participantCount: ZERO,
     prepareConcurrency: ZERO,
     commitConcurrency: ZERO,
@@ -87,6 +88,7 @@ function snapshotTransactionTelemetry(tx, outcome = null) {
     totalMs,
     metadataMutations: telemetry.metadataMutations,
     metadataReads: telemetry.metadataReads,
+    skippedParticipantSetMutations: telemetry.skippedParticipantSetMutations || ZERO,
     participantCount: tx.participants instanceof Map ?
       tx.participants.size :
       telemetry.participantCount,

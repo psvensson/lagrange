@@ -230,7 +230,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
   }
 
   async finalizeSelectSuccess(ast, sessionId, queryOptions, transactionRead,
-    result, partitionIds) {
+    result, partitionIds, params = []) {
     this.recordServicePartitionAccess(
       queryOptions,
       Array.isArray(result.partitions) ? result.partitions : partitionIds,
@@ -240,7 +240,9 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       const lockingOutcome = await executeLockingReadReservations({
         engine: this,
         ast,
+        params,
         sessionId,
+        queryOptions,
         transactionRead,
         selectResult: result,
       });
@@ -354,6 +356,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         transactionRead,
         result,
         partitionIds,
+        params,
       );
       if (lockingFailure) return lockingFailure;
     }

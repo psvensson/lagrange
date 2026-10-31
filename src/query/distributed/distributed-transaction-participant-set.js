@@ -35,8 +35,15 @@ const distributedTransactionParticipantSetMethods = {
     if (!prior) throw incompleteParticipantSet();
     const text = participantSetTextOf(tx.transactionId,
       [...prior.map((pair) => pair[1]), ...partitionIds]);
-    await this.persistAdmittedParticipantSet(tx, {...tx, participantSetText: text});
-    tx.participantSetText = text;
+    if (text === tx.participantSetText) {
+      if (tx?.telemetry) {
+        tx.telemetry.skippedParticipantSetMutations =
+          (tx.telemetry.skippedParticipantSetMutations || 0) + 1;
+      }
+    } else {
+      await this.persistAdmittedParticipantSet(tx, {...tx, participantSetText: text});
+      tx.participantSetText = text;
+    }
     // An admitted identity must survive even if BEGIN or progress persistence
     // fails. Its durable manifest precedes every possible participant request.
     for (const [participantId, partitionId] of readParticipantSet(tx.transactionId, text)) {

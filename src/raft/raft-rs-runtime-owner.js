@@ -1752,8 +1752,9 @@ const COMMAND_OPERATION = Object.freeze({
       }),
 });
 const PROPOSE_CONF_CHANGE = 'propose-conf-change';
+const PROPOSE_COMMAND = 'propose';
 const TICK_COMMAND = 'tick';
-const PROPOSAL_COMMANDS = new Set(['propose', PROPOSE_CONF_CHANGE]);
+const PROPOSAL_COMMANDS = new Set([PROPOSE_COMMAND, PROPOSE_CONF_CHANGE]);
 
 // What the closed participation gate refuses (O1: a replica not yet
 // admitted may not campaign or serve): every proposal, and a tick that could
@@ -1781,6 +1782,18 @@ function gatedCommandRefusal(group, command, expectedGeneration) {
 // and vote for itself), no proposal, campaign, transfer or probe.
 const COMMANDS_BEFORE_IDENTITY_RECORD = new Set([
   RUNTIME_COMMAND.READ_STATUS, RUNTIME_COMMAND.DRAIN_INBOUND]);
+
+function settlePrimitiveInvocation(group, command, expectedGeneration, invoked) {
+  if (Array.isArray(command.extraBatch) && command.extraBatch.length > 0) {
+    return finishBatchedPropose(group, expectedGeneration, invoked, command.extraBatch);
+  }
+  if (invoked.ok) {
+    return drainReady(group, expectedGeneration);
+  }
+  return PROPOSAL_COMMANDS.has(command.type) ?
+    answerRefusedProposal(group, expectedGeneration, invoked.result) :
+    invoked.result;
+}
 
 function performCommand(group, command, expectedGeneration) {
   if (!group.identityRecorded &&
@@ -1815,12 +1828,28 @@ function performCommand(group, command, expectedGeneration) {
   }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);
-  if (invoked.ok) {
-    return drainReady(group, expectedGeneration);
-  }
-  return PROPOSAL_COMMANDS.has(command.type) ?
-    answerRefusedProposal(group, expectedGeneration, invoked.result) :
-    invoked.result;
+  return settlePrimitiveInvocation(group, command, expectedGeneration, invoked);
+}
+
+function finishBatchedPropose(group, expectedGeneration, firstInvoked, extraBatch) {
+  let anyAccepted = firstInvoked.ok;
+  const extraResults = extraBatch.map((item) => {
+    const res = invokeCoreAt(group, expectedGeneration, 'propose', item.bytes);
+    if (res.ok) anyAccepted = true;
+    return res;
+  });
+  const settleExtras = (readyOutcome) => {
+    for (let i = 0; i < extraBatch.length; i += 1) {
+      const res = extraResults[i];
+      extraBatch[i].deferred.resolve(res.ok ? readyOutcome :
+        answerRefusedProposal(group, expectedGeneration, res.result));
+    }
+    return firstInvoked.ok ? readyOutcome :
+      answerRefusedProposal(group, expectedGeneration, firstInvoked.result);
+  };
+  return anyAccepted ?
+    thenMaybe(drainReady(group, expectedGeneration), settleExtras) :
+    settleExtras(null);
 }
 
 function acknowledgePendingSnapshot(group, expectedGeneration, message) {
@@ -2050,6 +2079,37 @@ function runScheduledInboundDrain(group) {
   }
 }
 
+function settleBatchTurn(batch, firstDeferred, outcomeOrPromise) {
+  const resolveAll = (val) => {
+    firstDeferred.resolve(val);
+    for (const item of batch) item.deferred.resolve(val);
+    return val;
+  };
+  if (outcomeOrPromise && typeof outcomeOrPromise.then === 'function') {
+    return outcomeOrPromise.then(resolveAll, (err) => {
+      firstDeferred.reject(err);
+      for (const item of batch) item.deferred.reject(err);
+    });
+  }
+  return resolveAll(outcomeOrPromise);
+}
+
+function drainQueuedProposalBatch(group) {
+  const batch = group.queuedProposals.splice(0, group.queuedProposals.length);
+  if (batch.length === 0) return null;
+  const [first, ...rest] = batch;
+  if (!persistenceAdmitted(group) || group.closed) {
+    const res = perform(group, {type: PROPOSE_COMMAND, bytes: first.bytes});
+    return thenMaybe(res, (val) => {
+      first.deferred.resolve(val);
+      for (const item of rest) item.deferred.resolve(val);
+      return val;
+    });
+  }
+  return settleBatchTurn(rest, first.deferred,
+    perform(group, {type: PROPOSE_COMMAND, bytes: first.bytes, extraBatch: rest}));
+}
+
 // A status read and the committed-membership read answer from the recorded
 // observation without queueing; every other command takes the group's turn.
 function executeCommand(group, command) {
@@ -2061,6 +2121,14 @@ function executeCommand(group, command) {
       command.purpose !== COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
     return thenMaybe(readStatusNow(group), (status) =>
       answerCommittedMembership(group, status, command.purpose));
+  }
+  if (command?.type === PROPOSE_COMMAND && group.tail !== null) {
+    const deferred = Promise.withResolvers();
+    group.queuedProposals.push({bytes: command.bytes, deferred});
+    if (group.queuedProposals.length === 1) {
+      enqueue(group, () => drainQueuedProposalBatch(group));
+    }
+    return deferred.promise;
   }
   return enqueue(group, () => perform(group, command));
 }
@@ -2144,6 +2212,7 @@ function createRuntimeDispatcher(request) {
     recovery: null,
     entered: 0,
     tail: null,
+    queuedProposals: [],
     inbound: [],
     inboundBytes: 0,
     inboundRejectedCount: 0,

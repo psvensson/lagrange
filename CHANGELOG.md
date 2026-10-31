@@ -12,14 +12,40 @@ releases without a compatibility guarantee.
 
 ## [0.4.0] — 2026-10-31
 
-Distributed scale-out, provenance separation, longitudinal metrics evolution,
-and unified 5-node and Scenario C summary benchmark release completing epic
+Scenario A (`tidb-oltp-baseline`) deep-stack throughput and latency optimization,
+distributed scale-out, provenance separation, longitudinal metrics evolution,
+and unified 5-node and Scenario C summary benchmark release completing epics
+`scenario-a-deep-stack-throughput-and-latency` and
 `distributed-scaleout-and-provenance-benchmark-series` (Slices 1–5):
 
 Formation health at cut time: `formation health: 0/20 passed (0%), 0 with a
 starved seed`.
 
 ### Added
+- **Locking-read bound parameter propagation & split-PK tuple resolution (`sql-query-engine-select-execution.js`, `sql-locking-read-execution.js`):**
+  Propagates bound `params` and `queryOptions` into `executeLockingReadReservations`,
+  merges equality-bound `WHERE` PK columns with projected `SELECT` columns so both
+  full-PK-in-`WHERE` (`SELECT quantity FROM stock ... FOR UPDATE`) and split-PK
+  (`SELECT order_id FROM new_order WHERE warehouse_id = ? AND district_id = ? FOR UPDATE`)
+  locking reads resolve canonical PK tuples in memory with 0 extra `SELECT` RPCs,
+  and preserves `orderBy`, `limit`, and `offset` on any fallback PK query.
+- **Coordinator participant-set deduplication & transient status skip (`distributed-transaction-participant-set.js`, `sql-query-engine-transaction-persistence-methods.js`, `distributed-transaction-telemetry.js`):**
+  Skips redundant `persistAdmittedParticipantSet` gateway mutations when the
+  admitted `participant_set_text` is already persisted on `tx.participantSetText`
+  (tracked via `skippedParticipantSetMutations`), and skips non-authoritative
+  pre-RPC participant status writes (`PREPARING`, `COMMITTING`, `ROLLING_BACK`)
+  while preserving `ACTIVE`, `PREPARED` evidence, `COMMITTED`, `ROLLED_BACK`,
+  and `FAILED`.
+- **Raft runtime proposal batching & durable batch telemetry (`raft-rs-runtime-owner.js`, `raft-rs-durable-store.js`):**
+  Coalesces concurrent `propose` commands arriving while a Raft group turn is in
+  flight into a single `drainReady` cycle and tracks `batchedEntryCount` and
+  `multiEntryReadyCount` in `getDurableSyncStats()`.
+- **Canonical row-key extraction, disjoint-commit generation advancement & $O(1)$ disjoint write staging (`partition-participant-transaction-session.js`, `partition-participant-transaction-request.js`, `partition-participant-transaction-apply.js`, `partition-participant-transaction-staging.js`):**
+  Extracts canonical PK row keys from `INSERT` column lists and `UPDATE`/`DELETE`
+  `WHERE` clauses, advances `session.generationBase` at `sealSession` when
+  intervening committed generations touched only disjoint row keys, cleans up
+  prepared participant row keys on rollback/refusal/expiry, and validates
+  disjoint-row staged writes directly in $O(1)$ (`disjointDirectValidations`).
 - **Distributed scale-out & provenance benchmark series (`#169`–`#173`):**
   Scenario B measurement provenance audit and reclassification (`local-oracle-plus-network-model` /
   `contract-model-non-comparable`) plus longitudinal Lagrange metrics evolution

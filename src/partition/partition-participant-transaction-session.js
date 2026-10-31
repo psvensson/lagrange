@@ -30,7 +30,121 @@ const SESSIONS = new WeakMap();
 // Per partition service: participantId -> when the hold sweep first saw it
 // PREPARED, and whether that hold was reported.
 const PREPARED_HOLDS = new WeakMap();
+const TABLE_PK_MEMO = new WeakMap();
+const COMMITTED_ROW_KEY_GENERATIONS = new WeakMap();
+const PREPARED_PARTICIPANT_ROW_KEYS = new WeakMap();
+const SCOPED_COMMIT_GENERATIONS = new WeakMap();
 const GRANULARITY_ROW_KEY = 'row-key';
+const ROW_KEY_SEPARATOR = '|';
+const EMPTY_PK_METADATA = Object.freeze({pkCols: Object.freeze([]), allCols: Object.freeze([])});
+const SQL_INSERT_PREFIX = /^\s*INSERT\b/iu;
+const SQL_INSERT_COLS_RE = /^\s*INSERT\s+INTO\s+[^\s(]+\s*\(([^)]+)\)/iu;
+const SQL_WHERE_SPLIT_RE = /\bWHERE\b/iu;
+const SQL_WHERE_TOKEN_RE = /([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(\?|\$\d+)|\?/gu;
+
+function perServiceMap(store, service) {
+  let map = store.get(service);
+  if (map === undefined) {
+    map = new Map();
+    store.set(service, map);
+  }
+  return map;
+}
+
+function readTableInfoMetadata(db, tableName) {
+  try {
+    const info = db.pragma(`table_info(${tableName})`);
+    if (!Array.isArray(info) || info.length === 0) {
+      return EMPTY_PK_METADATA;
+    }
+    const allCols = info.map((col) => String(col.name).toLowerCase());
+    const pkCols = info
+      .filter((col) => Number(col.pk) > 0)
+      .sort((a, b) => Number(a.pk) - Number(b.pk))
+      .map((col) => String(col.name).toLowerCase());
+    return {pkCols, allCols};
+  } catch (_err) {
+    return EMPTY_PK_METADATA;
+  }
+}
+
+function resolveTablePkMetadata(service) {
+  const db = service?.db;
+  const tableName = service?.tableName;
+  if (!db || typeof db.pragma !== 'function' || !tableName) {
+    return EMPTY_PK_METADATA;
+  }
+  let byTable = TABLE_PK_MEMO.get(db);
+  if (!byTable) {
+    byTable = new Map();
+    TABLE_PK_MEMO.set(db, byTable);
+  }
+  let meta = byTable.get(tableName);
+  if (!meta) {
+    meta = readTableInfoMetadata(db, tableName);
+    byTable.set(tableName, meta);
+  }
+  return meta;
+}
+
+function extractInsertRowKey(sql, params, pkCols, allCols) {
+  const match = SQL_INSERT_COLS_RE.exec(sql);
+  const cols = match ?
+    match[1].split(',').map((c) => c.trim().replace(/^["'`]|["'`]$/gu, '').toLowerCase()) :
+    allCols;
+  const values = [];
+  for (const pkCol of pkCols) {
+    const idx = cols.indexOf(pkCol);
+    if (idx < 0 || idx >= params.length || params[idx] === undefined) {
+      return null;
+    }
+    values.push(String(params[idx]));
+  }
+  return values.join(ROW_KEY_SEPARATOR);
+}
+
+function extractWhereRowKey(sql, params, pkCols) {
+  const whereMatch = SQL_WHERE_SPLIT_RE.exec(sql);
+  if (!whereMatch) return null;
+  const prefix = sql.slice(0, whereMatch.index);
+  let qIndex = (prefix.match(/\?/gu) || []).length;
+  const whereClause = sql.slice(whereMatch.index + whereMatch[0].length);
+  const equalities = new Map();
+  for (const match of whereClause.matchAll(SQL_WHERE_TOKEN_RE)) {
+    const col = match[1];
+    const placeholder = match[2];
+    if (!col) {
+      qIndex += 1;
+      continue;
+    }
+    const paramIdx = placeholder === '?' ? qIndex++ : Number(placeholder.slice(1)) - 1;
+    if (paramIdx >= 0 && paramIdx < params.length && params[paramIdx] !== undefined) {
+      equalities.set(col.toLowerCase(), String(params[paramIdx]));
+    }
+  }
+  const values = [];
+  for (const pkCol of pkCols) {
+    if (!equalities.has(pkCol)) return null;
+    values.push(equalities.get(pkCol));
+  }
+  return values.join(ROW_KEY_SEPARATOR);
+}
+
+function extractStatementCanonicalRowKey(service, params, sql) {
+  if (typeof sql === 'string' && sql.length > 0) {
+    const {pkCols, allCols} = resolveTablePkMetadata(service);
+    if (pkCols.length > 0) {
+      const extracted = SQL_INSERT_PREFIX.test(sql) ?
+        extractInsertRowKey(sql, params, pkCols, allCols) :
+        extractWhereRowKey(sql, params, pkCols);
+      if (extracted !== null) {
+        return {rowKey: extracted, scoped: true};
+      }
+      return {rowKey: String(params[0]), scoped: false};
+    }
+  }
+  return {rowKey: String(params[0]), scoped: true};
+}
 
 function sessionsOf(service) {
   let sessions = SESSIONS.get(service);
@@ -61,22 +175,137 @@ function canAdmitConcurrentParticipantSession(service) {
     !hasPreparingParticipantSession(service);
 }
 
-function checkAndRecordSessionRowKey(service, session, params) {
-  if (!isRowKeyConcurrencyEnabled(service) ||
-      !Array.isArray(params) ||
-      params.length === 0) {
-    return {conflict: false, rowKey: null};
-  }
-  const rowKey = String(params[0]);
+function hasRowKeyConflictWithOtherSession(service, session, rowKey) {
   for (const other of SESSIONS.get(service)?.values() ?? []) {
     if (other !== session &&
         other.phase !== PHASE.DOOMED &&
         other.touchedRowKeys?.has(rowKey)) {
-      return {conflict: true, rowKey};
+      return true;
     }
   }
-  session.touchedRowKeys?.add(rowKey);
-  return {conflict: false, rowKey};
+  return false;
+}
+
+function checkAndRecordSessionRowKey(service, session, params, sql = '') {
+  if (!isRowKeyConcurrencyEnabled(service) ||
+      !Array.isArray(params) ||
+      params.length === 0) {
+    return {conflict: false, rowKey: null, alreadyTouchedInSession: false, scoped: false};
+  }
+  const {rowKey, scoped} = extractStatementCanonicalRowKey(service, params, sql);
+  session.hasUnscopedWrite = session.hasUnscopedWrite || !scoped;
+  const alreadyTouchedInSession = session.touchedRowKeys?.has(rowKey) === true;
+  const conflict = hasRowKeyConflictWithOtherSession(service, session, rowKey);
+  if (!conflict) {
+    session.touchedRowKeys?.add(rowKey);
+  }
+  return {conflict, rowKey, alreadyTouchedInSession, scoped};
+}
+
+function stagePreparedParticipantRowKeys(
+  service,
+  participantId,
+  touchedRowKeys,
+  hasUnscopedWrite = false,
+) {
+  if (!service || !participantId || !(touchedRowKeys instanceof Set)) return;
+  perServiceMap(PREPARED_PARTICIPANT_ROW_KEYS, service).set(participantId, {
+    rowKeys: new Set(touchedRowKeys),
+    hasUnscopedWrite: Boolean(hasUnscopedWrite),
+  });
+}
+
+function clearPreparedParticipantRowKeys(service, participantId) {
+  if (!service || !participantId) return;
+  PREPARED_PARTICIPANT_ROW_KEYS.get(service)?.delete(participantId);
+}
+
+function perServiceSet(store, service) {
+  let set = store.get(service);
+  if (set === undefined) {
+    set = new Set();
+    store.set(service, set);
+  }
+  return set;
+}
+
+function recordCommittedParticipantRowKeys(service, participantId, generation) {
+  if (!service || !participantId) return;
+  const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
+  const entry = preparedMap?.get(participantId);
+  preparedMap?.delete(participantId);
+  if (!entry || entry.hasUnscopedWrite || entry.rowKeys.size === 0) {
+    return;
+  }
+  perServiceSet(SCOPED_COMMIT_GENERATIONS, service).add(generation);
+  const committedGenMap = perServiceMap(COMMITTED_ROW_KEY_GENERATIONS, service);
+  for (const rk of entry.rowKeys) {
+    committedGenMap.set(rk, generation);
+  }
+}
+
+function areIntermediateGenerationsScoped(service, fromGen, toGen) {
+  if (toGen === undefined || toGen <= fromGen) return true;
+  const scopedGens = SCOPED_COMMIT_GENERATIONS.get(service);
+  if (!scopedGens) return false;
+  for (let gen = fromGen + 1; gen <= toGen; gen += 1) {
+    if (!scopedGens.has(gen)) return false;
+  }
+  return true;
+}
+
+function isRowKeyHeldByOtherPreparedParticipant(preparedMap, selfParticipantId, rk) {
+  for (const [otherParticipantId, entry] of preparedMap?.entries() ?? []) {
+    if (otherParticipantId !== selfParticipantId &&
+        (entry?.hasUnscopedWrite === true || entry?.rowKeys?.has(rk))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isRowKeyTouchedAfterGeneration(service, session, rk) {
+  const committedGenMap = COMMITTED_ROW_KEY_GENERATIONS.get(service);
+  if ((committedGenMap?.get(rk) ?? 0) > session.generationBase) {
+    return true;
+  }
+  const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
+  return isRowKeyHeldByOtherPreparedParticipant(
+    preparedMap,
+    session.identity?.participantId,
+    rk,
+  );
+}
+
+function isScopedRowKeySession(service, session) {
+  return isRowKeyConcurrencyEnabled(service) &&
+    session?.hasUnscopedWrite !== true &&
+    session?.touchedRowKeys instanceof Set &&
+    session.touchedRowKeys.size > 0;
+}
+
+function canAdvanceRowKeySessionGeneration(service, session, targetGeneration) {
+  if (!isScopedRowKeySession(service, session) ||
+      !areIntermediateGenerationsScoped(service, session.generationBase, targetGeneration)) {
+    return false;
+  }
+  for (const rk of session.touchedRowKeys) {
+    if (isRowKeyTouchedAfterGeneration(service, session, rk)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function reconcilePreparedParticipantRowKeys(service) {
+  const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
+  if (!preparedMap || preparedMap.size === 0 || service?.db?.open !== true) return;
+  const durablePrepared = new Set(readPreparedParticipantIds(service.db));
+  for (const participantId of [...preparedMap.keys()]) {
+    if (!durablePrepared.has(participantId)) {
+      preparedMap.delete(participantId);
+    }
+  }
 }
 
 /**
@@ -96,6 +325,7 @@ function openParticipantSession(service, identity, base) {
     operations: [],
     compiledOperations: [],
     touchedRowKeys: new Set(),
+    hasUnscopedWrite: false,
     bytes: 0,
     generationBase: base.generationBase,
     lastValidatedGeneration: base.generationBase,
@@ -192,11 +422,13 @@ function endParticipantSession(service, session) {
 function discardParticipantSessions(service) {
   const sessions = SESSIONS.get(service);
   if (sessions === undefined || sessions.size === 0) {
+    reconcilePreparedParticipantRowKeys(service);
     return;
   }
   service.logger.info(LOG_MSG.SESSIONS_DISCARDED, {
     partitionId: service.partitionId, sessionCount: sessions.size});
   sessions.clear();
+  reconcilePreparedParticipantRowKeys(service);
 }
 
 // Discard the sessions held past the hold window (design 4, hold sweep): an
@@ -217,6 +449,9 @@ function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
         transactionId: session.identity.transactionId,
         phase: session.phase, heldMs: nowMs - session.startedAt});
     }
+  }
+  if (discarded > 0) {
+    reconcilePreparedParticipantRowKeys(service);
   }
   return discarded;
 }
@@ -272,7 +507,9 @@ function sweepParticipantTransactionHolds(service, nowMs) {
 
 export {
   canAdmitConcurrentParticipantSession,
+  canAdvanceRowKeySessionGeneration,
   checkAndRecordSessionRowKey,
+  clearPreparedParticipantRowKeys,
   discardParticipantSessions,
   endParticipantSession,
   findParticipantSession,
@@ -280,5 +517,7 @@ export {
   openParticipantSession,
   participantRoutingSessionCollision,
   participantTransactionActive,
+  recordCommittedParticipantRowKeys,
+  stagePreparedParticipantRowKeys,
   sweepParticipantTransactionHolds,
 };

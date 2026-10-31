@@ -314,6 +314,8 @@ class RaftRsDurableStore {
     this.ownTransactionDepth = 0;
     this.syncCommitCount = 0;
     this.totalSyncMs = 0;
+    this.batchedEntryCount = 0;
+    this.multiEntryReadyCount = 0;
     this.createRecordTables();
     this.addMembershipGenerationColumns();
   }
@@ -446,7 +448,8 @@ class RaftRsDurableStore {
   }
 
   getDurableSyncStats() {
-    return {syncCommitCount: this.syncCommitCount, totalSyncMs: this.totalSyncMs};
+    return {syncCommitCount: this.syncCommitCount, totalSyncMs: this.totalSyncMs,
+      batchedEntryCount: this.batchedEntryCount, multiEntryReadyCount: this.multiEntryReadyCount};
   }
 
   /**
@@ -457,15 +460,21 @@ class RaftRsDurableStore {
    * @param {Object} ready - A Ready from the core.
    */
   persistReady(groupId, ready) {
+    const entries = ready.entries || [];
+    const durability = readyCommitDurability(ready);
     return this.transaction(() => {
       if (ready.snapshot) {
         this.putSnapshot(groupId, ready.snapshot);
       }
-      this.appendEntries(groupId, ready.entries || []);
+      this.appendEntries(groupId, entries);
       if (ready.hardState) {
         this.putHardState(groupId, ready.hardState);
       }
-    }, readyCommitDurability(ready));
+      if (durability === RAFT_RS_COMMIT_DURABILITY.SYNCED) {
+        this.batchedEntryCount += entries.length;
+        if (entries.length > 1) this.multiEntryReadyCount += 1;
+      }
+    }, durability);
   }
 
   /**

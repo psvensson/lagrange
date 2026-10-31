@@ -71,6 +71,7 @@ function replayStatsOf(service) {
   let stats = STAGING_REPLAY_STATS.get(service);
   if (!stats) {
     stats = {
+      disjointDirectValidations: ZERO,
       emptyReadDirectExecutions: ZERO,
       fastReplayedOperations: ZERO,
       fullReplayedOperations: ZERO,
@@ -180,6 +181,40 @@ function validateOverReplay(service, session, run) {
   return stopped === VALIDATION_COMPLETE ? {ran} : {failure: stopped};
 }
 
+function validateDirectDisjointWrite(service, session, run) {
+  let ran;
+  let stopped = VALIDATION_COMPLETE;
+  try {
+    service.db.transaction(() => {
+      ran = run();
+      throw VALIDATION_COMPLETE;
+    })();
+  } catch (thrown) {
+    stopped = thrown;
+  }
+  if (stopped === VALIDATION_COMPLETE) {
+    const stats = replayStatsOf(service);
+    stats.disjointDirectValidations += ONE;
+    stats.fastReplayedOperations += session.operations.length;
+    return {ran};
+  }
+  return {failure: stopped};
+}
+
+function canDirectValidateDisjoint(service, session, rowKeyCheck) {
+  if (session.operations.length === ZERO ||
+      rowKeyCheck.scoped !== true ||
+      rowKeyCheck.alreadyTouchedInSession !== false ||
+      rowKeyCheck.rowKey === null) {
+    return false;
+  }
+  const currentGen = readPartitionWriteGeneration(service.db);
+  const currentSchema = readSchemaVersion(service.db);
+  return currentGen === session.lastValidatedGeneration &&
+    (session.lastValidatedSchemaVersion === null ||
+      currentSchema === session.lastValidatedSchemaVersion);
+}
+
 // A replay that no longer runs (committed state changed under the staged
 // operations): the session is doomed, and so is every later request of it.
 function doomSession(service, session, failure) {
@@ -232,7 +267,7 @@ function stageWrite(service, session, request, params) {
   if (!params.every(isJsonScalar)) {
     return refused(CODE.SESSION_WRITE_PARAM_UNSUPPORTED);
   }
-  const rowKeyCheck = checkAndRecordSessionRowKey(service, session, params);
+  const rowKeyCheck = checkAndRecordSessionRowKey(service, session, params, request.sql);
   if (rowKeyCheck.conflict) {
     return refused(CODE.ALREADY_ACTIVE, {detail: rowKeyCheck.rowKey});
   }
@@ -250,8 +285,9 @@ function stageWrite(service, session, request, params) {
     return refused(CODE.REPLAY_BUDGET_EXCEEDED,
       {operations: operations.length, bytes});
   }
-  const outcome = validateOverReplay(service, session,
-    () => runStaged(service, operation));
+  const outcome = canDirectValidateDisjoint(service, session, rowKeyCheck) ?
+    validateDirectDisjointWrite(service, session, () => runStaged(service, operation)) :
+    validateOverReplay(service, session, () => runStaged(service, operation));
   if (outcome.failure !== undefined) {
     return failedValidation(service, session, outcome.failure);
   }

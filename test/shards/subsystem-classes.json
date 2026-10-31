@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
-    "query-sql": 189,
+    "query-sql": 190,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 145,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2504,
-  "digest": "fnv1a32-03af1b33",
+  "censusSize": 2505,
+  "digest": "fnv1a32-5f531ab7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-615414a6",
+  "observationDigest": "fnv1a32-165e639a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1561,6 +1561,7 @@
     "test/query/runtime-api-exports.test.js": "query-sql",
     "test/query/runtime-integration.test.js": "query-sql",
     "test/query/runtime-runner.test.js": "query-sql",
+    "test/query/scenario-a-deep-stack-throughput-and-latency.test.js": "query-sql",
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "query-sql",
     "test/query/schema-provisioning-job-owner.test.js": "query-sql",
     "test/query/schema-provisioning-transient-collision.test.js": "query-sql",
@@ -12018,6 +12019,27 @@
       "files": [
         "src/control-plane/owners/runtime-access-policy-owner.js",
         "src/query/sql-query-engine-request-dispatch.js"
+      ]
+    },
+    "test/query/scenario-a-deep-stack-throughput-and-latency.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": {
