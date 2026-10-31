@@ -207,7 +207,9 @@ class CallCellInvoker {
     this._reclaimRetentionMs = positiveIntegerOption(
       options.reclaimRetentionMs, CALL_INVOKER_RECLAIM_RETENTION_DEFAULT_MS);
     this._batchRowBound = options.batchRowBound;
+    this._batchByteBound = options.batchByteBound;
     this._partialLimit = options.partialLimit;
+    this._partialByteLimit = options.partialByteLimit;
     this._maxConcurrentShardRuns = positiveIntegerOption(
       options.maxConcurrentShardRuns,
       CALL_INVOKER_MAX_CONCURRENT_SHARD_RUNS_DEFAULT);
@@ -217,10 +219,13 @@ class CallCellInvoker {
       typeof options.onInvocationTelemetry === 'function' ?
         options.onInvocationTelemetry :
         null;
-    // batchRowBound rides with the bounded-emit budgets so the shard's
-    // host node applies the same row bound when it builds the batch
-    // locally.
+    // batchRowBound (and optional batchByteBound) ride with the
+    // bounded-emit budgets so the shard's host node applies the same
+    // row/byte bounds when it builds the batch locally.
     this._callCellBudgets = Object.freeze({
+      ...(this._batchByteBound === undefined ?
+        {} :
+        {batchByteBound: this._batchByteBound}),
       batchRowBound: this._batchRowBound,
       emitBudget: nonNegativeIntegerOption(
         options.emitBudget, CALL_INVOKER_BUDGET_DEFAULT.EMIT_BUDGET),
@@ -378,6 +383,22 @@ class CallCellInvoker {
     }
   }
 
+  async _resolveCompletePartials(invocationId, slotIds) {
+    if (this._partialByteLimit === undefined) {
+      return this._reduceCoordinator.resolveCompletePartialSet(
+        invocationId,
+        slotIds,
+        this._partialLimit,
+      );
+    }
+    return this._reduceCoordinator.resolveCompletePartialSet(
+      invocationId,
+      slotIds,
+      this._partialLimit,
+      this._partialByteLimit,
+    );
+  }
+
   async _invokeWithTelemetry(
     {name, argumentsJson, callerServiceId, securityContext, deadlineMs,
       invocationId: suppliedInvocationId}, telemetry, executionEvidence) {
@@ -509,12 +530,10 @@ class CallCellInvoker {
 
     // resolveCompletePartialSet fails closed (typed REDUCE_INCOMPLETE) unless
     // the partial set is complete, fresh, bounded, and disjoint.
-    const {partials, witness} =
-      await this._reduceCoordinator.resolveCompletePartialSet(
-        invocationId,
-        slotIds,
-        this._partialLimit,
-      );
+    const {partials, witness} = await this._resolveCompletePartials(
+      invocationId,
+      slotIds,
+    );
 
     // Reduce runs on a replica that HOLDS the reduce lease: resolve the
     // reduce route first, acquire the dedicated reduce lease slot under

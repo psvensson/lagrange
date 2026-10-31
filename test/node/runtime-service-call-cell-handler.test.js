@@ -23,6 +23,18 @@ const SERVICE_ID = 'call-service';
 const TENANT_ID = 'tenant-a';
 const CALL_ARGUMENTS = JSON.stringify({topN: 3});
 const CALL_RESULT = JSON.stringify({kept: []});
+const CUSTOM_BATCH_BYTE_BOUND = 2048;
+const TEST_PARTITION_ID = 'tbl-ratings-p1';
+const TEST_ACTIVE_STATUS = 'active';
+const TEST_SELECT_AST_TYPE = 'SELECT';
+const TEST_RATINGS_TABLE = 'ratings';
+const TEST_RENDERED_SQL =
+  'SELECT movie_id, rating_sum, rating_count FROM ratings';
+const TEST_DECLARED_STATEMENT =
+  'SELECT movie_id, SUM(rating) AS rating_sum, COUNT(*) AS rating_count ' +
+  'FROM ratings GROUP BY movie_id ORDER BY movie_id ASC';
+const TEST_DATA_LOCAL_INVOCATION_ID = 'call-invocation-data-local-bytes';
+const TEST_DATA_LOCAL_INTENT_DIGEST = 'intent-digest-data-local-bytes';
 const CALL_BATCH = Object.freeze([
   Object.freeze({
     columns: Object.freeze([
@@ -348,4 +360,58 @@ test('call Cell handler attributes data-local shard partition reads to the ' +
     partitionIds: ['tbl-ratings-p1'],
     accessKind: 'r',
   }]);
+});
+
+test('call Cell handler forwards batchByteBound as resultMaxBytes on ' +
+  'data-local shard reads', async () => {
+  let capturedOptions = null;
+  const {handler} = createHandlerFixture();
+  handler.partitionServicesProvider = () => new Map([[
+    TEST_PARTITION_ID,
+    {
+      isStopped: false,
+      status: TEST_ACTIVE_STATUS,
+      executeQuery: async (_sql, _params, options) => {
+        capturedOptions = options;
+        return {
+          rows: [{movie_id: 50, rating_sum: 20, rating_count: 4}],
+          success: true,
+        };
+      },
+    },
+  ]]);
+  handler.cdcIntegrationService = {
+    sqlQueryEngine: {
+      parse: () => ({
+        type: TEST_SELECT_AST_TYPE,
+        from: {name: TEST_RATINGS_TABLE},
+        where: null,
+      }),
+      queryExecutor: {
+        buildSelectSQL: () => TEST_RENDERED_SQL,
+      },
+    },
+  };
+  const payload = createCallPayload({
+    batch: undefined,
+    invocation: {
+      callCell: {
+        batchRowBound: 4096,
+        batchByteBound: CUSTOM_BATCH_BYTE_BOUND,
+      },
+      deadlineMs: Date.now() + 30_000,
+      id: TEST_DATA_LOCAL_INVOCATION_ID,
+      intentDigest: TEST_DATA_LOCAL_INTENT_DIGEST,
+    },
+    partitionId: TEST_PARTITION_ID,
+    route: createCallRoute({
+      statement: TEST_DECLARED_STATEMENT,
+    }),
+  });
+  const response = await handleCallCellInvocation(
+    handler,
+    createCallEnvelope(payload),
+  );
+  assert.equal(response.processed, true);
+  assert.equal(capturedOptions?.resultMaxBytes, CUSTOM_BATCH_BYTE_BOUND);
 });

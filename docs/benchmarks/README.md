@@ -26,9 +26,9 @@ Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg)
 
 ## Evidence-tier and measurement boundary qualification
 
-This comparative benchmark suite qualifies results across two rigorous evidence tiers:
+Published comparative performance rows require original multi-host (`gcp` or `lab`) execution receipts:
 - `observed-docker-cluster`: live containerized cluster execution with recorded container lifecycles, real operating system processes, and measured network and storage calls.
-- `modeled-topology-oracle`: deterministic request-oracle execution paired with topology round-trip, quorum, and wire-transfer accounting over identical logical workloads.
+- `modeled-topology-oracle`: request-oracle or network-modeled artifacts (`local-oracle-plus-network-model`) are rejected as non-comparable (`contract-model-non-comparable`) and rendered as `[not measured]` until original multi-host execution receipts are recorded.
 
 Two distinct measurement boundaries are evaluated:
 - **Scenario A database transaction path**: isolates single-transaction latency and throughput under high row contention, measuring lock acquisition, commit durability, and transaction retry frequency on the primary storage engine.

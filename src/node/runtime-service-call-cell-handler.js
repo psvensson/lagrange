@@ -30,6 +30,8 @@ const CALL_CELL_RUNTIME_MESSAGE = Object.freeze({
   INVOCATION_FAILED: 'Call Cell invocation failed',
   LOCAL_BATCH_BOUND_INVALID:
     'Call Cell data-local dispatch carries no positive batch row bound',
+  LOCAL_BATCH_BYTE_BOUND_INVALID:
+    'Call Cell data-local dispatch carries no positive batch byte bound',
   LOCAL_ENGINE_UNAVAILABLE:
     'Call Cell data-local dispatch found no local SQL engine to render ' +
     'the declared statement',
@@ -53,6 +55,7 @@ const CALL_CELL_RUNTIME_MESSAGE = Object.freeze({
 });
 const AST_TYPE_SELECT = 'SELECT';
 const PARTITION_STATE_NORMAL = 'NORMAL';
+const DEFAULT_BATCH_BYTE_BOUND = 8388608;
 const CALL_CELL_INVOCATION_EXPORT_NAME = Object.freeze({
   RUN: 'run',
   REDUCE: 'reduce',
@@ -337,13 +340,14 @@ function localShardReadFailure(error) {
 }
 
 async function executeBoundedShardRead(
-  partitionService, sql, invocation, batchRowBound, partitionId,
+  partitionService, sql, invocation, bounds, partitionId,
 ) {
   let result = null;
   try {
     result = await partitionService.executeQuery(sql, [], {
       resultDeadlineMs: invocation.deadlineMs,
-      resultMaxRows: batchRowBound,
+      resultMaxRows: bounds.batchRowBound,
+      resultMaxBytes: bounds.batchByteBound,
     });
   } catch (error) {
     throw localShardReadFailure(error);
@@ -359,13 +363,7 @@ async function executeBoundedShardRead(
   return result?.rows || [];
 }
 
-async function buildLocalShardBatch(handler, payload, route, invocation) {
-  const partitionService =
-    resolveUsableLocalPartitionService(handler, payload.partitionId);
-  const engine = resolveLocalRenderEngine(handler);
-  const sql = engine.queryExecutor.buildSelectSQL(
-    parseLocalShardStatement(engine, route.statement),
-  );
+function resolveLocalShardBounds(invocation) {
   const batchRowBound = invocation?.callCell?.batchRowBound;
   if (!Number.isSafeInteger(batchRowBound) || batchRowBound <= 0) {
     throw new CallCellRoutingError(
@@ -373,8 +371,29 @@ async function buildLocalShardBatch(handler, payload, route, invocation) {
       CALL_CELL_RUNTIME_MESSAGE.LOCAL_BATCH_BOUND_INVALID,
     );
   }
+  const rawByteBound = invocation?.callCell?.batchByteBound;
+  const batchByteBound = rawByteBound === undefined ?
+    DEFAULT_BATCH_BYTE_BOUND :
+    rawByteBound;
+  if (!Number.isSafeInteger(batchByteBound) || batchByteBound <= 0) {
+    throw new CallCellRoutingError(
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      CALL_CELL_RUNTIME_MESSAGE.LOCAL_BATCH_BYTE_BOUND_INVALID,
+    );
+  }
+  return {batchRowBound, batchByteBound};
+}
+
+async function buildLocalShardBatch(handler, payload, route, invocation) {
+  const partitionService =
+    resolveUsableLocalPartitionService(handler, payload.partitionId);
+  const engine = resolveLocalRenderEngine(handler);
+  const sql = engine.queryExecutor.buildSelectSQL(
+    parseLocalShardStatement(engine, route.statement),
+  );
+  const bounds = resolveLocalShardBounds(invocation);
   const rows = await executeBoundedShardRead(
-    partitionService, sql, invocation, batchRowBound, payload.partitionId);
+    partitionService, sql, invocation, bounds, payload.partitionId);
   if (typeof engine.recordServicePartitionAccess === 'function') {
     engine.recordServicePartitionAccess(
       {issuingServiceId: route.serviceId},
@@ -383,7 +402,7 @@ async function buildLocalShardBatch(handler, payload, route, invocation) {
     );
   }
   try {
-    return toCellBatch(rows, batchRowBound);
+    return toCellBatch(rows, bounds.batchRowBound);
   } catch (error) {
     if (error instanceof CallCellValueError) {
       throw new CallCellRoutingError(

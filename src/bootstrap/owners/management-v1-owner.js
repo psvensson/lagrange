@@ -40,7 +40,7 @@ const RESTORE_FENCED_HEALTH = Object.freeze({
 
 function checkDecommissionPreflight(owner, snap, id) {
   const c = L6_DECOMMISSION_REASON_CODE;
-  if (owner.options.decommissionSupported === false) return c.DECOMMISSION_CAPABILITY_UNSUPPORTED;
+  if (!owner.decommissionSupported) return c.DECOMMISSION_CAPABILITY_UNSUPPORTED;
   if (owner.hasActiveOperation()) return c.CONCURRENT_OPERATION_ACTIVE;
   if (snap.underReplicatedPartitionCount > 0) return c.UNDER_REPLICATED_PARTITIONS;
   if (Array.isArray(snap.nodes) && snap.nodes.length > 0 && !snap.nodes.includes(id)) {
@@ -145,6 +145,7 @@ function buildFacts(owner, incLin) {
     capacity: buildCapacity(cap),
     capabilities: {
       backupRestore: resolveCapabilityState(owner.backupRestoreOwner?.capabilitySupported),
+      decommissionNode: resolveCapabilityState(owner.decommissionSupported),
       rollingUpgrade: resolveCapabilityState(owner.rollingUpgradeOwner?.capabilitySupported),
     },
   };
@@ -164,14 +165,48 @@ function resolveDrainingCount(upg) {
   return Array.isArray(ids) ? ids.length : 0;
 }
 
+function resolveRollingUpgradeSupport(options) {
+  if (options.rollingUpgradeSupported !== undefined) {
+    return Boolean(options.rollingUpgradeSupported);
+  }
+  if (options.capabilitySupported !== undefined) {
+    return Boolean(options.capabilitySupported);
+  }
+  return typeof options.onDrainNodeLeadership === 'function' &&
+    typeof options.onTriggerNodeRestart === 'function';
+}
+
+function resolveBackupRestoreSupport(options) {
+  if (options.backupRestoreSupported !== undefined) {
+    return Boolean(options.backupRestoreSupported);
+  }
+  if (options.capabilitySupported !== undefined) {
+    return Boolean(options.capabilitySupported);
+  }
+  return Boolean(options.storageAdapter) &&
+    typeof options.getPartitions === 'function';
+}
+
+function resolveDecommissionSupport(options) {
+  if (options.decommissionSupported !== undefined) {
+    return Boolean(options.decommissionSupported);
+  }
+  return typeof options.onDecommissionNode === 'function';
+}
+
 class ManagementV1Owner {
   constructor(options = {}) {
     this.options = options;
     this.clusterId = options.clusterId ?? null;
     this.includeRestoredFromInFacts = options.includeRestoredFromInFacts ?? false;
-    this.rollingUpgradeOwner = options.rollingUpgradeOwner ?? new RollingUpgradeOwner(options);
+    this.decommissionSupported = resolveDecommissionSupport(options);
+    this.rollingUpgradeOwner = options.rollingUpgradeOwner ?? new RollingUpgradeOwner({
+      ...options,
+      capabilitySupported: resolveRollingUpgradeSupport(options),
+    });
     this.backupRestoreOwner = options.backupRestoreOwner ?? new BackupRestoreOwner({
       ...options,
+      capabilitySupported: resolveBackupRestoreSupport(options),
       getClusterId: () => this.getClusterId(),
       onSetClusterId: (id) => {
         this.clusterId = id;

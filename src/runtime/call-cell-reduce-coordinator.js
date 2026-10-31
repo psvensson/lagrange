@@ -27,6 +27,8 @@ import {
 
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const EMPTY_PARTIAL_JSON = '[]';
+const UTF8_ENCODING = 'utf8';
+const DEFAULT_MAX_PARTIAL_BYTES = 16777216;
 const SQL_SINGLE_QUOTE_ESCAPE = '\'\'';
 const COORDINATION_QUERY_FAILED =
   'call cell reduce coordination query failed';
@@ -87,6 +89,8 @@ const CALL_CELL_REDUCE_ARGUMENT_MESSAGE = Object.freeze({
     'resolveCompletePartialSet requires an invocation id',
   RESOLVE_REQUIRES_LIMIT:
     'resolveCompletePartialSet requires a positive integer limit',
+  RESOLVE_REQUIRES_BYTE_LIMIT:
+    'resolveCompletePartialSet requires a positive integer byteLimit',
   PUBLISH_SNAPSHOT_REQUIRES:
     'publishFinalSnapshot requires an invocation id and result JSON',
   SEED_REQUIRES_INVOCATION:
@@ -155,9 +159,15 @@ function hasValidConfigTables(config) {
     isValidIdentifier(config?.resultTable);
 }
 
+function hasValidOptionalMaxBytes(config) {
+  return config?.maxPartialBytes === undefined ||
+    isValidLimit(config.maxPartialBytes);
+}
+
 function hasValidConfigBounds(config) {
   return Number.isFinite(config?.leaseMs) && config.leaseMs > 0 &&
-    Number.isInteger(config?.slotCount) && config.slotCount > 0;
+    Number.isInteger(config?.slotCount) && config.slotCount > 0 &&
+    hasValidOptionalMaxBytes(config);
 }
 
 function assertValidConfig(config) {
@@ -409,13 +419,24 @@ function createCallCellReduceCoordinator(options) {
     ));
   }
 
-  function parsePartialRows(row, limit) {
+  function parsePartialRows(row, limit, byteLimit) {
+    const byteLength = Buffer.byteLength(
+      String(row.partial_json), UTF8_ENCODING,
+    );
+    if (byteLength > byteLimit) {
+      return {
+        valid: false,
+        byteLength,
+        reason: CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED,
+      };
+    }
     let parsed;
     try {
       parsed = JSON.parse(row.partial_json);
     } catch {
       return {
         valid: false,
+        byteLength,
         reason: CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_INVALID,
       };
     }
@@ -434,10 +455,11 @@ function createCallCellReduceCoordinator(options) {
       [!entriesValid, CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_INVALID],
     ].find(([failed]) => failed);
     if (failure) {
-      return {valid: false, reason: failure[1]};
+      return {valid: false, byteLength, reason: failure[1]};
     }
     return {
       valid: true,
+      byteLength,
       rows: parsed.map((entry) => [
         entry[PARTIAL_ENTRY_SHAPE.KEY_FIELD],
         entry[PARTIAL_ENTRY_SHAPE.VALUE_FIELD],
@@ -456,14 +478,15 @@ function createCallCellReduceCoordinator(options) {
       seen.add(identity);
       merged.push([key, value]);
     }
-    return merged
-      .sort((left, right) => {
-        const valueOrder = right[1] - left[1];
-        return valueOrder || String(left[0]).localeCompare(
-          String(right[0]), undefined, {numeric: true},
-        );
-      })
-      .slice(0, limit);
+    if (merged.length > limit) {
+      throw new Error(CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED);
+    }
+    return merged.sort((left, right) => {
+      const valueOrder = right[1] - left[1];
+      return valueOrder || String(left[0]).localeCompare(
+        String(right[0]), undefined, {numeric: true},
+      );
+    });
   }
 
   function buildResultSnapshotWitness(slotStates) {
@@ -478,15 +501,28 @@ function createCallCellReduceCoordinator(options) {
     };
   }
 
-  function gateCompletePartialSet(slotRows, slotIds, limit, atMs) {
+  function sumSlotPartialBytes(slotStates) {
+    let totalBytes = 0;
+    for (const {partial} of slotStates) {
+      totalBytes += partial.byteLength || 0;
+    }
+    return totalBytes;
+  }
+
+  function isMergeIncompleteReason(reason) {
+    return reason === CALL_CELL_REDUCE_INCOMPLETE_REASON.SHARD_OVERLAP ||
+      reason === CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED;
+  }
+
+  function gateCompletePartialSet(slotRows, slotIds, limit, atMs, byteLimit) {
     const rowsBySlotId = new Map(
       slotRows.map((row) => [Number(row.slot_id), row]),
     );
     const slotStates = slotIds.map((expectedSlotId) => {
       const row = rowsBySlotId.get(expectedSlotId);
       const partial = row ?
-        parsePartialRows(row, limit) :
-        {valid: false};
+        parsePartialRows(row, limit, byteLimit) :
+        {valid: false, byteLength: 0};
       return {row, partial};
     });
     const failure = [
@@ -502,6 +538,8 @@ function createCallCellReduceCoordinator(options) {
       [slotStates.some(({partial}) => !partial.valid),
         slotStates.find(({partial}) => !partial.valid)?.partial.reason ||
           CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_INVALID],
+      [sumSlotPartialBytes(slotStates) > byteLimit,
+        CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED],
     ].find(([failed]) => failed);
     if (failure) {
       return {complete: false, reason: failure[1]};
@@ -514,18 +552,30 @@ function createCallCellReduceCoordinator(options) {
         witness: buildResultSnapshotWitness(slotStates),
       };
     } catch (error) {
-      if (error?.message !== CALL_CELL_REDUCE_INCOMPLETE_REASON.SHARD_OVERLAP) {
+      if (!isMergeIncompleteReason(error?.message)) {
         throw error;
       }
       return {
         complete: false,
-        reason: CALL_CELL_REDUCE_INCOMPLETE_REASON.SHARD_OVERLAP,
+        reason: error.message,
       };
     }
   }
 
+  function resolveEffectiveByteLimit(byteLimit) {
+    const resolved = byteLimit === undefined ?
+      (config.maxPartialBytes ?? DEFAULT_MAX_PARTIAL_BYTES) :
+      byteLimit;
+    if (!isValidLimit(resolved)) {
+      throw new TypeError(
+        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.RESOLVE_REQUIRES_BYTE_LIMIT,
+      );
+    }
+    return resolved;
+  }
+
   async function resolveCompletePartialSet(
-    invocationId, expectedSlotIds, limit,
+    invocationId, expectedSlotIds, limit, byteLimit,
   ) {
     if (!isNonEmptyString(invocationId)) {
       throw new TypeError(
@@ -537,9 +587,14 @@ function createCallCellReduceCoordinator(options) {
         CALL_CELL_REDUCE_ARGUMENT_MESSAGE.RESOLVE_REQUIRES_LIMIT,
       );
     }
+    const effectiveByteLimit = resolveEffectiveByteLimit(byteLimit);
     const slotIds = normalizeExpectedSlotIds(expectedSlotIds, config);
     const gate = gateCompletePartialSet(
-      await readSlotRows(invocationId), slotIds, limit, nowMs(),
+      await readSlotRows(invocationId),
+      slotIds,
+      limit,
+      nowMs(),
+      effectiveByteLimit,
     );
     if (!gate.complete) {
       throw createReduceIncompleteFailure(gate.reason, invocationId);

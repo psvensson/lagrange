@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "release-0-4-1-correctness-and-claim-repairs",
+  "class": "fix",
+  "statement": "Complete 0.4.1 bounded correctness and claim repairs (C0 generic reduction no-truncation and partial byte bounds, local shard SQL resultMaxBytes budget enforcement, truthful management-v1 default capabilities and control-plane auth, and CI guard/publication claim reconciliation).",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/release-0-4-1-correctness-and-claim-repairs-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "e44b4c43cd4ee2cdfd204b074a11fd42fc30a084"
+}

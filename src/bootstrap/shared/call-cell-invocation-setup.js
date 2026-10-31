@@ -47,6 +47,7 @@ import {createRequestCellCallBridge} from
 const CALL_CELL_COORDINATION_SESSION = 'call-cell-reduce-coordination';
 const CALL_CELL_INVOCATION_DEFAULT = Object.freeze({
   ACTIVATION_LEASE_MS: 60000,
+  BATCH_BYTE_BOUND: 8388608,
   BATCH_ROW_BOUND: 4096,
   // ends-on: the target cell answers the call
   DEADLINE_MS: 30000,
@@ -55,6 +56,7 @@ const CALL_CELL_INVOCATION_DEFAULT = Object.freeze({
   // invocation (brief §2: system policy, never caller-selected).
   MAX_CONCURRENT_SHARD_RUNS: 8,
   NESTED_CALL_BUDGET: 1,
+  PARTIAL_BYTE_LIMIT: 16777216,
   PARTIAL_LIMIT: 1024,
   RECLAIM_RETENTION_MS: 600000,
   REDUCE_LEASE_MS: 30000,
@@ -180,6 +182,9 @@ function attachCallCellInvoker(options = {}) {
     leaseMs: positiveIntegerOr(
       tunables.reduceLeaseMs,
       CALL_CELL_INVOCATION_DEFAULT.REDUCE_LEASE_MS),
+    maxPartialBytes: positiveIntegerOr(
+      tunables.partialByteLimit,
+      CALL_CELL_INVOCATION_DEFAULT.PARTIAL_BYTE_LIMIT),
     nowProvider: () => Date.now(),
     resultTable: TABLES.CALL_CELL_REDUCE_RESULTS,
     slotCount: positiveIntegerOr(
@@ -201,6 +206,9 @@ function attachCallCellInvoker(options = {}) {
     logger: options.logger,
     activationRetryIntervalMs: tunables.activationRetryIntervalMs,
     activationWaitMs: tunables.activationWaitMs,
+    batchByteBound: positiveIntegerOr(
+      tunables.batchByteBound,
+      CALL_CELL_INVOCATION_DEFAULT.BATCH_BYTE_BOUND),
     batchExecutor,
     batchRowBound: positiveIntegerOr(
       tunables.batchRowBound,
@@ -217,6 +225,9 @@ function attachCallCellInvoker(options = {}) {
     // Optional deployment observability sink: one frozen record per
     // invocation (concurrency, locality, durations, failure code).
     onInvocationTelemetry: options.onInvocationTelemetry,
+    partialByteLimit: positiveIntegerOr(
+      tunables.partialByteLimit,
+      CALL_CELL_INVOCATION_DEFAULT.PARTIAL_BYTE_LIMIT),
     partialLimit: positiveIntegerOr(
       tunables.partialLimit, CALL_CELL_INVOCATION_DEFAULT.PARTIAL_LIMIT),
     reclaimRetentionMs: positiveIntegerOr(

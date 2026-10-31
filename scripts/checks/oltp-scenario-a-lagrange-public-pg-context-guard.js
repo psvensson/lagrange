@@ -9,7 +9,6 @@ import {
 import {
   CONVERGENCE_DEFAULTS,
   REQUEST_CELL_AUTH,
-  TIMEOUTS,
 } from '../../test/distributed/harness/constants.js';
 import {
   buildLagrangeScenarioALiveAdmission,
@@ -27,6 +26,7 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const PASS_PREFIX = 'oltp-scenario-a-lagrange-public-pg-context-guard: PASS ';
 const NEWLINE = '\n';
+const DEFAULT_BENCHMARK_CONVERGENCE_TIMEOUT_MS = 300000;
 
 const runPublicPgContextGuard = async () => {
   const CORE_HEAD_SHA = 'a'.repeat(40);
@@ -122,7 +122,7 @@ const runPublicPgContextGuard = async () => {
   });
   assert.deepEqual(convergence, [{
     targetVoterCount: 2,
-    settleTimeoutMs: TIMEOUTS.SCENARIO_DEFAULT,
+    settleTimeoutMs: DEFAULT_BENCHMARK_CONVERGENCE_TIMEOUT_MS,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
   }]);
   assert.equal(scaleCalls.length, 1);

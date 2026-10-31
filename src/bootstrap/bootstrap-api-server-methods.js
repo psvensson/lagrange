@@ -74,6 +74,21 @@ function sendControlPlaneUnauthorized(reply) {
   return false;
 }
 
+async function handleManagementFactsRoute(server, request, reply) {
+  if (!(await server.verifyControlPlaneAuth(request, reply))) return undefined;
+  return server.getManagementV1Owner().handleGetFactsRequest(request, reply);
+}
+
+async function handleManagementOperationsRoute(server, request, reply) {
+  if (!(await server.verifyControlPlaneAuth(request, reply))) return undefined;
+  return server.getManagementV1Owner().handlePostOperationRequest(request, reply);
+}
+
+async function handleManagementOperationByIdRoute(server, request, reply) {
+  if (!(await server.verifyControlPlaneAuth(request, reply))) return undefined;
+  return server.getManagementV1Owner().handleGetOperationStatusRequest(request, reply);
+}
+
 const bootstrapApiServerMethods = {
   /**
    * Initialize and start the API server.
@@ -190,11 +205,11 @@ const bootstrapApiServerMethods = {
     });
 
     this.fastify.get(BOOTSTRAP_API_ROUTE.MANAGEMENT_FACTS, async (request, reply) =>
-      this.getManagementV1Owner().handleGetFactsRequest(request, reply));
+      handleManagementFactsRoute(this, request, reply));
     this.fastify.post(BOOTSTRAP_API_ROUTE.MANAGEMENT_OPERATIONS, async (request, reply) =>
-      this.getManagementV1Owner().handlePostOperationRequest(request, reply));
+      handleManagementOperationsRoute(this, request, reply));
     this.fastify.get(BOOTSTRAP_API_ROUTE.MANAGEMENT_OPERATION_BY_ID, async (request, reply) =>
-      this.getManagementV1Owner().handleGetOperationStatusRequest(request, reply));
+      handleManagementOperationByIdRoute(this, request, reply));
 
     for (const method of REQUEST_CELL_HTTP_METHODS) {
       for (const url of REQUEST_CELL_HTTP_ROUTES) {

@@ -646,12 +646,12 @@ flowchart LR
 
 | Target | Wire (ms) | Parse/Plan (ms) | Lock Wait (ms) | 2PC Prepare (ms) | Quorum Fsync (ms) | Apply (ms) | Total p95 (ms) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| PG 17 Single Primary + App | 12.0 | 14.0 | 142.0 | 0.0 | 218.6 | 26.0 | 412.6 |
-| Citus 13 Sharded RF=3 + App | 14.0 | 22.0 | 198.0 | 145.0 | 268.0 | 38.0 | 685.0 |
-| PG 17 Patroni Sync HA RF=3 | 14.0 | 16.0 | 210.0 | 0.0 | 638.5 | 42.0 | 920.5 |
-| TiDB + TiKV RF=3 (6-unit) | 16.0 | 28.0 | 340.0 | 312.0 | 615.2 | 72.0 | 1383.2 |
-| Lagrange 0.4.0 (5-Node RF=3 Fast-Path) | 15.0 | 24.0 | 395.0 | 286.0 | 692.0 | 78.0 | 1490.0 |
-| Lagrange 0.3.0 (3-Node Lab Baseline) | 18.0 | 35.0 | 2180.0 | 680.0 | 1385.9 | 120.0 | 4418.9 |
+| PG 17 Single Primary + App | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| Citus 13 Sharded RF=3 + App | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| PG 17 Patroni Sync HA RF=3 | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| TiDB + TiKV RF=3 (6-unit) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| Lagrange 0.4.0 (5-Node RF=3 Fast-Path) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| Lagrange 0.3.0 (3-Node Lab Baseline) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `4418.9` |
 
 ### Scenario B setup and 4-stage sequential p99 latency breakdown (tidb-distributed-risk-decision)
 
@@ -668,12 +668,12 @@ flowchart LR
 
 | Target | Ingress (ms) | Reducer (ms) | WAN Wait (ms) | Wire Decode (ms) | Steady p99 (ms) | Move Delta (ms) | WAN Bytes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.4.0 (Colocated WASI ctx.call) | 1.8 | 15.8 | 4.0 | 0.8 | 22.4 | 4.0 | 144 |
-| Apache Ignite 3 (JobTarget.colocated) | 2.0 | 12.4 | 6.2 | 2.2 | 22.8 | 15.8 | 820 |
-| PG 17 Patroni + PL/pgSQL Function | 2.0 | 16.4 | 4.0 | 2.8 | 25.2 | 0.0 | 960 |
-| Citus 13 (Colocated Dist Function) | 2.2 | 13.0 | 8.0 | 3.6 | 26.8 | 57.2 | 1540 |
-| YugabyteDB 2024.2 (YSQL Stored Proc) | 2.4 | 15.2 | 11.4 | 5.6 | 34.6 | 27.4 | 2420 |
-| TiDB + TiKV (App-Orchestrated SQL) | 2.6 | 10.2 | 24.0 | 11.8 | 48.6 | 43.8 | 6144 |
+| Lagrange 0.4.0 (Colocated WASI ctx.call) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| Apache Ignite 3 (JobTarget.colocated) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| PG 17 Patroni + PL/pgSQL Function | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| Citus 13 (Colocated Dist Function) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| YugabyteDB 2024.2 (YSQL Stored Proc) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| TiDB + TiKV (App-Orchestrated SQL) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
 
 ### Scenario C setup, decision latency, and rule-change backfill optimization (streaming-feature-risk-decision)
 
@@ -685,27 +685,27 @@ flowchart LR
     P -->|"Raft Apply"| R["In-Partition Delta Rollup<br/>(O(1) Micro-Buckets)"]
     D["Risk Decision Client"] -->|"Freshness SLA = 0ms"| Q["Epoch-Watermarked Reader<br/>(Local Storage Node)"]
     Q -->|"Local Lookup"| R
-    Q -.->|"Lazy Replay (&lt; 2ms)"| P
-    R -->|"Decision (&lt; 2ms, 0 B WAN)"| D
+    Q -.->|"Lazy Replay"| P
+    R -->|"Decision (0 B WAN)"| D
 ```
 
 | Target | Ingest Quorum (ms) | Prop Lag (ms) | Compute (ms) | 0ms Fresh (dec/s) | 5x Scale (dec/s) | Backfill (s) | Downtime (s) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange (In-Partition Rollup + Epoch-Lazy Opt) | 2.2 | 0.0 | 1.4 | 684.0 | 2860.0 | 2.4 | 0.0 |
-| Lagrange 0.4.0 (On-Read Raw Window Scan) | 2.2 | 0.0 | 7.8 | 441.2 | 1840.0 | 0.0 | 0.0 |
-| PG 17 Patroni + PL/pgSQL (On-Read Scan) | 3.4 | 0.0 | 11.2 | 316.8 | 480.0 | 0.0 | 0.0 |
-| PG 17 + Valkey 8 (Sync Write-Through) | 3.4 | 4.2 | 3.4 | 310.0 | 890.0 | 185.0 | 185.0 |
-| PG 17 + Valkey 8 (Async CDC Stream) | 3.4 | 65.0 | 2.6 | 0.0 | 0.0 | 240.0 | 240.0 |
+| Lagrange (In-Partition Rollup + Epoch-Lazy Opt) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| Lagrange 0.4.0 (On-Read Raw Window Scan) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| PG 17 Patroni + PL/pgSQL (On-Read Scan) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| PG 17 + Valkey 8 (Sync Write-Through) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+| PG 17 + Valkey 8 (Async CDC Stream) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
 
 ### Why rule-change backfill makes Scenario C and Scenario B look similar, and how Lagrange optimizes it
 
-In both `Lagrange 0.4.0` and `PostgreSQL 17 + PL/pgSQL`, the feature engine executes on-read raw event scanning across recent partition history (`O(W)`, requiring approximately `7.8 ms` of local reducer execution time). This architecture provides an operational advantage: deploying a new fraud rule or altering scoring thresholds requires exactly `0.0 s` of rule-change backfill downtime, because no precomputed cache tables need recalculation. However, this on-read scanning causes Scenario C decision throughput (`441.2 dec/s`, `18.09 ms` p99) to look identical to Scenario B sequential execution (`441.15 dec/s`, `18.09 ms` p99), since the per-decision compute path is dominated by scanning unaggregated event logs.
+In both `Lagrange 0.4.0` and `PostgreSQL 17 + PL/pgSQL`, when the feature engine executes on-read raw event scanning across recent partition history (`O(W)`), deploying a new fraud rule or altering scoring thresholds requires `0.0 s` of rule-change backfill downtime because no precomputed cache tables need recalculation. However, on-read scanning causes Scenario C decision execution to be dominated by scanning unaggregated event logs, similar to Scenario B sequential execution. Multi-host comparative throughput and latency figures for Scenario C remain `[not measured]` pending original multi-host execution receipts.
 
-In contrast, the `PostgreSQL 17 + Valkey 8` stack precomputes rolling aggregations into in-memory Redis/Valkey hashes. While this delivers high raw read throughput (`520.0 - 680.0 dec/s`), it incurs severe operational vulnerability: deploying a new correlated risk rule or altering window boundaries triggers `185-820 s` of complete backfill downtime, during which the external feature store must replay millions of historical events across the network. Furthermore, async streaming modes introduce a `14.8%` stale decision rate, violating the `0 ms` read-your-writes consistency SLA.
+In contrast, an external feature store (`PostgreSQL 17 + Valkey 8`) precomputes rolling aggregations into in-memory hashes. While precomputation avoids on-read window scans, deploying a new correlated risk rule or altering window boundaries requires replaying historical events across the network, and async streaming modes can introduce stale reads under a strict `0 ms` read-your-writes consistency SLA.
 
-To overcome the tradeoff between on-read compute cost and backfill downtime, Lagrange introduces three architectural improvements:
+To address the tradeoff between on-read compute cost and backfill work, Lagrange provides three architectural mechanisms (whose multi-host comparative throughput and latency remain `[not measured]` until original multi-host execution receipts are recorded):
 
-1. **In-Partition Raft-Apply Delta Rollups**: Instead of scanning historical logs on read, state machine apply hooks maintain `O(1)` local accumulators directly inside partition memory as Raft log entries commit. Local accumulator lookup executes in `1.4 ms` under a strict `0 ms` staleness SLA, expanding throughput from `441.2 dec/s` to `684.0 dec/s` at `1x` workload and up to `2860.0 dec/s` at `5x` joint scaling.
-2. **Decomposable Multi-Resolution Micro-Buckets**: Aggregations are factored into associative micro-buckets (1-second, 1-minute, and 1-hour sub-aggregates). When window durations, decay factors, or scoring thresholds change, existing micro-buckets recombine algebraically, resulting in `0.0 s` backfill downtime without raw log re-scans.
-3. **Epoch-Watermarked Lazy On-Read Cutover + Local Page-Cache Replay**: When a brand-new feature definition is introduced that cannot be computed from existing micro-buckets, Lagrange watermarks the new feature with an epoch boundary. Decisions immediately serve with `0.0 s` downtime and `0.0%` stale reads by lazily materializing only the queried entity on demand in under `2 ms`. Concurrently, background workers warm the remaining entities from the local OS page cache in `2.4 s`, transferring `0 B` of network backfill traffic across nodes.
+1. **In-Partition Raft-Apply Delta Rollups**: Instead of scanning historical logs on read, state machine apply hooks maintain `O(1)` local accumulators directly inside partition memory as Raft log entries commit.
+2. **Decomposable Multi-Resolution Micro-Buckets**: Aggregations are factored into associative micro-buckets (1-second and 60-second sub-aggregates). When window durations, decay factors, or scoring thresholds change, existing micro-buckets recombine algebraically without raw log re-scans.
+3. **Epoch-Watermarked Lazy On-Read Cutover + Local Page-Cache Replay**: When a brand-new feature definition is introduced that cannot be computed from existing micro-buckets, Lagrange watermarks the new feature with an epoch boundary so decisions lazily materialize the queried entity on demand while background workers warm remaining entities locally.
 

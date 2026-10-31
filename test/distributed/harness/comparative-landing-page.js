@@ -142,9 +142,9 @@ function renderComparativeLandingMarkdown(matrix) {
     '![Multi-system comparative benchmark overview](comparative-overview.svg)\n\n' +
     'Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg) | [TiDB comparison progress chart](tidb-comparison-progress.svg)\n\n' +
     '## Evidence-tier and measurement boundary qualification\n\n' +
-    'This comparative benchmark suite qualifies results across two rigorous evidence tiers:\n' +
+    'Published comparative performance rows require original multi-host (`gcp` or `lab`) execution receipts:\n' +
     '- `observed-docker-cluster`: live containerized cluster execution with recorded container lifecycles, real operating system processes, and measured network and storage calls.\n' +
-    '- `modeled-topology-oracle`: deterministic request-oracle execution paired with topology round-trip, quorum, and wire-transfer accounting over identical logical workloads.\n\n' +
+    '- `modeled-topology-oracle`: request-oracle or network-modeled artifacts (`local-oracle-plus-network-model`) are rejected as non-comparable (`contract-model-non-comparable`) and rendered as `[not measured]` until original multi-host execution receipts are recorded.\n\n' +
     'Two distinct measurement boundaries are evaluated:\n' +
     '- **Scenario A database transaction path**: isolates single-transaction latency and throughput under high row contention, measuring lock acquisition, commit durability, and transaction retry frequency on the primary storage engine.\n' +
     '- **Scenario B complete end-to-end business decision**: evaluates the full multi-stage risk decision pipeline (account, merchant, device, and related-account risk evaluation) traversing cross-partition graph relationships. Pushdown evaluation permits SQL `COUNT`/`SUM` aggregations at storage nodes and co-located WASM compute-near-data execution, measuring end-to-end client decision turnaround and WAN network byte consumption.\n\n' +

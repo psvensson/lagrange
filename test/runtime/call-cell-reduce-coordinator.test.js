@@ -29,8 +29,18 @@ const RESULT_TABLE = 'call_cell_results';
 const LEASE_MS = 1000;
 const SLOT_COUNT = 2;
 const LIMIT = 4;
+const SMALL_BYTE_LIMIT = 40;
 const REPLICA_ONE = 'svc-reduce-r1';
 const REPLICA_TWO = 'svc-reduce-r2';
+const KEY_A = 'a';
+const KEY_B = 'b';
+const KEY_C = 'c';
+const KEY_D = 'd';
+const KEY_E = 'e';
+const MSG_COMBINED_OVERFLOW_REJECTS =
+  'combined partials exceeding limit across slots fail closed without truncation';
+const MSG_BYTE_OVERFLOW_REJECTS =
+  'partials exceeding byteLimit fail closed with partial_unbounded';
 
 function slotRow(invocationId, slotId) {
   return {
@@ -691,5 +701,39 @@ test('a concurrent sweep can never reclaim another invocation\'s ' +
     'call-invocation-fresh', REPLICA_ONE, 1);
   t.equal(Number(acquired.slot_id), 1,
     'the seeded row stays immediately claimable at its seed time');
+  t.end();
+});
+
+test('resolveCompletePartialSet fails closed when merged partials across ' +
+  'slots exceed limit or byteLimit', async (t) => {
+  const nowRef = {now: 300_000};
+  const {executeInternal} = createSqlStore();
+  const coordinator = createCoordinator(executeInternal, nowRef);
+
+  await leaseAndPublish(coordinator, 1, REPLICA_ONE, [
+    {groupKey: KEY_A, aggValue: 1},
+    {groupKey: KEY_B, aggValue: 2},
+    {groupKey: KEY_C, aggValue: 3},
+  ], 300_010);
+  await leaseAndPublish(coordinator, 2, REPLICA_TWO, [
+    {groupKey: KEY_D, aggValue: 4},
+    {groupKey: KEY_E, aggValue: 5},
+  ], 300_020);
+
+  await expectReduceIncomplete(
+    t,
+    coordinator.resolveCompletePartialSet(INVOCATION_ID, [1, 2], LIMIT),
+    CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED,
+    MSG_COMBINED_OVERFLOW_REJECTS,
+  );
+
+  await expectReduceIncomplete(
+    t,
+    coordinator.resolveCompletePartialSet(
+      INVOCATION_ID, [1, 2], 10, SMALL_BYTE_LIMIT,
+    ),
+    CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED,
+    MSG_BYTE_OVERFLOW_REJECTS,
+  );
   t.end();
 });
