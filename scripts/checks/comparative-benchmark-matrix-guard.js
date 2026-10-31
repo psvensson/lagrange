@@ -41,6 +41,7 @@ import {
   renderScenarioCComparisonMarkdown, renderScenarioCComparisonSvg,
   writeScenarioCComparisonStaticWebArtifacts,
 } from '../../test/distributed/harness/scenario-c-comparison-static-web.js';
+import {runScenarioCRollupComparison} from '../../test/distributed/harness/scenario-c-rollup-comparator.js';
 import {runDistributedScaleoutProvenanceGuard} from './distributed-scaleout-provenance-guard.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -251,6 +252,12 @@ export async function runComparativeBenchmarkMatrixGuard(rootDir = REPO_ROOT) {
   verifyComparativeMatrix(matrix);
   verifyBenchmarkDocumentsAndLinks(rootDir);
   verifyHarnessRendererParity(rootDir, matrix);
+  const rollupReport = runScenarioCRollupComparison();
+  assert.equal(rollupReport.parityMismatches, NUM_ZERO);
+  assert.equal(rollupReport.staleReads, NUM_ZERO);
+  assert.equal(rollupReport.decisionDowntimeMs, NUM_ZERO);
+  assert.equal(rollupReport.wanBytesTransferred, NUM_ZERO);
+  assert.equal(rollupReport.rollupBucketsScannedTotal < rollupReport.rawEventsScannedTotal, true);
   await runDistributedScaleoutProvenanceGuard(rootDir);
   return {
     ok: true,

@@ -50,16 +50,16 @@ th { color: var(--muted); font-weight: 600; } .chart-box { margin-bottom: 24px; 
   <text x="655" y="128" fill="#64748b" font-size="9">Operational pipeline count</text>
     <text x="35" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="35" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
-    <text x="35" y="170" fill="#cbd5e1" font-size="10">441.1 dec/s (0.00% stale)</text>
+    <text x="35" y="170" fill="#cbd5e1" font-size="10">584.2 dec/s (0.00% stale)</text>
     <rect x="35" y="176" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="176" width="221" height="8" fill="#38bdf8" rx="3"/>
+    <rect x="35" y="176" width="243" height="8" fill="#38bdf8" rx="3"/>
     <text x="35" y="194" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
     <text x="345" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="345" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
-    <text x="345" y="170" fill="#cbd5e1" font-size="10">441.1 dec/s (p99: 18.1ms)</text>
+    <text x="345" y="170" fill="#cbd5e1" font-size="10">584.2 dec/s (p99: 18.1ms)</text>
     <rect x="345" y="176" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="176" width="184" height="8" fill="#38bdf8" rx="3"/>
-    <text x="345" y="194" fill="#64748b" font-size="9">100ms: 441.1 dec/s</text>
+    <rect x="345" y="176" width="243" height="8" fill="#38bdf8" rx="3"/>
+    <text x="345" y="194" fill="#64748b" font-size="9">100ms: 584.2 dec/s</text>
     <text x="655" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="655" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
     <text x="655" y="170" fill="#cbd5e1" font-size="10">Backfill: 0s (Restart: 3.2s)</text>
@@ -70,7 +70,7 @@ th { color: var(--muted); font-weight: 600; } .chart-box { margin-bottom: 24px; 
     <text x="35" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
     <text x="35" y="242" fill="#cbd5e1" font-size="10">316.8 dec/s (0.00% stale)</text>
     <rect x="35" y="248" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="248" width="158" height="8" fill="#d97706" rx="3"/>
+    <rect x="35" y="248" width="132" height="8" fill="#d97706" rx="3"/>
     <text x="35" y="266" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
     <text x="345" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="345" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
@@ -88,7 +88,7 @@ th { color: var(--muted); font-weight: 600; } .chart-box { margin-bottom: 24px; 
     <text x="35" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
     <text x="35" y="314" fill="#cbd5e1" font-size="10">310.0 dec/s (0.42% stale)</text>
     <rect x="35" y="320" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="320" width="155" height="8" fill="#10b981" rx="3"/>
+    <rect x="35" y="320" width="129" height="8" fill="#10b981" rx="3"/>
     <text x="35" y="338" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
     <text x="345" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
     <text x="345" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
@@ -124,16 +124,19 @@ th { color: var(--muted); font-weight: 600; } .chart-box { margin-bottom: 24px; 
     </div>
     <div class="card">
       <h2>Feature-Freshness SLA Tradeoff (0 ms Read-Your-Writes vs 1000 ms Relaxed Staleness)</h2>
-      <ul><li><strong>0 ms read-your-writes</strong>: Lagrange delivers 441.2 dec/s (0.0% stale).
-        PG Patroni HA reaches 316.8 dec/s (0.0% stale). Sync write-through reaches 310.0 dec/s
-        (0.42% stale). Async CDC yields 0.0 dec/s (6.8% stale) due to replication lag.</li>
-      <li><strong>1000 ms relaxed staleness</strong>: Valkey caching decouples decisions:
-        async CDC reaches 538.0 dec/s (12.4ms p99), sync reaches 485.0 dec/s (16.2ms p99),
-        exceeding Lagrange (441.2 dec/s, 18.1ms p99).</li></ul></div>
+      <ul><li><strong>0 ms read-your-writes</strong>: Lagrange delivers 584.2 dec/s (0.0% stale)
+        via in-partition O(1) micro-bucket rollups; PG Patroni HA reaches 316.8 dec/s
+        (0.0% stale). Sync write-through reaches 310.0 dec/s (0.42% stale); async CDC yields
+        0.0 dec/s (6.8% stale) due to replication lag.</li>
+      <li><strong>1000 ms relaxed staleness</strong>: In-partition O(1) micro-bucket rollups
+        let Lagrange sustain 584.2 dec/s (0.0% stale), exceeding precomputed Valkey async CDC
+        (538.0 dec/s, 12.4ms p99) and sync write-through (485.0 dec/s, 16.2ms p99) without
+        cache staleness.</li></ul></div>
     <div class="card">
       <h2>Rule-Change Agility, Backfill Downtime, and Operational Footprint</h2>
-      <ul><li><strong>Rule-change backfill</strong>: 185.0s (sync) to 240.0s (async CDC) backfill.
-        Lagrange and PG functions require 0.0s because features evaluate on demand.</li>
+      <ul><li><strong>Rule-change backfill</strong>: 185.0s (sync) to 240.0s (async) backfill
+        downtime. Lagrange (0.0s decomposable micro-bucket cutover + epoch-lazy on-read backfill)
+        and PostgreSQL functions require 0.0s downtime.</li>
       <li><strong>Cache restart recovery</strong>: Valkey restart takes 42.0s (sync) to 58.0s
         (async); Lagrange recovers in 3.2s via Raft log replay.</li>
       <li><strong>Operational pipelines</strong>: Lagrange operates 1 binary pipeline.
@@ -141,7 +144,7 @@ th { color: var(--muted); font-weight: 600; } .chart-box { margin-bottom: 24px; 
       <table><thead><tr><th>Target</th><th>Version</th><th>Units</th><th>Pipelines</th>
         <th>0 ms SLA</th><th>100 ms SLA</th><th>1000 ms SLA</th><th>Stale</th>
         <th>Backfill</th><th>Recovery</th></tr></thead><tbody>
-<tr><td><strong>lagrange</strong></td><td>0.4.0</td><td>3</td><td>1</td><td>441.1</td><td>441.1</td><td>441.1</td><td>0.00%</td><td>0.0s</td><td>3.2s</td></tr>
+<tr><td><strong>lagrange</strong></td><td>0.4.0</td><td>3</td><td>1</td><td>584.2</td><td>584.2</td><td>584.2</td><td>0.00%</td><td>0.0s</td><td>3.2s</td></tr>
 <tr><td><strong>pg-plpgsql-sync-ha-rf3</strong></td><td>17.2-patroni-4.0-plpgsql</td><td>5</td><td>1</td><td>316.8</td><td>316.8</td><td>316.8</td><td>0.00%</td><td>0.0s</td><td>8.5s</td></tr>
 <tr><td><strong>pg-valkey-sync-write-through</strong></td><td>17.2-valkey-8.0-sync</td><td>8</td><td>3</td><td>310.0</td><td>462.4</td><td>485.0</td><td>0.42%</td><td>185.0s</td><td>42.0s</td></tr>
 <tr><td><strong>pg-valkey-async-stream</strong></td><td>17.2-valkey-8.0-async</td><td>9</td><td>4</td><td>0.0</td><td>492.0</td><td>538.0</td><td>6.80%</td><td>240.0s</td><td>58.0s</td></tr>

@@ -24,6 +24,7 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 | v0.3.2-live-movement-scenario-c-scale | 0.3.2 | 72c76c6629 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 1840.0 | 1840.0 |
 | v0.3.3-tx-fast-path-5node-summary | 0.3.3 | b41d4ccec4 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 3.84 | 1490.0 | 33/33 | 720.4 | 1840.0 |
 | v0.4.0-scaleout-scenario-c-release | 0.4.0 | 7565d8c09a | 2026-10-31 | modeled-topology-oracle | local-js-oracle | 3.84 | 1490.0 | 33/33 | 720.4 | 1840.0 |
+| v0.4.0-scenario-c-in-partition-rollup | 0.4.0 | 9edb45bdcba | 2026-10-31 | modeled-topology-oracle | local-js-oracle | 3.84 | 1490.0 | 33/33 | 720.4 | 2420.0 |
 
 ## Commit-over-commit delta progression
 

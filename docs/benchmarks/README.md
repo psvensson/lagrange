@@ -38,8 +38,8 @@ Two distinct measurement boundaries are evaluated:
 
 | System / Configuration | Category | Topology Units (Processes) | RPO=0 Host-Loss Survival | [Scenario A](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) tx/sec (p95 ms) | [Scenario B](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) decisions/sec (p99 ms) | [Scenario C](tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision) 0ms Fresh dec/sec (Stale % / Backfill s) | WAN / Wire Bytes per Decision | Evidence Tier | Detail Page |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.4.0 | distributed-native | 3 (3) | Yes | 0.83 (4418.93 ms) | 441.15 (18.09 ms) | 441.15 (0.00% / 0.0s) | 144 B | A: `observed-docker-cluster` / B: `modeled-topology-oracle` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
-| Lagrange (5-Node RF=3) 0.4.0 | distributed-native-scaleout | 5 (5) | Yes | 3.84 (1490.00 ms) | 720.40 (18.09 ms) | 1840.00 (0.00% / 0.0s) | 144 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [scaleout-3to5-node-rf3-progress.md](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html)) |
+| Lagrange 0.4.0 | distributed-native | 3 (3) | Yes | 0.83 (4418.93 ms) | 441.15 (18.09 ms) | 584.20 (0.00% / 0.0s) | 144 B | A: `observed-docker-cluster` / B: `modeled-topology-oracle` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
+| Lagrange (5-Node RF=3) 0.4.0 | distributed-native-scaleout | 5 (5) | Yes | 3.84 (1490.00 ms) | 720.40 (18.09 ms) | 2420.00 (0.00% / 0.0s) | 144 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [scaleout-3to5-node-rf3-progress.md](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html)) |
 | TiDB + TiKV v8.5.8 | distributed-sql | 6 (6) | Yes | 6.75 (1383.18 ms) | 221.44 (36.08 ms) | 0.00 (0.00% / 0.0s) | 6144 B | A: `observed-docker-cluster` / B: `modeled-topology-oracle` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
 | PostgreSQL 17 (Single Primary + App Service) 17.2 | relational-single-primary | 2 (2) | No | 14.80 (412.60 ms) | 294.60 (26.40 ms) | 0.00 (0.00% / 0.0s) | 1420 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
 | PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) 17.2-patroni-4.0 | relational-sync-ha | 6 (9) | Yes | 8.40 (920.50 ms) | 218.20 (35.20 ms) | 0.00 (0.00% / 0.0s) | 2680 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
@@ -100,15 +100,15 @@ decision load. Detailed analysis: [Scenario C Feature-Store Comparison](scenario
 
 | System / Configuration | 0ms Fresh dec/s | 100ms SLA dec/s | 1000ms SLA dec/s | Stale Rate % | Rule Backfill (s) | Cache Restart (s) | Pipelines |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 441.15 | 441.15 | 441.15 | 0.00% | 0.0s | 3.2s | 1 |
-| Lagrange (5-Node RF=3) | 1840.00 | 1840.00 | 1840.00 | 0.00% | 0.0s | 3.2s | 1 |
+| Lagrange | 584.20 | 584.20 | 584.20 | 0.00% | 0.0s | 3.2s | 1 |
+| Lagrange (5-Node RF=3) | 2420.00 | 2420.00 | 2420.00 | 0.00% | 0.0s | 3.2s | 1 |
 | PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | 316.80 | 316.80 | 316.80 | 0.00% | 0.0s | 8.5s | 1 |
 | PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | 310.00 | 462.40 | 485.00 | 0.42% | 185.0s | 42.0s | 3 |
 | PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | 0.00 | 492.00 | 538.00 | 6.80% | 240.0s | 58.0s | 4 |
 
 | System / Configuration | 1x Fresh (0ms) dec/s | 5x Fresh (0ms) dec/s | 5x Relaxed (1000ms) dec/s | Stale % | 5x Backfill (s) | 5x Recovery (s) | Pipelines |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 441.15 | 1840.00 | 1840.00 | 0.00% | 0.0s | 3.2s | 1 |
+| Lagrange | 584.20 | 2420.00 | 2420.00 | 0.00% | 0.0s | 3.2s | 1 |
 | Apache Ignite 3 (Colocated) | 408.60 | 1590.00 | 1590.00 | 0.00% | 28.0s | 14.5s | 2 |
 | PG 17 Patroni + PL/pgSQL | 316.80 | 480.00 | 480.00 | 0.00% | 0.0s | 8.5s | 1 |
 | PG 17 + Valkey 8 (Sync) | 310.00 | 890.00 | 1620.00 | 1.85% | 640.0s | 118.0s | 3 |
@@ -237,6 +237,7 @@ decision load. Detailed analysis: [Scenario C Feature-Store Comparison](scenario
 | v0.3.2-live-movement-scenario-c-scale (`72c76c6629`) | 2.24 (2590.00 ms) | 33/33 | 1840.00 (17.80 ms / 144 B) | 1840.00 | `modeled-topology-oracle` / `local-js-oracle` |
 | v0.3.3-tx-fast-path-5node-summary (`b41d4ccec4`) | 3.84 (1490.00 ms) | 33/33 | 720.40 (18.09 ms / 144 B) | 1840.00 | `modeled-topology-oracle` / `local-js-oracle` |
 | v0.4.0-scaleout-scenario-c-release (`7565d8c09a`) | 3.84 (1490.00 ms) | 33/33 | 720.40 (18.09 ms / 144 B) | 1840.00 | `modeled-topology-oracle` / `local-js-oracle` |
+| v0.4.0-scenario-c-in-partition-rollup (`9edb45bdcba`) | 3.84 (1490.00 ms) | 33/33 | 720.40 (18.09 ms / 144 B) | 2420.00 | `modeled-topology-oracle` / `local-js-oracle` |
 
 ## Measurement provenance and evidence-tier separation
 

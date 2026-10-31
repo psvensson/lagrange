@@ -24,7 +24,7 @@ Scaling Scenario C workloads 5x across simultaneous ingestion, active entities, 
 
 | Target | 1x Scale (0ms) | 5x Scale (0ms) | 5x Scale (1000ms) | Stale Rate % | Rule Backfill (s) | Cache Recovery (s) | Pipelines | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 441.1 | 1840.0 | 1840.0 | 0.00% | 0.0 | 3.2 | 1 | modeled-topology-oracle |
+| Lagrange | 584.2 | 2420.0 | 2420.0 | 0.00% | 0.0 | 3.2 | 1 | modeled-topology-oracle |
 | Apache Ignite 3 (Colocated) | 408.6 | 1590.0 | 1590.0 | 0.00% | 28.0 | 14.5 | 2 | modeled-topology-oracle |
 | PG 17 Patroni + PL/pgSQL | 316.8 | 480.0 | 480.0 | 0.00% | 0.0 | 8.5 | 1 | modeled-topology-oracle |
 | PG 17 + Valkey 8 (Sync) | 310.0 | 890.0 | 1620.0 | 1.85% | 640.0 | 118.0 | 3 | modeled-topology-oracle |

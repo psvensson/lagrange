@@ -20,16 +20,16 @@
   <text x="655" y="128" fill="#64748b" font-size="9">Operational pipeline count</text>
     <text x="35" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="35" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
-    <text x="35" y="170" fill="#cbd5e1" font-size="10">441.1 dec/s (0.00% stale)</text>
+    <text x="35" y="170" fill="#cbd5e1" font-size="10">584.2 dec/s (0.00% stale)</text>
     <rect x="35" y="176" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="176" width="221" height="8" fill="#38bdf8" rx="3"/>
+    <rect x="35" y="176" width="243" height="8" fill="#38bdf8" rx="3"/>
     <text x="35" y="194" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
     <text x="345" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="345" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
-    <text x="345" y="170" fill="#cbd5e1" font-size="10">441.1 dec/s (p99: 18.1ms)</text>
+    <text x="345" y="170" fill="#cbd5e1" font-size="10">584.2 dec/s (p99: 18.1ms)</text>
     <rect x="345" y="176" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="176" width="184" height="8" fill="#38bdf8" rx="3"/>
-    <text x="345" y="194" fill="#64748b" font-size="9">100ms: 441.1 dec/s</text>
+    <rect x="345" y="176" width="243" height="8" fill="#38bdf8" rx="3"/>
+    <text x="345" y="194" fill="#64748b" font-size="9">100ms: 584.2 dec/s</text>
     <text x="655" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="655" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
     <text x="655" y="170" fill="#cbd5e1" font-size="10">Backfill: 0s (Restart: 3.2s)</text>
@@ -40,7 +40,7 @@
     <text x="35" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
     <text x="35" y="242" fill="#cbd5e1" font-size="10">316.8 dec/s (0.00% stale)</text>
     <rect x="35" y="248" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="248" width="158" height="8" fill="#d97706" rx="3"/>
+    <rect x="35" y="248" width="132" height="8" fill="#d97706" rx="3"/>
     <text x="35" y="266" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
     <text x="345" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="345" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
@@ -58,7 +58,7 @@
     <text x="35" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
     <text x="35" y="314" fill="#cbd5e1" font-size="10">310.0 dec/s (0.42% stale)</text>
     <rect x="35" y="320" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="320" width="155" height="8" fill="#10b981" rx="3"/>
+    <rect x="35" y="320" width="129" height="8" fill="#10b981" rx="3"/>
     <text x="35" y="338" fill="#64748b" font-size="9">Tier: modeled-topology-oracle</text>
     <text x="345" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
     <text x="345" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
