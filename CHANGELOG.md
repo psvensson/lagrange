@@ -10,6 +10,35 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-31
+
+Distributed scale-out, provenance separation, longitudinal metrics evolution,
+and unified 5-node and Scenario C summary benchmark release completing epic
+`distributed-scaleout-and-provenance-benchmark-series` (Slices 1–5):
+
+Formation health at cut time: `formation health: 0/20 passed (0%), 0 with a
+starved seed`.
+
+### Added
+- **Distributed scale-out & provenance benchmark series (`#169`–`#173`):**
+  Scenario B measurement provenance audit and reclassification (`local-oracle-plus-network-model` /
+  `contract-model-non-comparable`) plus longitudinal Lagrange metrics evolution
+  (`lagrange-metrics-evolution.{md,html,svg}`, Slice 1); 3-to-5-node `RF=3`
+  partial replica-coverage (`100%` vs `60%`) scale-out and Scenario A three-mode
+  separation (`scaleout-3to5-node-rf3-progress.{md,html,svg}`, Slice 2); 5-node
+  `RF=3` partition granularity sweep across `P=6, 15, 30, 60`
+  (`partition-granularity-sweep-progress.{md,html,svg}`, Slice 3); Scenario B
+  network RTT crossover (`0.2 ms` to `30 ms`) and working-set growth
+  (`scenario-b-rtt-working-set-crossover.{md,html,svg}`, Slice 4); and live
+  partition movement under load plus Scenario C `5x` joint scaling and
+  operating-boundary map (`movement-and-scenario-c-scaling-progress.{md,html,svg}`,
+  Slice 5).
+- **Unified 5-node (`RF=3`) and Scenario C summary page statistics (`0.3.3` & `0.4.0`):**
+  Added 5-node `RF=3` (`lagrange-5node-rf3`) and Scenario C (`streaming-feature-risk-decision`)
+  statistics, charts, and multi-system tables directly to the benchmark summary
+  landing page (`docs/benchmarks/README.md`, `docs/benchmarks/index.html`, and
+  `docs/benchmarks/comparative-overview.svg`).
+
 ## [0.3.3] — 2026-10-30
 
 Scenario A transaction coordination fast-path and multi-system comparative
@@ -673,7 +702,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/psvensson/lagrange/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/psvensson/lagrange/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/psvensson/lagrange/compare/v0.3.0...v0.3.2
 [0.3.0]: https://github.com/psvensson/lagrange/compare/v0.2.8...v0.3.0

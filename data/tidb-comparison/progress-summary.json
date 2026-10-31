@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "totalCombinations": 5,
+  "totalCombinations": 7,
   "entries": [
     {
       "schemaVersion": 1,
@@ -480,7 +480,243 @@
       "throughputLagFactorDeltaFromPrev": null,
       "tidbSemanticProofsDeltaFromPrev": null,
       "lagrangeSemanticProofsDeltaFromPrev": null
+    },
+    {
+      "schemaVersion": 1,
+      "combinationKey": "fw=0.3.3@b41d4ccec4b2236bd2223c24cea07ed7d2a2c3c2|scenario=tidb-distributed-risk-decision|profile=risk-three-island-rf3:-|workload=b28b56b626ad0acebe20b8174beda8c0e78b8fe50df3e73323711d738acb1280|measure=-|view=contract-model-non-comparable|lagrange=0.3.3@b41d4ccec4b2236bd2223c24cea07ed7d2a2c3c2|tidb=v8.5.8@pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8",
+      "combinationSha256": "ca6c388f5aa25a5ca0bd5b089d144c67c5bf219fe5dccb4330dcd7b8df2cb8b4",
+      "framework": {
+        "frameworkVersion": "0.3.3",
+        "frameworkCommitSha": "b41d4ccec4b2236bd2223c24cea07ed7d2a2c3c2",
+        "scenarioId": "tidb-distributed-risk-decision",
+        "profileId": "risk-three-island-rf3",
+        "profileSha256": null,
+        "datasetSha256": "41524d26838bd0921ea8efc9f149b278ac32a82f627840dfd4e7fcac671abeaf",
+        "workloadPlanSha256": "b28b56b626ad0acebe20b8174beda8c0e78b8fe50df3e73323711d738acb1280",
+        "measurementPlanSha256": null,
+        "retryPolicyId": "scenario-b-bounded-retry-v1",
+        "openLoopProfileId": "scenario-b-open-loop-v1",
+        "comparisonView": "contract-model-non-comparable"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.3.3",
+          "commitSha": "b41d4ccec4b2236bd2223c24cea07ed7d2a2c3c2"
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8"
+        }
+      },
+      "recordedAt": "2026-10-30T22:05:28.000Z",
+      "evidenceSource": {
+        "kind": "local-oracle-plus-network-model",
+        "runId": null,
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "metrics": {
+        "lagrange": {
+          "opsPerSec": 440.589288,
+          "latencyMs": {
+            "p50": 12.059,
+            "p95": 18.089,
+            "p99": 18.089
+          },
+          "transactions": {
+            "measuredAttempted": 64,
+            "measuredSucceeded": 64,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 8,
+            "requiredCount": 8
+          },
+          "scenarioBScorecard": {
+            "crossIslandBytesPerRequest": 144,
+            "duringMoveP99Ms": 18,
+            "routingConvergenceMs": 45,
+            "colocationAdvantage": true
+          }
+        },
+        "tidbTikv": {
+          "opsPerSec": 221.375155,
+          "latencyMs": {
+            "p50": 24.061,
+            "p95": 36.078,
+            "p99": 36.078
+          },
+          "transactions": {
+            "measuredAttempted": 64,
+            "measuredSucceeded": 64,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 8,
+            "requiredCount": 8
+          },
+          "scenarioBScorecard": {
+            "crossIslandBytesPerRequest": 6144,
+            "duringMoveP99Ms": 64,
+            "routingConvergenceMs": 180,
+            "colocationAdvantage": false
+          }
+        }
+      },
+      "comparison": {
+        "paired": true,
+        "throughputRatioLagrangeToTiDb": 1.990238,
+        "throughputLagFactorTiDbOverLagrange": 0.502452,
+        "latencyRatioLagrangeOverTiDb": {
+          "p50": 0.501184,
+          "p95": 0.501386,
+          "p99": 0.501386
+        },
+        "semanticProofDeltaLagrangeMinusTiDb": 0
+      },
+      "recordSha256": "830ca7fa2d21332cb325eb235e61d1d03e56ea63eca13e521fc9b2cde02b869e",
+      "deltas": {
+        "lagrangeOpsPerSecDeltaFromPrev": -0.5588,
+        "lagrangeOpsPerSecDeltaFromFirst": -0.5588,
+        "tidbOpsPerSecDeltaFromPrev": -0.065872,
+        "tidbOpsPerSecDeltaFromFirst": -0.065872,
+        "throughputRatioDeltaFromPrev": -0.001932,
+        "throughputLagFactorDeltaFromPrev": 0.000487,
+        "tidbSemanticProofsDeltaFromPrev": 0,
+        "lagrangeSemanticProofsDeltaFromPrev": 0
+      },
+      "lagrangeOpsPerSecDeltaFromPrev": -0.5588,
+      "lagrangeOpsPerSecDeltaFromFirst": -0.5588,
+      "tidbOpsPerSecDeltaFromPrev": -0.065872,
+      "tidbOpsPerSecDeltaFromFirst": -0.065872,
+      "throughputRatioDeltaFromPrev": -0.001932,
+      "throughputLagFactorDeltaFromPrev": 0.000487,
+      "tidbSemanticProofsDeltaFromPrev": 0,
+      "lagrangeSemanticProofsDeltaFromPrev": 0
+    },
+    {
+      "schemaVersion": 1,
+      "combinationKey": "fw=0.4.0@7565d8c09ab843da57563df29653b93cbe9e3044|scenario=tidb-distributed-risk-decision|profile=risk-three-island-rf3:-|workload=b28b56b626ad0acebe20b8174beda8c0e78b8fe50df3e73323711d738acb1280|measure=-|view=contract-model-non-comparable|lagrange=0.4.0@7565d8c09ab843da57563df29653b93cbe9e3044|tidb=v8.5.8@pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8",
+      "combinationSha256": "22e27b67459af19bf3a3aa473c8df4b169f483f57c6f4a33b4c6f6c65566f1b9",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "7565d8c09ab843da57563df29653b93cbe9e3044",
+        "scenarioId": "tidb-distributed-risk-decision",
+        "profileId": "risk-three-island-rf3",
+        "profileSha256": null,
+        "datasetSha256": "41524d26838bd0921ea8efc9f149b278ac32a82f627840dfd4e7fcac671abeaf",
+        "workloadPlanSha256": "b28b56b626ad0acebe20b8174beda8c0e78b8fe50df3e73323711d738acb1280",
+        "measurementPlanSha256": null,
+        "retryPolicyId": "scenario-b-bounded-retry-v1",
+        "openLoopProfileId": "scenario-b-open-loop-v1",
+        "comparisonView": "contract-model-non-comparable"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "7565d8c09ab843da57563df29653b93cbe9e3044"
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "pingcap/tidb:v8.5.8+tikv:v8.5.8+pd:v8.5.8"
+        }
+      },
+      "recordedAt": "2026-10-31T06:50:00.000Z",
+      "evidenceSource": {
+        "kind": "local-oracle-plus-network-model",
+        "runId": null,
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "metrics": {
+        "lagrange": {
+          "opsPerSec": 441.142006,
+          "latencyMs": {
+            "p50": 12.059,
+            "p95": 18.076,
+            "p99": 18.076
+          },
+          "transactions": {
+            "measuredAttempted": 64,
+            "measuredSucceeded": 64,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 8,
+            "requiredCount": 8
+          },
+          "scenarioBScorecard": {
+            "crossIslandBytesPerRequest": 144,
+            "duringMoveP99Ms": 18,
+            "routingConvergenceMs": 45,
+            "colocationAdvantage": true
+          }
+        },
+        "tidbTikv": {
+          "opsPerSec": 221.441027,
+          "latencyMs": {
+            "p50": 24.057,
+            "p95": 36.071,
+            "p99": 36.071
+          },
+          "transactions": {
+            "measuredAttempted": 64,
+            "measuredSucceeded": 64,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 8,
+            "requiredCount": 8
+          },
+          "scenarioBScorecard": {
+            "crossIslandBytesPerRequest": 6144,
+            "duringMoveP99Ms": 64,
+            "routingConvergenceMs": 180,
+            "colocationAdvantage": false
+          }
+        }
+      },
+      "comparison": {
+        "paired": true,
+        "throughputRatioLagrangeToTiDb": 1.992142,
+        "throughputLagFactorTiDbOverLagrange": 0.501972,
+        "latencyRatioLagrangeOverTiDb": {
+          "p50": 0.501268,
+          "p95": 0.501123,
+          "p99": 0.501123
+        },
+        "semanticProofDeltaLagrangeMinusTiDb": 0
+      },
+      "recordSha256": "e1009e0265fec3b1b970983428fc7ab3ee7cdfa43178c0244d78505ddef175e0",
+      "deltas": {
+        "lagrangeOpsPerSecDeltaFromPrev": 0.552718,
+        "lagrangeOpsPerSecDeltaFromFirst": -0.006082,
+        "tidbOpsPerSecDeltaFromPrev": 0.065872,
+        "tidbOpsPerSecDeltaFromFirst": 0,
+        "throughputRatioDeltaFromPrev": 0.001904,
+        "throughputLagFactorDeltaFromPrev": -0.00048,
+        "tidbSemanticProofsDeltaFromPrev": 0,
+        "lagrangeSemanticProofsDeltaFromPrev": 0
+      },
+      "lagrangeOpsPerSecDeltaFromPrev": 0.552718,
+      "lagrangeOpsPerSecDeltaFromFirst": -0.006082,
+      "tidbOpsPerSecDeltaFromPrev": 0.065872,
+      "tidbOpsPerSecDeltaFromFirst": 0,
+      "throughputRatioDeltaFromPrev": 0.001904,
+      "throughputLagFactorDeltaFromPrev": -0.00048,
+      "tidbSemanticProofsDeltaFromPrev": 0,
+      "lagrangeSemanticProofsDeltaFromPrev": 0
     }
   ],
-  "summarySha256": "466ded0a418aaf1ef56ac60aa161a05bfbfdc55ab2e07e4580622630b35420d4"
+  "summarySha256": "c67475e361d63178b74c7e70a07966a4fa9dd6d00f0fd75b9f16b6ed5284265e"
 }

@@ -15,12 +15,12 @@
   <rect x="650" y="74" width="280" height="340" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="665" y="98" fill="#38bdf8" font-size="13" font-weight="bold">5-Node Aggregate Capacity (dec/s)</text></a>
   <text x="665" y="114" fill="#94a3b8" font-size="10">Cluster-wide aggregate throughput</text>
-    <text x="45" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="45" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.3.3</text>
     <text x="45" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="45" y="154" fill="#cbd5e1" font-size="10">1.42 -> 2.24 tx/s (+57.7%)</text>
+    <text x="45" y="154" fill="#cbd5e1" font-size="10">2.38 -> 3.84 tx/s (+61.3%)</text>
     <rect x="45" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="158" width="25" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="175" fill="#64748b" font-size="9">p95: 2480ms -> 2590ms (modeled)</text>
+    <rect x="45" y="158" width="44" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="175" fill="#64748b" font-size="9">p95: 1410ms -> 1490ms (modeled)</text>
     <text x="45" y="185" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="45" y="196" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
     <text x="45" y="207" fill="#cbd5e1" font-size="10">7.85 -> 11.90 tx/s (+51.6%)</text>
@@ -45,7 +45,7 @@
     <rect x="45" y="370" width="250" height="7" fill="#334155" rx="2"/>
     <rect x="45" y="370" width="188" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
     <text x="45" y="387" fill="#64748b" font-size="9">p95: 740ms -> 780ms (modeled)</text>
-    <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.3.3</text>
     <text x="355" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
     <text x="355" y="154" fill="#cbd5e1" font-size="10">486.0 -> 441.1 dec/s (60%)</text>
     <rect x="355" y="158" width="250" height="7" fill="#334155" rx="2"/>
@@ -75,7 +75,7 @@
     <rect x="355" y="370" width="250" height="7" fill="#334155" rx="2"/>
     <rect x="355" y="370" width="204" height="7" fill="#ef4444" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
     <text x="355" y="387" fill="#64748b" font-size="9">5n p99: 20.1ms | WAN: 820 B/dec</text>
-    <text x="665" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="665" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.3.3</text>
     <text x="665" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
     <text x="665" y="154" fill="#cbd5e1" font-size="10">720.4 dec/s cluster aggregate</text>
     <rect x="665" y="158" width="250" height="7" fill="#334155" rx="2"/>

@@ -24,7 +24,7 @@ const TARGET_COLORS = Object.freeze({
 });
 
 const TARGET_LABELS = Object.freeze({
-  'lagrange': ['Lagrange', 'Native WASI (RF=3)'],
+  'lagrange': ['Lagrange 0.3.3', 'Native WASI (RF=3)'],
   'tidb-tikv': ['TiDB + TiKV', 'Distributed SQL (RF=3)'],
   'citus-sql-service': ['Citus 13', 'Sharded SQL + App (RF=3)'],
   'citus-distributed-function': ['Citus 13', 'Distributed Function (RF=3)'],
@@ -174,7 +174,7 @@ ${mdCov}
 
 Evaluating scale-out across three distinct operational workload models reveals critical scaling differences:
 - Fixed-Workload Scale-Out: Total offered load is kept constant while node count expands from 3 to 5 nodes. Additional Raft/consensus coordination slightly reduces net throughput (-2.2% to -5.7%).
-- Proportional-Growth Scale-Out: Offered load expands proportionally with node capacity (+66.7%). Distributed engines scale effectively (+49.4% to +57.7% gain), with Lagrange advancing to 2.24 tx/s.
+- Proportional-Growth Scale-Out: Offered load expands proportionally with node capacity (+66.7%). Distributed engines scale effectively (+49.4% to +61.3% gain), with Lagrange 0.3.3 advancing to 3.84 tx/s (1490.0 ms p95).
 - Hot-Contention Baseline: Single-partition or single-key serialization bottlenecks cannot scale by adding nodes (-5.1% to -8.5% scale gain, Patroni sync HA flat at 0.0%).
 
 | Mode | Target | 3-Node (tx/s) | 3-Node p95 (ms) | 5-Node (tx/s) | 5-Node p95 (ms) | Scale Gain % | Evidence Tier |

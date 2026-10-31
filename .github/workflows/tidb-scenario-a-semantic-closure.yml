@@ -73,6 +73,7 @@ jobs:
             test/distributed/harness/yugabyte-ignite-comparison-static-web.js \
             test/distributed/harness/scenario-c-comparison-static-web.js \
             test/distributed/harness/comparative-landing-svg-renderer.js \
+            test/distributed/harness/comparative-landing-tables.js \
             test/distributed/harness/comparative-landing-page.js \
             test/distributed/harness/lagrange-evolution-static-web.js \
             test/distributed/harness/scaleout-node-rf-comparison-static-web.js \
