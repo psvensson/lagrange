@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2167,
+    "unit": 2168,
     "integration": 119,
     "bootstrap": 217,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2510,
-  "digest": "fnv1a32-dbfb2a0f",
+  "censusSize": 2511,
+  "digest": "fnv1a32-be66c5d3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2291,6 +2291,7 @@
     "test/service/call-shard-dispatch-pool.test.js": "unit",
     "test/service/data-local-owner-boundaries.test.js": "unit",
     "test/service/external-service-manifest.test.js": "unit",
+    "test/service/h1-pinned-hono-component-proof.test.js": "unit",
     "test/service/handler-aware-runtime-invocation.test.js": "unit",
     "test/service/installable-service-artifact-resolver.test.js": "unit",
     "test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js": "unit",

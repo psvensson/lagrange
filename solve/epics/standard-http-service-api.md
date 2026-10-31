@@ -11,7 +11,8 @@ doneWhen:
     consecutive: 3
     metric: priority
     certification: true
-quests: []
+quests:
+  - h1-pinned-hono-component-proof
 authorizes:
   - src/authoring
   - src/service

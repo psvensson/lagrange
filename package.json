@@ -14,6 +14,7 @@
   "main": "src/public-api.js",
   "exports": {
     ".": "./src/public-api.js",
+    "./authoring": "./src/authoring/index.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -250,7 +251,9 @@
     "ajv": "^8.17.1",
     "better-sqlite3": "^11.7.0",
     "blessed": "^0.1.81",
+    "esbuild": "0.27.2",
     "fastify": "^5.12.7",
+    "hono": "4.13.14",
     "node-fetch": "^3.3.2",
     "node-sql-parser": "^5.4.0",
     "pg": "^8.18.0",
@@ -271,7 +274,6 @@
     "dependency-cruiser": "^17.3.8",
     "dockerode": "^4.0.9",
     "es-module-lexer": "^1.7.0",
-    "esbuild": "^0.27.2",
     "eslint": "^9.18.0",
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-sonarjs": "^4.0.2",

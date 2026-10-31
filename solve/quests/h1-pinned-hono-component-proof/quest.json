@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "h1-pinned-hono-component-proof",
+  "epic": "standard-http-service-api",
+  "statement": "Implement H1 pinned Hono (4.13.14) component proof on the canonical Lagrange toolchain (@bytecodealliance/componentize-js@0.21.0, @bytecodealliance/jco-transpile@0.4.2, esbuild@0.27.2): bundle ESM guest dependencies including hono and lagrange-server/authoring while refusing server-root/Node imports, qualify Hono routing, async JSON/binary body reads, multiple Set-Cookie headers, call-binding host import, HTTP-only zero-operation component, and pure call-cell facility isolation, and validate the pinned-toolchain-hono-component receipt.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/h1-pinned-hono-component-proof-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "6267f97fe1016036dfc612eb00d1684a9a97aacd"
+}

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2493,
+    "ordinary": 2494,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2510,
-  "digest": "fnv1a32-6c660a6f",
+  "censusSize": 2511,
+  "digest": "fnv1a32-cf1db32f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2290,6 +2290,7 @@
     "test/service/call-shard-dispatch-pool.test.js": "ordinary",
     "test/service/data-local-owner-boundaries.test.js": "ordinary",
     "test/service/external-service-manifest.test.js": "ordinary",
+    "test/service/h1-pinned-hono-component-proof.test.js": "ordinary",
     "test/service/handler-aware-runtime-invocation.test.js": "external-toolchain",
     "test/service/installable-service-artifact-resolver.test.js": "ordinary",
     "test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js": "ordinary",
