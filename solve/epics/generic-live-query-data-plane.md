@@ -24,8 +24,8 @@ polling precisely where Lagrange already has a distributed event substrate.
 
 The target contract is now documented in
 [`architecture/live-query-data-plane.md`](../../architecture/live-query-data-plane.md).
-The planning milestone is Phase 0.3 Queryable Core in the
-[AGPL feature map](../../docs/development/agpl-feature-map.md#phase-03--queryable-core).
+Remaining Queryable Core acceptance is allocated to 0.5 in the
+[AGPL feature map](../../docs/development/agpl-feature-map.md#1-queryable-core-completion).
 This epic exists to turn that documented
 contract into a sequence of implementation Quests without creating a parallel
 query engine, CDC system, cache, or UI-specific watcher.

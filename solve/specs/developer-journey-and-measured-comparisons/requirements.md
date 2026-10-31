@@ -18,11 +18,12 @@ create and change a service through the supported interface, and evaluate
 published comparisons without reconciling conflicting sources or hidden setup.
 The work includes product and evidence-path corrections, not just prose edits.
 
-Initial completion is part of 0.4 Practical and Demonstrated Service Core.
-The existing public-service and Scenario A owners retain their semantic
-contracts. This integration does not certify all of 0.4, pull full 0.5 pilot
-operations forward, or infer acceptance from main's 0.4.0 package version.
-At the audit baseline GitHub listed 0.3.3 as the latest published release.
+The post-release amendment carries remaining full journey/comparison acceptance
+from 0.4 to 0.5. Current bounded claim/guard repairs target 0.4.1. The existing
+public-service and Scenario A owners retain their semantic contracts; Scenario A
+can progress independently of Hono. Existing pilot qualification is not weakened.
+At the original audit baseline GitHub listed 0.3.3; v0.4.0 was subsequently
+published on 2026-10-31 at 14:16:56 UTC. Publication is not milestone acceptance.
 
 Planning delivery and product completion are separate. This document creates no
 runtime, benchmark, release or whole-corpus proof. No result may be fabricated
@@ -103,6 +104,37 @@ orchestration, documentation rendering or unit tests run.
 
 ## 3. Verified baseline and required corrections
 
+### Post-release reconciliation
+
+At `07206ba1c8bb396f4eb097a753915bb34580d824`, source implementation for canonical
+artifact ingestion, mandatory payload storage, identity-only deployment,
+monotonic binding revisions and the JSON-object body repair has landed. Reuse
+those owners and preserve their applicable focused evidence. Comparison
+renderers also removed substantial modeled values and expose missing evidence.
+The V01-V20 table below retains the original dated audit; it is not a claim
+that every original defect remains in the release.
+
+The [J1/J2/J3 composition test](../../../test/integration/developer-journey-j1-j2-j3.integration.test.js)
+builds a WASM artifact and then imports source into Node with a supplied
+dispatcher; its restart/second-node simulation shares an in-process database.
+This is useful composition evidence but cannot establish actual compiled guest
+execution or independent host failure/recovery. Required real J1/J2 evidence
+remains open unless original matching runtime receipts establish it.
+
+Current publication and guard consistency also needs repair: the benchmark
+introduction still permits a modeled-oracle tier, and released comparison prose
+must be reconciled with the original physical evidence. The exact-head CI
+failures inspected in this audit concern a removed README link and timeout
+expectation drift; they do not alone demonstrate a query-engine regression.
+Keep the comparison campaign's original-measurement requirement intact.
+
+The [standard HTTP successor](../standard-http-service-api/requirements.md)
+owns the user-selected Hono/Fetch application boundary and request-scoped SDK.
+It supersedes the future JSON-object-only HTTP envelope here, while crediting
+the V10 repair and retaining all artifact/revision/measurement requirements.
+
+### Original audit at dc07efb142f33b04e457d1abbfcc4baabdf9ede0
+
 | ID | Baseline observation | Consequence |
 | --- | --- | --- |
 | V01 | README and current-capabilities declare indexes unsupported; the audit hardcodes that answer while DDL source, journey tests and release notes describe index paths. | Reconcile source, public ingress, original proof and support level together. Do not blindly flip every feature to supported. |
@@ -156,8 +188,9 @@ refresh the relevant source identities before sealing work:
 
 | Concern | Existing semantic owner / contract | This epic's responsibility |
 | --- | --- | --- |
-| Release sequence | AGPL feature map; root roadmap and product roadmap are its projections | Allocate these corrections and proofs to 0.4; preserve stable row identities and honest earlier acceptance gaps. |
+| Release sequence | AGPL feature map; root roadmap and product roadmap are its projections | Bounded current repairs in 0.4.1; remaining full acceptance in 0.5. Preserve stable row identities and honest earlier acceptance gaps. |
 | Public WASI call model | pilot-readiness-and-public-proof Q1-Q5; code-first compiler and existing call/runtime owners | Consume the one current service path. Route required service-envelope work to its existing owner. |
+| HTTP application and scoped SDK | standard-http-service-api requirements | J1/J3 consume the Hono/Fetch successor; do not create a separate handler, router, policy or response contract here. |
 | Scenario A | RM-0.4-scenario-a-comparison; paired semantic/retry/load owners | Preserve its agreed semantics and acquire admissible real comparisons. |
 | Artifact bytes | ArtifactPayloadStore and ordinary replicated artifact tables | Make this the sole durable payload authority and ingestion/read path. |
 | Lifecycle | ServiceLifecycleCommandOwner and ServiceInstallCatalogOwner | Own immutable installation intent, idempotency and resumable completion. |
@@ -267,8 +300,9 @@ bounded reclaim route for genuinely abandoned uploads.
 
 ### 5.4 Stable endpoint update
 
-Define one revision-transition contract through the existing lifecycle/Binding
-owners. Current create-only Binding replay is not sufficient for changed code.
+Consume the revision-transition contract implemented in 0.4.0 through the
+existing lifecycle/Binding owners. The original create-only replay limitation
+motivated this work; do not rebuild that mechanism for the Hono successor.
 
 The contract must provide:
 
@@ -303,7 +337,8 @@ From a clean documented environment, using the declared published/tested version
 2. Start the normal runtime with a complete disposable credential configuration.
 3. Show the exact connection and authentication setup once.
 4. Create and seed the small fixture table through supported public SQL.
-5. Generate a new service with the real CLI; explain editable/generated files.
+5. Generate a new Hono service with the real CLI under the successor HTTP
+   contract; explain editable/generated files.
 6. Build and publish it through section 5, then deploy its registered identity.
 7. Wait for actual service readiness through a public inspect/status surface.
 8. Invoke it through authenticated JSON HTTP and compare exact expected output.
@@ -313,10 +348,14 @@ From a clean documented environment, using the declared published/tested version
 12. Stop and remove the disposable instance through a clear, repeatable reset.
 13. Repeat from clean state without hidden harness preconditions.
 
-The public JSON request-body contract is defined once at ingress and consumed
-by scaffold, flagship, typings and runtime. Invalid shapes are refused explicitly
-according to that contract, not silently converted to an unfiltered request.
-No second decoder is added to accommodate an old scaffold.
+Use the single Fetch HTTP contract in the
+[standard HTTP requirements](../standard-http-service-api/requirements.md).
+Ingress preserves admitted original bytes; ordinary Hono/application code parses
+and validates JSON. Invalid input cannot become an unfiltered distributed query.
+This deliberately supersedes the earlier JSON-object-only ingress requirement;
+there is no second decoder for old scaffolds. The public journey executes the
+generated compiled component through production owners, never a source import
+under Node standing in for guest execution.
 
 A developer may run a functional tutorial on their own machine. It uses the
 same ingestion, lifecycle and invocation mechanisms. Such a local run does not
@@ -350,6 +389,8 @@ injected store may supply the product success path.
 
 Retain account-summary as a transparent first exercise. Rewrite the hot-path
 tutorial around the current code-first authored service and section 5 lifecycle.
+For 0.5, consume the Hono/Fetch and explicit `lagrange.call` contract from its
+owner; Hono changes HTTP authoring, not the workload's mathematical semantics.
 
 For MovieLens or its bounded replacement, compare where applicable:
 
@@ -544,7 +585,7 @@ overlap, but integration and release acceptance follow this single sequence.
 | --- | --- | --- |
 | P0: Current truth and claim withdrawal | Refresh baseline; inventory every audit item, artifact source and advertised comparison; reconcile current capability/version facts; record supersession; remove modeled values from current comparisons; align feature map/root/product roadmap. | Current public claims contain no manufactured comparison results; source/proof gaps and the full unmeasured inventory are explicit. Historical receipts retain their source and meaning. |
 | P1: One artifact ingestion/deployment path | Seal section 5 with existing owners; implement bounded authenticated publish and identity-only deployment; remove all local/registry/cache/storeless alternative sources in the same cutover. | Remote client with no shared filesystem publishes; clean second client deploys registered identity; another node activates from replicated bytes after publisher disappears. |
-| P2: Stable service revision and request contract | Build on P1; seal revision transition and public JSON body contract; align scaffold, runtime, examples and types. | Same endpoint returns correctly filtered account-specific responses, then changed-code responses after an update; old in-flight work remains pinned and failed update preserves prior committed revision. |
+| P2: Stable service revision and request contract | Reuse P1 and the delivered 0.4.0 revision/JSON-body repairs; consume the 0.5 Hono Fetch successor and align scaffold, runtime, examples and types. | Same endpoint returns correctly filtered account-specific responses, then changed-code responses after an update; old in-flight work remains pinned and failed update preserves prior committed revision. |
 | P3: Complete developer journey | Build on P1/P2; implement fixture/configuration/readiness/diagnostic/reset support through canonical APIs; update generated README, first-hour and current hot-path tutorial. | A clean user follows J1 and J2 without internal harness setup, local artifact sources or manual system-table edits. |
 | P4: Measurement path and fair baselines | Connect existing scenario/evidence owners; remove constant/model generators and active acceptance loopholes; implement real adapters; freeze finite coverage/protocol. | Negative evidence admission cases fail; real responses reach independent oracle; every required case names actual deployment and measurement commands. |
 | P5: Measured comparison campaign | Use P1-P4 and existing service-envelope owners as prerequisites; execute actual paired GCP/lab runs in the manifest order, beginning with ordinary SQL baseline and then supported B/C/scale/movement cases. | Every required comparison resolves to admissible original measurements, complete attempt accounting and closed execution scopes. Missing cases remain open. |

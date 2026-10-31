@@ -1,120 +1,225 @@
 # Detailed design: Bounded structured partials
 
-Quest: `call-bounded-structured-partials` (Q4). Requirements contract:
-[`requirements.md`](requirements.md) "Structured partials". Epic:
-[`solve/epics/pilot-readiness-and-public-proof.md`](../../epics/pilot-readiness-and-public-proof.md);
-binding decisions cited as D1–D12.
+Quest slot: `call-bounded-structured-partials` (Q4). Requirements contract:
+[requirements.md](requirements.md#structured-partials). Epic:
+[pilot-readiness-and-public-proof](../../epics/pilot-readiness-and-public-proof.md).
 
-## Owner boundaries touched
+## Status and supersession — 2026-10-31
 
-- `src/service/call-cell-routing-contract.js` — first fail-closed validation
-  gate today (`normalizeEmittedPartialEntries`, finite-number rule); becomes
-  the first gate for the structured grammar.
-- `src/runtime/call-cell-reduce-coordinator.js` — second fail-closed gate and
-  merge owner; keeps the cross-shard disjoint-keys `SHARD_OVERLAP` refusal.
-- `src/runtime/call-cell-context-host.js` and
-  `src/runtime/call-cell-value-mapping.js` — guest emit path and value
-  marshalling; structured values cross the guest/host boundary here.
-- `src/service/service-source-contract.js` and
-  `src/service/service-typings-generator.js` — code-first declaration and the
-  generated `runtime-types.d.ts` editor types for the partial shape (D2).
-- One new shared codec module (placement **open**, see below) used by both
-  gates — the "one canonical encoding owner"; the routing contract and reduce
-  coordinator remain the validation/merge owners and no second partial codec
-  may exist (D11).
+This is the proposed 0.5 implementation contract, following 0.4.1's bounded
+count/byte and no-truncation repair. Q4 has no accepted implementation or new
+sealed verdict by virtue of this revision. Its actual Quest and red witness
+must be prepared before runtime work.
 
-## Contract shape
+This revision explicitly supersedes the earlier planning requirements that
+semantic group keys remain disjoint across shards, that an additive bare-number
+wire format coexist with a new structured envelope, or that the coordinator
+implicitly merge/select results. Existing Quest history and accepted evidence
+are not rewritten. The new contract uses one codec and separates transport
+delivery identity from application group keys.
 
-### Type grammar (closed, versioned)
+## Existing owners
 
-Structured partial value grammar, version 1 (D5):
+| Boundary | Responsibility |
+| --- | --- |
+| `src/service/call-cell-routing-contract.js` | Validate admitted emitted contributions and typed refusal vocabulary. |
+| `src/runtime/call-cell-reduce-coordinator.js` | Admit exact delivery identities, enforce aggregate completeness/budgets and present ordered contributions to the reducer. |
+| `src/runtime/call-cell-context-host.js` and `src/runtime/call-cell-value-mapping.js` | Preserve value types and bounds across guest/host representation boundaries. |
+| `src/service/service-source-contract.js` and `src/service/service-typings-generator.js` | Declare the partial/state schemas and generate immutable editor types. |
+| One shared codec owner used by these boundaries | Canonical finite-JSON encoding, validation, size accounting and deterministic comparison. Its placement is selected before the Quest is sealed; there is no per-channel codec. |
 
-- `null`, `boolean`
-- safe integer (|n| ≤ 2^53−1, no fraction/exponent)
-- finite float (no NaN, no ±Infinity, no −0 distinct from 0 after encoding)
-- string (bounded UTF-8 bytes)
-- bounded list of grammar values
-- bounded record: string field names, **lexical field order**, no duplicate
-  fields, no `__proto__`/`constructor`/`prototype` field names
+The compiler, guest entry, local receiver, durable coordination representation
+and reducer must use the same versioned contract. An adapter may change bytes
+only according to that owner's declared encoding; it may not change meaning,
+identity, limits, deadline or failure.
 
-Nothing else: no dates, no binary blobs, no undefined, no arbitrary object
-prototypes, no executable data. Extending the grammar is a new version, not
-a relaxation of version 1.
+## Closed value grammar
 
-### Canonical encoding (sealed: canonical JSON)
+Admitted values are finite JSON data:
 
-The single encoding owner is **canonical JSON** (JCS-style): lexically
-sorted record fields, shortest-round-trip float serialization, integers
-without fraction/exponent, escaped strings in one normal form, no
-insignificant whitespace. Rationale over canonical binary: the existing
-partial path is JSON-adjacent, receipts stay human-diffable (D7), and byte
-stability is achievable with a small closed grammar. The envelope is
-`{"v":1,"value":<grammar value>}`.
+- Null and booleans.
+- Finite IEEE-754 numbers. Integral values must be safe integers; larger exact
+  integers require an explicitly declared string representation. NaN and
+  infinities are rejected. Negative zero is normalized to zero at value
+  encoding and has no distinct wire representation.
+- Unicode strings with valid scalar values and explicit UTF-8 byte bounds.
+- Bounded arrays of admitted values.
+- Bounded records with string field names and admitted values.
 
-Byte stability rules: encode(decode(bytes)) must equal bytes for every
-accepted input (non-canonical input is refused, not normalized); replay and
-journaling store the canonical bytes; reducer input is decoded to frozen
-structures in field order, so reduction is deterministic.
+The typed schema declares required/optional fields and permitted value kinds.
+Missing, null and a concrete value have distinct semantics; undefined is
+invalid, not silently omitted. Unknown fields follow the declared closed
+schema and are refused unless the schema explicitly admits a dictionary.
 
-### Budgets (explicit, typed)
+Dates, functions, symbols, BigInt, binary objects, class instances, cycles,
+getters, setters and custom prototypes are invalid. Binary and other richer
+types require a future explicit contract; JSON serialization must not silently
+coerce them. Duplicate textual record names and invalid Unicode are refused.
+Decoding creates immutable safe data records without invoking object setters
+or constructors. Property names remain data; no merge or prototype operation
+may interpret them as authority.
 
-Per-entry maximum encoded bytes; per-shard maximum entry count and total
-partial bytes; maximum nesting depth; maximum list length; maximum record
-field count; maximum string bytes. All are named constants at the
-composition root, refused with typed errors — never truncated (D5). Numeric
-defaults are **open** (below).
+## One canonical codec
 
-### Cross-shard key semantics
+The canonical encoding is a versioned JSON envelope with its schema identity
+and value. Use a specified deterministic JSON serialization profile:
+deterministic UTF-16 code-unit property ordering, ECMAScript shortest-round-trip
+number spelling, standard minimal JSON escaping, no insignificant whitespace,
+and no Unicode normalization. The restricted number/value grammar above is
+validated before encoding.
 
-First release keeps the existing semantic: group keys must be disjoint
-across shards; duplicate keys are the `SHARD_OVERLAP` fail-closed refusal.
-No silent merge, no double-counting (D5). An algebraic merge contract
-(commutative/associative declared merges) is explicitly out of this Quest
-and would be its own spec.
+The codec owner must define the exact bytes and share golden vectors across
+guest and host. Describing an implementation merely as "JCS-style" is
+insufficient: every accepted number, escaped string, ordering case and envelope
+field has one representation. Wire decoding rejects duplicate fields before
+they can be lost by ordinary JSON parsing.
 
-### Backward compatibility
+There is one distinction between value input and wire input:
 
-Previously valid numeric-key partials remain a valid subset: a bare finite
-number continues to validate and reduce unchanged through both gates. The
-structured envelope is additive. The account-summary example
-(`examples/call-binding-account-summary/lagrange.service.js`) moves to one
-structured record per shard as the product evidence (D2, D6); generated
-editor types for the partial shape are exposed from the compiler.
+- Typed author values are validated and encoded canonically by the shared
+  encoder; their JavaScript insertion order does not define wire order.
+- Received canonical bytes must satisfy
+  `encode(decode(bytes)) === bytes`; alternate spellings, unknown versions and
+  non-canonical field order are typed refusals.
 
-## Failure semantics (D12)
+Durable records retain those canonical bytes or their durably owned content
+reference. A digest without recoverable bytes is not replay state. Decoded
+reducer/state values are deeply immutable. The codec guarantees deterministic
+input bytes; it does not make a nondeterministic user reducer deterministic.
 
-Both gates enforce the identical contract from the one shared codec module.
-Fail closed, typed, at first violation:
+Finite numeric values are a subset of the new value grammar. They travel
+through the same canonical envelope as records and arrays. Q5's cutover
+rebuilds service artifacts for this contract; there is no retained v0/bare-value
+wire branch, dual validation policy or parallel old runtime.
 
-- Malformed bytes, unknown envelope version, grammar violation.
-- Oversized: any budget breach (bytes, count, depth, list, fields, string).
-- Non-canonical: decode-then-re-encode mismatch, unsorted or duplicate
-  record fields, non-shortest float form.
-- Prototype pollution: `__proto__`/`constructor`/`prototype` keys refused at
-  parse; decoded structures are null-prototype and frozen before reaching
-  the reducer (`adversarial-js-intrinsics` template applies).
-- NaN/Infinity/−0, unsafe integers, undefined.
-- Duplicate cross-shard keys: `SHARD_OVERLAP`, unchanged.
+## Delivery identity and group identity
 
-Red-on-revert (sealed by the Quest): silently merging duplicate cross-shard
-keys (double-counting) and accepting any of the malformed classes above must
-fail the live scenario deterministically.
+Each final shard contribution has a runtime-owned delivery identity including
+invocation, attempt, operation, Binding generation, stable shard generation
+and emission ordinal. The guest supplies the group key and value; it cannot
+forge the source or retry identity. Page delivery identities belong to Q3 and
+are not reused as business group keys.
 
-## Non-goals and edition boundaries
+A group key is application data, with an explicitly typed string or finite
+numeric representation. For example, several shards may emit the group key
+`"account-42"`. Those are distinct valid contributions and all reach the
+application reducer. String `"1"` and number `1` remain distinct. A logical
+group may occur repeatedly within a shard as well as across shards.
 
-- No second partial codec, no per-channel encoding variant (D11).
-- No algebraic merge, no reducer-visible mutation, no schema evolution
-  beyond the version tag in this Quest.
-- No raw-Binding-JSON closure: raw Binding tests stay diagnostic (D2, D6).
-- Community/AGPL scope; no edition-matrix change implied (D8/D9).
+The coordination owner applies these rules:
 
-## Open decisions left to the Quest
+| Observation | Required behavior |
+| --- | --- |
+| New authorized delivery identity | Validate, account and retain its contribution. |
+| Same delivery identity and identical canonical group/value bytes | Idempotent duplicate; do not count or reduce it twice. |
+| Same delivery identity but different canonical bytes or source fence | Typed conflict or stale-delivery refusal; no successful partial result. |
+| Distinct delivery identities with the same semantic group key | Preserve every contribution for the declared reducer. |
+| Contribution from an abandoned attempt or unadmitted shard/generation | Refuse; it cannot satisfy completion. |
 
-- Codec module placement (e.g. a `src/service/` sibling reachable from both
-  `src/service/` and `src/runtime/` without creating a cycle) — must remain
-  the single owner used by both gates.
-- Numeric budget defaults and their composition-root wiring.
-- Whether legacy bare-number entries are internally tagged as v0 or decoded
-  as grammar floats (observable behavior must be unchanged either way).
-- Exact generated TypeScript surface for structured partials in
-  `runtime-types.d.ts` (shape naming, readonly depth).
+Deduplication is based on delivery identity, never on the group key. Removing
+the old `SHARD_OVERLAP` semantic-group refusal must therefore be paired with
+actual replay/delivery fencing; simply accepting duplicate keys is incomplete.
+
+## Reducer semantics and ordering
+
+The reducer receives the complete validated contribution sequence in a
+specified total order: canonical stable shard identity followed by emission
+ordinal, within the pinned invocation/attempt/operation. The shard comparator
+uses canonical bytes and an explicit type order, never host locale or arrival
+timing. The admitted shard set is frozen for the attempt; a new topology/view
+attempt cannot reuse old contributions.
+
+The application reducer owns grouping, sum/count/average, ordering and final
+selection. The host performs no implicit group merge, algebraic fold, numeric
+ranking, truncation or top-K. An explicit operation may compute top-K, but
+that is its declared algorithm with its own correct bounded accumulator and
+oracle, not a generic coordinator optimization.
+
+The same logical input and declared order must produce the same reducer input
+on replay. Floating-point addition is not assumed associative. A future
+parallel/tree reduction requires an explicit separately proven algebraic
+contract; this Quest does not silently introduce one.
+
+## Count, byte and retention bounds
+
+The contract declares maximum encoded bytes per contribution, maximum string
+bytes, nesting depth, list length and record-field count. It also declares
+per-shard and whole-invocation contribution count and total encoded bytes,
+and a bounded final result. Q3's accumulator uses compatible state limits.
+
+Every ingress validates using the shared codec before cloning, allocating a
+large decoded graph or retaining durable bytes. Aggregate counters are
+computed over admitted unique delivery identities and committed with their
+progress; an identical replay neither consumes budget again nor grants a new
+budget. Count checks per shard are insufficient to bound the combined input.
+
+If the full set cannot fit, the invocation fails with a typed count/byte
+refusal and the reducer is not invoked with a subset. The coordinator must
+not first concatenate an unbounded set and only then check its size.
+No `sort(...).slice(...)`, implicit max-items success or hidden top-K is
+allowed on the generic path. The planned 0.4.1 correction must establish this
+failure behavior for the current contract before Q4 extends it to the
+structured grammar without changing its meaning.
+
+Existing invocation and coordination owners retain partials only for the
+bounded attempt, terminal-result and replay-fencing lifetimes. Deadline,
+cancellation, conflict and whole-attempt discard release buffers/state through
+those owners while preserving the bounded evidence needed to reject late
+delivery. No second partial store or cleanup loop is introduced.
+
+## Typed failure classes
+
+The owned vocabulary must distinguish unsupported codec/schema version,
+invalid value/type, malformed/non-canonical bytes, depth/element/count/byte
+overflow, delivery conflict, stale attempt/generation, incomplete shard
+coverage and final-result overflow. Failures preserve the invocation's
+outcome and cleanup obligations. They are not mapped to an empty partial
+array, empty JSON object or successful truncated result.
+
+## Planned acceptance
+
+The proposed Q4 scenario is `call-bounded-structured-partials`, through the
+existing scenario-harness, three consecutive accepted runs, metric
+`priority`. A concrete red witness and original receipts are required before
+claiming completion; this plan is not evidence that the scenario exists.
+
+A generated public service must publish its compiled component and run through
+the canonical HTTP/WASI/call path on at least two independent partition
+hosts. The account-summary journey uses structured contributions containing
+sum and count, with the same account group present on multiple shards.
+An independent oracle verifies the complete total and weighted average.
+The normal journey also exercises Q3's one-page and multi-page forms.
+
+Required attacks and evidence include:
+
+- The same group key from different shards, repeated group keys within a shard
+  and string/numeric lookalikes; all valid unique deliveries reach reduction.
+- Identical delivery replay, conflicting replay and late output from an
+  abandoned attempt; only the identical replay is an idempotent no-op.
+- Arrival permutations produce the same ordered reducer input; removal of
+  deterministic ordering fails an order-sensitive witness.
+- Non-finite/unsafe numbers, negative-zero normalization, invalid Unicode,
+  duplicate field names, non-canonical bytes, prototypes/accessors and cyclic
+  author values; guest and host agree on acceptance and canonical vectors.
+- Boundary and overflow values for every count/byte/depth limit, including
+  many individually valid shards whose combined contribution exceeds the
+  global limit. No reducer sees a truncated set.
+- Real restart/lost-answer injection around durable contribution acceptance,
+  deadline/cancellation cleanup and measured retained-memory bounds.
+
+A handwritten dispatcher, source-imported reducer, fixture-only numeric matrix,
+single process with two logical owners or self-referential oracle cannot close
+this feature. Receipts identify exact source, component, workload, host and
+failure observations. Numeric success in one example does not certify the
+whole grammar or failure envelope.
+
+## Integration and limits
+
+Q2 owns typed selector parameters; Q3 owns read views, page accumulation and
+attempt progress; Q5 owns one canonical multi-operation component target.
+The [standard HTTP service API](../standard-http-service-api/requirements.md)
+owns Hono and the request-scoped SDK. This contract is internal to those
+public calls and adds no new routing or request-handler framework.
+
+No generalized algebraic merge, unbounded stream, new edition boundary,
+alternative wire format or legacy fallback is introduced.
