@@ -6,6 +6,7 @@ import {
   buildScaleout3To5Rf3Experiment,
   buildPartitionGranularitySweepExperiment,
   buildScenarioBRttWorkingSetExperiment,
+  buildLiveMovementAndScenarioCScalingExperiment,
 } from './scaleout-series-experiments.js';
 
 const DEFAULT_MULTI_SYSTEM_MATRIX_PATH = 'data/tidb-comparison/multi-system-matrix.json';
@@ -139,12 +140,14 @@ function buildMultiSystemComparativeMatrix(options = {}) {
         'real-3to5-node-rf3-scaleout-and-scenario-a-modes',
         'partition-granularity-sweep-5node-rf3',
         'scenario-b-rtt-crossover-and-working-set-growth',
+        'live-movement-under-load-and-scenario-c-joint-scaling',
       ],
-      remainingSlicesCount: 1,
+      remainingSlicesCount: 0,
     },
     scaleout3To5Rf3Experiment: buildScaleout3To5Rf3Experiment(),
     partitionGranularitySweepExperiment: buildPartitionGranularitySweepExperiment(),
     scenarioBRttWorkingSetExperiment: buildScenarioBRttWorkingSetExperiment(),
+    liveMovementAndScenarioCScalingExperiment: buildLiveMovementAndScenarioCScalingExperiment(),
     lagrangeEvolutionTimeline: buildLagrangeEvolutionTimeline(),
     scenarios: [
       sc('tidb-oltp-baseline', 'Scenario A: Contended OLTP Baseline',
@@ -188,6 +191,7 @@ export {
   buildScaleout3To5Rf3Experiment,
   buildPartitionGranularitySweepExperiment,
   buildScenarioBRttWorkingSetExperiment,
+  buildLiveMovementAndScenarioCScalingExperiment,
   readMultiSystemComparativeMatrix,
   writeMultiSystemComparativeMatrix,
 };

@@ -79,6 +79,7 @@ jobs:
             test/distributed/harness/scaleout-series-experiments.js \
             test/distributed/harness/partition-granularity-comparison-static-web.js \
             test/distributed/harness/scenario-b-rtt-working-set-static-web.js \
+            test/distributed/harness/movement-scenario-c-scaling-static-web.js \
             scripts/checks/distributed-scaleout-provenance-guard.js \
             scripts/checks/comparative-benchmark-matrix-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js

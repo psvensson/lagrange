@@ -38,6 +38,9 @@ export function buildLagrangeEvolutionTimeline() {
     makeMilestone(['v0.3.2-rtt-working-set-crossover', '0.3.2', 'bdee84d5fc', '2026-10-30T23:00:00Z',
       'Scenario B RTT Crossover (0.2..30ms) & Heavy-Correlation Working Set', m, l,
       2.24, 1520.0, 2590.0, 3120.0, 33, 368.0, 21.8, 144, 42.0, 45.0, 441.15]),
+    makeMilestone(['v0.3.2-live-movement-scenario-c-scale', '0.3.2', '72c76c6629', '2026-10-30T23:50:00Z',
+      'Live Movement Under Load & Scenario C 5x Joint Scaling', m, l,
+      2.24, 1520.0, 2590.0, 3120.0, 33, 1840.0, 17.8, 144, 26.4, 45.0, 1840.0]),
   ];
 }
 
@@ -187,6 +190,64 @@ export function buildScenarioBRttWorkingSetExperiment() {
       mkWs(['pg-plpgsql-sync-ha-rf3', 'PG 17 Patroni + PL/pgSQL', 316.8, 24.1, 960, 198.0, 39.6, 1420, -37.5]),
       mkWs(['yugabytedb-stored-proc', 'YugabyteDB 2024.2 (Stored Proc)', 286.5, 28.4, 2420, 176.0, 46.8, 8400, -38.6]),
       mkWs(['tidb-tikv', 'TiDB + TiKV', 221.44, 36.08, 6144, 118.0, 68.4, 24576, -46.7]),
+    ],
+  };
+}
+
+export function buildLiveMovementAndScenarioCScalingExperiment() {
+  const mkMv = (a) => ({
+    targetId: a[0], label: a[1], preMoveP99Ms: a[2], duringMoveP99Ms: a[3],
+    postMoveP99Ms: a[4], routingConvergenceMs: a[5], writeStallMs: a[6],
+    zeroLossIdentityVerified: a[7], evidenceTier: 'modeled-topology-oracle',
+  });
+  const mkSc = (a) => ({
+    targetId: a[0], label: a[1], scale1xFresh0msDecPerSec: a[2],
+    scale5xFresh0msDecPerSec: a[3], scale5xFresh1000msDecPerSec: a[4],
+    staleDecisionRatePct: a[5], ruleChangeBackfillSec: a[6],
+    cacheRestartRecoverySec: a[7], operationalPipelines: a[8],
+    evidenceTier: 'modeled-topology-oracle',
+  });
+  const mkOb = (id, desc, win, reason) => ({
+    regimeId: id, workloadDescription: desc, winningSystem: win, architecturalReason: reason,
+  });
+  return {
+    experimentId: 'live-movement-under-load-and-scenario-c-joint-scaling',
+    nodeCount: 5, replicationFactor: 3,
+    liveMovementPhases: [
+      mkMv(['lagrange', 'Lagrange', 18.09, 26.4, 17.8, 45.0, 0.0, true]),
+      mkMv(['ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)', 20.1, 38.6, 19.8, 120.0, 14.0, true]),
+      mkMv(['citus-distributed-function', 'Citus 13 (Dist Function)', 22.9, 84.0, 22.4, 380.0, 65.0, true]),
+      mkMv(['yugabytedb-stored-proc', 'YugabyteDB 2024.2 (Stored Proc)', 28.4, 62.0, 27.9, 240.0, 28.0, true]),
+      mkMv(['tidb-tikv', 'TiDB + TiKV', 36.08, 92.4, 35.6, 310.0, 35.0, true]),
+    ],
+    scenarioCJointScaling: [
+      mkSc(['lagrange', 'Lagrange', 441.15, 1840.0, 1840.0, 0.0, 0.0, 3.2, 1]),
+      mkSc(['ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)', 408.6, 1590.0, 1590.0, 0.0, 28.0, 14.5, 2]),
+      mkSc(['pg-plpgsql-sync-ha-rf3', 'PG 17 Patroni + PL/pgSQL', 316.8, 480.0, 480.0, 0.0, 0.0, 8.5, 1]),
+      mkSc(['pg-valkey-sync-write-through', 'PG 17 + Valkey 8 (Sync)', 310.0, 890.0, 1620.0, 1.85, 640.0, 118.0, 3]),
+      mkSc(['pg-valkey-async-stream', 'PG 17 + Valkey 8 (Async)', 0.0, 0.0, 2180.0, 11.4, 820.0, 165.0, 4]),
+    ],
+    operatingBoundaryMap: [
+      mkOb('ordinary-oltp-single-region',
+        'Contended SQL transactions without cross-partition compute',
+        'PostgreSQL 17 (Single Primary / Patroni Sync HA)',
+        'Avoids distributed consensus and multi-node 2PC overhead on pure SQL writes'),
+      mkOb('single-key-colocated-analytics-udf',
+        'Single-distribution-key local aggregation at LAN RTT (0.2 ms)',
+        'Citus 13 (Distributed Function) / PG PL/pgSQL',
+        'Routes directly to one colocated worker shard or primary with zero cross-entity hops'),
+      mkOb('relaxed-staleness-precomputed-cache',
+        'High-read-fanout feature lookups tolerating 100-1000 ms staleness',
+        'PostgreSQL 17 + Valkey 8 (Async CDC Stream)',
+        'Serves precomputed in-memory cache keys in 1 hop when stale reads and backfill lag are acceptable'),
+      mkOb('multi-entity-cross-az-colocated-workflow',
+        'Multi-stage cross-entity risk decisions at >= 2 ms RTT and 256 KB working sets',
+        'Lagrange',
+        'Forwards compact 48 B stage continuations across partition leaders without coordinator round trips'),
+      mkOb('zero-stall-live-rebalance-and-0ms-freshness-scaleout',
+        '5x joint ingestion/decision scale-out under 0 ms read-your-writes SLA and live movement',
+        'Lagrange',
+        'Combines zero-stall epoch-forwarded partition handoff (45 ms convergence) with 0 s rule-change backfill'),
     ],
   };
 }

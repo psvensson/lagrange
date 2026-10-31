@@ -21,6 +21,7 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 | v0.3.2-scaleout-3to5-rf3 | 0.3.2 | 89300e4d8a | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 720.4 | 441.1 |
 | v0.3.2-partition-sweep-p6to60 | 0.3.2 | 2025f7780d | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 784.0 | 441.1 |
 | v0.3.2-rtt-working-set-crossover | 0.3.2 | bdee84d5fc | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 368.0 | 441.1 |
+| v0.3.2-live-movement-scenario-c-scale | 0.3.2 | 72c76c6629 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 1840.0 | 1840.0 |
 
 ## Commit-over-commit delta progression
 
@@ -33,6 +34,7 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 - **v0.3.2-scaleout-3to5-rf3 (commit 89300e4d8a)**: 3-to-5-node RF=3 scale-out (2.24 tx/s proportional, 720.4 dec/s aggregate).
 - **v0.3.2-partition-sweep-p6to60 (commit 2025f7780d)**: Peak 784.0 dec/s at P=30 (6 leaders/node) vs -5.9% coordination drop at P=60
 - **v0.3.2-rtt-working-set-crossover (commit bdee84d5fc)**: RTT 0.2..30ms crossover (168 dec/s @ 10ms) & heavy 2048-event working set (368 dec/s, 144 B)
+- **v0.3.2-live-movement-scenario-c-scale (commit 72c76c6629)**: Zero-stall live move (26.4 ms during-move p99) & 5x Scenario C (1840 fresh dec/s @ 0ms)
 
 ## Provenance qualification across historical milestones
 

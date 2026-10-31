@@ -18,9 +18,10 @@
       "provenance-audit-and-evidence-tier-separation",
       "real-3to5-node-rf3-scaleout-and-scenario-a-modes",
       "partition-granularity-sweep-5node-rf3",
-      "scenario-b-rtt-crossover-and-working-set-growth"
+      "scenario-b-rtt-crossover-and-working-set-growth",
+      "live-movement-under-load-and-scenario-c-joint-scaling"
     ],
-    "remainingSlicesCount": 1
+    "remainingSlicesCount": 0
   },
   "scaleout3To5Rf3Experiment": {
     "replicationFactor": 3,
@@ -803,6 +804,162 @@
       }
     ]
   },
+  "liveMovementAndScenarioCScalingExperiment": {
+    "experimentId": "live-movement-under-load-and-scenario-c-joint-scaling",
+    "nodeCount": 5,
+    "replicationFactor": 3,
+    "liveMovementPhases": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "preMoveP99Ms": 18.09,
+        "duringMoveP99Ms": 26.4,
+        "postMoveP99Ms": 17.8,
+        "routingConvergenceMs": 45,
+        "writeStallMs": 0,
+        "zeroLossIdentityVerified": true,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "preMoveP99Ms": 20.1,
+        "duringMoveP99Ms": 38.6,
+        "postMoveP99Ms": 19.8,
+        "routingConvergenceMs": 120,
+        "writeStallMs": 14,
+        "zeroLossIdentityVerified": true,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "preMoveP99Ms": 22.9,
+        "duringMoveP99Ms": 84,
+        "postMoveP99Ms": 22.4,
+        "routingConvergenceMs": 380,
+        "writeStallMs": 65,
+        "zeroLossIdentityVerified": true,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "preMoveP99Ms": 28.4,
+        "duringMoveP99Ms": 62,
+        "postMoveP99Ms": 27.9,
+        "routingConvergenceMs": 240,
+        "writeStallMs": 28,
+        "zeroLossIdentityVerified": true,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "preMoveP99Ms": 36.08,
+        "duringMoveP99Ms": 92.4,
+        "postMoveP99Ms": 35.6,
+        "routingConvergenceMs": 310,
+        "writeStallMs": 35,
+        "zeroLossIdentityVerified": true,
+        "evidenceTier": "modeled-topology-oracle"
+      }
+    ],
+    "scenarioCJointScaling": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "scale1xFresh0msDecPerSec": 441.15,
+        "scale5xFresh0msDecPerSec": 1840,
+        "scale5xFresh1000msDecPerSec": 1840,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0,
+        "cacheRestartRecoverySec": 3.2,
+        "operationalPipelines": 1,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "scale1xFresh0msDecPerSec": 408.6,
+        "scale5xFresh0msDecPerSec": 1590,
+        "scale5xFresh1000msDecPerSec": 1590,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 28,
+        "cacheRestartRecoverySec": 14.5,
+        "operationalPipelines": 2,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "pg-plpgsql-sync-ha-rf3",
+        "label": "PG 17 Patroni + PL/pgSQL",
+        "scale1xFresh0msDecPerSec": 316.8,
+        "scale5xFresh0msDecPerSec": 480,
+        "scale5xFresh1000msDecPerSec": 480,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0,
+        "cacheRestartRecoverySec": 8.5,
+        "operationalPipelines": 1,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "pg-valkey-sync-write-through",
+        "label": "PG 17 + Valkey 8 (Sync)",
+        "scale1xFresh0msDecPerSec": 310,
+        "scale5xFresh0msDecPerSec": 890,
+        "scale5xFresh1000msDecPerSec": 1620,
+        "staleDecisionRatePct": 1.85,
+        "ruleChangeBackfillSec": 640,
+        "cacheRestartRecoverySec": 118,
+        "operationalPipelines": 3,
+        "evidenceTier": "modeled-topology-oracle"
+      },
+      {
+        "targetId": "pg-valkey-async-stream",
+        "label": "PG 17 + Valkey 8 (Async)",
+        "scale1xFresh0msDecPerSec": 0,
+        "scale5xFresh0msDecPerSec": 0,
+        "scale5xFresh1000msDecPerSec": 2180,
+        "staleDecisionRatePct": 11.4,
+        "ruleChangeBackfillSec": 820,
+        "cacheRestartRecoverySec": 165,
+        "operationalPipelines": 4,
+        "evidenceTier": "modeled-topology-oracle"
+      }
+    ],
+    "operatingBoundaryMap": [
+      {
+        "regimeId": "ordinary-oltp-single-region",
+        "workloadDescription": "Contended SQL transactions without cross-partition compute",
+        "winningSystem": "PostgreSQL 17 (Single Primary / Patroni Sync HA)",
+        "architecturalReason": "Avoids distributed consensus and multi-node 2PC overhead on pure SQL writes"
+      },
+      {
+        "regimeId": "single-key-colocated-analytics-udf",
+        "workloadDescription": "Single-distribution-key local aggregation at LAN RTT (0.2 ms)",
+        "winningSystem": "Citus 13 (Distributed Function) / PG PL/pgSQL",
+        "architecturalReason": "Routes directly to one colocated worker shard or primary with zero cross-entity hops"
+      },
+      {
+        "regimeId": "relaxed-staleness-precomputed-cache",
+        "workloadDescription": "High-read-fanout feature lookups tolerating 100-1000 ms staleness",
+        "winningSystem": "PostgreSQL 17 + Valkey 8 (Async CDC Stream)",
+        "architecturalReason": "Serves precomputed in-memory cache keys in 1 hop when stale reads and backfill lag are acceptable"
+      },
+      {
+        "regimeId": "multi-entity-cross-az-colocated-workflow",
+        "workloadDescription": "Multi-stage cross-entity risk decisions at >= 2 ms RTT and 256 KB working sets",
+        "winningSystem": "Lagrange",
+        "architecturalReason": "Forwards compact 48 B stage continuations across partition leaders without coordinator round trips"
+      },
+      {
+        "regimeId": "zero-stall-live-rebalance-and-0ms-freshness-scaleout",
+        "workloadDescription": "5x joint ingestion/decision scale-out under 0 ms read-your-writes SLA and live movement",
+        "winningSystem": "Lagrange",
+        "architecturalReason": "Combines zero-stall epoch-forwarded partition handoff (45 ms convergence) with 0 s rule-change backfill"
+      }
+    ]
+  },
   "lagrangeEvolutionTimeline": [
     {
       "milestoneId": "v0.2.0-tidb-ref",
@@ -992,6 +1149,27 @@
       "scenarioBMoveP99Ms": 42,
       "scenarioBConvergenceMs": 45,
       "scenarioCFresh0msDecPerSec": 441.15
+    },
+    {
+      "milestoneId": "v0.3.2-live-movement-scenario-c-scale",
+      "version": "0.3.2",
+      "commitSha": "72c76c6629",
+      "recordedAt": "2026-10-30T23:50:00Z",
+      "label": "Live Movement Under Load & Scenario C 5x Joint Scaling",
+      "evidenceTier": "modeled-topology-oracle",
+      "executionPath": "local-js-oracle",
+      "scenarioATxPerSec": 2.24,
+      "scenarioAP50Ms": 1520,
+      "scenarioAP95Ms": 2590,
+      "scenarioAP99Ms": 3120,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 1840,
+      "scenarioBP99Ms": 17.8,
+      "scenarioBWanBytes": 144,
+      "scenarioBMoveP99Ms": 26.4,
+      "scenarioBConvergenceMs": 45,
+      "scenarioCFresh0msDecPerSec": 1840
     }
   ],
   "scenarios": [
