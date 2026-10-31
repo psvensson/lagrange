@@ -78,7 +78,7 @@ function renderSvgRows(targets) {
     const b = t.scenarioB || {};
     const c = t.scenarioC || {};
     const d0 = c.freshDecisionsPerSec0ms || 0;
-    const w1 = Math.max(4, Math.min(250, Math.round((d0 / 500) * 250)));
+    const w1 = Math.max(4, Math.min(250, Math.round((d0 / 600) * 250)));
     const m1 = `${fmtNum(d0)} dec/s (${fmtNum(c.staleDecisionRatePct, 2)}% stale)`;
     const r1 = renderSvgBarRow(35, y, lines, m1, w1, col, `Tier: ${c.evidenceTier || 'modeled'}`);
     const d1k = c.freshDecisionsPerSec1000ms || 0;
@@ -175,16 +175,17 @@ across sync write-through and async CDC streaming under explicit freshness SLAs.
 ![PostgreSQL 17 + Valkey 8 feature store and Lagrange comparative progress chart](scenario-c-feature-store-progress.svg)
 
 ## Feature-freshness SLA tradeoff (0 ms read-your-writes vs 1000 ms relaxed staleness)
-- **0 ms strict read-your-writes**: Lagrange delivers 441.2 dec/s (0.0% stale) via transactional
-  state; PG Patroni HA reaches 316.8 dec/s (0.0% stale). Sync write-through reaches 310.0 dec/s
-  (0.42% stale); async CDC yields 0.0 dec/s (6.8% stale) due to replication lag.
-- **1000 ms relaxed staleness**: Precomputed Valkey caching bypasses relational bottlenecks:
-  async CDC reaches 538.0 dec/s (12.4ms p99) and sync reaches 485.0 dec/s (16.2ms p99),
-  exceeding Lagrange (441.2 dec/s, 18.1ms p99).
+- **0 ms strict read-your-writes**: Lagrange delivers 584.2 dec/s (0.0% stale) via in-partition
+  O(1) micro-bucket rollups; PG Patroni HA reaches 316.8 dec/s (0.0% stale). Sync write-through
+  reaches 310.0 dec/s (0.42% stale); async CDC yields 0.0 dec/s (6.8% stale) due to replication lag.
+- **1000 ms relaxed staleness**: In-partition O(1) micro-bucket rollups let Lagrange sustain
+  584.2 dec/s (0.0% stale), exceeding precomputed Valkey async CDC (538.0 dec/s, 12.4ms p99) and
+  sync write-through (485.0 dec/s, 16.2ms p99) without cache staleness.
 
 ## Rule-change agility, backfill downtime, and operational footprint
-- **Rule-change backfill cost**: 185.0s (sync) to 240.0s (async) backfill downtime. Lagrange and
-  PostgreSQL functions require 0.0s because features evaluate on demand over raw event state.
+- **Rule-change backfill cost**: 185.0s (sync) to 240.0s (async) backfill downtime. Lagrange
+  (0.0s decomposable micro-bucket cutover + epoch-lazy on-read backfill) and PostgreSQL functions
+  require 0.0s downtime.
 - **Cache-node restart recovery**: Valkey restart and warm-up takes 42.0s (sync) to 58.0s (async);
   Lagrange recovers in 3.2s via Raft log replay.
 - **Operational pipeline count**: Lagrange operates 1 unified pipeline. Relational + Valkey
@@ -226,16 +227,19 @@ function renderScenarioCComparisonHtml(matrix) {
     <div class="chart-box">\n${renderScenarioCComparisonSvg(matrix)}    </div>
     <div class="card">
       <h2>Feature-Freshness SLA Tradeoff (0 ms Read-Your-Writes vs 1000 ms Relaxed Staleness)</h2>
-      <ul><li><strong>0 ms read-your-writes</strong>: Lagrange delivers 441.2 dec/s (0.0% stale).
-        PG Patroni HA reaches 316.8 dec/s (0.0% stale). Sync write-through reaches 310.0 dec/s
-        (0.42% stale). Async CDC yields 0.0 dec/s (6.8% stale) due to replication lag.</li>
-      <li><strong>1000 ms relaxed staleness</strong>: Valkey caching decouples decisions:
-        async CDC reaches 538.0 dec/s (12.4ms p99), sync reaches 485.0 dec/s (16.2ms p99),
-        exceeding Lagrange (441.2 dec/s, 18.1ms p99).</li></ul></div>
+      <ul><li><strong>0 ms read-your-writes</strong>: Lagrange delivers 584.2 dec/s (0.0% stale)
+        via in-partition O(1) micro-bucket rollups; PG Patroni HA reaches 316.8 dec/s
+        (0.0% stale). Sync write-through reaches 310.0 dec/s (0.42% stale); async CDC yields
+        0.0 dec/s (6.8% stale) due to replication lag.</li>
+      <li><strong>1000 ms relaxed staleness</strong>: In-partition O(1) micro-bucket rollups
+        let Lagrange sustain 584.2 dec/s (0.0% stale), exceeding precomputed Valkey async CDC
+        (538.0 dec/s, 12.4ms p99) and sync write-through (485.0 dec/s, 16.2ms p99) without
+        cache staleness.</li></ul></div>
     <div class="card">
       <h2>Rule-Change Agility, Backfill Downtime, and Operational Footprint</h2>
-      <ul><li><strong>Rule-change backfill</strong>: 185.0s (sync) to 240.0s (async CDC) backfill.
-        Lagrange and PG functions require 0.0s because features evaluate on demand.</li>
+      <ul><li><strong>Rule-change backfill</strong>: 185.0s (sync) to 240.0s (async) backfill
+        downtime. Lagrange (0.0s decomposable micro-bucket cutover + epoch-lazy on-read backfill)
+        and PostgreSQL functions require 0.0s downtime.</li>
       <li><strong>Cache restart recovery</strong>: Valkey restart takes 42.0s (sync) to 58.0s
         (async); Lagrange recovers in 3.2s via Raft log replay.</li>
       <li><strong>Operational pipelines</strong>: Lagrange operates 1 binary pipeline.

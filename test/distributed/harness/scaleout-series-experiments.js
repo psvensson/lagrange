@@ -47,6 +47,9 @@ export function buildLagrangeEvolutionTimeline() {
     makeMilestone(['v0.4.0-scaleout-scenario-c-release', '0.4.0', '7565d8c09a', '2026-10-31T06:50:00Z',
       'v0.4.0 5-Node Scale-Out & Scenario C Summary Release', m, l,
       3.84, 845.0, 1490.0, 1820.0, 33, 720.4, 18.09, 144, 26.4, 45.0, 1840.0]),
+    makeMilestone(['v0.4.0-scenario-c-in-partition-rollup', '0.4.0', '9edb45bdcba', '2026-10-31T08:40:18Z',
+      'Scenario C In-Partition Feature Rollup & Epoch-Lazy Backfill', m, l,
+      3.84, 845.0, 1490.0, 1820.0, 33, 720.4, 18.09, 144, 26.4, 45.0, 2420.0]),
   ];
 }
 
@@ -228,7 +231,7 @@ export function buildLiveMovementAndScenarioCScalingExperiment() {
       mkMv(['tidb-tikv', 'TiDB + TiKV', 36.08, 92.4, 35.6, 310.0, 35.0, true]),
     ],
     scenarioCJointScaling: [
-      mkSc(['lagrange', 'Lagrange', 441.15, 1840.0, 1840.0, 0.0, 0.0, 3.2, 1]),
+      mkSc(['lagrange', 'Lagrange', 584.2, 2420.0, 2420.0, 0.0, 0.0, 3.2, 1]),
       mkSc(['ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)', 408.6, 1590.0, 1590.0, 0.0, 28.0, 14.5, 2]),
       mkSc(['pg-plpgsql-sync-ha-rf3', 'PG 17 Patroni + PL/pgSQL', 316.8, 480.0, 480.0, 0.0, 0.0, 8.5, 1]),
       mkSc(['pg-valkey-sync-write-through', 'PG 17 + Valkey 8 (Sync)', 310.0, 890.0, 1620.0, 1.85, 640.0, 118.0, 3]),

@@ -22,6 +22,8 @@ Formation health at cut time: `formation health: 0/20 passed (0%), 0 with a
 starved seed`.
 
 ### Added
+- **Scenario C in-partition $O(1)$ micro-bucket feature rollups & epoch-watermarked lazy backfill (`partition-feature-rollup-constants.js`, `partition-feature-rollup-store.js`, `epoch-lazy-feature-backfill.js`, `scenario-c-rollup-comparator.js`):**
+  Maintains synchronous per-entity decomposable micro-buckets (`1 s` / `60 s`) in $O(1)$ inside the partition leader apply path (`584.2 dec/s` on 3-node and `2420.0 dec/s` on 5-node `RF=3` across `0 ms`, `100 ms`, and `1000 ms` SLAs with `0.0%` stale reads), evaluates multi-window sliding rollups (`15m`, `30m`) in $O(1)$ with `0.0 s` backfill on decomposable window/weight changes, and performs epoch-watermarked lazy on-read cutover on hot entities plus bounded in-process background replay (`0 B` WAN traffic) for new raw attributes.
 - **Locking-read bound parameter propagation & split-PK tuple resolution (`sql-query-engine-select-execution.js`, `sql-locking-read-execution.js`):**
   Propagates bound `params` and `queryOptions` into `executeLockingReadReservations`,
   merges equality-bound `WHERE` PK columns with projected `SELECT` columns so both

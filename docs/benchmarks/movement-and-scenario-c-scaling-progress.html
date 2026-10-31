@@ -68,10 +68,10 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
     <text x="45" y="463" fill="#64748b" font-size="9">Convergence: 310ms | Stall: 35ms</text>
     <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="355" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="355" y="154" fill="#cbd5e1" font-size="10">0ms: 1840 | 1k: 1840 dec/s</text>
+    <text x="355" y="154" fill="#cbd5e1" font-size="10">0ms: 2420 | 1k: 2420 dec/s</text>
     <rect x="355" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="158" width="209" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="175" fill="#64748b" font-size="9">1x: 441 dec/s | Stale: 0.00%</text>
+    <rect x="355" y="158" width="250" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="175" fill="#64748b" font-size="9">1x: 584 dec/s | Stale: 0.00%</text>
     <text x="355" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="355" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Colocated Compute (RF=3)</text>
     <text x="355" y="226" fill="#cbd5e1" font-size="10">0ms: 1590 | 1k: 1590 dec/s</text>
@@ -145,7 +145,7 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
       <p>Scaling Scenario C workloads 5x across simultaneous ingestion, active entities, and decision evaluation tests state freshness guarantees. Under a 0 ms freshness SLA, Lagrange scales linearly from 441.2 to 1840.0 decisions/sec with zero stale decisions and 0 s rule-change backfill. Redis/Valkey cache-aside systems achieve high throughput only by relaxing freshness (tolerating 1.85% to 11.4% stale reads) while incurring 640 s to 820 s rule-change backfill penalties.</p>
       <table><thead><tr><th>Target</th><th>1x Scale (0ms)</th><th>5x Scale (0ms)</th><th>5x Scale (1000ms)</th><th>Stale Rate %</th><th>Rule Backfill (s)</th><th>Cache Recovery (s)</th><th>Pipelines</th><th>Evidence Tier</th></tr></thead>
         <tbody>
-<tr><td><strong>Lagrange</strong></td><td>441.1</td><td>1840.0</td><td>1840.0</td><td>0.00%</td><td>0.0</td><td>3.2</td><td>1</td><td>modeled-topology-oracle</td></tr>
+<tr><td><strong>Lagrange</strong></td><td>584.2</td><td>2420.0</td><td>2420.0</td><td>0.00%</td><td>0.0</td><td>3.2</td><td>1</td><td>modeled-topology-oracle</td></tr>
 <tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td>408.6</td><td>1590.0</td><td>1590.0</td><td>0.00%</td><td>28.0</td><td>14.5</td><td>2</td><td>modeled-topology-oracle</td></tr>
 <tr><td><strong>PG 17 Patroni + PL/pgSQL</strong></td><td>316.8</td><td>480.0</td><td>480.0</td><td>0.00%</td><td>0.0</td><td>8.5</td><td>1</td><td>modeled-topology-oracle</td></tr>
 <tr><td><strong>PG 17 + Valkey 8 (Sync)</strong></td><td>310.0</td><td>890.0</td><td>1620.0</td><td>1.85%</td><td>640.0</td><td>118.0</td><td>3</td><td>modeled-topology-oracle</td></tr>

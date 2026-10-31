@@ -49,10 +49,10 @@
     <text x="45" y="463" fill="#64748b" font-size="9">Convergence: 310ms | Stall: 35ms</text>
     <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="355" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="355" y="154" fill="#cbd5e1" font-size="10">0ms: 1840 | 1k: 1840 dec/s</text>
+    <text x="355" y="154" fill="#cbd5e1" font-size="10">0ms: 2420 | 1k: 2420 dec/s</text>
     <rect x="355" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="158" width="209" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="175" fill="#64748b" font-size="9">1x: 441 dec/s | Stale: 0.00%</text>
+    <rect x="355" y="158" width="250" height="7" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="175" fill="#64748b" font-size="9">1x: 584 dec/s | Stale: 0.00%</text>
     <text x="355" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="355" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Colocated Compute (RF=3)</text>
     <text x="355" y="226" fill="#cbd5e1" font-size="10">0ms: 1590 | 1k: 1590 dec/s</text>
