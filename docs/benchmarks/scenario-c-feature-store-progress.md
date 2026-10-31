@@ -30,7 +30,7 @@ across sync write-through and async CDC streaming under explicit freshness SLAs.
 
 | Target | Version | Units | Pipelines | 0 ms SLA | 100 ms SLA | 1000 ms SLA | Stale | Backfill | Recovery |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | 0.3.0 | 3 | 1 | 441.1 | 441.1 | 441.1 | 0.00% | 0.0s | 3.2s |
+| lagrange | 0.4.0 | 3 | 1 | 441.1 | 441.1 | 441.1 | 0.00% | 0.0s | 3.2s |
 | pg-plpgsql-sync-ha-rf3 | 17.2-patroni-4.0-plpgsql | 5 | 1 | 316.8 | 316.8 | 316.8 | 0.00% | 0.0s | 8.5s |
 | pg-valkey-sync-write-through | 17.2-valkey-8.0-sync | 8 | 3 | 310.0 | 462.4 | 485.0 | 0.42% | 185.0s | 42.0s |
 | pg-valkey-async-stream | 17.2-valkey-8.0-async | 9 | 4 | 0.0 | 492.0 | 538.0 | 6.80% | 240.0s | 58.0s |

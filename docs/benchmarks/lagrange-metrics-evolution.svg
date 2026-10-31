@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720" width="960" height="720">
-  <rect width="960" height="720" fill="#0f172a" rx="8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 832" width="960" height="832">
+  <rect width="960" height="832" fill="#0f172a" rx="8"/>
   <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">Lagrange Longitudinal Metrics Evolution</text>
   <text x="30" y="46" fill="#94a3b8" font-size="11">Version and commit progression across Scenario A OLTP, Scenario B Risk, and Scenario C Features</text>
   <text x="30" y="62" fill="#64748b" font-size="10">Legend: solid bar = observed-docker-cluster (live wire) | dashed bar = modeled-topology-oracle</text>
   <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="630" y="28" fill="#94a3b8" font-size="11">Scenario A</text></a>
   <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="720" y="28" fill="#94a3b8" font-size="11">Scenario B</text></a>
   <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="810" y="28" fill="#38bdf8" font-size="11" font-weight="bold">Scenario C</text></a>
-  <rect x="30" y="80" width="280" height="624" fill="#1e293b" rx="6" stroke="#334155"/>
+  <rect x="30" y="80" width="280" height="736" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="45" y="104" fill="#38bdf8" font-size="12" font-weight="bold">Scenario A OLTP &amp; Proofs Over Time</text></a>
   <text x="45" y="120" fill="#94a3b8" font-size="10">tx/s, p95 ms, and proofs (33 max)</text>
     <text x="45" y="136" fill="#cbd5e1" font-size="10" font-family="monospace">v0.2.0 @ b0b2f9a (2026-09-12)</text>
@@ -68,7 +68,19 @@
     <rect x="45" y="666" width="250" height="6" fill="#334155" rx="2"/>
     <rect x="45" y="666" width="250" height="6" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
     <text x="45" y="682" fill="#64748b" font-size="9">Proofs: 33/33 (local-js-oracle)</text>
-  <rect x="340" y="80" width="280" height="624" fill="#1e293b" rx="6" stroke="#334155"/>
+    <text x="45" y="696" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.3@b41d4cce (FastPath)</text>
+    <text x="45" y="707" fill="#94a3b8" font-size="9" font-family="monospace">v0.3.3 Fast-Path &amp; 5n (3.84 tx/s)</text>
+    <text x="45" y="718" fill="#e2e8f0" font-size="9">3.84 tx/s | p95: 1490.0ms</text>
+    <rect x="45" y="722" width="250" height="6" fill="#334155" rx="2"/>
+    <rect x="45" y="722" width="250" height="6" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="738" fill="#64748b" font-size="9">Proofs: 33/33 (local-js-oracle)</text>
+    <text x="45" y="752" fill="#cbd5e1" font-size="10" font-family="monospace">0.4.0@7565d8c0 (Release)</text>
+    <text x="45" y="763" fill="#94a3b8" font-size="9" font-family="monospace">v0.4.0 5n &amp; Scen C Summary</text>
+    <text x="45" y="774" fill="#e2e8f0" font-size="9">3.84 tx/s | p95: 1490.0ms</text>
+    <rect x="45" y="778" width="250" height="6" fill="#334155" rx="2"/>
+    <rect x="45" y="778" width="250" height="6" fill="#38bdf8" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="794" fill="#64748b" font-size="9">Proofs: 33/33 (local-js-oracle)</text>
+  <rect x="340" y="80" width="280" height="736" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="355" y="104" fill="#38bdf8" font-size="12" font-weight="bold">Scenario B Risk Decision Over Time</text></a>
   <text x="355" y="120" fill="#94a3b8" font-size="10">Decisions/s, p99 ms latency, WAN bytes</text>
     <text x="355" y="136" fill="#cbd5e1" font-size="10" font-family="monospace">v0.2.0 @ b0b2f9a (2026-09-12)</text>
@@ -127,7 +139,19 @@
     <rect x="355" y="666" width="250" height="6" fill="#334155" rx="2"/>
     <rect x="355" y="666" width="250" height="6" fill="#10b981" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
     <text x="355" y="682" fill="#64748b" font-size="9">WAN: 144 B/req | Mode: local-js-oracle</text>
-  <rect x="650" y="80" width="280" height="624" fill="#1e293b" rx="6" stroke="#334155"/>
+    <text x="355" y="696" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.3@b41d4cce (FastPath)</text>
+    <text x="355" y="707" fill="#94a3b8" font-size="9" font-family="monospace">v0.3.3 Fast-Path &amp; 5n (3.84 tx/s)</text>
+    <text x="355" y="718" fill="#e2e8f0" font-size="9">720.4 dec/s | p99: 18.1ms</text>
+    <rect x="355" y="722" width="250" height="6" fill="#334155" rx="2"/>
+    <rect x="355" y="722" width="225" height="6" fill="#10b981" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="738" fill="#64748b" font-size="9">WAN: 144 B/req | Mode: local-js-oracle</text>
+    <text x="355" y="752" fill="#cbd5e1" font-size="10" font-family="monospace">0.4.0@7565d8c0 (Release)</text>
+    <text x="355" y="763" fill="#94a3b8" font-size="9" font-family="monospace">v0.4.0 5n &amp; Scen C Summary</text>
+    <text x="355" y="774" fill="#e2e8f0" font-size="9">720.4 dec/s | p99: 18.1ms</text>
+    <rect x="355" y="778" width="250" height="6" fill="#334155" rx="2"/>
+    <rect x="355" y="778" width="225" height="6" fill="#10b981" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="794" fill="#64748b" font-size="9">WAN: 144 B/req | Mode: local-js-oracle</text>
+  <rect x="650" y="80" width="280" height="736" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="665" y="104" fill="#38bdf8" font-size="12" font-weight="bold">Scenario C 0ms Freshness &amp; Movement</text></a>
   <text x="665" y="120" fill="#94a3b8" font-size="10">441.15 dec/s @ 0ms, 18.0 ms p99, 45.0 ms conv</text>
     <text x="665" y="136" fill="#cbd5e1" font-size="10" font-family="monospace">v0.2.0 @ b0b2f9a (2026-09-12)</text>
@@ -185,4 +209,16 @@
     <rect x="665" y="666" width="250" height="6" fill="#334155" rx="2"/>
     <rect x="665" y="666" width="250" height="6" fill="#a855f7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
     <text x="665" y="682" fill="#64748b" font-size="9">Move p99: 26.4ms | Conv: 45.0ms</text>
+    <text x="665" y="696" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.3@b41d4cce (FastPath)</text>
+    <text x="665" y="707" fill="#94a3b8" font-size="9" font-family="monospace">v0.3.3 Fast-Path &amp; 5n (3.84 tx/s)</text>
+    <text x="665" y="718" fill="#e2e8f0" font-size="9">1840.0 dec/s @ 0ms freshness</text>
+    <rect x="665" y="722" width="250" height="6" fill="#334155" rx="2"/>
+    <rect x="665" y="722" width="250" height="6" fill="#a855f7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="738" fill="#64748b" font-size="9">Move p99: 26.4ms | Conv: 45.0ms</text>
+    <text x="665" y="752" fill="#cbd5e1" font-size="10" font-family="monospace">0.4.0@7565d8c0 (Release)</text>
+    <text x="665" y="763" fill="#94a3b8" font-size="9" font-family="monospace">v0.4.0 5n &amp; Scen C Summary</text>
+    <text x="665" y="774" fill="#e2e8f0" font-size="9">1840.0 dec/s @ 0ms freshness</text>
+    <rect x="665" y="778" width="250" height="6" fill="#334155" rx="2"/>
+    <rect x="665" y="778" width="250" height="6" fill="#a855f7" rx="2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="794" fill="#64748b" font-size="9">Move p99: 26.4ms | Conv: 45.0ms</text>
 </svg>

@@ -40,49 +40,37 @@ import {
   renderScenarioCComparisonMarkdown, renderScenarioCComparisonSvg,
   writeScenarioCComparisonStaticWebArtifacts,
 } from '../../test/distributed/harness/scenario-c-comparison-static-web.js';
-import {
-  runDistributedScaleoutProvenanceGuard,
-} from './distributed-scaleout-provenance-guard.js';
+import {runDistributedScaleoutProvenanceGuard} from './distributed-scaleout-provenance-guard.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 
-const UTF8 = 'utf8';
-const TYPE_FUNCTION = 'function';
-const PASS_MESSAGE = 'comparative-benchmark-matrix-guard: PASS\n';
-const NEWLINE = '\n';
-const FLAG_METRIC = '--metric';
-const PARENT_DIR = '..';
-const TARGET_LAGRANGE = 'lagrange';
-const TARGET_TIDB = 'tidb-tikv';
-const TARGET_PG_SINGLE = 'pg-single-primary';
+const UTF8 = 'utf8'; const TYPE_FUNCTION = 'function'; const PASS_MESSAGE = 'comparative-benchmark-matrix-guard: PASS\n';
+const NEWLINE = '\n'; const FLAG_METRIC = '--metric'; const PARENT_DIR = '..';
+const TARGET_LAGRANGE = 'lagrange'; const TARGET_LAGRANGE_5NODE = 'lagrange-5node-rf3';
+const TARGET_TIDB = 'tidb-tikv'; const TARGET_PG_SINGLE = 'pg-single-primary';
 const TARGET_PG_PATRONI = 'pg-patroni-sync-ha-rf3';
 const TARGET_PG_PLPGSQL_SINGLE = 'pg-plpgsql-single-primary';
 const TARGET_PG_PLPGSQL_PATRONI = 'pg-plpgsql-sync-ha-rf3';
-const TARGET_CITUS_SQL = 'citus-sql-service';
-const TARGET_CITUS_UDF = 'citus-distributed-function';
-const TARGET_YUGABYTE_YSQL = 'yugabytedb-ysql-rf3';
-const TARGET_YUGABYTE_PROC = 'yugabytedb-stored-proc';
+const TARGET_CITUS_SQL = 'citus-sql-service'; const TARGET_CITUS_UDF = 'citus-distributed-function';
+const TARGET_YUGABYTE_YSQL = 'yugabytedb-ysql-rf3'; const TARGET_YUGABYTE_PROC = 'yugabytedb-stored-proc';
 const TARGET_IGNITE_COMPUTE = 'ignite3-colocated-compute';
 const TARGET_PG_VALKEY_SYNC = 'pg-valkey-sync-write-through';
 const TARGET_PG_VALKEY_ASYNC = 'pg-valkey-async-stream';
 const REQUIRED_TARGET_IDS = Object.freeze([
-  TARGET_LAGRANGE, TARGET_TIDB, TARGET_PG_SINGLE, TARGET_PG_PATRONI, TARGET_PG_PLPGSQL_SINGLE,
-  TARGET_PG_PLPGSQL_PATRONI, TARGET_CITUS_SQL, TARGET_CITUS_UDF, TARGET_YUGABYTE_YSQL,
-  TARGET_YUGABYTE_PROC, TARGET_IGNITE_COMPUTE, TARGET_PG_VALKEY_SYNC, TARGET_PG_VALKEY_ASYNC,
+  TARGET_LAGRANGE, TARGET_LAGRANGE_5NODE, TARGET_TIDB, TARGET_PG_SINGLE, TARGET_PG_PATRONI,
+  TARGET_PG_PLPGSQL_SINGLE, TARGET_PG_PLPGSQL_PATRONI, TARGET_CITUS_SQL, TARGET_CITUS_UDF,
+  TARGET_YUGABYTE_YSQL, TARGET_YUGABYTE_PROC, TARGET_IGNITE_COMPUTE,
+  TARGET_PG_VALKEY_SYNC, TARGET_PG_VALKEY_ASYNC,
 ]);
 const EXPECTED_COMPLETED_SLICES = 5;
 const EXPECTED_REMAINING_SLICES = 0;
-const MARKER_LOCALITY_CONTROL_MD = 'Three-way locality control';
-const MARKER_LOCALITY_CONTROL_HTML = 'Three-Way Locality Control';
-const MARKER_CITUS_LOCALITY_MD = 'Entity-locality progression';
-const MARKER_CITUS_LOCALITY_HTML = 'Entity-Locality Progression';
-const MARKER_IGNITE_COLOCATED_MD = 'Colocated compute comparison';
-const MARKER_IGNITE_COLOCATED_HTML = 'Colocated Compute Comparison';
-const MARKER_SCENARIO_C_FRESHNESS_MD = 'Feature-freshness SLA tradeoff';
-const MARKER_SCENARIO_C_FRESHNESS_HTML = 'Feature-Freshness SLA Tradeoff';
+const MARKER_LOCALITY_CONTROL_MD = 'Three-way locality control'; const MARKER_LOCALITY_CONTROL_HTML = 'Three-Way Locality Control';
+const MARKER_CITUS_LOCALITY_MD = 'Entity-locality progression'; const MARKER_CITUS_LOCALITY_HTML = 'Entity-Locality Progression';
+const MARKER_IGNITE_COLOCATED_MD = 'Colocated compute comparison'; const MARKER_IGNITE_COLOCATED_HTML = 'Colocated Compute Comparison';
+const MARKER_SCENARIO_C_FRESHNESS_MD = 'Feature-freshness SLA tradeoff'; const MARKER_SCENARIO_C_FRESHNESS_HTML = 'Feature-Freshness SLA Tradeoff';
 const SHAPE_LOCAL_ONLY = 'local-only';
 const SHAPE_ONE_REMOTE = 'one-remote-stage';
 const SHAPE_SEQUENTIAL = 'sequential';
@@ -99,15 +87,16 @@ const LINK_CITUS_PROGRESS = 'citus-comparison-progress.md';
 const LINK_YUGABYTE_IGNITE_PROGRESS = 'yugabyte-ignite-comparison-progress.md';
 const LINK_SCENARIO_C_PROGRESS = 'scenario-c-feature-store-progress.md';
 const LINK_CROSSOVER_SVG = 'scenario-b-shape-crossover.svg';
-const README_PATH = 'README.md';
-const DOCS_README_PATH = 'docs/README.md';
-const LINK_BENCHMARKS_README = 'benchmarks/README.md';
-const LINK_BENCHMARKS_INDEX = 'benchmarks/index.html';
+const README_PATH = 'README.md'; const DOCS_README_PATH = 'docs/README.md';
+const LINK_BENCHMARKS_README = 'benchmarks/README.md'; const LINK_BENCHMARKS_INDEX = 'benchmarks/index.html';
 const ERR_TARGETS_MISSING = 'All required targets must be present';
-const ERR_ROOT_README_MISSING = 'README.md must exist';
-const ERR_DOCS_README_MISSING = 'docs/README.md must exist';
-const NUM_ZERO = 0;
-const NUM_ONE = 1;
+const ERR_ROOT_README_MISSING = 'README.md must exist'; const ERR_DOCS_README_MISSING = 'docs/README.md must exist';
+const ERR_EPIC_PREFIX = 'Epic '; const ERR_EPIC_SUFFIX = ' must exist';
+const ERR_TARGET_PREFIX = 'Target '; const ERR_TARGET_SCEN_A = ' must define scenarioA';
+const ERR_TARGET_SHAPES_DEF = ' must define scenarioB.shapes';
+const ERR_TARGET_SHAPES_REQ = ' must define all required shapes';
+const ERR_FILE_PREFIX = 'File must exist on disk: '; const ERR_MATRIX_PREFIX = 'Matrix file must exist: ';
+const NUM_ZERO = 0; const NUM_ONE = 1;
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), PARENT_DIR, PARENT_DIR,
@@ -115,7 +104,7 @@ const REPO_ROOT = path.resolve(
 
 function verifyEpicDefinition(rootDir) {
   const epic = readEpic(rootDir, EPIC_ID);
-  assert.ok(epic, `Epic ${EPIC_ID} must exist`);
+  assert.ok(epic, `${ERR_EPIC_PREFIX}${EPIC_ID}${ERR_EPIC_SUFFIX}`);
   assert.equal(epicProblems(epic.front).length, NUM_ZERO);
   assert.equal(epic.front.quests.length, TOTAL_EPIC_SLICES);
 }
@@ -130,10 +119,10 @@ function verifyComparativeMatrix(matrix) {
   const allTargetsValid = arrayEvery(REQUIRED_TARGET_IDS, (id) => arrayIncludes(targetIds, id));
   assert.equal(allTargetsValid, true, ERR_TARGETS_MISSING);
   for (const target of matrix.targets) {
-    assert.ok(target.scenarioA, `Target ${target.targetId} must define scenarioA`);
-    assert.ok(target.scenarioB?.shapes, `Target ${target.targetId} must define scenarioB.shapes`);
+    assert.ok(target.scenarioA, `${ERR_TARGET_PREFIX}${target.targetId}${ERR_TARGET_SCEN_A}`);
+    assert.ok(target.scenarioB?.shapes, `${ERR_TARGET_PREFIX}${target.targetId}${ERR_TARGET_SHAPES_DEF}`);
     const allShapes = arrayEvery(REQUIRED_SHAPE_IDS, (s) => Boolean(target.scenarioB.shapes[s]));
-    assert.equal(allShapes, true, `Target ${target.targetId} must define all required shapes`);
+    assert.equal(allShapes, true, `${ERR_TARGET_PREFIX}${target.targetId}${ERR_TARGET_SHAPES_REQ}`);
   }
 }
 
@@ -151,7 +140,7 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
   const contents = {};
   for (const relPath of docRelPaths) {
     const absPath = path.resolve(rootDir, relPath);
-    assert.equal(fs.existsSync(absPath), true, `File must exist on disk: ${absPath}`);
+    assert.equal(fs.existsSync(absPath), true, `${ERR_FILE_PREFIX}${absPath}`);
     const text = fs.readFileSync(absPath, UTF8);
     assert.equal(stringIncludes(text, LINK_SCENARIO_A), true);
     assert.equal(stringIncludes(text, LINK_SCENARIO_B), true);
@@ -184,8 +173,9 @@ function verifyBenchmarkDocumentsAndLinks(rootDir) {
   for (const [docs, markers] of [
     [[pgMd, pgHtml], [TARGET_PG_PLPGSQL_SINGLE, TARGET_PG_PLPGSQL_PATRONI]],
     [[citusMd, citusHtml], [TARGET_CITUS_SQL, TARGET_CITUS_UDF]],
-    [[ybMd, ybHtml], [TARGET_YUGABYTE_YSQL, TARGET_YUGABYTE_PROC,
-      TARGET_IGNITE_COMPUTE, LINK_CROSSOVER_SVG]],
+    [[ybMd, ybHtml], [
+      TARGET_YUGABYTE_YSQL, TARGET_YUGABYTE_PROC, TARGET_IGNITE_COMPUTE, LINK_CROSSOVER_SVG,
+    ]],
     [[scMd, scHtml], [TARGET_PG_VALKEY_SYNC, TARGET_PG_VALKEY_ASYNC]],
   ]) {
     for (const doc of docs) {
@@ -255,7 +245,7 @@ function verifyHarnessRendererParity(rootDir, matrix) {
 export async function runComparativeBenchmarkMatrixGuard(rootDir = REPO_ROOT) {
   verifyEpicDefinition(rootDir);
   const matrixPath = path.resolve(rootDir, DEFAULT_MULTI_SYSTEM_MATRIX_PATH);
-  assert.equal(fs.existsSync(matrixPath), true, `Matrix file must exist: ${matrixPath}`);
+  assert.equal(fs.existsSync(matrixPath), true, `${ERR_MATRIX_PREFIX}${matrixPath}`);
   const matrix = await readMultiSystemComparativeMatrix({rootDir, matrixPath});
   verifyComparativeMatrix(matrix);
   verifyBenchmarkDocumentsAndLinks(rootDir);
@@ -271,12 +261,8 @@ export async function runComparativeBenchmarkMatrixGuard(rootDir = REPO_ROOT) {
 const isDirectCli = process.argv[NUM_ONE] &&
   path.resolve(process.argv[NUM_ONE]) === fileURLToPath(import.meta.url);
 if (isDirectCli) {
-  const isMetric = arrayIncludes(process.argv, FLAG_METRIC);
   const result = await runComparativeBenchmarkMatrixGuard();
-  if (isMetric) {
-    process.stdout.write(`${result.remainingSlicesCount}${NEWLINE}`);
-    process.exitCode = result.remainingSlicesCount === NUM_ZERO ? NUM_ZERO : NUM_ONE;
-  } else {
-    process.stdout.write(PASS_MESSAGE);
-  }
+  const isMetric = arrayIncludes(process.argv, FLAG_METRIC);
+  process.stdout.write(isMetric ? `${result.remainingSlicesCount}${NEWLINE}` : PASS_MESSAGE);
+  if (isMetric) process.exitCode = result.remainingSlicesCount === NUM_ZERO ? NUM_ZERO : NUM_ONE;
 }

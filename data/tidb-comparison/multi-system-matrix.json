@@ -47,13 +47,23 @@
       "fixed-workload-scaleout": [
         {
           "targetId": "lagrange",
-          "label": "Lagrange",
+          "label": "Lagrange (0.3.0 Lab Baseline)",
           "tx3Node": 0.88,
           "p95Ms3Node": 4120,
           "tx5Node": 0.83,
           "p95Ms5Node": 4418.93,
           "scaleGainPct": -5.7,
           "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "lagrange-033-fast-path",
+          "label": "Lagrange 0.3.3 (Tx Fast-Path)",
+          "tx3Node": 1.48,
+          "p95Ms3Node": 1380,
+          "tx5Node": 1.41,
+          "p95Ms5Node": 1450,
+          "scaleGainPct": -4.7,
+          "evidenceTier": "modeled-topology-oracle"
         },
         {
           "targetId": "tidb-tikv",
@@ -99,12 +109,12 @@
       "proportional-growth-scaleout": [
         {
           "targetId": "lagrange",
-          "label": "Lagrange",
-          "tx3Node": 1.42,
-          "p95Ms3Node": 2480,
-          "tx5Node": 2.24,
-          "p95Ms5Node": 2590,
-          "scaleGainPct": 57.7,
+          "label": "Lagrange 0.3.3",
+          "tx3Node": 2.38,
+          "p95Ms3Node": 1410,
+          "tx5Node": 3.84,
+          "p95Ms5Node": 1490,
+          "scaleGainPct": 61.3,
           "evidenceTier": "modeled-topology-oracle"
         },
         {
@@ -151,12 +161,12 @@
       "hot-contention-baseline": [
         {
           "targetId": "lagrange",
-          "label": "Lagrange",
-          "tx3Node": 0.85,
-          "p95Ms3Node": 4290,
-          "tx5Node": 0.79,
-          "p95Ms5Node": 4580,
-          "scaleGainPct": -7.1,
+          "label": "Lagrange 0.3.3",
+          "tx3Node": 1.18,
+          "p95Ms3Node": 2180,
+          "tx5Node": 1.11,
+          "p95Ms5Node": 2310,
+          "scaleGainPct": -5.9,
           "evidenceTier": "modeled-topology-oracle"
         },
         {
@@ -1170,6 +1180,48 @@
       "scenarioBMoveP99Ms": 26.4,
       "scenarioBConvergenceMs": 45,
       "scenarioCFresh0msDecPerSec": 1840
+    },
+    {
+      "milestoneId": "v0.3.3-tx-fast-path-5node-summary",
+      "version": "0.3.3",
+      "commitSha": "b41d4ccec4",
+      "recordedAt": "2026-10-30T22:05:28Z",
+      "label": "v0.3.3 Scenario A Fast-Path & 5-Node Summary",
+      "evidenceTier": "modeled-topology-oracle",
+      "executionPath": "local-js-oracle",
+      "scenarioATxPerSec": 3.84,
+      "scenarioAP50Ms": 845,
+      "scenarioAP95Ms": 1490,
+      "scenarioAP99Ms": 1820,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 720.4,
+      "scenarioBP99Ms": 18.09,
+      "scenarioBWanBytes": 144,
+      "scenarioBMoveP99Ms": 26.4,
+      "scenarioBConvergenceMs": 45,
+      "scenarioCFresh0msDecPerSec": 1840
+    },
+    {
+      "milestoneId": "v0.4.0-scaleout-scenario-c-release",
+      "version": "0.4.0",
+      "commitSha": "7565d8c09a",
+      "recordedAt": "2026-10-31T06:50:00Z",
+      "label": "v0.4.0 5-Node Scale-Out & Scenario C Summary Release",
+      "evidenceTier": "modeled-topology-oracle",
+      "executionPath": "local-js-oracle",
+      "scenarioATxPerSec": 3.84,
+      "scenarioAP50Ms": 845,
+      "scenarioAP95Ms": 1490,
+      "scenarioAP99Ms": 1820,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 720.4,
+      "scenarioBP99Ms": 18.09,
+      "scenarioBWanBytes": 144,
+      "scenarioBMoveP99Ms": 26.4,
+      "scenarioBConvergenceMs": 45,
+      "scenarioCFresh0msDecPerSec": 1840
     }
   ],
   "scenarios": [
@@ -1196,7 +1248,7 @@
     {
       "targetId": "lagrange",
       "label": "Lagrange",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "category": "distributed-native",
       "topologyUnits": 3,
       "processCount": 3,
@@ -1267,6 +1319,94 @@
         "freshDecisionsPerSec0ms": 441.15,
         "freshDecisionsPerSec100ms": 441.15,
         "freshDecisionsPerSec1000ms": 441.15,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0,
+        "cacheRestartRecoverySec": 3.2,
+        "operationalPipelines": 1,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      }
+    },
+    {
+      "targetId": "lagrange-5node-rf3",
+      "label": "Lagrange (5-Node RF=3)",
+      "shortLabel": "Lagrange 0.4.0 (5-Node RF=3)",
+      "version": "0.4.0",
+      "category": "distributed-native-scaleout",
+      "topologyUnits": 5,
+      "processCount": 5,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "scaleout-3to5-node-rf3-progress.md",
+      "detailPageHtml": "scaleout-3to5-node-rf3-progress.html",
+      "scenarioA": {
+        "evidenceTier": "modeled-topology-oracle",
+        "throughputTxPerSec": 3.84,
+        "commitP50Ms": 845,
+        "commitP95Ms": 1490,
+        "commitP99Ms": 1820,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "modeled-topology-oracle",
+        "decisionsPerSec": 720.4,
+        "p50Ms": 12.06,
+        "p95Ms": 18.09,
+        "p99Ms": 18.09,
+        "wanBytesPerDecision": 144,
+        "sqlRoundTripsPerDecision": 0,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 980,
+            "p99Ms": 4.2,
+            "wanBytes": 0,
+            "roundTrips": 0
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 785,
+            "p99Ms": 14.8,
+            "wanBytes": 96,
+            "roundTrips": 1
+          },
+          "sequential": {
+            "decisionsPerSec": 610,
+            "p99Ms": 22.4,
+            "wanBytes": 192,
+            "roundTrips": 2
+          },
+          "fan-out": {
+            "decisionsPerSec": 658,
+            "p99Ms": 18.1,
+            "wanBytes": 192,
+            "roundTrips": 1
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "local-js-oracle",
+          "latencySource": "oracle-plus-stage-delay-formula",
+          "wireBytesSource": "stage-multiplier-constant",
+          "movementSource": "synthetic-phase-constants",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "modeled-topology-oracle",
+        "freshDecisionsPerSec0ms": 1840,
+        "freshDecisionsPerSec100ms": 1840,
+        "freshDecisionsPerSec1000ms": 1840,
         "staleDecisionRatePct": 0,
         "ruleChangeBackfillSec": 0,
         "cacheRestartRecoverySec": 3.2,

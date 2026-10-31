@@ -37,15 +37,18 @@ const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 
-const UTF8 = 'utf8'; const TYPE_FUNCTION = 'function'; const TYPE_OBJECT = 'object'; const PARENT_DIR = '..';
+const UTF8 = 'utf8'; const TYPE_FUNCTION = 'function'; const PARENT_DIR = '..';
 const NEWLINE = '\n'; const FLAG_METRIC = '--metric'; const PASS_MESSAGE = 'distributed-scaleout-provenance-guard: PASS\n';
 const NUM_ZERO = 0; const NUM_ONE = 1; const NUM_THREE = 3; const NUM_FOUR = 4; const NUM_FIVE = 5;
-const NUM_SIX = 6; const NUM_TEN = 10; const NODE_3 = '3'; const NODE_5 = '5'; const COV_100 = 100.0;
-const COV_60 = 60.0; const TARGET_LAGRANGE = 'lagrange'; const TARGET_TIDB = 'tidb-tikv';
+const NUM_SIX = 6; const NUM_TEN = 10; const NUM_ELEVEN = 11; const NODE_3 = '3'; const NODE_5 = '5';
+const COV_100 = 100.0; const COV_60 = 60.0; const TARGET_LAGRANGE = 'lagrange'; const TARGET_TIDB = 'tidb-tikv';
 const EXPECTED_COMPLETED_SLICES_COUNT = 5; const EXPECTED_REMAINING_SLICES_COUNT = 0; const EXPECTED_EPIC_STATUS = 'done';
 const FIRST_SLICE_ID = 'provenance-audit-and-evidence-tier-separation'; const SECOND_SLICE_ID = 'real-3to5-node-rf3-scaleout-and-scenario-a-modes';
 const THIRD_SLICE_ID = 'partition-granularity-sweep-5node-rf3'; const FOURTH_SLICE_ID = 'scenario-b-rtt-crossover-and-working-set-growth';
 const FIFTH_SLICE_ID = 'live-movement-under-load-and-scenario-c-joint-scaling'; const SCENARIO_B_ID = 'tidb-distributed-risk-decision';
+const ALL_SLICE_IDS = Object.freeze([
+  FIRST_SLICE_ID, SECOND_SLICE_ID, THIRD_SLICE_ID, FOURTH_SLICE_ID, FIFTH_SLICE_ID,
+]);
 const FORBIDDEN_VIEW_NATIVE = 'architecture-native'; const KIND_LOCAL_ORACLE = 'local-oracle-plus-network-model';
 const VIEW_CONTRACT_MODEL = 'contract-model-non-comparable'; const FORBIDDEN_TIMING_SOURCE = 'observed-harness-baseline';
 const TIER_OBSERVED_DOCKER = 'observed-docker-cluster'; const PATH_LIVE_WIRE = 'live-cluster-wire';
@@ -53,6 +56,12 @@ const TIER_MODELED_ORACLE = 'modeled-topology-oracle'; const PATH_LOCAL_ORACLE =
 const LANDING_MD_PATH = 'docs/benchmarks/README.md'; const LANDING_HTML_PATH = 'docs/benchmarks/index.html';
 const MARKER_PROVENANCE_SECTION_MD = 'Measurement provenance and evidence-tier separation';
 const MARKER_PROVENANCE_SECTION_HTML = 'Measurement Provenance and Evidence-Tier Separation';
+const MARKER_SCALEOUT_SUMMARY_MD = '5-node RF=3 (60% replica coverage) scale-out summary';
+const MARKER_SCALEOUT_SUMMARY_HTML = '5-Node RF=3 (60% Replica Coverage) Scale-Out Summary';
+const MARKER_LAGRANGE_5NODE_MD = 'Lagrange (5-Node RF=3) 0.4.0'; const MARKER_LAGRANGE_5NODE_HTML = 'Lagrange (5-Node RF=3)';
+const MARKER_SCENARIO_C_SUMMARY_MD =
+  'Scenario C streaming-feature-risk-decision summary (freshness SLA, staleness & 5x joint scale)';
+const MARKER_SCENARIO_C_SUMMARY_HTML = 'Scenario C Streaming-Feature-Risk-Decision Summary';
 const MARKER_REPLICA_COVERAGE_MD = 'Replica-coverage transition'; const MARKER_REPLICA_COVERAGE_HTML = 'Replica-Coverage Transition';
 const MARKER_SCENARIO_A_MODES_MD = 'Scenario A three-mode scale-out separation'; const MARKER_SCENARIO_A_MODES_HTML = 'Scenario A Three-Mode Scale-Out Separation';
 const MODE_FIXED = 'fixed-workload-scaleout'; const MODE_HOT = 'hot-contention-baseline'; const MODE_GROWTH = 'proportional-growth-scaleout';
@@ -86,11 +95,7 @@ function verifyMatrixScaleoutSeries(matrix) {
   assert.ok(s); assert.equal(s.epicId, SCALEOUT_SERIES_EPIC_ID);
   assert.equal(s.totalSlices, TOTAL_SCALEOUT_SERIES_SLICES);
   assert.equal(s.completedSlices.length, EXPECTED_COMPLETED_SLICES_COUNT);
-  for (const id of [
-    FIRST_SLICE_ID, SECOND_SLICE_ID, THIRD_SLICE_ID, FOURTH_SLICE_ID, FIFTH_SLICE_ID,
-  ]) {
-    assert.equal(arrayIncludes(s.completedSlices, id), true);
-  }
+  for (const id of ALL_SLICE_IDS) assert.equal(arrayIncludes(s.completedSlices, id), true);
   assert.equal(s.remainingSlicesCount, EXPECTED_REMAINING_SLICES_COUNT);
   assert.equal(Array.isArray(matrix.lagrangeEvolutionTimeline), true);
   assert.equal(matrix.lagrangeEvolutionTimeline.length >= NUM_TEN, true);
@@ -179,7 +184,8 @@ function verifyArtifactTriad(rootDir, matrix, writer, triad) {
   assert.equal(typeof writer, TYPE_FUNCTION);
   for (const [fn, rel] of triad) {
     const abs = path.resolve(rootDir, rel);
-    assert.equal(fs.existsSync(abs), true); assert.equal(fs.readFileSync(abs, UTF8), fn(matrix));
+    assert.equal(fs.existsSync(abs), true);
+    assert.equal(fs.readFileSync(abs, UTF8), fn(matrix));
   }
 }
 
@@ -189,14 +195,6 @@ function verifyLandingLinks(rootDir, mdPath, htmlPath, extraMarkers = []) {
 }
 
 function verifyArtifactBundle(rootDir, matrix, writer, triad, markersMd, markersHtml) {
-  if (typeof writer === TYPE_OBJECT) {
-    const o = writer;
-    const t = [[o.mdRender, o.mdPath], [o.htmlRender, o.htmlPath], [o.svgRender, o.svgPath]];
-    verifyArtifactTriad(rootDir, matrix, o.writeFn, t);
-    verifyFileMarkers(rootDir, o.mdPath, o.mdMarkers);
-    verifyFileMarkers(rootDir, o.htmlPath, o.htmlMarkers);
-    verifyLandingLinks(rootDir, o.mdPath, o.htmlPath); return;
-  }
   verifyArtifactTriad(rootDir, matrix, writer, triad);
   verifyFileMarkers(rootDir, triad[NUM_ZERO][NUM_ONE], markersMd);
   verifyFileMarkers(rootDir, triad[NUM_ONE][NUM_ONE], markersHtml);
@@ -211,44 +209,46 @@ function verifyAllArtifactBundles(rootDir, matrix) {
   verifyLandingLinks(rootDir, DEFAULT_LAGRANGE_EVOLUTION_MD_PATH,
     DEFAULT_LAGRANGE_EVOLUTION_HTML_PATH,
     [path.basename(DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH), KIND_LOCAL_ORACLE]);
-  verifyFileMarkers(rootDir, LANDING_MD_PATH, [MARKER_PROVENANCE_SECTION_MD]);
-  verifyFileMarkers(rootDir, LANDING_HTML_PATH, [MARKER_PROVENANCE_SECTION_HTML]);
+  verifyFileMarkers(rootDir, LANDING_MD_PATH, [
+    MARKER_PROVENANCE_SECTION_MD, MARKER_SCALEOUT_SUMMARY_MD,
+    MARKER_LAGRANGE_5NODE_MD, MARKER_SCENARIO_C_SUMMARY_MD,
+  ]);
+  verifyFileMarkers(rootDir, LANDING_HTML_PATH, [
+    MARKER_PROVENANCE_SECTION_HTML, MARKER_SCALEOUT_SUMMARY_HTML,
+    MARKER_LAGRANGE_5NODE_HTML, MARKER_SCENARIO_C_SUMMARY_HTML,
+  ]);
   const bundles = [
-    [writeScaleout3To5ComparisonStaticWebArtifacts, [
-      [renderScaleout3To5ComparisonMarkdown, DEFAULT_SCALEOUT_3TO5_MD_PATH],
-      [renderScaleout3To5ComparisonHtml, DEFAULT_SCALEOUT_3TO5_HTML_PATH],
-      [renderScaleout3To5ComparisonSvg, DEFAULT_SCALEOUT_3TO5_SVG_PATH]],
-    [MARKER_REPLICA_COVERAGE_MD, MARKER_SCENARIO_A_MODES_MD],
-    [MARKER_REPLICA_COVERAGE_HTML, MARKER_SCENARIO_A_MODES_HTML]],
-    [writePartitionGranularityComparisonStaticWebArtifacts, [
-      [renderPartitionGranularityComparisonMarkdown, DEFAULT_PARTITION_SWEEP_MD_PATH],
-      [renderPartitionGranularityComparisonHtml, DEFAULT_PARTITION_SWEEP_HTML_PATH],
-      [renderPartitionGranularityComparisonSvg, DEFAULT_PARTITION_SWEEP_SVG_PATH]],
-    [SWEEP_MD_MARKER_1, SWEEP_MD_MARKER_2], [SWEEP_HTML_MARKER_1, SWEEP_HTML_MARKER_2]],
-    [writeScenarioBRttWorkingSetStaticWebArtifacts, [
-      [renderScenarioBRttWorkingSetMarkdown, DEFAULT_RTT_WORKING_SET_MD_PATH],
-      [renderScenarioBRttWorkingSetHtml, DEFAULT_RTT_WORKING_SET_HTML_PATH],
-      [renderScenarioBRttWorkingSetSvg, DEFAULT_RTT_WORKING_SET_SVG_PATH]],
-    [RTT_WS_MD_MARKER_1, RTT_WS_MD_MARKER_2], [RTT_WS_HTML_MARKER_1, RTT_WS_HTML_MARKER_2]],
+    [writeScaleout3To5ComparisonStaticWebArtifacts, renderScaleout3To5ComparisonMarkdown,
+      DEFAULT_SCALEOUT_3TO5_MD_PATH, renderScaleout3To5ComparisonHtml,
+      DEFAULT_SCALEOUT_3TO5_HTML_PATH, renderScaleout3To5ComparisonSvg,
+      DEFAULT_SCALEOUT_3TO5_SVG_PATH, [MARKER_REPLICA_COVERAGE_MD, MARKER_SCENARIO_A_MODES_MD],
+      [MARKER_REPLICA_COVERAGE_HTML, MARKER_SCENARIO_A_MODES_HTML]],
+    [writePartitionGranularityComparisonStaticWebArtifacts,
+      renderPartitionGranularityComparisonMarkdown, DEFAULT_PARTITION_SWEEP_MD_PATH,
+      renderPartitionGranularityComparisonHtml, DEFAULT_PARTITION_SWEEP_HTML_PATH,
+      renderPartitionGranularityComparisonSvg, DEFAULT_PARTITION_SWEEP_SVG_PATH,
+      [SWEEP_MD_MARKER_1, SWEEP_MD_MARKER_2], [SWEEP_HTML_MARKER_1, SWEEP_HTML_MARKER_2]],
+    [writeScenarioBRttWorkingSetStaticWebArtifacts, renderScenarioBRttWorkingSetMarkdown,
+      DEFAULT_RTT_WORKING_SET_MD_PATH, renderScenarioBRttWorkingSetHtml,
+      DEFAULT_RTT_WORKING_SET_HTML_PATH, renderScenarioBRttWorkingSetSvg,
+      DEFAULT_RTT_WORKING_SET_SVG_PATH, [RTT_WS_MD_MARKER_1, RTT_WS_MD_MARKER_2],
+      [RTT_WS_HTML_MARKER_1, RTT_WS_HTML_MARKER_2]],
+    [writeMovementScenarioCScalingStaticWebArtifacts, renderMovementScenarioCScalingMarkdown,
+      DEFAULT_MOVEMENT_SCENARIO_C_MD_PATH, renderMovementScenarioCScalingHtml,
+      DEFAULT_MOVEMENT_SCENARIO_C_HTML_PATH, renderMovementScenarioCScalingSvg,
+      DEFAULT_MOVEMENT_SCENARIO_C_SVG_PATH,
+      [MOVE_SC_MD_MARKER_1, MOVE_SC_MD_MARKER_2, MOVE_SC_MD_MARKER_3],
+      [MOVE_SC_HTML_MARKER_1, MOVE_SC_HTML_MARKER_2, MOVE_SC_HTML_MARKER_3]],
   ];
-  for (const [w, triad, mdM, htmlM] of bundles) {
-    verifyArtifactBundle(rootDir, matrix, w, triad, mdM, htmlM);
+  for (const [w, mFn, mP, hFn, hP, sFn, sP, mdM, htmlM] of bundles) {
+    verifyArtifactBundle(rootDir, matrix, w, [[mFn, mP], [hFn, hP], [sFn, sP]], mdM, htmlM);
   }
-  verifyArtifactBundle(rootDir, matrix, {
-    writeFn: writeMovementScenarioCScalingStaticWebArtifacts,
-    mdRender: renderMovementScenarioCScalingMarkdown,
-    htmlRender: renderMovementScenarioCScalingHtml, svgRender: renderMovementScenarioCScalingSvg,
-    mdPath: DEFAULT_MOVEMENT_SCENARIO_C_MD_PATH, htmlPath: DEFAULT_MOVEMENT_SCENARIO_C_HTML_PATH,
-    svgPath: DEFAULT_MOVEMENT_SCENARIO_C_SVG_PATH,
-    mdMarkers: [MOVE_SC_MD_MARKER_1, MOVE_SC_MD_MARKER_2, MOVE_SC_MD_MARKER_3],
-    htmlMarkers: [MOVE_SC_HTML_MARKER_1, MOVE_SC_HTML_MARKER_2, MOVE_SC_HTML_MARKER_3],
-  });
 }
 
 export async function runDistributedScaleoutProvenanceGuard(rootDir = REPO_ROOT) {
   verifyEpic(rootDir);
   assert.equal(typeof runModeledScenarioBHarnessComparison, TYPE_FUNCTION);
-  assert.equal(buildLagrangeEvolutionTimeline().length >= NUM_TEN, true);
+  assert.equal(buildLagrangeEvolutionTimeline().length >= NUM_ELEVEN, true);
   const matrixPath = path.resolve(rootDir, DEFAULT_MULTI_SYSTEM_MATRIX_PATH);
   assert.equal(fs.existsSync(matrixPath), true);
   const matrix = await readMultiSystemComparativeMatrix({rootDir, matrixPath});
@@ -266,10 +266,7 @@ const isDirectCli = process.argv[NUM_ONE] &&
   path.resolve(process.argv[NUM_ONE]) === fileURLToPath(import.meta.url);
 if (isDirectCli) {
   const result = await runDistributedScaleoutProvenanceGuard();
-  if (arrayIncludes(process.argv, FLAG_METRIC)) {
-    process.stdout.write(`${result.remainingSlicesCount}${NEWLINE}`);
-    process.exitCode = result.remainingSlicesCount === NUM_ZERO ? NUM_ZERO : NUM_ONE;
-  } else {
-    process.stdout.write(PASS_MESSAGE);
-  }
+  const isMetric = arrayIncludes(process.argv, FLAG_METRIC);
+  process.stdout.write(isMetric ? `${result.remainingSlicesCount}${NEWLINE}` : PASS_MESSAGE);
+  if (isMetric) process.exitCode = result.remainingSlicesCount === NUM_ZERO ? NUM_ZERO : NUM_ONE;
 }

@@ -3,6 +3,7 @@ import path from 'node:path';
 import process from 'node:process';
 import {escapeXml, formatNum} from './comparative-landing-svg-renderer.js';
 import {buildMultiSystemComparativeMatrix} from './comparative-matrix-runner.js';
+import {buildLagrangeEvolutionTimeline} from './scaleout-series-experiments.js';
 
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -15,45 +16,7 @@ export const DEFAULT_LAGRANGE_EVOLUTION_HTML_PATH = 'docs/benchmarks/lagrange-me
 const HTML_PAGE_STYLE = `<style>:root{--bg:#0f172a;--card-bg:#1e293b;--text:#f8fafc;--muted:#94a3b8;--border:#334155;--accent:#38bdf8}body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px}.container{max-width:1100px;margin:0 auto}h1{font-size:24px;color:#fff}.nav-bar{margin:12px 0 20px 0}.nav-bar a{color:var(--accent);margin-right:12px}.card{background:var(--card-bg);border-radius:8px;border:1px solid var(--border);padding:18px;margin-bottom:24px}
 .card h2{font-size:16px;color:var(--accent)}.card p,.card li{font-size:13px;line-height:1.6;color:#cbd5e1}th{color:var(--muted);font-weight:600}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}.chart-box{margin-bottom:24px;display:flex}</style>`;
 
-function makeMilestone(id, ver, commit, date, desc, tier, mode, a, proofs, b, decC) {
-  return Object.freeze({
-    id, tag: id, milestoneId: id, version: ver, commit, commitSha: commit,
-    date, recordedAt: date, description: desc, label: desc, evidenceTier: tier,
-    executionMode: mode, executionPath: mode, scenarioATxPerSec: a[0], scenarioAP50Ms: a[1],
-    scenarioAP95Ms: a[2], scenarioAP99Ms: a[3], semanticProofPassed: proofs,
-    semanticProofRequired: 33, scenarioBDecisionsPerSec: b[0], scenarioBP99Ms: b[1],
-    scenarioBWanBytes: b[2], scenarioBMoveP99Ms: b[3], scenarioBConvergenceMs: b[4],
-    scenarioCFresh0msDecPerSec: decC,
-  });
-}
-
-const o = 'observed-docker-cluster';
-const m = 'modeled-topology-oracle';
-const w = 'live-cluster-wire';
-const l = 'local-js-oracle';
-
-const DEFAULT_TIMELINE = Object.freeze([
-  makeMilestone('v0.2.0-tidb-ref', '0.2.0', 'b0b2f9abcc', '2026-09-12T20:07:34Z',
-    'TiDB Reference Baseline Established', o, w, [0.0, 0.0, 0.0, 0.0], 0, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
-  makeMilestone('v0.3.0-lab-paired', '0.3.0', '8039e45f2a', '2026-10-29T18:53:52Z',
-    '5-Node Lab Paired Scenario A Baseline', o, w, [0.83, 2269.44, 4418.93, 5343.1], 4, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
-  makeMilestone('v0.3.0-conflict-retry', '0.3.0', '66d054c9c9', '2026-10-30T11:45:00Z',
-    'Retryable Conflict & Visibility Gate', o, w, [0.83, 2269.44, 4418.93, 5343.1], 16, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
-  makeMilestone('v0.3.0-semantic-closure', '0.3.0', '27af74dc7b', '2026-10-30T12:11:36Z',
-    'Full 33/33 Semantic Proof Closure', o, w, [0.83, 2269.44, 4418.93, 5343.1], 33, [0.0, 0.0, 0, 0.0, 0.0], 0.0),
-  makeMilestone('v0.3.0-scenario-b-model', '0.3.0', '2d416de6e5', '2026-10-30T16:05:00Z',
-    'Scenario B 3-Island RF=3 Risk & Movement Model', m, l, [0.83, 2269.44, 4418.93, 5343.1], 33, [441.15, 18.09, 144, 18.0, 45.0], 0.0),
-  makeMilestone('v0.3.2-provenance-matrix', '0.3.2', '4dc6db6b93', '2026-10-30T20:11:52Z',
-    '13-Target Matrix, Scenario C & Provenance Audit', m, l, [0.83, 2269.44, 4418.93, 5343.1], 33, [441.15, 18.09, 144, 18.0, 45.0], 441.15),
-  makeMilestone('v0.3.2-scaleout-3to5-rf3', '0.3.2', '89300e4d8a', '2026-10-30T21:40:00Z',
-    '3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Separation', m, l, [2.24, 1380.0, 2590.0, 3120.0], 33, [720.4, 18.09, 144, 18.0, 45.0], 441.15),
-  makeMilestone('v0.3.2-partition-sweep-p6to60', '0.3.2', '2025f7780d', '2026-10-30T22:10:00Z',
-    '5-Node RF=3 Partition Granularity Sweep (P=6..60)', m, l, [2.24, 1520.0, 2590.0, 3120.0], 33, [784.0, 16.9, 144, 42.0, 45.0], 441.15),
-  makeMilestone('v0.3.2-rtt-working-set-crossover', '0.3.2', 'bdee84d5fc', '2026-10-30T23:00:00Z',
-    'Scenario B RTT Crossover (0.2..30ms) & Heavy-Correlation Working Set', m, l, [2.24, 1520.0, 2590.0, 3120.0], 33, [368.0, 21.8, 144, 42.0, 45.0], 441.15),
-  makeMilestone('v0.3.2-live-movement-scenario-c-scale', '0.3.2', '72c76c6629', '2026-10-30T23:50:00Z',
-    'Live Movement Under Load & Scenario C 5x Joint Scaling', m, l, [2.24, 1520.0, 2590.0, 3120.0], 33, [1840.0, 17.8, 144, 26.4, 45.0], 1840.0),
-]);
+const DEFAULT_TIMELINE = buildLagrangeEvolutionTimeline();
 
 const MILESTONE_LABELS = Object.freeze({
   'v0.2.0-tidb-ref': ['v0.2.0 @ b0b2f9a (2026-09-12)', 'TiDB Reference Baseline'],
@@ -66,6 +29,8 @@ const MILESTONE_LABELS = Object.freeze({
   'v0.3.2-partition-sweep-p6to60': ['0.3.2@2025f778 (P=6..60)', 'Partition Sweep (784 dec/s)'],
   'v0.3.2-rtt-working-set-crossover': ['0.3.2@bdee84d5 (RTT/WS)', 'RTT & Working-Set Crossover'],
   'v0.3.2-live-movement-scenario-c-scale': ['0.3.2@72c76c66 (5x/Move)', 'Live Move & 5x Scenario C'],
+  'v0.3.3-tx-fast-path-5node-summary': ['0.3.3@b41d4cce (FastPath)', 'v0.3.3 Fast-Path & 5n (3.84 tx/s)'],
+  'v0.4.0-scaleout-scenario-c-release': ['0.4.0@7565d8c0 (Release)', 'v0.4.0 5n & Scen C Summary'],
 });
 
 const COMMIT_DELTAS = Object.freeze([
@@ -79,6 +44,8 @@ const COMMIT_DELTAS = Object.freeze([
   ['v0.3.2-partition-sweep-p6to60', '2025f7780d', 'Peak 784.0 dec/s at P=30 (6 leaders/node) vs -5.9% coordination drop at P=60'],
   ['v0.3.2-rtt-working-set-crossover', 'bdee84d5fc', 'RTT 0.2..30ms crossover (168 dec/s @ 10ms) & heavy 2048-event working set (368 dec/s, 144 B)'],
   ['v0.3.2-live-movement-scenario-c-scale', '72c76c6629', 'Zero-stall live move (26.4 ms during-move p99) & 5x Scenario C (1840 fresh dec/s @ 0ms)'],
+  ['v0.3.3-tx-fast-path-5node-summary', 'b41d4ccec4', 'v0.3.3 Scenario A tx coordination fast-path (3.84 tx/s 5-node proportional, 1490ms p95) & 5-node summary.'],
+  ['v0.4.0-scaleout-scenario-c-release', '7565d8c09a', 'v0.4.0 release with 5-node RF=3 and Scenario C summary statistics on the landing page.'],
 ]);
 
 function getMilestoneLabels(m) {

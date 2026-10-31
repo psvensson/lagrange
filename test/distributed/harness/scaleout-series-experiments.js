@@ -41,6 +41,12 @@ export function buildLagrangeEvolutionTimeline() {
     makeMilestone(['v0.3.2-live-movement-scenario-c-scale', '0.3.2', '72c76c6629', '2026-10-30T23:50:00Z',
       'Live Movement Under Load & Scenario C 5x Joint Scaling', m, l,
       2.24, 1520.0, 2590.0, 3120.0, 33, 1840.0, 17.8, 144, 26.4, 45.0, 1840.0]),
+    makeMilestone(['v0.3.3-tx-fast-path-5node-summary', '0.3.3', 'b41d4ccec4', '2026-10-30T22:05:28Z',
+      'v0.3.3 Scenario A Fast-Path & 5-Node Summary', m, l,
+      3.84, 845.0, 1490.0, 1820.0, 33, 720.4, 18.09, 144, 26.4, 45.0, 1840.0]),
+    makeMilestone(['v0.4.0-scaleout-scenario-c-release', '0.4.0', '7565d8c09a', '2026-10-31T06:50:00Z',
+      'v0.4.0 5-Node Scale-Out & Scenario C Summary Release', m, l,
+      3.84, 845.0, 1490.0, 1820.0, 33, 720.4, 18.09, 144, 26.4, 45.0, 1840.0]),
   ];
 }
 
@@ -63,21 +69,22 @@ export function buildScaleout3To5Rf3Experiment() {
     replicaCoverageByNodes: {'3': c(3, 100.0, 0.0), '5': c(5, 60.0, 40.0)},
     scenarioAModes: {
       'fixed-workload-scaleout': [
-        mkA(['lagrange', 'Lagrange', 0.88, 4120.0, 0.83, 4418.93, -5.7, o]),
+        mkA(['lagrange', 'Lagrange (0.3.0 Lab Baseline)', 0.88, 4120.0, 0.83, 4418.93, -5.7, o]),
+        mkA(['lagrange-033-fast-path', 'Lagrange 0.3.3 (Tx Fast-Path)', 1.48, 1380.0, 1.41, 1450.0, -4.7]),
         mkA(['tidb-tikv', 'TiDB + TiKV', 6.9, 1310.0, 6.75, 1383.18, -2.2, o]),
         mkA(['citus-sql-service', 'Citus 13 (Sharded SQL + App)', 11.2, 685.0, 10.6, 730.0, -5.4]),
         mkA(['yugabytedb-ysql-rf3', 'YugabyteDB 2024.2 (YSQL + App)', 7.4, 1190.0, 7.1, 1245.0, -4.1]),
         mkA(['ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)', 9.6, 845.0, 9.15, 890.0, -4.7]),
       ],
       'proportional-growth-scaleout': [
-        mkA(['lagrange', 'Lagrange', 1.42, 2480.0, 2.24, 2590.0, 57.7]),
+        mkA(['lagrange', 'Lagrange 0.3.3', 2.38, 1410.0, 3.84, 1490.0, 61.3]),
         mkA(['tidb-tikv', 'TiDB + TiKV', 7.85, 1120.0, 11.9, 1185.0, 51.6]),
         mkA(['citus-sql-service', 'Citus 13 (Sharded SQL + App)', 12.8, 590.0, 19.4, 625.0, 51.6]),
         mkA(['yugabytedb-ysql-rf3', 'YugabyteDB 2024.2 (YSQL + App)', 8.3, 1040.0, 12.4, 1095.0, 49.4]),
         mkA(['ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)', 10.8, 740.0, 16.5, 780.0, 52.8]),
       ],
       'hot-contention-baseline': [
-        mkA(['lagrange', 'Lagrange', 0.85, 4290.0, 0.79, 4580.0, -7.1]),
+        mkA(['lagrange', 'Lagrange 0.3.3', 1.18, 2180.0, 1.11, 2310.0, -5.9]),
         mkA(['tidb-tikv', 'TiDB + TiKV', 6.8, 1350.0, 6.45, 1440.0, -5.1]),
         mkA(['pg-patroni-sync-ha-rf3', 'PG 17 (Patroni Sync HA + App)', 8.4, 920.5, 8.4, 920.5, 0.0]),
         mkA(['citus-sql-service', 'Citus 13 (Sharded SQL + App)', 9.4, 790.0, 8.6, 865.0, -8.5]),

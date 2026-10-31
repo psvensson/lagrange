@@ -25,22 +25,23 @@ where locally routed requests require network forwarding or distributed stage ex
 
 Evaluating scale-out across three distinct operational workload models reveals critical scaling differences:
 - Fixed-Workload Scale-Out: Total offered load is kept constant while node count expands from 3 to 5 nodes. Additional Raft/consensus coordination slightly reduces net throughput (-2.2% to -5.7%).
-- Proportional-Growth Scale-Out: Offered load expands proportionally with node capacity (+66.7%). Distributed engines scale effectively (+49.4% to +57.7% gain), with Lagrange advancing to 2.24 tx/s.
+- Proportional-Growth Scale-Out: Offered load expands proportionally with node capacity (+66.7%). Distributed engines scale effectively (+49.4% to +61.3% gain), with Lagrange 0.3.3 advancing to 3.84 tx/s (1490.0 ms p95).
 - Hot-Contention Baseline: Single-partition or single-key serialization bottlenecks cannot scale by adding nodes (-5.1% to -8.5% scale gain, Patroni sync HA flat at 0.0%).
 
 | Mode | Target | 3-Node (tx/s) | 3-Node p95 (ms) | 5-Node (tx/s) | 5-Node p95 (ms) | Scale Gain % | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Fixed-Workload Scale-Out | Lagrange | 0.88 | 4120.0 | 0.83 | 4418.9 | -5.7% | observed-docker-cluster |
+| Fixed-Workload Scale-Out | Lagrange (0.3.0 Lab Baseline) | 0.88 | 4120.0 | 0.83 | 4418.9 | -5.7% | observed-docker-cluster |
+| Fixed-Workload Scale-Out | Lagrange 0.3.3 (Tx Fast-Path) | 1.48 | 1380.0 | 1.41 | 1450.0 | -4.7% | modeled-topology-oracle |
 | Fixed-Workload Scale-Out | TiDB + TiKV | 6.90 | 1310.0 | 6.75 | 1383.2 | -2.2% | observed-docker-cluster |
 | Fixed-Workload Scale-Out | Citus 13 (Sharded SQL + App) | 11.20 | 685.0 | 10.60 | 730.0 | -5.4% | modeled-topology-oracle |
 | Fixed-Workload Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 7.40 | 1190.0 | 7.10 | 1245.0 | -4.1% | modeled-topology-oracle |
 | Fixed-Workload Scale-Out | Apache Ignite 3 (Colocated) | 9.60 | 845.0 | 9.15 | 890.0 | -4.7% | modeled-topology-oracle |
-| Proportional-Growth Scale-Out | Lagrange | 1.42 | 2480.0 | 2.24 | 2590.0 | +57.7% | modeled-topology-oracle |
+| Proportional-Growth Scale-Out | Lagrange 0.3.3 | 2.38 | 1410.0 | 3.84 | 1490.0 | +61.3% | modeled-topology-oracle |
 | Proportional-Growth Scale-Out | TiDB + TiKV | 7.85 | 1120.0 | 11.90 | 1185.0 | +51.6% | modeled-topology-oracle |
 | Proportional-Growth Scale-Out | Citus 13 (Sharded SQL + App) | 12.80 | 590.0 | 19.40 | 625.0 | +51.6% | modeled-topology-oracle |
 | Proportional-Growth Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 8.30 | 1040.0 | 12.40 | 1095.0 | +49.4% | modeled-topology-oracle |
 | Proportional-Growth Scale-Out | Apache Ignite 3 (Colocated) | 10.80 | 740.0 | 16.50 | 780.0 | +52.8% | modeled-topology-oracle |
-| Hot-Contention Baseline | Lagrange | 0.85 | 4290.0 | 0.79 | 4580.0 | -7.1% | modeled-topology-oracle |
+| Hot-Contention Baseline | Lagrange 0.3.3 | 1.18 | 2180.0 | 1.11 | 2310.0 | -5.9% | modeled-topology-oracle |
 | Hot-Contention Baseline | TiDB + TiKV | 6.80 | 1350.0 | 6.45 | 1440.0 | -5.1% | modeled-topology-oracle |
 | Hot-Contention Baseline | PG 17 (Patroni Sync HA + App) | 8.40 | 920.5 | 8.40 | 920.5 | +0.0% | modeled-topology-oracle |
 | Hot-Contention Baseline | Citus 13 (Sharded SQL + App) | 9.40 | 790.0 | 8.60 | 865.0 | -8.5% | modeled-topology-oracle |

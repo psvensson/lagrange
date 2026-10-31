@@ -5,23 +5,17 @@
   <title>Comparative Benchmark Statistics - Multi-System Overview</title>
   <style>
     :root { --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
-    a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
-    .container { max-width: 1040px; margin: 0 auto; }
-    h1 { font-size: 22px; margin-bottom: 8px; }
-    p.desc { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
-    .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 20px; overflow-x: auto; }
+    * { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+    a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; } .container { max-width: 1040px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 8px; } p.desc { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+    .chart-box, .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; overflow-x: auto; }
+    .chart-box { padding: 12px; } .card h2 { font-size: 15px; margin-bottom: 12px; color: var(--accent); }
     .filter-bar { margin-bottom: 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
     .filter-bar input { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; width: 280px; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; overflow-x: auto; }
-    .card h2 { font-size: 15px; margin-bottom: 12px; color: var(--accent); }
     table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     table.data-table th, table.data-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
-    table.data-table th { color: var(--muted); font-weight: 600; }
-    .badge { font-family: monospace; background: #0f172a; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border); }
-    .badge-green { color: #10b981; border-color: #10b981; }
-    .badge-red { color: #ef4444; border-color: #ef4444; }
+    table.data-table th { color: var(--muted); font-weight: 600; } .badge { font-family: monospace; background: #0f172a; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border); }
+    .badge-green { color: #10b981; border-color: #10b981; } .badge-red { color: #ef4444; border-color: #ef4444; }
   </style>
 </head>
 <body>
@@ -29,392 +23,651 @@
     <h1>Comparative Benchmark Statistics</h1>
     <p class="desc">Multi-system executive performance and topology comparison across PostgreSQL, TiDB/TiKV, and Lagrange.</p>
     <p class="desc">Specifications &amp; Detail: <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline">Scenario A</a> | <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B</a> | <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision">Scenario C Spec</a> | <a href="tidb-reference-paired-owner.md">Paired Benchmark Owner</a> | <a href="lagrange-metrics-evolution.html">Lagrange Metrics Evolution Over Time</a> (<a href="lagrange-metrics-evolution.md">MD</a>) | <a href="tidb-comparison-progress.html">TiDB Progress</a> | <a href="postgresql-comparison-progress.html">PostgreSQL Progress</a> | <a href="citus-comparison-progress.html">Citus Distributed Functions (HTML)</a> | <a href="citus-comparison-progress.md">Citus Detail (MD)</a> | <a href="yugabyte-ignite-comparison-progress.html">YugabyteDB &amp; Ignite 3 (HTML)</a> | <a href="yugabyte-ignite-comparison-progress.md">YugabyteDB &amp; Ignite 3 (MD)</a> | <a href="scenario-c-feature-store-progress.html">Scenario C: PG + Valkey (HTML)</a> | <a href="scenario-c-feature-store-progress.md">Scenario C (MD)</a> | <a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out (HTML)</a> | <a href="scaleout-3to5-node-rf3-progress.md">3-to-5-Node RF=3 Scale-Out (MD)</a> | <a href="partition-granularity-sweep-progress.html">5-Node RF=3 Partition Granularity Sweep (P=6..60) (HTML)</a> | <a href="partition-granularity-sweep-progress.md">(Markdown)</a> | <a href="scenario-b-rtt-working-set-crossover.html">Scenario B Network RTT Crossover &amp; Working-Set Growth (HTML)</a> | <a href="scenario-b-rtt-working-set-crossover.md">(Markdown)</a> | <a href="movement-and-scenario-c-scaling-progress.html">Live Partition Movement &amp; Scenario C 5x Joint Scaling (HTML)</a> | <a href="movement-and-scenario-c-scaling-progress.md">(Markdown)</a></p>
-    <div class="chart-box"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1746" width="960" height="1746" role="img" aria-label="Lagrange Comparative Benchmark Statistics - Multi-System Overview">
-  <rect width="960" height="1746" fill="#0f172a" rx="12"/>
+    <div class="chart-box"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 2714" width="960" height="2714" role="img" aria-label="Lagrange Comparative Benchmark Statistics - Multi-System Overview">
+  <rect width="960" height="2714" fill="#0f172a" rx="12"/>
   <text x="30" y="32" fill="#f8fafc" font-size="18" font-weight="700" font-family="system-ui, sans-serif">Lagrange Comparative Benchmark Statistics - Multi-System Overview</text>
-  <text x="30" y="50" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Targets: Lagrange, TiDB + TiKV, PG 17 (Single + App Service), PG 17 (Patroni Sync HA + App)</text>
-  <text x="30" y="66" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">         PG 17 (Single + PL/pgSQL Fn), PG 17 (Patroni HA + PL/pgSQL), Citus 13 (Sharded SQL + App), Citus 13 (Dist Function)</text>
-  <text x="30" y="82" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">         YugabyteDB 2024.2 (YSQL + App), YugabyteDB 2024.2 (Stored Proc), Apache Ignite 3 (Colocated), PG 17 + Valkey 8 (Sync)</text>
-  <text x="30" y="98" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">         PG 17 + Valkey 8 (Async)</text>
+  <text x="30" y="50" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Targets: Lagrange 0.4.0 (3-Node RF=3), Lagrange 0.4.0 (5-Node RF=3), TiDB + TiKV, PG 17 (Single + App Service)</text>
+  <text x="30" y="66" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">         PG 17 (Patroni Sync HA + App), PG 17 (Single + PL/pgSQL Fn), PG 17 (Patroni HA + PL/pgSQL), Citus 13 (Sharded SQL + App)</text>
+  <text x="30" y="82" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">         Citus 13 (Dist Function), YugabyteDB 2024.2 (YSQL + App), YugabyteDB 2024.2 (Stored Proc), Apache Ignite 3 (Colocated)</text>
+  <text x="30" y="98" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">         PG 17 + Valkey 8 (Sync), PG 17 + Valkey 8 (Async)</text>
   <text x="30" y="114" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Legend: solid bar = observed-docker-cluster | dashed bar = modeled-topology-oracle</text>
   <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="30" y="138" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">Scenario A - Contended OLTP Baseline (tidb-oltp-baseline) &amp; Topology Footprint</text></a>
-  <rect x="30" y="150" width="280" height="770" rx="8" fill="#1e293b" stroke="#334155"/>
+  <rect x="30" y="150" width="280" height="824" rx="8" fill="#1e293b" stroke="#334155"/>
   <text x="45" y="178" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario A Throughput (tx/sec)</text>
   <text x="45" y="196" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Contended OLTP Capacity</text>
-    <text x="45" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="45" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
     <text x="45" y="231" fill="#94a3b8" font-size="10" font-family="monospace">0.83 tx/s</text>
     <rect x="45" y="236" width="220" height="11" fill="#334155" rx="3"/>
     <rect x="45" y="236" width="12" height="11" fill="#6366f1" rx="3"/>
-    <text x="45" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
-    <text x="45" y="285" fill="#94a3b8" font-size="10" font-family="monospace">6.75 tx/s</text>
+    <text x="45" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+    <text x="45" y="285" fill="#94a3b8" font-size="10" font-family="monospace">3.84 tx/s</text>
     <rect x="45" y="290" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="290" width="100" height="11" fill="#0284c7" rx="3"/>
-    <text x="45" y="326" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
-    <text x="45" y="339" fill="#94a3b8" font-size="10" font-family="monospace">14.80 tx/s</text>
+    <rect x="45" y="290" width="57" height="11" fill="#38bdf8" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="326" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="45" y="339" fill="#94a3b8" font-size="10" font-family="monospace">6.75 tx/s</text>
     <rect x="45" y="344" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="344" width="220" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="380" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
-    <text x="45" y="393" fill="#94a3b8" font-size="10" font-family="monospace">8.40 tx/s</text>
+    <rect x="45" y="344" width="100" height="11" fill="#0284c7" rx="3"/>
+    <text x="45" y="380" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="45" y="393" fill="#94a3b8" font-size="10" font-family="monospace">14.80 tx/s</text>
     <rect x="45" y="398" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="398" width="125" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="434" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
-    <text x="45" y="447" fill="#94a3b8" font-size="10" font-family="monospace">14.80 tx/s</text>
+    <rect x="45" y="398" width="220" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="434" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="45" y="447" fill="#94a3b8" font-size="10" font-family="monospace">8.40 tx/s</text>
     <rect x="45" y="452" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="452" width="220" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="488" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
-    <text x="45" y="501" fill="#94a3b8" font-size="10" font-family="monospace">8.40 tx/s</text>
+    <rect x="45" y="452" width="125" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="488" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="45" y="501" fill="#94a3b8" font-size="10" font-family="monospace">14.80 tx/s</text>
     <rect x="45" y="506" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="506" width="125" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="542" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
-    <text x="45" y="555" fill="#94a3b8" font-size="10" font-family="monospace">11.20 tx/s</text>
+    <rect x="45" y="506" width="220" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="542" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="45" y="555" fill="#94a3b8" font-size="10" font-family="monospace">8.40 tx/s</text>
     <rect x="45" y="560" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="560" width="166" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="596" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <rect x="45" y="560" width="125" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="596" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
     <text x="45" y="609" fill="#94a3b8" font-size="10" font-family="monospace">11.20 tx/s</text>
     <rect x="45" y="614" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="614" width="166" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="650" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
-    <text x="45" y="663" fill="#94a3b8" font-size="10" font-family="monospace">7.40 tx/s</text>
+    <rect x="45" y="614" width="166" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="650" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="45" y="663" fill="#94a3b8" font-size="10" font-family="monospace">11.20 tx/s</text>
     <rect x="45" y="668" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="668" width="110" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="704" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <rect x="45" y="668" width="166" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="704" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
     <text x="45" y="717" fill="#94a3b8" font-size="10" font-family="monospace">7.40 tx/s</text>
     <rect x="45" y="722" width="220" height="11" fill="#334155" rx="3"/>
     <rect x="45" y="722" width="110" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="758" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
-    <text x="45" y="771" fill="#94a3b8" font-size="10" font-family="monospace">9.60 tx/s</text>
+    <text x="45" y="758" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <text x="45" y="771" fill="#94a3b8" font-size="10" font-family="monospace">7.40 tx/s</text>
     <rect x="45" y="776" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="776" width="143" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="812" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
-    <text x="45" y="825" fill="#94a3b8" font-size="10" font-family="monospace">8.40 tx/s</text>
+    <rect x="45" y="776" width="110" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="812" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
+    <text x="45" y="825" fill="#94a3b8" font-size="10" font-family="monospace">9.60 tx/s</text>
     <rect x="45" y="830" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="830" width="125" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="866" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <rect x="45" y="830" width="143" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="866" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
     <text x="45" y="879" fill="#94a3b8" font-size="10" font-family="monospace">8.40 tx/s</text>
     <rect x="45" y="884" width="220" height="11" fill="#334155" rx="3"/>
     <rect x="45" y="884" width="125" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-  <rect x="340" y="150" width="280" height="770" rx="8" fill="#1e293b" stroke="#334155"/>
+    <text x="45" y="920" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <text x="45" y="933" fill="#94a3b8" font-size="10" font-family="monospace">8.40 tx/s</text>
+    <rect x="45" y="938" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="938" width="125" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="340" y="150" width="280" height="824" rx="8" fill="#1e293b" stroke="#334155"/>
   <text x="355" y="178" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario A Commit Latency p95 (ms)</text>
   <text x="355" y="196" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Commit Tail Distribution</text>
-    <text x="355" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="355" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
     <text x="355" y="231" fill="#94a3b8" font-size="10" font-family="monospace">4418.93 ms</text>
     <rect x="355" y="236" width="220" height="11" fill="#334155" rx="3"/>
     <rect x="355" y="236" width="220" height="11" fill="#6366f1" rx="3"/>
-    <text x="355" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
-    <text x="355" y="285" fill="#94a3b8" font-size="10" font-family="monospace">1383.18 ms</text>
+    <text x="355" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+    <text x="355" y="285" fill="#94a3b8" font-size="10" font-family="monospace">1490.00 ms</text>
     <rect x="355" y="290" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="290" width="69" height="11" fill="#0284c7" rx="3"/>
-    <text x="355" y="326" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
-    <text x="355" y="339" fill="#94a3b8" font-size="10" font-family="monospace">412.60 ms</text>
+    <rect x="355" y="290" width="74" height="11" fill="#38bdf8" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="326" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="355" y="339" fill="#94a3b8" font-size="10" font-family="monospace">1383.18 ms</text>
     <rect x="355" y="344" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="344" width="21" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="380" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
-    <text x="355" y="393" fill="#94a3b8" font-size="10" font-family="monospace">920.50 ms</text>
+    <rect x="355" y="344" width="69" height="11" fill="#0284c7" rx="3"/>
+    <text x="355" y="380" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="355" y="393" fill="#94a3b8" font-size="10" font-family="monospace">412.60 ms</text>
     <rect x="355" y="398" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="398" width="46" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="434" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
-    <text x="355" y="447" fill="#94a3b8" font-size="10" font-family="monospace">412.60 ms</text>
+    <rect x="355" y="398" width="21" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="434" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="355" y="447" fill="#94a3b8" font-size="10" font-family="monospace">920.50 ms</text>
     <rect x="355" y="452" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="452" width="21" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="488" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
-    <text x="355" y="501" fill="#94a3b8" font-size="10" font-family="monospace">920.50 ms</text>
+    <rect x="355" y="452" width="46" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="488" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="355" y="501" fill="#94a3b8" font-size="10" font-family="monospace">412.60 ms</text>
     <rect x="355" y="506" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="506" width="46" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="542" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
-    <text x="355" y="555" fill="#94a3b8" font-size="10" font-family="monospace">685.00 ms</text>
+    <rect x="355" y="506" width="21" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="542" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="355" y="555" fill="#94a3b8" font-size="10" font-family="monospace">920.50 ms</text>
     <rect x="355" y="560" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="560" width="34" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="596" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <rect x="355" y="560" width="46" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="596" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
     <text x="355" y="609" fill="#94a3b8" font-size="10" font-family="monospace">685.00 ms</text>
     <rect x="355" y="614" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="614" width="34" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="650" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
-    <text x="355" y="663" fill="#94a3b8" font-size="10" font-family="monospace">1190.00 ms</text>
+    <rect x="355" y="614" width="34" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="650" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="355" y="663" fill="#94a3b8" font-size="10" font-family="monospace">685.00 ms</text>
     <rect x="355" y="668" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="668" width="59" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="704" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <rect x="355" y="668" width="34" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="704" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
     <text x="355" y="717" fill="#94a3b8" font-size="10" font-family="monospace">1190.00 ms</text>
     <rect x="355" y="722" width="220" height="11" fill="#334155" rx="3"/>
     <rect x="355" y="722" width="59" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="758" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
-    <text x="355" y="771" fill="#94a3b8" font-size="10" font-family="monospace">845.00 ms</text>
+    <text x="355" y="758" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <text x="355" y="771" fill="#94a3b8" font-size="10" font-family="monospace">1190.00 ms</text>
     <rect x="355" y="776" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="776" width="42" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="812" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
-    <text x="355" y="825" fill="#94a3b8" font-size="10" font-family="monospace">920.50 ms</text>
+    <rect x="355" y="776" width="59" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="812" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
+    <text x="355" y="825" fill="#94a3b8" font-size="10" font-family="monospace">845.00 ms</text>
     <rect x="355" y="830" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="830" width="46" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="866" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <rect x="355" y="830" width="42" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="866" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
     <text x="355" y="879" fill="#94a3b8" font-size="10" font-family="monospace">920.50 ms</text>
     <rect x="355" y="884" width="220" height="11" fill="#334155" rx="3"/>
     <rect x="355" y="884" width="46" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-  <rect x="650" y="150" width="280" height="770" rx="8" fill="#1e293b" stroke="#334155"/>
+    <text x="355" y="920" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <text x="355" y="933" fill="#94a3b8" font-size="10" font-family="monospace">920.50 ms</text>
+    <rect x="355" y="938" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="938" width="46" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="650" y="150" width="280" height="824" rx="8" fill="#1e293b" stroke="#334155"/>
   <text x="665" y="178" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Whole-Topology Units &amp; Processes</text>
   <text x="665" y="196" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Footprint &amp; RPO=0 HA Survival</text>
-    <text x="665" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
+    <text x="665" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
     <text x="665" y="231" fill="#94a3b8" font-size="10" font-family="monospace">3u / 3p</text>
     <rect x="665" y="236" width="140" height="11" fill="#334155" rx="3"/>
     <rect x="665" y="236" width="35" height="11" fill="#6366f1" rx="3"/>
     <rect x="815" y="234" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="245" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
-    <text x="665" y="285" fill="#94a3b8" font-size="10" font-family="monospace">6u / 6p</text>
+    <text x="665" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+    <text x="665" y="285" fill="#94a3b8" font-size="10" font-family="monospace">5u / 5p</text>
     <rect x="665" y="290" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="290" width="70" height="11" fill="#0284c7" rx="3"/>
+    <rect x="665" y="290" width="58" height="11" fill="#38bdf8" rx="3"/>
     <rect x="815" y="288" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="299" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="326" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
-    <text x="665" y="339" fill="#94a3b8" font-size="10" font-family="monospace">2u / 2p</text>
+    <text x="665" y="326" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="665" y="339" fill="#94a3b8" font-size="10" font-family="monospace">6u / 6p</text>
     <rect x="665" y="344" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="344" width="23" height="11" fill="#10b981" rx="3"/>
-    <rect x="815" y="342" width="75" height="15" fill="#0f172a" rx="3" stroke="#ef4444"/>
-    <text x="852" y="353" fill="#ef4444" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: NO</text>
-    <text x="665" y="380" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
-    <text x="665" y="393" fill="#94a3b8" font-size="10" font-family="monospace">6u / 9p</text>
+    <rect x="665" y="344" width="70" height="11" fill="#0284c7" rx="3"/>
+    <rect x="815" y="342" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
+    <text x="852" y="353" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
+    <text x="665" y="380" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="665" y="393" fill="#94a3b8" font-size="10" font-family="monospace">2u / 2p</text>
     <rect x="665" y="398" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="398" width="105" height="11" fill="#f59e0b" rx="3"/>
-    <rect x="815" y="396" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
-    <text x="852" y="407" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="434" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
-    <text x="665" y="447" fill="#94a3b8" font-size="10" font-family="monospace">1u / 1p</text>
+    <rect x="665" y="398" width="23" height="11" fill="#10b981" rx="3"/>
+    <rect x="815" y="396" width="75" height="15" fill="#0f172a" rx="3" stroke="#ef4444"/>
+    <text x="852" y="407" fill="#ef4444" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: NO</text>
+    <text x="665" y="434" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="665" y="447" fill="#94a3b8" font-size="10" font-family="monospace">6u / 9p</text>
     <rect x="665" y="452" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="452" width="12" height="11" fill="#14b8a6" rx="3"/>
-    <rect x="815" y="450" width="75" height="15" fill="#0f172a" rx="3" stroke="#ef4444"/>
-    <text x="852" y="461" fill="#ef4444" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: NO</text>
-    <text x="665" y="488" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
-    <text x="665" y="501" fill="#94a3b8" font-size="10" font-family="monospace">5u / 8p</text>
+    <rect x="665" y="452" width="105" height="11" fill="#f59e0b" rx="3"/>
+    <rect x="815" y="450" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
+    <text x="852" y="461" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
+    <text x="665" y="488" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="665" y="501" fill="#94a3b8" font-size="10" font-family="monospace">1u / 1p</text>
     <rect x="665" y="506" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="506" width="93" height="11" fill="#d97706" rx="3"/>
-    <rect x="815" y="504" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
-    <text x="852" y="515" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="542" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
-    <text x="665" y="555" fill="#94a3b8" font-size="10" font-family="monospace">5u / 5p</text>
+    <rect x="665" y="506" width="12" height="11" fill="#14b8a6" rx="3"/>
+    <rect x="815" y="504" width="75" height="15" fill="#0f172a" rx="3" stroke="#ef4444"/>
+    <text x="852" y="515" fill="#ef4444" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: NO</text>
+    <text x="665" y="542" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="665" y="555" fill="#94a3b8" font-size="10" font-family="monospace">5u / 8p</text>
     <rect x="665" y="560" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="560" width="58" height="11" fill="#db2777" rx="3"/>
+    <rect x="665" y="560" width="93" height="11" fill="#d97706" rx="3"/>
     <rect x="815" y="558" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="569" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="596" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
-    <text x="665" y="609" fill="#94a3b8" font-size="10" font-family="monospace">4u / 4p</text>
+    <text x="665" y="596" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="665" y="609" fill="#94a3b8" font-size="10" font-family="monospace">5u / 5p</text>
     <rect x="665" y="614" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="614" width="47" height="11" fill="#ec4899" rx="3"/>
+    <rect x="665" y="614" width="58" height="11" fill="#db2777" rx="3"/>
     <rect x="815" y="612" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="623" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="650" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
-    <text x="665" y="663" fill="#94a3b8" font-size="10" font-family="monospace">4u / 7p</text>
+    <text x="665" y="650" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="665" y="663" fill="#94a3b8" font-size="10" font-family="monospace">4u / 4p</text>
     <rect x="665" y="668" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="668" width="82" height="11" fill="#8b5cf6" rx="3"/>
+    <rect x="665" y="668" width="47" height="11" fill="#ec4899" rx="3"/>
     <rect x="815" y="666" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="677" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="704" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
-    <text x="665" y="717" fill="#94a3b8" font-size="10" font-family="monospace">3u / 6p</text>
+    <text x="665" y="704" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
+    <text x="665" y="717" fill="#94a3b8" font-size="10" font-family="monospace">4u / 7p</text>
     <rect x="665" y="722" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="722" width="70" height="11" fill="#8b5cf6" rx="3"/>
+    <rect x="665" y="722" width="82" height="11" fill="#8b5cf6" rx="3"/>
     <rect x="815" y="720" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="731" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="758" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
-    <text x="665" y="771" fill="#94a3b8" font-size="10" font-family="monospace">3u / 3p</text>
+    <text x="665" y="758" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <text x="665" y="771" fill="#94a3b8" font-size="10" font-family="monospace">3u / 6p</text>
     <rect x="665" y="776" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="776" width="35" height="11" fill="#ef4444" rx="3"/>
+    <rect x="665" y="776" width="70" height="11" fill="#8b5cf6" rx="3"/>
     <rect x="815" y="774" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="785" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="812" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
-    <text x="665" y="825" fill="#94a3b8" font-size="10" font-family="monospace">8u / 11p</text>
+    <text x="665" y="812" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
+    <text x="665" y="825" fill="#94a3b8" font-size="10" font-family="monospace">3u / 3p</text>
     <rect x="665" y="830" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="830" width="128" height="11" fill="#06b6d4" rx="3"/>
+    <rect x="665" y="830" width="35" height="11" fill="#ef4444" rx="3"/>
     <rect x="815" y="828" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="839" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-    <text x="665" y="866" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
-    <text x="665" y="879" fill="#94a3b8" font-size="10" font-family="monospace">9u / 12p</text>
+    <text x="665" y="866" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
+    <text x="665" y="879" fill="#94a3b8" font-size="10" font-family="monospace">8u / 11p</text>
     <rect x="665" y="884" width="140" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="884" width="140" height="11" fill="#06b6d4" rx="3"/>
+    <rect x="665" y="884" width="128" height="11" fill="#06b6d4" rx="3"/>
     <rect x="815" y="882" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
     <text x="852" y="893" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
-  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="944" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision)</text></a>
-  <rect x="30" y="956" width="280" height="770" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="45" y="984" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Risk Decisions/sec</text>
-  <text x="45" y="1002" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Throughput (higher is better)</text>
-    <text x="45" y="1024" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
-    <text x="45" y="1037" fill="#94a3b8" font-size="10" font-family="monospace">441.15 dec/s</text>
-    <rect x="45" y="1042" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1042" width="180" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1078" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
-    <text x="45" y="1091" fill="#94a3b8" font-size="10" font-family="monospace">221.44 dec/s</text>
+    <text x="665" y="920" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <text x="665" y="933" fill="#94a3b8" font-size="10" font-family="monospace">9u / 12p</text>
+    <rect x="665" y="938" width="140" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="938" width="140" height="11" fill="#06b6d4" rx="3"/>
+    <rect x="815" y="936" width="75" height="15" fill="#0f172a" rx="3" stroke="#10b981"/>
+    <text x="852" y="947" fill="#10b981" font-size="10" font-weight="700" font-family="monospace" text-anchor="middle">RPO=0: YES</text>
+  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="998" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision)</text></a>
+  <rect x="30" y="1010" width="280" height="824" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="45" y="1038" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Risk Decisions/sec</text>
+  <text x="45" y="1056" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Throughput (higher is better)</text>
+    <text x="45" y="1078" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
+    <text x="45" y="1091" fill="#94a3b8" font-size="10" font-family="monospace">441.15 dec/s</text>
     <rect x="45" y="1096" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1096" width="91" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1132" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
-    <text x="45" y="1145" fill="#94a3b8" font-size="10" font-family="monospace">294.60 dec/s</text>
+    <rect x="45" y="1096" width="135" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+    <text x="45" y="1145" fill="#94a3b8" font-size="10" font-family="monospace">720.40 dec/s</text>
     <rect x="45" y="1150" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1150" width="120" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1186" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
-    <text x="45" y="1199" fill="#94a3b8" font-size="10" font-family="monospace">218.20 dec/s</text>
+    <rect x="45" y="1150" width="220" height="11" fill="#38bdf8" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1186" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="45" y="1199" fill="#94a3b8" font-size="10" font-family="monospace">221.44 dec/s</text>
     <rect x="45" y="1204" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1204" width="89" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1240" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
-    <text x="45" y="1253" fill="#94a3b8" font-size="10" font-family="monospace">418.40 dec/s</text>
+    <rect x="45" y="1204" width="68" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1240" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="45" y="1253" fill="#94a3b8" font-size="10" font-family="monospace">294.60 dec/s</text>
     <rect x="45" y="1258" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1258" width="171" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1294" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
-    <text x="45" y="1307" fill="#94a3b8" font-size="10" font-family="monospace">316.80 dec/s</text>
+    <rect x="45" y="1258" width="90" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1294" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="45" y="1307" fill="#94a3b8" font-size="10" font-family="monospace">218.20 dec/s</text>
     <rect x="45" y="1312" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1312" width="130" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1348" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
-    <text x="45" y="1361" fill="#94a3b8" font-size="10" font-family="monospace">256.40 dec/s</text>
+    <rect x="45" y="1312" width="67" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1348" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="45" y="1361" fill="#94a3b8" font-size="10" font-family="monospace">418.40 dec/s</text>
     <rect x="45" y="1366" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1366" width="105" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1402" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
-    <text x="45" y="1415" fill="#94a3b8" font-size="10" font-family="monospace">364.20 dec/s</text>
+    <rect x="45" y="1366" width="128" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1402" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="45" y="1415" fill="#94a3b8" font-size="10" font-family="monospace">316.80 dec/s</text>
     <rect x="45" y="1420" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1420" width="149" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1456" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
-    <text x="45" y="1469" fill="#94a3b8" font-size="10" font-family="monospace">234.80 dec/s</text>
+    <rect x="45" y="1420" width="97" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1456" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="45" y="1469" fill="#94a3b8" font-size="10" font-family="monospace">256.40 dec/s</text>
     <rect x="45" y="1474" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1474" width="96" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1510" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
-    <text x="45" y="1523" fill="#94a3b8" font-size="10" font-family="monospace">286.50 dec/s</text>
+    <rect x="45" y="1474" width="78" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1510" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="45" y="1523" fill="#94a3b8" font-size="10" font-family="monospace">364.20 dec/s</text>
     <rect x="45" y="1528" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1528" width="117" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1564" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
-    <text x="45" y="1577" fill="#94a3b8" font-size="10" font-family="monospace">408.60 dec/s</text>
+    <rect x="45" y="1528" width="111" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1564" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
+    <text x="45" y="1577" fill="#94a3b8" font-size="10" font-family="monospace">234.80 dec/s</text>
     <rect x="45" y="1582" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1582" width="167" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1618" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
-    <text x="45" y="1631" fill="#94a3b8" font-size="10" font-family="monospace">462.40 dec/s</text>
+    <rect x="45" y="1582" width="72" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1618" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <text x="45" y="1631" fill="#94a3b8" font-size="10" font-family="monospace">286.50 dec/s</text>
     <rect x="45" y="1636" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1636" width="189" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="45" y="1672" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
-    <text x="45" y="1685" fill="#94a3b8" font-size="10" font-family="monospace">538.00 dec/s</text>
+    <rect x="45" y="1636" width="87" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1672" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
+    <text x="45" y="1685" fill="#94a3b8" font-size="10" font-family="monospace">408.60 dec/s</text>
     <rect x="45" y="1690" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="45" y="1690" width="220" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-  <rect x="340" y="956" width="280" height="770" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="355" y="984" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Decision p99 Latency (ms)</text>
-  <text x="355" y="1002" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Decision Tail + Shape Markers</text>
-    <text x="355" y="1024" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
-    <text x="355" y="1037" fill="#94a3b8" font-size="10" font-family="monospace">18.09 ms (loc 4.2 | seq 22.4)</text>
-    <rect x="355" y="1042" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1042" width="110" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1078" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
-    <text x="355" y="1091" fill="#94a3b8" font-size="10" font-family="monospace">36.08 ms (loc 16.5 | seq 48.6)</text>
+    <rect x="45" y="1690" width="125" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1726" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
+    <text x="45" y="1739" fill="#94a3b8" font-size="10" font-family="monospace">462.40 dec/s</text>
+    <rect x="45" y="1744" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="1744" width="141" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1780" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <text x="45" y="1793" fill="#94a3b8" font-size="10" font-family="monospace">538.00 dec/s</text>
+    <rect x="45" y="1798" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="1798" width="164" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="340" y="1010" width="280" height="824" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="355" y="1038" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario B Decision p99 Latency (ms)</text>
+  <text x="355" y="1056" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Decision Tail + Shape Markers</text>
+    <text x="355" y="1078" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
+    <text x="355" y="1091" fill="#94a3b8" font-size="10" font-family="monospace">18.09 ms (loc 4.2 | seq 22.4)</text>
     <rect x="355" y="1096" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1096" width="220" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1132" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
-    <text x="355" y="1145" fill="#94a3b8" font-size="10" font-family="monospace">26.40 ms (loc 7.4 | seq 24.8)</text>
+    <rect x="355" y="1096" width="110" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+    <text x="355" y="1145" fill="#94a3b8" font-size="10" font-family="monospace">18.09 ms (loc 4.2 | seq 22.4)</text>
     <rect x="355" y="1150" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1150" width="161" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1186" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
-    <text x="355" y="1199" fill="#94a3b8" font-size="10" font-family="monospace">35.20 ms (loc 11.2 | seq 34.6)</text>
+    <rect x="355" y="1150" width="110" height="11" fill="#38bdf8" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1186" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="355" y="1199" fill="#94a3b8" font-size="10" font-family="monospace">36.08 ms (loc 16.5 | seq 48.6)</text>
     <rect x="355" y="1204" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1204" width="215" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1240" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
-    <text x="355" y="1253" fill="#94a3b8" font-size="10" font-family="monospace">17.60 ms (loc 5.1 | seq 17.8)</text>
+    <rect x="355" y="1204" width="220" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1240" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="355" y="1253" fill="#94a3b8" font-size="10" font-family="monospace">26.40 ms (loc 7.4 | seq 24.8)</text>
     <rect x="355" y="1258" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1258" width="107" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1294" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
-    <text x="355" y="1307" fill="#94a3b8" font-size="10" font-family="monospace">24.10 ms (loc 7.8 | seq 25.2)</text>
+    <rect x="355" y="1258" width="161" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1294" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="355" y="1307" fill="#94a3b8" font-size="10" font-family="monospace">35.20 ms (loc 11.2 | seq 34.6)</text>
     <rect x="355" y="1312" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1312" width="147" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1348" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
-    <text x="355" y="1361" fill="#94a3b8" font-size="10" font-family="monospace">31.80 ms (loc 8.9 | seq 33.8)</text>
+    <rect x="355" y="1312" width="215" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1348" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="355" y="1361" fill="#94a3b8" font-size="10" font-family="monospace">17.60 ms (loc 5.1 | seq 17.8)</text>
     <rect x="355" y="1366" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1366" width="194" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1402" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
-    <text x="355" y="1415" fill="#94a3b8" font-size="10" font-family="monospace">22.90 ms (loc 4.8 | seq 26.8)</text>
+    <rect x="355" y="1366" width="107" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1402" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="355" y="1415" fill="#94a3b8" font-size="10" font-family="monospace">24.10 ms (loc 7.8 | seq 25.2)</text>
     <rect x="355" y="1420" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1420" width="140" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1456" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
-    <text x="355" y="1469" fill="#94a3b8" font-size="10" font-family="monospace">34.20 ms (loc 12.8 | seq 42.4)</text>
+    <rect x="355" y="1420" width="147" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1456" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="355" y="1469" fill="#94a3b8" font-size="10" font-family="monospace">31.80 ms (loc 8.9 | seq 33.8)</text>
     <rect x="355" y="1474" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1474" width="209" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1510" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
-    <text x="355" y="1523" fill="#94a3b8" font-size="10" font-family="monospace">28.40 ms (loc 9.4 | seq 34.6)</text>
+    <rect x="355" y="1474" width="194" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1510" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="355" y="1523" fill="#94a3b8" font-size="10" font-family="monospace">22.90 ms (loc 4.8 | seq 26.8)</text>
     <rect x="355" y="1528" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1528" width="173" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1564" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
-    <text x="355" y="1577" fill="#94a3b8" font-size="10" font-family="monospace">20.10 ms (loc 4.5 | seq 22.8)</text>
+    <rect x="355" y="1528" width="140" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1564" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
+    <text x="355" y="1577" fill="#94a3b8" font-size="10" font-family="monospace">34.20 ms (loc 12.8 | seq 42.4)</text>
     <rect x="355" y="1582" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1582" width="123" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1618" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
-    <text x="355" y="1631" fill="#94a3b8" font-size="10" font-family="monospace">16.20 ms (loc 3.8 | seq 18.6)</text>
+    <rect x="355" y="1582" width="209" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1618" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <text x="355" y="1631" fill="#94a3b8" font-size="10" font-family="monospace">28.40 ms (loc 9.4 | seq 34.6)</text>
     <rect x="355" y="1636" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1636" width="99" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="355" y="1672" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
-    <text x="355" y="1685" fill="#94a3b8" font-size="10" font-family="monospace">12.40 ms (loc 2.9 | seq 14.8)</text>
+    <rect x="355" y="1636" width="173" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1672" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
+    <text x="355" y="1685" fill="#94a3b8" font-size="10" font-family="monospace">20.10 ms (loc 4.5 | seq 22.8)</text>
     <rect x="355" y="1690" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="355" y="1690" width="76" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-  <rect x="650" y="956" width="280" height="770" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="665" y="984" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Wire / WAN Traffic per Decision (bytes)</text>
-  <text x="665" y="1002" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Network Payload (lower is better)</text>
-    <text x="665" y="1024" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
-    <text x="665" y="1037" fill="#94a3b8" font-size="10" font-family="monospace">144 B/dec</text>
-    <rect x="665" y="1042" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1042" width="5" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1078" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
-    <text x="665" y="1091" fill="#94a3b8" font-size="10" font-family="monospace">6144 B/dec</text>
+    <rect x="355" y="1690" width="123" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1726" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
+    <text x="355" y="1739" fill="#94a3b8" font-size="10" font-family="monospace">16.20 ms (loc 3.8 | seq 18.6)</text>
+    <rect x="355" y="1744" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="1744" width="99" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1780" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <text x="355" y="1793" fill="#94a3b8" font-size="10" font-family="monospace">12.40 ms (loc 2.9 | seq 14.8)</text>
+    <rect x="355" y="1798" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="1798" width="76" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="650" y="1010" width="280" height="824" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="665" y="1038" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Wire / WAN Traffic per Decision (bytes)</text>
+  <text x="665" y="1056" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Network Payload (lower is better)</text>
+    <text x="665" y="1078" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
+    <text x="665" y="1091" fill="#94a3b8" font-size="10" font-family="monospace">144 B/dec</text>
     <rect x="665" y="1096" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1096" width="220" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1132" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
-    <text x="665" y="1145" fill="#94a3b8" font-size="10" font-family="monospace">1420 B/dec</text>
+    <rect x="665" y="1096" width="5" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+    <text x="665" y="1145" fill="#94a3b8" font-size="10" font-family="monospace">144 B/dec</text>
     <rect x="665" y="1150" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1150" width="51" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1186" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
-    <text x="665" y="1199" fill="#94a3b8" font-size="10" font-family="monospace">2680 B/dec</text>
+    <rect x="665" y="1150" width="5" height="11" fill="#38bdf8" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1186" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="665" y="1199" fill="#94a3b8" font-size="10" font-family="monospace">6144 B/dec</text>
     <rect x="665" y="1204" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1204" width="96" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1240" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
-    <text x="665" y="1253" fill="#94a3b8" font-size="10" font-family="monospace">320 B/dec</text>
+    <rect x="665" y="1204" width="220" height="11" fill="#0284c7" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1240" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="665" y="1253" fill="#94a3b8" font-size="10" font-family="monospace">1420 B/dec</text>
     <rect x="665" y="1258" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1258" width="11" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1294" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
-    <text x="665" y="1307" fill="#94a3b8" font-size="10" font-family="monospace">960 B/dec</text>
+    <rect x="665" y="1258" width="51" height="11" fill="#10b981" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1294" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="665" y="1307" fill="#94a3b8" font-size="10" font-family="monospace">2680 B/dec</text>
     <rect x="665" y="1312" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1312" width="34" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1348" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
-    <text x="665" y="1361" fill="#94a3b8" font-size="10" font-family="monospace">3120 B/dec</text>
+    <rect x="665" y="1312" width="96" height="11" fill="#f59e0b" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1348" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="665" y="1361" fill="#94a3b8" font-size="10" font-family="monospace">320 B/dec</text>
     <rect x="665" y="1366" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1366" width="112" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1402" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
-    <text x="665" y="1415" fill="#94a3b8" font-size="10" font-family="monospace">1540 B/dec</text>
+    <rect x="665" y="1366" width="11" height="11" fill="#14b8a6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1402" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="665" y="1415" fill="#94a3b8" font-size="10" font-family="monospace">960 B/dec</text>
     <rect x="665" y="1420" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1420" width="55" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1456" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
-    <text x="665" y="1469" fill="#94a3b8" font-size="10" font-family="monospace">3840 B/dec</text>
+    <rect x="665" y="1420" width="34" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1456" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="665" y="1469" fill="#94a3b8" font-size="10" font-family="monospace">3120 B/dec</text>
     <rect x="665" y="1474" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1474" width="138" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1510" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
-    <text x="665" y="1523" fill="#94a3b8" font-size="10" font-family="monospace">2420 B/dec</text>
+    <rect x="665" y="1474" width="112" height="11" fill="#db2777" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1510" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="665" y="1523" fill="#94a3b8" font-size="10" font-family="monospace">1540 B/dec</text>
     <rect x="665" y="1528" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1528" width="87" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1564" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
-    <text x="665" y="1577" fill="#94a3b8" font-size="10" font-family="monospace">820 B/dec</text>
+    <rect x="665" y="1528" width="55" height="11" fill="#ec4899" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1564" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
+    <text x="665" y="1577" fill="#94a3b8" font-size="10" font-family="monospace">3840 B/dec</text>
     <rect x="665" y="1582" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1582" width="29" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1618" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
-    <text x="665" y="1631" fill="#94a3b8" font-size="10" font-family="monospace">620 B/dec</text>
+    <rect x="665" y="1582" width="138" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1618" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <text x="665" y="1631" fill="#94a3b8" font-size="10" font-family="monospace">2420 B/dec</text>
     <rect x="665" y="1636" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1636" width="22" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
-    <text x="665" y="1672" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
-    <text x="665" y="1685" fill="#94a3b8" font-size="10" font-family="monospace">480 B/dec</text>
+    <rect x="665" y="1636" width="87" height="11" fill="#8b5cf6" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1672" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
+    <text x="665" y="1685" fill="#94a3b8" font-size="10" font-family="monospace">820 B/dec</text>
     <rect x="665" y="1690" width="220" height="11" fill="#334155" rx="3"/>
-    <rect x="665" y="1690" width="17" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <rect x="665" y="1690" width="29" height="11" fill="#ef4444" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1726" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
+    <text x="665" y="1739" fill="#94a3b8" font-size="10" font-family="monospace">620 B/dec</text>
+    <rect x="665" y="1744" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="1744" width="22" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1780" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <text x="665" y="1793" fill="#94a3b8" font-size="10" font-family="monospace">480 B/dec</text>
+    <rect x="665" y="1798" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="1798" width="17" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="30" y="1858" fill="#94a3b8" font-size="13" font-family="system-ui, sans-serif" font-weight="600">Scenario C - Streaming Feature Risk Decision &amp; Freshness SLA (streaming-feature-risk-decision)</text></a>
+  <rect x="30" y="1870" width="280" height="824" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="45" y="1898" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario C 0ms Freshness (dec/sec)</text>
+  <text x="45" y="1916" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Zero-Staleness Capacity</text>
+    <text x="45" y="1938" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
+    <text x="45" y="1951" fill="#94a3b8" font-size="10" font-family="monospace">441.15 dec/s (0.00% stale)</text>
+    <rect x="45" y="1956" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="1956" width="53" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="1992" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+    <text x="45" y="2005" fill="#94a3b8" font-size="10" font-family="monospace">1840.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2010" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2010" width="220" height="11" fill="#38bdf8" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="2046" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="45" y="2059" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2064" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2064" width="4" height="11" fill="#0284c7" rx="3"/>
+    <text x="45" y="2100" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="45" y="2113" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2118" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2118" width="4" height="11" fill="#10b981" rx="3"/>
+    <text x="45" y="2154" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="45" y="2167" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2172" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2172" width="4" height="11" fill="#f59e0b" rx="3"/>
+    <text x="45" y="2208" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="45" y="2221" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2226" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2226" width="4" height="11" fill="#14b8a6" rx="3"/>
+    <text x="45" y="2262" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="45" y="2275" fill="#94a3b8" font-size="10" font-family="monospace">316.80 dec/s (0.00% stale)</text>
+    <rect x="45" y="2280" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2280" width="38" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="2316" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="45" y="2329" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2334" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2334" width="4" height="11" fill="#db2777" rx="3"/>
+    <text x="45" y="2370" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="45" y="2383" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2388" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2388" width="4" height="11" fill="#ec4899" rx="3"/>
+    <text x="45" y="2424" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
+    <text x="45" y="2437" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2442" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2442" width="4" height="11" fill="#8b5cf6" rx="3"/>
+    <text x="45" y="2478" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <text x="45" y="2491" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2496" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2496" width="4" height="11" fill="#8b5cf6" rx="3"/>
+    <text x="45" y="2532" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
+    <text x="45" y="2545" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (0.00% stale)</text>
+    <rect x="45" y="2550" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2550" width="4" height="11" fill="#ef4444" rx="3"/>
+    <text x="45" y="2586" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
+    <text x="45" y="2599" fill="#94a3b8" font-size="10" font-family="monospace">310.00 dec/s (0.42% stale)</text>
+    <rect x="45" y="2604" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2604" width="37" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="45" y="2640" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <text x="45" y="2653" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (6.80% stale)</text>
+    <rect x="45" y="2658" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="45" y="2658" width="4" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="340" y="1870" width="280" height="824" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="355" y="1898" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Scenario C 1000ms SLA (dec/sec)</text>
+  <text x="355" y="1916" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Relaxed Freshness Capacity</text>
+    <text x="355" y="1938" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
+    <text x="355" y="1951" fill="#94a3b8" font-size="10" font-family="monospace">441.15 dec/s (100ms: 441.15)</text>
+    <rect x="355" y="1956" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="1956" width="53" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="1992" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+    <text x="355" y="2005" fill="#94a3b8" font-size="10" font-family="monospace">1840.00 dec/s (100ms: 1840.00)</text>
+    <rect x="355" y="2010" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2010" width="220" height="11" fill="#38bdf8" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="2046" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="355" y="2059" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (100ms: 0.00)</text>
+    <rect x="355" y="2064" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2064" width="4" height="11" fill="#0284c7" rx="3"/>
+    <text x="355" y="2100" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="355" y="2113" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (100ms: 0.00)</text>
+    <rect x="355" y="2118" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2118" width="4" height="11" fill="#10b981" rx="3"/>
+    <text x="355" y="2154" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="355" y="2167" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (100ms: 0.00)</text>
+    <rect x="355" y="2172" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2172" width="4" height="11" fill="#f59e0b" rx="3"/>
+    <text x="355" y="2208" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="355" y="2221" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (100ms: 0.00)</text>
+    <rect x="355" y="2226" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2226" width="4" height="11" fill="#14b8a6" rx="3"/>
+    <text x="355" y="2262" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="355" y="2275" fill="#94a3b8" font-size="10" font-family="monospace">316.80 dec/s (100ms: 316.80)</text>
+    <rect x="355" y="2280" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2280" width="38" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="2316" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="355" y="2329" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (100ms: 0.00)</text>
+    <rect x="355" y="2334" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2334" width="4" height="11" fill="#db2777" rx="3"/>
+    <text x="355" y="2370" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="355" y="2383" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (100ms: 0.00)</text>
+    <rect x="355" y="2388" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2388" width="4" height="11" fill="#ec4899" rx="3"/>
+    <text x="355" y="2424" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
+    <text x="355" y="2437" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (100ms: 0.00)</text>
+    <rect x="355" y="2442" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2442" width="4" height="11" fill="#8b5cf6" rx="3"/>
+    <text x="355" y="2478" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <text x="355" y="2491" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (100ms: 0.00)</text>
+    <rect x="355" y="2496" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2496" width="4" height="11" fill="#8b5cf6" rx="3"/>
+    <text x="355" y="2532" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
+    <text x="355" y="2545" fill="#94a3b8" font-size="10" font-family="monospace">0.00 dec/s (100ms: 0.00)</text>
+    <rect x="355" y="2550" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2550" width="4" height="11" fill="#ef4444" rx="3"/>
+    <text x="355" y="2586" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
+    <text x="355" y="2599" fill="#94a3b8" font-size="10" font-family="monospace">485.00 dec/s (100ms: 462.40)</text>
+    <rect x="355" y="2604" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2604" width="58" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="355" y="2640" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <text x="355" y="2653" fill="#94a3b8" font-size="10" font-family="monospace">538.00 dec/s (100ms: 492.00)</text>
+    <rect x="355" y="2658" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="355" y="2658" width="64" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="650" y="1870" width="280" height="824" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="665" y="1898" fill="#38bdf8" font-size="13" font-weight="600" font-family="system-ui, sans-serif">Rule-Change Backfill &amp; Recovery (sec)</text>
+  <text x="665" y="1916" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Operational Overhead (lower is better)</text>
+    <text x="665" y="1938" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
+    <text x="665" y="1951" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 3.2s (1p)</text>
+    <rect x="665" y="1956" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="1956" width="4" height="11" fill="#6366f1" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="1992" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+    <text x="665" y="2005" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 3.2s (1p)</text>
+    <rect x="665" y="2010" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2010" width="4" height="11" fill="#38bdf8" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="2046" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
+    <text x="665" y="2059" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 0.0s (1p)</text>
+    <rect x="665" y="2064" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2064" width="4" height="11" fill="#0284c7" rx="3"/>
+    <text x="665" y="2100" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + App Service)</text>
+    <text x="665" y="2113" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 0.0s (1p)</text>
+    <rect x="665" y="2118" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2118" width="4" height="11" fill="#10b981" rx="3"/>
+    <text x="665" y="2154" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni Sync HA + App)</text>
+    <text x="665" y="2167" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 0.0s (1p)</text>
+    <rect x="665" y="2172" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2172" width="4" height="11" fill="#f59e0b" rx="3"/>
+    <text x="665" y="2208" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Single + PL/pgSQL Fn)</text>
+    <text x="665" y="2221" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 0.0s (1p)</text>
+    <rect x="665" y="2226" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2226" width="4" height="11" fill="#14b8a6" rx="3"/>
+    <text x="665" y="2262" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 (Patroni HA + PL/pgSQL)</text>
+    <text x="665" y="2275" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 8.5s (1p)</text>
+    <rect x="665" y="2280" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2280" width="6" height="11" fill="#d97706" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="2316" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Sharded SQL + App)</text>
+    <text x="665" y="2329" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 0.0s (1p)</text>
+    <rect x="665" y="2334" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2334" width="4" height="11" fill="#db2777" rx="3"/>
+    <text x="665" y="2370" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
+    <text x="665" y="2383" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 0.0s (1p)</text>
+    <rect x="665" y="2388" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2388" width="4" height="11" fill="#ec4899" rx="3"/>
+    <text x="665" y="2424" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (YSQL + App)</text>
+    <text x="665" y="2437" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 0.0s (1p)</text>
+    <rect x="665" y="2442" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2442" width="4" height="11" fill="#8b5cf6" rx="3"/>
+    <text x="665" y="2478" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2 (Stored Proc)</text>
+    <text x="665" y="2491" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 0.0s (1p)</text>
+    <rect x="665" y="2496" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2496" width="4" height="11" fill="#8b5cf6" rx="3"/>
+    <text x="665" y="2532" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3 (Colocated)</text>
+    <text x="665" y="2545" fill="#94a3b8" font-size="10" font-family="monospace">BF 0.0s | Rec 0.0s (1p)</text>
+    <rect x="665" y="2550" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2550" width="4" height="11" fill="#ef4444" rx="3"/>
+    <text x="665" y="2586" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Sync)</text>
+    <text x="665" y="2599" fill="#94a3b8" font-size="10" font-family="monospace">BF 185.0s | Rec 42.0s (3p)</text>
+    <rect x="665" y="2604" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2604" width="168" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="665" y="2640" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 (Async)</text>
+    <text x="665" y="2653" fill="#94a3b8" font-size="10" font-family="monospace">BF 240.0s | Rec 58.0s (4p)</text>
+    <rect x="665" y="2658" width="220" height="11" fill="#334155" rx="3"/>
+    <rect x="665" y="2658" width="220" height="11" fill="#06b6d4" rx="3" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>
 </svg>
 </div>
     <div class="filter-bar"><label for="landing-filter">Filter:</label><input type="text" id="landing-filter" placeholder="Filter targets, categories, shapes..."/></div>
     <div class="card">
       <h2>Executive Multi-System Comparison Matrix</h2>
-      <table class="data-table"><thead><tr><th>System</th><th>Category</th><th>Topology (Procs)</th><th>RPO=0</th><th>Scenario A tx/s (p95)</th><th>Scenario B dec/s (p99)</th><th>Wire Bytes</th><th>Tier</th><th>Detail Page</th></tr></thead>
+      <table class="data-table"><thead><tr><th>System</th><th>Category</th><th>Topology (Procs)</th><th>RPO=0</th><th>Scenario A tx/s (p95)</th><th>Scenario B dec/s (p99)</th><th><a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision">Scenario C</a> 0ms Fresh dec/sec (Stale % / Backfill s)</th><th>Wire Bytes</th><th>Tier</th><th>Detail Page</th></tr></thead>
       <tbody>
-        <tr><td><strong>Lagrange</strong> <span class="badge">0.3.0</span></td><td>distributed-native</td><td>3 units (3 procs)</td><td><span class="badge badge-green">Yes</span></td><td>0.83 tx/s (4418.93 ms)</td><td>441.15 dec/s (18.09 ms)</td><td>144 B</td><td><span class="badge">A: observed-docker-cluster</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="tidb-comparison-progress.html">tidb-comparison-progress.md</a></td></tr>
-        <tr><td><strong>TiDB + TiKV</strong> <span class="badge">v8.5.8</span></td><td>distributed-sql</td><td>6 units (6 procs)</td><td><span class="badge badge-green">Yes</span></td><td>6.75 tx/s (1383.18 ms)</td><td>221.44 dec/s (36.08 ms)</td><td>6144 B</td><td><span class="badge">A: observed-docker-cluster</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="tidb-comparison-progress.html">tidb-comparison-progress.md</a></td></tr>
-        <tr><td><strong>PostgreSQL 17 (Single Primary + App Service)</strong> <span class="badge">17.2</span></td><td>relational-single-primary</td><td>2 units (2 procs)</td><td><span class="badge badge-red">No</span></td><td>14.80 tx/s (412.60 ms)</td><td>294.60 dec/s (26.40 ms)</td><td>1420 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
-        <tr><td><strong>PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)</strong> <span class="badge">17.2-patroni-4.0</span></td><td>relational-sync-ha</td><td>6 units (9 procs)</td><td><span class="badge badge-green">Yes</span></td><td>8.40 tx/s (920.50 ms)</td><td>218.20 dec/s (35.20 ms)</td><td>2680 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
-        <tr><td><strong>PostgreSQL 17 (Single Primary + PL/pgSQL Function)</strong> <span class="badge">17.2-plpgsql</span></td><td>relational-server-function</td><td>1 units (1 procs)</td><td><span class="badge badge-red">No</span></td><td>14.80 tx/s (412.60 ms)</td><td>418.40 dec/s (17.60 ms)</td><td>320 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
-        <tr><td><strong>PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function)</strong> <span class="badge">17.2-patroni-4.0-plpgsql</span></td><td>relational-sync-ha-function</td><td>5 units (8 procs)</td><td><span class="badge badge-green">Yes</span></td><td>8.40 tx/s (920.50 ms)</td><td>316.80 dec/s (24.10 ms)</td><td>960 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
-        <tr><td><strong>Citus 13 (Sharded SQL RF=3 + App Service)</strong> <span class="badge">13.0-pg17</span></td><td>sharded-postgresql-sql</td><td>5 units (5 procs)</td><td><span class="badge badge-green">Yes</span></td><td>11.20 tx/s (685.00 ms)</td><td>256.40 dec/s (31.80 ms)</td><td>3120 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="citus-comparison-progress.html">citus-comparison-progress.md</a></td></tr>
-        <tr><td><strong>Citus 13 (Colocated Tables + Distributed Function RF=3)</strong> <span class="badge">13.0-pg17-udf</span></td><td>sharded-postgresql-colocated-udf</td><td>4 units (4 procs)</td><td><span class="badge badge-green">Yes</span></td><td>11.20 tx/s (685.00 ms)</td><td>364.20 dec/s (22.90 ms)</td><td>1540 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="citus-comparison-progress.html">citus-comparison-progress.md</a></td></tr>
-        <tr><td><strong>YugabyteDB 2024.2 (YSQL RF=3 + App Service)</strong> <span class="badge">2024.2.1</span></td><td>distributed-sql-ysql</td><td>4 units (7 procs)</td><td><span class="badge badge-green">Yes</span></td><td>7.40 tx/s (1190.00 ms)</td><td>234.80 dec/s (34.20 ms)</td><td>3840 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="yugabyte-ignite-comparison-progress.html">yugabyte-ignite-comparison-progress.md</a></td></tr>
-        <tr><td><strong>YugabyteDB 2024.2 (YSQL Stored Procedure RF=3)</strong> <span class="badge">2024.2.1-proc</span></td><td>distributed-sql-stored-proc</td><td>3 units (6 procs)</td><td><span class="badge badge-green">Yes</span></td><td>7.40 tx/s (1190.00 ms)</td><td>286.50 dec/s (28.40 ms)</td><td>2420 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="yugabyte-ignite-comparison-progress.html">yugabyte-ignite-comparison-progress.md</a></td></tr>
-        <tr><td><strong>Apache Ignite 3 (JobTarget.colocated RF=3)</strong> <span class="badge">3.0.0</span></td><td>distributed-colocated-compute-grid</td><td>3 units (3 procs)</td><td><span class="badge badge-green">Yes</span></td><td>9.60 tx/s (845.00 ms)</td><td>408.60 dec/s (20.10 ms)</td><td>820 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="yugabyte-ignite-comparison-progress.html">yugabyte-ignite-comparison-progress.md</a></td></tr>
-        <tr><td><strong>PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service)</strong> <span class="badge">17.2-valkey-8.0-sync</span></td><td>relational-cache-write-through</td><td>8 units (11 procs)</td><td><span class="badge badge-green">Yes</span></td><td>8.40 tx/s (920.50 ms)</td><td>462.40 dec/s (16.20 ms)</td><td>620 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="scenario-c-feature-store-progress.html">scenario-c-feature-store-progress.md</a></td></tr>
-        <tr><td><strong>PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service)</strong> <span class="badge">17.2-valkey-8.0-async</span></td><td>relational-cache-async-stream</td><td>9 units (12 procs)</td><td><span class="badge badge-green">Yes</span></td><td>8.40 tx/s (920.50 ms)</td><td>538.00 dec/s (12.40 ms)</td><td>480 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="scenario-c-feature-store-progress.html">scenario-c-feature-store-progress.md</a></td></tr>
+        <tr><td><strong>Lagrange</strong> <span class="badge">0.4.0</span></td><td>distributed-native</td><td>3 units (3 procs)</td><td><span class="badge badge-green">Yes</span></td><td>0.83 tx/s (4418.93 ms)</td><td>441.15 dec/s (18.09 ms)</td><td>441.15 dec/s (0.00% / 0.0s)</td><td>144 B</td><td><span class="badge">A: observed-docker-cluster</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="tidb-comparison-progress.html">tidb-comparison-progress.md</a></td></tr>
+        <tr><td><strong>Lagrange (5-Node RF=3)</strong> <span class="badge">0.4.0</span></td><td>distributed-native-scaleout</td><td>5 units (5 procs)</td><td><span class="badge badge-green">Yes</span></td><td>3.84 tx/s (1490.00 ms)</td><td>720.40 dec/s (18.09 ms)</td><td>1840.00 dec/s (0.00% / 0.0s)</td><td>144 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="scaleout-3to5-node-rf3-progress.html">scaleout-3to5-node-rf3-progress.md</a></td></tr>
+        <tr><td><strong>TiDB + TiKV</strong> <span class="badge">v8.5.8</span></td><td>distributed-sql</td><td>6 units (6 procs)</td><td><span class="badge badge-green">Yes</span></td><td>6.75 tx/s (1383.18 ms)</td><td>221.44 dec/s (36.08 ms)</td><td>0.00 dec/s (0.00% / 0.0s)</td><td>6144 B</td><td><span class="badge">A: observed-docker-cluster</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="tidb-comparison-progress.html">tidb-comparison-progress.md</a></td></tr>
+        <tr><td><strong>PostgreSQL 17 (Single Primary + App Service)</strong> <span class="badge">17.2</span></td><td>relational-single-primary</td><td>2 units (2 procs)</td><td><span class="badge badge-red">No</span></td><td>14.80 tx/s (412.60 ms)</td><td>294.60 dec/s (26.40 ms)</td><td>0.00 dec/s (0.00% / 0.0s)</td><td>1420 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
+        <tr><td><strong>PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)</strong> <span class="badge">17.2-patroni-4.0</span></td><td>relational-sync-ha</td><td>6 units (9 procs)</td><td><span class="badge badge-green">Yes</span></td><td>8.40 tx/s (920.50 ms)</td><td>218.20 dec/s (35.20 ms)</td><td>0.00 dec/s (0.00% / 0.0s)</td><td>2680 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
+        <tr><td><strong>PostgreSQL 17 (Single Primary + PL/pgSQL Function)</strong> <span class="badge">17.2-plpgsql</span></td><td>relational-server-function</td><td>1 units (1 procs)</td><td><span class="badge badge-red">No</span></td><td>14.80 tx/s (412.60 ms)</td><td>418.40 dec/s (17.60 ms)</td><td>0.00 dec/s (0.00% / 0.0s)</td><td>320 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
+        <tr><td><strong>PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function)</strong> <span class="badge">17.2-patroni-4.0-plpgsql</span></td><td>relational-sync-ha-function</td><td>5 units (8 procs)</td><td><span class="badge badge-green">Yes</span></td><td>8.40 tx/s (920.50 ms)</td><td>316.80 dec/s (24.10 ms)</td><td>316.80 dec/s (0.00% / 0.0s)</td><td>960 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="postgresql-comparison-progress.html">postgresql-comparison-progress.md</a></td></tr>
+        <tr><td><strong>Citus 13 (Sharded SQL RF=3 + App Service)</strong> <span class="badge">13.0-pg17</span></td><td>sharded-postgresql-sql</td><td>5 units (5 procs)</td><td><span class="badge badge-green">Yes</span></td><td>11.20 tx/s (685.00 ms)</td><td>256.40 dec/s (31.80 ms)</td><td>0.00 dec/s (0.00% / 0.0s)</td><td>3120 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="citus-comparison-progress.html">citus-comparison-progress.md</a></td></tr>
+        <tr><td><strong>Citus 13 (Colocated Tables + Distributed Function RF=3)</strong> <span class="badge">13.0-pg17-udf</span></td><td>sharded-postgresql-colocated-udf</td><td>4 units (4 procs)</td><td><span class="badge badge-green">Yes</span></td><td>11.20 tx/s (685.00 ms)</td><td>364.20 dec/s (22.90 ms)</td><td>0.00 dec/s (0.00% / 0.0s)</td><td>1540 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="citus-comparison-progress.html">citus-comparison-progress.md</a></td></tr>
+        <tr><td><strong>YugabyteDB 2024.2 (YSQL RF=3 + App Service)</strong> <span class="badge">2024.2.1</span></td><td>distributed-sql-ysql</td><td>4 units (7 procs)</td><td><span class="badge badge-green">Yes</span></td><td>7.40 tx/s (1190.00 ms)</td><td>234.80 dec/s (34.20 ms)</td><td>0.00 dec/s (0.00% / 0.0s)</td><td>3840 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="yugabyte-ignite-comparison-progress.html">yugabyte-ignite-comparison-progress.md</a></td></tr>
+        <tr><td><strong>YugabyteDB 2024.2 (YSQL Stored Procedure RF=3)</strong> <span class="badge">2024.2.1-proc</span></td><td>distributed-sql-stored-proc</td><td>3 units (6 procs)</td><td><span class="badge badge-green">Yes</span></td><td>7.40 tx/s (1190.00 ms)</td><td>286.50 dec/s (28.40 ms)</td><td>0.00 dec/s (0.00% / 0.0s)</td><td>2420 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="yugabyte-ignite-comparison-progress.html">yugabyte-ignite-comparison-progress.md</a></td></tr>
+        <tr><td><strong>Apache Ignite 3 (JobTarget.colocated RF=3)</strong> <span class="badge">3.0.0</span></td><td>distributed-colocated-compute-grid</td><td>3 units (3 procs)</td><td><span class="badge badge-green">Yes</span></td><td>9.60 tx/s (845.00 ms)</td><td>408.60 dec/s (20.10 ms)</td><td>0.00 dec/s (0.00% / 0.0s)</td><td>820 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="yugabyte-ignite-comparison-progress.html">yugabyte-ignite-comparison-progress.md</a></td></tr>
+        <tr><td><strong>PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service)</strong> <span class="badge">17.2-valkey-8.0-sync</span></td><td>relational-cache-write-through</td><td>8 units (11 procs)</td><td><span class="badge badge-green">Yes</span></td><td>8.40 tx/s (920.50 ms)</td><td>462.40 dec/s (16.20 ms)</td><td>310.00 dec/s (0.42% / 185.0s)</td><td>620 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="scenario-c-feature-store-progress.html">scenario-c-feature-store-progress.md</a></td></tr>
+        <tr><td><strong>PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service)</strong> <span class="badge">17.2-valkey-8.0-async</span></td><td>relational-cache-async-stream</td><td>9 units (12 procs)</td><td><span class="badge badge-green">Yes</span></td><td>8.40 tx/s (920.50 ms)</td><td>538.00 dec/s (12.40 ms)</td><td>0.00 dec/s (6.80% / 240.0s)</td><td>480 B</td><td><span class="badge">A: modeled-topology-oracle</span> <span class="badge">B: modeled-topology-oracle</span></td><td><a href="scenario-c-feature-store-progress.html">scenario-c-feature-store-progress.md</a></td></tr>
+      </tbody></table>
+    </div>
+    <div class="card">
+      <h2>5-Node RF=3 (60% Replica Coverage) Scale-Out Summary</h2>
+      <p class="desc">At 3 nodes with RF=3, every node holds 100.0% of partitions locally. At 5 nodes with RF=3, replica coverage transitions to 60.0% (40.0% absent partitions per node), testing partial data locality, v0.3.3 Scenario A transaction-coordination fast-path scaling, and 5-node cluster aggregate capacity. Detailed analysis: <a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out</a> (<a href="scaleout-3to5-node-rf3-progress.md">MD</a>) and <a href="partition-granularity-sweep-progress.html">5-Node Partition Granularity Sweep (P=6..60)</a> (<a href="partition-granularity-sweep-progress.md">MD</a>).</p>
+      <div class="chart-box"><img src="scaleout-3to5-node-rf3-progress.svg" alt="3-to-5-Node RF=3 Scale-Out Progress"/></div>
+      <table class="data-table"><thead><tr><th>System / Configuration</th><th>3-Node (100%) A tx/s (p95 ms)</th><th>5-Node (60%) Proportional A tx/s (p95 ms)</th><th>A Scale Gain %</th><th>3-Node (100%) B dec/s</th><th>5-Node (60%) Node B dec/s (p99 ms)</th><th>5-Node Cluster Aggregate B dec/s (WAN B)</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Lagrange 0.3.3</strong></td><td>2.38 (1410.0 ms)</td><td>3.84 (1490.0 ms)</td><td>+61.3%</td><td>486.0</td><td>441.1 (18.1 ms)</td><td>720.4 (144 B)</td></tr>
+        <tr><td><strong>TiDB + TiKV</strong></td><td>7.85 (1120.0 ms)</td><td>11.90 (1185.0 ms)</td><td>+51.6%</td><td>268.0</td><td>221.4 (36.1 ms)</td><td>318.0 (6144 B)</td></tr>
+        <tr><td><strong>Citus 13 (Sharded SQL + App)</strong></td><td>12.80 (590.0 ms)</td><td>19.40 (625.0 ms)</td><td>+51.6%</td><td>412.0</td><td>364.2 (22.9 ms)</td><td>524.0 (1540 B)</td></tr>
+        <tr><td><strong>YugabyteDB 2024.2 (YSQL + App)</strong></td><td>8.30 (1040.0 ms)</td><td>12.40 (1095.0 ms)</td><td>+49.4%</td><td>328.0</td><td>286.5 (28.4 ms)</td><td>412.0 (2420 B)</td></tr>
+        <tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td>10.80 (740.0 ms)</td><td>16.50 (780.0 ms)</td><td>+52.8%</td><td>452.0</td><td>408.6 (20.1 ms)</td><td>618.0 (820 B)</td></tr>
+      </tbody></table>
+      <table class="data-table" style="margin-top: 16px;"><thead><tr><th>Scale-Out Mode</th><th>Target</th><th>3-Node tx/s (p95 ms)</th><th>5-Node tx/s (p95 ms)</th><th>Scale Gain %</th><th>Evidence Tier</th></tr></thead>
+      <tbody>
+        <tr><td>Fixed-Workload Scale-Out</td><td><strong>Lagrange (0.3.0 Lab Baseline)</strong></td><td>0.88 (4120.0 ms)</td><td>0.83 (4418.9 ms)</td><td>-5.7%</td><td><span class="badge">observed-docker-cluster</span></td></tr>
+        <tr><td>Fixed-Workload Scale-Out</td><td><strong>Lagrange 0.3.3 (Tx Fast-Path)</strong></td><td>1.48 (1380.0 ms)</td><td>1.41 (1450.0 ms)</td><td>-4.7%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Fixed-Workload Scale-Out</td><td><strong>TiDB + TiKV</strong></td><td>6.90 (1310.0 ms)</td><td>6.75 (1383.2 ms)</td><td>-2.2%</td><td><span class="badge">observed-docker-cluster</span></td></tr>
+        <tr><td>Fixed-Workload Scale-Out</td><td><strong>Citus 13 (Sharded SQL + App)</strong></td><td>11.20 (685.0 ms)</td><td>10.60 (730.0 ms)</td><td>-5.4%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Fixed-Workload Scale-Out</td><td><strong>YugabyteDB 2024.2 (YSQL + App)</strong></td><td>7.40 (1190.0 ms)</td><td>7.10 (1245.0 ms)</td><td>-4.1%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Fixed-Workload Scale-Out</td><td><strong>Apache Ignite 3 (Colocated)</strong></td><td>9.60 (845.0 ms)</td><td>9.15 (890.0 ms)</td><td>-4.7%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Proportional-Growth Scale-Out</td><td><strong>Lagrange 0.3.3</strong></td><td>2.38 (1410.0 ms)</td><td>3.84 (1490.0 ms)</td><td>+61.3%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Proportional-Growth Scale-Out</td><td><strong>TiDB + TiKV</strong></td><td>7.85 (1120.0 ms)</td><td>11.90 (1185.0 ms)</td><td>+51.6%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Proportional-Growth Scale-Out</td><td><strong>Citus 13 (Sharded SQL + App)</strong></td><td>12.80 (590.0 ms)</td><td>19.40 (625.0 ms)</td><td>+51.6%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Proportional-Growth Scale-Out</td><td><strong>YugabyteDB 2024.2 (YSQL + App)</strong></td><td>8.30 (1040.0 ms)</td><td>12.40 (1095.0 ms)</td><td>+49.4%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Proportional-Growth Scale-Out</td><td><strong>Apache Ignite 3 (Colocated)</strong></td><td>10.80 (740.0 ms)</td><td>16.50 (780.0 ms)</td><td>+52.8%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Hot-Contention Baseline</td><td><strong>Lagrange 0.3.3</strong></td><td>1.18 (2180.0 ms)</td><td>1.11 (2310.0 ms)</td><td>-5.9%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Hot-Contention Baseline</td><td><strong>TiDB + TiKV</strong></td><td>6.80 (1350.0 ms)</td><td>6.45 (1440.0 ms)</td><td>-5.1%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Hot-Contention Baseline</td><td><strong>PG 17 (Patroni Sync HA + App)</strong></td><td>8.40 (920.5 ms)</td><td>8.40 (920.5 ms)</td><td>+0.0%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Hot-Contention Baseline</td><td><strong>Citus 13 (Sharded SQL + App)</strong></td><td>9.40 (790.0 ms)</td><td>8.60 (865.0 ms)</td><td>-8.5%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Hot-Contention Baseline</td><td><strong>YugabyteDB 2024.2 (YSQL + App)</strong></td><td>6.90 (1260.0 ms)</td><td>6.40 (1340.0 ms)</td><td>-7.2%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+        <tr><td>Hot-Contention Baseline</td><td><strong>Apache Ignite 3 (Colocated)</strong></td><td>8.90 (910.0 ms)</td><td>8.30 (975.0 ms)</td><td>-6.7%</td><td><span class="badge">modeled-topology-oracle</span></td></tr>
+      </tbody></table>
+    </div>
+    <div class="card">
+      <h2>Scenario C Streaming-Feature-Risk-Decision Summary (Freshness SLA, Staleness &amp; 5x Joint Scale)</h2>
+      <p class="desc">Scenario C evaluates streaming feature store staleness SLAs, operational rule backfill and cache restart recovery overhead, and 5x joint scaling across ingestion, entity tracking, and decision load. Detailed analysis: <a href="scenario-c-feature-store-progress.html">Scenario C Feature-Store Comparison</a> (<a href="scenario-c-feature-store-progress.md">MD</a>) and <a href="movement-and-scenario-c-scaling-progress.html">Live Partition Movement &amp; Scenario C 5x Joint Scaling</a> (<a href="movement-and-scenario-c-scaling-progress.md">MD</a>).</p>
+      <div class="chart-box"><img src="scenario-c-feature-store-progress.svg" alt="Scenario C Feature-Store and Freshness Comparison"/></div>
+      <table class="data-table"><thead><tr><th>System / Configuration</th><th>0ms Fresh dec/s</th><th>100ms SLA dec/s</th><th>1000ms SLA dec/s</th><th>Stale Rate %</th><th>Rule Backfill (s)</th><th>Cache Restart (s)</th><th>Pipelines</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Lagrange</strong></td><td>441.15</td><td>441.15</td><td>441.15</td><td>0.00%</td><td>0.0s</td><td>3.2s</td><td>1</td></tr>
+        <tr><td><strong>Lagrange (5-Node RF=3)</strong></td><td>1840.00</td><td>1840.00</td><td>1840.00</td><td>0.00%</td><td>0.0s</td><td>3.2s</td><td>1</td></tr>
+        <tr><td><strong>PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function)</strong></td><td>316.80</td><td>316.80</td><td>316.80</td><td>0.00%</td><td>0.0s</td><td>8.5s</td><td>1</td></tr>
+        <tr><td><strong>PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service)</strong></td><td>310.00</td><td>462.40</td><td>485.00</td><td>0.42%</td><td>185.0s</td><td>42.0s</td><td>3</td></tr>
+        <tr><td><strong>PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service)</strong></td><td>0.00</td><td>492.00</td><td>538.00</td><td>6.80%</td><td>240.0s</td><td>58.0s</td><td>4</td></tr>
+      </tbody></table>
+      <table class="data-table" style="margin-top: 16px;"><thead><tr><th>System / Configuration</th><th>1x Fresh (0ms) dec/s</th><th>5x Fresh (0ms) dec/s</th><th>5x Relaxed (1000ms) dec/s</th><th>Stale %</th><th>5x Backfill (s)</th><th>5x Recovery (s)</th><th>Pipelines</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Lagrange</strong></td><td>441.15</td><td>1840.00</td><td>1840.00</td><td>0.00%</td><td>0.0s</td><td>3.2s</td><td>1</td></tr>
+        <tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td>408.60</td><td>1590.00</td><td>1590.00</td><td>0.00%</td><td>28.0s</td><td>14.5s</td><td>2</td></tr>
+        <tr><td><strong>PG 17 Patroni + PL/pgSQL</strong></td><td>316.80</td><td>480.00</td><td>480.00</td><td>0.00%</td><td>0.0s</td><td>8.5s</td><td>1</td></tr>
+        <tr><td><strong>PG 17 + Valkey 8 (Sync)</strong></td><td>310.00</td><td>890.00</td><td>1620.00</td><td>1.85%</td><td>640.0s</td><td>118.0s</td><td>3</td></tr>
+        <tr><td><strong>PG 17 + Valkey 8 (Async)</strong></td><td>0.00</td><td>0.00</td><td>2180.00</td><td>11.40%</td><td>820.0s</td><td>165.0s</td><td>4</td></tr>
       </tbody></table>
     </div>
     <div class="card">
@@ -426,6 +679,10 @@
         <tr><td>Lagrange</td><td><span class="badge">one-remote-stage</span></td><td>495.00</td><td>14.80</td><td>1</td><td>96 B</td></tr>
         <tr><td>Lagrange</td><td><span class="badge">sequential</span></td><td>380.00</td><td>22.40</td><td>2</td><td>192 B</td></tr>
         <tr><td>Lagrange</td><td><span class="badge">fan-out</span></td><td>410.00</td><td>18.10</td><td>1</td><td>192 B</td></tr>
+        <tr><td>Lagrange (5-Node RF=3)</td><td><span class="badge">local-only</span></td><td>980.00</td><td>4.20</td><td>0</td><td>0 B</td></tr>
+        <tr><td>Lagrange (5-Node RF=3)</td><td><span class="badge">one-remote-stage</span></td><td>785.00</td><td>14.80</td><td>1</td><td>96 B</td></tr>
+        <tr><td>Lagrange (5-Node RF=3)</td><td><span class="badge">sequential</span></td><td>610.00</td><td>22.40</td><td>2</td><td>192 B</td></tr>
+        <tr><td>Lagrange (5-Node RF=3)</td><td><span class="badge">fan-out</span></td><td>658.00</td><td>18.10</td><td>1</td><td>192 B</td></tr>
         <tr><td>TiDB + TiKV</td><td><span class="badge">local-only</span></td><td>280.00</td><td>16.50</td><td>2</td><td>2048 B</td></tr>
         <tr><td>TiDB + TiKV</td><td><span class="badge">one-remote-stage</span></td><td>235.00</td><td>32.10</td><td>4</td><td>4096 B</td></tr>
         <tr><td>TiDB + TiKV</td><td><span class="badge">sequential</span></td><td>190.00</td><td>48.60</td><td>6</td><td>6144 B</td></tr>
@@ -491,14 +748,17 @@
         <tr><td><strong>v0.3.2-partition-sweep-p6to60</strong> <span class="badge">2025f7780d</span></td><td>2.24 tx/s (2590.00 ms)</td><td><span class="badge">33/33</span></td><td>784.00 dec/s (16.90 ms / 144 B)</td><td>441.15 dec/s</td><td><span class="badge">modeled-topology-oracle</span> <span class="badge">local-js-oracle</span></td></tr>
         <tr><td><strong>v0.3.2-rtt-working-set-crossover</strong> <span class="badge">bdee84d5fc</span></td><td>2.24 tx/s (2590.00 ms)</td><td><span class="badge">33/33</span></td><td>368.00 dec/s (21.80 ms / 144 B)</td><td>441.15 dec/s</td><td><span class="badge">modeled-topology-oracle</span> <span class="badge">local-js-oracle</span></td></tr>
         <tr><td><strong>v0.3.2-live-movement-scenario-c-scale</strong> <span class="badge">72c76c6629</span></td><td>2.24 tx/s (2590.00 ms)</td><td><span class="badge">33/33</span></td><td>1840.00 dec/s (17.80 ms / 144 B)</td><td>1840.00 dec/s</td><td><span class="badge">modeled-topology-oracle</span> <span class="badge">local-js-oracle</span></td></tr>
+        <tr><td><strong>v0.3.3-tx-fast-path-5node-summary</strong> <span class="badge">b41d4ccec4</span></td><td>3.84 tx/s (1490.00 ms)</td><td><span class="badge">33/33</span></td><td>720.40 dec/s (18.09 ms / 144 B)</td><td>1840.00 dec/s</td><td><span class="badge">modeled-topology-oracle</span> <span class="badge">local-js-oracle</span></td></tr>
+        <tr><td><strong>v0.4.0-scaleout-scenario-c-release</strong> <span class="badge">7565d8c09a</span></td><td>3.84 tx/s (1490.00 ms)</td><td><span class="badge">33/33</span></td><td>720.40 dec/s (18.09 ms / 144 B)</td><td>1840.00 dec/s</td><td><span class="badge">modeled-topology-oracle</span> <span class="badge">local-js-oracle</span></td></tr>
       </tbody></table>
     </div>
     <div class="card">
       <h2>Measurement Provenance and Evidence-Tier Separation</h2>
-      <p class="desc">Scenario B evaluation uses <code>local-oracle-plus-network-model</code> (<code>contract-model-non-comparable</code>) stage-delay formulas (<code>stages * oneWayMs</code> vs <code>stages * 2 * oneWayMs</code> and <code>stages * 96 B</code> vs <code>stages * 4096 B</code>) with synthetic movement phase constants rather than live wire counters. Only live cluster runs provide comparable cluster evidence.</p>
+      <p class="desc">Scenario B evaluation uses <code>local-oracle-plus-network-model</code> (<code>contract-model-non-comparable</code>) stage-delay formulas (<code>stages * oneWayMs` vs `stages * 2 * oneWayMs</code> and `stages * 96 B` vs `stages * 4096 B`) with synthetic movement phase constants rather than live wire counters. Only live cluster runs provide comparable cluster evidence.</p>
       <table class="data-table"><thead><tr><th>System / Configuration</th><th>Scenario A Provenance</th><th>Scenario B Execution &amp; Latency Source</th><th>Wire &amp; Movement Source</th><th>Comparable Cluster Evidence</th></tr></thead>
       <tbody>
         <tr><td><strong>Lagrange</strong></td><td><span class="badge">live-cluster-wire</span> measured-client-wall-clock</td><td><span class="badge">local-js-oracle</span> oracle-plus-stage-delay-formula</td><td>stage-multiplier-constant / synthetic-phase-constants</td><td><span class="badge badge-red">No</span></td></tr>
+        <tr><td><strong>Lagrange (5-Node RF=3)</strong></td><td><span class="badge">local-js-oracle</span> oracle-plus-stage-delay-formula</td><td><span class="badge">local-js-oracle</span> oracle-plus-stage-delay-formula</td><td>stage-multiplier-constant / synthetic-phase-constants</td><td><span class="badge badge-red">No</span></td></tr>
         <tr><td><strong>TiDB + TiKV</strong></td><td><span class="badge">live-cluster-wire</span> measured-client-wall-clock</td><td><span class="badge">local-js-oracle</span> oracle-plus-stage-delay-formula</td><td>stage-multiplier-constant / synthetic-phase-constants</td><td><span class="badge badge-red">No</span></td></tr>
         <tr><td><strong>PostgreSQL 17 (Single Primary + App Service)</strong></td><td><span class="badge">local-js-oracle</span> oracle-plus-stage-delay-formula</td><td><span class="badge">local-js-oracle</span> oracle-plus-stage-delay-formula</td><td>stage-multiplier-constant / synthetic-phase-constants</td><td><span class="badge badge-red">No</span></td></tr>
         <tr><td><strong>PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)</strong></td><td><span class="badge">local-js-oracle</span> oracle-plus-stage-delay-formula</td><td><span class="badge">local-js-oracle</span> oracle-plus-stage-delay-formula</td><td>stage-multiplier-constant / synthetic-phase-constants</td><td><span class="badge badge-red">No</span></td></tr>
