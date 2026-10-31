@@ -5,11 +5,15 @@ import {
   UNIFIED_SERVICE_TYPE,
 } from '../constants/unified-service-lifecycle.js';
 import {
+  canonicalizeAdmittedRequestUrl,
+} from '../control-plane/owners/deployment-binding-contract.js';
+import {
   CellIngressAdapterBase,
   createActiveRequest,
   createRequestCancellationAwaiter,
 } from './cell-ingress-transport.js';
 import {
+  BODY_FORBIDDEN_STATUSES,
   REQUEST_CELL_ROUTE_CLASSIFICATION,
   REQUEST_CELL_ROUTE_ERROR_CODE,
   REQUEST_CELL_ROUTE_MESSAGE_TYPE,
@@ -26,15 +30,44 @@ import {ServicePolicyViolationError} from
 
 const IDEMPOTENCY_HEADER = 'idempotency-key';
 const RESPONSE_CONTENT_TYPE = 'content-type';
+const SET_COOKIE_HEADER = 'set-cookie';
+const CONNECTION_HEADER = 'connection';
 const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
 const REQUEST_CELL_URL_ORIGIN = 'http://request-cell.local';
+const FETCH_HANDLER_ID = 'fetch';
+const FETCH_ENVELOPE_MODE = 'fetch';
+const GET_METHOD = 'GET';
+const HEAD_METHOD = 'HEAD';
+const UTF8_ENCODING = 'utf8';
+const BASE64_ENCODING = 'base64';
+const HEADER_TOKEN_DELIMITER = ',';
+const BODY_BYTES_PROPERTY = 'bodyBytes';
+const DEFAULT_MAX_REQUEST_INPUT_BYTES = 1048576;
 const HTTP_STATUS_BAD_REQUEST = 400;
+const HTTP_STATUS_PAYLOAD_TOO_LARGE = 413;
 const INVALID_JSON_BODY_MESSAGE = 'Request body must be a valid JSON object';
 const NON_OBJECT_JSON_BODY_MESSAGE = 'Request body must be a JSON object';
+const REQUEST_BODY_TOO_LARGE_MESSAGE =
+  'Request body exceeds the configured input byte limit';
 const FORWARDED_REQUEST_HEADERS = Object.freeze([
   'accept',
   'content-type',
 ]);
+const HOP_BY_HOP_REQUEST_HEADERS = Object.freeze(new Set([
+  'connection',
+  'content-length',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+]));
+const CONSUMED_INGRESS_CREDENTIAL_HEADERS = Object.freeze(new Set([
+  'authorization',
+  'x-lagrange-token',
+]));
 const REQUEST_CELL_ADAPTER_MESSAGE = Object.freeze({
   DEADLINE_EXPIRED: 'Request Cell deadline expired',
   DISPATCH_FAILED: 'Request Cell dispatch failed',
@@ -63,6 +96,10 @@ const COMPONENT_FORBIDDEN_RESPONSE_HEADERS = new Set([
   'connection',
   'content-length',
   'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
   'transfer-encoding',
   'upgrade',
 ]);
@@ -77,6 +114,113 @@ function normalizedRequestHeaders(headers = {}) {
     if (typeof headers[name] === 'string') selected[name] = headers[name];
   }
   return selected;
+}
+
+function parseConnectionHeaderTokens(headers = {}) {
+  const excluded = new Set();
+  for (const [key, rawValue] of Object.entries(headers)) {
+    if (key.toLowerCase() !== CONNECTION_HEADER || !rawValue) continue;
+    const text = Array.isArray(rawValue) ?
+      rawValue.join(HEADER_TOKEN_DELIMITER) :
+      String(rawValue);
+    for (const token of text.split(HEADER_TOKEN_DELIMITER)) {
+      const normalized = token.trim().toLowerCase();
+      if (normalized.length > 0) excluded.add(normalized);
+    }
+  }
+  return excluded;
+}
+
+function isFilteredRequestHeader(lowerName, connectionTokens) {
+  return HOP_BY_HOP_REQUEST_HEADERS.has(lowerName) ||
+    CONSUMED_INGRESS_CREDENTIAL_HEADERS.has(lowerName) ||
+    connectionTokens.has(lowerName);
+}
+
+function appendNormalizedHeaderEntries(entries, lowerName, rawValue) {
+  if (rawValue === undefined || rawValue === null) return;
+  if (Array.isArray(rawValue)) {
+    for (const item of rawValue) {
+      if (item !== undefined && item !== null) {
+        entries.push(Object.freeze([lowerName, String(item)]));
+      }
+    }
+    return;
+  }
+  entries.push(Object.freeze([lowerName, String(rawValue)]));
+}
+
+function normalizeFetchRequestHeaders(headers = {}) {
+  const connectionTokens = parseConnectionHeaderTokens(headers);
+  const sortedKeys = Object.keys(headers).sort((a, b) =>
+    a.toLowerCase().localeCompare(b.toLowerCase()));
+  const entries = [];
+  for (const key of sortedKeys) {
+    const lowerName = key.toLowerCase();
+    if (isFilteredRequestHeader(lowerName, connectionTokens)) continue;
+    appendNormalizedHeaderEntries(entries, lowerName, headers[key]);
+  }
+  return Object.freeze(entries);
+}
+
+function resolveRawRequestBodyBytes(request, method) {
+  if (method === GET_METHOD || method === HEAD_METHOD) return null;
+  const rawBody = request.rawBody !== undefined ? request.rawBody : request.body;
+  if (rawBody === undefined || rawBody === null) return null;
+  if (Buffer.isBuffer(rawBody) || rawBody instanceof Uint8Array) {
+    return Buffer.from(rawBody);
+  }
+  if (typeof rawBody === 'string') {
+    return Buffer.from(rawBody, UTF8_ENCODING);
+  }
+  return Buffer.from(JSON.stringify(rawBody), UTF8_ENCODING);
+}
+
+function resolveAdmittedFetchUrl(request, route) {
+  if (typeof route?.admittedUrl === 'string') return route.admittedUrl;
+  try {
+    return canonicalizeAdmittedRequestUrl({
+      headers: request.headers,
+      url: request.url,
+    }).url;
+  } catch (cause) {
+    throw createRoutingFailure(
+      REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_REQUEST,
+      cause.message,
+      {cause, httpStatus: HTTP_STATUS_BAD_REQUEST},
+    );
+  }
+}
+
+function normalizeFetchHttpRequest(
+  request,
+  method,
+  path,
+  route,
+  maxInputBytes = DEFAULT_MAX_REQUEST_INPUT_BYTES,
+) {
+  const bodyBytes = resolveRawRequestBodyBytes(request, method);
+  if (bodyBytes && bodyBytes.byteLength > maxInputBytes) {
+    throw createRoutingFailure(
+      REQUEST_CELL_ROUTE_ERROR_CODE.BUDGET_EXHAUSTED,
+      REQUEST_BODY_TOO_LARGE_MESSAGE,
+      {httpStatus: HTTP_STATUS_PAYLOAD_TOO_LARGE},
+    );
+  }
+  const url = resolveAdmittedFetchUrl(request, route);
+  return Object.freeze({
+    body: bodyBytes ? bodyBytes.toString(UTF8_ENCODING) : null,
+    bodyBase64: bodyBytes ? bodyBytes.toString(BASE64_ENCODING) : null,
+    headers: normalizeFetchRequestHeaders(request.headers),
+    method,
+    path,
+    url,
+  });
+}
+
+function isFetchMountRoute(route) {
+  return route?.handlerId === FETCH_HANDLER_ID ||
+    typeof route?.mountPath === 'string';
 }
 
 function isPlainObject(value) {
@@ -134,8 +278,14 @@ function normalizeHttpRequest(request, method, path) {
 }
 
 function rejectAuthorityHeaders(headers = {}) {
+  const lowerKeys = new Set(
+    Object.keys(headers).map((key) => key.toLowerCase()),
+  );
   const forbidden = FORBIDDEN_AUTHORITY_HEADERS.find(
-    (name) => headers[name] !== undefined,
+    (name) => lowerKeys.has(name) && headers[name] !== undefined ||
+      Object.entries(headers).some(
+        ([k, v]) => k.toLowerCase() === name && v !== undefined,
+      ),
   );
   if (forbidden) {
     throw createRoutingFailure(
@@ -143,6 +293,54 @@ function rejectAuthorityHeaders(headers = {}) {
       `Client authority header is forbidden: ${forbidden}`,
     );
   }
+}
+
+function applyResponseMethodAndStatusRules(response, method) {
+  if (method !== HEAD_METHOD && !BODY_FORBIDDEN_STATUSES.has(response.status)) {
+    return response;
+  }
+  const stripped = {
+    body: '',
+    headers: response.headers,
+    status: response.status,
+  };
+  if (response.bodyBase64 !== undefined) {
+    stripped.bodyBase64 = '';
+  }
+  Object.defineProperty(stripped, BODY_BYTES_PROPERTY, {
+    configurable: false,
+    enumerable: false,
+    value: Buffer.alloc(0),
+    writable: false,
+  });
+  return Object.freeze(stripped);
+}
+
+function applyResponseHeadersToReply(headers, reply) {
+  const setCookieValues = [];
+  for (const [name, value] of headers) {
+    const lower = name.toLowerCase();
+    if (COMPONENT_FORBIDDEN_RESPONSE_HEADERS.has(lower)) continue;
+    if (lower === SET_COOKIE_HEADER) {
+      setCookieValues.push(value);
+      continue;
+    }
+    reply.header(name, value);
+  }
+  if (setCookieValues.length === 1) {
+    reply.header(SET_COOKIE_HEADER, setCookieValues[0]);
+  } else if (setCookieValues.length > 1) {
+    reply.header(SET_COOKIE_HEADER, setCookieValues);
+  }
+}
+
+function selectReplyBodyPayload(response) {
+  const bytes = response.bodyBytes;
+  if (Buffer.isBuffer(bytes) &&
+      Buffer.from(response.body, UTF8_ENCODING).compare(bytes) !== 0) {
+    return bytes;
+  }
+  return response.body;
 }
 
 function buildEnvelope(fields) {
@@ -265,6 +463,28 @@ class RequestCellHttpAdapter extends CellIngressAdapterBase {
     }
     super(options, REQUEST_CELL_INGRESS_KIT);
     this._authenticateRequest = options.authenticateRequest;
+    this._envelopeMode = options.envelopeMode || null;
+    this._maxInputBytes =
+      Number.isSafeInteger(options.maxInputBytes) && options.maxInputBytes > 0 ?
+        options.maxInputBytes :
+        DEFAULT_MAX_REQUEST_INPUT_BYTES;
+  }
+
+  _normalizeRequestForRoute(request, method, path, route) {
+    const fetchMode =
+      this._envelopeMode === FETCH_ENVELOPE_MODE || isFetchMountRoute(route);
+    const normalizedRequest = fetchMode ?
+      normalizeFetchHttpRequest(
+        request,
+        method,
+        path,
+        route,
+        this._maxInputBytes,
+      ) :
+      normalizeHttpRequest(request, method, path);
+    const requestDigest = createRequestDigest(normalizedRequest);
+    const intentPath = fetchMode ? normalizedRequest.url : path;
+    return {intentPath, normalizedRequest, requestDigest};
   }
 
   async invoke(request) {
@@ -284,16 +504,13 @@ class RequestCellHttpAdapter extends CellIngressAdapterBase {
       );
       const method = String(request.method || '').toUpperCase();
       const path = requestPath(request);
-      const normalizedRequest =
-        normalizeHttpRequest(request, method, path);
-      const requestDigest = createRequestDigest(normalizedRequest);
       const invocationId = createInvocationIdentity(
         securityContext.tenantId,
         request.headers?.[IDEMPOTENCY_HEADER],
       );
       const deadlineMs = Date.now() + this._deadlineMs;
       const dispatchId = randomUUID();
-      return await this._attemptOwner.run(async (attempt) => {
+      const response = await this._attemptOwner.run(async (attempt) => {
         this._assertOpen(activeRequest);
         if (Date.now() >= deadlineMs) {
           throw createRoutingFailure(
@@ -302,15 +519,19 @@ class RequestCellHttpAdapter extends CellIngressAdapterBase {
           );
         }
         const route = this._routeResolver.resolve({
+          headers: request.headers,
           invocationId,
           method,
           path,
           securityContext,
+          url: request.url,
         });
+        const {intentPath, normalizedRequest, requestDigest} =
+          this._normalizeRequestForRoute(request, method, path, route);
         const intentDigest = createInvocationIntentDigest({
           bindingVersionId: route.bindingVersionId,
           method,
-          path,
+          path: intentPath,
           requestDigest,
           tenantId: securityContext.tenantId,
         });
@@ -328,6 +549,7 @@ class RequestCellHttpAdapter extends CellIngressAdapterBase {
           traceId: request.id || invocationId,
         });
       });
+      return applyResponseMethodAndStatusRules(response, method);
     } finally {
       this._activeRequests.delete(activeRequest);
       activeRequest.resolveSettled();
@@ -337,13 +559,9 @@ class RequestCellHttpAdapter extends CellIngressAdapterBase {
   async handle(request, reply) {
     try {
       const response = await this.invoke(request);
-      for (const [name, value] of response.headers) {
-        if (!COMPONENT_FORBIDDEN_RESPONSE_HEADERS.has(name.toLowerCase())) {
-          reply.header(name, value);
-        }
-      }
+      applyResponseHeadersToReply(response.headers, reply);
       reply.code(response.status);
-      return response.body;
+      return selectReplyBodyPayload(response);
     } catch (error) {
       const failure = normalizeDispatchError(error);
       reply.code(failure.httpStatus);
@@ -359,5 +577,8 @@ class RequestCellHttpAdapter extends CellIngressAdapterBase {
 }
 
 export {
+  CONSUMED_INGRESS_CREDENTIAL_HEADERS,
+  HOP_BY_HOP_REQUEST_HEADERS,
   RequestCellHttpAdapter,
+  normalizeFetchHttpRequest,
 };

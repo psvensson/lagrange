@@ -12,6 +12,7 @@ import {
   requestCellTableIndexRowBound,
 } from './request-cell-table-read-index.js';
 import {
+  DEFAULT_REQUEST_HOST_CALL_BUDGET,
   HOST_CALL_MESSAGE,
   HOST_CALL_RESPONDER_STATUS,
   createHostCallDescriptor,
@@ -136,7 +137,11 @@ function attachInvocationHostCall(state, payload, options) {
     return null;
   }
   const descriptor = createHostCallDescriptor();
-  payload.hostCall = {descriptor};
+  const maxCalls =
+    Number.isSafeInteger(options.maxHostCalls) && options.maxHostCalls > 0 ?
+      options.maxHostCalls :
+      DEFAULT_REQUEST_HOST_CALL_BUDGET;
+  payload.hostCall = {descriptor, maxCalls};
   return createParentHostCallResponder({
     delegate: options.bindingCallDelegate,
     descriptor,

@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3261787,
-        "sha256": "3d8d181bb13395514ad5db90da975580492020f1f9af67139c4f8487a10faab0"
+        "bytes": 3263580,
+        "sha256": "2c8b3d55e5b29f59d3ea8eabd9c1e49d629cac23aa0aa9532814ac3730b99326"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a2dc9e26203a73af4ba09dc2967ce82b992c2f721d61886f69d819530b3dc5a7"
+        "sha256": "c6e397a4214d464932fcdf16b0caab2cce698c729fd89b4e1d381f5485b1f483"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "3ed7e5608b599eb38238946f5cab42199f11458b2cc6ab1d59f77e4305d68f0f"
+        "sha256": "7997e2743e4d529c91fa1c0a34e32a696cb1cb9d73b73ae772f87c350438733a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "3d5bdbe91b76f480f7ff95b64191c2ff28a38cea567052591d8caff1951befd8"
+    "inputDigest": "70cf305c5cf0528eed7b2c4d54ff7cb549648d8bdc31c15961d5c2560f225c67"
   },
   "reconciliation": {
     "complexity": {
@@ -117,13 +117,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a2dc9e26203a73af4ba09dc2967ce82b992c2f721d61886f69d819530b3dc5a7"
+          "sha256": "c6e397a4214d464932fcdf16b0caab2cce698c729fd89b4e1d381f5485b1f483"
         },
-        "cloneGroups": 42,
-        "duplicatedLines": 1331,
-        "sourceCloneTouches": 84,
-        "sourceDuplicatedLineTouches": 2662,
-        "nonzeroSourceCount": 53,
+        "cloneGroups": 43,
+        "duplicatedLines": 1371,
+        "sourceCloneTouches": 86,
+        "sourceDuplicatedLineTouches": 2742,
+        "nonzeroSourceCount": 55,
         "touchMultiplicity": 2
       },
       {
@@ -135,13 +135,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "3ed7e5608b599eb38238946f5cab42199f11458b2cc6ab1d59f77e4305d68f0f"
+          "sha256": "7997e2743e4d529c91fa1c0a34e32a696cb1cb9d73b73ae772f87c350438733a"
         },
-        "cloneGroups": 649,
-        "duplicatedLines": 24346,
-        "sourceCloneTouches": 1298,
-        "sourceDuplicatedLineTouches": 48692,
-        "nonzeroSourceCount": 419,
+        "cloneGroups": 650,
+        "duplicatedLines": 24368,
+        "sourceCloneTouches": 1300,
+        "sourceDuplicatedLineTouches": 48736,
+        "nonzeroSourceCount": 421,
         "touchMultiplicity": 2
       }
     ],
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3261787,
-        "sha256": "3d8d181bb13395514ad5db90da975580492020f1f9af67139c4f8487a10faab0"
+        "bytes": 3263580,
+        "sha256": "2c8b3d55e5b29f59d3ea8eabd9c1e49d629cac23aa0aa9532814ac3730b99326"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "cb26628735572223ddc10ee405e764e118e54d2a3e6296b93cd7d7148895ba26",
-      "moduleCount": 5852,
-      "edgeCount": 31749,
+      "sourceDigest": "c52f31f8251c57a1959d4a416f058f9d9252cf3b40e2ea7ece2bf3392bdf6798",
+      "moduleCount": 5854,
+      "edgeCount": 31773,
       "unresolvedCount": 43
     }
   },
   "assignment": {
-    "sourceSignalCount": 2440,
-    "assignedSignalCount": 2440,
-    "uniqueAssignmentCount": 2440,
-    "digest": "8ccb5c5f04b02c0ba624ac30a0f5ff3f7c5b2159d3801c0f82e279cc6d486eed"
+    "sourceSignalCount": 2444,
+    "assignedSignalCount": 2444,
+    "uniqueAssignmentCount": 2444,
+    "digest": "0bb0314d369a4c7517020a47d90dd73fa73b057ff98537d2bf22661bba0e65fa"
   },
   "signalCounts": {
     "cognitive": 147,
     "complexity": 1735,
-    "duplication": 472,
+    "duplication": 476,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1255,
+    "filesWithDebt": 1259,
     "rankedBoundaryCount": 112,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 92,
@@ -1518,6 +1518,34 @@
       ]
     },
     {
+      "key": "area:scripts/checks",
+      "owner": null,
+      "boundary": "scripts/checks",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/checks"
+      ],
+      "fileCount": 7,
+      "signalCount": 7,
+      "complexity": 0,
+      "cognitive": 3,
+      "oversizedFiles": 0,
+      "duplicatedLines": 128,
+      "cloneTouches": 4,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 23,
+      "importOut": 29,
+      "score": 36.8,
+      "topPaths": [
+        "scripts/checks/impact-proof-cone-inputs.js",
+        "scripts/checks/raft-rs-operation-boundary-audit.js",
+        "scripts/checks/test-primary-classification.js",
+        "scripts/checks/h2-hono-source-ir-deployment-cutover-guard.js",
+        "scripts/checks/h3-fetch-ingress-and-scoped-client-guard.js"
+      ]
+    },
+    {
       "key": "area:test/cli",
       "owner": null,
       "boundary": "test/cli",
@@ -1626,34 +1654,6 @@
       ]
     },
     {
-      "key": "area:scripts/checks",
-      "owner": null,
-      "boundary": "scripts/checks",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/checks"
-      ],
-      "fileCount": 5,
-      "signalCount": 5,
-      "complexity": 0,
-      "cognitive": 3,
-      "oversizedFiles": 0,
-      "duplicatedLines": 48,
-      "cloneTouches": 2,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 23,
-      "importOut": 23,
-      "score": 28.8,
-      "topPaths": [
-        "scripts/checks/impact-proof-cone-inputs.js",
-        "scripts/checks/raft-rs-operation-boundary-audit.js",
-        "scripts/checks/test-primary-classification.js",
-        "scripts/checks/run-dockerized-pg-client-compatibility-example-scenarios.js",
-        "scripts/checks/run-minimal-deployment-request-binding-example-scenarios.js"
-      ]
-    },
-    {
       "key": "area:src/debug-runtime",
       "owner": null,
       "boundary": "src/debug-runtime",
@@ -1705,6 +1705,34 @@
         "src/control-plane/replica-dispatch-service-dispatch-observation-methods.js",
         "src/control-plane/replica-dispatch-service-lifecycle.js",
         "src/control-plane/replica-dispatch-service.js"
+      ]
+    },
+    {
+      "key": "area:test/service",
+      "owner": null,
+      "boundary": "test/service",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/service"
+      ],
+      "fileCount": 7,
+      "signalCount": 7,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 231,
+      "cloneTouches": 9,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 1,
+      "importOut": 87,
+      "score": 23.1,
+      "topPaths": [
+        "test/service/service-reconciler.test.js",
+        "test/service/adapters/adapter-conformance.test.js",
+        "test/service/call-binding-route-resolver.test.js",
+        "test/service/h2-hono-source-ir-deployment-cutover.test.js",
+        "test/service/h3-fetch-ingress-and-scoped-client.test.js"
       ]
     },
     {
@@ -1835,34 +1863,6 @@
       "topPaths": [
         "src/control-plane/control-plane-readiness-service-node-methods.js",
         "src/control-plane/control-plane-readiness-service-shared.js"
-      ]
-    },
-    {
-      "key": "area:test/service",
-      "owner": null,
-      "boundary": "test/service",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/service"
-      ],
-      "fileCount": 5,
-      "signalCount": 5,
-      "complexity": 0,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 187,
-      "cloneTouches": 7,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 1,
-      "importOut": 48,
-      "score": 18.7,
-      "topPaths": [
-        "test/service/service-reconciler.test.js",
-        "test/service/adapters/adapter-conformance.test.js",
-        "test/service/call-binding-route-resolver.test.js",
-        "test/service/minimal-deployment-request-cell-routing-fixture.js",
-        "test/service/handler-aware-runtime-invocation.test.js"
       ]
     },
     {

@@ -37,11 +37,14 @@ const HOST_CALL_ERROR_CODE = Object.freeze({
   NOT_AVAILABLE_IN_CALL_MODE: 'not_available_in_call_mode',
   PROTOCOL_VIOLATION: 'protocol_violation',
   RECURSION_REFUSED: 'recursion_refused',
+  REQUEST_CLIENT_CLOSED: 'request_client_closed',
   RESPONSE_TOO_LARGE: 'response_too_large',
   TARGET_FAILED: 'target_failed',
   TARGET_NOT_ALLOWED: 'target_not_allowed',
   TARGET_NOT_INVOCABLE: 'target_not_invocable',
   TARGET_UNAVAILABLE: 'target_unavailable',
+  UNFINISHED_CHILD_WORK: 'unfinished_child_work',
+  UNSUPPORTED_CONCURRENCY: 'unsupported_concurrency',
 });
 
 const HOST_CALL_KNOWN_CODES =
@@ -90,9 +93,12 @@ const HOST_CALL_BUFFER_BYTES =
   HOST_CALL_RESPONSE_OFFSET + HOST_CALL_MAX_RESPONSE_BYTES;
 
 // One outstanding host call per request Cell, and one bridged binding
-// call per invocation: a second nested call refuses recursion_refused.
+// call per invocation by default on the raw protocol client; request-cell
+// worker invocations supply DEFAULT_REQUEST_HOST_CALL_BUDGET for bounded
+// sequential fan-out.
 const MAX_OUTSTANDING_HOST_CALLS = 1;
 const MAX_NESTED_BINDING_CALLS = 1;
+const DEFAULT_REQUEST_HOST_CALL_BUDGET = 16;
 
 const HOST_CALL_MAX_BINDING_NAME_CHARS = 256;
 const HOST_CALL_MAX_FAILURE_MESSAGE_CHARS = 1024;
@@ -109,9 +115,15 @@ const HOST_CALL_FAILURE_MESSAGE = Object.freeze({
     'Binding call refused: host-call shared state violated the protocol',
   RECURSION_REFUSED:
     'Binding call refused: nested binding-call budget exhausted',
+  REQUEST_CLIENT_CLOSED:
+    'Binding call refused: the request-scoped client is closed',
   RESPONSE_TOO_LARGE:
     'Binding call response exceeds the bounded host-call response size',
   TARGET_FAILED: 'Binding call target failed',
+  UNFINISHED_CHILD_WORK:
+    'Binding call refused: request returned with unfinished child work',
+  UNSUPPORTED_CONCURRENCY:
+    'Binding call refused: concurrent host calls are not supported',
 });
 
 const HOST_CALL_CONTRACT_MESSAGE = Object.freeze({
@@ -322,8 +334,13 @@ function createWorkerHostCallClient(options) {
   let outstanding = 0;
   return Object.freeze({
     call(name, argumentsJson) {
-      if (callsStarted >= maxCalls ||
-          outstanding >= MAX_OUTSTANDING_HOST_CALLS) {
+      if (outstanding >= MAX_OUTSTANDING_HOST_CALLS) {
+        throw createHostCallFailure(hostCallFailureRecord(
+          HOST_CALL_ERROR_CODE.UNSUPPORTED_CONCURRENCY,
+          HOST_CALL_FAILURE_MESSAGE.UNSUPPORTED_CONCURRENCY,
+        ));
+      }
+      if (callsStarted >= maxCalls) {
         throw createHostCallFailure(hostCallFailureRecord(
           HOST_CALL_ERROR_CODE.RECURSION_REFUSED,
           HOST_CALL_FAILURE_MESSAGE.RECURSION_REFUSED,
@@ -511,6 +528,7 @@ function createParentHostCallResponder(options) {
 }
 
 export {
+  DEFAULT_REQUEST_HOST_CALL_BUDGET,
   HOST_CALL_BUFFER_BYTES,
   HOST_CALL_ERROR_CODE,
   HOST_CALL_MAX_REQUEST_BYTES,

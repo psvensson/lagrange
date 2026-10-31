@@ -13,6 +13,7 @@ const REQUEST_CELL_ROUTE_ERROR_CODE = Object.freeze({
   AUTHENTICATION_UNAVAILABLE: 'request_cell_authentication_unavailable',
   AUTHORITY_FIELD_REJECTED: 'request_cell_authority_field_rejected',
   AUTHORIZATION_FAILED: 'request_cell_authorization_failed',
+  BUDGET_EXHAUSTED: 'request_cell_budget_exhausted',
   COMPONENT_FAILED: 'request_cell_component_failed',
   DEADLINE_EXHAUSTED: 'request_cell_deadline_exhausted',
   HANDLER_FAILED: 'request_cell_handler_failed',
@@ -27,6 +28,7 @@ const REQUEST_CELL_ROUTE_ERROR_CODE = Object.freeze({
   SHUTTING_DOWN: 'request_cell_shutting_down',
   TARGET_STALE: 'request_cell_target_stale',
   TRANSPORT_FAILED: 'request_cell_transport_failed',
+  UNFINISHED_CHILD_WORK: 'unfinished_child_work',
 });
 const REQUEST_CELL_ROUTE_HTTP_STATUS = Object.freeze({
   [REQUEST_CELL_ROUTE_ERROR_CODE.ACK_ONLY]: 502,
@@ -34,6 +36,7 @@ const REQUEST_CELL_ROUTE_HTTP_STATUS = Object.freeze({
   [REQUEST_CELL_ROUTE_ERROR_CODE.AUTHENTICATION_UNAVAILABLE]: 503,
   [REQUEST_CELL_ROUTE_ERROR_CODE.AUTHORITY_FIELD_REJECTED]: 400,
   [REQUEST_CELL_ROUTE_ERROR_CODE.AUTHORIZATION_FAILED]: 403,
+  [REQUEST_CELL_ROUTE_ERROR_CODE.BUDGET_EXHAUSTED]: 413,
   [REQUEST_CELL_ROUTE_ERROR_CODE.COMPONENT_FAILED]: 502,
   [REQUEST_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED]: 504,
   [REQUEST_CELL_ROUTE_ERROR_CODE.HANDLER_FAILED]: 502,
@@ -48,21 +51,39 @@ const REQUEST_CELL_ROUTE_HTTP_STATUS = Object.freeze({
   [REQUEST_CELL_ROUTE_ERROR_CODE.SHUTTING_DOWN]: 503,
   [REQUEST_CELL_ROUTE_ERROR_CODE.TARGET_STALE]: 503,
   [REQUEST_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED]: 502,
+  [REQUEST_CELL_ROUTE_ERROR_CODE.UNFINISHED_CHILD_WORK]: 502,
 });
 const REQUEST_CELL_ROUTE_ERROR_NAME = 'RequestCellRoutingError';
 const REQUEST_CELL_INVOCATION_ID_PREFIX = 'request-invocation-';
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
 const BYTE_ENCODING = 'utf8';
+const BASE64_ENCODING = 'base64';
+const BODY_BYTES_PROPERTY = 'bodyBytes';
 const IDEMPOTENCY_KEY_MAX_BYTES = 256;
+const DEFAULT_MAX_COMPONENT_OUTPUT_BYTES = 1048576;
+const HEADER_PAIR_LENGTH = 2;
 const HTTP_STATUS_INFORMATIONAL_MINIMUM = 100;
+const HTTP_STATUS_SWITCHING_PROTOCOLS = 101;
+const HTTP_STATUS_NO_CONTENT = 204;
+const HTTP_STATUS_RESET_CONTENT = 205;
+const HTTP_STATUS_NOT_MODIFIED = 304;
+const HTTP_STATUS_BAD_GATEWAY = 502;
 const HTTP_STATUS_SERVER_ERROR_MAXIMUM = 599;
 const HTTP_STATUS_INTERNAL_SERVER_ERROR = 500;
+const BODY_FORBIDDEN_STATUSES = Object.freeze(new Set([
+  HTTP_STATUS_SWITCHING_PROTOCOLS,
+  HTTP_STATUS_NO_CONTENT,
+  HTTP_STATUS_RESET_CONTENT,
+  HTTP_STATUS_NOT_MODIFIED,
+]));
 const REQUEST_CELL_CONTRACT_MESSAGE = Object.freeze({
   COMPONENT_RESPONSE_INVALID:
     'Request Cell Component response must contain status, headers, and body',
   COMPONENT_RESPONSE_JSON_INVALID:
     'Request Cell Component returned invalid response JSON',
+  COMPONENT_RESPONSE_TOO_LARGE:
+    'Request Cell Component response exceeds output byte budget',
   IDEMPOTENCY_KEY_TOO_LARGE:
     'Idempotency-Key exceeds the request Cell limit',
   SECURITY_CONTEXT_INVALID:
@@ -166,47 +187,97 @@ function freezeSecurityContext(context) {
   });
 }
 
-function normalizeComponentResponse(value) {
-  let response = value;
-  if (typeof value === 'string') {
-    try {
-      response = JSON.parse(value);
-    } catch (cause) {
-      throw new RequestCellRoutingError(
-        REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESPONSE,
-        REQUEST_CELL_CONTRACT_MESSAGE.COMPONENT_RESPONSE_JSON_INVALID,
-        {cause, invoked: true},
-      );
-    }
+function parseComponentResponseInput(value) {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch (cause) {
+    throw new RequestCellRoutingError(
+      REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESPONSE,
+      REQUEST_CELL_CONTRACT_MESSAGE.COMPONENT_RESPONSE_JSON_INVALID,
+      {cause, invoked: true},
+    );
   }
+}
+
+function isValidComponentResponseShape(response) {
   const headersValid =
     Array.isArray(response?.headers) &&
     response.headers.every(
       (entry) =>
         Array.isArray(entry) &&
-        entry.length === 2 &&
+        entry.length === HEADER_PAIR_LENGTH &&
         entry.every((part) => typeof part === 'string'),
     );
-  if (
-    !Number.isInteger(response?.status) ||
-    response.status < HTTP_STATUS_INFORMATIONAL_MINIMUM ||
-    response.status > HTTP_STATUS_SERVER_ERROR_MAXIMUM ||
-    !headersValid ||
-    typeof response?.body !== 'string'
-  ) {
+  const statusValid =
+    Number.isInteger(response?.status) &&
+    response.status >= HTTP_STATUS_INFORMATIONAL_MINIMUM &&
+    response.status <= HTTP_STATUS_SERVER_ERROR_MAXIMUM;
+  const bodyValid =
+    typeof response?.body === 'string' ||
+    typeof response?.bodyBase64 === 'string';
+  return headersValid && statusValid && bodyValid;
+}
+
+function resolveResponseBodyPayload(response, maxOutputBytes) {
+  const hasBase64 = typeof response.bodyBase64 === 'string';
+  const rawBytes = hasBase64 ?
+    Buffer.from(response.bodyBase64, BASE64_ENCODING) :
+    Buffer.from(response.body, BYTE_ENCODING);
+  if (rawBytes.byteLength > maxOutputBytes) {
+    throw new RequestCellRoutingError(
+      REQUEST_CELL_ROUTE_ERROR_CODE.BUDGET_EXHAUSTED,
+      REQUEST_CELL_CONTRACT_MESSAGE.COMPONENT_RESPONSE_TOO_LARGE,
+      {httpStatus: HTTP_STATUS_BAD_GATEWAY, invoked: true},
+    );
+  }
+  if (BODY_FORBIDDEN_STATUSES.has(response.status)) {
+    return {
+      body: '',
+      bodyBase64: hasBase64 ? '' : undefined,
+      bodyBytes: Buffer.alloc(0),
+    };
+  }
+  return {
+    body: typeof response.body === 'string' ?
+      response.body :
+      rawBytes.toString(BYTE_ENCODING),
+    bodyBase64: hasBase64 ? response.bodyBase64 : undefined,
+    bodyBytes: rawBytes,
+  };
+}
+
+function normalizeComponentResponse(value, options = {}) {
+  const response = parseComponentResponseInput(value);
+  if (!isValidComponentResponseShape(response)) {
     throw new RequestCellRoutingError(
       REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESPONSE,
       REQUEST_CELL_CONTRACT_MESSAGE.COMPONENT_RESPONSE_INVALID,
       {invoked: true},
     );
   }
-  return Object.freeze({
-    body: response.body,
+  const maxOutputBytes =
+    Number.isSafeInteger(options.maxOutputBytes) && options.maxOutputBytes > 0 ?
+      options.maxOutputBytes :
+      DEFAULT_MAX_COMPONENT_OUTPUT_BYTES;
+  const payload = resolveResponseBodyPayload(response, maxOutputBytes);
+  const normalized = {
+    body: payload.body,
     headers: Object.freeze(
       response.headers.map((entry) => Object.freeze([...entry])),
     ),
     status: response.status,
+  };
+  if (payload.bodyBase64 !== undefined) {
+    normalized.bodyBase64 = payload.bodyBase64;
+  }
+  Object.defineProperty(normalized, BODY_BYTES_PROPERTY, {
+    configurable: false,
+    enumerable: false,
+    value: payload.bodyBytes,
+    writable: false,
   });
+  return Object.freeze(normalized);
 }
 
 function createRoutingFailure(code, message, options = {}) {
@@ -214,6 +285,8 @@ function createRoutingFailure(code, message, options = {}) {
 }
 
 export {
+  BODY_FORBIDDEN_STATUSES,
+  DEFAULT_MAX_COMPONENT_OUTPUT_BYTES,
   REQUEST_CELL_ROUTE_CLASSIFICATION,
   REQUEST_CELL_ROUTE_ERROR_CODE,
   REQUEST_CELL_ROUTE_MESSAGE_TYPE,

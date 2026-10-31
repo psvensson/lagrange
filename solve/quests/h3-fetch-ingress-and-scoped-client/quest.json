@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "h3-fetch-ingress-and-scoped-client",
+  "epic": "standard-http-service-api",
+  "statement": "Implement H3 ingress/guest/client composition: complete bounded HTTP Fetch envelope fidelity (raw bytes, query order and repeated keys, application header forwarding, hop-by-hop and credential stripping, multiple Set-Cookie, HEAD/204/304 status rules, byte-distinct intent digests), awaited guest response, and request-scoped client with sequential multi-call fan-out, concurrent call refusal (unsupported_concurrency), post-return client closure (request_client_closed), and unfinished child work refusal (unfinished_child_work).",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/h3-fetch-ingress-and-scoped-client-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "e3c1bbec0f5a923c675597b1379eab94ac44ec72"
+}

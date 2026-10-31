@@ -10,7 +10,10 @@ import {
   requestCellTableIndexEstimatedBytes,
   requestCellTableIndexRowBound,
 } from './request-cell-table-read-index.js';
-import {createWorkerHostCallClient} from './cell-host-call-protocol.js';
+import {
+  DEFAULT_REQUEST_HOST_CALL_BUDGET,
+  createWorkerHostCallClient,
+} from './cell-host-call-protocol.js';
 import {resolveComponentExport} from './component-export-resolution.js';
 
 const WORKER_MESSAGE = Object.freeze({
@@ -29,6 +32,7 @@ const WORKER_ERROR_CODE = Object.freeze({
   INVOCATION_FAILED: 'request_cell_invocation_failed',
   TABLE_READ_DENIED: 'request_cell_table_read_denied',
   TABLE_WRITE_DENIED: 'request_cell_table_write_denied',
+  UNFINISHED_CHILD_WORK: 'unfinished_child_work',
 });
 const CONTEXT_BUDGET_FIELD = 'context_bytes';
 const WORKER_EVENT = Object.freeze({
@@ -56,6 +60,8 @@ const BINDING_CALL_ERROR_CODE = Object.freeze({
 });
 const BRIDGE_UNAVAILABLE_MESSAGE =
   'No request-call bridge is available for this invocation';
+const UNFINISHED_CHILD_WORK_DEFAULT_MESSAGE =
+  'Request handler returned with unfinished child work';
 const EMIT_BUFFER_META_SLOTS = 2;
 const EMIT_LENGTH_INDEX = 0;
 const EMIT_ERROR_INDEX = 1;
@@ -329,6 +335,26 @@ function buildWorkerInvocationFailure(error, message) {
   };
 }
 
+function assertNoGuestLifecycleViolation(value) {
+  if (typeof value !== 'string' ||
+      !value.includes(WORKER_ERROR_CODE.UNFINISHED_CHILD_WORK)) {
+    return;
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    parsed = null;
+  }
+  if (parsed?.code === WORKER_ERROR_CODE.UNFINISHED_CHILD_WORK &&
+      parsed?.status === undefined) {
+    throw new ComponentPolicyError(
+      WORKER_ERROR_CODE.UNFINISHED_CHILD_WORK,
+      parsed.message || UNFINISHED_CHILD_WORK_DEFAULT_MESSAGE,
+    );
+  }
+}
+
 async function invoke(message) {
   currentEffects = [];
   try {
@@ -339,6 +365,7 @@ async function invoke(message) {
     currentTables = Array.isArray(message.tables) ? message.tables : [];
     const invocationExport = requireInvocationExport(message);
     const value = await invocationExport(...message.args);
+    assertNoGuestLifecycleViolation(value);
     const result = {
       effects: currentEffects,
       id: message.id,
@@ -372,6 +399,7 @@ function resolveMessageBindingCallBridge(message) {
     const client = createWorkerHostCallClient({
       deadlineMs: message.deadlineMs,
       descriptor: message.hostCall.descriptor,
+      maxCalls: message.hostCall.maxCalls ?? DEFAULT_REQUEST_HOST_CALL_BUDGET,
       postToParent: (request) => parentPort.postMessage(request),
     });
     return (name, argumentsJson) => client.call(name, argumentsJson);

@@ -277,6 +277,11 @@ const DEFAULT_REQUEST_PATH = '/';
 const DEFAULT_REQUEST_METHOD = 'GET';
 const HEAD_REQUEST_METHOD = 'HEAD';
 const SET_COOKIE_HEADER = 'set-cookie';
+const REQUEST_CLIENT_CLOSED_CODE = 'request_client_closed';
+const UNSUPPORTED_CONCURRENCY_CODE = 'unsupported_concurrency';
+const UNFINISHED_CHILD_WORK_CODE = 'unfinished_child_work';
+const CALL_SETTLE_MICROTASK_TURNS = 8;
+const BODY_FORBIDDEN_STATUSES = new Set([101, 204, 205, 304]);
 const HTTP_STATUS = Object.freeze({
   NOT_FOUND: 404,
   OK: 200,
@@ -386,36 +391,99 @@ function createHandlerContext(handler) {
   };
 }
 
-function createFetchEnv(envelope) {
+function createClientError(code, message, retryable = false, payload = null) {
+  const wrapped = new Error(message);
+  wrapped.code = code;
+  wrapped.retryable = Boolean(retryable);
+  wrapped.payload = payload ?? {
+    code,
+    message,
+    retryable: Boolean(retryable),
+  };
+  return wrapped;
+}
+
+function createFetchEnv(envelope, abortSignal) {
+  let closed = false;
+  let concurrencyViolated = false;
+  let inFlightCalls = 0;
   const callOperation = async (operationRef, callArguments = {}) => {
+    if (closed) {
+      throw createClientError(
+        REQUEST_CLIENT_CLOSED_CODE,
+        'Request-scoped client is closed after handler completion',
+      );
+    }
+    if (inFlightCalls > 0 || concurrencyViolated) {
+      concurrencyViolated = true;
+      throw createClientError(
+        UNSUPPORTED_CONCURRENCY_CODE,
+        'Concurrent Lagrange client calls are not supported',
+      );
+    }
     const bindingName = resolveBindingNameForOperationRef(operationRef, null);
+    inFlightCalls += 1;
     try {
+      for (let turn = 0; turn < CALL_SETTLE_MICROTASK_TURNS; turn += 1) {
+        await Promise.resolve();
+      }
+      if (concurrencyViolated) {
+        throw createClientError(
+          UNSUPPORTED_CONCURRENCY_CODE,
+          'Concurrent Lagrange client calls are not supported',
+        );
+      }
+      if (closed) {
+        throw createClientError(
+          REQUEST_CLIENT_CLOSED_CODE,
+          'Request-scoped client is closed after handler completion',
+        );
+      }
       return JSON.parse(
         callBinding(bindingName, JSON.stringify(callArguments)),
       );
     } catch (caught) {
+      if (caught?.code === REQUEST_CLIENT_CLOSED_CODE ||
+          caught?.code === UNSUPPORTED_CONCURRENCY_CODE ||
+          caught?.code === UNDECLARED_OPERATION_CODE) {
+        throw caught;
+      }
       const payload = caught?.payload;
-      const wrapped = new Error(
+      throw createClientError(
+        payload?.code ?? caught?.code ?? null,
         payload?.message ?? String(caught?.message ?? caught),
+        payload?.retryable ?? caught?.retryable,
+        payload ?? null,
       );
-      wrapped.code = payload?.code ?? caught?.code ?? null;
-      wrapped.retryable = Boolean(payload?.retryable ?? caught?.retryable);
-      wrapped.payload = payload ?? null;
-      throw wrapped;
+    } finally {
+      inFlightCalls -= 1;
     }
   };
-  return {
+  const closeClient = (suppressUnfinishedError = false) => {
+    const pending = inFlightCalls;
+    closed = true;
+    if (!suppressUnfinishedError && !concurrencyViolated && pending > 0) {
+      throw createClientError(
+        UNFINISHED_CHILD_WORK_CODE,
+        'Request handler returned with unfinished child work',
+      );
+    }
+  };
+  const env = Object.freeze({
     call: callOperation,
     deadlineMs: envelope.deadlineMs ?? null,
-    lagrange: {
+    lagrange: Object.freeze({
       call: callOperation,
-    },
+    }),
     principal: envelope.principal ?? null,
+    roles: Object.freeze([...(envelope.roles || [])]),
+    signal: abortSignal ?? null,
     tenantId: envelope.tenantId ?? null,
-  };
+  });
+  return {closeClient, env};
 }
 
-function toWebRequest(envelope) {
+function toWebRequest(envelope, abortSignal) {
   const method = envelope.method || DEFAULT_REQUEST_METHOD;
   const url = envelope.url ||
     \`\${DEFAULT_REQUEST_ORIGIN}\${envelope.path || DEFAULT_REQUEST_PATH}\`;
@@ -431,11 +499,17 @@ function toWebRequest(envelope) {
       body = new TextEncoder().encode(envelope.body);
     }
   }
-  return new Request(url, {body, headers, method});
+  const init = {body, headers, method};
+  if (abortSignal) init.signal = abortSignal;
+  return new Request(url, init);
 }
 
-async function fromWebResponse(response) {
-  const responseBytes = new Uint8Array(await response.arrayBuffer());
+async function fromWebResponse(response, requestMethod) {
+  const rawBytes = new Uint8Array(await response.arrayBuffer());
+  const isBodyForbidden =
+    requestMethod === HEAD_REQUEST_METHOD ||
+    BODY_FORBIDDEN_STATUSES.has(response.status);
+  const responseBytes = isBodyForbidden ? new Uint8Array(0) : rawBytes;
   const headers = [];
   const setCookies = typeof response.headers.getSetCookie === 'function' ?
     response.headers.getSetCookie() :
@@ -460,9 +534,28 @@ async function fromWebResponse(response) {
 export async function handleRequest(handlerId, requestJson) {
   if (handlerId === FETCH_HANDLER_ID && typeof service.fetch === 'function') {
     const envelope = JSON.parse(requestJson);
-    const webRequest = toWebRequest(envelope);
-    const response = await service.fetch(webRequest, createFetchEnv(envelope));
-    return JSON.stringify(await fromWebResponse(response));
+    const abortController = typeof AbortController === 'function' ?
+      new AbortController() :
+      null;
+    const abortSignal = abortController ? abortController.signal : null;
+    const webRequest = toWebRequest(envelope, abortSignal);
+    const {closeClient, env} = createFetchEnv(envelope, abortSignal);
+    let response;
+    try {
+      response = await service.fetch(webRequest, env);
+    } catch (error) {
+      closeClient(true);
+      throw error;
+    }
+    try {
+      closeClient(false);
+    } catch (unfinishedError) {
+      return JSON.stringify({
+        code: unfinishedError.code,
+        message: unfinishedError.message,
+      });
+    }
+    return JSON.stringify(await fromWebResponse(response, webRequest.method));
   }
   const handler = HANDLER_TABLE.get(handlerId);
   if (!handler) return typedRefusal(UNKNOWN_HANDLER_CODE, handlerId);

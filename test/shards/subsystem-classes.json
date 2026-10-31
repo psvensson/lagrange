@@ -16,7 +16,7 @@
     "query-sql": 190,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 150,
+    "services-runtime": 151,
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
@@ -25,8 +25,8 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2512,
-  "digest": "fnv1a32-44d603c7",
+  "censusSize": 2513,
+  "digest": "fnv1a32-97ee36cb",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-667b0828",
   "classes": {
@@ -2312,6 +2312,7 @@
     "test/service/external-service-manifest.test.js": "services-runtime",
     "test/service/h1-pinned-hono-component-proof.test.js": "services-runtime",
     "test/service/h2-hono-source-ir-deployment-cutover.test.js": "services-runtime",
+    "test/service/h3-fetch-ingress-and-scoped-client.test.js": "services-runtime",
     "test/service/handler-aware-runtime-invocation.test.js": "services-runtime",
     "test/service/installable-service-artifact-resolver.test.js": "services-runtime",
     "test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js": "services-runtime",

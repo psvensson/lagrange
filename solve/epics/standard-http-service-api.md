@@ -14,6 +14,7 @@ doneWhen:
 quests:
   - h1-pinned-hono-component-proof
   - h2-hono-source-ir-deployment-cutover
+  - h3-fetch-ingress-and-scoped-client
 authorizes:
   - src/authoring
   - src/service
