@@ -72,7 +72,8 @@ function renderComparativeLandingMarkdown(matrix) {
     '  - [Scenario C: PostgreSQL 17 + Valkey 8 Feature-Store & Freshness Comparison](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html))\n' +
     '  - [3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Comparison](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html))\n' +
     '  - [5-Node RF=3 Partition Granularity Sweep (P=6..60)](partition-granularity-sweep-progress.md) ([HTML](partition-granularity-sweep-progress.html))\n' +
-    '  - [Scenario B Network RTT Crossover & Working-Set Growth](scenario-b-rtt-working-set-crossover.md) ([HTML](scenario-b-rtt-working-set-crossover.html))\n\n' +
+    '  - [Scenario B Network RTT Crossover & Working-Set Growth](scenario-b-rtt-working-set-crossover.md) ([HTML](scenario-b-rtt-working-set-crossover.html))\n' +
+    '  - [Live Partition Movement & Scenario C 5x Joint Scaling](movement-and-scenario-c-scaling-progress.md) ([HTML](movement-and-scenario-c-scaling-progress.html))\n\n' +
     '![Multi-system comparative benchmark overview](comparative-overview.svg)\n\n' +
     'Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg) | [TiDB comparison progress chart](tidb-comparison-progress.svg)\n\n' +
     '## Evidence-tier and measurement boundary qualification\n\n' +
@@ -198,23 +199,20 @@ function renderComparativeLandingHtml(matrix) {
     '    <p class="desc">Specifications &amp; Detail: ' +
     '<a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline">Scenario A</a> | ' +
     '<a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B</a> | ' +
-    '<a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision">' +
-    'Scenario C Spec</a> | ' +
+    '<a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision">Scenario C Spec</a> | ' +
     '<a href="tidb-reference-paired-owner.md">Paired Benchmark Owner</a> | ' +
-    '<a href="lagrange-metrics-evolution.html">Lagrange Metrics Evolution Over Time</a> ' +
-    '(<a href="lagrange-metrics-evolution.md">MD</a>) | ' +
+    '<a href="lagrange-metrics-evolution.html">Lagrange Metrics Evolution Over Time</a> (<a href="lagrange-metrics-evolution.md">MD</a>) | ' +
     '<a href="tidb-comparison-progress.html">TiDB Progress</a> | ' +
     '<a href="postgresql-comparison-progress.html">PostgreSQL Progress</a> | ' +
     '<a href="citus-comparison-progress.html">Citus Distributed Functions (HTML)</a> | ' +
     '<a href="citus-comparison-progress.md">Citus Detail (MD)</a> | ' +
     '<a href="yugabyte-ignite-comparison-progress.html">YugabyteDB &amp; Ignite 3 (HTML)</a> | ' +
     '<a href="yugabyte-ignite-comparison-progress.md">YugabyteDB &amp; Ignite 3 (MD)</a> | ' +
-    '<a href="scenario-c-feature-store-progress.html">Scenario C: PG + Valkey (HTML)</a> | ' +
-    '<a href="scenario-c-feature-store-progress.md">Scenario C (MD)</a> | ' +
-    '<a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out (HTML)</a> | ' +
-    '<a href="scaleout-3to5-node-rf3-progress.md">3-to-5-Node RF=3 Scale-Out (MD)</a> | ' +
+    '<a href="scenario-c-feature-store-progress.html">Scenario C: PG + Valkey (HTML)</a> | <a href="scenario-c-feature-store-progress.md">Scenario C (MD)</a> | ' +
+    '<a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out (HTML)</a> | <a href="scaleout-3to5-node-rf3-progress.md">3-to-5-Node RF=3 Scale-Out (MD)</a> | ' +
     '<a href="partition-granularity-sweep-progress.html">5-Node RF=3 Partition Granularity Sweep (P=6..60) (HTML)</a> | <a href="partition-granularity-sweep-progress.md">(Markdown)</a> | ' +
-    '<a href="scenario-b-rtt-working-set-crossover.html">Scenario B Network RTT Crossover &amp; Working-Set Growth (HTML)</a> | <a href="scenario-b-rtt-working-set-crossover.md">(Markdown)</a></p>\n' +
+    '<a href="scenario-b-rtt-working-set-crossover.html">Scenario B Network RTT Crossover &amp; Working-Set Growth (HTML)</a> | <a href="scenario-b-rtt-working-set-crossover.md">(Markdown)</a> | ' +
+    '<a href="movement-and-scenario-c-scaling-progress.html">Live Partition Movement &amp; Scenario C 5x Joint Scaling (HTML)</a> | <a href="movement-and-scenario-c-scaling-progress.md">(Markdown)</a></p>\n' +
     `    <div class="chart-box">${svg}</div>\n` +
     '    <div class="filter-bar"><label for="landing-filter">Filter:</label><input type="text" id="landing-filter" placeholder="Filter targets, categories, shapes..."/></div>\n' +
     '    <div class="card">\n' +

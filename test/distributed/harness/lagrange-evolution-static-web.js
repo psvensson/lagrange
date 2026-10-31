@@ -12,12 +12,8 @@ export const DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH = 'docs/benchmarks/lagrange-met
 export const DEFAULT_LAGRANGE_EVOLUTION_MD_PATH = 'docs/benchmarks/lagrange-metrics-evolution.md';
 export const DEFAULT_LAGRANGE_EVOLUTION_HTML_PATH = 'docs/benchmarks/lagrange-metrics-evolution.html';
 
-const HTML_PAGE_STYLE = `<style>:root{--bg:#0f172a;--card-bg:#1e293b;--text:#f8fafc;--muted:#94a3b8;--border:#334155;--accent:#38bdf8}
-body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px}
-.container{max-width:1100px;margin:0 auto}h1{font-size:24px;color:#fff}.nav-bar{margin:12px 0 20px 0}
-.nav-bar a{color:var(--accent);margin-right:12px}.card{background:var(--card-bg);border-radius:8px;border:1px solid var(--border);padding:18px;margin-bottom:24px}
-.card h2{font-size:16px;color:var(--accent)}.card p,.card li{font-size:13px;line-height:1.6;color:#cbd5e1}th{color:var(--muted);font-weight:600}
-table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}.chart-box{margin-bottom:24px;display:flex}</style>`;
+const HTML_PAGE_STYLE = `<style>:root{--bg:#0f172a;--card-bg:#1e293b;--text:#f8fafc;--muted:#94a3b8;--border:#334155;--accent:#38bdf8}body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px}.container{max-width:1100px;margin:0 auto}h1{font-size:24px;color:#fff}.nav-bar{margin:12px 0 20px 0}.nav-bar a{color:var(--accent);margin-right:12px}.card{background:var(--card-bg);border-radius:8px;border:1px solid var(--border);padding:18px;margin-bottom:24px}
+.card h2{font-size:16px;color:var(--accent)}.card p,.card li{font-size:13px;line-height:1.6;color:#cbd5e1}th{color:var(--muted);font-weight:600}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}.chart-box{margin-bottom:24px;display:flex}</style>`;
 
 function makeMilestone(id, ver, commit, date, desc, tier, mode, a, proofs, b, decC) {
   return Object.freeze({
@@ -55,6 +51,8 @@ const DEFAULT_TIMELINE = Object.freeze([
     '5-Node RF=3 Partition Granularity Sweep (P=6..60)', m, l, [2.24, 1520.0, 2590.0, 3120.0], 33, [784.0, 16.9, 144, 42.0, 45.0], 441.15),
   makeMilestone('v0.3.2-rtt-working-set-crossover', '0.3.2', 'bdee84d5fc', '2026-10-30T23:00:00Z',
     'Scenario B RTT Crossover (0.2..30ms) & Heavy-Correlation Working Set', m, l, [2.24, 1520.0, 2590.0, 3120.0], 33, [368.0, 21.8, 144, 42.0, 45.0], 441.15),
+  makeMilestone('v0.3.2-live-movement-scenario-c-scale', '0.3.2', '72c76c6629', '2026-10-30T23:50:00Z',
+    'Live Movement Under Load & Scenario C 5x Joint Scaling', m, l, [2.24, 1520.0, 2590.0, 3120.0], 33, [1840.0, 17.8, 144, 26.4, 45.0], 1840.0),
 ]);
 
 const MILESTONE_LABELS = Object.freeze({
@@ -67,6 +65,7 @@ const MILESTONE_LABELS = Object.freeze({
   'v0.3.2-scaleout-3to5-rf3': ['v0.3.2 @ 89300e4 (2026-10-30)', '3-to-5-Node RF=3 Scale-Out'],
   'v0.3.2-partition-sweep-p6to60': ['0.3.2@2025f778 (P=6..60)', 'Partition Sweep (784 dec/s)'],
   'v0.3.2-rtt-working-set-crossover': ['0.3.2@bdee84d5 (RTT/WS)', 'RTT & Working-Set Crossover'],
+  'v0.3.2-live-movement-scenario-c-scale': ['0.3.2@72c76c66 (5x/Move)', 'Live Move & 5x Scenario C'],
 });
 
 const COMMIT_DELTAS = Object.freeze([
@@ -79,6 +78,7 @@ const COMMIT_DELTAS = Object.freeze([
   ['v0.3.2-scaleout-3to5-rf3', '89300e4d8a', '3-to-5-node RF=3 scale-out (2.24 tx/s proportional, 720.4 dec/s aggregate).'],
   ['v0.3.2-partition-sweep-p6to60', '2025f7780d', 'Peak 784.0 dec/s at P=30 (6 leaders/node) vs -5.9% coordination drop at P=60'],
   ['v0.3.2-rtt-working-set-crossover', 'bdee84d5fc', 'RTT 0.2..30ms crossover (168 dec/s @ 10ms) & heavy 2048-event working set (368 dec/s, 144 B)'],
+  ['v0.3.2-live-movement-scenario-c-scale', '72c76c6629', 'Zero-stall live move (26.4 ms during-move p99) & 5x Scenario C (1840 fresh dec/s @ 0ms)'],
 ]);
 
 function getMilestoneLabels(m) {

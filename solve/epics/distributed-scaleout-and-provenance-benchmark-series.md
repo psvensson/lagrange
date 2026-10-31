@@ -1,6 +1,6 @@
 ---
 id: distributed-scaleout-and-provenance-benchmark-series
-status: open
+status: done
 proof: deterministic
 roadmapRow: null
 doneWhen:
