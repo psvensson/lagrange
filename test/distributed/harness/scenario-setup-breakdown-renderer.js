@@ -6,7 +6,7 @@ const stringReplace = Function.call.bind(String.prototype.replace);
 export const DEFAULT_SCENARIO_SETUP_BREAKDOWN_SVG_PATH =
   'docs/benchmarks/scenario-setup-time-breakdown.svg';
 
-export function buildScenarioSetupAndTimeBreakdown() {
+function buildScenarioSetupAndTimeBreakdown() {
   return {
     scenarioA: [
       ['PG 17 Single Primary + App', 12.0, 14.0, 142.0, 0.0, 218.6, 26.0, 412.6],

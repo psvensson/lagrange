@@ -267,5 +267,4 @@ export {
   CANONICAL_DEFAULT_TARGETS, DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH,
   escapeXml, formatNum, getDecisionsPerSec, getEvidenceTier, getP95, getP99,
   getTargets, getTxPerSec, getWireBytes, renderComparativeOverviewSvg,
-  renderRow1, renderRow2, renderRow3,
 };

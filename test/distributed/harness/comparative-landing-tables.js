@@ -243,26 +243,14 @@ function renderScaleoutSummaryHtmlSection(scaleoutExp) {
 }
 
 export {
-  renderEvolutionHtmlRow,
-  renderEvolutionMarkdownRow,
-  renderExecutiveHtmlRow,
-  renderExecutiveMarkdownRow,
   renderExecutiveMatrixRowsHtml,
   renderExecutiveMatrixRowsMd,
   renderMilestoneRowsHtml,
   renderMilestoneRowsMd,
-  renderProvenanceHtmlRow,
-  renderProvenanceMarkdownRow,
   renderProvenanceRowsHtml,
   renderProvenanceRowsMd,
-  renderScaleoutSummaryHtmlRows,
   renderScaleoutSummaryHtmlSection,
-  renderScaleoutSummaryMarkdownRows,
   renderScaleoutSummaryMarkdownSection,
-  renderScenarioAModesHtmlRows,
-  renderScenarioAModesMarkdownRows,
-  renderShapeHtmlRows,
-  renderShapeMarkdownRows,
   renderShapesRowsHtml,
   renderShapesRowsMd,
 };
