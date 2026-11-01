@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2507,
+    "ordinary": 2510,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2524,
-  "digest": "fnv1a32-e6f7a8d3",
+  "censusSize": 2527,
+  "digest": "fnv1a32-83924775",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -810,6 +810,7 @@
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-observation.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": "ordinary",
+    "test/distributed/harness/__tests__/benchmark-operation-outcome.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-partition-convergence.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-resource-live-observation-authority.test.js": "ordinary",
@@ -943,6 +944,8 @@
     "test/distributed/harness/__tests__/real-product-cluster-deployer-recovery.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": "ordinary",
+    "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "ordinary",
+    "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": "ordinary",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "ordinary",
     "test/distributed/harness/__tests__/report-writer.property.test.js": "ordinary",
     "test/distributed/harness/__tests__/report-writer.test.js": "ordinary",

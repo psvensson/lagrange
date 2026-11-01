@@ -1,6 +1,7 @@
 const SYSTEM = Object.freeze({
   TIDB_TIKV: 'tidb-tikv',
   LAGRANGE: 'lagrange',
+  POSTGRESQL: 'postgresql',
 });
 
 export {
