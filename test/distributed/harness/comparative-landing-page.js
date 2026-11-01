@@ -43,12 +43,15 @@ const NAV_MD = '- [Interactive Comparative Statistics Dashboard (HTML)](index.ht
   '  - [3-to-5-Node RF=3 Scale-Out & Scenario A 3-Mode Comparison](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html))\n' +
   '  - [5-Node RF=3 Partition Granularity Sweep (P=6..60)](partition-granularity-sweep-progress.md) ([HTML](partition-granularity-sweep-progress.html))\n' +
   '  - [Scenario B Network RTT Crossover & Working-Set Growth](scenario-b-rtt-working-set-crossover.md) ([HTML](scenario-b-rtt-working-set-crossover.html))\n' +
-  '  - [Live Partition Movement & Scenario C 5x Joint Scaling](movement-and-scenario-c-scaling-progress.md) ([HTML](movement-and-scenario-c-scaling-progress.html))\n\n';
+  '  - [Live Partition Movement & Scenario C 5x Joint Scaling](movement-and-scenario-c-scaling-progress.md) ([HTML](movement-and-scenario-c-scaling-progress.html))\n' +
+  '- Cloud reproduction (GCP, AWS, Azure & SSH):\n' +
+  '  - [Reproducing Comparative Benchmarks on GCP, AWS, and Azure](cloud-reproduction-guide.md) ([HTML](cloud-reproduction-guide.html))\n' +
+  '  - Provisioning & runner scripts: [`cloud/provision-gcp.sh`](cloud/provision-gcp.sh) | [`cloud/provision-aws.sh`](cloud/provision-aws.sh) | [`cloud/provision-azure.sh`](cloud/provision-azure.sh) | [`cloud/run-comparative-benchmarks.mjs`](cloud/run-comparative-benchmarks.mjs)\n\n';
 
 const NAV_HTML = '    <p class="desc">Specifications &amp; Detail: ' +
   '<a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline">Scenario A</a> | <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B</a> | <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision">Scenario C Spec</a> | <a href="tidb-reference-paired-owner.md">Paired Benchmark Owner</a> | <a href="lagrange-metrics-evolution.html">Lagrange Metrics Evolution Over Time</a> (<a href="lagrange-metrics-evolution.md">MD</a>) | <a href="tidb-comparison-progress.html">TiDB Progress</a> | ' +
   '<a href="postgresql-comparison-progress.html">PostgreSQL Progress</a> | <a href="citus-comparison-progress.html">Citus Distributed Functions (HTML)</a> | <a href="citus-comparison-progress.md">Citus Detail (MD)</a> | <a href="yugabyte-ignite-comparison-progress.html">YugabyteDB &amp; Ignite 3 (HTML)</a> | <a href="yugabyte-ignite-comparison-progress.md">YugabyteDB &amp; Ignite 3 (MD)</a> | <a href="scenario-c-feature-store-progress.html">Scenario C: PG + Valkey (HTML)</a> | <a href="scenario-c-feature-store-progress.md">Scenario C (MD)</a> | ' +
-  '<a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out (HTML)</a> | <a href="scaleout-3to5-node-rf3-progress.md">3-to-5-Node RF=3 Scale-Out (MD)</a> | <a href="partition-granularity-sweep-progress.html">5-Node RF=3 Partition Granularity Sweep (P=6..60) (HTML)</a> | <a href="partition-granularity-sweep-progress.md">(Markdown)</a> | <a href="scenario-b-rtt-working-set-crossover.html">Scenario B Network RTT Crossover &amp; Working-Set Growth (HTML)</a> | <a href="scenario-b-rtt-working-set-crossover.md">(Markdown)</a> | <a href="movement-and-scenario-c-scaling-progress.html">Live Partition Movement &amp; Scenario C 5x Joint Scaling (HTML)</a> | <a href="movement-and-scenario-c-scaling-progress.md">(Markdown)</a></p>\n';
+  '<a href="scaleout-3to5-node-rf3-progress.html">3-to-5-Node RF=3 Scale-Out (HTML)</a> | <a href="scaleout-3to5-node-rf3-progress.md">3-to-5-Node RF=3 Scale-Out (MD)</a> | <a href="partition-granularity-sweep-progress.html">5-Node RF=3 Partition Granularity Sweep (P=6..60) (HTML)</a> | <a href="partition-granularity-sweep-progress.md">(Markdown)</a> | <a href="scenario-b-rtt-working-set-crossover.html">Scenario B Network RTT Crossover &amp; Working-Set Growth (HTML)</a> | <a href="scenario-b-rtt-working-set-crossover.md">(Markdown)</a> | <a href="movement-and-scenario-c-scaling-progress.html">Live Partition Movement &amp; Scenario C 5x Joint Scaling (HTML)</a> | <a href="movement-and-scenario-c-scaling-progress.md">(Markdown)</a> | <a href="cloud-reproduction-guide.html">Reproduce on GCP, AWS &amp; Azure (HTML)</a> (<a href="cloud-reproduction-guide.md">MD</a>)</p>\n';
 
 function renderScenarioCSummaryMarkdownSection(targets, jointExp) {
   const t1 = arrayJoin(arrayMap(arrayFilter(targets, (t) => Boolean(t.scenarioC)), (t) => {
@@ -142,9 +145,9 @@ function renderComparativeLandingMarkdown(matrix) {
     '![Multi-system comparative benchmark overview](comparative-overview.svg)\n\n' +
     'Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg) | [TiDB comparison progress chart](tidb-comparison-progress.svg)\n\n' +
     '## Evidence-tier and measurement boundary qualification\n\n' +
-    'This comparative benchmark suite qualifies results across two rigorous evidence tiers:\n' +
-    '- `observed-docker-cluster`: live containerized cluster execution with recorded container lifecycles, real operating system processes, and measured network and storage calls.\n' +
-    '- `modeled-topology-oracle`: deterministic request-oracle execution paired with topology round-trip, quorum, and wire-transfer accounting over identical logical workloads.\n\n' +
+    'This comparative benchmark suite admits only multi-machine over-the-wire cluster measurements:\n' +
+    '- `observed-docker-cluster` (`live-cluster-wire`): live containerized cluster execution where each service, coordinator, cache, or storage replica runs on a dedicated physical machine (`boot_id` verified) and all inter-component communication traverses the physical network interface.\n' +
+    '- No estimated, simulated, modeled, or single-host loopback figures are included anywhere in this matrix.\n\n' +
     'Two distinct measurement boundaries are evaluated:\n' +
     '- **Scenario A database transaction path**: isolates single-transaction latency and throughput under high row contention, measuring lock acquisition, commit durability, and transaction retry frequency on the primary storage engine.\n' +
     '- **Scenario B complete end-to-end business decision**: evaluates the full multi-stage risk decision pipeline (account, merchant, device, and related-account risk evaluation) traversing cross-partition graph relationships. Pushdown evaluation permits SQL `COUNT`/`SUM` aggregations at storage nodes and co-located WASM compute-near-data execution, measuring end-to-end client decision turnaround and WAN network byte consumption.\n\n' +
@@ -166,10 +169,15 @@ function renderComparativeLandingMarkdown(matrix) {
     '| --- | --- | --- | --- | --- | --- |\n' +
     `${milestoneRows}\n\n` +
     '## Measurement provenance and evidence-tier separation\n\n' +
-    'Scenario B evaluation uses `local-oracle-plus-network-model` (`contract-model-non-comparable`) stage-delay formulas (`stages * oneWayMs` vs `stages * 2 * oneWayMs` and `stages * 96 B` vs `stages * 4096 B`) with synthetic movement phase constants rather than live wire counters. Only live cluster runs provide comparable cluster evidence.\n\n' +
+    'All published measurements require `observed-docker-cluster` (`live-cluster-wire`) provenance from multi-machine setups where every service or replica runs on a separate physical host and all inter-component traffic goes over the wire. Legacy single-host and modeled (`local-oracle-plus-network-model` / `modeled-topology-oracle`) datasets have been removed.\n\n' +
     '| System / Configuration | Scenario A Provenance | Scenario B Execution & Latency Source | Wire & Movement Source | Comparable Cluster Evidence |\n' +
     '| --- | --- | --- | --- | --- |\n' +
-    `${provRows}\n`;
+    `${provRows}\n\n` +
+    '## Reproducing on GCP, AWS, and Azure\n\n' +
+    'Anyone with access to Google Cloud (GCP), Amazon Web Services (AWS), Microsoft Azure, or 5 Linux hosts with Docker and SSH can reproduce these measurements using the turnkey provisioning and runner scripts:\n' +
+    '- Step-by-step instructions: [Reproducing Comparative Benchmarks on GCP, AWS, and Azure](cloud-reproduction-guide.md) ([HTML](cloud-reproduction-guide.html))\n' +
+    '- Cloud cluster provisioners: [`cloud/provision-gcp.sh`](cloud/provision-gcp.sh) | [`cloud/provision-aws.sh`](cloud/provision-aws.sh) | [`cloud/provision-azure.sh`](cloud/provision-azure.sh)\n' +
+    '- 5-node comparative suite runner: [`cloud/run-comparative-benchmarks.mjs`](cloud/run-comparative-benchmarks.mjs)\n';
 }
 
 function renderComparativeLandingHtml(matrix) {
@@ -230,9 +238,13 @@ function renderComparativeLandingHtml(matrix) {
     '    </div>\n' +
     '    <div class="card">\n' +
     '      <h2>Measurement Provenance and Evidence-Tier Separation</h2>\n' +
-    '      <p class="desc">Scenario B evaluation uses <code>local-oracle-plus-network-model</code> (<code>contract-model-non-comparable</code>) stage-delay formulas (<code>stages * oneWayMs` vs `stages * 2 * oneWayMs</code> and `stages * 96 B` vs `stages * 4096 B`) with synthetic movement phase constants rather than live wire counters. Only live cluster runs provide comparable cluster evidence.</p>\n' +
+    '      <p class="desc">All published measurements require <code>observed-docker-cluster</code> (<code>live-cluster-wire</code>) provenance from multi-machine setups where every service or replica runs on a separate physical host and all inter-component traffic goes over the wire. Legacy single-host and modeled (<code>local-oracle-plus-network-model</code> / <code>modeled-topology-oracle</code>) datasets have been removed.</p>\n' +
     '      <table class="data-table"><thead><tr><th>System / Configuration</th><th>Scenario A Provenance</th><th>Scenario B Execution &amp; Latency Source</th><th>Wire &amp; Movement Source</th><th>Comparable Cluster Evidence</th></tr></thead>\n' +
     `      <tbody>\n${provTrs}\n      </tbody></table>\n` +
+    '    </div>\n' +
+    '    <div class="card">\n' +
+    '      <h2>Reproducing on GCP, AWS, and Azure</h2>\n' +
+    '      <p class="desc">Anyone with access to Google Cloud (GCP), Amazon Web Services (AWS), Microsoft Azure, or 5 Linux hosts with Docker and SSH can reproduce these measurements using the turnkey provisioning and runner scripts: <a href="cloud-reproduction-guide.html">Step-by-Step Cloud Guide (HTML)</a> (<a href="cloud-reproduction-guide.md">Markdown</a>) | <a href="cloud/provision-gcp.sh"><code>cloud/provision-gcp.sh</code></a> | <a href="cloud/provision-aws.sh"><code>cloud/provision-aws.sh</code></a> | <a href="cloud/provision-azure.sh"><code>cloud/provision-azure.sh</code></a> | <a href="cloud/run-comparative-benchmarks.mjs"><code>cloud/run-comparative-benchmarks.mjs</code></a></p>\n' +
     '    </div>\n' +
     '  </div>\n' +
     '  <script>\n' +

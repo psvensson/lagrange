@@ -279,7 +279,7 @@ function renderComparativeOverviewSvg(matrix) {
     'Lagrange Comparative Benchmark Statistics - Multi-System Overview</text>\n' +
     subtitleSvg +
     `  <text x="30" y="${legendY}" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">` +
-    'Legend: solid bar = observed-docker-cluster | dashed bar = modeled-topology-oracle</text>\n' +
+    'Legend: solid bar = observed-docker-cluster (multi-machine live wire)</text>\n' +
     `${r1}${renderRow1(targets, r1Y, cardHeight)}\n` +
     `${r2}${renderRow2(targets, r2Y, cardHeight)}\n` +
     `${r3}${renderRow3(targets, r3Y, cardHeight)}\n` +

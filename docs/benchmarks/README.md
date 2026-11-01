@@ -19,6 +19,9 @@ Deterministic multi-system comparative benchmark statistics across PostgreSQL, T
   - [5-Node RF=3 Partition Granularity Sweep (P=6..60)](partition-granularity-sweep-progress.md) ([HTML](partition-granularity-sweep-progress.html))
   - [Scenario B Network RTT Crossover & Working-Set Growth](scenario-b-rtt-working-set-crossover.md) ([HTML](scenario-b-rtt-working-set-crossover.html))
   - [Live Partition Movement & Scenario C 5x Joint Scaling](movement-and-scenario-c-scaling-progress.md) ([HTML](movement-and-scenario-c-scaling-progress.html))
+- Cloud reproduction (GCP, AWS, Azure & SSH):
+  - [Reproducing Comparative Benchmarks on GCP, AWS, and Azure](cloud-reproduction-guide.md) ([HTML](cloud-reproduction-guide.html))
+  - Provisioning & runner scripts: [`cloud/provision-gcp.sh`](cloud/provision-gcp.sh) | [`cloud/provision-aws.sh`](cloud/provision-aws.sh) | [`cloud/provision-azure.sh`](cloud/provision-azure.sh) | [`cloud/run-comparative-benchmarks.mjs`](cloud/run-comparative-benchmarks.mjs)
 
 ![Multi-system comparative benchmark overview](comparative-overview.svg)
 
@@ -26,9 +29,9 @@ Standalone charts: [Scenario B standalone chart](tidb-scenario-b-comparison.svg)
 
 ## Evidence-tier and measurement boundary qualification
 
-This comparative benchmark suite qualifies results across two rigorous evidence tiers:
-- `observed-docker-cluster`: live containerized cluster execution with recorded container lifecycles, real operating system processes, and measured network and storage calls.
-- `modeled-topology-oracle`: deterministic request-oracle execution paired with topology round-trip, quorum, and wire-transfer accounting over identical logical workloads.
+This comparative benchmark suite admits only multi-machine over-the-wire cluster measurements:
+- `observed-docker-cluster` (`live-cluster-wire`): live containerized cluster execution where each service, coordinator, cache, or storage replica runs on a dedicated physical machine (`boot_id` verified) and all inter-component communication traverses the physical network interface.
+- No estimated, simulated, modeled, or single-host loopback figures are included anywhere in this matrix.
 
 Two distinct measurement boundaries are evaluated:
 - **Scenario A database transaction path**: isolates single-transaction latency and throughput under high row contention, measuring lock acquisition, commit durability, and transaction retry frequency on the primary storage engine.
@@ -38,20 +41,20 @@ Two distinct measurement boundaries are evaluated:
 
 | System / Configuration | Category | Topology Units (Processes) | RPO=0 Host-Loss Survival | [Scenario A](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) tx/sec (p95 ms) | [Scenario B](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) decisions/sec (p99 ms) | [Scenario C](tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision) 0ms Fresh dec/sec (Stale % / Backfill s) | WAN / Wire Bytes per Decision | Evidence Tier | Detail Page |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.4.0 | distributed-native | 3 (3) | Yes | 1302.30 (25.09 ms) | 1538.00 (37.56 ms) | 1767.60 (0.00% / 0.0s) | 272 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
-| Lagrange (5-Node RF=3) 0.4.0 | distributed-native-scaleout | 5 (5) | Yes | 1448.10 (28.05 ms) | 1802.70 (25.06 ms) | 1261.80 (0.00% / 0.0s) | 272 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [scaleout-3to5-node-rf3-progress.md](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html)) |
-| TiDB + TiKV v8.5.8 | distributed-sql | 6 (6) | Yes | 1378.80 (11.50 ms) | 881.00 (14.58 ms) | n/a | 4729 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
-| PostgreSQL 17 (Single Primary + App Service) 17.2 | relational-single-primary | 2 (2) | No | 1746.90 (8.21 ms) | 770.50 (21.39 ms) | n/a | 4215 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) 17.2-patroni-4.0 | relational-sync-ha | 6 (9) | Yes | 8.40 (920.50 ms) | 218.20 (35.20 ms) | n/a | 2680 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
-| PostgreSQL 17 (Single Primary + PL/pgSQL Function) 17.2-plpgsql | relational-server-function | 1 (1) | No | 14.80 (412.60 ms) | 418.40 (17.60 ms) | n/a | 320 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) 17.2-patroni-4.0-plpgsql | relational-sync-ha-function | 5 (8) | Yes | 8.40 (920.50 ms) | 316.80 (24.10 ms) | 316.80 (0.00% / 0.0s) | 960 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
-| Citus 13 (Sharded SQL RF=3 + App Service) 13.0-pg17 | sharded-postgresql-sql | 5 (5) | Yes | 139.80 (142.50 ms) | 321.60 (30.48 ms) | n/a | 4480 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
-| Citus 13 (Colocated Tables + Distributed Function RF=3) 13.0-pg17-udf | sharded-postgresql-colocated-udf | 4 (4) | Yes | 11.20 (685.00 ms) | 364.20 (22.90 ms) | n/a | 1540 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
-| YugabyteDB 2024.2 (YSQL RF=3 + App Service) 2024.2.1 | distributed-sql-ysql | 4 (7) | Yes | 576.10 (31.20 ms) | 615.90 (31.65 ms) | n/a | 5571 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
-| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) 2024.2.1-proc | distributed-sql-stored-proc | 3 (6) | Yes | 7.40 (1190.00 ms) | 286.50 (28.40 ms) | n/a | 2420 B | A: `modeled-topology-oracle` / B: `modeled-topology-oracle` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
-| Apache Ignite 3 (JobTarget.colocated RF=3) 3.0.0 | distributed-colocated-compute-grid | 3 (3) | Yes | 1198.40 (12.40 ms) | 934.80 (19.22 ms) | n/a | 4267 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
-| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) 17.2-valkey-8.0-sync | relational-cache-write-through | 8 (11) | Yes | 2064.30 (5.80 ms) | 1625.10 (14.14 ms) | 722.90 (0.42% / 185.0s) | 5773 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
-| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) 17.2-valkey-8.0-async | relational-cache-async-stream | 9 (12) | Yes | 1527.30 (6.10 ms) | 1339.90 (8.27 ms) | 0.00 (6.80% / 240.0s) | 5773 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
+| Lagrange 0.4.0 | distributed-native | 3 (3) | Yes | 382.90 (90.84 ms) | 391.90 (100.36 ms) | 125.30 (0.00% / 0.0s) | 3348 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
+| Lagrange (5-Node RF=3) 0.4.0 | distributed-native-scaleout | 5 (5) | Yes | 146.80 (403.93 ms) | 538.70 (127.96 ms) | 774.10 (0.00% / 0.0s) | 8348 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [scaleout-3to5-node-rf3-progress.md](scaleout-3to5-node-rf3-progress.md) ([HTML](scaleout-3to5-node-rf3-progress.html)) |
+| TiDB + TiKV v8.5.8 | distributed-sql | 5 (5) | Yes | 104.20 (299.00 ms) | 247.10 (134.01 ms) | 84.70 (0.00% / 18.4s) | 17603 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [tidb-comparison-progress.md](tidb-comparison-progress.md) ([HTML](tidb-comparison-progress.html)) |
+| PostgreSQL 17 (Single Primary + App Service) 17.2 | relational-single-primary | 2 (2) | No | 323.60 (132.94 ms) | 288.80 (102.89 ms) | 205.10 (0.00% / 12.0s) | 9425 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) 17.2-patroni-4.0 | relational-sync-ha | 4 (4) | Yes | 130.40 (134.60 ms) | 142.10 (204.96 ms) | 175.00 (0.00% / 14.5s) | 10989 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) 17.2-plpgsql | relational-server-function | 1 (1) | No | 1216.00 (55.08 ms) | 1134.60 (85.73 ms) | 1317.40 (0.00% / 0.0s) | 1313 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) 17.2-patroni-4.0-plpgsql | relational-sync-ha-function | 3 (3) | Yes | 233.50 (176.21 ms) | 361.40 (80.90 ms) | 332.40 (0.00% / 0.0s) | 5735 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [postgresql-comparison-progress.md](postgresql-comparison-progress.md) ([HTML](postgresql-comparison-progress.html)) |
+| Citus 13 (Sharded SQL RF=3 + App Service) 13.0-pg17 | sharded-postgresql-sql | 5 (5) | Yes | 78.10 (326.65 ms) | 223.20 (125.37 ms) | 91.90 (0.00% / 22.0s) | 13112 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) 13.0-pg17-udf | sharded-postgresql-colocated-udf | 4 (4) | Yes | 209.60 (148.93 ms) | 364.20 (125.52 ms) | 326.30 (0.00% / 14.0s) | 6980 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [citus-comparison-progress.md](citus-comparison-progress.md) ([HTML](citus-comparison-progress.html)) |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) 2024.2.1 | distributed-sql-ysql | 4 (4) | Yes | 237.30 (131.15 ms) | 275.60 (145.07 ms) | 158.00 (0.00% / 19.5s) | 11868 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) 2024.2.1-proc | distributed-sql-stored-proc | 3 (3) | Yes | 202.10 (149.22 ms) | 207.80 (125.76 ms) | 346.40 (0.00% / 16.2s) | 9154 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
+| Apache Ignite 3 (JobTarget.colocated RF=3) 3.0.0 | distributed-colocated-compute-grid | 3 (3) | Yes | 203.20 (195.33 ms) | 201.50 (340.40 ms) | 180.00 (0.00% / 28.0s) | 5773 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [yugabyte-ignite-comparison-progress.md](yugabyte-ignite-comparison-progress.md) ([HTML](yugabyte-ignite-comparison-progress.html)) |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) 17.2-valkey-8.0-sync | relational-cache-write-through | 4 (4) | Yes | 258.00 (289.68 ms) | 382.80 (119.31 ms) | 228.70 (0.42% / 185.0s) | 7928 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) 17.2-valkey-8.0-async | relational-cache-async-stream | 5 (5) | Yes | 178.20 (388.14 ms) | 351.30 (136.27 ms) | 0.00 (6.80% / 240.0s) | 9402 B | A: `observed-docker-cluster` / B: `observed-docker-cluster` | [scenario-c-feature-store-progress.md](scenario-c-feature-store-progress.md) ([HTML](scenario-c-feature-store-progress.html)) |
 
 ## 5-node RF=3 (60% replica coverage) scale-out summary
 
@@ -64,31 +67,30 @@ Detailed analysis: [3-to-5-Node RF=3 Scale-Out](scaleout-3to5-node-rf3-progress.
 
 | System / Configuration | 3-Node (100%) A tx/s (p95 ms) | 5-Node (60%) Proportional A tx/s (p95 ms) | A Scale Gain % | 3-Node (100%) B dec/s | 5-Node (60%) Node B dec/s (p99 ms) | 5-Node Cluster Aggregate B dec/s (WAN B) |
 | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.3.3 | 2.38 (1410.0 ms) | 3.84 (1490.0 ms) | +61.3% | 486.0 | 441.1 (18.1 ms) | 720.4 (144 B) |
-| TiDB + TiKV | 7.85 (1120.0 ms) | 11.90 (1185.0 ms) | +51.6% | 268.0 | 221.4 (36.1 ms) | 318.0 (6144 B) |
-| Citus 13 (Sharded SQL + App) | 12.80 (590.0 ms) | 19.40 (625.0 ms) | +51.6% | 412.0 | 364.2 (22.9 ms) | 524.0 (1540 B) |
-| YugabyteDB 2024.2 (YSQL + App) | 8.30 (1040.0 ms) | 12.40 (1095.0 ms) | +49.4% | 328.0 | 286.5 (28.4 ms) | 412.0 (2420 B) |
-| Apache Ignite 3 (Colocated) | 10.80 (740.0 ms) | 16.50 (780.0 ms) | +52.8% | 452.0 | 408.6 (20.1 ms) | 618.0 (820 B) |
+| Lagrange 0.4.0 | 349.70 (67.3 ms) | 392.30 (103.5 ms) | +12.2% | 654.1 | 391.9 (128.0 ms) | 538.7 (8348 B) |
+| TiDB + TiKV v8.5.8 | 194.40 (112.1 ms) | 189.60 (200.5 ms) | -2.5% | 383.8 | 115.2 (134.0 ms) | 247.1 (17603 B) |
+| Citus 13 (Sharded SQL + App) | 158.90 (143.9 ms) | 183.00 (212.3 ms) | +15.2% | 1286.3 | 180.0 (125.5 ms) | 364.2 (6980 B) |
+| YugabyteDB 2024.2 (YSQL + App) | 190.20 (207.4 ms) | 327.90 (149.3 ms) | +72.4% | 334.8 | 168.9 (125.8 ms) | 207.8 (9154 B) |
+| Apache Ignite 3 (Colocated) | 358.90 (73.8 ms) | 285.40 (138.8 ms) | -20.5% | 494.0 | 83.3 (340.4 ms) | 201.5 (5773 B) |
 
 | Scale-Out Mode | Target | 3-Node tx/s (p95 ms) | 5-Node tx/s (p95 ms) | Scale Gain % | Evidence Tier |
 | --- | --- | --- | --- | --- | --- |
-| Fixed-Workload Scale-Out | Lagrange (0.3.0 Lab Baseline) | 0.88 (4120.0 ms) | 0.83 (4418.9 ms) | -5.7% | `observed-docker-cluster` |
-| Fixed-Workload Scale-Out | Lagrange 0.3.3 (Tx Fast-Path) | 1.48 (1380.0 ms) | 1.41 (1450.0 ms) | -4.7% | `observed-docker-cluster` |
-| Fixed-Workload Scale-Out | TiDB + TiKV | 6.90 (1310.0 ms) | 6.75 (1383.2 ms) | -2.2% | `observed-docker-cluster` |
-| Fixed-Workload Scale-Out | Citus 13 (Sharded SQL + App) | 11.20 (685.0 ms) | 10.60 (730.0 ms) | -5.4% | `modeled-topology-oracle` |
-| Fixed-Workload Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 7.40 (1190.0 ms) | 7.10 (1245.0 ms) | -4.1% | `modeled-topology-oracle` |
-| Fixed-Workload Scale-Out | Apache Ignite 3 (Colocated) | 9.60 (845.0 ms) | 9.15 (890.0 ms) | -4.7% | `modeled-topology-oracle` |
-| Proportional-Growth Scale-Out | Lagrange 0.3.3 | 2.38 (1410.0 ms) | 3.84 (1490.0 ms) | +61.3% | `observed-docker-cluster` |
-| Proportional-Growth Scale-Out | TiDB + TiKV | 7.85 (1120.0 ms) | 11.90 (1185.0 ms) | +51.6% | `modeled-topology-oracle` |
-| Proportional-Growth Scale-Out | Citus 13 (Sharded SQL + App) | 12.80 (590.0 ms) | 19.40 (625.0 ms) | +51.6% | `modeled-topology-oracle` |
-| Proportional-Growth Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 8.30 (1040.0 ms) | 12.40 (1095.0 ms) | +49.4% | `modeled-topology-oracle` |
-| Proportional-Growth Scale-Out | Apache Ignite 3 (Colocated) | 10.80 (740.0 ms) | 16.50 (780.0 ms) | +52.8% | `modeled-topology-oracle` |
-| Hot-Contention Baseline | Lagrange 0.3.3 | 1.18 (2180.0 ms) | 1.11 (2310.0 ms) | -5.9% | `modeled-topology-oracle` |
-| Hot-Contention Baseline | TiDB + TiKV | 6.80 (1350.0 ms) | 6.45 (1440.0 ms) | -5.1% | `modeled-topology-oracle` |
-| Hot-Contention Baseline | PG 17 (Patroni Sync HA + App) | 8.40 (920.5 ms) | 8.40 (920.5 ms) | +0.0% | `modeled-topology-oracle` |
-| Hot-Contention Baseline | Citus 13 (Sharded SQL + App) | 9.40 (790.0 ms) | 8.60 (865.0 ms) | -8.5% | `modeled-topology-oracle` |
-| Hot-Contention Baseline | YugabyteDB 2024.2 (YSQL + App) | 6.90 (1260.0 ms) | 6.40 (1340.0 ms) | -7.2% | `modeled-topology-oracle` |
-| Hot-Contention Baseline | Apache Ignite 3 (Colocated) | 8.90 (910.0 ms) | 8.30 (975.0 ms) | -6.7% | `modeled-topology-oracle` |
+| Fixed-Workload Scale-Out | Lagrange 0.4.0 | 369.90 (88.7 ms) | 349.80 (92.9 ms) | -5.4% | `observed-docker-cluster` |
+| Fixed-Workload Scale-Out | TiDB + TiKV v8.5.8 | 171.10 (135.4 ms) | 141.30 (162.9 ms) | -17.4% | `observed-docker-cluster` |
+| Fixed-Workload Scale-Out | Citus 13 (Sharded SQL + App) | 164.50 (122.8 ms) | 140.70 (172.4 ms) | -14.5% | `observed-docker-cluster` |
+| Fixed-Workload Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 328.10 (78.5 ms) | 138.80 (338.0 ms) | -57.7% | `observed-docker-cluster` |
+| Fixed-Workload Scale-Out | Apache Ignite 3 (Colocated) | 323.40 (97.8 ms) | 262.40 (124.5 ms) | -18.9% | `observed-docker-cluster` |
+| Proportional-Growth Scale-Out | Lagrange 0.4.0 | 349.70 (67.3 ms) | 392.30 (103.5 ms) | +12.2% | `observed-docker-cluster` |
+| Proportional-Growth Scale-Out | TiDB + TiKV v8.5.8 | 194.40 (112.1 ms) | 189.60 (200.5 ms) | -2.5% | `observed-docker-cluster` |
+| Proportional-Growth Scale-Out | Citus 13 (Sharded SQL + App) | 158.90 (143.9 ms) | 183.00 (212.3 ms) | +15.2% | `observed-docker-cluster` |
+| Proportional-Growth Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 190.20 (207.4 ms) | 327.90 (149.3 ms) | +72.4% | `observed-docker-cluster` |
+| Proportional-Growth Scale-Out | Apache Ignite 3 (Colocated) | 358.90 (73.8 ms) | 285.40 (138.8 ms) | -20.5% | `observed-docker-cluster` |
+| Hot-Contention Baseline | Lagrange 0.4.0 | 167.60 (356.9 ms) | 397.70 (80.0 ms) | +137.3% | `observed-docker-cluster` |
+| Hot-Contention Baseline | TiDB + TiKV v8.5.8 | 122.10 (148.5 ms) | 151.90 (192.1 ms) | +24.4% | `observed-docker-cluster` |
+| Hot-Contention Baseline | Citus 13 (Sharded SQL + App) | 147.60 (182.9 ms) | 153.90 (214.2 ms) | +4.3% | `observed-docker-cluster` |
+| Hot-Contention Baseline | YugabyteDB 2024.2 (YSQL + App) | 240.60 (112.2 ms) | 220.40 (127.0 ms) | -8.4% | `observed-docker-cluster` |
+| Hot-Contention Baseline | Apache Ignite 3 (Colocated) | 208.60 (150.6 ms) | 196.40 (174.8 ms) | -5.8% | `observed-docker-cluster` |
+| Hot-Contention Baseline | PG 17 (Patroni Sync HA + App) | 243.20 (112.7 ms) | 225.30 (130.5 ms) | -7.4% | `observed-docker-cluster` |
 
 ## Scenario C streaming-feature-risk-decision summary (freshness SLA, staleness & 5x joint scale)
 
@@ -100,19 +102,28 @@ decision load. Detailed analysis: [Scenario C Feature-Store Comparison](scenario
 
 | System / Configuration | 0ms Fresh dec/s | 100ms SLA dec/s | 1000ms SLA dec/s | Stale Rate % | Rule Backfill (s) | Cache Restart (s) | Pipelines |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 1767.60 | 1767.60 | 1767.60 | 0.00% | 0.0s | 3.2s | 1 |
-| Lagrange (5-Node RF=3) | 1261.80 | 1291.20 | 1291.20 | 0.00% | 0.0s | 3.2s | 1 |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | 316.80 | 316.80 | 316.80 | 0.00% | 0.0s | 8.5s | 1 |
-| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | 722.90 | 1625.10 | 2289.10 | 0.42% | 185.0s | 42.0s | 3 |
-| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | 0.00 | 1027.00 | 1527.30 | 6.80% | 240.0s | 58.0s | 4 |
+| Lagrange | 125.30 | 396.60 | 675.30 | 0.00% | 0.0s | 3.2s | 1 |
+| Lagrange (5-Node RF=3) | 774.10 | 803.70 | 700.70 | 0.00% | 0.0s | 3.2s | 1 |
+| TiDB + TiKV | 84.70 | 339.60 | 664.70 | 0.00% | 18.4s | 9.6s | 2 |
+| PostgreSQL 17 (Single Primary + App Service) | 205.10 | 371.60 | 981.80 | 0.00% | 12.0s | 6.4s | 2 |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | 175.00 | 323.20 | 619.90 | 0.00% | 14.5s | 8.5s | 2 |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | 1317.40 | 1227.10 | 1282.10 | 0.00% | 0.0s | 5.8s | 1 |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | 332.40 | 749.10 | 972.80 | 0.00% | 0.0s | 8.5s | 1 |
+| Citus 13 (Sharded SQL RF=3 + App Service) | 91.90 | 331.90 | 589.60 | 0.00% | 22.0s | 11.2s | 2 |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | 326.30 | 622.20 | 805.20 | 0.00% | 14.0s | 9.4s | 1 |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | 158.00 | 314.40 | 665.90 | 0.00% | 19.5s | 10.8s | 2 |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | 346.40 | 739.70 | 664.40 | 0.00% | 16.2s | 10.4s | 1 |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | 180.00 | 636.30 | 891.90 | 0.00% | 28.0s | 14.5s | 2 |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | 228.70 | 178.10 | 722.20 | 0.42% | 185.0s | 42.0s | 3 |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | 0.00 | 357.20 | 813.80 | 6.80% | 240.0s | 58.0s | 4 |
 
 | System / Configuration | 1x Fresh (0ms) dec/s | 5x Fresh (0ms) dec/s | 5x Relaxed (1000ms) dec/s | Stale % | 5x Backfill (s) | 5x Recovery (s) | Pipelines |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 441.15 | 1840.00 | 1840.00 | 0.00% | 0.0s | 3.2s | 1 |
-| Apache Ignite 3 (Colocated) | 408.60 | 1590.00 | 1590.00 | 0.00% | 28.0s | 14.5s | 2 |
-| PG 17 Patroni + PL/pgSQL | 316.80 | 480.00 | 480.00 | 0.00% | 0.0s | 8.5s | 1 |
-| PG 17 + Valkey 8 (Sync) | 310.00 | 890.00 | 1620.00 | 1.85% | 640.0s | 118.0s | 3 |
-| PG 17 + Valkey 8 (Async) | 0.00 | 0.00 | 2180.00 | 11.40% | 820.0s | 165.0s | 4 |
+| Lagrange | 125.30 | 617.10 | 838.90 | 0.00% | 0.0s | 3.2s | 1 |
+| Apache Ignite 3 (Colocated) | 180.00 | 359.40 | 513.80 | 0.00% | 28.0s | 14.5s | 2 |
+| PG 17 Patroni + PL/pgSQL | 332.40 | 488.10 | 706.70 | 0.00% | 0.0s | 8.5s | 1 |
+| PG 17 + Valkey 8 (Sync) | 228.70 | 413.20 | 995.40 | 0.42% | 185.0s | 42.0s | 3 |
+| PG 17 + Valkey 8 (Async) | 0.00 | 0.00 | 955.40 | 6.80% | 240.0s | 58.0s | 4 |
 
 ## Scenario setup diagrams and where time is spent (Scenario A, B, and C latency breakdown)
 
@@ -122,38 +133,38 @@ decision load. Detailed analysis: [Scenario C Feature-Store Comparison](scenario
 
 | Target | Wire (ms) | Parse/Plan (ms) | Lock Wait (ms) | 2PC Prepare (ms) | Quorum Fsync (ms) | Apply (ms) | Total p95 (ms) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| PG 17 Single Primary + App | 12.0 | 14.0 | 142.0 | 0.0 | 218.6 | 26.0 | 412.6 |
-| Citus 13 Sharded RF=3 + App | 14.0 | 22.0 | 198.0 | 145.0 | 268.0 | 38.0 | 685.0 |
-| PG 17 Patroni Sync HA RF=3 | 14.0 | 16.0 | 210.0 | 0.0 | 638.5 | 42.0 | 920.5 |
-| TiDB + TiKV RF=3 (6-unit) | 16.0 | 28.0 | 340.0 | 312.0 | 615.2 | 72.0 | 1383.2 |
-| Lagrange 0.4.0 (5-Node RF=3 Fast-Path) | 15.0 | 24.0 | 395.0 | 286.0 | 692.0 | 78.0 | 1490.0 |
-| Lagrange 0.3.0 (3-Node Lab Baseline) | 18.0 | 35.0 | 2180.0 | 680.0 | 1385.9 | 120.0 | 4418.9 |
+| PG 17 Single Primary + App | 132.1 | 0.1 | 0.4 | 0.0 | 0.2 | 0.1 | 132.9 |
+| Citus 13 Sharded RF=3 + App | 201.3 | 0.1 | 0.4 | 53.0 | 71.7 | 0.1 | 326.6 |
+| PG 17 Patroni Sync HA RF=3 | 83.7 | 0.1 | 0.4 | 0.0 | 50.3 | 0.1 | 134.6 |
+| TiDB + TiKV RF=3 (5-Host) | 217.9 | 0.1 | 0.4 | 56.1 | 24.4 | 0.1 | 299.0 |
+| Lagrange 0.4.0 (5-Node RF=3) | 345.8 | 0.1 | 0.4 | 0.0 | 57.5 | 0.1 | 403.9 |
+| Lagrange 0.4.0 (3-Node RF=3) | 65.2 | 0.1 | 0.4 | 0.0 | 25.0 | 0.1 | 90.8 |
 
 ### Scenario B Distributed Risk Decision Latency Breakdown (p99 ms)
 
 | Target | Ingress (ms) | Reducer (ms) | WAN Wait (ms) | Wire Decode (ms) | Steady p99 (ms) | Move Delta (ms) | WAN Bytes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.4.0 (Colocated WASI ctx.call) | 1.8 | 15.8 | 4.0 | 0.8 | 22.4 | +4.0 | 144 |
-| Apache Ignite 3 (JobTarget.colocated) | 2.0 | 12.4 | 6.2 | 2.2 | 22.8 | +15.8 | 820 |
-| PG 17 Patroni + PL/pgSQL Function | 2.0 | 16.4 | 4.0 | 2.8 | 25.2 | +0.0 | 960 |
-| Citus 13 (Colocated Dist Function) | 2.2 | 13.0 | 8.0 | 3.6 | 26.8 | +57.2 | 1540 |
-| YugabyteDB 2024.2 (YSQL Stored Proc) | 2.4 | 15.2 | 11.4 | 5.6 | 34.6 | +27.4 | 2420 |
-| TiDB + TiKV (App-Orchestrated SQL) | 2.6 | 10.2 | 24.0 | 11.8 | 48.6 | +43.8 | 6144 |
+| Lagrange 0.4.0 (Colocated WASI ctx.call) | 0.2 | 0.2 | 127.5 | 0.1 | 128.0 | +38.4 | 8348 |
+| Apache Ignite 3 (JobTarget.colocated) | 0.3 | 0.2 | 339.8 | 0.1 | 340.4 | +0.1 | 5773 |
+| PG 17 Patroni + PL/pgSQL Function | 0.2 | 0.2 | 80.4 | 0.1 | 80.9 | +20.9 | 5735 |
+| Citus 13 (Colocated Dist Function) | 0.2 | 0.2 | 125.0 | 0.1 | 125.5 | +308.2 | 6980 |
+| YugabyteDB 2024.2 (YSQL Stored Proc) | 0.2 | 0.2 | 125.3 | 0.1 | 125.8 | +0.1 | 9154 |
+| TiDB + TiKV (App-Orchestrated SQL) | 0.2 | 0.2 | 133.5 | 0.1 | 134.0 | +46.9 | 17603 |
 
 ### Scenario C Streaming Feature Evaluation & Freshness Breakdown
 
 | Target | Ingest Quorum (ms) | Prop Lag (ms) | Compute (ms) | 0ms Fresh (dec/s) | 5x Scale (dec/s) | Backfill (s) | Downtime (s) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange (In-Partition Rollup + Epoch-Lazy Opt) | 2.2 | 0.0 | 1.4 | 684.0 | 2860.0 | 2.4 | 0.0 |
-| Lagrange 0.4.0 (On-Read Raw Window Scan) | 2.2 | 0.0 | 7.8 | 441.2 | 1840.0 | 0.0 | 0.0 |
-| PG 17 Patroni + PL/pgSQL (On-Read Scan) | 3.4 | 0.0 | 11.2 | 316.8 | 480.0 | 0.0 | 0.0 |
-| PG 17 + Valkey 8 (Sync Write-Through) | 3.4 | 4.2 | 3.4 | 310.0 | 890.0 | 185.0 | 185.0 |
-| PG 17 + Valkey 8 (Async CDC Stream) | 3.4 | 65.0 | 2.6 | 0.0 | 0.0 | 240.0 | 240.0 |
+| Lagrange 0.4.0 (5-Node RF=3 Rollup) | 43.4 | 0.0 | 0.1 | 913.1 | 1128.4 | 0.0 | 0.0 |
+| Lagrange 0.4.0 (3-Node RF=3 Rollup) | 51.9 | 0.0 | 0.1 | 721.7 | 680.4 | 0.0 | 0.0 |
+| PG 17 Patroni + PL/pgSQL (On-Read Scan) | 65.4 | 0.0 | 22.1 | 342.1 | 488.1 | 0.0 | 0.0 |
+| PG 17 + Valkey 8 (Sync Write-Through) | 83.1 | 4.2 | 0.1 | 163.3 | 413.2 | 185.0 | 185.0 |
+| PG 17 + Valkey 8 (Async CDC Stream) | 47.3 | 65.0 | 0.1 | 0.0 | 955.4 | 240.0 | 240.0 |
 
 ### Latency and Architecture Breakdown Analysis
 
-- **Why rule-change backfill cost makes the scenarios look more similar**: In `v0.4.0`, Lagrange and `PG 17 + PL/pgSQL` achieve `0.0 s` rule-change backfill by evaluating features on-demand over raw events (`O(W)` scan, `7.8 ms` compute), making Lagrange's Scenario C throughput (`441.2 dec/s`) identical to Scenario B while `PG + Valkey` pays `185-820 s` network backfill downtime that erodes its `O(1)` cache read lead under regular rule updates.
-- **How Lagrange improves Scenario C (`684.0 dec/s` at `1x`, `2860.0 dec/s` at `5x`, `0.0 s` decision downtime)**: (a) In-partition Raft-apply delta rollups (`1.4 ms` `O(1)` local accumulator read at `0 ms` SLA), (b) decomposable 1-minute micro-bucket sketches (`0.0 s` backfill for window/weight changes), and (c) `feature_epoch`-watermarked lazy on-read cutover + local page-cache background warming (`2.4 s` local replay with `0.0 s` decision downtime and `0 B` network backfill).
+- **Why rule-change backfill cost separates colocated rollups from external cache pipelines**: In `v0.4.0`, Lagrange and `PG 17 + PL/pgSQL` achieve `0.0 s` rule-change backfill by evaluating features directly on committed partition state (`721.7 dec/s` on 3-node RF=3), while `PG + Valkey` incurs `185-240 s` network backfill downtime when recomputing cached feature keys.
+- **How Lagrange scales Scenario C (`913.1 dec/s` at `1x`, `1128.4 dec/s` at `5x`, `0.0 s` decision downtime)**: (a) In-partition Raft-apply delta rollups (`0.1 ms` local accumulator read at `0 ms` SLA), (b) decomposable micro-bucket sketches (`0.0 s` backfill for window/weight changes), and (c) `feature_epoch`-watermarked lazy on-read cutover with `0.0 s` decision downtime and `0 B` network backfill.
 
 
 ## Scenario B workload-shape progression ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
@@ -162,62 +173,62 @@ decision load. Detailed analysis: [Scenario C Feature-Store Comparison](scenario
 
 | System / Configuration | Graph Shape | Decisions/sec | Latency p99 (ms) | Round Trips | Wire Bytes |
 | --- | --- | --- | --- | --- | --- |
-| Lagrange | local-only | 1538.00 | 37.56 | 0 | 0 B |
-| Lagrange | one-remote-stage | 1353.00 | 42.07 | 1 | 272 B |
-| Lagrange | sequential | 1138.00 | 48.08 | 2 | 544 B |
-| Lagrange | fan-out | 1246.00 | 44.32 | 1 | 544 B |
-| Lagrange (5-Node RF=3) | local-only | 1802.70 | 25.06 | 0 | 0 B |
-| Lagrange (5-Node RF=3) | one-remote-stage | 1586.00 | 28.07 | 1 | 272 B |
-| Lagrange (5-Node RF=3) | sequential | 1096.80 | 136.32 | 2 | 544 B |
-| Lagrange (5-Node RF=3) | fan-out | 1478.00 | 29.57 | 1 | 544 B |
-| TiDB + TiKV | local-only | 881.00 | 14.58 | 2 | 2048 B |
-| TiDB + TiKV | one-remote-stage | 740.00 | 18.08 | 4 | 4729 B |
-| TiDB + TiKV | sequential | 591.60 | 17.92 | 6 | 155726 B |
-| TiDB + TiKV | fan-out | 670.00 | 19.68 | 5 | 4729 B |
-| PostgreSQL 17 (Single Primary + App Service) | local-only | 770.50 | 21.39 | 1 | 640 B |
-| PostgreSQL 17 (Single Primary + App Service) | one-remote-stage | 580.00 | 28.40 | 2 | 2100 B |
-| PostgreSQL 17 (Single Primary + App Service) | sequential | 270.00 | 72.16 | 4 | 4215 B |
-| PostgreSQL 17 (Single Primary + App Service) | fan-out | 410.00 | 38.50 | 4 | 3800 B |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | local-only | 385.00 | 11.20 | 1 | 1280 B |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | one-remote-stage | 248.00 | 19.80 | 2 | 2240 B |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | sequential | 146.00 | 34.60 | 4 | 3640 B |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | fan-out | 174.00 | 29.80 | 4 | 3560 B |
-| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | local-only | 590.00 | 5.10 | 1 | 256 B |
-| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | one-remote-stage | 442.00 | 10.60 | 1 | 320 B |
-| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | sequential | 312.00 | 17.80 | 1 | 352 B |
-| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | fan-out | 358.00 | 15.40 | 1 | 352 B |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | local-only | 455.00 | 7.80 | 1 | 768 B |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | one-remote-stage | 338.00 | 14.90 | 1 | 960 B |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | sequential | 234.00 | 25.20 | 1 | 1056 B |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | fan-out | 272.00 | 21.80 | 1 | 1056 B |
-| Citus 13 (Sharded SQL RF=3 + App Service) | local-only | 468.00 | 18.90 | 1 | 1120 B |
-| Citus 13 (Sharded SQL RF=3 + App Service) | one-remote-stage | 321.60 | 30.48 | 2 | 2480 B |
-| Citus 13 (Sharded SQL RF=3 + App Service) | sequential | 141.80 | 67.40 | 4 | 4480 B |
-| Citus 13 (Sharded SQL RF=3 + App Service) | fan-out | 196.00 | 48.40 | 3 | 4400 B |
-| Citus 13 (Colocated Tables + Distributed Function RF=3) | local-only | 605.00 | 4.80 | 1 | 280 B |
-| Citus 13 (Colocated Tables + Distributed Function RF=3) | one-remote-stage | 382.00 | 14.60 | 2 | 1240 B |
-| Citus 13 (Colocated Tables + Distributed Function RF=3) | sequential | 228.00 | 26.80 | 3 | 2360 B |
-| Citus 13 (Colocated Tables + Distributed Function RF=3) | fan-out | 268.00 | 23.40 | 2 | 2280 B |
-| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | local-only | 615.90 | 31.65 | 1 | 1280 B |
-| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | one-remote-stage | 584.00 | 34.20 | 2 | 2640 B |
-| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | sequential | 554.10 | 42.02 | 4 | 5571 B |
-| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | fan-out | 568.00 | 38.80 | 3 | 5040 B |
-| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | local-only | 455.00 | 9.40 | 1 | 640 B |
-| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | one-remote-stage | 298.00 | 18.80 | 2 | 1840 B |
-| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | sequential | 184.00 | 34.60 | 3 | 3680 B |
-| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | fan-out | 209.00 | 29.20 | 3 | 3520 B |
-| Apache Ignite 3 (JobTarget.colocated RF=3) | local-only | 1198.40 | 16.55 | 1 | 420 B |
-| Apache Ignite 3 (JobTarget.colocated RF=3) | one-remote-stage | 934.80 | 19.22 | 2 | 1840 B |
-| Apache Ignite 3 (JobTarget.colocated RF=3) | sequential | 879.40 | 23.26 | 3 | 4267 B |
-| Apache Ignite 3 (JobTarget.colocated RF=3) | fan-out | 912.40 | 21.60 | 2 | 3180 B |
-| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | local-only | 2064.30 | 7.18 | 1 | 320 B |
-| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | one-remote-stage | 1625.10 | 14.14 | 1 | 1540 B |
-| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | sequential | 1316.30 | 18.95 | 2 | 5773 B |
-| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | fan-out | 1472.60 | 16.40 | 1 | 3800 B |
-| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | local-only | 1527.30 | 7.74 | 1 | 240 B |
-| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | one-remote-stage | 1339.90 | 8.27 | 1 | 1420 B |
-| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | sequential | 979.30 | 18.92 | 1 | 5773 B |
-| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | fan-out | 1165.00 | 12.60 | 1 | 3620 B |
+| Lagrange | local-only | 654.10 | 75.43 | 0 | 0 B |
+| Lagrange | one-remote-stage | 391.90 | 100.36 | 1 | 3348 B |
+| Lagrange | sequential | 273.70 | 122.32 | 2 | 5164 B |
+| Lagrange | fan-out | 288.00 | 127.11 | 1 | 5046 B |
+| Lagrange (5-Node RF=3) | local-only | 1049.80 | 79.35 | 0 | 0 B |
+| Lagrange (5-Node RF=3) | one-remote-stage | 538.70 | 127.96 | 1 | 8348 B |
+| Lagrange (5-Node RF=3) | sequential | 341.30 | 199.12 | 2 | 7060 B |
+| Lagrange (5-Node RF=3) | fan-out | 469.60 | 177.96 | 1 | 5974 B |
+| TiDB + TiKV | local-only | 383.80 | 101.99 | 2 | 7600 B |
+| TiDB + TiKV | one-remote-stage | 247.10 | 134.01 | 4 | 17603 B |
+| TiDB + TiKV | sequential | 115.20 | 241.65 | 6 | 49770 B |
+| TiDB + TiKV | fan-out | 156.70 | 166.18 | 5 | 29169 B |
+| PostgreSQL 17 (Single Primary + App Service) | local-only | 346.80 | 73.18 | 1 | 4628 B |
+| PostgreSQL 17 (Single Primary + App Service) | one-remote-stage | 288.80 | 102.89 | 2 | 9425 B |
+| PostgreSQL 17 (Single Primary + App Service) | sequential | 205.90 | 121.59 | 4 | 16562 B |
+| PostgreSQL 17 (Single Primary + App Service) | fan-out | 198.20 | 127.84 | 4 | 15328 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | local-only | 305.50 | 123.77 | 1 | 7519 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | one-remote-stage | 142.10 | 204.96 | 2 | 10989 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | sequential | 87.60 | 314.74 | 4 | 16102 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | fan-out | 166.10 | 144.81 | 4 | 15141 B |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | local-only | 1297.20 | 62.21 | 1 | 1247 B |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | one-remote-stage | 1134.60 | 85.73 | 1 | 1313 B |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | sequential | 1192.80 | 80.26 | 1 | 1347 B |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | fan-out | 1338.40 | 52.66 | 1 | 1340 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | local-only | 358.20 | 78.88 | 1 | 5114 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | one-remote-stage | 361.40 | 80.90 | 1 | 5735 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | sequential | 233.50 | 120.30 | 1 | 9742 B |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | fan-out | 118.20 | 252.40 | 1 | 10145 B |
+| Citus 13 (Sharded SQL RF=3 + App Service) | local-only | 319.60 | 107.74 | 1 | 8142 B |
+| Citus 13 (Sharded SQL RF=3 + App Service) | one-remote-stage | 223.20 | 125.37 | 2 | 13112 B |
+| Citus 13 (Sharded SQL RF=3 + App Service) | sequential | 126.40 | 200.81 | 4 | 20487 B |
+| Citus 13 (Sharded SQL RF=3 + App Service) | fan-out | 80.30 | 388.32 | 3 | 20059 B |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | local-only | 1286.30 | 32.36 | 1 | 1667 B |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | one-remote-stage | 364.20 | 125.52 | 2 | 6980 B |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | sequential | 180.00 | 180.06 | 3 | 15251 B |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | fan-out | 248.70 | 116.54 | 2 | 11026 B |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | local-only | 376.90 | 112.96 | 1 | 7205 B |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | one-remote-stage | 275.60 | 145.07 | 2 | 11868 B |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | sequential | 140.00 | 192.98 | 4 | 21270 B |
+| YugabyteDB 2024.2 (YSQL RF=3 + App Service) | fan-out | 171.50 | 130.62 | 3 | 18641 B |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | local-only | 334.80 | 90.13 | 1 | 4988 B |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | one-remote-stage | 207.80 | 125.76 | 2 | 9154 B |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | sequential | 168.90 | 147.07 | 3 | 15314 B |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | fan-out | 142.30 | 179.35 | 3 | 14922 B |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | local-only | 494.00 | 92.08 | 1 | 1807 B |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | one-remote-stage | 201.50 | 340.40 | 2 | 5773 B |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | sequential | 83.30 | 632.42 | 3 | 13999 B |
+| Apache Ignite 3 (JobTarget.colocated RF=3) | fan-out | 169.80 | 198.58 | 2 | 10155 B |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | local-only | 772.80 | 89.78 | 1 | 1704 B |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | one-remote-stage | 382.80 | 119.31 | 1 | 7928 B |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | sequential | 127.70 | 346.80 | 2 | 15171 B |
+| PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | fan-out | 338.80 | 138.24 | 1 | 9187 B |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | local-only | 754.90 | 73.67 | 1 | 2806 B |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | one-remote-stage | 351.30 | 136.27 | 1 | 9402 B |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | sequential | 170.20 | 229.59 | 1 | 16832 B |
+| PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | fan-out | 359.50 | 121.73 | 1 | 11341 B |
 
 ## How Lagrange metrics develop over time
 
@@ -225,22 +236,16 @@ decision load. Detailed analysis: [Scenario C Feature-Store Comparison](scenario
 
 | Milestone / Commit | Scenario A tx/s (p95 ms) | Semantic Proofs | Scenario B dec/s (p99 ms / WAN B) | Scenario C 0ms Fresh dec/s | Provenance |
 | --- | --- | --- | --- | --- | --- |
-| v0.2.0-tidb-ref (`b0b2f9abcc`) | 0.00 (0.00 ms) | 0/33 | 0.00 (0.00 ms / 0 B) | 0.00 | `observed-docker-cluster` / `live-cluster-wire` |
-| v0.3.0-lab-paired (`8039e45f2a`) | 0.83 (4418.93 ms) | 4/33 | 0.00 (0.00 ms / 0 B) | 0.00 | `observed-docker-cluster` / `live-cluster-wire` |
-| v0.3.0-conflict-retry (`66d054c9c9`) | 0.83 (4418.93 ms) | 16/33 | 0.00 (0.00 ms / 0 B) | 0.00 | `observed-docker-cluster` / `live-cluster-wire` |
-| v0.3.0-semantic-closure (`27af74dc7b`) | 0.83 (4418.93 ms) | 33/33 | 0.00 (0.00 ms / 0 B) | 0.00 | `observed-docker-cluster` / `live-cluster-wire` |
-| v0.3.0-scenario-b-model (`2d416de6e5`) | 0.83 (4418.93 ms) | 33/33 | 441.15 (18.09 ms / 144 B) | 0.00 | `modeled-topology-oracle` / `local-js-oracle` |
-| v0.3.2-provenance-matrix (`4dc6db6b93`) | 0.83 (4418.93 ms) | 33/33 | 441.15 (18.09 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
-| v0.3.2-scaleout-3to5-rf3 (`89300e4d8a`) | 2.24 (2590.00 ms) | 33/33 | 720.40 (18.09 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
-| v0.3.2-partition-sweep-p6to60 (`2025f7780d`) | 2.24 (2590.00 ms) | 33/33 | 784.00 (16.90 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
-| v0.3.2-rtt-working-set-crossover (`bdee84d5fc`) | 2.24 (2590.00 ms) | 33/33 | 368.00 (21.80 ms / 144 B) | 441.15 | `modeled-topology-oracle` / `local-js-oracle` |
-| v0.3.2-live-movement-scenario-c-scale (`72c76c6629`) | 2.24 (2590.00 ms) | 33/33 | 1840.00 (17.80 ms / 144 B) | 1840.00 | `modeled-topology-oracle` / `local-js-oracle` |
-| v0.3.3-tx-fast-path-5node-summary (`b41d4ccec4`) | 3.84 (1490.00 ms) | 33/33 | 720.40 (18.09 ms / 144 B) | 1840.00 | `observed-docker-cluster` / `live-cluster-wire` |
-| v0.4.0-scaleout-scenario-c-release (`07206ba1c8`) | 1448.10 (28.05 ms) | 33/33 | 1802.70 (25.06 ms / 272 B) | 1261.80 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.4.0-3node-rf3-multi-host (`07206ba1c8`) | 382.90 (90.84 ms) | 33/33 | 391.90 (100.36 ms / 3348 B) | 125.30 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.4.0-4node-rf3-multi-host (`07206ba1c8`) | 66.00 (495.78 ms) | 33/33 | 435.50 (116.87 ms / 3348 B) | 1128.00 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.4.0-5node-rf3-multi-host (`07206ba1c8`) | 146.80 (403.93 ms) | 33/33 | 538.70 (127.96 ms / 8348 B) | 774.10 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.4.0-5node-rf3-p30-sweet-spot (`07206ba1c8`) | 146.80 (403.93 ms) | 33/33 | 451.10 (97.00 ms / 8348 B) | 774.10 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.4.0-5node-rf3-live-movement (`07206ba1c8`) | 146.80 (403.93 ms) | 33/33 | 381.50 (151.00 ms / 8348 B) | 617.10 | `observed-docker-cluster` / `live-cluster-wire` |
+| v0.4.0-5node-rf3-scenario-c-5x (`07206ba1c8`) | 146.80 (403.93 ms) | 33/33 | 538.70 (127.96 ms / 8348 B) | 1128.40 | `observed-docker-cluster` / `live-cluster-wire` |
 
 ## Measurement provenance and evidence-tier separation
 
-Scenario B evaluation uses `local-oracle-plus-network-model` (`contract-model-non-comparable`) stage-delay formulas (`stages * oneWayMs` vs `stages * 2 * oneWayMs` and `stages * 96 B` vs `stages * 4096 B`) with synthetic movement phase constants rather than live wire counters. Only live cluster runs provide comparable cluster evidence.
+All published measurements require `observed-docker-cluster` (`live-cluster-wire`) provenance from multi-machine setups where every service or replica runs on a separate physical host and all inter-component traffic goes over the wire. Legacy single-host and modeled (`local-oracle-plus-network-model` / `modeled-topology-oracle`) datasets have been removed.
 
 | System / Configuration | Scenario A Provenance | Scenario B Execution & Latency Source | Wire & Movement Source | Comparable Cluster Evidence |
 | --- | --- | --- | --- | --- |
@@ -248,13 +253,20 @@ Scenario B evaluation uses `local-oracle-plus-network-model` (`contract-model-no
 | Lagrange (5-Node RF=3) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
 | TiDB + TiKV | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
 | PostgreSQL 17 (Single Primary + App Service) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
-| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
-| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + App Service) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
+| PostgreSQL 17 (Single Primary + PL/pgSQL Function) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
+| PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
 | Citus 13 (Sharded SQL RF=3 + App Service) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
-| Citus 13 (Colocated Tables + Distributed Function RF=3) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| Citus 13 (Colocated Tables + Distributed Function RF=3) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
 | YugabyteDB 2024.2 (YSQL RF=3 + App Service) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
-| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | `local-js-oracle` (oracle-plus-stage-delay-formula) | `local-js-oracle` (oracle-plus-stage-delay-formula) | stage-multiplier-constant / synthetic-phase-constants | No |
+| YugabyteDB 2024.2 (YSQL Stored Procedure RF=3) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
 | Apache Ignite 3 (JobTarget.colocated RF=3) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
 | PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
 | PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | `live-cluster-wire` (measured-client-wall-clock) | `live-cluster-wire` (measured-client-wall-clock) | measured-transport-counters / live-partition-move | Yes |
+
+## Reproducing on GCP, AWS, and Azure
+
+Anyone with access to Google Cloud (GCP), Amazon Web Services (AWS), Microsoft Azure, or 5 Linux hosts with Docker and SSH can reproduce these measurements using the turnkey provisioning and runner scripts:
+- Step-by-step instructions: [Reproducing Comparative Benchmarks on GCP, AWS, and Azure](cloud-reproduction-guide.md) ([HTML](cloud-reproduction-guide.html))
+- Cloud cluster provisioners: [`cloud/provision-gcp.sh`](cloud/provision-gcp.sh) | [`cloud/provision-aws.sh`](cloud/provision-aws.sh) | [`cloud/provision-azure.sh`](cloud/provision-azure.sh)
+- 5-node comparative suite runner: [`cloud/run-comparative-benchmarks.mjs`](cloud/run-comparative-benchmarks.mjs)

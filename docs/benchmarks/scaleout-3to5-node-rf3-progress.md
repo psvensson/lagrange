@@ -32,23 +32,22 @@ Comparative performance claims await admitted GCP/lab measurements.
 
 | Mode | Target | 3-Node (tx/s) | 3-Node p95 (ms) | 5-Node (tx/s) | 5-Node p95 (ms) | Scale Gain % | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Fixed-Workload Scale-Out | Lagrange (0.3.0 Lab Baseline) | 0.88 | 4120.0 | 0.83 | 4418.9 | -5.7% | observed-docker-cluster |
-| Fixed-Workload Scale-Out | Lagrange 0.3.3 (Tx Fast-Path) | 1.48 | 1380.0 | 1.41 | 1450.0 | -4.7% | observed-docker-cluster |
-| Fixed-Workload Scale-Out | TiDB + TiKV | 6.90 | 1310.0 | 6.75 | 1383.2 | -2.2% | observed-docker-cluster |
-| Fixed-Workload Scale-Out | Citus 13 (Sharded SQL + App) | 11.20 | 685.0 | 10.60 | 730.0 | -5.4% | modeled-topology-oracle |
-| Fixed-Workload Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 7.40 | 1190.0 | 7.10 | 1245.0 | -4.1% | modeled-topology-oracle |
-| Fixed-Workload Scale-Out | Apache Ignite 3 (Colocated) | 9.60 | 845.0 | 9.15 | 890.0 | -4.7% | modeled-topology-oracle |
-| Proportional-Growth Scale-Out | Lagrange 0.3.3 | 2.38 | 1410.0 | 3.84 | 1490.0 | +61.3% | observed-docker-cluster |
-| Proportional-Growth Scale-Out | TiDB + TiKV | 7.85 | 1120.0 | 11.90 | 1185.0 | +51.6% | modeled-topology-oracle |
-| Proportional-Growth Scale-Out | Citus 13 (Sharded SQL + App) | 12.80 | 590.0 | 19.40 | 625.0 | +51.6% | modeled-topology-oracle |
-| Proportional-Growth Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 8.30 | 1040.0 | 12.40 | 1095.0 | +49.4% | modeled-topology-oracle |
-| Proportional-Growth Scale-Out | Apache Ignite 3 (Colocated) | 10.80 | 740.0 | 16.50 | 780.0 | +52.8% | modeled-topology-oracle |
-| Hot-Contention Baseline | Lagrange 0.3.3 | 1.18 | 2180.0 | 1.11 | 2310.0 | -5.9% | modeled-topology-oracle |
-| Hot-Contention Baseline | TiDB + TiKV | 6.80 | 1350.0 | 6.45 | 1440.0 | -5.1% | modeled-topology-oracle |
-| Hot-Contention Baseline | PG 17 (Patroni Sync HA + App) | 8.40 | 920.5 | 8.40 | 920.5 | +0.0% | modeled-topology-oracle |
-| Hot-Contention Baseline | Citus 13 (Sharded SQL + App) | 9.40 | 790.0 | 8.60 | 865.0 | -8.5% | modeled-topology-oracle |
-| Hot-Contention Baseline | YugabyteDB 2024.2 (YSQL + App) | 6.90 | 1260.0 | 6.40 | 1340.0 | -7.2% | modeled-topology-oracle |
-| Hot-Contention Baseline | Apache Ignite 3 (Colocated) | 8.90 | 910.0 | 8.30 | 975.0 | -6.7% | modeled-topology-oracle |
+| Fixed-Workload Scale-Out | Lagrange 0.4.0 | 369.90 | 88.7 | 349.80 | 92.9 | -5.4% | observed-docker-cluster |
+| Fixed-Workload Scale-Out | TiDB + TiKV v8.5.8 | 171.10 | 135.4 | 141.30 | 162.9 | -17.4% | observed-docker-cluster |
+| Fixed-Workload Scale-Out | Citus 13 (Sharded SQL + App) | 164.50 | 122.8 | 140.70 | 172.4 | -14.5% | observed-docker-cluster |
+| Fixed-Workload Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 328.10 | 78.5 | 138.80 | 338.0 | -57.7% | observed-docker-cluster |
+| Fixed-Workload Scale-Out | Apache Ignite 3 (Colocated) | 323.40 | 97.8 | 262.40 | 124.5 | -18.9% | observed-docker-cluster |
+| Proportional-Growth Scale-Out | Lagrange 0.4.0 | 349.70 | 67.3 | 392.30 | 103.5 | +12.2% | observed-docker-cluster |
+| Proportional-Growth Scale-Out | TiDB + TiKV v8.5.8 | 194.40 | 112.1 | 189.60 | 200.5 | -2.5% | observed-docker-cluster |
+| Proportional-Growth Scale-Out | Citus 13 (Sharded SQL + App) | 158.90 | 143.9 | 183.00 | 212.3 | +15.2% | observed-docker-cluster |
+| Proportional-Growth Scale-Out | YugabyteDB 2024.2 (YSQL + App) | 190.20 | 207.4 | 327.90 | 149.3 | +72.4% | observed-docker-cluster |
+| Proportional-Growth Scale-Out | Apache Ignite 3 (Colocated) | 358.90 | 73.8 | 285.40 | 138.8 | -20.5% | observed-docker-cluster |
+| Hot-Contention Baseline | Lagrange 0.4.0 | 167.60 | 356.9 | 397.70 | 80.0 | +137.3% | observed-docker-cluster |
+| Hot-Contention Baseline | TiDB + TiKV v8.5.8 | 122.10 | 148.5 | 151.90 | 192.1 | +24.4% | observed-docker-cluster |
+| Hot-Contention Baseline | Citus 13 (Sharded SQL + App) | 147.60 | 182.9 | 153.90 | 214.2 | +4.3% | observed-docker-cluster |
+| Hot-Contention Baseline | YugabyteDB 2024.2 (YSQL + App) | 240.60 | 112.2 | 220.40 | 127.0 | -8.4% | observed-docker-cluster |
+| Hot-Contention Baseline | Apache Ignite 3 (Colocated) | 208.60 | 150.6 | 196.40 | 174.8 | -5.8% | observed-docker-cluster |
+| Hot-Contention Baseline | PG 17 (Patroni Sync HA + App) | 243.20 | 112.7 | 225.30 | 130.5 | -7.4% | observed-docker-cluster |
 
 ## Scenario B partial replica-coverage comparison at 5 nodes (RF=3)
 
@@ -57,8 +56,8 @@ while total cluster aggregate capacity evaluates distributed state scaling. Comp
 
 | Target | 3-Node (100%) dec/s | 3-Node p99 (ms) | 5-Node (60%) dec/s | 5-Node p99 (ms) | 5-Node WAN (B) | Aggregate dec/s | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 486.0 | 15.2 | 441.1 | 18.1 | 144 | 720.4 | modeled-topology-oracle |
-| TiDB + TiKV | 268.0 | 29.4 | 221.4 | 36.1 | 6144 | 318.0 | modeled-topology-oracle |
-| Citus 13 (Dist Function) | 412.0 | 18.4 | 364.2 | 22.9 | 1540 | 524.0 | modeled-topology-oracle |
-| YugabyteDB 2024.2 (Stored Proc) | 328.0 | 23.6 | 286.5 | 28.4 | 2420 | 412.0 | modeled-topology-oracle |
-| Apache Ignite 3 (Colocated) | 452.0 | 16.8 | 408.6 | 20.1 | 820 | 618.0 | modeled-topology-oracle |
+| Lagrange | 654.1 | 75.4 | 391.9 | 128.0 | 8348 | 538.7 | observed-docker-cluster |
+| TiDB + TiKV | 383.8 | 102.0 | 115.2 | 134.0 | 17603 | 247.1 | observed-docker-cluster |
+| Citus 13 (Dist Function) | 1286.3 | 32.4 | 180.0 | 125.5 | 6980 | 364.2 | observed-docker-cluster |
+| YugabyteDB 2024.2 (Stored Proc) | 334.8 | 90.1 | 168.9 | 125.8 | 9154 | 207.8 | observed-docker-cluster |
+| Apache Ignite 3 (Colocated) | 494.0 | 92.1 | 83.3 | 340.4 | 5773 | 201.5 | observed-docker-cluster |

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Reproducing Comparative Benchmarks on GCP, AWS, and Azure</title>
+  <style>
+    :root { --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+    a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+    .container { max-width: 1040px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    h2 { font-size: 16px; margin-bottom: 10px; color: var(--accent); }
+    p.desc { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; overflow-x: auto; }
+    pre { background: #0b1120; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; overflow-x: auto; margin: 8px 0; color: #e2e8f0; }
+    code { font-family: monospace; background: #0b1120; padding: 2px 5px; border-radius: 4px; font-size: 12px; }
+    table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    table.data-table th, table.data-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+    table.data-table th { color: var(--muted); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Reproducing Comparative Benchmarks on GCP, AWS, and Azure</h1>
+    <p class="desc"><a href="index.html">Back to Comparative Benchmark Dashboard (HTML)</a> | <a href="README.md">Landing Page (Markdown)</a> | <a href="cloud-reproduction-guide.md">Cloud Guide (Markdown)</a></p>
+
+    <div class="card">
+      <h2>1. 5-Node Cloud Cluster Sizing &amp; Provisioning Scripts</h2>
+      <p class="desc">All 14 benchmarked targets use public container images and zero-dependency Node.js wire-protocol clients. Provisioning 5 VMs for a 30-minute run costs ~$0.50 USD on GCP, AWS, or Azure.</p>
+      <table class="data-table">
+        <thead>
+          <tr><th>Cloud Provider</th><th>Provisioning Script</th><th>Default Instance Type</th><th>vCPU / RAM</th><th>Disk</th><th>Est. 30-Min Cost (5 VMs)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Google Cloud (GCP)</strong></td><td><a href="cloud/provision-gcp.sh"><code>cloud/provision-gcp.sh</code></a></td><td><code>n2-standard-4</code></td><td>4 vCPU / 16 GB</td><td>50 GB <code>pd-ssd</code></td><td>~$0.49 USD</td></tr>
+          <tr><td><strong>Amazon Web Services (AWS)</strong></td><td><a href="cloud/provision-aws.sh"><code>cloud/provision-aws.sh</code></a></td><td><code>m6i.xlarge</code></td><td>4 vCPU / 16 GB</td><td>50 GB <code>gp3</code></td><td>~$0.48 USD</td></tr>
+          <tr><td><strong>Microsoft Azure</strong></td><td><a href="cloud/provision-azure.sh"><code>cloud/provision-azure.sh</code></a></td><td><code>Standard_D4s_v5</code></td><td>4 vCPU / 16 GB</td><td>50 GB <code>StandardSSD_LRS</code></td><td>~$0.48 USD</td></tr>
+          <tr><td><strong>Bring Your Own 5 Hosts</strong></td><td>SSH + Docker</td><td>4+ vCPU / 16+ GB</td><td>Ubuntu 24.04 + Docker</td><td>50 GB SSD</td><td>$0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>2. Google Cloud Platform (GCP)</h2>
+      <pre>export PROJECT_ID="your-gcp-project-id"
+export ZONE="us-central1-a"
+./docs/benchmarks/cloud/provision-gcp.sh
+
+# Run the 5-node comparative benchmark suite and regenerate docs/benchmarks/*:
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts "$HOSTS" --ssh-user "$SSH_USER" --regenerate-docs
+
+# Tear down when finished:
+./docs/benchmarks/cloud/provision-gcp.sh --teardown</pre>
+    </div>
+
+    <div class="card">
+      <h2>3. Amazon Web Services (AWS)</h2>
+      <pre>export REGION="us-east-1"
+export KEY_NAME="your-ec2-keypair-name"
+./docs/benchmarks/cloud/provision-aws.sh
+
+# Run the 5-node comparative benchmark suite and regenerate docs/benchmarks/*:
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts "$HOSTS" --ssh-user ubuntu --ssh-key ~/.ssh/your-ec2-keypair.pem --regenerate-docs
+
+# Tear down when finished:
+./docs/benchmarks/cloud/provision-aws.sh --teardown</pre>
+    </div>
+
+    <div class="card">
+      <h2>4. Microsoft Azure</h2>
+      <pre>export RESOURCE_GROUP="lagrange-bench-rg"
+export LOCATION="eastus"
+./docs/benchmarks/cloud/provision-azure.sh
+
+# Run the 5-node comparative benchmark suite and regenerate docs/benchmarks/*:
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts "$HOSTS" --ssh-user azureuser --regenerate-docs
+
+# Tear down when finished:
+./docs/benchmarks/cloud/provision-azure.sh --teardown</pre>
+    </div>
+
+    <div class="card">
+      <h2>5. Single-Machine Quick Comparison (No Cloud Account Required)</h2>
+      <pre>npm ci
+npm run demo:movielens</pre>
+    </div>
+  </div>
+</body>
+</html>

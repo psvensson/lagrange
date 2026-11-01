@@ -23,31 +23,31 @@ Evaluating colocated compute grid execution (`JobTarget.colocated`) in Apache Ig
 
 | Target | Local-Only | One Remote Stage | Sequential | Fan-Out |
 | --- | --- | --- | --- | --- |
-| lagrange | 1538.0 dec/s, p99 37.6ms, 0B, 0RT | 1353.0 dec/s, p99 42.1ms, 272B, 1RT | 1138.0 dec/s, p99 48.1ms, 544B, 2RT | 1246.0 dec/s, p99 44.3ms, 544B, 1RT |
-| tidb-tikv | 881.0 dec/s, p99 14.6ms, 2048B, 2RT | 740.0 dec/s, p99 18.1ms, 4729B, 4RT | 591.6 dec/s, p99 17.9ms, 155726B, 6RT | 670.0 dec/s, p99 19.7ms, 4729B, 5RT |
-| citus-distributed-function | 605.0 dec/s, p99 4.8ms, 280B, 1RT | 382.0 dec/s, p99 14.6ms, 1240B, 2RT | 228.0 dec/s, p99 26.8ms, 2360B, 3RT | 268.0 dec/s, p99 23.4ms, 2280B, 2RT |
-| yugabytedb-ysql-rf3 | 615.9 dec/s, p99 31.6ms, 1280B, 1RT | 584.0 dec/s, p99 34.2ms, 2640B, 2RT | 554.1 dec/s, p99 42.0ms, 5571B, 4RT | 568.0 dec/s, p99 38.8ms, 5040B, 3RT |
-| yugabytedb-stored-proc | 455.0 dec/s, p99 9.4ms, 640B, 1RT | 298.0 dec/s, p99 18.8ms, 1840B, 2RT | 184.0 dec/s, p99 34.6ms, 3680B, 3RT | 209.0 dec/s, p99 29.2ms, 3520B, 3RT |
-| ignite3-colocated-compute | 1198.4 dec/s, p99 16.6ms, 420B, 1RT | 934.8 dec/s, p99 19.2ms, 1840B, 2RT | 879.4 dec/s, p99 23.3ms, 4267B, 3RT | 912.4 dec/s, p99 21.6ms, 3180B, 2RT |
+| lagrange | 654.1 dec/s, p99 75.4ms, 0B, 0RT | 391.9 dec/s, p99 100.4ms, 3348B, 1RT | 273.7 dec/s, p99 122.3ms, 5164B, 2RT | 288.0 dec/s, p99 127.1ms, 5046B, 1RT |
+| tidb-tikv | 383.8 dec/s, p99 102.0ms, 7600B, 2RT | 247.1 dec/s, p99 134.0ms, 17603B, 4RT | 115.2 dec/s, p99 241.7ms, 49770B, 6RT | 156.7 dec/s, p99 166.2ms, 29169B, 5RT |
+| citus-distributed-function | 1286.3 dec/s, p99 32.4ms, 1667B, 1RT | 364.2 dec/s, p99 125.5ms, 6980B, 2RT | 180.0 dec/s, p99 180.1ms, 15251B, 3RT | 248.7 dec/s, p99 116.5ms, 11026B, 2RT |
+| yugabytedb-ysql-rf3 | 376.9 dec/s, p99 113.0ms, 7205B, 1RT | 275.6 dec/s, p99 145.1ms, 11868B, 2RT | 140.0 dec/s, p99 193.0ms, 21270B, 4RT | 171.5 dec/s, p99 130.6ms, 18641B, 3RT |
+| yugabytedb-stored-proc | 334.8 dec/s, p99 90.1ms, 4988B, 1RT | 207.8 dec/s, p99 125.8ms, 9154B, 2RT | 168.9 dec/s, p99 147.1ms, 15314B, 3RT | 142.3 dec/s, p99 179.3ms, 14922B, 3RT |
+| ignite3-colocated-compute | 494.0 dec/s, p99 92.1ms, 1807B, 1RT | 201.5 dec/s, p99 340.4ms, 5773B, 2RT | 83.3 dec/s, p99 632.4ms, 13999B, 3RT | 169.8 dec/s, p99 198.6ms, 10155B, 2RT |
 
 ## Scenario A OLTP baseline comparison ([tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline))
 
 | Target | Version | Units | Processes | RPO=0 HA | Evidence Tier | Throughput (tx/s) | p50 (ms) | p95 (ms) | p99 (ms) | Proofs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | 0.4.0 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 1302.30 | 13.18 | 25.09 | 35.65 | 33/33 |
-| tidb-tikv | v8.5.8 | 6 | 6 | Yes (RPO=0) | observed-docker-cluster | 1378.80 | 4.04 | 11.50 | 12.81 | 33/33 |
-| citus-distributed-function | 13.0-pg17-udf | 4 | 4 | Yes (RPO=0) | modeled-topology-oracle | 11.20 | 280.40 | 685.00 | 960.40 | 33/33 |
-| yugabytedb-ysql-rf3 | 2024.2.1 | 4 | 7 | Yes (RPO=0) | observed-docker-cluster | 576.10 | 11.40 | 31.20 | 44.55 | 33/33 |
-| yugabytedb-stored-proc | 2024.2.1-proc | 3 | 6 | Yes (RPO=0) | modeled-topology-oracle | 7.40 | 392.00 | 1190.00 | 1480.00 | 33/33 |
-| ignite3-colocated-compute | 3.0.0 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 1198.40 | 5.80 | 12.40 | 16.55 | 33/33 |
+| lagrange | 0.4.0 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 382.90 | 51.94 | 90.84 | 120.29 | 33/33 |
+| tidb-tikv | v8.5.8 | 5 | 5 | Yes (RPO=0) | observed-docker-cluster | 104.20 | 75.37 | 299.00 | 327.16 | 33/33 |
+| citus-distributed-function | 13.0-pg17-udf | 4 | 4 | Yes (RPO=0) | observed-docker-cluster | 209.60 | 69.30 | 148.93 | 238.42 | 33/33 |
+| yugabytedb-ysql-rf3 | 2024.2.1 | 4 | 4 | Yes (RPO=0) | observed-docker-cluster | 237.30 | 76.47 | 131.15 | 149.94 | 33/33 |
+| yugabytedb-stored-proc | 2024.2.1-proc | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 202.10 | 87.15 | 149.22 | 209.97 | 33/33 |
+| ignite3-colocated-compute | 3.0.0 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 203.20 | 88.41 | 195.33 | 227.78 | 33/33 |
 
 ## Scenario B risk decision and graph-shape comparison ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
 | Target | Evidence Tier | Decisions/s | p50 (ms) | p95 (ms) | p99 (ms) | WAN Bytes/Dec | SQL Round-Trips | Movement Continuity |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | observed-docker-cluster | 1538.00 | 7.34 | 26.15 | 37.56 | 272 | 0.00 | Passed |
-| tidb-tikv | observed-docker-cluster | 881.00 | 8.39 | 11.53 | 14.58 | 4729 | 6.00 | Passed |
-| citus-distributed-function | modeled-topology-oracle | 364.20 | 13.40 | 20.10 | 22.90 | 1540 | 1.75 | Passed |
-| yugabytedb-ysql-rf3 | observed-docker-cluster | 615.90 | 12.10 | 24.80 | 31.65 | 5571 | 5.00 | Passed |
-| yugabytedb-stored-proc | modeled-topology-oracle | 286.50 | 16.40 | 25.10 | 28.40 | 2420 | 2.25 | Passed |
-| ignite3-colocated-compute | observed-docker-cluster | 934.80 | 8.20 | 15.40 | 19.22 | 4267 | 3.00 | Passed |
+| lagrange | observed-docker-cluster | 391.90 | 54.31 | 80.56 | 100.36 | 3348 | 0.00 | Passed |
+| tidb-tikv | observed-docker-cluster | 247.10 | 67.59 | 111.85 | 134.01 | 17603 | 6.00 | Passed |
+| citus-distributed-function | observed-docker-cluster | 364.20 | 43.17 | 112.08 | 125.52 | 6980 | 2.00 | Passed |
+| yugabytedb-ysql-rf3 | observed-docker-cluster | 275.60 | 54.11 | 109.90 | 145.07 | 11868 | 5.00 | Passed |
+| yugabytedb-stored-proc | observed-docker-cluster | 207.80 | 77.88 | 110.19 | 125.76 | 9154 | 2.00 | Passed |
+| ignite3-colocated-compute | observed-docker-cluster | 201.50 | 71.86 | 270.23 | 340.40 | 5773 | 2.00 | Passed |

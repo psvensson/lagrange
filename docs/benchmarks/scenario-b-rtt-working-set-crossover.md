@@ -12,12 +12,12 @@ Evaluating network latency scaling from 0.2 ms LAN to 30 ms cross-region WAN hig
 
 | Target | Hops | Local (0.2ms) | 0.2 ms | 2.0 ms | 10.0 ms | 30.0 ms | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 2 | 628.0 | 540.0 | 380.0 | 168.0 | 68.0 | modeled-topology-oracle |
-| Apache Ignite 3 (Colocated) | 6 | 618.0 | 495.0 | 274.0 | 108.0 | 41.0 | modeled-topology-oracle |
-| Citus 13 (Dist Function) | 6 | 612.0 | 440.0 | 228.0 | 86.0 | 32.0 | modeled-topology-oracle |
-| PG 17 Patroni + PL/pgSQL | 6 | 510.0 | 395.0 | 234.0 | 82.0 | 30.0 | modeled-topology-oracle |
-| YugabyteDB 2024.2 (Stored Proc) | 6 | 472.0 | 340.0 | 184.0 | 68.0 | 24.0 | modeled-topology-oracle |
-| TiDB + TiKV | 12 | 345.0 | 295.0 | 190.0 | 54.0 | 19.0 | modeled-topology-oracle |
+| Lagrange | 2 | 1049.8 | 250.9 | 117.1 | 51.9 | 30.6 | observed-docker-cluster |
+| Apache Ignite 3 (Colocated) | 6 | 494.0 | 127.4 | 76.5 | 40.0 | 23.6 | observed-docker-cluster |
+| Citus 13 (Dist Function) | 6 | 1286.3 | 157.8 | 68.3 | 32.2 | 15.8 | observed-docker-cluster |
+| PG 17 Patroni + PL/pgSQL | 6 | 358.2 | 189.6 | 53.7 | 49.4 | 34.0 | observed-docker-cluster |
+| YugabyteDB 2024.2 (Stored Proc) | 6 | 334.8 | 152.5 | 30.3 | 39.6 | 20.5 | observed-docker-cluster |
+| TiDB + TiKV | 12 | 383.8 | 106.4 | 42.0 | 22.8 | 12.3 | observed-docker-cluster |
 
 ## Working-set growth (moderate 64-event vs heavy-correlation 2048-event histories)
 
@@ -25,9 +25,9 @@ Increasing historical state from a moderate 64-event history to a heavy-correlat
 
 | Target | Moderate (dec/s) | Moderate p99 (ms) | Moderate WAN | Heavy (dec/s) | Heavy p99 (ms) | Heavy WAN | Drop % | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 441.1 | 18.1 | 144 | 368.0 | 21.8 | 144 | -16.6% | modeled-topology-oracle |
-| Apache Ignite 3 (Colocated) | 408.6 | 20.1 | 820 | 312.0 | 26.4 | 1140 | -23.6% | modeled-topology-oracle |
-| Citus 13 (Dist Function) | 364.2 | 22.9 | 1540 | 246.0 | 34.2 | 4860 | -32.5% | modeled-topology-oracle |
-| PG 17 Patroni + PL/pgSQL | 316.8 | 24.1 | 960 | 198.0 | 39.6 | 1420 | -37.5% | modeled-topology-oracle |
-| YugabyteDB 2024.2 (Stored Proc) | 286.5 | 28.4 | 2420 | 176.0 | 46.8 | 8400 | -38.6% | modeled-topology-oracle |
-| TiDB + TiKV | 221.4 | 36.1 | 6144 | 118.0 | 68.4 | 24576 | -46.7% | modeled-topology-oracle |
+| Lagrange | 538.7 | 128.0 | 8348 | 456.0 | 101.8 | 5825 | -15.4% | observed-docker-cluster |
+| Apache Ignite 3 (Colocated) | 201.5 | 340.4 | 5773 | 199.4 | 222.4 | 9270 | -1.0% | observed-docker-cluster |
+| Citus 13 (Dist Function) | 364.2 | 125.5 | 6980 | 159.6 | 315.0 | 12380 | -56.2% | observed-docker-cluster |
+| PG 17 Patroni + PL/pgSQL | 361.4 | 80.9 | 5735 | 298.2 | 109.6 | 9252 | -17.5% | observed-docker-cluster |
+| YugabyteDB 2024.2 (Stored Proc) | 207.8 | 125.8 | 9154 | 175.5 | 151.0 | 14747 | -15.5% | observed-docker-cluster |
+| TiDB + TiKV | 247.1 | 134.0 | 17603 | 190.9 | 158.4 | 28780 | -22.7% | observed-docker-cluster |

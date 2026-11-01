@@ -22,11 +22,11 @@ Throughput and latency sweep across all evaluated systems:
 
 | Target | Optimal P | Peak (dec/s) | P=6 (dec/s) | P=15 (dec/s) | P=30 (dec/s) | P=60 (dec/s) | Drop at P=60 (%) | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 30 | 784.0 | 590.0 | 720.4 | 784.0 | 738.0 | -5.9% | modeled-topology-oracle |
-| TiDB + TiKV | 15 | 318.0 | 274.0 | 318.0 | 302.0 | 264.0 | -17.0% | modeled-topology-oracle |
-| Citus 13 (Dist Function) | 30 | 542.0 | 448.0 | 524.0 | 542.0 | 486.0 | -10.3% | modeled-topology-oracle |
-| YugabyteDB 2024.2 (Stored Proc) | 15 | 412.0 | 356.0 | 412.0 | 398.0 | 348.0 | -15.5% | modeled-topology-oracle |
-| Apache Ignite 3 (Colocated) | 30 | 662.0 | 520.0 | 618.0 | 662.0 | 610.0 | -7.9% | modeled-topology-oracle |
+| Lagrange | 30 | 451.1 | 295.2 | 350.6 | 451.1 | 381.8 | -15.4% | observed-docker-cluster |
+| TiDB + TiKV | 30 | 236.2 | 174.8 | 210.9 | 236.2 | 212.1 | -10.2% | observed-docker-cluster |
+| Citus 13 (Dist Function) | 30 | 300.3 | 282.9 | 255.3 | 300.3 | 280.7 | -6.5% | observed-docker-cluster |
+| YugabyteDB 2024.2 (Stored Proc) | 30 | 245.7 | 150.7 | 162.2 | 245.7 | 216.5 | -11.9% | observed-docker-cluster |
+| Apache Ignite 3 (Colocated) | 30 | 252.8 | 196.5 | 57.0 | 252.8 | 163.1 | -35.5% | observed-docker-cluster |
 
 ## Parallelism sweet spot vs over-partitioning coordination overhead
 

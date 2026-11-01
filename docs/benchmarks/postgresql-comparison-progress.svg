@@ -13,93 +13,93 @@
   <text x="655" y="98" fill="#38bdf8" font-size="13" font-weight="bold">Scenario B: 4-Shape Ladder &amp; WAN</text>
   <text x="655" y="116" fill="#94a3b8" font-size="10">Throughput (local/remote/seq/fan) &amp; WAN bytes</text>
     <text x="35" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
-    <text x="35" y="152" fill="#94a3b8" font-size="10">1302.3 tx/s (p95: 25.1ms)</text>
+    <text x="35" y="152" fill="#94a3b8" font-size="10">382.9 tx/s (p95: 90.8ms)</text>
     <rect x="35" y="158" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="35" y="158" width="250" height="8" fill="#38bdf8" rx="3"/>
     <text x="35" y="176" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
-    <text x="345" y="152" fill="#94a3b8" font-size="10">1538.0 dec/s (p99: 37.6ms)</text>
+    <text x="345" y="152" fill="#94a3b8" font-size="10">391.9 dec/s (p99: 100.4ms)</text>
     <rect x="345" y="158" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="158" width="250" height="8" fill="#38bdf8" rx="3"/>
+    <rect x="345" y="158" width="196" height="8" fill="#38bdf8" rx="3"/>
     <text x="345" y="176" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="35" y="200" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit)</text>
-    <text x="35" y="214" fill="#94a3b8" font-size="10">1378.8 tx/s (p95: 11.5ms)</text>
+    <text x="35" y="214" fill="#94a3b8" font-size="10">104.2 tx/s (p95: 299.0ms)</text>
     <rect x="35" y="220" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="220" width="250" height="8" fill="#f59e0b" rx="3"/>
+    <rect x="35" y="220" width="74" height="8" fill="#f59e0b" rx="3"/>
     <text x="35" y="238" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="200" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit)</text>
-    <text x="345" y="214" fill="#94a3b8" font-size="10">881.0 dec/s (p99: 14.6ms)</text>
+    <text x="345" y="214" fill="#94a3b8" font-size="10">247.1 dec/s (p99: 134.0ms)</text>
     <rect x="345" y="220" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="220" width="250" height="8" fill="#f59e0b" rx="3"/>
+    <rect x="345" y="220" width="124" height="8" fill="#f59e0b" rx="3"/>
     <text x="345" y="238" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="35" y="262" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + App Svc (2-unit)</text>
-    <text x="35" y="276" fill="#94a3b8" font-size="10">1746.9 tx/s (p95: 8.2ms)</text>
+    <text x="35" y="276" fill="#94a3b8" font-size="10">323.6 tx/s (p95: 132.9ms)</text>
     <rect x="35" y="282" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="282" width="250" height="8" fill="#94a3b8" rx="3"/>
+    <rect x="35" y="282" width="231" height="8" fill="#94a3b8" rx="3"/>
     <text x="35" y="300" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="262" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + App Svc (2-unit)</text>
-    <text x="345" y="276" fill="#94a3b8" font-size="10">770.5 dec/s (p99: 21.4ms)</text>
+    <text x="345" y="276" fill="#94a3b8" font-size="10">288.8 dec/s (p99: 102.9ms)</text>
     <rect x="345" y="282" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="282" width="250" height="8" fill="#94a3b8" rx="3"/>
+    <rect x="345" y="282" width="144" height="8" fill="#94a3b8" rx="3"/>
     <text x="345" y="300" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="35" y="324" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + App Svc (6-unit)</text>
-    <text x="35" y="338" fill="#94a3b8" font-size="10">8.4 tx/s (p95: 920.5ms)</text>
+    <text x="35" y="338" fill="#94a3b8" font-size="10">130.4 tx/s (p95: 134.6ms)</text>
     <rect x="35" y="344" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="344" width="6" height="8" fill="#a78bfa" rx="3"/>
-    <text x="35" y="362" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <rect x="35" y="344" width="93" height="8" fill="#a78bfa" rx="3"/>
+    <text x="35" y="362" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="324" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + App Svc (6-unit)</text>
-    <text x="345" y="338" fill="#94a3b8" font-size="10">218.2 dec/s (p99: 35.2ms)</text>
+    <text x="345" y="338" fill="#94a3b8" font-size="10">142.1 dec/s (p99: 205.0ms)</text>
     <rect x="345" y="344" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="344" width="109" height="8" fill="#a78bfa" rx="3"/>
-    <text x="345" y="362" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <rect x="345" y="344" width="71" height="8" fill="#a78bfa" rx="3"/>
+    <text x="345" y="362" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="35" y="386" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + PL/pgSQL (1-unit)</text>
-    <text x="35" y="400" fill="#94a3b8" font-size="10">14.8 tx/s (p95: 412.6ms)</text>
+    <text x="35" y="400" fill="#94a3b8" font-size="10">1216.0 tx/s (p95: 55.1ms)</text>
     <rect x="35" y="406" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="406" width="11" height="8" fill="#14b8a6" rx="3"/>
-    <text x="35" y="424" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <rect x="35" y="406" width="250" height="8" fill="#14b8a6" rx="3"/>
+    <text x="35" y="424" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="386" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + PL/pgSQL (1-unit)</text>
-    <text x="345" y="400" fill="#94a3b8" font-size="10">418.4 dec/s (p99: 17.6ms)</text>
+    <text x="345" y="400" fill="#94a3b8" font-size="10">1134.6 dec/s (p99: 85.7ms)</text>
     <rect x="345" y="406" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="406" width="209" height="8" fill="#14b8a6" rx="3"/>
-    <text x="345" y="424" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <rect x="345" y="406" width="250" height="8" fill="#14b8a6" rx="3"/>
+    <text x="345" y="424" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="35" y="448" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + PL/pgSQL (5-unit)</text>
-    <text x="35" y="462" fill="#94a3b8" font-size="10">8.4 tx/s (p95: 920.5ms)</text>
+    <text x="35" y="462" fill="#94a3b8" font-size="10">233.5 tx/s (p95: 176.2ms)</text>
     <rect x="35" y="468" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="468" width="6" height="8" fill="#d97706" rx="3"/>
-    <text x="35" y="486" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <rect x="35" y="468" width="167" height="8" fill="#d97706" rx="3"/>
+    <text x="35" y="486" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="448" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + PL/pgSQL (5-unit)</text>
-    <text x="345" y="462" fill="#94a3b8" font-size="10">316.8 dec/s (p99: 24.1ms)</text>
+    <text x="345" y="462" fill="#94a3b8" font-size="10">361.4 dec/s (p99: 80.9ms)</text>
     <rect x="345" y="468" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="468" width="158" height="8" fill="#d97706" rx="3"/>
-    <text x="345" y="486" fill="#64748b" font-size="9">modeled-topology-oracle</text>
+    <rect x="345" y="468" width="181" height="8" fill="#d97706" rx="3"/>
+    <text x="345" y="486" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="655" y="138" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
-    <text x="655" y="152" fill="#94a3b8" font-size="10">WAN: 272B (0.0 RT)</text>
+    <text x="655" y="152" fill="#94a3b8" font-size="10">WAN: 3348B (0.0 RT)</text>
     <rect x="655" y="158" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="158" width="14" height="8" fill="#38bdf8" rx="3"/>
-    <text x="655" y="176" fill="#94a3b8" font-size="9">1538 / 1353 / 1138 / 1246 dec/s</text>
+    <rect x="655" y="158" width="174" height="8" fill="#38bdf8" rx="3"/>
+    <text x="655" y="176" fill="#94a3b8" font-size="9">654 / 392 / 274 / 288 dec/s</text>
     <text x="655" y="200" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB+TiKV (6-unit)</text>
-    <text x="655" y="214" fill="#94a3b8" font-size="10">WAN: 4729B (6.0 RT)</text>
+    <text x="655" y="214" fill="#94a3b8" font-size="10">WAN: 17603B (6.0 RT)</text>
     <rect x="655" y="220" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="220" width="246" height="8" fill="#f59e0b" rx="3"/>
-    <text x="655" y="238" fill="#94a3b8" font-size="9">881 / 740 / 592 / 670 dec/s</text>
+    <rect x="655" y="220" width="260" height="8" fill="#f59e0b" rx="3"/>
+    <text x="655" y="238" fill="#94a3b8" font-size="9">384 / 247 / 115 / 157 dec/s</text>
     <text x="655" y="262" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + App Svc (2-unit)</text>
-    <text x="655" y="276" fill="#94a3b8" font-size="10">WAN: 4215B (4.0 RT)</text>
+    <text x="655" y="276" fill="#94a3b8" font-size="10">WAN: 9425B (4.0 RT)</text>
     <rect x="655" y="282" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="282" width="219" height="8" fill="#94a3b8" rx="3"/>
-    <text x="655" y="300" fill="#94a3b8" font-size="9">771 / 580 / 270 / 410 dec/s</text>
+    <rect x="655" y="282" width="260" height="8" fill="#94a3b8" rx="3"/>
+    <text x="655" y="300" fill="#94a3b8" font-size="9">347 / 289 / 206 / 198 dec/s</text>
     <text x="655" y="324" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + App Svc (6-unit)</text>
-    <text x="655" y="338" fill="#94a3b8" font-size="10">WAN: 2680B (2.8 RT)</text>
+    <text x="655" y="338" fill="#94a3b8" font-size="10">WAN: 10989B (3.0 RT)</text>
     <rect x="655" y="344" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="344" width="139" height="8" fill="#a78bfa" rx="3"/>
-    <text x="655" y="362" fill="#94a3b8" font-size="9">385 / 248 / 146 / 174 dec/s</text>
+    <rect x="655" y="344" width="260" height="8" fill="#a78bfa" rx="3"/>
+    <text x="655" y="362" fill="#94a3b8" font-size="9">306 / 142 / 88 / 166 dec/s</text>
     <text x="655" y="386" fill="#cbd5e1" font-size="11" font-family="monospace">PG Single + PL/pgSQL (1-unit)</text>
-    <text x="655" y="400" fill="#94a3b8" font-size="10">WAN: 320B (1.0 RT)</text>
+    <text x="655" y="400" fill="#94a3b8" font-size="10">WAN: 1313B (1.0 RT)</text>
     <rect x="655" y="406" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="406" width="17" height="8" fill="#14b8a6" rx="3"/>
-    <text x="655" y="424" fill="#94a3b8" font-size="9">590 / 442 / 312 / 358 dec/s</text>
+    <rect x="655" y="406" width="68" height="8" fill="#14b8a6" rx="3"/>
+    <text x="655" y="424" fill="#94a3b8" font-size="9">1297 / 1135 / 1193 / 1338 dec/s</text>
     <text x="655" y="448" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA + PL/pgSQL (5-unit)</text>
-    <text x="655" y="462" fill="#94a3b8" font-size="10">WAN: 960B (1.0 RT)</text>
+    <text x="655" y="462" fill="#94a3b8" font-size="10">WAN: 5735B (1.0 RT)</text>
     <rect x="655" y="468" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="468" width="50" height="8" fill="#d97706" rx="3"/>
-    <text x="655" y="486" fill="#94a3b8" font-size="9">455 / 338 / 234 / 272 dec/s</text>
+    <rect x="655" y="468" width="260" height="8" fill="#d97706" rx="3"/>
+    <text x="655" y="486" fill="#94a3b8" font-size="9">358 / 361 / 234 / 118 dec/s</text>
 </svg>
