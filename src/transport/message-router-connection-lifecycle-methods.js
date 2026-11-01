@@ -58,6 +58,8 @@ function reportConnectSpent(router, connectionInfo, ws, boundMs) {
 }
 
 const objectFreeze = Object.freeze;
+const WS_PLAIN_PREFIX = 'ws://';
+const WSS_TLS_PREFIX = 'wss://';
 
 class MessageRouterConnectionLifecycleMethods {
   /**
@@ -69,7 +71,17 @@ class MessageRouterConnectionLifecycleMethods {
   buildSelfConnectionAddress() {
     const host = this.resolveSelfConnectionHost();
     const normalizedHost = this.normalizeWebSocketHost(host);
-    return TRANSPORT_FORMAT.buildWebSocketAddress(normalizedHost, this.wsPort);
+    const baseAddr = TRANSPORT_FORMAT.buildWebSocketAddress(
+      normalizedHost,
+      this.wsPort,
+    );
+    if (
+      this.trustProvider?.isTlsRequired() &&
+      baseAddr.startsWith(WS_PLAIN_PREFIX)
+    ) {
+      return `${WSS_TLS_PREFIX}${baseAddr.slice(WS_PLAIN_PREFIX.length)}`;
+    }
+    return baseAddr;
   }
   /**
    * Resolve host used for self-connection.
@@ -259,7 +271,17 @@ class MessageRouterConnectionLifecycleMethods {
       address,
       routerId: this.routerId,
     });
-    const normalizedAddress = normalizeToWebSocketAddress(address) || address;
+    if (this.trustProvider) {
+      this.trustProvider.validatePeerAddress(address);
+    }
+    let normalizedAddress = normalizeToWebSocketAddress(address) || address;
+    if (
+      this.trustProvider?.isTlsRequired() &&
+      typeof normalizedAddress === TRANSPORT_TYPEOF.STRING &&
+      normalizedAddress.startsWith(WS_PLAIN_PREFIX)
+    ) {
+      normalizedAddress = `${WSS_TLS_PREFIX}${normalizedAddress.slice(WS_PLAIN_PREFIX.length)}`;
+    }
     const existing = this.nodeConnections.get(nodeId) || null;
     if (existing) {
       this.refreshReconnectAuthority(existing, normalizedAddress);
@@ -316,7 +338,12 @@ class MessageRouterConnectionLifecycleMethods {
     return new Promise((resolve, reject) => {
       let settled = false;
       try {
-        const ws = new WebSocket(connectionInfo.address);
+        const wsClientOptions = this.trustProvider?.isTlsRequired() ?
+          this.trustProvider.buildClientTlsOptions() :
+          undefined;
+        const ws = wsClientOptions ?
+          new WebSocket(connectionInfo.address, wsClientOptions) :
+          new WebSocket(connectionInfo.address);
         let connectionEstablished = false;
         let connectTimeout = null;
         const clearConnectTimeout = () => {
@@ -560,7 +587,10 @@ class MessageRouterConnectionLifecycleMethods {
     if (this.identifyPayload && !connectionInfo.isSelfConnection) {
       message.bootstrap = this.identifyPayload;
     }
-    this.sendRaw(connectionInfo.ws, message);
+    const outboundIdentify = this.trustProvider ?
+      this.trustProvider.signIdentifyFrame(message) :
+      message;
+    this.sendRaw(connectionInfo.ws, outboundIdentify);
   }
   getCurrentPrimaryConnectionBootIncarnation(nodeId) {
     return this.connectionAuthorityOwner.getCurrentPrimaryBootIncarnation(

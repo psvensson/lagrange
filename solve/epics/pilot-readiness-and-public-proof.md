@@ -5,8 +5,11 @@ proof: deterministic
 roadmapRow: null
 graduatesTo: null
 quests:
+  - call-bounded-structured-partials
   - call-selector-typed-parameter-narrowing
+  - call-shard-paged-execution
   - learner-promotion-progress-proof
+  - node-transport-authenticated-encryption
   - partition-leader-row-publication-integrity-v2
   - partition-leader-row-publication-integrity-v3
   - partition-leader-row-publication-integrity

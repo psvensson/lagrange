@@ -22,11 +22,11 @@
     "storage-raft": 148,
     "test-infrastructure": 153,
     "transactions": 17,
-    "transport-messaging": 112,
+    "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2520,
-  "digest": "fnv1a32-39d0f2b5",
+  "censusSize": 2521,
+  "digest": "fnv1a32-446997da",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-5e93e6bd",
   "classes": {
@@ -2436,6 +2436,7 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": "transport-messaging",
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "transport-messaging",
     "test/transport/owner-retry-budget.test.js": "transport-messaging",
+    "test/transport/q7-node-transport-authenticated-encryption.test.js": "transport-messaging",
     "test/transport/router-envelope-pre-send-failure.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "transport-messaging",
