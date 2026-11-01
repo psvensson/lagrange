@@ -13,6 +13,7 @@ import {
 import {
   createRemoteWorkloadRunner,
   createWorkloadRunExecutor,
+  prepareLoadGeneratorCheckout,
 } from '../comparative-benchmark-workload-call-site.js';
 import {stringIncludes} from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
@@ -177,4 +178,43 @@ test('an exhausted deployment is run unopened: the request names the setup failu
   assert.equal(result.endpoint, null);
   assert.equal(result.placement, null);
   assert.equal(result.observations.requests[0].outcome, 'unissued');
+});
+
+// A lab host's shared checkout is at whatever commit it was last provisioned
+// with (and may carry local edits): the load generator never moves it. The
+// campaign runs the CLI from a throwaway detached worktree of that checkout at
+// the harness commit, fetched from origin when absent, and removes it after.
+test('the load generator runs from a worktree at the harness commit, never the shared checkout',
+  async () => {
+    const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
+    const ssh = createScriptedSsh([[/git worktree add/u, 'abc'],
+      [/run-benchmark-workload\.js/u, '\n__exit_code=0'],
+      [/tail -n 1/u, JSON.stringify(b1Record())],
+      [/git rev-parse HEAD/u, 'abc']]);
+    const checkout = await prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
+      harnessCommit: 'abc', campaignId: 'bench-x'});
+    const worktree = '/srv/lagrange/test-output/bench-worktrees/bench-x';
+    assert.equal(checkout.host.repoPath, worktree);
+    assert.equal(host.repoPath, '/srv/lagrange');
+    const add = ssh.calls[0].command;
+    assert.match(add, /^cd '\/srv\/lagrange' && /u);
+    assert.match(add, /git cat-file -e 'abc\^\{commit\}' 2>\/dev\/null \|\| git fetch --quiet origin 'abc'/u);
+    assert.match(add, /git worktree add --detach --quiet '\/srv\/lagrange\/test-output\/bench-worktrees\/bench-x' 'abc'/u);
+    assert.match(add, /ln -s '\/srv\/lagrange\/node_modules' '\/srv\/lagrange\/test-output\/bench-worktrees\/bench-x\/node_modules'/u);
+    await createRemoteWorkloadRunner({sshRun: ssh.sshRun, opts: {}, host: checkout.host,
+      harnessCommit: 'abc', campaignId: 'bench-x'})({system: 'lagrange'}, RUN);
+    const cli = arrayFind(ssh.calls, (call) => stringIncludes(call.command, 'run-benchmark'));
+    assert.match(cli.command, /^cd '\/srv\/lagrange\/test-output\/bench-worktrees\/bench-x' && /u);
+    await checkout.release();
+    const removal = ssh.calls[ssh.calls.length - 1].command;
+    assert.match(removal, /git worktree remove --force '\/srv\/lagrange\/test-output\/bench-worktrees\/bench-x'/u);
+  });
+
+test('a worktree that is not at the harness commit refuses the campaign', async () => {
+  const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
+  const ssh = createScriptedSsh([[/git worktree add/u, 'deadbeef']]);
+  await assert.rejects(prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
+    harnessCommit: 'abc', campaignId: 'bench-x'}),
+  (error) => error.code === 'load_generator_commit_mismatch');
+  assert.match(ssh.calls[ssh.calls.length - 1].command, /git worktree remove --force/u);
 });
