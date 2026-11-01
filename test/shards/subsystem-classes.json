@@ -9,7 +9,7 @@
     "cli-tooling": 98,
     "control-plane": 224,
     "convergence-topology": 78,
-    "distributed-harness": 186,
+    "distributed-harness": 187,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2514,
-  "digest": "fnv1a32-ab2e9ca3",
+  "censusSize": 2515,
+  "digest": "fnv1a32-24b0187b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2ab628fe",
+  "observationDigest": "fnv1a32-a2d9c153",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -951,6 +951,7 @@
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer.property.test.js": "distributed-harness",
@@ -7020,6 +7021,39 @@
       ]
     },
     "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
+        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
+        "test/distributed/harness/benchmark-operation-outcome.js",
+        "test/distributed/harness/benchmark-scenario-a-run.js",
+        "test/distributed/harness/benchmark-workload-dispatch.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/oltp-baseline-dataset.js",
+        "test/distributed/harness/oltp-baseline-transaction-executor.js",
+        "test/distributed/harness/oltp-baseline-workload.js",
+        "test/distributed/harness/oltp-error-classification.js",
+        "test/distributed/harness/oltp-open-loop-step-owner.js",
+        "test/distributed/harness/oltp-paired-retry-owner.js",
+        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
+        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/reference-client/lagrange-oltp-adapter.js",
+        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
+        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
+        "test/distributed/reference-client/postgresql-oltp-adapter.js",
+        "test/distributed/reference-client/tidb-oltp-adapter.js",
+        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
+      ],
+      "directories": [
+        "src"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js": {
       "files": [
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
