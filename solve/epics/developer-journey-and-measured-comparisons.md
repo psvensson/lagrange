@@ -32,6 +32,7 @@ authorizes:
   - src/wasm-service
   - data/tidb-comparison
   - scripts/checks
+  - scripts/lab
   - scripts/check-complexity.js
   - scripts/check-current-capabilities.js
   - scripts/check-unused-exports.js
@@ -96,6 +97,12 @@ records remain intact; successor work records the correction explicitly.
   this amendment neither rewrites its seal nor certifies stronger acceptance.
 
 ## Decision log
+
+- 2026-11-01: Scope widened (R16, recorded): `scripts/lab` joins `authorizes` so the
+  comparative benchmark runner can default to the registered lab machines through the
+  existing lab owners (fleet probe gains a thermal-sensor fact; host selection consumes it).
+  Decided by the quest comparative-benchmark-evidence-repair under the owner's 2026-11-01
+  instruction to default to the lab machines.
 
 - 2026-10-31: Peter accepted the developer-facing audit with two stronger
   requirements: every comparison must be an actual GCP/lab run; deployment must
