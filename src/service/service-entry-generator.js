@@ -22,6 +22,9 @@
 
 import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
+import {
+  renderGuestCanonicalPartialCodecSource,
+} from './call-canonical-partial-codec.js';
 
 const EMITTED_FILE_MODE = 'utf8';
 const ENTRY_WORLD = Object.freeze({
@@ -579,25 +582,35 @@ function plainRow(row) {
   return record;
 }
 
+${renderGuestCanonicalPartialCodecSource()}
+
 export function run(operationId, batch, argumentsJson) {
   const operation = OPERATION_TABLE.get(operationId);
   if (!operation) return typedRefusal(UNKNOWN_OPERATION_CODE, operationId);
   const rows = batch.map(plainRow);
-  const encodingEmit = (key, partial) => emit(key, JSON.stringify(partial));
-  return JSON.stringify(operation.run(
+  const schema = operation.partialSchema;
+  const encodingEmit = (key, partial) => emit(
+    encodeCanonicalGroupKey(key),
+    encodeCanonicalPartialValue(partial, {schema}),
+  );
+  const outcome = operation.run(
     rows, JSON.parse(argumentsJson), {emit: encodingEmit},
-  ));
+  );
+  return encodeCanonicalPartialValue(outcome === undefined ? null : outcome);
 }
 
 export function reduce(operationId, partials, argumentsJson) {
   const operation = OPERATION_TABLE.get(operationId);
   if (!operation) return typedRefusal(UNKNOWN_OPERATION_CODE, operationId);
-  const decoded = partials.map(
-    ([key, partialJson]) => [key, JSON.parse(partialJson)],
+  const schema = operation.partialSchema;
+  const decoded = partials.map(([key, partialJson]) => Object.freeze([
+    decodeCanonicalGroupKey(key),
+    decodeCanonicalPartialValue(partialJson, {schema}),
+  ]));
+  const reduced = operation.reduce(
+    Object.freeze(decoded), JSON.parse(argumentsJson),
   );
-  return JSON.stringify(operation.reduce(
-    decoded, JSON.parse(argumentsJson),
-  ));
+  return encodeCanonicalPartialValue(reduced);
 }
 `;
 }

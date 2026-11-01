@@ -378,8 +378,8 @@ test('resolveCompletePartialSet merges a complete fresh disjoint set ' +
     INVOCATION_ID, [1, 2], LIMIT,
   );
   t.equal(resolved.complete, true, 'the gate opens for a complete set');
-  t.same(resolved.partials, [['a', 5], ['c', 4], ['b', 2]],
-    'merged partials are key/value tuples sorted by aggregate');
+  t.same(resolved.partials, [['b', 2], ['a', 5], ['c', 4]],
+    'merged partials are key/value tuples ordered by (slotId, emissionOrdinal)');
   t.equal(resolved.witness.schemaVersion, 1,
     'the witness declares its schema version');
   t.same(resolved.witness.slots.map((slot) => slot.slotId), [1, 2],
@@ -435,27 +435,35 @@ test('resolveCompletePartialSet fails closed on a stale partial',
     t.end();
   });
 
-test('resolveCompletePartialSet fails closed on shard overlap',
-  async (t) => {
-    const nowRef = {now: 70_000};
-    const {executeInternal} = createSqlStore();
-    const coordinator = createCoordinator(executeInternal, nowRef);
+test('resolveCompletePartialSet preserves duplicate groupKey across shards ' +
+  'and fails closed on conflicting delivery replay', async (t) => {
+  const nowRef = {now: 70_000};
+  const {executeInternal} = createSqlStore();
+  const coordinator = createCoordinator(executeInternal, nowRef);
 
-    await leaseAndPublish(coordinator, 1, REPLICA_ONE, [
-      {groupKey: 'a', aggValue: 1},
-    ], 70_010);
-    await leaseAndPublish(coordinator, 2, REPLICA_TWO, [
-      {groupKey: 'a', aggValue: 2},
-    ], 70_020);
+  await leaseAndPublish(coordinator, 1, REPLICA_ONE, [
+    {groupKey: 'a', aggValue: 1, deliveryId: 'deliv-1'},
+  ], 70_010);
+  await leaseAndPublish(coordinator, 2, REPLICA_TWO, [
+    {groupKey: 'a', aggValue: 2, deliveryId: 'deliv-2'},
+  ], 70_020);
 
-    await expectReduceIncomplete(
-      t,
-      coordinator.resolveCompletePartialSet(INVOCATION_ID, [1, 2], LIMIT),
-      CALL_CELL_REDUCE_INCOMPLETE_REASON.SHARD_OVERLAP,
-      'a duplicated group key across partials fails closed',
-    );
-    t.end();
-  });
+  const overlapping = await coordinator.resolveCompletePartialSet(
+    INVOCATION_ID, [1, 2], LIMIT,
+  );
+  t.same(overlapping.partials, [['a', 1], ['a', 2]],
+    'duplicate semantic groupKey across shards is preserved for reduce');
+
+  await expectReduceIncomplete(
+    t,
+    leaseAndPublish(coordinator, 2, REPLICA_TWO, [
+      {groupKey: 'a', aggValue: 9, deliveryId: 'deliv-1'},
+    ], 70_030),
+    CALL_CELL_REDUCE_INCOMPLETE_REASON.DELIVERY_CONFLICT,
+    'a conflicting delivery replay on a leased slot fails closed with DELIVERY_CONFLICT',
+  );
+  t.end();
+});
 
 test('resolveCompletePartialSet fails closed on an unbounded partial',
   async (t) => {
@@ -628,7 +636,7 @@ test('seedInvocation creates the rows the guarded coordination cycle ' +
   const gate = await coordinator.resolveCompletePartialSet(
     invocationId, [1, 2], LIMIT,
   );
-  t.same(gate.partials, [['b', 5], ['a', 3]],
+  t.same(gate.partials, [['a', 3], ['b', 5]],
     'the seeded rows carry a full leased publish → gate cycle');
   await coordinator.publishFinalSnapshot(
     invocationId, JSON.stringify(gate.partials), gate.witness,

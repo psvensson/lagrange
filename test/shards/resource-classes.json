@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2498,
+    "ordinary": 2499,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2515,
-  "digest": "fnv1a32-494bd279",
+  "censusSize": 2516,
+  "digest": "fnv1a32-621e26ca",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2303,6 +2303,7 @@
     "test/service/minimal-deployment-request-cell-routing.test.js": "ordinary",
     "test/service/minimal-deployment-single-contract-owner-guard.test.js": "ordinary",
     "test/service/q2-call-selector-typed-parameter-narrowing.test.js": "ordinary",
+    "test/service/q4-call-bounded-structured-partials.test.js": "ordinary",
     "test/service/replicated-service-topology.test.js": "ordinary",
     "test/service/request-binding-route-resolver.test.js": "ordinary",
     "test/service/request-cell-call-bridge.test.js": "ordinary",

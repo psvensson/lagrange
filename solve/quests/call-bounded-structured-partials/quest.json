@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "call-bounded-structured-partials",
+  "epic": "pilot-readiness-and-public-proof",
+  "statement": "Implement Q4 bounded structured partials across a single canonical finite-JSON partial codec owner, the distributed-operation authoring and service source/entry/typings contracts, Call Cell routing normalization, Call Cell invoker, and Call Cell reduce coordinator so shards emit bounded structured finite-JSON contributions under runtime-owned delivery identities, duplicate application group keys across or within shards are preserved without host-side group merging or numeric truncation, identical delivery replays are idempotent no-ops, conflicting or stale delivery replays fail closed with typed REDUCE_INCOMPLETE reasons, and reducers receive the complete validated contribution sequence in deterministic (shardId, emissionOrdinal) order.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q4-call-bounded-structured-partials-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "46de639862e8fb663bab6924ea3730215991a567"
+}

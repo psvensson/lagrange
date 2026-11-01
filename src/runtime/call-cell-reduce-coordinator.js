@@ -1,22 +1,11 @@
 /**
  * Reduce coordination for a single `call`/`pushdown` Cell invocation.
  *
- * The sealed contract (`architecture/minimal-deployment-surface.md`)
- * requires `reduce` to execute on any replica of the reducing service
- * that holds the reduce lease, with exactly-once VISIBILITY of the final
- * reduced result — one atomically published snapshot per complete partial
- * set — not exactly-once reduce execution. This module is the
- * per-invocation analogue of `sql-query-loop-parallel-reduce.js`: shards
- * `emit` partials under leased slots in a coordination table, a
- * fail-closed gate accepts only a complete fresh bounded disjoint partial
- * set, and one atomic result-row UPDATE carries the witness that makes
- * the snapshot's provenance checkable.
- *
- * All persistence goes through the injected `executeInternal(sql, params)`
- * executor; the module holds no class state beyond its frozen config.
- * Every conditional write is a guarded single-row UPDATE whose effects
- * are verified by a re-read, so a replacement replica claiming an expired
- * lease cannot double-publish a visible final snapshot.
+ * Shards `emit` partials under leased slots in a coordination table, a
+ * fail-closed gate accepts only a complete fresh bounded partial set
+ * (with deterministic ordering and delivery deduplication), and one atomic
+ * result-row UPDATE carries the witness that makes the snapshot's provenance
+ * checkable. All persistence goes through the injected `executeInternal(sql, params)`.
  */
 
 import {
@@ -24,6 +13,13 @@ import {
   CALL_CELL_ROUTE_ERROR_CODE,
   createCallRoutingFailure,
 } from '../service/call-cell-routing-contract.js';
+import {
+  PARTIAL_CODEC_ERROR_CODE,
+  compareCanonicalStrings,
+  encodeCanonicalPartialValue,
+  isWellFormedUnicode,
+  validateCanonicalPartialValue,
+} from '../service/call-canonical-partial-codec.js';
 
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const EMPTY_PARTIAL_JSON = '[]';
@@ -46,16 +42,20 @@ const CALL_CELL_REDUCE_SNAPSHOT_STATE = Object.freeze({
 });
 
 const CALL_CELL_REDUCE_INCOMPLETE_REASON = Object.freeze({
-  SLOT_UNAVAILABLE: 'slot_unavailable',
-  SLOT_SET_INCOMPLETE: 'slot_set_incomplete',
-  SLOT_LEASE_EXPIRED: 'slot_lease_expired',
-  PARTIAL_STALE: 'partial_stale',
+  DELIVERY_CONFLICT: 'delivery_conflict',
   PARTIAL_INVALID: 'partial_invalid',
+  PARTIAL_STALE: 'partial_stale',
   PARTIAL_UNBOUNDED: 'partial_unbounded',
   SHARD_OVERLAP: 'shard_overlap',
+  SLOT_LEASE_EXPIRED: 'slot_lease_expired',
+  SLOT_SET_INCOMPLETE: 'slot_set_incomplete',
+  SLOT_UNAVAILABLE: 'slot_unavailable',
+  STALE_DELIVERY: 'stale_delivery',
 });
 
 const CALL_CELL_REDUCE_FAILURE_MESSAGE = Object.freeze({
+  [CALL_CELL_REDUCE_INCOMPLETE_REASON.DELIVERY_CONFLICT]:
+    'a delivery identity was replayed with conflicting canonical bytes or fence',
   [CALL_CELL_REDUCE_INCOMPLETE_REASON.SLOT_UNAVAILABLE]:
     'no leased reduce slot is available for the invocation',
   [CALL_CELL_REDUCE_INCOMPLETE_REASON.SLOT_SET_INCOMPLETE]:
@@ -70,6 +70,8 @@ const CALL_CELL_REDUCE_FAILURE_MESSAGE = Object.freeze({
     'a contributing partial exceeds the declared batch bound',
   [CALL_CELL_REDUCE_INCOMPLETE_REASON.SHARD_OVERLAP]:
     'two partials emit the same group key; shards are not disjoint',
+  [CALL_CELL_REDUCE_INCOMPLETE_REASON.STALE_DELIVERY]:
+    'a contributing partial carries a stale attempt or unadmitted shard fence',
 });
 
 const CALL_CELL_REDUCE_ARGUMENT_MESSAGE = Object.freeze({
@@ -146,12 +148,13 @@ function assertQuerySuccess(result) {
 }
 
 function createReduceIncompleteFailure(reason, invocationId) {
-  return createCallRoutingFailure(
+  const err = createCallRoutingFailure(
     CALL_CELL_ROUTE_ERROR_CODE.REDUCE_INCOMPLETE,
-    `${CALL_CELL_REDUCE_FAILURE_MESSAGE[reason]} ` +
-      `(invocation=${invocationId}, reason=${reason})`,
+    `${CALL_CELL_REDUCE_FAILURE_MESSAGE[reason]} (invocation=${invocationId}, reason=${reason})`,
     {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
   );
+  err.reason = reason;
+  return err;
 }
 
 function hasValidConfigTables(config) {
@@ -228,6 +231,143 @@ function parseWitnessSlotEntries(parsedSlots, slotIds, limit) {
     });
   }
   return slots;
+}
+
+function isValidPartialGroupKey(key) {
+  if (typeof key === 'string') {
+    return key.length > 0 && isWellFormedUnicode(key);
+  }
+  return typeof key === 'number' && Number.isFinite(key) &&
+    (!Number.isInteger(key) || Number.isSafeInteger(key));
+}
+
+function normalizeEntryGroupKey(key) {
+  return typeof key === 'number' && Object.is(key, -0) ? 0 : key;
+}
+
+function classifyCodecErrorReason(error) {
+  if (error?.code === PARTIAL_CODEC_ERROR_CODE.BYTE_OVERFLOW ||
+      error?.code === PARTIAL_CODEC_ERROR_CODE.ELEMENT_COUNT_OVERFLOW ||
+      error?.code === PARTIAL_CODEC_ERROR_CODE.DEPTH_OVERFLOW) {
+    return CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED;
+  }
+  return CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_INVALID;
+}
+
+function isStaleOrInvalidEntryAttempt(entry, activeAttempt) {
+  if (entry.stale === true) return true;
+  if (entry.attempt === undefined) return false;
+  if (!Number.isInteger(entry.attempt) || entry.attempt <= 0) return true;
+  return activeAttempt !== undefined && entry.attempt !== activeAttempt;
+}
+
+function extractContributionDeliveryMeta(entry, row, ordinal) {
+  const slotId = Number(row.slot_id);
+  const explicitShardId = isNonEmptyString(entry.shardId) ?
+    entry.shardId :
+    null;
+  const shardId = explicitShardId ?? String(slotId);
+  const emissionOrdinal =
+    Number.isInteger(entry.emissionOrdinal) && entry.emissionOrdinal >= 0 ?
+      entry.emissionOrdinal :
+      ordinal;
+  const attempt = Number.isInteger(entry.attempt) ? entry.attempt : 1;
+  const deliveryId = isNonEmptyString(entry.deliveryId) ?
+    entry.deliveryId :
+    `slot=${slotId}:shard=${shardId}:ord=${emissionOrdinal}`;
+  return {attempt, deliveryId, emissionOrdinal, explicitShardId, shardId, slotId};
+}
+
+function entryAdmissionFailureReason(entry, activeAttempt) {
+  const validShape = Boolean(
+    entry && typeof entry === 'object' && !Array.isArray(entry) &&
+    isValidPartialGroupKey(entry[PARTIAL_ENTRY_SHAPE.KEY_FIELD]) &&
+    Object.prototype.hasOwnProperty.call(entry, PARTIAL_ENTRY_SHAPE.VALUE_FIELD),
+  );
+  if (!validShape) return CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_INVALID;
+  return isStaleOrInvalidEntryAttempt(entry, activeAttempt) ?
+    CALL_CELL_REDUCE_INCOMPLETE_REASON.STALE_DELIVERY :
+    null;
+}
+
+function normalizeSinglePartialEntry(entry, row, ordinal, activeAttempt) {
+  const admissionReason = entryAdmissionFailureReason(entry, activeAttempt);
+  if (admissionReason !== null) {
+    return {reason: admissionReason};
+  }
+  const groupKey = normalizeEntryGroupKey(entry[PARTIAL_ENTRY_SHAPE.KEY_FIELD]);
+  let aggValue;
+  let canonicalValueJson;
+  try {
+    aggValue = validateCanonicalPartialValue(
+      entry[PARTIAL_ENTRY_SHAPE.VALUE_FIELD]);
+    canonicalValueJson = encodeCanonicalPartialValue(aggValue);
+  } catch (error) {
+    return {reason: classifyCodecErrorReason(error)};
+  }
+  const meta = extractContributionDeliveryMeta(entry, row, ordinal);
+  return {
+    contribution: Object.freeze({
+      ...meta,
+      aggValue,
+      canonicalValueJson,
+      groupKey,
+      groupKeyIdentity: `${typeof groupKey}:${String(groupKey)}`,
+    }),
+  };
+}
+
+function compareOrderedContributions(left, right) {
+  if (left.explicitShardId !== null && right.explicitShardId !== null) {
+    const shardOrder = compareCanonicalStrings(
+      left.explicitShardId,
+      right.explicitShardId,
+    );
+    if (shardOrder !== 0) return shardOrder;
+  }
+  if (left.slotId !== right.slotId) {
+    return left.slotId - right.slotId;
+  }
+  return left.emissionOrdinal - right.emissionOrdinal;
+}
+
+function isIdenticalDeliveryContribution(existing, candidate) {
+  return existing.groupKeyIdentity === candidate.groupKeyIdentity &&
+    existing.canonicalValueJson === candidate.canonicalValueJson &&
+    existing.attempt === candidate.attempt &&
+    existing.shardId === candidate.shardId;
+}
+
+function admitAndOrderContributions(slotStates, limit) {
+  const byDeliveryId = new Map();
+  const uniqueCountBySlot = new Map();
+  for (const {row, partial} of slotStates) {
+    const slotId = Number(row.slot_id);
+    let slotUnique = uniqueCountBySlot.get(slotId) ?? 0;
+    for (const item of partial.contributions) {
+      const existing = byDeliveryId.get(item.deliveryId);
+      if (existing) {
+        if (!isIdenticalDeliveryContribution(existing, item)) {
+          throw new Error(CALL_CELL_REDUCE_INCOMPLETE_REASON.DELIVERY_CONFLICT);
+        }
+        continue;
+      }
+      byDeliveryId.set(item.deliveryId, item);
+      slotUnique += 1;
+    }
+    if (slotUnique > limit) {
+      throw new Error(CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED);
+    }
+    uniqueCountBySlot.set(slotId, slotUnique);
+  }
+  if (byDeliveryId.size > limit) {
+    throw new Error(CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED);
+  }
+  const ordered = [...byDeliveryId.values()].sort(compareOrderedContributions);
+  return {
+    partials: ordered.map((item) => [item.groupKey, item.aggValue]),
+    uniqueCountBySlot,
+  };
 }
 
 function createCallCellReduceCoordinator(options) {
@@ -397,16 +537,36 @@ function createCallCellReduceCoordinator(options) {
     ));
   }
 
-  async function publishPartial(
-    invocationId, slotId, replicaId, partialJson, computedAt,
+  function assertPublishSlotArgs(
+    invocationId, publishedSlotId, replicaId, partialJson, computedAt, options,
   ) {
-    const publishedSlotId = normalizeSlotId(slotId);
     if (!isNonEmptyString(invocationId) || !isValidReplicaId(replicaId) ||
         publishedSlotId === null || !Number.isFinite(computedAt) ||
         computedAt <= 0 || typeof partialJson !== 'string') {
       throw new TypeError(
-        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.PUBLISH_PARTIAL_REQUIRES,
-      );
+        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.PUBLISH_PARTIAL_REQUIRES);
+    }
+    if (options?.attempt < options?.fenceAttempt) {
+      throw createReduceIncompleteFailure(
+        CALL_CELL_REDUCE_INCOMPLETE_REASON.STALE_DELIVERY, invocationId);
+    }
+  }
+
+  async function publishPartial(
+    invocationId, slotId, replicaId, partialJson, computedAt, options,
+  ) {
+    const publishedSlotId = normalizeSlotId(slotId);
+    assertPublishSlotArgs(
+      invocationId, publishedSlotId, replicaId, partialJson, computedAt, options);
+    const existingRows = await readSlotRows(invocationId);
+    const ownedRow = existingRows.find(
+      (row) => Number(row.slot_id) === publishedSlotId &&
+        row.replica_id === replicaId);
+    if (ownedRow && ownedRow.partial_json !== EMPTY_PARTIAL_JSON &&
+        Number(ownedRow.computed_at) > 0 &&
+        ownedRow.partial_json !== partialJson) {
+      throw createReduceIncompleteFailure(
+        CALL_CELL_REDUCE_INCOMPLETE_REASON.DELIVERY_CONFLICT, invocationId);
     }
     assertQuerySuccess(await config.executeInternal(
       `UPDATE ${config.coordinationTable} SET ` +
@@ -421,8 +581,7 @@ function createCallCellReduceCoordinator(options) {
 
   function parsePartialRows(row, limit, byteLimit) {
     const byteLength = Buffer.byteLength(
-      String(row.partial_json), UTF8_ENCODING,
-    );
+      String(row.partial_json), UTF8_ENCODING);
     if (byteLength > byteLimit) {
       return {
         valid: false,
@@ -440,84 +599,59 @@ function createCallCellReduceCoordinator(options) {
         reason: CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_INVALID,
       };
     }
-    const entriesValid = Array.isArray(parsed) && parsed.every((entry) => {
-      const key = entry?.[PARTIAL_ENTRY_SHAPE.KEY_FIELD];
-      const value = entry?.[PARTIAL_ENTRY_SHAPE.VALUE_FIELD];
-      const keyValid = typeof key === 'string' ||
-        (typeof key === 'number' && Number.isFinite(key));
-      return keyValid && typeof value === 'number' && Number.isFinite(value);
-    });
-    const failure = [
-      [!Array.isArray(parsed),
-        CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_INVALID],
-      [Array.isArray(parsed) && parsed.length > limit,
-        CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED],
-      [!entriesValid, CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_INVALID],
-    ].find(([failed]) => failed);
-    if (failure) {
-      return {valid: false, byteLength, reason: failure[1]};
+    if (!Array.isArray(parsed)) {
+      return {
+        valid: false,
+        byteLength,
+        reason: CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_INVALID,
+      };
+    }
+    const contributions = [];
+    for (let index = 0; index < parsed.length; index += 1) {
+      const normalized = normalizeSinglePartialEntry(
+        parsed[index], row, index, config.activeAttempt);
+      if (normalized.reason) {
+        return {valid: false, byteLength, reason: normalized.reason};
+      }
+      contributions.push(normalized.contribution);
     }
     return {
       valid: true,
       byteLength,
-      rows: parsed.map((entry) => [
-        entry[PARTIAL_ENTRY_SHAPE.KEY_FIELD],
-        entry[PARTIAL_ENTRY_SHAPE.VALUE_FIELD],
-      ]),
+      contributions,
+      rows: contributions.map((item) => [item.groupKey, item.aggValue]),
     };
   }
 
-  function mergeDisjointPartialRows(partials, limit) {
-    const seen = new Set();
-    const merged = [];
-    for (const [key, value] of partials) {
-      const identity = `${typeof key}:${String(key)}`;
-      if (seen.has(identity)) {
-        throw new Error(CALL_CELL_REDUCE_INCOMPLETE_REASON.SHARD_OVERLAP);
-      }
-      seen.add(identity);
-      merged.push([key, value]);
-    }
-    if (merged.length > limit) {
-      throw new Error(CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED);
-    }
-    return merged.sort((left, right) => {
-      const valueOrder = right[1] - left[1];
-      return valueOrder || String(left[0]).localeCompare(
-        String(right[0]), undefined, {numeric: true},
-      );
-    });
-  }
-
-  function buildResultSnapshotWitness(slotStates) {
+  function buildResultSnapshotWitness(slotStates, uniqueCountBySlot) {
     return {
       schemaVersion: RESULT_SNAPSHOT_SCHEMA_VERSION,
       slots: slotStates.map(({row, partial}) => ({
         slotId: Number(row.slot_id),
         replicaId: row.replica_id,
         computedAt: Number(row.computed_at),
-        candidateCount: partial.rows.length,
+        candidateCount:
+          uniqueCountBySlot?.get(Number(row.slot_id)) ?? partial.rows.length,
       })),
     };
   }
 
   function sumSlotPartialBytes(slotStates) {
     let totalBytes = 0;
-    for (const {partial} of slotStates) {
-      totalBytes += partial.byteLength || 0;
-    }
+    for (const {partial} of slotStates) totalBytes += partial.byteLength || 0;
     return totalBytes;
   }
 
   function isMergeIncompleteReason(reason) {
-    return reason === CALL_CELL_REDUCE_INCOMPLETE_REASON.SHARD_OVERLAP ||
+    return reason === CALL_CELL_REDUCE_INCOMPLETE_REASON.DELIVERY_CONFLICT ||
+      reason === CALL_CELL_REDUCE_INCOMPLETE_REASON.STALE_DELIVERY ||
+      reason === CALL_CELL_REDUCE_INCOMPLETE_REASON.SHARD_OVERLAP ||
       reason === CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED;
   }
 
   function gateCompletePartialSet(slotRows, slotIds, limit, atMs, byteLimit) {
     const rowsBySlotId = new Map(
-      slotRows.map((row) => [Number(row.slot_id), row]),
-    );
+      slotRows.map((row) => [Number(row.slot_id), row]));
     const slotStates = slotIds.map((expectedSlotId) => {
       const row = rowsBySlotId.get(expectedSlotId);
       const partial = row ?
@@ -526,12 +660,10 @@ function createCallCellReduceCoordinator(options) {
       return {row, partial};
     });
     const failure = [
-      [slotStates.some(({row}) =>
-        !row || !isNonEmptyString(row.replica_id)),
-      CALL_CELL_REDUCE_INCOMPLETE_REASON.SLOT_SET_INCOMPLETE],
-      [slotStates.some(({row}) =>
-        row && Number(row.lease_expires_at) <= atMs),
-      CALL_CELL_REDUCE_INCOMPLETE_REASON.SLOT_LEASE_EXPIRED],
+      [slotStates.some(({row}) => !row || !isNonEmptyString(row.replica_id)),
+        CALL_CELL_REDUCE_INCOMPLETE_REASON.SLOT_SET_INCOMPLETE],
+      [slotStates.some(({row}) => row && Number(row.lease_expires_at) <= atMs),
+        CALL_CELL_REDUCE_INCOMPLETE_REASON.SLOT_LEASE_EXPIRED],
       [slotStates.some(({row}) =>
         row && Number(row.computed_at) <= atMs - config.leaseMs),
       CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_STALE],
@@ -541,35 +673,31 @@ function createCallCellReduceCoordinator(options) {
       [sumSlotPartialBytes(slotStates) > byteLimit,
         CALL_CELL_REDUCE_INCOMPLETE_REASON.PARTIAL_UNBOUNDED],
     ].find(([failed]) => failed);
-    if (failure) {
-      return {complete: false, reason: failure[1]};
-    }
-    const partials = slotStates.flatMap(({partial}) => partial.rows);
+    if (failure) return {complete: false, reason: failure[1]};
     try {
+      const {partials, uniqueCountBySlot} = admitAndOrderContributions(
+        slotStates, limit);
       return {
         complete: true,
-        partials: mergeDisjointPartialRows(partials, limit),
-        witness: buildResultSnapshotWitness(slotStates),
+        partials,
+        witness: buildResultSnapshotWitness(slotStates, uniqueCountBySlot),
       };
     } catch (error) {
-      if (!isMergeIncompleteReason(error?.message)) {
-        throw error;
-      }
-      return {
-        complete: false,
-        reason: error.message,
-      };
+      if (!isMergeIncompleteReason(error?.message)) throw error;
+      return {complete: false, reason: error.message};
     }
   }
 
   function resolveEffectiveByteLimit(byteLimit) {
-    const resolved = byteLimit === undefined ?
-      (config.maxPartialBytes ?? DEFAULT_MAX_PARTIAL_BYTES) :
+    const rawLimit = typeof byteLimit === 'object' && byteLimit !== null ?
+      byteLimit.byteLimit :
       byteLimit;
+    const resolved = rawLimit === undefined ?
+      (config.maxPartialBytes ?? DEFAULT_MAX_PARTIAL_BYTES) :
+      rawLimit;
     if (!isValidLimit(resolved)) {
       throw new TypeError(
-        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.RESOLVE_REQUIRES_BYTE_LIMIT,
-      );
+        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.RESOLVE_REQUIRES_BYTE_LIMIT);
     }
     return resolved;
   }
@@ -654,15 +782,9 @@ function createCallCellReduceCoordinator(options) {
   }
 
   return Object.freeze({
-    acquireReduceLease,
-    releaseReduceLease,
-    publishPartial,
-    reclaimExpiredCoordination,
-    resolveCompletePartialSet,
-    publishFinalSnapshot,
-    parseResultSnapshotWitness,
-    readSlotRows,
-    seedInvocation,
+    acquireReduceLease, parseResultSnapshotWitness, publishFinalSnapshot,
+    publishPartial, readSlotRows, reclaimExpiredCoordination,
+    releaseReduceLease, resolveCompletePartialSet, seedInvocation,
   });
 }
 

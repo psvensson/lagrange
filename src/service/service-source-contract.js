@@ -22,6 +22,9 @@ import {
   inspectSelectorPlaceholders,
   normalizeCallSelectorParameterSchema,
 } from './call-selector-parameter-contract.js';
+import {
+  normalizePartialValueSchema,
+} from './call-canonical-partial-codec.js';
 
 const SERVICE_SOURCE_ERROR_CODE = Object.freeze({
   DEFAULT_EXPORT_NOT_PLAIN_OBJECT: 'default_export_not_plain_object',
@@ -36,6 +39,7 @@ const SERVICE_SOURCE_ERROR_CODE = Object.freeze({
   INVALID_MOUNT: 'invalid_mount',
   INVALID_OPERATION: 'invalid_operation',
   INVALID_PARAMETERS: 'invalid_parameters',
+  INVALID_PARTIAL_SCHEMA: 'invalid_partial_schema',
   INVALID_STATEMENT: 'invalid_statement',
   LEGACY_HANDLERS_UNSUPPORTED: 'legacy_handlers_unsupported',
   MISSING_FETCH: 'missing_fetch',
@@ -71,6 +75,8 @@ const SERVICE_SOURCE_MESSAGE = Object.freeze({
   INVALID_OPERATION: 'operation must be a distributed-operation descriptor',
   INVALID_PARAMETERS:
     'operation parameters must declare typed selector parameter slots matching the statement placeholders',
+  INVALID_PARTIAL_SCHEMA:
+    'operation partialSchema must declare a valid finite-JSON partial value schema',
   INVALID_STATEMENT:
     'operation statement must be a sql template descriptor with non-empty text',
   LEGACY_HANDLERS_UNSUPPORTED:
@@ -230,20 +236,40 @@ function validateOperationParameters(pointer, text, rawParameters, errors) {
   }
 }
 
+function validateOperationPartialSchema(pointer, rawPartialSchema, errors) {
+  if (rawPartialSchema === undefined) return undefined;
+  try {
+    return normalizePartialValueSchema(rawPartialSchema);
+  } catch {
+    errors.push(serviceSourceError(
+      SERVICE_SOURCE_ERROR_CODE.INVALID_PARTIAL_SCHEMA,
+      `${pointer}/partialSchema`));
+    return undefined;
+  }
+}
+
+function buildOperationIrNode(
+  id, text, normalizedParameters, normalizedPartialSchema, reduce, run,
+) {
+  const node = {id, reduce, run, statement: {text}};
+  if (normalizedParameters !== undefined) {
+    node.parameters = normalizedParameters;
+  }
+  if (normalizedPartialSchema !== undefined &&
+      normalizedPartialSchema !== null) {
+    node.partialSchema = normalizedPartialSchema;
+  }
+  return node;
+}
+
 function validateOperationDescriptor(id, descriptor, collected, errors) {
   const pointer = operationPointer(id);
   if (!IDENTIFIER_PATTERN.test(id)) {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.INVALID_IDENTIFIER, pointer));
   }
-  if (!isPlainObject(descriptor)) {
-    errors.push(serviceSourceError(
-      SERVICE_SOURCE_ERROR_CODE.INVALID_OPERATION, pointer));
-    return;
-  }
-  const {kind, params, parameters, reduce, run, statement} =
-    ownRecord(descriptor);
-  if (kind !== AUTHORING_DESCRIPTOR_KIND.DISTRIBUTED_OPERATION) {
+  if (!isPlainObject(descriptor) ||
+      descriptor.kind !== AUTHORING_DESCRIPTOR_KIND.DISTRIBUTED_OPERATION) {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.INVALID_OPERATION, pointer));
     return;
@@ -254,14 +280,18 @@ function validateOperationDescriptor(id, descriptor, collected, errors) {
     return;
   }
   collected.idByDescriptor.set(descriptor, id);
+  const {
+    params, parameters, partial, partialSchema, reduce, run, statement,
+  } = ownRecord(descriptor);
   const text = sqlStatementText(statement);
   if (text === null) {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.INVALID_STATEMENT, `${pointer}/statement`));
   }
-  const rawParameters = parameters !== undefined ? parameters : params;
   const normalizedParameters = validateOperationParameters(
-    pointer, text, rawParameters, errors);
+    pointer, text, parameters ?? params, errors);
+  const normalizedPartialSchema = validateOperationPartialSchema(
+    pointer, partialSchema ?? partial, errors);
   if (typeof run !== 'function') {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.MISSING_RUN, pointer));
@@ -270,15 +300,8 @@ function validateOperationDescriptor(id, descriptor, collected, errors) {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.MISSING_REDUCE, pointer));
   }
-  collected.operations.push({
-    id,
-    ...(normalizedParameters !== undefined ?
-      {parameters: normalizedParameters} :
-      {}),
-    reduce,
-    run,
-    statement: {text},
-  });
+  collected.operations.push(buildOperationIrNode(
+    id, text, normalizedParameters, normalizedPartialSchema, reduce, run));
 }
 
 function collectOperations(operations, errors, options) {

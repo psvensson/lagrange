@@ -1,4 +1,8 @@
 import {createHash, randomUUID} from 'node:crypto';
+import {
+  decodeCanonicalGroupKey,
+  decodeCanonicalPartialWire,
+} from './call-canonical-partial-codec.js';
 
 const CALL_CELL_ROUTE_OPERATION = 'call_cell.invoke';
 const CALL_CELL_ROUTE_MESSAGE_TYPE = 'INVOKE_CALL_CELL';
@@ -417,13 +421,17 @@ function normalizeCallComponentResult(value) {
 }
 
 // The emitted-partial wire contract for reduce coordination: every emit
-// carries a finite numeric aggregation value as its partial JSON, keyed by
-// the guest's group key. The coordinator's completeness gate re-validates
-// the same shape fail-closed; this normalization exists so the invocation
-// owner refuses an incoherent component before anything is published.
-function normalizeEmittedPartialEntries(partials) {
+// carries a canonical finite-JSON partial value (or versioned envelope),
+// keyed by the guest's group key, under a runtime-owned delivery identity.
+function normalizeEmittedPartialEntries(partials, options = {}) {
   const entries = Array.isArray(partials) ? partials : [];
-  return entries.map((entry) => {
+  const slotId = options.slotId ?? null;
+  const shardId = options.shardId !== undefined && options.shardId !== null ?
+    String(options.shardId) :
+    (slotId !== null ? String(slotId) : '');
+  const invocationId = options.invocationId ?? '';
+  const attempt = options.attempt ?? 1;
+  return entries.map((entry, emissionOrdinal) => {
     const key = entry?.key;
     const partial = entry?.partial;
     if (typeof key !== 'string' ||
@@ -434,9 +442,12 @@ function normalizeEmittedPartialEntries(partials) {
         CALL_CELL_CONTRACT_MESSAGE.EMITTED_PARTIAL_INVALID,
       );
     }
-    let aggValue;
+    const rawGroupKey = key.slice(CALL_CELL_PARTIAL_KEY_PREFIX.length);
+    let groupKey;
+    let decodedWire;
     try {
-      aggValue = JSON.parse(partial);
+      groupKey = decodeCanonicalGroupKey(rawGroupKey, options);
+      decodedWire = decodeCanonicalPartialWire(partial, options);
     } catch (error) {
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESULT,
@@ -444,16 +455,26 @@ function normalizeEmittedPartialEntries(partials) {
         {cause: error},
       );
     }
-    if (typeof aggValue !== 'number' || !Number.isFinite(aggValue)) {
-      throw createCallRoutingFailure(
-        CALL_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESULT,
-        CALL_CELL_CONTRACT_MESSAGE.EMITTED_PARTIAL_INVALID,
-      );
-    }
-    return Object.freeze({
-      aggValue,
-      groupKey: key.slice(CALL_CELL_PARTIAL_KEY_PREFIX.length),
-    });
+    const deliveryId =
+      `${invocationId}:attempt=${attempt}:slot=${slotId ?? 0}:` +
+      `shard=${shardId}:ord=${emissionOrdinal}`;
+    const normalized = {
+      aggValue: decodedWire.value,
+      groupKey,
+      ...(options.includeDeliveryMetadata === true ?
+        {
+          aggValueJson: decodedWire.canonicalValueJson,
+          attempt,
+          deliveryId,
+          emissionOrdinal,
+          schema: decodedWire.schema,
+          shardId,
+          slotId,
+          v: decodedWire.v,
+        } :
+        {}),
+    };
+    return Object.freeze(normalized);
   });
 }
 

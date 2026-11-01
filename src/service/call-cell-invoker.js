@@ -40,6 +40,10 @@ import {
 import {
   normalizeCallSelectorInvocationParameters,
 } from './call-selector-parameter-contract.js';
+import {
+  encodeCanonicalGroupKey,
+  encodeCanonicalPartialValue,
+} from './call-canonical-partial-codec.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const CALL_INVOKER_MESSAGE = Object.freeze({
@@ -362,9 +366,13 @@ class CallCellInvoker {
     // bounded call-context emit log), normalized fail-closed into the
     // coordinator's {groupKey, aggValue} entries. The run export's own
     // return value is component bookkeeping and is not coordinated.
-    const entries = normalizeEmittedPartialEntries(delivery.partials);
+    const entries = normalizeEmittedPartialEntries(delivery.partials, {
+      invocationId: request.invocationId,
+      shardId: request.shard?.partitionId,
+      slotId: request.slotId,
+    });
     const replicaId = delivery.replicaId ?? request.resolution.replicaId;
-    const partialJson = JSON.stringify(entries);
+    const partialJson = encodeCanonicalPartialValue(entries);
     if (telemetry) {
       telemetry.bytesEmittedAsPartials += Buffer.byteLength(partialJson);
     }
@@ -634,8 +642,10 @@ class CallCellInvoker {
           parametersDigest: normalizedParams.parametersDigest,
         } :
         {}),
-      partials: partials.map(([groupKey, aggValue]) =>
-        [String(groupKey), JSON.stringify(aggValue)]),
+      partials: partials.map(([groupKey, aggValue]) => [
+        encodeCanonicalGroupKey(groupKey),
+        encodeCanonicalPartialValue(aggValue),
+      ]),
       securityContext,
     });
     const reducedBy = reduceDelivery.replicaId ?? reduceRoute.replicaId;

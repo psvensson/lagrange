@@ -28,6 +28,8 @@ import path from 'node:path';
 
 const EMITTED_FILE_MODE = 'utf8';
 const TEXT_NEWLINE = '\n';
+const TEXT_SPACE = ' ';
+const TS_NULL_KEYWORD = 'null';
 const EMPTY_TEXT = '';
 const COLUMN_SEPARATOR = ',';
 
@@ -125,6 +127,15 @@ function pascalCase(id) {
 
 const PARAM_SLOT_TYPE_BOOLEAN = 'boolean';
 const PARAM_SLOT_TYPE_TEXT = 'text';
+const SCHEMA_TYPE_STRING = 'string';
+const SCHEMA_TYPE_NULL = 'null';
+const SCHEMA_TYPE_ARRAY = 'array';
+const SCHEMA_TYPE_RECORD = 'record';
+const SCHEMA_TYPE_OBJECT = 'object';
+const PARTIAL_SUFFIX = 'Partial';
+const EXPORT_TYPE_PREFIX = 'export type ';
+const OPTIONAL_QUESTION = '?';
+const GROUP_KEY_TS_TYPE = 'string | number';
 
 function rowInterfaceName(operationId) {
   return pascalCase(operationId) + DTS_FRAGMENT.ROW_SUFFIX;
@@ -132,6 +143,10 @@ function rowInterfaceName(operationId) {
 
 function paramsInterfaceName(operationId) {
   return pascalCase(operationId) + DTS_FRAGMENT.PARAMS_SUFFIX;
+}
+
+function partialTypeName(operationId) {
+  return pascalCase(operationId) + PARTIAL_SUFFIX;
 }
 
 function operationInterfaceName(operationId) {
@@ -142,6 +157,41 @@ function operationArgsType(operation) {
   return Array.isArray(operation?.parameters) ?
     paramsInterfaceName(operation.id) :
     DTS_FRAGMENT.ARGS_TYPE;
+}
+
+function tsTypeForPartialSchemaNode(schema) {
+  if (!schema || typeof schema !== 'object') return DTS_FRAGMENT.UNKNOWN;
+  let baseType = DTS_FRAGMENT.TS_NUMBER;
+  if (schema.type === SCHEMA_TYPE_NULL) {
+    return TS_NULL_KEYWORD;
+  } else if (schema.type === PARAM_SLOT_TYPE_BOOLEAN) {
+    baseType = DTS_FRAGMENT.TS_BOOLEAN;
+  } else if (schema.type === PARAM_SLOT_TYPE_TEXT ||
+      schema.type === SCHEMA_TYPE_STRING) {
+    baseType = DTS_FRAGMENT.TS_STRING;
+  } else if (schema.type === SCHEMA_TYPE_ARRAY) {
+    baseType = `readonly (${tsTypeForPartialSchemaNode(schema.items)})[]`;
+  } else if ((schema.type === SCHEMA_TYPE_RECORD ||
+      schema.type === SCHEMA_TYPE_OBJECT) && schema.fields) {
+    const props = Object.keys(schema.fields).map((key) => {
+      const f = schema.fields[key];
+      const opt = f.optional === true ? OPTIONAL_QUESTION : EMPTY_TEXT;
+      return `readonly ${JSON.stringify(key)}${opt}: ${tsTypeForPartialSchemaNode(f)};`;
+    });
+    baseType = `{ ${props.join(TEXT_SPACE)} }`;
+  }
+  return schema.nullable === true ?
+    `${baseType}${DTS_FRAGMENT.TS_NULL}` :
+    baseType;
+}
+
+function emitPartialTypeDeclaration(operation) {
+  const typeExpr = tsTypeForPartialSchemaNode(operation.partialSchema);
+  return [
+    ...doc(
+      `Structured partial schema declared by the \`${operation.id}\` operation.`),
+    `${EXPORT_TYPE_PREFIX}${partialTypeName(operation.id)} = ${typeExpr};`,
+  ].join(TEXT_NEWLINE);
 }
 
 function tsTypeForParameterSlot(slot) {
@@ -205,13 +255,23 @@ function emitRowInterface(operation) {
 function emitOperationInterface(operation) {
   const rowName = rowInterfaceName(operation.id);
   const argsType = operationArgsType(operation);
+  const hasPartialSchema = Boolean(operation?.partialSchema);
+  const pType = hasPartialSchema ?
+    partialTypeName(operation.id) :
+    DTS_FRAGMENT.UNKNOWN;
+  const contextEmit = hasPartialSchema ?
+    `context: { emit(key: ${GROUP_KEY_TS_TYPE}, partial: ${pType}): void }` :
+    DTS_FRAGMENT.CONTEXT_EMIT;
+  const partialsType = hasPartialSchema ?
+    `readonly (readonly [${GROUP_KEY_TS_TYPE}, ${pType}])[]` :
+    DTS_FRAGMENT.PARTIALS_TYPE;
   return [
     ...doc(`The \`${operation.id}\` distributed operation.`),
     `${DTS_FRAGMENT.EXPORT_INTERFACE}${operationInterfaceName(operation.id)} {`,
     DTS_FRAGMENT.KIND_FIELD,
     `  run(rows: readonly ${rowName}[], args: ${argsType}, ` +
-      `${DTS_FRAGMENT.CONTEXT_EMIT}): ${DTS_FRAGMENT.UNKNOWN};`,
-    `  reduce(partials: ${DTS_FRAGMENT.PARTIALS_TYPE}, ` +
+      `${contextEmit}): ${DTS_FRAGMENT.UNKNOWN};`,
+    `  reduce(partials: ${partialsType}, ` +
       `args: ${argsType}): ${DTS_FRAGMENT.UNKNOWN};`,
     CLOSE_BRACE,
   ].join(TEXT_NEWLINE);
@@ -305,6 +365,9 @@ function typingsSource(ir) {
     sections.push(emitRowInterface(operation), EMPTY_TEXT);
     if (Array.isArray(operation.parameters)) {
       sections.push(emitParamsInterface(operation), EMPTY_TEXT);
+    }
+    if (operation.partialSchema) {
+      sections.push(emitPartialTypeDeclaration(operation), EMPTY_TEXT);
     }
   }
   for (const operation of ir.operations) {

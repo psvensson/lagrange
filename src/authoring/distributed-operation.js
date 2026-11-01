@@ -10,14 +10,22 @@ function distributed({
   statement,
   params = undefined,
   parameters = undefined,
+  partial = undefined,
+  partialSchema = undefined,
   run,
   reduce,
 }) {
   const declaredParameters = parameters !== undefined ? parameters : params;
+  const declaredPartialSchema = partialSchema !== undefined ?
+    partialSchema :
+    partial;
   return deepFreeze({
     kind: AUTHORING_DESCRIPTOR_KIND.DISTRIBUTED_OPERATION,
     ...(declaredParameters !== undefined ?
       {parameters: declaredParameters} :
+      {}),
+    ...(declaredPartialSchema !== undefined ?
+      {partialSchema: declaredPartialSchema} :
       {}),
     reduce,
     run,
