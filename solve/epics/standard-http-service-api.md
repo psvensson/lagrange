@@ -17,6 +17,7 @@ quests:
   - h3-fetch-ingress-and-scoped-client
   - h4-http-invocation-recovery-and-cancellation
   - h5-compiled-public-hono-journey
+  - h6-successor-contract-and-evidence-cutover
 authorizes:
   - src/authoring
   - src/service

@@ -133,3 +133,11 @@ export {
   normalizeCallSelectorParameterSchema,
   parseSelectorStatementAst,
 } from './call-selector-parameter-contract.js';
+
+export {
+  STANDARD_HTTP_ACCEPTANCE_ERROR_CODE,
+  STANDARD_HTTP_ACCEPTANCE_SCENARIO_ID,
+  STANDARD_HTTP_RECEIPT_ID,
+  STANDARD_HTTP_REQUIRED_RECEIPT_IDS,
+  validateStandardHttpAcceptanceReport,
+} from './standard-http-service-acceptance-contract.js';

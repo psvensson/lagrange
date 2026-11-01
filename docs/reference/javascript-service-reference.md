@@ -11,16 +11,25 @@ Lagrange services execute data-heavy operations near data as compiled WebAssembl
 
 ## Authoring Primitives
 
-Lagrange provides a guest-safe authoring library in `src/authoring/` (vendored into
-`authoring/` in scaffolded projects). All descriptors are declarative, cycle-safe,
-and frozen.
+Lagrange provides a guest-safe authoring library in `src/authoring/` (exposed via the
+`lagrange-server/authoring` package subpath and vendored into `authoring/` in
+scaffolded projects). All descriptors are declarative, cycle-safe, and frozen.
 
 ### `defineService(definition)`
 
-Root descriptor factory for defining a service.
+Root descriptor factory for defining a service. Supports the standard Fetch/Hono
+application boundary (`fetch(request, context)`) as well as route handler tables:
 
 ```js
-import {defineService} from './authoring/define-service.js';
+import {Hono} from 'hono';
+import {defineService} from 'lagrange-server/authoring';
+
+const app = new Hono();
+app.post('/amounts/summary', async (c) => {
+  const {accountId} = await c.req.json();
+  const result = await c.env.lagrange.call(summarizeAmounts, {accountId});
+  return c.json(result);
+});
 
 export default defineService({
   name: 'my-service',
@@ -28,18 +37,20 @@ export default defineService({
   operations: {
     summarizeAmounts,
   },
-  handlers: {
-    amountSummary,
+  fetch(request, context) {
+    return app.fetch(request, context);
   },
 });
 ```
 
 - `name` (*string*): Kebab-case service name (`/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/u`).
 - `version` (*string*): Semantic version string (e.g. `'0.1.0'`).
-- `operations` (*Record<string, DistributedOperation>*): Map of named distributed operations.
+- `operations` (*Record<string, DistributedOperation>*): Map of named distributed operations (may be empty `{}` for HTTP-only services on `service-cell-v2`).
+- `fetch(request, context)` (*Function*): Standard Fetch entry returning `Response | Promise<Response>`, receiving `context.lagrange.call(operation, args)` (exposed in Hono as `c.env.lagrange.call`), `context.principal`, `context.tenantId`, `context.deadlineMs`, and `context.signal`.
+- `mount` (*{host?: string, pathPrefix?: string}*): Optional service ingress mount (defaults to `pathPrefix: '/'`).
 - `handlers` (*Record<string, RequestHandler>*): Map of named HTTP route handlers.
 
-Service and operation identities derive strictly from explicit object keys, never from `Function.name`.
+Service and operation identities derive strictly from explicit object keys, never from `Function.name`. Pre-successor single-operation `service-cell` artifacts are refused in successor mode with `legacy_artifact_rebuild_required` via `assertSuccessorServiceArtifact`.
 
 ### `distributed({statement, run, reduce})`
 
@@ -150,21 +161,21 @@ Lagrange compiles JavaScript services into WebAssembly (WASI) components using C
 
 ## SQL Selectors and Partition Input Bounds
 
-- **Single-Table Literal Queries:** The statement declared on a distributed operation must be a single-table `SELECT`. Joins and multi-statement scripts are not supported in data-local operations.
-- **Per-Shard Input Limit:** Each partition shard evaluates the selector locally up to a default safety bound of **4,096 rows**. Queries exceeding this limit trigger typed buffer truncation or deadline errors.
+- **Single-Table Literal Queries with Typed Narrowing:** The statement declared on a distributed operation must be a single-table `SELECT` with optional typed positional parameter predicates (`$1..$N`). Joins and multi-statement scripts are not supported in data-local operations.
+- **Paged Shard Execution:** Each partition shard evaluates the selector locally in bounded pages of **4,096 rows** under an explicit per-shard row and byte cap (`maxShardRows`, `maxShardBytes`), invoking `run()` per page and merging shard-local contributions deterministically before returning to the coordinator.
 - **Partition-Local Execution:** For each selected partition, `run()` executes on the node holding the leader replica for that partition, reading from that node's local storage engine.
 
 ## Partial Emission and Coordination Rules
 
-Partials are intermediate metrics emitted by `run()` across partition shards and merged by `reduce()`:
+Partials are intermediate structured or numeric values emitted by `run()` across partition shards and merged by `reduce()`:
 
-1. **Numeric Values Only:** Every emitted partial value must be a finite JavaScript number (`typeof value === 'number' && Number.isFinite(value)`). Emitting strings, objects, arrays, `NaN`, or `Infinity` fails closed with a typed coordination error.
-2. **Per-Shard Emission Bound:** At most **64** `emit()` calls are permitted per partition shard.
+1. **Bounded Canonical Finite-JSON v1 (`lagrange.partial.v1`):** Every emitted partial value must be a finite number or a bounded canonical JSON object, array, string, boolean, or null conforming to the declared `partialSchema` (`maxSerializedBytes`, `maxDepth`, `maxObjectKeys`, `maxArrayLength`). Emitting `NaN`, `Infinity`, functions, symbols, or values violating `partialSchema` fails closed with a typed coordination error.
+2. **Per-Shard Emission Bound:** At most **64** `emit()` calls are permitted per partition shard page, bounded by the per-shard and total partial byte caps.
 3. **Total Partial Bound:** The coordinator accepts at most **1,024** total partials across all shards for a single distributed invocation.
-4. **Shard-Disjoint Keys:** Partial keys emitted across different partition shards must be strictly disjoint. Emitting the same key from two distinct shards violates the coordination contract and triggers an immediate typed refusal.
-   - *Best Practice:* Suffix or prefix emitted keys with a shard or partition differentiator, such as the lowest matching row ID:
+4. **Semantic Group Keys with Distinct Delivery Identities:** Multiple partition shards may emit the same semantic group key (such as `'all'` or a category key); each emission carries a distinct `(partitionId, shardBatchIndex, emitIndex)` delivery identity, and the coordinator sorts contributions deterministically before invoking `reduce()`.
+   - *Example:* Emit by semantic group key or shard key:
      ```js
-     emit(`total:${shardKey}`, totalCents);
+     emit('orders', { count: rows.length, revenueCents: totalCents });
      ```
 
 ## Unsupported Behaviors and Fail-Closed Guarantees
@@ -175,8 +186,8 @@ The following capabilities are deliberately unsupported in the guest sandbox and
 | --- | --- | --- |
 | Outbound Network (`fetch`, TCP/UDP) | Sockets and global networking APIs are absent from the WASI sandbox. | Runtime exception; sandbox traps. |
 | Dynamic Code (`eval`, `new Function`) | Disabled in component sandbox. | Immediate compilation or runtime error. |
-| Non-Numeric Partials | `emit(key, {struct})` or `emit(key, "text")`. | Typed coordination failure (`PARTIAL_NOT_FINITE`). |
-| Colliding Shard Keys | Identical metric keys emitted from distinct shards. | Coordination refusal (`DUPLICATE_PARTIAL_KEY`). |
+| Non-Finite or Schema-Violating Partials | `emit(key, NaN)`, `emit(key, Infinity)`, or payloads violating `partialSchema` bounds. | Typed coordination failure (`CALL_PARTIAL_SCHEMA_VIOLATION`). |
+| Exceeded Shard or Partial Budgets | Input rows, pages, or emitted partial bytes exceeding configured caps. | Typed refusal (`CALL_SHARD_BUDGET_EXCEEDED` / `CALL_PARTIAL_BUDGET_EXCEEDED`). |
 | Undeclared Outbound Calls | Calling an operation not listed in route `calls`. | Pre-dispatch policy rejection (`POLICY_VIOLATION`). |
 | Interpolated SQL Statements | `sql`SELECT * FROM t WHERE id = ${id}``. | Immediate `AuthoringError` during service loading. |
 

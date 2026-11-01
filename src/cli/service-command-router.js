@@ -25,8 +25,10 @@ const SERVICE_COMMAND = Object.freeze({
 });
 
 const SERVICE_COMMAND_FLAG = Object.freeze({
+  FRAMEWORK_LONG: '--framework',
   HELP_LONG: '--help',
   HELP_SHORT: '-h',
+  HONO_FRAMEWORK: 'hono',
   OPTION_PREFIX: '-',
 });
 
@@ -112,22 +114,48 @@ function initializationError(error) {
     SERVICE_COMMAND_EXIT_CODE.USAGE : SERVICE_COMMAND_EXIT_CODE.FAILURE;
 }
 
-function runInitCommand(args) {
-  if (args.length !== 1) {
-    return usageError(
-      SERVICE_COMMAND_ERROR_CODE.USAGE,
-      SERVICE_COMMAND_MESSAGE.INIT_DIRECTORY_REQUIRED,
-    );
+function parseInitCommandArguments(args) {
+  let targetArgument = null;
+  let framework = null;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === SERVICE_COMMAND_FLAG.FRAMEWORK_LONG &&
+        args[index + 1] === SERVICE_COMMAND_FLAG.HONO_FRAMEWORK) {
+      framework = SERVICE_COMMAND_FLAG.HONO_FRAMEWORK;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith(SERVICE_COMMAND_FLAG.OPTION_PREFIX)) {
+      return {
+        errorCode: SERVICE_COMMAND_ERROR_CODE.UNKNOWN_OPTION,
+        errorMessage: `unknown option: ${arg}`,
+      };
+    }
+    if (targetArgument !== null) {
+      return {
+        errorCode: SERVICE_COMMAND_ERROR_CODE.USAGE,
+        errorMessage: SERVICE_COMMAND_MESSAGE.INIT_DIRECTORY_REQUIRED,
+      };
+    }
+    targetArgument = arg;
   }
-  const targetArgument = args[0];
-  if (targetArgument.startsWith(SERVICE_COMMAND_FLAG.OPTION_PREFIX)) {
-    return usageError(
-      SERVICE_COMMAND_ERROR_CODE.UNKNOWN_OPTION,
-      `unknown option: ${targetArgument}`,
-    );
+  if (targetArgument === null) {
+    return {
+      errorCode: SERVICE_COMMAND_ERROR_CODE.USAGE,
+      errorMessage: SERVICE_COMMAND_MESSAGE.INIT_DIRECTORY_REQUIRED,
+    };
+  }
+  return {errorCode: null, framework, targetArgument};
+}
+
+function runInitCommand(args) {
+  const parsed = parseInitCommandArguments(args);
+  if (parsed.errorCode !== null) {
+    return usageError(parsed.errorCode, parsed.errorMessage);
   }
   try {
-    const result = createWasmServiceProject(targetArgument);
+    const options = parsed.framework ? {framework: parsed.framework} : undefined;
+    const result = createWasmServiceProject(parsed.targetArgument, options);
     process.stdout.write(
       `Created service project at ${result.targetDirectory}\n`);
     return SERVICE_COMMAND_EXIT_CODE.SUCCESS;
