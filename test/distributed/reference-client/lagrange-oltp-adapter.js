@@ -12,6 +12,10 @@ import {
   OLTP_SQL_STATEMENT,
   executeOltpBaselineTransaction,
 } from '../harness/oltp-baseline-transaction-executor.js';
+import {
+  OLTP_COMMIT_FAILURE_OUTCOME,
+  resolveOltpCommitFailureOutcome,
+} from '../harness/oltp-error-classification.js';
 
 const {Client} = pg;
 const ZERO = 0;
@@ -23,6 +27,13 @@ const PUBLIC_EXECUTION_PATH = 'public-sql';
 const LOCKING_READ_MODE = 'snapshot-write-conflict';
 const NATIVE_LOCKING_READ_MODE = 'native-for-update';
 const FOR_UPDATE_SUFFIX = ' FOR UPDATE';
+
+const NATIVE_FOR_UPDATE_TRANSLATION_AUDIT = Object.freeze({
+  lockingReadMode: NATIVE_LOCKING_READ_MODE,
+  forUpdateStripped: false,
+  nativeLockingReadProved: false,
+  strippedStatementIds: Object.freeze([]),
+});
 
 const LAGRANGE_OLTP_TRANSLATION_AUDIT = Object.freeze({
   lockingReadMode: LOCKING_READ_MODE,
@@ -247,17 +258,17 @@ async function closeClients(clients) {
   }
 }
 
-function resolveErrorSqlState(error) {
-  return String(
-    error?.sqlState || error?.sqlstate || error?.code || '',
-  ).toUpperCase();
-}
-
-function isExplicitCommitSerializationAbort(error) {
-  return resolveErrorSqlState(error) === '40001' &&
-    error?.commitOutcomeUnknown !== true &&
-    error?.outcome !== 'OUTCOME_UNKNOWN' &&
-    error?.code !== 'OUTCOME_UNKNOWN';
+// An aborted COMMIT is already rolled back by the product; the explicit
+// ROLLBACK only clears a driver-side transaction state. Its failure is kept
+// on the commit error as evidence, never swallowed.
+async function rollbackAfterAbortedCommit(rollback, commitError) {
+  try {
+    await rollback();
+  } catch (rollbackError) {
+    if (commitError && typeof commitError === 'object') {
+      commitError.rollbackAfterAbortError = String(rollbackError?.message || rollbackError);
+    }
+  }
 }
 
 function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
@@ -285,12 +296,12 @@ function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
         await client.query('COMMIT');
         return result;
       } catch (commitError) {
-        if (isExplicitCommitSerializationAbort(commitError)) {
-          try {
-            await client.query('ROLLBACK');
-          } catch {
-            // best-effort rollback, ignore if already aborted
-          }
+        // The retry owner maps the COMMIT failure: a product-answered
+        // SQLSTATE (40001, 25P04, ...) is a definite rollback; a lost answer
+        // or a typed unknown outcome leaves the commit unresolved.
+        if (resolveOltpCommitFailureOutcome(commitError) ===
+            OLTP_COMMIT_FAILURE_OUTCOME.ABORTED) {
+          await rollbackAfterAbortedCommit(() => client.query('ROLLBACK'), commitError);
           if (commitError && typeof commitError === 'object') {
             commitError.commitAborted = true;
           }
@@ -312,7 +323,9 @@ function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
       const result = await client.query(sql, parameters);
       return {
         rows: Array.isArray(result?.rows) ? result.rows : [],
-        rowCount: Number.isFinite(result?.rowCount) ? Number(result.rowCount) : ZERO,
+        // A write without a reported count stays unreported (null); the
+        // executor refuses it rather than reading zero.
+        rowCount: Number.isFinite(result?.rowCount) ? Number(result.rowCount) : null,
       };
     },
   };
@@ -345,6 +358,8 @@ async function insertRows(client, table, columns, rows) {
 // cluster that still holds the schema fails loudly on the product gap rather
 // than silently loading on top of stale rows.
 const TABLE_NOT_FOUND_MARKER = 'Table not found';
+// PostgreSQL answers a missing relation with SQLSTATE 42P01 (undefined_table).
+const UNDEFINED_TABLE_SQLSTATE = '42P01';
 const DROP_TABLE_UNSUPPORTED_MARKER = 'Unsupported statement type: DROP_TABLE';
 
 async function tableExists(client, table) {
@@ -352,30 +367,48 @@ async function tableExists(client, table) {
     await client.query(`SELECT COUNT(*) AS row_count FROM ${table}`);
     return true;
   } catch (error) {
-    if (String(error?.message || '').includes(TABLE_NOT_FOUND_MARKER)) {
+    if (String(error?.message || '').includes(TABLE_NOT_FOUND_MARKER) ||
+        error?.code === UNDEFINED_TABLE_SQLSTATE) {
       return false;
     }
     throw error;
   }
 }
 
-async function dropExistingTables(client, {tolerateUnsupportedDrop = false} = {}) {
-  const skipped = [];
+// Preparation drops every existing table; an engine that cannot drop is a
+// failed preparation (the dataset is fresh only on a fresh formation).
+async function dropExistingTables(client) {
   for (const table of DROP_TABLES) {
     if (!(await tableExists(client, table))) continue;
+    await client.query(`DROP TABLE IF EXISTS ${table}`);
+  }
+}
+
+const TABLE_DROP_OUTCOME = Object.freeze({
+  DROPPED: 'dropped',
+  ABSENT: 'absent',
+  DROP_UNSUPPORTED: 'drop-unsupported',
+});
+
+// Cleanup reports one typed outcome per table: an engine that refuses DROP
+// TABLE is a named outcome the caller records, not a tolerated skip.
+async function dropTablesForCleanup(client) {
+  const outcomes = [];
+  for (const table of DROP_TABLES) {
+    if (!(await tableExists(client, table))) {
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.ABSENT}));
+      continue;
+    }
     try {
       await client.query(`DROP TABLE IF EXISTS ${table}`);
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROPPED}));
     } catch (error) {
-      const unsupported =
-        String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER);
-      if (unsupported && tolerateUnsupportedDrop) {
-        skipped.push(table);
-        continue;
-      }
-      throw error;
+      if (!String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER)) throw error;
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROP_UNSUPPORTED,
+        error: String(error.message)}));
     }
   }
-  return Object.freeze(skipped);
+  return Object.freeze(outcomes);
 }
 
 // CREATE TABLE on Lagrange is a durable provisioning job. When the job
@@ -387,7 +420,6 @@ async function dropExistingTables(client, {tolerateUnsupportedDrop = false} = {}
 // expires. The CREATE statement is not re-issued (the job already owns it).
 const SCHEMA_PROVISIONING_ACTIVE_SQLSTATE = '55P03';
 const SCHEMA_PROVISIONING_ACTIVE_MARKER = 'Schema provisioning remains active';
-const SCHEMA_PROVISIONING_DEFAULT_RETRY_MS = 500;
 const SCHEMA_PROVISIONING_WAIT_BUDGET_MS = 120000;
 const CREATE_TABLE_NAME_PATTERN = /^\s*CREATE\s+TABLE\s+([A-Za-z0-9_]+)/iu;
 
@@ -400,20 +432,26 @@ function isSchemaProvisioningActive(error) {
     String(error?.message || '').includes(SCHEMA_PROVISIONING_ACTIVE_MARKER);
 }
 
+// The product's retry_after_ms hint is the wait; a missing, unreadable or
+// non-positive hint is a broken provisioning answer, raised with the
+// original error, never replaced by a client-side default.
 function resolveSchemaProvisioningRetryMs(error) {
   const detail = error?.detail;
-  let parsed = null;
-  if (detail && typeof detail === 'object') parsed = detail;
-  else if (typeof detail === 'string') {
+  let parsed = detail && typeof detail === 'object' ? detail : null;
+  if (typeof detail === 'string') {
     try {
       parsed = JSON.parse(detail);
-    } catch {
-      parsed = null;
+    } catch (parseError) {
+      throw new AggregateError([error, parseError],
+        'Schema provisioning answer carries an unreadable retry hint');
     }
   }
   const hinted = Number(parsed?.retry_after_ms);
-  return Number.isFinite(hinted) && hinted > ZERO ?
-    hinted : SCHEMA_PROVISIONING_DEFAULT_RETRY_MS;
+  if (!Number.isFinite(hinted) || hinted <= ZERO) {
+    throw new AggregateError([error],
+      'Schema provisioning answer carries no positive retry_after_ms hint');
+  }
+  return hinted;
 }
 
 async function createSchemaStatement(client, statement) {
@@ -536,12 +574,11 @@ async function queryStateCounts(client) {
   });
 }
 
-// Cleanup is best effort: the harness destroys the cluster after the proof,
-// so a schema the engine cannot drop is reported, not fatal.
+// Cleanup returns the per-table drop outcomes; the caller records them.
 async function cleanupDataset(createClient, options) {
   const client = await openClient(createClient, options);
   try {
-    return await dropExistingTables(client, {tolerateUnsupportedDrop: true});
+    return await dropTablesForCleanup(client);
   } finally {
     await client.end();
   }
@@ -566,6 +603,8 @@ async function createLagrangeOltpAdapter(options = {}) {
     options.lockingReadMode,
   );
   const resolvedClientOptions = clientOptions(endpoint, connection);
+  const translationAudit = resolvedLockingReadMode === NATIVE_LOCKING_READ_MODE ?
+    NATIVE_FOR_UPDATE_TRANSLATION_AUDIT : LAGRANGE_OLTP_TRANSLATION_AUDIT;
   const workerClients = [];
   const workerSessions = [];
   const busyWorkers = new Set();
@@ -608,7 +647,7 @@ async function createLagrangeOltpAdapter(options = {}) {
     protocol: PUBLIC_PROTOCOL,
     executionPath: PUBLIC_EXECUTION_PATH,
     lockingReadMode: resolvedLockingReadMode,
-    translationAudit: LAGRANGE_OLTP_TRANSLATION_AUDIT,
+    translationAudit,
     datasetSha256,
     datasetSummary,
     workerSessionIds,
@@ -641,7 +680,7 @@ async function createLagrangeOltpAdapter(options = {}) {
         protocol: PUBLIC_PROTOCOL,
         executionPath: PUBLIC_EXECUTION_PATH,
         lockingReadMode: resolvedLockingReadMode,
-        translationAudit: LAGRANGE_OLTP_TRANSLATION_AUDIT,
+        translationAudit,
         datasetSha256,
         datasetSummary,
         workerSessionIds,
@@ -649,9 +688,10 @@ async function createLagrangeOltpAdapter(options = {}) {
       });
     },
     async close(closeOptions = {}) {
-      if (closed) return;
+      if (closed) return Object.freeze({tableDrops: null});
       closed = true;
       const failures = [];
+      let tableDrops = null;
       try {
         await closeClients(workerClients);
       } catch (error) {
@@ -659,7 +699,7 @@ async function createLagrangeOltpAdapter(options = {}) {
       }
       if (closeOptions.dropTables !== false) {
         try {
-          await cleanupDataset(createClient, resolvedClientOptions);
+          tableDrops = await cleanupDataset(createClient, resolvedClientOptions);
         } catch (error) {
           failures.push(error);
         }
@@ -667,11 +707,17 @@ async function createLagrangeOltpAdapter(options = {}) {
       if (failures.length > ZERO) {
         throw new AggregateError(failures, 'Lagrange OLTP adapter cleanup failed');
       }
+      return Object.freeze({tableDrops});
     },
   });
 }
 
 export {
+  LOCKING_READ_MODE as PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE,
+  PUBLIC_EXECUTION_PATH as PGWIRE_OLTP_EXECUTION_PATH,
+  PUBLIC_PROTOCOL as PGWIRE_OLTP_PROTOCOL,
+  TABLE_DROP_OUTCOME as LAGRANGE_OLTP_TABLE_DROP_OUTCOME,
+  NATIVE_LOCKING_READ_MODE as PGWIRE_OLTP_NATIVE_LOCKING_READ_MODE,
   SQL as LAGRANGE_OLTP_SQL,
   LAGRANGE_OLTP_TRANSLATION_AUDIT,
   createLagrangeOltpAdapter,

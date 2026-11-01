@@ -4,24 +4,47 @@ import {
   executePairedOltpTransactionWithRetry,
 } from './oltp-paired-retry-owner.js';
 import {
-  summarizeOltpBaselineLatencies,
-} from './oltp-baseline-workload.js';
+  FAILURE_CLASS,
+  OPERATION_OUTCOME,
+  BENCHMARK_UNRESOLVED_REASON,
+  computeExecutedOperationsDigest,
+  benchmarkCompletedPerSec,
+  benchmarkOperationId,
+  buildBenchmarkAttemptRecord,
+  classifyBenchmarkAttemptFailure,
+  createBenchmarkHarnessFault,
+  retainBenchmarkResponseEvidence,
+  summarizeBenchmarkLatencies,
+  validateBenchmarkAccounting,
+} from './benchmark-operation-outcome.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayMap = Function.call.bind(Array.prototype.map);
 
 const ZERO = 0;
 const ONE = 1;
 const THOUSAND = 1000;
 
+// v2 supersedes scenario-a-open-loop-v1 (R09): v1 recorded `succeeded` for
+// any resolved adapter promise and awaited every request, so a request that
+// never answered blocked the summary and a run had no unissued/unresolved
+// state. v2 consumes typed attempt outcomes, adds the unissued/unresolved
+// accounting states and a run-level watchdog that stops issuing and still
+// summarises.
 const OPEN_LOOP_PROFILE = Object.freeze({
-  id: 'scenario-a-open-loop-v1',
+  id: 'scenario-a-open-loop-v2',
+  supersedes: 'scenario-a-open-loop-v1',
+  supersededBecause:
+    'v1 counted any resolved promise as succeeded and could not stop issuing; v2 consumes ' +
+    'typed outcomes and adds unissued/unresolved accounting under a run watchdog',
   issueSchedule: 'fixed-rate-intended-time',
   workerSerialization: 'per-worker',
   latencyOrigin: 'intended-issue-time',
-  headlineLatency: 'successful-requests',
-  attemptLatency: 'all-attempted-requests',
+  headlineLatency: 'committed-requests',
+  attemptLatency: 'completed-issued-requests',
   completionRateWindow: 'max-scheduled-and-drain',
+  watchdog: 'run-level-bound-stops-issuing',
 });
 
 function positiveNumber(value, label) {
@@ -87,118 +110,356 @@ async function defaultSleep(delayMs) {
   await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
+// Timers may fire a fraction early against the monotonic clock: wait until
+// the clock has reached the intended time.
 async function defaultWaitUntil(targetTimeMs, now, sleep) {
-  const delayMs = Math.max(ZERO, targetTimeMs - now());
-  if (delayMs > ZERO) await sleep(delayMs);
-}
-
-function recordSuccess(entry, issuedAtMs, executionStartedAtMs, outcome) {
-  return Object.freeze({
-    index: entry.index,
-    workerId: entry.workerId,
-    kind: entry.operation.kind,
-    status: 'succeeded',
-    intendedIssueTimeMs: entry.intendedIssueTimeMs,
-    issuedAtMs,
-    executionStartedAtMs,
-    completedAtMs: outcome.evidence.completedAtMs,
-    issueLagMs: Math.max(ZERO, issuedAtMs - entry.intendedIssueTimeMs),
-    queueDelayMs:
-      Math.max(ZERO, executionStartedAtMs - entry.intendedIssueTimeMs),
-    latencyMs: outcome.evidence.requestClockElapsedMs,
-    attempts: outcome.evidence.attempts,
-    retries: outcome.evidence.retries,
-    retryDelayMs: outcome.evidence.retryDelayMs,
-    sqlState: null,
-  });
-}
-
-function resolveFailureEvidence(error, now) {
-  const evidence = error?.oltpRetryEvidence;
-  const sqlState = error?.sqlState || null;
-  if (!evidence) {
-    return {
-      completedAtMs: now(),
-      attempts: ONE,
-      retries: ZERO,
-      retryDelayMs: ZERO,
-      sqlState,
-    };
+  for (let delayMs = targetTimeMs - now(); delayMs > ZERO; delayMs = targetTimeMs - now()) {
+    await sleep(Math.max(ONE, Math.ceil(delayMs)));
   }
+}
+
+function createRequestState(entry) {
   return {
-    completedAtMs: evidence.completedAtMs ?? now(),
-    attempts: evidence.attempts ?? ONE,
-    retries: evidence.retries ?? ZERO,
-    retryDelayMs: evidence.retryDelayMs ?? ZERO,
-    sqlState,
+    entry,
+    opId: benchmarkOperationId(entry.operation),
+    issuedAtMs: null,
+    executionStartedAtMs: null,
+    completedAtMs: null,
+    attemptInFlight: false,
+    inFlightAttempt: null,
+    attempts: [],
+    final: null,
+    retryEvidence: null,
+    effectSummary: null,
   };
 }
 
-function recordFailure(entry, issuedAtMs, executionStartedAtMs, error, now) {
-  const failureMetrics = resolveFailureEvidence(error, now);
-  const completedAtMs = failureMetrics.completedAtMs;
-  return Object.freeze({
-    index: entry.index,
-    workerId: entry.workerId,
-    kind: entry.operation.kind,
-    status: 'failed',
-    intendedIssueTimeMs: entry.intendedIssueTimeMs,
-    issuedAtMs,
-    executionStartedAtMs,
-    completedAtMs,
-    issueLagMs: Math.max(ZERO, issuedAtMs - entry.intendedIssueTimeMs),
-    queueDelayMs:
-      Math.max(ZERO, executionStartedAtMs - entry.intendedIssueTimeMs),
-    latencyMs: Math.max(ZERO, completedAtMs - entry.intendedIssueTimeMs),
-    attempts: failureMetrics.attempts,
-    retries: failureMetrics.retries,
-    retryDelayMs: failureMetrics.retryDelayMs,
-    sqlState: failureMetrics.sqlState,
+function lastAttempt(state) {
+  return state.attempts.length > ZERO ? state.attempts[state.attempts.length - ONE] : null;
+}
+
+// A request's logical outcome on a normal finish: the retry owner returned
+// (committed) or threw; the last attempt's typed classification decides.
+function settleFromError(state) {
+  const attempt = lastAttempt(state);
+  if (!attempt) {
+    return {
+      outcome: OPERATION_OUTCOME.TERMINAL_FAILURE,
+      failureClass: FAILURE_CLASS.HARNESS_FAULT,
+      unresolvedReason: undefined,
+    };
+  }
+  return {
+    outcome: attempt.outcome,
+    failureClass: attempt.failureClass,
+    unresolvedReason: attempt.outcome === OPERATION_OUTCOME.UNRESOLVED ?
+      BENCHMARK_UNRESOLVED_REASON.COMMIT_ANSWER_LOST : undefined,
+  };
+}
+
+function stopDisposition(state) {
+  if (state.final) return state.final;
+  if (state.executionStartedAtMs === null) {
+    return {outcome: OPERATION_OUTCOME.UNISSUED, failureClass: null};
+  }
+  return {
+    outcome: OPERATION_OUTCOME.UNRESOLVED,
+    failureClass: FAILURE_CLASS.WATCHDOG_STOPPED,
+    unresolvedReason: state.attemptInFlight ?
+      BENCHMARK_UNRESOLVED_REASON.WATCHDOG_IN_FLIGHT :
+      BENCHMARK_UNRESOLVED_REASON.WATCHDOG_BETWEEN_ATTEMPTS,
+  };
+}
+
+// The attempt the watchdog found on the wire: its outcome is unresolved and
+// it has no end.
+// Its end is the moment the watchdog closed it (closedByWatchdog), not an
+// observed answer.
+function inFlightAttemptRecord(state, closedAtMs) {
+  return buildBenchmarkAttemptRecord({
+    attemptNo: state.inFlightAttempt.attemptNo,
+    startedMs: state.inFlightAttempt.startedMs,
+    endedMs: closedAtMs,
+    closedByWatchdog: true,
+    outcome: OPERATION_OUTCOME.UNRESOLVED,
+    failureClass: FAILURE_CLASS.WATCHDOG_STOPPED,
+    statements: [],
   });
 }
 
-function summarizeStep(issuePlan, records, offeredRatePerSec) {
-  const succeeded = arrayFilter(records, ({status}) => status === 'succeeded');
-  const failed = records.length - succeeded.length;
+// An issued request that did not commit has no committed effect: a named
+// state, never an absent summary.
+const NO_COMMITTED_EFFECT = Object.freeze({status: 'no-committed-effect'});
+
+function freezeRequestRecord(state, disposition, evidenceOptions, closedAtMs = null) {
+  const {entry} = state;
+  const completedAtMs = state.final ? state.completedAtMs : null;
+  const attempts = !state.final && state.attemptInFlight ?
+    [...state.attempts, inFlightAttemptRecord(state, closedAtMs)] : state.attempts;
+  const retained = retainBenchmarkResponseEvidence(attempts, evidenceOptions);
+  const attemptOf = attempts.length > ZERO ? attempts[attempts.length - ONE] : null;
+  return Object.freeze({
+    index: entry.index,
+    opId: state.opId,
+    phase: entry.operation.phase,
+    workerId: entry.workerId,
+    sequence: entry.operation.sequence,
+    operationKind: entry.operation.kind,
+    intendedStartMs: entry.intendedIssueTimeMs,
+    issuedAtMs: state.issuedAtMs,
+    executionStartedAtMs: state.executionStartedAtMs,
+    completedAtMs,
+    // Unclamped: a negative lag is a clock defect the validator refuses.
+    issueLagMs: state.issuedAtMs === null ? null :
+      state.issuedAtMs - entry.intendedIssueTimeMs,
+    queueDelayMs: state.executionStartedAtMs === null ? null :
+      state.executionStartedAtMs - entry.intendedIssueTimeMs,
+    latencyMs: completedAtMs === null ? null :
+      completedAtMs - entry.intendedIssueTimeMs,
+    outcome: disposition.outcome,
+    failureClass: disposition.failureClass,
+    ...(disposition.unresolvedReason ? {unresolvedReason: disposition.unresolvedReason} : {}),
+    // Retries are the recorded attempts beyond the first; the retry delay is
+    // known only from the retry owner's evidence (null when the watchdog
+    // closed the request before the owner returned).
+    retries: attempts.length === ZERO ? ZERO : attempts.length - ONE,
+    retryDelayMs: state.retryEvidence ? state.retryEvidence.retryDelayMs : null,
+    effectSummary: effectSummaryOf(state, disposition),
+    endpoint: attemptOf?.endpoint ?? null,
+    serverConnectionId: attemptOf?.serverConnectionId ?? null,
+    attempts: Object.freeze(retained.attempts),
+    responseEvidence: retained.responseEvidence,
+  });
+}
+
+function effectSummaryOf(state, disposition) {
+  if (disposition.outcome === OPERATION_OUTCOME.UNISSUED) return null;
+  if (disposition.outcome === OPERATION_OUTCOME.COMMITTED) return state.effectSummary;
+  return NO_COMMITTED_EFFECT;
+}
+
+// An attempt that failed without passing the wire capture: no statement or
+// answer was observed for it (named, not an empty default).
+const NO_WIRE_EVIDENCE = Object.freeze({
+  wireEvidence: 'not-captured',
+  statements: Object.freeze([]),
+  productAnsweredError: false,
+});
+
+function typedAttemptOf(value) {
+  if (value?.outcome !== OPERATION_OUTCOME.COMMITTED || !value.attemptEvidence ||
+      !value.result || typeof value.result !== 'object') {
+    throw createBenchmarkHarnessFault(
+      'Open-loop OLTP adapter resolved without a typed committed outcome');
+  }
+  return value;
+}
+
+// After the watchdog fired the request record is closed: a late answer is
+// kept beside it, never folded into it.
+function recordLateCompletion(run, state, observedOutcome) {
+  run.lateCompletions.push(Object.freeze({
+    opId: state.opId,
+    observedOutcome,
+    observedAtMs: run.now(),
+  }));
+}
+
+async function executeTypedAttempt(adapter, state, run, attemptNo) {
+  if (run.stopped) {
+    throw createBenchmarkHarnessFault('Open-loop OLTP step stopped issuing');
+  }
+  const startedMs = run.now();
+  state.attemptInFlight = true;
+  state.inFlightAttempt = {attemptNo, startedMs};
+  try {
+    const typed = typedAttemptOf(await adapter.executeTransaction(state.entry.operation));
+    if (run.stopped) {
+      recordLateCompletion(run, state, OPERATION_OUTCOME.COMMITTED);
+      return typed;
+    }
+    state.attempts.push(buildBenchmarkAttemptRecord({
+      ...typed.attemptEvidence,
+      attemptNo,
+      startedMs,
+      endedMs: run.now(),
+      outcome: OPERATION_OUTCOME.COMMITTED,
+      result: typed.result,
+    }));
+    state.effectSummary = typed.result;
+    return typed;
+  } catch (error) {
+    const evidence = error?.benchmarkAttemptEvidence ?? NO_WIRE_EVIDENCE;
+    const classified = classifyBenchmarkAttemptFailure(error, evidence);
+    if (run.stopped) {
+      recordLateCompletion(run, state, classified.outcome);
+      throw error;
+    }
+    state.attempts.push(buildBenchmarkAttemptRecord({
+      ...evidence,
+      ...classified,
+      attemptNo,
+      startedMs,
+      endedMs: run.now(),
+    }));
+    throw error;
+  } finally {
+    if (!run.stopped) state.attemptInFlight = false;
+  }
+}
+
+async function runRequest(adapter, state, run) {
+  state.executionStartedAtMs = run.now();
+  try {
+    const outcome = await executePairedOltpTransactionWithRetry({
+      intendedIssueTimeMs: state.entry.intendedIssueTimeMs,
+      now: run.now,
+      ...(run.retrySleep ? {sleep: run.retrySleep} : {}),
+      executeAttempt: ({attempts}) => executeTypedAttempt(adapter, state, run, attempts),
+    });
+    if (run.stopped) return;
+    state.retryEvidence = outcome.evidence;
+    state.completedAtMs = outcome.evidence.completedAtMs;
+    state.final = {outcome: OPERATION_OUTCOME.COMMITTED, failureClass: null};
+  } catch (error) {
+    if (run.stopped) return;
+    if (!error?.oltpRetryEvidence) {
+      // Only the retry owner ends a request; any other error is our fault.
+      state.completedAtMs = run.now();
+      state.final = {outcome: OPERATION_OUTCOME.TERMINAL_FAILURE,
+        failureClass: FAILURE_CLASS.HARNESS_FAULT};
+      return;
+    }
+    state.retryEvidence = error.oltpRetryEvidence;
+    state.completedAtMs = state.retryEvidence.completedAtMs;
+    state.final = settleFromError(state);
+  }
+}
+
+function createStopSignal() {
+  let resolveStop;
+  const promise = new Promise((resolve) => {
+    resolveStop = resolve;
+  });
+  return {promise, resolve: resolveStop};
+}
+
+function defaultWatchdogTimer(callback, delayMs) {
+  const handle = setTimeout(callback, delayMs);
+  return () => clearTimeout(handle);
+}
+
+// The run-level bound: when it fires the step stops issuing, closes every
+// record as it stands and summarises. It never completes a request.
+function armWatchdog(run, boundOffsetMs, firstIntendedMs, setTimer) {
+  const deadlineMs = firstIntendedMs + boundOffsetMs;
+  const cancel = setTimer(() => {
+    if (run.finished || run.stopped) return;
+    run.stopped = true;
+    run.stoppedAtMs = run.now();
+    run.stop.resolve();
+  }, Math.max(ZERO, deadlineMs - run.now()));
+  return {deadlineMs, cancel};
+}
+
+function summarizeWindow(issuePlan, records, offeredRatePerSec, run) {
   const firstIssueMs = issuePlan[ZERO].intendedIssueTimeMs;
-  const scheduledWindowMs =
-    (issuePlan.length * THOUSAND) / offeredRatePerSec;
-  const lastCompletionMs = Math.max(
-    ...arrayMap(records, ({completedAtMs}) => completedAtMs),
-  );
-  const completionWindowMs = Math.max(ZERO, lastCompletionMs - firstIssueMs);
-  const accountingWindowMs = Math.max(scheduledWindowMs, completionWindowMs);
-  const totalRetries = records.reduce(
-    (sum, record) => sum + record.retries,
-    ZERO,
-  );
+  const scheduledMs = (issuePlan.length * THOUSAND) / offeredRatePerSec;
+  const completions = arrayMap(
+    arrayFilter(records, (record) => record.completedAtMs !== null),
+    ({completedAtMs}) => completedAtMs);
+  const lastObservedMs = run.stopped ? run.stoppedAtMs :
+    (completions.length > ZERO ? Math.max(...completions) : firstIssueMs);
+  const drainMs = lastObservedMs - firstIssueMs;
+  return Object.freeze({
+    scheduledMs,
+    drainMs,
+    drainOverrunMs: Math.max(ZERO, drainMs - scheduledMs),
+    accountingWindowMs: Math.max(scheduledMs, drainMs),
+  });
+}
+
+function summarizeOpenLoopStep(issuePlan, states, run, options) {
+  const records = Object.freeze(arrayMap(states, (state) =>
+    freezeRequestRecord(state, stopDisposition(state), options.evidence, run.stoppedAtMs)));
+  const accounting = validateBenchmarkAccounting(records);
+  const window = summarizeWindow(issuePlan, records, options.offeredRatePerSec, run);
+  const wallClockOf = (monotonicMs) => new Date(
+    Date.parse(run.originWallClockIso) + (monotonicMs - run.originMs)).toISOString();
+  const firstIntendedMs = issuePlan[ZERO].intendedIssueTimeMs;
   return Object.freeze({
     profileId: OPEN_LOOP_PROFILE.id,
-    offeredRatePerSec,
-    attempted: records.length,
-    succeeded: succeeded.length,
-    failed,
-    retries: totalRetries,
-    scheduledWindowMs,
-    completionWindowMs,
-    drainOverrunMs: Math.max(ZERO, completionWindowMs - scheduledWindowMs),
-    accountingWindowMs,
-    completedPerSec: accountingWindowMs > ZERO ?
-      succeeded.length / (accountingWindowMs / THOUSAND) : ZERO,
-    latency: summarizeOltpBaselineLatencies(
-      arrayMap(succeeded, ({latencyMs}) => latencyMs),
-    ),
-    attemptLatency: summarizeOltpBaselineLatencies(
-      arrayMap(records, ({latencyMs}) => latencyMs),
-    ),
-    queueDelay: summarizeOltpBaselineLatencies(
-      arrayMap(records, ({queueDelayMs}) => queueDelayMs),
-    ),
-    issueLag: summarizeOltpBaselineLatencies(
-      arrayMap(records, ({issueLagMs}) => issueLagMs),
-    ),
-    records: Object.freeze([...records]),
+    offeredRatePerSec: options.offeredRatePerSec,
+    clock: Object.freeze({
+      monotonicOriginMs: run.originMs,
+      monotonicOriginWallClockIso: run.originWallClockIso,
+    }),
+    accounting,
+    window: Object.freeze({
+      ...window,
+      startedAt: wallClockOf(firstIntendedMs),
+      endedAt: wallClockOf(firstIntendedMs + window.drainMs),
+    }),
+    watchdog: Object.freeze({
+      boundMs: options.watchdog.boundMs,
+      derivation: options.watchdog.derivation,
+      deadlineMs: run.watchdogDeadlineMs,
+      fired: run.stopped,
+      firedAtMs: run.stopped ? run.stoppedAtMs : null,
+    }),
+    completedPerSec: benchmarkCompletedPerSec(accounting.committed, window.accountingWindowMs),
+    ...summarizeBenchmarkLatencies(records, accounting),
+    executedOperationsDigest: computeExecutedOperationsDigest(records),
+    records,
+    // Completions observed after the watchdog fired: the request stays
+    // unresolved; this live list keeps the late fact beside it.
+    lateCompletions: run.lateCompletions,
   });
+}
+
+function requireWatchdog(value) {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Open-loop OLTP step requires a run watchdog');
+  }
+  positiveNumber(value.boundMs, 'watchdog.boundMs');
+  if (!value.derivation || typeof value.derivation !== 'object') {
+    throw new Error('Open-loop OLTP step watchdog requires its derivation');
+  }
+  return value;
+}
+
+function createRun(options, now) {
+  return {
+    now,
+    retrySleep: options.retrySleep,
+    stopped: false,
+    finished: false,
+    stoppedAtMs: null,
+    stop: createStopSignal(),
+    originMs: now(),
+    originWallClockIso: new Date().toISOString(),
+    lateCompletions: [],
+    watchdogDeadlineMs: null,
+  };
+}
+
+async function scheduleRequests(adapter, issuePlan, states, run, waitUntil) {
+  const workerQueues = new Map();
+  for (const state of states) {
+    if (run.stopped) break;
+    await Promise.race([waitUntil(state.entry.intendedIssueTimeMs), run.stop.promise]);
+    if (run.stopped) break;
+    state.issuedAtMs = run.now();
+    if (state.issuedAtMs < state.entry.intendedIssueTimeMs) {
+      throw new Error('Open-loop OLTP scheduler returned before intended issue time');
+    }
+    const previous = workerQueues.get(state.entry.workerId) || Promise.resolve();
+    workerQueues.set(state.entry.workerId, previous.then(async () => {
+      if (run.stopped) return;
+      await runRequest(adapter, state, run);
+    }));
+  }
+  return [...workerQueues.values()];
 }
 
 async function runOpenLoopOltpStep(adapter, operations, options = {}) {
@@ -209,63 +470,52 @@ async function runOpenLoopOltpStep(adapter, operations, options = {}) {
   const schedulerSleep = options.schedulerSleep || defaultSleep;
   const waitUntil = options.waitUntil || ((targetTimeMs) =>
     defaultWaitUntil(targetTimeMs, now, schedulerSleep));
-  const offeredRatePerSec = positiveNumber(
-    options.offeredRatePerSec,
-    'offeredRatePerSec',
-  );
-  const startTimeMs = options.startTimeMs ?? now();
-  const issuePlan = buildOpenLoopIssuePlan(
-    operations,
-    offeredRatePerSec,
-    startTimeMs,
-  );
-  const workerQueues = new Map();
-  const records = new Array(issuePlan.length);
+  const offeredRatePerSec = positiveNumber(options.offeredRatePerSec, 'offeredRatePerSec');
+  const watchdog = requireWatchdog(options.watchdog);
+  const run = createRun(options, now);
+  const startTimeMs = options.startTimeMs ?? run.originMs;
+  const issuePlan = buildOpenLoopIssuePlan(operations, offeredRatePerSec, startTimeMs);
+  const states = arrayMap(issuePlan, createRequestState);
+  const armed = armWatchdog(run, watchdog.boundMs, issuePlan[ZERO].intendedIssueTimeMs,
+    options.setWatchdogTimer || defaultWatchdogTimer);
+  run.watchdogDeadlineMs = armed.deadlineMs;
 
-  for (const entry of issuePlan) {
-    await waitUntil(entry.intendedIssueTimeMs);
-    const issuedAtMs = now();
-    if (issuedAtMs < entry.intendedIssueTimeMs) {
-      throw new Error(
-        'Open-loop OLTP scheduler returned before intended issue time',
-      );
+  const scheduling = scheduleRequests(adapter, issuePlan, states, run, waitUntil)
+    .then((tasks) => Promise.allSettled(tasks));
+  try {
+    await Promise.race([scheduling, run.stop.promise]);
+    if (!run.stopped) {
+      const settled = await scheduling;
+      const rejected = arrayFind(settled, (result) => result.status === 'rejected');
+      if (rejected) throw rejected.reason;
+      run.finished = true;
     }
-    const previous = workerQueues.get(entry.workerId) || Promise.resolve();
-    const task = previous.then(async () => {
-      const executionStartedAtMs = now();
-      try {
-        const outcome = await executePairedOltpTransactionWithRetry({
-          intendedIssueTimeMs: entry.intendedIssueTimeMs,
-          now,
-          ...(options.retrySleep ? {sleep: options.retrySleep} : {}),
-          executeAttempt: () => adapter.executeTransaction(entry.operation),
-        });
-        records[entry.index] = recordSuccess(
-          entry,
-          issuedAtMs,
-          executionStartedAtMs,
-          outcome,
-        );
-      } catch (error) {
-        records[entry.index] = recordFailure(
-          entry,
-          issuedAtMs,
-          executionStartedAtMs,
-          error,
-          now,
-        );
-      }
-    });
-    workerQueues.set(entry.workerId, task);
+  } finally {
+    armed.cancel();
   }
+  return summarizeOpenLoopStep(issuePlan, states, run, {
+    offeredRatePerSec,
+    watchdog,
+    evidence: options.evidence || {},
+  });
+}
 
-  await Promise.all(workerQueues.values());
-  return summarizeStep(issuePlan, records, offeredRatePerSec);
+// A step that never ran (its system could not be opened): every planned
+// request is offered and unissued.
+function buildUnissuedOpenLoopRecords(operations, offeredRatePerSec, startTimeMs = ZERO) {
+  const issuePlan = buildOpenLoopIssuePlan(operations, offeredRatePerSec, startTimeMs);
+  const records = Object.freeze(arrayMap(issuePlan, (entry) => freezeRequestRecord(
+    createRequestState(entry),
+    {outcome: OPERATION_OUTCOME.UNISSUED, failureClass: null},
+    {},
+  )));
+  return Object.freeze({records, accounting: validateBenchmarkAccounting(records)});
 }
 
 export {
   OPEN_LOOP_PROFILE as OLTP_OPEN_LOOP_PROFILE,
   buildOpenLoopIssuePlan,
+  buildUnissuedOpenLoopRecords,
   interleaveOltpWorkerPhase,
   runOpenLoopOltpStep,
 };

@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "3bb1a061569f2d8528587d3c202f28c593bb5bc580d09046b66948de3c2cdce4"
+        "sha256": "ccbd159f556a29883f30298a20c1dc4f6a4070ef0324ff77b3712a5c781eaa52"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3259741,
-        "sha256": "39f35dbb8e2eedfeec80a2ebb302babac32a96cca3952c297fedbbf650a420c9"
+        "bytes": 3276871,
+        "sha256": "8888c660d62d53164a05f5d3e0e1df491a21025b7ac69b42c0cada8b061f8e25"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "414ade4990afe4ac61e49fc3b57fc03bd0acecb5e6e33ab6d01bc8b523733575"
+        "sha256": "c7bc105959795aae0f3bc38891d10424c39025cc3aa50012a60a2179388dee3b"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "543ee8e39fe4388baf14e47586d25911851d8e1a137ba6589c733c6a8ff22c65"
+        "sha256": "72b042732c3cfcf7832c05f7ff2c0feb844716ef1e69b5cf18691b3e35bc0032"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "5eea41a291c8d5cd8188efe4f9bd92f0df8ac9cf1c1110e838dfb367f05ca722"
+    "inputDigest": "27503f7534e6746d0c26b9f14bae89f1bc1e96623f03a300f139bb91340969f2"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "3bb1a061569f2d8528587d3c202f28c593bb5bc580d09046b66948de3c2cdce4"
+        "sha256": "ccbd159f556a29883f30298a20c1dc4f6a4070ef0324ff77b3712a5c781eaa52"
       },
-      "declaredCount": 1735,
-      "observedCount": 1735,
-      "assignedCount": 1735
+      "declaredCount": 1738,
+      "observedCount": 1738,
+      "assignedCount": 1738
     },
     "cognitive": {
       "identity": {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "414ade4990afe4ac61e49fc3b57fc03bd0acecb5e6e33ab6d01bc8b523733575"
+          "sha256": "c7bc105959795aae0f3bc38891d10424c39025cc3aa50012a60a2179388dee3b"
         },
         "cloneGroups": 42,
         "duplicatedLines": 1331,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "543ee8e39fe4388baf14e47586d25911851d8e1a137ba6589c733c6a8ff22c65"
+          "sha256": "72b042732c3cfcf7832c05f7ff2c0feb844716ef1e69b5cf18691b3e35bc0032"
         },
         "cloneGroups": 649,
         "duplicatedLines": 24346,
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3259741,
-        "sha256": "39f35dbb8e2eedfeec80a2ebb302babac32a96cca3952c297fedbbf650a420c9"
+        "bytes": 3276871,
+        "sha256": "8888c660d62d53164a05f5d3e0e1df491a21025b7ac69b42c0cada8b061f8e25"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "12c59f3b89bc76da35c4bfb5d7345e7b8a4e13a5e689c02989d251c5bdc865f5",
-      "moduleCount": 5848,
-      "edgeCount": 31724,
-      "unresolvedCount": 43
+      "sourceDigest": "ef147ca233dea09d8dcbe3d933688b9530a5894188e6a2622c84b1aab9180651",
+      "moduleCount": 5875,
+      "edgeCount": 31883,
+      "unresolvedCount": 44
     }
   },
   "assignment": {
-    "sourceSignalCount": 2440,
-    "assignedSignalCount": 2440,
-    "uniqueAssignmentCount": 2440,
-    "digest": "8ccb5c5f04b02c0ba624ac30a0f5ff3f7c5b2159d3801c0f82e279cc6d486eed"
+    "sourceSignalCount": 2443,
+    "assignedSignalCount": 2443,
+    "uniqueAssignmentCount": 2443,
+    "digest": "a21631fece26914fa89e45b9b374d6cc1f6d729acbaf3594e69b1401f63cedfe"
   },
   "signalCounts": {
     "cognitive": 147,
-    "complexity": 1735,
+    "complexity": 1738,
     "duplication": 472,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1255,
+    "filesWithDebt": 1257,
     "rankedBoundaryCount": 112,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 92,
@@ -216,18 +216,18 @@
       "ownerAreas": [
         "test/distributed/harness"
       ],
-      "fileCount": 167,
-      "signalCount": 476,
-      "complexity": 391,
+      "fileCount": 170,
+      "signalCount": 480,
+      "complexity": 395,
       "cognitive": 0,
       "oversizedFiles": 11,
       "duplicatedLines": 13223,
       "cloneTouches": 312,
       "cycleGroups": 0,
       "lintExclusions": 10,
-      "importIn": 375,
-      "importOut": 635,
-      "score": 2864.4,
+      "importIn": 402,
+      "importOut": 650,
+      "score": 2880.4,
       "topPaths": [
         "test/distributed/harness/failure-bundle-playback-classification.js",
         "test/distributed/harness/report-writer.js",
@@ -393,8 +393,8 @@
       "cloneTouches": 8,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 79,
-      "importOut": 158,
+      "importIn": 87,
+      "importOut": 156,
       "score": 565.4,
       "topPaths": [
         "test/distributed/scenarios/postgres-baseline-comparison-discovery-readiness.js",
@@ -1785,34 +1785,6 @@
       ]
     },
     {
-      "key": "area:test/distributed/reference-client",
-      "owner": null,
-      "boundary": "test/distributed/reference-client",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/distributed/reference-client"
-      ],
-      "fileCount": 6,
-      "signalCount": 6,
-      "complexity": 2,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 132,
-      "cloneTouches": 6,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 17,
-      "importOut": 10,
-      "score": 21.2,
-      "topPaths": [
-        "test/distributed/reference-client/lagrange-retryable-conflict-probe.js",
-        "test/distributed/reference-client/tidb-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-visibility-probe.js",
-        "test/distributed/reference-client/lagrange-delivery-observer.js",
-        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js"
-      ]
-    },
-    {
       "key": "semantic:control_plane_readiness_owner/control_plane_readiness_workflow",
       "owner": "control_plane_readiness_owner",
       "boundary": "control_plane_readiness_workflow",
@@ -1863,6 +1835,34 @@
         "test/service/call-binding-route-resolver.test.js",
         "test/service/minimal-deployment-request-cell-routing-fixture.js",
         "test/service/handler-aware-runtime-invocation.test.js"
+      ]
+    },
+    {
+      "key": "area:test/distributed/reference-client",
+      "owner": null,
+      "boundary": "test/distributed/reference-client",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/distributed/reference-client"
+      ],
+      "fileCount": 5,
+      "signalCount": 5,
+      "complexity": 1,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 132,
+      "cloneTouches": 6,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 15,
+      "importOut": 6,
+      "score": 17.2,
+      "topPaths": [
+        "test/distributed/reference-client/lagrange-retryable-conflict-probe.js",
+        "test/distributed/reference-client/tidb-visibility-probe.js",
+        "test/distributed/reference-client/lagrange-delivery-observer.js",
+        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
+        "test/distributed/reference-client/lagrange-payment-observer.js"
       ]
     },
     {
@@ -3694,8 +3694,8 @@
           }
         ],
         "baseline": {
-          "score": 2864.4,
-          "complexity": 391,
+          "score": 2880.4,
+          "complexity": 395,
           "cognitive": 0,
           "oversizedFiles": 11,
           "duplicatedLines": 13223,
