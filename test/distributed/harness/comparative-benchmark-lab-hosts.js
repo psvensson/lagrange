@@ -37,6 +37,18 @@ const LAB_HOLDER_PATH = '${LAB_LOCK_DIR:-$HOME/.lab}/machine.holder.json';
 const THERMAL_GATE = 'scripts/checks/wait-for-thermal-headroom.js';
 const THERMAL_UNMEASURABLE_WORD = 'unmeasurable';
 const THERMAL_MEASURED = 'measured';
+// Free bytes a data host's docker data root needs: the product images it must
+// hold plus a margin. Measured 2026-11-01 on tv-dator (containerd store):
+// psvensson/lagrange 0.4.0 788,149,562 B and pingcap/tikv v8.5.8
+// 2,055,725,487 B; pd, tidb and postgres:17-alpine were on no lab host, so
+// 1.5 GiB is reserved for them unmeasured; 2 GiB margin for container
+// layers and logs of a smoke run (data in the container layer). 6.5 GiB.
+const DATA_HOST_MIN_DOCKER_FREE_BYTES = Math.ceil(6.5 * 2 ** 30);
+
+function dockerDiskLow(facts) {
+  const free = Number(facts.capability.dockerRootFreeBytes);
+  return !Number.isFinite(free) || free < DATA_HOST_MIN_DOCKER_FREE_BYTES;
+}
 // The gate's own bound is twenty polls of 30 s; one minute of slack for ssh.
 const THERMAL_GATE_TIMEOUT_MS = 11 * 60 * 1000;
 const HOST_ROLE = Object.freeze({DATA: 'data', CLIENT: 'client'});
@@ -126,17 +138,29 @@ function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimu
   const free = (entry) => arrayIncludes(USABLE_LOCK_STATES, entry.lock.state);
   const preferred = [...arrayFilter(eligible, free),
     ...arrayFilter(eligible, (entry) => !free(entry))];
-  // The load generator is the LAST capable free host (else the last capable
-  // one), so data hosts keep name order from the front of the list.
-  const capable = arrayFilter(preferred, (entry) => !loadGeneratorGap(entry.facts, nodeMinimum));
-  const capableFree = arrayFilter(capable, free);
-  const client = capableFree[capableFree.length - 1] || capable[capable.length - 1] || null;
+  // Data hosts first, in preference order, from hosts with room for the
+  // product images; then the load generator from the rest (it needs only the
+  // checkout and a Node at the floor): the last capable free one, else the
+  // last capable one.
+  const data = [];
+  for (const entry of preferred) {
+    if (dockerDiskLow(entry.facts)) {
+      excluded.push({name: entry.node.name, reason: 'host-ineligible: docker_disk_low ' +
+        `(${entry.facts.capability.dockerRootFreeBytes ?? 'unknown'} bytes free on the ` +
+        `docker data root, a data host needs ${DATA_HOST_MIN_DOCKER_FREE_BYTES})`});
+    } else if (data.length < dataHostCount) {
+      data.push(entry);
+    }
+  }
+  const capable = arrayFilter(preferred, (entry) => !arrayIncludes(data, entry) &&
+    !loadGeneratorGap(entry.facts, nodeMinimum));
   for (const entry of preferred) {
     const gap = loadGeneratorGap(entry.facts, nodeMinimum);
     if (gap) excluded.push({name: entry.node.name, reason: `not a load generator: ${gap}`});
   }
-  const ordered = client ? [...arrayFilter(preferred, (entry) => entry !== client)
-    .slice(0, dataHostCount), client] : [];
+  const capableFree = arrayFilter(capable, free);
+  const client = capableFree[capableFree.length - 1] || capable[capable.length - 1] || null;
+  const ordered = client && data.length === dataHostCount ? [...data, client] : [];
   if (ordered.length < required) {
     throw deploymentFailure(SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY,
       `${SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY}: the campaign needs ${required} ` +

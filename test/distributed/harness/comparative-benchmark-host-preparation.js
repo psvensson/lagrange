@@ -8,6 +8,8 @@
  */
 import {SCENARIO_REFUSAL} from './scenario-host-topology.js';
 import {
+  arrayFilter,
+  arrayFind,
   arrayIncludes,
   arrayMap,
   stringSplit,
@@ -17,6 +19,7 @@ import {
   DEPLOYMENT_FAILURE,
   deploymentFailure,
 } from './real-product-deployment-contract.js';
+import {contentIdentityOf, imageStoreOf} from './real-product-identity.js';
 import {errorText, execWithStatus, shellWord} from './real-product-remote-shell.js';
 
 const FIELD_SEPARATOR = '|';
@@ -75,33 +78,42 @@ async function ensureProductImages({hosts, images, sshRun, opts}) {
 }
 
 /**
- * The campaign's content-pinned image on every host, by image id (the content
- * identity the manifest pins), with the registry digest as provenance. A host
- * whose image came from the registry runs it by that digest; a host where the
- * same content was `docker load`ed (no RepoDigest) runs it by image id and
- * says so (`loaded:<id>`). A host without the content is image_unavailable:
- * no pull is attempted - placing the image is an operator step
- * (cloud-reproduction-guide.md).
- * @param {{hosts: Array<{ip: string}>, imageId: string, registryRef: string,
- *   sshRun: Function, opts: Object}} input
- * @return {Promise<Object<string, {runRef: string, imageId: string,
- *   provenance: string}>>} by host ip
+ * The campaign's content-pinned image on every host, found by CONTENT
+ * identity (the digest of its ordered RootFS diff_ids; real-product-identity.js),
+ * never by .Id, which is the manifest digest on a containerd store and the
+ * config digest on overlay2. A host whose image carries the registry digest
+ * runs it by that digest; a host where the same content was `docker load`ed
+ * (no RepoDigest) runs it by its local .Id and says so (`loaded:<id>`). A host
+ * without the content is image_unavailable: no pull is attempted - placing
+ * the image is an operator step (cloud-reproduction-guide.md).
+ * @param {{hosts: Array<{ip: string}>, contentIdentity: string,
+ *   registryRef: string, sshRun: Function, opts: Object}} input
+ * @return {Promise<Object<string, Object>>} by host ip
  */
-async function resolvePinnedImage({hosts, imageId, registryRef, sshRun, opts}) {
+async function resolvePinnedImage({hosts, contentIdentity, registryRef, sshRun, opts}) {
   const resolved = {};
   for (const host of hosts) {
-    const inspect = await execWithStatus(sshRun, host.ip, opts,
-      `docker image inspect --format '{{json .}}' ${shellWord(imageId)} 2>&1`);
-    if (inspect.exitCode !== 0) {
+    const imageStore = imageStoreOf(await sshRun(host.ip, opts,
+      'docker info --format \'{{.Driver}}|{{json .DriverStatus}}\''));
+    const listing = await execWithStatus(sshRun, host.ip, opts,
+      'docker image inspect --format \'{{.Id}}|{{json .RepoDigests}}|' +
+      '{{json .RootFS.Layers}}\' $(docker image ls -aq --no-trunc | sort -u) 2>/dev/null');
+    const images = arrayMap(arrayFilter(stringSplit(listing.stdout, '\n'), Boolean),
+      (line) => {
+        const [id, digests, layers] = stringSplit(line, '|');
+        return {id, digests: JSON.parse(digests || 'null') || [],
+          contentIdentity: contentIdentityOf(JSON.parse(layers || 'null'))};
+      });
+    const match = arrayFind(images, (image) => image.contentIdentity === contentIdentity);
+    if (!match) {
       throw deploymentFailure(DEPLOYMENT_FAILURE.IMAGE_UNAVAILABLE,
-        `pinned image ${imageId} is not on ${host.ip}`,
-        {host: host.ip, imageId, reason: 'absent', inspect: inspect.stdout});
+        `pinned image content ${contentIdentity} is not on ${host.ip}`,
+        {host: host.ip, contentIdentity, reason: 'absent', imageStore});
     }
-    const image = JSON.parse(inspect.stdout);
-    const digests = Array.isArray(image.RepoDigests) ? image.RepoDigests : [];
-    resolved[host.ip] = arrayIncludes(digests, registryRef) ?
-      {runRef: registryRef, imageId, provenance: `registry:${registryRef}`} :
-      {runRef: imageId, imageId, provenance: `loaded:${imageId}`};
+    const viaRegistry = arrayIncludes(match.digests, registryRef);
+    resolved[host.ip] = {runRef: viaRegistry ? registryRef : match.id, imageId: match.id,
+      imageStore, contentIdentity, repoDigests: match.digests,
+      provenance: viaRegistry ? `registry:${registryRef}` : `loaded:${match.id}`};
   }
   return resolved;
 }

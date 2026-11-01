@@ -24,6 +24,7 @@ function labNode(name, ip, {lock = 'free', docker = true, roles = ['harness'],
   return {name, ip, ssh: `bench@${ip}`, os: 'linux', roles,
     testCapability: {bootId, dockerReachable: docker, repoPath: '/home/bench/lagrange',
       nodePath: '/usr/bin/node', nodeVersion: 'v22.23.2', thermal,
+      dockerRootFreeBytes: 100 * 2 ** 30,
       machineLock: {state: lock, holder: null}}};
 }
 
@@ -63,7 +64,8 @@ test('D25: --dry-run defaults to the lab and names the inventory hosts it would 
     assert.ok(arrayEvery(plan.wouldLock, (lock) => lock.purpose === 'bench:bench-test-1'));
     assert.equal(plan.wouldLock.length, 4);
     assert.match(plan.manifestDigest, /^sha256:[0-9a-f]{64}$/u);
-    assert.ok(plan.manifest.runs.length > 0);
+    assert.equal(plan.manifest.runs.length, 3, 'a smoke campaign is one run per arm');
+    assert.equal(plan.manifest.comparable, false);
   });
 
 test('D25: the lab target refuses hand-typed hosts', () => {

@@ -93,6 +93,7 @@ function createContainerLedger() {
       [TIDB_IMAGE_ID]: `pingcap/tidb@sha256:${'2'.repeat(64)}`}[imageId] ||
       `postgres@sha256:${'3'.repeat(64)}`;
     return JSON.stringify({Id: imageId, RepoDigests: [digest], Created: '2026-10-30T10:00:00Z',
+      RootFS: {Type: 'layers', Layers: [`sha256:${imageId.slice(-64)}`]},
       Config: {Labels: {'org.opencontainers.image.version': '0.4.0'}}});
   };
   return {containers, run, inspect, repoDigests};

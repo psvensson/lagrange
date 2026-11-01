@@ -268,7 +268,8 @@ async function attemptRun({run, manifest, header, deps, watchdog}) {
 async function runComparativeCampaign({manifest, header, deps}) {
   const headerRecord = {recordType: RECORD_TYPE.HEADER, schemaVersion: RECORD_SCHEMA,
     campaignId: manifest.campaignId, startedAt: iso(deps.now()),
-    manifestDigest: manifest.manifestDigest, manifest, harness: header.harness,
+    manifestDigest: manifest.manifestDigest, comparable: manifest.comparable, manifest,
+    harness: header.harness,
     executionTarget: header.executionTarget, physicalHosts: header.physicalHosts};
   // A header A's owner rejects stops the campaign before any run.
   deps.recordOwner.validateCampaignHeader(headerRecord);

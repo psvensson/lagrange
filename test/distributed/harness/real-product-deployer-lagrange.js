@@ -332,9 +332,9 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const image = opts.lagrangeImage || LAGRANGE_IMAGE_DEFAULT;
   // A publishable run (explicit host volumes) needs the artifact pinned by
   // digest: one tag resolved to four different images across the lab (D18).
-  if (opts.storageRoot && !opts.lagrangeImageId) {
+  if (opts.storageRoot && !opts.lagrangeImageContent) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `a publishable run needs the Lagrange image pinned by content (image id), got ${image}`,
+      `a publishable run needs the Lagrange image pinned by content identity, got ${image}`,
       {image});
   }
   const ctx = {sshRun, opts, clientIp, sleep, budget: resolveReadinessBudget(opts)};
@@ -366,7 +366,7 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const probe = await probeWriteReadback(ctx, sql, campaignId, visibility);
   const products = verifyProductIdentity(
     await reportedVersions(ctx, await inspectProducts({sshRun, opts, roles})),
-    {[NODE_ROLE]: {imageRef: image, imageId: opts.lagrangeImageId ?? null,
+    {[NODE_ROLE]: {imageRef: image, contentIdentity: opts.lagrangeImageContent ?? null,
       versionPattern: versionPatternOf(image, opts.lagrangeVersion)}});
   if (opts.lagrangeRevision) {
     const wrong = arrayFilter(products, (product) =>

@@ -8,7 +8,6 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {createSemanticGateStage} from '../comparative-benchmark-semantic-gate.js';
-import {arrayMap} from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   createContainerLedger,
@@ -16,6 +15,7 @@ import {
 } from './real-product-deployer-product-answers-fixture.js';
 import {
   arrayFilter,
+  arrayMap,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
 

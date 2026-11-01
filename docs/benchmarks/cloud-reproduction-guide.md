@@ -73,12 +73,28 @@ held with (purpose `bench:<campaignId>`), the thermal gate and the full frozen m
 ```sh
 node docs/benchmarks/cloud/run-comparative-benchmarks.mjs
 ```
+A smoke campaign (the default profile) is one run per arm at one offered rate, executed in the
+recorded order of its targets and marked `comparable: false`: it shows the chain runs end to end,
+not how the products compare. `--profile capacity` runs the counter-balanced paired sweep.
+
 For a publishable run, pin the Lagrange image by content and name its registry provenance:
-`--lagrange-image psvensson/lagrange@sha256:<digest> --lagrange-image-id sha256:<image id>
---lagrange-version <version> --storage-root <dir>`. Every data host must already hold that
-image id; the runner never pulls it. On a host whose daemon cannot pull from the registry,
-place the image yourself (`docker save` on a host that has it, `docker load` on that host); the
-run then records its provenance as `loaded:<image id>`.
+`--lagrange-image psvensson/lagrange@sha256:<registry digest> --lagrange-image-content
+sha256:<content identity> --lagrange-version <version> --storage-root <dir>`. The content
+identity is the sha256 of the image's ordered layer diff_ids, which is the same on Docker's
+containerd and overlay2 image stores (the image's `.Id` is not: it is the manifest digest on one
+and the config digest on the other). Derive it on any host that holds the image:
+
+```sh
+printf %s "$(docker image inspect --format '{{json .RootFS.Layers}}' psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb)" | sha256sum
+```
+
+For the Docker Hub `psvensson/lagrange` 0.4.0 image
+(`psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb`)
+it is `sha256:3c263af6030eea3c663dcd863813bcbcb03acdeb3c7ded8870199f4c251e2270` (26 layers,
+read on a containerd-store host on 2026-11-01). Every data host must already hold that content;
+the runner never pulls it and never deletes or prunes images. On a host whose daemon cannot pull
+from the registry, place the image yourself (`docker save` on a host that has it, `docker load`
+on that host); the run then records its provenance as `loaded:<image id>`.
 Every selected host is held with the lab's machine-wide `flock` and holder record before any
 deployment (a host another run holds refuses the campaign, naming the holder), the thermal gate
 `scripts/checks/wait-for-thermal-headroom.js` runs on every held host, and the holds are released

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {resolvePinnedImage} from '../comparative-benchmark-host-preparation.js';
+import {contentIdentityOf} from '../real-product-identity.js';
 import {
   checkLabThermalHeadroom,
   holdLabBenchmarkHosts,
@@ -75,7 +76,7 @@ function inventory(entries) {
     [name, {name, ip: `192.168.9.${name.length}${name.charCodeAt(0)}`, ssh: `b@${name}`,
       os: 'linux', roles: ['harness'], testCapability: {bootId: `boot-${name}`,
         dockerReachable: true, repoPath: '/srv/lagrange', nodePath: '/usr/bin/node',
-        nodeVersion: 'v22.23.2', thermal: 'measured',
+        nodeVersion: 'v22.23.2', thermal: 'measured', dockerRootFreeBytes: 100 * 2 ** 30,
         machineLock: {state: lock, holder: null}}, ...extra}]))};
 }
 
@@ -88,14 +89,14 @@ test('selection prefers free hosts, then held ones the hold will wait for; unrea
         machineLock: {state: 'free'}}}]]);
   const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0'});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role, host.lock.state]),
-    [['b', 'data', 'free'], ['c', 'data', 'free'], ['a', 'data', 'busy'],
-      ['e', 'client', 'stale-record']]);
+    [['b', 'data', 'free'], ['c', 'data', 'free'], ['e', 'data', 'stale-record'],
+      ['f', 'client', 'busy']]);
 });
 
 test('a host whose checkout runs an old Node is never the load generator', () => {
   const old = {testCapability: {bootId: 'boot-old', dockerReachable: true,
     repoPath: '/srv/lagrange', nodePath: '/usr/bin/node', nodeVersion: 'v14.21.3',
-    thermal: 'measured',
+    thermal: 'measured', dockerRootFreeBytes: 100 * 2 ** 30,
     machineLock: {state: 'free'}}};
   const state = inventory([['a', 'free', old], ['b', 'free', {testCapability: {...old.testCapability,
     bootId: 'boot-b'}}], ['c', 'free', {testCapability: {...old.testCapability,
@@ -134,24 +135,47 @@ test('a host whose thermal sources are unmeasurable (WSL2) is never selected; an
   });
 });
 
-test('the pinned image resolves per host by content; absent is image_unavailable with no ' +
-  'pull attempt', async () => {
-  const imageId = `sha256:${'a'.repeat(64)}`;
+test('the pinned image resolves per host by content identity across image stores; absent ' +
+  'is image_unavailable with no pull attempt', async () => {
+  const layers = ['sha256:' + 'e'.repeat(64)];
+  const content = contentIdentityOf(layers);
   const registryRef = `psvensson/lagrange@sha256:${'1'.repeat(64)}`;
-  const answer = (repoDigests) => `${JSON.stringify({Id: imageId,
-    RepoDigests: repoDigests})}\n__exit_code=0`;
-  const {sshRun, calls} = createScriptedSsh([[/docker image inspect/u, (_command, host) => {
-    if (host === '10.0.0.3') return 'Error: No such image\n__exit_code=1';
-    return answer(host === '10.0.0.2' ? [] : [registryRef]);
-  }]]);
-  const hosts = [{ip: '10.0.0.1'}, {ip: '10.0.0.2'}];
-  const resolved = await resolvePinnedImage({hosts, imageId, registryRef, sshRun, opts: {}});
-  assert.deepEqual(resolved['10.0.0.1'], {runRef: registryRef, imageId,
-    provenance: `registry:${registryRef}`});
-  assert.deepEqual(resolved['10.0.0.2'], {runRef: imageId, imageId,
-    provenance: `loaded:${imageId}`});
-  await assert.rejects(resolvePinnedImage({hosts: [{ip: '10.0.0.3'}], imageId, registryRef,
-    sshRun, opts: {}}), (error) => error.code === 'image_unavailable' &&
+  const manifestId = `sha256:${'c'.repeat(64)}`;
+  const configId = `sha256:${'f'.repeat(64)}`;
+  const {sshRun, calls} = createScriptedSsh([
+    [/docker info --format/u, (_command, host) => (host === '10.0.0.2' ?
+      'overlay2|[]' : 'overlayfs|[["driver-type","io.containerd.snapshotter.v1"]]')],
+    [/docker image inspect/u, (_command, host) => {
+      if (host === '10.0.0.3') return `${configId}|[]|["sha256:${'0'.repeat(64)}"]\n__exit_code=0`;
+      return host === '10.0.0.2' ?
+        `${configId}|[]|${JSON.stringify(layers)}\n__exit_code=0` :
+        `${manifestId}|${JSON.stringify([registryRef])}|${JSON.stringify(layers)}\n__exit_code=0`;
+    }]]);
+  const resolved = await resolvePinnedImage({hosts: [{ip: '10.0.0.1'}, {ip: '10.0.0.2'}],
+    contentIdentity: content, registryRef, sshRun, opts: {}});
+  assert.equal(resolved['10.0.0.1'].runRef, registryRef);
+  assert.equal(resolved['10.0.0.1'].imageStore, 'containerd');
+  assert.equal(resolved['10.0.0.2'].runRef, configId);
+  assert.equal(resolved['10.0.0.2'].imageStore, 'overlay2');
+  assert.equal(resolved['10.0.0.2'].provenance, `loaded:${configId}`);
+  await assert.rejects(resolvePinnedImage({hosts: [{ip: '10.0.0.3'}], contentIdentity: content,
+    registryRef, sshRun, opts: {}}), (error) => error.code === 'image_unavailable' &&
     error.diagnostic.reason === 'absent');
   assert.equal(arraySome(calls, (call) => /docker pull/u.test(call.command)), false);
+});
+
+test('docker disk is a fleet fact: a host below the data-host requirement is not a data ' +
+  'host but may be the load generator (2026-11-01: adam-laptop had 433 MB free)', () => {
+  const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
+    ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
+  state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 433 * 1024 * 1024;
+  state.nodes['carinas-windows'].testCapability.thermal = 'unmeasurable';
+  const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0'});
+  assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role]), [
+    ['adams-gamla', 'data'], ['lenovo-laptop', 'data'], ['tv-dator', 'data'],
+    ['adam-laptop', 'client']]);
+  state.nodes['tv-dator'].testCapability.dockerRootFreeBytes = 1024;
+  assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
+    nodeMinimum: '22.12.0'}), (error) => error.code === 'refused_insufficient_host_topology' &&
+    /host-ineligible: docker_disk_low/u.test(error.message));
 });

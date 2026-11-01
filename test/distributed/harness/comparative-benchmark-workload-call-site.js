@@ -80,7 +80,12 @@ function workloadRequestOf({run, manifest, deployment, evidenceDir}) {
   return {targetId: run.targetId, system: run.system, scenario: run.scenario,
     subkind: run.workloadSubkind, connection: connectionOf(run, deployment),
     plan: {offeredRatePerSec: run.offeredRatePerSec, repetition: run.repetition,
-      orderIndex: run.orderIndex, sweepPlanSha256: bareDigest(manifest.plan.sweepPlanDigest)},
+      orderIndex: run.orderIndex,
+      sweepPlanSha256: manifest.plan.sweepPlanDigest ?
+        bareDigest(manifest.plan.sweepPlanDigest) : null,
+      // The smoke family owns its workload; the capacity family takes the
+      // manifest's.
+      ...(manifest.plan.profileClass === 'capacity' ? {workload: manifest.plan.workload} : {})},
     evidenceDir};
 }
 

@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+
 /**
  * Product identity and storage placement of a comparative-benchmark
  * deployment, read from the RUNNING containers (`docker inspect` of the
@@ -13,9 +15,12 @@ import {
   arrayIncludes,
   arrayMap,
   arraySome,
+  stringIncludes,
   stringLastIndexOf,
   stringReplace,
+  stringSplit,
   stringStartsWith,
+  stringTrim,
 } from './real-product-captured-intrinsics.js';
 import {
   DEPLOYMENT_FAILURE,
@@ -31,6 +36,8 @@ import {
 
 const PERSISTENT_MOUNT_TYPES = Object.freeze(['bind', 'volume']);
 const IMAGE_ID_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const IMAGE_STORE = Object.freeze({CONTAINERD: 'containerd', OVERLAY2: 'overlay2',
+  UNKNOWN: 'unknown'});
 const REPO_DIGEST_NONE = 'none: the image carries no repo digest (loaded, not pulled)';
 // Deployment event kinds spelled as stream A's record owner spells them
 // (raw-observation-record.js DEPLOYMENT_EVENT_KIND); an absent container is
@@ -45,6 +52,32 @@ function imageRepository(imageRef) {
   const text = String(imageRef || '');
   const at = stringLastIndexOf(text, ':');
   return at > stringLastIndexOf(text, '/') ? text.slice(0, at) : text;
+}
+
+/**
+ * An image's content identity: sha256 over the canonical JSON of its ordered
+ * RootFS diff_ids. Identical across Docker's containerd store (.Id is the
+ * manifest digest) and the overlay2 store (.Id is the config digest), so it
+ * is the identity compared across hosts; .Id never is.
+ * @param {Array<string>} layers
+ * @return {string|null}
+ */
+function contentIdentityOf(layers) {
+  if (!Array.isArray(layers) || layers.length === 0) return null;
+  return `sha256:${createHash('sha256').update(JSON.stringify(layers)).digest('hex')}`;
+}
+
+// Which image store a host's daemon uses, from its own report.
+function imageStoreOf(info) {
+  const [driver, status] = stringSplit(String(info ?? ''), '|');
+  if (stringIncludes(String(status), 'containerd.snapshotter')) return IMAGE_STORE.CONTAINERD;
+  return stringTrim(String(driver)) === IMAGE_STORE.OVERLAY2 ? IMAGE_STORE.OVERLAY2 :
+    IMAGE_STORE.UNKNOWN;
+}
+
+async function readImageStore({sshRun, opts, host}) {
+  return imageStoreOf(await sshRun(host, opts,
+    'docker info --format \'{{.Driver}}|{{json .DriverStatus}}\''));
 }
 
 // Image facts of the running container's image id: its repo digests (empty
@@ -65,6 +98,7 @@ async function readImageFacts({sshRun, opts, host, imageId, imageRef}) {
   // Provenance is a typed identity fact: pulled from the registry (a repo
   // digest), or loaded content known only by its image id.
   return {repoDigest, repoDigestStatus: repoDigest ? 'recorded' : REPO_DIGEST_NONE,
+    contentIdentity: contentIdentityOf(image.RootFS?.Layers),
     provenance: repoDigest ? `registry:${repoDigest}` : `loaded:${imageId}`,
     imageLabels: image.Config?.Labels ?? null, imageCreated: image.Created ?? null};
 }
@@ -113,9 +147,13 @@ async function inspectRunningContainer({sshRun, opts, host, containerId, role}) 
 /** Inspect every role's container, in role order. */
 async function inspectProducts({sshRun, opts, roles}) {
   const products = [];
+  const stores = new Map();
   for (const role of roles) {
-    products.push(await inspectRunningContainer({sshRun, opts, host: role.host,
-      containerId: role.containerId, role: role.role}));
+    if (!stores.has(role.host)) {
+      stores.set(role.host, await readImageStore({sshRun, opts, host: role.host}));
+    }
+    products.push({...await inspectRunningContainer({sshRun, opts, host: role.host,
+      containerId: role.containerId, role: role.role}), imageStore: stores.get(role.host)});
   }
   return products;
 }
@@ -162,10 +200,10 @@ function identityProblems(product, expectation) {
   if (!expectation) return [`${product.role}: no identity expectation`];
   // A content pin (image id) is the identity; the reference it ran by may be
   // the registry digest or the id itself.
-  if (expectation.imageId) {
-    if (product.imageId !== expectation.imageId) {
-      problems.push(`${product.role}: runs image ${product.imageId}, the campaign pins ` +
-        expectation.imageId);
+  if (expectation.contentIdentity) {
+    if (product.contentIdentity !== expectation.contentIdentity) {
+      problems.push(`${product.role}: runs image content ${product.contentIdentity}, the ` +
+        `campaign pins ${expectation.contentIdentity}`);
     }
   } else if (product.imageRef !== expectation.imageRef) {
     problems.push(`${product.role}: runs ${product.imageRef}, expected ${expectation.imageRef}`);
@@ -189,9 +227,11 @@ function verifyProductIdentity(products, expectations) {
   const problems = [];
   for (const product of products) {
     problems.push(...identityProblems(product, expectations[product.role]));
-    const sameRef = arrayFilter(products, (other) => other.imageRef === product.imageRef);
-    if (arraySome(sameRef, (other) => other.imageId !== product.imageId)) {
-      problems.push(`${product.role}: ${product.imageRef} resolves to different image ids`);
+    // One role runs one content on every host (never compared by .Id).
+    const sameRole = arrayFilter(products, (other) => other.role === product.role);
+    if (!product.contentIdentity ||
+        arraySome(sameRole, (other) => other.contentIdentity !== product.contentIdentity)) {
+      problems.push(`${product.role}: hosts run different image content`);
     }
   }
   if (products.length === 0) problems.push('no product container inspected');
@@ -246,8 +286,11 @@ function compareProductIdentity(before, after, observedAt) {
 
 export {
   EVENT_KIND as IDENTITY_EVENT_KIND,
+  IMAGE_STORE,
   classifyStorage,
   compareProductIdentity,
+  contentIdentityOf,
+  imageStoreOf,
   inspectProducts,
   inspectRunningContainer,
   observeProductsAfterWindow,

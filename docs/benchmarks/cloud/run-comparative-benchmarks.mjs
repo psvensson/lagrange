@@ -30,6 +30,7 @@ import {
   DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH,
 } from '../../../test/distributed/harness/raw-observation-store.js';
 import {
+  COMPARATIVE_CAPACITY_PROFILE,
   COMPARATIVE_SMOKE_PROFILE,
   buildComparativeCampaignManifest,
 } from '../../../test/distributed/harness/comparative-benchmark-campaign-manifest.js';
@@ -92,7 +93,8 @@ import {loadState, selectNodesByRole} from '../../../scripts/lab/state.js';
 const execFileAsync = promisify(execFile);
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const TARGET = Object.freeze({LAB: 'lab', GCP: 'gcp'});
-const PROFILES = Object.freeze({smoke: COMPARATIVE_SMOKE_PROFILE});
+const PROFILES = Object.freeze({smoke: COMPARATIVE_SMOKE_PROFILE,
+  capacity: COMPARATIVE_CAPACITY_PROFILE});
 // The smoke targets of stream A's coverage manifest.
 const DEFAULT_TARGETS = Object.freeze([COMPARATIVE_TARGET.LAGRANGE,
   COMPARATIVE_TARGET.TIDB_TIKV, COMPARATIVE_TARGET.PG_SINGLE_PRIMARY]);
@@ -118,14 +120,18 @@ Options:
   --client-node <path>          gcp only: Node >= 22 on the load generator (default: node)
   --targets <a,b,...>           ${Object.values(COMPARATIVE_TARGET).join(', ')}
                                 (default: ${DEFAULT_TARGETS.join(',')})
-  --profile <smoke>             Campaign profile (default: smoke)
+  --profile <smoke|capacity>    smoke (default): one run per arm, not a comparison;
+                                capacity: the counter-balanced paired sweep
   --campaign-id <id>            Campaign id (default: generated)
   --storage-root <path>         Host directory for product data volumes; without it
                                 data lives in the container layer (smoke only)
   --lagrange-image <ref>        Lagrange image (default: ${LAGRANGE_IMAGE_DEFAULT});
                                 publishable runs need repo@sha256:<digest>
-  --lagrange-image-id <sha256>  The Lagrange image content every data host must hold (by
-                                image id; --lagrange-image is then its registry provenance)
+  --lagrange-image-content <sha256>
+                                The Lagrange image content identity every data host must
+                                hold (sha256 of its ordered RootFS diff_ids; the same on
+                                containerd and overlay2 stores); --lagrange-image is then
+                                its registry provenance
   --lagrange-version <v>        Product version the image must report (needed for a digest)
   --lagrange-revision <sha>     org.opencontainers.image.revision the image must carry
   --raw-observations <path>     Append-only record store
@@ -149,7 +155,7 @@ const VALUE_FLAGS = Object.freeze({
   '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
   '--lock-wait-minutes': 'lockWaitMinutes', '--client-checkout': 'clientCheckout',
   '--client-node': 'clientNode', '--lagrange-version': 'lagrangeVersion',
-  '--lagrange-image-id': 'lagrangeImageId',
+  '--lagrange-image-content': 'lagrangeImageContent',
   '--lagrange-revision': 'lagrangeRevision',
 });
 
@@ -262,9 +268,10 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   const facts = await collectHostFacts({hosts, sshRun, opts});
   const physicalHosts = facts.map((fact, index) => ({...fact, name: hosts[index].name,
     role: hosts[index].role, ...(physicalExtras[hosts[index].name] || {})}));
-  const pinned = opts.lagrangeImageId ? await resolvePinnedImage({
-    hosts: hosts.filter((host) => host.role === 'data'), imageId: opts.lagrangeImageId,
-    registryRef: opts.lagrangeImage, sshRun, opts}) : null;
+  const pinned = opts.lagrangeImageContent ? await resolvePinnedImage({
+    hosts: hosts.filter((host) => host.role === 'data'),
+    contentIdentity: opts.lagrangeImageContent, registryRef: opts.lagrangeImage, sshRun,
+    opts}) : null;
   await ensureProductImages({hosts, sshRun, opts,
     images: imagesFor(manifest.targets, opts).filter((image) =>
       !(pinned && image === opts.lagrangeImage))});
@@ -295,7 +302,7 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
   const controllerIp = (await sshRun(dataIps[0], opts, 'echo "${SSH_CLIENT%% *}"')).trim();
   const deployOpts = {lagrangeImage: opts.lagrangeImage, storageRoot: opts.storageRoot || null,
     lagrangeVersion: opts.lagrangeVersion || null, lagrangeRevision: opts.lagrangeRevision || null,
-    lagrangeImageId: opts.lagrangeImageId || null,
+    lagrangeImageContent: opts.lagrangeImageContent || null,
     lagrangeImageByHost: pinned ? Object.fromEntries(Object.entries(pinned).map(
       ([ip, entry]) => [ip, entry.runRef])) : null,
     proofClientIps: controllerIp ? [controllerIp] : []};

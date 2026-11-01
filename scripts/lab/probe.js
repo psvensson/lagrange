@@ -482,6 +482,11 @@ const CAPABILITY_SCRIPT = [
   // Bounded: a wedged docker daemon must not hang discovery.
   'if command -v timeout >/dev/null 2>&1; then dockercheck="timeout 10 docker"; ' +
     'else dockercheck="docker"; fi',
+  // Free bytes on the docker daemon's data root: whether the host has room
+  // for the images a deployment must hold.
+  'docker_root="$($dockercheck info --format \'{{.DockerRootDir}}\' 2>/dev/null)"',
+  'if [ -n "$docker_root" ]; then say docker_root_free_bytes ' +
+    '"$(df -PB1 "$docker_root" 2>/dev/null | awk \'NR==2{print $4}\')"; fi',
   'if $dockercheck info >/dev/null 2>&1; then say docker_reachable yes; ' +
     'else say docker_reachable no; fi',
   'if [ -e "$repo/.git" ]; then',
@@ -568,6 +573,7 @@ export function parseCapability(text, probedAt = Date.now()) {
     movielensSha256: repoPresent ? capabilityText(values.movielens_sha256) : null,
     cpuSampleMs: capabilityNumber(values.cpu_sample_ms),
     thermal: capabilityText(values.thermal),
+    dockerRootFreeBytes: capabilityNumber(values.docker_root_free_bytes),
     machineLock: parseMachineLock(values),
   };
 }
