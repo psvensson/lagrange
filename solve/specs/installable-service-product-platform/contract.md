@@ -112,7 +112,7 @@ including:
 The current edition matrix keeps these implementations outside the AGPL repo:
 
 - commercial entitlement/license policy;
-- paid exporters and advanced observability products;
+- managed telemetry retention, fleet analytics and organization reporting products;
 - Enterprise secret-provider/KMS implementations;
 - Enterprise policy-provider implementations.
 
@@ -528,11 +528,12 @@ Lagrange local telemetry contribution boundary
         |
         +-- local diagnostics/status
         +-- customer-selected Community/local sinks
-        `-- optional paid exporters (Prometheus/OTel/etc.)
+        `-- optional commercial managed retention/fleet analytics
 ```
 
-The local contribution boundary is generic service substrate. Export products
-remain in their edition implementation homes.
+The local contribution boundary and standard Prometheus/OpenTelemetry-compatible
+exports are Community service substrate. Managed retention, fleet correlation
+and organizational reporting remain external commercial services.
 
 Telemetry policy requirements:
 

@@ -6,7 +6,14 @@ documentClass: planning
 # Lagrange Product Roadmap
 
 This is the cross-edition view of one ordered release sequence. Every future
-capability below has a numbered release home. Publication and milestone acceptance
+capability below has a numbered release home. Lagrange AGPL is a complete
+self-managed runtime: locality and regional replication, safe recovery,
+security, ordinary policy enforcement and standard telemetry remain open.
+Commercial products govern, integrate and verify those mechanisms across
+organizations without introducing a parallel core authority. Optional
+Lagrange Images/Object Environment development tools are not required for
+any enterprise feature; their own releases and licensing live in their
+repositories. Publication and milestone acceptance
 follow the preceding release. Independent bounded implementation may proceed
 concurrently when consumed contracts are defined, with one writer per changing
 interaction and ordered integration. A section assigns intended scope, not a
@@ -35,10 +42,10 @@ No status in this roadmap substitutes for that evidence.
 | 0.6 | Safe managed OCI activation and native Call Cells | Community |
 | 0.7 | Transport independence, NATS-only operation and effective static timing | Community |
 | 0.8 | Veilid-only cluster operation | Community |
-| 0.9 | Complete installable-service lifecycle, diagnostics and support | Community core; Pro/Enterprise commercial integrations |
-| 1.0 | Production guarantees, global uniqueness and backup/recovery products | Community core; Pro backup/restore/PITR |
+| 0.9 | Complete installable-service lifecycle, standard telemetry exports, diagnostics and support | Community core; Pro/Enterprise managed operations integrations |
+| 1.0 | Production guarantees, global uniqueness, open backup/restore/PITR and paid recovery assurance | Community mechanisms; Pro recurring verification |
 | 1.1 | Broader SQL and PostgreSQL compatibility | Community |
-| 1.2 | Enterprise identity, tenancy, secrets and cross-region operation | Enterprise, external implementation |
+| 1.2 | Qualified AGPL regional operation and enterprise governance | Community regional/tenancy contracts; Enterprise organizational services |
 | 2.0 | Deeper execution, optimizer, advanced artifact storage and full Scenario B | Community |
 | 2.1 | Specialized search and data-local processing services | Community search substrate; AI edition remains unclassified |
 
@@ -258,8 +265,8 @@ Acceptance disables alternate inter-node WebSocket and NATS paths. Mixed
 transports are not required for correctness or availability of this mode.
 
 This release consumes 0.7's transport and timing contracts and publishes its
-measured capacity and latency envelope. It does not promise enterprise
-cross-region replication, which is assigned to 1.2.
+measured capacity and latency envelope. It does not claim general cross-region
+support; named regional profiles are assigned to AGPL qualification in 1.2.
 
 ## Phase 0.9 - Installable Service Product Platform
 
@@ -277,7 +284,8 @@ lifecycle. This is one versioned product milestone, building on 0.6.
 | SQL and CLI operations | Community / AGPL | Service install/upgrade/remove/list/status, service revision/instance views and registry management through the normal public surfaces |
 | Diagnostics and support | Community / AGPL | Health/metrics contributions, bounded customer-inspectable support bundles and explicit secret/payload redaction |
 | Telemetry contributions | Community / AGPL | Customer-controlled export plumbing, separate from licensing and entitlement validity |
-| Advanced observability | Pro / External commercial | Prometheus export, OpenTelemetry tracing, partition heatmaps and advanced runtime traces |
+| Standard observability and export | Community / AGPL | Prometheus/OpenTelemetry-compatible metrics/traces, placement explanations, traffic/resource counters and locally controlled export |
+| Managed observability | Pro / External commercial | Managed retention, fleet-wide correlation, reporting and supported operations across deployments |
 | Entitlement and edition controls | Pro/Enterprise / External commercial | Offline-capable signed entitlement assertions, edition requirements, activation checks and safe typed grace/expiry behavior |
 | Commercial provider integration contracts | Community seams; external commercial providers | Defined capability discovery and secret-reference/policy integration; unavailable paid providers fail explicitly rather than being presumed implemented |
 
@@ -297,8 +305,9 @@ within its eventual edition classification.
 | Stable compatibility policies | Community / AGPL | SQL/service/driver, upgrade/downgrade and supported transport-profile contracts |
 | Global unique indexes | Community / AGPL | Synchronous transactional index maintenance participates in commit correctness and enforces global uniqueness |
 | Production index guarantees | Community / AGPL | Supported NULL/type/collation contract, rebuild/backfill under failure, write amplification and recovery/pressure bounds |
-| Consistent snapshot service API | Community / AGPL | Cluster-consistent barriers and snapshot contracts consumed by recovery products |
-| Backup, restore and PITR | Pro / External commercial | External storage, incremental backup, restore into existing/new clusters, point-in-time recovery and measured disaster-recovery RPO/RTO |
+| Consistent snapshot service API | Community / AGPL | Cluster-consistent barriers and snapshot contracts consumed by supported recovery mechanisms and optional managed verification |
+| Backup, restore and PITR mechanisms | Community / AGPL | External storage, backup integrity, restore into fresh/compatible clusters, point-in-time recovery and measured recovery guarantees through the public operating path |
+| Verified recovery operations | Pro / External commercial | Scheduled isolated application restores, declared-check execution, retained measured recovery evidence and fleet orchestration |
 | Supported installed services | Community core; commercial products externally | Production security, compatibility, diagnostics, upgrade/rollback and operating guarantees over the 0.9 lifecycle |
 
 Replica snapshots remain distinct from customer backups. A support statement
@@ -317,19 +326,21 @@ Community scope follows the Queryable Core access-path foundation completed in
 - broader `information_schema` and `pg_catalog` compatibility;
 - window functions, sequences and other explicitly tested relational conveniences.
 
-## Phase 1.2 - Enterprise Operations
+## Phase 1.2 - Regional Qualification and Enterprise Governance
 
-These are Enterprise features implemented in the external commercial repository.
-The AGPL implementation home and the security floor of earlier releases do not
-change.
+Regional correctness is an AGPL outcome; organization governance is a
+distinct external commercial outcome in the same numbered release. Neither
+is supported on the published alpha merely by being planned.
 
-| Requirement | Release outcome |
-| --- | --- |
-| Enterprise identity and policy | Enterprise authentication/SSO integrations, RBAC, audit policy and a supported policy-provider API |
-| Tenancy | Tenant context propagation, isolation, resource quotas and policy-controlled placement |
-| Secrets and encryption | Cluster-resolved external references, credentials, secrets/KMS integrations and encryption-at-rest controls |
-| Cross-region operation | Supported replication, durability/failover, data-sovereignty and latency contracts with measured failure/recovery evidence |
-| Compliance surfaces | Commercial operational and audit controls for the declared tenancy and deployment model |
+| Requirement | Edition / implementation | Release outcome |
+| --- | --- | --- |
+| Regional operating profiles | Community / AGPL | Named physical cross-region latency, placement, replication, availability and recovery contracts with measured fault and traffic behavior; observed latency groups are not geographic or sovereignty labels |
+| Core supported tenancy | Community / AGPL | Basic roles, authorization, tenant isolation and resource limits wherever claimed by the supported multi-tenant profile |
+| Identity and policy governance | Enterprise / External commercial | SSO/SCIM/group synchronization, organization-wide policy inheritance, delegation, approval, drift/exception tracking and audit retention |
+| Secrets and compliance integrations | Enterprise / External commercial | KMS/secrets providers, organization-specific evidentiary controls and supported enterprise identity workflows; base security remains open |
+| Fleet and release governance | Enterprise / External commercial | Supported multi-deployment upgrades, publisher/dependency policies, promotion approval and revision inventory over the ordinary 0.9 lifecycle |
+| Cost and regional policy administration | Enterprise / External commercial | Provider price/billing integration, attribution/chargeback, budget owner policy, approved changes and measured financial outcomes; core owns locality and placement |
+| Optional Images integration | External open development companion; public AGPL integration | Images/Object Environment may contribute app-specific recovery or Project metadata but cannot be required to install or operate Lagrange Enterprise |
 
 ## Phase 2.0 - Deeper Distributed Execution
 

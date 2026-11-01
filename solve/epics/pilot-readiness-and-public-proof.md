@@ -27,6 +27,20 @@ doneWhen:
 
 # Pilot readiness and public-path proof
 
+## Edition-ownership supersession (2026-11-01)
+
+The [edition matrix](../../edition-matrix.md) now supersedes earlier statements
+in this epic that assigned all user backup/restore/PITR or cross-region
+replication to commercial implementations. Those underlying mechanisms, normal
+security/authorization and supported tenancy are Community/AGPL; recurring
+recovery drills, organization identity, policy approvals, billing and fleet
+governance are separate external commercial outcomes. The 0.5 pilot still does
+not implement the full 1.0 backup product or certify the 1.2 regional profiles.
+Historical D8/D9 reasoning and audit entries below remain dated records;
+their old edition allocations no longer direct new work. Sealed Quest
+acceptance, Q7-Q12 boundaries, this epic's gate and existing evidence are
+unchanged. No new runtime feature or proof is claimed by this correction.
+
 ## Current release allocation
 
 The reviewed published baseline is v0.4.0 at
@@ -76,8 +90,8 @@ OOM incident or exploit and not permission for a second resource scheduler.
 
 Keep the running local agent's current cutover work coherent before opening
 overlapping runtime edits. Core readiness documentation may clarify rebuild/
-reload limits now; commercial backup/restore/PITR implementation stays in its
-existing external home. This finding does not move it into AGPL or expand 0.3.
+reload limits now; the user backup/restore/PITR mechanisms belong to the later
+AGPL 1.0 milestone. This finding neither implements them nor expands 0.5.
 
 ## Intent (why now)
 
@@ -90,11 +104,11 @@ owns the approved Hono authoring boundary. This epic retains data-local
 execution and pilot obligations underneath it, without adding parallel
 execution, transport, routing or workflow owners.
 
-The operational pilot boundary remains evidence-dependent. Commercial
-backup/PITR, enterprise identity and tenancy, secrets/KMS integrations and
-cross-region durability retain their edition/implementation homes. Removing
-false-positive management success is an immediate correctness obligation; it
-does not establish or authorize a backup product.
+The operational pilot boundary remains evidence-dependent. Future AGPL user
+backup/PITR and regional durability profiles retain their assigned 1.0/1.2
+milestones; enterprise organizational identity and secrets/KMS integrations
+remain external. Removing false-positive management success is an immediate
+correctness obligation; it does not establish or implement backup capability.
 
 ## Historical source audit (2026-08-07)
 
@@ -146,14 +160,15 @@ HEAD at audit: `761dc17c7facd847843f7e68c39d253bca256a62`.
 7. **No claim without a reproducible receipt.** Every latency, throughput,
    transfer, scale, recovery, or compatibility claim names the release
    commit, topology, workload, sample method, and machine-readable evidence.
-8. **Core cluster security stays core.** Cryptographic authentication and
-   encryption required for nodes to trust one another belong to the
-   Community/AGPL production floor. Enterprise SSO, customer RBAC, hostile
-   multi-tenancy, policy providers, and secrets/KMS integrations remain in
-   the external commercial implementation home.
-9. **Edition boundaries are enforced.** Backup/restore/PITR and cross-region
-   work do not land in this repository unless `edition-matrix.md` is changed
-   by an explicit product decision first.
+8. **Core cluster security stays core.** Cryptographic peer trust, ordinary
+   authentication/authorization, basic roles and the isolation required by a
+   supported operating profile are Community/AGPL. Enterprise SSO group
+   provisioning, organization policy governance and KMS integrations remain
+   external; hostile multi-tenancy requires an explicit supported contract.
+9. **Edition boundaries are enforced.** User backup/restore/PITR mechanisms
+   and regional correctness are Community/AGPL in their assigned later
+   milestones. This 0.5 pilot epic does not implement those later features
+   merely because their edition classification changed.
 10. **No documentation-only closure.** Documentation may be updated as a
     consequence of landed behavior, but a Quest's red direction and
     `doneWhen` must exercise code or live evidence.
@@ -193,12 +208,13 @@ Q1, Q2, Q3, Q7, and Q11 are real gates. Dependent work does not execute when
 a gate refutes its assumed design; a failed gate updates this epic's decision
 log rather than being routed around by weakening the statement.
 
-## Commercial companion work (external, not landed here)
+## Later recovery, regional and commercial work (not landed here)
 
-Per `edition-matrix.md`, backup/restore/PITR, enterprise identity/policy/secrets,
-and cross-region durability stay in the external commercial repository.
-Cryptographic node transport remains core because every edition must establish
-peer trust. Replica snapshots are primitives, not a user backup product.
+Per the current `edition-matrix.md`, AGPL owns future user backup/restore/PITR
+and regional replication/locality; its recovery mechanisms are separate from
+replica-internal snapshots. External commercial services own recovery
+assurance, organization identity/policy/secrets integrations and fleet
+governance. This 0.5 pilot acceptance does not certify those later outcomes.
 
 ## Epic completion criteria
 
@@ -213,10 +229,9 @@ peer trust. Replica snapshots are primitives, not a user backup product.
 7. The final scale/failure certification passes its sealed bar.
 8. A named upgrade/recovery envelope is executable rather than prose.
 
-Commercial backup/PITR, enterprise identity/tenancy, secrets/KMS, and
-cross-region work are not required to mark this AGPL epic complete, but the
-epic links to the companion backlog (above) and must not imply those
-guarantees.
+Future AGPL backup/PITR and regional profile qualification, and separate
+enterprise organization integrations, are not required to close this 0.5
+epic. Its pilot evidence must not imply those later guarantees.
 
 ## Decision log
 

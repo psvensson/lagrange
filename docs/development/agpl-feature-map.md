@@ -26,8 +26,16 @@ Edition ownership and implementation-home rules live in `edition-matrix.md`.
 
 - In scope: Community / AGPL features and shared platform substrate whose
   implementation home is this repository in `edition-matrix.md`
-- Out of scope: Pro and Enterprise backlog, even when those items are visible
+- Out of scope: Pro and Enterprise operational services, even when visible
   elsewhere for status tracking
+- Core includes ordinary regional operation, locality and traffic efficiency,
+  safe recovery mechanisms, necessary authorization/isolation and standard
+  observability/export. The paid layer may administer, integrate and verify
+  these capabilities across deployments, never replace their owners.
+- Lagrange Images/Object Environment are optional external development tools;
+  shared generic host/service integrations stay AGPL here, their own product
+  development and licensing stay in their repositories. Enterprise never
+  requires these tools.
 
 ## Version Sequence
 
@@ -39,8 +47,9 @@ published 0.4.0 experimental-alpha baseline:
 Every planned feature has one primary version home below. Earlier capabilities
 are prerequisites reused by later milestones. Phase 0.1 and Phase 0.2 retain
 historical foundation scope; they are not open-ended feature backlogs.
-Phase 1.2 is an explicit external-edition milestone and authorizes no paid
-implementation in this repository. Version placement is delivery order, not a
+Phase 1.2 contains explicitly separate AGPL regional-qualification work and
+external enterprise-operations outcomes; it authorizes no paid implementation
+in this repository. Version placement is delivery order, not a
 calendar promise, runtime claim or Quest completion receipt.
 
 The former future 0.2.9 is retired. Its stable row IDs remain below under their
@@ -245,7 +254,7 @@ OCI execution to 0.6.
 |----|------|---------------|-------------|
 | `RM-0.2-five-node-convergence` | Five-node cold formation and runtime-service initial placement | ✅ | Formation, table creation, and initial service placement complete without stalled control-plane or service operations |
 | `RM-0.2-topology-safety` | Topology-operation safety closure | ✅ | Authoritative operation-ledger release, safe surplus removal, and ready-lease candidate admission retain their safety invariants |
-| `RM-0.2-snapshot-integration` | Compacted-follower snapshot catch-up integration | ✅ | Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log` compaction (`SN1`), and follower catch-up landed in `0.2.6`; bounded current correctness repairs belong to 0.4.1, remaining composed retention and pilot log/recovery qualification to 0.5, and customer backup/PITR to the external 1.0 product |
+| `RM-0.2-snapshot-integration` | Compacted-follower snapshot catch-up integration | ✅ | Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log` compaction (`SN1`), and follower catch-up landed in `0.2.6`; bounded current correctness repairs belong to 0.4.1, remaining composed retention and pilot log/recovery qualification to 0.5, and AGPL user backup/PITR mechanisms to 1.0 |
 | `RM-0.2-release-verification` | Core release verification | ✅ | Historical release checks include the tagged but unpublished `0.2.0` candidate and published `0.2.5`/`0.2.6` releases, as recorded in `CHANGELOG.md`; each current release claim still requires its own exact-candidate evidence |
 
 ### Phase 0.2 Exit Criteria
@@ -263,7 +272,8 @@ Automatic `raft-rs` partition snapshot cadence, retention sweep, `_raft_rs_log`
 compaction (`SN1`), and follower catch-up shipped in `0.2.6`, while
 bounded defects in current log guarantees are assigned to 0.4.1; remaining
 composed retention and pilot-scale log/recovery qualification belong to 0.5.
-Customer backup/PITR is an external 1.0 product. The existing bounded distributed
+Customer backup/restore/PITR mechanisms are AGPL 1.0 scope; recurring
+recovery assurance and fleet administration remain external commercial services. The existing bounded distributed
 service journey, service expansion and qualified multi-machine comparison belong
 to 0.5, OCI execution to 0.6, and advanced automatic data-affinity/cost-aware
 placement to 2.0.
@@ -540,12 +550,12 @@ authority.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
-| RM-0.5-pilot-transport-security | Authenticated and encrypted node transport | 🔲 | Protect the supported transport before pilot use. Enterprise identity, RBAC and tenant policy remain the external 1.2 milestone. Contract: `docs/security.md`. |
+| RM-0.5-pilot-transport-security | Authenticated and encrypted node transport | 🔲 | Protect the supported transport before pilot use. Basic authentication, authorization and supported tenancy remain AGPL; organization-wide identity and policy administration belong to external 1.2 services. Contract: `docs/security.md`. |
 | RM-0.5-pilot-pg-authentication | Pilot PostgreSQL authentication and TLS | 🔲 | Qualify the selected driver/authentication profile, including SCRAM where required; preserve explicit trust/password/TLS limits. Enterprise identity integration remains 1.2. Contract: `architecture/postgres-wire.md`. |
 | RM-0.5-pilot-recovery-envelope | Bounded logs and pilot recovery certification | 🔲 | Qualify message-group compaction and multi-machine soak/recovery using delivered mechanisms and the inherited retention obligations completed by the stabilization owner. Name supported topology, capacity and fault cases; do not defer initial pilot proof to 0.9. Contract: `docs/operations-readiness.md`. |
-| RM-0.5-pilot-migration-upgrades | Pilot migration, upgrade and exit procedures | 🔲 | Data load, shadowing, cutover, rollback/exit and supported release-pair upgrade/downgrade rehearsals. Customer backup/PITR implementation remains external in 1.0. Contract: `docs/migration.md`. |
+| RM-0.5-pilot-migration-upgrades | Pilot migration, upgrade and exit procedures | 🔲 | Data load, shadowing, cutover, rollback/exit and supported release-pair upgrade/downgrade rehearsals. Full user backup/restore/PITR mechanisms remain later AGPL 1.0 work; pilot export/reload limits must be explicit. Contract: `docs/migration.md`. |
 | RM-0.5-pilot-driver-certification | Named PostgreSQL-driver and SQL profiles | 🔲 | Certify the declared current subset and necessary metadata through actual drivers. Broader catalogs, window functions, sequences and index syntax are assigned to 1.1. Contract: `architecture/postgres-wire.md`. |
-| RM-0.5-pilot-operational-view | One public operating and diagnostics view | 🔲 | Correlate requests, shard runs, partials, placement, retries and typed failures; expose index state/build failures and live-query dependencies/frontiers/maintenance mode. Basic diagnostics remain Community; advanced exporters remain external. |
+| RM-0.5-pilot-operational-view | One public operating and diagnostics view | 🔲 | Correlate requests, shard runs, partials, placement, retries and typed failures; expose index state/build failures and live-query dependencies/frontiers/maintenance mode. Standard metrics/traces and export remain Community; paid fleet reporting is separate. |
 
 The existing PostgreSQL wire, dialect translation, supported CTE/subquery
 surface and `EXPLAIN DISTRIBUTED` are prerequisites, not new blanket SQL
@@ -671,7 +681,7 @@ for Community and commercial consumers. Contract:
 | RM-0.9-service-management-ux | Complete install/status/remove/upgrade surface | 🔲 | Idempotent SQL/CLI operations, revision/instance inspection, drain/cleanup and durable typed failure queryability. Complete the existing lifecycle SQL/catalog path rather than equating recorded installation with running service. |
 | RM-0.9-registry-offline-operation | Registry management and mirrored/air-gapped operation | 🔲 | Registry add/list/remove, priority/auth, verified local OCI layouts, offline trust and upgrades from customer-controlled artifacts. Native distributed artifact storage is assigned to 2.0. |
 | RM-0.9-service-diagnostics-support | Diagnostics and customer-inspectable support bundles | 🔲 | Stable service health/metrics/failure contribution, versioned local bundles, bounded collection, redaction and contributor-failure isolation. Submission is a separate explicit action. |
-| RM-0.9-service-telemetry-contribution | Customer-controlled telemetry contribution | 🔲 | One local contribution/export boundary, explicit customer destination policy and telemetry/licensing separation. Paid exporters and advanced observability stay external. |
+| RM-0.9-service-telemetry-contribution | Customer-controlled telemetry contribution | 🔲 | One local contribution/export boundary including standard Prometheus/OpenTelemetry-compatible output, explicit customer destination policy and telemetry/licensing separation. Managed retention, fleet analytics and reporting may be external services. |
 | RM-0.9-commercial-extension-seams | Entitlement and external-reference integration contracts | 🔲 | Community consumes typed external assertions and opaque references. Offline entitlement policy/verification and paid providers remain external; Enterprise secret/KMS and policy implementations are assigned to 1.2. |
 | RM-0.9-service-product-acceptance | Real service and integrated product qualification | 🔲 | A separately released service completes install, readiness, restart, diagnostics, bounded support, upgrade, rollback and remove on the supported cluster. Consume prior milestone evidence and close integration gaps. |
 
@@ -682,8 +692,8 @@ commands consume the same owner outcomes. Public topology and event-emission
 interfaces needed by installed services belong to this stable contract;
 advanced placement and execution expansion belongs to 2.0.
 
-Commercial entitlement implementations and advanced telemetry/export products
-share this version milestone in their external repositories. Core only supplies
+Commercial entitlement implementations and managed telemetry/organizational
+analysis services share this version milestone in their external repositories. Core only supplies
 the generic extension and contribution boundaries. Lagrange AI is the intended
 acceptance candidate in the platform contract; its currently unclassified
 edition/implementation home must be resolved before implementation, without
@@ -705,8 +715,8 @@ runtime state. Earlier pilot and provider guarantees remain qualified.
 
 Production support builds on the already qualified query, service, transport
 and installable-product capabilities. It does not reopen their initial
-implementation. Broader SQL syntax is 1.1; Enterprise/cross-region additions
-are 1.2 in their external implementation homes.
+implementation. Broader SQL syntax is 1.1; named AGPL regional support and separate
+enterprise administration outcomes are assigned explicitly to 1.2.
 
 ### 1. Production Guarantees
 
@@ -738,13 +748,16 @@ are 1.2 in their external implementation homes.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
-| RM-1.0-consistent-snapshot-api | Shared consistent snapshot/barrier API | 🔲 | Core-owned service barrier and cluster-consistent read contract consumed by external backup/recovery. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md`. |
-| RM-1.0-support-contract | Supported compatibility, security and recovery contract | 🔲 | Stable SQL/service/upgrade policies, named hardware/workload certification, measured recovery bounds and explicit support distinctions. Current safety controls remain prerequisites; Enterprise policy remains external 1.2. |
+| RM-1.0-consistent-snapshot-api | Shared consistent snapshot/barrier API | 🔲 | Core-owned service barrier and cluster-consistent read contract consumed by AGPL backup/restore/PITR and optional external recovery assurance. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md`. |
+| RM-1.0-user-recovery-mechanisms | Usable user backup/restore/PITR | 🔲 | Supported backup and restore into a fresh deployment, integrity and point-in-time contracts, public operating path and measured recovery evidence. Must receive a bounded owner/spec before implementation; optional commercial drills call the same core mechanisms. |
+| RM-1.0-support-contract | Supported compatibility, security and recovery contract | 🔲 | Stable SQL/service/upgrade policies, named hardware/workload certification, measured recovery bounds and explicit support distinctions. Core authentication, authorization and supported isolation remain prerequisites; enterprise organization policy remains external 1.2. |
 
-Backup/restore/PITR and its measured disaster-recovery RPO/RTO are assigned to
-1.0 in the external Pro implementation home. Core supplies only its owned
-snapshot/barrier and service-platform prerequisites. This placement does not
-authorize the backup product in this AGPL repository.
+Backup/restore/PITR mechanisms and their supported recovery semantics belong
+to AGPL in 1.0. The customer-operated API and integrity checks do not require
+a paid service. External Pro services may schedule isolated recovery drills,
+exercise application checks, retain measured evidence and manage fleet coverage.
+The 2026-11-01 edition correction changes ownership, not implementation status
+or an existing sealed acceptance contract.
 
 ### Phase 1.0 Exit Criteria
 
@@ -779,20 +792,28 @@ preserves the supported transaction, index and upgrade contracts.
 
 ---
 
-## Phase 1.2 — Enterprise and Cross-Region Product
+## Phase 1.2 — Regional Qualification and Organization Operations
 
-This is the next version in the single product sequence, with implementation
-outside the AGPL repository. Enterprise identity/RBAC, tenant isolation,
-resource quotas, encryption-at-rest policy, secrets/KMS, enterprise policy,
-compliance and cross-region durability/replication remain governed by
-`edition-matrix.md` and the external backlog mirrored in
-`docs/development/product-roadmap.md`.
+This is one milestone with separately owned outcomes. The AGPL repository
+qualifies real cross-region replication, latency-group behavior, locality,
+failure-domain placement, routing and recovery through the existing canonical
+runtime owners. Latency groups alone do not establish geographic location or
+regulatory residency. No support profile is claimed before physical evidence.
+The external commercial repository supplies organization policy administration,
+identity provisioning, managed audit/evidence, fleet changes, cost/billing
+integrations and governed service promotion.
+
+| Id | Item | Roadmap state | Scope notes |
+|----|------|---------------|-------------|
+| RM-1.2-agpl-regional-operating-profiles | Named AGPL regional operating profiles | 🔲 | Prove placement constraints, regional efficiency and safe replication/failover/recovery over real regions with declared topology, workload, latency and failure bounds; one core planner and no edition entitlement. A bounded spec/Quest is required before implementation. |
+| RM-1.2-core-tenancy-policy-contract | Supported core tenancy and policy enforcement | 🔲 | Complete basic roles/authorization, tenant isolation and quotas where promised by the supported operating model. Organization-wide administration remains an external consumer of these core contracts. A bounded spec/Quest is required before implementation. |
 
 There are no paid implementation rows here. Previously delivered Community
-transport protection, capability enforcement, operating bounds and generic
-reference seams remain prerequisites. This milestone does not postpone those
-basic safety requirements or authorize an Enterprise policy implementation in
-core.
+transport protection, capability enforcement, ordinary policy mechanisms,
+operating bounds and generic reference seams remain prerequisites.
+Commercial management cannot become another scheduler, service lifecycle,
+recovery engine or authorization authority; it cannot disable running cluster
+safety when absent or expired.
 
 ---
 
@@ -818,7 +839,7 @@ then qualify the full Scenario B comparison against that supported contract.
 | Item | Roadmap state | Scope notes |
 |------|---------------|-------------|
 | Additional OCI providers and resource placement | 🔲 | Kubernetes/containerd and broader runtime-platform scale reuse the 0.6 lifecycle and invocation owner. |
-| Activation-cost-aware placement | 🔲 | Image presence, warm runtime/WASM materialization cost, partition locality, admission/readiness and developer feedback through existing placement authority. Spec: `solve/specs/activation-cost-aware-placement/`. |
+| Activation-cost-aware placement | 🔲 | Image presence, warm runtime/WASM materialization cost, partition locality, measured bytes/traffic movement, admission/readiness and developer feedback through existing placement authority. The core algorithm may consume caller-supplied costs; paid billing reconciliation does not own placement. Spec: `solve/specs/activation-cost-aware-placement/`. |
 | Advanced network operating policies | 🔲 | Adaptive timing or mixed-transport policy builds on the measured sole-transport contracts from 0.7/0.8; this does not reopen their delivery or routing ownership. |
 | Keyed invocation routing | 🔲 | Canonical actor-key extraction and transport-neutral rendezvous routing; seal a fixed-shard/epoch ownership contract. Spec: `solve/specs/request-invocation-partitioning/`. |
 | Non-request source completion | 🔲 | Complete CDC, timer, once, boot and planner-pushdown invocation through existing desired-state/Cell owners; consume the call path already established in 0.5/0.6. Plan: `solve/epics/minimal-deployment-surface.md`. |

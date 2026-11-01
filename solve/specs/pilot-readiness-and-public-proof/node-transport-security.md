@@ -101,9 +101,12 @@ each red in the multi-node scenario:
 
 - Core cluster safety, lands in the AGPL runtime (D8): nodes must be unable
   to trust an unauthenticated peer in every edition.
-- External per `edition-matrix.md`: OIDC/SAML, customer RBAC, policy
-  providers, secrets/KMS integration, hostile multi-tenancy (D8); no
-  backup/cross-region coupling (D9).
+- Out of scope for this transport Quest: user-facing identity, RBAC,
+  policy providers, secrets/KMS and hostile multi-tenancy qualification
+  (D8); no backup/cross-region implementation coupling (D9). Basic
+  authorization/roles and supported tenant isolation belong to AGPL;
+  organization identity and managed policy integrations remain external
+  under the current edition matrix.
 - No parallel transport stack, no per-channel trust model (D11).
 - pgwire client-facing TLS is out of scope here; only node-to-node transport.
 
