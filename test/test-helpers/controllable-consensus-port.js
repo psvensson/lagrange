@@ -119,6 +119,16 @@ export function applyCommandThroughApplicationOwner({database, groupId, index,
   });
 }
 
+// A peer without a committed node has no address: the production status
+// reports it as unavailable (raft-rs-status-observation.js), never throws.
+function resolvedPeerAddress(resolveAddress, identity, nodeId) {
+  try {
+    return resolveAddress(identity, nodeId);
+  } catch {
+    return null;
+  }
+}
+
 export class ControllableConsensusPort {
   constructor(options = {}) {
     Object.assign(this, DEFAULT_PORT_STATE);
@@ -150,8 +160,9 @@ export class ControllableConsensusPort {
     this.steps = [];
     this.schedulingCalls = [];
     this.committedIndex = 0;
-    // The leader's view of each follower's matched index, by address (the
-    // production status's followerProgress); a suite sets it by hand.
+    // The leader's view of each follower's matched index, by replica
+    // identity (the production status's followerProgress); a suite sets it
+    // by hand.
     this.followerProgress = {};
     this.gateOpen = options.gateOpen !== false;
     this.identityRecorded = options.identityRecorded !== false;
@@ -195,10 +206,15 @@ export class ControllableConsensusPort {
       const localIdentity = request[RAFT_OPERATION_PORT_REQUEST.PEER_ID];
       const resolveAddress =
         request[RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS];
+      // The production port hands the resolver each peer's committed node:
+      // for a founder, the node its GENESIS stamp placed it on.
+      const founderNodeIds = request[
+        RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]?.founderNodeIds || {};
       this.peers = (request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS] ||
         []).filter((identity) => identity !== localIdentity)
         .map((identity) => ({
-          address: resolveAddress(identity),
+          address: resolvedPeerAddress(resolveAddress, identity,
+            founderNodeIds[identity] ?? null),
           replicaIdentity: identity,
         }));
     }

@@ -110,25 +110,6 @@ function shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) {
   return !isPeerRowStatusAdmissible(serviceRow.status);
 }
 
-/**
- * Whether the init loop may admit a bootstrap peer (F2): the same filter as
- * the row-driven reconciliation, over the peer's services row when this
- * node's cache holds one. A bootstrap peer with no row yet is admitted as
- * before (the bootstrap membership names it); a PENDING/CREATING or retiring
- * row is not, here or anywhere: it is admitted on the row change that records
- * its fact.
- * @param {Object} partitionService - The opening partition replica.
- * @param {string} peerId - The bootstrap peer.
- * @return {boolean}
- */
-function isBootstrapPeerAdmissible(partitionService, peerId) {
-  const serviceRow = typeof partitionService.systemTableCache?.get ===
-    PARTITION_SERVICE_TYPE.FUNCTION ?
-    partitionService.systemTableCache.get(TABLES.SERVICES, peerId) : null;
-  return !serviceRow ||
-    !shouldSkipPeerServiceRow(partitionService, serviceRow, peerId);
-}
-
 function addressMatchesReplica(addressManager, address, replicaId) {
   if (typeof address !== 'string' || address.length === 0) {
     return false;
@@ -454,7 +435,6 @@ function redriveAdmissionsOnMembershipChange(partitionService) {
 }
 
 export {
-  isBootstrapPeerAdmissible,
   reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
   retireRaftPeerFromAuthoritativeServiceChange,

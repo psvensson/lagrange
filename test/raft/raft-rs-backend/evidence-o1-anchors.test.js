@@ -123,7 +123,7 @@ test('anchor: a GENESIS stamp reaching a founder that holds a durable ' +
     const logBefore = durableLog(model.replica(founder).dbFile, PARTITION_ID);
     const restarted = restartWith(model, founder,
       {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-        genesisStamp([founder])});
+        genesisStamp([founder], {})});
     assert.equal(restarted.refused, undefined,
       `the founder restores (${restarted.refused?.message})`);
     assert.equal(model.node(founder).readStatus().gateOpen, true,
@@ -277,7 +277,7 @@ const PORT_DEFECT_CASES = Object.freeze({
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.IDENTITY_UNRESOLVED]: (stamp) =>
     ({...stamp, identities: {...stamp.identities, [stamp.voters[0]]: null}}),
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_FOUNDERS]: () =>
-    genesisStamp([]),
+    genesisStamp([], {}),
 });
 
 test('anchor (port stamp validation): the port refuses every stamp defect ' +

@@ -331,7 +331,8 @@ class SQLQueryEngineProvisionTargetMethods {
    * Build the explicit bootstrap cohort for initial table partition creation.
    * @param {string} partitionId - Partition ID.
    * @param {Array<Object>} plannedOperations - Planned ADD operations.
-   * @return {Object} Replica IDs and peer addresses for the initial cohort.
+   * @return {Object} Replica IDs, peer addresses and the founders' placed
+   *   nodes for the initial cohort.
    * @private
    */
   buildInitialPartitionBootstrapTopology(partitionId, plannedOperations) {
@@ -399,11 +400,27 @@ class SQLQueryEngineProvisionTargetMethods {
       }
     }
 
+    const uniquePeerAddresses = [...new Set(peerAddresses)];
     return {
       replicaIds,
-      peerAddresses: [...new Set(peerAddresses)],
+      peerAddresses: uniquePeerAddresses,
+      founderNodeIds: founderNodeIdsOf(addressManager, replicaIds,
+        uniquePeerAddresses),
     };
   }
+}
+
+// The node each founder is placed on, read from the cohort's unified
+// addresses (the founding placement): the GENESIS stamp commits it.
+function founderNodeIdsOf(addressManager, replicaIds, peerAddresses) {
+  const founderNodeIds = {};
+  for (const address of peerAddresses) {
+    const parsed = addressManager.parse(address);
+    if (replicaIds.includes(parsed.serviceId)) {
+      founderNodeIds[parsed.serviceId] = parsed.nodeId;
+    }
+  }
+  return founderNodeIds;
 }
 
 function createSQLQueryEngineProvisionTargetMethods() {

@@ -587,7 +587,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     );
     // The founding cohort's GENESIS stamp (owner decision O1): the second
     // and last stamp origin beside the creation owner's committed read.
-    const bootstrapMembership = genesisStamp(bootstrapTopology.replicaIds);
+    const bootstrapMembership = genesisStamp(bootstrapTopology.replicaIds,
+      bootstrapTopology.founderNodeIds);
     const bootstrapLeaderNodeId =
       this.resolveInitialPartitionBootstrapLeaderNodeId(
         partitionId,

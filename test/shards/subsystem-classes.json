@@ -19,16 +19,16 @@
     "services-runtime": 148,
     "solver-tooling": 7,
     "storage-partition": 209,
-    "storage-raft": 148,
+    "storage-raft": 146,
     "test-infrastructure": 153,
     "transactions": 17,
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2511,
-  "digest": "fnv1a32-2f02936b",
+  "censusSize": 2509,
+  "digest": "fnv1a32-f377dd9a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-92d6ece8",
+  "observationDigest": "fnv1a32-aabe3c52",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1639,8 +1639,6 @@
     "test/raft/leadership-transfer-single-path.test.js": "storage-raft",
     "test/raft/learner-promotion-progress-proof-contract.test.js": "storage-raft",
     "test/raft/message-group-readiness-delivery-priority.test.js": "storage-raft",
-    "test/raft/peer-address-resolver.property.test.js": "storage-raft",
-    "test/raft/peer-address-resolver.test.js": "storage-raft",
     "test/raft/raft-cleanup-verification.test.js": "storage-raft",
     "test/raft/raft-id-mapper.test.js": "storage-raft",
     "test/raft/raft-log-write-owner.test.js": "storage-raft",
@@ -10236,9 +10234,11 @@
     },
     "test/partition/learner-promotion-proof-committed-admission.test.js": {
       "files": [
+        "src/partition/partition-committed-peer-address.js",
         "src/partition/partition-service-raft-membership-administration.js",
-        "src/raft/learner-promotion-progress.js",
-        "src/raft/raft-committed-membership-constants.js"
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ],
       "directories": [
         "src"

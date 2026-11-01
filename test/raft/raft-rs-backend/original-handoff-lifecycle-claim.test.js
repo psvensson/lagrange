@@ -18,7 +18,7 @@ function generation(t) {
   const db = new Database(':memory:');
   const port = createRaftRsOperationPort({groupId: GROUP, peerId: REPLICA,
     peerAddress: 'local-replica', durableStorage: db, timing: TIMING,
-    bootstrapPeerIds: [REPLICA], bootstrapMembership: genesisStamp([REPLICA]),
+    bootstrapPeerIds: [REPLICA], bootstrapMembership: genesisStamp([REPLICA], {}),
     resolvePeerAddress: () => 'local-replica', sendToPeer: () => {},
     applyCommittedEntry: () => {}, deferElection: true});
   const request = Object.freeze({runtime: port, groupId: GROUP,

@@ -195,7 +195,7 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
   }
 
   const seedPort = open(seedId, {
-    bootstrapMembership: genesisStamp([seedId]), bootstrapPeerIds: [seedId],
+    bootstrapMembership: genesisStamp([seedId], {}), bootstrapPeerIds: [seedId],
   });
   runOnExecutionNode(seedId, () => seedPort.campaign());
 

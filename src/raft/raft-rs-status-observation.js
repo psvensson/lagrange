@@ -73,6 +73,11 @@ function leaderObservation(group, lead) {
     leaderAddressStatus: observed.addressStatus};
 }
 
+// The leader's own matched index per configured peer, keyed by the peer's
+// replica identity (raft-rs Progress[id].matched, the id resolved through
+// this replica's identity record). Whether the peer can be addressed is the
+// transport's concern, never a reason to drop its progress; an id this
+// replica never reserved has no identity to key it by.
 function followerProgressSnapshot(group, status) {
   const progress = Array.isArray(status?.progress) ? status.progress : [];
   const snapshot = {};
@@ -81,17 +86,10 @@ function followerProgressSnapshot(group, status) {
       continue;
     }
     const matched = Number(item?.matched);
-    if (!Number.isFinite(matched)) {
-      continue;
-    }
-    let address = null;
-    try {
-      address = group.resolvePeerAddress(item.id);
-    } catch {
-      continue;
-    }
-    if (typeof address === 'string' && address.length > 0) {
-      snapshot[address] = matched;
+    const identity = group.resolvePeerIdentity(item?.id);
+    if (Number.isFinite(matched) &&
+        identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED) {
+      snapshot[identity.replicaIdentity] = matched;
     }
   }
   return snapshot;

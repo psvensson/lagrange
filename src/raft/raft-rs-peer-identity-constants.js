@@ -75,6 +75,13 @@ const RAFT_RS_LEARNER_ORIGIN_COVERAGE = Object.freeze({
   UNVOUCHED: 'unvouched',
 });
 
+// Why a peer has no address: no committed node for it in this replica's
+// identity record (it is not in the configuration this replica applied, or
+// no committed fact placed it). The per-peer delivery outcome carries it.
+const RAFT_RS_PEER_ADDRESS_REFUSAL = Object.freeze({
+  PEER_NOT_IN_CONFIGURATION: 'peer_not_in_configuration',
+});
+
 const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
   LEARNER_ADMISSION_CONFLICT: 'committed learner origin conflicts with permanent identity',
   LEARNER_ADMISSION_TRANSACTION: 'committed learner origin requires the application transaction',
@@ -101,6 +108,7 @@ export {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
   RAFT_RS_NODE_ID_COLUMN,
   RAFT_RS_LEARNER_ORIGIN_COVERAGE,
+  RAFT_RS_PEER_ADDRESS_REFUSAL,
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
   RAFT_RS_PEER_IDENTITY_SQL,

@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {AddressManager} from '../address/address-manager.js';
 import {
   REDRIVEN_ADMISSION_OUTCOMES,
   admissionOfPortAnswer,
@@ -64,6 +65,9 @@ function groupRetiringRefusal(service) {
  * through the group-neutral admission owner: only the leader proposes, a
  * member or a replica that is not the leader is a typed no-op, and every
  * decision is recorded as what the port answered.
+ * The admission commits the node the peer's unified address names (the
+ * admission context): from then on the peer is addressed from that
+ * committed fact, never from the row that triggered the admission.
  * @param {Object} service - The partition service.
  * @param {Object} peer - {replicaIdentity, peerAddress}.
  * @return {Object} The frozen admission record.
@@ -78,7 +82,8 @@ function admitPartitionRaftPeer(service, peer) {
       change: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, ...refused});
     return refused;
   }
-  return admitGroupPeer(service.raft, admissionGroupOf(service), peer);
+  return admitGroupPeer(service.raft, admissionGroupOf(service), {...peer,
+    nodeId: AddressManager.getInstance().getNodeId(peer.peerAddress)});
 }
 
 // The row-driven retirements (REMOVE_PEER) the port deferred, by the change

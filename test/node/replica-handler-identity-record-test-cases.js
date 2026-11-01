@@ -55,7 +55,7 @@ function portRequest(options, db, overrides = {}) {
     [REQUEST.PEER_ID]: options.replicaId,
     [REQUEST.PEER_ADDRESS]: addressOf(options.replicaId),
     [REQUEST.BOOTSTRAP_PEER_IDS]: [options.replicaId],
-    [REQUEST.BOOTSTRAP_MEMBERSHIP]: genesisStamp([options.replicaId]),
+    [REQUEST.BOOTSTRAP_MEMBERSHIP]: genesisStamp([options.replicaId], {}),
     [REQUEST.IDENTITY_EXISTED]: options.identityExisted,
     ...(options.identityRecorded === undefined ? {} :
       {[REQUEST.IDENTITY_RECORDED]: options.identityRecorded}),
