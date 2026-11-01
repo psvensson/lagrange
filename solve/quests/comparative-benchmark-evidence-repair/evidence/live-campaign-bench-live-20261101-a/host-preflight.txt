@@ -1,0 +1,56 @@
+== 192.168.86.32 2026-11-01T22:00:05Z
+peter-RB102
+driver=overlayfs status=[["driver-type","io.containerd.snapshotter.v1"]] root=/var/lib/docker
+/dev/nvme0n1p2  468G   70G  375G  16% /
+psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb -> sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb ["psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb"]
+sha256:18aeffc977a27fc3b365d29364c4c8a34c1f366ff94ede07d61c432fa8dc4a0c -> 
+pingcap/pd:v8.5.8 -> 
+pingcap/tikv:v8.5.8 -> sha256:ab84580b6795868940231aa778a34b082d19e4417e6d66f755c609bebdbbfd69 ["pingcap/tikv@sha256:ab84580b6795868940231aa778a34b082d19e4417e6d66f755c609bebdbbfd69"]
+pingcap/tidb:v8.5.8 -> 
+postgres:17-alpine -> 
+mysql:8.4.11 -> 
+checkout HEAD 83a81f49b703ac99296a44bf9885ef72cd785fd6
+ M package-lock.json
+ M package.json
+== 192.168.86.34 2026-11-01T22:00:06Z
+adam-Aspire-A515-52G
+driver=overlayfs status=[["driver-type","io.containerd.snapshotter.v1"]] root=/var/lib/docker
+/dev/nvme0n1p3   30G   28G  433M  99% /
+psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb -> sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb ["psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb"]
+sha256:18aeffc977a27fc3b365d29364c4c8a34c1f366ff94ede07d61c432fa8dc4a0c -> 
+pingcap/pd:v8.5.8 -> sha256:424e896800e42e1b7eb585b604c8daa3454110d0f0df5ab41f7c5f49164d3aef ["pingcap/pd@sha256:424e896800e42e1b7eb585b604c8daa3454110d0f0df5ab41f7c5f49164d3aef"]
+pingcap/tikv:v8.5.8 -> 
+pingcap/tidb:v8.5.8 -> 
+postgres:17-alpine -> 
+mysql:8.4.11 -> 
+checkout HEAD 83a81f49b703ac99296a44bf9885ef72cd785fd6
+ M package-lock.json
+ M package.json
+== 192.168.86.41 2026-11-01T22:00:10Z
+peter-All-Series
+driver=overlayfs status=[["driver-type","io.containerd.snapshotter.v1"]] root=/var/lib/docker
+/dev/sda3       109G   41G   64G  40% /
+psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb -> sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb ["psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb"]
+sha256:18aeffc977a27fc3b365d29364c4c8a34c1f366ff94ede07d61c432fa8dc4a0c -> 
+pingcap/pd:v8.5.8 -> 
+pingcap/tikv:v8.5.8 -> sha256:ab84580b6795868940231aa778a34b082d19e4417e6d66f755c609bebdbbfd69 ["pingcap/tikv@sha256:ab84580b6795868940231aa778a34b082d19e4417e6d66f755c609bebdbbfd69"]
+pingcap/tidb:v8.5.8 -> 
+postgres:17-alpine -> 
+mysql:8.4.11 -> 
+checkout HEAD 83a81f49b703ac99296a44bf9885ef72cd785fd6
+ M package-lock.json
+ M package.json
+== 192.168.86.27 2026-11-01T22:00:11Z
+peter-Lenovo-Y50-70
+driver=overlay2 status=[["Backing Filesystem","extfs"],["Supports d_type","true"],["Using metacopy","false"],["Native Overlay Diff","true"],["userxattr","false"]] root=/var/lib/docker
+/dev/sda2       468G  286G  160G  65% /
+psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb -> 
+sha256:18aeffc977a27fc3b365d29364c4c8a34c1f366ff94ede07d61c432fa8dc4a0c -> 
+pingcap/pd:v8.5.8 -> 
+pingcap/tikv:v8.5.8 -> sha256:c7bcabdb80f01470ef6c0d1526a3b8b18c4a99930dcfad33b2c02aa52c79ebd9 []
+pingcap/tidb:v8.5.8 -> 
+postgres:17-alpine -> 
+mysql:8.4.11 -> 
+checkout HEAD 83a81f49b703ac99296a44bf9885ef72cd785fd6
+ M package-lock.json
+ M package.json
