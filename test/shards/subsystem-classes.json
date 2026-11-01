@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
-    "query-sql": 190,
+    "query-sql": 191,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 158,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2523,
-  "digest": "fnv1a32-dd669489",
+  "censusSize": 2524,
+  "digest": "fnv1a32-53434f99",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b296d1f1",
+  "observationDigest": "fnv1a32-fdbb15bb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1540,6 +1540,7 @@
     "test/query/primitive-telemetry.test.js": "query-sql",
     "test/query/provision-target-live-transport-rescue.test.js": "query-sql",
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": "query-sql",
+    "test/query/q10-postgres-compatibility-certification-matrix.test.js": "query-sql",
     "test/query/query-constants-vocabulary.test.js": "query-sql",
     "test/query/query-executor-build-sql-and-routability.test.js": "query-sql",
     "test/query/query-executor-delay.test.js": "query-sql",
@@ -11998,6 +11999,18 @@
         "src/query/table-creation-service-create-table.js",
         "src/query/table-creation-service-existing-table-reconciliation.js",
         "src/query/table-creation-service-partition-provisioning.js"
+      ]
+    },
+    "test/query/q10-postgres-compatibility-certification-matrix.test.js": {
+      "files": [
+        "docs/postgres-compatibility-matrix.json",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
+      ],
+      "directories": [
+        "test/fixtures/pgwire-tls"
       ]
     },
     "test/query/query-constants-vocabulary.test.js": {

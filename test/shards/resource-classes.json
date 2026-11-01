@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2506,
+    "ordinary": 2507,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2523,
-  "digest": "fnv1a32-2c620cdc",
+  "censusSize": 2524,
+  "digest": "fnv1a32-9caa1f59",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1520,6 +1520,7 @@
     "test/query/primitive-telemetry.test.js": "ordinary",
     "test/query/provision-target-live-transport-rescue.test.js": "ordinary",
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": "ordinary",
+    "test/query/q10-postgres-compatibility-certification-matrix.test.js": "ordinary",
     "test/query/query-constants-vocabulary.test.js": "ordinary",
     "test/query/query-executor-build-sql-and-routability.test.js": "ordinary",
     "test/query/query-executor-delay.test.js": "ordinary",

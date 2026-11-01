@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2180,
+    "unit": 2181,
     "integration": 119,
     "bootstrap": 217,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2523,
-  "digest": "fnv1a32-34438198",
+  "censusSize": 2524,
+  "digest": "fnv1a32-4d75b721",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1521,6 +1521,7 @@
     "test/query/primitive-telemetry.test.js": "unit",
     "test/query/provision-target-live-transport-rescue.test.js": "unit",
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": "unit",
+    "test/query/q10-postgres-compatibility-certification-matrix.test.js": "unit",
     "test/query/query-constants-vocabulary.test.js": "unit",
     "test/query/query-executor-build-sql-and-routability.test.js": "unit",
     "test/query/query-executor-delay.test.js": "unit",

@@ -14,6 +14,7 @@ quests:
   - partition-leader-row-publication-integrity-v3
   - partition-leader-row-publication-integrity
   - pilot-cutover-and-rollback-receipts
+  - postgres-compatibility-certification-matrix
   - public-path-multinode-baseline
   - resumable-bulk-data-load
   - service-cell-v2-default-multi-operation
