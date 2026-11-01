@@ -18,6 +18,7 @@ This page is generated deterministically from [`data/tidb-comparison/history.ndj
 | 2026-10-30T16:05:00.000Z | 0.3.0 (2d416de6e5) | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) / risk-three-island-rf3 | 0.3.0 (2d416de6e5) | v8.5.8 (pingcap/ti) | 026e356c0f4566e3 |
 | 2026-10-30T22:05:28.000Z | 0.3.3 (b41d4ccec4) | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) / risk-three-island-rf3 | 0.3.3 (b41d4ccec4) | v8.5.8 (pingcap/ti) | ca6c388f5aa25a5c |
 | 2026-10-31T06:50:00.000Z | 0.4.0 (7565d8c09a) | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) / risk-three-island-rf3 | 0.4.0 (7565d8c09a) | v8.5.8 (pingcap/ti) | 22e27b67459af19b |
+| 2026-11-01T09:58:24.579Z | 0.4.0 (07206ba1c8) | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) / oltp-baseline-v1 | 0.4.0 (07206ba1c8) | v8.5.8 (pingcap/ti) | 9dbaefd3752e53bf |
 
 ## Throughput, latency, and semantic proof progression
 
@@ -30,6 +31,7 @@ This page is generated deterministically from [`data/tidb-comparison/history.ndj
 | 2026-10-30T16:05:00.000Z | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | 441.15 (12.06 / 18.09 / 18.09) | 221.44 (24.06 / 36.08 / 36.08) | 1.992x (0.50x lag) | 8/8 vs 8/8 |
 | 2026-10-30T22:05:28.000Z | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | 440.59 (12.06 / 18.09 / 18.09) | 221.38 (24.06 / 36.08 / 36.08) | 1.990x (0.50x lag) | 8/8 vs 8/8 |
 | 2026-10-31T06:50:00.000Z | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | 441.14 (12.06 / 18.08 / 18.08) | 221.44 (24.06 / 36.07 / 36.07) | 1.992x (0.50x lag) | 8/8 vs 8/8 |
+| 2026-11-01T09:58:24.579Z | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) | 1448.10 (12.97 / 28.05 / 37.97) | 1378.80 (4.04 / 11.50 / 12.81) | 1.050x (0.95x lag) | 33/33 vs 33/33 |
 
 ## Progress deltas over time
 
@@ -42,6 +44,7 @@ This page is generated deterministically from [`data/tidb-comparison/history.ndj
 | 2026-10-30T16:05:00.000Z | 2d416de6e5 | 0.00 / 0.00 | 0.00 / 0.00 | 0.00 | 0.00 | 0.00 |
 | 2026-10-30T22:05:28.000Z | b41d4ccec4 | -0.56 / -0.56 | -0.07 / -0.07 | -0.002 | +0.00 | 0 |
 | 2026-10-31T06:50:00.000Z | 7565d8c09a | +0.55 / -0.01 | +0.07 / 0.00 | +0.002 | -0.00 | 0 |
+| 2026-11-01T09:58:24.579Z | 07206ba1c8 | +1447.27 / 0.00 | +1372.05 / +1372.05 | +0.928 | -7.22 | +22 |
 
 ## Scenario B distributed risk & movement scorecard ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 

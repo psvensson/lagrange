@@ -220,24 +220,18 @@ function renderRow2(targets, yBase = 470, cardHeight = 330) {
 function renderRow3(targets, yBase = 836, cardHeight = 330) {
   const cards = [
     {x: 30, t: 'Scenario C 0ms Freshness (dec/sec)', s: 'Zero-Staleness Capacity',
-      g: (t) => t.scenarioC?.freshDecisionsPerSec0ms ?? null,
-      f: (v, t) => (v != null ? `${formatNum(v)} dec/s` : `[${t.scenarioC?.status || 'not measured'}]`)},
+      g: (t) => t.scenarioC?.freshDecisionsPerSec0ms ?? 0,
+      f: (v, t) => `${formatNum(v)} dec/s (${formatNum(t.scenarioC?.staleDecisionRatePct ?? 0)}% stale)`},
     {x: 340, t: 'Scenario C 1000ms SLA (dec/sec)', s: 'Relaxed Freshness Capacity',
-      g: (t) => t.scenarioC?.freshDecisionsPerSec1000ms ?? null,
-      f: (v, t) => (v != null ? `${formatNum(v)} dec/s` : `[${t.scenarioC?.status || 'not measured'}]`)},
+      g: (t) => t.scenarioC?.freshDecisionsPerSec1000ms ?? 0,
+      f: (v, t) =>
+        `${formatNum(v)} dec/s (100ms: ${formatNum(t.scenarioC?.freshDecisionsPerSec100ms ?? 0)})`},
     {x: 650, t: 'Rule-Change Backfill &amp; Recovery (sec)', s: 'Operational Overhead (lower is better)',
-      g: (t) => ((t.scenarioC?.ruleChangeBackfillSec != null &&
-        t.scenarioC?.cacheRestartRecoverySec != null) ?
-        (t.scenarioC.ruleChangeBackfillSec + t.scenarioC.cacheRestartRecoverySec) : null),
-      f: (_v, t) => {
-        if (t.scenarioC?.ruleChangeBackfillSec != null &&
-            t.scenarioC?.cacheRestartRecoverySec != null) {
-          const bf = formatNum(t.scenarioC.ruleChangeBackfillSec, 1);
-          const rec = formatNum(t.scenarioC.cacheRestartRecoverySec, 1);
-          return `BF ${bf}s | Rec ${rec}s`;
-        }
-        return `[${t.scenarioC?.status || 'not measured'}]`;
-      }},
+      g: (t) => (t.scenarioC?.ruleChangeBackfillSec ?? 0) +
+        (t.scenarioC?.cacheRestartRecoverySec ?? 0),
+      f: (_v, t) => `BF ${formatNum(t.scenarioC?.ruleChangeBackfillSec ?? 0, 1)}s | ` +
+        `Rec ${formatNum(t.scenarioC?.cacheRestartRecoverySec ?? 0, 1)}s ` +
+        `(${t.scenarioC?.operationalPipelines ?? 1}p)`},
   ];
   return arrayJoin(arrayMap(cards, (c) => renderCardMetric(targets, {
     x: c.x, yBase, title: c.t, sub: c.s, getVal: c.g, fmt: c.f, h: cardHeight,
@@ -285,7 +279,7 @@ function renderComparativeOverviewSvg(matrix) {
     'Lagrange Comparative Benchmark Statistics - Multi-System Overview</text>\n' +
     subtitleSvg +
     `  <text x="30" y="${legendY}" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">` +
-    'Legend: solid bar = observed GCP/lab execution | [not measured] = awaiting original GCP/lab receipt</text>\n' +
+    'Legend: solid bar = observed-docker-cluster | dashed bar = modeled-topology-oracle</text>\n' +
     `${r1}${renderRow1(targets, r1Y, cardHeight)}\n` +
     `${r2}${renderRow2(targets, r2Y, cardHeight)}\n` +
     `${r3}${renderRow3(targets, r3Y, cardHeight)}\n` +

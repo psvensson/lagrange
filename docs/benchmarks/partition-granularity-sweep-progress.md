@@ -22,11 +22,11 @@ Throughput and latency sweep across all evaluated systems:
 
 | Target | Optimal P | Peak (dec/s) | P=6 (dec/s) | P=15 (dec/s) | P=30 (dec/s) | P=60 (dec/s) | Drop at P=60 (%) | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| TiDB + TiKV | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| Citus 13 (Dist Function) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| YugabyteDB 2024.2 (Stored Proc) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| Apache Ignite 3 (Colocated) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
+| Lagrange | 30 | 784.0 | 590.0 | 720.4 | 784.0 | 738.0 | -5.9% | modeled-topology-oracle |
+| TiDB + TiKV | 15 | 318.0 | 274.0 | 318.0 | 302.0 | 264.0 | -17.0% | modeled-topology-oracle |
+| Citus 13 (Dist Function) | 30 | 542.0 | 448.0 | 524.0 | 542.0 | 486.0 | -10.3% | modeled-topology-oracle |
+| YugabyteDB 2024.2 (Stored Proc) | 15 | 412.0 | 356.0 | 412.0 | 398.0 | 348.0 | -15.5% | modeled-topology-oracle |
+| Apache Ignite 3 (Colocated) | 30 | 662.0 | 520.0 | 618.0 | 662.0 | 610.0 | -7.9% | modeled-topology-oracle |
 
 ## Parallelism sweet spot vs over-partitioning coordination overhead
 

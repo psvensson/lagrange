@@ -12,18 +12,18 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 
 | Milestone | Version | Commit | Date | Evidence Tier | Execution Mode | Scenario A (tx/s) | p95 (ms) | Proofs | Scenario B (dec/s) | Scenario C (dec/s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| v0.2.0-tidb-ref | 0.2.0 | b0b2f9abcc | 2026-09-12 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.0-lab-paired | 0.3.0 | 8039e45f2a | 2026-10-29 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.0-conflict-retry | 0.3.0 | 66d054c9c9 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.0-semantic-closure | 0.3.0 | 27af74dc7b | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.0-scenario-b-model | 0.3.0 | 2d416de6e5 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-provenance-matrix | 0.3.2 | 4dc6db6b93 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-scaleout-3to5-rf3 | 0.3.2 | 89300e4d8a | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-partition-sweep-p6to60 | 0.3.2 | 2025f7780d | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-rtt-working-set-crossover | 0.3.2 | bdee84d5fc | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-live-movement-scenario-c-scale | 0.3.2 | 72c76c6629 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.3-tx-fast-path-5node-summary | 0.3.3 | b41d4ccec4 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.4.0-scaleout-scenario-c-release | 0.4.0 | 7565d8c09a | 2026-10-31 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.2.0-tidb-ref | 0.2.0 | b0b2f9abcc | 2026-09-12 | observed-docker-cluster | live-cluster-wire | 0.00 | 0.0 | 0/33 | 0.0 | 0.0 |
+| v0.3.0-lab-paired | 0.3.0 | 8039e45f2a | 2026-10-29 | observed-docker-cluster | live-cluster-wire | 0.83 | 4418.9 | 4/33 | 0.0 | 0.0 |
+| v0.3.0-conflict-retry | 0.3.0 | 66d054c9c9 | 2026-10-30 | observed-docker-cluster | live-cluster-wire | 0.83 | 4418.9 | 16/33 | 0.0 | 0.0 |
+| v0.3.0-semantic-closure | 0.3.0 | 27af74dc7b | 2026-10-30 | observed-docker-cluster | live-cluster-wire | 0.83 | 4418.9 | 33/33 | 0.0 | 0.0 |
+| v0.3.0-scenario-b-model | 0.3.0 | 2d416de6e5 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 0.83 | 4418.9 | 33/33 | 441.1 | 0.0 |
+| v0.3.2-provenance-matrix | 0.3.2 | 4dc6db6b93 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 0.83 | 4418.9 | 33/33 | 441.1 | 441.1 |
+| v0.3.2-scaleout-3to5-rf3 | 0.3.2 | 89300e4d8a | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 720.4 | 441.1 |
+| v0.3.2-partition-sweep-p6to60 | 0.3.2 | 2025f7780d | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 784.0 | 441.1 |
+| v0.3.2-rtt-working-set-crossover | 0.3.2 | bdee84d5fc | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 368.0 | 441.1 |
+| v0.3.2-live-movement-scenario-c-scale | 0.3.2 | 72c76c6629 | 2026-10-30 | modeled-topology-oracle | local-js-oracle | 2.24 | 2590.0 | 33/33 | 1840.0 | 1840.0 |
+| v0.3.3-tx-fast-path-5node-summary | 0.3.3 | b41d4ccec4 | 2026-10-30 | observed-docker-cluster | live-cluster-wire | 3.84 | 1490.0 | 33/33 | 720.4 | 1840.0 |
+| v0.4.0-scaleout-scenario-c-release | 0.4.0 | 07206ba1c8 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 1448.10 | 28.1 | 33/33 | 1802.7 | 1261.8 |
 
 ## Commit-over-commit delta progression
 

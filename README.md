@@ -153,6 +153,7 @@ For detailed authoring rules, see [JavaScript Service Reference](docs/reference/
 - [First Hour With Lagrange](docs/tutorials/first-hour.md) - Complete step-by-step developer walkthrough
 - [Kubernetes and Cloud Benchmarks](docs/kubernetes-and-cloud-benchmarks.md) - Helm chart guide, credential config, and cloud benchmark matrix
 - [JavaScript Service Reference](docs/reference/javascript-service-reference.md) - Authoring API, typings, and limits
+- [TiDB/TiKV and Lagrange comparison progress](docs/benchmarks/tidb-comparison-progress.md) - versioned OLTP throughput, latency, and semantic proof history ([interactive HTML dashboard](docs/benchmarks/tidb-comparison-progress.html))
 - [Rewrite A Hot Path For Lagrange](docs/tutorials/rewrite-a-hot-path.md) - MovieLens top-N three-baseline tutorial
 - [The Lagrange Native Programming Model](docs/native-programming-model.md) - Handlers, `run()`, and `reduce()`
 - [Execution Semantics](docs/execution-semantics.md) - Placement, retries, and visibility guarantees

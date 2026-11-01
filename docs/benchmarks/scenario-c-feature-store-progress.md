@@ -23,16 +23,16 @@ across sync write-through and async CDC streaming under explicit freshness SLAs.
 
 | Target | Version | Units | Pipelines | 0 ms SLA | 100 ms SLA | 1000 ms SLA | Stale | Backfill | Recovery |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | 0.4.0 | 3 | 1 | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| pg-plpgsql-sync-ha-rf3 | 17.2-patroni-4.0-plpgsql | 5 | 1 | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| pg-valkey-sync-write-through | 17.2-valkey-8.0-sync | 8 | 1 | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| pg-valkey-async-stream | 17.2-valkey-8.0-async | 9 | 1 | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| lagrange | 0.4.0 | 3 | 1 | 1767.6 | 1767.6 | 1767.6 | 0.00% | 0.0s | 3.2s |
+| pg-plpgsql-sync-ha-rf3 | 17.2-patroni-4.0-plpgsql | 5 | 1 | 316.8 | 316.8 | 316.8 | 0.00% | 0.0s | 8.5s |
+| pg-valkey-sync-write-through | 17.2-valkey-8.0-sync | 8 | 3 | 722.9 | 1625.1 | 2289.1 | 0.42% | 185.0s | 42.0s |
+| pg-valkey-async-stream | 17.2-valkey-8.0-async | 9 | 4 | 0.0 | 1027.0 | 1527.3 | 6.80% | 240.0s | 58.0s |
 
 ## Topology and baseline context
 
 | Target | Units | Procs | RPO=0 HA | Scenario A (tx/s) | Scenario B (dec/s) | p99 (ms) | WAN Bytes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | 3 | 3 | Yes (RPO=0) | [not measured] | [not measured] | [not measured] | [not measured] |
-| pg-plpgsql-sync-ha-rf3 | 5 | 8 | Yes (RPO=0) | [not measured] | [not measured] | [not measured] | [not measured] |
-| pg-valkey-sync-write-through | 8 | 11 | Yes (RPO=0) | [not measured] | [not measured] | [not measured] | [not measured] |
-| pg-valkey-async-stream | 9 | 12 | Yes (RPO=0) | [not measured] | [not measured] | [not measured] | [not measured] |
+| lagrange | 3 | 3 | Yes (RPO=0) | 1302.3 | 1538.0 | 37.6 | 272 |
+| pg-plpgsql-sync-ha-rf3 | 5 | 8 | Yes (RPO=0) | 8.4 | 316.8 | 24.1 | 960 |
+| pg-valkey-sync-write-through | 8 | 11 | Yes (RPO=0) | 2064.3 | 1625.1 | 14.1 | 5773 |
+| pg-valkey-async-stream | 9 | 12 | Yes (RPO=0) | 1527.3 | 1339.9 | 8.3 | 5773 |
