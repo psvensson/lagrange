@@ -14,11 +14,13 @@ const REQUEST_CELL_ROUTE_ERROR_CODE = Object.freeze({
   AUTHORITY_FIELD_REJECTED: 'request_cell_authority_field_rejected',
   AUTHORIZATION_FAILED: 'request_cell_authorization_failed',
   BUDGET_EXHAUSTED: 'request_cell_budget_exhausted',
+  CANCELLED: 'request_cell_cancelled',
   COMPONENT_FAILED: 'request_cell_component_failed',
   DEADLINE_EXHAUSTED: 'request_cell_deadline_exhausted',
   HANDLER_FAILED: 'request_cell_handler_failed',
   INVOCATION_AMBIGUOUS: 'request_cell_invocation_ambiguous',
   INVOCATION_CONFLICT: 'request_cell_invocation_conflict',
+  INVOCATION_EXPIRED: 'request_cell_invocation_expired',
   INVALID_COMPONENT_RESPONSE: 'request_cell_invalid_component_response',
   INVALID_REQUEST: 'request_cell_invalid_request',
   OVERLOADED: 'request_cell_overloaded',
@@ -37,11 +39,13 @@ const REQUEST_CELL_ROUTE_HTTP_STATUS = Object.freeze({
   [REQUEST_CELL_ROUTE_ERROR_CODE.AUTHORITY_FIELD_REJECTED]: 400,
   [REQUEST_CELL_ROUTE_ERROR_CODE.AUTHORIZATION_FAILED]: 403,
   [REQUEST_CELL_ROUTE_ERROR_CODE.BUDGET_EXHAUSTED]: 413,
+  [REQUEST_CELL_ROUTE_ERROR_CODE.CANCELLED]: 499,
   [REQUEST_CELL_ROUTE_ERROR_CODE.COMPONENT_FAILED]: 502,
   [REQUEST_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED]: 504,
   [REQUEST_CELL_ROUTE_ERROR_CODE.HANDLER_FAILED]: 502,
   [REQUEST_CELL_ROUTE_ERROR_CODE.INVOCATION_AMBIGUOUS]: 503,
   [REQUEST_CELL_ROUTE_ERROR_CODE.INVOCATION_CONFLICT]: 409,
+  [REQUEST_CELL_ROUTE_ERROR_CODE.INVOCATION_EXPIRED]: 410,
   [REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESPONSE]: 502,
   [REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_REQUEST]: 400,
   [REQUEST_CELL_ROUTE_ERROR_CODE.OVERLOADED]: 429,
@@ -62,6 +66,8 @@ const BASE64_ENCODING = 'base64';
 const BODY_BYTES_PROPERTY = 'bodyBytes';
 const IDEMPOTENCY_KEY_MAX_BYTES = 256;
 const DEFAULT_MAX_COMPONENT_OUTPUT_BYTES = 1048576;
+const DEFAULT_INVOCATION_RETENTION_WINDOW_MS = 86400000;
+const DEFAULT_INVOCATION_RETENTION_MAX_BYTES = 1048576;
 const HEADER_PAIR_LENGTH = 2;
 const HTTP_STATUS_INFORMATIONAL_MINIMUM = 100;
 const HTTP_STATUS_SWITCHING_PROTOCOLS = 101;
@@ -137,7 +143,7 @@ function createRequestDigest(request) {
   return `sha256:${sha256(canonicalJson(request))}`;
 }
 
-function createInvocationIdentity(tenantId, idempotencyKey) {
+function createInvocationIdentity(tenantId, idempotencyKey, scope = null) {
   const requestKey =
     typeof idempotencyKey === 'string' && idempotencyKey.length > 0 ?
       idempotencyKey :
@@ -149,9 +155,40 @@ function createInvocationIdentity(tenantId, idempotencyKey) {
       REQUEST_CELL_CONTRACT_MESSAGE.IDEMPOTENCY_KEY_TOO_LARGE,
     );
   }
+  const hasScope =
+    typeof scope?.principal === 'string' ||
+    typeof scope?.bindingId === 'string';
+  const payload = hasScope ?
+    {
+      bindingId: scope.bindingId || null,
+      principal: scope.principal || null,
+      requestKey,
+      tenantId,
+    } :
+    {requestKey, tenantId};
   return `${REQUEST_CELL_INVOCATION_ID_PREFIX}${sha256(
-    canonicalJson({requestKey, tenantId}),
+    canonicalJson(payload),
   )}`;
+}
+
+function createScopedInvocationKey(fields) {
+  return `${REQUEST_CELL_INVOCATION_ID_PREFIX}${sha256(
+    canonicalJson({
+      bindingId: fields.bindingId || null,
+      invocationId: fields.invocationId,
+      principal: fields.principal || null,
+      tenantId: fields.tenantId,
+    }),
+  )}`;
+}
+
+function createSemanticInvocationIntentDigest(fields) {
+  return `sha256:${sha256(canonicalJson({
+    method: fields.method,
+    path: fields.path,
+    requestDigest: fields.requestDigest,
+    tenantId: fields.tenantId,
+  }))}`;
 }
 
 function createInvocationIntentDigest(fields) {
@@ -286,6 +323,8 @@ function createRoutingFailure(code, message, options = {}) {
 
 export {
   BODY_FORBIDDEN_STATUSES,
+  DEFAULT_INVOCATION_RETENTION_MAX_BYTES,
+  DEFAULT_INVOCATION_RETENTION_WINDOW_MS,
   DEFAULT_MAX_COMPONENT_OUTPUT_BYTES,
   REQUEST_CELL_ROUTE_CLASSIFICATION,
   REQUEST_CELL_ROUTE_ERROR_CODE,
@@ -297,6 +336,8 @@ export {
   createInvocationIntentDigest,
   createRequestDigest,
   createRoutingFailure,
+  createScopedInvocationKey,
+  createSemanticInvocationIntentDigest,
   freezeSecurityContext,
   normalizeComponentResponse,
 };

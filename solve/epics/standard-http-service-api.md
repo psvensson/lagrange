@@ -15,6 +15,7 @@ quests:
   - h1-pinned-hono-component-proof
   - h2-hono-source-ir-deployment-cutover
   - h3-fetch-ingress-and-scoped-client
+  - h4-http-invocation-recovery-and-cancellation
 authorizes:
   - src/authoring
   - src/service

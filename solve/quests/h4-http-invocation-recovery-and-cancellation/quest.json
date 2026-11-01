@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "h4-http-invocation-recovery-and-cancellation",
+  "epic": "standard-http-service-api",
+  "statement": "Implement Package H4 (invocation recovery and cancellation contract) under standard-http-service-api: scope keyed HTTP invocations to authenticated tenant, principal, and stable mount/binding identity; pin the admitted bindingVersionId at first admission on an Idempotency-Key so retries consume the pinned revision even after a mount update while new keys use the current ready revision; reject conflicting semantic inputs or conflicting explicit revision selection with INVOCATION_CONFLICT (HTTP 409); enforce the retention window with a typed INVOCATION_EXPIRED outcome; prevent automatic reruns after uncertain handler execution (INVOCATION_AMBIGUOUS, HTTP 503); and support multiple authorized waiters on an in-flight keyed invocation so a disconnected waiter detaches without cancelling work still owned by remaining waiters while cancelling when all waiters disconnect or explicit cancellation occurs.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/h4-http-invocation-recovery-and-cancellation-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "c50a571af912bcc23f32440a9a6c6321b593e373"
+}

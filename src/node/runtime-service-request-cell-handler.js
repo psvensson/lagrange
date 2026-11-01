@@ -212,9 +212,13 @@ function assertCurrentRequestCellTarget(
   return localReplica;
 }
 
+function isFetchRoute(route) {
+  return route?.handlerId === FETCH_HANDLER_ID ||
+    typeof route?.mountPath === 'string';
+}
+
 function buildGuestRequestEnvelope(request, route, invocation, securityContext) {
-  if (route?.handlerId !== FETCH_HANDLER_ID &&
-      typeof route?.mountPath !== 'string') {
+  if (!isFetchRoute(route)) {
     return request;
   }
   return {
@@ -259,15 +263,24 @@ function buildRequestCellInvocation(
         route,
         invocation,
       ),
+    bindingId: route.bindingId || null,
+    bindingVersionId: route.bindingVersionId || null,
     deadlineMs: invocation.deadlineMs,
+    explicitBindingVersionId: invocation.explicitBindingVersionId || null,
+    fetchMode: isFetchRoute(route),
     intentDigest: invocation.intentDigest,
     invocationId: invocation.id,
     invocationServiceId: route.serviceId,
+    pinnedBindingVersionId:
+      invocation.pinnedBindingVersionId || route.bindingVersionId || null,
+    retentionWindowMs: invocation.retentionWindowMs,
     // The full frozen server-derived security context rides with the
     // invocation so the request-call bridge can authorize a bridged
     // binding call as the same principal; tenantId stays for existing
     // consumers.
     securityContext,
+    semanticIntentDigest: invocation.semanticIntentDigest || null,
+    signal: invocation.signal || null,
     tenantId: securityContext.tenantId,
   };
 }
