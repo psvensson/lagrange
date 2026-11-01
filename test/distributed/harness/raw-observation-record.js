@@ -1,0 +1,799 @@
+// Owner of the raw observation record (design note
+// solve/quests/comparative-benchmark-evidence-repair/evidence/chain-design.md).
+//
+// v2 is the only record publication may consume: one record per run, NDJSON,
+// append-only. The validator throws on anything malformed and never coerces a
+// missing or invalid value to zero. The v1 reader below exists only to parse the
+// retained forensic campaign files; v1 records never feed publication.
+import {createHash} from 'node:crypto';
+
+import {digest, serializeJsonData} from '../../../src/utils/canonical-json-data.js';
+import {OLTP_SCENARIO_A_SEMANTIC_PROFILE} from './oltp-scenario-a-semantic-profile.js';
+
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringTrim = Function.call.bind(String.prototype.trim);
+const numberIsFinite = Number.isFinite;
+const numberIsSafeInteger = Number.isSafeInteger;
+const objectValues = Object.values;
+const jsonParse = JSON.parse;
+const jsonStringify = JSON.stringify;
+const dateParse = Date.parse;
+
+const RAW_OBSERVATION_SCHEMA = Object.freeze({
+  V2: 'lagrange-raw-observation-v2',
+  V1_RUN: 'lagrange-raw-observation-v1',
+  V1_CAMPAIGN: 'lagrange-raw-observation-campaign-v1',
+});
+
+const RAW_RECORD_TYPE = Object.freeze({
+  CAMPAIGN_HEADER: 'campaign-header',
+  RUN: 'run',
+});
+
+const EXECUTION_TARGET = Object.freeze({LAB: 'lab', GCP: 'gcp'});
+
+const READINESS_STATE = Object.freeze({READY: 'ready', EXHAUSTED: 'exhausted'});
+
+const STORAGE_KIND = Object.freeze({
+  HOST_VOLUME: 'host-volume',
+  CONTAINER_LAYER: 'container-layer',
+});
+
+const NETWORK_SCOPE = Object.freeze({HOST_NIC_TOTAL: 'host-nic-total'});
+
+// The enumerated business-operation families a run may claim (D11): a run whose
+// scenario is not one of these is refused, never routed to a default family.
+const BENCHMARK_SCENARIO = Object.freeze({
+  A: 'scenarioA',
+  B: 'scenarioB',
+  C: 'scenarioC',
+});
+
+const PROFILE_OUTCOME = OLTP_SCENARIO_A_SEMANTIC_PROFILE.outcomes;
+
+// Shared outcome words come from the semantic profile; the accounting
+// subclasses the profile leaves to the harness are added here.
+const OPERATION_OUTCOME = Object.freeze({
+  COMMITTED: PROFILE_OUTCOME.success,
+  SERIALIZATION_CONFLICT: PROFILE_OUTCOME.retryableConflict,
+  TERMINAL_FAILURE: PROFILE_OUTCOME.terminalFailure,
+  UNRESOLVED: 'unresolved',
+  UNISSUED: 'unissued',
+});
+
+// Failure classes are displayed separately and never summed into one "failures"
+// figure (model challenge amendment 5).
+const FAILURE_CLASS = Object.freeze({
+  PRODUCT_ERROR: 'product_error',
+  CORRECTNESS_FAILURE: 'correctness_failure',
+  TRANSPORT_FAILURE: 'transport_failure',
+  HARNESS_FAULT: 'harness_fault',
+  AMBIGUOUS_COMMIT: 'ambiguous_commit',
+});
+
+const TERMINAL_FAILURE_CLASSES = Object.freeze([
+  FAILURE_CLASS.PRODUCT_ERROR,
+  FAILURE_CLASS.CORRECTNESS_FAILURE,
+  FAILURE_CLASS.TRANSPORT_FAILURE,
+  FAILURE_CLASS.HARNESS_FAULT,
+]);
+
+// A smoke profile proves end-to-end execution, correctness and accounting only; it
+// never publishes a capacity figure. Capacity runs are subject to the admission
+// owner's sufficiency rule.
+const PROFILE_CLASS = Object.freeze({SMOKE: 'smoke', CAPACITY: 'capacity'});
+
+const CLOSURE_STATUS = Object.freeze({COMPLETE: 'complete', INCOMPLETE: 'incomplete'});
+
+// Deployment events that break a measurement window when they fall inside it.
+const DEPLOYMENT_EVENT_KIND = Object.freeze({
+  RESTART: 'restart',
+  IMAGE_CHANGE: 'image-change',
+  NETWORK_IMPAIRMENT_APPLIED: 'network-impairment-applied',
+  LOCK_LOST: 'lock-lost',
+});
+
+// Final-state snapshot tables the Scenario A reconciliation reads (row counts).
+const FINAL_STATE_TABLE = Object.freeze({
+  ORDERS: 'orders',
+  HISTORY: 'history',
+  NEW_ORDER: 'new_order',
+});
+
+const UNRESOLVED_FAILURE_CLASSES = Object.freeze([
+  FAILURE_CLASS.AMBIGUOUS_COMMIT,
+  FAILURE_CLASS.TRANSPORT_FAILURE,
+]);
+
+const HEADER_FIELD = Object.freeze({
+  RECORD_TYPE: 'recordType',
+  SCHEMA_VERSION: 'schemaVersion',
+  CAMPAIGN_ID: 'campaignId',
+  STARTED_AT: 'startedAt',
+  MANIFEST_DIGEST: 'manifestDigest',
+  HARNESS: 'harness',
+  EXECUTION_TARGET: 'executionTarget',
+  PHYSICAL_HOSTS: 'physicalHosts',
+});
+
+const RUN_FIELD = Object.freeze({
+  RECORD_TYPE: 'recordType',
+  SCHEMA_VERSION: 'schemaVersion',
+  CAMPAIGN_ID: 'campaignId',
+  RUN_ID: 'runId',
+  CLAIM_KEY: 'claimKey',
+  TARGET_ID: 'targetId',
+  SCENARIO: 'scenario',
+  SUBKIND: 'subkind',
+  EXECUTION_TARGET: 'executionTarget',
+  IDENTITY: 'identity',
+  PLAN: 'plan',
+  DEPLOYMENT: 'deployment',
+  OBSERVATIONS: 'observations',
+  CORRECTNESS: 'correctness',
+  RAW_OBSERVATIONS_DIGEST: 'rawObservationsDigest',
+});
+
+const IDENTITY_FIELD = Object.freeze({
+  HARNESS: 'harness',
+  PRODUCTS: 'products',
+  PRODUCTS_AFTER_WINDOW: 'productsAfterWindow',
+  PUBLICATION: 'publication',
+  GIT_COMMIT: 'gitCommit',
+  DRIVER_SOURCE_SHA256: 'driverSourceSha256',
+  ADAPTER_IDS: 'adapterIds',
+});
+
+const PRODUCT_FIELD = Object.freeze({
+  ROLE: 'role',
+  HOST: 'host',
+  CONTAINER_ID: 'containerId',
+  IMAGE_REF: 'imageRef',
+  IMAGE_ID: 'imageId',
+  REPO_DIGEST: 'repoDigest',
+  STARTED_AT: 'startedAt',
+  ENTRYPOINT: 'entrypoint',
+  CMD: 'cmd',
+  REPORTED_VERSION: 'reportedVersion',
+});
+
+const PLAN_FIELD = Object.freeze({
+  MANIFEST_DIGEST: 'manifestDigest',
+  DATASET_DIGEST: 'datasetDigest',
+  WORKLOAD_PLAN_DIGEST: 'workloadPlanDigest',
+  MEASUREMENT_PLAN_DIGEST: 'measurementPlanDigest',
+  SEMANTIC_PROFILE_ID: 'semanticProfileId',
+  SEMANTIC_PROFILE_DIGEST: 'semanticProfileDigest',
+  RETRY_POLICY_ID: 'retryPolicyId',
+  OPEN_LOOP_PROFILE_ID: 'openLoopProfileId',
+  SWEEP_PLAN_DIGEST: 'sweepPlanDigest',
+  OFFERED_RATE_PER_SEC: 'offeredRatePerSec',
+  PROFILE_CLASS: 'profileClass',
+  OPERATION_SLICE_DIGEST: 'operationSliceDigest',
+  PLANNED_OPERATION_COUNTS: 'plannedOperationCounts',
+  REPETITION: 'repetition',
+  ORDER_INDEX: 'orderIndex',
+  WARMUP: 'warmup',
+});
+
+const DEPLOYMENT_FIELD = Object.freeze({
+  HOSTS: 'hosts',
+  ROLES: 'roles',
+  STORAGE: 'storage',
+  READINESS: 'readiness',
+  DATASET: 'dataset',
+  PLACEMENT: 'placement',
+  ENDPOINT: 'endpoint',
+  LOAD_GENERATOR: 'loadGenerator',
+  EVENTS: 'events',
+  CLOSURE: 'closure',
+});
+
+const OBSERVATIONS_FIELD = Object.freeze({
+  REQUESTS: 'requests',
+  ACCOUNTING: 'accounting',
+  WINDOW: 'window',
+  RESOURCES: 'resources',
+  NETWORK: 'network',
+  EXECUTED_OPERATIONS_DIGEST: 'executedOperationsDigest',
+});
+
+const ACCOUNTING_FIELD = Object.freeze({
+  OFFERED: 'offered',
+  ISSUED: 'issued',
+  UNISSUED: 'unissued',
+  ATTEMPTS: 'attempts',
+  COMMITTED: 'committed',
+  CONFLICTS: 'conflicts',
+  CONFLICT_EXHAUSTED: 'conflictExhausted',
+  TERMINAL_FAILURES: 'terminalFailures',
+  UNRESOLVED: 'unresolved',
+});
+
+const WINDOW_FIELD = Object.freeze({
+  SCHEDULED_MS: 'scheduledMs',
+  DRAIN_MS: 'drainMs',
+  DRAIN_OVERRUN_MS: 'drainOverrunMs',
+  STARTED_AT: 'startedAt',
+  ENDED_AT: 'endedAt',
+});
+
+const REQUEST_FIELD = Object.freeze({
+  OP_ID: 'opId',
+  OPERATION_KIND: 'operationKind',
+  INTENDED_START_MS: 'intendedStartMs',
+  EFFECT_SUMMARY: 'effectSummary',
+  OUTCOME: 'outcome',
+  FAILURE_CLASS: 'failureClass',
+  ATTEMPTS: 'attempts',
+  RESPONSE_EVIDENCE: 'responseEvidence',
+});
+
+const ATTEMPT_FIELD = Object.freeze({
+  ATTEMPT_NO: 'attemptNo',
+  STARTED_MS: 'startedMs',
+  ENDED_MS: 'endedMs',
+  OUTCOME: 'outcome',
+  SQLSTATE: 'sqlstate',
+  ERROR_CODE: 'errorCode',
+  RESPONSE_DIGEST: 'responseDigest',
+});
+
+const CORRECTNESS_FIELD = Object.freeze({
+  SEMANTIC_GATE: 'semanticGate',
+  FINAL_STATE: 'finalState',
+  STATUS: 'status',
+  PASSED: 'passed',
+  FAILED: 'failed',
+  MISSING: 'missing',
+  BINDING: 'binding',
+  BEFORE: 'before',
+  AFTER: 'after',
+  TABLE_ROWS: 'tableRows',
+});
+
+// Typed rejection codes; admission reports them as `record-rejected:<code>`.
+const RECORD_REJECTION = Object.freeze({
+  NOT_AN_OBJECT: 'not-an-object',
+  MISSING_FIELD: 'missing-field',
+  INVALID_TEXT: 'invalid-text',
+  INVALID_COUNT: 'invalid-count',
+  INVALID_TIMING: 'invalid-timing',
+  INVALID_ENUM: 'invalid-enum',
+  DUPLICATE_OP_ID: 'duplicate-op-id',
+  ACCOUNTING_MISMATCH: 'accounting-mismatch',
+  ACCOUNTING_INVARIANT: 'accounting-invariant',
+  CORRUPT_LINE: 'corrupt-line',
+  DIGEST_MISMATCH: 'digest-mismatch',
+  UNKNOWN_SCHEMA: 'unknown-schema',
+});
+
+class RawObservationRecordError extends Error {
+  constructor(code, message) {
+    super(`${code}: ${message}`);
+    this.name = 'RawObservationRecordError';
+    this.code = code;
+  }
+}
+
+function reject(code, message) {
+  throw new RawObservationRecordError(code, message);
+}
+
+function requireObject(value, at) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    reject(RECORD_REJECTION.MISSING_FIELD, `${at} must be an object`);
+  }
+  return value;
+}
+
+function requireArray(value, at) {
+  if (!Array.isArray(value)) reject(RECORD_REJECTION.MISSING_FIELD, `${at} must be an array`);
+  return value;
+}
+
+function requireText(value, at) {
+  if (typeof value !== 'string' || stringTrim(value) === '') {
+    reject(RECORD_REJECTION.INVALID_TEXT, `${at} must be a non-empty string`);
+  }
+  return value;
+}
+
+function requireCount(value, at) {
+  if (typeof value !== 'number' || !numberIsSafeInteger(value) || value < 0) {
+    reject(RECORD_REJECTION.INVALID_COUNT, `${at} must be a non-negative safe integer`);
+  }
+  return value;
+}
+
+function requireTiming(value, at) {
+  if (typeof value !== 'number' || !numberIsFinite(value) || value < 0) {
+    reject(RECORD_REJECTION.INVALID_TIMING, `${at} must be a finite non-negative number`);
+  }
+  return value;
+}
+
+function requireIsoTime(value, at) {
+  requireText(value, at);
+  if (!numberIsFinite(dateParse(value))) {
+    reject(RECORD_REJECTION.INVALID_TIMING, `${at} must be an ISO timestamp`);
+  }
+  return value;
+}
+
+function requireEnum(value, allowed, at) {
+  if (!arrayIncludes(allowed, value)) {
+    reject(RECORD_REJECTION.INVALID_ENUM, `${at} must be one of ${allowed.join('|')}`);
+  }
+  return value;
+}
+
+function requireNullableObject(value, at) {
+  if (value === null) return null;
+  return requireObject(value, at);
+}
+
+function validateHarnessIdentity(harness, at) {
+  requireObject(harness, at);
+  requireText(harness[IDENTITY_FIELD.GIT_COMMIT], `${at}.gitCommit`);
+  requireText(harness[IDENTITY_FIELD.DRIVER_SOURCE_SHA256], `${at}.driverSourceSha256`);
+  const adapterIds = requireArray(harness[IDENTITY_FIELD.ADAPTER_IDS], `${at}.adapterIds`);
+  adapterIds.forEach((id, idx) => requireText(id, `${at}.adapterIds[${idx}]`));
+}
+
+function validateProduct(product, at) {
+  requireObject(product, at);
+  for (const field of [
+    PRODUCT_FIELD.ROLE, PRODUCT_FIELD.HOST, PRODUCT_FIELD.CONTAINER_ID, PRODUCT_FIELD.IMAGE_REF,
+    PRODUCT_FIELD.IMAGE_ID, PRODUCT_FIELD.REPO_DIGEST, PRODUCT_FIELD.REPORTED_VERSION,
+  ]) {
+    requireText(product[field], `${at}.${field}`);
+  }
+  requireIsoTime(product[PRODUCT_FIELD.STARTED_AT], `${at}.startedAt`);
+}
+
+function validateProducts(products, at) {
+  requireArray(products, at);
+  if (products.length === 0) reject(RECORD_REJECTION.MISSING_FIELD, `${at} must not be empty`);
+  products.forEach((p, idx) => validateProduct(p, `${at}[${idx}]`));
+}
+
+function validateIdentity(identity) {
+  requireObject(identity, RUN_FIELD.IDENTITY);
+  validateHarnessIdentity(identity[IDENTITY_FIELD.HARNESS], 'identity.harness');
+  validateProducts(identity[IDENTITY_FIELD.PRODUCTS], 'identity.products');
+  validateProducts(identity[IDENTITY_FIELD.PRODUCTS_AFTER_WINDOW], 'identity.productsAfterWindow');
+  if (!Object.hasOwn(identity, IDENTITY_FIELD.PUBLICATION)) {
+    reject(RECORD_REJECTION.MISSING_FIELD, 'identity.publication must be present (null until set)');
+  }
+  requireNullableObject(identity[IDENTITY_FIELD.PUBLICATION], 'identity.publication');
+}
+
+function validatePlan(plan) {
+  requireObject(plan, RUN_FIELD.PLAN);
+  for (const field of [
+    PLAN_FIELD.MANIFEST_DIGEST, PLAN_FIELD.DATASET_DIGEST, PLAN_FIELD.WORKLOAD_PLAN_DIGEST,
+    PLAN_FIELD.MEASUREMENT_PLAN_DIGEST, PLAN_FIELD.SEMANTIC_PROFILE_ID,
+    PLAN_FIELD.SEMANTIC_PROFILE_DIGEST, PLAN_FIELD.RETRY_POLICY_ID,
+    PLAN_FIELD.OPEN_LOOP_PROFILE_ID, PLAN_FIELD.SWEEP_PLAN_DIGEST,
+  ]) {
+    requireText(plan[field], `plan.${field}`);
+  }
+  requireTiming(plan[PLAN_FIELD.OFFERED_RATE_PER_SEC], 'plan.offeredRatePerSec');
+  requireEnum(plan[PLAN_FIELD.PROFILE_CLASS], objectValues(PROFILE_CLASS), 'plan.profileClass');
+  requireText(plan[PLAN_FIELD.OPERATION_SLICE_DIGEST], 'plan.operationSliceDigest');
+  const planned = requireObject(plan[PLAN_FIELD.PLANNED_OPERATION_COUNTS],
+    'plan.plannedOperationCounts');
+  for (const [kind, n] of Object.entries(planned)) {
+    requireCount(n, `plan.plannedOperationCounts.${kind}`);
+  }
+  requireCount(plan[PLAN_FIELD.REPETITION], 'plan.repetition');
+  requireCount(plan[PLAN_FIELD.ORDER_INDEX], 'plan.orderIndex');
+  requireObject(plan[PLAN_FIELD.WARMUP], 'plan.warmup');
+}
+
+function validateHosts(hosts, at) {
+  requireArray(hosts, at).forEach((host, idx) => {
+    requireObject(host, `${at}[${idx}]`);
+    requireText(host.hostId, `${at}[${idx}].hostId`);
+    requireText(host.ip, `${at}[${idx}].ip`);
+    requireText(host.hostname, `${at}[${idx}].hostname`);
+    requireText(host.bootId, `${at}[${idx}].bootId`);
+    requireCount(host.cpus, `${at}[${idx}].cpus`);
+    requireTiming(host.memGb, `${at}[${idx}].memGb`);
+  });
+}
+
+function validateDataset(dataset) {
+  requireObject(dataset, 'deployment.dataset');
+  requireArray(dataset.tables, 'deployment.dataset.tables').forEach((t, idx) => {
+    requireText(t.table, `deployment.dataset.tables[${idx}].table`);
+    requireCount(t.rows, `deployment.dataset.tables[${idx}].rows`);
+  });
+  const coverage = requireObject(dataset.keyCoverage, 'deployment.dataset.keyCoverage');
+  requireCount(coverage.expected, 'deployment.dataset.keyCoverage.expected');
+  requireCount(coverage.present, 'deployment.dataset.keyCoverage.present');
+  requireText(dataset.logicalChecksum, 'deployment.dataset.logicalChecksum');
+  requireText(dataset.resetMethod, 'deployment.dataset.resetMethod');
+}
+
+function validateEndpointAndLoadGenerator(deployment) {
+  const endpoint = requireObject(deployment[DEPLOYMENT_FIELD.ENDPOINT], 'deployment.endpoint');
+  requireText(endpoint.host, 'deployment.endpoint.host');
+  requireCount(endpoint.port, 'deployment.endpoint.port');
+  requireText(endpoint.containerId, 'deployment.endpoint.containerId');
+  requireText(endpoint.protocol, 'deployment.endpoint.protocol');
+  const generator = requireObject(deployment[DEPLOYMENT_FIELD.LOAD_GENERATOR],
+    'deployment.loadGenerator');
+  requireText(generator.host, 'deployment.loadGenerator.host');
+  requireText(generator.nodeVersion, 'deployment.loadGenerator.nodeVersion');
+  requireObject(generator.driverVersions, 'deployment.loadGenerator.driverVersions');
+}
+
+function validateEventsAndClosure(deployment) {
+  requireArray(deployment[DEPLOYMENT_FIELD.EVENTS], 'deployment.events').forEach((e, idx) => {
+    requireEnum(e.kind, objectValues(DEPLOYMENT_EVENT_KIND), `deployment.events[${idx}].kind`);
+    requireIsoTime(e.at, `deployment.events[${idx}].at`);
+  });
+  const closure = requireObject(deployment[DEPLOYMENT_FIELD.CLOSURE], 'deployment.closure');
+  requireEnum(closure.status, objectValues(CLOSURE_STATUS), 'deployment.closure.status');
+  requireArray(closure.unclosed, 'deployment.closure.unclosed');
+}
+
+function validateDeployment(deployment) {
+  requireObject(deployment, RUN_FIELD.DEPLOYMENT);
+  validateHosts(deployment[DEPLOYMENT_FIELD.HOSTS], 'deployment.hosts');
+  requireArray(deployment[DEPLOYMENT_FIELD.ROLES], 'deployment.roles').forEach((r, idx) => {
+    requireText(r.role, `deployment.roles[${idx}].role`);
+    requireText(r.host, `deployment.roles[${idx}].host`);
+    requireText(r.containerId, `deployment.roles[${idx}].containerId`);
+  });
+  requireArray(deployment[DEPLOYMENT_FIELD.STORAGE], 'deployment.storage').forEach((s, idx) => {
+    requireText(s.containerId, `deployment.storage[${idx}].containerId`);
+    requireText(s.mount, `deployment.storage[${idx}].mount`);
+    requireEnum(s.kind, objectValues(STORAGE_KIND), `deployment.storage[${idx}].kind`);
+  });
+  const readiness = requireObject(deployment[DEPLOYMENT_FIELD.READINESS], 'deployment.readiness');
+  requireEnum(readiness.state, objectValues(READINESS_STATE), 'deployment.readiness.state');
+  requireIsoTime(readiness.observedAt, 'deployment.readiness.observedAt');
+  validateDataset(deployment[DEPLOYMENT_FIELD.DATASET]);
+  validateEndpointAndLoadGenerator(deployment);
+  validateEventsAndClosure(deployment);
+  requireNullableObject(deployment[DEPLOYMENT_FIELD.PLACEMENT] ?? null, 'deployment.placement');
+}
+
+function validateAttempt(attempt, at) {
+  requireObject(attempt, at);
+  requireCount(attempt[ATTEMPT_FIELD.ATTEMPT_NO], `${at}.attemptNo`);
+  const started = requireTiming(attempt[ATTEMPT_FIELD.STARTED_MS], `${at}.startedMs`);
+  const ended = requireTiming(attempt[ATTEMPT_FIELD.ENDED_MS], `${at}.endedMs`);
+  if (ended < started) reject(RECORD_REJECTION.INVALID_TIMING, `${at} ends before it starts`);
+  requireEnum(attempt[ATTEMPT_FIELD.OUTCOME], [
+    OPERATION_OUTCOME.COMMITTED, OPERATION_OUTCOME.SERIALIZATION_CONFLICT,
+    OPERATION_OUTCOME.TERMINAL_FAILURE, OPERATION_OUTCOME.UNRESOLVED,
+  ], `${at}.outcome`);
+  requireText(attempt[ATTEMPT_FIELD.RESPONSE_DIGEST], `${at}.responseDigest`);
+}
+
+function validateRequestFailureClass(request, at) {
+  const outcome = request[REQUEST_FIELD.OUTCOME];
+  const failureClass = request[REQUEST_FIELD.FAILURE_CLASS];
+  if (outcome === OPERATION_OUTCOME.TERMINAL_FAILURE) {
+    requireEnum(failureClass, TERMINAL_FAILURE_CLASSES, `${at}.failureClass`);
+  } else if (outcome === OPERATION_OUTCOME.UNRESOLVED) {
+    requireEnum(failureClass, UNRESOLVED_FAILURE_CLASSES, `${at}.failureClass`);
+  } else if (failureClass !== undefined && failureClass !== null) {
+    reject(RECORD_REJECTION.INVALID_ENUM, `${at}.failureClass only accompanies a failure`);
+  }
+}
+
+function validateRequest(request, at, seenOpIds) {
+  requireObject(request, at);
+  const opId = requireText(request[REQUEST_FIELD.OP_ID], `${at}.opId`);
+  if (seenOpIds.has(opId)) reject(RECORD_REJECTION.DUPLICATE_OP_ID, `${at}.opId ${opId}`);
+  seenOpIds.add(opId);
+  const outcome = requireEnum(request[REQUEST_FIELD.OUTCOME], objectValues(OPERATION_OUTCOME),
+    `${at}.outcome`);
+  requireText(request[REQUEST_FIELD.OPERATION_KIND], `${at}.operationKind`);
+  requireTiming(request[REQUEST_FIELD.INTENDED_START_MS], `${at}.intendedStartMs`);
+  validateRequestFailureClass(request, at);
+  const attempts = requireArray(request[REQUEST_FIELD.ATTEMPTS], `${at}.attempts`);
+  attempts.forEach((a, idx) => validateAttempt(a, `${at}.attempts[${idx}]`));
+  if ((outcome === OPERATION_OUTCOME.UNISSUED) !== (attempts.length === 0)) {
+    reject(RECORD_REJECTION.ACCOUNTING_INVARIANT,
+      `${at}: exactly the unissued requests have no attempts`);
+  }
+  if (outcome !== OPERATION_OUTCOME.UNISSUED) {
+    requireObject(request[REQUEST_FIELD.RESPONSE_EVIDENCE], `${at}.responseEvidence`);
+    requireObject(request[REQUEST_FIELD.EFFECT_SUMMARY], `${at}.effectSummary`);
+    if (attempts[0][ATTEMPT_FIELD.STARTED_MS] < request[REQUEST_FIELD.INTENDED_START_MS]) {
+      reject(RECORD_REJECTION.INVALID_TIMING, `${at} starts before its intended issue time`);
+    }
+  }
+}
+
+function emptyTerminalFailures() {
+  return Object.fromEntries(arrayMap(TERMINAL_FAILURE_CLASSES, (cls) => [cls, 0]));
+}
+
+// Accounting recounted from the logical request records: the only source of truth.
+function recountAccounting(requests) {
+  const counts = {
+    offered: requests.length, issued: 0, unissued: 0, attempts: 0, committed: 0, conflicts: 0,
+    conflictExhausted: 0, terminalFailures: emptyTerminalFailures(), unresolved: 0,
+  };
+  for (const request of requests) {
+    const outcome = request[REQUEST_FIELD.OUTCOME];
+    const attempts = request[REQUEST_FIELD.ATTEMPTS];
+    counts.attempts += attempts.length;
+    counts.conflicts += arrayFilter(attempts,
+      (a) => a.outcome === OPERATION_OUTCOME.SERIALIZATION_CONFLICT).length;
+    if (outcome === OPERATION_OUTCOME.UNISSUED) {
+      counts.unissued += 1;
+      continue;
+    }
+    counts.issued += 1;
+    if (outcome === OPERATION_OUTCOME.COMMITTED) counts.committed += 1;
+    if (outcome === OPERATION_OUTCOME.SERIALIZATION_CONFLICT) counts.conflictExhausted += 1;
+    if (outcome === OPERATION_OUTCOME.UNRESOLVED) counts.unresolved += 1;
+    if (outcome === OPERATION_OUTCOME.TERMINAL_FAILURE) {
+      counts.terminalFailures[request[REQUEST_FIELD.FAILURE_CLASS]] += 1;
+    }
+  }
+  return counts;
+}
+
+function sumTerminalFailures(terminalFailures) {
+  let total = 0;
+  for (const cls of TERMINAL_FAILURE_CLASSES) total += terminalFailures[cls];
+  return total;
+}
+
+function validateAccountingBlock(accounting) {
+  requireObject(accounting, 'observations.accounting');
+  for (const field of objectValues(ACCOUNTING_FIELD)) {
+    if (field === ACCOUNTING_FIELD.TERMINAL_FAILURES) continue;
+    requireCount(accounting[field], `observations.accounting.${field}`);
+  }
+  const failures = requireObject(accounting[ACCOUNTING_FIELD.TERMINAL_FAILURES],
+    'observations.accounting.terminalFailures');
+  for (const cls of TERMINAL_FAILURE_CLASSES) {
+    requireCount(failures[cls], `observations.accounting.terminalFailures.${cls}`);
+  }
+  if (accounting.offered !== accounting.issued + accounting.unissued) {
+    reject(RECORD_REJECTION.ACCOUNTING_INVARIANT, 'offered != issued + unissued');
+  }
+  const resolved = accounting.committed + accounting.conflictExhausted +
+    sumTerminalFailures(failures) + accounting.unresolved;
+  if (accounting.issued !== resolved) {
+    reject(RECORD_REJECTION.ACCOUNTING_INVARIANT,
+      'issued != committed + conflictExhausted + terminalFailures + unresolved');
+  }
+  if (accounting.attempts < accounting.issued) {
+    reject(RECORD_REJECTION.ACCOUNTING_INVARIANT, 'attempts < issued');
+  }
+}
+
+function validateAccountingMatchesRequests(accounting, requests) {
+  const recount = recountAccounting(requests);
+  if (serializeJsonData(recount, {sortKeys: true}) !==
+      serializeJsonData(accounting, {sortKeys: true})) {
+    reject(RECORD_REJECTION.ACCOUNTING_MISMATCH,
+      `observations.accounting ${jsonStringify(accounting)} != recount ${jsonStringify(recount)}`);
+  }
+}
+
+function validateWindow(window) {
+  requireObject(window, 'observations.window');
+  requireTiming(window[WINDOW_FIELD.SCHEDULED_MS], 'observations.window.scheduledMs');
+  requireTiming(window[WINDOW_FIELD.DRAIN_MS], 'observations.window.drainMs');
+  requireTiming(window[WINDOW_FIELD.DRAIN_OVERRUN_MS], 'observations.window.drainOverrunMs');
+  requireIsoTime(window[WINDOW_FIELD.STARTED_AT], 'observations.window.startedAt');
+  requireIsoTime(window[WINDOW_FIELD.ENDED_AT], 'observations.window.endedAt');
+}
+
+function validateObservations(observations) {
+  requireObject(observations, RUN_FIELD.OBSERVATIONS);
+  const requests = requireArray(observations[OBSERVATIONS_FIELD.REQUESTS],
+    'observations.requests');
+  const seen = new Set();
+  requests.forEach((r, idx) => validateRequest(r, `observations.requests[${idx}]`, seen));
+  validateAccountingBlock(observations[OBSERVATIONS_FIELD.ACCOUNTING]);
+  validateAccountingMatchesRequests(observations[OBSERVATIONS_FIELD.ACCOUNTING], requests);
+  validateWindow(observations[OBSERVATIONS_FIELD.WINDOW]);
+  requireText(observations[OBSERVATIONS_FIELD.EXECUTED_OPERATIONS_DIGEST],
+    'observations.executedOperationsDigest');
+  requireNullableObject(observations[OBSERVATIONS_FIELD.RESOURCES] ?? null,
+    'observations.resources');
+  const network = requireNullableObject(observations[OBSERVATIONS_FIELD.NETWORK] ?? null,
+    'observations.network');
+  if (network) requireEnum(network.scope, objectValues(NETWORK_SCOPE), 'observations.network.scope');
+}
+
+function validateCorrectness(correctness) {
+  requireObject(correctness, RUN_FIELD.CORRECTNESS);
+  const gate = requireNullableObject(correctness[CORRECTNESS_FIELD.SEMANTIC_GATE] ?? null,
+    'correctness.semanticGate');
+  if (gate) {
+    requireText(gate[CORRECTNESS_FIELD.STATUS], 'correctness.semanticGate.status');
+    for (const list of [CORRECTNESS_FIELD.PASSED, CORRECTNESS_FIELD.FAILED,
+      CORRECTNESS_FIELD.MISSING]) {
+      requireArray(gate[list], `correctness.semanticGate.${list}`);
+    }
+    requireNullableObject(gate[CORRECTNESS_FIELD.BINDING] ?? null,
+      'correctness.semanticGate.binding');
+  }
+  const finalState = requireNullableObject(correctness[CORRECTNESS_FIELD.FINAL_STATE] ?? null,
+    'correctness.finalState');
+  if (finalState) {
+    for (const side of [CORRECTNESS_FIELD.BEFORE, CORRECTNESS_FIELD.AFTER]) {
+      const snapshot = requireObject(finalState[side], `correctness.finalState.${side}`);
+      const rows = requireObject(snapshot[CORRECTNESS_FIELD.TABLE_ROWS],
+        `correctness.finalState.${side}.tableRows`);
+      for (const [table, n] of Object.entries(rows)) {
+        requireCount(n, `correctness.finalState.${side}.tableRows.${table}`);
+      }
+    }
+  }
+}
+
+// Digest over the ordered issued operations ({opId, operationKind}); the planner
+// computes the same digest over the slice a rate/repetition is planned to issue.
+function computeExecutedOperationsDigest(requests) {
+  const issued = arrayFilter(requests,
+    (r) => r[REQUEST_FIELD.OUTCOME] !== OPERATION_OUTCOME.UNISSUED);
+  return digest(arrayMap(issued, (r) => ({
+    opId: r[REQUEST_FIELD.OP_ID],
+    operationKind: r[REQUEST_FIELD.OPERATION_KIND],
+  })));
+}
+
+function digestedRunContent(run) {
+  const {publication: _publication, ...identity} = run[RUN_FIELD.IDENTITY];
+  return {
+    observations: run[RUN_FIELD.OBSERVATIONS],
+    correctness: run[RUN_FIELD.CORRECTNESS],
+    deployment: run[RUN_FIELD.DEPLOYMENT],
+    identity,
+    plan: run[RUN_FIELD.PLAN],
+  };
+}
+
+// sha256 over canonical JSON of observations + correctness + deployment + identity
+// + plan. identity.publication is excluded: the publisher fills it after the run.
+function computeRunObservationsDigest(run) {
+  return digest(digestedRunContent(run));
+}
+
+function buildClaimKey({targetId, scenario, subkind, offeredRatePerSec, repetition}) {
+  return `${targetId}/${scenario}/${subkind}/${offeredRatePerSec}/${repetition}`;
+}
+
+function validateRunRecord(run) {
+  if (!run || typeof run !== 'object') reject(RECORD_REJECTION.NOT_AN_OBJECT, 'run record');
+  requireEnum(run[RUN_FIELD.RECORD_TYPE], [RAW_RECORD_TYPE.RUN], 'recordType');
+  requireEnum(run[RUN_FIELD.SCHEMA_VERSION], [RAW_OBSERVATION_SCHEMA.V2], 'schemaVersion');
+  for (const field of [RUN_FIELD.CAMPAIGN_ID, RUN_FIELD.RUN_ID, RUN_FIELD.CLAIM_KEY,
+    RUN_FIELD.TARGET_ID, RUN_FIELD.SUBKIND]) {
+    requireText(run[field], field);
+  }
+  requireEnum(run[RUN_FIELD.SCENARIO], objectValues(BENCHMARK_SCENARIO), 'scenario');
+  requireEnum(run[RUN_FIELD.EXECUTION_TARGET], objectValues(EXECUTION_TARGET), 'executionTarget');
+  validateIdentity(run[RUN_FIELD.IDENTITY]);
+  validatePlan(run[RUN_FIELD.PLAN]);
+  validateDeployment(run[RUN_FIELD.DEPLOYMENT]);
+  validateObservations(run[RUN_FIELD.OBSERVATIONS]);
+  validateCorrectness(run[RUN_FIELD.CORRECTNESS]);
+  const expectedKey = buildClaimKey({
+    targetId: run.targetId, scenario: run.scenario, subkind: run.subkind,
+    offeredRatePerSec: run.plan.offeredRatePerSec, repetition: run.plan.repetition,
+  });
+  if (run[RUN_FIELD.CLAIM_KEY] !== expectedKey) {
+    reject(RECORD_REJECTION.INVALID_TEXT, `claimKey ${run.claimKey} != ${expectedKey}`);
+  }
+  requireText(run[RUN_FIELD.RAW_OBSERVATIONS_DIGEST], RUN_FIELD.RAW_OBSERVATIONS_DIGEST);
+  return run;
+}
+
+function validateCampaignHeader(header) {
+  requireObject(header, 'campaign header');
+  requireEnum(header[HEADER_FIELD.RECORD_TYPE], [RAW_RECORD_TYPE.CAMPAIGN_HEADER], 'recordType');
+  requireEnum(header[HEADER_FIELD.SCHEMA_VERSION], [RAW_OBSERVATION_SCHEMA.V2], 'schemaVersion');
+  requireText(header[HEADER_FIELD.CAMPAIGN_ID], 'campaignId');
+  requireIsoTime(header[HEADER_FIELD.STARTED_AT], 'startedAt');
+  requireText(header[HEADER_FIELD.MANIFEST_DIGEST], 'manifestDigest');
+  validateHarnessIdentity(header[HEADER_FIELD.HARNESS], 'harness');
+  requireEnum(header[HEADER_FIELD.EXECUTION_TARGET], objectValues(EXECUTION_TARGET),
+    'executionTarget');
+  validateHosts(header[HEADER_FIELD.PHYSICAL_HOSTS], 'physicalHosts');
+  return header;
+}
+
+// ---- v1 forensic reader (retained campaign files only; never publication input) ----
+
+function computeV1PayloadDigest(payload) {
+  const hex = createHash('sha256').update(jsonStringify(payload), 'utf8').digest('hex');
+  return `sha256:${hex}`;
+}
+
+function parseLine(line, file, lineNo) {
+  try {
+    return jsonParse(line);
+  } catch {
+    return reject(RECORD_REJECTION.CORRUPT_LINE, `${file}:${lineNo} is not JSON`);
+  }
+}
+
+function classifyLine(parsed, file, lineNo, out) {
+  const schema = parsed?.schemaVersion;
+  if (schema === RAW_OBSERVATION_SCHEMA.V1_CAMPAIGN) {
+    out.forensicHeaders.push({file, header: parsed});
+  } else if (schema === RAW_OBSERVATION_SCHEMA.V1_RUN) {
+    if (computeV1PayloadDigest(parsed.rawObservationPayload) !== parsed.rawObservationsDigest) {
+      reject(RECORD_REJECTION.DIGEST_MISMATCH, `${file}:${lineNo} forensic ${parsed.receiptId}`);
+    }
+    const header = out.forensicHeaders[out.forensicHeaders.length - 1]?.header || null;
+    out.forensicRecords.push({file, campaignGitCommit: header?.gitCommit ?? null, record: parsed});
+  } else if (schema === RAW_OBSERVATION_SCHEMA.V2 &&
+      parsed.recordType === RAW_RECORD_TYPE.CAMPAIGN_HEADER) {
+    out.campaignHeaders.push(parsed);
+  } else if (schema === RAW_OBSERVATION_SCHEMA.V2 && parsed.recordType === RAW_RECORD_TYPE.RUN) {
+    out.runs.push(parsed);
+  } else {
+    reject(RECORD_REJECTION.UNKNOWN_SCHEMA, `${file}:${lineNo} schema ${schema}`);
+  }
+}
+
+// Splits a raw observation file into v2 campaign headers/runs and v1 forensic
+// records. v2 runs are returned unvalidated: admission validates each one so a
+// malformed run becomes a typed invalid cell instead of hiding its neighbours.
+function parseRawObservationText(text, file) {
+  const out = {campaignHeaders: [], runs: [], forensicHeaders: [], forensicRecords: []};
+  const lines = arrayMap(stringSplit(text, '\n'), (l) => stringTrim(l));
+  lines.forEach((line, idx) => {
+    if (line !== '') classifyLine(parseLine(line, file, idx + 1), file, idx + 1, out);
+  });
+  return out;
+}
+
+export {
+  ACCOUNTING_FIELD,
+  ATTEMPT_FIELD,
+  BENCHMARK_SCENARIO,
+  CLOSURE_STATUS,
+  CORRECTNESS_FIELD,
+  DEPLOYMENT_EVENT_KIND,
+  DEPLOYMENT_FIELD,
+  EXECUTION_TARGET,
+  FAILURE_CLASS,
+  FINAL_STATE_TABLE,
+  HEADER_FIELD,
+  IDENTITY_FIELD,
+  NETWORK_SCOPE,
+  OBSERVATIONS_FIELD,
+  OPERATION_OUTCOME,
+  PLAN_FIELD,
+  PRODUCT_FIELD,
+  PROFILE_CLASS,
+  RAW_OBSERVATION_SCHEMA,
+  RAW_RECORD_TYPE,
+  READINESS_STATE,
+  RECORD_REJECTION,
+  REQUEST_FIELD,
+  RUN_FIELD,
+  RawObservationRecordError,
+  STORAGE_KIND,
+  TERMINAL_FAILURE_CLASSES,
+  WINDOW_FIELD,
+  buildClaimKey,
+  computeExecutedOperationsDigest,
+  computeRunObservationsDigest,
+  computeV1PayloadDigest,
+  parseRawObservationText,
+  recountAccounting,
+  validateCampaignHeader,
+  validateRunRecord,
+};

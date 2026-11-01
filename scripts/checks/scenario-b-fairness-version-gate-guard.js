@@ -20,10 +20,7 @@ import {
 } from '../../test/distributed/harness/oltp-paired-sweep-runner.js';
 import {
   getScenarioDefinitionHref,
-  renderComparisonProgressHtml,
-  renderComparisonProgressMarkdown,
-  renderComparisonProgressSvg,
-  renderScenarioBComparisonSvg,
+  renderComparisonProgress,
 } from '../../test/distributed/harness/oltp-comparison-static-web.js';
 import {
   runObservedScenarioBHarnessComparison,
@@ -46,14 +43,14 @@ const STR_TIMING_OBSERVED = 'observed';
 const STR_MODELED_HARNESS_BASELINE = 'local-oracle-plus-network-model';
 const STR_SMOKE_PROFILE = 'smoke';
 const STR_CONTRACT_MODEL = 'deterministic-contract-model';
-const STR_SCORECARD_MD_HEADER = '## Scenario B distributed risk & movement scorecard';
-const STR_SCORECARD_HTML_HEADER = 'Scenario B Distributed Risk &amp; Movement Scorecard';
+const STR_SCORECARD_MD_HEADER = '## Scenario B history';
+const STR_SCORECARD_HTML_HEADER = '<h2>Scenario B history</h2>';
 const STR_TMP_PREFIX = 'scenario-b-version-gate-';
 const STR_TMP_NDJSON = 'history.ndjson';
 const STR_TMP_SUMMARY = 'summary.json';
-const STR_RISK_DECISIONS_PER_SEC = 'Risk Decisions/sec';
-const STR_CROSS_ISLAND_WAN_TRAFFIC = 'Cross-Island WAN Traffic';
-const STR_SCENARIO_B_SVG_FILENAME = 'tidb-scenario-b-comparison.svg';
+const STR_RISK_DECISIONS_PER_SEC = 'dec/s';
+const STR_SCENARIO_B_SVG_TITLE = 'Scenario B comparison history';
+const STR_INVALID_MEASUREMENT = 'invalid-measurement';
 const STR_SCENARIO_B_DOC_HREF = 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision';
 
 const NUM_BYTES_192 = 192;
@@ -240,20 +237,18 @@ async function verifyScenarioBVersionGatedExecution(existingRecords) {
   assert.equal(runTidbBumped.skipped, false);
 
   const summary = buildComparisonProgressSummary(recordsWithScenarioB);
-  const markdown = renderComparisonProgressMarkdown(summary);
-  const html = renderComparisonProgressHtml(summary);
-  const progressSvg = renderComparisonProgressSvg(summary);
-  const scenarioBSvg = renderScenarioBComparisonSvg(summary);
+  const {markdown, html, scenarioBSvg} = renderComparisonProgress(summary);
   assert.equal(getScenarioDefinitionHref(STR_SCENARIO_B), STR_SCENARIO_B_DOC_HREF);
   assert.equal(stringIncludes(markdown, STR_SCORECARD_MD_HEADER), true);
   assert.equal(stringIncludes(html, STR_SCORECARD_HTML_HEADER), true);
-  assert.equal(stringIncludes(markdown, STR_SCENARIO_B_SVG_FILENAME), true);
+  assert.equal(stringIncludes(markdown, STR_INVALID_MEASUREMENT), true);
   assert.equal(stringIncludes(markdown, STR_SCENARIO_B_DOC_HREF), true);
   assert.equal(stringIncludes(html, STR_SCENARIO_B_DOC_HREF), true);
-  assert.equal(stringIncludes(progressSvg, STR_RISK_DECISIONS_PER_SEC), true);
-  assert.equal(stringIncludes(progressSvg, STR_CROSS_ISLAND_WAN_TRAFFIC), true);
-  assert.equal(stringIncludes(scenarioBSvg, STR_RISK_DECISIONS_PER_SEC), true);
-  assert.equal(stringIncludes(scenarioBSvg, STR_CROSS_ISLAND_WAN_TRAFFIC), true);
+  // History records are forensic: the pages name them and their admission status
+  // and republish no decision rate.
+  assert.equal(stringIncludes(markdown, STR_RISK_DECISIONS_PER_SEC), false);
+  assert.equal(stringIncludes(html, STR_RISK_DECISIONS_PER_SEC), false);
+  assert.equal(stringIncludes(scenarioBSvg, STR_SCENARIO_B_SVG_TITLE), true);
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), STR_TMP_PREFIX));
   try {

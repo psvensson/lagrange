@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2493,
+    "ordinary": 2495,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2510,
-  "digest": "fnv1a32-6c660a6f",
+  "censusSize": 2512,
+  "digest": "fnv1a32-d7526cf7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -809,6 +809,7 @@
     "test/distributed/harness/__tests__/assertions.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-observation.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js": "ordinary",
+    "test/distributed/harness/__tests__/benchmark-claim-admission.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-partition-convergence.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js": "ordinary",
@@ -853,6 +854,7 @@
     "test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js": "ordinary",
     "test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js": "ordinary",
     "test/distributed/harness/__tests__/cluster.test.js": "ordinary",
+    "test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js": "exclusive",
     "test/distributed/harness/__tests__/comparative-efficiency-evidence-contract.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-efficiency-measured-cell-admission.test.js": "ordinary",
