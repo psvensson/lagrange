@@ -22,6 +22,9 @@ const CALL_CELL_ROUTE_ERROR_CODE = Object.freeze({
   HOST_CELL_UNAVAILABLE: 'call_cell_host_cell_unavailable',
   INVALID_ARGUMENTS: 'call_cell_invalid_arguments',
   INVALID_COMPONENT_RESULT: 'call_cell_invalid_component_result',
+  INVOCATION_AMBIGUOUS: 'call_cell_invocation_ambiguous',
+  INVOCATION_CONFLICT: 'call_cell_invocation_conflict',
+  INVOCATION_EXPIRED: 'call_cell_invocation_expired',
   NOT_INVOCABLE: 'call_cell_not_invocable',
   REDUCE_INCOMPLETE: 'call_cell_reduce_incomplete',
   ROUTE_AMBIGUOUS: 'call_cell_route_ambiguous',
@@ -108,6 +111,18 @@ const CALL_CELL_ROUTE_ERROR_PUBLIC = Object.freeze({
     message: 'Call Cell component returned an invalid result',
     origin: CALL_CELL_FAILURE_ORIGIN.APPLICATION,
   }),
+  [CALL_CELL_ROUTE_ERROR_CODE.INVOCATION_AMBIGUOUS]: Object.freeze({
+    message: 'Call invocation outcome is uncertain',
+    origin: CALL_CELL_FAILURE_ORIGIN.DELIVERY,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.INVOCATION_CONFLICT]: Object.freeze({
+    message: 'Call invocation key is already bound to different invocation intent',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.INVOCATION_EXPIRED]: Object.freeze({
+    message: 'Call invocation key has expired',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
   [CALL_CELL_ROUTE_ERROR_CODE.NOT_INVOCABLE]: Object.freeze({
     message: 'Call Binding is not invocable',
     origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
@@ -147,6 +162,7 @@ const CALL_CELL_ROUTE_ERROR_PUBLIC = Object.freeze({
 });
 const CALL_CELL_ROUTE_ERROR_NAME = 'CallCellRoutingError';
 const CALL_CELL_INVOCATION_ID_PREFIX = 'call-invocation-';
+const DIRECT_CALL_INVOCATION_PREFIX = 'call-direct-';
 // Wire prefix the runtime invocation owner stamps onto every emitted
 // partial key (call-cell-driver-invoke.js); consumers strip it to recover
 // the guest's group key.
@@ -401,6 +417,26 @@ function createCallInvocationIntentDigest(fields) {
     .digest(HASH_ENCODING);
 }
 
+function createScopedDirectCallInvocationId({
+  invocationKey,
+  principal,
+  tenantId,
+} = {}) {
+  createCallInvocationIdentity(invocationKey);
+  if (typeof invocationKey !== 'string' || invocationKey.length === 0) {
+    throw createCallRoutingFailure(
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      CALL_CELL_CONTRACT_MESSAGE.IDEMPOTENCY_KEY_RESERVED_SUFFIX,
+    );
+  }
+  const scopeDigest = createCallInvocationIntentDigest({
+    invocationKey,
+    principal: String(principal ?? ''),
+    tenantId: String(tenantId ?? ''),
+  });
+  return `${DIRECT_CALL_INVOCATION_PREFIX}${scopeDigest}`;
+}
+
 function normalizeCallComponentResult(value) {
   if (typeof value !== 'string') {
     throw createCallRoutingFailure(
@@ -525,6 +561,7 @@ export {
   createCallReduceInvocationId,
   createCallRoutingFailure,
   createCallSlotInvocationId,
+  createScopedDirectCallInvocationId,
   normalizeCallArguments,
   normalizeCallComponentResult,
   normalizeEmittedPartialEntries,

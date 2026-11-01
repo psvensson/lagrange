@@ -33,6 +33,7 @@ const AUTHORING_RELATIVE_PATH = '../authoring/index.js';
 const REPO_NODE_MODULES_RELATIVE_PATH = '../../node_modules';
 
 const SERVICE_CELL_WORLD = 'service-cell';
+const SERVICE_CELL_V2_WORLD = 'service-cell-v2';
 const COMPONENTIZE_MODULE = '@bytecodealliance/componentize-js';
 const COMPONENTIZE_SPECIFIER = COMPONENTIZE_MODULE;
 const ESBUILD_SPECIFIER = 'esbuild';
@@ -304,12 +305,19 @@ async function runComponentizeWithBundle(
   }
 }
 
+function inferServiceWorldFromEntrySource(entrySource) {
+  return typeof entrySource === 'string' &&
+      entrySource.includes(SERVICE_CELL_V2_WORLD) ?
+    SERVICE_CELL_V2_WORLD :
+    SERVICE_CELL_WORLD;
+}
+
 /**
  * Componentize a generated service entry against the service-cell world.
  * @param {object} params
  * @param {string} [params.entryPath] - on-disk generated entry module path.
  * @param {string} [params.sourcePath] - alias for entryPath.
- * @param {string} [params.worldName] - WIT world (defaults to service-cell).
+ * @param {string} [params.worldName] - WIT world (defaults to entry-inferred world).
  * @param {string} [params.witPath] - WIT package dir or file (defaults to defaultWitPath()).
  * @param {boolean} [params.bundle] - whether to bundle ESM guest dependencies with esbuild.
  * @param {object} [params.componentizeImpl] - optional componentize implementation override.
@@ -318,7 +326,7 @@ async function runComponentizeWithBundle(
 async function buildServiceComponent({
   entryPath,
   sourcePath = entryPath,
-  worldName = SERVICE_CELL_WORLD,
+  worldName = undefined,
   witPath = undefined,
   bundle = undefined,
   componentizeImpl = null,
@@ -326,6 +334,8 @@ async function buildServiceComponent({
   const {resolvedEntryPath, resolvedWitPath, witWorld} =
     resolveValidatedBuildPaths(entryPath, sourcePath, witPath);
   const entrySource = fs.readFileSync(resolvedEntryPath, UTF8_ENCODING);
+  const effectiveWorldName =
+    worldName || inferServiceWorldFromEntrySource(entrySource);
   const entryDigest = computeSha256Digest(entrySource);
   const bundleHandle = shouldBundleGuestEntry(bundle, componentizeImpl) ?
     await bundleGuestEntry(resolvedEntryPath) :
@@ -335,7 +345,7 @@ async function buildServiceComponent({
     disableFeatures: [...DISABLED_ENGINE_FEATURES],
     sourcePath: resolvedEntryPath,
     witWorld,
-    worldName,
+    worldName: effectiveWorldName,
   };
   const result = await runComponentizeWithBundle(
     componentize,
@@ -360,4 +370,5 @@ export {
   buildServiceComponent,
   bundleGuestEntry,
   componentizeService,
+  inferServiceWorldFromEntrySource,
 };

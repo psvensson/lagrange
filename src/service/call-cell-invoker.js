@@ -29,10 +29,15 @@ import {
   createCallReduceInvocationId,
   createCallRoutingFailure,
   createCallSlotInvocationId,
+  createScopedDirectCallInvocationId,
   normalizeCallComponentResult,
   normalizeEmittedPartialEntries,
   recordInvocationExecutionStarted,
 } from './call-cell-routing-contract.js';
+import {
+  DirectCallReplayCoordinator,
+  executeWithDirectCallReplay,
+} from './call-direct-invocation-replay.js';
 import {
   SHARD_TASK_STATUS,
   runBoundedShardDispatch,
@@ -53,6 +58,8 @@ import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 const CALL_INVOKER_MESSAGE = Object.freeze({
   EMPTY_BATCH_SET:
     'Call Cell declared statement resolved to zero shard batches',
+  INVOCATION_GENERATION_CONFLICT:
+    'Call Cell explicit generation does not match resolved binding generation',
   INVOCATION_PARAMETER_CONFLICT:
     'Call Cell retry or duplicate invocation changed selector parameter values under an existing invocation identity',
   REDUCE_LEASE_HOLDER_MOVED:
@@ -62,6 +69,11 @@ const CALL_INVOKER_MESSAGE = Object.freeze({
     'Call Cell invocation deadline passed before every shard run was ' +
     'admitted',
 });
+const _DIRECT_CALL_ERROR_CODES = Object.freeze([
+  CALL_CELL_ROUTE_ERROR_CODE.INVOCATION_AMBIGUOUS,
+  CALL_CELL_ROUTE_ERROR_CODE.INVOCATION_CONFLICT,
+  CALL_CELL_ROUTE_ERROR_CODE.INVOCATION_EXPIRED,
+]);
 
 const CALL_INVOKER_ARGUMENT_MESSAGE = Object.freeze({
   ROUTE_RESOLVER_REQUIRED:
@@ -170,11 +182,20 @@ function nonNegativeIntegerOption(value, fallback) {
 // Base-identity resolution owner: a system-owned supplied base (the
 // request-call bridge's '#call-' child identity) is used verbatim after
 // the wire-grammar gate; otherwise a fresh routing-contract UUID.
-function resolveBaseInvocationId(suppliedInvocationId) {
-  return typeof suppliedInvocationId === 'string' &&
-      suppliedInvocationId.length > 0 ?
-    assertCallBaseInvocationId(suppliedInvocationId) :
-    createCallInvocationIdentity().invocationId;
+function resolveBaseInvocationId(suppliedInvocationId, request) {
+  if (typeof suppliedInvocationId === 'string' &&
+      suppliedInvocationId.length > 0) {
+    return assertCallBaseInvocationId(suppliedInvocationId);
+  }
+  const directKey = request?.invocationKey ?? request?.idempotencyKey;
+  if (typeof directKey === 'string' && directKey.length > 0) {
+    return createScopedDirectCallInvocationId({
+      invocationKey: directKey,
+      principal: request?.securityContext?.principal,
+      tenantId: request?.securityContext?.tenantId,
+    });
+  }
+  return createCallInvocationIdentity().invocationId;
 }
 
 function assertInvokerCollaborators(options) {
@@ -257,6 +278,12 @@ class CallCellInvoker {
         CALL_INVOKER_BUDGET_DEFAULT.NESTED_CALL_BUDGET),
     });
     this._invocationParameterFence = new Map();
+    this._directCallReplay = options.directCallReplay ||
+      new DirectCallReplayCoordinator({
+        nowProvider: options.nowProvider,
+        reduceCoordinator: this._reduceCoordinator,
+        retentionWindowMs: options.retentionWindowMs,
+      });
   }
 
   _assertInvocationParameterFence(
@@ -473,18 +500,6 @@ class CallCellInvoker {
     return request.slotId;
   }
 
-  /**
-   * @param {object} request
-   * @param {string} request.name call Binding registration name
-   * @param {string} [request.argumentsJson] transient arguments JSON object
-   * @param {object} request.securityContext frozen {tenantId,principal,roles}
-   * @param {number} [request.deadlineMs] absolute epoch-ms deadline
-   * @param {string} [request.invocationId] system-owned base identity
-   *   (e.g. the request-call bridge's '#call-' child id) used verbatim;
-   *   the slot/reduce wire grammar is refused typed. Absent -> fresh
-   *   routing-contract UUID identity.
-   * @return {Promise<string>} the final reduced result JSON string
-   */
   async invoke(request) {
     const telemetry = {
       activationLeasesPublished: 0,
@@ -497,13 +512,17 @@ class CallCellInvoker {
       selectedPartitionCount: 0,
       shardDispatchMs: 0,
     };
-    // Invocation-level execution evidence for the public outcome class: a
-    // failure surfaced from one dispatch says nothing about the other
-    // shards (or a reduce) of the same invocation that already ran.
     const executionEvidence = {started: false};
     try {
-      return await this._invokeWithTelemetry(
-        request, telemetry, executionEvidence);
+      return await executeWithDirectCallReplay({
+        executionEvidence,
+        replayCoordinator: this._directCallReplay,
+        request,
+        resolveProbePrefix: RESOLVE_PROBE_PREFIX,
+        routeResolver: this._routeResolver,
+        runCore: (effectiveReq) =>
+          this._invokeWithTelemetry(effectiveReq, telemetry, executionEvidence),
+      });
     } catch (error) {
       if (executionEvidence.started) recordInvocationExecutionStarted(error);
       telemetry.failureCode = typeof error?.code === 'string' ?
@@ -624,13 +643,14 @@ class CallCellInvoker {
     } = request;
     const attemptId = request.attemptId || DEFAULT_ATTEMPT_ID;
     const pagedExecution = Boolean(request.pagedExecution);
-    const resolution = this._routeResolver.resolve({
-      callerServiceId,
-      invocationId: `${RESOLVE_PROBE_PREFIX}${name}`,
-      name,
-      securityContext,
-    });
-    const invocationId = resolveBaseInvocationId(suppliedInvocationId);
+    const resolution = request._preResolvedRoute ||
+      this._routeResolver.resolve({
+        callerServiceId,
+        invocationId: `${RESOLVE_PROBE_PREFIX}${name}`,
+        name,
+        securityContext,
+      });
+    const invocationId = resolveBaseInvocationId(suppliedInvocationId, request);
     const {batches, normalizedParams} = this._planInvocationShards(
       invocationId,
       securityContext,
@@ -641,10 +661,13 @@ class CallCellInvoker {
     const slotIds = batches.map((_, index) => index + 1);
     await this._reclaimExpiredCoordinationIfSupported();
     const reduceLeaseSlotId = slotIds.length + 1;
-    await this._reduceCoordinator.seedInvocation(
-      invocationId,
-      [...slotIds, reduceLeaseSlotId],
-    );
+    if (!request._skipSeedIfRetry) {
+      await this._reduceCoordinator.seedInvocation(
+        invocationId,
+        [...slotIds, reduceLeaseSlotId],
+        request._admissionMeta,
+      );
+    }
 
     telemetry.selectedPartitionCount = batches.length;
     const shardPhaseStartedAt = Date.now();
@@ -755,10 +778,18 @@ class CallCellInvoker {
     }
     const resultJson = normalizeCallComponentResult(
       reduceDelivery.componentResult);
+    const finalWitness = request._admissionMeta ?
+      await this._directCallReplay.recordCompleted(
+        invocationId,
+        request._admissionMeta,
+        resultJson,
+        witness,
+      ) :
+      witness;
     await this._reduceCoordinator.publishFinalSnapshot(
       invocationId,
       resultJson,
-      witness,
+      finalWitness,
     );
     telemetry.reduceMs = Date.now() - reduceStartedAt;
     return resultJson;

@@ -423,25 +423,15 @@ function createCallCellReduceCoordinator(options) {
       await readSlotRows(invocationId), replicaId, slotId, atMs);
   }
 
-  // Seed the per-invocation coordination rows the guarded UPDATEs bite on:
-  // one expired-lease slot row per expected slot plus the result row the
-  // final snapshot atomically fills. Invocation ids are content-fresh
-  // (UUID identities from the routing contract), so plain INSERTs are
-  // correct — re-seeding an id would mean the orchestrator reused an
-  // identity, and the coordination table's primary key is the right place
-  // for that to fail loudly.
-  async function seedInvocation(invocationId, expectedSlotIds) {
+  // Seed per-invocation coordination rows (one expired-lease slot row per
+  // expected slot plus the result row the final snapshot atomically fills).
+  async function seedInvocation(invocationId, expectedSlotIds, admissionMeta) {
     if (!isNonEmptyString(invocationId)) {
       throw new TypeError(
         CALL_CELL_REDUCE_ARGUMENT_MESSAGE.SEED_REQUIRES_INVOCATION,
       );
     }
     const slotIds = normalizeExpectedSlotIds(expectedSlotIds, config);
-    // Seed-time (not 0) as the initial lease_expires_at: the row stays
-    // immediately claimable (seed-time <= now) while the reclaim
-    // predicate cannot touch it until the retention window has passed —
-    // a concurrent invocation's sweep can never race away just-seeded,
-    // not-yet-leased rows.
     const seededAt = nowMs();
     for (const slotId of slotIds) {
       assertQuerySuccess(await config.executeInternal(
@@ -453,26 +443,35 @@ function createCallCellReduceCoordinator(options) {
         [],
       ));
     }
-    // The seed time stamps the result row so an ABANDONED invocation
-    // (result_json never filled) is age-discriminable for reclaim; a
-    // published snapshot overwrites computed_at with the publish time.
+    const initialWitness = admissionMeta ? JSON.stringify({admissionMeta}) : SEED_EMPTY_JSON;
     assertQuerySuccess(await config.executeInternal(
-      `INSERT INTO ${config.resultTable} ` +
-      SEED_RESULT_INSERT_COLUMNS +
+      `INSERT INTO ${config.resultTable} ` + SEED_RESULT_INSERT_COLUMNS +
       `(${sqlLiteral(invocationId)}, ${sqlLiteral(SEED_EMPTY_JSON)}, ` +
-      `${nowMs()}, ${sqlLiteral(SEED_EMPTY_JSON)})`,
-      [],
+      `${nowMs()}, ${sqlLiteral(initialWitness)})`, [],
     ));
     return {slotIds};
   }
 
-  // Bounded reclaim of coordination garbage: slot rows whose lease lapsed
-  // more than the retention window ago, and result rows of ABANDONED
-  // invocations (no snapshot ever published) older than the window.
-  // Published snapshots are the durable visible result and are never
-  // touched here — their retention is a product decision, not coordinator
-  // hygiene. Callers sweep opportunistically (e.g. once per new
-  // invocation), so accumulation is bounded without a background reaper.
+  async function readResultRow(invocationId) {
+    if (!isNonEmptyString(invocationId)) return null;
+    const result = assertQuerySuccess(await config.executeInternal(
+      `SELECT result_id, result_json, computed_at, ${RESULT_SNAPSHOT_WITNESS_COLUMN} ` +
+      `FROM ${config.resultTable} WHERE result_id = ${sqlLiteral(invocationId)}`, [],
+    ));
+    return resultRows(result)[0] || null;
+  }
+
+  async function updateResultWitness(invocationId, witness) {
+    if (!isNonEmptyString(invocationId)) return;
+    assertQuerySuccess(await config.executeInternal(
+      `UPDATE ${config.resultTable} SET computed_at = ${nowMs()}, ` +
+      `${RESULT_SNAPSHOT_WITNESS_COLUMN} = ${sqlLiteral(JSON.stringify(witness ?? null))} ` +
+      `WHERE result_id = ${sqlLiteral(invocationId)}`, [],
+    ));
+  }
+
+  // Bounded reclaim of coordination garbage: expired slot rows and abandoned
+  // result rows older than the retention window. Published snapshots stay.
   async function reclaimExpiredCoordination(retentionMs) {
     if (!Number.isFinite(retentionMs) || retentionMs <= 0) {
       throw new TypeError(
@@ -783,8 +782,9 @@ function createCallCellReduceCoordinator(options) {
 
   return Object.freeze({
     acquireReduceLease, parseResultSnapshotWitness, publishFinalSnapshot,
-    publishPartial, readSlotRows, reclaimExpiredCoordination,
+    publishPartial, readResultRow, readSlotRows, reclaimExpiredCoordination,
     releaseReduceLease, resolveCompletePartialSet, seedInvocation,
+    updateResultWitness,
   });
 }
 

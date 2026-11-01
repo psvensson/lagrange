@@ -37,6 +37,7 @@ const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
   INVALID_IDEMPOTENCY_KEY: 'service_lifecycle_invalid_idempotency_key',
   INVALID_SECURITY_CONTEXT: 'service_lifecycle_invalid_security_context',
   INVALID_SERVICE_NAME: 'service_lifecycle_invalid_service_name',
+  LEGACY_ARTIFACT_ABI_UNSUPPORTED: 'LEGACY_ARTIFACT_ABI_UNSUPPORTED',
   MANIFEST_REJECTED: 'service_lifecycle_manifest_rejected',
   PAYLOAD_MISSING: 'service_lifecycle_payload_missing',
   SERVICE_NOT_FOUND: 'service_lifecycle_service_not_found',

@@ -12,6 +12,7 @@ const SERVICE_COMMAND_EXIT_CODE = Object.freeze({
 
 const SERVICE_COMMAND = Object.freeze({
   BUILD: 'build',
+  CALL: 'call',
   DEPLOY: 'deploy',
   DEV_INSTALL: 'dev-install',
   GENERATE: 'generate',
@@ -80,6 +81,7 @@ const SERVICE_LIFECYCLE_COMMANDS = Object.freeze(new Set([
 ]));
 const SERVICE_PIPELINE_COMMANDS = Object.freeze(new Set([
   SERVICE_COMMAND.BUILD,
+  SERVICE_COMMAND.CALL,
   SERVICE_COMMAND.DEPLOY,
   SERVICE_COMMAND.GENERATE,
   SERVICE_COMMAND.PUBLISH,
