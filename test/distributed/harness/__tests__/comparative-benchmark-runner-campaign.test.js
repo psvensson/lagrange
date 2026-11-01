@@ -3,7 +3,9 @@
 // included; readiness failure never starts measurement; product containers
 // that vanish or change across the measured window fail the run; the
 // watchdog stops issuing and records the interrupted state. Real entry: the
-// campaign owner; substituted: deploy/workload/inspect/teardown seams.
+// campaign owner; substituted: deploy/workload/inspect/teardown seams and
+// stream A's record owner (a recording stand-in for validateRunRecord /
+// computeRunObservationsDigest; the real one is wired by the runner CLI).
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -36,19 +38,34 @@ function deployment(runId) {
   identity: {products: [product('c1')]}};
 }
 
+function recordOwner(rejectRun = null) {
+  return {
+    validateCampaignHeader: (header) => header,
+    validateRunRecord: (record) => {
+      if (rejectRun) throw Object.assign(new Error(rejectRun), {code: 'missing-field'});
+      return record;
+    },
+    computeRunObservationsDigest: (record) => `sha256:${'d'.repeat(63)}` +
+      String(record.plan.orderIndex % 10),
+  };
+}
+
 function harness(overrides = {}) {
   const records = [];
   const calls = {workload: [], teardown: []};
   let clock = 0;
   const deps = {
     now: () => clock,
+    recordOwner: recordOwner(),
     deadlineAt: null,
     deployRun: async (run) => deployment(run.runId),
     executeWorkloadRun: async ({run}) => {
       calls.workload.push(run.runId);
       clock += 10000;
       return {observations: {accounting: {offered: 1}}, correctness: {semanticGate: null},
-        dataset: {resetMethod: 'fresh-formation'}, loadGenerator: {host: '10.0.0.9'}};
+        plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
+        dataset: {resetMethod: 'fresh-formation'},
+        loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}}};
     },
     inspectProducts: async () => [product('c1')],
     teardownRun: async (run) => {
@@ -78,8 +95,13 @@ test('campaign: header first, one v2 run record per attempted run, append only',
       assert.equal(record.identity.publication, null);
       assert.equal(record.plan.manifestDigest, MANIFEST.manifestDigest);
       assert.match(record.rawObservationsDigest, /^sha256:[0-9a-f]{64}$/u);
-      assert.deepEqual(record.events, []);
-      assert.equal(record.closure.complete, true);
+      assert.deepEqual(record.deployment.events, []);
+      assert.equal(record.deployment.closure.status, 'complete');
+      assert.equal(record.deployment.loadGenerator.host, '10.0.0.9');
+      assert.equal(record.deployment.dataset.resetMethod, 'fresh-formation');
+      assert.equal(record.plan.profileClass, 'smoke');
+      assert.equal(record.plan.operationSliceDigest, 'sha256:slice');
+      assert.deepEqual(record.identity.productsAfterWindow, record.identity.products);
     }
     assert.equal(summary.exitCode, 0);
     assert.equal(summary.attempted.length, MANIFEST.runs.length);
@@ -111,8 +133,9 @@ test('J15: product containers removed while the harness lives - no successful co
     const first = records[1];
     assert.equal(first.execution.state, 'failed');
     assert.equal(first.execution.failure.code, 'product_changed');
-    assert.ok(arraySome(first.events, (event) => event.kind === 'container-absent' &&
+    assert.ok(arraySome(first.harnessEvents, (event) => event.kind === 'container-absent' &&
       event.containerId === 'c1'));
+    assert.deepEqual(first.identity.productsAfterWindow, []);
     assert.notEqual(summary.exitCode, 0);
   });
 
@@ -122,7 +145,8 @@ test('identity after the window: a restarted container is an event and fails the
       [product('c1', '2026-11-01T10:05:00Z')]});
     await run(deps);
     assert.equal(records[1].execution.failure.code, 'product_changed');
-    assert.equal(records[1].events[0].kind, 'container-restarted');
+    assert.equal(records[1].deployment.events[0].kind, 'restart');
+    assert.match(records[1].deployment.events[0].at, /^\d{4}-/u);
   });
 
 test('endpoint bound to a container outside the recorded roles is topology-false',
@@ -142,7 +166,7 @@ test('watchdog: past the campaign deadline the remaining runs are recorded inter
     const states = arrayMap(records.slice(1), (record) => record.execution.state);
     assert.equal(states[0], 'completed');
     assert.ok(arrayEvery(states.slice(1), (state) => state === 'interrupted'));
-    assert.ok(arraySome(records[2].events, (event) => event.kind === 'watchdog-stop'));
+    assert.ok(arraySome(records[2].harnessEvents, (event) => event.kind === 'watchdog-stop'));
     assert.notEqual(summary.exitCode, 0);
   });
 
@@ -152,8 +176,8 @@ test('teardown failure is recorded in closure and the campaign continues', async
   }});
   await run(deps);
   assert.equal(records.length, MANIFEST.runs.length + 1);
-  assert.equal(records[1].closure.complete, false);
-  assert.match(records[1].closure.error, /no route/u);
+  assert.equal(records[1].deployment.closure.status, 'incomplete');
+  assert.match(records[1].deployment.closure.error, /no route/u);
 });
 
 test('a topology refusal is blocked, never failed or passed', async () => {
@@ -165,3 +189,12 @@ test('a topology refusal is blocked, never failed or passed', async () => {
   assert.equal(records[1].execution.state, 'blocked');
   assert.equal(summary.exitCode, 3);
 });
+
+test('a completed run whose record stream A\'s validator rejects is recorded failed',
+  async () => {
+    const {deps, records} = harness({recordOwner: recordOwner('plan.operationSliceDigest')});
+    const summary = await run(deps);
+    assert.equal(records[1].execution.state, 'failed');
+    assert.equal(records[1].execution.failure.code, 'record_rejected');
+    assert.equal(summary.exitCode, 1);
+  });

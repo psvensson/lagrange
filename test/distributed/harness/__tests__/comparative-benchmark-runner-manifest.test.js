@@ -13,13 +13,11 @@ import {buildScenarioAPairedSweepPlan} from '../oltp-paired-sweep-plan.js';
 import {
   arrayEvery,
   arrayFilter,
-  arrayFind,
-  arrayIncludes,
   arrayMap,
   stringIncludes,
 } from '../real-product-captured-intrinsics.js';
 
-const TARGETS = ['lagrange', 'tidb-tikv', 'pg-sync-standby-ha'];
+const TARGETS = ['lagrange', 'tidb-tikv', 'pg-patroni-sync-ha-rf3'];
 
 function manifest() {
   return buildComparativeCampaignManifest({campaignId: 'bench-m-1',
@@ -52,22 +50,17 @@ test('manifest: every target x rate x repetition is a run with a unique runId an
   assert.ok(arrayEvery(built.runs, (run, index) => run.orderIndex === index));
 });
 
-test('D12/D22: claims with no execution are not-measured entries, not run knobs', () => {
+test('D12/D22: runs carry no unobserved knobs; they are all Scenario A main', () => {
+  // Claims without execution are stream A's coverage-manifest cells, not runs.
   const built = manifest();
-  const notMeasured = arrayMap(arrayFilter(built.claims,
-    (claim) => claim.status === 'not-measured'), (claim) => claim.claim);
-  for (const claim of ['partition-sweep', 'live-movement', 'rtt-sweep', 'recovery',
-    'backfill', 'scenario-c', 'scale-out']) {
-    assert.ok(arrayIncludes(notMeasured, claim), claim);
-  }
-  const blocked = arrayFind(built.claims, (claim) => claim.claim === 'scenario-b' &&
-    claim.targetId === 'lagrange');
-  assert.equal(blocked.status, 'blocked');
+  assert.equal(built.claims, undefined);
   const text = JSON.stringify(built.runs);
   for (const knob of ['liveMoveActive', 'partitionCount', 'netDelayMs', 'hopMult']) {
     assert.equal(stringIncludes(text, knob), false, knob);
   }
-  assert.ok(arrayEvery(built.runs, (run) => run.scenario === 'scenarioA'));
+  assert.ok(arrayEvery(built.runs, (run) => run.scenario === 'scenarioA' &&
+    run.subkind === 'main'));
+  assert.equal(built.plan.profileClass, 'smoke');
 });
 
 test('manifest: frozen and digested; any change changes the digest', () => {
@@ -81,6 +74,6 @@ test('manifest: frozen and digested; any change changes the digest', () => {
 
 test('manifest: an unknown target is refused', () => {
   assert.throws(() => buildComparativeCampaignManifest({campaignId: 'bench-m-1',
-    profile: COMPARATIVE_SMOKE_PROFILE, targets: ['pg-patroni-sync-ha-rf3']}),
+    profile: COMPARATIVE_SMOKE_PROFILE, targets: ['citus-sql-service']}),
   /unknown comparative target/u);
 });

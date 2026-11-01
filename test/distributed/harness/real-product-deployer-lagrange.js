@@ -16,7 +16,15 @@
  *   (src/admin/admin-websocket-diagnostics-route-methods.js);
  * - partition leaders and replica placement
  *   `GET :8081/api/admin/diagnostics/partitions`
- *   (src/admin/admin-control-snapshot-local-diagnostics-methods.js).
+ *   (src/admin/admin-control-snapshot-local-diagnostics-methods.js);
+ * - cluster readiness from the system tables over the public PG wire
+ *   (real-product-lagrange-readiness-evaluation.js): live ready leases and
+ *   connection_state for every node, healthy service endpoints, a routable,
+ *   fully replicated leader for every partition - and, after the dataset is
+ *   loaded, for every partition of every canonical table - then a probe write
+ *   and read-back through the same public wire. `/health` is never readiness.
+ * Boot provenance is the product's own startup log line
+ * (`version`, `bootedSrcFingerprint`).
  */
 import {REQUEST_CELL_AUTH} from './constants.js';
 import {
@@ -25,6 +33,7 @@ import {
   arrayFind,
   arrayFlatMap,
   arrayMap,
+  stringIndexOf,
   stringReplace,
   stringPadStart,
 } from './real-product-captured-intrinsics.js';
@@ -40,10 +49,18 @@ import {
   runClassOf,
   verifyProductIdentity,
 } from './real-product-identity.js';
+import {CANONICAL_TABLES} from './real-product-dataset-verification.js';
+import {evaluateLagrangeClusterReadiness} from './real-product-lagrange-readiness-evaluation.js';
 import {pollReadiness} from './real-product-readiness.js';
-import {dockerRunDetached, httpFromHost} from './real-product-remote-shell.js';
+import {
+  dockerRunDetached,
+  errorText,
+  httpFromHost,
+  shellWord,
+} from './real-product-remote-shell.js';
 import {
   bindEndpointToContainer,
+  createPsqlQueryReader,
   createPsqlTableReader,
 } from './real-product-sql-clients.js';
 
@@ -59,6 +76,14 @@ const PG_WIRE_DESIRED_STATE = Object.freeze({replicaCount: 1,
 const NODE_ID_PREFIX = '00000000-0000-4000-8000-';
 const NODE_ID_WIDTH = 12;
 const SEMVER_TAG = /:(\d+\.\d+\.\d+)$/u;
+const SYSTEM_TABLE_QUERIES = Object.freeze({
+  nodes: 'SELECT * FROM nodes',
+  endpoints: 'SELECT * FROM service_endpoints',
+  partitions: 'SELECT * FROM partitions',
+  services: 'SELECT * FROM services WHERE service_type = \'partition\'',
+});
+const PROBE_TABLE = 'bench_readiness_probe';
+const BOOT_PROVENANCE_MARKER = 'bootedSrcFingerprint';
 
 function nodeIdOf(index) {
   return `${NODE_ID_PREFIX}${stringPadStart(String(index + 1), NODE_ID_WIDTH, '0')}`;
@@ -168,10 +193,52 @@ function leadersReady(ctx, seedHost) {
   });
 }
 
+async function readSystemTables(query) {
+  const tables = {};
+  for (const [name, sql] of Object.entries(SYSTEM_TABLE_QUERIES)) tables[name] = await query(sql);
+  return tables;
+}
+
+function clusterReady(ctx, component, query, expectedNodeIds, requiredTables = null) {
+  return readinessOf(ctx, component, async () => {
+    const tables = await readSystemTables(query);
+    const verdict = evaluateLagrangeClusterReadiness({...tables, expectedNodeIds,
+      requiredServiceIds: [PG_WIRE_SERVICE_ID], requiredTables, now: Date.now()});
+    return {ready: verdict.ready, diagnostic: {denials: verdict.denials,
+      nodes: tables.nodes.length, partitions: tables.partitions.length}};
+  });
+}
+
+function probeWriteReadback(ctx, query, campaignId) {
+  return readinessOf(ctx, 'lagrange-probe-write-readback', async () => {
+    const id = Date.now();
+    const token = `${campaignId}-${id}`;
+    await query(`CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`);
+    await query(`INSERT INTO ${PROBE_TABLE} (id, token) VALUES (${id}, '${token}')`);
+    const rows = await query(`SELECT token FROM ${PROBE_TABLE} WHERE id = ${id}`);
+    return {ready: rows.length === 1 && rows[0].token === token,
+      diagnostic: {written: token, readBack: rows}};
+  });
+}
+
+async function bootProvenance(ctx, product) {
+  try {
+    const line = String(await ctx.sshRun(product.host, ctx.opts,
+      `docker logs ${shellWord(product.containerId)} 2>&1 | grep -m 1 ${BOOT_PROVENANCE_MARKER}`));
+    const parsed = JSON.parse(line.slice(stringIndexOf(line, '{')));
+    return {version: parsed.version ?? null,
+      bootedSrcFingerprint: parsed.bootedSrcFingerprint ?? null,
+      subsystem: parsed.subsystem ?? null};
+  } catch (error) {
+    return {unavailable: errorText(error)};
+  }
+}
+
 async function reportedVersions(ctx, products) {
   for (const product of products) {
     const facts = await getJson(ctx, `http://${product.host}:${PORT.REST}/management/v1/facts`);
     product.reportedVersion = facts.json?.release?.version ?? null;
+    product.bootProvenance = await bootProvenance(ctx, product);
   }
   return products;
 }
@@ -204,6 +271,11 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const membership = await membershipReady(ctx, seedHost, hosts.length);
   const listener = await publicPgWireReady(ctx, seedHost, roles);
   const leaders = await leadersReady(ctx, seedHost);
+  const query = createPsqlQueryReader({sshRun, opts, from: clientIp, campaignId,
+    endpoint: {host: listener.host, port: listener.port}, connection});
+  const expectedNodeIds = arrayMap(roles, (role) => role.nodeId);
+  const cluster = await clusterReady(ctx, 'lagrange-system-tables', query, expectedNodeIds);
+  const probe = await probeWriteReadback(ctx, query, campaignId);
   const products = verifyProductIdentity(
     await reportedVersions(ctx, await inspectProducts({sshRun, opts, roles})),
     {[NODE_ROLE]: {imageRef: image, versionPattern: versionPatternOf(image)}});
@@ -223,7 +295,8 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
       'PostgreSQL wire listener directly', clientPath: 'public-pg-wire'},
     roles, storage, runClass: runClassOf(storage),
     readiness: {state: READINESS_STATE.READY, observedAt,
-      evidence: {nodes: nodeReadiness, membership, publicPgWire: listener, leaders}},
+      evidence: {nodes: nodeReadiness, membership, publicPgWire: listener, leaders, cluster,
+        probe}},
     identity: {products},
     placement: placementOf(await readPartitions(ctx, seedHost), roles, observedAt),
     endpoint,
@@ -231,8 +304,14 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
     operations: {
       readTableRows: createPsqlTableReader({sshRun, opts, from: clientIp, campaignId,
         endpoint, connection}),
-      observePlacement: async () => placementOf(await readPartitions(ctx, seedHost), roles,
-        new Date().toISOString()),
+      // After the canonical load: every partition of every canonical table
+      // routable and replicated, or a typed readiness exhaustion.
+      observePlacement: async () => {
+        const routable = await clusterReady(ctx, 'lagrange-canonical-tables-routable', query,
+          expectedNodeIds, arrayMap(CANONICAL_TABLES, (table) => table.name));
+        return {...placementOf(await readPartitions(ctx, seedHost), roles,
+          new Date().toISOString()), routable};
+      },
       observeRoles: async () => ({leaders: (await readPartitions(ctx, seedHost))?.leaders ??
         null}),
     },

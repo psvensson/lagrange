@@ -63,7 +63,7 @@ test('D12: the PostgreSQL HA arm is a primary with two synchronous streaming sta
   'clients connect to the primary, access is scoped scram', async () => {
   const ledger = createContainerLedger();
   const {sshRun, calls} = createScriptedSsh(postgresHealthyRules(ledger));
-  const deployment = await deployers.deployComparativeTarget('pg-sync-standby-ha',
+  const deployment = await deployers.deployComparativeTarget('pg-patroni-sync-ha-rf3',
     input(sshRun));
   assert.equal(deployment.topology.description,
     'primary + 2 synchronous streaming standbys');

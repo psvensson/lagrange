@@ -23,7 +23,8 @@ function labNode(name, ip, {lock = 'free', docker = true, roles = ['harness'],
   bootId = `boot-${name}`} = {}) {
   return {name, ip, ssh: `bench@${ip}`, os: 'linux', roles,
     testCapability: {bootId, dockerReachable: docker, repoPath: '/home/bench/lagrange',
-      nodePath: '/usr/bin/node', machineLock: {state: lock, holder: null}}};
+      nodePath: '/usr/bin/node', nodeVersion: 'v22.23.2',
+      machineLock: {state: lock, holder: null}}};
 }
 
 function inventoryDir(nodes) {

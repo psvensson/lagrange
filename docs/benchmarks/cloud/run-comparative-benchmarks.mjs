@@ -54,6 +54,10 @@ import {
   loadCanonicalWorkloadEntry,
 } from '../../../test/distributed/harness/comparative-benchmark-workload-call-site.js';
 import {
+  loadRawObservationRecordOwner,
+} from '../../../test/distributed/harness/comparative-benchmark-record-owner.js';
+import {SCENARIO_OUTCOME} from '../../../test/distributed/harness/scenario-outcome.js';
+import {
   COMPARATIVE_TARGET,
   LAGRANGE_IMAGE_DEFAULT,
   PD_IMAGE_DEFAULT,
@@ -239,11 +243,13 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   const physicalHosts = facts.map((fact, index) => ({...fact, name: hosts[index].name,
     role: hosts[index].role, ...(physicalExtras[hosts[index].name] || {})}));
   await ensureProductImages({hosts, images: imagesFor(manifest.targets, opts), sshRun, opts});
+  const recordOwner = await loadRawObservationRecordOwner();
   const runCanonicalWorkload = await loadCanonicalWorkloadEntry();
   const client = hosts.find((host) => host.role === 'client');
   const dataIps = hosts.filter((host) => host.role === 'data').map((host) => host.ip);
   const deployOpts = {lagrangeImage: opts.lagrangeImage, storageRoot: opts.storageRoot || null};
   const deps = {
+    recordOwner,
     now: Date.now,
     deadlineAt: Date.now() + manifest.campaignBudgetMinutes * MS_PER_MINUTE,
     deployRun: (run) => deployComparativeTarget(run.targetId, {hosts: dataIps,
@@ -268,13 +274,26 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
   try {
-    return await runComparativeCampaign({manifest,
+    const summary = await runComparativeCampaign({manifest,
       header: {executionTarget: opts.executionTarget, physicalHosts,
         harness: harnessIdentity()}, deps});
+    const admitted = recordOwner.campaignOutcome({header: summary.header,
+      runs: summary.records, file: opts.rawObservationsPath, rootDir: REPO_ROOT, manifest});
+    const {header: _header, records: _records, ...rest} = summary;
+    return {...rest, admission: admitted, exitCode: campaignExitCode(summary.exitCode,
+      admitted.outcome)};
   } finally {
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
   }
+}
+
+// A run failure keeps its exit code; otherwise the admitted cells decide: an
+// all-non-valid campaign never exits as passed.
+function campaignExitCode(runExitCode, outcome) {
+  if (runExitCode !== EXIT_CODES.SUCCESS) return runExitCode;
+  if (outcome === SCENARIO_OUTCOME.PASSED) return EXIT_CODES.SUCCESS;
+  return outcome === SCENARIO_OUTCOME.REFUSED ? EXIT_CODES.REFUSED : EXIT_CODES.FAILURE;
 }
 
 async function runLabCampaign({opts, manifest, dataHostCount}) {
@@ -283,7 +302,8 @@ async function runLabCampaign({opts, manifest, dataHostCount}) {
   const fleet = await discoverFleet({nodes: selectNodesByRole(state, HARNESS_ROLE),
     controllerRepoPath: REPO_ROOT, lockGraphSha256: requirement.lockGraphSha256,
     nodeMinimum: requirement.nodeMinimum});
-  const hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount});
+  const hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
+    nodeMinimum: requirement.nodeMinimum});
   const budgetMs = manifest.campaignBudgetMinutes * MS_PER_MINUTE;
   const sessions = await holdLabBenchmarkHosts({hosts, campaignId: manifest.campaignId,
     waitMs: Number(opts.lockWaitMinutes) * MS_PER_MINUTE, expectedMs: budgetMs});
@@ -302,7 +322,8 @@ async function runLabCampaign({opts, manifest, dataHostCount}) {
 async function dryRunPlan({opts, manifest, dataHostCount}) {
   const lab = opts.executionTarget === TARGET.LAB;
   const hosts = lab ?
-    selectLabBenchmarkHosts({state: await loadState({allowMissing: false}), dataHostCount}) :
+    selectLabBenchmarkHosts({state: await loadState({allowMissing: false}), dataHostCount,
+      nodeMinimum: fleetRequirement(REPO_ROOT).nodeMinimum}) :
     gcpHosts(opts, dataHostCount);
   return {schema: PLAN_SCHEMA, executionTarget: opts.executionTarget,
     campaignId: manifest.campaignId, manifestDigest: manifest.manifestDigest,

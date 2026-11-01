@@ -6,6 +6,7 @@
  * running containers' image ids are the identity, D18); and the identity of
  * the load generator's host and checkout.
  */
+import {SCENARIO_REFUSAL} from './scenario-host-topology.js';
 import {
   arrayMap,
   stringSplit,
@@ -22,9 +23,10 @@ const HOST_FACTS_COMMAND = 'echo "$(hostname)|$(cat /proc/sys/kernel/random/boot
   '$(nproc)|$(awk \'/MemTotal/ {printf "%.1f", $2/1048576}\' /proc/meminfo)|' +
   '$(ip route get 1.1.1.1 | awk \'{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1); exit}\')"';
 const IMAGE_PULL_TIMEOUT_MS = 10 * 60 * 1000;
+// [driver, lockfile, package key]: the drivers the canonical adapters use.
 const LOCKFILE_DRIVERS = Object.freeze([
-  ['package-lock.json', 'node_modules/pg'],
-  ['test/distributed/reference-client/package-lock.json', 'node_modules/mysql2'],
+  ['pg', 'package-lock.json', 'node_modules/pg'],
+  ['mysql2', 'test/distributed/reference-client/package-lock.json', 'node_modules/mysql2'],
 ]);
 
 /**
@@ -41,7 +43,7 @@ async function collectHostFacts({hosts, sshRun, opts}) {
       cpus: Number(cpus), memGb: Number(memGb), primaryIface: primaryIface || null});
   }
   if (new Set(arrayMap(facts, (fact) => fact.bootId)).size !== facts.length) {
-    throw deploymentFailure('refused_insufficient_host_topology',
+    throw deploymentFailure(SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY,
       'two campaign hosts are the same machine (equal boot ids)', {facts});
   }
   return facts;
@@ -75,10 +77,11 @@ async function ensureProductImages({hosts, images, sshRun, opts}) {
 }
 
 function lockfileVersionsScript() {
-  const reads = arrayMap(LOCKFILE_DRIVERS, ([file, key]) =>
-    `${JSON.stringify(key)}: (() => { try { return require(${JSON.stringify(`./${file}`)})` +
+  const reads = arrayMap(LOCKFILE_DRIVERS, ([driver, file, key]) =>
+    `${JSON.stringify(driver)}: (() => { try { return require(${JSON.stringify(`./${file}`)})` +
     `.packages[${JSON.stringify(key)}].version; } catch { return null; } })()`);
-  return `console.log(JSON.stringify({node: process.version, ${reads.join(', ')}}))`;
+  return 'console.log(JSON.stringify({nodeVersion: process.version, driverVersions: ' +
+    `{${reads.join(', ')}}}))`;
 }
 
 /**
@@ -91,7 +94,8 @@ async function describeLoadGenerator({sshRun, opts, host, hostFacts, repoPath, n
     bootId: hostFacts?.bootId ?? null};
   if (!repoPath || !nodePath) {
     return {...base, checkout: null, checkoutReason: 'no recorded checkout on this host',
-      node: stringTrim(String(await sshRun(host.ip, opts, 'node --version')))};
+      nodeVersion: stringTrim(String(await sshRun(host.ip, opts, 'node --version'))),
+      driverVersions: {}};
   }
   const cd = `cd ${shellQuote(repoPath)}`;
   const versions = JSON.parse(await sshRun(host.ip, opts,

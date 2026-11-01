@@ -31,10 +31,14 @@ import {
 
 const PERSISTENT_MOUNT_TYPES = Object.freeze(['bind', 'volume']);
 const IMAGE_ID_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const REPO_DIGEST_NONE = 'none: the image carries no repo digest (loaded, not pulled)';
+// Deployment event kinds spelled as stream A's record owner spells them
+// (raw-observation-record.js DEPLOYMENT_EVENT_KIND); an absent container is
+// carried by productsAfterWindow, which admission compares with products.
 const EVENT_KIND = Object.freeze({
+  RESTART: 'restart',
+  IMAGE_CHANGE: 'image-change',
   CONTAINER_ABSENT: 'container-absent',
-  CONTAINER_RESTARTED: 'container-restarted',
-  IMAGE_CHANGED: 'image-changed',
 });
 
 function imageRepository(imageRef) {
@@ -43,13 +47,19 @@ function imageRepository(imageRef) {
   return at > stringLastIndexOf(text, '/') ? text.slice(0, at) : text;
 }
 
-async function readRepoDigest({sshRun, opts, host, imageId, imageRef}) {
-  const raw = await sshRun(host, opts,
-    `docker image inspect --format '{{json .RepoDigests}}' ${shellWord(imageId)}`);
-  const digests = JSON.parse(String(raw || 'null')) || [];
+// Image facts of the running container's image id: its repo digests (empty
+// for an image that was `docker load`ed, which is recorded as such, never
+// filled in), its build labels and creation time.
+async function readImageFacts({sshRun, opts, host, imageId, imageRef}) {
+  const image = JSON.parse(String(await sshRun(host, opts,
+    `docker image inspect --format '{{json .}}' ${shellWord(imageId)}`) || 'null')) || {};
+  const digests = Array.isArray(image.RepoDigests) ? image.RepoDigests : [];
   const repository = imageRepository(imageRef);
-  return arrayFind(digests, (digest) => stringStartsWith(digest, `${repository}@`)) ||
-    digests[0] || null;
+  const repoDigest = arrayFind(digests, (digest) => stringStartsWith(digest,
+    `${repository}@`)) || digests[0] || null;
+  return {repoDigest, repoDigestStatus: repoDigest ? 'recorded' :
+    REPO_DIGEST_NONE, imageLabels: image.Config?.Labels ?? null,
+  imageCreated: image.Created ?? null};
 }
 
 function mountsOf(inspect) {
@@ -82,7 +92,9 @@ async function inspectRunningContainer({sshRun, opts, host, containerId, role}) 
     role, host, containerId: inspect.Id || containerId,
     name: stringReplace(String(inspect.Name || ''), /^\//u, '') || null,
     imageRef, imageId,
-    repoDigest: imageId ? await readRepoDigest({sshRun, opts, host, imageId, imageRef}) : null,
+    ...(imageId ? await readImageFacts({sshRun, opts, host, imageId, imageRef}) :
+      {repoDigest: null, repoDigestStatus: 'no image id', imageLabels: null,
+        imageCreated: null}),
     entrypoint: inspect.Config?.Entrypoint ?? null,
     cmd: inspect.Config?.Cmd ?? null,
     startedAt: inspect.State?.StartedAt ?? null,
@@ -184,19 +196,17 @@ function compareProductIdentity(before, after, observedAt) {
   for (const product of before) {
     const now = arrayFind(after, (one) => one.containerId === product.containerId);
     if (!now) {
-      events.push({kind: EVENT_KIND.CONTAINER_ABSENT, role: product.role, host: product.host,
-        containerId: product.containerId, observedAt});
+      events.push({kind: EVENT_KIND.CONTAINER_ABSENT, at: observedAt, role: product.role,
+        host: product.host, containerId: product.containerId});
       continue;
     }
     if (now.startedAt !== product.startedAt) {
-      events.push({kind: EVENT_KIND.CONTAINER_RESTARTED, role: product.role,
-        containerId: product.containerId, before: product.startedAt, after: now.startedAt,
-        observedAt});
+      events.push({kind: EVENT_KIND.RESTART, at: observedAt, role: product.role,
+        containerId: product.containerId, before: product.startedAt, after: now.startedAt});
     }
     if (now.imageId !== product.imageId) {
-      events.push({kind: EVENT_KIND.IMAGE_CHANGED, role: product.role,
-        containerId: product.containerId, before: product.imageId, after: now.imageId,
-        observedAt});
+      events.push({kind: EVENT_KIND.IMAGE_CHANGE, at: observedAt, role: product.role,
+        containerId: product.containerId, before: product.imageId, after: now.imageId});
     }
   }
   return events;

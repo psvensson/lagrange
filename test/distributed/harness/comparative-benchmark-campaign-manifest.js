@@ -4,8 +4,10 @@
  * repetition in the counter-balanced order of the paired sweep owner
  * (oltp-paired-sweep-plan.js), with every dataset/plan/profile digest taken
  * from the canonical owners (never a label hash, D15), the warm-up and the
- * SLO. Claims that have no execution in this layer are listed as
- * `not-measured` or `blocked` entries, never as knobs on a run (D12, D22).
+ * SLO. Runs carry only those plan variables: claims without execution
+ * (Scenario B/C, scale-out, partition, movement, RTT, recovery, backfill) are
+ * declared by stream A's coverage manifest (comparative-coverage-manifest.js)
+ * as not-measured/blocked cells, never as knobs on a run (D12, D22).
  */
 import {createHash} from 'node:crypto';
 
@@ -16,14 +18,12 @@ import {
 } from './oltp-paired-sweep-plan.js';
 import {
   arrayFilter,
-  arrayFlatMap,
   arrayIncludes,
   arrayMap,
   stringPadStart,
 } from './real-product-captured-intrinsics.js';
 import {COMPARATIVE_TARGET} from './real-product-cluster-deployers.js';
 import {
-  CLAIM_STATUS,
   RUN_CLASS,
   requireCampaignId,
 } from './real-product-deployment-contract.js';
@@ -35,7 +35,9 @@ const RUN_ORDINAL_WIDTH = 3;
 const COMPARATIVE_SMOKE_PROFILE = Object.freeze({
   id: 'comparative-smoke-v1',
   runClass: RUN_CLASS.SMOKE,
-  subkind: 'oltp-baseline-smoke',
+  // Stream A's coverage manifest claims Scenario A as subkind `main`; the
+  // smoke character is the plan's profileClass, not a separate subkind.
+  subkind: 'main',
   campaignBudgetMinutes: 240,
   sweep: Object.freeze({
     comparisonView: COMPARISON_VIEW.ARCHITECTURE_NATIVE,
@@ -47,18 +49,6 @@ const COMPARATIVE_SMOKE_PROFILE = Object.freeze({
       warmupOperationsPerWorker: 10, measurementOperationsPerWorker: 50}),
   }),
 });
-
-// Claims with no execution or observation in this layer (scope decision of
-// the quest's chain design): each target gets the entry, with its reason.
-const UNMEASURED_CLAIMS = Object.freeze([
-  ['scenario-c', 'no event ingestion or freshness observation exists'],
-  ['scale-out', 'no scale-out execution exists'],
-  ['partition-sweep', 'no partition-count execution exists'],
-  ['live-movement', 'no observed replica movement during measurement exists'],
-  ['rtt-sweep', 'no verified tc-netem sweep is part of the smoke profile'],
-  ['recovery', 'no named-component interruption is part of the smoke profile'],
-  ['backfill', 'no backfill execution exists'],
-]);
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${arrayMap(value, canonicalJson).join(',')}]`;
@@ -119,23 +109,12 @@ function planOf(sweep, profile) {
     openLoopProfileId: identity.openLoopProfileId,
     retryPolicyId: identity.retryPolicyId,
     comparisonView: identity.comparisonView,
+    profileClass: profile.runClass,
     slo: identity.slo,
     workload: profile.sweep.workload,
     warmup: {operationsPerWorker: profile.sweep.workload.warmupOperationsPerWorker,
       beforeMeasurement: sweep.profile.warmupBeforeMeasurement},
   };
-}
-
-function claimsOf(targets) {
-  return arrayFlatMap(targets, (targetId) => [
-    targetId === COMPARATIVE_TARGET.LAGRANGE ?
-      {targetId, claim: 'scenario-b', status: CLAIM_STATUS.BLOCKED,
-        reason: 'no compiled risk service exists for the Lagrange arm'} :
-      {targetId, claim: 'scenario-b', status: CLAIM_STATUS.NOT_MEASURED,
-        reason: 'comparator arm has no Lagrange counterpart to compare with'},
-    ...arrayMap(UNMEASURED_CLAIMS, ([claim, reason]) => ({targetId, claim,
-      status: CLAIM_STATUS.NOT_MEASURED, reason})),
-  ]);
 }
 
 /**
@@ -161,7 +140,7 @@ function buildComparativeCampaignManifest({campaignId, profile, targets}) {
   }
   const body = {schema: MANIFEST_SCHEMA, campaignId, profileId: profile.id,
     runClass: profile.runClass, campaignBudgetMinutes: profile.campaignBudgetMinutes,
-    targets: selected, plan: planOf(sweep, profile), runs, claims: claimsOf(selected)};
+    targets: selected, plan: planOf(sweep, profile), runs};
   return deepFreeze({...body, manifestDigest: digestCampaignManifest(body)});
 }
 

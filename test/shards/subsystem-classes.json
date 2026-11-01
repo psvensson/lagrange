@@ -9,7 +9,7 @@
     "cli-tooling": 98,
     "control-plane": 224,
     "convergence-topology": 78,
-    "distributed-harness": 195,
+    "distributed-harness": 196,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,8 +25,8 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2523,
-  "digest": "fnv1a32-149981c6",
+  "censusSize": 2524,
+  "digest": "fnv1a32-1cb0b2d5",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-bc1e6a5f",
   "classes": {
@@ -877,6 +877,7 @@
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-manifest.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-record-owner.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-evidence-contract.test.js": "distributed-harness",

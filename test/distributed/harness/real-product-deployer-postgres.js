@@ -1,7 +1,7 @@
 /**
  * PostgreSQL arms of the comparative benchmark: a single primary
  * (`pg-single-primary`) or a primary with two synchronous streaming standbys
- * (`pg-sync-standby-ha`; no Patroni runs, and the record says exactly that).
+ * (target id `pg-patroni-sync-ha-rf3`; no Patroni runs, and the record says so).
  * Clients connect to the primary directly - there is no forwarder.
  *
  * Access is password (scram-sha-256) and scoped: pg_hba admits the bench
@@ -45,7 +45,9 @@ import {
   createPsqlTableReader,
 } from './real-product-sql-clients.js';
 
-const TARGET = Object.freeze({SINGLE: 'pg-single-primary', SYNC_HA: 'pg-sync-standby-ha'});
+// Target ids are stream A's coverage-manifest ids; the HA id predates this
+// layer and names no Patroni deployment - topology.description says what runs.
+const TARGET = Object.freeze({SINGLE: 'pg-single-primary', SYNC_HA: 'pg-patroni-sync-ha-rf3'});
 const ROLE = Object.freeze({PRIMARY: 'postgres-primary', STANDBY: 'postgres-standby'});
 const PORT = 5432;
 const DATA_ROOT = '/var/lib/postgresql/data';

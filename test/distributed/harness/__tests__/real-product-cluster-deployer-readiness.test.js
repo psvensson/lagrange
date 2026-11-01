@@ -15,6 +15,7 @@ import {
 } from './real-product-deployer-product-answers-fixture.js';
 import {
   arrayFilter,
+  arrayIncludes,
   arrayMap,
   arraySome,
   stringIncludes,
@@ -93,4 +94,50 @@ test('D04: a throwing semantic-proof path never yields a passed count; the deplo
     (value) => value !== undefined);
   assert.deepEqual(claimed, [], 'semantic evidence comes only from the semantic gate');
   assert.equal(arraySome(calls, (call) => stringIncludes(call.text, 'bench_proof')), false);
+});
+
+test('live diagnosis: /health and /readyz healthy but a node lease lapsed and a partition ' +
+  'without a leader - readiness_exhausted names the denials, nothing is measured',
+{timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  const nodeIds = ['00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003'];
+  const {sshRun, calls} = createScriptedSsh([
+    [/FROM nodes'/u, 'node_id|status|connection_state|ready_lease_expires_at\n' +
+      `${nodeIds[0]}|active|ready|${Date.now() + 60000}\n` +
+      `${nodeIds[1]}|active|ready|${Date.now() - 60000}\n` +
+      `${nodeIds[2]}|active|connecting|${Date.now() + 60000}`],
+    [/FROM services WHERE/u, 'partition_id|node_id|status|raft_role\n' +
+      `p-stock|${nodeIds[0]}|active|follower`],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  await assert.rejects(deployers.deployLagrangeCluster(baseInput(sshRun)), (error) => {
+    assert.equal(error.code, 'readiness_exhausted');
+    assert.equal(error.diagnostic.component, 'lagrange-system-tables');
+    const denials = error.diagnostic.last.denials;
+    assert.ok(arrayIncludes(denials, `node_ready_lease_or_status:${nodeIds[1]}`));
+    assert.ok(arrayIncludes(denials, `node_connection_not_ready:${nodeIds[2]}`));
+    assert.ok(arrayIncludes(denials, 'partition_not_routable:p-warehouse'));
+    return true;
+  });
+  assert.equal(arraySome(calls, (call) => /bench_readiness_probe/u.test(call.command)), false);
+});
+
+test('after the canonical load every partition of every created table must be routable ' +
+  'and replicated', async () => {
+  const {evaluateLagrangeClusterReadiness} =
+    await import('../real-product-lagrange-readiness-evaluation.js');
+  const now = Date.now();
+  const nodes = [{node_id: 'a', status: 'active', connection_state: 'ready',
+    ready_lease_expires_at: String(now + 1000)}, {node_id: 'b', status: 'active',
+    connection_state: 'ready', ready_lease_expires_at: String(now + 1000)}];
+  const verdict = evaluateLagrangeClusterReadiness({nodes, now,
+    endpoints: [{service_id: 'sys-postgres-wire', health_status: 'healthy'}],
+    partitions: [{partition_id: 'p1', table_name: 'stock', replica_count: '2'}],
+    services: [{partition_id: 'p1', node_id: 'a', status: 'active', raft_role: 'leader'}],
+    expectedNodeIds: ['a', 'b'], requiredServiceIds: ['sys-postgres-wire'],
+    requiredTables: ['stock', 'item']});
+  assert.equal(verdict.ready, false);
+  assert.deepEqual(verdict.denials, ['table_without_partitions:item',
+    'partition_under_replicated:p1']);
 });

@@ -9,8 +9,10 @@
 import {buildTiDbPhysicalMysqlCommand} from './tidb-reference-physical-placement-proof.js';
 import {
   arrayFilter,
+  arrayJoin,
   arrayMap,
   stringIncludes,
+  stringSplit,
 } from './real-product-captured-intrinsics.js';
 import {
   DEPLOYMENT_FAILURE,
@@ -59,6 +61,25 @@ function createPsqlTableReader({sshRun, opts, from, campaignId, endpoint, connec
     await sshRun(from, opts, psqlCommand({campaignId, endpoint, connection,
       sql: buildTableQuery(table)})),
     table.columns, {separator: PSQL_SEPARATOR, nullToken: ''});
+}
+
+/**
+ * Rows of any query over psql, keyed by the column names psql prints in its
+ * header line (unaligned, no footer): one short-lived client per query, so no
+ * client stays attached to the product during measurement.
+ */
+function createPsqlQueryReader({sshRun, opts, from, campaignId, endpoint, connection}) {
+  return async (sql) => {
+    const text = String(await sshRun(from, opts, dockerRunOnceCommand({campaignId,
+      image: SQL_CLIENT_IMAGE, dockerArgs: ['-e', `PGPASSWORD=${connection.password}`],
+      commandArgs: ['psql', '-h', endpoint.host, '-p', String(endpoint.port),
+        '-U', connection.user, '-d', connection.database, '-v', 'ON_ERROR_STOP=1',
+        '-A', '-F', PSQL_SEPARATOR, '-P', 'footer=off', '-c', sql]})) ?? '');
+    const [header, ...rows] = arrayFilter(stringSplit(text, /\r?\n/u), (line) => line !== '');
+    if (header === undefined) return [];
+    return rowsFromDelimitedText(arrayJoin(rows, '\n'), stringSplit(header, PSQL_SEPARATOR),
+      {separator: PSQL_SEPARATOR, nullToken: ''});
+  };
 }
 
 /** A canonical-table reader over the TiDB mysql client container. */
@@ -110,6 +131,7 @@ async function bindEndpointToContainer({sshRun, opts, campaignId, endpoint, cand
 export {
   bindEndpointToContainer,
   createMysqlTableReader,
+  createPsqlQueryReader,
   createPsqlTableReader,
   psqlCommand,
 };

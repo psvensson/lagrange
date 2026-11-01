@@ -73,7 +73,8 @@ function inventory(entries) {
   return {version: 1, nodes: Object.fromEntries(arrayMap(entries, ([name, lock, extra]) =>
     [name, {name, ip: `192.168.9.${name.length}${name.charCodeAt(0)}`, ssh: `b@${name}`,
       os: 'linux', roles: ['harness'], testCapability: {bootId: `boot-${name}`,
-        dockerReachable: true, machineLock: {state: lock, holder: null}}, ...extra}]))};
+        dockerReachable: true, repoPath: '/srv/lagrange', nodePath: '/usr/bin/node',
+        nodeVersion: 'v22.23.2', machineLock: {state: lock, holder: null}}, ...extra}]))};
 }
 
 test('selection prefers free hosts, then held ones the hold will wait for; unreachable, ' +
@@ -83,8 +84,33 @@ test('selection prefers free hosts, then held ones the hold will wait for; unrea
     ['e', 'stale-record'], ['f', 'busy'], ['g', 'free',
       {testCapability: {bootId: 'boot-b', dockerReachable: true,
         machineLock: {state: 'free'}}}]]);
-  const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3});
+  const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0'});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role, host.lock.state]),
-    [['b', 'data', 'free'], ['c', 'data', 'free'], ['e', 'data', 'stale-record'],
-      ['a', 'client', 'busy']]);
+    [['b', 'data', 'free'], ['c', 'data', 'free'], ['a', 'data', 'busy'],
+      ['e', 'client', 'stale-record']]);
+});
+
+test('a host whose checkout runs an old Node is never the load generator', () => {
+  const old = {testCapability: {bootId: 'boot-old', dockerReachable: true,
+    repoPath: '/srv/lagrange', nodePath: '/usr/bin/node', nodeVersion: 'v14.21.3',
+    machineLock: {state: 'free'}}};
+  const state = inventory([['a', 'free', old], ['b', 'free', {testCapability: {...old.testCapability,
+    bootId: 'boot-b'}}], ['c', 'free', {testCapability: {...old.testCapability,
+    bootId: 'boot-c'}}], ['d', 'free', {testCapability: {...old.testCapability,
+    bootId: 'boot-d'}}]]);
+  assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
+    nodeMinimum: '22.12.0'}), (error) => error.code === 'refused_insufficient_host_topology' &&
+    /node v14\.21\.3 is below the engines floor/u.test(error.message));
+  const mixed = inventory([['a', 'free', old], ['b', 'free'], ['c', 'free'], ['d', 'free']]);
+  const hosts = selectLabBenchmarkHosts({state: mixed, dataHostCount: 3,
+    nodeMinimum: '22.12.0'});
+  assert.equal(hosts[3].name, 'd');
+  assert.equal(hosts[0].name, 'a', 'an old-Node host can still be a data host');
+});
+
+test('a host without thermal sensors is a typed refusal', async () => {
+  const {sshRun} = createScriptedSsh([[/wait-for-thermal-headroom/u,
+    'thermal: unmeasurable (no sensors)']]);
+  await assert.rejects(checkLabThermalHeadroom({hosts: HOSTS, sshRun, opts: {}}),
+    (error) => error.code === 'thermal_unmeasurable');
 });

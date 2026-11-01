@@ -117,8 +117,8 @@ this runner.
 ```sh
 node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --help
 ```
-`--targets` selects arms (`lagrange`, `tidb-tikv`, `pg-single-primary`, `pg-sync-standby-ha`;
-default `lagrange,tidb-tikv,pg-sync-standby-ha`). The PostgreSQL HA arm is a primary with two
+`--targets` selects arms (`lagrange`, `tidb-tikv`, `pg-single-primary`, `pg-patroni-sync-ha-rf3`;
+default `lagrange,tidb-tikv,pg-patroni-sync-ha-rf3`). The PostgreSQL HA arm is a primary with two
 synchronous streaming standbys; clients connect to the primary directly and no HA manager runs.
 
 ---

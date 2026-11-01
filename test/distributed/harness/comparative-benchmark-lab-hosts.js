@@ -17,6 +17,9 @@ import {
   arrayFind,
   arrayIncludes,
   arrayMap,
+  stringIncludes,
+  stringReplace,
+  stringSplit,
 } from './real-product-captured-intrinsics.js';
 import {
   DEPLOYMENT_FAILURE,
@@ -32,6 +35,7 @@ const USABLE_LOCK_STATES = Object.freeze(['free', 'stale-record']);
 const LAB_LOCK_PATH = '${LAB_LOCK_DIR:-$HOME/.lab}/machine.lock';
 const LAB_HOLDER_PATH = '${LAB_LOCK_DIR:-$HOME/.lab}/machine.holder.json';
 const THERMAL_GATE = 'scripts/checks/wait-for-thermal-headroom.js';
+const THERMAL_UNMEASURABLE_WORD = 'unmeasurable';
 // The gate's own bound is twenty polls of 30 s; one minute of slack for ssh.
 const THERMAL_GATE_TIMEOUT_MS = 11 * 60 * 1000;
 const HOST_ROLE = Object.freeze({DATA: 'data', CLIENT: 'client'});
@@ -64,16 +68,39 @@ function lockOf(facts) {
     holder: lock?.holder ? labHolderText(lock.holder) : null};
 }
 
+function versionAtLeast(version, minimum) {
+  const parts = (value) => arrayMap(stringSplit(stringReplace(String(value || ''), /^v/u, ''), '.'),
+    (part) => Number.parseInt(part, 10) || 0);
+  const [have, need] = [parts(version), parts(minimum)];
+  for (let index = 0; index < need.length; index += 1) {
+    if ((have[index] || 0) !== need[index]) return (have[index] || 0) > need[index];
+  }
+  return true;
+}
+
+// Why a host cannot be the load generator (it runs the canonical adapters
+// from its own checkout): no checkout, or a Node older than the engines floor.
+function loadGeneratorGap(facts, nodeMinimum) {
+  const capability = facts.capability;
+  if (!capability.repoPath || !capability.nodePath) return 'no checkout to run the workload from';
+  if (nodeMinimum && !versionAtLeast(capability.nodeVersion, nodeMinimum)) {
+    return `node ${capability.nodeVersion || 'unknown'} is below the engines floor ${nodeMinimum}`;
+  }
+  return null;
+}
+
 /**
- * Choose `dataHostCount` data hosts plus one load-generator host from the
- * inventory: free hosts first, then hosts another run holds (the hold waits
- * for them, bounded, and refuses naming the holder), each group in name
- * order. Too few eligible hosts is a typed topology refusal (blocked, never
- * failed) naming every excluded host and why.
- * @param {{state: Object, fleet?: Array<Object>|null, dataHostCount: number}} input
+ * Choose one load-generator host (a checkout and a Node at the engines floor)
+ * and `dataHostCount` data hosts from the inventory: free hosts first, then
+ * hosts another run holds (the hold waits for them, bounded, and refuses
+ * naming the holder), each group in name order. Too few eligible hosts is a
+ * typed topology refusal (blocked, never failed) naming every excluded host
+ * and why.
+ * @param {{state: Object, fleet?: Array<Object>|null, dataHostCount: number,
+ *   nodeMinimum?: string|null}} input
  * @return {Array<Object>}
  */
-function selectLabBenchmarkHosts({state, fleet = null, dataHostCount}) {
+function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimum = null}) {
   const required = dataHostCount + 1;
   const candidates = [...selectNodesByRole(state, HARNESS_ROLE)]
     .sort((left, right) => (left.name < right.name ? -1 : 1));
@@ -91,8 +118,19 @@ function selectLabBenchmarkHosts({state, fleet = null, dataHostCount}) {
     eligible.push({node, facts, lock: lockOf(facts)});
   }
   const free = (entry) => arrayIncludes(USABLE_LOCK_STATES, entry.lock.state);
-  const ordered = [...arrayFilter(eligible, free),
+  const preferred = [...arrayFilter(eligible, free),
     ...arrayFilter(eligible, (entry) => !free(entry))];
+  // The load generator is the LAST capable free host (else the last capable
+  // one), so data hosts keep name order from the front of the list.
+  const capable = arrayFilter(preferred, (entry) => !loadGeneratorGap(entry.facts, nodeMinimum));
+  const capableFree = arrayFilter(capable, free);
+  const client = capableFree[capableFree.length - 1] || capable[capable.length - 1] || null;
+  for (const entry of preferred) {
+    const gap = loadGeneratorGap(entry.facts, nodeMinimum);
+    if (gap) excluded.push({name: entry.node.name, reason: `not a load generator: ${gap}`});
+  }
+  const ordered = client ? [...arrayFilter(preferred, (entry) => entry !== client)
+    .slice(0, dataHostCount), client] : [];
   if (ordered.length < required) {
     throw deploymentFailure(SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY,
       `${SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY}: the campaign needs ${required} ` +
@@ -170,14 +208,22 @@ async function checkLabThermalHeadroom({hosts, sshRun, opts}) {
         `lab host ${host.name} has no recorded checkout to run the thermal gate from`,
         {host: host.name});
     }
+    let line;
     try {
-      results[host.name] = {outcome: 'ok', line: String(await sshRun(host.ip, opts,
+      line = String(await sshRun(host.ip, opts,
         `cd ${shellQuote(host.repoPath)} && ${shellQuote(host.nodePath)} ${THERMAL_GATE}`,
-        THERMAL_GATE_TIMEOUT_MS))};
+        THERMAL_GATE_TIMEOUT_MS));
     } catch (error) {
       throw deploymentFailure(DEPLOYMENT_FAILURE.THERMAL_EXHAUSTED,
         `lab host ${host.name} thermal gate refused: ${errorText(error)}`, {host: host.name});
     }
+    // A host with no sensors cannot show the thermal condition the lab record
+    // must carry: refused, named, never silently measured.
+    if (stringIncludes(line, THERMAL_UNMEASURABLE_WORD)) {
+      throw deploymentFailure(DEPLOYMENT_FAILURE.THERMAL_UNMEASURABLE,
+        `lab host ${host.name} has no thermal sensors: ${line}`, {host: host.name, line});
+    }
+    results[host.name] = {outcome: 'ok', line};
   }
   return results;
 }

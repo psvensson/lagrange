@@ -14,7 +14,8 @@ import {arrayMap} from '../real-product-captured-intrinsics.js';
 
 const WORKLOAD = Object.freeze({warehouseCount: 1, districtsPerWarehouse: 1,
   customersPerDistrict: 2, itemCount: 15});
-const MANIFEST = {plan: {workload: WORKLOAD, warmup: {}, slo: {}, semanticProfileId: 'p'}};
+const MANIFEST = {campaignId: 'bench-x',
+  plan: {workload: WORKLOAD, warmup: {}, slo: {}, semanticProfileId: 'p'}};
 const RUN = {runId: 'r1', targetId: 'lagrange', offeredRatePerSec: 5};
 
 function deployment(readTableRows) {
@@ -22,6 +23,7 @@ function deployment(readTableRows) {
   return {roles: [{role: 'n', host: '10.0.0.1', containerId: 'c1'}],
     endpoint: {protocol: 'postgresql', host: '10.0.0.1', port: 5433, containerId: 'c1'},
     access: {connection: {user: 'u'}},
+    identity: {products: [{containerId: 'c1', imageId: `sha256:${'a'.repeat(64)}`}]},
     operations: {
       readTableRows: readTableRows ||
         (async (table) => arrayMap(expected[table.name], (row) => ({...row}))),
@@ -66,9 +68,14 @@ test('a verified hand-over returns observations, dataset, placement and the load
   const run = executor(async (input) => {
     seen = input;
     await input.beforeMeasurement();
-    return {observations: {accounting: {offered: 1}}, correctness: {semanticGate: null}};
+    return {observations: {accounting: {offered: 1}}, correctness: {semanticGate: null},
+      plan: {operationSliceDigest: 'sha256:s', plannedOperationCounts: {payment: 2}}};
   });
   const result = await run({run: RUN, manifest: MANIFEST, deployment: deployment()});
+  assert.deepEqual(seen.semanticGateBinding, {campaignId: 'bench-x', containerId: 'c1',
+    imageId: `sha256:${'a'.repeat(64)}`, endpoint: '10.0.0.1:5433'});
+  assert.deepEqual(result.plan, {operationSliceDigest: 'sha256:s',
+    plannedOperationCounts: {payment: 2}});
   assert.deepEqual(seen.endpoint, {host: '10.0.0.1', port: 5433});
   assert.equal(seen.offeredRatePerSec, 5);
   assert.equal(result.dataset.keyCoverage.present, result.dataset.keyCoverage.expected);

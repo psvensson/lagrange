@@ -12,9 +12,15 @@
  *   runCanonicalWorkload({targetId, runId, protocol, endpoint: {host, port},
  *     connection, clientHost, sshRun, opts, workload, offeredRatePerSec,
  *     warmup, slo, semanticProfileId, signal, beforeMeasurement})
- *   -> {observations, correctness, loadGenerator?}
- * where `observations`/`correctness` have the chain design's v2 shape and
- * `signal` aborting means stop issuing safely (unissued/unresolved).
+ *     semanticGateBinding})
+ *   -> {observations, correctness, plan: {operationSliceDigest,
+ *       plannedOperationCounts}, loadGenerator?}
+ * where `observations`/`correctness` have stream A's v2 shape
+ * (raw-observation-record.js), `plan` is the operation slice B1 planned for
+ * this run, and `signal` aborting means stop issuing safely. The semantic
+ * gate is bound to this deployment: B1 records `semanticGateBinding`
+ * ({campaignId, containerId, imageId, endpoint: 'host:port'}) as
+ * correctness.semanticGate.binding.
  */
 import {
   DEPLOYMENT_FAILURE,
@@ -23,6 +29,7 @@ import {
 import {verifyCanonicalDataset} from './real-product-dataset-verification.js';
 import {errorText} from './real-product-remote-shell.js';
 import {
+  arrayFind,
   arrayIncludes,
   arrayMap,
 } from './real-product-captured-intrinsics.js';
@@ -52,6 +59,14 @@ async function loadCanonicalWorkloadEntry(importModule = (specifier) => import(s
       CANONICAL_WORKLOAD_ENTRY);
   }
   return entry;
+}
+
+function semanticGateBindingOf(manifest, deployment) {
+  const endpoint = deployment.endpoint;
+  const product = arrayFind((deployment.identity?.products || []),
+    (one) => one.containerId === endpoint.containerId);
+  return {campaignId: manifest.campaignId, containerId: endpoint.containerId,
+    imageId: product?.imageId ?? null, endpoint: `${endpoint.host}:${endpoint.port}`};
 }
 
 function productHostsOf(deployment) {
@@ -84,6 +99,7 @@ function createWorkloadRunExecutor({runCanonicalWorkload, sshRun, opts, clientHo
         workload: manifest.plan.workload, offeredRatePerSec: run.offeredRatePerSec,
         warmup: manifest.plan.warmup, slo: manifest.plan.slo,
         semanticProfileId: manifest.plan.semanticProfileId, signal,
+        semanticGateBinding: semanticGateBindingOf(manifest, deployment),
         beforeMeasurement: async () => {
           dataset = await verifyCanonicalDataset({workload: manifest.plan.workload,
             readTableRows: deployment.operations.readTableRows});
@@ -105,6 +121,8 @@ function createWorkloadRunExecutor({runCanonicalWorkload, sshRun, opts, clientHo
         'the workload entry returned no observations');
     }
     return {observations: result.observations, correctness: result.correctness ?? null,
+      plan: {operationSliceDigest: result.plan?.operationSliceDigest ?? null,
+        plannedOperationCounts: result.plan?.plannedOperationCounts ?? null},
       dataset, placement, loadGenerator: {...loadGenerator, ...(result.loadGenerator || {})}};
   };
 }

@@ -7,6 +7,7 @@
 
 import {
   arrayFind,
+  arrayFlatMap,
   arrayJoin,
   arrayMap,
   stringIncludes,
@@ -76,16 +77,19 @@ function createContainerLedger() {
     if (!entry || entry.removed) return new Error(`Error: No such container: ${id}`);
     return JSON.stringify({
       Id: entry.id, Name: `/${entry.name}`, Image: imageIdOf(entry.image),
-      State: {Running: entry.running, Status: entry.running ? 'running' : 'exited'},
+      State: {Running: entry.running, Status: entry.running ? 'running' : 'exited',
+        StartedAt: entry.startedAt || '2026-11-01T10:00:00.000Z'},
       Config: {Image: entry.image, Entrypoint: entrypointOf(entry.image), Cmd: ['serve']},
       Mounts: entry.mounts,
     });
   };
   const repoDigests = (command) => {
     const imageId = stringSplit(stringTrim(command), /\s+/u).pop();
-    if (imageId === LAGRANGE_IMAGE_ID) return `["psvensson/lagrange@sha256:${'1'.repeat(64)}"]`;
-    if (imageId === TIDB_IMAGE_ID) return `["pingcap/tidb@sha256:${'2'.repeat(64)}"]`;
-    return `["postgres@sha256:${'3'.repeat(64)}"]`;
+    const digest = {[LAGRANGE_IMAGE_ID]: `psvensson/lagrange@sha256:${'1'.repeat(64)}`,
+      [TIDB_IMAGE_ID]: `pingcap/tidb@sha256:${'2'.repeat(64)}`}[imageId] ||
+      `postgres@sha256:${'3'.repeat(64)}`;
+    return JSON.stringify({Id: imageId, RepoDigests: [digest], Created: '2026-10-30T10:00:00Z',
+      Config: {Labels: {'org.opencontainers.image.version': '0.4.0'}}});
   };
   return {containers, run, inspect, repoDigests};
 }
@@ -122,8 +126,42 @@ function dockerRules(ledger) {
 const LAGRANGE_NODE_IDS = ['00000000-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003'];
 
+const CANONICAL_TABLE_NAMES = Object.freeze(['warehouse', 'district', 'customer', 'item',
+  'stock', 'orders', 'new_order', 'order_line', 'history']);
+
+// The Lagrange system tables over the public PG wire (psql, header line +
+// '|'-separated rows): every node active with a live lease and a ready
+// connection, a healthy sys-postgres-wire endpoint, and every partition led
+// and replicated on all nodes.
+function lagrangeSystemTableRules(nodeIds) {
+  const partitions = arrayMap(CANONICAL_TABLE_NAMES, (table) => `p-${table}|${table}|3`);
+  const services = arrayFlatMap(CANONICAL_TABLE_NAMES, (table) => arrayMap(nodeIds,
+    (nodeId, index) => `p-${table}|${nodeId}|active|${index === 0 ? 'leader' : 'follower'}`));
+  return [
+    [/FROM nodes'/u, () => arrayJoin(['node_id|status|connection_state|ready_lease_expires_at',
+      ...arrayMap(nodeIds, (nodeId) => `${nodeId}|active|ready|${Date.now() + 3600000}`)],
+    '\n')],
+    [/FROM service_endpoints'/u, arrayJoin(['service_id|node_id|protocol|port|health_status',
+      `sys-postgres-wire|${nodeIds[0]}|postgresql|5433|healthy`], '\n')],
+    [/FROM partitions'/u, arrayJoin(['partition_id|table_name|replica_count', ...partitions],
+      '\n')],
+    [/FROM services WHERE/u, arrayJoin(['partition_id|node_id|status|raft_role', ...services],
+      '\n')],
+    [/CREATE TABLE IF NOT EXISTS bench_readiness_probe/u, 'CREATE TABLE'],
+    [/INSERT INTO bench_readiness_probe/u, 'INSERT 0 1'],
+    [/SELECT token FROM bench_readiness_probe/u, (command) => {
+      const campaign = (/lagrange\.bench\.campaign=(\S+)/u.exec(command) || [])[1];
+      const id = (/WHERE id = (\d+)/u.exec(command) || [])[1];
+      return `token\n${campaign}-${id}`;
+    }],
+    [/grep -m 1 bootedSrcFingerprint/u, '{"subsystem":"main","version":"0.4.0",' +
+      '"bootedSrcFingerprint":"sha256:feed"}'],
+  ];
+}
+
 function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.3']} = {}) {
   return [
+    ...lagrangeSystemTableRules(LAGRANGE_NODE_IDS.slice(0, hosts.length)),
     ...dockerRules(ledger),
     [/\/readyz/u, http(200, {ready: true, phase: 'ready', state: 'ready', reasons: []})],
     [/\/health/u, '{"status":"healthy","ready":true}'],
@@ -187,6 +225,7 @@ export {
   TIDB_RELEASE,
   postgresHealthyRules,
   tidbHealthyRules,
+  CANONICAL_TABLE_NAMES,
   LAGRANGE_NODE_IDS,
   createContainerLedger,
   dockerRules,

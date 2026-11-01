@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2506,
+    "ordinary": 2507,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2523,
-  "digest": "fnv1a32-db7ff49e",
+  "censusSize": 2524,
+  "digest": "fnv1a32-e6f7a8d3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -857,6 +857,7 @@
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-manifest.test.js": "ordinary",
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-record-owner.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js": "exclusive",
     "test/distributed/harness/__tests__/comparative-efficiency-evidence-contract.test.js": "ordinary",
