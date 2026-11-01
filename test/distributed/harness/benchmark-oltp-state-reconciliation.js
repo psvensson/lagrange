@@ -137,22 +137,29 @@ function countBy(records, outcome, kind) {
     record.outcome === outcome && record.operationKind === kind).length;
 }
 
+// The sum of one effect count over the committed requests of a kind. An effect
+// that is not a count cannot be reconciled: it is a defect of the record.
 function committedSum(records, kind, field) {
-  return arrayFilter(records, (record) =>
-    record.outcome === OPERATION_OUTCOME.COMMITTED && record.operationKind === kind)
-    .reduce((sum, record) => sum + record.effectSummary[field], 0);
+  let sum = 0;
+  for (const record of arrayFilter(records, (entry) =>
+    entry.outcome === OPERATION_OUTCOME.COMMITTED && entry.operationKind === kind)) {
+    const count = record.effectSummary[field];
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new Error(`committed ${kind} effect ${field} is not a count`);
+    }
+    sum += count;
+  }
+  return sum;
 }
 
 function expectationsOf(records) {
   const committed = OPERATION_OUTCOME.COMMITTED;
   const unresolved = OPERATION_OUTCOME.UNRESOLVED;
-  const newOrders = countBy(records, committed, OLTP_OPERATION_KIND.NEW_ORDER);
-  const delivered = committedSum(records, OLTP_OPERATION_KIND.DELIVERY, 'deliveredOrders');
   return {
     committed: {
-      newOrders,
+      newOrders: countBy(records, committed, OLTP_OPERATION_KIND.NEW_ORDER),
       payments: countBy(records, committed, OLTP_OPERATION_KIND.PAYMENT),
-      deliveredOrders: delivered,
+      deliveredOrders: committedSum(records, OLTP_OPERATION_KIND.DELIVERY, 'deliveredOrders'),
       orderLines: committedSum(records, OLTP_OPERATION_KIND.NEW_ORDER, 'lineCount'),
     },
     unresolved: {
@@ -163,19 +170,84 @@ function expectationsOf(records) {
   };
 }
 
-function check(name, observed, expected, maxExplainedExcess) {
+/**
+ * The table deltas the committed requests explain exactly:
+ * Δorders == committed new-orders, Δhistory == committed payments,
+ * Δnew_order == committed new-orders − Σ delivered, Δorder_line == Σ lines.
+ * @param {Array<Object>} records request records with outcome, kind, effectSummary
+ * @return {{orders: number, history: number, new_order: number, order_line: number}}
+ */
+function committedTableDeltas(records) {
+  const {committed} = expectationsOf(records);
+  return {
+    orders: committed.newOrders,
+    history: committed.payments,
+    new_order: committed.newOrders - committed.deliveredOrders,
+    order_line: committed.orderLines,
+  };
+}
+
+// One check: the observed delta minus the committed expectation must be zero,
+// or lie in [-maxDeficit, maxExcess], the effects the unresolved requests could
+// have applied at most once each. A committed effect missing from the state is
+// never explained by an unresolved request (maxDeficit is 0 except where an
+// unresolved delivery may have removed new_order rows).
+function check(name, observed, expected, maxExcess, maxDeficit) {
+  const difference = observed - expected;
   return Object.freeze({
     name,
     observedDelta: observed,
     expectedDelta: expected,
-    exact: observed === expected,
-    explainedByUnresolved: observed !== expected && maxExplainedExcess !== null &&
-      Math.abs(observed - expected) <= maxExplainedExcess,
+    exact: difference === 0,
+    explainedByUnresolved: difference !== 0 && difference <= maxExcess &&
+      difference >= -maxDeficit,
   });
 }
 
-// Δorders == committed new-orders, Δhistory == committed payments,
-// Δnew_order == committed new-orders − Σ delivered, Δorder_line == Σ lines.
+function rowCount(rows, table, side) {
+  const count = rows[table];
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new Error(`final-state ${side} row count of ${table} is not a count`);
+  }
+  return count;
+}
+
+/**
+ * The one final-state reconciliation formula, over the row counts before and
+ * after the window. The run records its verdict with it; admission recomputes
+ * the verdict from the record with it.
+ * @param {Array<Object>} records request records
+ * @param {Object<string, number>} beforeRows table -> row count
+ * @param {Object<string, number>} afterRows table -> row count
+ * @param {{districtsPerWarehouse: number}} scale the executed workload's scale
+ * @return {Object} status, deltas, committedEffects, unresolvedRequests, checks
+ */
+function reconcileTableRows(records, beforeRows, afterRows, scale) {
+  const delta = (table) => rowCount(afterRows, table, 'after') -
+    rowCount(beforeRows, table, 'before');
+  const {committed, unresolved} = expectationsOf(records);
+  const expected = committedTableDeltas(records);
+  const checks = Object.freeze([
+    check('orders', delta('orders'), expected.orders, unresolved.newOrders, 0),
+    check('history', delta('history'), expected.history, unresolved.payments, 0),
+    check('new_order', delta('new_order'), expected.new_order, unresolved.newOrders,
+      unresolved.deliveries * scale.districtsPerWarehouse),
+    check('order_line', delta('order_line'), expected.order_line,
+      unresolved.newOrders * OLTP_MAX_NEW_ORDER_LINES, 0),
+  ]);
+  let status = RECONCILIATION_STATUS.MISMATCH;
+  if (arrayEvery(checks, (entry) => entry.exact)) status = RECONCILIATION_STATUS.RECONCILED;
+  else if (arrayEvery(checks, (entry) => entry.exact || entry.explainedByUnresolved)) {
+    status = RECONCILIATION_STATUS.UNRESOLVED_EFFECTS_OBSERVED;
+  }
+  return Object.freeze({
+    status,
+    committedEffects: Object.freeze(committed),
+    unresolvedRequests: Object.freeze(unresolved),
+    checks,
+  });
+}
+
 function reconcileFinalState(records, before, after, scale) {
   if (!before.snapshot || !after.snapshot) {
     return Object.freeze({
@@ -185,30 +257,17 @@ function reconcileFinalState(records, before, after, scale) {
       checks: null,
     });
   }
-  const delta = (table) => after.snapshot.rowCounts[table] - before.snapshot.rowCounts[table];
-  const {committed, unresolved} = expectationsOf(records);
-  const checks = Object.freeze([
-    check('orders', delta('orders'), committed.newOrders, unresolved.newOrders),
-    check('history', delta('history'), committed.payments, unresolved.payments),
-    check('new_order', delta('new_order'), committed.newOrders - committed.deliveredOrders,
-      unresolved.newOrders + unresolved.deliveries * scale.districtsPerWarehouse),
-    check('order_line', delta('order_line'), committed.orderLines,
-      unresolved.newOrders * OLTP_MAX_NEW_ORDER_LINES),
-  ]);
-  const allExact = arrayEvery(checks, (entry) => entry.exact);
-  const allExplained = arrayEvery(checks, (entry) => entry.exact || entry.explainedByUnresolved);
-  let status = RECONCILIATION_STATUS.MISMATCH;
-  if (allExact) status = RECONCILIATION_STATUS.RECONCILED;
-  else if (allExplained) status = RECONCILIATION_STATUS.UNRESOLVED_EFFECTS_OBSERVED;
+  const verdict = reconcileTableRows(records, before.snapshot.rowCounts,
+    after.snapshot.rowCounts, scale);
   return Object.freeze({
-    status,
+    status: verdict.status,
     before: snapshotSummary(before),
     after: snapshotSummary(after),
-    deltas: Object.freeze(Object.fromEntries(arrayMap(OLTP_SNAPSHOT_TABLES,
-      (table) => [table.name, delta(table.name)]))),
-    committedEffects: Object.freeze(committed),
-    unresolvedRequests: Object.freeze(unresolved),
-    checks,
+    deltas: Object.freeze(Object.fromEntries(arrayMap(OLTP_SNAPSHOT_TABLES, (table) =>
+      [table.name, after.snapshot.rowCounts[table.name] - before.snapshot.rowCounts[table.name]]))),
+    committedEffects: verdict.committedEffects,
+    unresolvedRequests: verdict.unresolvedRequests,
+    checks: verdict.checks,
   });
 }
 
@@ -216,7 +275,9 @@ export {
   LOGICAL_CHECKSUM_METHOD as OLTP_LOGICAL_CHECKSUM_METHOD,
   RECONCILIATION_STATUS as OLTP_RECONCILIATION_STATUS,
   VERIFICATION_STATUS as OLTP_DATASET_VERIFICATION_STATUS,
+  committedTableDeltas as committedOltpTableDeltas,
   observeSnapshot as observeOltpStateSnapshot,
   reconcileFinalState as reconcileOltpFinalState,
+  reconcileTableRows as reconcileOltpTableRows,
   verifyLoadedDataset as verifyOltpLoadedDataset,
 };

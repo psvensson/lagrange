@@ -10,7 +10,8 @@ import path from 'node:path';
 import {ADVERTISED_TARGETS} from './comparative-coverage-manifest.js';
 import {
   OLTP_DATASET_VERIFICATION_STATUS,
-  OLTP_RECONCILIATION_STATUS,
+  committedOltpTableDeltas,
+  reconcileOltpTableRows,
 } from './benchmark-oltp-state-reconciliation.js';
 import {
   BENCHMARK_UNRESOLVED_REASON,
@@ -27,7 +28,11 @@ import {
   isBenchmarkDispatchRefusal,
   resolveBenchmarkWorkloadProfile,
 } from './benchmark-workload-dispatch.js';
-import {OLTP_OPERATION_KIND, buildOltpBaselinePlan} from './oltp-baseline-workload.js';
+import {
+  OLTP_OPERATION_KIND,
+  buildOltpBaselinePlan,
+  resolveOltpBaselineConfig,
+} from './oltp-baseline-workload.js';
 import {OLTP_OPEN_LOOP_PROFILE, interleaveOltpWorkerPhase} from './oltp-open-loop-step-owner.js';
 import {OLTP_PAIRED_RETRY_POLICY} from './oltp-paired-retry-owner.js';
 import {OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS} from './oltp-scenario-a-semantic-gate.js';
@@ -49,7 +54,6 @@ import {
 
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayMap = Function.call.bind(Array.prototype.map);
-const arrayFilter = Function.call.bind(Array.prototype.filter);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const FIXTURE_TIME = '2026-11-01T12:00:00.000Z';
@@ -133,6 +137,13 @@ function fixtureWorkload(requestCount) {
 
 // The measured operations of the workload, in the order the open-loop owner issues
 // them, as committed requests.
+// The effect a committed fixture operation reports, in the executor's shape.
+function fixtureEffectSummary(operation) {
+  if (operation.kind === OLTP_OPERATION_KIND.DELIVERY) return {deliveredOrders: 1};
+  if (operation.kind === OLTP_OPERATION_KIND.NEW_ORDER) return {lineCount: operation.lines.length};
+  return {};
+}
+
 function buildRequests(workload, latencyMs) {
   const operations = interleaveOltpWorkerPhase(buildOltpBaselinePlan(workload).workers,
     'measurement');
@@ -144,7 +155,7 @@ function buildRequests(workload, latencyMs) {
       intendedStartMs: intended, issuedAtMs: intended, executionStartedAtMs: intended,
       completedAtMs: intended + latencyMs, issueLagMs: 0, queueDelayMs: 0, latencyMs,
       outcome: OPERATION_OUTCOME.COMMITTED, failureClass: null, retries: 0, retryDelayMs: 0,
-      effectSummary: kind === OLTP_OPERATION_KIND.DELIVERY ? {deliveredOrders: 1} : {},
+      effectSummary: fixtureEffectSummary(operation),
       endpoint: FIXTURE_ENDPOINT, serverConnectionId: 1,
       attempts: [{attemptNo: 1, startedMs: intended, endedMs: intended + latencyMs,
         outcome: OPERATION_OUTCOME.COMMITTED, failureClass: null, sqlstate: null,
@@ -173,17 +184,17 @@ function setFixtureRequestOutcome(request, outcome, failureClass) {
   }
 }
 
-function finalStateFor(requests) {
-  const committed = (kind) => arrayFilter(requests, (r) =>
-    r.outcome === OPERATION_OUTCOME.COMMITTED && r.operationKind === kind).length;
-  const newOrders = committed(OLTP_OPERATION_KIND.NEW_ORDER);
-  const delivered = committed(OLTP_OPERATION_KIND.DELIVERY);
+// The fixture state moves by exactly what the committed requests explain, and
+// the verdict is the reconciliation owner's.
+function finalStateFor(requests, scale) {
+  const before = {orders: 1000, history: 500, new_order: 300, order_line: 3000};
+  const expected = committedOltpTableDeltas(requests);
+  const after = Object.fromEntries(arrayMap(Object.keys(before),
+    (table) => [table, before[table] + expected[table]]));
   return {
-    status: OLTP_RECONCILIATION_STATUS.RECONCILED,
-    before: {tableRows: {orders: 1000, history: 500, new_order: 300}},
-    after: {tableRows: {orders: 1000 + newOrders,
-      history: 500 + committed(OLTP_OPERATION_KIND.PAYMENT),
-      new_order: 300 + newOrders - delivered}},
+    status: reconcileOltpTableRows(requests, before, after, scale).status,
+    before: {tableRows: before},
+    after: {tableRows: after},
   };
 }
 
@@ -201,7 +212,8 @@ function sealFixtureRun(run, options = {}) {
   run.observations.accounting = JSON.parse(JSON.stringify(validateBenchmarkAccounting(requests)));
   run.observations.executedOperationsDigest = computeExecutedOperationsDigest(requests);
   if (!options.keepFinalState && run.correctness.finalState) {
-    run.correctness.finalState = finalStateFor(requests);
+    run.correctness.finalState = finalStateFor(requests,
+      resolveOltpBaselineConfig(run.plan.workload).scale);
   }
   run.rawObservationsDigest = computeRunObservationsDigest(run);
   return run;

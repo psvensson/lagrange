@@ -99,13 +99,6 @@ const DEPLOYMENT_EVENT_KIND = Object.freeze({
   LOCK_LOST: 'lock-lost',
 });
 
-// Final-state snapshot tables the Scenario A reconciliation reads (row counts).
-const FINAL_STATE_TABLE = Object.freeze({
-  ORDERS: 'orders',
-  HISTORY: 'history',
-  NEW_ORDER: 'new_order',
-});
-
 const HEADER_FIELD = Object.freeze({
   RECORD_TYPE: 'recordType',
   SCHEMA_VERSION: 'schemaVersion',
@@ -767,7 +760,6 @@ export {
   DEPLOYMENT_EVENT_KIND,
   DEPLOYMENT_FIELD,
   EXECUTION_TARGET,
-  FINAL_STATE_TABLE,
   HEADER_FIELD,
   IDENTITY_FIELD,
   NETWORK_SCOPE,

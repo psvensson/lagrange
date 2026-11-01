@@ -7,7 +7,7 @@
 // metrics only for valid-observed and product-failure. Forensic records are never
 // admitted; they only explain why a previously published value is withdrawn.
 import {COMPARATIVE_PARITY_STATUS} from './comparative-efficiency-evidence-contract.js';
-import {OLTP_OPERATION_KIND} from './oltp-baseline-workload.js';
+import {resolveOltpBaselineConfig} from './oltp-baseline-workload.js';
 import {OLTP_OPEN_LOOP_PROFILE} from './oltp-open-loop-step-owner.js';
 import {OLTP_PAIRED_RETRY_POLICY} from './oltp-paired-retry-owner.js';
 import {OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS as GATE_STATUS} from
@@ -19,6 +19,7 @@ import {
 import {
   OLTP_DATASET_VERIFICATION_STATUS,
   OLTP_RECONCILIATION_STATUS,
+  reconcileOltpTableRows,
 } from './benchmark-oltp-state-reconciliation.js';
 import {
   FAILURE_CLASS,
@@ -38,7 +39,6 @@ import {
   BENCHMARK_SCENARIO,
   CLOSURE_STATUS,
   DEPLOYMENT_EVENT_KIND,
-  FINAL_STATE_TABLE,
   READINESS_STATE,
   computeRunObservationsDigest,
   validateCampaignHeader,
@@ -436,74 +436,29 @@ function checkExecution(run) {
   return reasons;
 }
 
-function committedOf(requests, kind) {
-  return arrayFilter(requests, (r) =>
-    r.outcome === OPERATION_OUTCOME.COMMITTED && r.operationKind === kind);
+// The scale of the executed workload, by the workload owner's own resolution.
+function workloadScaleOf(run) {
+  return resolveOltpBaselineConfig(run.plan.workload).scale;
 }
 
-function unresolvedOf(requests, kind) {
-  return arrayFilter(requests, (r) =>
-    r.outcome === OPERATION_OUTCOME.UNRESOLVED && r.operationKind === kind).length;
-}
-
-// The excess of an observed delta over what the committed requests explain must
-// lie within what the unresolved requests could have applied, each at most once.
-// A delivery that may have committed only lowers new_order, so new_order has no
-// lower bound while an unresolved delivery exists.
-function withinUnresolvedBounds(excess, requests) {
-  const newOrders = unresolvedOf(requests, OLTP_OPERATION_KIND.NEW_ORDER);
-  const payments = unresolvedOf(requests, OLTP_OPERATION_KIND.PAYMENT);
-  const deliveries = unresolvedOf(requests, OLTP_OPERATION_KIND.DELIVERY);
-  const within = (value, max) => value >= 0 && value <= max;
-  return within(excess.orders, newOrders) && within(excess.history, payments) &&
-    excess.newOrder <= newOrders && (deliveries > 0 || excess.newOrder >= 0);
-}
-
-// Orders the committed deliveries delivered, or null when a delivery's effect
-// summary is not a count.
-function deliveredOrdersOf(requests) {
-  let delivered = 0;
-  for (const r of committedOf(requests, OLTP_OPERATION_KIND.DELIVERY)) {
-    const n = r.effectSummary.deliveredOrders;
-    if (typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0) return null;
-    delivered += n;
-  }
-  return delivered;
-}
-
-// What the observed table deltas hold beyond the committed requests' effects.
-function stateExcess(finalState, requests) {
-  const before = finalState.before.tableRows;
-  const after = finalState.after.tableRows;
-  const delta = (table) => (typeof before[table] === 'number' &&
-    typeof after[table] === 'number' ? after[table] - before[table] : null);
-  const delivered = deliveredOrdersOf(requests);
-  const newOrders = committedOf(requests, OLTP_OPERATION_KIND.NEW_ORDER).length;
-  const excess = {
-    orders: delta(FINAL_STATE_TABLE.ORDERS) - newOrders,
-    history: delta(FINAL_STATE_TABLE.HISTORY) -
-      committedOf(requests, OLTP_OPERATION_KIND.PAYMENT).length,
-    newOrder: delta(FINAL_STATE_TABLE.NEW_ORDER) - (newOrders - delivered),
-  };
-  return delivered === null || arraySome(Object.values(excess), (v) => !Number.isFinite(v)) ?
-    null : excess;
-}
-
-// Final-state reconciliation (model challenge amendment 1): the committed set must
-// explain the observed state change exactly, or, when the reconciliation owner
-// observed unresolved effects, up to what the unresolved requests can explain.
+// Final-state reconciliation (model challenge amendment 1): the reconciliation
+// owner's verdict, recomputed from the record's row counts and requests, must be
+// the verdict the run recorded, and either exact or within what the unresolved
+// requests could have applied (a note). A record the owner cannot reconcile
+// (a row or effect that is not a count) is unreconciled.
 function checkFinalState(run) {
   const finalState = run.correctness.finalState;
   if (!finalState) return [ADMISSION_REASON.FINAL_STATE_MISSING];
-  const ambiguous = finalState.status === OLTP_RECONCILIATION_STATUS.UNRESOLVED_EFFECTS_OBSERVED;
-  const excess = ambiguous || finalState.status === OLTP_RECONCILIATION_STATUS.RECONCILED ?
-    stateExcess(finalState, run.observations.requests) : null;
-  if (!excess) return [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
-  if (!ambiguous) {
-    return excess.orders === 0 && excess.history === 0 && excess.newOrder === 0 ? [] :
-      [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
+  let verdict;
+  try {
+    verdict = reconcileOltpTableRows(run.observations.requests, finalState.before.tableRows,
+      finalState.after.tableRows, workloadScaleOf(run));
+  } catch {
+    return [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
   }
-  return withinUnresolvedBounds(excess, run.observations.requests) ?
+  if (verdict.status !== finalState.status) return [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
+  if (verdict.status === OLTP_RECONCILIATION_STATUS.RECONCILED) return [];
+  return verdict.status === OLTP_RECONCILIATION_STATUS.UNRESOLVED_EFFECTS_OBSERVED ?
     [ADMISSION_REASON.UNRESOLVED_EFFECTS_OBSERVED] :
     [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
 }
