@@ -1,6 +1,7 @@
 # Comparative benchmark defect ledger
 
 > The live diagnosis report `live-diagnosis-2026-11-01.md` is in the relocated bundle `comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz` (sha256 `5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69`); its summary is in tree: `live-diagnosis-2026-11-01-summary.md`.
+> The first-divergence analysis `product-blocker-first-divergence-2026-11-01.md` (D28) is in the relocated bundle `comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.tar.gz` (sha256 `eaf4c6658612a812504507dffa26a594ff820217898f8df0ba28cf5f7f83b95f`); its summary is in tree: `product-blocker-first-divergence-2026-11-01-summary.md`.
 
 Base commit inspected: `62d537313969b4adc556a38d99c6c9eee02f0cf5` (origin/main, the last externally
 reviewed main commit; no commits on origin/main since). Working branch:
