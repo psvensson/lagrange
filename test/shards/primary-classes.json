@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2189,
+    "unit": 2191,
     "integration": 119,
     "bootstrap": 217,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2532,
-  "digest": "fnv1a32-b3800640",
+  "censusSize": 2534,
+  "digest": "fnv1a32-cefe5912",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -889,6 +889,7 @@
     "test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js": "unit",
     "test/distributed/harness/__tests__/failure-bundle-sql-query-engine-availability.test.js": "unit",
     "test/distributed/harness/__tests__/failure-bundle.test.js": "unit",
+    "test/distributed/harness/__tests__/fresh-formation-routability-predicate.test.js": "unit",
     "test/distributed/harness/__tests__/full-node-log-capture.test.js": "unit",
     "test/distributed/harness/__tests__/gate-engine.test.js": "unit",
     "test/distributed/harness/__tests__/gcp-provisioner.test.js": "unit",
@@ -950,6 +951,7 @@
     "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": "unit",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": "unit",
     "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "unit",
+    "test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js": "unit",
     "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": "unit",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "unit",
     "test/distributed/harness/__tests__/report-writer.property.test.js": "unit",

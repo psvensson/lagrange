@@ -1,0 +1,146 @@
+{
+  "scenarioName": "fresh-formation-user-table-routability",
+  "startedAt": 1793567947084,
+  "endedAt": 1793568581005,
+  "durationMs": 633921,
+  "files": {
+    "events": "test-output/.playback/report/fresh-formation-user-table-routability/events.ndjson",
+    "samples": "test-output/.playback/report/fresh-formation-user-table-routability/samples.ndjson",
+    "snapshots": "test-output/.playback/report/fresh-formation-user-table-routability/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/fresh-formation-user-table-routability/playback-manifest.json",
+    "viewer": "test-output/.playback/report/fresh-formation-user-table-routability/playback-viewer.html"
+  },
+  "counts": {
+    "events": 51,
+    "samples": 501,
+    "snapshots": 742
+  },
+  "warnings": [
+    {
+      "code": "process-diagnostics-capture-failed-28fca726-b632-4403-859a-4aacee3b274a",
+      "message": "Failed to capture process diagnostics for node 28fca726-b632-4403-859a-4aacee3b274a: Process resource diagnostics unavailable for node 28fca726-b632-4403-859a-4aacee3b274a (status=-1)",
+      "timestamp": 1793567949071,
+      "details": null
+    },
+    {
+      "code": "process-diagnostics-capture-failed-ef108c21-01a5-4b49-a18b-efc036bfce07",
+      "message": "Failed to capture process diagnostics for node ef108c21-01a5-4b49-a18b-efc036bfce07: Process resource diagnostics unavailable for node ef108c21-01a5-4b49-a18b-efc036bfce07 (status=-1)",
+      "timestamp": 1793567980433,
+      "details": null
+    },
+    {
+      "code": "process-diagnostics-capture-failed-0dd0a97a-78d5-47a4-8a71-f5a57a61b614",
+      "message": "Failed to capture process diagnostics for node 0dd0a97a-78d5-47a4-8a71-f5a57a61b614: Process resource diagnostics unavailable for node 0dd0a97a-78d5-47a4-8a71-f5a57a61b614 (status=-1)",
+      "timestamp": 1793567981631,
+      "details": null
+    },
+    {
+      "code": "topology-capture-failed",
+      "message": "Failed to capture topology snapshot: Admin API query timed out for node 28fca726-b632-4403-859a-4aacee3b274a on lane snapshot after 15000ms",
+      "timestamp": 1793567990519,
+      "details": {
+        "anchorNodeId": "28fca726-b632-4403-859a-4aacee3b274a",
+        "error": "Admin API query timed out for node 28fca726-b632-4403-859a-4aacee3b274a on lane snapshot after 15000ms",
+        "reachability": [
+          {
+            "nodeId": "28fca726-b632-4403-859a-4aacee3b274a",
+            "timestamp": 1793567974804,
+            "reachable": true,
+            "adminReady": true,
+            "reachableBy": "admin_health",
+            "bootstrapHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://192.168.86.32:8080/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://192.168.86.32:8081/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminWs": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": "ws://192.168.86.32:8081/api/admin/stream",
+              "query": null
+            },
+            "sqlProbe": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": null,
+              "query": "SELECT node_id FROM nodes LIMIT 1"
+            },
+            "lastError": null
+          }
+        ]
+      }
+    },
+    {
+      "code": "service-query-failed-28fca726-b632-4403-859a-4aacee3b274a",
+      "message": "Failed to query services on node 28fca726-b632-4403-859a-4aacee3b274a: Admin API query connection reset for node 28fca726-b632-4403-859a-4aacee3b274a on lane snapshot",
+      "timestamp": 1793568005580,
+      "details": {
+        "nodeId": "28fca726-b632-4403-859a-4aacee3b274a",
+        "error": "Admin API query connection reset for node 28fca726-b632-4403-859a-4aacee3b274a on lane snapshot",
+        "reachability": {
+          "nodeId": "28fca726-b632-4403-859a-4aacee3b274a",
+          "timestamp": 1793568004567,
+          "reachable": true,
+          "adminReady": true,
+          "reachableBy": "admin_health",
+          "bootstrapHealth": {
+            "attempted": true,
+            "ok": true,
+            "statusCode": 200,
+            "error": null,
+            "url": "http://192.168.86.32:8080/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminHealth": {
+            "attempted": true,
+            "ok": true,
+            "statusCode": 200,
+            "error": null,
+            "url": "http://192.168.86.32:8081/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminWs": {
+            "attempted": false,
+            "ok": false,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": "ws://192.168.86.32:8081/api/admin/stream",
+            "query": null
+          },
+          "sqlProbe": {
+            "attempted": false,
+            "ok": false,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": null,
+            "query": "SELECT node_id FROM nodes LIMIT 1"
+          },
+          "lastError": null
+        }
+      }
+    }
+  ]
+}

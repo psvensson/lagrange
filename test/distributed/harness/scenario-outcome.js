@@ -44,6 +44,10 @@ function describeScenarioRefusal(refusal) {
     `; at most ${refusal.maxNodesPerHost} node(s) per host, config places ` +
       `${refusal.maxNodesOnOneHost ?? 'unknown'} on one host` :
     '';
+  if (refusal.requiredUnit === 'nodes') {
+    return `${refusal.reason}: requires exactly ${refusal.required} ` +
+      `node(s), config places ${available}`;
+  }
   return `${refusal.reason}: requires >= ${refusal.required} distinct ` +
     `host(s), config provides ${available}${perHost}`;
 }

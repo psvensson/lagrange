@@ -10,10 +10,12 @@
 // scenario, subkind, connection, plan, evidenceDir). One NDJSON record is
 // appended to --out. Exit 0: executed or a typed non-execution (blocked /
 // unsupported); exit 2: typed dispatch refusal; exit 1: harness error.
-import {execFileSync} from 'node:child_process';
 import {appendFile, readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {hostname} from 'node:os';
+import {fileURLToPath} from 'node:url';
+
+import {execGit} from '../../../scripts/checks/git-invocation.js';
 
 import {
   isBenchmarkDispatchRefusal,
@@ -22,7 +24,9 @@ import {
   executeBenchmarkWorkload,
 } from './real-product-workload-drivers.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const EXIT = Object.freeze({OK: 0, HARNESS_ERROR: 1, REFUSED: 2});
@@ -48,14 +52,29 @@ function parseArgs(argv) {
   return args;
 }
 
-function observedGitCommit() {
+const CHECKOUT_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+
+// The harness checkout the load generator executes, read through the one
+// git invocation owner: its commit and whether its tree is clean. A dirty
+// checkout is a typed identity fact (`dirty: true`): the executed code is
+// not the recorded commit, so the run cannot be valid-observed.
+function observedCheckout() {
   try {
+    const gitCommit = stringTrim(execGit(['rev-parse', 'HEAD'],
+      {cwd: CHECKOUT_ROOT, encoding: 'utf8'}));
+    const porcelain = execGit(['status', '--porcelain', '--untracked-files=all'],
+      {cwd: CHECKOUT_ROOT, encoding: 'utf8'});
+    const changedPaths = arrayFilter(stringSplit(porcelain, '\n'), (line) => line !== '');
     return {
-      gitCommit: stringTrim(execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'})),
+      root: CHECKOUT_ROOT,
+      gitCommit,
+      dirty: changedPaths.length > 0,
+      changedPaths,
       error: null,
     };
   } catch (error) {
-    return {gitCommit: null, error: String(error?.message || error)};
+    return {root: CHECKOUT_ROOT, gitCommit: null, dirty: null, changedPaths: null,
+      error: String(error?.message || error)};
   }
 }
 
@@ -71,7 +90,7 @@ function loadGeneratorIdentity() {
   return Object.freeze({
     hostname: hostname(),
     nodeVersion: process.version,
-    checkout: Object.freeze(observedGitCommit()),
+    checkout: Object.freeze(observedCheckout()),
     nativeClients: Object.freeze(Object.fromEntries(
       arrayMap(NATIVE_CLIENT_PACKAGES, (name) => [name, packageVersion(name)]))),
   });

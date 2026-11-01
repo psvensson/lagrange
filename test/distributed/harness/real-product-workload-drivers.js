@@ -85,8 +85,8 @@ async function driverSourceIdentity() {
  *   tidb-tikv: {endpoint, databaseName}
  * @param {object} request.plan         {offeredRatePerSec, repetition?,
  *   orderIndex?, sweepPlanSha256?, workload? (Scenario A main only)}
- * @param {string} [request.evidenceDir] retains response evidence over the
- *   inline bound
+ * @param {string} request.evidenceDir retains response evidence over the
+ *   inline bound (required for an executed run)
  * @return {Promise<object>} dispatch, identity, plan, deployment,
  *   observations, correctness, cleanup
  */
@@ -95,6 +95,12 @@ async function executeBenchmarkWorkload(request = {}) {
   if (dispatch.status === BENCHMARK_DISPATCH_STATUS.EXECUTED &&
       (!request.plan || typeof request.plan !== 'object')) {
     throw new Error('benchmark run requires a plan');
+  }
+  // Response evidence over the inline bound is retained as files: an
+  // executed run names where.
+  if (dispatch.status === BENCHMARK_DISPATCH_STATUS.EXECUTED &&
+      (typeof request.evidenceDir !== 'string' || request.evidenceDir === '')) {
+    throw new Error('benchmark run requires evidenceDir');
   }
   const harness = await driverSourceIdentity();
   const base = {

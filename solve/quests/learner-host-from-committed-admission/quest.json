@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "learner-host-from-committed-admission",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The partition leader answers a learner promotion proof from its committed configuration and its own admission record: the learner's host is a field of the admitted identity recorded when the leader admitted the peer, never looked up in the CDC-fed services cache. The cache-address resolution paths behind buildPeerAddress for promotion and transport, and the refusal cause learner_address_unresolvable, are deleted; the only refusals are NOT_LEADER and NOT_IN_CONFIGURATION. On a fresh three-node formation no promotion proof is refused for a replica named in the committed configuration, the priority control-plane spread reaches readyDistinctNodeCount 3 within the stated bound, and time-to-serve-lane is recorded.",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "fresh-formation-user-table-routability",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "class-not-instance",
+      "statement": "Instance C2/C3 of the class 'serve-gating decision consumes a projection' (evidence/systemic-analysis-serve-lane-2026-11-01.md in comparative-benchmark-evidence-repair). The repair moves the decision onto the committed fact; it adds no timer, retry, carve-out, cache wait or alternate resolution path, and deletes the existing ones for this decision."
+    },
+    {
+      "id": "committed-read-direction",
+      "statement": "Continues owner decision O1/A8 (committed-membership bootstrap read 2026-09-25/26): rows are discovery, never authority; the admission record is extended with the admitted node identity and read back through the raft-rs runtime owner, not re-derived."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first at the unit level (proof handler resolves host from admission/committed configuration; cache row absent or stale does not change the answer; unknown replica refuses NOT_IN_CONFIGURATION), then the live scenario fresh-formation-user-table-routability on local-three-node.json red before, green three consecutive after, with node logs retained; independent verification before landing."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating"
+  ]
+}

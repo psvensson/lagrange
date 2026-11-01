@@ -138,3 +138,24 @@ free) and never typed by hand; each host is taken with the machine-wide `flock` 
 - Scenario C, scale-out, partition sweep, movement, RTT, recovery, backfill: `not-measured` /
   `unsupported` until their execution and observation exist. No numeric substitutes.
 - All currently published numbers: invalidated by ledger entries (forensic records retained).
+
+## Amendments (2026-11-01, after the phase-3 model challenge)
+
+Binding, superseding the text above where they conflict; detail in
+`model-challenge-2026-11-01.md`:
+
+1. `oltp-paired-sweep-runner.js` and `oltp-open-loop-step-owner.js` are rewritten by stream B1
+   (no substitutes, no fallbacks, typed outcomes consumed, abortable settle). The open-loop profile
+   is superseded to `scenario-a-open-loop-v2` and the sweep plan to `scenario-a-paired-sweep-v2`
+   with recorded reasons; the semantic profile `scenario-a-semantic-v1` is unchanged.
+2. Record v2 adds `endpoint.containerId` per arm, `executedOperationsDigest`, mandatory
+   `correctness.finalState` (nine-table snapshot before/after + reconciliation deltas),
+   `events[]`, `closure`, `loadGenerator`, identity before and after the window,
+   `dataset.resetMethod`, per-request scheduling fields and `effectSummary`.
+3. Systems: `POSTGRESQL` joins the comparison-system enum; gate and plan accept N systems.
+4. Admission: statistical sufficiency rule (minimum committed count, repetitions, dispersion;
+   `insufficient-samples` otherwise); smoke runs publish no capacity metric; duplicate claimKey
+   without a ledger entry is `invalid-measurement`; regenerate reads the ledger; one status
+   vocabulary owner; `refused` maps to `blocked`; an all-non-valid campaign never exits as passed.
+5. Failure classes gain `harness_fault`; `25P04` is a definite product rollback, socket error
+   codes are transport failures, never SQLSTATEs.

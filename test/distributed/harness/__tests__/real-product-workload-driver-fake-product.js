@@ -35,7 +35,21 @@ const FAULT = Object.freeze({
   COMMIT_ACK_LOST: 'commit-ack-lost',
   // The dataset load is refused with 55P03, as Lagrange answers on the lab.
   LOAD_LOCK_NOT_AVAILABLE: 'load-lock-not-available',
+  // Lab 2026-11-01, 5-node: CREATE TABLE answers 55P03 with a retry hint and
+  // the table's partition then answers XX000 participant failures
+  // ("Partition service not found") until it becomes routable.
+  PROVISIONING_UNROUTABLE: 'provisioning-unroutable',
+  // As above, but the poll answers an unrelated XX000.
+  PROVISIONING_OTHER_INTERNAL_ERROR: 'provisioning-other-internal-error',
+  // Lagrange's PG wire returns integer columns as decimal text.
+  INTEGER_TEXT: 'integer-text',
+  // Integer columns as non-canonical text ('5.0') once armed.
+  NONCANONICAL_INTEGER_TEXT: 'noncanonical-integer-text',
 });
+const PROVISIONING_TABLE = 'warehouse';
+const STATEMENT_VERB = /^\s*([A-Za-z]+)/u;
+const UNROUTABLE_POLLS = 2;
+const PROVISIONING_RETRY_HINT_MS = 5;
 const ARM_AFTER_HISTORY_SNAPSHOTS = 2;
 const WRONG_INTEGER = 'garbage';
 const WRONG_AFFECTED_ROWS = 2;
@@ -273,12 +287,41 @@ function loadBatch(state, sql, parameters) {
   return {rows: [], rowCount: parameters.length / columns.length};
 }
 
+function provisioningPollError(fault) {
+  if (fault === FAULT.PROVISIONING_OTHER_INTERNAL_ERROR) {
+    return Object.assign(new Error('executor invariant broken'), {code: 'XX000',
+      severity: 'ERROR'});
+  }
+  return Object.assign(new Error('Distributed operation failed due to participant failures'), {
+    code: 'XX000',
+    severity: 'ERROR',
+    detail: JSON.stringify({participantFailuresOmittedCount: 0, firstFailedParticipant: {
+      partitionId: 'tbl-fixture-p1', participantNodeId: null,
+      error: 'Partition service not found', failedTable: PROVISIONING_TABLE}}),
+  });
+}
+
+function renderIntegers(result, fault, armed) {
+  const textual = fault === FAULT.INTEGER_TEXT ||
+    (fault === FAULT.NONCANONICAL_INTEGER_TEXT && armed);
+  if (!textual || !Array.isArray(result.rows)) return result;
+  const render = fault === FAULT.INTEGER_TEXT ? (n) => String(n) : (n) => `${n}.0`;
+  return {...result, rows: arrayMap(result.rows, (row) => Object.fromEntries(
+    arrayMap(Object.entries(row), ([key, value]) =>
+      [key, typeof value === 'number' ? render(value) : value])))};
+}
+
 // Statements outside the canonical set: schema, load, snapshot, admin.
 function administrative(state, sql, parameters) {
   if (SNAPSHOT_PATTERN.test(sql)) return {rows: snapshotRows(state, sql)};
   const count = COUNT_PATTERN.exec(sql);
   if (count) {
     if (!state.tables.has(count[1])) throw new Error(`Table not found: ${count[1]}`);
+    if (count[1] === PROVISIONING_TABLE && state.provisioningPolls !== undefined &&
+        state.provisioningPolls < UNROUTABLE_POLLS) {
+      state.provisioningPolls += 1;
+      throw provisioningPollError(state.fault);
+    }
     return {rows: [{row_count: rowsOf(state, count[1]).length}]};
   }
   if (INSERT_BATCH_PATTERN.test(sql)) {
@@ -291,6 +334,15 @@ function administrative(state, sql, parameters) {
   const createTable = /^CREATE TABLE ([a-z_]+)/u.exec(sql);
   if (createTable) {
     rowsOf(state, createTable[1]);
+    if (createTable[1] === PROVISIONING_TABLE && (state.fault ===
+        FAULT.PROVISIONING_UNROUTABLE || state.fault === FAULT.PROVISIONING_OTHER_INTERNAL_ERROR)) {
+      state.provisioningPolls = 0;
+      throw Object.assign(new Error('Schema provisioning remains active'), {
+        code: '55P03', severity: 'ERROR',
+        detail: JSON.stringify({job_id: 'schema-job-fixture',
+          retry_after_ms: PROVISIONING_RETRY_HINT_MS}),
+      });
+    }
     return {rows: [], rowCount: 0};
   }
   if (/^SELECT CONNECTION_ID\(\)/u.test(sql)) return {rows: [{connection_id: state.connections}]};
@@ -354,10 +406,13 @@ function createSession(state, fault, dialect) {
       }
       const normalized = normalizeSql(sql);
       const statementId = STATEMENT_BY_SQL.get(normalized);
-      if (!statementId) return administrative(state, normalized, parameters);
+      if (!statementId) {
+        return renderIntegers(administrative(state, normalized, parameters), fault, state.armed);
+      }
       state.statements.push(sql);
       const result = HANDLERS[statementId](state, session.tx, parameters);
-      return applyFault(state, fault, statementId, {rows: [], ...result}, dialect);
+      return renderIntegers(await applyFault(state, fault, statementId, {rows: [], ...result},
+        dialect), fault, state.armed);
     },
   };
 }
@@ -384,7 +439,9 @@ function createFakeOltpProduct(fault = FAULT.NONE) {
           this.processID = handle.session.serverConnectionId;
         },
         async query(sql, parameters) {
-          return handle.run(sql, parameters);
+          const result = await handle.run(sql, parameters);
+          return {rowCount: result.rows.length, ...result,
+            command: stringToUpperCase(STATEMENT_VERB.exec(sql)[1])};
         },
         async end() {},
       };

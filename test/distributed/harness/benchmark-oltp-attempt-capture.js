@@ -40,6 +40,27 @@ const DESTROYING_FAILURE_CLASSES = Object.freeze(new Set([
 
 const attemptStorage = new AsyncLocalStorage();
 
+const WIRE_FAMILY = Object.freeze({PGWIRE: 'pgwire', MYSQL: 'mysql'});
+// The product's acknowledgement of one statement as the client received it.
+// A receipt is recorded, never read as a durability witness (ledger D30):
+// durability evidence is the final-state reconciliation.
+const RECEIPT_KIND = Object.freeze({
+  PGWIRE_COMMAND_COMPLETE: 'pgwire-command-complete',
+  MYSQL_OK_PACKET: 'mysql-ok-packet',
+  MYSQL_RESULT_SET: 'mysql-result-set',
+  MYSQL_TRANSACTION_CONTROL: 'mysql-transaction-control',
+});
+// How a returned column value was encoded on the wire: a recorded dialect
+// fact (Lagrange's PG wire returns integers as decimal text).
+const COLUMN_ENCODING = Object.freeze({
+  NUMBER: 'number',
+  DECIMAL_TEXT: 'decimal-text',
+  TEXT: 'text',
+  OTHER: 'other',
+});
+const CANONICAL_DECIMAL_TEXT = /^-?(0|[1-9][0-9]*)$/u;
+const STATEMENT_VERB = /^\s*([A-Za-z]+)/u;
+
 function createAttemptTrace() {
   return {
     statements: [],
@@ -67,6 +88,50 @@ function rowsOfResult(result) {
   return Array.isArray(result) ? result : null;
 }
 
+function receiptOf(family, raw, sql) {
+  if (family === WIRE_FAMILY.PGWIRE) {
+    return Object.freeze({kind: RECEIPT_KIND.PGWIRE_COMMAND_COMPLETE,
+      command: typeof raw.command === 'string' ? raw.command : null,
+      // An unreported count stays unreported.
+      rowCount: Number.isInteger(raw.rowCount) ? raw.rowCount : null});
+  }
+  if (raw === null) {
+    return Object.freeze({kind: RECEIPT_KIND.MYSQL_TRANSACTION_CONTROL,
+      statementVerb: controlWord(sql)});
+  }
+  if (Array.isArray(raw)) {
+    return Object.freeze({kind: RECEIPT_KIND.MYSQL_RESULT_SET, rowCount: raw.length});
+  }
+  return Object.freeze({kind: RECEIPT_KIND.MYSQL_OK_PACKET,
+    statementVerb: STATEMENT_VERB.exec(sql)[1],
+    affectedRows: Number.isInteger(raw.affectedRows) ? raw.affectedRows : null,
+    changedRows: Number.isInteger(raw.changedRows) ? raw.changedRows : null});
+}
+
+function encodingOf(value) {
+  if (typeof value === 'number') return COLUMN_ENCODING.NUMBER;
+  if (typeof value === 'string') {
+    return CANONICAL_DECIMAL_TEXT.test(value) ? COLUMN_ENCODING.DECIMAL_TEXT :
+      COLUMN_ENCODING.TEXT;
+  }
+  return COLUMN_ENCODING.OTHER;
+}
+
+// Per column, the set of encodings observed across the returned rows.
+function columnEncodingsOf(rows) {
+  if (!Array.isArray(rows)) return null;
+  const byColumn = new Map();
+  for (const row of rows) {
+    for (const [column, value] of Object.entries(row)) {
+      if (value === null) continue;
+      if (!byColumn.has(column)) byColumn.set(column, new Set());
+      byColumn.get(column).add(encodingOf(value));
+    }
+  }
+  return Object.freeze(Object.fromEntries(arrayMap([...byColumn],
+    ([column, encodings]) => [column, [...encodings].sort().join('|')])));
+}
+
 function affectedRowsOfResult(result) {
   if (Number.isInteger(result?.rowCount)) return result.rowCount;
   if (Number.isInteger(result?.affectedRows)) return result.affectedRows;
@@ -90,6 +155,8 @@ async function traceStatement(connection, sql, send) {
     statement.status = STATEMENT_STATUS.OK;
     statement.affectedRows = affectedRowsOfResult(result.raw);
     statement.rows = rowsOfResult(result.raw);
+    statement.receipt = receiptOf(connection.family, result.raw, sql);
+    statement.columnEncodings = columnEncodingsOf(statement.rows);
     if (word === TRANSACTION_CONTROL.COMMIT) trace.commitAcknowledged = true;
     return result;
   } catch (error) {
@@ -118,8 +185,9 @@ function createConnectionRegistry() {
 
 // The connection lifecycle shared by both wire families: a destroyed
 // connection reopens only at a transaction start, never mid-transaction.
-function createLifecycle(registry, open, closeInner, destroyInner) {
+function createLifecycle(registry, family, open, closeInner, destroyInner) {
   const connection = {
+    family,
     inner: null,
     destroyed: false,
     inTransaction: false,
@@ -175,7 +243,7 @@ function destroyPgInner(inner, registry) {
 // pg-protocol clients (Lagrange public PG wire, PostgreSQL).
 function createTrackedPgClientFactory(baseFactory, registry) {
   return (options) => {
-    const connection = createLifecycle(registry, async (target) => {
+    const connection = createLifecycle(registry, WIRE_FAMILY.PGWIRE, async (target) => {
       const inner = baseFactory(options);
       await inner.connect();
       target.inner = inner;
@@ -213,7 +281,7 @@ function destroyMysqlInner(inner, registry) {
 // mysql2 connections (TiDB).
 function createTrackedMysqlConnectionFactory(baseFactory, registry) {
   return async (options) => {
-    const connection = createLifecycle(registry, async (target) => {
+    const connection = createLifecycle(registry, WIRE_FAMILY.MYSQL, async (target) => {
       const inner = await baseFactory(options);
       target.inner = inner;
       target.endpoint = endpointLabel(options);
