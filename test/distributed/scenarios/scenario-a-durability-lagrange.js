@@ -48,8 +48,11 @@ async function resolveNodeIncarnation(node) {
       if (startedAt || pid) {
         return `${node.containerId}:${startedAt}:${pid}`;
       }
-    } catch {
-      return '';
+    } catch (error) {
+      // An unreadable incarnation fails the proof explicitly; it is never
+      // read as "no incarnation".
+      throw new Error(`durability fault target incarnation unreadable: ${error?.message}`,
+        {cause: error});
     }
   }
   if (typeof node?.inspectContainerState === 'function') {
@@ -60,8 +63,11 @@ async function resolveNodeIncarnation(node) {
       if (finishedAt || status) {
         return `${node.id || ''}:${status}:${finishedAt}`;
       }
-    } catch {
-      return '';
+    } catch (error) {
+      // An unreadable incarnation fails the proof explicitly; it is never
+      // read as "no incarnation".
+      throw new Error(`durability fault target incarnation unreadable: ${error?.message}`,
+        {cause: error});
     }
   }
   return '';

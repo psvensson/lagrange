@@ -92,6 +92,10 @@ async function driverSourceIdentity() {
  */
 async function executeBenchmarkWorkload(request = {}) {
   const dispatch = resolveBenchmarkDispatch(request);
+  if (dispatch.status === BENCHMARK_DISPATCH_STATUS.EXECUTED &&
+      (!request.plan || typeof request.plan !== 'object')) {
+    throw new Error('benchmark run requires a plan');
+  }
   const harness = await driverSourceIdentity();
   const base = {
     recordKind: RECORD_KIND,
@@ -116,7 +120,7 @@ async function executeBenchmarkWorkload(request = {}) {
   const run = await executeScenarioARun({
     dispatch,
     connection: request.connection,
-    plan: request.plan || {},
+    plan: request.plan,
     drivers: request.drivers,
     runtime: request.runtime,
     evidenceDir: request.evidenceDir,
