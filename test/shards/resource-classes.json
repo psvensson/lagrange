@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2501,
+    "ordinary": 2502,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2518,
-  "digest": "fnv1a32-8819b60f",
+  "censusSize": 2519,
+  "digest": "fnv1a32-cc4ba484",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2294,6 +2294,7 @@
     "test/service/h2-hono-source-ir-deployment-cutover.test.js": "ordinary",
     "test/service/h3-fetch-ingress-and-scoped-client.test.js": "ordinary",
     "test/service/h4-http-invocation-recovery-and-cancellation.test.js": "ordinary",
+    "test/service/h5-compiled-public-hono-journey.test.js": "ordinary",
     "test/service/handler-aware-runtime-invocation.test.js": "external-toolchain",
     "test/service/installable-service-artifact-resolver.test.js": "ordinary",
     "test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js": "ordinary",

@@ -34,6 +34,15 @@ const SERVICE_VERSION = '0.1.0';
 // scaffold-time typings projection so the two can never drift.
 const TEMPLATE_STATEMENT_TEXT =
   'SELECT id, account_id, amount_cents FROM account_activity';
+const HONO_TEMPLATE_STATEMENT_TEXT =
+  'SELECT id, account_id, amount_cents FROM account_activity WHERE ($1 IS NULL OR account_id = $1)';
+const HONO_FRAMEWORK_NAME = 'hono';
+const FETCH_ENTRY_KIND = 'fetch';
+const HONO_PINNED_VERSION = '4.12.14';
+const AUTHORING_INDEX_FILE = 'index.js';
+const PARAM_ACCOUNT_ID = 'accountId';
+const PARAM_TYPE_INTEGER = 'integer';
+const SCHEMA_TYPE_RECORD = 'record';
 const SERVICE_PACKAGE_TYPE = 'module';
 const SERVICE_BUILD_SCRIPT =
   'lagrange service generate . && lagrange service build .';
@@ -463,14 +472,136 @@ function validateServiceName(serviceName, targetDirectory) {
 // src/ stay fully checked against runtime-types.d.ts.
 const VENDORED_TS_NOCHECK_HEADER = '// @ts-nocheck\n';
 
-function vendoredAuthoringFiles() {
-  return AUTHORING_MODULE_FILES.map((file) => [
+function vendoredAuthoringFiles(includeIndex = false) {
+  const files = includeIndex ?
+    [...AUTHORING_MODULE_FILES, AUTHORING_INDEX_FILE] :
+    AUTHORING_MODULE_FILES;
+  return files.map((file) => [
     path.join(WASM_PROJECT_PATH.AUTHORING_DIRECTORY, file),
     VENDORED_TS_NOCHECK_HEADER + fs.readFileSync(
       path.join(authoringSourceDirectory(), file), {
         encoding: WASM_PROJECT_FILE.ENCODING,
       }),
   ]);
+}
+
+function honoLagrangeServiceSource(serviceName) {
+  return `import {Hono} from 'hono';
+import {defineService, distributed, sql} from './authoring/index.js';
+
+const SERVICE_NAME = '${serviceName}';
+const VERSION = '${SERVICE_VERSION}';
+
+const summarizeAmounts = distributed({
+  parameters: [{name: 'accountId', nullable: true, type: 'integer'}],
+  partialSchema: {
+    type: 'record',
+    fields: {
+      count: {type: 'integer'},
+      totalCents: {type: 'integer'},
+    },
+  },
+  statement: sql\`${HONO_TEMPLATE_STATEMENT_TEXT}\`,
+  run(rows, runArguments, {emit}) {
+    const accountId = runArguments?.accountId ?? null;
+    let matched = 0;
+    let totalCents = 0;
+    for (const row of rows) {
+      if (accountId !== null && Number(row.account_id) !== Number(accountId)) {
+        continue;
+      }
+      if (row.amount_cents === null || row.amount_cents === undefined) {
+        continue;
+      }
+      matched += 1;
+      totalCents += Number(row.amount_cents);
+    }
+    if (matched > 0) {
+      emit(String(accountId ?? 'all'), {count: matched, totalCents});
+    }
+    return {matched, scanned: rows.length};
+  },
+  reduce(partials, runArguments) {
+    const accountId = runArguments?.accountId ?? null;
+    let transactions = 0;
+    let totalCents = 0;
+    let contributingShards = 0;
+    for (const [, value] of partials) {
+      contributingShards += 1;
+      transactions += Number(value?.count || 0);
+      totalCents += Number(value?.totalCents || 0);
+    }
+    return {
+      accountId,
+      contributingShards,
+      totalCents,
+      transactions,
+    };
+  },
+});
+
+const app = new Hono();
+
+app.get('/health', (c) => c.json({ok: true, service: SERVICE_NAME}));
+
+app.post('/amounts/summary', async (c) => {
+  let body = {};
+  const rawText = await c.req.text();
+  if (rawText.trim().length > 0) {
+    try {
+      body = JSON.parse(rawText);
+    } catch {
+      return c.json({error: 'invalid_request_body'}, 400);
+    }
+  }
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json({error: 'invalid_request_body'}, 400);
+  }
+  const rawAccountId = body.accountId ?? null;
+  let accountId = null;
+  if (typeof rawAccountId === 'number' &&
+      Number.isSafeInteger(rawAccountId) && rawAccountId >= 0) {
+    accountId = rawAccountId;
+  } else if (typeof rawAccountId === 'string' &&
+      /^\\d+$/u.test(rawAccountId.trim())) {
+    accountId = Number.parseInt(rawAccountId, 10);
+  } else if (rawAccountId !== null) {
+    return c.json({error: 'invalid_account_id'}, 400);
+  }
+  const summary = await c.env.lagrange.call(summarizeAmounts, {accountId});
+  return c.json(summary, 200);
+});
+
+export const operations = {summarizeAmounts};
+
+export default defineService({
+  name: SERVICE_NAME,
+  version: VERSION,
+  operations,
+  fetch: app.fetch,
+});
+`;
+}
+
+function honoPackageJson(serviceName) {
+  return JSON.stringify({
+    name: serviceName,
+    version: SERVICE_VERSION,
+    private: true,
+    type: SERVICE_PACKAGE_TYPE,
+    dependencies: {
+      [HONO_FRAMEWORK_NAME]: HONO_PINNED_VERSION,
+    },
+    scripts: {
+      build: SERVICE_BUILD_SCRIPT,
+      deploy: SERVICE_DEPLOY_SCRIPT,
+      generate: SERVICE_GENERATE_SCRIPT,
+      test: SERVICE_TEST_SCRIPT,
+    },
+    engines: {
+      node: SERVICE_NODE_ENGINE,
+    },
+  }, null, JSCONFIG_INDENT) + TEXT_NEWLINE;
 }
 
 // The scaffold ships an INITIAL runtime-types.d.ts computed by the real
@@ -493,15 +624,58 @@ function templateIr(serviceName) {
   };
 }
 
+function honoTemplateIr(serviceName) {
+  return {
+    entryKind: FETCH_ENTRY_KIND,
+    handlers: [
+      {allowedOperations: [TEMPLATE_OPERATION_ID], id: FETCH_ENTRY_KIND},
+    ],
+    name: serviceName,
+    operations: [
+      {
+        id: TEMPLATE_OPERATION_ID,
+        parameters: [
+          {name: PARAM_ACCOUNT_ID, nullable: true, type: PARAM_TYPE_INTEGER},
+        ],
+        partialSchema: {
+          fields: {
+            count: {type: PARAM_TYPE_INTEGER},
+            totalCents: {type: PARAM_TYPE_INTEGER},
+          },
+          type: SCHEMA_TYPE_RECORD,
+        },
+        statement: {text: HONO_TEMPLATE_STATEMENT_TEXT},
+      },
+    ],
+    version: SERVICE_VERSION,
+  };
+}
+
 function projectFiles(serviceName) {
   return Object.freeze([
-    ...vendoredAuthoringFiles(),
+    ...vendoredAuthoringFiles(false),
     [WASM_PROJECT_PATH.SERVICE_SOURCE, lagrangeServiceSource(serviceName)],
     [WASM_PROJECT_PATH.HANDLER_SOURCE, handlerSource()],
     [WASM_PROJECT_PATH.HANDLER_TEST, handlerTestSource()],
     [WASM_PROJECT_PATH.JSCONFIG, jsconfigJson()],
     [WASM_PROJECT_PATH.RUNTIME_TYPES, typingsSource(templateIr(serviceName))],
     [WASM_PROJECT_PATH.PACKAGE, packageJson(serviceName)],
+    [WASM_PROJECT_PATH.README, readme(serviceName)],
+  ]);
+}
+
+function honoProjectFiles(serviceName) {
+  return Object.freeze([
+    ...vendoredAuthoringFiles(true),
+    [WASM_PROJECT_PATH.SERVICE_SOURCE, honoLagrangeServiceSource(serviceName)],
+    [WASM_PROJECT_PATH.HANDLER_SOURCE, handlerSource()],
+    [WASM_PROJECT_PATH.HANDLER_TEST, handlerTestSource()],
+    [WASM_PROJECT_PATH.JSCONFIG, jsconfigJson()],
+    [
+      WASM_PROJECT_PATH.RUNTIME_TYPES,
+      typingsSource(honoTemplateIr(serviceName)),
+    ],
+    [WASM_PROJECT_PATH.PACKAGE, honoPackageJson(serviceName)],
     [WASM_PROJECT_PATH.README, readme(serviceName)],
   ]);
 }
@@ -531,11 +705,14 @@ function classifyFileSystemError(error, targetDirectory) {
   );
 }
 
-function createWasmServiceProject(targetArgument) {
+function createWasmServiceProject(targetArgument, options = {}) {
   const targetDirectory = path.resolve(targetArgument);
   const serviceName = path.basename(targetDirectory);
   validateServiceName(serviceName, targetDirectory);
-  const files = projectFiles(serviceName);
+  const useHono = options?.framework === HONO_FRAMEWORK_NAME;
+  const files = useHono ?
+    honoProjectFiles(serviceName) :
+    projectFiles(serviceName);
   return createScaffoldProject({
     targetArgument,
     subdirectories: [
@@ -548,11 +725,18 @@ function createWasmServiceProject(targetArgument) {
   });
 }
 
+function createHonoServiceProject(targetArgument) {
+  return createWasmServiceProject(targetArgument, {
+    framework: HONO_FRAMEWORK_NAME,
+  });
+}
+
 const runInit = createWasmServiceProject;
 
 export {
   ServiceWasmScaffoldError,
   WASM_PROJECT_ERROR_CODE,
+  createHonoServiceProject,
   createWasmServiceProject,
   runInit,
 };

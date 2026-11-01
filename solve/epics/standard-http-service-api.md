@@ -16,6 +16,7 @@ quests:
   - h2-hono-source-ir-deployment-cutover
   - h3-fetch-ingress-and-scoped-client
   - h4-http-invocation-recovery-and-cancellation
+  - h5-compiled-public-hono-journey
 authorizes:
   - src/authoring
   - src/service

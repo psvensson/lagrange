@@ -64,7 +64,14 @@ const DTS_FRAGMENT = Object.freeze({
   REQUEST_QUERY_FIELD:
     '  readonly query: Readonly<Record<string, string>>;',
   HANDLER_CONTEXTS_NAME: 'HandlerContexts',
+  LAGRANGE_CLIENT_NAME: 'LagrangeRequestClient',
+  LAGRANGE_ENV_NAME: 'LagrangeEnv',
+  LAGRANGE_ENV_FIELD: '  readonly lagrange: LagrangeRequestClient;',
+  PRINCIPAL_FIELD: '  readonly principal: string | null;',
+  PROMISE_UNKNOWN: 'Promise<unknown>',
+  REQUEST_ID_FIELD: '  readonly requestId: string;',
   ROW_SUFFIX: 'Row',
+  TENANT_FIELD: '  readonly tenant: string | null;',
   TS_BOOLEAN: 'boolean',
   TS_NULL: ' | null',
   TS_NUMBER: 'number',
@@ -77,6 +84,7 @@ const DTS_FRAGMENT = Object.freeze({
 const CLOSE_BRACE = '}';
 const NESTED_CLOSE_BRACE = '  };';
 const UNION_SEPARATOR = ' | ';
+const FETCH_ENTRY_KIND = 'fetch';
 const GENERATED_DOC = Object.freeze({
   ABI_NOTE: 'component ABI; this file never changes runtime behavior.',
   EDITOR_ONLY: '`lagrange service generate`. Editor-level only: JSON ' +
@@ -85,6 +93,10 @@ const GENERATED_DOC = Object.freeze({
   HANDLER_CONTEXT: 'The request-handler collaborator surface.',
   HANDLER_CONTEXTS: 'Per-handler contexts: call() accepts only the ' +
     'operations that handler declared in calls.',
+  LAGRANGE_CLIENT:
+    'Request-scoped Lagrange client injected on `c.env.lagrange` in Hono handlers.',
+  LAGRANGE_ENV:
+    'Hono environment bindings provided by the Lagrange Request Cell host.',
   REGENERATE: 'regenerate with',
   REQUEST: 'The serialized request envelope every http handler receives; ' +
     'body is a JSON record or null when absent.',
@@ -377,6 +389,33 @@ function emitHandlerContexts(handlers) {
   return lines.join(TEXT_NEWLINE);
 }
 
+function emitLagrangeRequestClient(operations) {
+  const handleUnion = operations.length === 0 ?
+    DTS_FRAGMENT.NEVER :
+    operations.map((operation) =>
+      `${DTS_FRAGMENT.HANDLES_NAME}[${JSON.stringify(operation.id)}]`)
+      .join(UNION_SEPARATOR);
+  return [
+    ...doc(GENERATED_DOC.LAGRANGE_CLIENT),
+    `${DTS_FRAGMENT.EXPORT_INTERFACE}${DTS_FRAGMENT.LAGRANGE_CLIENT_NAME} {`,
+    DTS_FRAGMENT.REQUEST_ID_FIELD,
+    DTS_FRAGMENT.TENANT_FIELD,
+    DTS_FRAGMENT.PRINCIPAL_FIELD,
+    `  call(operation: ${handleUnion}, args?: ${DTS_FRAGMENT.ARGS_TYPE}): ` +
+      `${DTS_FRAGMENT.PROMISE_UNKNOWN};`,
+    CLOSE_BRACE,
+  ].join(TEXT_NEWLINE);
+}
+
+function emitLagrangeEnv() {
+  return [
+    ...doc(GENERATED_DOC.LAGRANGE_ENV),
+    `${DTS_FRAGMENT.EXPORT_INTERFACE}${DTS_FRAGMENT.LAGRANGE_ENV_NAME} {`,
+    DTS_FRAGMENT.LAGRANGE_ENV_FIELD,
+    CLOSE_BRACE,
+  ].join(TEXT_NEWLINE);
+}
+
 function typingsSource(ir) {
   const sections = [
     DTS_FRAGMENT.DOC_OPEN,
@@ -411,6 +450,12 @@ function typingsSource(ir) {
     emitHandlerContext(ir.operations), EMPTY_TEXT,
     emitHandlerContexts(ir.handlers || []), EMPTY_TEXT,
   );
+  if (ir.entryKind === FETCH_ENTRY_KIND) {
+    sections.push(
+      emitLagrangeRequestClient(ir.operations), EMPTY_TEXT,
+      emitLagrangeEnv(), EMPTY_TEXT,
+    );
+  }
   return sections.join(TEXT_NEWLINE);
 }
 
