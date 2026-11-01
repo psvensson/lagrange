@@ -20,15 +20,17 @@ import {
   fixtureTargetCell,
   publishFixtureCampaign,
   sealFixtureRun,
+  setFixtureRequestOutcome,
   toNdjson,
   writeFixtureRoot,
 } from '../comparative-benchmark-fixtures.js';
 import {formatNum} from '../comparative-landing-svg-renderer.js';
+import {FAILURE_CLASS, OPERATION_OUTCOME} from '../benchmark-operation-outcome.js';
+import {BENCHMARK_RUN_STATUS} from '../benchmark-scenario-a-run.js';
+import {BENCHMARK_PROFILE_CLASS} from '../benchmark-workload-dispatch.js';
+import {OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS} from '../oltp-scenario-a-semantic-gate.js';
 import {
   EXECUTION_TARGET,
-  FAILURE_CLASS,
-  OPERATION_OUTCOME,
-  PROFILE_CLASS,
   READINESS_STATE,
   RECORD_REJECTION,
   computeV1PayloadDigest,
@@ -93,18 +95,25 @@ describe('raw observation record v2 validator', () => {
     dup.observations.requests[1].opId = dup.observations.requests[0].opId;
     assertRejected(dup, RECORD_REJECTION.DUPLICATE_OP_ID);
     const missing = buildFixtureRun();
-    delete missing.deployment.dataset.logicalChecksum;
+    delete missing.deployment.dataset.verification.expectedLogicalChecksum;
     assertRejected(missing, RECORD_REJECTION.INVALID_TEXT);
     const counts = buildFixtureRun();
     counts.observations.accounting.offered += 1;
-    assertRejected(counts, RECORD_REJECTION.ACCOUNTING_INVARIANT);
+    assertRejected(counts, RECORD_REJECTION.ACCOUNTING_MISMATCH);
+    const contradiction = buildFixtureRun();
+    contradiction.observations.requests[0].completedAtMs = null;
+    assertRejected(contradiction, RECORD_REJECTION.ACCOUNTING_INVARIANT);
     const recount = buildFixtureRun();
     recount.observations.accounting.committed -= 1;
     recount.observations.accounting.unresolved += 1;
     assertRejected(recount, RECORD_REJECTION.ACCOUNTING_MISMATCH);
     const fraction = buildFixtureRun();
-    fraction.deployment.dataset.keyCoverage.present = 9.5;
+    fraction.deployment.dataset.verification.observedTableRows.warehouse = 0.5;
     assertRejected(fraction, RECORD_REJECTION.INVALID_COUNT);
+    const unexplained = buildFixtureRun();
+    setFixtureRequestOutcome(unexplained.observations.requests[0], OPERATION_OUTCOME.UNRESOLVED,
+      null);
+    assertRejected(unexplained, RECORD_REJECTION.INVALID_ENUM);
   });
 
   it('refuses an execution target outside lab and gcp', () => {
@@ -129,8 +138,8 @@ describe('claim admission through the publication path', () => {
     ['readiness exhausted', ADMISSION_REASON.READINESS_UNVERIFIED, (run) => {
       run.deployment.readiness.state = READINESS_STATE.EXHAUSTED;
     }],
-    ['dataset key coverage short', ADMISSION_REASON.DATASET_UNVERIFIED, (run) => {
-      run.deployment.dataset.keyCoverage.present = 4;
+    ['dataset snapshot mismatch', ADMISSION_REASON.DATASET_UNVERIFIED, (run) => {
+      run.deployment.dataset.verification.observedTableRows.warehouse = 0;
     }],
     ['non-canonical retry policy', ADMISSION_REASON.NON_CANONICAL_WORKLOAD, (run) => {
       run.plan.retryPolicyId = 'exponential-backoff-v1';
@@ -189,9 +198,7 @@ describe('claim admission through the publication path', () => {
   it('a run with zero committed operations is a product failure with counts', async () => {
     const runs = arrayMap(pair(), (run) => {
       for (const r of run.observations.requests) {
-        r.outcome = OPERATION_OUTCOME.UNRESOLVED;
-        r.failureClass = FAILURE_CLASS.TRANSPORT_FAILURE;
-        r.attempts[0].outcome = OPERATION_OUTCOME.UNRESOLVED;
+        setFixtureRequestOutcome(r, OPERATION_OUTCOME.UNRESOLVED, FAILURE_CLASS.TRANSPORT_FAILURE);
       }
       return sealFixtureRun(run);
     });
@@ -229,7 +236,8 @@ describe('claim admission through the publication path', () => {
   });
 
   it('a smoke profile never publishes a capacity figure', async () => {
-    const {cell} = await publishedLagrangeCell(() => {}, {profileClass: PROFILE_CLASS.SMOKE});
+    const {cell} = await publishedLagrangeCell(() => {},
+      {profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SMOKE_PROFILE), true);
     assert.equal(cell.metrics.capacity, null);
     assert.equal('committedPerSec' in cell.metrics.runs[0], false);
@@ -253,6 +261,63 @@ describe('claim admission through the publication path', () => {
       const absent = fixtureTargetCell(matrix, LAGRANGE);
       assert.equal(absent.status, CLAIM_CELL_STATUS.NOT_MEASURED);
     });
+});
+
+function setupFailed(run, setup) {
+  for (const r of run.observations.requests) {
+    Object.assign(r, {outcome: OPERATION_OUTCOME.UNISSUED, failureClass: null, attempts: [],
+      issuedAtMs: null, executionStartedAtMs: null, completedAtMs: null, issueLagMs: null,
+      queueDelayMs: null, latencyMs: null});
+  }
+  run.observations.runStatus = BENCHMARK_RUN_STATUS.SETUP_FAILED;
+  run.observations.setup = setup;
+  delete run.observations.window;
+  delete run.observations.executedOperationsDigest;
+  run.correctness = {semanticGate: null, finalState: null};
+  sealFixtureRun(run, {keepPlan: true});
+}
+
+describe('semantic gate by profile class and stopped runs', () => {
+  const incomplete = (run) => {
+    run.correctness.semanticGate.status = OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS.INCOMPLETE;
+    run.correctness.semanticGate.missing = ['durability'];
+  };
+
+  it('a smoke run with an incomplete gate is admitted and says so', async () => {
+    const {cell, readme} = await publishedLagrangeCell(incomplete,
+      {profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
+    assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED);
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SMOKE_PROFILE), true);
+    assert.equal(cell.metrics.capacity, null);
+    assert.equal(stringIncludes(readme, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+  });
+
+  it('a capacity run with an incomplete gate is not admitted', async () => {
+    const {cell} = await publishedLagrangeCell(incomplete);
+    assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
+  });
+
+  it('a setup failure answered by the product (55P03) is a visible product failure',
+    async () => {
+      const {cell, readme} = await publishedLagrangeCell((run) => setupFailed(run, {
+        failureClass: FAILURE_CLASS.PRODUCT_ERROR, sqlState: '55P03', code: '55P03',
+        message: 'lock not available'}), {profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
+      assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE, cell.reasons.join(', '));
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.DATASET_PREPARATION_FAILED),
+        true);
+      assert.equal(cell.metrics.setupFailures[0].sqlState, '55P03');
+      assert.equal(stringIncludes(readme, ADMISSION_REASON.DATASET_PREPARATION_FAILED), true);
+    });
+
+  it('a setup failure of the harness itself is not a product result', async () => {
+    const {cell} = await publishedLagrangeCell((run) => setupFailed(run, {
+      failureClass: FAILURE_CLASS.HARNESS_FAULT, sqlState: null, code: null, message: 'x'}),
+    {profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
+    assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SETUP_HARNESS_FAULT), true);
+  });
 });
 
 describe('status vocabulary and campaign outcome', () => {

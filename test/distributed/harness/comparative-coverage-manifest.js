@@ -8,6 +8,7 @@ import {CLAIM_CELL_STATUS, CLAIM_KIND, ADMISSION_REASON} from './benchmark-claim
 import {BENCHMARK_SCENARIO} from './raw-observation-record.js';
 
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
@@ -15,6 +16,7 @@ const COVERAGE_MANIFEST_ID = 'comparative-coverage-manifest-v1';
 
 const SUBKIND = Object.freeze({
   MAIN: 'main',
+  SMOKE: 'smoke',
   RULE_BACKFILL: 'rule-backfill',
   CACHE_RESTART_RECOVERY: 'cache-restart-recovery',
 });
@@ -100,6 +102,11 @@ const ADVERTISED_TARGETS = Object.freeze(arrayMap([
   Object.freeze({targetId, label, advertisedLabel, category, detailPagePrefix,
     minDistinctHosts})));
 
+// The products of the named Scenario A smoke profile (scenario-a-smoke-v1): it
+// proves the canonical workload ran end to end with per-request correctness and
+// complete accounting, and never carries a capacity figure.
+const SMOKE_TARGETS = Object.freeze([T.LAGRANGE, T.TIDB, T.PG_SINGLE]);
+
 const MIN_HOSTS = new Map(arrayMap(ADVERTISED_TARGETS, (t) => [t.targetId, t.minDistinctHosts]));
 MIN_HOSTS.set(T.LAGRANGE_4, 4);
 
@@ -137,6 +144,10 @@ function buildTargetClaims(targetId) {
     scenarioA: claim(targetId, BENCHMARK_SCENARIO.A, SUBKIND.MAIN, CLAIM_KIND.THROUGHPUT,
       [r('scenario-a')]),
   };
+  if (arrayIncludes(SMOKE_TARGETS, targetId)) {
+    claims['scenarioA/smoke'] = claim(targetId, BENCHMARK_SCENARIO.A, SUBKIND.SMOKE,
+      CLAIM_KIND.THROUGHPUT, []);
+  }
   for (const shape of SCENARIO_B_SHAPES) {
     claims[`scenarioB/${shape}`] = claim(targetId, BENCHMARK_SCENARIO.B, shape,
       CLAIM_KIND.DECISION_THROUGHPUT, [r(shape)], {declared: scenarioBDeclared(targetId)});
@@ -332,6 +343,7 @@ export {
   ADVERTISED_TARGETS,
   COVERAGE_MANIFEST_ID,
   SCENARIO_B_SHAPES,
+  SMOKE_TARGETS,
   TARGET_ID,
   buildCoverageManifest,
   listManifestClaims,

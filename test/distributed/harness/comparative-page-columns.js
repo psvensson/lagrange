@@ -7,6 +7,7 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
 
 const SCENARIO_A_COLUMNS = Object.freeze([column('scenarioA', 'Scenario A')]);
+const SMOKE_COLUMNS = Object.freeze([column('scenarioA/smoke', 'Scenario A smoke')]);
 const SCENARIO_B_COLUMNS = Object.freeze(arrayMap(SCENARIO_B_SHAPES,
   (shape) => column(`scenarioB/${shape}`, `Scenario B ${shape}`)));
 const SCENARIO_C_COLUMNS = Object.freeze([
@@ -38,4 +39,5 @@ export {
   SCENARIO_B_COLUMNS,
   SCENARIO_C_COLUMNS,
   SCENARIO_LINKS,
+  SMOKE_COLUMNS,
 };

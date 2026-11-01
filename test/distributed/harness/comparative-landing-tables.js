@@ -7,7 +7,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import {CLAIM_CELL_STATUS} from './benchmark-claim-admission.js';
-import {TERMINAL_FAILURE_CLASSES} from './raw-observation-record.js';
 import {escapeXml, formatNum, renderStatusGridSvg} from './comparative-landing-svg-renderer.js';
 
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -33,8 +32,8 @@ const STATUS_MEANING = Object.freeze([
 ]);
 
 function formatAccounting(a) {
-  const failures = arrayMap(TERMINAL_FAILURE_CLASSES,
-    (cls) => `${cls} ${a.terminalFailures[cls] ?? 0}`);
+  const failures = arrayMap(Object.entries(a.terminalFailures),
+    ([cls, n]) => `${cls} ${n}`);
   return `offered ${a.offered}, issued ${a.issued}, committed ${a.committed}, ` +
     `conflict-exhausted ${a.conflictExhausted}, ${arrayJoin(failures, ', ')}, ` +
     `unresolved ${a.unresolved}, unissued ${a.unissued}`;

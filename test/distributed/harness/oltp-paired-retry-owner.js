@@ -1,9 +1,15 @@
+import {PG_ERROR_CODE} from '../../../src/runtime/pgwire-protocol-constants.js';
+import {
+  isOltpOutcomeUnknownError as isOutcomeUnknownError,
+  isOltpSqlState,
+  resolveOltpErrorSqlState as resolveSqlState,
+} from './oltp-error-classification.js';
+
 const ZERO = 0;
 const ONE = 1;
 const TWO = 2;
 
-const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/u;
-const SERIALIZATION_FAILURE_SQLSTATE = '40001';
+const SERIALIZATION_FAILURE_SQLSTATE = PG_ERROR_CODE.SERIALIZATION_FAILURE;
 const RETRY_OUTCOME = Object.freeze({
   SERIALIZATION_CONFLICT: 'serialization_conflict',
   TERMINAL_FAILURE: 'terminal_failure',
@@ -13,7 +19,6 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
-const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
 
 const OLTP_PAIRED_RETRY_POLICY = Object.freeze({
   id: 'scenario-a-retry-v1',
@@ -24,27 +29,6 @@ const OLTP_PAIRED_RETRY_POLICY = Object.freeze({
   ambiguousCommitIsFailure: true,
   adapterRetriesAllowed: false,
 });
-
-function normalizeSqlState(value) {
-  if (typeof value !== 'string') return null;
-  const normalized = stringToUpperCase(value);
-  return SQLSTATE_PATTERN.test(normalized) ? normalized : null;
-}
-
-function resolveSqlState(error) {
-  for (const value of [error?.sqlState, error?.sqlstate, error?.code]) {
-    const sqlState = normalizeSqlState(value);
-    if (sqlState) return sqlState;
-  }
-  return null;
-}
-
-function isOutcomeUnknownError(error) {
-  return error?.commitOutcomeUnknown === true ||
-    error?.outcome === 'OUTCOME_UNKNOWN' ||
-    error?.code === 'OUTCOME_UNKNOWN' ||
-    error?.errorCode === 'OUTCOME_UNKNOWN';
-}
 
 function classifyOltpAttemptError(
   error,
@@ -97,7 +81,7 @@ function validatePolicy(policy) {
   }
   validatePolicyDelays(policy);
   if (!Array.isArray(policy?.retryableSqlStates) ||
-      arraySome(policy.retryableSqlStates, (value) => !normalizeSqlState(value))) {
+      arraySome(policy.retryableSqlStates, (value) => !isOltpSqlState(value))) {
     throw new Error('OLTP paired retry owner requires valid retryable SQLSTATEs');
   }
 }

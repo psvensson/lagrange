@@ -23,7 +23,9 @@ import {
   regenerateAllBenchmarkArtifactsFromAdmitted,
 } from '../../test/distributed/harness/raw-observation-campaign-specs.js';
 import {readRawObservationSources} from '../../test/distributed/harness/raw-observation-store.js';
-import {PROFILE_CLASS} from '../../test/distributed/harness/raw-observation-record.js';
+import {
+  BENCHMARK_PROFILE_CLASS,
+} from '../../test/distributed/harness/benchmark-workload-dispatch.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arraySome = Function.call.bind(Array.prototype.some);
@@ -112,7 +114,8 @@ function checkPublishedCells(matrix) {
       differ(`${where}: a published numeric cell is covered by the invalidation ledger`);
     }
     const carriesCapacity = (m) => arraySome(CAPACITY_RUN_FIELDS, (field) => field in m);
-    if (cell.metrics?.profileClass === PROFILE_CLASS.SMOKE && (cell.metrics.capacity !== null ||
+    const isSmoke = cell.metrics?.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE;
+    if (isSmoke && (cell.metrics.capacity !== null ||
         arraySome(cell.metrics.runs, carriesCapacity))) {
       differ(`${where}: a smoke run carries a capacity figure`);
     }

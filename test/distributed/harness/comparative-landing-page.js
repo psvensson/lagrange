@@ -9,11 +9,20 @@ import {
   buildTargetSection,
   writeClaimPageArtifacts,
 } from './comparative-landing-tables.js';
-import {ALL_TARGET_IDS, OVERVIEW_COLUMNS, SCENARIO_LINKS} from './comparative-page-columns.js';
+import {
+  BENCHMARK_OPERATION_FAMILY,
+  BENCHMARK_WORKLOAD_PROFILE,
+} from './benchmark-workload-dispatch.js';
+import {SMOKE_TARGETS} from './comparative-coverage-manifest.js';
+import {
+  ALL_TARGET_IDS, OVERVIEW_COLUMNS, SCENARIO_LINKS, SMOKE_COLUMNS,
+} from './comparative-page-columns.js';
 import {renderScenarioSetupBreakdownSvg} from './scenario-setup-breakdown-renderer.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
 
+const SMOKE_PROFILE_ID =
+  BENCHMARK_WORKLOAD_PROFILE[BENCHMARK_OPERATION_FAMILY.SCENARIO_A_SMOKE].id;
 const DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH = 'docs/benchmarks/comparative-overview.svg';
 const DEFAULT_COMPARATIVE_LANDING_MD_PATH = 'docs/benchmarks/README.md';
 const DEFAULT_COMPARATIVE_LANDING_HTML_PATH = 'docs/benchmarks/index.html';
@@ -48,6 +57,11 @@ function buildComparativeLandingPage(matrix) {
       buildTargetSection(matrix, {heading: 'Advertised configurations', columns: OVERVIEW_COLUMNS,
         targetIds: ALL_TARGET_IDS,
         description: 'Configuration labels describe what the deployer starts.'}),
+      buildTargetSection(matrix, {heading: 'Scenario A smoke runs', columns: SMOKE_COLUMNS,
+        targetIds: SMOKE_TARGETS,
+        description: `The named smoke profile ${SMOKE_PROFILE_ID}: the canonical workload ` +
+          'executed end to end with per-request correctness and complete accounting. A smoke ' +
+          'cell never carries throughput, latency quantiles or a ratio.'}),
       buildExperimentSection(matrix, 'scenario-setup-breakdown',
         'Phase timings are admitted only from observed spans.'),
     ],
@@ -61,7 +75,7 @@ async function writeComparativeLandingArtifacts({matrix, svgPath, setupBreakdown
   markdownPath, htmlPath}) {
   const page = buildComparativeLandingPage(matrix);
   const rendered = await writeClaimPageArtifacts(
-    {...page, sections: page.sections.slice(0, 1)}, {svgPath});
+    {...page, sections: page.sections.slice(0, 2)}, {svgPath});
   await writeClaimPageArtifacts(page, {markdownPath, htmlPath});
   if (setupBreakdownSvgPath) {
     await fs.mkdir(path.dirname(setupBreakdownSvgPath), {recursive: true});

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2495,
+    "ordinary": 2498,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2512,
-  "digest": "fnv1a32-d7526cf7",
+  "censusSize": 2515,
+  "digest": "fnv1a32-4ea12a31",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -811,6 +811,7 @@
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-claim-admission.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": "ordinary",
+    "test/distributed/harness/__tests__/benchmark-operation-outcome.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-partition-convergence.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js": "ordinary",
     "test/distributed/harness/__tests__/benchmark-resource-live-observation-authority.test.js": "ordinary",
@@ -931,6 +932,8 @@
     "test/distributed/harness/__tests__/publication-convergence-claim.test.js": "ordinary",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "ordinary",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "ordinary",
+    "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "ordinary",
+    "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": "ordinary",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "ordinary",
     "test/distributed/harness/__tests__/report-writer.property.test.js": "ordinary",
     "test/distributed/harness/__tests__/report-writer.test.js": "ordinary",

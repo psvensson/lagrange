@@ -8,7 +8,14 @@
 import {createHash} from 'node:crypto';
 
 import {digest, serializeJsonData} from '../../../src/utils/canonical-json-data.js';
-import {OLTP_SCENARIO_A_SEMANTIC_PROFILE} from './oltp-scenario-a-semantic-profile.js';
+import {
+  FAILURE_CLASS,
+  OPERATION_OUTCOME,
+  validateBenchmarkAccounting,
+} from './benchmark-operation-outcome.js';
+import {OLTP_DATASET_VERIFICATION_STATUS} from './benchmark-oltp-state-reconciliation.js';
+import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
+import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -52,39 +59,20 @@ const BENCHMARK_SCENARIO = Object.freeze({
   C: 'scenarioC',
 });
 
-const PROFILE_OUTCOME = OLTP_SCENARIO_A_SEMANTIC_PROFILE.outcomes;
-
-// Shared outcome words come from the semantic profile; the accounting
-// subclasses the profile leaves to the harness are added here.
-const OPERATION_OUTCOME = Object.freeze({
-  COMMITTED: PROFILE_OUTCOME.success,
-  SERIALIZATION_CONFLICT: PROFILE_OUTCOME.retryableConflict,
-  TERMINAL_FAILURE: PROFILE_OUTCOME.terminalFailure,
-  UNRESOLVED: 'unresolved',
-  UNISSUED: 'unissued',
-});
-
-// Failure classes are displayed separately and never summed into one "failures"
-// figure (model challenge amendment 5).
-const FAILURE_CLASS = Object.freeze({
-  PRODUCT_ERROR: 'product_error',
-  CORRECTNESS_FAILURE: 'correctness_failure',
-  TRANSPORT_FAILURE: 'transport_failure',
-  HARNESS_FAULT: 'harness_fault',
-  AMBIGUOUS_COMMIT: 'ambiguous_commit',
-});
-
-const TERMINAL_FAILURE_CLASSES = Object.freeze([
-  FAILURE_CLASS.PRODUCT_ERROR,
-  FAILURE_CLASS.CORRECTNESS_FAILURE,
+// Outcome words and failure classes are owned by benchmark-operation-outcome.js.
+// An unresolved request names why it is unresolved; null is refused.
+const UNRESOLVED_FAILURE_CLASSES = Object.freeze(arrayFilter([
+  FAILURE_CLASS.AMBIGUOUS_COMMIT,
   FAILURE_CLASS.TRANSPORT_FAILURE,
-  FAILURE_CLASS.HARNESS_FAULT,
-]);
+  FAILURE_CLASS.WATCHDOG_STOPPED,
+], (cls) => typeof cls === 'string'));
 
-// A smoke profile proves end-to-end execution, correctness and accounting only; it
-// never publishes a capacity figure. Capacity runs are subject to the admission
-// owner's sufficiency rule.
-const PROFILE_CLASS = Object.freeze({SMOKE: 'smoke', CAPACITY: 'capacity'});
+// Runs that ended before a measurement window: their requests are all unissued
+// and they carry no window or executed-operations digest.
+const RUNS_WITHOUT_WINDOW = Object.freeze([
+  BENCHMARK_RUN_STATUS.SETUP_FAILED,
+  BENCHMARK_RUN_STATUS.WARMUP_FAILED,
+]);
 
 const CLOSURE_STATUS = Object.freeze({COMPLETE: 'complete', INCOMPLETE: 'incomplete'});
 
@@ -102,11 +90,6 @@ const FINAL_STATE_TABLE = Object.freeze({
   HISTORY: 'history',
   NEW_ORDER: 'new_order',
 });
-
-const UNRESOLVED_FAILURE_CLASSES = Object.freeze([
-  FAILURE_CLASS.AMBIGUOUS_COMMIT,
-  FAILURE_CLASS.TRANSPORT_FAILURE,
-]);
 
 const HEADER_FIELD = Object.freeze({
   RECORD_TYPE: 'recordType',
@@ -199,6 +182,8 @@ const OBSERVATIONS_FIELD = Object.freeze({
   RESOURCES: 'resources',
   NETWORK: 'network',
   EXECUTED_OPERATIONS_DIGEST: 'executedOperationsDigest',
+  RUN_STATUS: 'runStatus',
+  SETUP: 'setup',
 });
 
 const ACCOUNTING_FIELD = Object.freeze({
@@ -378,12 +363,17 @@ function validatePlan(plan) {
     PLAN_FIELD.MANIFEST_DIGEST, PLAN_FIELD.DATASET_DIGEST, PLAN_FIELD.WORKLOAD_PLAN_DIGEST,
     PLAN_FIELD.MEASUREMENT_PLAN_DIGEST, PLAN_FIELD.SEMANTIC_PROFILE_ID,
     PLAN_FIELD.SEMANTIC_PROFILE_DIGEST, PLAN_FIELD.RETRY_POLICY_ID,
-    PLAN_FIELD.OPEN_LOOP_PROFILE_ID, PLAN_FIELD.SWEEP_PLAN_DIGEST,
+    PLAN_FIELD.OPEN_LOOP_PROFILE_ID,
   ]) {
     requireText(plan[field], `plan.${field}`);
   }
+  // A smoke run has no sweep plan; admission requires one for capacity runs.
+  if (plan[PLAN_FIELD.SWEEP_PLAN_DIGEST] !== null) {
+    requireText(plan[PLAN_FIELD.SWEEP_PLAN_DIGEST], 'plan.sweepPlanDigest');
+  }
   requireTiming(plan[PLAN_FIELD.OFFERED_RATE_PER_SEC], 'plan.offeredRatePerSec');
-  requireEnum(plan[PLAN_FIELD.PROFILE_CLASS], objectValues(PROFILE_CLASS), 'plan.profileClass');
+  requireEnum(plan[PLAN_FIELD.PROFILE_CLASS], objectValues(BENCHMARK_PROFILE_CLASS),
+    'plan.profileClass');
   requireText(plan[PLAN_FIELD.OPERATION_SLICE_DIGEST], 'plan.operationSliceDigest');
   const planned = requireObject(plan[PLAN_FIELD.PLANNED_OPERATION_COUNTS],
     'plan.plannedOperationCounts');
@@ -407,17 +397,27 @@ function validateHosts(hosts, at) {
   });
 }
 
+function validateTableRows(rows, at) {
+  requireObject(rows, at);
+  for (const [table, n] of Object.entries(rows)) requireCount(n, `${at}.${table}`);
+}
+
+// Dataset evidence is the product-content snapshot verification of
+// benchmark-oltp-state-reconciliation.js (verifyOltpLoadedDataset).
 function validateDataset(dataset) {
   requireObject(dataset, 'deployment.dataset');
-  requireArray(dataset.tables, 'deployment.dataset.tables').forEach((t, idx) => {
-    requireText(t.table, `deployment.dataset.tables[${idx}].table`);
-    requireCount(t.rows, `deployment.dataset.tables[${idx}].rows`);
-  });
-  const coverage = requireObject(dataset.keyCoverage, 'deployment.dataset.keyCoverage');
-  requireCount(coverage.expected, 'deployment.dataset.keyCoverage.expected');
-  requireCount(coverage.present, 'deployment.dataset.keyCoverage.present');
-  requireText(dataset.logicalChecksum, 'deployment.dataset.logicalChecksum');
   requireText(dataset.resetMethod, 'deployment.dataset.resetMethod');
+  const v = requireObject(dataset.verification, 'deployment.dataset.verification');
+  requireEnum(v.status, objectValues(OLTP_DATASET_VERIFICATION_STATUS),
+    'deployment.dataset.verification.status');
+  requireText(v.method, 'deployment.dataset.verification.method');
+  requireText(v.expectedLogicalChecksum, 'deployment.dataset.verification.expectedLogicalChecksum');
+  validateTableRows(v.expectedTableRows, 'deployment.dataset.verification.expectedTableRows');
+  if (v.status !== OLTP_DATASET_VERIFICATION_STATUS.UNOBSERVED) {
+    requireText(v.observedLogicalChecksum,
+      'deployment.dataset.verification.observedLogicalChecksum');
+    validateTableRows(v.observedTableRows, 'deployment.dataset.verification.observedTableRows');
+  }
 }
 
 function validateEndpointAndLoadGenerator(deployment) {
@@ -465,119 +465,46 @@ function validateDeployment(deployment) {
   requireNullableObject(deployment[DEPLOYMENT_FIELD.PLACEMENT] ?? null, 'deployment.placement');
 }
 
-function validateAttempt(attempt, at) {
-  requireObject(attempt, at);
-  requireCount(attempt[ATTEMPT_FIELD.ATTEMPT_NO], `${at}.attemptNo`);
-  const started = requireTiming(attempt[ATTEMPT_FIELD.STARTED_MS], `${at}.startedMs`);
-  const ended = requireTiming(attempt[ATTEMPT_FIELD.ENDED_MS], `${at}.endedMs`);
-  if (ended < started) reject(RECORD_REJECTION.INVALID_TIMING, `${at} ends before it starts`);
-  requireEnum(attempt[ATTEMPT_FIELD.OUTCOME], [
-    OPERATION_OUTCOME.COMMITTED, OPERATION_OUTCOME.SERIALIZATION_CONFLICT,
-    OPERATION_OUTCOME.TERMINAL_FAILURE, OPERATION_OUTCOME.UNRESOLVED,
-  ], `${at}.outcome`);
-  requireText(attempt[ATTEMPT_FIELD.RESPONSE_DIGEST], `${at}.responseDigest`);
+function validateAttemptTimings(attempts, at) {
+  attempts.forEach((attempt, idx) => {
+    requireObject(attempt, `${at}[${idx}]`);
+    const started = requireTiming(attempt[ATTEMPT_FIELD.STARTED_MS], `${at}[${idx}].startedMs`);
+    const ended = requireTiming(attempt[ATTEMPT_FIELD.ENDED_MS], `${at}[${idx}].endedMs`);
+    if (ended < started) reject(RECORD_REJECTION.INVALID_TIMING, `${at}[${idx}] ends early`);
+    requireText(attempt[ATTEMPT_FIELD.RESPONSE_DIGEST], `${at}[${idx}].responseDigest`);
+  });
 }
 
-function validateRequestFailureClass(request, at) {
-  const outcome = request[REQUEST_FIELD.OUTCOME];
-  const failureClass = request[REQUEST_FIELD.FAILURE_CLASS];
-  if (outcome === OPERATION_OUTCOME.TERMINAL_FAILURE) {
-    requireEnum(failureClass, TERMINAL_FAILURE_CLASSES, `${at}.failureClass`);
-  } else if (outcome === OPERATION_OUTCOME.UNRESOLVED) {
-    requireEnum(failureClass, UNRESOLVED_FAILURE_CLASSES, `${at}.failureClass`);
-  } else if (failureClass !== undefined && failureClass !== null) {
-    reject(RECORD_REJECTION.INVALID_ENUM, `${at}.failureClass only accompanies a failure`);
-  }
-}
-
-function validateRequest(request, at, seenOpIds) {
-  requireObject(request, at);
-  const opId = requireText(request[REQUEST_FIELD.OP_ID], `${at}.opId`);
-  if (seenOpIds.has(opId)) reject(RECORD_REJECTION.DUPLICATE_OP_ID, `${at}.opId ${opId}`);
-  seenOpIds.add(opId);
-  const outcome = requireEnum(request[REQUEST_FIELD.OUTCOME], objectValues(OPERATION_OUTCOME),
-    `${at}.outcome`);
-  requireText(request[REQUEST_FIELD.OPERATION_KIND], `${at}.operationKind`);
-  requireTiming(request[REQUEST_FIELD.INTENDED_START_MS], `${at}.intendedStartMs`);
-  validateRequestFailureClass(request, at);
-  const attempts = requireArray(request[REQUEST_FIELD.ATTEMPTS], `${at}.attempts`);
-  attempts.forEach((a, idx) => validateAttempt(a, `${at}.attempts[${idx}]`));
-  if ((outcome === OPERATION_OUTCOME.UNISSUED) !== (attempts.length === 0)) {
-    reject(RECORD_REJECTION.ACCOUNTING_INVARIANT,
-      `${at}: exactly the unissued requests have no attempts`);
-  }
-  if (outcome !== OPERATION_OUTCOME.UNISSUED) {
-    requireObject(request[REQUEST_FIELD.RESPONSE_EVIDENCE], `${at}.responseEvidence`);
-    requireObject(request[REQUEST_FIELD.EFFECT_SUMMARY], `${at}.effectSummary`);
-    if (attempts[0][ATTEMPT_FIELD.STARTED_MS] < request[REQUEST_FIELD.INTENDED_START_MS]) {
-      reject(RECORD_REJECTION.INVALID_TIMING, `${at} starts before its intended issue time`);
+// Typed record-level checks; every other request invariant is owned by
+// validateBenchmarkAccounting (benchmark-operation-outcome.js).
+function validateRequests(requests) {
+  const seen = new Set();
+  requests.forEach((request, idx) => {
+    const at = `observations.requests[${idx}]`;
+    requireObject(request, at);
+    const opId = requireText(request[REQUEST_FIELD.OP_ID], `${at}.opId`);
+    if (seen.has(opId)) reject(RECORD_REJECTION.DUPLICATE_OP_ID, `${at}.opId ${opId}`);
+    seen.add(opId);
+    requireTiming(request[REQUEST_FIELD.INTENDED_START_MS], `${at}.intendedStartMs`);
+    validateAttemptTimings(requireArray(request[REQUEST_FIELD.ATTEMPTS], `${at}.attempts`),
+      `${at}.attempts`);
+    if (request[REQUEST_FIELD.OUTCOME] === OPERATION_OUTCOME.UNRESOLVED) {
+      requireEnum(request[REQUEST_FIELD.FAILURE_CLASS], UNRESOLVED_FAILURE_CLASSES,
+        `${at}.failureClass`);
     }
-  }
+  });
 }
 
-function emptyTerminalFailures() {
-  return Object.fromEntries(arrayMap(TERMINAL_FAILURE_CLASSES, (cls) => [cls, 0]));
-}
-
-// Accounting recounted from the logical request records: the only source of truth.
 function recountAccounting(requests) {
-  const counts = {
-    offered: requests.length, issued: 0, unissued: 0, attempts: 0, committed: 0, conflicts: 0,
-    conflictExhausted: 0, terminalFailures: emptyTerminalFailures(), unresolved: 0,
-  };
-  for (const request of requests) {
-    const outcome = request[REQUEST_FIELD.OUTCOME];
-    const attempts = request[REQUEST_FIELD.ATTEMPTS];
-    counts.attempts += attempts.length;
-    counts.conflicts += arrayFilter(attempts,
-      (a) => a.outcome === OPERATION_OUTCOME.SERIALIZATION_CONFLICT).length;
-    if (outcome === OPERATION_OUTCOME.UNISSUED) {
-      counts.unissued += 1;
-      continue;
-    }
-    counts.issued += 1;
-    if (outcome === OPERATION_OUTCOME.COMMITTED) counts.committed += 1;
-    if (outcome === OPERATION_OUTCOME.SERIALIZATION_CONFLICT) counts.conflictExhausted += 1;
-    if (outcome === OPERATION_OUTCOME.UNRESOLVED) counts.unresolved += 1;
-    if (outcome === OPERATION_OUTCOME.TERMINAL_FAILURE) {
-      counts.terminalFailures[request[REQUEST_FIELD.FAILURE_CLASS]] += 1;
-    }
-  }
-  return counts;
-}
-
-function sumTerminalFailures(terminalFailures) {
-  let total = 0;
-  for (const cls of TERMINAL_FAILURE_CLASSES) total += terminalFailures[cls];
-  return total;
-}
-
-function validateAccountingBlock(accounting) {
-  requireObject(accounting, 'observations.accounting');
-  for (const field of objectValues(ACCOUNTING_FIELD)) {
-    if (field === ACCOUNTING_FIELD.TERMINAL_FAILURES) continue;
-    requireCount(accounting[field], `observations.accounting.${field}`);
-  }
-  const failures = requireObject(accounting[ACCOUNTING_FIELD.TERMINAL_FAILURES],
-    'observations.accounting.terminalFailures');
-  for (const cls of TERMINAL_FAILURE_CLASSES) {
-    requireCount(failures[cls], `observations.accounting.terminalFailures.${cls}`);
-  }
-  if (accounting.offered !== accounting.issued + accounting.unissued) {
-    reject(RECORD_REJECTION.ACCOUNTING_INVARIANT, 'offered != issued + unissued');
-  }
-  const resolved = accounting.committed + accounting.conflictExhausted +
-    sumTerminalFailures(failures) + accounting.unresolved;
-  if (accounting.issued !== resolved) {
-    reject(RECORD_REJECTION.ACCOUNTING_INVARIANT,
-      'issued != committed + conflictExhausted + terminalFailures + unresolved');
-  }
-  if (accounting.attempts < accounting.issued) {
-    reject(RECORD_REJECTION.ACCOUNTING_INVARIANT, 'attempts < issued');
+  try {
+    return validateBenchmarkAccounting(requests);
+  } catch (err) {
+    return reject(RECORD_REJECTION.ACCOUNTING_INVARIANT, err.message);
   }
 }
 
 function validateAccountingMatchesRequests(accounting, requests) {
+  requireObject(accounting, 'observations.accounting');
   const recount = recountAccounting(requests);
   if (serializeJsonData(recount, {sortKeys: true}) !==
       serializeJsonData(accounting, {sortKeys: true})) {
@@ -597,12 +524,22 @@ function validateWindow(window) {
 
 function validateObservations(observations) {
   requireObject(observations, RUN_FIELD.OBSERVATIONS);
+  const runStatus = requireEnum(observations[OBSERVATIONS_FIELD.RUN_STATUS],
+    objectValues(BENCHMARK_RUN_STATUS), 'observations.runStatus');
   const requests = requireArray(observations[OBSERVATIONS_FIELD.REQUESTS],
     'observations.requests');
-  const seen = new Set();
-  requests.forEach((r, idx) => validateRequest(r, `observations.requests[${idx}]`, seen));
-  validateAccountingBlock(observations[OBSERVATIONS_FIELD.ACCOUNTING]);
+  validateRequests(requests);
   validateAccountingMatchesRequests(observations[OBSERVATIONS_FIELD.ACCOUNTING], requests);
+  if (arrayIncludes(RUNS_WITHOUT_WINDOW, runStatus)) {
+    if (observations.accounting.issued !== 0) {
+      reject(RECORD_REJECTION.ACCOUNTING_INVARIANT, `${runStatus} run issued requests`);
+    }
+    if (runStatus === BENCHMARK_RUN_STATUS.SETUP_FAILED) {
+      const setup = requireObject(observations[OBSERVATIONS_FIELD.SETUP], 'observations.setup');
+      requireText(setup.failureClass, 'observations.setup.failureClass');
+    }
+    return;
+  }
   validateWindow(observations[OBSERVATIONS_FIELD.WINDOW]);
   requireText(observations[OBSERVATIONS_FIELD.EXECUTED_OPERATIONS_DIGEST],
     'observations.executedOperationsDigest');
@@ -638,17 +575,6 @@ function validateCorrectness(correctness) {
       }
     }
   }
-}
-
-// Digest over the ordered issued operations ({opId, operationKind}); the planner
-// computes the same digest over the slice a rate/repetition is planned to issue.
-function computeExecutedOperationsDigest(requests) {
-  const issued = arrayFilter(requests,
-    (r) => r[REQUEST_FIELD.OUTCOME] !== OPERATION_OUTCOME.UNISSUED);
-  return digest(arrayMap(issued, (r) => ({
-    opId: r[REQUEST_FIELD.OP_ID],
-    operationKind: r[REQUEST_FIELD.OPERATION_KIND],
-  })));
 }
 
 function digestedRunContent(run) {
@@ -768,16 +694,13 @@ export {
   DEPLOYMENT_EVENT_KIND,
   DEPLOYMENT_FIELD,
   EXECUTION_TARGET,
-  FAILURE_CLASS,
   FINAL_STATE_TABLE,
   HEADER_FIELD,
   IDENTITY_FIELD,
   NETWORK_SCOPE,
   OBSERVATIONS_FIELD,
-  OPERATION_OUTCOME,
   PLAN_FIELD,
   PRODUCT_FIELD,
-  PROFILE_CLASS,
   RAW_OBSERVATION_SCHEMA,
   RAW_RECORD_TYPE,
   READINESS_STATE,
@@ -786,14 +709,11 @@ export {
   RUN_FIELD,
   RawObservationRecordError,
   STORAGE_KIND,
-  TERMINAL_FAILURE_CLASSES,
   WINDOW_FIELD,
   buildClaimKey,
-  computeExecutedOperationsDigest,
   computeRunObservationsDigest,
   computeV1PayloadDigest,
   parseRawObservationText,
-  recountAccounting,
   validateCampaignHeader,
   validateRunRecord,
 };

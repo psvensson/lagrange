@@ -149,7 +149,10 @@ const proofs = arrayMap(ready.cases, (proofCase) => Object.freeze({
   artifactSha256: ARTIFACT_SHA256,
   proofIds: proofCase.proofIds,
 }));
-const gate = buildScenarioASemanticGateEvidence({proofs});
+const gate = buildScenarioASemanticGateEvidence({
+  systems: [OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV, OLTP_SCENARIO_A_SYSTEM.LAGRANGE],
+  proofs,
+});
 const lagrange = gate.systems[OLTP_SCENARIO_A_SYSTEM.LAGRANGE];
 assert.deepEqual(lagrange.failedProofIds, []);
 assert.deepEqual(lagrange.missingProofIds, []);

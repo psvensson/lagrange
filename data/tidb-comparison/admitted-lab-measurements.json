@@ -4303,6 +4303,21 @@
       "metrics": null
     },
     {
+      "claimKey": "lagrange/scenarioA/smoke",
+      "claimKind": "throughput",
+      "status": "not-measured",
+      "reasons": [
+        "no-observation"
+      ],
+      "defectIds": [],
+      "evidence": {
+        "runIds": [],
+        "rawObservationsDigests": [],
+        "forensic": []
+      },
+      "metrics": null
+    },
+    {
       "claimKey": "lagrange/scenarioB/fan-out",
       "claimKind": "decision-throughput",
       "status": "blocked",
@@ -7068,6 +7083,21 @@
       "metrics": null
     },
     {
+      "claimKey": "pg-single-primary/scenarioA/smoke",
+      "claimKind": "throughput",
+      "status": "not-measured",
+      "reasons": [
+        "no-observation"
+      ],
+      "defectIds": [],
+      "evidence": {
+        "runIds": [],
+        "rawObservationsDigests": [],
+        "forensic": []
+      },
+      "metrics": null
+    },
+    {
       "claimKey": "pg-single-primary/scenarioB/fan-out",
       "claimKind": "decision-throughput",
       "status": "invalid-measurement",
@@ -9017,6 +9047,21 @@
             ]
           }
         ]
+      },
+      "metrics": null
+    },
+    {
+      "claimKey": "tidb-tikv/scenarioA/smoke",
+      "claimKind": "throughput",
+      "status": "not-measured",
+      "reasons": [
+        "no-observation"
+      ],
+      "defectIds": [],
+      "evidence": {
+        "runIds": [],
+        "rawObservationsDigests": [],
+        "forensic": []
       },
       "metrics": null
     },

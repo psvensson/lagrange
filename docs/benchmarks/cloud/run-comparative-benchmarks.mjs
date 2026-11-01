@@ -48,9 +48,6 @@ import {
   measureRealBackfillAndRecovery,
   removeTcNetemDelay,
 } from '../../../test/distributed/harness/real-product-cluster-deployers.js';
-import {
-  buildWorkloadDriverScript,
-} from '../../../test/distributed/harness/real-product-workload-drivers.js';
 
 const execFileAsync = promisify(execFile);
 const REPO_ROOT = path.resolve(
@@ -256,24 +253,6 @@ async function collectHostMetadata(opts) {
   return {hostMetaByIp, physicalHosts};
 }
 
-async function readClusterNetBytes(clusterHosts, hostMetaByIp, opts) {
-  const byHost = {};
-  let total = 0;
-  await Promise.all(clusterHosts.map(async (ip) => {
-    const hm = hostMetaByIp.get(ip);
-    const iface = hm?.primaryIface || 'eth0';
-    const out = await sshRun(
-      ip,
-      opts,
-      `awk -v dev="${iface}:" '$1 == dev {print $2 + $10}' /proc/net/dev`,
-    );
-    const val = Number(out.split('\n')[0] || 0);
-    byHost[ip] = val;
-    total += val;
-  }));
-  return {total, byHost};
-}
-
 async function cleanContainers(opts) {
   await cleanClusterContainers(opts.hosts, sshRun, opts);
 }
@@ -307,59 +286,16 @@ async function deployCluster(spec, opts) {
   throw new Error(`Unsupported cluster deployment for targetId: ${spec.targetId}`);
 }
 
-async function runRemoteWorkload({
-  clientIp,
-  clusterHosts,
-  hostMetaByIp,
-  opts,
-  targetId,
-  scenario,
-  subkind,
-  endpoints,
-  totalOps,
-  concurrency,
-  payloadConfig,
-}) {
-  const netBefore = await readClusterNetBytes(clusterHosts, hostMetaByIp, opts);
-  const startedAtIso = new Date().toISOString();
-  const driverScript = buildWorkloadDriverScript({
-    targetId,
-    scenario,
-    subkind,
-    endpoints,
-    totalOps,
-    concurrency,
-    payloadConfig,
-  });
-  const b64 = Buffer.from(driverScript, 'utf8').toString('base64');
-  const out = await sshRun(
-    clientIp,
-    opts,
-    'docker run --rm --network host ' +
-    '-v /tmp/bench-deps/node_modules:/bench-deps/node_modules:ro ' +
-    '-e NODE_PATH=/app/node_modules:/bench-deps/node_modules ' +
-    `--entrypoint /nodejs/bin/node ${opts.lagrangeImage} ` +
-    `-e "eval(Buffer.from('${b64}','base64').toString('utf8'))"`,
-    180000,
+// The base64-evaluated driver script ran inside the product image and is
+// deleted (defect ledger D01-D03, D06, D07, D09, D11, D24). The load
+// generator now runs `node test/distributed/harness/run-benchmark-workload.js
+// --manifest <json> --out <ndjson>` from a harness checkout on the lab/GCP
+// worker; stream B2 wires this runner to it. Until then this path refuses.
+async function runRemoteWorkload() {
+  throw new Error(
+    'runRemoteWorkload is replaced by test/distributed/harness/run-benchmark-workload.js ' +
+    '(executeBenchmarkWorkload); the generated driver script is deleted',
   );
-  const endedAtIso = new Date().toISOString();
-  const netAfter = await readClusterNetBytes(clusterHosts, hostMetaByIp, opts);
-  const parsed = JSON.parse(out.split('\n').pop());
-  return {
-    startedAtIso,
-    endedAtIso,
-    elapsedMs: parsed.elapsedMs,
-    totalAttempts: parsed.totalAttempts,
-    completed: parsed.completed,
-    failures: parsed.failures,
-    timeouts: parsed.timeouts,
-    clientWireBytesTotal: parsed.clientWireBytesTotal,
-    netCountersBefore: netBefore,
-    netCountersAfter: netAfter,
-    latenciesMs: parsed.latenciesMs,
-    phaseSumsMs: parsed.phaseSumsMs,
-    phaseSampleCount: parsed.phaseSampleCount,
-  };
 }
 
 function makeRawRecord({

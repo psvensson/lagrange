@@ -10,21 +10,30 @@ import {COMPARATIVE_PARITY_STATUS} from './comparative-efficiency-evidence-contr
 import {OLTP_OPERATION_KIND} from './oltp-baseline-workload.js';
 import {OLTP_OPEN_LOOP_PROFILE} from './oltp-open-loop-step-owner.js';
 import {OLTP_PAIRED_RETRY_POLICY} from './oltp-paired-retry-owner.js';
-import {OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS} from './oltp-scenario-a-semantic-gate.js';
+import {OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS as GATE_STATUS} from
+  './oltp-scenario-a-semantic-gate.js';
 import {
   OLTP_SCENARIO_A_SEMANTIC_PROFILE,
   hashScenarioASemanticProfile,
 } from './oltp-scenario-a-semantic-profile.js';
 import {
+  OLTP_DATASET_VERIFICATION_STATUS,
+  OLTP_RECONCILIATION_STATUS,
+} from './benchmark-oltp-state-reconciliation.js';
+import {
+  FAILURE_CLASS,
+  OPERATION_OUTCOME,
+  computeExecutedOperationsDigest,
+} from './benchmark-operation-outcome.js';
+import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
+import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
+import {
   BENCHMARK_SCENARIO,
   CLOSURE_STATUS,
   DEPLOYMENT_EVENT_KIND,
   FINAL_STATE_TABLE,
-  OPERATION_OUTCOME,
   PRODUCT_FIELD,
-  PROFILE_CLASS,
   READINESS_STATE,
-  computeExecutedOperationsDigest,
   computeRunObservationsDigest,
   validateRunRecord,
 } from './raw-observation-record.js';
@@ -102,6 +111,12 @@ const ADMISSION_REASON = Object.freeze({
   SEMANTIC_GATE_NOT_PASSED: 'semantic-gate-not-passed',
   SEMANTIC_GATE_UNBOUND: 'semantic-gate-unbound',
   SEMANTIC_GATE_FAILED: 'semantic-gate-failed',
+  SEMANTIC_GATE_INCOMPLETE: 'semantic-gate-incomplete',
+  SWEEP_PLAN_MISSING: 'sweep-plan-missing',
+  DATASET_PREPARATION_FAILED: 'dataset-preparation-failed',
+  SETUP_HARNESS_FAULT: 'setup-harness-fault',
+  WARMUP_FAILED: 'warmup-failed',
+  WATCHDOG_STOPPED: 'watchdog-stopped',
   TOPOLOGY_MISMATCH: 'topology-mismatch',
   DELAY_OR_BYTE_FORMULA: 'delay-or-byte-formula',
   MIXED_CAMPAIGN: 'mixed-campaign',
@@ -129,7 +144,16 @@ const ADMISSION_REASON = Object.freeze({
 // Reasons that explain a valid or product-failure cell without blocking admission.
 const NON_BLOCKING_REASONS = Object.freeze([
   ADMISSION_REASON.SEMANTIC_GATE_FAILED,
+  ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE,
 ]);
+
+// A run that stopped before or during its window is a visible product failure,
+// never a measurement and never hidden.
+const STOPPED_RUN_REASON = Object.freeze({
+  [BENCHMARK_RUN_STATUS.SETUP_FAILED]: ADMISSION_REASON.DATASET_PREPARATION_FAILED,
+  [BENCHMARK_RUN_STATUS.WARMUP_FAILED]: ADMISSION_REASON.WARMUP_FAILED,
+  [BENCHMARK_RUN_STATUS.WATCHDOG_STOPPED]: ADMISSION_REASON.WATCHDOG_STOPPED,
+});
 
 const REASON_PREFIX = Object.freeze({
   RECORD_REJECTED: 'record-rejected:',
@@ -160,10 +184,11 @@ const CELL_STATUS_MAPPING = Object.freeze({
     [COMPARATIVE_PARITY_STATUS.FAIL]: CLAIM_CELL_STATUS.PRODUCT_FAILURE,
     [COMPARATIVE_PARITY_STATUS.NOT_MEASURED]: CLAIM_CELL_STATUS.NOT_MEASURED,
   }),
+  // incomplete is admissible only for a smoke run (with a stated reason).
   semanticGateStatus: Object.freeze({
-    [OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED]: null,
-    [OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.FAILED]: CLAIM_CELL_STATUS.PRODUCT_FAILURE,
-    incomplete: CLAIM_CELL_STATUS.INVALID_MEASUREMENT,
+    [GATE_STATUS.PASSED]: null,
+    [GATE_STATUS.FAILED]: CLAIM_CELL_STATUS.PRODUCT_FAILURE,
+    [GATE_STATUS.INCOMPLETE]: CLAIM_CELL_STATUS.INVALID_MEASUREMENT,
   }),
   // Operation outcomes are accounting counts inside a cell, never a cell status.
   operationOutcome: Object.freeze(Object.fromEntries(
@@ -282,27 +307,15 @@ function checkProducts(run) {
   return reasons;
 }
 
-function checkExecution(run) {
-  const reasons = [];
-  const deployment = run.deployment;
-  const endpoint = deployment.endpoint;
-  if (!arraySome(deployment.roles, (r) =>
-    r.containerId === endpoint.containerId && r.host === endpoint.host)) {
-    reasons.push(ADMISSION_REASON.ENDPOINT_NOT_BOUND);
-  }
-  if (arraySome(deployment.roles, (r) => r.host === deployment.loadGenerator.host)) {
-    reasons.push(ADMISSION_REASON.LOAD_GENERATOR_ON_PRODUCT_HOST);
-  }
-  if (arraySome(deployment.events, (e) => arrayIncludes(WINDOW_BREAKING_EVENTS, e.kind))) {
-    reasons.push(ADMISSION_REASON.RESTART_DURING_WINDOW);
-  }
-  if (deployment.closure.status !== CLOSURE_STATUS.COMPLETE) {
-    reasons.push(ADMISSION_REASON.CLOSURE_INCOMPLETE);
-  }
+function hasWindow(run) {
+  return run.observations.runStatus === BENCHMARK_RUN_STATUS.COMPLETED ||
+    run.observations.runStatus === BENCHMARK_RUN_STATUS.WATCHDOG_STOPPED;
+}
+
+function checkPlannedSlice(run) {
   const requests = run.observations.requests;
-  const executed = computeExecutedOperationsDigest(requests);
-  if (executed !== run.observations.executedOperationsDigest ||
-      executed !== run.plan.operationSliceDigest) {
+  const reasons = [];
+  if (run.plan.operationSliceDigest !== run.observations.executedOperationsDigest) {
     reasons.push(ADMISSION_REASON.EXECUTED_OPERATIONS_MISMATCH);
   }
   const issuedByKind = {};
@@ -319,6 +332,41 @@ function checkExecution(run) {
   return reasons;
 }
 
+function checkExecution(run) {
+  const reasons = [];
+  const deployment = run.deployment;
+  const endpoint = deployment.endpoint;
+  const endpointText = `${endpoint.host}:${endpoint.port}`;
+  if (!arraySome(deployment.roles, (r) =>
+    r.containerId === endpoint.containerId && r.host === endpoint.host) ||
+      arraySome(run.observations.requests, (r) =>
+        r.outcome !== OPERATION_OUTCOME.UNISSUED && r.endpoint !== endpointText)) {
+    reasons.push(ADMISSION_REASON.ENDPOINT_NOT_BOUND);
+  }
+  if (arraySome(deployment.roles, (r) => r.host === deployment.loadGenerator.host)) {
+    reasons.push(ADMISSION_REASON.LOAD_GENERATOR_ON_PRODUCT_HOST);
+  }
+  if (arraySome(deployment.events, (e) => arrayIncludes(WINDOW_BREAKING_EVENTS, e.kind))) {
+    reasons.push(ADMISSION_REASON.RESTART_DURING_WINDOW);
+  }
+  if (deployment.closure.status !== CLOSURE_STATUS.COMPLETE) {
+    reasons.push(ADMISSION_REASON.CLOSURE_INCOMPLETE);
+  }
+  if (run.observations.runStatus === BENCHMARK_RUN_STATUS.SETUP_FAILED &&
+      run.observations.setup.failureClass === FAILURE_CLASS.HARNESS_FAULT) {
+    reasons.push(ADMISSION_REASON.SETUP_HARNESS_FAULT);
+  }
+  if (!hasWindow(run)) return reasons;
+  if (computeExecutedOperationsDigest(run.observations.requests) !==
+      run.observations.executedOperationsDigest) {
+    reasons.push(ADMISSION_REASON.EXECUTED_OPERATIONS_MISMATCH);
+  }
+  if (run.observations.runStatus === BENCHMARK_RUN_STATUS.COMPLETED) {
+    reasons.push(...checkPlannedSlice(run));
+  }
+  return reasons;
+}
+
 function committedOf(requests, kind) {
   return arrayFilter(requests, (r) =>
     r.outcome === OPERATION_OUTCOME.COMMITTED && r.operationKind === kind);
@@ -329,6 +377,10 @@ function committedOf(requests, kind) {
 function checkFinalState(run) {
   const finalState = run.correctness.finalState;
   if (!finalState) return [ADMISSION_REASON.FINAL_STATE_MISSING];
+  if (finalState.status !== undefined &&
+      finalState.status !== OLTP_RECONCILIATION_STATUS.RECONCILED) {
+    return [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
+  }
   const before = finalState.before.tableRows;
   const after = finalState.after.tableRows;
   const delta = (table) => (typeof before[table] === 'number' &&
@@ -361,13 +413,18 @@ function gateBindingHolds(run, binding) {
     binding.endpoint === `${endpoint.host}:${endpoint.port}`;
 }
 
+// Capacity runs need a passed gate; a smoke run may carry an incomplete gate,
+// which the cell then states. A gate whose proofs are not bound to this run's
+// deployment is refused.
 function checkSemanticGate(run) {
   const gate = run.correctness.semanticGate;
   if (!gate) return [ADMISSION_REASON.SEMANTIC_GATE_MISSING];
   if (!gateBindingHolds(run, gate.binding)) return [ADMISSION_REASON.SEMANTIC_GATE_UNBOUND];
-  if (gate.status === OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED) return [];
-  return [gate.status === OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.FAILED ?
-    ADMISSION_REASON.SEMANTIC_GATE_FAILED :
+  if (gate.status === GATE_STATUS.PASSED) return [];
+  if (gate.status === GATE_STATUS.FAILED) return [ADMISSION_REASON.SEMANTIC_GATE_FAILED];
+  return [gate.status === GATE_STATUS.INCOMPLETE &&
+    run.plan.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ?
+    ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE :
     ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED];
 }
 
@@ -382,7 +439,14 @@ function checkScenarioA(run) {
       plan.openLoopProfileId !== OLTP_OPEN_LOOP_PROFILE.id) {
     reasons.push(ADMISSION_REASON.NON_CANONICAL_WORKLOAD);
   }
-  reasons.push(...checkSemanticGate(run), ...checkFinalState(run));
+  if (plan.profileClass === BENCHMARK_PROFILE_CLASS.CAPACITY && plan.sweepPlanDigest === null) {
+    reasons.push(ADMISSION_REASON.SWEEP_PLAN_MISSING);
+  }
+  // A run stopped before its window has no gate verdict or final state to check;
+  // it is published as the product failure it is.
+  if (run.observations.runStatus === BENCHMARK_RUN_STATUS.COMPLETED) {
+    reasons.push(...checkSemanticGate(run), ...checkFinalState(run));
+  }
   return reasons;
 }
 
@@ -392,9 +456,11 @@ function checkDeployment(run, claim) {
   if (deployment.readiness.state !== READINESS_STATE.READY) {
     reasons.push(ADMISSION_REASON.READINESS_UNVERIFIED);
   }
-  const dataset = deployment.dataset;
-  if (dataset.tables.length === 0 || dataset.keyCoverage.expected === 0 ||
-      dataset.keyCoverage.present !== dataset.keyCoverage.expected) {
+  const v = deployment.dataset.verification;
+  if (run.observations.runStatus !== BENCHMARK_RUN_STATUS.SETUP_FAILED &&
+      (v.status !== OLTP_DATASET_VERIFICATION_STATUS.VERIFIED ||
+      v.observedLogicalChecksum !== v.expectedLogicalChecksum ||
+      jsonStringify(v.observedTableRows) !== jsonStringify(v.expectedTableRows))) {
     reasons.push(ADMISSION_REASON.DATASET_UNVERIFIED);
   }
   const hostsById = new Map(arrayMap(deployment.hosts, (h) => [h.hostId, h]));
@@ -424,7 +490,7 @@ function checkRun(entry, claim, context) {
   const header = context.campaignHeaders.get(run.campaignId) || null;
   reasons.push(...checkIdentityAgainstHeader(run, header), ...checkProducts(run),
     ...checkExecution(run));
-  if (run.observations.accounting.issued === 0) {
+  if (hasWindow(run) && run.observations.accounting.issued === 0) {
     reasons.push(ADMISSION_REASON.NO_ISSUED_OPERATIONS);
   }
   if (run.scenario !== claim.scenario) reasons.push(ADMISSION_REASON.WRONG_DISPATCH_FAMILY);
@@ -468,7 +534,8 @@ function sumAccounting(runMetrics) {
 // Counts-only view of a run: what a smoke or insufficient run may publish.
 function countsOnly(m) {
   return {
-    runId: m.runId, offeredRatePerSec: m.offeredRatePerSec, repetition: m.repetition,
+    runId: m.runId, runStatus: m.runStatus, offeredRatePerSec: m.offeredRatePerSec,
+    repetition: m.repetition,
     accounting: m.accounting, drainOverrunMs: m.drainOverrunMs, maxLatencyMs: m.maxLatencyMs,
   };
 }
@@ -516,35 +583,45 @@ function buildCell(claim, status, {reasons = [], defectIds = [], evidence, metri
   };
 }
 
-function admittedCell(claim, entries, evidence, defectIds) {
+function failureReasons(entries, accounting) {
+  const reasons = [];
+  for (const e of entries) {
+    const stopped = STOPPED_RUN_REASON[e.run.observations.runStatus];
+    if (stopped) reasons.push(stopped);
+    if (e.run.correctness.semanticGate?.status === GATE_STATUS.FAILED) {
+      reasons.push(ADMISSION_REASON.SEMANTIC_GATE_FAILED);
+    }
+  }
+  if (accounting.committed === 0) reasons.push(ADMISSION_REASON.NO_COMMITTED_OPERATIONS);
+  return reasons;
+}
+
+function admittedCell(claim, entries, evidence, defectIds, notes) {
   const runMetrics = arrayMap(entries, (e) => deriveRunMetrics(e.run));
   const accounting = sumAccounting(runMetrics);
   const profileClass = entries[0].run.plan.profileClass;
-  const gateFailed = arraySome(entries, (e) =>
-    e.run.correctness.semanticGate?.status === OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.FAILED);
+  const setupFailures = arrayMap(arrayFilter(entries, (e) => e.run.observations.setup),
+    (e) => ({runId: e.run.runId, ...e.run.observations.setup}));
   const counts = {profileClass, sufficiencyRuleId: SUFFICIENCY_RULE.id, accounting,
-    runs: arrayMap(runMetrics, countsOnly), capacity: null};
-  if (gateFailed || accounting.committed === 0) {
-    const reasons = [
-      ...(gateFailed ? [ADMISSION_REASON.SEMANTIC_GATE_FAILED] : []),
-      ...(accounting.committed === 0 ? [ADMISSION_REASON.NO_COMMITTED_OPERATIONS] : []),
-    ];
+    runs: arrayMap(runMetrics, countsOnly), setupFailures, capacity: null};
+  const failed = failureReasons(entries, accounting);
+  if (failed.length > 0) {
     return buildCell(claim, CLAIM_CELL_STATUS.PRODUCT_FAILURE,
-      {reasons, defectIds, evidence, metrics: counts});
+      {reasons: [...failed, ...notes], defectIds, evidence, metrics: counts});
   }
-  if (profileClass === PROFILE_CLASS.SMOKE) {
-    return buildCell(claim, CLAIM_CELL_STATUS.VALID_OBSERVED,
-      {reasons: [ADMISSION_REASON.SMOKE_PROFILE], defectIds, evidence, metrics: counts});
+  if (profileClass === BENCHMARK_PROFILE_CLASS.SMOKE) {
+    return buildCell(claim, CLAIM_CELL_STATUS.VALID_OBSERVED, {
+      reasons: [ADMISSION_REASON.SMOKE_PROFILE, ...notes], defectIds, evidence, metrics: counts,
+    });
   }
   if (!isSufficient(runMetrics)) {
-    return buildCell(claim, CLAIM_CELL_STATUS.VALID_OBSERVED,
-      {reasons: [ADMISSION_REASON.INSUFFICIENT_SAMPLES], defectIds, evidence, metrics: counts});
+    return buildCell(claim, CLAIM_CELL_STATUS.VALID_OBSERVED, {
+      reasons: [ADMISSION_REASON.INSUFFICIENT_SAMPLES, ...notes], defectIds, evidence,
+      metrics: counts,
+    });
   }
-  return buildCell(claim, CLAIM_CELL_STATUS.VALID_OBSERVED, {defectIds, evidence, metrics: {
-    ...counts,
-    runs: runMetrics,
-    capacity: {byRate: dispersionByRate(runMetrics)},
-  }});
+  return buildCell(claim, CLAIM_CELL_STATUS.VALID_OBSERVED, {reasons: notes, defectIds, evidence,
+    metrics: {...counts, runs: runMetrics, capacity: {byRate: dispersionByRate(runMetrics)}}});
 }
 
 function cellWithoutLiveRuns(claim, forensic, extra) {
@@ -619,7 +696,8 @@ function admitClaim({claim, runs, campaignHeaders, forensicRecords, invalidation
     return buildCell(claim, CLAIM_CELL_STATUS.INVALID_MEASUREMENT,
       {reasons, defectIds, evidence});
   }
-  return admittedCell(claim, live, evidence, defectIds);
+  const notes = arrayFilter(unique(reasons), (r) => r !== ADMISSION_REASON.SEMANTIC_GATE_FAILED);
+  return admittedCell(claim, live, evidence, defectIds, notes);
 }
 
 /**

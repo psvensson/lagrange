@@ -1,0 +1,430 @@
+// One Scenario A run (one system, one offered rate, one repetition) of the
+// canonical OLTP workload through the shared owners: canonical dataset and
+// plan, the system's native adapter beneath the wire-attempt capture, the
+// open-loop step owner (v2) with the paired retry owner, a run watchdog
+// derived from the product timing ladder, and product-content dataset
+// verification and final-state reconciliation on a separate connection.
+import {
+  QUERY_DEFAULTS,
+} from '../../../src/query/query-constants.js';
+import {
+  UNKNOWN_OUTCOME_REDELIVERY_MAX_DELAY_MS,
+} from '../../../src/query/query-executor-unknown-outcome.js';
+import {
+  createLagrangeOltpAdapter,
+} from '../reference-client/lagrange-oltp-adapter.js';
+import {
+  observeLagrangeOltpStateSnapshot,
+} from '../reference-client/lagrange-oltp-state-snapshot.js';
+import {
+  createPostgreSqlOltpAdapter,
+} from '../reference-client/postgresql-oltp-adapter.js';
+import {
+  createTiDbOltpAdapter,
+} from '../reference-client/tidb-oltp-adapter.js';
+import {
+  observeTiDbOltpStateSnapshot,
+} from '../reference-client/tidb-oltp-state-snapshot.js';
+import {
+  createBenchmarkConnectionRegistry,
+  createBenchmarkOutcomeAdapter,
+  createTrackedMysqlConnectionFactory,
+  createTrackedPgClientFactory,
+} from './benchmark-oltp-attempt-capture.js';
+import {
+  benchmarkCanonicalDigest,
+  classifyBenchmarkAttemptFailure,
+  describePlannedOperationSlice,
+} from './benchmark-operation-outcome.js';
+import {
+  OLTP_RECONCILIATION_STATUS,
+  observeOltpStateSnapshot,
+  reconcileOltpFinalState,
+  verifyOltpLoadedDataset,
+} from './benchmark-oltp-state-reconciliation.js';
+import {
+  BENCHMARK_PROFILE_CLASS,
+} from './benchmark-workload-dispatch.js';
+import {
+  buildOltpBaselineDataset,
+  hashOltpBaselineDataset,
+} from './oltp-baseline-dataset.js';
+import {
+  buildOltpBaselinePlan,
+  hashOltpBaselineMeasurementPlan,
+} from './oltp-baseline-workload.js';
+import {
+  OLTP_OPEN_LOOP_PROFILE,
+  buildUnissuedOpenLoopRecords,
+  interleaveOltpWorkerPhase,
+  runOpenLoopOltpStep,
+} from './oltp-open-loop-step-owner.js';
+import {
+  OLTP_PAIRED_RETRY_POLICY,
+  resolvePairedOltpRetryDelayMs,
+} from './oltp-paired-retry-owner.js';
+import {
+  OLTP_SCENARIO_A_SYSTEM,
+} from './oltp-scenario-a-comparison-systems.js';
+import {
+  prepareLagrangeScenarioAPublicPgContext,
+} from './oltp-scenario-a-lagrange-public-pg-context.js';
+import {
+  OLTP_SCENARIO_A_SEMANTIC_PROFILE,
+  hashScenarioASemanticProfile,
+} from './oltp-scenario-a-semantic-profile.js';
+
+const THOUSAND = 1000;
+// A request awaits at most one blocked body statement and its COMMIT, each
+// bounded by the engine query timeout (unknown-outcome redelivery runs
+// inside that budget, plus at most one maximum redelivery delay).
+const STATEMENTS_AWAITED_PER_ATTEMPT = 2;
+
+const RUN_STATUS = Object.freeze({
+  COMPLETED: 'completed',
+  WATCHDOG_STOPPED: 'watchdog-stopped',
+  SETUP_FAILED: 'setup-failed',
+  WARMUP_FAILED: 'warmup-failed',
+});
+
+const DATASET_RESET_METHOD = Object.freeze({
+  FRESH_FORMATION: 'fresh-formation',
+  TRUNCATE_AND_RELOAD: 'truncate-and-reload',
+  NONE: 'none',
+});
+
+const ADAPTER_ID = Object.freeze({
+  [OLTP_SCENARIO_A_SYSTEM.LAGRANGE]: 'lagrange-public-pgwire-oltp-adapter',
+  [OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV]: 'tidb-mysql2-oltp-adapter',
+  [OLTP_SCENARIO_A_SYSTEM.POSTGRESQL]: 'postgresql-pgwire-native-for-update',
+});
+
+// The run-level bound and its derivation from the product timing ladder.
+function deriveRunWatchdog(scheduledMs) {
+  const perAttemptMs = STATEMENTS_AWAITED_PER_ATTEMPT * QUERY_DEFAULTS.QUERY_TIMEOUT_MS +
+    UNKNOWN_OUTCOME_REDELIVERY_MAX_DELAY_MS;
+  const attempts = OLTP_PAIRED_RETRY_POLICY.maxRetries + 1;
+  let retryBackoffMs = 0;
+  for (let retry = 1; retry <= OLTP_PAIRED_RETRY_POLICY.maxRetries; retry += 1) {
+    retryBackoffMs += resolvePairedOltpRetryDelayMs(retry);
+  }
+  const ladderMs = attempts * perAttemptMs + retryBackoffMs;
+  return Object.freeze({
+    boundMs: scheduledMs + ladderMs,
+    derivation: Object.freeze({
+      scheduledMs,
+      engineQueryTimeoutMs: QUERY_DEFAULTS.QUERY_TIMEOUT_MS,
+      unknownOutcomeRedeliveryMaxDelayMs: UNKNOWN_OUTCOME_REDELIVERY_MAX_DELAY_MS,
+      statementsAwaitedPerAttempt: STATEMENTS_AWAITED_PER_ATTEMPT,
+      attemptsPerRequest: attempts,
+      retryBackoffMs,
+      ladderMsAfterLastIntendedIssue: ladderMs,
+      rule: 'bound = scheduledMs + attempts * (2 * queryTimeout + maxRedeliveryDelay) + ' +
+        'sum(retry backoff)',
+    }),
+  });
+}
+
+function requireEndpoint(value, label) {
+  const host = typeof value?.host === 'string' ? value.host : '';
+  const port = value?.port;
+  if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${label} requires endpoint {host, port}`);
+  }
+  return Object.freeze({host, port});
+}
+
+async function resolveLagrangeConnection(connection) {
+  if (connection?.cluster) {
+    const context = await prepareLagrangeScenarioAPublicPgContext({
+      cluster: connection.cluster,
+      admission: connection.admission,
+    });
+    return {endpoint: context.endpoint, credentials: context.connection,
+      discovery: 'public-pg-context', serviceEndpoint: context.serviceEndpoint};
+  }
+  return {
+    endpoint: requireEndpoint(connection?.endpoint, 'Lagrange public PG wire'),
+    credentials: connection?.credentials,
+    discovery: 'caller-endpoint',
+    serviceEndpoint: null,
+  };
+}
+
+// The system's native adapter beneath the wire capture, its separate
+// snapshot reader and its dataset reset method.
+async function openSystem(system, connection, workload, registry, drivers) {
+  if (system === OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV) {
+    const endpoint = requireEndpoint(connection?.endpoint, 'TiDB');
+    const baseConnect = drivers.createMysqlConnection || defaultMysqlConnection;
+    const adapterOptions = {endpoint, databaseName: connection.databaseName, workload,
+      createConnection: createTrackedMysqlConnectionFactory(baseConnect, registry)};
+    return {
+      endpoint,
+      resetMethod: DATASET_RESET_METHOD.TRUNCATE_AND_RELOAD,
+      open: () => createTiDbOltpAdapter(adapterOptions),
+      snapshot: (adapter) => observeTiDbOltpStateSnapshot({endpoint,
+        databaseName: adapter.databaseName, createConnection: baseConnect}),
+    };
+  }
+  const resolved = system === OLTP_SCENARIO_A_SYSTEM.LAGRANGE ?
+    await resolveLagrangeConnection(connection) :
+    {endpoint: requireEndpoint(connection?.endpoint, 'PostgreSQL'),
+      credentials: connection?.credentials, discovery: 'caller-endpoint'};
+  const baseClient = drivers.createPgClient || defaultPgClient;
+  const createAdapter = system === OLTP_SCENARIO_A_SYSTEM.LAGRANGE ?
+    createLagrangeOltpAdapter : createPostgreSqlOltpAdapter;
+  const adapterOptions = {endpoint: resolved.endpoint, connection: resolved.credentials, workload,
+    createClient: createTrackedPgClientFactory(baseClient, registry)};
+  return {
+    endpoint: resolved.endpoint,
+    discovery: resolved.discovery,
+    // Lagrange cannot DROP TABLE: the dataset is fresh only on a fresh formation.
+    resetMethod: system === OLTP_SCENARIO_A_SYSTEM.LAGRANGE ?
+      DATASET_RESET_METHOD.FRESH_FORMATION : DATASET_RESET_METHOD.TRUNCATE_AND_RELOAD,
+    open: () => createAdapter(adapterOptions),
+    snapshot: () => observeLagrangeOltpStateSnapshot({endpoint: resolved.endpoint,
+      connection: resolved.credentials, createClient: baseClient}),
+  };
+}
+
+// The native client libraries, loaded on first use from the load
+// generator's checkout (never from a product image).
+let pgModule = null;
+let mysqlModule = null;
+function defaultPgClient(options) {
+  return new pgModule.Client(options);
+}
+
+function defaultMysqlConnection(options) {
+  return mysqlModule.createConnection(options);
+}
+
+async function loadDefaultDrivers(drivers) {
+  if (!drivers.createPgClient && !pgModule) pgModule = (await import('pg')).default;
+  if (!drivers.createMysqlConnection && !mysqlModule) {
+    const loaded = await import('mysql2/promise');
+    mysqlModule = loaded.default || loaded;
+  }
+  return drivers;
+}
+
+function stepOptions(offeredRatePerSec, operations, runtime, evidence) {
+  const scheduledMs = (operations.length * THOUSAND) / offeredRatePerSec;
+  return {
+    offeredRatePerSec,
+    watchdog: deriveRunWatchdog(scheduledMs),
+    evidence,
+    ...runtime,
+  };
+}
+
+function planIdentity(profile, plan, workloadPlan, dataset, offeredRatePerSec) {
+  const slice = describePlannedOperationSlice(
+    interleaveOltpWorkerPhase(workloadPlan.workers, 'measurement'));
+  return Object.freeze({
+    workloadProfileId: profile.id,
+    publication: profile.publication,
+    profileClass: profile.profileClass,
+    operationSliceDigest: slice.operationSliceDigest,
+    plannedOperationCounts: slice.plannedOperationCounts,
+    semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
+    semanticProfileDigest: hashScenarioASemanticProfile(),
+    retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id,
+    openLoopProfileId: OLTP_OPEN_LOOP_PROFILE.id,
+    datasetDigest: hashOltpBaselineDataset(dataset),
+    workloadPlanDigest: benchmarkCanonicalDigest(workloadPlan),
+    measurementPlanDigest: hashOltpBaselineMeasurementPlan(workloadPlan),
+    offeredRatePerSec,
+    repetition: plan.repetition ?? null,
+    orderIndex: plan.orderIndex ?? null,
+    sweepPlanDigest: plan.sweepPlanSha256 ?? null,
+  });
+}
+
+function resolveWorkload(profile, plan) {
+  if (profile.ownsWorkload) {
+    if (plan.workload !== undefined) {
+      throw new Error(`workload profile ${profile.id} owns its workload`);
+    }
+    return profile.workload;
+  }
+  if (!plan.workload || typeof plan.workload !== 'object') {
+    throw new Error(`workload profile ${profile.id} requires plan.workload`);
+  }
+  return plan.workload;
+}
+
+function requireRate(plan) {
+  const rate = plan?.offeredRatePerSec;
+  if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
+    throw new Error('benchmark run requires plan.offeredRatePerSec > 0');
+  }
+  return rate;
+}
+
+function setupFailure(error) {
+  const classified = classifyBenchmarkAttemptFailure(error, {});
+  return Object.freeze({
+    failureClass: classified.failureClass,
+    sqlState: classified.sqlState,
+    code: classified.code,
+    message: classified.message,
+  });
+}
+
+async function closeAdapter(adapter) {
+  if (!adapter) return Object.freeze({status: 'not-opened'});
+  try {
+    await adapter.close();
+    return Object.freeze({status: 'closed'});
+  } catch (error) {
+    return Object.freeze({status: 'close-failed', error: String(error?.message || error)});
+  }
+}
+
+function warmupSummary(step) {
+  return Object.freeze({
+    accounting: step.accounting,
+    executedOperationsDigest: step.executedOperationsDigest,
+    watchdog: step.watchdog,
+    records: step.records,
+  });
+}
+
+function unissuedMeasurement(workloadPlan, rate) {
+  return buildUnissuedOpenLoopRecords(
+    interleaveOltpWorkerPhase(workloadPlan.workers, 'measurement'), rate);
+}
+
+async function measure(context) {
+  const {adapter, outcomeAdapter, system, workloadPlan, rate, runtime, evidence} = context;
+  const warmupOps = interleaveOltpWorkerPhase(workloadPlan.workers, 'warmup');
+  let warmup = null;
+  if (warmupOps.length > 0) {
+    warmup = await runOpenLoopOltpStep(outcomeAdapter, warmupOps,
+      stepOptions(rate, warmupOps, runtime, evidence));
+    if (warmup.watchdog.fired) outcomeAdapter.abortInFlight();
+    if (warmup.accounting.committed !== warmup.accounting.offered) {
+      return {status: RUN_STATUS.WARMUP_FAILED, warmup: warmupSummary(warmup), step: null,
+        unissued: unissuedMeasurement(workloadPlan, rate)};
+    }
+  }
+  const before = await observeOltpStateSnapshot(() => system.snapshot(adapter));
+  const operations = interleaveOltpWorkerPhase(workloadPlan.workers, 'measurement');
+  const step = await runOpenLoopOltpStep(outcomeAdapter, operations,
+    stepOptions(rate, operations, runtime, evidence));
+  const abortedInFlight = step.watchdog.fired ? outcomeAdapter.abortInFlight() : 0;
+  const after = await observeOltpStateSnapshot(() => system.snapshot(adapter));
+  return {
+    status: step.watchdog.fired ? RUN_STATUS.WATCHDOG_STOPPED : RUN_STATUS.COMPLETED,
+    warmup: warmup ? warmupSummary(warmup) : null,
+    step,
+    plannedOffered: operations.length,
+    abortedInFlight,
+    reconciliation: reconcileOltpFinalState(step.records, before, after,
+      workloadPlan.config.scale),
+  };
+}
+
+function observationsOf(measured, registry, profileClass) {
+  const {step} = measured;
+  if (!step) {
+    return Object.freeze({
+      runStatus: measured.status,
+      setup: measured.setup ?? null,
+      warmup: measured.warmup ?? null,
+      plannedOffered: measured.unissued.records.length,
+      offered: measured.unissued.accounting.offered,
+      requests: measured.unissued.records,
+      accounting: measured.unissued.accounting,
+    });
+  }
+  return Object.freeze({
+    runStatus: measured.status,
+    setup: null,
+    warmup: measured.warmup,
+    openLoopProfileId: step.profileId,
+    clock: step.clock,
+    plannedOffered: measured.plannedOffered,
+    offered: step.accounting.offered,
+    requests: step.records,
+    accounting: step.accounting,
+    window: step.window,
+    watchdog: step.watchdog,
+    // A smoke run never carries a capacity metric.
+    ...(profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ? {} :
+      {completedPerSec: step.completedPerSec}),
+    quantileMethod: step.quantileMethod,
+    latency: step.latency,
+    attemptLatency: step.attemptLatency,
+    unresolvedExcludedFromAttemptLatency: step.unresolvedExcludedFromAttemptLatency,
+    maxLatencyMs: step.maxLatencyMs,
+    errorRate: step.errorRate,
+    executedOperationsDigest: step.executedOperationsDigest,
+    lateCompletions: Object.freeze([...step.lateCompletions]),
+    connections: Object.freeze({
+      destroyedAfterUnresolvedOrTransportFailure: registry.destroyed,
+      abortedInFlightAtWatchdog: measured.abortedInFlight,
+    }),
+  });
+}
+
+async function executeScenarioARun(options) {
+  const {dispatch, connection, plan} = options;
+  const profile = dispatch.profile;
+  const workload = resolveWorkload(profile, plan);
+  const rate = requireRate(plan);
+  const workloadPlan = buildOltpBaselinePlan(workload);
+  const dataset = buildOltpBaselineDataset(workload);
+  const drivers = await loadDefaultDrivers(options.drivers || {});
+  const registry = createBenchmarkConnectionRegistry();
+  const system = await openSystem(dispatch.system, connection, workload, registry, drivers);
+  const identity = planIdentity(profile, plan, workloadPlan, dataset, rate);
+  let adapter = null;
+  let measured;
+  let loaded = {snapshot: null, error: 'dataset not loaded'};
+  try {
+    adapter = await system.open();
+  } catch (error) {
+    measured = {status: RUN_STATUS.SETUP_FAILED, setup: setupFailure(error), step: null,
+      unissued: unissuedMeasurement(workloadPlan, rate)};
+  }
+  if (adapter) {
+    loaded = await observeOltpStateSnapshot(() => system.snapshot(adapter));
+    measured = await measure({adapter, outcomeAdapter: createBenchmarkOutcomeAdapter(
+      adapter, registry), system, workloadPlan, rate, runtime: options.runtime || {},
+    evidence: {evidenceDir: options.evidenceDir}});
+  }
+  const cleanup = await closeAdapter(adapter);
+  return Object.freeze({
+    adapterId: ADAPTER_ID[dispatch.system],
+    plan: identity,
+    deployment: Object.freeze({
+      endpoint: system.endpoint,
+      endpointDiscovery: system.discovery ?? 'caller-endpoint',
+      dataset: Object.freeze({
+        resetMethod: system.resetMethod,
+        verification: await verifyOltpLoadedDataset(dataset, loaded),
+      }),
+    }),
+    observations: observationsOf(measured, registry, profile.profileClass),
+    correctness: Object.freeze({
+      semanticGate: null,
+      // An unobserved snapshot leaves no final state; the reason is kept.
+      finalState: measured.reconciliation?.status === OLTP_RECONCILIATION_STATUS.UNOBSERVED ?
+        null : (measured.reconciliation ?? null),
+      finalStateObservation: measured.reconciliation?.status ===
+        OLTP_RECONCILIATION_STATUS.UNOBSERVED ? measured.reconciliation : null,
+    }),
+    cleanup,
+  });
+}
+
+export {
+  ADAPTER_ID as BENCHMARK_SCENARIO_A_ADAPTER_ID,
+  DATASET_RESET_METHOD as BENCHMARK_DATASET_RESET_METHOD,
+  RUN_STATUS as BENCHMARK_RUN_STATUS,
+  deriveRunWatchdog as deriveBenchmarkRunWatchdog,
+  executeScenarioARun,
+};

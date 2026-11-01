@@ -6,6 +6,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import {OLTP_DATASET_VERIFICATION_STATUS} from './benchmark-oltp-state-reconciliation.js';
+import {
+  BENCHMARK_UNRESOLVED_REASON,
+  OPERATION_OUTCOME,
+  computeExecutedOperationsDigest,
+  validateBenchmarkAccounting,
+} from './benchmark-operation-outcome.js';
+import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
+import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
 import {OLTP_OPERATION_KIND} from './oltp-baseline-workload.js';
 import {OLTP_OPEN_LOOP_PROFILE} from './oltp-open-loop-step-owner.js';
 import {OLTP_PAIRED_RETRY_POLICY} from './oltp-paired-retry-owner.js';
@@ -18,16 +27,12 @@ import {
   BENCHMARK_SCENARIO,
   CLOSURE_STATUS,
   EXECUTION_TARGET,
-  OPERATION_OUTCOME,
-  PROFILE_CLASS,
   RAW_OBSERVATION_SCHEMA,
   RAW_RECORD_TYPE,
   READINESS_STATE,
   STORAGE_KIND,
   buildClaimKey,
-  computeExecutedOperationsDigest,
   computeRunObservationsDigest,
-  recountAccounting,
 } from './raw-observation-record.js';
 
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -61,19 +66,44 @@ function buildFixtureHeader({campaignId, executionTarget = EXECUTION_TARGET.LAB}
   };
 }
 
+const FIXTURE_ENDPOINT = 'lab-host-1:5432';
+
 function buildRequests(count, latencyMs) {
   return Array.from({length: count}, (_u, i) => {
     const kind = KIND_CYCLE[i % KIND_CYCLE.length];
     const intended = i * 10;
     return {
-      opId: `op-${i + 1}`, operationKind: kind, intendedStartMs: intended,
-      outcome: OPERATION_OUTCOME.COMMITTED,
-      attempts: [{attemptNo: 1, startedMs: intended, endedMs: intended + latencyMs,
-        outcome: OPERATION_OUTCOME.COMMITTED, responseDigest: `sha256:${hexDigits('d')}`}],
-      responseEvidence: {rows: 1},
+      index: i, opId: `measurement:1:${i + 1}`, operationKind: kind,
+      intendedStartMs: intended, issuedAtMs: intended, executionStartedAtMs: intended,
+      completedAtMs: intended + latencyMs, issueLagMs: 0, queueDelayMs: 0, latencyMs,
+      outcome: OPERATION_OUTCOME.COMMITTED, failureClass: null, retries: 0, retryDelayMs: 0,
       effectSummary: kind === OLTP_OPERATION_KIND.DELIVERY ? {deliveredOrders: 1} : {},
+      endpoint: FIXTURE_ENDPOINT, serverConnectionId: 1,
+      attempts: [{attemptNo: 1, startedMs: intended, endedMs: intended + latencyMs,
+        outcome: OPERATION_OUTCOME.COMMITTED, failureClass: null, sqlstate: null,
+        errorCode: null, message: null, endpoint: FIXTURE_ENDPOINT, serverConnectionId: 1,
+        commitSent: true, statements: null, responseDigest: `sha256:${hexDigits('d')}`}],
+      responseEvidence: {encoding: 'inline', sha256: hexDigits('d'), bytes: 1},
     };
   });
+}
+
+/**
+ * Give a fixture request a failure outcome consistent with the outcome owner:
+ * a terminal failure with a class, or an unresolved request whose commit answer
+ * was lost.
+ * @param {Object} request
+ * @param {string} outcome
+ * @param {string} failureClass
+ */
+function setFixtureRequestOutcome(request, outcome, failureClass) {
+  request.outcome = outcome;
+  request.failureClass = failureClass;
+  request.attempts[0].outcome = outcome;
+  request.attempts[0].failureClass = failureClass;
+  if (outcome === OPERATION_OUTCOME.UNRESOLVED) {
+    request.unresolvedReason = BENCHMARK_UNRESOLVED_REASON.COMMIT_ANSWER_LOST;
+  }
 }
 
 function plannedCounts(requests) {
@@ -104,7 +134,8 @@ function finalStateFor(requests) {
  */
 function sealFixtureRun(run, options = {}) {
   const requests = run.observations.requests;
-  run.observations.accounting = recountAccounting(requests);
+  // A plain copy: tests edit the recorded accounting to prove the recount catches it.
+  run.observations.accounting = JSON.parse(JSON.stringify(validateBenchmarkAccounting(requests)));
   run.observations.executedOperationsDigest = computeExecutedOperationsDigest(requests);
   if (!options.keepPlan) {
     run.plan.operationSliceDigest = run.observations.executedOperationsDigest;
@@ -133,7 +164,7 @@ function buildProducts(hosts, targetId) {
  */
 function buildFixtureRun(options = {}) {
   const {campaignId = 'fixture-campaign', targetId = 'lagrange', subkind = 'main',
-    profileClass = PROFILE_CLASS.CAPACITY, requestCount = 120, latencyMs = 4,
+    profileClass = BENCHMARK_PROFILE_CLASS.CAPACITY, requestCount = 120, latencyMs = 4,
     offeredRatePerSec = 100, repetition = 1, hostCount = 3} = options;
   const hosts = fixtureHosts(hostCount + 1);
   const productHosts = hosts.slice(0, hostCount);
@@ -165,14 +196,20 @@ function buildFixtureRun(options = {}) {
       storage: arrayMap(products, (p) => ({containerId: p.containerId, mount: '/data',
         kind: STORAGE_KIND.HOST_VOLUME})),
       readiness: {state: READINESS_STATE.READY, observedAt: FIXTURE_TIME, evidence: {}},
-      dataset: {tables: [{table: 'warehouse', rows: 1}], keyCoverage: {expected: 10, present: 10},
-        logicalChecksum: `sha256:${hexDigits('5')}`, resetMethod: 'fresh-formation'},
+      dataset: {resetMethod: 'fresh-formation', verification: {
+        status: OLTP_DATASET_VERIFICATION_STATUS.VERIFIED,
+        method: 'oltp-state-snapshot-integer-normalized-v1',
+        expectedLogicalChecksum: `sha256:${hexDigits('5')}`,
+        observedLogicalChecksum: `sha256:${hexDigits('5')}`,
+        expectedTableRows: {warehouse: 1, orders: 0}, observedTableRows: {warehouse: 1, orders: 0},
+      }},
       placement: null, endpoint,
       loadGenerator: {host: hosts[hostCount].hostId, nodeVersion: 'v22.0.0',
         driverVersions: {pg: '8.0.0'}},
       events: [], closure: {status: CLOSURE_STATUS.COMPLETE, unclosed: []},
     },
     observations: {
+      runStatus: BENCHMARK_RUN_STATUS.COMPLETED, setup: null,
       requests, accounting: null, executedOperationsDigest: '',
       window: {scheduledMs: requestCount * 10, drainMs: requestCount * 10 + latencyMs,
         drainOverrunMs: latencyMs, startedAt: FIXTURE_TIME, endedAt: FIXTURE_LATER},
@@ -240,6 +277,7 @@ export {
   fixtureTargetCell,
   publishFixtureCampaign,
   sealFixtureRun,
+  setFixtureRequestOutcome,
   toNdjson,
   writeFixtureRoot,
 };

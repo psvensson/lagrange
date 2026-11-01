@@ -40,6 +40,16 @@ Configuration labels describe what the deployer starts.
 | PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) |
 | PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | unsupported (async-stream-cannot-serve-0ms-freshness, closed-loop-throughput, constant-phase-or-byte, emulated-product, invalidated:inv-0006, label-hash-identity, non-canonical-workload) |
 
+## Scenario A smoke runs
+
+The named smoke profile scenario-a-smoke-v1: the canonical workload executed end to end with per-request correctness and complete accounting. A smoke cell never carries throughput, latency quantiles or a ratio.
+
+| Configuration | Scenario A smoke |
+| --- | --- |
+| Lagrange 0.4.0 (3 nodes) | not-measured (no-observation) |
+| TiDB + TiKV v8.5.8 | not-measured (no-observation) |
+| PostgreSQL 17 (single primary) | not-measured (no-observation) |
+
 ## Per-phase time breakdown
 
 Phase timings are admitted only from observed spans.

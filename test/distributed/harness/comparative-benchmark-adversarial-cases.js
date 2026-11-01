@@ -18,12 +18,10 @@ import {
   fixtureTargetCell,
   publishFixtureCampaign,
   sealFixtureRun,
+  setFixtureRequestOutcome,
 } from './comparative-benchmark-fixtures.js';
-import {
-  FAILURE_CLASS,
-  OPERATION_OUTCOME,
-  PROFILE_CLASS,
-} from './raw-observation-record.js';
+import {FAILURE_CLASS, OPERATION_OUTCOME} from './benchmark-operation-outcome.js';
+import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
 import {recomputeComparativeBenchmarks} from '../../../scripts/checks/comparative-benchmark-recompute.js';
 
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -37,6 +35,8 @@ const OTHER_CAMPAIGN = 'fixture-campaign-other';
 const LAGRANGE = 'lagrange';
 const TIDB = 'tidb-tikv';
 const PG = 'pg-single-primary';
+const SMOKE_SUBKIND = 'smoke';
+const SMOKE_COLUMN = 'scenarioA/smoke';
 const RAW_FILE = 'data/tidb-comparison/raw-observations.ndjson';
 
 function header(campaignId = CAMPAIGN) {
@@ -76,9 +76,7 @@ async function expectInvalidLagrange(label, reason, mutate) {
 async function caseValidNegativeResultsStayVisible() {
   const pgRuns = arrayMap(pair(PG, {hostCount: 1}), (run) => {
     for (const r of run.observations.requests) {
-      r.outcome = OPERATION_OUTCOME.TERMINAL_FAILURE;
-      r.failureClass = FAILURE_CLASS.PRODUCT_ERROR;
-      r.attempts[0].outcome = OPERATION_OUTCOME.TERMINAL_FAILURE;
+      setFixtureRequestOutcome(r, OPERATION_OUTCOME.TERMINAL_FAILURE, FAILURE_CLASS.PRODUCT_ERROR);
     }
     return sealFixtureRun(run);
   });
@@ -202,9 +200,11 @@ async function caseLateInvalidation() {
 
 // Amendment 3: a smoke profile publishes counts only.
 async function caseSmokeHasNoCapacity() {
-  await withPublication([header(), ...pair(LAGRANGE, {profileClass: PROFILE_CLASS.SMOKE})],
+  const smokeRuns = pair(LAGRANGE, {profileClass: BENCHMARK_PROFILE_CLASS.SMOKE,
+    subkind: SMOKE_SUBKIND});
+  await withPublication([header(), ...smokeRuns],
     ({matrix, readme}) => {
-      const cell = fixtureTargetCell(matrix, LAGRANGE);
+      const cell = fixtureTargetCell(matrix, LAGRANGE, SMOKE_COLUMN);
       assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED);
       assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SMOKE_PROFILE), true);
       assert.equal(cell.metrics.capacity, null);
