@@ -393,9 +393,13 @@ function createCampaignLog({manifest, header, deps}) {
 
   async function writeHeader() {
     if (pins.size === 0) {
+      // Nothing is written, so each attempted run's own outcome travels in
+      // the refusal: the operator's only evidence of what happened.
       throw deploymentFailure(PRODUCTS_UNPINNED,
         'no target of the campaign could pin its product identity',
-        {unpinned: Object.fromEntries(unpinned)});
+        {unpinned: Object.fromEntries(unpinned), runs: arrayMap(held, (record) => ({
+          runId: record.runId, targetId: record.targetId, state: record.execution.state,
+          failure: record.execution.failure}))});
     }
     headerRecord.products = arrayFlatMap(arrayFilter(manifest.targets,
       (targetId) => pins.has(targetId)), (targetId) => pins.get(targetId));

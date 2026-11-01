@@ -221,7 +221,14 @@ test('header: a campaign that pinned no product identity writes no header and fa
     const {deps, records} = harness({deployRun: async () => {
       throw Object.assign(new Error('ssh down'), {code: 'deployment_command_failed'});
     }});
-    await assert.rejects(run(deps), (error) => error.code === 'campaign_products_unpinned');
+    await assert.rejects(run(deps), (error) => error.code === 'campaign_products_unpinned' &&
+      // Live campaign bench-live-20261101-b-r2 wrote nothing and its
+      // diagnostic was `{"unpinned":{}}`: each attempted run's own failure
+      // must survive in the refusal, or the campaign leaves no evidence.
+      error.diagnostic.runs.length === MANIFEST.runs.length &&
+      error.diagnostic.runs[0].failure.code === 'deployment_command_failed' &&
+      error.diagnostic.runs[0].failure.message === 'ssh down' &&
+      typeof error.diagnostic.runs[0].runId === 'string');
     assert.deepEqual(records, []);
   });
 
