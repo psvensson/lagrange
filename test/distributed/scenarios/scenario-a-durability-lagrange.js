@@ -33,6 +33,9 @@ const OUTPUT_PATH =
   process.env.LAGRANGE_SCENARIO_A_DURABILITY_EVIDENCE_PATH ||
   'test-output/tidb-reference/scenario-a-durability-lagrange.json';
 
+// The boot incarnation of a node, or null when none is observable. An inspection
+// error propagates: a failed inspection is not an absent incarnation, and the
+// durability evaluation refuses a missing before/after incarnation.
 async function resolveNodeIncarnation(node) {
   const direct = node?.bootIncarnation ?? node?.incarnation ?? node?.pid;
   if (direct !== undefined && direct !== null && String(direct).trim()) {
@@ -41,30 +44,18 @@ async function resolveNodeIncarnation(node) {
   if (node?._dockerProvider &&
       typeof node._dockerProvider.inspectContainer === 'function' &&
       node.containerId) {
-    try {
-      const info = await node._dockerProvider.inspectContainer(node.containerId);
-      const startedAt = String(info?.State?.StartedAt || '').trim();
-      const pid = info?.State?.Pid != null ? String(info.State.Pid) : '';
-      if (startedAt || pid) {
-        return `${node.containerId}:${startedAt}:${pid}`;
-      }
-    } catch {
-      return '';
-    }
+    const info = await node._dockerProvider.inspectContainer(node.containerId);
+    const startedAt = String(info?.State?.StartedAt || '').trim();
+    const pid = info?.State?.Pid != null ? String(info.State.Pid) : '';
+    return startedAt || pid ? `${node.containerId}:${startedAt}:${pid}` : null;
   }
   if (typeof node?.inspectContainerState === 'function') {
-    try {
-      const state = await node.inspectContainerState();
-      const finishedAt = String(state?.finishedAt || '').trim();
-      const status = String(state?.status || '').trim();
-      if (finishedAt || status) {
-        return `${node.id || ''}:${status}:${finishedAt}`;
-      }
-    } catch {
-      return '';
-    }
+    const state = await node.inspectContainerState();
+    const finishedAt = String(state?.finishedAt || '').trim();
+    const status = String(state?.status || '').trim();
+    return finishedAt || status ? `${node.id || ''}:${status}:${finishedAt}` : null;
   }
-  return '';
+  return null;
 }
 
 async function preStart(options = {}) {

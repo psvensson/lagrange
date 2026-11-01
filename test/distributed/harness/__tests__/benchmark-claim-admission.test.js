@@ -26,6 +26,7 @@ import {
   writeFixtureRoot,
 } from '../comparative-benchmark-fixtures.js';
 import {formatNum} from '../comparative-landing-svg-renderer.js';
+import {computeV1PayloadDigest} from '../raw-observation-forensic-reader.js';
 import {executeBenchmarkWorkload} from '../real-product-workload-drivers.js';
 import {
   FAKE_PRODUCT_FAULT,
@@ -39,7 +40,6 @@ import {
   EXECUTION_TARGET,
   READINESS_STATE,
   RECORD_REJECTION,
-  computeV1PayloadDigest,
   validateRunRecord,
 } from '../raw-observation-record.js';
 import {SCENARIO_OUTCOME} from '../scenario-outcome.js';
@@ -52,6 +52,7 @@ const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringReplace = Function.call.bind(String.prototype.replace);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const LAGRANGE = 'lagrange';
 const TIDB = 'tidb-tikv';
@@ -192,8 +193,12 @@ describe('claim admission through the publication path', () => {
       for (const h of run.deployment.hosts) h.bootId = 'same-machine';
     }],
     ['delay formula in the plan', ADMISSION_REASON.DELAY_OR_BYTE_FORMULA, (run) => {
-      run.plan.warmup = {delayFormula: 'execMs + stages * 2 * oneWayMs'};
+      run.deployment.placement = {delayFormula: 'execMs + stages * 2 * oneWayMs'};
     }],
+    ['executed warm-up differs from the plan', ADMISSION_REASON.WARMUP_PLAN_MISMATCH,
+      (run) => {
+        run.plan.warmup = {operations: 10, digest: `sha256:${'6'.repeat(64)}`};
+      }],
     ['wrong dispatch family', ADMISSION_REASON.WRONG_DISPATCH_FAMILY, (run) => {
       run.scenario = 'scenarioC';
       run.claimKey = stringReplace(run.claimKey, '/scenarioA/', '/scenarioC/');
@@ -265,7 +270,8 @@ describe('claim admission through the publication path', () => {
         receiptId: 'receipt-tidb-tikv-scenario-a', rawObservationPayload: payload,
         rawObservationsDigest: computeV1PayloadDigest(payload)};
       const {matrix, readme} = await publish([
-        {schemaVersion: 'lagrange-raw-observation-campaign-v1', gitCommit: 'f'.repeat(40)}, v1]);
+        {schemaVersion: 'lagrange-raw-observation-campaign-v1', recordType: 'campaign-header',
+          gitCommit: 'f'.repeat(40)}, v1]);
       const cell = fixtureTargetCell(matrix, TIDB);
       assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
       assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.FORENSIC_RECORD), true);
@@ -414,7 +420,8 @@ describe('invalidation ledger and offline recomputation', () => {
       const payload = {completed: 1};
       const v1 = {schemaVersion: 'lagrange-raw-observation-v1', receiptId: 'receipt-x',
         rawObservationPayload: payload, rawObservationsDigest: computeV1PayloadDigest(payload)};
-      const header = {schemaVersion: 'lagrange-raw-observation-campaign-v1', gitCommit: 'f'};
+      const header = {schemaVersion: 'lagrange-raw-observation-campaign-v1',
+        recordType: 'campaign-header', gitCommit: 'f'};
       const {root} = await publishFixtureCampaign({rawRecords: [header, v1]});
       try {
         const uncovered = await recomputeComparativeBenchmarks(root);
@@ -455,4 +462,43 @@ describe('adversarial acceptance cases (J9, J10, J12, J13)', () => {
   for (const [name, run] of Object.entries(ADVERSARIAL_CASES)) {
     it(name, run);
   }
+});
+
+// The publication path (regeneration, store, matrix, renderers) must not reach the
+// forensic v1 reader, and no publication module may know the v1 schema names.
+const PUBLICATION_ENTRY_MODULES = Object.freeze([
+  'raw-observation-campaign-specs.js', 'raw-observation-store.js',
+  'comparative-matrix-runner.js', 'scaleout-series-experiments.js',
+  'comparative-landing-page.js', 'oltp-comparison-static-web.js',
+]);
+const FORENSIC_READER = 'raw-observation-forensic-reader.js';
+const IMPORT_PATTERN =
+  /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/gu;
+
+function publicationImportGraph() {
+  const harnessDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  const seen = new Set();
+  const pending = arrayMap(PUBLICATION_ENTRY_MODULES, (name) => path.join(harnessDir, name));
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    for (const match of fs.readFileSync(file, 'utf8').matchAll(IMPORT_PATTERN)) {
+      const specifier = match[1] || match[2];
+      if (stringStartsWith(specifier, '.')) pending.push(path.resolve(path.dirname(file), specifier));
+    }
+  }
+  return seen;
+}
+
+describe('the forensic reader is outside the publication path', () => {
+  it('no publication module imports the v1 reader or names a v1 schema', () => {
+    const graph = publicationImportGraph();
+    assert.ok(graph.size > PUBLICATION_ENTRY_MODULES.length, 'the walk follows imports');
+    for (const file of graph) {
+      assert.notEqual(path.basename(file), FORENSIC_READER, `${file} is publication`);
+      assert.equal(stringIncludes(fs.readFileSync(file, 'utf8'), 'lagrange-raw-observation-v1'),
+        false, `${file} names a v1 schema`);
+    }
+  });
 });

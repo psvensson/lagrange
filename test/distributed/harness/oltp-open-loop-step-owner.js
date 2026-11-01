@@ -47,6 +47,17 @@ const OPEN_LOOP_PROFILE = Object.freeze({
   watchdog: 'run-level-bound-stops-issuing',
 });
 
+// The schedule and the request clock share one monotonic origin, so a request
+// can never act before its intended issue time; a negative interval is a
+// harness defect and is refused instead of clamped to zero.
+function elapsedSinceIntended(entry, observedMs, field) {
+  const elapsed = observedMs - entry.intendedIssueTimeMs;
+  if (!Number.isFinite(elapsed) || elapsed < ZERO) {
+    throw new Error(`open-loop request ${entry.index} ${field} precedes its intended issue time`);
+  }
+  return elapsed;
+}
+
 function positiveNumber(value, label) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= ZERO) {
@@ -210,15 +221,16 @@ function freezeRequestRecord(state, disposition, evidenceOptions, closedAtMs = n
     executionStartedAtMs: state.executionStartedAtMs,
     completedAtMs,
     issueLagMs: state.issuedAtMs === null ? null :
-      Math.max(ZERO, state.issuedAtMs - entry.intendedIssueTimeMs),
+      elapsedSinceIntended(entry, state.issuedAtMs, 'issuedAtMs'),
     queueDelayMs: state.executionStartedAtMs === null ? null :
-      Math.max(ZERO, state.executionStartedAtMs - entry.intendedIssueTimeMs),
+      elapsedSinceIntended(entry, state.executionStartedAtMs, 'executionStartedAtMs'),
     latencyMs: completedAtMs === null ? null :
-      Math.max(ZERO, completedAtMs - entry.intendedIssueTimeMs),
+      elapsedSinceIntended(entry, completedAtMs, 'completedAtMs'),
     outcome: disposition.outcome,
     failureClass: disposition.failureClass ?? null,
     ...(disposition.unresolvedReason ? {unresolvedReason: disposition.unresolvedReason} : {}),
-    retries: state.retryEvidence?.retries ?? Math.max(ZERO, state.attempts.length - ONE),
+    // Retries are the attempts after the first, counted from the attempt records.
+    retries: state.attempts.length === ZERO ? ZERO : state.attempts.length - ONE,
     retryDelayMs: state.retryEvidence?.retryDelayMs ?? null,
     effectSummary: effectSummaryOf(state, disposition),
     endpoint: attemptOf?.endpoint ?? null,
@@ -311,7 +323,9 @@ async function runRequest(adapter, state, run) {
   } catch (error) {
     if (run.stopped) return;
     state.retryEvidence = error?.oltpRetryEvidence ?? null;
-    state.completedAtMs = state.retryEvidence?.completedAtMs ?? run.now();
+    // With retry evidence the retry owner recorded the end; without it the error
+    // came from outside the retry owner and the request ended when it surfaced.
+    state.completedAtMs = state.retryEvidence ? state.retryEvidence.completedAtMs : run.now();
     state.final = settleFromError(state);
   }
 }

@@ -28,7 +28,7 @@
   "censusSize": 2516,
   "digest": "fnv1a32-686d4969",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-807036aa",
+  "observationDigest": "fnv1a32-be5e3823",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5726,7 +5726,8 @@
         "data/tidb-comparison",
         "data/tidb-comparison/forensic",
         "docs/benchmarks",
-        "src"
+        "src",
+        "test/distributed/harness"
       ]
     },
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": {

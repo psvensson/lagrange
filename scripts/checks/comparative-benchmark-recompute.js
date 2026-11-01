@@ -22,6 +22,9 @@ import {
 import {
   regenerateAllBenchmarkArtifactsFromAdmitted,
 } from '../../test/distributed/harness/raw-observation-campaign-specs.js';
+import {
+  verifyRetainedRawObservationText,
+} from '../../test/distributed/harness/raw-observation-forensic-reader.js';
 import {readRawObservationSources} from '../../test/distributed/harness/raw-observation-store.js';
 import {
   BENCHMARK_PROFILE_CLASS,
@@ -71,15 +74,25 @@ function copyInputs(rootDir, scratch) {
   }
 }
 
-function checkForensicCoverage(rootDir) {
+// Every retained (non-v2) line must be an intact forensic record and must be
+// covered by an invalidation-ledger entry.
+function checkRetainedRecords(rootDir) {
   const raw = readRawObservationSources(rootDir);
+  for (const source of raw.sources) {
+    try {
+      verifyRetainedRawObservationText(fs.readFileSync(path.join(rootDir, source.path), UTF8),
+        source.path);
+    } catch (err) {
+      differ(err.message);
+    }
+  }
   const ledger = readInvalidationLedger(rootDir);
-  for (const f of raw.forensicRecords) {
+  for (const f of raw.retainedReferences) {
     const covered = arraySome(ledger, (inv) => inv.scope.file === f.file &&
       (inv.scope.campaignGitCommit === null ||
         inv.scope.campaignGitCommit === f.campaignGitCommit) &&
-      (inv.scope.receiptIds === 'all' || arrayIncludes(inv.scope.receiptIds, f.record.receiptId)));
-    if (!covered) differ(`forensic record ${f.file}#${f.record.receiptId} has no ledger entry`);
+      (inv.scope.receiptIds === 'all' || arrayIncludes(inv.scope.receiptIds, f.recordId)));
+    if (!covered) differ(`forensic record ${f.file}#${f.recordId} has no ledger entry`);
   }
 }
 
@@ -145,7 +158,7 @@ function compareTrees(rootDir, scratch) {
 async function recomputeComparativeBenchmarks(rootDir = REPO_ROOT) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'comparative-recompute-'));
   try {
-    checkForensicCoverage(rootDir);
+    checkRetainedRecords(rootDir);
     copyInputs(rootDir, scratch);
     await regenerateAllBenchmarkArtifactsFromAdmitted(scratch);
     compareTrees(rootDir, scratch);

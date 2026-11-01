@@ -66,7 +66,8 @@ function observe(output, product) {
     product,
     dispatchStatus: output.dispatch.status,
     accounting: observations?.accounting ?? null,
-    latencyCount: observations?.latency?.count ?? 0,
+    // A blocked dispatch or a run without a window has no latency summary at all.
+    latencyCount: observations?.latency ? observations.latency.count : null,
     failureClasses: [...classes],
     outputKeys: [...collectKeys(output)],
     statements: [...product.state.statements],

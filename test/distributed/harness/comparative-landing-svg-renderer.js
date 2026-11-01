@@ -74,7 +74,8 @@ function renderSvgSection(section, top) {
       `${escapeXml(row.label)}</text>`);
     section.columns.forEach((col, i) => {
       const cell = row.cells[col.key];
-      if (cell) parts.push(renderSvgCell(cell, PAD + LABEL_WIDTH + i * CELL_WIDTH, y));
+      if (!cell) throw new Error(`${row.label}/${col.key}: no admission cell`);
+      parts.push(renderSvgCell(cell, PAD + LABEL_WIDTH + i * CELL_WIDTH, y));
     });
   });
   return {svg: arrayJoin(parts, ''), height: 48 + section.rows.length * ROW_HEIGHT + SECTION_GAP};

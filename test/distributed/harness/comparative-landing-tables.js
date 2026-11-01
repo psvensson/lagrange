@@ -55,13 +55,13 @@ function formatCapacity(metrics) {
  * @return {string}
  */
 function formatCell(cell) {
-  if (!cell) return CLAIM_CELL_STATUS.NOT_MEASURED;
+  if (!cell) throw new Error('a rendered cell must come from admission; none was given');
   const reasons = cell.reasons.length > 0 ? ` (${arrayJoin(cell.reasons, ', ')})` : '';
   const head = `${cell.status}${reasons}`;
   if (!cell.metrics) return head;
   const setup = arrayMap(cell.metrics.setupFailures || [], (f) =>
-    `; setup failed in ${f.runId}: ${f.failureClass} ${f.sqlState ?? f.code ?? ''} ` +
-    `${f.message ?? ''}`);
+    `; setup failed in ${f.runId}: ${f.failureClass}, sqlstate ${f.sqlState}, ` +
+    `code ${f.code}, message ${f.message}`);
   const counts = `${cell.metrics.profileClass} profile: ` +
     `${formatAccounting(cell.metrics.accounting)}${arrayJoin(setup, '')}`;
   return cell.metrics.capacity ?
@@ -143,7 +143,8 @@ function renderSectionHtml(section) {
   const rows = arrayMap(section.rows, (row) => `<tr><td>${escapeXml(row.label)}</td>` +
     arrayJoin(arrayMap(section.columns, (c) => {
       const cell = row.cells[c.key];
-      return `<td class="${escapeXml(cell?.status ?? CLAIM_CELL_STATUS.NOT_MEASURED)}">` +
+      if (!cell) throw new Error(`${row.label}/${c.key}: no admission cell`);
+      return `<td class="${escapeXml(cell.status)}">` +
         `${escapeXml(formatCell(cell))}</td>`;
     }), '') + '</tr>');
   return `<h2>${escapeXml(section.heading)}</h2><p>${escapeXml(section.description)}</p>` +

@@ -188,7 +188,7 @@ function buildFixtureRun(options = {}) {
       retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id, openLoopProfileId: OLTP_OPEN_LOOP_PROFILE.id,
       sweepPlanDigest: `sha256:${hexDigits('4')}`, offeredRatePerSec, profileClass,
       operationSliceDigest: '', plannedOperationCounts: {}, repetition,
-      orderIndex: repetition - 1, warmup: {operations: 0},
+      orderIndex: repetition - 1, warmup: {operations: 0, digest: null},
     },
     deployment: {
       hosts, roles: arrayMap(products, (p) => ({role: p.role, host: p.host,
@@ -209,7 +209,7 @@ function buildFixtureRun(options = {}) {
       events: [], closure: {status: CLOSURE_STATUS.COMPLETE, unclosed: []},
     },
     observations: {
-      runStatus: BENCHMARK_RUN_STATUS.COMPLETED, setup: null,
+      runStatus: BENCHMARK_RUN_STATUS.COMPLETED, setup: null, warmup: null,
       requests, accounting: null, executedOperationsDigest: '',
       window: {scheduledMs: requestCount * 10, drainMs: requestCount * 10 + latencyMs,
         drainOverrunMs: latencyMs, startedAt: FIXTURE_TIME, endedAt: FIXTURE_LATER},
@@ -244,8 +244,9 @@ function composeFixtureRunFromDriverOutput(base, output) {
       endpoint: {...base.deployment.endpoint, ...output.deployment.endpoint},
       dataset: output.deployment.dataset},
     observations: output.observations,
-    correctness: {...output.correctness,
-      semanticGate: output.correctness.semanticGate ?? base.correctness.semanticGate},
+    // The driver never produces the gate; the proof journey does. The fixture's
+    // gate stands in for the proof journey's record.
+    correctness: {...output.correctness, semanticGate: base.correctness.semanticGate},
   };
   run.rawObservationsDigest = computeRunObservationsDigest(run);
   return run;

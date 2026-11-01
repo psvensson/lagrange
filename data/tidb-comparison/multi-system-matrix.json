@@ -6218,8 +6218,7 @@
       "title": "Three-to-five-node scale-out",
       "columns": [
         "3-node",
-        "5-node",
-        "observed-placement"
+        "5-node"
       ],
       "rows": [
         {
@@ -7655,7 +7654,16 @@
               "metrics": null
             }
           }
-        },
+        }
+      ]
+    },
+    {
+      "experimentId": "replica-placement-5node-rf3",
+      "title": "Observed replica placement (5 nodes, RF=3)",
+      "columns": [
+        "observed-placement"
+      ],
+      "rows": [
         {
           "rowId": "placement/lagrange",
           "label": "Replica placement: lagrange",

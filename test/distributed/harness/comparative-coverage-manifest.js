@@ -123,11 +123,20 @@ function isLagrange(targetId) {
   return stringStartsWith(targetId, T.LAGRANGE);
 }
 
+// A claim names the distinct machines it needs; there is no default count.
+function requiredHostCount(targetId, explicit) {
+  const count = explicit === undefined ? MIN_HOSTS.get(targetId) : explicit;
+  if (!Number.isSafeInteger(count) || count < 1) {
+    throw new Error(`coverage manifest: no distinct-host requirement for ${targetId}`);
+  }
+  return count;
+}
+
 function claim(targetId, scenario, subkind, claimKind, forensicReceiptIds, options = {}) {
   return Object.freeze({
     claimKey: `${targetId}/${scenario}/${subkind}`,
     targetId, scenario, subkind, claimKind,
-    minDistinctHosts: options.minDistinctHosts ?? MIN_HOSTS.get(targetId) ?? 1,
+    minDistinctHosts: requiredHostCount(targetId, options.minDistinctHosts),
     forensicReceiptIds: Object.freeze(forensicReceiptIds),
     declared: options.declared ?? null,
   });
@@ -189,14 +198,17 @@ function scaleoutRows() {
       Object.fromEntries(arrayMap(SCALEOUT_NODE_COUNTS, (n) => [`${n}-node`,
         claim(targetId, 'scaleout', `${mode}-${n}node`, CLAIM_KIND.SCALEOUT,
           [`receipt-scaleout-${mode}-${targetId}-${n}node`], {minDistinctHosts: n})])))));
-  const coverage = arrayMap([
+  return modeRows;
+}
+
+function placementRows() {
+  return arrayMap([
     [T.LAGRANGE, T.LAGRANGE_5], [T.TIDB, T.TIDB], [T.CITUS_UDF, T.CITUS_UDF],
     [T.YUGABYTE_PROC, T.YUGABYTE_PROC], [T.IGNITE, T.IGNITE],
   ], ([id3, id5]) => row(`placement/${id3}`, `Replica placement: ${id3}`, {
     'observed-placement': claim(id3, 'placement', '5node-rf3', CLAIM_KIND.PLACEMENT,
       [`receipt-${id3}-local-only`, `receipt-${id5}-sequential`], {minDistinctHosts: 5}),
   }));
-  return [...modeRows, ...coverage];
 }
 
 const SWEEP_TARGETS = Object.freeze([
@@ -300,7 +312,9 @@ function buildCoverageManifest() {
     (t) => [t.targetId, buildTargetClaims(t.targetId)]));
   const experiments = [
     experiment('scaleout-3to5-node-rf3', 'Three-to-five-node scale-out',
-      ['3-node', '5-node', 'observed-placement'], scaleoutRows()),
+      ['3-node', '5-node'], scaleoutRows()),
+    experiment('replica-placement-5node-rf3', 'Observed replica placement (5 nodes, RF=3)',
+      ['observed-placement'], placementRows()),
     experiment('partition-granularity-sweep', 'Partition granularity sweep (5 nodes)',
       arrayMap(PARTITION_COUNTS, (p) => `p${p}`), partitionRows()),
     experiment('scenario-b-rtt-sweep', 'Scenario B under controlled network delay',
