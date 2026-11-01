@@ -64,7 +64,7 @@ import {RAFT_PEER_PROGRESS_PROBE_REASON} from
   '../../src/raft/raft-operation-port-constants.js';
 import {
   COMMITTED_ENTRY_COUNT,
-  LEARNER_ADDRESS,
+  LEARNER_REPLICA,
   NO_ACKNOWLEDGED_MATCH_INDEX,
   configureFixtureRuntime,
   createFiveNodeFixture,
@@ -133,7 +133,7 @@ async (t) => {
         'not leader discovery or quorum shape',
     );
     t.equal(
-      leader.raft.readStatus().followerProgress[LEARNER_ADDRESS],
+      leader.raft.readStatus().followerProgress[LEARNER_REPLICA],
       NO_ACKNOWLEDGED_MATCH_INDEX,
       'the leader holds no progress evidence for the partitioned learner',
     );
@@ -153,7 +153,7 @@ async (t) => {
       'the proven learner promotes within the retry cadence, not 30s',
     );
     const matchIndex =
-      leader.raft.readStatus().followerProgress[LEARNER_ADDRESS];
+      leader.raft.readStatus().followerProgress[LEARNER_REPLICA];
     t.ok(
       Number.isFinite(matchIndex),
       'promotion happened only after the leader observed learner progress',
@@ -290,7 +290,7 @@ async (t) => {
   try {
     const partitioned = leader.raft.readStatus();
     t.equal(
-      partitioned.followerProgress[LEARNER_ADDRESS],
+      partitioned.followerProgress[LEARNER_REPLICA],
       NO_ACKNOWLEDGED_MATCH_INDEX,
       'precondition: the leader holds no acknowledged progress for the ' +
         'partitioned learner',
@@ -305,7 +305,7 @@ async (t) => {
     // probe triggers one append to the learner (lost here: the replication
     // path is still partitioned).
     t.match(
-      await leader.raft.probePeerProgress(LEARNER_ADDRESS),
+      await leader.raft.probePeerProgress(LEARNER_REPLICA),
       {
         outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
         reason: RAFT_PEER_PROGRESS_PROBE_REASON.PROGRESS_PROBE_SENT,
@@ -333,7 +333,7 @@ async (t) => {
 
     // Typed outcome 2: caught up - the probe observes the leader's own
     // progress record, which covers the committed prefix.
-    const observed = await leader.raft.probePeerProgress(LEARNER_ADDRESS);
+    const observed = await leader.raft.probePeerProgress(LEARNER_REPLICA);
     t.match(
       observed,
       {
