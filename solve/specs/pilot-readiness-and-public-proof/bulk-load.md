@@ -116,7 +116,7 @@ Fail closed, typed, durable:
 - No bypass write path, no direct-to-partition injection, no second
   transaction coordinator (D11).
 - Single-table loads in v1; multi-table orchestration is Q9's plan layer.
-- No backup/restore/PITR semantics (D9; commercial companion epic).
+- No backup/restore/PITR semantics in this bulk-load work unit (D9). The generic user recovery mechanisms are separate AGPL 1.0 work under the current edition matrix; this non-goal does not reclassify them as paid.
 - Community/AGPL scope per `edition-matrix.md`.
 
 ## Open decisions left to the Quest

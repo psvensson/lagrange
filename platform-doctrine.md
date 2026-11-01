@@ -36,6 +36,18 @@ The guiding principle is:
 
 **external simplicity, internal rigor.**
 
+Lagrange remains a complete, usable distributed runtime without optional
+development or enterprise products. Lagrange Images and Lagrange Object
+Environment can provide a persistent, language-rich development experience,
+but neither is necessary to author ordinary services, use SQL, deploy,
+operate or recover Lagrange. Commercial operations may coordinate deployments,
+verify recovery and administer organization policy through ordinary public
+contracts; physical routing, replication, authorization and service execution
+retain their single core owners. This is platform framing; the
+[edition matrix](edition-matrix.md) determines ownership and the
+[current capabilities page](docs/current-capabilities-and-limitations.md)
+determines what is actually supported.
+
 Users interact with a small set of concepts.  
 The system contains the complexity required to make those concepts scalable, reliable, and programmable.
 

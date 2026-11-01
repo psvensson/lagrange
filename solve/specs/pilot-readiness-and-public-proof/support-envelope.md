@@ -107,8 +107,11 @@ script stage, and removing it is a release-process regression.
   pairs.
 - No re-running dependency certifications — Q6/Q7/Q8–Q9/Q11 receipts are
   linked (D11).
-- No backup/restore/PITR implementation; `backupDependency` may only link
-  externally (D9). Community/AGPL scope per `edition-matrix.md` (D8).
+- No backup/restore/PITR implementation in this support-envelope work unit
+  (D9). `backupDependency` references a separately supported recovery
+  provider or reports absence; the future AGPL 1.0 backup mechanisms are
+  not implemented by this Quest. Community/AGPL scope per the current
+  `edition-matrix.md` (D8).
 - No prose-only envelope: documentation is generated from the record
   (D10).
 
