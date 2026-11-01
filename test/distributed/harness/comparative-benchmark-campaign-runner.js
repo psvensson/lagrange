@@ -104,7 +104,10 @@ function recordedDeployment({attempt, header, events, closure}) {
     roles: deployment.roles, storage: deployment.storage, runClass: deployment.runClass,
     readiness: deployment.readiness, dataset: workload?.dataset ?? null,
     placement: workload?.placement ?? deployment.placement ?? null,
-    endpoint: deployment.endpoint, accessEvidence: deployment.accessEvidence ?? null,
+    // The deployer's binding (containerId, protocol) with the endpoint the
+    // workload reports it used.
+    endpoint: {...deployment.endpoint, ...(workload?.endpoint || {})},
+    accessEvidence: deployment.accessEvidence ?? null,
     loadGenerator: workload?.loadGenerator ?? null,
     events: arrayFilter(events, (event) => arrayIncludes(DEPLOYMENT_EVENT_KINDS, event.kind)),
     closure: closureOf(closure), roleObservations: attempt.roleObservations ?? null};
@@ -181,19 +184,18 @@ async function teardownSafely(deps, run, deployment) {
 
 function runRecord({run, manifest, header, state, failure, attempt, events, closure,
   startedAt, endedAt, recordOwner}) {
-  const slice = attempt?.workload?.plan;
+  // The frozen manifest's preregistered plan (warm-up spec included), then the
+  // plan identity the workload executed, as stream A composes them.
   const plan = {...manifest.plan, manifestDigest: manifest.manifestDigest,
     offeredRatePerSec: run.offeredRatePerSec, repetition: run.repetition,
-    orderIndex: run.orderIndex, operationSliceDigest: slice?.operationSliceDigest ?? null,
-    plannedOperationCounts: slice?.plannedOperationCounts ?? null};
+    orderIndex: run.orderIndex, ...(attempt?.workload?.plan || {})};
   const record = {recordType: RECORD_TYPE.RUN, schemaVersion: RECORD_SCHEMA,
     campaignId: manifest.campaignId, runId: run.runId, claimKey: run.claimKey,
     targetId: run.targetId, scenario: run.scenario, subkind: run.subkind,
     executionTarget: header.executionTarget,
     execution: {state, failure, startedAt, endedAt},
     identity: {harness: attempt?.workload?.harness ?
-      {...header.harness, ...attempt.workload.harness, gitCommit: header.harness.gitCommit} :
-      header.harness,
+      {...attempt.workload.harness, gitCommit: header.harness.gitCommit} : header.harness,
     products: attempt?.deployment?.identity?.products ?? null,
     productsAfterWindow: attempt?.productsAfter ?? null, publication: null},
     plan, deployment: recordedDeployment({attempt, header, events, closure}),

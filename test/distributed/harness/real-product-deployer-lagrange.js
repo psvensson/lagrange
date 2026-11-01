@@ -33,19 +33,23 @@ import {
   arrayFind,
   arrayFlatMap,
   arrayMap,
+  stringIncludes,
   stringIndexOf,
   stringReplace,
   stringPadStart,
 } from './real-product-captured-intrinsics.js';
 import {
+  DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,
   READINESS_STATE,
+  deploymentFailure,
   requireCampaignId,
   resolveReadinessBudget,
 } from './real-product-deployment-contract.js';
 import {
   classifyStorage,
   inspectProducts,
+  pinnedVersionPattern,
   runClassOf,
   verifyProductIdentity,
 } from './real-product-identity.js';
@@ -85,6 +89,14 @@ const SYSTEM_TABLE_QUERIES = Object.freeze({
   services: 'SELECT * FROM services WHERE service_type = \'partition\'',
 });
 const PROBE_TABLE = 'bench_readiness_probe';
+const DIGEST_MARK = '@sha256:';
+const REVISION_LABEL = 'org.opencontainers.image.revision';
+// The canonical tables' routability after CREATE TABLE: on the 2026-11-01 lab
+// a 5-node cluster needed 2 min 41 s for its first table and 3-/4-node
+// clusters none within 13-21 min (live-diagnosis-2026-11-01.md). The bound is
+// 15 polls a minute for 15 minutes (5.6x the one routable observation); it is
+// recorded with the outcome, and exhaustion is the arm's product failure.
+const ROUTABLE_ATTEMPTS = 900;
 const BOOT_PROVENANCE_MARKER = 'bootedSrcFingerprint';
 
 function nodeIdOf(index) {
@@ -109,9 +121,12 @@ function storageArgs(opts, campaignId, index) {
     ['-v', `${opts.storageRoot}/${campaignId}/lagrange-${index + 1}:${DATA_DIR}`] : [];
 }
 
-function versionPatternOf(imageRef) {
-  const match = SEMVER_TAG.exec(String(imageRef));
-  return match ? new RegExp(`^${stringReplace(match[1], /\./gu, '\\.')}$`, 'u') : /\S/u;
+// A digest reference pins the artifact but not a version string: the expected
+// product version then comes from the campaign (opts.lagrangeVersion).
+function versionPatternOf(imageRef, expectedVersion) {
+  if (expectedVersion) return new RegExp(`^${stringReplace(expectedVersion, /\./gu, '\\.')}$`, 'u');
+  return pinnedVersionPattern(imageRef, SEMVER_TAG,
+    (version) => new RegExp(`^${stringReplace(version, /\./gu, '\\.')}$`, 'u'));
 }
 
 async function getJson(ctx, url) {
@@ -284,6 +299,12 @@ async function reportedVersions(ctx, products) {
 async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId, sleep}) {
   requireCampaignId(campaignId);
   const image = opts.lagrangeImage || LAGRANGE_IMAGE_DEFAULT;
+  // A publishable run (explicit host volumes) needs the artifact pinned by
+  // digest: one tag resolved to four different images across the lab (D18).
+  if (opts.storageRoot && !stringIncludes(image, DIGEST_MARK)) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `a publishable run needs the Lagrange image by digest, got ${image}`, {image});
+  }
   const ctx = {sshRun, opts, clientIp, sleep, budget: resolveReadinessBudget(opts)};
   const connection = {user: REQUEST_CELL_AUTH.USER, password: REQUEST_CELL_AUTH.PASSWORD,
     database: REQUEST_CELL_AUTH.DATABASE};
@@ -310,7 +331,17 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const probe = await probeWriteReadback(ctx, query, campaignId);
   const products = verifyProductIdentity(
     await reportedVersions(ctx, await inspectProducts({sshRun, opts, roles})),
-    {[NODE_ROLE]: {imageRef: image, versionPattern: versionPatternOf(image)}});
+    {[NODE_ROLE]: {imageRef: image,
+      versionPattern: versionPatternOf(image, opts.lagrangeVersion)}});
+  if (opts.lagrangeRevision) {
+    const wrong = arrayFilter(products, (product) =>
+      product.imageLabels?.[REVISION_LABEL] !== opts.lagrangeRevision);
+    if (wrong.length > 0) {
+      throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+        `image revision label differs from ${opts.lagrangeRevision}`,
+        {hosts: arrayMap(wrong, (one) => [one.host, one.imageLabels?.[REVISION_LABEL] ?? null])});
+    }
+  }
   const binding = await bindEndpointToContainer({sshRun, opts, campaignId,
     endpoint: {host: listener.host, port: listener.port},
     candidates: arrayFilter(roles, (role) => role.host === listener.host)});
@@ -337,8 +368,10 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
       // After the canonical load: every partition of every canonical table
       // routable and replicated, or a typed readiness exhaustion.
       observePlacement: async () => {
-        const routable = await clusterReady(ctx, 'lagrange-canonical-tables-routable', query,
-          nodeRoles, arrayMap(CANONICAL_TABLES, (table) => table.name));
+        const routable = await clusterReady({...ctx, budget: {...ctx.budget,
+          attempts: ctx.budget.routableAttempts ?? ROUTABLE_ATTEMPTS}},
+        'lagrange-canonical-tables-routable', query, nodeRoles,
+        arrayMap(CANONICAL_TABLES, (table) => table.name));
         return {...placementOf(await readPartitions(ctx, seedHost), roles,
           new Date().toISOString()), routable};
       },

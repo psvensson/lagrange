@@ -16,7 +16,7 @@ import {
   DEPLOYMENT_FAILURE,
   deploymentFailure,
 } from './real-product-deployment-contract.js';
-import {errorText, shellWord} from './real-product-remote-shell.js';
+import {errorText, execWithStatus, shellWord} from './real-product-remote-shell.js';
 
 const FIELD_SEPARATOR = '|';
 const HOST_FACTS_COMMAND = 'echo "$(hostname)|$(cat /proc/sys/kernel/random/boot_id)|' +
@@ -49,23 +49,25 @@ async function ensureProductImages({hosts, images, sshRun, opts}) {
   const present = [];
   for (const host of hosts) {
     for (const image of images) {
-      let imageId;
-      try {
-        imageId = stringTrim(String(await sshRun(host.ip, opts,
-          `docker image inspect --format '{{.Id}}' ${shellWord(image)}`)));
-      } catch {
+      // Absent is decided by docker's own exit status, never by any failure:
+      // an unreachable host is a typed failure, not a reason to pull.
+      const inspect = `docker image inspect --format '{{.Id}}' ${shellWord(image)}`;
+      const local = await execWithStatus(sshRun, host.ip, opts, `${inspect} 2>&1`);
+      let pulled = false;
+      if (local.exitCode !== 0) {
         try {
           await sshRun(host.ip, opts, `docker pull -q ${shellWord(image)}`,
             IMAGE_PULL_TIMEOUT_MS);
-          imageId = stringTrim(String(await sshRun(host.ip, opts,
-            `docker image inspect --format '{{.Id}}' ${shellWord(image)}`)));
+          pulled = true;
         } catch (error) {
           throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
-            `image ${image} unavailable on ${host.ip}: ${errorText(error)}`,
-            {host: host.ip, image});
+            `image ${image} absent on ${host.ip} and not pullable: ${errorText(error)}`,
+            {host: host.ip, image, inspect: local.stdout});
         }
       }
-      present.push({host: host.ip, image, imageId});
+      const imageId = pulled ? stringTrim(String(await sshRun(host.ip, opts, inspect))) :
+        stringTrim(local.stdout);
+      present.push({host: host.ip, image, imageId, pulled});
     }
   }
   return present;

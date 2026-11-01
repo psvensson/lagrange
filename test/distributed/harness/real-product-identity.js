@@ -52,7 +52,12 @@ function imageRepository(imageRef) {
 // filled in), its build labels and creation time.
 async function readImageFacts({sshRun, opts, host, imageId, imageRef}) {
   const image = JSON.parse(String(await sshRun(host, opts,
-    `docker image inspect --format '{{json .}}' ${shellWord(imageId)}`) || 'null')) || {};
+    `docker image inspect --format '{{json .}}' ${shellWord(imageId)}`) || 'null'));
+  if (!image || typeof image !== 'object') {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `image ${imageId} of a running container on ${host} could not be inspected`,
+      {host, imageId});
+  }
   const digests = Array.isArray(image.RepoDigests) ? image.RepoDigests : [];
   const repository = imageRepository(imageRef);
   const repoDigest = arrayFind(digests, (digest) => stringStartsWith(digest,
@@ -130,6 +135,24 @@ async function observeProductsAfterWindow({sshRun, opts, products}) {
     }
   }
   return observed;
+}
+
+/**
+ * The product version an image reference pins, as a pattern on the version the
+ * product reports. A reference that pins no version (a bare or `latest` tag)
+ * has no expectation: identity is unverified, never accepted on any version.
+ * @param {string} imageRef
+ * @param {RegExp} tagPattern captures the pinned version
+ * @param {Function} toPattern (version) => RegExp
+ * @return {RegExp}
+ */
+function pinnedVersionPattern(imageRef, tagPattern, toPattern) {
+  const match = tagPattern.exec(String(imageRef));
+  if (!match) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `image reference ${imageRef} pins no product version to verify against`, {imageRef});
+  }
+  return toPattern(match[1]);
 }
 
 function identityProblems(product, expectation) {
@@ -219,6 +242,7 @@ export {
   inspectProducts,
   inspectRunningContainer,
   observeProductsAfterWindow,
+  pinnedVersionPattern,
   runClassOf,
   verifyProductIdentity,
 };

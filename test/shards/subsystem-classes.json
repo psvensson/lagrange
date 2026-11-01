@@ -28,7 +28,7 @@
   "censusSize": 2531,
   "digest": "fnv1a32-a90b6559",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8d4e5ada",
+  "observationDigest": "fnv1a32-29313780",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7206,15 +7206,8 @@
     "test/distributed/harness/__tests__/real-product-cluster-deployer-dataset.test.js": {
       "files": [
         "Dockerfile",
-        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/run-benchmark-workload.js"
-      ],
-      "directories": [
-        "src"
+        "test/distributed/config/local.json"
       ]
     },
     "test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js": {

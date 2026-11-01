@@ -41,10 +41,10 @@ const SMOKE_WORKLOAD_PROFILE =
 const COMPARATIVE_SMOKE_PROFILE = Object.freeze({
   id: 'comparative-smoke-v1',
   runClass: RUN_CLASS.SMOKE,
-  // Stream A's coverage manifest claims Scenario A as subkind `main`; the
-  // smoke character is the plan's profileClass. The workload dispatch (B1)
-  // names the smoke family `smoke` and owns its workload.
-  subkind: 'main',
+  // The smoke claim of stream A's coverage manifest (scenarioA/smoke, smoke
+  // targets lagrange, tidb-tikv, pg-single-primary) and the workload
+  // dispatch's smoke family share the subkind; the dispatch owns the workload.
+  subkind: 'smoke',
   workloadSubkind: 'smoke',
   workloadProfileId: SMOKE_WORKLOAD_PROFILE.id,
   campaignBudgetMinutes: 240,

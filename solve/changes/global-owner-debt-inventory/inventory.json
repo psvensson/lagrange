@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "c5c5792d8f25288fd416eb5484f1dc7f26db663ba8d31e2f884069b5db768b5f"
+        "sha256": "54fdc3163560c6d4bd066978444d73d8cfbc8bcca465f248c49382c1411a572a"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3299495,
-        "sha256": "0e749e45b6271cca6cf1634434a3e9d515dc61a8d27b990fe8f6fbef2fab4da7"
+        "bytes": 3299412,
+        "sha256": "3fa830161a91d90108c47b11c44facc75b6d05db591b99c2cb5b872b21fb3cdd"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "fcb9c1d6a66779d2f9ca2032368f374d3383fba5c4f36dd4e525897afff287cd"
+        "sha256": "f6124b70a1d112a0e508f6f793440177a20ebad8585ce8dbb820cf1dfea67cce"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "e5450a8a75f114891a2becea3e0ff24f1e612d471a29047808f150b1ee8d30a7"
+    "inputDigest": "1e5c8847728ded4607298233ad7425a2cfc28d520d17acd68dbbd44b00f5876b"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "c5c5792d8f25288fd416eb5484f1dc7f26db663ba8d31e2f884069b5db768b5f"
+        "sha256": "54fdc3163560c6d4bd066978444d73d8cfbc8bcca465f248c49382c1411a572a"
       },
-      "declaredCount": 1750,
-      "observedCount": 1750,
-      "assignedCount": 1750
+      "declaredCount": 1751,
+      "observedCount": 1751,
+      "assignedCount": 1751
     },
     "cognitive": {
       "identity": {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "fcb9c1d6a66779d2f9ca2032368f374d3383fba5c4f36dd4e525897afff287cd"
+          "sha256": "f6124b70a1d112a0e508f6f793440177a20ebad8585ce8dbb820cf1dfea67cce"
         },
         "cloneGroups": 649,
         "duplicatedLines": 24346,
@@ -173,29 +173,29 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3299495,
-        "sha256": "0e749e45b6271cca6cf1634434a3e9d515dc61a8d27b990fe8f6fbef2fab4da7"
+        "bytes": 3299412,
+        "sha256": "3fa830161a91d90108c47b11c44facc75b6d05db591b99c2cb5b872b21fb3cdd"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "fe1456643a404ba5fa076c4f79ebeafdbdbf14d1eb17908d41f3c1d8022287dd",
+      "sourceDigest": "73b4387fbbe51e1d5d6ecd044c99386954ecc348b4803d529ecb21baf8c6520a",
       "moduleCount": 5911,
-      "edgeCount": 32057,
+      "edgeCount": 32056,
       "unresolvedCount": 44
     }
   },
   "assignment": {
-    "sourceSignalCount": 2455,
-    "assignedSignalCount": 2455,
-    "uniqueAssignmentCount": 2455,
-    "digest": "695851ced3536f2c48538adf5f0673dfeb5e11ab476f0cc91a4ad11040db6434"
+    "sourceSignalCount": 2456,
+    "assignedSignalCount": 2456,
+    "uniqueAssignmentCount": 2456,
+    "digest": "391a7420db399c1de4fc31c4ef47720f739b49d04843b1165e3981751cc30826"
   },
   "signalCounts": {
     "cognitive": 147,
-    "complexity": 1750,
+    "complexity": 1751,
     "duplication": 472,
     "fileSize": 47,
     "lintExclusion": 39
@@ -217,17 +217,17 @@
         "test/distributed/harness"
       ],
       "fileCount": 179,
-      "signalCount": 492,
-      "complexity": 407,
+      "signalCount": 493,
+      "complexity": 408,
       "cognitive": 0,
       "oversizedFiles": 11,
       "duplicatedLines": 13223,
       "cloneTouches": 312,
       "cycleGroups": 0,
       "lintExclusions": 10,
-      "importIn": 426,
+      "importIn": 425,
       "importOut": 686,
-      "score": 2928.4,
+      "score": 2932.4,
       "topPaths": [
         "test/distributed/harness/failure-bundle-playback-classification.js",
         "test/distributed/harness/report-writer.js",
@@ -3694,8 +3694,8 @@
           }
         ],
         "baseline": {
-          "score": 2928.4,
-          "complexity": 407,
+          "score": 2932.4,
+          "complexity": 408,
           "cognitive": 0,
           "oversizedFiles": 11,
           "duplicatedLines": 13223,

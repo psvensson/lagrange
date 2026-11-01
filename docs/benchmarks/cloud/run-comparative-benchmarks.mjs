@@ -87,8 +87,9 @@ const execFileAsync = promisify(execFile);
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const TARGET = Object.freeze({LAB: 'lab', GCP: 'gcp'});
 const PROFILES = Object.freeze({smoke: COMPARATIVE_SMOKE_PROFILE});
+// The smoke targets of stream A's coverage manifest.
 const DEFAULT_TARGETS = Object.freeze([COMPARATIVE_TARGET.LAGRANGE,
-  COMPARATIVE_TARGET.TIDB_TIKV, COMPARATIVE_TARGET.PG_SYNC_STANDBY_HA]);
+  COMPARATIVE_TARGET.TIDB_TIKV, COMPARATIVE_TARGET.PG_SINGLE_PRIMARY]);
 const PLAN_SCHEMA = 'lagrange-comparative-campaign-plan/v3';
 const SUMMARY_SCHEMA = 'lagrange-comparative-campaign-summary/v1';
 const SSH_TIMEOUT_MS = 120000;
@@ -119,7 +120,10 @@ Options:
   --campaign-id <id>            Campaign id (default: generated)
   --storage-root <path>         Host directory for product data volumes; without it
                                 data lives in the container layer (smoke only)
-  --lagrange-image <ref>        Lagrange image (default: ${LAGRANGE_IMAGE_DEFAULT})
+  --lagrange-image <ref>        Lagrange image (default: ${LAGRANGE_IMAGE_DEFAULT});
+                                publishable runs need repo@sha256:<digest>
+  --lagrange-version <v>        Product version the image must report (needed for a digest)
+  --lagrange-revision <sha>     org.opencontainers.image.revision the image must carry
   --raw-observations <path>     Append-only record store
                                 (default: ${DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH})
   --output <path>               Campaign summary JSON
@@ -137,7 +141,8 @@ const VALUE_FLAGS = Object.freeze({
   '--storage-root': 'storageRoot', '--lagrange-image': 'lagrangeImage',
   '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
   '--lock-wait-minutes': 'lockWaitMinutes', '--client-checkout': 'clientCheckout',
-  '--client-node': 'clientNode',
+  '--client-node': 'clientNode', '--lagrange-version': 'lagrangeVersion',
+  '--lagrange-revision': 'lagrangeRevision',
 });
 
 function list(text) {
@@ -268,6 +273,7 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   // the controller's address (as the data host sees it) next to the load generator.
   const controllerIp = (await sshRun(dataIps[0], opts, 'echo "${SSH_CLIENT%% *}"')).trim();
   const deployOpts = {lagrangeImage: opts.lagrangeImage, storageRoot: opts.storageRoot || null,
+    lagrangeVersion: opts.lagrangeVersion || null, lagrangeRevision: opts.lagrangeRevision || null,
     proofClientIps: controllerIp ? [controllerIp] : []};
   const deployArm = (run) => deployComparativeTarget(run.targetId, {hosts: dataIps,
     clientIp: client.ip, sshRun, opts: deployOpts, campaignId: manifest.campaignId,

@@ -63,7 +63,8 @@ test('D21: data directories inside the container layer make the deployment a smo
   const ledgerB = createContainerLedger();
   const volume = createScriptedSsh(lagrangeHealthyRules(ledgerB, {hosts: HOSTS}));
   const durable = await deployers.deployLagrangeCluster(input(volume.sshRun, {
-    opts: {...OPTS, storageRoot: '/srv/lagrange-bench'},
+    opts: {...OPTS, storageRoot: '/srv/lagrange-bench', lagrangeVersion: '0.4.0',
+      lagrangeImage: `psvensson/lagrange@sha256:${'c'.repeat(64)}`},
   }));
   assert.equal(durable.runClass, 'publishable');
   assert.ok(arrayEvery(durable.storage, (entry) => entry.kind === 'host-volume' &&
@@ -111,3 +112,16 @@ test('J8: a running container of the wrong image fails identity', {timeout: 3000
       deployers.deployPostgresCluster(input(sshRun, {targetId: 'pg-single-primary'})),
       (error) => error.code === 'identity_unverified');
   });
+
+test('D18: a publishable run refuses a tag-only Lagrange image; a digest reference ' +
+  'verifies against the campaign\'s expected version and revision label', async () => {
+  const ledger = createContainerLedger();
+  const tagOnly = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts: HOSTS}));
+  await assert.rejects(deployers.deployLagrangeCluster(input(tagOnly.sshRun, {
+    opts: {...OPTS, storageRoot: '/srv/b'}})), (error) => error.code === 'identity_unverified');
+  const wrongRevision = createScriptedSsh(lagrangeHealthyRules(createContainerLedger(),
+    {hosts: HOSTS}));
+  await assert.rejects(deployers.deployLagrangeCluster(input(wrongRevision.sshRun, {
+    opts: {...OPTS, lagrangeVersion: '0.4.0', lagrangeRevision: '07206ba1c8'}})),
+  (error) => error.code === 'identity_unverified' && /revision/u.test(error.message));
+});

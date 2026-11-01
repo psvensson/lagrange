@@ -42,7 +42,7 @@ function b1Record(overrides = {}) {
       workloadProfileId: 'scenario-a-smoke-v1'},
     deployment: {endpoint: {host: '10.0.0.1', port: 5433}, dataset: {
       resetMethod: 'fresh-formation', verification: {status: 'verified',
-        observedLogicalChecksum: 'k', expectedLogicalChecksum: 'k',
+        method: 'm', observedLogicalChecksum: 'k', expectedLogicalChecksum: 'k',
         expectedTableRows: {item: 3}, observedTableRows: {item: 3}}}},
     observations: {runStatus: 'completed', requests: []},
     correctness: {semanticGate: null, finalState: null},
@@ -72,8 +72,11 @@ test('a completed B1 run maps into stream A fields', async () => {
   assert.equal(result.failure, null);
   assert.equal(result.productFailure, null);
   assert.deepEqual(result.plan.plannedOperationCounts, {payment: 2});
-  assert.equal(result.dataset.keyCoverage.present, 3);
+  assert.equal(result.dataset.verification.status, 'verified');
+  assert.deepEqual(result.endpoint, {host: '10.0.0.1', port: 5433});
+  assert.equal(result.plan.workloadProfileId, 'scenario-a-smoke-v1');
   assert.deepEqual(result.harness, {driverSourceSha256: 'feed', adapterIds: ['lagrange-pgwire']});
+  assert.equal(seen[0].subkind, 'smoke');
   assert.equal(result.loadGenerator.nodeVersion, 'v22.23.2');
   assert.deepEqual(result.loadGenerator.driverVersions, {pg: '8.18.0', mysql2: '3.24.4'});
   assert.equal(result.correctness.semanticGate, null);

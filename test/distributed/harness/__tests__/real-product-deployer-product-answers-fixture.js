@@ -30,7 +30,7 @@ function containerIdFor(index) {
 
 function imageOfRun(command) {
   const words = stringSplit(command, /\s+/u);
-  return arrayFind(words, (word) => /^(psvensson\/lagrange|pingcap\/(pd|tikv|tidb)|postgres|mysql):/u
+  return arrayFind(words, (word) => /^(psvensson\/lagrange|pingcap\/(pd|tikv|tidb)|postgres|mysql)[:@]/u
     .test(word)) || 'unknown:0';
 }
 

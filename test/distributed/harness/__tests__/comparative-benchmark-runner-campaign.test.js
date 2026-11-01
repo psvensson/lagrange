@@ -101,6 +101,8 @@ test('campaign: header first, one v2 run record per attempted run, append only',
       assert.equal(record.deployment.dataset.resetMethod, 'fresh-formation');
       assert.equal(record.plan.profileClass, 'smoke');
       assert.equal(record.plan.operationSliceDigest, 'sha256:slice');
+      assert.equal(record.plan.manifestDigest, MANIFEST.manifestDigest);
+      assert.ok(record.plan.warmup);
       assert.deepEqual(record.identity.productsAfterWindow, record.identity.products);
     }
     assert.equal(summary.exitCode, 0);

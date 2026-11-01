@@ -39,6 +39,7 @@ import {
 import {
   classifyStorage,
   inspectProducts,
+  pinnedVersionPattern,
   runClassOf,
   verifyProductIdentity,
 } from './real-product-identity.js';
@@ -69,9 +70,8 @@ function storageArgs(opts, campaignId, label) {
 }
 
 function versionPatternOf(image) {
-  const match = TAG.exec(String(image));
-  return match ? new RegExp(`(^|[^\\d])${stringSplit(match[1], '.').join('\\.')}([^\\d]|$)`,
-    'u') : /\d/u;
+  return pinnedVersionPattern(image, TAG, (version) =>
+    new RegExp(`(^|[^\\d])${stringSplit(version, '.').join('\\.')}([^\\d]|$)`, 'u'));
 }
 
 async function start(ctx, role, host, ordinal, image, dockerArgs, commandArgs) {

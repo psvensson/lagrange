@@ -31,6 +31,7 @@ import {
 import {
   classifyStorage,
   inspectProducts,
+  pinnedVersionPattern,
   runClassOf,
   verifyProductIdentity,
 } from './real-product-identity.js';
@@ -228,9 +229,8 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, c
   for (const product of products) {
     product.reportedVersion = await query(ctx, product, 'SELECT version()');
   }
-  const major = (MAJOR_TAG.exec(image) || [])[1];
   const expectation = {imageRef: image,
-    versionPattern: major ? versionPatternOfMajor(major) : /^PostgreSQL \d/u};
+    versionPattern: pinnedVersionPattern(image, MAJOR_TAG, versionPatternOfMajor)};
   verifyProductIdentity(products, {[ROLE.PRIMARY]: expectation, [ROLE.STANDBY]: expectation});
   const binding = await bindEndpointToContainer({sshRun, opts, campaignId,
     endpoint: {host: primary.host, port: PORT}, candidates: [primary]});

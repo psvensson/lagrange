@@ -63,7 +63,7 @@ test('manifest: two PostgreSQL arms in one campaign are refused', () => {
       'pg-patroni-sync-ha-rf3']}), /duplicates/u);
 });
 
-test('D12/D22: runs carry no unobserved knobs; they are all Scenario A main', () => {
+test('D12/D22: runs carry no unobserved knobs; they are all Scenario A smoke', () => {
   // Claims without execution are stream A's coverage-manifest cells, not runs.
   const built = manifest();
   assert.equal(built.claims, undefined);
@@ -72,7 +72,7 @@ test('D12/D22: runs carry no unobserved knobs; they are all Scenario A main', ()
     assert.equal(stringIncludes(text, knob), false, knob);
   }
   assert.ok(arrayEvery(built.runs, (run) => run.scenario === 'scenarioA' &&
-    run.subkind === 'main'));
+    run.subkind === 'smoke'));
   assert.equal(built.plan.profileClass, 'smoke');
 });
 

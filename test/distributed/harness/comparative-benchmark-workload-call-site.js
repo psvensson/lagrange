@@ -7,8 +7,9 @@
  * canonical dataset through the canonical adapter, verifies it through the
  * product's public interface (product snapshot vs the generator's expected
  * snapshot, benchmark-oltp-state-reconciliation.js) and measures. This module
- * hands B1 the deployment's endpoint and credentials, maps B1's answer into
- * stream A's record fields, and types every non-success: a dispatch refusal
+ * hands B1 the deployment's endpoint and credentials, returns B1's plan,
+ * endpoint, dataset and harness identity as stream A composes them, and types
+ * every non-success: a dispatch refusal
  * or non-execution, an endpoint B1 did not use, a plan that differs from the
  * frozen manifest, an unverified dataset (never measured as valid), and a
  * product that failed setup (`product-failure`: the record stays complete).
@@ -57,7 +58,11 @@ function bareDigest(value) {
 
 function connectionOf(run, deployment) {
   const endpoint = {host: deployment.endpoint.host, port: deployment.endpoint.port};
-  const access = deployment.access?.connection ?? {};
+  const access = deployment.access?.connection;
+  if (!access) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
+      `deployment of ${run.targetId} carries no client credentials`);
+  }
   return run.system === 'tidb-tikv' ? {endpoint, databaseName: access.database} :
     {endpoint, credentials: access};
 }
@@ -102,35 +107,6 @@ function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaign
   };
 }
 
-function keyedRows(rows) {
-  return Object.values(rows || {}).reduce((sum, count) => sum + Number(count || 0), 0);
-}
-
-/**
- * B1's dataset verification as stream A's deployment.dataset. Full key
- * coverage is claimed only when the observed logical checksum equals the
- * expected one (equality over every canonical row implies every key); any
- * other status leaves `present` null and fails the run.
- */
-function datasetRecordOf(dataset) {
-  const verification = dataset?.verification ?? {};
-  const verified = verification.status === OLTP_DATASET_VERIFICATION_STATUS.VERIFIED;
-  const expected = keyedRows(verification.expectedTableRows);
-  return {
-    resetMethod: dataset?.resetMethod ?? null,
-    method: verification.method ?? null,
-    status: verification.status ?? null,
-    tables: arrayMap(Object.entries(verification.observedTableRows || {}),
-      ([table, rows]) => ({table, rows, expectedRows:
-        verification.expectedTableRows?.[table] ?? null})),
-    keyCoverage: {expected, present: verified ? expected : null,
-      derivation: 'logical-checksum-equality'},
-    logicalChecksum: verification.observedLogicalChecksum ?? null,
-    expectedChecksum: verification.expectedLogicalChecksum ?? null,
-    error: verification.error ?? null,
-  };
-}
-
 function planFailure(manifest, b1Plan) {
   if (!b1Plan) return 'the workload returned no plan identity';
   if (bareDigest(b1Plan.datasetDigest) !== bareDigest(manifest.plan.datasetDigest)) {
@@ -149,7 +125,7 @@ function outcomeOf(record, manifest, deployment) {
     return {failure: {code: DEPLOYMENT_FAILURE.ENDPOINT_UNBOUND,
       message: 'the workload did not use the deployment endpoint', diagnostic: {used}}};
   }
-  const dataset = datasetRecordOf(record.deployment.dataset);
+  const dataset = record.deployment.dataset;
   const runStatus = record.observations?.runStatus ?? null;
   if (arrayIncludes(PRODUCT_FAILURE_STATUSES, runStatus)) {
     return {dataset, productFailure: {runStatus, setup: record.observations.setup ?? null}};
@@ -158,9 +134,10 @@ function outcomeOf(record, manifest, deployment) {
   if (planProblem) {
     return {dataset, failure: {code: FAILURE.PLAN_MISMATCH, message: planProblem}};
   }
-  if (dataset.keyCoverage.present === null) {
+  if (dataset?.verification?.status !== OLTP_DATASET_VERIFICATION_STATUS.VERIFIED) {
     return {dataset, failure: {code: DEPLOYMENT_FAILURE.DATASET_UNVERIFIED,
-      message: `loaded dataset ${dataset.status}`, diagnostic: dataset}};
+      message: `loaded dataset ${dataset?.verification?.status}`,
+      diagnostic: dataset?.verification ?? null}};
   }
   if (runStatus === BENCHMARK_RUN_STATUS.WATCHDOG_STOPPED) {
     return {dataset, failure: {code: DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
@@ -217,12 +194,13 @@ function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHo
     return {
       observations: record.observations,
       correctness: {...record.correctness, semanticGate},
-      plan: {operationSliceDigest: record.plan?.operationSliceDigest ?? null,
-        plannedOperationCounts: record.plan?.plannedOperationCounts ?? null,
-        workloadProfileId: record.plan?.workloadProfileId ?? null},
-      harness: {driverSourceSha256: record.identity?.harness?.driverSourceSha256 ?? null,
-        adapterIds: record.identity?.harness?.adapterIds ?? []},
-      dataset: outcome.dataset ?? null,
+      // B1's answer as stream A composes it: the plan identity B1 executed,
+      // the endpoint B1 used, the dataset B1 verified, the harness identity
+      // B1 reported (composeFixtureRunFromDriverOutput).
+      plan: record.plan ?? null,
+      endpoint: record.deployment.endpoint,
+      harness: record.identity?.harness ?? null,
+      dataset: outcome.dataset ?? record.deployment.dataset ?? null,
       placement,
       loadGenerator: {...await describeLoadGenerator(), host: clientHost, productHosts,
         notProductHost: true, nodeVersion: generator.nodeVersion ?? null,
@@ -240,6 +218,5 @@ export {
   LOAD_GENERATOR_CLI,
   createRemoteWorkloadRunner,
   createWorkloadRunExecutor,
-  datasetRecordOf,
   workloadRequestOf,
 };
