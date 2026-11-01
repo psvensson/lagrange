@@ -83,10 +83,9 @@ if ! command -v docker >/dev/null 2>&1; then
   apt-get install -y docker.io
   systemctl enable --now docker
 fi
-chmod 666 /var/run/docker.sock || true
-for u in $(ls /home 2>/dev/null || true); do
-  usermod -aG docker "$u" || true
-done
+# Docker socket access is NOT granted here: no world-writable socket and no
+# blanket group grant to every /home user. The operator grants the one SSH
+# user the runner connects as, explicitly (see cloud-reproduction-guide.md).
 '
 
 TMP_META="$(mktemp)"
@@ -133,8 +132,9 @@ echo "export HOSTS=\"${HOSTS_CSV}\""
 echo "export SSH_HOSTS=\"${SSH_HOSTS_CSV}\""
 echo "export SSH_USER=\"${SSH_USER}\""
 echo ""
-echo "Run the full comparative suite:"
-echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts \"\${HOSTS}\" --ssh-hosts \"\${SSH_HOSTS}\" --ssh-user \"\${SSH_USER}\" --execution-target gcp --regenerate-docs"
+echo "Grant Docker access to \${SSH_USER} on each VM yourself (the script does not), then preview and run:"
+echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp --hosts \"\${HOSTS}\" --ssh-hosts \"\${SSH_HOSTS}\" --ssh-user \"\${SSH_USER}\" --dry-run"
+echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp --hosts \"\${HOSTS}\" --ssh-hosts \"\${SSH_HOSTS}\" --ssh-user \"\${SSH_USER}\""
 echo ""
 echo "When finished, tear down all resources with:"
 echo "  ./docs/benchmarks/cloud/provision-gcp.sh --teardown"

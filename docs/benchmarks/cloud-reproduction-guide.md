@@ -1,155 +1,156 @@
-# Reproducing Comparative Benchmarks on GCP, AWS, and Azure
+# Reproducing the Comparative Benchmarks
 
 Back to [Comparative Benchmark Landing Page](README.md) ([HTML Dashboard](index.html)) | [Scenario Specifications](tidb-reference-scenarios.md)
 
-This guide explains how anyone with access to **Google Cloud Platform (GCP)**, **Amazon Web Services (AWS)**, **Microsoft Azure**, or any **5 Linux hosts with Docker and SSH** can reproduce the 14-system comparative benchmark suite (`v0.4.0`) for themselves.
+This guide explains how a comparative-benchmark campaign is run: Lagrange, TiDB + TiKV and
+PostgreSQL deployed as real product containers on real hosts and driven by the canonical
+workload from a separate load-generator host. The runner is
+[`cloud/run-comparative-benchmarks.mjs`](cloud/run-comparative-benchmarks.mjs).
+
+The current profile is a named **smoke** profile (`comparative-smoke-v1`): a small canonical
+dataset, two offered rates, two counter-balanced repetitions. It produces raw observation
+records for admission; it makes no capacity claim. Scenario B, Scenario C, scale-out, partition
+sweeps, live movement, RTT sweeps, recovery and backfill are recorded in the campaign manifest as
+`not-measured` (Scenario B for Lagrange as `blocked`) until their execution exists.
 
 ---
 
-## 1. Architecture & Resource Sizing
+## 1. What a campaign does
 
-The full comparative suite runs across **6 identical Linux VMs** (5 cluster nodes + 1 dedicated client driver VM) in the same private VPC/VNet so that multi-node Raft/Paxos replication (`RF=3`), distributed SQL coordinators, and client-to-cluster RTT sweeps reflect real network and storage behavior without client-driver CPU contention.
+1. Builds a **frozen manifest** (targets x scenario x subkind x offered rate x repetition, in the
+   counter-balanced order of the paired sweep owner, with the dataset, workload, measurement,
+   semantic-profile and sweep digests from their canonical owners) and digests it before any run.
+2. Selects the hosts: 3 data hosts (one failure domain per replica) and 1 load-generator host
+   that is never a product host.
+3. For every run: deploys a fresh product arm; waits for readiness by the product's own contract
+   (Lagrange `/readyz`, membership facts, partition leaders and a healthy public PostgreSQL wire
+   listener; TiDB 3 Up stores and table placement; PostgreSQL `pg_isready`, streaming standbys
+   and `synchronous_standby_names` read back) and fails closed when readiness is exhausted;
+   reads product identity from the running containers (`docker inspect` of each container, image
+   id, repo digest, entrypoint, mounts) and the product's version report; binds the client
+   endpoint to the container that owns its listening socket; runs the Scenario A semantic proof
+   journey against the arm (Lagrange and PostgreSQL; each proof case on a fresh Lagrange
+   formation, the durability case restarting exactly the endpoint container), with its
+   evidence under `test-output/bench/<campaignId>/<runId>/`; runs the canonical workload with
+   the load-generator CLI (`test/distributed/harness/run-benchmark-workload.js`) from the load
+   generator's own checkout, which must be at the campaign's commit, which
+   loads the canonical dataset and hands it back for verification (all nine canonical tables read
+   through the product's public interface and compared with the generator's digest) before any
+   measurement; re-inspects the containers after the measured window; and tears down only the
+   containers labelled `lagrange.bench.campaign=<campaignId>`, recording what it could not close.
+4. Appends a campaign header and one v2 record per attempted run (failed runs included) to
+   `data/tidb-comparison/raw-observations.ndjson`, never rewriting earlier campaigns, and writes a
+   campaign summary JSON. A campaign watchdog stops issuing at the profile's budget and records
+   the remaining runs as `interrupted`.
 
-| Cloud Provider | Provisioning Script | Default Instance Type | vCPU / RAM | Disk | Estimated 30-Min Run Cost (6 VMs) |
-| --- | --- | --- | --- | --- | --- |
-| **Google Cloud (GCP)** | [`cloud/provision-gcp.sh`](cloud/provision-gcp.sh) | `e2-standard-4` | 4 vCPU / 16 GB | 50 GB `pd-balanced` | ~$0.40 USD |
-| **Amazon Web Services (AWS)** | [`cloud/provision-aws.sh`](cloud/provision-aws.sh) | `m6i.xlarge` | 4 vCPU / 16 GB | 50 GB `gp3` | ~$0.58 USD |
-| **Microsoft Azure** | [`cloud/provision-azure.sh`](cloud/provision-azure.sh) | `Standard_D4s_v5` | 4 vCPU / 16 GB | 50 GB `StandardSSD_LRS` | ~$0.58 USD |
-| **Any 6 SSH + Docker Hosts** | Bring your own hosts | 4+ vCPU / 16+ GB | Ubuntu 22.04/24.04 + Docker | 50 GB SSD | $0 (existing hardware) |
+Without `--storage-root`, product data lives in the containers' writable layer and every run is
+recorded as `smoke`. With `--storage-root <dir>`, each data directory is an explicit host volume
+under `<dir>/<campaignId>/` and the deployment records it as `host-volume`.
 
-### Public Container Images & Native Protocols Used
-The live runner deploys and benchmarks the 7 measured configurations across the 3 core product families using official public container images and native wire protocols:
-- **Lagrange (`v0.4.0`):** `psvensson/lagrange:0.4.0` (`node src/index.js`, 3-node, 4-node, and 5-node `RF=3` clusters driven over HTTP `:8080` and Admin WebSocket `:8081/api/admin/stream`)
-- **TiDB + TiKV (`v8.5.8`):** `pingcap/pd:v8.5.8`, `pingcap/tikv:v8.5.8`, `pingcap/tidb:v8.5.8` (PD + 3 TiKV stores + TiDB SQL server driven over native MySQL wire protocol `:4000` via `mysql2/promise`)
-- **PostgreSQL 17 (`17-alpine`):** `postgres:17-alpine` (single-primary, synchronous physical streaming replication via `pg_basebackup` + `FIRST 1 (s1, s2)`, and server-side `LANGUAGE plpgsql` functions driven over native PostgreSQL wire protocol `:5432` via `pg.Pool`)
-- **Unmeasured Comparators (`not-measured`):** Citus 13, YugabyteDB 2024.2, Apache Ignite 3, and PostgreSQL 17 + Valkey 8 are explicitly recorded as `[not measured]` (`evidenceTier: 'not-measured'`) in the generated matrix until native product cluster deployers and wire drivers are added.
+Publishing is not part of the runner: published pages are regenerated from admitted cells only.
 
 ---
 
-## 2. Option A: Run on Google Cloud Platform (GCP)
+## 2. Default: the home lab
+
+The lab is the default execution target. Hosts come from the registered lab inventory, never
+from the command line. The repository's home-lab guide (`docs/development/home-lab.md`) owns the
+inventory, the machine-wide lock and the thermal gate.
 
 ### Prerequisites
-- [`gcloud` CLI](https://cloud.google.com/sdk/docs/install) authenticated (`gcloud auth login`) with Compute Engine API enabled.
-- Node.js `>= 22.13.0` on the runner machine.
+- Four or more Linux inventory nodes with the `harness` role, Docker reachable by the SSH user,
+  and a checkout of this repository (`node scripts/lab.js node add ...`).
+- Fresh facts: `node scripts/lab.js fleet` (the live run re-discovers the fleet itself).
 
-### Step 1 - Provision the 5 GCP VMs
+### Preview
+```sh
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --dry-run
+```
+The plan names the lab hosts it would use (3 `data`, 1 `client`), the lock each one would be
+held with (purpose `bench:<campaignId>`), the thermal gate and the full frozen manifest.
+
+### Run
+```sh
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs
+```
+For a publishable run, pin the Lagrange image by content and name its registry provenance:
+`--lagrange-image psvensson/lagrange@sha256:<digest> --lagrange-image-id sha256:<image id>
+--lagrange-version <version> --storage-root <dir>`. Every data host must already hold that
+image id; the runner never pulls it. On a host whose daemon cannot pull from the registry,
+place the image yourself (`docker save` on a host that has it, `docker load` on that host); the
+run then records its provenance as `loaded:<image id>`.
+Every selected host is held with the lab's machine-wide `flock` and holder record before any
+deployment (a host another run holds refuses the campaign, naming the holder), the thermal gate
+`scripts/checks/wait-for-thermal-headroom.js` runs on every held host, and the holds are released
+when the campaign ends, however it ends. The holder record and the thermal reading of each host
+are part of the campaign header.
+
+---
+
+## 3. Explicit: GCP
+
+GCP is used only when asked for, with hosts you provisioned; the runner creates nothing.
+
+### Step 1 - Provision VMs
 ```sh
 export PROJECT_ID="your-gcp-project-id"
 export ZONE="us-central1-a"
 ./docs/benchmarks/cloud/provision-gcp.sh
 ```
-The script creates 5 `n2-standard-4` Ubuntu 24.04 VMs (`lagrange-bench-1` .. `lagrange-bench-5`), configures an intra-cluster VPC firewall rule, installs Docker on each VM, and prints the `export HOSTS=...` and `export SSH_USER=...` variables.
+The script creates the VMs (the dedicated client VM last), an intra-cluster firewall rule, and
+installs Docker. It does not open the Docker socket to everyone and does not add users to the
+`docker` group: grant Docker access to the one SSH user the runner connects as yourself. SSH
+host keys are verified as usual; record each VM's host key in `known_hosts` (for example with
+`gcloud compute ssh` once per VM) before the run.
 
-### Step 2 - Run the Comparative Benchmark Suite
-From `lagrange-bench-1` (or any machine with VPC SSH connectivity to the 5 internal IPs):
+### Step 2 - Preview and run
 ```sh
-git clone https://github.com/psvensson/lagrange.git
-cd lagrange
-npm ci
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp \
+  --hosts "$HOSTS" --ssh-hosts "$SSH_HOSTS" --ssh-user "$SSH_USER" --dry-run
 
-# Preview the 5-node execution plan without SSHing:
-node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts "$HOSTS" --dry-run
-
-# Run the live 5-node Docker suite and regenerate docs/benchmarks/*:
-node docs/benchmarks/cloud/run-comparative-benchmarks.mjs \
-  --hosts "$HOSTS" \
-  --ssh-user "$SSH_USER" \
-  --regenerate-docs
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp \
+  --hosts "$HOSTS" --ssh-hosts "$SSH_HOSTS" --ssh-user "$SSH_USER"
 ```
+The first three `--hosts` addresses are the data hosts and the last is the load generator.
+A live GCP run also needs `--client-checkout <path>` (a checkout of this commit with
+`npm ci` done on the load-generator VM) and, if `node` there is not Node 22 or later,
+`--client-node <path>`.
 
-### Step 3 - Tear Down GCP Resources
+### Step 3 - Tear down
 ```sh
 ./docs/benchmarks/cloud/provision-gcp.sh --teardown
 ```
 
----
-
-## 3. Option B: Run on Amazon Web Services (AWS)
-
-### Prerequisites
-- [`aws` CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) configured (`aws configure`) and an existing EC2 SSH key pair in your target region.
-
-### Step 1 - Provision the 5 AWS EC2 Instances
-```sh
-export REGION="us-east-1"
-export KEY_NAME="your-ec2-keypair-name"
-./docs/benchmarks/cloud/provision-aws.sh
-```
-The script resolves the latest Ubuntu 24.04 LTS `gp3` AMI via AWS SSM, creates security group `lagrange-bench-sg` allowing intra-cluster traffic and SSH, launches 5 `m6i.xlarge` instances with Docker installed via `user-data`, and prints `export HOSTS=...`.
-
-### Step 2 - Run the Comparative Benchmark Suite
-```sh
-node docs/benchmarks/cloud/run-comparative-benchmarks.mjs \
-  --hosts "$HOSTS" \
-  --ssh-user ubuntu \
-  --ssh-key ~/.ssh/your-ec2-keypair.pem \
-  --regenerate-docs
-```
-
-### Step 3 - Tear Down AWS Resources
-```sh
-./docs/benchmarks/cloud/provision-aws.sh --teardown
-```
+AWS and Azure provisioning scripts exist in [`cloud/`](cloud/) but are not execution targets of
+this runner.
 
 ---
 
-## 4. Option C: Run on Microsoft Azure
+## 4. Runner options
 
-### Prerequisites
-- [`az` CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) authenticated (`az login`).
-
-### Step 1 - Provision the 5 Azure VMs
 ```sh
-export RESOURCE_GROUP="lagrange-bench-rg"
-export LOCATION="eastus"
-./docs/benchmarks/cloud/provision-azure.sh
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --help
 ```
-The script creates resource group `lagrange-bench-rg`, VNet `10.42.0.0/16`, NSG `lagrange-bench-nsg`, and 5 `Standard_D4s_v5` Ubuntu 24.04 VMs (`lagrange-bench-1` .. `lagrange-bench-5`) with Docker enabled via cloud-init, then outputs `export HOSTS=...`.
-
-### Step 2 - Run the Comparative Benchmark Suite
-```sh
-node docs/benchmarks/cloud/run-comparative-benchmarks.mjs \
-  --hosts "$HOSTS" \
-  --ssh-user azureuser \
-  --regenerate-docs
-```
-
-### Step 3 - Tear Down Azure Resources
-```sh
-./docs/benchmarks/cloud/provision-azure.sh --teardown
-```
+`--targets` selects arms (`lagrange`, `tidb-tikv`, `pg-single-primary`, `pg-patroni-sync-ha-rf3`;
+default `lagrange,tidb-tikv,pg-patroni-sync-ha-rf3`). The PostgreSQL HA arm is a primary with two
+synchronous streaming standbys; clients connect to the primary directly and no HA manager runs.
 
 ---
 
-## 5. Option D: Single-Machine Quick Comparison (No Cloud Account Required)
-
-If you want to verify Lagrange's co-located compute-near-data speedup vs. client-fetched remote execution on a single laptop or workstation without provisioning 5 VMs:
+## 5. Single-machine quick comparison (no cluster)
 
 ```sh
 npm ci
 npm run demo:movielens
 ```
-
-This executes [`examples/service-data-affinity/run-comparison.js`](../../examples/service-data-affinity/run-comparison.js) locally and prints the side-by-side latency and throughput comparison.
+This runs [`examples/service-data-affinity/run-comparison.js`](../../examples/service-data-affinity/run-comparison.js)
+locally; it is a demonstration, not a comparative-benchmark campaign.
 
 ---
 
-## 6. Reference Files & Regenerators
+## 6. Reference files
 
-- Cloud provisioning & runner scripts:
-  - [`docs/benchmarks/cloud/provision-gcp.sh`](cloud/provision-gcp.sh)
-  - [`docs/benchmarks/cloud/provision-aws.sh`](cloud/provision-aws.sh)
-  - [`docs/benchmarks/cloud/provision-azure.sh`](cloud/provision-azure.sh)
-  - [`docs/benchmarks/cloud/run-comparative-benchmarks.mjs`](cloud/run-comparative-benchmarks.mjs)
-- Benchmark matrix, raw observation store & static web regenerators:
-  - [`test/distributed/harness/raw-observation-store.js`](../../test/distributed/harness/raw-observation-store.js)
-  - [`test/distributed/harness/raw-observation-campaign-specs.js`](../../test/distributed/harness/raw-observation-campaign-specs.js)
-  - [`test/distributed/harness/comparative-matrix-runner.js`](../../test/distributed/harness/comparative-matrix-runner.js)
-  - [`test/distributed/harness/scaleout-series-experiments.js`](../../test/distributed/harness/scaleout-series-experiments.js)
-  - [`test/distributed/harness/tidb-reference-physical-topology.js`](../../test/distributed/harness/tidb-reference-physical-topology.js)
-- Recorded measurement & raw observation stores:
-  - [`data/tidb-comparison/raw-observations.ndjson`](../../data/tidb-comparison/raw-observations.ndjson)
-  - [`data/tidb-comparison/admitted-lab-measurements.json`](../../data/tidb-comparison/admitted-lab-measurements.json)
-  - [`data/tidb-comparison/history.ndjson`](../../data/tidb-comparison/history.ndjson)
-  - [`data/tidb-comparison/progress-summary.json`](../../data/tidb-comparison/progress-summary.json)
-  - [`data/tidb-comparison/multi-system-matrix.json`](../../data/tidb-comparison/multi-system-matrix.json)
+- Runner and provisioning: [`cloud/run-comparative-benchmarks.mjs`](cloud/run-comparative-benchmarks.mjs), [`cloud/provision-gcp.sh`](cloud/provision-gcp.sh)
+- Campaign owners: [`comparative-benchmark-campaign-manifest.js`](../../test/distributed/harness/comparative-benchmark-campaign-manifest.js), [`comparative-benchmark-campaign-runner.js`](../../test/distributed/harness/comparative-benchmark-campaign-runner.js), [`comparative-benchmark-lab-hosts.js`](../../test/distributed/harness/comparative-benchmark-lab-hosts.js), [`comparative-benchmark-workload-call-site.js`](../../test/distributed/harness/comparative-benchmark-workload-call-site.js)
+- Deployment layer: [`real-product-cluster-deployers.js`](../../test/distributed/harness/real-product-cluster-deployers.js) and the `real-product-*` owners beside it
+- Raw observation store: [`data/tidb-comparison/raw-observations.ndjson`](../../data/tidb-comparison/raw-observations.ndjson)
