@@ -257,14 +257,16 @@ async function observeFormationUntilSettled(context) {
 
 // CREATE TABLE follows its own contract: while it answers pending with
 // nextAction retry, it is re-issued on the poll cadence (each answer
-// recorded); any other error ends the attempt, named.
-async function createProbeTable(seedNode, deps, deadline, timeoutMs) {
+// recorded); any other error ends the attempt, named. A DDL answer is
+// bounded by the remaining routability bound, not the control-read timeout
+// (run 1, 2026-11-01: a 15 s control-read bound cut a slower CREATE answer).
+async function createProbeTable(seedNode, deps, deadline) {
   const attempts = [];
   while (deps.now() < deadline) {
     let outcome;
     try {
       const result = await seedNode.queryWithTimeout(SQL.CREATE_TABLE, [],
-        {timeoutMs});
+        {timeoutMs: deadline - deps.now()});
       outcome = {contractState: result.contractState ?? null,
         nextAction: result.nextAction ?? null,
         reasonCodes: result.reasonCodes ?? []};
@@ -297,7 +299,7 @@ async function observeUserTable(context) {
   const {deps, seedNode, timeoutMs, state} = context;
   const issuedAtMs = deps.now();
   const deadline = issuedAtMs + deps.routabilityBoundMs;
-  const create = await createProbeTable(seedNode, deps, deadline, timeoutMs);
+  const create = await createProbeTable(seedNode, deps, deadline);
   state.createAttempts = create.attempts;
   let result = null;
   while (deps.now() < deadline) {

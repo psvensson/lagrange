@@ -1,0 +1,352 @@
+{
+  "schemaVersion": 1,
+  "scenario": "fresh-formation-user-table-routability",
+  "form": "MULTI-HOST lab Docker harness (one node per distinct machine, --network host): seed 28fca726 on tv-dator 192.168.86.32, joiner 0dd0a97a on adam-laptop 192.168.86.34, joiner ef108c21 on adams-gamla 192.168.86.41",
+  "threeProcessForm": "NOT RUN: scripts/lab/harness.js refuses a single-host run (TOO_FEW_HOSTS: use the local Docker config for single-host runs); the brief forbids raw ssh for the run and the controller",
+  "command": "node scripts/lab.js harness run fresh-formation-user-table-routability --base test/distributed/config/local-three-node.json --nodes tv-dator,adam-laptop,adams-gamla",
+  "headSha": "e5770352fe1f (branch wip/formation-serve-lane-repro-20261101); image distributed-db:test built on each host from that commit (label ddb.git-hash=e5770352fe1f), srcFingerprintMatches true",
+  "imageNote": "Not the Docker Hub digest image: the harness owns image build per host (docker.buildOnHosts) and has no by-digest image input. git diff 07206ba1c8 (the Hub image revision) e5770352f -- src is empty, so the product source is byte-identical to the Hub image; Dockerfile/dependency layers were built from this checkout.",
+  "outcome": "failed",
+  "verdict": "BLOCK_TOPOLOGY_CONVERGENCE",
+  "verdictReason": "topology_progress_blocked",
+  "error": "fresh-formation-user-table-routability: first unmet predicate a-serve-lane-open (serve_ineligible, serve_lane_priority_recovery_active, serve_lane_publication_stream_not_ready); unmet: a-serve-lane-open, b-priority-spread, c-replica-operations-quiet, d-user-table-routable, f-no-learner-address-unresolvable-for-committed-row; time-to-serve-lane neverms, time-to-user-table-routable neverms",
+  "firstUnmet": {
+    "id": "a-serve-lane-open",
+    "reasonCodes": [
+      "serve_ineligible",
+      "serve_lane_priority_recovery_active",
+      "serve_lane_publication_stream_not_ready"
+    ]
+  },
+  "timings": {
+    "formationSatisfiedSinceScenarioStartMs": null,
+    "seedProcessStartAt": "2026-11-01T21:19:12.309Z",
+    "timeToServeLaneSinceScenarioStartMs": null,
+    "timeToServeLaneSinceSeedStartMs": null,
+    "timeToUserTableRoutableSinceScenarioStartMs": null,
+    "timeToUserTableRoutableSinceSeedStartMs": null
+  },
+  "bounds": {
+    "formationBoundMs": 420000,
+    "formationPollMs": 1000,
+    "quietWindowMs": 5000,
+    "routabilityBoundMs": 120000
+  },
+  "pollCount": 183,
+  "readFailureCount": 0,
+  "predicates": [
+    {
+      "id": "a-serve-lane-open",
+      "met": false,
+      "reasonCodes": [
+        "serve_ineligible",
+        "serve_lane_priority_recovery_active",
+        "serve_lane_publication_stream_not_ready"
+      ]
+    },
+    {
+      "id": "b-priority-spread",
+      "met": false,
+      "reasonCodes": [
+        "authority_not_spread:control_plane_publications-p1:2/3",
+        "authority_not_spread:replica_operations-p1:2/3",
+        "authority_not_spread:schema_operations-p1:1/3",
+        "authority_not_spread:sql_transaction_participants-p1:1/3",
+        "authority_not_spread:sql_transactions-p1:1/3",
+        "authority_not_spread:sql_write_operations-p1:1/3",
+        "projection_not_spread:0dd0a97a-78d5-47a4-8a71-f5a57a61b614",
+        "projection_not_spread:28fca726-b632-4403-859a-4aacee3b274a",
+        "projection_not_spread:ef108c21-01a5-4b49-a18b-efc036bfce07"
+      ]
+    },
+    {
+      "id": "c-replica-operations-quiet",
+      "met": false,
+      "reasonCodes": [
+        "projection_in_flight:0dd0a97a-78d5-47a4-8a71-f5a57a61b614",
+        "projection_in_flight:28fca726-b632-4403-859a-4aacee3b274a",
+        "projection_in_flight:ef108c21-01a5-4b49-a18b-efc036bfce07",
+        "replica_operations_in_flight"
+      ]
+    },
+    {
+      "id": "d-user-table-routable",
+      "met": false,
+      "reasonCodes": [
+        "active_services_below_quorum:tbl-5aa54f3c91d485c621cb384f40619318-p1:0/2",
+        "count_probe_failed:distributed_participant_failure: Admin API query failed for node 28fca726-b632-4403-859a-4aacee3b274a on lane default: Distributed operation failed due to participant failures",
+        "create_table_failed:Admin API query timed out for node 28fca726-b632-4403-859a-4aacee3b274a on lane default after 15000ms",
+        "leader_absent:tbl-5aa54f3c91d485c621cb384f40619318-p1"
+      ]
+    },
+    {
+      "id": "f-no-learner-address-unresolvable-for-committed-row",
+      "met": false,
+      "reasonCodes": [
+        "learner_address_unresolvable_for_committed_row"
+      ]
+    },
+    {
+      "id": "g-projection-agrees-with-authority",
+      "met": true,
+      "reasonCodes": []
+    },
+    {
+      "id": "observation-integrity",
+      "met": true,
+      "reasonCodes": []
+    }
+  ],
+  "reasonCodeTally": {
+    "serve_ineligible": 183,
+    "serve_lane_priority_recovery_active": 183,
+    "serve_lane_publication_stream_not_ready": 183,
+    "authority_not_spread:control_plane_publications-p1:2/3": 183,
+    "authority_not_spread:replica_operations-p1:2/3": 183,
+    "authority_not_spread:schema_operations-p1:1/3": 183,
+    "authority_not_spread:sql_transaction_participants-p1:1/3": 183,
+    "authority_not_spread:sql_transactions-p1:1/3": 183,
+    "authority_not_spread:sql_write_operations-p1:1/3": 183,
+    "projection_not_spread:0dd0a97a-78d5-47a4-8a71-f5a57a61b614": 183,
+    "projection_not_spread:28fca726-b632-4403-859a-4aacee3b274a": 183,
+    "projection_not_spread:ef108c21-01a5-4b49-a18b-efc036bfce07": 183,
+    "projection_in_flight:0dd0a97a-78d5-47a4-8a71-f5a57a61b614": 183,
+    "projection_in_flight:28fca726-b632-4403-859a-4aacee3b274a": 183,
+    "projection_in_flight:ef108c21-01a5-4b49-a18b-efc036bfce07": 183,
+    "replica_operations_in_flight": 183,
+    "cache_stale_watermark": 1,
+    "stale_replica_operations_in_flight": 164,
+    "readiness_entry_absent:ef108c21-01a5-4b49-a18b-efc036bfce07->0dd0a97a-78d5-47a4-8a71-f5a57a61b614": 6,
+    "readiness_entry_absent:0dd0a97a-78d5-47a4-8a71-f5a57a61b614->ef108c21-01a5-4b49-a18b-efc036bfce07": 5
+  },
+  "logObservations": {
+    "28fca726-b632-4403-859a-4aacee3b274a": {
+      "lineCount": 24670,
+      "observations": {
+        "learner_address_unresolvable": {
+          "count": 4,
+          "firstAt": "2026-11-01T21:19:57.103Z",
+          "unparsedMatchCount": 0
+        },
+        "CACHE_WAIT_TIMEOUT_MS": {
+          "count": 9,
+          "firstAt": "2026-11-01T21:19:32.182Z",
+          "unparsedMatchCount": 0
+        },
+        "cdc_committed_acceptance_unknown": {
+          "count": 2526,
+          "firstAt": "2026-11-01T21:19:31.457Z",
+          "unparsedMatchCount": 0
+        },
+        "cdc_update_row_missing": {
+          "count": 1083,
+          "firstAt": "2026-11-01T21:19:24.414Z",
+          "unparsedMatchCount": 0
+        },
+        "partition_write_cutover_paused": {
+          "count": 0,
+          "firstAt": null,
+          "unparsedMatchCount": 0
+        },
+        "PRIORITY_CONTROL_PLANE_RECOVERY_PENDING": {
+          "count": 115,
+          "firstAt": "2026-11-01T21:19:51.320Z",
+          "unparsedMatchCount": 0
+        },
+        "node_ready_lease_incomplete": {
+          "count": 150,
+          "firstAt": "2026-11-01T21:19:32.842Z",
+          "unparsedMatchCount": 0
+        },
+        "process_start": {
+          "count": 1,
+          "firstAt": "2026-11-01T21:19:12.309Z",
+          "unparsedMatchCount": 0
+        }
+      },
+      "role": "seed"
+    },
+    "ef108c21-01a5-4b49-a18b-efc036bfce07": {
+      "lineCount": 4076,
+      "observations": {
+        "learner_address_unresolvable": {
+          "count": 0,
+          "firstAt": null,
+          "unparsedMatchCount": 0
+        },
+        "CACHE_WAIT_TIMEOUT_MS": {
+          "count": 3,
+          "firstAt": "2026-11-01T21:20:02.185Z",
+          "unparsedMatchCount": 0
+        },
+        "cdc_committed_acceptance_unknown": {
+          "count": 0,
+          "firstAt": null,
+          "unparsedMatchCount": 0
+        },
+        "cdc_update_row_missing": {
+          "count": 0,
+          "firstAt": null,
+          "unparsedMatchCount": 0
+        },
+        "partition_write_cutover_paused": {
+          "count": 0,
+          "firstAt": null,
+          "unparsedMatchCount": 0
+        },
+        "PRIORITY_CONTROL_PLANE_RECOVERY_PENDING": {
+          "count": 3,
+          "firstAt": "2026-11-01T21:19:58.632Z",
+          "unparsedMatchCount": 0
+        },
+        "node_ready_lease_incomplete": {
+          "count": 0,
+          "firstAt": null,
+          "unparsedMatchCount": 0
+        },
+        "process_start": {
+          "count": 1,
+          "firstAt": "2026-11-01T21:19:41.683Z",
+          "unparsedMatchCount": 0
+        }
+      },
+      "role": "joiner"
+    },
+    "0dd0a97a-78d5-47a4-8a71-f5a57a61b614": {
+      "lineCount": 7539,
+      "observations": {
+        "learner_address_unresolvable": {
+          "count": 4,
+          "firstAt": "2026-11-01T21:19:57.117Z",
+          "unparsedMatchCount": 0
+        },
+        "CACHE_WAIT_TIMEOUT_MS": {
+          "count": 1,
+          "firstAt": "2026-11-01T21:19:58.912Z",
+          "unparsedMatchCount": 0
+        },
+        "cdc_committed_acceptance_unknown": {
+          "count": 0,
+          "firstAt": null,
+          "unparsedMatchCount": 0
+        },
+        "cdc_update_row_missing": {
+          "count": 10,
+          "firstAt": "2026-11-01T21:20:01.766Z",
+          "unparsedMatchCount": 0
+        },
+        "partition_write_cutover_paused": {
+          "count": 0,
+          "firstAt": null,
+          "unparsedMatchCount": 0
+        },
+        "PRIORITY_CONTROL_PLANE_RECOVERY_PENDING": {
+          "count": 2,
+          "firstAt": "2026-11-01T21:19:50.939Z",
+          "unparsedMatchCount": 0
+        },
+        "node_ready_lease_incomplete": {
+          "count": 0,
+          "firstAt": null,
+          "unparsedMatchCount": 0
+        },
+        "process_start": {
+          "count": 1,
+          "firstAt": "2026-11-01T21:19:42.928Z",
+          "unparsedMatchCount": 0
+        }
+      },
+      "role": "joiner"
+    }
+  },
+  "learnerRefusals": {
+    "committedRowRefusalCount": 8,
+    "firstCommittedRowRefusal": {
+      "learnerReplicaId": "replace-replica-804a44382c8f7676e0f5d04aed17f26e",
+      "nodeId": "28fca726-b632-4403-859a-4aacee3b274a",
+      "partitionId": "replica_operations-p1",
+      "timeMs": 1793567997103,
+      "rowCreatedAtMs": 1793567995514
+    },
+    "refusalCount": 8
+  },
+  "userTablePhase": {
+    "issuedAfterFormationSatisfied": false,
+    "createAttempts": [
+      {
+        "contractState": "pending",
+        "nextAction": "retry",
+        "reasonCodes": [
+          "schema_replica_convergence_pending"
+        ],
+        "atMs": 1793568448897
+      },
+      {
+        "contractState": "pending",
+        "nextAction": "retry",
+        "reasonCodes": [],
+        "atMs": 1793568464751
+      },
+      {
+        "contractState": "pending",
+        "nextAction": "retry",
+        "reasonCodes": [
+          "schema_replica_convergence_pending"
+        ],
+        "atMs": 1793568480075
+      },
+      {
+        "contractState": "pending",
+        "nextAction": "retry",
+        "reasonCodes": [],
+        "atMs": 1793568495912
+      },
+      {
+        "contractState": "pending",
+        "nextAction": "retry",
+        "reasonCodes": [
+          "schema_replica_convergence_pending"
+        ],
+        "atMs": 1793568511539
+      },
+      {
+        "contractState": "pending",
+        "nextAction": "retry",
+        "reasonCodes": [],
+        "atMs": 1793568527409
+      },
+      {
+        "contractState": "pending",
+        "nextAction": "retry",
+        "reasonCodes": [
+          "schema_replica_convergence_pending"
+        ],
+        "atMs": 1793568543029
+      },
+      {
+        "contractState": null,
+        "error": "Admin API query timed out for node 28fca726-b632-4403-859a-4aacee3b274a on lane default after 15000ms",
+        "nextAction": null,
+        "reasonCodes": [],
+        "atMs": 1793568559030
+      }
+    ],
+    "note": "post-bound diagnostic: the last CREATE attempt hit the 15 s control-read timeout of the harness (fixed in the follow-up commit: DDL now bounded by the remaining routability bound); this does not affect the first unmet predicate"
+  },
+  "retained": {
+    "fullNodeLogs": [
+      "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--quests__evidence__formation-repro__multi-host-lab-run1-20261101T2118Z__full-logs__28fca726-b632-4403-859a-4aacee3b274a.log.gz",
+      "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--quests__evidence__formation-repro__multi-host-lab-run1-20261101T2118Z__full-logs__0dd0a97a-78d5-47a4-8a71-f5a57a61b614.log.gz",
+      "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--quests__evidence__formation-repro__multi-host-lab-run1-20261101T2118Z__full-logs__ef108c21-01a5-4b49-a18b-efc036bfce07.log.gz"
+    ],
+    "harnessReport": "harness-report.json",
+    "playback": "playback/ (failure-bundle.md, triage, events, samples, curated node logs, run failure bundle)",
+    "console": "lab-harness-console.log.txt (curated per-node logs and _timeline under playback/ also carry the .log.txt suffix: *.log is gitignored)",
+    "config": "harness-config.json",
+    "sharedEvidenceAssets": [
+      "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--quests__evidence__formation-repro__multi-host-lab-run1-20261101T2118Z__playback__failure-bundle.json",
+      "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--quests__evidence__formation-repro__multi-host-lab-run1-20261101T2118Z__playback__snapshots.ndjson.gz"
+    ],
+    "sharedEvidenceNote": "archives and files over 1 MB are refused in-tree by the solve binary guard; uploaded with solve evidence add (sha256-verified, recorded as evidence findings in the quest log.ndjson)"
+  }
+}
