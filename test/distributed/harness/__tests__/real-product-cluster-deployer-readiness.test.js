@@ -6,6 +6,7 @@ import {test} from 'node:test';
 
 import * as deployers from '../real-product-cluster-deployers.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
+import {evaluateLagrangeClusterReadiness} from '../real-product-lagrange-readiness-evaluation.js';
 import {
   LAGRANGE_IMAGE,
   createContainerLedger,
@@ -174,6 +175,53 @@ test('after the canonical load every partition of every created table must be ro
   assert.equal(verdict.ready, false);
   assert.deepEqual(verdict.denials, ['table_without_partitions:item',
     'partition_under_replicated:p1']);
+});
+
+// F1: the replication target is the partition's own replica_count; an absent or
+// unreadable count is a typed denial, never a lowered target, and the cluster
+// size never lowers it either.
+function replicationVerdict({replicaCount, activeNodeIds, expectedNodeIds}) {
+  const now = Date.now();
+  const nodes = arrayMap(expectedNodeIds, (nodeId) => ({node_id: nodeId, status: 'active',
+    connection_state: 'ready', ready_lease_expires_at: String(now + 1000),
+    last_heartbeat: String(now - 10)}));
+  const partition = {partition_id: 'p1', table_name: 'stock', leader_node_id: 'a'};
+  if (replicaCount !== undefined) partition.replica_count = replicaCount;
+  return evaluateLagrangeClusterReadiness({nodes, now,
+    endpoints: [{service_id: 'sys-postgres-wire', health_status: 'healthy'}],
+    partitions: [partition],
+    services: arrayMap(activeNodeIds, (nodeId, index) => ({partition_id: 'p1',
+      node_id: nodeId, status: 'active', raft_role: index === 0 ? 'leader' : 'follower'})),
+    expectedNodeIds, requiredServiceIds: ['sys-postgres-wire'], requiredTables: ['stock']});
+}
+
+test('F1: a missing replica_count is a typed readiness denial, never a lowered target', () => {
+  const verdict = replicationVerdict({replicaCount: undefined, activeNodeIds: ['a'],
+    expectedNodeIds: ['a', 'b', 'c']});
+  assert.equal(verdict.ready, false);
+  assert.deepEqual(verdict.denials, ['partition_replica_count_unreadable:p1']);
+});
+
+test('F1: a non-numeric replica_count is a typed readiness denial', () => {
+  for (const replicaCount of ['abc', '', '0', '-1', '2.5', null]) {
+    const verdict = replicationVerdict({replicaCount, activeNodeIds: ['a'],
+      expectedNodeIds: ['a', 'b', 'c']});
+    assert.equal(verdict.ready, false, `replica_count ${JSON.stringify(replicaCount)}`);
+    assert.deepEqual(verdict.denials, ['partition_replica_count_unreadable:p1'],
+      `replica_count ${JSON.stringify(replicaCount)}`);
+  }
+});
+
+test('F1: RF=3 with two active services is under-replicated, whatever the cluster size', () => {
+  for (const expectedNodeIds of [['a', 'b', 'c'], ['a', 'b']]) {
+    const verdict = replicationVerdict({replicaCount: '3', activeNodeIds: ['a', 'b'],
+      expectedNodeIds});
+    assert.equal(verdict.ready, false, `expected nodes ${expectedNodeIds.length}`);
+    assert.deepEqual(verdict.denials, ['partition_under_replicated:p1'],
+      `expected nodes ${expectedNodeIds.length}`);
+  }
+  assert.deepEqual(replicationVerdict({replicaCount: '3', activeNodeIds: ['a', 'b', 'c'],
+    expectedNodeIds: ['a', 'b', 'c']}).denials, []);
 });
 
 test('live diagnosis 2026-11-01: serve lane closed (priority control-plane recovery ' +
