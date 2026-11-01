@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 148,
     "solver-tooling": 7,
-    "storage-partition": 208,
+    "storage-partition": 209,
     "storage-raft": 148,
     "test-infrastructure": 153,
     "transactions": 17,
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2510,
-  "digest": "fnv1a32-d80fe9e9",
+  "censusSize": 2511,
+  "digest": "fnv1a32-2f02936b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4beabfad",
+  "observationDigest": "fnv1a32-92d6ece8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1310,6 +1310,7 @@
     "test/partition/key-range-manager.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-budget-walk.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
+    "test/partition/learner-promotion-proof-committed-admission.test.js": "storage-partition",
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": "storage-partition",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "storage-partition",
     "test/partition/managed-merge-workflow.test.js": "storage-partition",
@@ -10231,6 +10232,16 @@
     "test/partition/learner-promotion-count-check-inputs.test.js": {
       "files": [
         "test/partition/fixtures/critical-spread-transition-authority/recorded-guard-shapes.json"
+      ]
+    },
+    "test/partition/learner-promotion-proof-committed-admission.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/raft/learner-promotion-progress.js",
+        "src/raft/raft-committed-membership-constants.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": {

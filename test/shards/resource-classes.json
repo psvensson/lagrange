@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2493,
+    "ordinary": 2494,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2510,
-  "digest": "fnv1a32-6c660a6f",
+  "censusSize": 2511,
+  "digest": "fnv1a32-a51067f9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1290,6 +1290,7 @@
     "test/partition/key-range-manager.test.js": "ordinary",
     "test/partition/learner-promotion-count-check-budget-walk.test.js": "ordinary",
     "test/partition/learner-promotion-count-check-inputs.test.js": "ordinary",
+    "test/partition/learner-promotion-proof-committed-admission.test.js": "ordinary",
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": "ordinary",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "ordinary",
     "test/partition/managed-merge-workflow.test.js": "ordinary",
