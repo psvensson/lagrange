@@ -38,7 +38,7 @@ const PROFILE_V2 = 'scenario-a-open-loop-v2';
 const PROFILE_V1 = 'scenario-a-open-loop-v1';
 const EXPECTED_INTENDED = objectFreeze([[1, 1000], [2, 1010], [1, 1020]]);
 const TRANSACTION_MS = 4;
-const BENCHMARK_FAILURE_CLASS_AMBIGUOUS = FAILURE_CLASS.AMBIGUOUS_COMMIT;
+const BENCHMARK_FAILURE_CLASS_WATCHDOG = FAILURE_CLASS.WATCHDOG_STOPPED;
 const WATCHDOG_OPERATIONS = 8;
 const EVIDENCE = objectFreeze({
   endpoint: '10.0.0.1:5432',
@@ -182,7 +182,8 @@ async function assertWatchdogStopsIssuingAndSummarises() {
   assert.equal(unresolved.unresolvedReason, BENCHMARK_UNRESOLVED_REASON.WATCHDOG_IN_FLIGHT);
   assert.equal(unresolved.completedAtMs, null);
   assert.equal(unresolved.attempts[0].closedByWatchdog, true);
-  assert.equal(unresolved.failureClass, BENCHMARK_FAILURE_CLASS_AMBIGUOUS);
+  assert.equal(unresolved.failureClass, BENCHMARK_FAILURE_CLASS_WATCHDOG);
+  assert.equal(unresolved.attempts[0].failureClass, BENCHMARK_FAILURE_CLASS_WATCHDOG);
   assert.equal(result.records[TWO].outcome, OPERATION_OUTCOME.UNISSUED);
   assert.equal(result.records[TWO].executionStartedAtMs, null);
 }

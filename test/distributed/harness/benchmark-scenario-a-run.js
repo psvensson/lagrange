@@ -34,6 +34,7 @@ import {
 import {
   benchmarkCanonicalDigest,
   classifyBenchmarkAttemptFailure,
+  computeExecutedOperationsDigest,
   describePlannedOperationSlice,
 } from './benchmark-operation-outcome.js';
 import {
@@ -292,9 +293,18 @@ function warmupSummary(step) {
   });
 }
 
-function unissuedMeasurement(workloadPlan, rate) {
-  return buildUnissuedOpenLoopRecords(
-    interleaveOltpWorkerPhase(workloadPlan.workers, 'measurement'), rate);
+// A measurement that never started: every planned request offered and
+// unissued, over its scheduled window, with no capacity metric.
+function unissuedMeasurement(workloadPlan, rate, startedAtIso) {
+  const operations = interleaveOltpWorkerPhase(workloadPlan.workers, 'measurement');
+  const unissued = buildUnissuedOpenLoopRecords(operations, rate);
+  const scheduledMs = (operations.length * THOUSAND) / rate;
+  return {
+    ...unissued,
+    window: Object.freeze({scheduledMs, drainMs: 0, drainOverrunMs: 0,
+      accountingWindowMs: scheduledMs, startedAt: startedAtIso,
+      endedAt: new Date().toISOString()}),
+  };
 }
 
 async function measure(context) {
@@ -307,7 +317,7 @@ async function measure(context) {
     if (warmup.watchdog.fired) outcomeAdapter.abortInFlight();
     if (warmup.accounting.committed !== warmup.accounting.offered) {
       return {status: RUN_STATUS.WARMUP_FAILED, warmup: warmupSummary(warmup), step: null,
-        unissued: unissuedMeasurement(workloadPlan, rate)};
+        unissued: unissuedMeasurement(workloadPlan, rate, context.startedAtIso)};
     }
   }
   const before = await observeOltpStateSnapshot(() => system.snapshot(adapter));
@@ -327,6 +337,15 @@ async function measure(context) {
   };
 }
 
+function finalStateObservationOf(measured) {
+  if (!measured.reconciliation) {
+    return Object.freeze({status: OLTP_RECONCILIATION_STATUS.UNOBSERVED,
+      reason: measured.status});
+  }
+  return measured.reconciliation.status === OLTP_RECONCILIATION_STATUS.UNOBSERVED ?
+    measured.reconciliation : null;
+}
+
 function observationsOf(measured, registry, profileClass) {
   const {step} = measured;
   if (!step) {
@@ -338,6 +357,9 @@ function observationsOf(measured, registry, profileClass) {
       offered: measured.unissued.accounting.offered,
       requests: measured.unissued.records,
       accounting: measured.unissued.accounting,
+      window: measured.unissued.window,
+      executedOperationsDigest: computeExecutedOperationsDigest(measured.unissued.records),
+      errorRate: null,
     });
   }
   return Object.freeze({
@@ -383,16 +405,17 @@ async function executeScenarioARun(options) {
   const identity = planIdentity(profile, plan, workloadPlan, dataset, rate);
   let adapter = null;
   let measured;
+  const startedAtIso = new Date().toISOString();
   let loaded = {snapshot: null, error: 'dataset not loaded'};
   try {
     adapter = await system.open();
   } catch (error) {
     measured = {status: RUN_STATUS.SETUP_FAILED, setup: setupFailure(error), step: null,
-      unissued: unissuedMeasurement(workloadPlan, rate)};
+      unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)};
   }
   if (adapter) {
     loaded = await observeOltpStateSnapshot(() => system.snapshot(adapter));
-    measured = await measure({adapter, outcomeAdapter: createBenchmarkOutcomeAdapter(
+    measured = await measure({adapter, startedAtIso, outcomeAdapter: createBenchmarkOutcomeAdapter(
       adapter, registry), system, workloadPlan, rate, runtime: options.runtime || {},
     evidence: {evidenceDir: options.evidenceDir}});
   }
@@ -405,7 +428,7 @@ async function executeScenarioARun(options) {
       endpointDiscovery: system.discovery ?? 'caller-endpoint',
       dataset: Object.freeze({
         resetMethod: system.resetMethod,
-        verification: await verifyOltpLoadedDataset(dataset, loaded),
+        verification: await verifyOltpLoadedDataset(dataset, loaded, measured.setup ?? null),
       }),
     }),
     observations: observationsOf(measured, registry, profile.profileClass),
@@ -414,8 +437,7 @@ async function executeScenarioARun(options) {
       // An unobserved snapshot leaves no final state; the reason is kept.
       finalState: measured.reconciliation?.status === OLTP_RECONCILIATION_STATUS.UNOBSERVED ?
         null : (measured.reconciliation ?? null),
-      finalStateObservation: measured.reconciliation?.status ===
-        OLTP_RECONCILIATION_STATUS.UNOBSERVED ? measured.reconciliation : null,
+      finalStateObservation: finalStateObservationOf(measured),
     }),
     cleanup,
   });

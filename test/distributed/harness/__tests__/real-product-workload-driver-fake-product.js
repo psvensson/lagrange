@@ -33,6 +33,8 @@ const FAULT = Object.freeze({
   ZERO_AFFECTED: 'zero-affected',
   WRONG_VALUE: 'wrong-value',
   COMMIT_ACK_LOST: 'commit-ack-lost',
+  // The dataset load is refused with 55P03, as Lagrange answers on the lab.
+  LOAD_LOCK_NOT_AVAILABLE: 'load-lock-not-available',
 });
 const ARM_AFTER_HISTORY_SNAPSHOTS = 2;
 const WRONG_INTEGER = 'garbage';
@@ -279,7 +281,13 @@ function administrative(state, sql, parameters) {
     if (!state.tables.has(count[1])) throw new Error(`Table not found: ${count[1]}`);
     return {rows: [{row_count: rowsOf(state, count[1]).length}]};
   }
-  if (INSERT_BATCH_PATTERN.test(sql)) return loadBatch(state, sql, parameters);
+  if (INSERT_BATCH_PATTERN.test(sql)) {
+    if (state.fault === FAULT.LOAD_LOCK_NOT_AVAILABLE) {
+      throw Object.assign(new Error('Schema provisioning remains active'),
+        {code: '55P03', severity: 'ERROR'});
+    }
+    return loadBatch(state, sql, parameters);
+  }
   const createTable = /^CREATE TABLE ([a-z_]+)/u.exec(sql);
   if (createTable) {
     rowsOf(state, createTable[1]);
@@ -356,6 +364,7 @@ function createSession(state, fault, dialect) {
 
 function createFakeOltpProduct(fault = FAULT.NONE) {
   const state = createState();
+  state.fault = fault;
   const connect = () => {
     if (fault === FAULT.NEVER_OPEN) throw systemError('ECONNREFUSED', 'connect');
   };

@@ -29,6 +29,8 @@ const VERIFICATION_STATUS = Object.freeze({
   VERIFIED: 'verified',
   MISMATCH: 'mismatch',
   UNOBSERVED: 'unobserved',
+  // The product refused the canonical dataset load (setup failed).
+  FAILED: 'failed',
 });
 
 const RECONCILIATION_STATUS = Object.freeze({
@@ -79,9 +81,18 @@ async function expectedDatasetSnapshot(dataset) {
   });
 }
 
-async function verifyLoadedDataset(dataset, observed) {
+async function verifyLoadedDataset(dataset, observed, setupFailure = null) {
   const expected = await expectedDatasetSnapshot(dataset);
   const expectedChecksum = logicalChecksum(expected);
+  if (setupFailure) {
+    return Object.freeze({
+      status: VERIFICATION_STATUS.FAILED,
+      method: LOGICAL_CHECKSUM_METHOD,
+      expectedLogicalChecksum: expectedChecksum,
+      observedLogicalChecksum: null,
+      failure: setupFailure,
+    });
+  }
   if (!observed.snapshot) {
     return Object.freeze({
       status: VERIFICATION_STATUS.UNOBSERVED,

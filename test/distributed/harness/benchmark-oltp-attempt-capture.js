@@ -288,10 +288,13 @@ function createBenchmarkOutcomeAdapter(adapter, registry) {
         registry.inFlight.delete(trace);
       }
     },
-    // Watchdog: every connection with an attempt still in flight is destroyed.
+    // Watchdog: every request it stopped is never retried and its connection
+    // is destroyed, whether an attempt was in flight or the request waited
+    // between attempts; returns the number of attempts that were in flight.
     abortInFlight() {
       const aborted = registry.inFlight.size;
       for (const trace of registry.inFlight) destroyTraceConnections(trace);
+      for (const connection of registry.connections) connection.destroy();
       return aborted;
     },
   });
