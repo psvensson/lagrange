@@ -88,7 +88,17 @@ test('the accounting validator throws, never coerces', async () => {
   assert.throws(() => validateBenchmarkAccounting([record({failureClass: CLASS.PRODUCT_ERROR})]),
     /cannot carry failure class/u);
   assert.throws(() => validateBenchmarkAccounting([record({outcome: OUTCOME.UNRESOLVED,
-    completedAtMs: null, latencyMs: null})]), /unresolved reason/u);
+    completedAtMs: null, latencyMs: null})]), /cannot carry failure class null/u,
+  'an unresolved request names its class (R07)');
+  assert.throws(() => validateBenchmarkAccounting([record({outcome: OUTCOME.UNRESOLVED,
+    failureClass: CLASS.WATCHDOG_STOPPED, completedAtMs: null, latencyMs: null})]),
+  /unresolved reason/u);
+  const stopped = validateBenchmarkAccounting([record({outcome: OUTCOME.UNRESOLVED,
+    failureClass: CLASS.WATCHDOG_STOPPED, unresolvedReason: 'watchdog-stopped-between-attempts',
+    completedAtMs: null, latencyMs: null,
+    attempts: [{outcome: OUTCOME.SERIALIZATION_CONFLICT}]})]);
+  assert.equal(stopped.unresolved, 1);
+  assert.equal(stopped.conflicts, 1, 'the last attempt outcome is retained');
   assert.throws(() => validateBenchmarkAccounting([record({outcome: OUTCOME.UNISSUED,
     executionStartedAtMs: null, completedAtMs: null, latencyMs: null})]),
   /unissued but has attempts/u);
