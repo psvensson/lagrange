@@ -1,0 +1,225 @@
+{
+ "firstUnmet": {
+  "id": "a-serve-lane-open",
+  "reasonCodes": [
+   "serve_ineligible",
+   "serve_lane_priority_recovery_active",
+   "serve_lane_publication_stream_not_ready"
+  ]
+ },
+ "timings": {
+  "formationSatisfiedSinceScenarioStartMs": null,
+  "seedProcessStartAt": "2026-11-01T22:56:55.936Z",
+  "timeToServeLaneSinceScenarioStartMs": null,
+  "timeToServeLaneSinceSeedStartMs": null,
+  "timeToUserTableRoutableSinceScenarioStartMs": null,
+  "timeToUserTableRoutableSinceSeedStartMs": null
+ },
+ "pollCount": 100,
+ "predicates": [
+  {
+   "id": "a-serve-lane-open",
+   "met": false,
+   "reasonCodes": [
+    "serve_ineligible",
+    "serve_lane_priority_recovery_active",
+    "serve_lane_publication_stream_not_ready"
+   ]
+  },
+  {
+   "id": "b-priority-spread",
+   "met": false,
+   "reasonCodes": [
+    "authority_not_spread:replica_operations-p1:2/3",
+    "authority_not_spread:schema_operations-p1:1/3",
+    "authority_not_spread:sql_transaction_participants-p1:1/3",
+    "authority_not_spread:sql_transactions-p1:1/3",
+    "authority_not_spread:sql_write_operations-p1:1/3",
+    "projection_not_spread:0dd58440-9f3c-4fcb-b104-c41de5d43eb4",
+    "projection_not_spread:4d18133f-3c72-4dd1-bb6b-8b3f30e74684",
+    "projection_not_spread:db79df75-5b4c-4546-b04f-81116b9e43d6"
+   ]
+  },
+  {
+   "id": "c-replica-operations-quiet",
+   "met": false,
+   "reasonCodes": [
+    "projection_in_flight:0dd58440-9f3c-4fcb-b104-c41de5d43eb4",
+    "projection_in_flight:4d18133f-3c72-4dd1-bb6b-8b3f30e74684",
+    "projection_in_flight:db79df75-5b4c-4546-b04f-81116b9e43d6",
+    "replica_operations_in_flight"
+   ]
+  },
+  {
+   "id": "d-user-table-routable",
+   "met": false,
+   "reasonCodes": [
+    "active_services_below_quorum:tbl-5aa54f3c91d485c621cb384f40619318-p1:0/2",
+    "count_probe_failed:distributed_participant_failure: Admin API query failed for node 4d18133f-3c72-4dd1-bb6b-8b3f30e74684 on lane default: Distributed operation failed due to participant failures",
+    "create_table_failed:Admin API query timed out for node 4d18133f-3c72-4dd1-bb6b-8b3f30e74684 on lane default after 9157ms",
+    "leader_absent:tbl-5aa54f3c91d485c621cb384f40619318-p1"
+   ]
+  },
+  {
+   "id": "f-no-learner-address-unresolvable-for-committed-row",
+   "met": false,
+   "reasonCodes": [
+    "learner_address_unresolvable_for_committed_row"
+   ]
+  },
+  {
+   "id": "g-projection-agrees-with-authority",
+   "met": false,
+   "reasonCodes": [
+    "persistent_disagreement:ledger_in_flight:4d18133f-3c72-4dd1-bb6b-8b3f30e74684"
+   ]
+  },
+  {
+   "id": "observation-integrity",
+   "met": false,
+   "reasonCodes": [
+    "control_snapshot_read_failed:db79df75-5b4c-4546-b04f-81116b9e43d6:Admin API query timed out for node db79df75-5b4c-4546-b04f-81116b9e43d6 on lane snapshot after 15000ms"
+   ]
+  }
+ ],
+ "logObservations": {
+  "4d18133f-3c72-4dd1-bb6b-8b3f30e74684": {
+   "lineCount": 28708,
+   "observations": {
+    "learner_address_unresolvable": {
+     "count": 16,
+     "firstAt": "2026-11-01T22:57:50.935Z",
+     "unparsedMatchCount": 0
+    },
+    "CACHE_WAIT_TIMEOUT_MS": {
+     "count": 14,
+     "firstAt": "2026-11-01T22:57:23.113Z",
+     "unparsedMatchCount": 0
+    },
+    "cdc_committed_acceptance_unknown": {
+     "count": 10774,
+     "firstAt": "2026-11-01T22:57:22.272Z",
+     "unparsedMatchCount": 0
+    },
+    "cdc_update_row_missing": {
+     "count": 1082,
+     "firstAt": "2026-11-01T22:57:12.090Z",
+     "unparsedMatchCount": 0
+    },
+    "partition_write_cutover_paused": {
+     "count": 121,
+     "firstAt": "2026-11-01T23:00:36.008Z",
+     "unparsedMatchCount": 0
+    },
+    "PRIORITY_CONTROL_PLANE_RECOVERY_PENDING": {
+     "count": 92,
+     "firstAt": "2026-11-01T22:57:46.257Z",
+     "unparsedMatchCount": 0
+    },
+    "node_ready_lease_incomplete": {
+     "count": 345,
+     "firstAt": "2026-11-01T22:57:35.003Z",
+     "unparsedMatchCount": 0
+    },
+    "process_start": {
+     "count": 1,
+     "firstAt": "2026-11-01T22:56:55.936Z",
+     "unparsedMatchCount": 0
+    }
+   },
+   "role": "seed"
+  },
+  "0dd58440-9f3c-4fcb-b104-c41de5d43eb4": {
+   "lineCount": 4854,
+   "observations": {
+    "learner_address_unresolvable": {
+     "count": 12,
+     "firstAt": "2026-11-01T22:58:50.315Z",
+     "unparsedMatchCount": 0
+    },
+    "CACHE_WAIT_TIMEOUT_MS": {
+     "count": 2,
+     "firstAt": "2026-11-01T22:58:52.039Z",
+     "unparsedMatchCount": 0
+    },
+    "cdc_committed_acceptance_unknown": {
+     "count": 0,
+     "firstAt": null,
+     "unparsedMatchCount": 0
+    },
+    "cdc_update_row_missing": {
+     "count": 19,
+     "firstAt": "2026-11-01T22:59:28.544Z",
+     "unparsedMatchCount": 0
+    },
+    "partition_write_cutover_paused": {
+     "count": 2,
+     "firstAt": "2026-11-01T23:06:05.480Z",
+     "unparsedMatchCount": 0
+    },
+    "PRIORITY_CONTROL_PLANE_RECOVERY_PENDING": {
+     "count": 3,
+     "firstAt": "2026-11-01T22:57:36.505Z",
+     "unparsedMatchCount": 0
+    },
+    "node_ready_lease_incomplete": {
+     "count": 0,
+     "firstAt": null,
+     "unparsedMatchCount": 0
+    },
+    "process_start": {
+     "count": 1,
+     "firstAt": "2026-11-01T22:57:35.384Z",
+     "unparsedMatchCount": 0
+    }
+   },
+   "role": "joiner"
+  },
+  "db79df75-5b4c-4546-b04f-81116b9e43d6": {
+   "lineCount": 6719,
+   "observations": {
+    "learner_address_unresolvable": {
+     "count": 8,
+     "firstAt": "2026-11-01T22:57:50.387Z",
+     "unparsedMatchCount": 0
+    },
+    "CACHE_WAIT_TIMEOUT_MS": {
+     "count": 4,
+     "firstAt": "2026-11-01T22:57:46.240Z",
+     "unparsedMatchCount": 0
+    },
+    "cdc_committed_acceptance_unknown": {
+     "count": 3,
+     "firstAt": "2026-11-01T22:59:13.050Z",
+     "unparsedMatchCount": 0
+    },
+    "cdc_update_row_missing": {
+     "count": 19,
+     "firstAt": "2026-11-01T22:58:13.334Z",
+     "unparsedMatchCount": 0
+    },
+    "partition_write_cutover_paused": {
+     "count": 4,
+     "firstAt": "2026-11-01T22:58:41.375Z",
+     "unparsedMatchCount": 0
+    },
+    "PRIORITY_CONTROL_PLANE_RECOVERY_PENDING": {
+     "count": 4,
+     "firstAt": "2026-11-01T22:57:44.760Z",
+     "unparsedMatchCount": 0
+    },
+    "node_ready_lease_incomplete": {
+     "count": 0,
+     "firstAt": null,
+     "unparsedMatchCount": 0
+    },
+    "process_start": {
+     "count": 1,
+     "firstAt": "2026-11-01T22:57:33.122Z",
+     "unparsedMatchCount": 0
+    }
+   },
+   "role": "joiner"
+  }
+ }
+}
