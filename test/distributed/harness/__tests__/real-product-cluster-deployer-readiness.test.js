@@ -74,6 +74,10 @@ test('D05: PostgreSQL pg_isready exhaustion throws readiness_exhausted', {timeou
         assert.equal(error.deployment.endpoint.containerId,
           error.deployment.roles[0].containerId);
         assert.equal(error.deployment.identity.products.length, 1);
+        // The scripted product answers no version: null with why, never ''.
+        assert.equal(error.deployment.identity.products[0].reportedVersion, null);
+        assert.equal(typeof error.deployment.identity.products[0].reportedVersionError,
+          'string');
         return true;
       });
   });

@@ -6,6 +6,7 @@ import {
 } from '../harness/oltp-paired-retry-owner.js';
 import {
   OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
+  OLTP_SCENARIO_A_FAULT_ROLE,
   buildScenarioADurabilityCase,
   evaluateScenarioADurabilityObservation,
 } from '../harness/oltp-scenario-a-durability-case.js';
@@ -34,6 +35,8 @@ const OUTPUT_PATH =
   'test-output/tidb-reference/scenario-a-durability-lagrange.json';
 
 const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayJoin = Function.call.bind(Array.prototype.join);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 // The named state of a node whose boot incarnation nothing observes: absent,
@@ -106,7 +109,18 @@ async function resolveNodeIncarnation(node) {
 // The default fault: restart one node of the cluster that is not the PG-wire
 // endpoint's node (the only node of a one-node cluster) and record its
 // incarnation before and after the restart.
-async function restartReplicaFault(cluster, context) {
+// The proof plan names the fault target's role; a missing or unknown role
+// refuses the case (a node is never presumed to be a data replica).
+function plannedFaultRole(options) {
+  if (!arrayIncludes(Object.values(OLTP_SCENARIO_A_FAULT_ROLE), options.faultRole)) {
+    throw Object.assign(new Error('fault_role_unplanned: the durability proof plan must ' +
+      `name the fault target role (${arrayJoin(Object.values(OLTP_SCENARIO_A_FAULT_ROLE), ', ')}), ` +
+      `got ${JSON.stringify(options.faultRole)}`), {code: 'fault_role_unplanned'});
+  }
+  return options.faultRole;
+}
+
+async function restartReplicaFault(cluster, context, role) {
   if (typeof cluster?.getNodes !== 'function' || typeof cluster.restartNode !== 'function') {
     throw new Error('durability proof needs a cluster that lists and restarts its nodes');
   }
@@ -121,9 +135,9 @@ async function restartReplicaFault(cluster, context) {
   return Object.freeze({
     faultTarget: Object.freeze({
       nodeId: String(target.id),
-      role: String(target.role || 'data-replica'),
-      isDataReplica: target.isDataReplica !== false,
-      pgHostOnly: target.pgHostOnly === true,
+      role,
+      isDataReplica: role === OLTP_SCENARIO_A_FAULT_ROLE.DATA_REPLICA,
+      pgHostOnly: role === OLTP_SCENARIO_A_FAULT_ROLE.PG_HOST_ONLY,
     }),
     beforeIncarnation,
     afterIncarnation: await resolveNodeIncarnation(after),
@@ -139,7 +153,9 @@ async function restartReplicaFault(cluster, context) {
 // nothing, which the evaluation refuses as fault_evidence_missing), else the
 // default replica restart.
 async function faultEvidenceOf({options, cluster, context}) {
-  if (!options.restartCluster) return restartReplicaFault(cluster, context);
+  if (!options.restartCluster) {
+    return restartReplicaFault(cluster, context, plannedFaultRole(options));
+  }
   const evidence = await options.restartCluster({cluster, context});
   return evidence === undefined ? null : evidence;
 }

@@ -193,7 +193,10 @@ function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.
     [/\/api\/admin\/discovery\/services/u, http(200, {services: [{serviceIds: ['sys-postgres-wire'],
       replicas: [{serviceId: 'sys-postgres-wire', nodeId: LAGRANGE_NODE_IDS[0],
         address: hosts[0], port: 5433, healthStatus: 'healthy'}]}]})],
+    // The product's partition diagnostics shape (admin-control-snapshot-local-
+    // diagnostics-methods.js): leaders and partitionsById are always answered.
     [/\/api\/admin\/diagnostics\/partitions/u, http(200, {partitionCount: 1,
+      leaders: {p1: LAGRANGE_NODE_IDS[0]},
       partitionsById: {p1: {partitionId: 'p1', tableName: 'stock',
         leaderNodeId: LAGRANGE_NODE_IDS[0],
         replicas: arrayMap(LAGRANGE_NODE_IDS.slice(0, hosts.length),

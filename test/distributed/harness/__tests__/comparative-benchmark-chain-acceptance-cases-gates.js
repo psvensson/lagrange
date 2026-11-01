@@ -272,7 +272,7 @@ async function dispatchClaim(claim) {
     subkind: claim.subkind,
     connection: system === TIDB ? {endpoint: ENDPOINT, databaseName: 'bench_chain'} :
       {endpoint: ENDPOINT, credentials: CREDENTIALS},
-    plan: {offeredRatePerSec: 2000, repetition: 1, orderIndex: 0,
+    plan: {offeredRatePerSec: 2000, repetition: 1, orderIndex: 0, sweepPlanSha256: null,
       ...(claim.subkind === 'main' ? {workload: CAPACITY_WORKLOAD} : {})},
     drivers: {createPgClient: product.createPgClient,
       createMysqlConnection: product.createMysqlConnection},

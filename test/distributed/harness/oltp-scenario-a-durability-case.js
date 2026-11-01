@@ -27,6 +27,9 @@ function freezeRecord(value) {
   return Object.freeze(value);
 }
 
+// The roles a proof plan may name for the restarted fault target.
+const FAULT_ROLE = Object.freeze({DATA_REPLICA: 'data-replica', PG_HOST_ONLY: 'pg-host-only'});
+
 function buildScenarioADurabilityCase() {
   const payment = buildScenarioAPaymentCase();
   const identity = freezeRecord({
@@ -192,6 +195,7 @@ assertClaimedProofIdsAreCanonical();
 
 export {
   CLAIMED_PROOF_IDS as OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
+  FAULT_ROLE as OLTP_SCENARIO_A_FAULT_ROLE,
   buildScenarioADurabilityCase,
   evaluateScenarioADurabilityObservation,
 };

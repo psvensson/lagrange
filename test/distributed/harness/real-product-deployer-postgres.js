@@ -114,7 +114,7 @@ function serverReady(ctx, role) {
 
 async function query(ctx, role, sql) {
   return stringTrim(String(await ctx.sshRun(role.host, ctx.opts,
-    adminSql(role.containerId, sql)) ?? ''));
+    adminSql(role.containerId, sql))));
 }
 
 function replicationRows(text) {
@@ -219,7 +219,11 @@ function postgresTopology(targetId) {
 
 async function reportedVersions(ctx, products) {
   for (const product of products) {
-    product.reportedVersion = await query(ctx, product, 'SELECT version()');
+    const version = await query(ctx, product, 'SELECT version()');
+    // An empty answer is no version: null with why, never ''.
+    Object.assign(product, version === '' ?
+      {reportedVersion: null, reportedVersionError: 'SELECT version() answered nothing'} :
+      {reportedVersion: version, reportedVersionError: null});
   }
   return products;
 }

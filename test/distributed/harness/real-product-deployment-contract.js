@@ -27,6 +27,8 @@ const DEPLOYMENT_FAILURE = Object.freeze({
   THERMAL_UNMEASURABLE: 'thermal_unmeasurable',
   LAB_HOST_UNAVAILABLE: 'lab_host_unavailable',
   WATCHDOG_STOPPED: 'watchdog_stopped',
+  // Docker answered that the container does not exist ("No such container").
+  CONTAINER_ABSENT: 'container_absent',
 });
 
 const BENCH_LABEL = Object.freeze({

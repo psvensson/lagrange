@@ -286,12 +286,16 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   // harness commit; the checkout itself is never moved.
   const loadGenerator = await prepareLoadGeneratorCheckout({sshRun, opts, host: client,
     harnessCommit: harness.gitCommit, campaignId: manifest.campaignId});
+  // The worktree's removal is part of the campaign's closure: a failure is
+  // recorded in the summary (or on the campaign's own error), never swallowed.
+  let summary;
   try {
-    return await runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physicalHosts,
+    summary = await runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physicalHosts,
       pinned, recordOwner, client, harness, loadGeneratorHost: loadGenerator.host});
-  } finally {
-    await loadGenerator.release();
+  } catch (error) {
+    throw Object.assign(error, {loadGeneratorWorktree: await loadGenerator.release()});
   }
+  return {...summary, closure: {loadGeneratorWorktree: await loadGenerator.release()}};
 }
 
 async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physicalHosts,
@@ -448,6 +452,10 @@ async function main() {
 main().catch((error) => {
   process.stderr.write(`${error instanceof UsageError ? '' : `${error.code || 'error'}: `}` +
     `${error.message}\n`);
+  if (error.loadGeneratorWorktree) {
+    process.stderr.write('load generator worktree closure: ' +
+      `${JSON.stringify(error.loadGeneratorWorktree)}\n`);
+  }
   if (error instanceof UsageError) process.stderr.write(USAGE);
   process.exitCode = String(error.code || '').startsWith('refused_') ?
     EXIT_CODES.REFUSED : EXIT_CODES.FAILURE;

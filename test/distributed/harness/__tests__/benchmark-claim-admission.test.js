@@ -509,7 +509,7 @@ describe('driver output through admission', () => {
         output = await executeBenchmarkWorkload({
           targetId: LAGRANGE, system: LAGRANGE, scenario: 'scenarioA', subkind: 'smoke',
           connection: {endpoint, credentials: {user: 'u', password: 'p', database: 'd'}},
-          plan: {offeredRatePerSec: 50, repetition: 1, orderIndex: 0},
+          plan: {offeredRatePerSec: 50, repetition: 1, orderIndex: 0, sweepPlanSha256: null},
           drivers: {createPgClient: product.createPgClient,
             createMysqlConnection: product.createMysqlConnection},
           evidenceDir,

@@ -13,6 +13,7 @@ import {
 import {
   validateBenchmarkAccounting,
 } from '../benchmark-operation-outcome.js';
+import {executeBenchmarkWorkload} from '../real-product-workload-drivers.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const stringIncludes = Function.call.bind(String.prototype.includes);
@@ -215,4 +216,21 @@ test('an unopened run (the deployer\'s readiness exhausted) records every planne
 test('an unopened run refuses a setup failure without its typed fields', async () => {
   await assert.rejects(runDriverCase({...LAGRANGE_SCENARIO_A,
     setupFailure: {code: 'readiness_exhausted'}}), /setupFailure/u);
+});
+
+test('the plan names its repetition, order and sweep plan (null: no sweep); a missing ' +
+  'one is refused, never recorded as null', async () => {
+  const setupFailure = {failureClass: 'product_error', sqlState: null,
+    code: 'readiness_exhausted', message: 'never ready'};
+  const base = {targetId: 'lagrange', system: 'lagrange', scenario: 'scenarioA',
+    subkind: 'smoke', setupFailure, evidenceDir: '/tmp/unused-bench-evidence'};
+  const complete = {offeredRatePerSec: 50, repetition: 1, orderIndex: 0, sweepPlanSha256: null};
+  const output = await executeBenchmarkWorkload({...base, plan: complete});
+  assert.equal(output.plan.sweepPlanDigest, null);
+  assert.equal(output.plan.repetition, 1);
+  for (const missing of ['repetition', 'orderIndex', 'sweepPlanSha256']) {
+    const plan = {...complete};
+    delete plan[missing];
+    await assert.rejects(executeBenchmarkWorkload({...base, plan}), new RegExp(missing, 'u'));
+  }
 });

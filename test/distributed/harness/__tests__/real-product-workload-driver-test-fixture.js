@@ -108,7 +108,8 @@ async function runDriverCase({targetId, scenario, subkind, mode = FAKE_PRODUCT_F
       scenario,
       subkind,
       ...(setupFailure ? {setupFailure} : {connection: connectionFor(system)}),
-      plan: {offeredRatePerSec: FIXTURE_RATE_PER_SEC, repetition: 1, orderIndex: 0},
+      plan: {offeredRatePerSec: FIXTURE_RATE_PER_SEC, repetition: 1, orderIndex: 0,
+        sweepPlanSha256: null},
       drivers: {
         createPgClient: product.createPgClient,
         createMysqlConnection: product.createMysqlConnection,

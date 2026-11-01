@@ -180,15 +180,20 @@ async function semanticGateStage({run, manifest, deps, deployment, events}) {
   return staged;
 }
 
+// A failure past deployment keeps the attempt (and its deployment) in the record.
+async function withAttempt(attempt, step) {
+  try {
+    return await step();
+  } catch (error) {
+    throw Object.assign(error, {attempt});
+  }
+}
+
 async function measureRun({run, manifest, deps, events, signal}) {
   const attempt = {deployment: await deps.deployRun(run), workload: null,
     productsAfter: null, roleObservations: null};
   // The deployment stays in the record (and pins its identity) when refused.
-  try {
-    assertEndpointBound(attempt.deployment);
-  } catch (error) {
-    throw Object.assign(error, {attempt});
-  }
+  await withAttempt(attempt, () => assertEndpointBound(attempt.deployment));
   const staged = await semanticGateStage({run, manifest, deps,
     deployment: attempt.deployment, events});
   attempt.deployment = staged.deployment;
@@ -198,7 +203,7 @@ async function measureRun({run, manifest, deps, events, signal}) {
   attempt.workload = await deps.executeWorkloadRun({run, manifest, deployment, signal,
     semanticGate: staged.gate});
   events.push(...(attempt.workload.events || []));
-  attempt.productsAfter = await deps.inspectProducts(deployment);
+  attempt.productsAfter = await withAttempt(attempt, () => deps.inspectProducts(deployment));
   const identityEvents = compareProductIdentity(deployment.identity.products,
     attempt.productsAfter, iso(deps.now()));
   events.push(...identityEvents);

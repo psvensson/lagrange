@@ -218,3 +218,29 @@ test('a worktree that is not at the harness commit refuses the campaign', async 
   (error) => error.code === 'load_generator_commit_mismatch');
   assert.match(ssh.calls[ssh.calls.length - 1].command, /git worktree remove --force/u);
 });
+
+test('a worktree removal that fails is recorded as an incomplete closure, never swallowed',
+  async () => {
+    const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
+    const ssh = createScriptedSsh([[/git worktree add/u, 'abc'],
+      [/git worktree remove/u, new Error('worktree locked')]]);
+    const checkout = await prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
+      harnessCommit: 'abc', campaignId: 'bench-x'});
+    const closure = await checkout.release();
+    assert.equal(closure.status, 'incomplete');
+    assert.match(closure.error, /worktree locked/u);
+  });
+
+test('a failed checkout preparation keeps its cause and records the cleanup it attempted',
+  async () => {
+    const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
+    const ssh = createScriptedSsh([[/git worktree add/u, new Error('fetch failed')],
+      [/git worktree remove/u, new Error('no such worktree')]]);
+    await assert.rejects(prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
+      harnessCommit: 'abc', campaignId: 'bench-x'}), (error) => {
+      assert.match(error.message, /fetch failed/u);
+      assert.equal(error.loadGeneratorWorktree.status, 'incomplete');
+      assert.match(error.loadGeneratorWorktree.error, /no such worktree/u);
+      return true;
+    });
+  });

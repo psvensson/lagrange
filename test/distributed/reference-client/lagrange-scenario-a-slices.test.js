@@ -614,6 +614,7 @@ async function testScenarioRunContracts() {
         restartNode: async () => {},
       }, {
         admission,
+        faultRole: 'data-replica',
         prepareContext: () => fakeMockContext(admission),
         createAdapter: async () => ({
           executionPath: 'public-sql',
@@ -636,6 +637,69 @@ async function testScenarioRunContracts() {
         outputPath: '/tmp/test-durability-unchanged-incarnation.json',
       }),
       /fault_incarnation_unchanged/u,
+    );
+
+    // The fault target's role comes from the proof plan; a missing or unknown
+    // role refuses the case instead of presuming a data replica.
+    await assert.rejects(
+      runDurability({
+        getNodes: () => [{id: 'node-1', ip: '127.0.0.1', bootIncarnation: 'inc-same'}],
+        restartNode: async () => {},
+      }, {
+        admission,
+        prepareContext: () => fakeMockContext(admission),
+        createAdapter: async () => ({
+          executionPath: 'public-sql',
+          protocol: 'postgresql',
+          lockingReadMode: 'snapshot-write-conflict',
+          datasetSha256: caseDef.identity.datasetSha256,
+          executeTransaction: async () => ({paidCents: payment.identity.expected.paidCents}),
+          close: async () => {},
+        }),
+        observePayment: async () => ({
+          warehouseYtdCents: payment.identity.expected.warehouseYtdCents,
+          districtYtdCents: payment.identity.expected.districtYtdCents,
+          customerBalanceCents: payment.identity.expected.customerBalanceCents,
+          customerYtdPaymentCents: payment.identity.expected.customerYtdPaymentCents,
+          customerPaymentCount: payment.identity.expected.customerPaymentCount,
+          historyCount: payment.identity.expected.historyCount,
+          historyAmountCents: payment.identity.expected.historyAmountCents,
+        }),
+        observeSnapshot: async () => ({stateSha256: DUMMY_STATE_SHA}),
+        outputPath: '/tmp/test-durability-unplanned-role.json',
+      }),
+      /fault_role_unplanned/u,
+    );
+
+    await assert.rejects(
+      runDurability({
+        getNodes: () => [{id: 'node-1', ip: '127.0.0.1', bootIncarnation: 'inc-same'}],
+        restartNode: async () => {},
+      }, {
+        admission,
+        faultRole: 'any-node',
+        prepareContext: () => fakeMockContext(admission),
+        createAdapter: async () => ({
+          executionPath: 'public-sql',
+          protocol: 'postgresql',
+          lockingReadMode: 'snapshot-write-conflict',
+          datasetSha256: caseDef.identity.datasetSha256,
+          executeTransaction: async () => ({paidCents: payment.identity.expected.paidCents}),
+          close: async () => {},
+        }),
+        observePayment: async () => ({
+          warehouseYtdCents: payment.identity.expected.warehouseYtdCents,
+          districtYtdCents: payment.identity.expected.districtYtdCents,
+          customerBalanceCents: payment.identity.expected.customerBalanceCents,
+          customerYtdPaymentCents: payment.identity.expected.customerYtdPaymentCents,
+          customerPaymentCount: payment.identity.expected.customerPaymentCount,
+          historyCount: payment.identity.expected.historyCount,
+          historyAmountCents: payment.identity.expected.historyAmountCents,
+        }),
+        observeSnapshot: async () => ({stateSha256: DUMMY_STATE_SHA}),
+        outputPath: '/tmp/test-durability-unknown-role.json',
+      }),
+      /fault_role_unplanned/u,
     );
   }
 }

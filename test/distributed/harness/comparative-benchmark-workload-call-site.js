@@ -45,6 +45,7 @@ const LOAD_GENERATOR_CLI = 'test/distributed/harness/run-benchmark-workload.js';
 const LOAD_GENERATOR_WORKTREE_PARENT = 'test-output/bench-worktrees';
 const LOAD_GENERATOR_LINKED_DIR = 'node_modules';
 const CHECKOUT_PREPARATION_TIMEOUT_MS = 10 * 60 * 1000;
+const WORKTREE_CLOSURE = Object.freeze({COMPLETE: 'complete', INCOMPLETE: 'incomplete'});
 const LOAD_GENERATOR_EXIT = Object.freeze({OK: 0, REFUSED: 2});
 const REFUSED_RECORD_KIND = 'benchmark-dispatch-refused';
 const WORKLOAD_TIMEOUT_MS = 60 * 60 * 1000;
@@ -126,16 +127,27 @@ function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaign
  * checkout stays at whatever commit it was provisioned with (and may carry
  * local edits); it is never moved. The CLI runs from a throwaway detached
  * worktree of it at the harness commit (fetched from origin when absent),
- * with the host's installed dependencies linked in; `release` removes it.
- * A worktree not at the harness commit refuses the campaign.
+ * with the host's installed dependencies linked in; `release` removes it and
+ * answers the closure: {status: 'complete'} or {status: 'incomplete', error}
+ * (a removal failure is recorded, never swallowed). A failed preparation
+ * leaves with its cause and the closure of the removal it attempted
+ * (error.loadGeneratorWorktree). A worktree not at the harness commit refuses
+ * the campaign.
  * @return {Promise<{host: Object, release: Function}>} host with repoPath at
  *   the worktree
  */
 async function prepareLoadGeneratorCheckout({sshRun, opts, host, harnessCommit, campaignId}) {
   const repo = host.repoPath;
   const worktree = `${repo}/${LOAD_GENERATOR_WORKTREE_PARENT}/${campaignId}`;
-  const release = () => sshRun(host.ip, opts, `cd ${shellQuote(repo)} && ` +
-    `git worktree remove --force ${shellQuote(worktree)}; git worktree prune`);
+  const release = async () => {
+    try {
+      await sshRun(host.ip, opts, `cd ${shellQuote(repo)} && ` +
+        `git worktree remove --force ${shellQuote(worktree)} && git worktree prune`);
+      return {status: WORKTREE_CLOSURE.COMPLETE, error: null};
+    } catch (error) {
+      return {status: WORKTREE_CLOSURE.INCOMPLETE, error: errorText(error)};
+    }
+  };
   let head;
   try {
     head = stringTrim(String(await sshRun(host.ip, opts, [
@@ -148,13 +160,12 @@ async function prepareLoadGeneratorCheckout({sshRun, opts, host, harnessCommit, 
       `git -C ${shellQuote(worktree)} rev-parse HEAD`,
     ].join(' && '), CHECKOUT_PREPARATION_TIMEOUT_MS)));
   } catch (error) {
-    await release().catch(() => null);
-    throw error;
+    throw Object.assign(error, {loadGeneratorWorktree: await release()});
   }
   if (head !== harnessCommit) {
-    await release();
-    throw deploymentFailure(FAILURE.COMMIT_MISMATCH, `load generator ${host.ip} worktree ` +
-      `is at ${head}, the campaign records ${harnessCommit}`, {commit: head, harnessCommit});
+    throw Object.assign(deploymentFailure(FAILURE.COMMIT_MISMATCH, `load generator ${host.ip} ` +
+      `worktree is at ${head}, the campaign records ${harnessCommit}`,
+    {commit: head, harnessCommit}), {loadGeneratorWorktree: await release()});
   }
   return {host: {...host, repoPath: worktree}, release};
 }

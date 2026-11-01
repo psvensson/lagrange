@@ -366,3 +366,17 @@ test('without a gate stage the run records that the semantic gate was unavailabl
     await run(deps);
     assert.equal(records[1].harnessEvents[0].kind, 'semantic-gate-unavailable');
   });
+
+test('an inspection after the window that fails is identity_unverified on a failed run ' +
+  'that keeps its deployment, never read as an absent container', async () => {
+  const {deps, records} = harness({inspectProducts: async () => {
+    throw Object.assign(new Error('ssh: connection timed out'), {code: 'identity_unverified'});
+  }});
+  await run(deps);
+  const first = records[1];
+  assert.equal(first.execution.state, 'failed');
+  assert.equal(first.execution.failure.code, 'identity_unverified');
+  assert.notEqual(first.deployment, null);
+  assert.equal(arraySome(first.harnessEvents, (event) => event.kind === 'container-absent'),
+    false);
+});

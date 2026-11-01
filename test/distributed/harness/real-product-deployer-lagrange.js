@@ -146,7 +146,7 @@ function nodeReady(ctx, host) {
   return readinessOf(ctx, `${NODE_ROLE}@${host}`, async () => {
     const answer = await getJson(ctx, `http://${host}:${PORT.REST}/readyz`);
     return {ready: answer.status === HTTP_OK && answer.json?.ready === true,
-      diagnostic: answer.json ?? answer.body ?? answer.error};
+      diagnostic: answer};
   });
 }
 
@@ -154,7 +154,7 @@ function membershipReady(ctx, seedHost, nodeCount) {
   return readinessOf(ctx, 'lagrange-membership', async () => {
     const answer = await getJson(ctx, `http://${seedHost}:${PORT.REST}/management/v1/facts`);
     return {ready: answer.json?.topology?.readyNodeCount === nodeCount,
-      diagnostic: answer.json?.topology ?? answer.body ?? answer.error};
+      diagnostic: answer};
   });
 }
 
@@ -164,8 +164,7 @@ function healthyListener(services, roles) {
   const replica = arrayFind(replicas, (one) => one?.serviceId === PG_WIRE_SERVICE_ID &&
     one?.healthStatus === HEALTHY && Number.isInteger(Number(one?.port)) && one?.port > 0);
   const node = replica && arrayFind(roles, (role) => role.nodeId === replica.nodeId);
-  return node ? {host: node.host, port: Number(replica.port), nodeId: replica.nodeId,
-    advertisedAddress: replica.address ?? null} : null;
+  return node ? {host: node.host, port: Number(replica.port), nodeId: replica.nodeId} : null;
 }
 
 async function publicPgWireReady(ctx, seedHost, roles) {
@@ -176,41 +175,95 @@ async function publicPgWireReady(ctx, seedHost, roles) {
       url: `${admin}/api/admin/services/${PG_WIRE_SERVICE_ID}/scale`, method: 'POST',
       body: PG_WIRE_DESIRED_STATE});
     if (scale.json?.success !== true || scale.json?.outcome !== 'applied') {
-      return {ready: false, diagnostic: {scale: scale.json ?? scale.body ?? scale.error}};
+      return {ready: false, diagnostic: {scale}};
     }
     const found = await getJson(ctx,
       `${admin}/api/admin/discovery/services?serviceId=${PG_WIRE_SERVICE_ID}`);
     listener = healthyListener(found.json?.services, roles);
-    return {ready: listener !== null, diagnostic: {discovery: found.json ?? found.error}};
+    return {ready: listener !== null, diagnostic: {discovery: found}};
   });
   return listener;
 }
 
-function placementOf(diagnostics, roles, observedAt) {
-  const partitions = Object.values(diagnostics?.partitionsById || {});
-  const hostOf = (nodeId) => arrayFind(roles, (role) => role.nodeId === nodeId)?.host ?? null;
-  return {observedAt, source: '/api/admin/diagnostics/partitions',
-    replicasByPartition: arrayMap(partitions, (partition) => ({
-      partitionId: partition.partitionId, tableName: partition.tableName ?? null,
-      leaderNodeId: partition.leaderNodeId ?? null, leaderHost: hostOf(partition.leaderNodeId),
-      replicas: arrayMap(partition.replicas || [], (replica) => ({nodeId: replica.nodeId,
-        host: hostOf(replica.nodeId), status: replica.status ?? null}))}))};
+// A field of the product's partition diagnostics: the product answers it (its
+// value may be null, e.g. a partition without a leader); a missing field is
+// an unreadable answer, never a default.
+function partitionField(record, key) {
+  if (!record || typeof record !== 'object' || !Object.hasOwn(record, key)) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `partition diagnostics answered without ${key}`, {record});
+  }
+  return record[key];
 }
 
-async function readPartitions(ctx, seedHost) {
-  const answer = await getJson(ctx,
-    `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions`);
-  return answer.status === HTTP_OK ? answer.json : null;
+// The host of a node of this deployment, or null: the node is not one of its
+// recorded roles (a foreign node named by the product).
+function deploymentHostOf(roles, nodeId) {
+  const role = arrayFind(roles, (one) => one.nodeId === nodeId);
+  return role === undefined ? null : role.host;
+}
+
+// Placement as the product reports it; null when the product did not answer
+// its partition diagnostics (the record's explicit "not observed").
+function placementOf(answer, roles, observedAt) {
+  if (answer.status !== HTTP_OK) return null;
+  const partitions = Object.values(partitionField(answer.json, 'partitionsById'));
+  return {observedAt, source: '/api/admin/diagnostics/partitions',
+    replicasByPartition: arrayMap(partitions, (partition) => ({
+      partitionId: partitionField(partition, 'partitionId'),
+      tableName: partitionField(partition, 'tableName'),
+      leaderNodeId: partitionField(partition, 'leaderNodeId'),
+      leaderHost: deploymentHostOf(roles, partitionField(partition, 'leaderNodeId')),
+      replicas: arrayMap(partitionField(partition, 'replicas'), (replica) => ({
+        nodeId: partitionField(replica, 'nodeId'),
+        host: deploymentHostOf(roles, partitionField(replica, 'nodeId')),
+        status: partitionField(replica, 'status')}))}))};
+}
+
+// The leaders the product reports; an unanswered diagnostics read is a typed
+// failure the campaign records as a role-observation failure.
+async function observedLeaders(ctx, seedHost) {
+  const answer = await readPartitions(ctx, seedHost);
+  if (answer.status !== HTTP_OK) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      'partition diagnostics did not answer', {answer});
+  }
+  return partitionField(answer.json, 'leaders');
+}
+
+// The image a host runs: its content-pinned reference when the campaign pinned
+// one per host (every data host must have it), else the campaign's reference.
+function imageForHost(opts, host, image) {
+  if (!opts.lagrangeImageByHost) return image;
+  if (!Object.hasOwn(opts.lagrangeImageByHost, host)) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `the pinned Lagrange image names no reference for host ${host}`, {host});
+  }
+  return opts.lagrangeImageByHost[host];
+}
+
+// The image's revision label, or null: Docker answered no labels, or the image
+// carries none (the explicit unlabelled state the revision pin refuses).
+function revisionLabelOf(product) {
+  if (product.imageLabels === null || !Object.hasOwn(product.imageLabels, REVISION_LABEL)) {
+    return null;
+  }
+  return product.imageLabels[REVISION_LABEL];
+}
+
+function readPartitions(ctx, seedHost) {
+  return getJson(ctx, `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions`);
 }
 
 function leadersReady(ctx, seedHost) {
   return readinessOf(ctx, 'lagrange-partition-leaders', async () => {
-    const diagnostics = await readPartitions(ctx, seedHost);
-    const partitions = Object.values(diagnostics?.partitionsById || {});
+    const answer = await readPartitions(ctx, seedHost);
+    if (answer.status !== HTTP_OK) return {ready: false, diagnostic: answer};
+    const partitions = Object.values(partitionField(answer.json, 'partitionsById'));
     return {ready: partitions.length > 0 &&
-      arrayEvery(partitions, (partition) => Boolean(partition.leaderNodeId)),
-    diagnostic: diagnostics ? {partitionCount: partitions.length,
-      leaders: diagnostics.leaders ?? null} : 'partition diagnostics unavailable'};
+      arrayEvery(partitions, (partition) => Boolean(partitionField(partition, 'leaderNodeId'))),
+    diagnostic: {partitionCount: partitions.length,
+      leaders: partitionField(answer.json, 'leaders')}};
   });
 }
 
@@ -235,7 +288,9 @@ async function controlSnapshots(ctx, roles) {
 // not a participant failure).
 async function tableRoutingDenials(query, requiredTables) {
   const denials = [];
-  for (const table of requiredTables || []) {
+  // null: system-table readiness, no user-table scope (the evaluation owner's state).
+  if (requiredTables === null) return denials;
+  for (const table of requiredTables) {
     try {
       await query(`SELECT COUNT(*) AS row_count FROM ${table}`);
     } catch (error) {
@@ -248,7 +303,8 @@ async function tableRoutingDenials(query, requiredTables) {
 // Per required table, the time from the first poll until the table first
 // showed no denial of its own (time-to-routable).
 function recordTableRoutability(tableReadyAt, tables, context) {
-  for (const table of context.requiredTables || []) {
+  if (context.requiredTables === null) return;
+  for (const table of context.requiredTables) {
     if (tableReadyAt[table] !== undefined) continue;
     const own = evaluateLagrangeClusterReadiness({...tables,
       expectedNodeIds: context.expectedNodeIds, requiredServiceIds: [],
@@ -303,23 +359,44 @@ function probeWriteReadback(ctx, sql, campaignId, visibility) {
   });
 }
 
+// A field of the product's boot-provenance log line; a line without it is an
+// unavailable provenance (the caller records why), never a filled-in null.
+function bootLogField(parsed, key) {
+  if (!Object.hasOwn(parsed, key)) throw new Error(`boot provenance line without ${key}`);
+  return parsed[key];
+}
+
+// The boot provenance the node logged, or {unavailable: why}: the explicit
+// state of a node whose log does not carry it.
 async function bootProvenance(ctx, product) {
   try {
     const line = String(await ctx.sshRun(product.host, ctx.opts,
       `docker logs ${shellWord(product.containerId)} 2>&1 | grep -m 1 ${BOOT_PROVENANCE_MARKER}`));
     const parsed = JSON.parse(line.slice(stringIndexOf(line, '{')));
-    return {version: parsed.version ?? null,
-      bootedSrcFingerprint: parsed.bootedSrcFingerprint ?? null,
-      subsystem: parsed.subsystem ?? null};
+    return {version: bootLogField(parsed, 'version'),
+      bootedSrcFingerprint: bootLogField(parsed, 'bootedSrcFingerprint'),
+      subsystem: bootLogField(parsed, 'subsystem')};
   } catch (error) {
     return {unavailable: errorText(error)};
   }
 }
 
+// The version the node reports in its facts, or null with the reason: a node
+// that did not answer it has no reported version (an empty string is none).
+function reportedVersionOf(facts) {
+  const version = facts.status === HTTP_OK ? facts.json?.release?.version : undefined;
+  if (typeof version === 'string' && version !== '') {
+    return {reportedVersion: version, reportedVersionError: null};
+  }
+  return {reportedVersion: null, reportedVersionError: `facts answered ${JSON.stringify(
+    {status: facts.status, error: facts.error, version: version === undefined ? 'absent' :
+      version})}`};
+}
+
 async function reportedVersions(ctx, products) {
   for (const product of products) {
     const facts = await getJson(ctx, `http://${product.host}:${PORT.REST}/management/v1/facts`);
-    product.reportedVersion = facts.json?.release?.version ?? null;
+    Object.assign(product, reportedVersionOf(facts));
     product.bootProvenance = await bootProvenance(ctx, product);
   }
   return products;
@@ -376,7 +453,7 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
     const host = hosts[index];
     const nodeId = nodeIdOf(index);
     const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
-      ordinal: index + 1, image: opts.lagrangeImageByHost?.[host] ?? image,
+      ordinal: index + 1, image: imageForHost(opts, host, image),
       dockerArgs: [...storageArgs(opts, campaignId, index),
         ...nodeEnv({nodeId, host, seedHost, connection})]});
     roles.push({role: NODE_ROLE, host, containerId: started.containerId, nodeId});
@@ -400,11 +477,11 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
       versionPattern: versionPatternOf(image, opts.lagrangeVersion)}});
   if (opts.lagrangeRevision) {
     const wrong = arrayFilter(products, (product) =>
-      product.imageLabels?.[REVISION_LABEL] !== opts.lagrangeRevision);
+      revisionLabelOf(product) !== opts.lagrangeRevision);
     if (wrong.length > 0) {
       throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
         `image revision label differs from ${opts.lagrangeRevision}`,
-        {hosts: arrayMap(wrong, (one) => [one.host, one.imageLabels?.[REVISION_LABEL] ?? null])});
+        {hosts: arrayMap(wrong, (one) => [one.host, revisionLabelOf(one)])});
     }
   }
   const binding = await bindEndpointToContainer({sshRun, opts, campaignId,
@@ -433,7 +510,7 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
       // routable and replicated, or a typed readiness exhaustion.
       observePlacement: async () => {
         const routable = await clusterReady({...ctx, budget: {...ctx.budget,
-          attempts: ctx.budget.routableAttempts ?? ROUTABLE_ATTEMPTS}},
+          attempts: ROUTABLE_ATTEMPTS}},
         'lagrange-canonical-tables-routable', query, nodeRoles,
         arrayMap(CANONICAL_TABLES, (table) => table.name));
         return {...placementOf(await readPartitions(ctx, seedHost), roles,
@@ -442,8 +519,7 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
       // The arm's readiness contract again (after a product restart).
       awaitReady: async () => ({cluster: await clusterReady(ctx, 'lagrange-system-tables', query,
         nodeRoles), probe: await probeWriteReadback(ctx, sql, campaignId, visibility)}),
-      observeRoles: async () => ({leaders: (await readPartitions(ctx, seedHost))?.leaders ??
-        null}),
+      observeRoles: async () => ({leaders: await observedLeaders(ctx, seedHost)}),
     },
   };
 }

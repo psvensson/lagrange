@@ -2,10 +2,18 @@
 // product's own version report; storage is classified from the container's
 // mounts. Real entry path: the deployers via the facade; substituted: ssh.
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 
 import * as deployers from '../real-product-cluster-deployers.js';
-import {contentIdentityOf} from '../real-product-identity.js';
+import {
+  contentIdentityOf,
+  observeProductsAfterWindow,
+} from '../real-product-identity.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   LAGRANGE_IMAGE,
@@ -184,4 +192,48 @@ test('D18: image content identity is the digest of the ordered RootFS diff_ids, 
   assert.ok(arrayEvery(deployment.identity.products, (p) => p.contentIdentity === content));
   await assert.rejects(run((host) => (host === '10.0.0.3' ? [layers[0]] : null)),
     (error) => error.code === 'identity_unverified');
+});
+
+// After the window: only docker's explicit "No such container" answer is an
+// absent container (compareProductIdentity reads it as container-absent); a
+// failed ssh or inspection is the harness's identity_unverified, never absence.
+test('after the window an unanswered inspection is identity_unverified, not an absent ' +
+  'container', async () => {
+  const products = [{role: 'node', host: '10.0.0.1', containerId: 'c1', reportedVersion: '1'},
+    {role: 'node', host: '10.0.0.2', containerId: 'c2', reportedVersion: '1'}];
+  const gone = createScriptedSsh([[/docker inspect --type container/u, (_command, host) =>
+    (host === '10.0.0.1' ? new Error('Error: No such container: c1') :
+      new Error('ssh: connect to host 10.0.0.2 port 22: Connection timed out'))]]);
+  await assert.rejects(observeProductsAfterWindow({sshRun: gone.sshRun, opts: {}, products}),
+    (error) => error.code === 'identity_unverified' && /timed out/u.test(error.message));
+  const absentOnly = createScriptedSsh([[/docker inspect --type container/u,
+    new Error('Error: No such container: c1')]]);
+  assert.deepEqual(await observeProductsAfterWindow({sshRun: absentOnly.sshRun, opts: {},
+    products: [products[0]]}), []);
+});
+
+// The guide's content-identity recipe, executed as written over a stub docker
+// that answers a fixture layer list as `docker image inspect --format
+// '{{json .RootFS.Layers}}'` does (Go JSON plus a trailing newline), must equal
+// contentIdentityOf of the same list: the documentation and the owner cannot drift.
+const RECIPE_LINE =
+  /^printf %s "\$\(docker image inspect --format '\{\{json \.RootFS\.Layers\}\}' /u;
+
+test('the reproduction guide\'s content-identity recipe equals contentIdentityOf', () => {
+  const guide = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)),
+    '../../../../docs/benchmarks/cloud-reproduction-guide.md'), 'utf8');
+  const recipe = arrayFind(stringSplit(guide, '\n'), (line) => RECIPE_LINE.test(line));
+  assert.equal(typeof recipe, 'string', 'the guide documents the recipe');
+  const layers = ['sha256:' + '1'.repeat(64), 'sha256:' + '2'.repeat(64),
+    'sha256:' + '3'.repeat(64)];
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'content-identity-recipe-'));
+  try {
+    fs.writeFileSync(path.join(bin, 'docker'),
+      `#!/bin/sh\nprintf '%s\\n' '${JSON.stringify(layers)}'\n`, {mode: 0o755});
+    const digest = execFileSync('/bin/bash', ['-c', recipe],
+      {env: {...process.env, PATH: `${bin}:${process.env.PATH}`}, encoding: 'utf8'});
+    assert.equal(`sha256:${stringSplit(digest, ' ')[0]}`, contentIdentityOf(layers));
+  } finally {
+    fs.rmSync(bin, {recursive: true, force: true});
+  }
 });

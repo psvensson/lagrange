@@ -69,12 +69,20 @@ function inspectedField(inspection, path, subject) {
   return value;
 }
 
+// Docker's own answer that the object does not exist.
+const NO_SUCH_OBJECT = /\bNo such (?:container|object)\b/u;
+
 async function inspectJson({sshRun, opts, host, command, subject}) {
   try {
     return JSON.parse(String(await sshRun(host, opts, command)));
   } catch (error) {
+    const text = errorText(error);
+    if (NO_SUCH_OBJECT.test(text)) {
+      throw deploymentFailure(DEPLOYMENT_FAILURE.CONTAINER_ABSENT,
+        `${subject}: docker answered ${text}`, {host});
+    }
     throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `${subject} could not be inspected: ${errorText(error)}`, {host});
+      `${subject} could not be inspected: ${text}`, {host});
   }
 }
 
@@ -159,6 +167,19 @@ async function inspectRunningContainer({sshRun, opts, host, containerId, role}) 
   };
 }
 
+// At identity time a container docker says does not exist is an unverified
+// identity of the deployment (dead-process evidence is never identity, D15).
+async function inspectedAtIdentityTime({sshRun, opts, role}) {
+  try {
+    return await inspectRunningContainer({sshRun, opts, host: role.host,
+      containerId: role.containerId, role: role.role});
+  } catch (error) {
+    if (error?.code !== DEPLOYMENT_FAILURE.CONTAINER_ABSENT) throw error;
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED, error.message,
+      error.diagnostic);
+  }
+}
+
 /** Inspect every role's container, in role order. */
 async function inspectProducts({sshRun, opts, roles}) {
   const products = [];
@@ -167,16 +188,18 @@ async function inspectProducts({sshRun, opts, roles}) {
     if (!stores.has(role.host)) {
       stores.set(role.host, await readImageStore({sshRun, opts, host: role.host}));
     }
-    products.push({...await inspectRunningContainer({sshRun, opts, host: role.host,
-      containerId: role.containerId, role: role.role}), imageStore: stores.get(role.host)});
+    products.push({...await inspectedAtIdentityTime({sshRun, opts, role}),
+      imageStore: stores.get(role.host)});
   }
   return products;
 }
 
 /**
- * Inspect the products again after the measured window. A container that is
- * gone or stopped is simply missing from the answer: compareProductIdentity
- * turns that into a container-absent event.
+ * Inspect the products again after the measured window. A container docker
+ * answers does not exist ("No such container") is missing from the answer:
+ * compareProductIdentity turns that into a container-absent event. Any other
+ * failure (ssh, an unreadable inspection, a stopped container) is the
+ * harness's identity_unverified and propagates: it is never read as absence.
  */
 async function observeProductsAfterWindow({sshRun, opts, products}) {
   const observed = [];
@@ -185,8 +208,8 @@ async function observeProductsAfterWindow({sshRun, opts, products}) {
       const now = await inspectRunningContainer({sshRun, opts, host: product.host,
         containerId: product.containerId, role: product.role});
       observed.push({...now, reportedVersion: product.reportedVersion});
-    } catch {
-      // absent: reported by compareProductIdentity as container-absent
+    } catch (error) {
+      if (error?.code !== DEPLOYMENT_FAILURE.CONTAINER_ABSENT) throw error;
     }
   }
   return observed;

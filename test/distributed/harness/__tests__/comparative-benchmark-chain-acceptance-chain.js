@@ -114,7 +114,7 @@ async function driveArm(options) {
     targetId, system, scenario: 'scenarioA', subkind,
     connection: connectionFor(system),
     plan: {offeredRatePerSec, repetition, orderIndex: repetition - 1,
-      ...(capacity ? {workload, sweepPlanSha256: SWEEP_PLAN_SHA256} : {})},
+      ...(capacity ? {workload, sweepPlanSha256: SWEEP_PLAN_SHA256} : {sweepPlanSha256: null})},
     drivers: {createPgClient: product.createPgClient,
       createMysqlConnection: product.createMysqlConnection},
     runtime: {setWatchdogTimer: watchdogTimer(mode === FAKE_PRODUCT_FAULT.SILENT ?
