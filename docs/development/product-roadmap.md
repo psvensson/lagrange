@@ -203,6 +203,7 @@ arbitrary WASI HTTP component or Node middleware support.
 | Driver and SQL compatibility | Community | Named, tested PostgreSQL-driver/SQL matrix; unsupported authentication and SQL modes are explicit |
 | Upgrade and operating envelope | Community | Supported topology/capacity bounds and executable upgrade/downgrade rehearsals for named release pairs |
 | Operator view | Community | Correlated request, shard, partial, placement, retry and failure diagnostics; inspect index and live-query dependency/frontier state |
+| Working pilot latency groups | Community | Automatic group formation and membership changes, group-aware routing/placement, representative traffic propagation and explainable locality diagnostics under the declared pilot topology and failures; geographically qualified cross-region profiles remain AGPL 1.2 |
 
 Security is required on the supported transport in 0.5. It does not wait for
 NATS or Veilid. Standard telemetry exporters are AGPL work in 0.9;
