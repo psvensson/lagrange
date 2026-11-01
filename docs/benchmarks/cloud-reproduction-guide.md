@@ -49,7 +49,7 @@ Publishing is not part of the runner: published pages are regenerated from admit
 ## 2. Default: the home lab
 
 The lab is the default execution target. Hosts come from the registered lab inventory, never
-from the command line. See [`docs/development/home-lab.md`](../development/home-lab.md) for the
+from the command line. The repository's home-lab guide (`docs/development/home-lab.md`) owns the
 inventory, the machine-wide lock and the thermal gate.
 
 ### Prerequisites
