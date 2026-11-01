@@ -10,11 +10,11 @@
 // scenario, subkind, connection, plan, evidenceDir). One NDJSON record is
 // appended to --out. Exit 0: executed or a typed non-execution (blocked /
 // unsupported); exit 2: typed dispatch refusal; exit 1: harness error.
-import {execFileSync} from 'node:child_process';
 import {appendFile, readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {hostname} from 'node:os';
 
+import {execGit} from '../../../scripts/checks/git-invocation.js';
 import {
   isBenchmarkDispatchRefusal,
 } from './benchmark-workload-dispatch.js';
@@ -51,7 +51,7 @@ function parseArgs(argv) {
 function observedGitCommit() {
   try {
     return {
-      gitCommit: stringTrim(execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'})),
+      gitCommit: stringTrim(execGit(['rev-parse', 'HEAD'], {encoding: 'utf8'})),
       error: null,
     };
   } catch (error) {
