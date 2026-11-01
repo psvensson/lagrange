@@ -43,7 +43,7 @@ for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 | --- | --- | --- |
 | 0.4.0 | Published implementation baseline | Released alpha implementation; outstanding feature and comparison acceptance remains explicit. |
 | 0.4.1 | Bounded correctness and claim repairs | Complete admitted generic results or refuse them explicitly, enforce byte bounds, repair stale checks and align published claims with measured support. |
-| 0.5 | Standard HTTP services and pilot-ready operation | Hono/Fetch authoring, remaining query and practical-service journeys, reproducible measured comparisons, and a secure, recoverable pilot envelope. |
+| 0.5 | Standard HTTP services and pilot-ready operation | Hono/Fetch authoring, remaining query and practical-service journeys, reproducible measured comparisons, working latency groups with topology-scoped locality diagnostics, and a secure, recoverable pilot envelope (not yet named cross-region qualification). |
 | 0.6 | Native OCI Call Cells | Real managed native services execute functions at the data through the same service model. |
 | 0.7 | Transport independence and NATS | Complete NATS-only cluster operation and effective Raft timing profiles follow a measured transport baseline. |
 | 0.8 | Veilid-only networking | The complete cluster workload works over Veilid alone within a measured envelope. |
