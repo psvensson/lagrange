@@ -1,795 +1,354 @@
 #!/usr/bin/env node
 /**
- * Multi-System 5-Node + 1-Client Cloud/Lab Comparative Benchmark Runner.
+ * Comparative benchmark campaign runner: Lagrange, TiDB + TiKV and PostgreSQL
+ * deployed as real product containers on real hosts, driven by the canonical
+ * workload (stream B1) from a separate load-generator host.
  *
- * Executes the comparative benchmark suite using real product containers and
- * native protocols across dedicated VMs/hosts over the wire:
- * - Lagrange 0.4.0 (node src/index.js, native HTTP :8080 & Admin WS :8081)
- * - TiDB + TiKV v8.5.8 (pingcap/pd, pingcap/tikv, pingcap/tidb via mysql2/promise)
- * - PostgreSQL 17 (postgres:17-alpine, sync standbys, PL/pgSQL via pg.Pool)
+ * The default execution target is the home lab: hosts come from the
+ * registered lab inventory (`node scripts/lab.js`, `harness` role, reachable,
+ * Docker reachable, machine lock free), each is held with the machine-wide
+ * lock under purpose `bench:<campaignId>` and released on exit, and the
+ * thermal gate runs on every held host before deployment. GCP is explicit
+ * (`--execution-target gcp --hosts ...`) and creates no infrastructure.
  *
- * Measures kernel RTT sweeps via real Linux `tc netem` delay emulation.
- * Writes immutable raw observations to `data/tidb-comparison/raw-observations.ndjson`,
- * derives `data/tidb-comparison/admitted-lab-measurements.json`, and optionally
- * regenerates all benchmark pages.
+ * The campaign runs a frozen manifest (written and digested before any run)
+ * and APPENDS a v2 campaign header and one record per attempted run to the
+ * raw observation store. Publication is not this runner's business: stream
+ * A's regenerate path consumes admitted cells only.
  */
 
-import {createHash} from 'node:crypto';
+import {createHash, randomBytes} from 'node:crypto';
 import {execFile, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
+
+import {EXIT_CODES} from '../../../test/distributed/harness/constants.js';
 import {
   DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH,
-  computeRawObservationPayloadDigest,
 } from '../../../test/distributed/harness/raw-observation-store.js';
 import {
-  writeAdmittedLabMeasurementsFromRawObservations,
-} from '../../../test/distributed/harness/scaleout-series-experiments.js';
+  COMPARATIVE_SMOKE_PROFILE,
+  buildComparativeCampaignManifest,
+} from '../../../test/distributed/harness/comparative-benchmark-campaign-manifest.js';
+import {runComparativeCampaign} from
+  '../../../test/distributed/harness/comparative-benchmark-campaign-runner.js';
 import {
-  OPERATING_BOUNDARY_MAP,
-  SCALEOUT_MODES_SPEC,
-  buildCampaignTargetSpecs,
-  regenerateAllBenchmarkArtifactsFromAdmitted,
-} from '../../../test/distributed/harness/raw-observation-campaign-specs.js';
+  collectHostFacts,
+  describeLoadGenerator,
+  ensureProductImages,
+} from '../../../test/distributed/harness/comparative-benchmark-host-preparation.js';
 import {
+  THERMAL_GATE,
+  checkLabThermalHeadroom,
+  holdLabBenchmarkHosts,
+  plannedLabLocks,
+  readLabHolderRecords,
+  releaseLabBenchmarkHosts,
+  selectLabBenchmarkHosts,
+} from '../../../test/distributed/harness/comparative-benchmark-lab-hosts.js';
+import {
+  createWorkloadRunExecutor,
+  loadCanonicalWorkloadEntry,
+} from '../../../test/distributed/harness/comparative-benchmark-workload-call-site.js';
+import {
+  COMPARATIVE_TARGET,
+  LAGRANGE_IMAGE_DEFAULT,
   PD_IMAGE_DEFAULT,
   POSTGRES_IMAGE_DEFAULT,
+  TARGET_DATA_HOSTS,
   TIDB_IMAGE_DEFAULT,
   TIKV_IMAGE_DEFAULT,
-  applyTcNetemDelay,
-  cleanClusterContainers,
-  deployLagrangeCluster,
-  deployPostgresCluster,
-  deployTiDbCluster,
-  ensureBenchDepsOnHost,
-  measureRealBackfillAndRecovery,
-  removeTcNetemDelay,
+  deployComparativeTarget,
+  removeCampaignContainers,
 } from '../../../test/distributed/harness/real-product-cluster-deployers.js';
 import {
-  buildWorkloadDriverScript,
-} from '../../../test/distributed/harness/real-product-workload-drivers.js';
+  TIDB_SQL_CLIENT_IMAGE,
+} from '../../../test/distributed/harness/real-product-deployment-contract.js';
+import {
+  observeProductsAfterWindow,
+} from '../../../test/distributed/harness/real-product-identity.js';
+import {discoverFleet, fleetRequirement} from '../../../scripts/lab/probe.js';
+import {loadState, selectNodesByRole} from '../../../scripts/lab/state.js';
 
 const execFileAsync = promisify(execFile);
-const REPO_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..',
-);
-const DEFAULT_LAGRANGE_IMAGE = 'psvensson/lagrange:0.4.0';
-const DEFAULT_OUTPUT_PATH = 'test-output/cloud-benchmarks/comparative-results.json';
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const TARGET = Object.freeze({LAB: 'lab', GCP: 'gcp'});
+const PROFILES = Object.freeze({smoke: COMPARATIVE_SMOKE_PROFILE});
+const DEFAULT_TARGETS = Object.freeze([COMPARATIVE_TARGET.LAGRANGE,
+  COMPARATIVE_TARGET.TIDB_TIKV, COMPARATIVE_TARGET.PG_SYNC_STANDBY_HA]);
+const PLAN_SCHEMA = 'lagrange-comparative-campaign-plan/v3';
+const SUMMARY_SCHEMA = 'lagrange-comparative-campaign-summary/v1';
+const SSH_TIMEOUT_MS = 120000;
+const SSH_MAX_BUFFER = 64 * 1024 * 1024;
+const MS_PER_MINUTE = 60000;
+const DEFAULT_LOCK_WAIT_MINUTES = 30;
+const HARNESS_ROLE = 'harness';
+const DEPLOYMENT_SOURCES = Object.freeze([
+  'test/distributed/harness/comparative-benchmark-workload-call-site.js',
+  'test/distributed/harness/real-product-cluster-deployers.js',
+]);
 
-function sha256Prefixed(str) {
-  return `sha256:${createHash('sha256').update(String(str), 'utf8').digest('hex')}`;
+const USAGE = `Usage: node docs/benchmarks/cloud/run-comparative-benchmarks.mjs [options]
+
+Options:
+  --execution-target <lab|gcp>  Where the campaign runs (default: lab)
+                                lab: hosts from the registered lab inventory
+                                (node scripts/lab.js), locked per host
+  --hosts <ip,...>              gcp only: 3 data hosts first, load generator last
+  --ssh-hosts <ip,...>          gcp only: external SSH addresses matching --hosts
+  --ssh-user <user>             gcp only: SSH user (default: $SSH_USER or $USER)
+  --ssh-key <path>              gcp only: SSH private key
+  --targets <a,b,...>           ${Object.values(COMPARATIVE_TARGET).join(', ')}
+                                (default: ${DEFAULT_TARGETS.join(',')})
+  --profile <smoke>             Campaign profile (default: smoke)
+  --campaign-id <id>            Campaign id (default: generated)
+  --storage-root <path>         Host directory for product data volumes; without it
+                                data lives in the container layer (smoke only)
+  --lagrange-image <ref>        Lagrange image (default: ${LAGRANGE_IMAGE_DEFAULT})
+  --raw-observations <path>     Append-only record store
+                                (default: ${DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH})
+  --output <path>               Campaign summary JSON
+  --lock-wait-minutes <n>       Bounded wait for each lab host lock (default: 30)
+  --dry-run                     Print the manifest and the hosts it would lock
+  --help                        Show this help
+`;
+
+class UsageError extends Error {}
+
+const VALUE_FLAGS = Object.freeze({
+  '--execution-target': 'executionTarget', '--hosts': 'hostsRaw',
+  '--ssh-hosts': 'sshHostsRaw', '--ssh-user': 'sshUser', '--ssh-key': 'sshKey',
+  '--targets': 'targetsRaw', '--profile': 'profile', '--campaign-id': 'campaignId',
+  '--storage-root': 'storageRoot', '--lagrange-image': 'lagrangeImage',
+  '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
+  '--lock-wait-minutes': 'lockWaitMinutes',
+});
+
+function list(text) {
+  return String(text || '').split(',').map((part) => part.trim()).filter(Boolean);
 }
 
-function printHelp() {
-  process.stdout.write(
-    'Usage: node docs/benchmarks/cloud/run-comparative-benchmarks.mjs [options]\n\n' +
-    'Options:\n' +
-    '  --hosts <ip1..ip5[,ip6]>       5 or 6 comma-separated cluster+client internal IPs\n' +
-    '  --ssh-hosts <ip1..ip5[,ip6]>   Optional external SSH IPs matching --hosts\n' +
-    '  --ssh-user <username>          SSH username (default: $SSH_USER or $USER or ubuntu)\n' +
-    '  --ssh-key <path>               Optional SSH private key path (-i)\n' +
-    '  --execution-target <gcp|lab>   Execution target label (default: gcp)\n' +
-    '  --lagrange-image <image>       Lagrange image (default: psvensson/lagrange:0.4.0)\n' +
-    '  --output <path>                Summary JSON output path\n' +
-    '  --regenerate-docs              Derive admitted measurements and regenerate docs/benchmarks/*\n' +
-    '  --dry-run                      Validate arguments and print the execution plan\n' +
-    '  --help                         Show this help message\n',
-  );
+function generatedCampaignId() {
+  const stamp = new Date().toISOString().replace(/[-:]/gu, '').replace(/\..*$/u, 'Z');
+  return `bench-${stamp}-${randomBytes(3).toString('hex')}`;
 }
 
-function applyCliFlag(opts, arg, nextArg) {
-  if (arg === '--help' || arg === '-h') {
-    opts.help = true;
-    return 0;
+function parseCliArgs(argv, env) {
+  const opts = {executionTarget: env.EXECUTION_TARGET || TARGET.LAB, hostsRaw: '',
+    sshHostsRaw: '', sshUser: env.SSH_USER || env.USER || '', sshKey: env.SSH_KEY || '',
+    targetsRaw: DEFAULT_TARGETS.join(','), profile: 'smoke', campaignId: '',
+    storageRoot: '', lagrangeImage: LAGRANGE_IMAGE_DEFAULT,
+    rawObservationsPath: DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH, outputPath: '',
+    lockWaitMinutes: String(DEFAULT_LOCK_WAIT_MINUTES), dryRun: false, help: false};
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--help' || arg === '-h') opts.help = true;
+    else if (arg === '--dry-run') opts.dryRun = true;
+    else if (VALUE_FLAGS[arg] && argv[index + 1] !== undefined) {
+      opts[VALUE_FLAGS[arg]] = argv[index + 1];
+      index += 1;
+    } else throw new UsageError(`unknown or incomplete option ${arg}`);
   }
-  if (arg === '--dry-run') {
-    opts.dryRun = true;
-    return 0;
+  if (!Object.values(TARGET).includes(opts.executionTarget)) {
+    throw new UsageError(`--execution-target must be lab or gcp, got ${opts.executionTarget}`);
   }
-  if (arg === '--regenerate-docs') {
-    opts.regenerateDocs = true;
-    return 0;
+  if (opts.executionTarget === TARGET.LAB && (opts.hostsRaw || opts.sshHostsRaw)) {
+    throw new UsageError('lab hosts come from the registered lab inventory ' +
+      '(node scripts/lab.js); --hosts/--ssh-hosts are for --execution-target gcp');
   }
-  const map = {
-    '--hosts': 'hostsRaw',
-    '--ssh-hosts': 'sshHostsRaw',
-    '--ssh-user': 'sshUser',
-    '--ssh-key': 'sshKey',
-    '--execution-target': 'executionTarget',
-    '--lagrange-image': 'lagrangeImage',
-    '--output': 'outputPath',
-  };
-  const key = map[arg];
-  if (key) {
-    opts[key] = nextArg || opts[key];
-    return 1;
-  }
-  return 0;
-}
-
-function parseCliArgs(argv) {
-  const opts = {
-    hostsRaw: process.env.HOSTS || '',
-    sshHostsRaw: process.env.SSH_HOSTS || '',
-    sshUser: process.env.SSH_USER || process.env.USER || 'ubuntu',
-    sshKey: process.env.SSH_KEY || '',
-    executionTarget: process.env.EXECUTION_TARGET || 'gcp',
-    lagrangeImage: DEFAULT_LAGRANGE_IMAGE,
-    outputPath: DEFAULT_OUTPUT_PATH,
-    regenerateDocs: false,
-    dryRun: false,
-    help: false,
-  };
-  for (let i = 0; i < argv.length; i += 1) {
-    i += applyCliFlag(opts, argv[i], argv[i + 1]);
-  }
-  opts.hosts = opts.hostsRaw.split(',').map((h) => h.trim()).filter(Boolean);
-  opts.sshHosts = opts.sshHostsRaw ?
-    opts.sshHostsRaw.split(',').map((h) => h.trim()).filter(Boolean) :
-    [...opts.hosts];
-  opts.sshMap = new Map(opts.hosts.map((h, idx) => [h, opts.sshHosts[idx] || h]));
+  if (!PROFILES[opts.profile]) throw new UsageError(`unknown profile ${opts.profile}`);
+  opts.campaignId = opts.campaignId || generatedCampaignId();
+  opts.targets = list(opts.targetsRaw);
+  opts.outputPath = opts.outputPath ||
+    `test-output/cloud-benchmarks/comparative-campaign-${opts.campaignId}.json`;
   return opts;
 }
 
-async function sshRun(internalIp, opts, remoteCmd, timeoutMs = 120000) {
-  const targetHost = opts.sshMap.get(internalIp) || internalIp;
-  const sshArgs = [
-    '-o', 'BatchMode=yes',
-    '-o', 'StrictHostKeyChecking=no',
-    '-o', 'ConnectTimeout=15',
-  ];
-  if (opts.sshKey) sshArgs.push('-i', opts.sshKey);
-  sshArgs.push(`${opts.sshUser}@${targetHost}`, remoteCmd);
-  const {stdout} = await execFileAsync('ssh', sshArgs, {
-    timeout: timeoutMs,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  return (stdout || '').trim();
+function dataHostCountOf(targets) {
+  return Math.max(...targets.map((target) => TARGET_DATA_HOSTS[target]));
 }
 
-async function ensureImagesOnHosts(opts, specs) {
-  process.stdout.write(`[cloud-bench] Verifying SSH + Docker across ${opts.hosts.length} hosts...\n`);
-  await Promise.all(opts.hosts.map(async (ip) => {
-    let ver = '';
-    for (let attempt = 1; attempt <= 20; attempt += 1) {
-      try {
-        ver = await sshRun(
-          ip,
-          opts,
-          'sudo usermod -aG docker $USER 2>/dev/null || true; ' +
-          'sudo chmod 666 /var/run/docker.sock 2>/dev/null || true; docker --version',
-        );
-        if (ver) break;
-      } catch (err) {
-        if (attempt === 20) throw err;
-        await new Promise((r) => setTimeout(r, 3000));
-      }
-    }
-    process.stdout.write(`  - ${ip} (${opts.sshMap.get(ip)}): ${ver}\n`);
-  }));
-
-  const localDigest = spawnSync(
-    'docker', ['inspect', '--format', '{{.Id}}', opts.lagrangeImage], {encoding: 'utf8'},
-  ).stdout.trim();
-
-  await Promise.all(opts.hosts.map(async (ip) => {
-    const remoteId = await sshRun(
-      ip, opts, `docker inspect --format '{{.Id}}' ${opts.lagrangeImage} 2>/dev/null || true`,
-    );
-    if (remoteId && remoteId === localDigest) return;
-    process.stdout.write(`  - Streaming ${opts.lagrangeImage} to ${ip}...\n`);
-    const sshHost = opts.sshMap.get(ip) || ip;
-    const keyPart = opts.sshKey ? `-i ${opts.sshKey} ` : '';
-    await execFileAsync('bash', [
-      '-c',
-      `docker save ${opts.lagrangeImage} | gzip -1 | ssh -o BatchMode=yes -o StrictHostKeyChecking=no ${keyPart}${opts.sshUser}@${sshHost} "gunzip | docker load"`,
-    ], {timeout: 300000});
-  }));
-
-  const pullsByHost = new Map();
-  for (const s of specs) {
-    if (s.measured === false) continue;
-    const requiredImages = [];
-    if (s.targetId === 'tidb-tikv') {
-      requiredImages.push(PD_IMAGE_DEFAULT, TIKV_IMAGE_DEFAULT, TIDB_IMAGE_DEFAULT);
-    } else if (s.targetId.startsWith('pg-')) {
-      requiredImages.push(POSTGRES_IMAGE_DEFAULT);
-    }
-    for (const img of requiredImages) {
-      for (const h of s.clusterHosts) {
-        if (!pullsByHost.has(h)) pullsByHost.set(h, new Set());
-        pullsByHost.get(h).add(img);
-      }
-    }
+// The first data-host-count addresses are data hosts and the LAST is the load
+// generator (provision-gcp.sh lists its dedicated client VM last); any
+// addresses between them are not used by the campaign.
+function gcpHosts(opts, dataHostCount) {
+  const ips = list(opts.hostsRaw);
+  if (ips.length < dataHostCount + 1) {
+    throw new UsageError('--execution-target gcp needs --hosts with at least ' +
+      `${dataHostCount + 1} internal IPs (${dataHostCount} data hosts + 1 load generator, ` +
+      `last), got ${ips.length}`);
   }
-
-  await Promise.all([...pullsByHost.entries()].map(async ([host, images]) => {
-    for (const image of images) {
-      const present = await sshRun(host, opts, `docker images -q ${image} 2>/dev/null || true`);
-      if (!present) {
-        process.stdout.write(`  - Pulling ${image} on ${host}...\n`);
-        await sshRun(host, opts, `docker pull -q ${image}`, 300000);
-      }
-    }
-    await sshRun(host, opts, 'sync');
-  }));
-
-  const clientHosts = new Set(specs.filter((s) => s.measured !== false).map((s) => s.clientHost));
-  for (const ch of clientHosts) {
-    await ensureBenchDepsOnHost(ch, sshRun, opts);
-  }
-
-  await new Promise((r) => setTimeout(r, 2000));
+  const ssh = list(opts.sshHostsRaw);
+  const host = (index, role) => ({name: ips[index], ip: ips[index], role,
+    sshTarget: `${opts.sshUser ? `${opts.sshUser}@` : ''}${ssh[index] || ips[index]}`,
+    repoPath: null, nodePath: null});
+  return [...Array.from({length: dataHostCount}, (_unused, index) => host(index, 'data')),
+    host(ips.length - 1, 'client')];
 }
 
-async function collectHostMetadata(opts) {
-  const hostMetaByIp = new Map();
-  const physicalHosts = [];
-  for (let i = 0; i < opts.hosts.length; i += 1) {
-    const ip = opts.hosts[i];
-    const infoRaw = await sshRun(
-      ip,
-      opts,
-      'echo "$(hostname)|$(cat /proc/sys/kernel/random/boot_id)|$(nproc)|$(awk \'/MemTotal/ {printf "%.1f", $2/1048576}\' /proc/meminfo)|$(ip route get 8.8.8.8 | awk \'{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1); exit}\')"',
-    );
-    const [hostname, bootId, cpus, memGb, primaryIface] = infoRaw.split('|');
-    const entry = {
-      hostId: `node-${i + 1}`,
-      ip,
-      sshHost: opts.sshMap.get(ip),
-      hostname,
-      bootId,
-      cpus: Number(cpus),
-      memGb: Number(memGb),
-      primaryIface: primaryIface || 'eth0',
-    };
-    hostMetaByIp.set(ip, entry);
-    physicalHosts.push(entry);
-  }
-  const uniqueBootIds = new Set(physicalHosts.map((h) => h.bootId));
-  if (uniqueBootIds.size < physicalHosts.length) {
-    throw new Error(`Host isolation check failed: expected ${physicalHosts.length} distinct boot_ids, got ${uniqueBootIds.size}`);
-  }
-  return {hostMetaByIp, physicalHosts};
-}
-
-async function readClusterNetBytes(clusterHosts, hostMetaByIp, opts) {
-  const byHost = {};
-  let total = 0;
-  await Promise.all(clusterHosts.map(async (ip) => {
-    const hm = hostMetaByIp.get(ip);
-    const iface = hm?.primaryIface || 'eth0';
-    const out = await sshRun(
-      ip,
-      opts,
-      `awk -v dev="${iface}:" '$1 == dev {print $2 + $10}' /proc/net/dev`,
-    );
-    const val = Number(out.split('\n')[0] || 0);
-    byHost[ip] = val;
-    total += val;
-  }));
-  return {total, byHost};
-}
-
-async function cleanContainers(opts) {
-  await cleanClusterContainers(opts.hosts, sshRun, opts);
-}
-
-async function deployCluster(spec, opts) {
-  if (spec.targetId.startsWith('lagrange') || spec.targetId === 'scaleout-5node') {
-    return deployLagrangeCluster({
-      hosts: spec.clusterHosts,
-      clientIp: spec.clientHost,
-      sshRun,
-      opts,
-    });
-  }
-  if (spec.targetId === 'tidb-tikv') {
-    return deployTiDbCluster({
-      hosts: spec.clusterHosts,
-      clientIp: spec.clientHost,
-      sshRun,
-      opts,
-      is3Node: spec.clusterHosts.length === 3,
-    });
-  }
-  if (spec.targetId.startsWith('pg-')) {
-    return deployPostgresCluster({
-      targetId: spec.targetId,
-      hosts: spec.clusterHosts,
-      sshRun,
-      opts,
-    });
-  }
-  throw new Error(`Unsupported cluster deployment for targetId: ${spec.targetId}`);
-}
-
-async function runRemoteWorkload({
-  clientIp,
-  clusterHosts,
-  hostMetaByIp,
-  opts,
-  targetId,
-  scenario,
-  subkind,
-  endpoints,
-  totalOps,
-  concurrency,
-  payloadConfig,
-}) {
-  const netBefore = await readClusterNetBytes(clusterHosts, hostMetaByIp, opts);
-  const startedAtIso = new Date().toISOString();
-  const driverScript = buildWorkloadDriverScript({
-    targetId,
-    scenario,
-    subkind,
-    endpoints,
-    totalOps,
-    concurrency,
-    payloadConfig,
-  });
-  const b64 = Buffer.from(driverScript, 'utf8').toString('base64');
-  const out = await sshRun(
-    clientIp,
-    opts,
-    'docker run --rm --network host ' +
-    '-v /tmp/bench-deps/node_modules:/bench-deps/node_modules:ro ' +
-    '-e NODE_PATH=/app/node_modules:/bench-deps/node_modules ' +
-    `--entrypoint /nodejs/bin/node ${opts.lagrangeImage} ` +
-    `-e "eval(Buffer.from('${b64}','base64').toString('utf8'))"`,
-    180000,
-  );
-  const endedAtIso = new Date().toISOString();
-  const netAfter = await readClusterNetBytes(clusterHosts, hostMetaByIp, opts);
-  const parsed = JSON.parse(out.split('\n').pop());
-  return {
-    startedAtIso,
-    endedAtIso,
-    elapsedMs: parsed.elapsedMs,
-    totalAttempts: parsed.totalAttempts,
-    completed: parsed.completed,
-    failures: parsed.failures,
-    timeouts: parsed.timeouts,
-    clientWireBytesTotal: parsed.clientWireBytesTotal,
-    netCountersBefore: netBefore,
-    netCountersAfter: netAfter,
-    latenciesMs: parsed.latenciesMs,
-    phaseSumsMs: parsed.phaseSumsMs,
-    phaseSampleCount: parsed.phaseSampleCount,
+function createSshRun(hosts, opts) {
+  const targetOf = new Map(hosts.map((host) => [host.ip, host.sshTarget]));
+  return async (ip, _opts, command, timeoutMs = SSH_TIMEOUT_MS) => {
+    const target = targetOf.get(ip);
+    if (!target) throw new Error(`host ${ip} is not part of this campaign`);
+    const args = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15'];
+    if (opts.sshKey) args.push('-i', opts.sshKey);
+    const {stdout} = await execFileAsync('ssh', [...args, target, command],
+      {timeout: timeoutMs, maxBuffer: SSH_MAX_BUFFER});
+    return String(stdout || '').trim();
   };
 }
 
-function makeRawRecord({
-  receiptId,
-  targetId,
-  scenario,
-  subkind,
-  opts,
-  gitCommit,
-  clusterHosts,
-  clientIp,
-  hostMetaByIp,
-  candidateNode,
-  comparatorNode,
-  rawObservationPayload,
-  roundTrips = 1,
-  zeroWanOverride = false,
-}) {
-  const mapping = {};
-  clusterHosts.forEach((ip, idx) => {
-    const hm = hostMetaByIp.get(ip);
-    mapping[`node-${idx + 1}`] = `${ip} (${hm?.hostname || 'host'}:${hm?.bootId?.slice(0, 8) || 'boot'})`;
-  });
-  const chm = hostMetaByIp.get(clientIp);
-
-  // Requirement 7: packageDigest set to comparatorNode.imageDigest
-  const rawDigest = comparatorNode.imageDigest || candidateNode.imageDigest;
-  const packageDigest = rawDigest.startsWith('sha256:') ?
-    rawDigest :
-    sha256Prefixed(rawDigest);
-
-  return {
-    schemaVersion: 'lagrange-raw-observation-v1',
-    receiptId,
-    targetId,
-    scenario,
-    subkind,
-    executionTarget: opts.executionTarget,
-    gitCommit,
-    packageDigest,
-    datasetDigest: sha256Prefixed(`dataset-${targetId}-${clusterHosts.length}`),
-    planDigest: sha256Prefixed(`plan-${receiptId}-${clusterHosts.join(',')}`),
-    nodeCount: clusterHosts.length,
-    roundTrips,
-    zeroWanOverride,
-    hostPlacement: {
-      nodeCount: clusterHosts.length,
-      hosts: clusterHosts,
-      mapping,
-    },
-    clientHost: {
-      ip: clientIp,
-      hostname: chm?.hostname || 'client',
-      bootId: chm?.bootId || '',
-    },
-    productProcessEvidence: {
-      candidate: {
-        processId: candidateNode.containerId,
-        publicInterface: candidateNode.publicInterface || candidateNode.endpoint,
-        imageDigest: candidateNode.imageDigest,
-        processNames: candidateNode.processNames || ['node', 'lagrange'],
-      },
-      comparator: {
-        processId: comparatorNode.containerId,
-        publicInterface: comparatorNode.publicInterface || comparatorNode.endpoint,
-        imageDigest: comparatorNode.imageDigest,
-        processNames: comparatorNode.processNames || ['postgres'],
-      },
-    },
-    rawObservationPayload,
-    rawObservationsDigest: computeRawObservationPayloadDigest(rawObservationPayload),
-  };
+function imagesFor(targets, opts) {
+  const images = new Set([POSTGRES_IMAGE_DEFAULT]);
+  if (targets.includes(COMPARATIVE_TARGET.LAGRANGE)) images.add(opts.lagrangeImage);
+  if (targets.includes(COMPARATIVE_TARGET.TIDB_TIKV)) {
+    for (const image of [PD_IMAGE_DEFAULT, TIKV_IMAGE_DEFAULT, TIDB_IMAGE_DEFAULT,
+      TIDB_SQL_CLIENT_IMAGE]) images.add(image);
+  }
+  return [...images];
 }
 
-async function runCampaign(opts, specs, hostMetaByIp, physicalHosts) {
-  const gitCommit = spawnSync('git', ['rev-parse', 'HEAD'], {cwd: REPO_ROOT, encoding: 'utf8'}).stdout.trim();
-  const recordedAt = new Date().toISOString();
-  const rawRecords = [];
-  let lagrangeCandidateNode = null;
+function fileSha256(relative) {
+  const file = path.join(REPO_ROOT, relative);
+  return fs.existsSync(file) ?
+    `sha256:${createHash('sha256').update(fs.readFileSync(file)).digest('hex')}` : null;
+}
 
-  const pushRun = async (
-    receiptId, targetId, scenario, subkind, specHosts, clientIp,
-    nodes, totalOps, concurrency, payloadConfig, extra = {},
-  ) => {
-    const rawObservationPayload = await runRemoteWorkload({
-      clientIp,
-      clusterHosts: specHosts,
-      hostMetaByIp,
-      opts,
-      targetId,
-      scenario,
-      subkind,
-      endpoints: nodes.map((n) => n.endpoint),
-      totalOps,
-      concurrency,
-      payloadConfig,
-    });
+function harnessIdentity() {
+  const git = (args) => spawnSync('git', args, {cwd: REPO_ROOT, encoding: 'utf8'}).stdout.trim();
+  return {gitCommit: git(['rev-parse', 'HEAD']),
+    worktreeClean: git(['status', '--porcelain']) === '',
+    driverSourceSha256: fileSha256('test/distributed/harness/real-product-canonical-workload.js'),
+    deploymentSourceSha256: Object.fromEntries(DEPLOYMENT_SOURCES.map((file) =>
+      [file, fileSha256(file)])),
+    adapterIds: []};
+}
 
-    if (nodes[0]?.semanticProofsPassed !== undefined && scenario === 'scenarioA') {
-      rawObservationPayload.semanticProofsPassed = nodes[0].semanticProofsPassed;
-    }
+function appendRecords(file, records) {
+  fs.mkdirSync(path.dirname(file), {recursive: true});
+  fs.appendFileSync(file, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
+}
 
-    const rec = makeRawRecord({
-      receiptId,
-      targetId,
-      scenario,
-      subkind,
-      opts,
-      gitCommit,
-      clusterHosts: specHosts,
-      clientIp,
-      hostMetaByIp,
-      candidateNode: lagrangeCandidateNode || nodes[0],
-      comparatorNode: nodes[nodes.length - 1],
-      rawObservationPayload,
-      roundTrips: extra.roundTrips ?? 1,
-      zeroWanOverride: Boolean(extra.zeroWanOverride),
-    });
-    rawRecords.push(rec);
-    return rec;
+async function runCampaign({opts, manifest, hosts, physicalExtras}) {
+  const sshRun = createSshRun(hosts, opts);
+  const facts = await collectHostFacts({hosts, sshRun, opts});
+  const physicalHosts = facts.map((fact, index) => ({...fact, name: hosts[index].name,
+    role: hosts[index].role, ...(physicalExtras[hosts[index].name] || {})}));
+  await ensureProductImages({hosts, images: imagesFor(manifest.targets, opts), sshRun, opts});
+  const runCanonicalWorkload = await loadCanonicalWorkloadEntry();
+  const client = hosts.find((host) => host.role === 'client');
+  const dataIps = hosts.filter((host) => host.role === 'data').map((host) => host.ip);
+  const deployOpts = {lagrangeImage: opts.lagrangeImage, storageRoot: opts.storageRoot || null};
+  const deps = {
+    now: Date.now,
+    deadlineAt: Date.now() + manifest.campaignBudgetMinutes * MS_PER_MINUTE,
+    deployRun: (run) => deployComparativeTarget(run.targetId, {hosts: dataIps,
+      clientIp: client.ip, sshRun, opts: deployOpts, campaignId: manifest.campaignId,
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))}),
+    executeWorkloadRun: createWorkloadRunExecutor({runCanonicalWorkload, sshRun,
+      opts: deployOpts, clientHost: client.ip,
+      describeLoadGenerator: () => describeLoadGenerator({sshRun, opts, host: client,
+        hostFacts: facts[hosts.indexOf(client)], repoPath: client.repoPath,
+        nodePath: client.nodePath})}),
+    inspectProducts: (deployment) => observeProductsAfterWindow({sshRun, opts,
+      products: deployment.identity.products}),
+    teardownRun: () => removeCampaignContainers({hosts: hosts.map((host) => host.ip),
+      campaignId: manifest.campaignId, sshRun, opts}),
+    appendRecords: (records) => appendRecords(
+      path.resolve(REPO_ROOT, opts.rawObservationsPath), records),
   };
-
-  const sweepTargetIds = new Set([
-    'lagrange-5node-rf3', 'tidb-tikv', 'pg-plpgsql-sync-ha-rf3',
-  ]);
-  const c5xTargetIds = new Set([
-    'lagrange', 'lagrange-5node-rf3', 'pg-plpgsql-sync-ha-rf3',
-  ]);
-
-  for (const spec of specs) {
-    if (spec.measured === false) {
-      process.stdout.write(`\n[cloud-bench] === Skipping unmeasured target: ${spec.targetId} ===\n`);
-      continue;
-    }
-
-    process.stdout.write(`\n[cloud-bench] === Target: ${spec.targetId} (${spec.clusterHosts.length} hosts, client on ${spec.clientHost}) ===\n`);
-    const nodes = await deployCluster(spec, opts);
-    if (spec.targetId === 'lagrange') lagrangeCandidateNode = nodes[0];
-
-    await pushRun(
-      `receipt-${spec.targetId}-scenario-a`, spec.targetId, 'scenarioA', 'main',
-      spec.clusterHosts, spec.clientHost, nodes,
-      spec.txCfg.totalOps, spec.txCfg.concurrency, spec.txCfg,
-    );
-
-    for (const [shapeId, sCfg] of Object.entries(spec.shapesCfg)) {
-      const clientRoundTrips = shapeId === 'local-only' ? 1 : (spec.roundTripsB || 1);
-      const bConc = clientRoundTrips > 1 ? 18 : 26;
-      await pushRun(
-        `receipt-${spec.targetId}-${shapeId}`, spec.targetId, 'scenarioB', `shape:${shapeId}`,
-        spec.clusterHosts, spec.clientHost, nodes, 120, bConc,
-        {...sCfg, clientRoundTrips, commitDecision: clientRoundTrips > 1},
-        {roundTrips: sCfg.roundTrips, zeroWanOverride: sCfg.zeroWan},
-      );
-    }
-
-    if (sweepTargetIds.has(spec.targetId)) {
-      const baseShape = {
-        ...spec.shapesCfg['one-remote-stage'],
-        clientRoundTrips: spec.roundTripsB || 1,
-      };
-      for (const pCount of [6, 15, 30, 60]) {
-        const pConc = pCount === 6 ? 12 : (pCount === 15 ? 20 : (pCount === 30 ? 28 : 20));
-        await pushRun(
-          `receipt-${spec.targetId}-part-${pCount}`, spec.targetId, 'scenarioB', `part:${pCount}`,
-          spec.clusterHosts, spec.clientHost, nodes,
-          80, pConc, {...baseShape, partitionCount: pCount},
-        );
-      }
-      await pushRun(
-        `receipt-${spec.targetId}-heavy-ws`, spec.targetId, 'scenarioB', 'heavy-ws',
-        spec.clusterHosts, spec.clientHost, nodes, 80, 22,
-        {...baseShape, eventCount: 2048, responseBytes: Math.max(144, baseShape.responseBytes * 2)},
-      );
-      await pushRun(
-        `receipt-${spec.targetId}-move-during`, spec.targetId, 'scenarioB', 'move-during',
-        spec.clusterHosts, spec.clientHost, nodes,
-        80, 22, {...baseShape, liveMoveActive: true, moveChunkBytes: spec.targetId.startsWith('lagrange') ? 512 : 4096},
-      );
-      await pushRun(
-        `receipt-${spec.targetId}-move-post`, spec.targetId, 'scenarioB', 'move-post',
-        spec.clusterHosts, spec.clientHost, nodes,
-        80, 24, baseShape,
-      );
-      const seqCfg = {
-        ...spec.shapesCfg.sequential,
-        clientRoundTrips: spec.roundTripsB || 1,
-      };
-      for (const [rttMs, hopMult] of [[0.2, 1], [2.0, 2], [10.0, 4], [30.0, 8]]) {
-        try {
-          if (rttMs > 0.2) {
-            await applyTcNetemDelay({
-              clusterHosts: spec.clusterHosts,
-              rttMs,
-              hostMetaByIp,
-              sshRun,
-              opts,
-            });
-          }
-          await pushRun(
-            `receipt-${spec.targetId}-rtt-${rttMs}`, spec.targetId, 'scenarioB', `rtt:${rttMs}`,
-            spec.clusterHosts, spec.clientHost, nodes,
-            60, Math.max(8, Math.floor(24 / hopMult)),
-            {...seqCfg, netDelayMs: rttMs},
-          );
-        } finally {
-          if (rttMs > 0.2) {
-            await removeTcNetemDelay({
-              clusterHosts: spec.clusterHosts,
-              hostMetaByIp,
-              sshRun,
-              opts,
-            });
-          }
-        }
-      }
-    }
-
-    const recC0 = await pushRun(
-      `receipt-${spec.targetId}-scen-c-0ms`, spec.targetId, 'scenarioC', '0ms',
-      spec.clusterHosts, spec.clientHost, nodes,
-      100, spec.scenCCfg.c0.concurrency, spec.scenCCfg.c0,
-    );
-
-    await pushRun(
-      `receipt-${spec.targetId}-scen-c-100ms`, spec.targetId, 'scenarioC', '100ms',
-      spec.clusterHosts, spec.clientHost, nodes,
-      100, spec.scenCCfg.c100.concurrency, spec.scenCCfg.c100,
-    );
-    await pushRun(
-      `receipt-${spec.targetId}-scen-c-1000ms`, spec.targetId, 'scenarioC', '1000ms',
-      spec.clusterHosts, spec.clientHost, nodes,
-      100, spec.scenCCfg.c1000.concurrency, spec.scenCCfg.c1000,
-    );
-    if (c5xTargetIds.has(spec.targetId)) {
-      await pushRun(
-        `receipt-${spec.targetId}-scen-c-5x-0ms`, spec.targetId, 'scenarioC', '5x-0ms',
-        spec.clusterHosts, spec.clientHost, nodes,
-        100, spec.scenCCfg.c0.concurrency + 12, {...spec.scenCCfg.c0, keySpace: 1000},
-      );
-      await pushRun(
-        `receipt-${spec.targetId}-scen-c-5x-1000ms`, spec.targetId, 'scenarioC', '5x-1000ms',
-        spec.clusterHosts, spec.clientHost, nodes,
-        100, spec.scenCCfg.c1000.concurrency + 14, {...spec.scenCCfg.c1000, keySpace: 1000},
-      );
-    }
-
-    // Reuse active cluster for 3-node / 5-node scale-out modes before restart recovery
-    if (spec.targetId === 'lagrange') {
-      const lagFixed = SCALEOUT_MODES_SPEC.fixed.find((i) => i.targetId === 'lagrange');
-      const lagProp = SCALEOUT_MODES_SPEC.prop.find((i) => i.targetId === 'lagrange');
-      const lagHot = SCALEOUT_MODES_SPEC.hot.find((i) => i.targetId === 'lagrange');
-      if (lagFixed) await pushRun('receipt-scaleout-fixed-lagrange-3node', 'lagrange', 'scaleout', 'fixed-3node', spec.clusterHosts, spec.clientHost, nodes, 140, 16, {...lagFixed.cfg, quorumPeers: 2, keySpace: 40});
-      if (lagProp) await pushRun('receipt-scaleout-prop-lagrange-3node', 'lagrange', 'scaleout', 'prop-3node', spec.clusterHosts, spec.clientHost, nodes, 150, 16, {...lagProp.cfg, quorumPeers: 2, keySpace: 180});
-      if (lagHot) await pushRun('receipt-scaleout-hot-lagrange-3node', 'lagrange', 'scaleout', 'hot-3node', spec.clusterHosts, spec.clientHost, nodes, 140, 18, {...lagHot.cfg, quorumPeers: 2, keySpace: 4});
-    } else if (spec.targetId === 'lagrange-5node-rf3') {
-      const lagFixed = SCALEOUT_MODES_SPEC.fixed.find((i) => i.targetId === 'lagrange');
-      const lagProp = SCALEOUT_MODES_SPEC.prop.find((i) => i.targetId === 'lagrange');
-      const lagHot = SCALEOUT_MODES_SPEC.hot.find((i) => i.targetId === 'lagrange');
-      if (lagFixed) await pushRun('receipt-scaleout-fixed-lagrange-5node', 'lagrange', 'scaleout', 'fixed-5node', spec.clusterHosts, spec.clientHost, nodes, 220, 26, {...lagFixed.cfg, quorumPeers: 1, keySpace: 40});
-      if (lagProp) await pushRun('receipt-scaleout-prop-lagrange-5node', 'lagrange', 'scaleout', 'prop-5node', spec.clusterHosts, spec.clientHost, nodes, 250, 30, {...lagProp.cfg, quorumPeers: 1, keySpace: 300});
-      if (lagHot) await pushRun('receipt-scaleout-hot-lagrange-5node', 'lagrange', 'scaleout', 'hot-5node', spec.clusterHosts, spec.clientHost, nodes, 160, 20, {...lagHot.cfg, quorumPeers: 2, keySpace: 4});
-    } else if (spec.targetId === 'tidb-tikv') {
-      const tidbFixed = SCALEOUT_MODES_SPEC.fixed.find((i) => i.targetId === 'tidb-tikv');
-      const tidbProp = SCALEOUT_MODES_SPEC.prop.find((i) => i.targetId === 'tidb-tikv');
-      const tidbHot = SCALEOUT_MODES_SPEC.hot.find((i) => i.targetId === 'tidb-tikv');
-      if (tidbFixed) await pushRun('receipt-scaleout-fixed-tidb-tikv-5node', 'tidb-tikv', 'scaleout', 'fixed-5node', spec.clusterHosts, spec.clientHost, nodes, 220, 26, {...tidbFixed.cfg, quorumPeers: 1, keySpace: 40});
-      if (tidbProp) await pushRun('receipt-scaleout-prop-tidb-tikv-5node', 'tidb-tikv', 'scaleout', 'prop-5node', spec.clusterHosts, spec.clientHost, nodes, 250, 30, {...tidbProp.cfg, quorumPeers: 1, keySpace: 300});
-      if (tidbHot) await pushRun('receipt-scaleout-hot-tidb-tikv-5node', 'tidb-tikv', 'scaleout', 'hot-5node', spec.clusterHosts, spec.clientHost, nodes, 160, 20, {...tidbHot.cfg, quorumPeers: 2, keySpace: 4});
-    } else if (spec.targetId === 'pg-patroni-sync-ha-rf3') {
-      const pgHot = SCALEOUT_MODES_SPEC.hot.find((i) => i.targetId === 'pg-patroni-sync-ha-rf3');
-      if (pgHot) {
-        await pushRun('receipt-scaleout-hot-pg-patroni-sync-ha-rf3-3node', 'pg-patroni-sync-ha-rf3', 'scaleout', 'hot-3node', spec.clusterHosts.slice(0, 3), spec.clientHost, nodes, 140, 18, {...pgHot.cfg, quorumPeers: 2, keySpace: 4});
-        await pushRun('receipt-scaleout-hot-pg-patroni-sync-ha-rf3-5node', 'pg-patroni-sync-ha-rf3', 'scaleout', 'hot-5node', opts.hosts.slice(0, 5), spec.clientHost, nodes, 160, 20, {...pgHot.cfg, quorumPeers: 2, keySpace: 4});
-      }
-    }
-
-    // Measure real SQL backfill and restart recovery for Scenario C
-    const backfillRecovery = await measureRealBackfillAndRecovery({
-      targetId: spec.targetId,
-      clusterHosts: spec.clusterHosts,
-      clientIp: spec.clientHost,
-      endpoints: nodes.map((n) => n.endpoint),
-      sshRun,
-      opts,
-    });
-    recC0.rawObservationPayload.measuredBackfillMs = backfillRecovery.measuredBackfillMs;
-    recC0.rawObservationPayload.measuredRecoveryMs = backfillRecovery.measuredRecoveryMs;
-    recC0.rawObservationPayload.staleCount = backfillRecovery.staleCount;
-    recC0.rawObservationsDigest = computeRawObservationPayloadDigest(recC0.rawObservationPayload);
-  }
-
-  // Remaining scale-out topologies (Lagrange 4-node RF=3 and TiDB 3-node RF=3)
-  const [h0, h1, h2, h3, h4, hClient] = opts.hosts;
-  const clientIp = hClient || h4;
-  const hosts4 = [h0, h1, h2, h3];
-  const hosts3 = [h0, h1, h2];
-
-  process.stdout.write('\n[cloud-bench] === Deploying Lagrange 4-Node RF=3 Scale-Out ===\n');
-  const nodes4 = await deployLagrangeCluster({
-    hosts: hosts4,
-    clientIp,
-    sshRun,
-    opts,
-    verifyProofs: false,
-  });
-
-  await pushRun('receipt-lagrange-4node-rf3-scenario-a', 'lagrange-4node-rf3', 'scenarioA', 'main', hosts4, clientIp, nodes4, 140, 28, {quorumPeers: 1, keySpace: 250});
-  await pushRun('receipt-lagrange-4node-rf3-scenario-b', 'lagrange-4node-rf3', 'scenarioB', 'one-remote-stage', hosts4, clientIp, nodes4, 120, 28, {serialRounds: 1, responseBytes: 120});
-  await pushRun('receipt-lagrange-4node-rf3-move', 'lagrange-4node-rf3', 'scenarioB', 'move-during', hosts4, clientIp, nodes4, 80, 28, {serialRounds: 1, responseBytes: 120, liveMoveActive: true, moveChunkBytes: 512});
-  await pushRun('receipt-lagrange-4node-rf3-scen-c-0ms', 'lagrange-4node-rf3', 'scenarioC', '0ms', hosts4, clientIp, nodes4, 120, 28, {hashLoops: 2});
-
-  // TiDB 3-node scaleout runs
-  process.stdout.write('\n[cloud-bench] === Deploying TiDB 3-Node Scale-Out ===\n');
-  const tidb3Nodes = await deployTiDbCluster({
-    hosts: hosts3,
-    clientIp,
-    sshRun,
-    opts,
-    is3Node: true,
-  });
-  const tidbFixedItem = SCALEOUT_MODES_SPEC.fixed.find((i) => i.targetId === 'tidb-tikv');
-  if (tidbFixedItem) {
-    await pushRun('receipt-scaleout-fixed-tidb-tikv-3node', 'tidb-tikv', 'scaleout', 'fixed-3node', hosts3, clientIp, tidb3Nodes, 140, 16, {...tidbFixedItem.cfg, quorumPeers: 2, keySpace: 40});
-  }
-  const tidbPropItem = SCALEOUT_MODES_SPEC.prop.find((i) => i.targetId === 'tidb-tikv');
-  if (tidbPropItem) {
-    await pushRun('receipt-scaleout-prop-tidb-tikv-3node', 'tidb-tikv', 'scaleout', 'prop-3node', hosts3, clientIp, tidb3Nodes, 150, 16, {...tidbPropItem.cfg, quorumPeers: 2, keySpace: 180});
-  }
-  const tidbHotItem = SCALEOUT_MODES_SPEC.hot.find((i) => i.targetId === 'tidb-tikv');
-  if (tidbHotItem) {
-    await pushRun('receipt-scaleout-hot-tidb-tikv-3node', 'tidb-tikv', 'scaleout', 'hot-3node', hosts3, clientIp, tidb3Nodes, 140, 18, {...tidbHotItem.cfg, quorumPeers: 2, keySpace: 4});
-  }
-
-  await cleanContainers(opts);
-
-  const header = {
-    recordType: 'campaign-header',
-    schemaVersion: 'lagrange-raw-observation-campaign-v1',
-    admittedSchema: 'lagrange-admitted-multi-host-lab-measurements/v1',
-    recordedAt,
-    gitCommit,
-    executionTarget: opts.executionTarget,
-    physicalHosts,
-    targetSpecs: specs.map((s) => ({
-      targetId: s.targetId, label: s.label, ...(s.shortLabel ? {shortLabel: s.shortLabel} : {}),
-      version: s.version, category: s.category, topologyUnits: s.topologyUnits,
-      processCount: s.processCount, rpoZeroSurvivability: s.rpoZeroSurvivability,
-      detailPagePrefix: s.detailPagePrefix, roundTripsB: s.roundTripsB,
-      continuityB: s.continuityB, asyncStreamOnly: Boolean(s.asyncStreamOnly),
-      stalePct: s.scenCCfg.stalePct, backfillSec: s.scenCCfg.backfillSec,
-      recoverySec: s.scenCCfg.recoverySec, pipelines: s.scenCCfg.pipelines,
-      measured: s.measured,
-    })),
-    scaleoutModesSpec: {
-      fixed: SCALEOUT_MODES_SPEC.fixed.map(({targetId, label}) => ({targetId, label})),
-      prop: SCALEOUT_MODES_SPEC.prop.map(({targetId, label}) => ({targetId, label})),
-      hot: SCALEOUT_MODES_SPEC.hot.map(({targetId, label}) => ({targetId, label})),
-    },
-    operatingBoundaryMap: OPERATING_BOUNDARY_MAP,
+  // A signal stops issuing new runs; the run in flight finishes its teardown.
+  const stop = () => {
+    deps.deadlineAt = 0;
   };
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+  try {
+    return await runComparativeCampaign({manifest,
+      header: {executionTarget: opts.executionTarget, physicalHosts,
+        harness: harnessIdentity()}, deps});
+  } finally {
+    process.off('SIGINT', stop);
+    process.off('SIGTERM', stop);
+  }
+}
 
-  const rawNdjsonPath = path.resolve(REPO_ROOT, DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH);
-  fs.mkdirSync(path.dirname(rawNdjsonPath), {recursive: true});
-  const lines = [JSON.stringify(header), ...rawRecords.map((r) => JSON.stringify(r))];
-  fs.writeFileSync(rawNdjsonPath, `${lines.join('\n')}\n`, 'utf8');
-  process.stdout.write(`\n[cloud-bench] Wrote ${rawRecords.length} raw observation records to ${DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH}\n`);
+async function runLabCampaign({opts, manifest, dataHostCount}) {
+  const state = await loadState({allowMissing: false});
+  const requirement = fleetRequirement(REPO_ROOT);
+  const fleet = await discoverFleet({nodes: selectNodesByRole(state, HARNESS_ROLE),
+    controllerRepoPath: REPO_ROOT, lockGraphSha256: requirement.lockGraphSha256,
+    nodeMinimum: requirement.nodeMinimum});
+  const hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount});
+  const budgetMs = manifest.campaignBudgetMinutes * MS_PER_MINUTE;
+  const sessions = await holdLabBenchmarkHosts({hosts, campaignId: manifest.campaignId,
+    waitMs: Number(opts.lockWaitMinutes) * MS_PER_MINUTE, expectedMs: budgetMs});
+  try {
+    const sshRun = createSshRun(hosts, opts);
+    const thermal = await checkLabThermalHeadroom({hosts, sshRun, opts});
+    const holders = await readLabHolderRecords({hosts, sshRun, opts});
+    const extras = Object.fromEntries(hosts.map((host) => [host.name,
+      {lab: {holder: holders[host.name], thermal: thermal[host.name]}}]));
+    return await runCampaign({opts, manifest, hosts, physicalExtras: extras});
+  } finally {
+    await releaseLabBenchmarkHosts(sessions);
+  }
+}
 
-  const {derived} = writeAdmittedLabMeasurementsFromRawObservations(REPO_ROOT);
-  process.stdout.write('[cloud-bench] Derived data/tidb-comparison/admitted-lab-measurements.json from raw observations.\n');
-  return {header, rawObservationCount: rawRecords.length, derived};
+async function dryRunPlan({opts, manifest, dataHostCount}) {
+  const lab = opts.executionTarget === TARGET.LAB;
+  const hosts = lab ?
+    selectLabBenchmarkHosts({state: await loadState({allowMissing: false}), dataHostCount}) :
+    gcpHosts(opts, dataHostCount);
+  return {schema: PLAN_SCHEMA, executionTarget: opts.executionTarget,
+    campaignId: manifest.campaignId, manifestDigest: manifest.manifestDigest,
+    rawObservationsPath: opts.rawObservationsPath,
+    hostSource: lab ?
+      'registered lab inventory (recorded facts; a live run re-discovers the fleet)' :
+      '--hosts (no infrastructure is created)',
+    ...(lab ? {labHosts: hosts.map(({name, ip, role, lock}) => ({name, ip, role, lock}))} :
+      {hosts: hosts.map(({ip, sshTarget, role}) => ({ip, sshTarget, role}))}),
+    wouldLock: lab ? plannedLabLocks(hosts, manifest.campaignId) : [],
+    thermalGate: lab ? THERMAL_GATE : null,
+    manifest};
 }
 
 async function main() {
-  const opts = parseCliArgs(process.argv.slice(2));
+  const opts = parseCliArgs(process.argv.slice(2), process.env);
   if (opts.help) {
-    printHelp();
+    process.stdout.write(USAGE);
     return;
   }
-  if (opts.hosts.length < 5 || opts.hosts.length > 6) {
-    process.stderr.write(
-      `Error: --hosts requires 5 or 6 comma-separated host IPs (got ${opts.hosts.length}).\n\n`,
-    );
-    printHelp();
-    process.exitCode = 1;
-    return;
-  }
-
-  const specs = buildCampaignTargetSpecs(opts.hosts);
+  const manifest = buildComparativeCampaignManifest({campaignId: opts.campaignId,
+    profile: PROFILES[opts.profile], targets: opts.targets});
+  const dataHostCount = dataHostCountOf(manifest.targets);
   if (opts.dryRun) {
-    process.stdout.write(`${JSON.stringify({
-      schema: 'lagrange-cloud-comparative-plan/v2',
-      executionTarget: opts.executionTarget,
-      hosts: opts.hosts,
-      sshHosts: opts.sshHosts,
-      targetCount: specs.length,
-      targets: specs.map((s) => ({
-        targetId: s.targetId,
-        clusterHosts: s.clusterHosts,
-        clientHost: s.clientHost,
-        measured: s.measured,
-      })),
-    }, null, 2)}\n`);
+    const plan = await dryRunPlan({opts, manifest, dataHostCount});
+    process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
     return;
   }
-
-  await ensureImagesOnHosts(opts, specs);
-  const {hostMetaByIp, physicalHosts} = await collectHostMetadata(opts);
-  const {rawObservationCount, derived} = await runCampaign(
-    opts, specs, hostMetaByIp, physicalHosts,
-  );
-
-  const outAbs = path.resolve(REPO_ROOT, opts.outputPath);
-  fs.mkdirSync(path.dirname(outAbs), {recursive: true});
-  fs.writeFileSync(outAbs, `${JSON.stringify({
-    schema: 'lagrange-cloud-comparative-results/v2',
-    recordedAt: derived.recordedAt,
-    executionTarget: derived.executionTarget,
-    gitCommit: derived.gitCommit,
-    rawObservationCount,
-    physicalHosts,
-  }, null, 2)}\n`, 'utf8');
-
-  if (opts.regenerateDocs) {
-    await regenerateAllBenchmarkArtifactsFromAdmitted(REPO_ROOT, derived);
-    process.stdout.write('[cloud-bench] Regenerated all benchmark pages in docs/benchmarks/.\n');
-  }
+  const summary = opts.executionTarget === TARGET.LAB ?
+    await runLabCampaign({opts, manifest, dataHostCount}) :
+    await runCampaign({opts, manifest, hosts: gcpHosts(opts, dataHostCount),
+      physicalExtras: {}});
+  const output = path.resolve(REPO_ROOT, opts.outputPath);
+  fs.mkdirSync(path.dirname(output), {recursive: true});
+  fs.writeFileSync(output, `${JSON.stringify({schema: SUMMARY_SCHEMA,
+    executionTarget: opts.executionTarget, rawObservationsPath: opts.rawObservationsPath,
+    ...summary}, null, 2)}\n`);
+  process.stdout.write(`[bench] campaign ${summary.campaignId}: ${summary.attempted.length} ` +
+    `runs attempted, summary ${opts.outputPath}\n`);
+  process.exitCode = summary.exitCode;
 }
 
-main().catch((err) => {
-  process.stderr.write(`${err.stack || err.message || String(err)}\n`);
-  process.exitCode = 1;
+main().catch((error) => {
+  process.stderr.write(`${error instanceof UsageError ? '' : `${error.code || 'error'}: `}` +
+    `${error.message}\n`);
+  if (error instanceof UsageError) process.stderr.write(USAGE);
+  process.exitCode = String(error.code || '').startsWith('refused_') ?
+    EXIT_CODES.REFUSED : EXIT_CODES.FAILURE;
 });
