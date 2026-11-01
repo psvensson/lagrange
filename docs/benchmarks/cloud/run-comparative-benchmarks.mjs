@@ -17,7 +17,7 @@
  * A's regenerate path consumes admitted cells only.
  */
 
-import {createHash, randomBytes} from 'node:crypto';
+import {randomBytes} from 'node:crypto';
 import {execFile} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -57,6 +57,9 @@ import {
 import {
   loadRawObservationRecordOwner,
 } from '../../../test/distributed/harness/comparative-benchmark-record-owner.js';
+import {
+  composeCampaignHarnessIdentity,
+} from '../../../test/distributed/harness/comparative-benchmark-harness-identity.js';
 import {
   createSemanticGateStage,
 } from '../../../test/distributed/harness/comparative-benchmark-semantic-gate.js';
@@ -99,10 +102,6 @@ const SSH_MAX_BUFFER = 64 * 1024 * 1024;
 const MS_PER_MINUTE = 60000;
 const DEFAULT_LOCK_WAIT_MINUTES = 30;
 const HARNESS_ROLE = 'harness';
-const DEPLOYMENT_SOURCES = Object.freeze([
-  'test/distributed/harness/comparative-benchmark-workload-call-site.js',
-  'test/distributed/harness/real-product-cluster-deployers.js',
-]);
 
 const USAGE = `Usage: node docs/benchmarks/cloud/run-comparative-benchmarks.mjs [options]
 
@@ -237,26 +236,15 @@ function imagesFor(targets, opts) {
   return [...images];
 }
 
-function fileSha256(relative) {
-  const file = path.join(REPO_ROOT, relative);
-  return fs.existsSync(file) ?
-    `sha256:${createHash('sha256').update(fs.readFileSync(file)).digest('hex')}` : null;
-}
-
-// The harness identity the campaign header and every run carry, read through
-// the repository's one git invocation owner. A git read that fails throws: a
-// campaign never records a substitute commit.
-function harnessIdentity() {
+// The harness identity the campaign header carries (stream A's same-harness
+// shape), the commit and checkout state read through the repository's one git
+// invocation owner. A git read that fails throws: a campaign never records a
+// substitute commit.
+function harnessIdentity(manifest) {
   const git = (args) => String(execGit(args, {cwd: REPO_ROOT, encoding: 'utf8',
     bound: GIT_OUTPUT_BOUND.COMMAND})).trim();
-  return {gitCommit: git(['rev-parse', 'HEAD']),
-    checkoutDirty: git(['status', '--porcelain']) !== '',
-    // The workload owner's own source digest arrives per run from the load
-    // generator (identity.harness of each run record).
-    driverSourceSha256: fileSha256('test/distributed/harness/real-product-workload-drivers.js'),
-    deploymentSourceSha256: Object.fromEntries(DEPLOYMENT_SOURCES.map((file) =>
-      [file, fileSha256(file)])),
-    adapterIds: []};
+  return composeCampaignHarnessIdentity({gitCommit: git(['rev-parse', 'HEAD']),
+    checkoutDirty: git(['status', '--porcelain']) !== '', systems: manifest.plan.systems});
 }
 
 function appendRecords(file, records) {
@@ -281,7 +269,7 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
     throw new UsageError('the load generator needs a checkout at the harness commit: ' +
       'lab hosts record one; for gcp pass --client-checkout <path>');
   }
-  const harness = harnessIdentity();
+  const harness = await harnessIdentity(manifest);
   const dataIps = hosts.filter((host) => host.role === 'data').map((host) => host.ip);
   // The semantic proof journey runs here, on the controller; PostgreSQL admits
   // the controller's address (as the data host sees it) next to the load generator.

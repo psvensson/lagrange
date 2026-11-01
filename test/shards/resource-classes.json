@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2514,
+    "ordinary": 2515,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2531,
-  "digest": "fnv1a32-2e61eff1",
+  "censusSize": 2532,
+  "digest": "fnv1a32-7ab16844",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -857,6 +857,7 @@
     "test/distributed/harness/__tests__/cluster.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": "ordinary",
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "ordinary",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-manifest.test.js": "ordinary",

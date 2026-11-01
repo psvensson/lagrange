@@ -30,6 +30,7 @@ import {
   DEPLOYMENT_FAILURE,
   deploymentFailure,
 } from './real-product-deployment-contract.js';
+import {composeRunHarnessIdentity} from './comparative-benchmark-harness-identity.js';
 import {
   IDENTITY_EVENT_KIND,
   compareProductIdentity,
@@ -194,8 +195,8 @@ function runRecord({run, manifest, header, state, failure, attempt, events, clos
     targetId: run.targetId, scenario: run.scenario, subkind: run.subkind,
     executionTarget: header.executionTarget,
     execution: {state, failure, startedAt, endedAt},
-    identity: {harness: attempt?.workload?.harness ?
-      {...attempt.workload.harness, gitCommit: header.harness.gitCommit} : header.harness,
+    identity: {harness: composeRunHarnessIdentity({header: header.harness, system: run.system,
+      reported: attempt?.workload?.harness ?? null}),
     products: attempt?.deployment?.identity?.products ?? null,
     productsAfterWindow: attempt?.productsAfter ?? null, publication: null},
     plan, deployment: recordedDeployment({attempt, header, events, closure}),
