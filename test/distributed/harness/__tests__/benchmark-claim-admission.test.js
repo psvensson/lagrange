@@ -67,6 +67,8 @@ const stringReplace = Function.call.bind(String.prototype.replace);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const LAGRANGE = 'lagrange';
+// The smoke claim: its subkind names the smoke profile, whose class is smoke.
+const SMOKE = Object.freeze({subkind: 'smoke'});
 const TIDB = 'tidb-tikv';
 
 function pair(options = {}) {
@@ -82,10 +84,11 @@ async function publish(rawRecords, invalidations = []) {
 async function publishedLagrangeCell(mutate, options = {}) {
   const runs = pair(options);
   mutate(runs[0]);
-  sealFixtureRun(runs[0], {keepPlan: true, keepFinalState: true});
+  sealFixtureRun(runs[0], {keepFinalState: true});
   const {matrix, readme} = await publish([buildFixtureHeader({campaignId:
-    'fixture-campaign'}), ...runs]);
-  return {cell: fixtureTargetCell(matrix, LAGRANGE), readme};
+    'fixture-campaign', targetIds: [LAGRANGE]}), ...runs]);
+  return {cell: fixtureTargetCell(matrix, LAGRANGE,
+    options.subkind === SMOKE.subkind ? 'scenarioA/smoke' : 'scenarioA'), readme};
 }
 
 function assertRejected(run, code) {
@@ -154,7 +157,7 @@ describe('raw observation record v2 validator', () => {
 describe('claim admission through the publication path', () => {
   it('admits a sufficient capacity run and renders its observed numbers', async () => {
     const {matrix, readme} = await publish([
-      buildFixtureHeader({campaignId: 'fixture-campaign'}), ...pair()]);
+      buildFixtureHeader({campaignId: 'fixture-campaign', targetIds: [LAGRANGE]}), ...pair()]);
     const cell = fixtureTargetCell(matrix, LAGRANGE);
     assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED);
     assert.deepEqual(cell.reasons, []);
@@ -235,7 +238,7 @@ describe('claim admission through the publication path', () => {
       return sealFixtureRun(run);
     });
     const {matrix, readme} = await publish([
-      buildFixtureHeader({campaignId: 'fixture-campaign'}), ...runs]);
+      buildFixtureHeader({campaignId: 'fixture-campaign', targetIds: [LAGRANGE]}), ...runs]);
     const cell = fixtureTargetCell(matrix, LAGRANGE);
     assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE);
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.NO_COMMITTED_OPERATIONS), true);
@@ -245,7 +248,15 @@ describe('claim admission through the publication path', () => {
   });
 
   it('a run that issued nothing is not a measurement', async () => {
-    const {cell} = await publishedLagrangeCell(() => {}, {requestCount: 0});
+    // A completed window in which every planned request stayed unissued.
+    const {cell} = await publishedLagrangeCell((run) => {
+      for (const r of run.observations.requests) {
+        Object.assign(r, {outcome: OPERATION_OUTCOME.UNISSUED, failureClass: null,
+          attempts: [], issuedAtMs: null, executionStartedAtMs: null, completedAtMs: null,
+          issueLagMs: null, queueDelayMs: null, latencyMs: null});
+      }
+      sealFixtureRun(run);
+    });
     assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.NO_ISSUED_OPERATIONS), true);
   });
@@ -269,7 +280,7 @@ describe('claim admission through the publication path', () => {
 
   it('a smoke profile never publishes a capacity figure', async () => {
     const {cell} = await publishedLagrangeCell(() => {},
-      {profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
+      SMOKE);
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SMOKE_PROFILE), true);
     assert.equal(cell.metrics.capacity, null);
     assert.equal('committedPerSec' in cell.metrics.runs[0], false);
@@ -307,7 +318,7 @@ function setupFailed(run, setup) {
   delete run.observations.window;
   delete run.observations.executedOperationsDigest;
   run.correctness = {semanticGate: null, finalState: null};
-  sealFixtureRun(run, {keepPlan: true});
+  sealFixtureRun(run);
 }
 
 describe('harness identity across a multi-arm campaign', () => {
@@ -318,7 +329,7 @@ describe('harness identity across a multi-arm campaign', () => {
       run.identity.harness = {...run.identity.harness, ...runHarness};
       return sealFixtureRun(run);
     });
-    const header = buildFixtureHeader({campaignId: 'fixture-campaign'});
+    const header = buildFixtureHeader({campaignId: 'fixture-campaign', targetIds: [LAGRANGE]});
     header.harness = {...header.harness, ...headerHarness};
     const {matrix} = await publish([header, ...runs]);
     return fixtureTargetCell(matrix, LAGRANGE);
@@ -364,8 +375,7 @@ describe('semantic gate by profile class and stopped runs', () => {
   };
 
   it('a smoke run with an incomplete gate is admitted and says so', async () => {
-    const {cell, readme} = await publishedLagrangeCell(incomplete,
-      {profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
+    const {cell, readme} = await publishedLagrangeCell(incomplete, SMOKE);
     assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED);
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SMOKE_PROFILE), true);
@@ -383,7 +393,7 @@ describe('semantic gate by profile class and stopped runs', () => {
     async () => {
       const {cell, readme} = await publishedLagrangeCell((run) => setupFailed(run, {
         failureClass: FAILURE_CLASS.PRODUCT_ERROR, sqlState: '55P03', code: '55P03',
-        message: 'lock not available'}), {profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
+        message: 'lock not available'}), SMOKE);
       assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE, cell.reasons.join(', '));
       assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.DATASET_PREPARATION_FAILED),
         true);
@@ -394,7 +404,7 @@ describe('semantic gate by profile class and stopped runs', () => {
   it('a setup failure of the harness itself is not a product result', async () => {
     const {cell} = await publishedLagrangeCell((run) => setupFailed(run, {
       failureClass: FAILURE_CLASS.HARNESS_FAULT, sqlState: null, code: null, message: 'x'}),
-    {profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
+    SMOKE);
     assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SETUP_HARNESS_FAULT), true);
   });
@@ -452,8 +462,8 @@ describe('driver output through admission', () => {
         assert.equal(request.responseEvidence.encoding,
           BENCHMARK_RESPONSE_EVIDENCE_ENCODING.RETAINED_FILE);
         assertEvidenceFilesReferenced(runs[0], evidenceDir);
-        const {matrix} = await publish([buildFixtureHeader({campaignId: 'fixture-campaign'}),
-          ...runs]);
+        const header = buildFixtureHeader({campaignId: 'fixture-campaign', targetIds: [LAGRANGE]});
+        const {matrix} = await publish([header, ...runs]);
         assert.equal(fixtureTargetCell(matrix, LAGRANGE).status,
           CLAIM_CELL_STATUS.VALID_OBSERVED);
         assert.deepEqual(directoryState(REPO_DATA_DIR), dataBefore,
@@ -493,7 +503,8 @@ describe('driver output through admission', () => {
       // own identity function and the adapter union over the three arms.
       const {driverSourceSha256} = await benchmarkDriverSourceIdentity();
       assert.equal(run.identity.harness.driverSourceSha256, driverSourceSha256);
-      const header = buildFixtureHeader({campaignId: 'fixture-campaign'});
+      const header = buildFixtureHeader({campaignId: 'fixture-campaign',
+        targetIds: [LAGRANGE]});
       header.harness = {...header.harness, driverSourceSha256,
         adapterIds: [...Object.values(BENCHMARK_SCENARIO_A_ADAPTER_ID)]};
       const {matrix, readme} = await publish([header, run]);
@@ -578,7 +589,7 @@ describe('invalidation ledger and offline recomputation', () => {
   it('a generated artifact edited by hand fails recomputation', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'recompute-'));
     try {
-      writeFixtureRoot(root, {rawRecords: [buildFixtureHeader({campaignId: 'c',
+      writeFixtureRoot(root, {rawRecords: [buildFixtureHeader({campaignId: 'c', targetIds: [LAGRANGE],
         executionTarget: EXECUTION_TARGET.LAB})]});
       const {regenerateAllBenchmarkArtifactsFromAdmitted} = await import(
         '../raw-observation-campaign-specs.js');

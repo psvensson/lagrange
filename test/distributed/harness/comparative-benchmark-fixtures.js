@@ -2,21 +2,33 @@
 // adversarial cases of the comparative benchmark guards. Fixtures are never
 // written to the published data directory; they exist to prove that the chain
 // rejects what it must reject and keeps a valid negative result visible.
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import {OLTP_DATASET_VERIFICATION_STATUS} from './benchmark-oltp-state-reconciliation.js';
+import {ADVERTISED_TARGETS} from './comparative-coverage-manifest.js';
+import {
+  OLTP_DATASET_VERIFICATION_STATUS,
+  OLTP_RECONCILIATION_STATUS,
+} from './benchmark-oltp-state-reconciliation.js';
 import {
   BENCHMARK_UNRESOLVED_REASON,
   OPERATION_OUTCOME,
+  benchmarkOperationId,
   computeExecutedOperationsDigest,
   validateBenchmarkAccounting,
 } from './benchmark-operation-outcome.js';
-import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
-import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
-import {OLTP_OPERATION_KIND} from './oltp-baseline-workload.js';
-import {OLTP_OPEN_LOOP_PROFILE} from './oltp-open-loop-step-owner.js';
+import {
+  BENCHMARK_RUN_STATUS,
+  describeBenchmarkWorkloadIdentity,
+} from './benchmark-scenario-a-run.js';
+import {
+  isBenchmarkDispatchRefusal,
+  resolveBenchmarkWorkloadProfile,
+} from './benchmark-workload-dispatch.js';
+import {OLTP_OPERATION_KIND, buildOltpBaselinePlan} from './oltp-baseline-workload.js';
+import {OLTP_OPEN_LOOP_PROFILE, interleaveOltpWorkerPhase} from './oltp-open-loop-step-owner.js';
 import {OLTP_PAIRED_RETRY_POLICY} from './oltp-paired-retry-owner.js';
 import {OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS} from './oltp-scenario-a-semantic-gate.js';
 import {
@@ -38,14 +50,11 @@ import {
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const FIXTURE_TIME = '2026-11-01T12:00:00.000Z';
 const FIXTURE_LATER = '2026-11-01T12:05:00.000Z';
 const hexDigits = (ch) => ch.repeat(64);
-const KIND_CYCLE = Object.freeze([
-  OLTP_OPERATION_KIND.NEW_ORDER, OLTP_OPERATION_KIND.PAYMENT, OLTP_OPERATION_KIND.ORDER_STATUS,
-  OLTP_OPERATION_KIND.DELIVERY, OLTP_OPERATION_KIND.STOCK_LEVEL,
-]);
 
 function fixtureHosts(count) {
   return Array.from({length: count}, (_u, i) => ({
@@ -59,22 +68,79 @@ function fixtureHarness() {
     adapterIds: ['pg-wire-v1']};
 }
 
-function buildFixtureHeader({campaignId, executionTarget = EXECUTION_TARGET.LAB}) {
+function sha256Hex(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+// The product family a fixture target runs: two targets of one family may share
+// an image, two families never do.
+function fixtureProductFamily(targetId) {
+  if (stringStartsWith(targetId, 'lagrange')) return 'lagrange';
+  if (stringStartsWith(targetId, 'pg-')) return 'postgresql';
+  return targetId;
+}
+
+// The fixture identity of a target's product image, distinct per target.
+function fixtureProductIdentity(targetId) {
+  return {
+    imageRef: `example/${targetId}:fixture`,
+    imageId: `sha256:${sha256Hex(`image:${targetId}`)}`,
+    repoDigest: `example/${targetId}@sha256:${sha256Hex(`repo:${targetId}`)}`,
+    reportedVersion: `0.0.0-fixture-${targetId}`,
+  };
+}
+
+function fixtureProductRole(targetId) {
+  return `${targetId}-node`;
+}
+
+/**
+ * The campaign header of a fixture campaign: the harness identity and, per
+ * target, the product identity pinned before any run.
+ * @param {{campaignId: string, targetIds: Array<string>, harness?: Object,
+ *   executionTarget?: string}} options
+ * @return {Object}
+ */
+function buildFixtureHeader({campaignId, targetIds, harness = fixtureHarness(),
+  executionTarget = EXECUTION_TARGET.LAB}) {
+  if (!Array.isArray(targetIds) || targetIds.length === 0) {
+    throw new Error('a fixture campaign header names the targets it pins');
+  }
   return {
     recordType: RAW_RECORD_TYPE.CAMPAIGN_HEADER, schemaVersion: RAW_OBSERVATION_SCHEMA.V2,
     campaignId, startedAt: FIXTURE_TIME, manifestDigest: `sha256:${hexDigits('c')}`,
-    harness: fixtureHarness(), executionTarget, physicalHosts: fixtureHosts(4),
+    harness, executionTarget, physicalHosts: fixtureHosts(4),
+    products: arrayMap(targetIds, (targetId) => {
+      const {imageId, repoDigest, reportedVersion} = fixtureProductIdentity(targetId);
+      return {targetId, product: fixtureProductFamily(targetId),
+        role: fixtureProductRole(targetId), imageId, repoDigest, reportedVersion};
+    }),
   };
 }
 
 const FIXTURE_ENDPOINT = 'lab-host-1:5432';
 
-function buildRequests(count, latencyMs) {
-  return Array.from({length: count}, (_u, i) => {
-    const kind = KIND_CYCLE[i % KIND_CYCLE.length];
+// The canonical workload a fixture run executes: two workers, no warm-up, the
+// smallest dataset the workload owner accepts.
+function fixtureWorkload(requestCount) {
+  if (!Number.isSafeInteger(requestCount) || requestCount < 2 || requestCount % 2 !== 0) {
+    throw new Error('a fixture run executes an even number of requests (two workers)');
+  }
+  return {seed: 1, workers: 2, warmupOperationsPerWorker: 0,
+    measurementOperationsPerWorker: requestCount / 2, warehouseCount: 1,
+    districtsPerWarehouse: 1, customersPerDistrict: 1, itemCount: 15};
+}
+
+// The measured operations of the workload, in the order the open-loop owner issues
+// them, as committed requests.
+function buildRequests(workload, latencyMs) {
+  const operations = interleaveOltpWorkerPhase(buildOltpBaselinePlan(workload).workers,
+    'measurement');
+  return arrayMap(operations, (operation, i) => {
+    const kind = operation.kind;
     const intended = i * 10;
     return {
-      index: i, opId: `measurement:1:${i + 1}`, operationKind: kind,
+      index: i, opId: benchmarkOperationId(operation), operationKind: kind,
       intendedStartMs: intended, issuedAtMs: intended, executionStartedAtMs: intended,
       completedAtMs: intended + latencyMs, issueLagMs: 0, queueDelayMs: 0, latencyMs,
       outcome: OPERATION_OUTCOME.COMMITTED, failureClass: null, retries: 0, retryDelayMs: 0,
@@ -107,18 +173,13 @@ function setFixtureRequestOutcome(request, outcome, failureClass) {
   }
 }
 
-function plannedCounts(requests) {
-  const counts = {};
-  for (const r of requests) counts[r.operationKind] = (counts[r.operationKind] || 0) + 1;
-  return counts;
-}
-
 function finalStateFor(requests) {
   const committed = (kind) => arrayFilter(requests, (r) =>
     r.outcome === OPERATION_OUTCOME.COMMITTED && r.operationKind === kind).length;
   const newOrders = committed(OLTP_OPERATION_KIND.NEW_ORDER);
   const delivered = committed(OLTP_OPERATION_KIND.DELIVERY);
   return {
+    status: OLTP_RECONCILIATION_STATUS.RECONCILED,
     before: {tableRows: {orders: 1000, history: 500, new_order: 300}},
     after: {tableRows: {orders: 1000 + newOrders,
       history: 500 + committed(OLTP_OPERATION_KIND.PAYMENT),
@@ -127,10 +188,11 @@ function finalStateFor(requests) {
 }
 
 /**
- * Recompute every derived field of a fixture run after its observations changed:
- * accounting, executed-operations digest, plan slice, final state and the raw digest.
+ * Recompute every derived observation of a fixture run after its observations
+ * changed: accounting, executed-operations digest, final state and the raw digest.
+ * The plan is preregistered and never follows the observations.
  * @param {Object} run
- * @param {{keepPlan?: boolean, keepFinalState?: boolean}} options
+ * @param {{keepFinalState?: boolean}} options
  * @return {Object} The same run, sealed.
  */
 function sealFixtureRun(run, options = {}) {
@@ -138,10 +200,6 @@ function sealFixtureRun(run, options = {}) {
   // A plain copy: tests edit the recorded accounting to prove the recount catches it.
   run.observations.accounting = JSON.parse(JSON.stringify(validateBenchmarkAccounting(requests)));
   run.observations.executedOperationsDigest = computeExecutedOperationsDigest(requests);
-  if (!options.keepPlan) {
-    run.plan.operationSliceDigest = run.observations.executedOperationsDigest;
-    run.plan.plannedOperationCounts = plannedCounts(requests);
-  }
   if (!options.keepFinalState && run.correctness.finalState) {
     run.correctness.finalState = finalStateFor(requests);
   }
@@ -151,10 +209,8 @@ function sealFixtureRun(run, options = {}) {
 
 function buildProducts(hosts, targetId) {
   return arrayMap(hosts, (h, i) => ({
-    role: `${targetId}-node`, host: h.hostId, containerId: `ctr-${i + 1}`,
-    imageRef: `example/${targetId}:fixture`, imageId: `sha256:${hexDigits('e')}`,
-    repoDigest: `example/${targetId}@sha256:${hexDigits('f')}`, entrypoint: 'serve', cmd: '',
-    reportedVersion: '0.0.0-fixture', startedAt: FIXTURE_TIME,
+    role: fixtureProductRole(targetId), host: h.hostId, containerId: `ctr-${i + 1}`,
+    ...fixtureProductIdentity(targetId), entrypoint: 'serve', cmd: '', startedAt: FIXTURE_TIME,
   }));
 }
 
@@ -163,14 +219,33 @@ function buildProducts(hosts, targetId) {
  * @param {Object} options
  * @return {Object} A sealed v2 run record.
  */
+function fixtureProfile(subkind, options) {
+  try {
+    return resolveBenchmarkWorkloadProfile({scenario: BENCHMARK_SCENARIO.A, subkind});
+  } catch (err) {
+    if (!isBenchmarkDispatchRefusal(err) || !options.workloadProfileId) throw err;
+    return {id: options.workloadProfileId, profileClass: options.profileClass, workload: null};
+  }
+}
+
 function buildFixtureRun(options = {}) {
   const {campaignId = 'fixture-campaign', targetId = 'lagrange', subkind = 'main',
-    profileClass = BENCHMARK_PROFILE_CLASS.CAPACITY, requestCount = 120, latencyMs = 4,
-    offeredRatePerSec = 100, repetition = 1, hostCount = 3} = options;
+    latencyMs = 4, offeredRatePerSec = 100, repetition = 1} = options;
+  // The named profile of the subkind (dispatch owner); a profile that owns its
+  // workload fixes the request count. A family without a profile (a claim no run
+  // can satisfy) names the profile its record claims explicitly.
+  const profile = fixtureProfile(subkind, options);
+  const workload = profile.workload || fixtureWorkload(options.requestCount ?? 120);
+  const identity = describeBenchmarkWorkloadIdentity(workload);
+  const profileClass = options.profileClass ?? profile.profileClass;
+  // The distinct product machines the target's claims require (coverage manifest).
+  const hostCount = options.hostCount ?? arrayFind(ADVERTISED_TARGETS,
+    (t) => t.targetId === targetId).minDistinctHosts;
   const hosts = fixtureHosts(hostCount + 1);
   const productHosts = hosts.slice(0, hostCount);
   const products = buildProducts(productHosts, targetId);
-  const requests = buildRequests(requestCount, latencyMs);
+  const requests = buildRequests(workload, latencyMs);
+  const requestCount = requests.length;
   const endpoint = {host: productHosts[0].hostId, port: 5432, containerId: 'ctr-1',
     protocol: 'pg-wire'};
   const run = {
@@ -182,13 +257,16 @@ function buildFixtureRun(options = {}) {
     identity: {harness: fixtureHarness(), products,
       productsAfterWindow: arrayMap(products, (p) => ({...p})), publication: null},
     plan: {
-      manifestDigest: `sha256:${hexDigits('c')}`, datasetDigest: `sha256:${hexDigits('1')}`,
-      workloadPlanDigest: `sha256:${hexDigits('2')}`, measurementPlanDigest: `sha256:${hexDigits('3')}`,
+      manifestDigest: `sha256:${hexDigits('c')}`, datasetDigest: identity.datasetDigest,
+      workloadPlanDigest: identity.workloadPlanDigest,
+      measurementPlanDigest: identity.measurementPlanDigest,
+      workloadProfileId: profile.id, workload,
       semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
       semanticProfileDigest: hashScenarioASemanticProfile(),
       retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id, openLoopProfileId: OLTP_OPEN_LOOP_PROFILE.id,
       sweepPlanDigest: `sha256:${hexDigits('4')}`, offeredRatePerSec, profileClass,
-      operationSliceDigest: '', plannedOperationCounts: {}, repetition,
+      operationSliceDigest: identity.operationSliceDigest,
+      plannedOperationCounts: {...identity.plannedOperationCounts}, repetition,
       orderIndex: repetition - 1, warmup: {operations: 0, digest: null},
     },
     deployment: {
@@ -301,6 +379,7 @@ export {
   buildFixtureHeader,
   buildFixtureRun,
   composeFixtureRunFromDriverOutput,
+  fixtureProductIdentity,
   fixtureTargetCell,
   publishFixtureCampaign,
   sealFixtureRun,

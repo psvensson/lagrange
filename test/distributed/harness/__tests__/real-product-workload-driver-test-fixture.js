@@ -6,7 +6,7 @@
 // outcome classification and reconciliation are the production path.
 // Evidence ceiling: classification/accounting of each response class, not
 // native product behaviour.
-import {mkdtempSync, rmSync} from 'node:fs';
+import {mkdtempSync, readFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 
@@ -59,6 +59,18 @@ function collectKeys(value, keys = new Set()) {
   return keys;
 }
 
+// The retained response evidence of every request, read while its directory
+// exists: path -> the recorded attempts' statements.
+function readRetainedEvidence(requests) {
+  const retained = {};
+  for (const {responseEvidence} of requests) {
+    if (responseEvidence?.encoding === 'retained-file') {
+      retained[responseEvidence.path] = JSON.parse(readFileSync(responseEvidence.path, 'utf8'));
+    }
+  }
+  return retained;
+}
+
 function observe(output, product) {
   const observations = output.observations;
   const requests = observations?.requests || [];
@@ -78,6 +90,7 @@ function observe(output, product) {
     tables: tablesOfStatements(product.state.statements),
     healthRequests: 0,
     kinds: arrayMap(requests, (request) => request.operationKind),
+    retainedEvidence: readRetainedEvidence(requests),
   };
 }
 
