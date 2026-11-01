@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3286182,
-        "sha256": "31e48a5de9f6d9f29e1d659283ac6a882a03bec5202723a00d600415deb40f54"
+        "bytes": 3288435,
+        "sha256": "e4ec751e71a9f87531010586d69bb54d941e18218bc49b0ec49e6ae4af4fe043"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "f9ac62050ad3448ee48cd4b818ff29cf79b33bc0032792e2d4d263e2c9bf8ed7"
+        "sha256": "7456ee05ca5f3678ef72c0dea93ce5729d9ff45c8b86375bdc5a23cfc2526284"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "2c02b6b9b4de9b5a00e4bd1055513d7ec205ab0fb67b0af65dfef66c15f5cd75"
+        "sha256": "c365f2d612c34b264d19ccb3778d189e2c356abb9230a46927f0a6d359e950f2"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "eeadc017f9e6f1a247a4cb85b76c5b1f5af568dd7a894037b005e84a346cdf3b"
+    "inputDigest": "982c5f71ca81f163bdd988a2b5d8ae3b8fc635e9e0b1f72e2a553fc7186a6d52"
   },
   "reconciliation": {
     "complexity": {
@@ -117,13 +117,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "f9ac62050ad3448ee48cd4b818ff29cf79b33bc0032792e2d4d263e2c9bf8ed7"
+          "sha256": "7456ee05ca5f3678ef72c0dea93ce5729d9ff45c8b86375bdc5a23cfc2526284"
         },
-        "cloneGroups": 45,
-        "duplicatedLines": 1436,
-        "sourceCloneTouches": 90,
-        "sourceDuplicatedLineTouches": 2872,
-        "nonzeroSourceCount": 57,
+        "cloneGroups": 46,
+        "duplicatedLines": 1462,
+        "sourceCloneTouches": 92,
+        "sourceDuplicatedLineTouches": 2924,
+        "nonzeroSourceCount": 58,
         "touchMultiplicity": 2
       },
       {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "2c02b6b9b4de9b5a00e4bd1055513d7ec205ab0fb67b0af65dfef66c15f5cd75"
+          "sha256": "c365f2d612c34b264d19ccb3778d189e2c356abb9230a46927f0a6d359e950f2"
         },
         "cloneGroups": 649,
         "duplicatedLines": 24346,
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3286182,
-        "sha256": "31e48a5de9f6d9f29e1d659283ac6a882a03bec5202723a00d600415deb40f54"
+        "bytes": 3288435,
+        "sha256": "e4ec751e71a9f87531010586d69bb54d941e18218bc49b0ec49e6ae4af4fe043"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "ead58ed1046c8503fbde663ac25e03af286c06c996e103bffb13c6eff42be656",
-      "moduleCount": 5882,
-      "edgeCount": 32041,
+      "sourceDigest": "4508d0d0a2295af496298fa9321e3e821513d63ab34443e9b85994dc9a984b36",
+      "moduleCount": 5887,
+      "edgeCount": 32064,
       "unresolvedCount": 44
     }
   },
   "assignment": {
-    "sourceSignalCount": 2445,
-    "assignedSignalCount": 2445,
-    "uniqueAssignmentCount": 2445,
-    "digest": "38622a8bdc7e3bc3b6feaa06ca8a1a214e751c8762ca62fa515d3450f90a32d2"
+    "sourceSignalCount": 2446,
+    "assignedSignalCount": 2446,
+    "uniqueAssignmentCount": 2446,
+    "digest": "05df6012f300f202086f57d7c019a6709ca165cc2c2b024db35b3417e25d53cb"
   },
   "signalCounts": {
     "cognitive": 147,
     "complexity": 1736,
-    "duplication": 476,
+    "duplication": 477,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1259,
+    "filesWithDebt": 1260,
     "rankedBoundaryCount": 112,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 92,
@@ -617,7 +617,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 138,
+      "importIn": 139,
       "importOut": 78,
       "score": 196,
       "topPaths": [
@@ -1272,6 +1272,34 @@
       ]
     },
     {
+      "key": "area:scripts/checks",
+      "owner": null,
+      "boundary": "scripts/checks",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/checks"
+      ],
+      "fileCount": 10,
+      "signalCount": 10,
+      "complexity": 0,
+      "cognitive": 3,
+      "oversizedFiles": 0,
+      "duplicatedLines": 310,
+      "cloneTouches": 10,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 23,
+      "importOut": 38,
+      "score": 55,
+      "topPaths": [
+        "scripts/checks/q2-call-selector-typed-parameter-narrowing-guard.js",
+        "scripts/checks/impact-proof-cone-inputs.js",
+        "scripts/checks/raft-rs-operation-boundary-audit.js",
+        "scripts/checks/test-primary-classification.js",
+        "scripts/checks/h2-hono-source-ir-deployment-cutover-guard.js"
+      ]
+    },
+    {
       "key": "area:test/cdc",
       "owner": null,
       "boundary": "test/cdc",
@@ -1297,34 +1325,6 @@
         "test/cdc/retry-delay-backoff.property.test.js",
         "test/cdc/bootstrap-mode-routing.property.test.js",
         "test/cdc/cdc-pipeline-readiness-gate.property.test.js"
-      ]
-    },
-    {
-      "key": "area:scripts/checks",
-      "owner": null,
-      "boundary": "scripts/checks",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/checks"
-      ],
-      "fileCount": 9,
-      "signalCount": 9,
-      "complexity": 0,
-      "cognitive": 3,
-      "oversizedFiles": 0,
-      "duplicatedLines": 258,
-      "cloneTouches": 8,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 23,
-      "importOut": 35,
-      "score": 49.8,
-      "topPaths": [
-        "scripts/checks/q2-call-selector-typed-parameter-narrowing-guard.js",
-        "scripts/checks/impact-proof-cone-inputs.js",
-        "scripts/checks/raft-rs-operation-boundary-audit.js",
-        "scripts/checks/test-primary-classification.js",
-        "scripts/checks/h2-hono-source-ir-deployment-cutover-guard.js"
       ]
     },
     {
@@ -1454,7 +1454,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 57,
+      "importIn": 58,
       "importOut": 57,
       "score": 44,
       "topPaths": [

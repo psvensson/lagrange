@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2178,
+    "unit": 2179,
     "integration": 119,
     "bootstrap": 217,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2521,
-  "digest": "fnv1a32-4dce3190",
+  "censusSize": 2522,
+  "digest": "fnv1a32-754844ee",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -420,6 +420,7 @@
     "test/cli/core/viewmodel-computed-caching.property.test.js": "unit",
     "test/cli/core/visual-indicators.test.js": "unit",
     "test/cli/index.test.js": "unit",
+    "test/cli/q8-resumable-bulk-data-load.test.js": "unit",
     "test/cli/service-init-scaffold.test.js": "unit",
     "test/cli/service-init-wasm-scaffold.test.js": "unit",
     "test/cli/service-install-lifecycle-cli.test.js": "unit",

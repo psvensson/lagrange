@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2504,
+    "ordinary": 2505,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2521,
-  "digest": "fnv1a32-563846e8",
+  "censusSize": 2522,
+  "digest": "fnv1a32-21b5e616",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -419,6 +419,7 @@
     "test/cli/core/viewmodel-computed-caching.property.test.js": "ordinary",
     "test/cli/core/visual-indicators.test.js": "ordinary",
     "test/cli/index.test.js": "ordinary",
+    "test/cli/q8-resumable-bulk-data-load.test.js": "ordinary",
     "test/cli/service-init-scaffold.test.js": "ordinary",
     "test/cli/service-init-wasm-scaffold.test.js": "external-toolchain",
     "test/cli/service-install-lifecycle-cli.test.js": "ordinary",

@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "resumable-bulk-data-load",
+  "epic": "pilot-readiness-and-public-proof",
+  "statement": "Implement Q8 resumable bulk data load across the bulk-load manifest contract, bulk-load command owner, and CLI bulk-load router so multi-batch NDJSON/CSV loads validate schema/source/batch digests, persist durable checkpoints and reject rows in SQL only after Raft commit ack, replay idempotently on primary-key conflict across crash/restart, refuse schema drift/source truncation/offset regression/mutated batch replay, and verify external pgwire completeness via key-range SHA-256 digests and sample row reconciliation.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q8-resumable-bulk-data-load-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "665e0008ba41c985e4a7b8ecc2dbf610f08959b9"
+}

@@ -6,7 +6,7 @@
     "architecture-governance": 21,
     "bootstrap-membership": 329,
     "cdc-metadata": 67,
-    "cli-tooling": 98,
+    "cli-tooling": 99,
     "control-plane": 224,
     "convergence-topology": 78,
     "distributed-harness": 182,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2521,
-  "digest": "fnv1a32-446997da",
+  "censusSize": 2522,
+  "digest": "fnv1a32-ba72b2df",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5e93e6bd",
+  "observationDigest": "fnv1a32-7c4fd8fd",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -439,6 +439,7 @@
     "test/cli/core/viewmodel-computed-caching.property.test.js": "cli-tooling",
     "test/cli/core/visual-indicators.test.js": "cli-tooling",
     "test/cli/index.test.js": "cli-tooling",
+    "test/cli/q8-resumable-bulk-data-load.test.js": "cli-tooling",
     "test/cli/service-init-scaffold.test.js": "cli-tooling",
     "test/cli/service-init-wasm-scaffold.test.js": "cli-tooling",
     "test/cli/service-install-lifecycle-cli.test.js": "cli-tooling",
@@ -3924,6 +3925,16 @@
         "src/cli/USER_GUIDE.md",
         "src/cli/core/help-overlay.js",
         "src/config/listener-port-model.js"
+      ]
+    },
+    "test/cli/q8-resumable-bulk-data-load.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
     "test/cli/service-init-scaffold.test.js": {

@@ -14,6 +14,7 @@ quests:
   - partition-leader-row-publication-integrity-v3
   - partition-leader-row-publication-integrity
   - public-path-multinode-baseline
+  - resumable-bulk-data-load
   - service-cell-v2-default-multi-operation
   - user-table-leader-handoff-demotion-pairing-v2
   - user-table-leader-handoff-demotion-pairing
