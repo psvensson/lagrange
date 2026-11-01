@@ -15,8 +15,9 @@ alternative placement or service lifecycle.
 Lagrange Images and Lagrange Object Environment are optional development
 companions, never prerequisites for any Lagrange Enterprise operation.
 They can contribute application-specific checks through public extension
-contracts while Lagrange continues to serve ordinary SQL, Hono/WASM and OCI
-applications without them. Companion licensing is owned by their repositories.
+contracts. Ordinary SQL applications, and planned Hono/WASM and OCI application
+paths as they qualify, must remain usable without either companion. Companion
+licensing is owned by their repositories.
 
 This is one ordered release programme. Each planned deliverable has one version
 that owns its initial completion, including its research, documentation and
