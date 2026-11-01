@@ -122,7 +122,8 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
   function admitOnEveryMember(joinerId) {
     for (const [memberId, port] of ports) {
       runOnExecutionNode(memberId, () => reserveAndAdmitGroupPeer(port,
-        admissionGroup(memberId), {replicaIdentity: joinerId, peerAddress: joinerId}));
+        admissionGroup(memberId),
+        {replicaIdentity: joinerId, peerAddress: joinerId, nodeId: joinerId}));
     }
   }
 
@@ -133,7 +134,7 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
     if (!port) return;
     for (const joinerId of takeGroupAdmissionsInFlight(port)) {
       reserveAndAdmitGroupPeer(port, admissionGroup(nodeId),
-        {replicaIdentity: joinerId, peerAddress: joinerId});
+        {replicaIdentity: joinerId, peerAddress: joinerId, nodeId: joinerId});
     }
     drivePendingJoins();
   }
@@ -195,7 +196,8 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
   }
 
   const seedPort = open(seedId, {
-    bootstrapMembership: genesisStamp([seedId], {}), bootstrapPeerIds: [seedId],
+    bootstrapMembership: genesisStamp([seedId], {[seedId]: seedId}),
+    bootstrapPeerIds: [seedId],
   });
   runOnExecutionNode(seedId, () => seedPort.campaign());
 
