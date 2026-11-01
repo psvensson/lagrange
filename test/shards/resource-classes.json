@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2515,
+    "ordinary": 2517,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2532,
-  "digest": "fnv1a32-7ab16844",
+  "censusSize": 2534,
+  "digest": "fnv1a32-cad50a6e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -888,6 +888,7 @@
     "test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js": "ordinary",
     "test/distributed/harness/__tests__/failure-bundle-sql-query-engine-availability.test.js": "ordinary",
     "test/distributed/harness/__tests__/failure-bundle.test.js": "ordinary",
+    "test/distributed/harness/__tests__/fresh-formation-routability-predicate.test.js": "ordinary",
     "test/distributed/harness/__tests__/full-node-log-capture.test.js": "ordinary",
     "test/distributed/harness/__tests__/gate-engine.test.js": "ordinary",
     "test/distributed/harness/__tests__/gcp-provisioner.test.js": "ordinary",
@@ -949,6 +950,7 @@
     "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "ordinary",
+    "test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": "ordinary",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "ordinary",
     "test/distributed/harness/__tests__/report-writer.property.test.js": "ordinary",
