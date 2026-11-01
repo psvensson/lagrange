@@ -9,7 +9,7 @@
     "cli-tooling": 98,
     "control-plane": 224,
     "convergence-topology": 78,
-    "distributed-harness": 182,
+    "distributed-harness": 184,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,8 +25,8 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2510,
-  "digest": "fnv1a32-d80fe9e9",
+  "censusSize": 2512,
+  "digest": "fnv1a32-954a80a4",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-4beabfad",
   "classes": {
@@ -949,6 +949,8 @@
     "test/distributed/harness/__tests__/publication-convergence-claim.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer.property.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer.test.js": "distributed-harness",
