@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "copiedAt": "2026-11-01",
+  "copiedVerbatim": true,
+  "sourceDirectory": "/tmp/claude-1000/-mnt-data-peter-projects-lagrange/c6ec814b-3c4a-4df4-b6a1-319dfe73b9bc/scratchpad/live-diagnosis/out/3node-hub",
+  "capturedBy": "quest comparative-benchmark-evidence-repair live diagnosis (claude:live-diagnosis), 2026-11-01 19:50-20:13Z",
+  "cluster": "Docker Hub psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb (0.4.0, revision 07206ba1c8bb396f4eb097a753915bb34580d824), three hosts 192.168.86.32 (seed) / .34 / .41, --network host",
+  "analysis": "solve/quests/comparative-benchmark-evidence-repair/evidence/product-blocker-first-divergence-2026-11-01.md",
+  "notes": [
+    "Records are the seed admin stream (ws://192.168.86.32:8081/api/admin/stream?lane=bench) as captured by the live-diagnosis client; query results with more than 20 rows were trimmed by that client to {trimmedRowsArray, length, first20}.",
+    "unsolicited[0] of each file is the seed node cache_dump (its local system-table cache, i.e. the projection), complete arrays.",
+    "step2a record 2 used the SQL `SELECT control_snapshot_local();` which the product answers `no such function`; no control snapshot (readinessByNodeId) was captured in this run."
+  ],
+  "files": [
+    {
+      "file": "step2a-membership.json",
+      "sha256": "d621d1adcfc9bd8b15fe8fe0c7647961942ec3bc6ebccded1234f7160cb280ef",
+      "bytes": 400576
+    },
+    {
+      "file": "step2c-tables.json",
+      "sha256": "b5146eb824862fbfc8fa64747e3d15a8dc96b3d57934f8a692b83e15c738712d",
+      "bytes": 1035919
+    },
+    {
+      "file": "tables-for-evidence.md",
+      "sha256": "dd3633d4b088b88f19b49bc06c7c6411b2e96eaf7ad93c50705337f4f143b988",
+      "bytes": 19494
+    },
+    {
+      "file": "seed-log-excerpt.txt",
+      "sha256": "0913d84184aa4ca40c0ac3a0d2ce5d57a87592d8abbefae3dc2c3f215ea9efab",
+      "bytes": 3070,
+      "excerptOf": "node-logs-192.168.86.32.txt (seed, 20566 lines) in sourceDirectory",
+      "excerptLineNumbers": [
+        6,
+        1374,
+        1854,
+        2329,
+        4101,
+        4194
+      ],
+      "note": "verbatim lines: process start, first No row found for CDC update, first cdc_committed_acceptance_unknown hold (partitions-p1), the CACHE_WAIT_TIMEOUT_MS wait_bound_spent (analysis #8, first divergence), the first two learner_address_unresolvable refusals (analysis #14; 93 in the full seed log)"
+    }
+  ]
+}

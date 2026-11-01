@@ -1,0 +1,63 @@
+{
+  "schema": "solve-quest/2",
+  "id": "fresh-formation-user-table-routability",
+  "class": "product",
+  "epic": "topology-convergence-hardening",
+  "statement": "On a fresh three-node formation, within a preregistered bound, (a) every node's serve lane opens (controlPlaneDiagnostics.readinessByNodeId[*] serveEligible true, none of PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, priority_partitions_not_spread, publication_stream_not_ready, priority_recovery_active, planning_snapshot_refresh_pending, config_safe_mode), (b) all six priority control-plane partitions reach readyDistinct == required, (c) replica_operations in-flight reaches 0 for a quiet window, (d) a CREATE TABLE issued after (a)-(c) becomes routable (contractState != pending; every partitions row has leader_node_id and >= syncReplicaAcks+1 active services rows on distinct nodes; SELECT COUNT(*) returns a result), (e) one INSERT + readback succeeds with rowCount 1 from every node, and (f) zero learner_address_unresolvable refusals are logged for a learner whose services row is durably committed.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/fresh-formation-user-table-routability/evidence/receipt.json",
+      "requiredReceipts": [
+        "reproducer-red-on-current-product",
+        "first-divergence-repaired-at-cause",
+        "scenario-green-three-consecutive",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "reproducer-is-the-registered-scenario",
+      "statement": "The reproducer is the registered scenario fresh-formation-user-table-routability on local-three-node.json (predicates in test/distributed/harness/fresh-formation-routability-predicate.js), unchanged in its predicates and bounds; the bounds (formation 420000 ms, quiet window TIMEOUTS.QUIET_WINDOW, routability TIMEOUTS.SCENARIO_DEFAULT, projection persistence CDC_DEFAULTS.CACHE_WAIT_TIMEOUT_MS) are preregistered and are never widened to turn the scenario green."
+    },
+    {
+      "id": "trace-first-divergence-before-repair",
+      "statement": "Before changing production source, confirm or refute hypothesis H1 of evidence/product-blocker-first-divergence-2026-11-01.md section 2 (the seed's system-table-cache CDC delivery runs behind the authoritative services/partitions/nodes rows: CACHE_WAIT_TIMEOUT_MS spent, cdc_committed_acceptance_unknown holds) with the single settling observation named there, and record the first causal divergence on the reproducer's own run."
+    },
+    {
+      "id": "owner-cache-cdc-visibility",
+      "statement": "Owner (a): system-table-cache CDC delivery and cache visibility (src/partition/partition-cdc-obligation-delivery.js, src/cdc/cdc-integration-service*.js, src/cdc/cdc-integration-service-cache-visibility-wait.js). A durably committed services row must become visible to the deciding node's cache within its owner-stated bound or the decision must read authority; repair the delivery or visibility contract, not its consumers."
+    },
+    {
+      "id": "owner-priority-spread-serve-lane",
+      "statement": "Owner (b): the priority-spread / formation release path that gates the serve lane (src/control-plane/projection-readiness*, src/control-plane/control-plane-readiness-constants.js, src/rebalancer/*priority*, src/partition/partition-service-learner-promotion-proof-methods.js with src/raft/peer-address-resolver.js). No serve-gating decision may pass or deny while its authoritative committed state disagrees with its projection beyond the visibility bound."
+    },
+    {
+      "id": "owner-participant-cutover-pause",
+      "statement": "Owner (c): the TX1 participant cutover pause on control_plane_publications-p1 (src/node/replica-handler-participant-release.js, src/partition/partition-participant-transaction-pause.js). An engaged pause must have a reachable release path (architecture/contracts/authority-and-recovery.md 119-128, 138-145)."
+    },
+    {
+      "id": "systemic-not-local",
+      "statement": "Treat the defect as the class 'serve-gating decision on a projection that disagrees with committed authority' unless a local cause is proven: census every consumer of the same projection, remove the duplicate authority, and research prior occurrences (sealed formation-priority-spread-*, executor-active-services-cache-handoff, formation-joining-ready-phase-fence quests) before choosing the repair."
+    },
+    {
+      "id": "no-symptom-patches",
+      "statement": "Forbidden: widened timeouts, bounds, budgets or retry counts; any bypass of serve eligibility for user tables (the priority-control-plane bootstrap routing bypass must not be extended to user tables); harness repair of product state (no harness-issued writes, transfers, cache refreshes or restarts to make the cluster converge); legacy, alias or fallback paths that keep the old decision alive."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Any source change is verified on the exact candidate by a fresh independent verifier before audit and landing, recorded as note --verification ... --verifier subagent:<id> --verdict approve."
+    },
+    {
+      "id": "lab-execution",
+      "statement": "Live runs execute on lab hosts through scripts/lab.js under the machine lock with thermal headroom, never on the controller; retain full node logs and the harness report per run."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "formation-circularity",
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

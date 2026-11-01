@@ -177,6 +177,32 @@ function resolveBenchmarkConvergenceTimeoutMs(cluster) {
     TIMEOUTS.SCENARIO_DEFAULT;
 }
 
+/**
+ * Scale the public PostgreSQL wire service through its owner and resolve
+ * its healthy advertised endpoint: the public-path entry every Lagrange
+ * Scenario A context and the fresh-formation routability scenario share.
+ * It waits on nothing else (no convergence gate), so a caller that must
+ * observe formation itself keeps that observation its own.
+ * @param {Object} cluster harness cluster (getNodes)
+ * @param {Object} seedNode node handle that receives the scale request
+ * @param {Object} executionContract {serviceId, protocol}
+ * @return {Promise<Object>} {endpoint, serviceEndpoint, connection}
+ */
+async function openLagrangePublicPgEndpoint(cluster, seedNode,
+  executionContract) {
+  await configurePublicPgWire(seedNode, executionContract);
+  const discovered = await discoverPublicPgWireEndpoint(
+    cluster,
+    seedNode,
+    executionContract,
+  );
+  return Object.freeze({
+    connection: buildConnectionConfig(),
+    endpoint: discovered.endpoint,
+    serviceEndpoint: discovered.serviceEndpoint,
+  });
+}
+
 async function prepareLagrangeScenarioAPublicPgContext(value) {
   const options = requireOptions(value);
   const cluster = requireCluster(options.cluster);
@@ -194,23 +220,20 @@ async function prepareLagrangeScenarioAPublicPgContext(value) {
     settleTimeoutMs: resolveBenchmarkConvergenceTimeoutMs(cluster),
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
   });
-  await configurePublicPgWire(seedNode, executionContract);
-  const discovered = await discoverPublicPgWireEndpoint(
-    cluster,
-    seedNode,
-    executionContract,
-  );
+  const opened = await openLagrangePublicPgEndpoint(cluster, seedNode,
+    executionContract);
   return Object.freeze({
     admission,
     runtimePreflight,
     publicExecutionContract: executionContract,
-    connection: buildConnectionConfig(),
-    endpoint: discovered.endpoint,
-    serviceEndpoint: discovered.serviceEndpoint,
+    connection: opened.connection,
+    endpoint: opened.endpoint,
+    serviceEndpoint: opened.serviceEndpoint,
   });
 }
 
 export {
+  openLagrangePublicPgEndpoint,
   prepareLagrangeScenarioAPublicPgContext,
   resolveHealthyPublicPgEndpoint,
 };
