@@ -148,6 +148,24 @@ function resolveBenchmarkDispatch({targetId, system, scenario, subkind}) {
   });
 }
 
+/**
+ * The named workload profile a Scenario A (scenario, subkind) runs, for a
+ * reader that holds a run record (admission): the same family resolution as
+ * the dispatch, without a system. A family without an executed profile and an
+ * unknown family are typed refusals.
+ * @param {{scenario: string, subkind: string}} claim
+ * @return {Object} the workload profile
+ */
+function resolveBenchmarkWorkloadProfile({scenario, subkind}) {
+  const details = {scenario, subkind};
+  const profile = WORKLOAD_PROFILE[familyOf(scenario, subkind, details)];
+  if (!profile) {
+    throw refuse(`benchmark family of ${scenario}/${subkind} executes no workload profile`,
+      details);
+  }
+  return profile;
+}
+
 function isBenchmarkDispatchRefusal(error) {
   return error?.code === DISPATCH_REFUSED_CODE && stringStartsWith(String(error.name),
     'BenchmarkDispatch');
@@ -163,4 +181,5 @@ export {
   WORKLOAD_PROFILE as BENCHMARK_WORKLOAD_PROFILE,
   isBenchmarkDispatchRefusal,
   resolveBenchmarkDispatch,
+  resolveBenchmarkWorkloadProfile,
 };

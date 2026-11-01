@@ -4,7 +4,9 @@
 // state snapshot and the TiDB administrative statements, with per-connection
 // transactions and an undo log. Faults are armed after the driver's second
 // state snapshot (dataset verification, then the pre-measurement snapshot),
-// so warmup runs clean and the measured window exhibits the fault.
+// so warmup runs clean and the measured window exhibits the fault. A
+// response delay (options.responseDelayMs) slows every workload statement of
+// a healthy product, so a valid but slower arm can be measured.
 // Evidence ceiling: proves the driver's classification and accounting of
 // each response class; it is not a product.
 import {
@@ -31,11 +33,18 @@ const FAULT = Object.freeze({
   SILENT: 'silent',
   ERROR_ENVELOPE: 'error-envelope',
   ZERO_AFFECTED: 'zero-affected',
+  // Every read answers with no row (the row the workload reads is missing).
+  MISSING_ROW: 'missing-row',
   WRONG_VALUE: 'wrong-value',
   COMMIT_ACK_LOST: 'commit-ack-lost',
   // The dataset load is refused with 55P03, as Lagrange answers on the lab.
   LOAD_LOCK_NOT_AVAILABLE: 'load-lock-not-available',
+  // The product disappears at the first workload statement of the measured
+  // window: that statement, every later statement on any connection (the
+  // post-run snapshot included) and every new connection fail.
+  PRODUCT_REMOVED: 'product-removed',
 });
+const TRANSACTION_WORDS = new Set(['BEGIN', 'COMMIT', 'ROLLBACK']);
 const ARM_AFTER_HISTORY_SNAPSHOTS = 2;
 const WRONG_INTEGER = 'garbage';
 const WRONG_AFFECTED_ROWS = 2;
@@ -76,7 +85,7 @@ function productError(dialect) {
 }
 
 function createState() {
-  return {tables: new Map(), historySnapshots: 0, armed: false, statements: [],
+  return {tables: new Map(), historySnapshots: 0, armed: false, removed: false, statements: [],
     connections: 0, destroyed: 0, lockHolder: null, lockReleased: null, releaseLock: null};
 }
 
@@ -233,6 +242,8 @@ function applyFault(state, fault, statementId, result, dialect) {
     throw productError(dialect);
   case FAULT.ZERO_AFFECTED:
     return WRITE_STATEMENTS.has(statementId) ? {...result, rowCount: 0} : result;
+  case FAULT.MISSING_ROW:
+    return WRITE_STATEMENTS.has(statementId) ? result : {...result, rows: []};
   case FAULT.WRONG_VALUE:
     return corrupt(statementId, result);
   default:
@@ -323,35 +334,60 @@ function breakSession(state, session) {
   releaseTransactionLock(state, session);
 }
 
-function createSession(state, fault, dialect) {
+function isWorkloadStatement(word, sql) {
+  return TRANSACTION_WORDS.has(word) || STATEMENT_BY_SQL.has(normalizeSql(sql));
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+// The removed product refuses the first workload statement of the measured
+// window and everything after it.
+async function admitStatement(state, fault, session, workload, responseDelayMs) {
+  if (session.broken) throw systemError('ECONNRESET', 'read');
+  if (state.armed && fault === FAULT.PRODUCT_REMOVED && workload) state.removed = true;
+  if (state.removed) {
+    breakSession(state, session);
+    throw systemError('ECONNRESET', 'read');
+  }
+  if (workload && responseDelayMs > 0) await delay(responseDelayMs);
+}
+
+async function transactionControl(state, fault, session, word) {
+  if (word === 'BEGIN') {
+    await acquireTransactionLock(state, session);
+    session.tx = {undo: []};
+    return {rows: [], rowCount: 0};
+  }
+  if (word === 'ROLLBACK') {
+    for (const undo of [...(session.tx?.undo || [])].reverse()) undo();
+    session.tx = null;
+    releaseTransactionLock(state, session);
+    return {rows: [], rowCount: 0};
+  }
+  session.tx = null;
+  releaseTransactionLock(state, session);
+  if (state.armed && fault === FAULT.COMMIT_ACK_LOST) {
+    session.broken = true;
+    throw systemError('ECONNRESET', 'read');
+  }
+  return {rows: [], rowCount: 0};
+}
+
+function createSession(state, fault, dialect, responseDelayMs) {
   state.connections += 1;
   const session = {tx: null, broken: false, serverConnectionId: state.connections};
   return {
     session,
     breakSession: () => breakSession(state, session),
     async run(sql, parameters = []) {
-      if (session.broken) throw systemError('ECONNRESET', 'read');
       const word = stringToUpperCase(stringTrim(sql));
-      if (word === 'BEGIN') {
-        await acquireTransactionLock(state, session);
-        session.tx = {undo: []};
-        return {rows: [], rowCount: 0};
-      }
-      if (word === 'ROLLBACK') {
-        for (const undo of [...(session.tx?.undo || [])].reverse()) undo();
-        session.tx = null;
-        releaseTransactionLock(state, session);
-        return {rows: [], rowCount: 0};
-      }
-      if (word === 'COMMIT') {
-        session.tx = null;
-        releaseTransactionLock(state, session);
-        if (state.armed && fault === FAULT.COMMIT_ACK_LOST) {
-          session.broken = true;
-          throw systemError('ECONNRESET', 'read');
-        }
-        return {rows: [], rowCount: 0};
-      }
+      await admitStatement(state, fault, session, isWorkloadStatement(word, sql),
+        responseDelayMs);
+      if (TRANSACTION_WORDS.has(word)) return transactionControl(state, fault, session, word);
       const normalized = normalizeSql(sql);
       const statementId = STATEMENT_BY_SQL.get(normalized);
       if (!statementId) return administrative(state, normalized, parameters);
@@ -362,11 +398,15 @@ function createSession(state, fault, dialect) {
   };
 }
 
-function createFakeOltpProduct(fault = FAULT.NONE) {
+function createFakeOltpProduct(fault = FAULT.NONE, options = {}) {
+  const responseDelayMs = options.responseDelayMs ?? 0;
+  if (!Number.isFinite(responseDelayMs) || responseDelayMs < 0) {
+    throw new Error('fake product responseDelayMs must be a finite non-negative number');
+  }
   const state = createState();
   state.fault = fault;
   const connect = () => {
-    if (fault === FAULT.NEVER_OPEN) throw systemError('ECONNREFUSED', 'connect');
+    if (fault === FAULT.NEVER_OPEN || state.removed) throw systemError('ECONNREFUSED', 'connect');
   };
   return {
     state,
@@ -380,7 +420,7 @@ function createFakeOltpProduct(fault = FAULT.NONE) {
         }}},
         async connect() {
           connect();
-          handle = createSession(state, fault, 'pg');
+          handle = createSession(state, fault, 'pg', responseDelayMs);
           this.processID = handle.session.serverConnectionId;
         },
         async query(sql, parameters) {
@@ -391,7 +431,7 @@ function createFakeOltpProduct(fault = FAULT.NONE) {
     },
     async createMysqlConnection() {
       connect();
-      const handle = createSession(state, fault, 'mysql');
+      const handle = createSession(state, fault, 'mysql', responseDelayMs);
       const answer = async (sql, parameters) => {
         const result = await handle.run(sql, parameters);
         return stringStartsWith(stringToUpperCase(stringTrim(sql)), 'SELECT') ?

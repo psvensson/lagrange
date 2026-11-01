@@ -25,27 +25,35 @@ import {
   OPERATION_OUTCOME,
   computeExecutedOperationsDigest,
 } from './benchmark-operation-outcome.js';
-import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
-import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
+import {
+  BENCHMARK_RUN_STATUS,
+  describeBenchmarkWorkloadIdentity,
+} from './benchmark-scenario-a-run.js';
+import {
+  BENCHMARK_PROFILE_CLASS,
+  isBenchmarkDispatchRefusal,
+  resolveBenchmarkWorkloadProfile,
+} from './benchmark-workload-dispatch.js';
 import {
   BENCHMARK_SCENARIO,
   CLOSURE_STATUS,
   DEPLOYMENT_EVENT_KIND,
   FINAL_STATE_TABLE,
-  PRODUCT_FIELD,
   READINESS_STATE,
   computeRunObservationsDigest,
+  validateCampaignHeader,
   validateRunRecord,
 } from './raw-observation-record.js';
 import {deriveRunMetrics} from './raw-observation-metrics.js';
+import {serializeJsonData} from '../../../src/utils/canonical-json-data.js';
 import {SCENARIO_OUTCOME} from './scenario-outcome.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
-const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const jsonStringify = JSON.stringify;
 
 const CLAIM_CELL_STATUS = Object.freeze({
@@ -94,19 +102,26 @@ const ADMISSION_REASON = Object.freeze({
   IDENTITY_MISMATCH: 'identity-mismatch',
   IDENTITY_NOT_RUNNING: 'identity-not-running',
   IDENTITY_CHANGED_DURING_WINDOW: 'identity-changed-during-window',
+  PRODUCT_IDENTITY_MISMATCH: 'product-identity-mismatch',
+  CANDIDATE_IMAGE_IS_COMPARATOR_IMAGE: 'candidate-image-is-comparator-image',
   RESTART_DURING_WINDOW: 'restart-during-window',
   ENDPOINT_NOT_BOUND: 'endpoint-not-bound',
   LOAD_GENERATOR_ON_PRODUCT_HOST: 'load-generator-on-product-host',
   CLOSURE_INCOMPLETE: 'closure-incomplete',
   WRONG_DISPATCH_FAMILY: 'wrong-dispatch-family',
   NON_CANONICAL_WORKLOAD: 'non-canonical-workload',
+  WORKLOAD_PROFILE_MISMATCH: 'workload-profile-mismatch',
+  WORKLOAD_IDENTITY_MISMATCH: 'workload-identity-mismatch',
   EXECUTED_OPERATIONS_MISMATCH: 'executed-operations-mismatch',
   PLANNED_COUNTS_MISMATCH: 'planned-counts-mismatch',
   SEMANTIC_PROFILE_MISMATCH: 'semantic-profile-mismatch',
   READINESS_UNVERIFIED: 'readiness-unverified',
+  READINESS_EXHAUSTED: 'readiness-exhausted',
   DATASET_UNVERIFIED: 'dataset-unverified',
   FINAL_STATE_MISSING: 'final-state-missing',
   FINAL_STATE_UNRECONCILED: 'final-state-unreconciled',
+  UNRESOLVED_EFFECTS_OBSERVED: 'unresolved-effects-observed',
+  CORRECTNESS_FAILURES_OBSERVED: 'correctness-failures-observed',
   SEMANTIC_GATE_MISSING: 'semantic-gate-missing',
   SEMANTIC_GATE_NOT_PASSED: 'semantic-gate-not-passed',
   SEMANTIC_GATE_UNBOUND: 'semantic-gate-unbound',
@@ -146,6 +161,7 @@ const ADMISSION_REASON = Object.freeze({
 const NON_BLOCKING_REASONS = Object.freeze([
   ADMISSION_REASON.SEMANTIC_GATE_FAILED,
   ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE,
+  ADMISSION_REASON.UNRESOLVED_EFFECTS_OBSERVED,
 ]);
 
 // A run that stopped before or during its window is a visible product failure,
@@ -198,9 +214,6 @@ const CELL_STATUS_MAPPING = Object.freeze({
 
 const IMAGE_ID_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const REPO_DIGEST_PATTERN = /^[^\s@]+@sha256:[0-9a-f]{64}$/u;
-const IDENTITY_SENTINELS = Object.freeze([
-  'mismatched', 'unknown', 'n/a', 'none', 'null', 'undefined', 'latest', '-',
-]);
 const FORMULA_PATTERNS = Object.freeze([
   /stages\s*\*\s*oneWayMs/iu,
   /execMs\s*\+\s*stages/iu,
@@ -264,19 +277,53 @@ function forensicEvidence(claim, retainedReferences, invalidations) {
 
 // ---- v2 run checks ----
 
+// Image ids the header pins for more than one product family: a comparator arm
+// that runs the candidate's image (or the reverse) is not a comparison.
+function sharedImageIds(pins) {
+  const families = new Map();
+  for (const pin of pins) {
+    families.set(pin.imageId, new Set([...(families.get(pin.imageId) || []), pin.product]));
+  }
+  return new Set(arrayMap(arrayFilter([...families.entries()], ([, f]) => f.size > 1),
+    ([imageId]) => imageId));
+}
+
+// Every product the run inspected must be the one the campaign pinned for its
+// target and role, identically (image id, repo digest, reported version).
+function checkPinnedProducts(run, pins) {
+  const reasons = [];
+  const shared = sharedImageIds(pins);
+  for (const product of run.identity.products) {
+    const pin = arrayFind(pins, (p) => p.targetId === run.targetId && p.role === product.role);
+    if (!pin || pin.imageId !== product.imageId || pin.repoDigest !== product.repoDigest ||
+        pin.reportedVersion !== product.reportedVersion) {
+      reasons.push(ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH);
+    }
+    if (shared.has(product.imageId) || (pin && shared.has(pin.imageId))) {
+      reasons.push(ADMISSION_REASON.CANDIDATE_IMAGE_IS_COMPARATOR_IMAGE);
+    }
+  }
+  return reasons;
+}
+
+// The run's harness is the campaign's: same commit and driver sources, and every
+// adapter the run used is one the campaign declared.
 function checkIdentityAgainstHeader(run, header) {
   if (!header) return [ADMISSION_REASON.CAMPAIGN_HEADER_MISSING];
+  try {
+    validateCampaignHeader(header);
+  } catch (err) {
+    return [`${REASON_PREFIX.RECORD_REJECTED}${err.code}`];
+  }
   const harness = run.identity.harness;
   const sameHarness = harness.gitCommit === header.harness.gitCommit &&
     harness.driverSourceSha256 === header.harness.driverSourceSha256 &&
-    jsonStringify(harness.adapterIds) === jsonStringify(header.harness.adapterIds);
+    harness.adapterIds.length > 0 &&
+    arrayEvery(harness.adapterIds, (id) => arrayIncludes(header.harness.adapterIds, id));
   const sameCampaign = run.plan.manifestDigest === header.manifestDigest &&
     run.executionTarget === header.executionTarget;
-  return sameHarness && sameCampaign ? [] : [ADMISSION_REASON.IDENTITY_MISMATCH];
-}
-
-function isSentinel(value) {
-  return arrayIncludes(IDENTITY_SENTINELS, stringToLowerCase(value));
+  return [...(sameHarness && sameCampaign ? [] : [ADMISSION_REASON.IDENTITY_MISMATCH]),
+    ...checkPinnedProducts(run, header.products)];
 }
 
 function productKey(product) {
@@ -288,10 +335,7 @@ function checkProducts(run) {
   const running = new Set(arrayMap(run.deployment.roles, (r) => `${r.host}|${r.containerId}`));
   const after = new Set(arrayMap(run.identity.productsAfterWindow, productKey));
   for (const product of run.identity.products) {
-    const fields = [PRODUCT_FIELD.IMAGE_ID, PRODUCT_FIELD.REPO_DIGEST,
-      PRODUCT_FIELD.REPORTED_VERSION];
-    if (arraySome(fields, (f) => isSentinel(product[f])) ||
-        !IMAGE_ID_PATTERN.test(product.imageId) ||
+    if (!IMAGE_ID_PATTERN.test(product.imageId) ||
         !REPO_DIGEST_PATTERN.test(product.repoDigest)) {
       reasons.push(ADMISSION_REASON.IDENTITY_MISSING);
     }
@@ -341,6 +385,13 @@ function checkPlannedSlice(run) {
   return reasons;
 }
 
+// Every attempt that reached a connection names the deployment's endpoint. An
+// attempt the run watchdog closed has no answer and records no endpoint.
+function attemptsBoundTo(request, endpointText) {
+  return arrayEvery(request.attempts, (a) => (a.closedByWatchdog === true ?
+    a.endpoint === null : a.endpoint === endpointText));
+}
+
 function checkExecution(run) {
   const reasons = [];
   const deployment = run.deployment;
@@ -348,8 +399,7 @@ function checkExecution(run) {
   const endpointText = `${endpoint.host}:${endpoint.port}`;
   if (!arraySome(deployment.roles, (r) =>
     r.containerId === endpoint.containerId && r.host === endpoint.host) ||
-      arraySome(run.observations.requests, (r) =>
-        r.outcome !== OPERATION_OUTCOME.UNISSUED && r.endpoint !== endpointText)) {
+      arraySome(run.observations.requests, (r) => !attemptsBoundTo(r, endpointText))) {
     reasons.push(ADMISSION_REASON.ENDPOINT_NOT_BOUND);
   }
   if (arraySome(deployment.roles, (r) => r.host === deployment.loadGenerator.host)) {
@@ -381,34 +431,71 @@ function committedOf(requests, kind) {
     r.outcome === OPERATION_OUTCOME.COMMITTED && r.operationKind === kind);
 }
 
-// Final-state reconciliation (model challenge amendment 1): the committed set must
-// explain the observed state change.
-function checkFinalState(run) {
-  const finalState = run.correctness.finalState;
-  if (!finalState) return [ADMISSION_REASON.FINAL_STATE_MISSING];
-  if (finalState.status !== undefined &&
-      finalState.status !== OLTP_RECONCILIATION_STATUS.RECONCILED) {
-    return [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
+function unresolvedOf(requests, kind) {
+  return arrayFilter(requests, (r) =>
+    r.outcome === OPERATION_OUTCOME.UNRESOLVED && r.operationKind === kind).length;
+}
+
+// The excess of an observed delta over what the committed requests explain must
+// lie within what the unresolved requests could have applied, each at most once.
+// A delivery that may have committed only lowers new_order, so new_order has no
+// lower bound while an unresolved delivery exists.
+function withinUnresolvedBounds(excess, requests) {
+  const newOrders = unresolvedOf(requests, OLTP_OPERATION_KIND.NEW_ORDER);
+  const payments = unresolvedOf(requests, OLTP_OPERATION_KIND.PAYMENT);
+  const deliveries = unresolvedOf(requests, OLTP_OPERATION_KIND.DELIVERY);
+  const within = (value, max) => value >= 0 && value <= max;
+  return within(excess.orders, newOrders) && within(excess.history, payments) &&
+    excess.newOrder <= newOrders && (deliveries > 0 || excess.newOrder >= 0);
+}
+
+// Orders the committed deliveries delivered, or null when a delivery's effect
+// summary is not a count.
+function deliveredOrdersOf(requests) {
+  let delivered = 0;
+  for (const r of committedOf(requests, OLTP_OPERATION_KIND.DELIVERY)) {
+    const n = r.effectSummary.deliveredOrders;
+    if (typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0) return null;
+    delivered += n;
   }
+  return delivered;
+}
+
+// What the observed table deltas hold beyond the committed requests' effects.
+function stateExcess(finalState, requests) {
   const before = finalState.before.tableRows;
   const after = finalState.after.tableRows;
   const delta = (table) => (typeof before[table] === 'number' &&
     typeof after[table] === 'number' ? after[table] - before[table] : null);
-  const requests = run.observations.requests;
+  const delivered = deliveredOrdersOf(requests);
   const newOrders = committedOf(requests, OLTP_OPERATION_KIND.NEW_ORDER).length;
-  const payments = committedOf(requests, OLTP_OPERATION_KIND.PAYMENT).length;
-  let delivered = 0;
-  for (const r of committedOf(requests, OLTP_OPERATION_KIND.DELIVERY)) {
-    const n = r.effectSummary.deliveredOrders;
-    if (typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0) {
-      return [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
-    }
-    delivered += n;
+  const excess = {
+    orders: delta(FINAL_STATE_TABLE.ORDERS) - newOrders,
+    history: delta(FINAL_STATE_TABLE.HISTORY) -
+      committedOf(requests, OLTP_OPERATION_KIND.PAYMENT).length,
+    newOrder: delta(FINAL_STATE_TABLE.NEW_ORDER) - (newOrders - delivered),
+  };
+  return delivered === null || arraySome(Object.values(excess), (v) => !Number.isFinite(v)) ?
+    null : excess;
+}
+
+// Final-state reconciliation (model challenge amendment 1): the committed set must
+// explain the observed state change exactly, or, when the reconciliation owner
+// observed unresolved effects, up to what the unresolved requests can explain.
+function checkFinalState(run) {
+  const finalState = run.correctness.finalState;
+  if (!finalState) return [ADMISSION_REASON.FINAL_STATE_MISSING];
+  const ambiguous = finalState.status === OLTP_RECONCILIATION_STATUS.UNRESOLVED_EFFECTS_OBSERVED;
+  const excess = ambiguous || finalState.status === OLTP_RECONCILIATION_STATUS.RECONCILED ?
+    stateExcess(finalState, run.observations.requests) : null;
+  if (!excess) return [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
+  if (!ambiguous) {
+    return excess.orders === 0 && excess.history === 0 && excess.newOrder === 0 ? [] :
+      [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
   }
-  const holds = delta(FINAL_STATE_TABLE.ORDERS) === newOrders &&
-    delta(FINAL_STATE_TABLE.HISTORY) === payments &&
-    delta(FINAL_STATE_TABLE.NEW_ORDER) === newOrders - delivered;
-  return holds ? [] : [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
+  return withinUnresolvedBounds(excess, run.observations.requests) ?
+    [ADMISSION_REASON.UNRESOLVED_EFFECTS_OBSERVED] :
+    [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
 }
 
 function gateBindingHolds(run, binding) {
@@ -445,9 +532,63 @@ function warmupMatchesPlan(planned, executed) {
     executed.executedOperationsDigest === planned.digest;
 }
 
+const workloadIdentities = new Map();
+
+// The canonical identity of the recorded workload, derived once per distinct
+// workload by the run owner's own derivation.
+function workloadIdentityOf(workload) {
+  const key = serializeJsonData(workload, {sortKeys: true});
+  if (!workloadIdentities.has(key)) {
+    workloadIdentities.set(key, describeBenchmarkWorkloadIdentity(workload));
+  }
+  return workloadIdentities.get(key);
+}
+
+function isCanonical(value, expected) {
+  return serializeJsonData(value, {sortKeys: true}) ===
+    serializeJsonData(expected, {sortKeys: true});
+}
+
+// The named profile of the run's (scenario, subkind) from the dispatch owner, or
+// null when the family executes no profile.
+function workloadProfileOf(run) {
+  try {
+    return resolveBenchmarkWorkloadProfile(run);
+  } catch (err) {
+    if (!isBenchmarkDispatchRefusal(err)) throw err;
+    return null;
+  }
+}
+
+// The run executed the named profile of its (scenario, subkind) with that
+// profile's class, and its plan digests are the ones its workload derives to.
+function checkWorkload(run) {
+  const plan = run.plan;
+  const profile = workloadProfileOf(run);
+  if (!profile || profile.id !== plan.workloadProfileId ||
+      profile.profileClass !== plan.profileClass ||
+      (profile.ownsWorkload && !isCanonical(plan.workload, profile.workload))) {
+    return [ADMISSION_REASON.WORKLOAD_PROFILE_MISMATCH];
+  }
+  let identity;
+  try {
+    identity = workloadIdentityOf(plan.workload);
+  } catch {
+    // A recorded workload the owner cannot derive is not the canonical workload.
+    return [ADMISSION_REASON.WORKLOAD_IDENTITY_MISMATCH];
+  }
+  const same = identity.datasetDigest === plan.datasetDigest &&
+    identity.workloadPlanDigest === plan.workloadPlanDigest &&
+    identity.measurementPlanDigest === plan.measurementPlanDigest &&
+    identity.operationSliceDigest === plan.operationSliceDigest &&
+    isCanonical(sortedCounts(identity.plannedOperationCounts),
+      sortedCounts(plan.plannedOperationCounts));
+  return same ? [] : [ADMISSION_REASON.WORKLOAD_IDENTITY_MISMATCH];
+}
+
 function checkScenarioA(run) {
   const plan = run.plan;
-  const reasons = [];
+  const reasons = [...checkWorkload(run)];
   if (plan.semanticProfileId !== OLTP_SCENARIO_A_SEMANTIC_PROFILE.id ||
       plan.semanticProfileDigest !== hashScenarioASemanticProfile()) {
     reasons.push(ADMISSION_REASON.SEMANTIC_PROFILE_MISMATCH);
@@ -473,7 +614,10 @@ function checkScenarioA(run) {
 function checkDeployment(run, claim) {
   const deployment = run.deployment;
   const reasons = [];
-  if (deployment.readiness.state !== READINESS_STATE.READY) {
+  // An exhausted readiness is the product failure of a run that never measured;
+  // a run that measured on an unready deployment is not a measurement.
+  if (deployment.readiness.state !== READINESS_STATE.READY &&
+      !isReadinessExhaustedRun(run)) {
     reasons.push(ADMISSION_REASON.READINESS_UNVERIFIED);
   }
   const v = deployment.dataset.verification;
@@ -494,6 +638,11 @@ function checkDeployment(run, claim) {
     reasons.push(ADMISSION_REASON.DELAY_OR_BYTE_FORMULA);
   }
   return reasons;
+}
+
+function isReadinessExhaustedRun(run) {
+  return run.deployment.readiness.state === READINESS_STATE.EXHAUSTED &&
+    run.observations.runStatus === BENCHMARK_RUN_STATUS.SETUP_FAILED;
 }
 
 function checkRun(entry, claim, context) {
@@ -608,13 +757,19 @@ function buildCell(claim, status, {reasons = [], defectIds = [], evidence, metri
 function failureReasons(entries, accounting) {
   const reasons = [];
   for (const e of entries) {
-    const stopped = STOPPED_RUN_REASON[e.run.observations.runStatus];
+    const stopped = isReadinessExhaustedRun(e.run) ? ADMISSION_REASON.READINESS_EXHAUSTED :
+      STOPPED_RUN_REASON[e.run.observations.runStatus];
     if (stopped) reasons.push(stopped);
     if (e.run.correctness.semanticGate?.status === GATE_STATUS.FAILED) {
       reasons.push(ADMISSION_REASON.SEMANTIC_GATE_FAILED);
     }
   }
   if (accounting.committed === 0) reasons.push(ADMISSION_REASON.NO_COMMITTED_OPERATIONS);
+  // A well-formed answer with the wrong content violates the workload contract:
+  // the run is the product failure it observed, never a valid measurement.
+  if (accounting.terminalFailures[FAILURE_CLASS.CORRECTNESS_FAILURE] > 0) {
+    reasons.push(ADMISSION_REASON.CORRECTNESS_FAILURES_OBSERVED);
+  }
   return reasons;
 }
 

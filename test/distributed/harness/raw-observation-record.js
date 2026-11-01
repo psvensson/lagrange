@@ -18,6 +18,14 @@
 //   of that slice; digest is null exactly when no warm-up is planned).
 //   observations.warmup is what the driver executed. Admission refuses a capacity
 //   cell whose executed warm-up differs from the planned one.
+// - The campaign header pins, before any run, the product identity every target
+//   role must run ({targetId, product, role, imageId, repoDigest,
+//   reportedVersion}) and lists every adapter the campaign's arms may use;
+//   admission compares each run's inspected products with the pin and refuses an
+//   image pinned for two product families (stream C, 2026-11-01).
+// - plan.workloadProfileId and plan.workload name the executed workload profile
+//   and configuration; admission recomputes the dataset, plan and slice digests
+//   from the workload through the run owner's derivation.
 import {digest, serializeJsonData} from '../../../src/utils/canonical-json-data.js';
 import {
   FAILURE_CLASS,
@@ -107,6 +115,18 @@ const HEADER_FIELD = Object.freeze({
   HARNESS: 'harness',
   EXECUTION_TARGET: 'executionTarget',
   PHYSICAL_HOSTS: 'physicalHosts',
+  PRODUCTS: 'products',
+});
+
+// One pinned product identity of the campaign header: what a target's role must
+// run, fixed before any run (the tag is informational; D18).
+const PINNED_PRODUCT_FIELD = Object.freeze({
+  TARGET_ID: 'targetId',
+  PRODUCT: 'product',
+  ROLE: 'role',
+  IMAGE_ID: 'imageId',
+  REPO_DIGEST: 'repoDigest',
+  REPORTED_VERSION: 'reportedVersion',
 });
 
 const RUN_FIELD = Object.freeze({
@@ -162,6 +182,8 @@ const PLAN_FIELD = Object.freeze({
   SWEEP_PLAN_DIGEST: 'sweepPlanDigest',
   OFFERED_RATE_PER_SEC: 'offeredRatePerSec',
   PROFILE_CLASS: 'profileClass',
+  WORKLOAD_PROFILE_ID: 'workloadProfileId',
+  WORKLOAD: 'workload',
   OPERATION_SLICE_DIGEST: 'operationSliceDigest',
   PLANNED_OPERATION_COUNTS: 'plannedOperationCounts',
   REPETITION: 'repetition',
@@ -370,10 +392,12 @@ function validatePlan(plan) {
     PLAN_FIELD.MANIFEST_DIGEST, PLAN_FIELD.DATASET_DIGEST, PLAN_FIELD.WORKLOAD_PLAN_DIGEST,
     PLAN_FIELD.MEASUREMENT_PLAN_DIGEST, PLAN_FIELD.SEMANTIC_PROFILE_ID,
     PLAN_FIELD.SEMANTIC_PROFILE_DIGEST, PLAN_FIELD.RETRY_POLICY_ID,
-    PLAN_FIELD.OPEN_LOOP_PROFILE_ID,
+    PLAN_FIELD.OPEN_LOOP_PROFILE_ID, PLAN_FIELD.WORKLOAD_PROFILE_ID,
   ]) {
     requireText(plan[field], `plan.${field}`);
   }
+  // The executed workload configuration; admission recomputes its identity.
+  requireObject(plan[PLAN_FIELD.WORKLOAD], 'plan.workload');
   // A smoke run has no sweep plan; admission requires one for capacity runs.
   if (plan[PLAN_FIELD.SWEEP_PLAN_DIGEST] !== null) {
     requireText(plan[PLAN_FIELD.SWEEP_PLAN_DIGEST], 'plan.sweepPlanDigest');
@@ -652,6 +676,18 @@ function validateCampaignHeader(header) {
   requireEnum(header[HEADER_FIELD.EXECUTION_TARGET], objectValues(EXECUTION_TARGET),
     'executionTarget');
   validateHosts(header[HEADER_FIELD.PHYSICAL_HOSTS], 'physicalHosts');
+  const pinned = requireArray(header[HEADER_FIELD.PRODUCTS], 'products');
+  if (pinned.length === 0) reject(RECORD_REJECTION.MISSING_FIELD, 'products must not be empty');
+  const keys = new Set();
+  pinned.forEach((pin, idx) => {
+    requireObject(pin, `products[${idx}]`);
+    for (const field of objectValues(PINNED_PRODUCT_FIELD)) {
+      requireText(pin[field], `products[${idx}].${field}`);
+    }
+    const key = `${pin.targetId}|${pin.role}`;
+    if (keys.has(key)) reject(RECORD_REJECTION.INVALID_TEXT, `products pins ${key} twice`);
+    keys.add(key);
+  });
   return header;
 }
 
@@ -728,6 +764,7 @@ export {
   IDENTITY_FIELD,
   NETWORK_SCOPE,
   OBSERVATIONS_FIELD,
+  PINNED_PRODUCT_FIELD,
   PLAN_FIELD,
   PRODUCT_FIELD,
   RAW_OBSERVATION_SCHEMA,

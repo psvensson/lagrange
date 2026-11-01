@@ -21,7 +21,11 @@ import {
   setFixtureRequestOutcome,
 } from './comparative-benchmark-fixtures.js';
 import {FAILURE_CLASS, OPERATION_OUTCOME} from './benchmark-operation-outcome.js';
-import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
+import {
+  BENCHMARK_OPERATION_FAMILY,
+  BENCHMARK_PROFILE_CLASS,
+  BENCHMARK_WORKLOAD_PROFILE,
+} from './benchmark-workload-dispatch.js';
 import {recomputeComparativeBenchmarks} from '../../../scripts/checks/comparative-benchmark-recompute.js';
 
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -40,7 +44,7 @@ const SMOKE_COLUMN = 'scenarioA/smoke';
 const RAW_FILE = 'data/tidb-comparison/raw-observations.ndjson';
 
 function header(campaignId = CAMPAIGN) {
-  return buildFixtureHeader({campaignId});
+  return buildFixtureHeader({campaignId, targetIds: [LAGRANGE, TIDB, PG]});
 }
 
 function pair(targetId, options = {}) {
@@ -147,7 +151,7 @@ async function caseEditedObservations() {
   await expectInvalidLagrange('wrong operations', ADMISSION_REASON.EXECUTED_OPERATIONS_MISMATCH,
     (run) => {
       run.plan.operationSliceDigest = `sha256:${'7'.repeat(64)}`;
-      sealFixtureRun(run, {keepPlan: true});
+      sealFixtureRun(run);
     });
 }
 
@@ -214,7 +218,11 @@ async function caseSmokeHasNoCapacity() {
 
 // D11: a scale-out claim never admits a run, whatever family it executed.
 async function caseScaleoutClaimNeverAdmitted() {
-  const run = buildFixtureRun({subkind: 'fixed-3node'});
+  // No workload profile exists for a scale-out family: the record names the
+  // capacity profile it claims to have run.
+  const run = buildFixtureRun({subkind: 'fixed-3node', workloadProfileId:
+    BENCHMARK_WORKLOAD_PROFILE[BENCHMARK_OPERATION_FAMILY.SCENARIO_A_OLTP].id,
+  profileClass: BENCHMARK_PROFILE_CLASS.CAPACITY});
   await withPublication([header(), run], ({matrix}) => {
     const exp = arrayFind(matrix.experiments,
       (e) => e.experimentId === 'scaleout-3to5-node-rf3');

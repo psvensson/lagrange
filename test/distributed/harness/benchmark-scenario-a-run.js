@@ -226,22 +226,38 @@ function stepOptions(offeredRatePerSec, operations, runtime, evidence) {
   };
 }
 
-function planIdentity(profile, plan, workloadPlan, dataset, offeredRatePerSec) {
+// The canonical identity of a workload: what the dataset, the plan and the
+// measured slice digest to. The run records it and admission recomputes it
+// from the recorded workload; there is no second derivation.
+function describeWorkloadIdentity(workload) {
+  const workloadPlan = buildOltpBaselinePlan(workload);
   const slice = describePlannedOperationSlice(
     interleaveOltpWorkerPhase(workloadPlan.workers, 'measurement'));
+  return Object.freeze({
+    datasetDigest: hashOltpBaselineDataset(buildOltpBaselineDataset(workload)),
+    workloadPlanDigest: benchmarkCanonicalDigest(workloadPlan),
+    measurementPlanDigest: hashOltpBaselineMeasurementPlan(workloadPlan),
+    operationSliceDigest: slice.operationSliceDigest,
+    plannedOperationCounts: slice.plannedOperationCounts,
+  });
+}
+
+function planIdentity(profile, plan, workload, offeredRatePerSec) {
+  const identity = describeWorkloadIdentity(workload);
   return Object.freeze({
     workloadProfileId: profile.id,
     publication: profile.publication,
     profileClass: profile.profileClass,
-    operationSliceDigest: slice.operationSliceDigest,
-    plannedOperationCounts: slice.plannedOperationCounts,
+    workload,
+    operationSliceDigest: identity.operationSliceDigest,
+    plannedOperationCounts: identity.plannedOperationCounts,
     semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
     semanticProfileDigest: hashScenarioASemanticProfile(),
     retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id,
     openLoopProfileId: OLTP_OPEN_LOOP_PROFILE.id,
-    datasetDigest: hashOltpBaselineDataset(dataset),
-    workloadPlanDigest: benchmarkCanonicalDigest(workloadPlan),
-    measurementPlanDigest: hashOltpBaselineMeasurementPlan(workloadPlan),
+    datasetDigest: identity.datasetDigest,
+    workloadPlanDigest: identity.workloadPlanDigest,
+    measurementPlanDigest: identity.measurementPlanDigest,
     offeredRatePerSec,
     repetition: plan.repetition ?? null,
     orderIndex: plan.orderIndex ?? null,
@@ -409,7 +425,7 @@ async function executeScenarioARun(options) {
   const drivers = await loadDefaultDrivers(options.drivers || {});
   const registry = createBenchmarkConnectionRegistry();
   const system = await openSystem(dispatch.system, connection, workload, registry, drivers);
-  const identity = planIdentity(profile, plan, workloadPlan, dataset, rate);
+  const identity = planIdentity(profile, plan, workload, rate);
   let adapter = null;
   let measured;
   const startedAtIso = new Date().toISOString();
@@ -455,5 +471,6 @@ export {
   DATASET_RESET_METHOD as BENCHMARK_DATASET_RESET_METHOD,
   RUN_STATUS as BENCHMARK_RUN_STATUS,
   deriveRunWatchdog as deriveBenchmarkRunWatchdog,
+  describeWorkloadIdentity as describeBenchmarkWorkloadIdentity,
   executeScenarioARun,
 };
