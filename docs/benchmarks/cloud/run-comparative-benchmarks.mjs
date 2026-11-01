@@ -56,6 +56,12 @@ import {
 import {
   loadRawObservationRecordOwner,
 } from '../../../test/distributed/harness/comparative-benchmark-record-owner.js';
+import {
+  createSemanticGateStage,
+} from '../../../test/distributed/harness/comparative-benchmark-semantic-gate.js';
+import {
+  runScenarioASemanticProofJourney,
+} from '../../../test/distributed/scenarios/scenario-a-semantic-proof-journey.js';
 import {SCENARIO_OUTCOME} from '../../../test/distributed/harness/scenario-outcome.js';
 import {
   COMPARATIVE_TARGET,
@@ -258,14 +264,29 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   }
   const harness = harnessIdentity();
   const dataIps = hosts.filter((host) => host.role === 'data').map((host) => host.ip);
-  const deployOpts = {lagrangeImage: opts.lagrangeImage, storageRoot: opts.storageRoot || null};
+  // The semantic proof journey runs here, on the controller; PostgreSQL admits
+  // the controller's address (as the data host sees it) next to the load generator.
+  const controllerIp = (await sshRun(dataIps[0], opts, 'echo "${SSH_CLIENT%% *}"')).trim();
+  const deployOpts = {lagrangeImage: opts.lagrangeImage, storageRoot: opts.storageRoot || null,
+    proofClientIps: controllerIp ? [controllerIp] : []};
+  const deployArm = (run) => deployComparativeTarget(run.targetId, {hosts: dataIps,
+    clientIp: client.ip, sshRun, opts: deployOpts, campaignId: manifest.campaignId,
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))});
+  const teardown = () => removeCampaignContainers({hosts: hosts.map((host) => host.ip),
+    campaignId: manifest.campaignId, sshRun, opts});
   const deps = {
+    runSemanticGate: createSemanticGateStage({journey: runScenarioASemanticProofJourney,
+      sshRun, opts,
+      redeploy: async (run) => {
+        await teardown();
+        return deployArm(run);
+      },
+      evidenceDirOf: (run) => path.resolve(REPO_ROOT,
+        `test-output/bench/${manifest.campaignId}/${run.runId}/semantic-gate`)}),
     recordOwner,
     now: Date.now,
     deadlineAt: Date.now() + manifest.campaignBudgetMinutes * MS_PER_MINUTE,
-    deployRun: (run) => deployComparativeTarget(run.targetId, {hosts: dataIps,
-      clientIp: client.ip, sshRun, opts: deployOpts, campaignId: manifest.campaignId,
-      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))}),
+    deployRun: deployArm,
     executeWorkloadRun: createWorkloadRunExecutor({clientHost: client.ip,
       runWorkload: createRemoteWorkloadRunner({sshRun, opts, host: client,
         harnessCommit: harness.gitCommit, campaignId: manifest.campaignId}),
@@ -274,8 +295,7 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
         hostFacts: facts[hosts.indexOf(client)]})}),
     inspectProducts: (deployment) => observeProductsAfterWindow({sshRun, opts,
       products: deployment.identity.products}),
-    teardownRun: () => removeCampaignContainers({hosts: hosts.map((host) => host.ip),
-      campaignId: manifest.campaignId, sshRun, opts}),
+    teardownRun: teardown,
     appendRecords: (records) => appendRecords(
       path.resolve(REPO_ROOT, opts.rawObservationsPath), records),
   };

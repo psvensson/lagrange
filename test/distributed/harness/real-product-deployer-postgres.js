@@ -82,9 +82,9 @@ function adminSql(cid, sql) {
     `-At -F '|' -c ${shellQuote(sql)}`;
 }
 
-function hbaFile({clientIp, standbyHosts}) {
+function hbaFile({clientIps, standbyHosts}) {
   return arrayJoin(['local all all trust',
-    `host ${DATABASE} ${APP_USER} ${clientIp}/32 scram-sha-256`,
+    ...arrayMap(clientIps, (ip) => `host ${DATABASE} ${APP_USER} ${ip}/32 scram-sha-256`),
     ...arrayMap(standbyHosts,
       (host) => `host replication ${REPLICATION_USER} ${host}/32 scram-sha-256`), ''], '\n');
 }
@@ -119,12 +119,12 @@ function replicationRows(text) {
   });
 }
 
-async function configureAccess(ctx, primary, {clientIp, standbyHosts, passwords}) {
+async function configureAccess(ctx, primary, {clientIps, standbyHosts, passwords}) {
   await query(ctx, primary, `CREATE ROLE ${APP_USER} LOGIN PASSWORD '${passwords.app}'`);
   await query(ctx, primary, `ALTER DATABASE ${DATABASE} OWNER TO ${APP_USER}`);
   await query(ctx, primary,
     `CREATE ROLE ${REPLICATION_USER} REPLICATION LOGIN PASSWORD '${passwords.replication}'`);
-  const encoded = Buffer.from(hbaFile({clientIp, standbyHosts}), 'utf8').toString('base64');
+  const encoded = Buffer.from(hbaFile({clientIps, standbyHosts}), 'utf8').toString('base64');
   await ctx.sshRun(primary.host, ctx.opts, `docker exec ${shellWord(primary.containerId)} ` +
     `sh -c ${shellQuote(`echo ${encoded} | base64 -d > "$PGDATA/pg_hba.conf"`)}`);
   await query(ctx, primary, 'SELECT pg_reload_conf()');
@@ -208,7 +208,10 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, c
     commandArgs: ['postgres', ...settingArgs()]});
   const primary = {role: ROLE.PRIMARY, host: started.host, containerId: started.containerId};
   const readiness = {servers: [await serverReady(ctx, primary)]};
-  const hbaRules = await configureAccess(ctx, primary, {clientIp, standbyHosts, passwords});
+  // The load generator, plus the controller when it runs the semantic proof
+  // journey in process (opts.proofClientIps): each one /32, scram, read back.
+  const clientIps = [...new Set([clientIp, ...(opts.proofClientIps || [])])];
+  const hbaRules = await configureAccess(ctx, primary, {clientIps, standbyHosts, passwords});
   const roles = [primary];
   if (targetId === TARGET.SYNC_HA) {
     const standbys = await startStandbys(ctx, primary, {hosts, campaignId, image, passwords});
@@ -252,6 +255,15 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, c
     operations: {
       observePlacement: async () => observeRoles(ctx, roles),
       observeRoles: async () => observeRoles(ctx, roles),
+      // The arm's readiness contract again (after a product restart).
+      awaitReady: async () => {
+        const again = {servers: []};
+        for (const role of roles) again.servers.push(await serverReady(ctx, role));
+        if (roles.length > 1) {
+          again.streaming = await streamingReady(ctx, primary, roles.length - 1);
+        }
+        return again;
+      },
     },
   };
 }

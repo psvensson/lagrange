@@ -309,6 +309,9 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
         return {...placementOf(await readPartitions(ctx, seedHost), roles,
           new Date().toISOString()), routable};
       },
+      // The arm's readiness contract again (after a product restart).
+      awaitReady: async () => ({cluster: await clusterReady(ctx, 'lagrange-system-tables', query,
+        expectedNodeIds), probe: await probeWriteReadback(ctx, query, campaignId)}),
       observeRoles: async () => ({leaders: (await readPartitions(ctx, seedHost))?.leaders ??
         null}),
     },

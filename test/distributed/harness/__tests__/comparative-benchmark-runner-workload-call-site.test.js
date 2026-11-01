@@ -77,24 +77,16 @@ test('a completed B1 run maps into stream A fields', async () => {
   assert.equal(result.loadGenerator.nodeVersion, 'v22.23.2');
   assert.deepEqual(result.loadGenerator.driverVersions, {pg: '8.18.0', mysql2: '3.24.4'});
   assert.equal(result.correctness.semanticGate, null);
-  assert.equal(result.events[0].kind, 'semantic-gate-unavailable');
 });
 
-test('the semantic proof journey runs before the workload, bound to the endpoint container',
-  async () => {
-    const order = [];
-    const {execute} = executor(() => {
-      order.push('workload');
-      return b1Record();
-    }, {semanticJourney: async ({binding}) => {
-      order.push('gate');
-      return {status: 'passed', passed: [], failed: [], missing: [], binding};
-    }});
-    const result = await execute();
-    assert.deepEqual(order, ['gate', 'workload']);
-    assert.deepEqual(result.correctness.semanticGate.binding, {campaignId: 'bench-x',
-      containerId: 'c1', imageId: IMAGE, endpoint: '10.0.0.1:5433'});
-  });
+test('the semantic gate record from the gate stage lands in correctness', async () => {
+  const run = createWorkloadRunExecutor({clientHost: '10.0.0.9',
+    runWorkload: async () => b1Record(), describeLoadGenerator: async () => ({})});
+  const gate = {status: 'passed', passed: ['p'], failed: [], missing: []};
+  const result = await run({run: RUN, manifest: MANIFEST, deployment: deployment(),
+    semanticGate: gate});
+  assert.equal(result.correctness.semanticGate, gate);
+});
 
 test('a product setup failure (SQLSTATE 55P03) is a product failure with a complete record',
   async () => {

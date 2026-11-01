@@ -28,7 +28,12 @@ sweeps, live movement, RTT sweeps, recovery and backfill are recorded in the cam
    and `synchronous_standby_names` read back) and fails closed when readiness is exhausted;
    reads product identity from the running containers (`docker inspect` of each container, image
    id, repo digest, entrypoint, mounts) and the product's version report; binds the client
-   endpoint to the container that owns its listening socket; runs the canonical workload, which
+   endpoint to the container that owns its listening socket; runs the Scenario A semantic proof
+   journey against the arm (Lagrange and PostgreSQL; each proof case on a fresh Lagrange
+   formation, the durability case restarting exactly the endpoint container), with its
+   evidence under `test-output/bench/<campaignId>/<runId>/`; runs the canonical workload with
+   the load-generator CLI (`test/distributed/harness/run-benchmark-workload.js`) from the load
+   generator's own checkout, which must be at the campaign's commit, which
    loads the canonical dataset and hands it back for verification (all nine canonical tables read
    through the product's public interface and compared with the generator's digest) before any
    measurement; re-inspects the containers after the measured window; and tears down only the
@@ -101,6 +106,9 @@ node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp
   --hosts "$HOSTS" --ssh-hosts "$SSH_HOSTS" --ssh-user "$SSH_USER"
 ```
 The first three `--hosts` addresses are the data hosts and the last is the load generator.
+A live GCP run also needs `--client-checkout <path>` (a checkout of this commit with
+`npm ci` done on the load-generator VM) and, if `node` there is not Node 22 or later,
+`--client-node <path>`.
 
 ### Step 3 - Tear down
 ```sh

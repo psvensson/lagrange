@@ -237,3 +237,33 @@ test('a workload failure (e.g. unverified dataset) keeps the attempt in the reco
   assert.equal(records[1].deployment.dataset.keyCoverage.present, null);
   assert.equal(records[1].deployment.loadGenerator.host, '10.0.0.9');
 });
+
+test('the semantic gate stage runs before the workload on the deployment it hands back',
+  async () => {
+    const order = [];
+    const reformed = {...deployment('reformed'), endpoint: {host: '10.0.0.1', port: 5433,
+      containerId: 'c1'}};
+    const {deps, records} = harness({
+      runSemanticGate: async ({deployment: first}) => {
+        order.push(['gate', first.targetId]);
+        return {gate: {status: 'passed'}, deployment: reformed,
+          events: [{kind: 're-formation', at: '2026-11-01T10:00:00Z', caseId: 'payment'}]};
+      },
+      executeWorkloadRun: async ({deployment: used, semanticGate}) => {
+        order.push(['workload', used.targetId, semanticGate.status]);
+        return {observations: {}, correctness: {semanticGate}, plan: null, events: [],
+          loadGenerator: {host: '10.0.0.9'}, failure: null, productFailure: null};
+      },
+    });
+    await run(deps);
+    assert.deepEqual(order.slice(0, 2), [['gate', MANIFEST.runs[0].runId],
+      ['workload', 'reformed', 'passed']]);
+    assert.equal(records[1].harnessEvents[0].kind, 're-formation');
+  });
+
+test('without a gate stage the run records that the semantic gate was unavailable',
+  async () => {
+    const {deps, records} = harness();
+    await run(deps);
+    assert.equal(records[1].harnessEvents[0].kind, 'semantic-gate-unavailable');
+  });

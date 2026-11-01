@@ -45,7 +45,8 @@ const RECORDED_STATES = Object.freeze([RUN_STATE.COMPLETED, RUN_STATE.PRODUCT_FA
 // Harness events outside A's deployment-event vocabulary, kept apart from
 // deployment.events so the record stays in A's shape.
 const EVENT = Object.freeze({WATCHDOG_STOP: 'watchdog-stop', ROLE_CHANGED: 'role-changed',
-  ROLE_OBSERVATION_FAILED: 'role-observation-failed'});
+  ROLE_OBSERVATION_FAILED: 'role-observation-failed',
+  SEMANTIC_GATE_UNAVAILABLE: 'semantic-gate-unavailable'});
 const CLOSURE_STATUS = Object.freeze({COMPLETE: 'complete', INCOMPLETE: 'incomplete'});
 const RECORD_REJECTED = 'record_rejected';
 const DEPLOYMENT_EVENT_KINDS = Object.freeze([IDENTITY_EVENT_KIND.RESTART,
@@ -113,12 +114,29 @@ async function observeRolesSafely(deployment, events, now) {
   }
 }
 
+// The semantic gate before the window; without a gate stage the run says so.
+async function semanticGateStage({run, manifest, deps, deployment, events}) {
+  if (!deps.runSemanticGate) {
+    events.push({kind: EVENT.SEMANTIC_GATE_UNAVAILABLE, at: iso(deps.now())});
+    return {gate: null, deployment};
+  }
+  const staged = await deps.runSemanticGate({run, manifest, deployment});
+  events.push(...(staged.events || []));
+  return staged;
+}
+
 async function measureRun({run, manifest, deps, events, signal}) {
-  const deployment = await deps.deployRun(run);
-  const attempt = {deployment, workload: null, productsAfter: null};
+  const attempt = {deployment: await deps.deployRun(run), workload: null,
+    productsAfter: null};
+  assertEndpointBound(attempt.deployment);
+  const staged = await semanticGateStage({run, manifest, deps,
+    deployment: attempt.deployment, events});
+  attempt.deployment = staged.deployment;
+  const deployment = attempt.deployment;
   assertEndpointBound(deployment);
   const rolesBefore = await observeRolesSafely(deployment, events, deps.now);
-  attempt.workload = await deps.executeWorkloadRun({run, manifest, deployment, signal});
+  attempt.workload = await deps.executeWorkloadRun({run, manifest, deployment, signal,
+    semanticGate: staged.gate});
   events.push(...(attempt.workload.events || []));
   attempt.productsAfter = await deps.inspectProducts(deployment);
   const identityEvents = compareProductIdentity(deployment.identity.products,

@@ -13,10 +13,8 @@
  * frozen manifest, an unverified dataset (never measured as valid), and a
  * product that failed setup (`product-failure`: the record stays complete).
  *
- * Semantic proofs: when B1's runScenarioASemanticProofJourney is supplied the
- * gate runs against the deployed arm BEFORE the workload, bound to this
- * deployment's endpoint container; until then the record carries
- * `semanticGate: null` and a typed `semantic-gate-unavailable` event.
+ * The semantic gate ran before this call (comparative-benchmark-semantic-gate.js);
+ * its record is placed in correctness.semanticGate.
  */
 import {
   OLTP_DATASET_VERIFICATION_STATUS,
@@ -24,7 +22,6 @@ import {
 import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
 import {BENCHMARK_DISPATCH_STATUS} from './benchmark-workload-dispatch.js';
 import {
-  arrayFind,
   arrayIncludes,
   arrayMap,
   stringReplace,
@@ -45,7 +42,6 @@ const LOAD_GENERATOR_EXIT = Object.freeze({OK: 0, REFUSED: 2});
 const REFUSED_RECORD_KIND = 'benchmark-dispatch-refused';
 const WORKLOAD_TIMEOUT_MS = 60 * 60 * 1000;
 const SHA_PREFIX = /^sha256:/u;
-const EVENT = Object.freeze({SEMANTIC_GATE_UNAVAILABLE: 'semantic-gate-unavailable'});
 const PRODUCT_FAILURE_STATUSES = Object.freeze([BENCHMARK_RUN_STATUS.SETUP_FAILED,
   BENCHMARK_RUN_STATUS.WARMUP_FAILED]);
 const FAILURE = Object.freeze({
@@ -146,14 +142,6 @@ function planFailure(manifest, b1Plan) {
   return null;
 }
 
-function semanticGateBindingOf(manifest, deployment) {
-  const endpoint = deployment.endpoint;
-  const product = arrayFind(deployment.identity?.products || [],
-    (one) => one.containerId === endpoint.containerId);
-  return {campaignId: manifest.campaignId, containerId: endpoint.containerId,
-    imageId: product?.imageId ?? null, endpoint: `${endpoint.host}:${endpoint.port}`};
-}
-
 function outcomeOf(record, manifest, deployment) {
   const used = record.deployment?.endpoint;
   if (!used || used.host !== deployment.endpoint.host ||
@@ -187,14 +175,13 @@ function productHostsOf(deployment) {
 
 /**
  * @param {{runWorkload: Function, describeLoadGenerator: Function,
- *   clientHost: string, semanticJourney?: Function|null,
- *   evidenceDirOf?: Function, now?: Function}} input
- * @return {Function} executeWorkloadRun({run, manifest, deployment, signal})
+ *   clientHost: string, evidenceDirOf?: Function}} input
+ * @return {Function} executeWorkloadRun({run, manifest, deployment,
+ *   semanticGate})
  */
 function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHost,
-  semanticJourney = null, evidenceDirOf = (run) => `test-output/bench/${run.runId}`,
-  now = Date.now}) {
-  return async ({run, manifest, deployment}) => {
+  evidenceDirOf = (run) => `test-output/bench/${run.runId}`}) {
+  return async ({run, manifest, deployment, semanticGate = null}) => {
     const productHosts = productHostsOf(deployment);
     if (arrayIncludes(productHosts, clientHost)) {
       throw deploymentFailure(DEPLOYMENT_FAILURE.LOAD_GENERATOR_COLOCATED,
@@ -202,16 +189,6 @@ function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHo
     }
     const request = workloadRequestOf({run, manifest, deployment,
       evidenceDir: evidenceDirOf(run)});
-    const events = [];
-    const binding = semanticGateBindingOf(manifest, deployment);
-    let semanticGate = null;
-    if (semanticJourney) {
-      semanticGate = await semanticJourney({system: run.system,
-        connection: request.connection, binding, evidenceDir: request.evidenceDir});
-    } else {
-      events.push({kind: EVENT.SEMANTIC_GATE_UNAVAILABLE, at: new Date(now()).toISOString(),
-        reason: 'runScenarioASemanticProofJourney is not exposed by the workload owner'});
-    }
     let record;
     try {
       record = await runWorkload(request, run);
@@ -252,7 +229,7 @@ function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHo
         driverVersions: generator.nativeClients ?? {}, checkout: generator.checkout ?? null,
         reportedHostname: generator.hostname ?? null},
       cleanup: record.cleanup ?? null,
-      events,
+      events: [],
       failure: outcome.failure ?? null,
       productFailure: outcome.productFailure ?? null,
     };
