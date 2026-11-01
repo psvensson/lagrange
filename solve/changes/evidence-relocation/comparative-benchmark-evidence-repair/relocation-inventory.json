@@ -9,6 +9,15 @@
       "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/formation-repro/multi-host-lab-run1-20261101T2118Z/",
       "files": 16,
       "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.json"
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+      "bundleSha256": "5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+      "sourceCommit": "2247fccd27740c50f20aef0ebdb42725ee80dff4",
+      "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/",
+      "files": 3,
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.json"
     }
   ]
 }

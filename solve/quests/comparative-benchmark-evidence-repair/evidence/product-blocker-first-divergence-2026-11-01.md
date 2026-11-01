@@ -1,5 +1,7 @@
 # Product blocker: first causal divergence (live 3-node diagnosis, 2026-11-01)
 
+> The live diagnosis report `live-diagnosis-2026-11-01.md` is in the relocated bundle `comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz` (sha256 `5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69`); its summary is in tree: `live-diagnosis-2026-11-01-summary.md`.
+
 Quest `comparative-benchmark-evidence-repair`, read-only product-side investigation. No repository
 file other than this one was created or changed; no cluster was run; nothing is committed.
 

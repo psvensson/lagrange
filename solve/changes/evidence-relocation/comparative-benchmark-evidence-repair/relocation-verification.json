@@ -17,6 +17,23 @@
       "results": "1111111111111111",
       "mismatches": [],
       "verified": true
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+      "bundleSha256": "5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69",
+      "sourceCommit": "2247fccd27740c50f20aef0ebdb42725ee80dff4",
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.json",
+      "shardSha256": "f07e0116ac4fa7fa407b66ab685c3b8b0fe2d5001f9cf78fffdfec5cecd8b357",
+      "verifiedAt": "2026-11-01T23:13:26.606Z",
+      "downloadedSha256": "5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 3,
+      "results": "111",
+      "mismatches": [],
+      "verified": true
     }
   ]
 }
