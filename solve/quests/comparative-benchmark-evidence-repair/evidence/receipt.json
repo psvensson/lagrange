@@ -1,0 +1,40 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "defects-reproduced-by-red-tests",
+      "passed": false
+    },
+    {
+      "id": "invalid-claims-withdrawn-forensics-retained",
+      "passed": false
+    },
+    {
+      "id": "canonical-chain-one-path",
+      "passed": false
+    },
+    {
+      "id": "adversarial-acceptance-chain-rejects",
+      "passed": false
+    },
+    {
+      "id": "lab-default-execution-target",
+      "passed": false
+    },
+    {
+      "id": "real-product-smoke-three-arms",
+      "passed": false
+    },
+    {
+      "id": "offline-recomputation-matches-publication",
+      "passed": false
+    },
+    {
+      "id": "independent-review",
+      "passed": false
+    }
+  ],
+  "evidence": [],
+  "applicability": "sealed red at quest start 2026-11-01; no receipt passes until its evidence exists"
+}

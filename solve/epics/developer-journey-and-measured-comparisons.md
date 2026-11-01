@@ -10,6 +10,7 @@ doneWhen:
     file: solve/quests/developer-journey-and-measured-comparisons-acceptance/evidence/receipt.json
 quests:
   - developer-journey-and-measured-comparisons-acceptance
+  - comparative-benchmark-evidence-repair
 authorizes:
   - Dockerfile
   - README.md
