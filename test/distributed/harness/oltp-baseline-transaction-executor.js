@@ -2,7 +2,6 @@ import {OLTP_OPERATION_KIND} from './oltp-baseline-workload.js';
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayMap = Function.call.bind(Array.prototype.map);
-const stringTrim = Function.call.bind(String.prototype.trim);
 
 const ZERO = 0;
 const ONE = 1;
@@ -97,11 +96,21 @@ function requireAffectedRows(result, statementId, expected) {
 
 // A returned value the contract reads as an integer must be one; a wrong
 // value is a correctness violation, never coerced through Number().
+// An integer column arrives as a number, or (Lagrange's PG wire, a
+// recorded dialect fact) as canonical decimal text whose numeric value
+// round-trips exactly. Anything else ('5.0', ' 5', '05', '') is a wrong
+// value, never coerced.
+const CANONICAL_DECIMAL_TEXT = /^-?(0|[1-9][0-9]*)$/u;
+
 function integerColumn(row, column, statementId) {
   const value = row?.[column];
-  const number = typeof value === 'string' && stringTrim(value) !== '' ?
-    Number(value) : value;
-  if (typeof number !== 'number' || !Number.isSafeInteger(number)) {
+  let number = Number.NaN;
+  if (typeof value === 'number') number = value;
+  if (typeof value === 'string' && CANONICAL_DECIMAL_TEXT.test(value)) {
+    const parsed = Number(value);
+    if (String(parsed) === value) number = parsed;
+  }
+  if (!Number.isSafeInteger(number)) {
     throw correctnessViolation(
       `OLTP ${statementId} returned a non-integer ${column}`,
       {invariant: 'integer-column', statementId, column, observedValue: String(value)},
@@ -117,13 +126,14 @@ async function executeWrite(tx, statementId, parameters, expected = ONE) {
 }
 
 function normalizeOrderStatusLine(row) {
+  const column = (name) => integerColumn(row, name, STATEMENT.ORDER_STATUS_LINES);
   return {
-    lineNumber: Number(row.line_number),
-    itemId: Number(row.item_id),
-    supplyWarehouseId: Number(row.supply_warehouse_id),
-    quantity: Number(row.quantity),
-    amountCents: Number(row.amount_cents),
-    delivered: Number(row.delivered),
+    lineNumber: column('line_number'),
+    itemId: column('item_id'),
+    supplyWarehouseId: column('supply_warehouse_id'),
+    quantity: column('quantity'),
+    amountCents: column('amount_cents'),
+    delivered: column('delivered'),
   };
 }
 
@@ -250,18 +260,14 @@ async function executeOrderStatus(session, operation) {
     if (orderRows.length === ZERO) {
       return {orderId: null, lineCount: ZERO, lines: []};
     }
-    const order = orderRows[ZERO];
+    const orderId = integerColumn(orderRows[ZERO], 'order_id', STATEMENT.ORDER_STATUS_LATEST);
     const lineRows = rowsOf(await tx.execute(STATEMENT.ORDER_STATUS_LINES, [
       operation.warehouseId,
       operation.districtId,
-      order.order_id,
+      orderId,
     ]));
     const lines = arrayMap(lineRows, normalizeOrderStatusLine);
-    return {
-      orderId: integerColumn(order, 'order_id', STATEMENT.ORDER_STATUS_LATEST),
-      lineCount: lines.length,
-      lines,
-    };
+    return {orderId, lineCount: lines.length, lines};
   });
 }
 
@@ -321,7 +327,7 @@ async function executeDelivery(session, operation, scale) {
         amountCents,
         operation.warehouseId,
         districtId,
-        order.customer_id,
+        integerColumn(order, 'customer_id', STATEMENT.DELIVERY_ORDER_FOR_UPDATE),
       ]);
       deliveredOrders += ONE;
     }

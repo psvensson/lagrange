@@ -16,6 +16,8 @@ import {
 } from '../../scenarios/scenario-a-semantic-proof-journey.js';
 
 const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
+const arrayMap = Function.call.bind(Array.prototype.map);
 
 const REFUSING_ENDPOINT = Object.freeze({host: '127.0.0.1', port: 1});
 const CREDENTIALS = Object.freeze({user: 'bench', password: 'bench', database: 'bench'});
@@ -56,4 +58,56 @@ test('the journey refuses a missing binding and a non-PG-wire system', async () 
     binding: {...BINDING, imageId: ''}}), /binding requires imageId/u);
   await assert.rejects(runScenarioASemanticProofJourney({system: 'postgresql', connection,
     binding: {...BINDING, endpoint: 'nowhere'}}), /host:port/u);
+});
+
+test('a rebind from beforeCase becomes the context of that case and every later case',
+  async () => {
+    const rebound = {...BINDING, containerId: 'container-reformed', endpoint: '127.0.0.1:2'};
+    let calls = 0;
+    const gate = await runScenarioASemanticProofJourney({
+      system: 'postgresql',
+      connection: {endpoint: REFUSING_ENDPOINT, credentials: CREDENTIALS},
+      binding: BINDING,
+      beforeCase: async ({caseId}) => {
+        calls += 1;
+        if (caseId !== 'payment') return null;
+        return {
+          connection: {endpoint: {host: '127.0.0.1', port: 2}, credentials: CREDENTIALS},
+          binding: rebound,
+        };
+      },
+    });
+    assert.ok(calls > 0);
+    const caseIds = arrayMap(gate.cases, (entry) => entry.caseId);
+    const paymentIndex = arrayIndexOf(caseIds, 'payment');
+    for (let index = 0; index < gate.cases.length; index += 1) {
+      const expected = index < paymentIndex ? BINDING : rebound;
+      assert.deepEqual(gate.cases[index].binding, expected, gate.cases[index].caseId);
+    }
+    assert.deepEqual(gate.bindings, [BINDING, rebound]);
+    assert.equal(gate.binding, null, 'a gate over two deployments names no single binding');
+  });
+
+test('a case whose connection differs from its binding is refused, typed', async () => {
+  const gate = await runScenarioASemanticProofJourney({
+    system: 'postgresql',
+    connection: {endpoint: {host: '127.0.0.1', port: 3}, credentials: CREDENTIALS},
+    binding: BINDING,
+  });
+  for (const entry of gate.cases) {
+    if (entry.caseId === 'durability') continue;
+    assert.equal(entry.status, 'refused', entry.caseId);
+    assert.equal(entry.reason, 'binding_changed_without_rebind');
+  }
+});
+
+test('beforeCase must answer a rebind or an explicit null', async () => {
+  const gate = await runScenarioASemanticProofJourney({
+    system: 'postgresql',
+    connection: {endpoint: REFUSING_ENDPOINT, credentials: CREDENTIALS},
+    binding: BINDING,
+    beforeCase: async () => undefined,
+  });
+  assert.equal(gate.cases[0].status, 'errored');
+  assert.match(gate.cases[0].error, /beforeCase must answer/u);
 });

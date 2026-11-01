@@ -51,6 +51,7 @@ import {executeProof as executeVisibilityProof} from './scenario-a-visibility-la
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySome = Function.call.bind(Array.prototype.some);
 
 const DURABILITY_CASE_ID = 'durability';
 const BINDING_FIELDS = Object.freeze(['campaignId', 'containerId', 'imageId', 'endpoint']);
@@ -67,7 +68,16 @@ const CASE_STATUS = Object.freeze({
   FAILED: 'failed',
   ERRORED: 'errored',
   NOT_EXECUTED: 'not-executed',
+  // The case ran against a deployment other than its binding names; its
+  // proof record is withheld from the gate.
+  REFUSED: 'refused',
 });
+
+const REFUSAL_REASON = Object.freeze({
+  BINDING_CHANGED_WITHOUT_REBIND: 'binding_changed_without_rebind',
+});
+
+const DEPLOYMENT_OBSERVATION = Object.freeze({NOT_OBSERVED: 'not-observed'});
 
 const NOT_EXECUTED_REASON = Object.freeze({
   NO_RESTART_CAPABILITY: 'caller-supplied-no-restart-capability',
@@ -145,18 +155,59 @@ async function persistEvidence(evidenceDir, system, caseId, evidence) {
   return outputPath;
 }
 
+function endpointLabel(endpoint) {
+  return `${endpoint.host}:${endpoint.port}`;
+}
+
+function bindingMatches(binding, observed) {
+  return observed.endpoint === binding.endpoint && observed.containerId === binding.containerId;
+}
+
+// The deployment a case runs against: the request's, until a beforeCase
+// answers a rebind {connection, binding}; null keeps the current one.
+async function rebindForCase(current, proofCase, journey) {
+  if (!journey.beforeCase) return current;
+  const answer = await journey.beforeCase({caseId: proofCase.id, context: current});
+  if (answer === null) return current;
+  if (!answer || typeof answer !== 'object' || !answer.connection || !answer.binding) {
+    throw new Error('beforeCase must answer {connection, binding} or null');
+  }
+  return buildContext(current.system, answer.connection, answer.binding);
+}
+
+async function observedDeployment(journey, proofCase, context) {
+  if (!journey.observeDeployment) return DEPLOYMENT_OBSERVATION.NOT_OBSERVED;
+  const observed = await journey.observeDeployment({caseId: proofCase.id, context});
+  return Object.freeze({containerId: observed.containerId, endpoint: observed.endpoint});
+}
+
+function refusal(result, extra) {
+  return Object.freeze({...result, status: CASE_STATUS.REFUSED,
+    reason: REFUSAL_REASON.BINDING_CHANGED_WITHOUT_REBIND, ...extra});
+}
+
 async function runCase(proofCase, context, options, journey) {
-  const result = {caseId: proofCase.id, proofIds: proofCase.proofIds};
+  const result = {caseId: proofCase.id, proofIds: proofCase.proofIds,
+    binding: context.binding};
   if (proofCase.id === DURABILITY_CASE_ID && !options.restartCluster) {
     return {...result, status: CASE_STATUS.NOT_EXECUTED,
       reason: NOT_EXECUTED_REASON.NO_RESTART_CAPABILITY};
   }
+  if (endpointLabel(context.endpoint) !== context.binding.endpoint) {
+    return refusal(result, {observedEndpoint: endpointLabel(context.endpoint)});
+  }
   let adapter = null;
   try {
-    if (journey.beforeCase) await journey.beforeCase({caseId: proofCase.id, context});
     const outcome = await CASE_EXECUTORS[proofCase.id]({context, options, cluster: null});
     adapter = outcome.adapter;
     const evidence = buildProofEvidence(outcome);
+    const deployment = await observedDeployment(journey, proofCase, context);
+    result.deploymentObservation = deployment;
+    if (deployment !== DEPLOYMENT_OBSERVATION.NOT_OBSERVED &&
+        !bindingMatches(context.binding, deployment)) {
+      await closeQuietly(adapter, result);
+      return refusal(result, {});
+    }
     result.status = outcome.evaluation.passed ? CASE_STATUS.PASSED : CASE_STATUS.FAILED;
     result.proofRecord = evidence.proofRecord;
     result.evidencePath = await persistEvidence(journey.evidenceDir, context.system,
@@ -186,18 +237,19 @@ function gateStatusOf(summary) {
  * @param {string} [request.evidenceDir] retains every case's evidence
  * @param {Function} [request.restartProduct] ({context}) => fault evidence;
  *   without it the durability case is not executed (its proofs stay missing)
- * @param {Function} [request.beforeCase] ({caseId, context}) dataset reset
- *   hook (Lagrange cannot DROP TABLE in place)
+ * @param {Function} [request.beforeCase] ({caseId, context}) => {connection,
+ *   binding} | null: re-forms the arm before a case (Lagrange cannot DROP
+ *   TABLE in place); a rebind is the context of that and every later case
+ * @param {Function} [request.observeDeployment] ({caseId, context}) =>
+ *   {containerId, endpoint} observed after the case; a mismatch with the
+ *   case binding refuses the case (binding_changed_without_rebind)
  * @return {Promise<object>} the semantic-gate record of the system
  */
-async function runScenarioASemanticProofJourney(request = {}) {
-  if (!PGWIRE_PROOF_SYSTEMS.has(request.system)) {
-    throw new Error(`Scenario A PG-wire proof journey does not run ${request.system}`);
-  }
-  const binding = requireBinding(request.binding);
-  const connection = requireConnection(request.connection);
-  const context = Object.freeze({
-    system: request.system,
+function buildContext(system, rawConnection, rawBinding) {
+  const binding = requireBinding(rawBinding);
+  const connection = requireConnection(rawConnection);
+  return Object.freeze({
+    system,
     endpoint: connection.endpoint,
     connection: connection.credentials,
     binding,
@@ -207,19 +259,41 @@ async function runScenarioASemanticProofJourney(request = {}) {
     publicExecutionContract: Object.freeze({
       protocol: PGWIRE_OLTP_PROTOCOL,
       executionPath: PGWIRE_OLTP_EXECUTION_PATH,
-      lockingReadMode: LOCKING_READ_MODE_BY_SYSTEM[request.system],
+      lockingReadMode: LOCKING_READ_MODE_BY_SYSTEM[system],
     }),
   });
-  const options = Object.freeze({
-    createAdapter: ADAPTER_BY_SYSTEM[request.system],
-    prepareContext: async () => context,
-    ...(request.restartProduct ?
-      {restartCluster: ({context: current}) => request.restartProduct({context: current})} :
-      {}),
-  });
+}
+
+async function runScenarioASemanticProofJourney(request = {}) {
+  if (!PGWIRE_PROOF_SYSTEMS.has(request.system)) {
+    throw new Error(`Scenario A PG-wire proof journey does not run ${request.system}`);
+  }
+  let context = buildContext(request.system, request.connection, request.binding);
   const cases = [];
   for (const proofCase of OLTP_SCENARIO_A_PROOF_CASES) {
-    cases.push(await runCase(proofCase, context, options, request));
+    try {
+      context = await rebindForCase(context, proofCase, request);
+    } catch (error) {
+      cases.push(Object.freeze({caseId: proofCase.id, proofIds: proofCase.proofIds,
+        binding: context.binding, status: CASE_STATUS.ERRORED,
+        error: String(error?.message || error)}));
+      continue;
+    }
+    const current = context;
+    const options = Object.freeze({
+      createAdapter: ADAPTER_BY_SYSTEM[request.system],
+      prepareContext: async () => current,
+      ...(request.restartProduct ?
+        {restartCluster: ({context: active}) => request.restartProduct({context: active})} :
+        {}),
+    });
+    cases.push(await runCase(proofCase, current, options, request));
+  }
+  const bindings = [];
+  for (const entry of cases) {
+    if (!arraySome(bindings, (seen) => JSON.stringify(seen) === JSON.stringify(entry.binding))) {
+      bindings.push(entry.binding);
+    }
   }
   const proofs = arrayMap(arrayFilter(cases, (entry) => entry.proofRecord),
     (entry) => entry.proofRecord);
@@ -231,7 +305,9 @@ async function runScenarioASemanticProofJourney(request = {}) {
     passed: summary.passedProofIds,
     failed: summary.failedProofIds,
     missing: summary.missingProofIds,
-    binding,
+    // One deployment: its binding; several (rebinds): null, see bindings.
+    binding: bindings.length === 1 ? bindings[0] : null,
+    bindings: Object.freeze(bindings),
     semanticProfileId: gate.semanticProfileId,
     semanticProfileSha256: gate.semanticProfileSha256,
     semanticGateEvidenceSha256: gate.semanticGateEvidenceSha256,
@@ -241,6 +317,7 @@ async function runScenarioASemanticProofJourney(request = {}) {
 
 export {
   CASE_STATUS as SCENARIO_A_PROOF_CASE_STATUS,
+  REFUSAL_REASON as SCENARIO_A_PROOF_REFUSAL_REASON,
   GATE_STATUS as SCENARIO_A_SEMANTIC_GATE_STATUS,
   runScenarioASemanticProofJourney,
 };

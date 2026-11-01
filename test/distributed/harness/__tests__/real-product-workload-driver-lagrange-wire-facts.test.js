@@ -4,6 +4,7 @@
 // shapes (no durability inferred from a receipt), and integer columns as
 // canonical decimal text recorded as a dialect fact.
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import {
@@ -20,6 +21,14 @@ const LAGRANGE_SMOKE = Object.freeze({
   subkind: 'smoke',
 });
 const WRITE_PATTERN = /^\s*(INSERT|UPDATE|DELETE)\b/iu;
+
+// The first attempt's statements, inline or from the retained evidence file.
+function firstAttemptStatements(request) {
+  if (request.responseEvidence.encoding === 'retained-file') {
+    return JSON.parse(readFileSync(request.responseEvidence.path, 'utf8'))[0];
+  }
+  return request.attempts[0].statements;
+}
 
 test('D29: an unroutable partition during provisioning is a typed pending state',
   async () => {
@@ -54,7 +63,7 @@ test('D30: every statement records its receipt shape; durability is never inferr
   async () => {
     const observed = await runDriverCase(LAGRANGE_SMOKE);
     for (const request of observed.output.observations.requests) {
-      for (const statement of request.attempts[0].statements) {
+      for (const statement of firstAttemptStatements(request)) {
         assert.equal(typeof statement.receipt?.kind, 'string', statement.sql);
         assert.equal(Object.hasOwn(statement.receipt, 'durable'), false);
         if (WRITE_PATTERN.test(statement.sql)) {
@@ -76,7 +85,7 @@ test('integer columns as canonical decimal text are a recorded dialect fact',
     assert.equal(observed.accounting.committed, observed.accounting.offered);
     const encodings = new Set();
     for (const request of output.observations.requests) {
-      for (const statement of request.attempts[0].statements) {
+      for (const statement of firstAttemptStatements(request)) {
         for (const encoding of Object.values(statement.columnEncodings ?? {})) {
           encodings.add(encoding);
         }

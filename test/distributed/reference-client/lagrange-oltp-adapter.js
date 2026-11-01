@@ -14,6 +14,9 @@ import {
 } from '../harness/oltp-baseline-transaction-executor.js';
 import {
   OLTP_COMMIT_FAILURE_OUTCOME,
+  OLTP_PROVISIONING_STATE,
+  OLTP_SCHEMA_PROVISIONING_BOUND as SCHEMA_PROVISIONING_BOUND,
+  classifyOltpProvisioningState,
   resolveOltpCommitFailureOutcome,
 } from '../harness/oltp-error-classification.js';
 
@@ -357,22 +360,31 @@ async function insertRows(client, table, columns, rows) {
 // actually exist: a fresh cluster skips every drop honestly, and a reused
 // cluster that still holds the schema fails loudly on the product gap rather
 // than silently loading on top of stale rows.
-const TABLE_NOT_FOUND_MARKER = 'Table not found';
-// PostgreSQL answers a missing relation with SQLSTATE 42P01 (undefined_table).
-const UNDEFINED_TABLE_SQLSTATE = '42P01';
 const DROP_TABLE_UNSUPPORTED_MARKER = 'Unsupported statement type: DROP_TABLE';
+// A table the product answers is present; every other observation is one
+// of the classification owner's provisioning states.
+const TABLE_PRESENT = 'present';
 
-async function tableExists(client, table) {
+// The table as the product answers it now: present, or a typed
+// provisioning state; any other answer is raised as the product's error.
+async function observeTableState(client, table) {
   try {
     await client.query(`SELECT COUNT(*) AS row_count FROM ${table}`);
-    return true;
+    return TABLE_PRESENT;
   } catch (error) {
-    if (String(error?.message || '').includes(TABLE_NOT_FOUND_MARKER) ||
-        error?.code === UNDEFINED_TABLE_SQLSTATE) {
-      return false;
-    }
-    throw error;
+    const state = classifyOltpProvisioningState(error);
+    if (state === null) throw error;
+    return {state, error};
   }
+}
+
+// Outside provisioning a table is present or missing; an unroutable or
+// pending table there is the product's error.
+async function tableExists(client, table) {
+  const observed = await observeTableState(client, table);
+  if (observed === TABLE_PRESENT) return true;
+  if (observed.state === OLTP_PROVISIONING_STATE.TABLE_MISSING) return false;
+  throw observed.error;
 }
 
 // Preparation drops every existing table; an engine that cannot drop is a
@@ -418,19 +430,19 @@ async function dropTablesForCleanup(client) {
 // schema load honours that contract: it waits the hinted interval and polls
 // the table's existence until the provisioning settles or the bounded wait
 // expires. The CREATE statement is not re-issued (the job already owns it).
-const SCHEMA_PROVISIONING_ACTIVE_SQLSTATE = '55P03';
-const SCHEMA_PROVISIONING_ACTIVE_MARKER = 'Schema provisioning remains active';
-const SCHEMA_PROVISIONING_WAIT_BUDGET_MS = 120000;
+const PROVISIONING_OUTCOME = Object.freeze({
+  CREATED: 'created',
+  ROUTABLE: 'routable',
+  BOUND_EXHAUSTED: 'bound-exhausted',
+  // An answer that is no provisioning state; raised as the product's error.
+  PRODUCT_ERROR: 'product-error',
+});
 const CREATE_TABLE_NAME_PATTERN = /^\s*CREATE\s+TABLE\s+([A-Za-z0-9_]+)/iu;
 
 function sleepMs(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isSchemaProvisioningActive(error) {
-  return error?.code === SCHEMA_PROVISIONING_ACTIVE_SQLSTATE ||
-    String(error?.message || '').includes(SCHEMA_PROVISIONING_ACTIVE_MARKER);
-}
 
 // The product's retry_after_ms hint is the wait; a missing, unreadable or
 // non-positive hint is a broken provisioning answer, raised with the
@@ -454,27 +466,74 @@ function resolveSchemaProvisioningRetryMs(error) {
   return hinted;
 }
 
-async function createSchemaStatement(client, statement) {
+function stateEntry(startedMs, state, error) {
+  return Object.freeze({
+    atMs: Date.now() - startedMs,
+    state,
+    sqlState: error?.code ?? null,
+    message: error ? String(error.message) : null,
+  });
+}
+
+function provisioningFailure(error, record) {
+  if (error && typeof error === 'object') error.schemaProvisioning = record;
+  return error;
+}
+
+// CREATE TABLE under the product's provisioning contract: a pending answer
+// is waited through the typed states (pending, not routable, missing) at
+// the product's hinted interval within the derived bound; every observation
+// is recorded; any other answer is the product's error.
+async function createSchemaStatement(client, statement, provisioning) {
+  const table = CREATE_TABLE_NAME_PATTERN.exec(statement)?.[1] ?? null;
+  const startedMs = Date.now();
+  const states = [];
+  const record = () => ({table, states: Object.freeze([...states])});
   try {
     await client.query(statement);
+    provisioning.push(Object.freeze({table, outcome: PROVISIONING_OUTCOME.CREATED,
+      states: Object.freeze([])}));
     return;
   } catch (error) {
-    if (!isSchemaProvisioningActive(error)) throw error;
-    const table = CREATE_TABLE_NAME_PATTERN.exec(statement)?.[1];
-    if (!table) throw error;
-    const deadline = Date.now() + SCHEMA_PROVISIONING_WAIT_BUDGET_MS;
-    const retryMs = resolveSchemaProvisioningRetryMs(error);
-    while (Date.now() < deadline) {
-      await sleepMs(retryMs);
-      if (await tableExists(client, table)) return;
+    if (classifyOltpProvisioningState(error) !== OLTP_PROVISIONING_STATE.PROVISIONING_PENDING ||
+        table === null) {
+      throw error;
     }
-    throw error;
+    states.push(stateEntry(startedMs, OLTP_PROVISIONING_STATE.PROVISIONING_PENDING, error));
+    const retryMs = resolveSchemaProvisioningRetryMs(error);
+    let lastError = error;
+    while (Date.now() - startedMs < SCHEMA_PROVISIONING_BOUND.boundMs) {
+      await sleepMs(retryMs);
+      let observed;
+      try {
+        observed = await observeTableState(client, table);
+      } catch (answer) {
+        states.push(stateEntry(startedMs, PROVISIONING_OUTCOME.PRODUCT_ERROR, answer));
+        provisioning.push(Object.freeze({
+          ...record(),
+          outcome: PROVISIONING_OUTCOME.PRODUCT_ERROR,
+        }));
+        throw answer;
+      }
+      if (observed === TABLE_PRESENT) {
+        states.push(stateEntry(startedMs, TABLE_PRESENT, null));
+        provisioning.push(Object.freeze({...record(), outcome: PROVISIONING_OUTCOME.ROUTABLE}));
+        return;
+      }
+      states.push(stateEntry(startedMs, observed.state, observed.error));
+      lastError = observed.error;
+    }
+    const exhausted = Object.freeze({...record(), outcome: PROVISIONING_OUTCOME.BOUND_EXHAUSTED});
+    provisioning.push(exhausted);
+    throw provisioningFailure(new AggregateError([lastError],
+      `Schema provisioning of ${table} did not become routable within ` +
+      `${SCHEMA_PROVISIONING_BOUND.boundMs} ms`), exhausted);
   }
 }
 
-async function createSchema(client) {
+async function createSchema(client, provisioning) {
   for (const statement of CREATE_SCHEMA) {
-    await createSchemaStatement(client, statement);
+    await createSchemaStatement(client, statement, provisioning);
   }
 }
 
@@ -546,12 +605,20 @@ async function loadDataset(client, dataset) {
   );
 }
 
+// The provisioning observations are returned, and attached to a failure,
+// as {boundMs, derivation, tables}.
 async function prepareDataset(createClient, options, dataset) {
+  const tables = [];
+  const evidence = () => Object.freeze({...SCHEMA_PROVISIONING_BOUND,
+    tables: Object.freeze([...tables])});
   const client = await openClient(createClient, options);
   try {
     await dropExistingTables(client);
-    await createSchema(client);
+    await createSchema(client, tables);
     await loadDataset(client, dataset);
+    return evidence();
+  } catch (error) {
+    throw provisioningFailure(error, evidence());
   } finally {
     await client.end();
   }
@@ -610,9 +677,10 @@ async function createLagrangeOltpAdapter(options = {}) {
   const busyWorkers = new Set();
   let closed = false;
   let datasetPrepared = false;
+  let schemaProvisioning = null;
 
   try {
-    await prepareDataset(createClient, resolvedClientOptions, dataset);
+    schemaProvisioning = await prepareDataset(createClient, resolvedClientOptions, dataset);
     datasetPrepared = true;
     for (let index = ZERO; index < config.workers; index += ONE) {
       const client = await openClient(createClient, resolvedClientOptions);
@@ -651,6 +719,7 @@ async function createLagrangeOltpAdapter(options = {}) {
     datasetSha256,
     datasetSummary,
     workerSessionIds,
+    schemaProvisioning,
     async executeTransaction(operation) {
       if (closed) throw new Error('Lagrange OLTP adapter is closed');
       const workerIndex = Number(operation?.workerId) - ONE;

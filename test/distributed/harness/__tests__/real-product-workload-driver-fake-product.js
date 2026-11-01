@@ -47,6 +47,7 @@ const FAULT = Object.freeze({
   NONCANONICAL_INTEGER_TEXT: 'noncanonical-integer-text',
 });
 const PROVISIONING_TABLE = 'warehouse';
+const STATEMENT_VERB = /^\s*([A-Za-z]+)/u;
 const UNROUTABLE_POLLS = 2;
 const PROVISIONING_RETRY_HINT_MS = 5;
 const ARM_AFTER_HISTORY_SNAPSHOTS = 2;
@@ -438,7 +439,9 @@ function createFakeOltpProduct(fault = FAULT.NONE) {
           this.processID = handle.session.serverConnectionId;
         },
         async query(sql, parameters) {
-          return handle.run(sql, parameters);
+          const result = await handle.run(sql, parameters);
+          return {rowCount: result.rows.length, ...result,
+            command: stringToUpperCase(STATEMENT_VERB.exec(sql)[1])};
         },
         async end() {},
       };
