@@ -62,9 +62,11 @@ async function readImageFacts({sshRun, opts, host, imageId, imageRef}) {
   const repository = imageRepository(imageRef);
   const repoDigest = arrayFind(digests, (digest) => stringStartsWith(digest,
     `${repository}@`)) || digests[0] || null;
-  return {repoDigest, repoDigestStatus: repoDigest ? 'recorded' :
-    REPO_DIGEST_NONE, imageLabels: image.Config?.Labels ?? null,
-  imageCreated: image.Created ?? null};
+  // Provenance is a typed identity fact: pulled from the registry (a repo
+  // digest), or loaded content known only by its image id.
+  return {repoDigest, repoDigestStatus: repoDigest ? 'recorded' : REPO_DIGEST_NONE,
+    provenance: repoDigest ? `registry:${repoDigest}` : `loaded:${imageId}`,
+    imageLabels: image.Config?.Labels ?? null, imageCreated: image.Created ?? null};
 }
 
 function mountsOf(inspect) {
@@ -158,7 +160,14 @@ function pinnedVersionPattern(imageRef, tagPattern, toPattern) {
 function identityProblems(product, expectation) {
   const problems = [];
   if (!expectation) return [`${product.role}: no identity expectation`];
-  if (product.imageRef !== expectation.imageRef) {
+  // A content pin (image id) is the identity; the reference it ran by may be
+  // the registry digest or the id itself.
+  if (expectation.imageId) {
+    if (product.imageId !== expectation.imageId) {
+      problems.push(`${product.role}: runs image ${product.imageId}, the campaign pins ` +
+        expectation.imageId);
+    }
+  } else if (product.imageRef !== expectation.imageRef) {
     problems.push(`${product.role}: runs ${product.imageRef}, expected ${expectation.imageRef}`);
   }
   if (!IMAGE_ID_PATTERN.test(String(product.imageId || ''))) {

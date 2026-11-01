@@ -463,6 +463,12 @@ const CAPABILITY_SCRIPT = [
     '{ hostname; sysctl -n kern.boottime; } 2>/dev/null | tr -d \'\\n\')"',
   'say cores "$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null)"',
   'say mem_kib "$(awk \'/^MemTotal:/{print $2}\' /proc/meminfo 2>/dev/null)"',
+  // Whether the thermal gate (scripts/checks/wait-for-thermal-headroom.js) has
+  // a source here: lm-sensors, a sysfs thermal zone or an hwmon input. A host
+  // with none (a WSL2 VM) is `unmeasurable`, a fact placement can decide on.
+  'if { command -v sensors >/dev/null 2>&1 && sensors -j >/dev/null 2>&1; } || ' +
+    'ls /sys/class/thermal/thermal_zone*/temp /sys/class/hwmon/hwmon*/temp*_input ' +
+    '>/dev/null 2>&1; then say thermal measured; else say thermal unmeasurable; fi',
   'NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
   '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 && ' +
     '[ -n "$node_major" ] && nvm use "$node_major" >/dev/null 2>&1',
@@ -561,6 +567,7 @@ export function parseCapability(text, probedAt = Date.now()) {
     },
     movielensSha256: repoPresent ? capabilityText(values.movielens_sha256) : null,
     cpuSampleMs: capabilityNumber(values.cpu_sample_ms),
+    thermal: capabilityText(values.thermal),
     machineLock: parseMachineLock(values),
   };
 }

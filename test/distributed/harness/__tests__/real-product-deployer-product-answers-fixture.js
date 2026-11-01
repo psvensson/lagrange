@@ -30,11 +30,13 @@ function containerIdFor(index) {
 
 function imageOfRun(command) {
   const words = stringSplit(command, /\s+/u);
-  return arrayFind(words, (word) => /^(psvensson\/lagrange|pingcap\/(pd|tikv|tidb)|postgres|mysql)[:@]/u
-    .test(word)) || 'unknown:0';
+  return arrayFind(words, (word) =>
+    /^((psvensson\/lagrange|pingcap\/(pd|tikv|tidb)|postgres|mysql)[:@]|sha256:[0-9a-f]{64}$)/u
+      .test(word)) || 'unknown:0';
 }
 
 function entrypointOf(image) {
+  if (image === LAGRANGE_IMAGE_ID) return ['/nodejs/bin/node'];
   if (stringStartsWith(image, 'psvensson/lagrange')) return ['/nodejs/bin/node'];
   if (stringStartsWith(image, 'pingcap/pd')) return ['/pd-server'];
   if (stringStartsWith(image, 'pingcap/tikv')) return ['/tikv-server'];
@@ -44,6 +46,7 @@ function entrypointOf(image) {
 }
 
 function imageIdOf(image) {
+  if (stringStartsWith(image, 'sha256:')) return image;
   if (stringStartsWith(image, 'psvensson/lagrange')) return LAGRANGE_IMAGE_ID;
   if (stringStartsWith(image, 'pingcap/')) return TIDB_IMAGE_ID;
   return POSTGRES_IMAGE_ID;
@@ -153,9 +156,10 @@ function lagrangeSystemTableRules(nodeIds, hosts) {
         reasonCodes: []}}}});
   };
   return [
-    [/FROM nodes'/u, () => arrayJoin(['node_id|status|connection_state|ready_lease_expires_at',
-      ...arrayMap(nodeIds, (nodeId) => `${nodeId}|active|ready|${Date.now() + 3600000}`)],
-    '\n')],
+    [/FROM nodes'/u, () => arrayJoin(
+      ['node_id|status|connection_state|ready_lease_expires_at|last_heartbeat',
+        ...arrayMap(nodeIds, (nodeId) =>
+          `${nodeId}|active|ready|${Date.now() + 3600000}|${Date.now() - 1000}`)], '\n')],
     [/FROM service_endpoints'/u, arrayJoin(['service_id|node_id|protocol|port|health_status',
       `sys-postgres-wire|${nodeIds[0]}|postgresql|5433|healthy`], '\n')],
     [/FROM partitions'/u, arrayJoin(['partition_id|table_name|replica_count|leader_node_id',
@@ -238,6 +242,7 @@ function tidbHealthyRules(ledger) {
 
 export {
   LAGRANGE_IMAGE,
+  LAGRANGE_IMAGE_ID,
   PG_VERSION,
   TIDB_RELEASE,
   postgresHealthyRules,

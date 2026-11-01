@@ -20,10 +20,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const RUNNER = path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs');
 
 function labNode(name, ip, {lock = 'free', docker = true, roles = ['harness'],
-  bootId = `boot-${name}`} = {}) {
+  bootId = `boot-${name}`, thermal = 'measured'} = {}) {
   return {name, ip, ssh: `bench@${ip}`, os: 'linux', roles,
     testCapability: {bootId, dockerReachable: docker, repoPath: '/home/bench/lagrange',
-      nodePath: '/usr/bin/node', nodeVersion: 'v22.23.2',
+      nodePath: '/usr/bin/node', nodeVersion: 'v22.23.2', thermal,
       machineLock: {state: lock, holder: null}}};
 }
 
@@ -45,6 +45,7 @@ const FLEET = [
   labNode('alpha', '192.168.1.11'), labNode('bravo', '192.168.1.12'),
   labNode('charlie', '192.168.1.13', {lock: 'busy'}),
   labNode('delta', '192.168.1.14'), labNode('echo', '192.168.1.15', {docker: false}),
+  labNode('dwsl', '192.168.1.18', {thermal: 'unmeasurable'}),
   labNode('foxtrot', '192.168.1.16'), labNode('golf', '192.168.1.17', {roles: ['runner']}),
 ];
 

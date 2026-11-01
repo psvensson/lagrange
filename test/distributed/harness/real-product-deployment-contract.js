@@ -23,6 +23,7 @@ const DEPLOYMENT_FAILURE = Object.freeze({
   WORKLOAD_FAILED: 'workload_failed',
   LOAD_GENERATOR_COLOCATED: 'load_generator_colocated',
   THERMAL_EXHAUSTED: 'thermal_exhausted',
+  IMAGE_UNAVAILABLE: 'image_unavailable',
   THERMAL_UNMEASURABLE: 'thermal_unmeasurable',
   LAB_HOST_UNAVAILABLE: 'lab_host_unavailable',
   WATCHDOG_STOPPED: 'watchdog_stopped',

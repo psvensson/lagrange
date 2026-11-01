@@ -14,6 +14,7 @@ import {
   lagrangeHealthyRules,
 } from './real-product-deployer-product-answers-fixture.js';
 import {
+  arrayEvery,
   arrayFilter,
   arrayFindIndex,
   arrayIncludes,
@@ -104,10 +105,10 @@ test('live diagnosis: /health and /readyz healthy but a node lease lapsed and a 
   const nodeIds = ['00000000-0000-4000-8000-000000000001',
     '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003'];
   const {sshRun, calls} = createScriptedSsh([
-    [/FROM nodes'/u, 'node_id|status|connection_state|ready_lease_expires_at\n' +
-      `${nodeIds[0]}|active|ready|${Date.now() + 60000}\n` +
-      `${nodeIds[1]}|active|ready|${Date.now() - 60000}\n` +
-      `${nodeIds[2]}|active|connecting|${Date.now() + 60000}`],
+    [/FROM nodes'/u, 'node_id|status|connection_state|ready_lease_expires_at|last_heartbeat\n' +
+      `${nodeIds[0]}|active|ready|${Date.now() + 60000}|${Date.now() - 600000}\n` +
+      `${nodeIds[1]}|active|ready|${Date.now() - 60000}|${Date.now() - 1000}\n` +
+      `${nodeIds[2]}|active|connecting|${Date.now() + 60000}|${Date.now() - 1000}`],
     [/FROM services WHERE/u, 'partition_id|node_id|status|raft_role\n' +
       `p-stock|${nodeIds[0]}|active|follower`],
     ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
@@ -118,6 +119,8 @@ test('live diagnosis: /health and /readyz healthy but a node lease lapsed and a 
     const denials = error.diagnostic.last.denials;
     assert.ok(arrayIncludes(denials, `node_ready_lease_or_status:${nodeIds[1]}`));
     assert.ok(arrayIncludes(denials, `node_connection_not_ready:${nodeIds[2]}`));
+    assert.ok(arrayIncludes(denials, `node_heartbeat_stale:${nodeIds[0]}`),
+      'a live lease on a heartbeat older than the product lease is stale (live diagnosis)');
     assert.ok(arrayIncludes(denials, 'partition_not_routable:p-warehouse'));
     return true;
   });
@@ -130,8 +133,9 @@ test('after the canonical load every partition of every created table must be ro
     await import('../real-product-lagrange-readiness-evaluation.js');
   const now = Date.now();
   const nodes = [{node_id: 'a', status: 'active', connection_state: 'ready',
-    ready_lease_expires_at: String(now + 1000)}, {node_id: 'b', status: 'active',
-    connection_state: 'ready', ready_lease_expires_at: String(now + 1000)}];
+    ready_lease_expires_at: String(now + 1000), last_heartbeat: String(now - 10)},
+  {node_id: 'b', status: 'active', connection_state: 'ready',
+    ready_lease_expires_at: String(now + 1000), last_heartbeat: String(now - 10)}];
   const verdict = evaluateLagrangeClusterReadiness({nodes, now,
     endpoints: [{service_id: 'sys-postgres-wire', health_status: 'healthy'}],
     partitions: [{partition_id: 'p1', table_name: 'stock', replica_count: '2',
@@ -184,4 +188,35 @@ test('readiness must hold for the stable window: a flapping verdict resets the c
       sleep: async () => {}, stablePolls: 2,
       probe: async () => ({ready: flapping.shift()})}),
     (error) => error.code === 'readiness_exhausted');
+  });
+
+test('predicate step 6: the probe INSERT must report one row, and a single PG-wire ' +
+  'listener is recorded as a typed visibility limitation, never as pass', {timeout: 300000},
+async () => {
+  const ledger = createContainerLedger();
+  const healthy = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts: HOSTS}));
+  const deployment = await deployers.deployLagrangeCluster(baseInput(healthy.sshRun));
+  const probe = deployment.readiness.evidence.probe.evidence;
+  assert.equal(probe.insertRowCount, 1);
+  assert.deepEqual(probe.visibility, {status: 'single-listener',
+    readFrom: ['00000000-0000-4000-8000-000000000001'],
+    notReadFrom: ['00000000-0000-4000-8000-000000000002',
+      '00000000-0000-4000-8000-000000000003']});
+  const zeroRows = createScriptedSsh([[/INSERT INTO bench_readiness_probe/u, 'INSERT 0 0'],
+    ...lagrangeHealthyRules(createContainerLedger(), {hosts: HOSTS})]);
+  await assert.rejects(deployers.deployLagrangeCluster(baseInput(zeroRows.sshRun)),
+    (error) => error.code === 'readiness_exhausted' &&
+      error.diagnostic.component === 'lagrange-probe-write-readback');
+});
+
+test('predicate step 5: time-to-routable is recorded per canonical table', {timeout: 300000},
+  async () => {
+    const ledger = createContainerLedger();
+    const {sshRun} = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts: HOSTS}));
+    const deployment = await deployers.deployLagrangeCluster(baseInput(sshRun));
+    const placement = await deployment.operations.observePlacement();
+    const perTable = placement.routable.tableTimeToRoutableMs;
+    assert.deepEqual(Object.keys(perTable).sort(), ['customer', 'district', 'history', 'item',
+      'new_order', 'order_line', 'orders', 'stock', 'warehouse']);
+    assert.ok(arrayEvery(Object.values(perTable), (ms) => Number.isFinite(ms) && ms >= 0));
   });

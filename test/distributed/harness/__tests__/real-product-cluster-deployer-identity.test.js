@@ -8,12 +8,15 @@ import * as deployers from '../real-product-cluster-deployers.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   LAGRANGE_IMAGE,
+  LAGRANGE_IMAGE_ID,
   createContainerLedger,
   lagrangeHealthyRules,
   postgresHealthyRules,
 } from './real-product-deployer-product-answers-fixture.js';
 import {
   arrayEvery,
+  arrayFilter,
+  arrayFind,
   arraySome,
   stringSplit,
   stringStartsWith,
@@ -64,7 +67,8 @@ test('D21: data directories inside the container layer make the deployment a smo
   const volume = createScriptedSsh(lagrangeHealthyRules(ledgerB, {hosts: HOSTS}));
   const durable = await deployers.deployLagrangeCluster(input(volume.sshRun, {
     opts: {...OPTS, storageRoot: '/srv/lagrange-bench', lagrangeVersion: '0.4.0',
-      lagrangeImage: `psvensson/lagrange@sha256:${'c'.repeat(64)}`},
+      lagrangeImage: `psvensson/lagrange@sha256:${'c'.repeat(64)}`,
+      lagrangeImageId: LAGRANGE_IMAGE_ID},
   }));
   assert.equal(durable.runClass, 'publishable');
   assert.ok(arrayEvery(durable.storage, (entry) => entry.kind === 'host-volume' &&
@@ -124,4 +128,26 @@ test('D18: a publishable run refuses a tag-only Lagrange image; a digest referen
   await assert.rejects(deployers.deployLagrangeCluster(input(wrongRevision.sshRun, {
     opts: {...OPTS, lagrangeVersion: '0.4.0', lagrangeRevision: '07206ba1c8'}})),
   (error) => error.code === 'identity_unverified' && /revision/u.test(error.message));
+});
+
+test('D18: the Lagrange image is pinned by content; a host where it was docker-loaded ' +
+  '(no RepoDigest) runs it by image id with typed provenance', {timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  const registryRef = `psvensson/lagrange@sha256:${'1'.repeat(64)}`;
+  const {sshRun, calls} = createScriptedSsh([
+    [/docker image inspect/u, (_command, host) => JSON.stringify({Id: LAGRANGE_IMAGE_ID,
+      RepoDigests: host === '10.0.0.2' ? [] : [registryRef], Config: {Labels: {}}})],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  const deployment = await deployers.deployLagrangeCluster(input(sshRun, {opts: {...OPTS,
+    lagrangeImage: registryRef, lagrangeImageId: LAGRANGE_IMAGE_ID, lagrangeVersion: '0.4.0',
+    lagrangeImageByHost: {'10.0.0.1': registryRef, '10.0.0.2': LAGRANGE_IMAGE_ID,
+      '10.0.0.3': registryRef}}}));
+  const runs = arrayFilter(calls, (call) => /^docker run -d /u.test(call.command));
+  assert.match(runs[1].command, new RegExp(` ${LAGRANGE_IMAGE_ID}$`, 'u'));
+  const loaded = arrayFind(deployment.identity.products, (p) => p.host === '10.0.0.2');
+  assert.equal(loaded.repoDigest, null);
+  assert.equal(loaded.provenance, `loaded:${LAGRANGE_IMAGE_ID}`);
+  const pulled = arrayFind(deployment.identity.products, (p) => p.host === '10.0.0.1');
+  assert.equal(pulled.provenance, `registry:${registryRef}`);
 });

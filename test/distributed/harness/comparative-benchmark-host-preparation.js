@@ -8,6 +8,7 @@
  */
 import {SCENARIO_REFUSAL} from './scenario-host-topology.js';
 import {
+  arrayIncludes,
   arrayMap,
   stringSplit,
   stringTrim,
@@ -60,9 +61,9 @@ async function ensureProductImages({hosts, images, sshRun, opts}) {
             IMAGE_PULL_TIMEOUT_MS);
           pulled = true;
         } catch (error) {
-          throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
+          throw deploymentFailure(DEPLOYMENT_FAILURE.IMAGE_UNAVAILABLE,
             `image ${image} absent on ${host.ip} and not pullable: ${errorText(error)}`,
-            {host: host.ip, image, inspect: local.stdout});
+            {host: host.ip, image, reason: 'pull_refused', inspect: local.stdout});
         }
       }
       const imageId = pulled ? stringTrim(String(await sshRun(host.ip, opts, inspect))) :
@@ -71,6 +72,38 @@ async function ensureProductImages({hosts, images, sshRun, opts}) {
     }
   }
   return present;
+}
+
+/**
+ * The campaign's content-pinned image on every host, by image id (the content
+ * identity the manifest pins), with the registry digest as provenance. A host
+ * whose image came from the registry runs it by that digest; a host where the
+ * same content was `docker load`ed (no RepoDigest) runs it by image id and
+ * says so (`loaded:<id>`). A host without the content is image_unavailable:
+ * no pull is attempted - placing the image is an operator step
+ * (cloud-reproduction-guide.md).
+ * @param {{hosts: Array<{ip: string}>, imageId: string, registryRef: string,
+ *   sshRun: Function, opts: Object}} input
+ * @return {Promise<Object<string, {runRef: string, imageId: string,
+ *   provenance: string}>>} by host ip
+ */
+async function resolvePinnedImage({hosts, imageId, registryRef, sshRun, opts}) {
+  const resolved = {};
+  for (const host of hosts) {
+    const inspect = await execWithStatus(sshRun, host.ip, opts,
+      `docker image inspect --format '{{json .}}' ${shellWord(imageId)} 2>&1`);
+    if (inspect.exitCode !== 0) {
+      throw deploymentFailure(DEPLOYMENT_FAILURE.IMAGE_UNAVAILABLE,
+        `pinned image ${imageId} is not on ${host.ip}`,
+        {host: host.ip, imageId, reason: 'absent', inspect: inspect.stdout});
+    }
+    const image = JSON.parse(inspect.stdout);
+    const digests = Array.isArray(image.RepoDigests) ? image.RepoDigests : [];
+    resolved[host.ip] = arrayIncludes(digests, registryRef) ?
+      {runRef: registryRef, imageId, provenance: `registry:${registryRef}`} :
+      {runRef: imageId, imageId, provenance: `loaded:${imageId}`};
+  }
+  return resolved;
 }
 
 /**
@@ -83,4 +116,4 @@ function describeLoadGenerator({host, hostFacts}) {
     bootId: hostFacts?.bootId ?? null};
 }
 
-export {collectHostFacts, describeLoadGenerator, ensureProductImages};
+export {collectHostFacts, describeLoadGenerator, ensureProductImages, resolvePinnedImage};

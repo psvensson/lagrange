@@ -73,6 +73,12 @@ held with (purpose `bench:<campaignId>`), the thermal gate and the full frozen m
 ```sh
 node docs/benchmarks/cloud/run-comparative-benchmarks.mjs
 ```
+For a publishable run, pin the Lagrange image by content and name its registry provenance:
+`--lagrange-image psvensson/lagrange@sha256:<digest> --lagrange-image-id sha256:<image id>
+--lagrange-version <version> --storage-root <dir>`. Every data host must already hold that
+image id; the runner never pulls it. On a host whose daemon cannot pull from the registry,
+place the image yourself (`docker save` on a host that has it, `docker load` on that host); the
+run then records its provenance as `loaded:<image id>`.
 Every selected host is held with the lab's machine-wide `flock` and holder record before any
 deployment (a host another run holds refuses the campaign, naming the holder), the thermal gate
 `scripts/checks/wait-for-thermal-headroom.js` runs on every held host, and the holds are released

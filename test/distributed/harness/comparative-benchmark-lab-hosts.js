@@ -36,6 +36,7 @@ const LAB_LOCK_PATH = '${LAB_LOCK_DIR:-$HOME/.lab}/machine.lock';
 const LAB_HOLDER_PATH = '${LAB_LOCK_DIR:-$HOME/.lab}/machine.holder.json';
 const THERMAL_GATE = 'scripts/checks/wait-for-thermal-headroom.js';
 const THERMAL_UNMEASURABLE_WORD = 'unmeasurable';
+const THERMAL_MEASURED = 'measured';
 // The gate's own bound is twenty polls of 30 s; one minute of slack for ssh.
 const THERMAL_GATE_TIMEOUT_MS = 11 * 60 * 1000;
 const HOST_ROLE = Object.freeze({DATA: 'data', CLIENT: 'client'});
@@ -56,6 +57,11 @@ function exclusionOf(node, facts, seenBootIds) {
   if (!node.ssh || !node.ip) return 'no ssh target or ip in the inventory';
   if (facts.error || !facts.capability) return `unreachable: ${facts.error || 'never probed'}`;
   if (facts.capability.dockerReachable !== true) return 'docker not reachable';
+  // The lab record must carry each host's thermal condition: a host the gate
+  // cannot measure (or that was never probed for it) is not eligible.
+  if (facts.capability.thermal !== THERMAL_MEASURED) {
+    return `host-ineligible: thermal_${facts.capability.thermal || 'unknown'}`;
+  }
   if (facts.capability.bootId && seenBootIds.has(facts.capability.bootId)) {
     return 'same machine as another inventory node';
   }

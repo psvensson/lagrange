@@ -11,6 +11,7 @@ import {
   arrayMap,
   stringIncludes,
   stringSplit,
+  stringTrim,
 } from './real-product-captured-intrinsics.js';
 import {
   DEPLOYMENT_FAILURE,
@@ -63,13 +64,29 @@ function rowsFromDelimitedText(text, columns, {separator, nullToken = null}) {
  * header line (unaligned, no footer): one short-lived client per query, so no
  * client stays attached to the product during measurement.
  */
-function createPsqlQueryReader({sshRun, opts, from, campaignId, endpoint, connection}) {
+function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, sql) {
+  return sshRun(from, opts, dockerRunOnceCommand({campaignId,
+    image: SQL_CLIENT_IMAGE, dockerArgs: ['-e', `PGPASSWORD=${connection.password}`],
+    commandArgs: ['psql', '-h', endpoint.host, '-p', String(endpoint.port),
+      '-U', connection.user, '-d', connection.database, '-v', 'ON_ERROR_STOP=1',
+      '-A', '-F', PSQL_SEPARATOR, '-P', 'footer=off', '-c', sql]}));
+}
+
+/**
+ * A statement's command tag as psql prints it (`INSERT 0 1`): the affected
+ * row count of a write, read from the product's own answer.
+ */
+function createPsqlStatementRunner(target) {
   return async (sql) => {
-    const text = String(await sshRun(from, opts, dockerRunOnceCommand({campaignId,
-      image: SQL_CLIENT_IMAGE, dockerArgs: ['-e', `PGPASSWORD=${connection.password}`],
-      commandArgs: ['psql', '-h', endpoint.host, '-p', String(endpoint.port),
-        '-U', connection.user, '-d', connection.database, '-v', 'ON_ERROR_STOP=1',
-        '-A', '-F', PSQL_SEPARATOR, '-P', 'footer=off', '-c', sql]})) ?? '');
+    const tag = stringTrim(String(await psqlText(target, sql) ?? ''));
+    const count = Number(stringSplit(tag, /\s+/u).pop());
+    return {tag, rowCount: Number.isInteger(count) ? count : null};
+  };
+}
+
+function createPsqlQueryReader(target) {
+  return async (sql) => {
+    const text = String(await psqlText(target, sql) ?? '');
     const [header, ...rows] = arrayFilter(stringSplit(text, /\r?\n/u), (line) => line !== '');
     if (header === undefined) return [];
     return rowsFromDelimitedText(arrayJoin(rows, '\n'), stringSplit(header, PSQL_SEPARATOR),
@@ -112,5 +129,6 @@ async function bindEndpointToContainer({sshRun, opts, campaignId, endpoint, cand
 export {
   bindEndpointToContainer,
   createPsqlQueryReader,
+  createPsqlStatementRunner,
   rowsFromDelimitedText,
 };

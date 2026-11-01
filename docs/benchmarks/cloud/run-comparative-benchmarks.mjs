@@ -39,6 +39,7 @@ import {
   collectHostFacts,
   describeLoadGenerator,
   ensureProductImages,
+  resolvePinnedImage,
 } from '../../../test/distributed/harness/comparative-benchmark-host-preparation.js';
 import {
   THERMAL_GATE,
@@ -123,6 +124,8 @@ Options:
                                 data lives in the container layer (smoke only)
   --lagrange-image <ref>        Lagrange image (default: ${LAGRANGE_IMAGE_DEFAULT});
                                 publishable runs need repo@sha256:<digest>
+  --lagrange-image-id <sha256>  The Lagrange image content every data host must hold (by
+                                image id; --lagrange-image is then its registry provenance)
   --lagrange-version <v>        Product version the image must report (needed for a digest)
   --lagrange-revision <sha>     org.opencontainers.image.revision the image must carry
   --raw-observations <path>     Append-only record store
@@ -143,6 +146,7 @@ const VALUE_FLAGS = Object.freeze({
   '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
   '--lock-wait-minutes': 'lockWaitMinutes', '--client-checkout': 'clientCheckout',
   '--client-node': 'clientNode', '--lagrange-version': 'lagrangeVersion',
+  '--lagrange-image-id': 'lagrangeImageId',
   '--lagrange-revision': 'lagrangeRevision',
 });
 
@@ -265,7 +269,12 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   const facts = await collectHostFacts({hosts, sshRun, opts});
   const physicalHosts = facts.map((fact, index) => ({...fact, name: hosts[index].name,
     role: hosts[index].role, ...(physicalExtras[hosts[index].name] || {})}));
-  await ensureProductImages({hosts, images: imagesFor(manifest.targets, opts), sshRun, opts});
+  const pinned = opts.lagrangeImageId ? await resolvePinnedImage({
+    hosts: hosts.filter((host) => host.role === 'data'), imageId: opts.lagrangeImageId,
+    registryRef: opts.lagrangeImage, sshRun, opts}) : null;
+  await ensureProductImages({hosts, sshRun, opts,
+    images: imagesFor(manifest.targets, opts).filter((image) =>
+      !(pinned && image === opts.lagrangeImage))});
   const recordOwner = await loadRawObservationRecordOwner();
   const client = hosts.find((host) => host.role === 'client');
   if (!client.repoPath || !client.nodePath) {
@@ -279,6 +288,9 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   const controllerIp = (await sshRun(dataIps[0], opts, 'echo "${SSH_CLIENT%% *}"')).trim();
   const deployOpts = {lagrangeImage: opts.lagrangeImage, storageRoot: opts.storageRoot || null,
     lagrangeVersion: opts.lagrangeVersion || null, lagrangeRevision: opts.lagrangeRevision || null,
+    lagrangeImageId: opts.lagrangeImageId || null,
+    lagrangeImageByHost: pinned ? Object.fromEntries(Object.entries(pinned).map(
+      ([ip, entry]) => [ip, entry.runRef])) : null,
     proofClientIps: controllerIp ? [controllerIp] : []};
   const deployArm = (run) => deployComparativeTarget(run.targetId, {hosts: dataIps,
     clientIp: client.ip, sshRun, opts: deployOpts, campaignId: manifest.campaignId,

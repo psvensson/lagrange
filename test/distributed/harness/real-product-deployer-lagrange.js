@@ -33,7 +33,6 @@ import {
   arrayFind,
   arrayFlatMap,
   arrayMap,
-  stringIncludes,
   stringIndexOf,
   stringReplace,
   stringPadStart,
@@ -68,6 +67,7 @@ import {
 import {
   bindEndpointToContainer,
   createPsqlQueryReader,
+  createPsqlStatementRunner,
 } from './real-product-sql-clients.js';
 
 const PORT = Object.freeze({REST: 8080, ADMIN: 8081, TRANSPORT: 8082});
@@ -89,7 +89,7 @@ const SYSTEM_TABLE_QUERIES = Object.freeze({
   services: 'SELECT * FROM services WHERE service_type = \'partition\'',
 });
 const PROBE_TABLE = 'bench_readiness_probe';
-const DIGEST_MARK = '@sha256:';
+const PROBE_VISIBILITY_SINGLE_LISTENER = 'single-listener';
 const REVISION_LABEL = 'org.opencontainers.image.revision';
 // The canonical tables' routability after CREATE TABLE: on the 2026-11-01 lab
 // a 5-node cluster needed 2 min 41 s for its first table and 3-/4-node
@@ -241,30 +241,61 @@ async function tableRoutingDenials(query, requiredTables) {
   return denials;
 }
 
-function clusterReady(ctx, component, query, nodeRoles, requiredTables = null) {
+// Per required table, the time from the first poll until the table first
+// showed no denial of its own (time-to-routable).
+function recordTableRoutability(tableReadyAt, tables, context) {
+  for (const table of context.requiredTables || []) {
+    if (tableReadyAt[table] !== undefined) continue;
+    const own = evaluateLagrangeClusterReadiness({...tables,
+      expectedNodeIds: context.expectedNodeIds, requiredServiceIds: [],
+      requiredTables: [table], now: context.now});
+    if (own.ready) tableReadyAt[table] = context.now - context.startedAt;
+  }
+}
+
+async function clusterReady(ctx, component, query, nodeRoles, requiredTables = null) {
   const expectedNodeIds = arrayMap(nodeRoles, (role) => role.nodeId);
-  return readinessOf(ctx, component, async () => {
+  const startedAt = Date.now();
+  const tableReadyAt = {};
+  const readiness = await readinessOf(ctx, component, async () => {
     const tables = await readSystemTables(query);
+    const now = Date.now();
+    recordTableRoutability(tableReadyAt, tables, {requiredTables, expectedNodeIds, now,
+      startedAt});
     const verdict = evaluateLagrangeClusterReadiness({...tables, expectedNodeIds,
-      requiredServiceIds: [PG_WIRE_SERVICE_ID], requiredTables, now: Date.now()});
+      requiredServiceIds: [PG_WIRE_SERVICE_ID], requiredTables, now});
     const lane = evaluateLagrangeServeLane({snapshots: await controlSnapshots(ctx, nodeRoles)});
     const routing = verdict.ready && lane.ready ?
       await tableRoutingDenials(query, requiredTables) : [];
     const denials = [...verdict.denials, ...lane.denials, ...routing];
     return {ready: denials.length === 0, diagnostic: {denials,
-      nodes: tables.nodes.length, partitions: tables.partitions.length}};
+      nodes: tables.nodes.length, partitions: tables.partitions.length,
+      tableTimeToRoutableMs: {...tableReadyAt}}};
   }, ctx.budget.stablePolls);
+  return requiredTables ? {...readiness, tableTimeToRoutableMs: {...tableReadyAt}} : readiness;
 }
 
-function probeWriteReadback(ctx, query, campaignId) {
+// The public PG wire is one listener (replicaCount 1): the row is read back
+// through it only, which is recorded as a typed limitation, never as
+// visibility from every node.
+function probeVisibility(listenerNodeId, nodeRoles) {
+  return {status: PROBE_VISIBILITY_SINGLE_LISTENER, readFrom: [listenerNodeId],
+    notReadFrom: arrayFilter(arrayMap(nodeRoles, (role) => role.nodeId),
+      (nodeId) => nodeId !== listenerNodeId)};
+}
+
+function probeWriteReadback(ctx, sql, campaignId, visibility) {
   return readinessOf(ctx, 'lagrange-probe-write-readback', async () => {
     const id = Date.now();
     const token = `${campaignId}-${id}`;
-    await query(`CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`);
-    await query(`INSERT INTO ${PROBE_TABLE} (id, token) VALUES (${id}, '${token}')`);
-    const rows = await query(`SELECT token FROM ${PROBE_TABLE} WHERE id = ${id}`);
-    return {ready: rows.length === 1 && rows[0].token === token,
-      diagnostic: {written: token, readBack: rows}};
+    await sql.statement(
+      `CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`);
+    const insert = await sql.statement(
+      `INSERT INTO ${PROBE_TABLE} (id, token) VALUES (${id}, '${token}')`);
+    const rows = await sql.query(`SELECT token FROM ${PROBE_TABLE} WHERE id = ${id}`);
+    return {ready: insert.rowCount === 1 && rows.length === 1 && rows[0].token === token,
+      diagnostic: {written: token, insertTag: insert.tag, insertRowCount: insert.rowCount,
+        readBack: rows, visibility}};
   });
 }
 
@@ -301,9 +332,10 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const image = opts.lagrangeImage || LAGRANGE_IMAGE_DEFAULT;
   // A publishable run (explicit host volumes) needs the artifact pinned by
   // digest: one tag resolved to four different images across the lab (D18).
-  if (opts.storageRoot && !stringIncludes(image, DIGEST_MARK)) {
+  if (opts.storageRoot && !opts.lagrangeImageId) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `a publishable run needs the Lagrange image by digest, got ${image}`, {image});
+      `a publishable run needs the Lagrange image pinned by content (image id), got ${image}`,
+      {image});
   }
   const ctx = {sshRun, opts, clientIp, sleep, budget: resolveReadinessBudget(opts)};
   const connection = {user: REQUEST_CELL_AUTH.USER, password: REQUEST_CELL_AUTH.PASSWORD,
@@ -315,7 +347,7 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
     const host = hosts[index];
     const nodeId = nodeIdOf(index);
     const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
-      ordinal: index + 1, image,
+      ordinal: index + 1, image: opts.lagrangeImageByHost?.[host] ?? image,
       dockerArgs: [...storageArgs(opts, campaignId, index),
         ...nodeEnv({nodeId, host, seedHost, connection})]});
     roles.push({role: NODE_ROLE, host, containerId: started.containerId, nodeId});
@@ -324,14 +356,17 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const membership = await membershipReady(ctx, seedHost, hosts.length);
   const listener = await publicPgWireReady(ctx, seedHost, roles);
   const leaders = await leadersReady(ctx, seedHost);
-  const query = createPsqlQueryReader({sshRun, opts, from: clientIp, campaignId,
-    endpoint: {host: listener.host, port: listener.port}, connection});
+  const target = {sshRun, opts, from: clientIp, campaignId,
+    endpoint: {host: listener.host, port: listener.port}, connection};
+  const query = createPsqlQueryReader(target);
+  const sql = {query, statement: createPsqlStatementRunner(target)};
   const nodeRoles = [...roles];
   const cluster = await clusterReady(ctx, 'lagrange-system-tables', query, nodeRoles);
-  const probe = await probeWriteReadback(ctx, query, campaignId);
+  const visibility = probeVisibility(listener.nodeId, roles);
+  const probe = await probeWriteReadback(ctx, sql, campaignId, visibility);
   const products = verifyProductIdentity(
     await reportedVersions(ctx, await inspectProducts({sshRun, opts, roles})),
-    {[NODE_ROLE]: {imageRef: image,
+    {[NODE_ROLE]: {imageRef: image, imageId: opts.lagrangeImageId ?? null,
       versionPattern: versionPatternOf(image, opts.lagrangeVersion)}});
   if (opts.lagrangeRevision) {
     const wrong = arrayFilter(products, (product) =>
@@ -377,7 +412,7 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
       },
       // The arm's readiness contract again (after a product restart).
       awaitReady: async () => ({cluster: await clusterReady(ctx, 'lagrange-system-tables', query,
-        nodeRoles), probe: await probeWriteReadback(ctx, query, campaignId)}),
+        nodeRoles), probe: await probeWriteReadback(ctx, sql, campaignId, visibility)}),
       observeRoles: async () => ({leaders: (await readPartitions(ctx, seedHost))?.leaders ??
         null}),
     },

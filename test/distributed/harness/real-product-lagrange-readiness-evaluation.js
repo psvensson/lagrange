@@ -16,7 +16,11 @@
  * typed denial codes, the last of which an exhaustion carries.
  * (Predicate: product-blocker-first-divergence-2026-11-01.md section 5.)
  */
-import {isNodeRecordReady} from '../../../src/node/node-readiness-policy.js';
+import {DEFAULT_READY_LEASE_MS} from '../../../src/control-plane/control-plane-constants.js';
+import {
+  isNodeRecordReady,
+  wasNodeRecordReadyWhenWritten,
+} from '../../../src/node/node-readiness-policy.js';
 import {
   arrayFilter,
   arrayFind,
@@ -44,6 +48,7 @@ const DENIAL = Object.freeze({
   NODE_MISSING: 'node_missing',
   NODE_NOT_READY: 'node_ready_lease_or_status',
   NODE_CONNECTION: 'node_connection_not_ready',
+  NODE_HEARTBEAT_STALE: 'node_heartbeat_stale',
   SERVICE_ENDPOINT: 'service_endpoint_unhealthy',
   NO_PARTITIONS: 'no_partitions',
   TABLE_WITHOUT_PARTITIONS: 'table_without_partitions',
@@ -66,6 +71,14 @@ function nodeDenials(nodes, expectedNodeIds, now) {
     const lease = {...row, ready_lease_expires_at: Number(row.ready_lease_expires_at)};
     if (!isNodeRecordReady(lease, {now, requireActiveStatus: true})) {
       denials.push(`${DENIAL.NODE_NOT_READY}:${nodeId}`);
+    }
+    // The heartbeat the lease was written on, no older than the product's own
+    // ready-lease duration (src/control-plane/control-plane-constants.js).
+    const heartbeatAt = Number(row.last_heartbeat);
+    if (!wasNodeRecordReadyWhenWritten({...lease, last_heartbeat: heartbeatAt},
+      {now, requireActiveStatus: true}) || !Number.isFinite(heartbeatAt) ||
+        now - heartbeatAt > DEFAULT_READY_LEASE_MS) {
+      denials.push(`${DENIAL.NODE_HEARTBEAT_STALE}:${nodeId}`);
     }
     if (text(row.connection_state) !== CONNECTION_READY) {
       denials.push(`${DENIAL.NODE_CONNECTION}:${nodeId}`);
