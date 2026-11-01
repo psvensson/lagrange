@@ -17,6 +17,7 @@ import {appendInvalidationEntries} from '../benchmark-invalidation-ledger.js';
 import {
   buildFixtureHeader,
   buildFixtureRun,
+  composeFixtureRunFromDriverOutput,
   fixtureTargetCell,
   publishFixtureCampaign,
   sealFixtureRun,
@@ -25,6 +26,11 @@ import {
   writeFixtureRoot,
 } from '../comparative-benchmark-fixtures.js';
 import {formatNum} from '../comparative-landing-svg-renderer.js';
+import {executeBenchmarkWorkload} from '../real-product-workload-drivers.js';
+import {
+  FAKE_PRODUCT_FAULT,
+  createFakeOltpProduct,
+} from './real-product-workload-driver-fake-product.js';
 import {FAILURE_CLASS, OPERATION_OUTCOME} from '../benchmark-operation-outcome.js';
 import {BENCHMARK_RUN_STATUS} from '../benchmark-scenario-a-run.js';
 import {BENCHMARK_PROFILE_CLASS} from '../benchmark-workload-dispatch.js';
@@ -110,6 +116,15 @@ describe('raw observation record v2 validator', () => {
     const fraction = buildFixtureRun();
     fraction.deployment.dataset.verification.observedTableRows.warehouse = 0.5;
     assertRejected(fraction, RECORD_REJECTION.INVALID_COUNT);
+    const transport = buildFixtureRun();
+    setFixtureRequestOutcome(transport.observations.requests[0], OPERATION_OUTCOME.UNRESOLVED,
+      FAILURE_CLASS.TRANSPORT_FAILURE);
+    assertRejected(transport, RECORD_REJECTION.INVALID_ENUM);
+    const watchdog = buildFixtureRun();
+    setFixtureRequestOutcome(watchdog.observations.requests[0], OPERATION_OUTCOME.UNRESOLVED,
+      FAILURE_CLASS.WATCHDOG_STOPPED);
+    sealFixtureRun(watchdog);
+    assert.doesNotThrow(() => validateRunRecord(watchdog));
     const unexplained = buildFixtureRun();
     setFixtureRequestOutcome(unexplained.observations.requests[0], OPERATION_OUTCOME.UNRESOLVED,
       null);
@@ -198,7 +213,7 @@ describe('claim admission through the publication path', () => {
   it('a run with zero committed operations is a product failure with counts', async () => {
     const runs = arrayMap(pair(), (run) => {
       for (const r of run.observations.requests) {
-        setFixtureRequestOutcome(r, OPERATION_OUTCOME.UNRESOLVED, FAILURE_CLASS.TRANSPORT_FAILURE);
+        setFixtureRequestOutcome(r, OPERATION_OUTCOME.UNRESOLVED, FAILURE_CLASS.AMBIGUOUS_COMMIT);
       }
       return sealFixtureRun(run);
     });
@@ -318,6 +333,36 @@ describe('semantic gate by profile class and stopped runs', () => {
     assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SETUP_HARNESS_FAULT), true);
   });
+});
+
+describe('driver output through admission', () => {
+  it('the Lagrange smoke record that ends setup-failed (55P03) is a product failure',
+    async () => {
+      const product = createFakeOltpProduct(FAKE_PRODUCT_FAULT.LOAD_LOCK_NOT_AVAILABLE);
+      const endpoint = {host: 'lab-host-1', port: 5432};
+      const output = await executeBenchmarkWorkload({
+        targetId: LAGRANGE, system: LAGRANGE, scenario: 'scenarioA', subkind: 'smoke',
+        connection: {endpoint, credentials: {user: 'u', password: 'p', database: 'd'}},
+        plan: {offeredRatePerSec: 50, repetition: 1, orderIndex: 0},
+        drivers: {createPgClient: product.createPgClient,
+          createMysqlConnection: product.createMysqlConnection},
+      });
+      assert.equal(output.observations.runStatus, BENCHMARK_RUN_STATUS.SETUP_FAILED);
+      const base = buildFixtureRun({subkind: 'smoke', offeredRatePerSec: 50,
+        profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
+      const run = composeFixtureRunFromDriverOutput(base, output);
+      // The campaign header records the harness identity the driver reported.
+      const header = {...buildFixtureHeader({campaignId: 'fixture-campaign'}),
+        harness: run.identity.harness};
+      const {matrix, readme} = await publish([header, run]);
+      const cell = fixtureTargetCell(matrix, LAGRANGE, 'scenarioA/smoke');
+      assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE, cell.reasons.join(', '));
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.DATASET_PREPARATION_FAILED),
+        true);
+      assert.equal(cell.metrics.setupFailures[0].sqlState, '55P03');
+      assert.equal(cell.metrics.accounting.unissued, cell.metrics.accounting.offered);
+      assert.equal(stringIncludes(readme, '55P03'), true, 'the 55P03 evidence is visible');
+    });
 });
 
 describe('status vocabulary and campaign outcome', () => {

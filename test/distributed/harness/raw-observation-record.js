@@ -17,7 +17,6 @@ import {OLTP_DATASET_VERIFICATION_STATUS} from './benchmark-oltp-state-reconcili
 import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
 import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
 
-const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringSplit = Function.call.bind(String.prototype.split);
@@ -61,11 +60,10 @@ const BENCHMARK_SCENARIO = Object.freeze({
 
 // Outcome words and failure classes are owned by benchmark-operation-outcome.js.
 // An unresolved request names why it is unresolved; null is refused.
-const UNRESOLVED_FAILURE_CLASSES = Object.freeze(arrayFilter([
+const UNRESOLVED_FAILURE_CLASSES = Object.freeze([
   FAILURE_CLASS.AMBIGUOUS_COMMIT,
-  FAILURE_CLASS.TRANSPORT_FAILURE,
   FAILURE_CLASS.WATCHDOG_STOPPED,
-], (cls) => typeof cls === 'string'));
+]);
 
 // Runs that ended before a measurement window: their requests are all unissued
 // and they carry no window or executed-operations digest.
@@ -412,8 +410,10 @@ function validateDataset(dataset) {
     'deployment.dataset.verification.status');
   requireText(v.method, 'deployment.dataset.verification.method');
   requireText(v.expectedLogicalChecksum, 'deployment.dataset.verification.expectedLogicalChecksum');
-  validateTableRows(v.expectedTableRows, 'deployment.dataset.verification.expectedTableRows');
-  if (v.status !== OLTP_DATASET_VERIFICATION_STATUS.UNOBSERVED) {
+  // Observed (and expected) table rows exist only when the loaded state was observed.
+  if (v.status === OLTP_DATASET_VERIFICATION_STATUS.VERIFIED ||
+      v.status === OLTP_DATASET_VERIFICATION_STATUS.MISMATCH) {
+    validateTableRows(v.expectedTableRows, 'deployment.dataset.verification.expectedTableRows');
     requireText(v.observedLogicalChecksum,
       'deployment.dataset.verification.observedLogicalChecksum');
     validateTableRows(v.observedTableRows, 'deployment.dataset.verification.observedTableRows');

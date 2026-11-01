@@ -164,8 +164,7 @@ function stopDisposition(state) {
   }
   return {
     outcome: OPERATION_OUTCOME.UNRESOLVED,
-    // In flight: the commit may have been sent, its answer is unknown.
-    failureClass: state.attemptInFlight ? FAILURE_CLASS.AMBIGUOUS_COMMIT : null,
+    failureClass: FAILURE_CLASS.WATCHDOG_STOPPED,
     unresolvedReason: state.attemptInFlight ?
       BENCHMARK_UNRESOLVED_REASON.WATCHDOG_IN_FLIGHT :
       BENCHMARK_UNRESOLVED_REASON.WATCHDOG_BETWEEN_ATTEMPTS,
@@ -183,7 +182,7 @@ function inFlightAttemptRecord(state, closedAtMs) {
     endedMs: closedAtMs,
     closedByWatchdog: true,
     outcome: OPERATION_OUTCOME.UNRESOLVED,
-    failureClass: FAILURE_CLASS.AMBIGUOUS_COMMIT,
+    failureClass: FAILURE_CLASS.WATCHDOG_STOPPED,
     statements: [],
   });
 }

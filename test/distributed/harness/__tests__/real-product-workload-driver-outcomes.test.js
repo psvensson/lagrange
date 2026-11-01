@@ -10,6 +10,9 @@ import {
   DRIVER_FIXTURE_MODE,
   runDriverCase,
 } from './real-product-workload-driver-test-fixture.js';
+import {
+  validateBenchmarkAccounting,
+} from '../benchmark-operation-outcome.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const stringIncludes = Function.call.bind(String.prototype.includes);
@@ -166,4 +169,27 @@ test('the happy path commits every request and reconciles the final state', asyn
       assert.match(request.attempts[0].responseDigest, /^sha256:[0-9a-f]{64}$/u);
     }
   }
+});
+
+test('a refused dataset load (55P03) is a complete setup-failed record', async () => {
+  const observed = await runDriverCase({
+    ...LAGRANGE_SCENARIO_A,
+    mode: DRIVER_FIXTURE_MODE.LOAD_LOCK_NOT_AVAILABLE,
+  });
+  const {output} = observed;
+  const {observations} = output;
+  assert.equal(observations.runStatus, 'setup-failed');
+  assert.equal(observations.setup.failureClass, 'product_error');
+  assert.equal(observations.setup.sqlState, '55P03');
+  assert.equal(output.deployment.dataset.verification.status, 'failed');
+  assert.equal(observations.accounting.offered, observations.plannedOffered);
+  assert.equal(observations.accounting.unissued, observations.accounting.offered);
+  assert.equal(observations.accounting.issued, 0);
+  assert.deepEqual(validateBenchmarkAccounting(observations.requests), observations.accounting);
+  assert.match(observations.executedOperationsDigest, /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(typeof observations.window.startedAt, 'string');
+  assert.equal(observations.errorRate, null);
+  assert.equal(Object.hasOwn(observations, 'completedPerSec'), false);
+  assert.equal(output.correctness.finalState, null);
+  assert.equal(output.correctness.finalStateObservation.reason, 'setup-failed');
 });

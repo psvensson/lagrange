@@ -59,7 +59,11 @@ function formatCell(cell) {
   const reasons = cell.reasons.length > 0 ? ` (${arrayJoin(cell.reasons, ', ')})` : '';
   const head = `${cell.status}${reasons}`;
   if (!cell.metrics) return head;
-  const counts = `${cell.metrics.profileClass} profile: ${formatAccounting(cell.metrics.accounting)}`;
+  const setup = arrayMap(cell.metrics.setupFailures || [], (f) =>
+    `; setup failed in ${f.runId}: ${f.failureClass} ${f.sqlState ?? f.code ?? ''} ` +
+    `${f.message ?? ''}`);
+  const counts = `${cell.metrics.profileClass} profile: ` +
+    `${formatAccounting(cell.metrics.accounting)}${arrayJoin(setup, '')}`;
   return cell.metrics.capacity ?
     `${head}: ${counts}; ${formatCapacity(cell.metrics)}` :
     `${head}: ${counts}`;

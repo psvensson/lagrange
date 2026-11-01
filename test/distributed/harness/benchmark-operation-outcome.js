@@ -57,6 +57,11 @@ const FAILURE_CLASS = Object.freeze({
   // unknown local error before any statement). Never counted against the
   // product.
   HARNESS_FAULT: 'harness_fault',
+  // The run watchdog closed the request before its outcome was observed (in
+  // flight, or between retry attempts): unresolved, its last attempt kept,
+  // never retried, its connection destroyed. A lost COMMIT answer is
+  // ambiguous_commit instead.
+  WATCHDOG_STOPPED: 'watchdog_stopped',
 });
 
 const TERMINAL_FAILURE_CLASSES = Object.freeze([
@@ -261,7 +266,7 @@ function allowedFailureClasses(outcome) {
   case OUTCOME.TERMINAL_FAILURE:
     return TERMINAL_FAILURE_CLASSES;
   case OUTCOME.UNRESOLVED:
-    return [null, FAILURE_CLASS.AMBIGUOUS_COMMIT, FAILURE_CLASS.TRANSPORT_FAILURE];
+    return [FAILURE_CLASS.AMBIGUOUS_COMMIT, FAILURE_CLASS.WATCHDOG_STOPPED];
   default:
     return [null];
   }

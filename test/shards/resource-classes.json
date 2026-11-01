@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2498,
+    "ordinary": 2499,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2515,
-  "digest": "fnv1a32-4ea12a31",
+  "censusSize": 2516,
+  "digest": "fnv1a32-f26f7789",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -945,6 +945,7 @@
     "test/distributed/harness/__tests__/scale-certification-receipt-freshness.test.js": "ordinary",
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js": "ordinary",
+    "test/distributed/harness/__tests__/scenario-a-semantic-proof-journey.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-certification.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-config.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "ordinary",

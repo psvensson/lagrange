@@ -227,6 +227,30 @@ function buildFixtureRun(options = {}) {
   return sealFixtureRun(run);
 }
 
+/**
+ * Compose a v2 run record from a workload-driver output (executeBenchmarkWorkload)
+ * and a fixture run that stands in for the deployer and campaign fields the
+ * runner adds (products, roles, hosts, loadGenerator, events, closure, gate).
+ * @param {Object} base A fixture run for the same claim.
+ * @param {Object} output The driver output.
+ * @return {Object} A sealed v2 run record.
+ */
+function composeFixtureRunFromDriverOutput(base, output) {
+  const run = {
+    ...base,
+    identity: {...base.identity, harness: {...base.identity.harness, ...output.identity.harness}},
+    plan: {...base.plan, ...output.plan},
+    deployment: {...base.deployment,
+      endpoint: {...base.deployment.endpoint, ...output.deployment.endpoint},
+      dataset: output.deployment.dataset},
+    observations: output.observations,
+    correctness: {...output.correctness,
+      semanticGate: output.correctness.semanticGate ?? base.correctness.semanticGate},
+  };
+  run.rawObservationsDigest = computeRunObservationsDigest(run);
+  return run;
+}
+
 function toNdjson(records) {
   return arrayMap(records, (r) => JSON.stringify(r)).join('\n') + (records.length ? '\n' : '');
 }
@@ -274,6 +298,7 @@ function fixtureTargetCell(matrix, targetId, column = 'scenarioA') {
 export {
   buildFixtureHeader,
   buildFixtureRun,
+  composeFixtureRunFromDriverOutput,
   fixtureTargetCell,
   publishFixtureCampaign,
   sealFixtureRun,
