@@ -61,9 +61,9 @@ function observedGitCommit() {
 
 function packageVersion(name) {
   try {
-    return requireFromHere(`${name}/package.json`).version;
+    return {version: requireFromHere(`${name}/package.json`).version, error: null};
   } catch (error) {
-    return `unresolved: ${String(error?.message || error)}`;
+    return {version: null, error: String(error?.message || error)};
   }
 }
 

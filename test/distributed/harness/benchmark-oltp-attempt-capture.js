@@ -88,8 +88,8 @@ async function traceStatement(connection, sql, send) {
   try {
     const result = await send();
     statement.status = STATEMENT_STATUS.OK;
-    statement.affectedRows = affectedRowsOfResult(result?.raw ?? result);
-    statement.rows = rowsOfResult(result?.raw ?? result);
+    statement.affectedRows = affectedRowsOfResult(result.raw);
+    statement.rows = rowsOfResult(result.raw);
     if (word === TRANSACTION_CONTROL.COMMIT) trace.commitAcknowledged = true;
     return result;
   } catch (error) {
@@ -111,6 +111,8 @@ function createConnectionRegistry() {
     connections: new Set(),
     inFlight: new Set(),
     destroyed: 0,
+    // A destroyed connection whose close also failed: kept, never swallowed.
+    destroyFailures: [],
   };
 }
 
@@ -142,7 +144,7 @@ function createLifecycle(registry, open, closeInner, destroyInner) {
       connection.destroyed = true;
       connection.inTransaction = false;
       registry.destroyed += 1;
-      destroyInner(connection.inner);
+      destroyInner(connection.inner, registry);
       connection.inner = null;
     },
     async end() {
@@ -155,9 +157,19 @@ function createLifecycle(registry, open, closeInner, destroyInner) {
   return connection;
 }
 
-function destroyPgInner(inner) {
-  inner.connection?.stream?.destroy?.();
-  Promise.resolve(inner.end()).then(() => undefined, () => undefined);
+function recordDestroyFailure(registry, error) {
+  registry.destroyFailures.push(String(error?.message || error));
+}
+
+// pg has no destroy(): the socket is destroyed, then end() releases the
+// client; a failure of either is recorded on the registry.
+function destroyPgInner(inner, registry) {
+  try {
+    inner.connection.stream.destroy();
+  } catch (error) {
+    recordDestroyFailure(registry, error);
+  }
+  Promise.resolve(inner.end()).catch((error) => recordDestroyFailure(registry, error));
 }
 
 // pg-protocol clients (Lagrange public PG wire, PostgreSQL).
@@ -176,12 +188,12 @@ function createTrackedPgClientFactory(baseFactory, registry) {
       },
       async query(sql, parameters) {
         const word = controlWord(sql);
-        return traceStatement(connection, sql, async () => {
+        return (await traceStatement(connection, sql, async () => {
           await connection.ensureOpen(word);
           const result = await connection.inner.query(sql, parameters);
           connection.track(word);
-          return result;
-        });
+          return {raw: result, value: result};
+        })).value;
       },
       async end() {
         await connection.end();
@@ -190,8 +202,12 @@ function createTrackedPgClientFactory(baseFactory, registry) {
   };
 }
 
-function destroyMysqlInner(inner) {
-  inner.destroy();
+function destroyMysqlInner(inner, registry) {
+  try {
+    inner.destroy();
+  } catch (error) {
+    recordDestroyFailure(registry, error);
+  }
 }
 
 // mysql2 connections (TiDB).
@@ -210,19 +226,19 @@ function createTrackedMysqlConnectionFactory(baseFactory, registry) {
       connection.track(word);
       return result;
     });
-    const wrapped = (result) => ({raw: result?.[0], value: result});
+    const wrapped = (result) => ({raw: result[0], value: result});
     return {
       async beginTransaction() {
         await send(TRANSACTION_CONTROL.BEGIN, TRANSACTION_CONTROL.BEGIN,
-          (inner) => inner.beginTransaction());
+          async (inner) => ({raw: null, value: await inner.beginTransaction()}));
       },
       async commit() {
         await send(TRANSACTION_CONTROL.COMMIT, TRANSACTION_CONTROL.COMMIT,
-          (inner) => inner.commit());
+          async (inner) => ({raw: null, value: await inner.commit()}));
       },
       async rollback() {
         await send(TRANSACTION_CONTROL.ROLLBACK, TRANSACTION_CONTROL.ROLLBACK,
-          (inner) => inner.rollback());
+          async (inner) => ({raw: null, value: await inner.rollback()}));
       },
       async execute(sql, parameters) {
         return (await send(controlWord(sql), sql,

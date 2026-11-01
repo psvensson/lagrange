@@ -94,6 +94,11 @@ const DATASET_RESET_METHOD = Object.freeze({
   NONE: 'none',
 });
 
+const ENDPOINT_DISCOVERY = Object.freeze({
+  CALLER: 'caller-endpoint',
+  PUBLIC_PG_CONTEXT: 'public-pg-context',
+});
+
 const ADAPTER_ID = Object.freeze({
   [OLTP_SCENARIO_A_SYSTEM.LAGRANGE]: 'lagrange-public-pgwire-oltp-adapter',
   [OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV]: 'tidb-mysql2-oltp-adapter',
@@ -142,12 +147,12 @@ async function resolveLagrangeConnection(connection) {
       admission: connection.admission,
     });
     return {endpoint: context.endpoint, credentials: context.connection,
-      discovery: 'public-pg-context', serviceEndpoint: context.serviceEndpoint};
+      discovery: ENDPOINT_DISCOVERY.PUBLIC_PG_CONTEXT, serviceEndpoint: context.serviceEndpoint};
   }
   return {
     endpoint: requireEndpoint(connection?.endpoint, 'Lagrange public PG wire'),
     credentials: connection?.credentials,
-    discovery: 'caller-endpoint',
+    discovery: ENDPOINT_DISCOVERY.CALLER,
     serviceEndpoint: null,
   };
 }
@@ -162,6 +167,7 @@ async function openSystem(system, connection, workload, registry, drivers) {
       createConnection: createTrackedMysqlConnectionFactory(baseConnect, registry)};
     return {
       endpoint,
+      discovery: ENDPOINT_DISCOVERY.CALLER,
       resetMethod: DATASET_RESET_METHOD.TRUNCATE_AND_RELOAD,
       open: () => createTiDbOltpAdapter(adapterOptions),
       snapshot: (adapter) => observeTiDbOltpStateSnapshot({endpoint,
@@ -171,7 +177,7 @@ async function openSystem(system, connection, workload, registry, drivers) {
   const resolved = system === OLTP_SCENARIO_A_SYSTEM.LAGRANGE ?
     await resolveLagrangeConnection(connection) :
     {endpoint: requireEndpoint(connection?.endpoint, 'PostgreSQL'),
-      credentials: connection?.credentials, discovery: 'caller-endpoint'};
+      credentials: connection?.credentials, discovery: ENDPOINT_DISCOVERY.CALLER};
   const baseClient = drivers.createPgClient || defaultPgClient;
   const createAdapter = system === OLTP_SCENARIO_A_SYSTEM.LAGRANGE ?
     createLagrangeOltpAdapter : createPostgreSqlOltpAdapter;
@@ -277,8 +283,8 @@ function setupFailure(error) {
 async function closeAdapter(adapter) {
   if (!adapter) return Object.freeze({status: 'not-opened'});
   try {
-    await adapter.close();
-    return Object.freeze({status: 'closed'});
+    const closed = await adapter.close();
+    return Object.freeze({status: 'closed', ...closed});
   } catch (error) {
     return Object.freeze({status: 'close-failed', error: String(error?.message || error)});
   }
@@ -387,6 +393,7 @@ function observationsOf(measured, registry, profileClass) {
     lateCompletions: Object.freeze([...step.lateCompletions]),
     connections: Object.freeze({
       destroyedAfterUnresolvedOrTransportFailure: registry.destroyed,
+      destroyFailures: Object.freeze([...registry.destroyFailures]),
       abortedInFlightAtWatchdog: measured.abortedInFlight,
     }),
   });
@@ -425,7 +432,7 @@ async function executeScenarioARun(options) {
     plan: identity,
     deployment: Object.freeze({
       endpoint: system.endpoint,
-      endpointDiscovery: system.discovery ?? 'caller-endpoint',
+      endpointDiscovery: system.discovery,
       dataset: Object.freeze({
         resetMethod: system.resetMethod,
         verification: await verifyOltpLoadedDataset(dataset, loaded, measured.setup ?? null),

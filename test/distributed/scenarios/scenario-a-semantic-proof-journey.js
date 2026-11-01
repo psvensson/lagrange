@@ -20,6 +20,10 @@ import {
   buildScenarioASemanticGateEvidence,
 } from '../harness/oltp-scenario-a-semantic-gate.js';
 import {
+  PGWIRE_OLTP_EXECUTION_PATH,
+  PGWIRE_OLTP_NATIVE_LOCKING_READ_MODE,
+  PGWIRE_OLTP_PROTOCOL,
+  PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE,
   createLagrangeOltpAdapter,
 } from '../reference-client/lagrange-oltp-adapter.js';
 import {
@@ -86,6 +90,11 @@ for (const proofCase of OLTP_SCENARIO_A_PROOF_CASES) {
     throw new Error(`Scenario A proof journey has no executor for case ${proofCase.id}`);
   }
 }
+
+const LOCKING_READ_MODE_BY_SYSTEM = Object.freeze({
+  [OLTP_SCENARIO_A_SYSTEM.LAGRANGE]: PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE,
+  [OLTP_SCENARIO_A_SYSTEM.POSTGRESQL]: PGWIRE_OLTP_NATIVE_LOCKING_READ_MODE,
+});
 
 const ADAPTER_BY_SYSTEM = Object.freeze({
   [OLTP_SCENARIO_A_SYSTEM.LAGRANGE]: createLagrangeOltpAdapter,
@@ -195,6 +204,11 @@ async function runScenarioASemanticProofJourney(request = {}) {
     serviceEndpoint: null,
     admission: null,
     runtimePreflight: null,
+    publicExecutionContract: Object.freeze({
+      protocol: PGWIRE_OLTP_PROTOCOL,
+      executionPath: PGWIRE_OLTP_EXECUTION_PATH,
+      lockingReadMode: LOCKING_READ_MODE_BY_SYSTEM[request.system],
+    }),
   });
   const options = Object.freeze({
     createAdapter: ADAPTER_BY_SYSTEM[request.system],
