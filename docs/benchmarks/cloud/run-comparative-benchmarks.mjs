@@ -37,6 +37,7 @@ import {
 import {runComparativeCampaign} from
   '../../../test/distributed/harness/comparative-benchmark-campaign-runner.js';
 import {
+  campaignImagesByRole,
   collectHostFacts,
   describeLoadGenerator,
   ensureProductImages,
@@ -72,17 +73,10 @@ import {SCENARIO_OUTCOME} from '../../../test/distributed/harness/scenario-outco
 import {
   COMPARATIVE_TARGET,
   LAGRANGE_IMAGE_DEFAULT,
-  PD_IMAGE_DEFAULT,
-  POSTGRES_IMAGE_DEFAULT,
   TARGET_DATA_HOSTS,
-  TIDB_IMAGE_DEFAULT,
-  TIKV_IMAGE_DEFAULT,
   deployComparativeTarget,
   removeCampaignContainers,
 } from '../../../test/distributed/harness/real-product-cluster-deployers.js';
-import {
-  TIDB_SQL_CLIENT_IMAGE,
-} from '../../../test/distributed/harness/real-product-deployment-contract.js';
 import {
   observeProductsAfterWindow,
 } from '../../../test/distributed/harness/real-product-identity.js';
@@ -237,16 +231,6 @@ function createSshRun(hosts, opts) {
   };
 }
 
-function imagesFor(targets, opts) {
-  const images = new Set([POSTGRES_IMAGE_DEFAULT]);
-  if (targets.includes(COMPARATIVE_TARGET.LAGRANGE)) images.add(opts.lagrangeImage);
-  if (targets.includes(COMPARATIVE_TARGET.TIDB_TIKV)) {
-    for (const image of [PD_IMAGE_DEFAULT, TIKV_IMAGE_DEFAULT, TIDB_IMAGE_DEFAULT,
-      TIDB_SQL_CLIENT_IMAGE]) images.add(image);
-  }
-  return [...images];
-}
-
 // The harness identity the campaign header carries (stream A's same-harness
 // shape), the commit and checkout state read through the repository's one git
 // invocation owner. A git read that fails throws: a campaign never records a
@@ -272,9 +256,12 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
     hosts: hosts.filter((host) => host.role === 'data'),
     contentIdentity: opts.lagrangeImageContent, registryRef: opts.lagrangeImage, sshRun,
     opts}) : null;
-  await ensureProductImages({hosts, sshRun, opts,
-    images: imagesFor(manifest.targets, opts).filter((image) =>
-      !(pinned && image === opts.lagrangeImage))});
+  const images = campaignImagesByRole({targets: manifest.targets,
+    lagrangeImage: opts.lagrangeImage});
+  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'data'), sshRun, opts,
+    images: images.data.filter((image) => !(pinned && image === opts.lagrangeImage))});
+  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'client'), sshRun,
+    opts, images: images.client});
   const recordOwner = await loadRawObservationRecordOwner();
   const client = hosts.find((host) => host.role === 'client');
   if (!client.repoPath || !client.nodePath) {

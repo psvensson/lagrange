@@ -20,6 +20,14 @@ import {
   deploymentFailure,
 } from './real-product-deployment-contract.js';
 import {contentIdentityOf, imageStoreOf} from './real-product-identity.js';
+import {
+  COMPARATIVE_TARGET,
+  PD_IMAGE_DEFAULT,
+  POSTGRES_IMAGE_DEFAULT,
+  TIDB_IMAGE_DEFAULT,
+  TIKV_IMAGE_DEFAULT,
+} from './real-product-cluster-deployers.js';
+import {TIDB_SQL_CLIENT_IMAGE} from './real-product-deployment-contract.js';
 import {errorText, execWithStatus, shellWord} from './real-product-remote-shell.js';
 
 const FIELD_SEPARATOR = '|';
@@ -46,6 +54,26 @@ async function collectHostFacts({hosts, sshRun, opts}) {
       'two campaign hosts are the same machine (equal boot ids)', {facts});
   }
   return facts;
+}
+
+/**
+ * The images each host role must hold. Data hosts run the product containers;
+ * the load generator runs only the containers it starts itself (the TiDB
+ * arm's SQL client, started at the client's address), never a product image.
+ * @param {{targets: Array<string>, lagrangeImage: string}} input
+ * @return {{data: Array<string>, client: Array<string>}}
+ */
+function campaignImagesByRole({targets, lagrangeImage}) {
+  const data = new Set([POSTGRES_IMAGE_DEFAULT]);
+  const client = [];
+  if (arrayIncludes(targets, COMPARATIVE_TARGET.LAGRANGE)) data.add(lagrangeImage);
+  if (arrayIncludes(targets, COMPARATIVE_TARGET.TIDB_TIKV)) {
+    for (const image of [PD_IMAGE_DEFAULT, TIKV_IMAGE_DEFAULT, TIDB_IMAGE_DEFAULT]) {
+      data.add(image);
+    }
+    client.push(TIDB_SQL_CLIENT_IMAGE);
+  }
+  return {data: [...data], client};
 }
 
 /** Every image present on every host, by reference; a failed pull is typed. */
@@ -128,4 +156,10 @@ function describeLoadGenerator({host, hostFacts}) {
     bootId: hostFacts?.bootId ?? null};
 }
 
-export {collectHostFacts, describeLoadGenerator, ensureProductImages, resolvePinnedImage};
+export {
+  campaignImagesByRole,
+  collectHostFacts,
+  describeLoadGenerator,
+  ensureProductImages,
+  resolvePinnedImage,
+};

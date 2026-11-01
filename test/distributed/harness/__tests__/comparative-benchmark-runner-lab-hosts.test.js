@@ -6,7 +6,10 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {resolvePinnedImage} from '../comparative-benchmark-host-preparation.js';
+import {
+  campaignImagesByRole,
+  resolvePinnedImage,
+} from '../comparative-benchmark-host-preparation.js';
 import {contentIdentityOf} from '../real-product-identity.js';
 import {
   checkLabThermalHeadroom,
@@ -179,3 +182,22 @@ test('docker disk is a fleet fact: a host below the data-host requirement is not
     nodeMinimum: '22.12.0'}), (error) => error.code === 'refused_insufficient_host_topology' &&
     /host-ineligible: docker_disk_low/u.test(error.message));
 });
+
+// Live campaign bench-live-20261101-b: the runner staged EVERY product image on
+// every host, the load generator included, so a load generator with little
+// docker disk (adam-laptop, 408 MB free) failed staging on images it never
+// runs. Data hosts hold the product images; the load generator holds only
+// the containers it starts itself (the TiDB arm's SQL client).
+test('product images go to the data hosts; the load generator gets only its own client image',
+  () => {
+    const all = campaignImagesByRole({targets: ['lagrange', 'tidb-tikv', 'pg-single-primary'],
+      lagrangeImage: 'psvensson/lagrange@sha256:abc'});
+    assert.deepEqual(all.client, ['mysql:8.4.11']);
+    assert.deepEqual([...all.data].sort(), ['pingcap/pd:v8.5.8', 'pingcap/tidb:v8.5.8',
+      'pingcap/tikv:v8.5.8', 'postgres:17-alpine', 'psvensson/lagrange@sha256:abc']);
+    const noTidb = campaignImagesByRole({targets: ['lagrange', 'pg-single-primary'],
+      lagrangeImage: 'psvensson/lagrange@sha256:abc'});
+    assert.deepEqual(noTidb.client, []);
+    assert.deepEqual([...noTidb.data].sort(), ['postgres:17-alpine',
+      'psvensson/lagrange@sha256:abc']);
+  });
