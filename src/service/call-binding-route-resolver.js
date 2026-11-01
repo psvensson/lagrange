@@ -92,6 +92,28 @@ function selectHostScopedActual(request, chosenActuals) {
   };
 }
 
+const PAGED_ROUTE_FIELD_KEYS = Object.freeze([
+  'maxPages',
+  'maxShardBytes',
+  'maxShardRows',
+  'pageKey',
+  'pageRowBound',
+  'stateSchema',
+]);
+
+function resolvePagedRouteFields(source, chosenDefinition) {
+  const fields = {};
+  for (const key of PAGED_ROUTE_FIELD_KEYS) {
+    const val = source?.[key] !== undefined ?
+      source[key] :
+      chosenDefinition?.[key];
+    if (val !== undefined) {
+      fields[key] = val;
+    }
+  }
+  return fields;
+}
+
 function buildResolvedCallRoute(
   request,
   active,
@@ -100,7 +122,8 @@ function buildResolvedCallRoute(
   actual,
 ) {
   const {chosenBinding, chosenDefinition, serviceId} = active;
-  const parameters = chosenBinding.declaration.source.parameters;
+  const source = chosenBinding.declaration.source;
+  const parameters = source.parameters;
   return Object.freeze({
     bindingDigest: chosenDefinition.binding_digest,
     bindingId: chosenBinding.bindingId,
@@ -110,6 +133,7 @@ function buildResolvedCallRoute(
     hostNodeId,
     name: request.name,
     nodeId: actual.node_id,
+    ...resolvePagedRouteFields(source, chosenDefinition),
     ...(parameters !== undefined ? {parameters} : {}),
     replicaId: actual.service_id,
     serviceId,

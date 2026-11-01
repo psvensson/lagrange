@@ -133,6 +133,7 @@ const SCHEMA_TYPE_ARRAY = 'array';
 const SCHEMA_TYPE_RECORD = 'record';
 const SCHEMA_TYPE_OBJECT = 'object';
 const PARTIAL_SUFFIX = 'Partial';
+const STATE_SUFFIX = 'State';
 const EXPORT_TYPE_PREFIX = 'export type ';
 const OPTIONAL_QUESTION = '?';
 const GROUP_KEY_TS_TYPE = 'string | number';
@@ -147,6 +148,10 @@ function paramsInterfaceName(operationId) {
 
 function partialTypeName(operationId) {
   return pascalCase(operationId) + PARTIAL_SUFFIX;
+}
+
+function stateTypeName(operationId) {
+  return pascalCase(operationId) + STATE_SUFFIX;
 }
 
 function operationInterfaceName(operationId) {
@@ -191,6 +196,15 @@ function emitPartialTypeDeclaration(operation) {
     ...doc(
       `Structured partial schema declared by the \`${operation.id}\` operation.`),
     `${EXPORT_TYPE_PREFIX}${partialTypeName(operation.id)} = ${typeExpr};`,
+  ].join(TEXT_NEWLINE);
+}
+
+function emitStateTypeDeclaration(operation) {
+  const typeExpr = tsTypeForPartialSchemaNode(operation.stateSchema);
+  return [
+    ...doc(
+      `Bounded accumulator state schema declared by the \`${operation.id}\` operation.`),
+    `${EXPORT_TYPE_PREFIX}${stateTypeName(operation.id)} = ${typeExpr};`,
   ].join(TEXT_NEWLINE);
 }
 
@@ -252,6 +266,20 @@ function emitRowInterface(operation) {
   return lines.join(TEXT_NEWLINE);
 }
 
+function emitAccumulatorSignatures(operation, rowName, argsType, contextEmit) {
+  if (!operation?.stateSchema && typeof operation?.init !== 'function') {
+    return [];
+  }
+  const sType = operation.stateSchema ?
+    stateTypeName(operation.id) :
+    DTS_FRAGMENT.UNKNOWN;
+  return [
+    `  init(args: ${argsType}): ${sType};`,
+    `  step(state: ${sType}, page: readonly ${rowName}[], args: ${argsType}): ${sType};`,
+    `  finish(state: ${sType}, args: ${argsType}, ${contextEmit}): ${DTS_FRAGMENT.UNKNOWN};`,
+  ];
+}
+
 function emitOperationInterface(operation) {
   const rowName = rowInterfaceName(operation.id);
   const argsType = operationArgsType(operation);
@@ -269,6 +297,7 @@ function emitOperationInterface(operation) {
     ...doc(`The \`${operation.id}\` distributed operation.`),
     `${DTS_FRAGMENT.EXPORT_INTERFACE}${operationInterfaceName(operation.id)} {`,
     DTS_FRAGMENT.KIND_FIELD,
+    ...emitAccumulatorSignatures(operation, rowName, argsType, contextEmit),
     `  run(rows: readonly ${rowName}[], args: ${argsType}, ` +
       `${contextEmit}): ${DTS_FRAGMENT.UNKNOWN};`,
     `  reduce(partials: ${partialsType}, ` +
@@ -368,6 +397,9 @@ function typingsSource(ir) {
     }
     if (operation.partialSchema) {
       sections.push(emitPartialTypeDeclaration(operation), EMPTY_TEXT);
+    }
+    if (operation.stateSchema) {
+      sections.push(emitStateTypeDeclaration(operation), EMPTY_TEXT);
     }
   }
   for (const operation of ir.operations) {

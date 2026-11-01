@@ -25,6 +25,11 @@ import {
   assertDispatchedSelectorParameters,
   parseSelectorStatementAst,
 } from '../service/call-selector-parameter-contract.js';
+import {
+  executeLocalShardPageRead,
+  extractUserArgumentsJson,
+  stampPagedCallArguments,
+} from '../service/call-shard-paged-execution.js';
 
 const CALL_CELL_RUNTIME_MESSAGE = Object.freeze({
   ACTUAL_NOT_ACTIVE:
@@ -530,7 +535,9 @@ function buildCallCellInvocation(
   };
 }
 
-function buildSuccessfulInvocationResponse(result, route) {
+const EMPTY_JSON_OBJECT = '{}';
+
+function buildSuccessfulInvocationResponse(result, route, pageMeta = null) {
   const value = result?.journaled === true ? result.value : result;
   const componentResult =
     value && typeof value === 'object' && 'result' in value ?
@@ -545,6 +552,7 @@ function buildSuccessfulInvocationResponse(result, route) {
       invoked: result?.replayed !== true,
       replayed: result?.replayed === true,
     },
+    ...(pageMeta ? {pageMeta} : {}),
     partials: componentResult.partials,
     processed: true,
     // Receiver truth for lease bookkeeping: the replica that actually
@@ -592,14 +600,14 @@ function assertHandlerInvocationParameterFence(
   securityContext,
   invocation,
   route,
-  call,
+  userArgumentsJson,
   verifiedParameters,
 ) {
   const fenceMap = getHandlerParameterFenceMap(handler);
   const {baseInvocationId} = parseCallInvocationIdentity(invocation.id);
   const key = `${securityContext.tenantId}:${baseInvocationId}`;
   const current = {
-    arguments: call.arguments,
+    arguments: userArgumentsJson,
     bindingVersionId: route.bindingVersionId ?? null,
     intentDigest: invocation.intentDigest,
     parametersDigest: verifiedParameters.parametersDigest,
@@ -620,10 +628,26 @@ function assertHandlerInvocationParameterFence(
   }
 }
 
-// Data-local branch: a run dispatch without a pre-built batch names its
-// shard partition; this node builds the typed batch from its own
-// partition replica AFTER route/target admission and BEFORE the
-// component is touched (every refusal inside stays invoked=false).
+function hasPagedBatchRequest(pageRequest) {
+  if (!pageRequest) return false;
+  return (
+    pageRequest.readViewId !== undefined ||
+    pageRequest.pageCursor !== undefined ||
+    pageRequest.pageIndex !== undefined
+  );
+}
+
+function recordLocalShardReadAccess(handler, route, partitionId) {
+  const engine = handler.cdcIntegrationService?.sqlQueryEngine || null;
+  if (typeof engine?.recordServicePartitionAccess === 'function') {
+    engine.recordServicePartitionAccess(
+      {issuingServiceId: route.serviceId},
+      [partitionId],
+      SERVICE_PARTITION_ACCESS_KIND.READ,
+    );
+  }
+}
+
 async function resolveRunInputBatch(
   handler,
   payload,
@@ -635,10 +659,25 @@ async function resolveRunInputBatch(
     typeof payload?.partitionId === 'string' &&
     resolveCallCellExportName(invocation) ===
       CALL_CELL_INVOCATION_EXPORT_NAME.RUN;
-  return dataLocal ?
-    buildLocalShardBatch(
-      handler, payload, route, invocation, boundParameters) :
-    payload?.batch;
+  if (!dataLocal) {
+    return {batch: payload?.batch, pageMeta: null};
+  }
+  if (hasPagedBatchRequest(payload.pageRequest)) {
+    const partitionService =
+      resolveUsableLocalPartitionService(handler, payload.partitionId);
+    recordLocalShardReadAccess(handler, route, payload.partitionId);
+    return executeLocalShardPageRead({
+      boundParameters,
+      handler,
+      invocation,
+      partitionService,
+      payload,
+      route,
+    });
+  }
+  const batch = await buildLocalShardBatch(
+    handler, payload, route, invocation, boundParameters);
+  return {batch, pageMeta: null};
 }
 
 async function handleCallCellInvocation(handler, envelope) {
@@ -677,8 +716,11 @@ async function handleCallCellInvocation(handler, envelope) {
       invocation,
     );
     assertPartitionFenceCurrent(handler, payload);
+    const userArgumentsJson = extractUserArgumentsJson(
+      call.arguments ?? EMPTY_JSON_OBJECT,
+    );
     const verifiedParameters = assertDispatchedSelectorParameters({
-      argumentsJson: call.arguments,
+      argumentsJson: userArgumentsJson,
       dispatchedParameters: call.parameters,
       dispatchedParametersDigest: call.parametersDigest,
       parameterSchema: route.parameters,
@@ -689,22 +731,23 @@ async function handleCallCellInvocation(handler, envelope) {
       securityContext,
       invocation,
       route,
-      call,
+      userArgumentsJson,
       verifiedParameters,
     );
-    const batch = await resolveRunInputBatch(
+    const {batch, pageMeta} = await resolveRunInputBatch(
       handler,
       payload,
       route,
       invocation,
       verifiedParameters.boundParameters,
     );
+    const invokeCall = stampPagedCallArguments(admittedCall, pageMeta);
     invocationStarted = true;
     const result = await handler.serviceRuntimeLifecycle.invoke(
       localReplica.replicaHandle,
       buildCallCellInvocation(
         handler,
-        admittedCall,
+        invokeCall,
         batch,
         partials,
         route,
@@ -712,7 +755,7 @@ async function handleCallCellInvocation(handler, envelope) {
         securityContext,
       ),
     );
-    return buildSuccessfulInvocationResponse(result, route);
+    return buildSuccessfulInvocationResponse(result, route, pageMeta);
   } catch (error) {
     return buildInvocationFailure(error, {
       invoked: resolveInvocationFailureStarted(

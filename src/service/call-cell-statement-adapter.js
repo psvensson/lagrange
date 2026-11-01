@@ -71,6 +71,18 @@ function freezeCallSecurityContext(context) {
   return context;
 }
 
+function extractUserCallArguments(callArguments) {
+  try {
+    const parsed = JSON.parse(callArguments);
+    if (parsed && typeof parsed === 'object' && parsed.__lagrangePagedStep) {
+      return JSON.stringify(parsed.arguments ?? {});
+    }
+  } catch {
+    return callArguments;
+  }
+  return callArguments;
+}
+
 function buildEnvelope(fields) {
   return Object.freeze({
     [SERVICE_MESSAGE_FIELD.MESSAGE_ID]:
@@ -100,6 +112,9 @@ function buildEnvelope(fields) {
         id: fields.invocationId,
         intentDigest: fields.intentDigest,
       }),
+      ...(fields.pageRequest !== undefined ?
+        {pageRequest: fields.pageRequest} :
+        {}),
       partitionFence: fields.partitionFence,
       partitionId: fields.partitionId,
       partials: fields.partials,
@@ -183,6 +198,7 @@ const CALL_CELL_INGRESS_KIT = Object.freeze({
     componentResult: normalizeCallComponentResult(
       delivery.componentResult,
     ),
+    ...(delivery.pageMeta !== undefined ? {pageMeta: delivery.pageMeta} : {}),
     partials: Array.isArray(delivery.partials) ?
       delivery.partials :
       [],
@@ -253,6 +269,7 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
     callCell,
     parameters,
     parametersDigest,
+    pageRequest,
     partitionId,
     partitionFence,
     hostNodeId,
@@ -268,7 +285,8 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
       this._assertOpen(activeRequest);
       const frozenContext = freezeCallSecurityContext(securityContext);
       const callArguments = normalizeCallArguments(argumentsJson);
-      const argumentsDigest = sha256Hex(callArguments);
+      const userCallArguments = extractUserCallArguments(callArguments);
+      const argumentsDigest = sha256Hex(userCallArguments);
       const invocationId = typeof providedInvocationId === 'string' &&
         providedInvocationId.length > 0 ?
         providedInvocationId :
@@ -296,7 +314,7 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
         });
         const resolvedParams = resolveAdapterRouteParameters(
           route,
-          callArguments,
+          userCallArguments,
           parameters,
           parametersDigest,
         );
@@ -322,6 +340,7 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
           intentDigest,
           invocationId,
           name,
+          pageRequest,
           parameters: resolvedParams.parameters,
           parametersDigest: resolvedParams.parametersDigest,
           partials,

@@ -584,17 +584,109 @@ function plainRow(row) {
 
 ${renderGuestCanonicalPartialCodecSource()}
 
+function emitFinishEntries(entries, emitFn, alreadyEmitted) {
+  if (alreadyEmitted || !Array.isArray(entries)) return;
+  for (const entry of entries) {
+    if (Array.isArray(entry)) {
+      emitFn(entry[0], entry[1]);
+    } else if (entry && typeof entry === 'object') {
+      const groupKey = 'groupKey' in entry ? entry.groupKey : entry.key;
+      const partial = 'partial' in entry ? entry.partial : entry.value;
+      emitFn(groupKey, partial);
+    }
+  }
+}
+
+function executePagedStepEnvelope(operation, rows, stepSpec, userArgs, encodingEmit, didEmit) {
+  const hasAccumulator = typeof operation.init === 'function' &&
+    typeof operation.step === 'function' &&
+    typeof operation.finish === 'function';
+  if (!hasAccumulator) {
+    if (stepSpec.requireAccumulator === true || stepSpec.isFinalPage === false) {
+      throw new Error('UNSUPPORTED_ACCUMULATOR_OPERATION');
+    }
+    const outcome = operation.run(rows, userArgs, {emit: encodingEmit});
+    return encodeCanonicalPartialValue({
+      __lagrangePagedOutcome: 'finished',
+      outcome: outcome === undefined ? null : outcome,
+      stateJson: 'null',
+    });
+  }
+  const stateSchema = operation.stateSchema;
+  let state;
+  if (stepSpec.pageIndex === 0 ||
+      stepSpec.stateJson === null ||
+      stepSpec.stateJson === undefined) {
+    state = operation.init(userArgs);
+    encodeCanonicalPartialValue(state, {schema: stateSchema});
+  } else {
+    state = decodeCanonicalPartialValue(stepSpec.stateJson, {schema: stateSchema});
+  }
+  if (rows.length > 0) {
+    state = operation.step(state, rows, userArgs);
+  }
+  const nextStateJson = encodeCanonicalPartialValue(state, {schema: stateSchema});
+  state = decodeCanonicalPartialValue(nextStateJson, {schema: stateSchema});
+  if (stepSpec.isFinalPage === true) {
+    const finishOutcome = operation.finish(state, userArgs, {emit: encodingEmit});
+    emitFinishEntries(finishOutcome, encodingEmit, didEmit());
+    return encodeCanonicalPartialValue({
+      __lagrangePagedOutcome: 'finished',
+      stateJson: nextStateJson,
+    });
+  }
+  if (didEmit()) {
+    throw new Error('UNFINISHED_SHARD_EMIT_FORBIDDEN');
+  }
+  return encodeCanonicalPartialValue({
+    __lagrangePagedOutcome: 'stepped',
+    stateJson: nextStateJson,
+  });
+}
+
 export function run(operationId, batch, argumentsJson) {
   const operation = OPERATION_TABLE.get(operationId);
   if (!operation) return typedRefusal(UNKNOWN_OPERATION_CODE, operationId);
   const rows = batch.map(plainRow);
   const schema = operation.partialSchema;
-  const encodingEmit = (key, partial) => emit(
-    encodeCanonicalGroupKey(key),
-    encodeCanonicalPartialValue(partial, {schema}),
-  );
+  let emittedCount = 0;
+  const encodingEmit = (key, partial) => {
+    emittedCount += 1;
+    return emit(
+      encodeCanonicalGroupKey(key),
+      encodeCanonicalPartialValue(partial, {schema}),
+    );
+  };
+  const parsedArgs = JSON.parse(argumentsJson);
+  if (parsedArgs && typeof parsedArgs === 'object' && parsedArgs.__lagrangePagedStep) {
+    return executePagedStepEnvelope(
+      operation,
+      rows,
+      parsedArgs.__lagrangePagedStep,
+      parsedArgs.arguments,
+      encodingEmit,
+      () => emittedCount > 0,
+    );
+  }
+  if (typeof operation.init === 'function' &&
+      typeof operation.step === 'function' &&
+      typeof operation.finish === 'function') {
+    const stateSchema = operation.stateSchema;
+    let state = operation.init(parsedArgs);
+    encodeCanonicalPartialValue(state, {schema: stateSchema});
+    if (rows.length > 0) {
+      state = operation.step(state, rows, parsedArgs);
+    }
+    const nextStateJson = encodeCanonicalPartialValue(state, {schema: stateSchema});
+    state = decodeCanonicalPartialValue(nextStateJson, {schema: stateSchema});
+    const finishOutcome = operation.finish(state, parsedArgs, {emit: encodingEmit});
+    emitFinishEntries(finishOutcome, encodingEmit, emittedCount > 0);
+    return encodeCanonicalPartialValue(
+      finishOutcome === undefined ? null : finishOutcome,
+    );
+  }
   const outcome = operation.run(
-    rows, JSON.parse(argumentsJson), {emit: encodingEmit},
+    rows, parsedArgs, {emit: encodingEmit},
   );
   return encodeCanonicalPartialValue(outcome === undefined ? null : outcome);
 }

@@ -40,6 +40,7 @@ const SERVICE_SOURCE_ERROR_CODE = Object.freeze({
   INVALID_OPERATION: 'invalid_operation',
   INVALID_PARAMETERS: 'invalid_parameters',
   INVALID_PARTIAL_SCHEMA: 'invalid_partial_schema',
+  INVALID_STATE_SCHEMA: 'invalid_state_schema',
   INVALID_STATEMENT: 'invalid_statement',
   LEGACY_HANDLERS_UNSUPPORTED: 'legacy_handlers_unsupported',
   MISSING_FETCH: 'missing_fetch',
@@ -77,6 +78,8 @@ const SERVICE_SOURCE_MESSAGE = Object.freeze({
     'operation parameters must declare typed selector parameter slots matching the statement placeholders',
   INVALID_PARTIAL_SCHEMA:
     'operation partialSchema must declare a valid finite-JSON partial value schema',
+  INVALID_STATE_SCHEMA:
+    'operation stateSchema must declare a valid finite-JSON accumulator state schema',
   INVALID_STATEMENT:
     'operation statement must be a sql template descriptor with non-empty text',
   LEGACY_HANDLERS_UNSUPPORTED:
@@ -248,9 +251,49 @@ function validateOperationPartialSchema(pointer, rawPartialSchema, errors) {
   }
 }
 
+function validateOperationAccumulatorSchema(pointer, rawSchema, errors) {
+  if (rawSchema === undefined) return undefined;
+  try {
+    return normalizePartialValueSchema(rawSchema);
+  } catch {
+    errors.push(serviceSourceError(
+      SERVICE_SOURCE_ERROR_CODE.INVALID_STATE_SCHEMA,
+      `${pointer}/stateSchema`));
+    return undefined;
+  }
+}
+
+function attachAccumulatorNodeFields(node, descriptorRecord, accumulatorSchema) {
+  if (accumulatorSchema !== undefined && accumulatorSchema !== null) {
+    node.stateSchema = accumulatorSchema;
+  }
+  if (typeof descriptorRecord.init === 'function') {
+    node.init = descriptorRecord.init;
+  }
+  if (typeof descriptorRecord.step === 'function') {
+    node.step = descriptorRecord.step;
+  }
+  if (typeof descriptorRecord.finish === 'function') {
+    node.finish = descriptorRecord.finish;
+  }
+  if (descriptorRecord.pageKey !== undefined) {
+    node.pageKey = descriptorRecord.pageKey;
+  }
+  if (descriptorRecord.pageRowBound !== undefined) {
+    node.pageRowBound = descriptorRecord.pageRowBound;
+  }
+  return node;
+}
+
 function buildOperationIrNode(
-  id, text, normalizedParameters, normalizedPartialSchema, reduce, run,
+  id,
+  text,
+  normalizedParameters,
+  normalizedPartialSchema,
+  normalizedAccumulatorSchema,
+  descriptorRecord,
 ) {
+  const {reduce, run} = descriptorRecord;
   const node = {id, reduce, run, statement: {text}};
   if (normalizedParameters !== undefined) {
     node.parameters = normalizedParameters;
@@ -259,7 +302,11 @@ function buildOperationIrNode(
       normalizedPartialSchema !== null) {
     node.partialSchema = normalizedPartialSchema;
   }
-  return node;
+  return attachAccumulatorNodeFields(
+    node,
+    descriptorRecord,
+    normalizedAccumulatorSchema,
+  );
 }
 
 function validateOperationDescriptor(id, descriptor, collected, errors) {
@@ -280,9 +327,11 @@ function validateOperationDescriptor(id, descriptor, collected, errors) {
     return;
   }
   collected.idByDescriptor.set(descriptor, id);
+  const descriptorRecord = ownRecord(descriptor);
   const {
-    params, parameters, partial, partialSchema, reduce, run, statement,
-  } = ownRecord(descriptor);
+    params, parameters, partial, partialSchema, reduce, run,
+    state, stateSchema, statement,
+  } = descriptorRecord;
   const text = sqlStatementText(statement);
   if (text === null) {
     errors.push(serviceSourceError(
@@ -292,6 +341,8 @@ function validateOperationDescriptor(id, descriptor, collected, errors) {
     pointer, text, parameters ?? params, errors);
   const normalizedPartialSchema = validateOperationPartialSchema(
     pointer, partialSchema ?? partial, errors);
+  const normalizedAccumulatorSchema = validateOperationAccumulatorSchema(
+    pointer, stateSchema ?? state, errors);
   if (typeof run !== 'function') {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.MISSING_RUN, pointer));
@@ -301,7 +352,13 @@ function validateOperationDescriptor(id, descriptor, collected, errors) {
       SERVICE_SOURCE_ERROR_CODE.MISSING_REDUCE, pointer));
   }
   collected.operations.push(buildOperationIrNode(
-    id, text, normalizedParameters, normalizedPartialSchema, reduce, run));
+    id,
+    text,
+    normalizedParameters,
+    normalizedPartialSchema,
+    normalizedAccumulatorSchema,
+    descriptorRecord,
+  ));
 }
 
 function collectOperations(operations, errors, options) {

@@ -44,6 +44,10 @@ import {
   encodeCanonicalGroupKey,
   encodeCanonicalPartialValue,
 } from './call-canonical-partial-codec.js';
+import {
+  createPagedShardProgressTracker,
+  executePagedShardSlot,
+} from './call-shard-paged-execution.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const CALL_INVOKER_MESSAGE = Object.freeze({
@@ -83,6 +87,8 @@ const CALL_INVOKER_BUDGET_DEFAULT = Object.freeze({
   EMIT_BUDGET: 64,
   NESTED_CALL_BUDGET: 1,
 });
+const DEFAULT_ATTEMPT_ID = 'attempt-1';
+const DEFAULT_SHARD_FAIL_REASON = 'shard_failed';
 // Bounded wait for a lease-driven activation to produce a ready Cell on
 // the shard host node: retry the host-restricted dispatch until the
 // planner's replica turns ready or the window lapses (then the typed
@@ -217,6 +223,14 @@ class CallCellInvoker {
       options.reclaimRetentionMs, CALL_INVOKER_RECLAIM_RETENTION_DEFAULT_MS);
     this._batchRowBound = options.batchRowBound;
     this._batchByteBound = options.batchByteBound;
+    this._pagedExecution = Boolean(options.pagedExecution);
+    this._pageRowBound = options.pageRowBound;
+    this._maxPagesPerShard = options.maxPagesPerShard;
+    this._maxShardRows = options.maxShardRows;
+    this._maxShardBytes = options.maxShardBytes;
+    this._maxStateBytes = options.maxStateBytes;
+    this._progressTracker = options.progressTracker ||
+      createPagedShardProgressTracker();
     this._partialLimit = options.partialLimit;
     this._partialByteLimit = options.partialByteLimit;
     this._maxConcurrentShardRuns = positiveIntegerOption(
@@ -292,6 +306,9 @@ class CallCellInvoker {
       invocationId: createCallSlotInvocationId(
         request.invocationId, request.slotId),
       name: request.name,
+      ...(request.pageRequest !== undefined ?
+        {pageRequest: request.pageRequest} :
+        {}),
       ...(request.parametersDigest !== null &&
           request.parametersDigest !== undefined ?
         {
@@ -352,6 +369,68 @@ class CallCellInvoker {
     }
   }
 
+  _isPagedOperation(request) {
+    const res = request.resolution;
+    return Boolean(
+      this._pagedExecution ||
+      request.pagedExecution ||
+      res?.paged ||
+      res?.pageKey !== undefined ||
+      res?.stateSchema !== undefined ||
+      res?.pageRowBound !== undefined,
+    );
+  }
+
+  _resolvePagedExecutionLimits(res) {
+    const r = res || {};
+    return {
+      maxPages: r.maxPages ?? this._maxPagesPerShard,
+      maxShardBytes: r.maxShardBytes ?? this._maxShardBytes,
+      maxShardRows: r.maxShardRows ?? this._maxShardRows,
+      maxStateBytes: r.maxStateBytes ?? this._maxStateBytes,
+      pageByteBound: r.pageByteBound ?? this._batchByteBound,
+      pageRowBound:
+        r.pageRowBound ?? this._pageRowBound ?? this._batchRowBound,
+    };
+  }
+
+  async _runPagedShardSlot(request, telemetry, executionEvidence) {
+    const res = request.resolution;
+    const outcome = await executePagedShardSlot({
+      dispatchPage: (pageTurn) => {
+        const pagedArgsJson = JSON.stringify({
+          __lagrangePagedStep: {
+            isFinalPage: false,
+            pageIndex: pageTurn.pageIndex,
+            requireAccumulator: Boolean(res?.requireAccumulator),
+            stateJson: pageTurn.stateJson,
+          },
+          arguments: pageTurn.userArguments,
+        });
+        return this._dispatchShardRun({
+          ...request,
+          argumentsJson: pagedArgsJson,
+          pageRequest: {
+            attemptId: pageTurn.attemptId,
+            pageByteBound: pageTurn.pageByteBound,
+            pageCursor: pageTurn.pageCursor,
+            pageIndex: pageTurn.pageIndex,
+            pageKey: res?.pageKey,
+            pageRowBound: pageTurn.pageRowBound,
+            readViewId: pageTurn.readViewId,
+          },
+        }, telemetry);
+      },
+      executionEvidence,
+      limits: this._resolvePagedExecutionLimits(res),
+      progressTracker: this._progressTracker,
+      reduceCoordinator: this._reduceCoordinator,
+      request,
+      telemetry,
+    });
+    return outcome.slotId;
+  }
+
   // One complete per-slot pipeline: host-restricted dispatch (with
   // bounded activation), fail-closed partial normalization, slot lease
   // acquisition, and partial publication. Independent per slot and safe
@@ -359,6 +438,9 @@ class CallCellInvoker {
   // identity and coordination row, and publication order never affects
   // the complete-set gate.
   async _runShardSlot(request, telemetry, executionEvidence) {
+    if (this._isPagedOperation(request)) {
+      return this._runPagedShardSlot(request, telemetry, executionEvidence);
+    }
     const delivery = await this._dispatchShardRun(request, telemetry);
     // A processed delivery means this shard's run export executed.
     executionEvidence.started = true;
@@ -506,9 +588,42 @@ class CallCellInvoker {
     }
   }
 
-  async _invokeWithTelemetry(
-    {name, argumentsJson, callerServiceId, securityContext, deadlineMs,
-      invocationId: suppliedInvocationId}, telemetry, executionEvidence) {
+  async _assertShardDispatchSettled(
+    dispatchOutcome,
+    invocationId,
+    attemptId,
+    executionEvidence,
+  ) {
+    const rejected = dispatchOutcome.settled.find(
+      (entry) => entry.status === SHARD_TASK_STATUS.REJECTED);
+    if (!rejected) {
+      return;
+    }
+    await this._progressTracker.discardAttempt(
+      invocationId,
+      attemptId,
+      rejected.reason?.pagedCode || rejected.reason?.code ||
+        DEFAULT_SHARD_FAIL_REASON,
+    );
+    if (dispatchOutcome.settled.some((entry) =>
+      entry.status === SHARD_TASK_STATUS.REJECTED &&
+      !callFailureProvesNoExecution(entry.reason))) {
+      executionEvidence.started = true;
+    }
+    throw rejected.reason;
+  }
+
+  async _invokeWithTelemetry(request, telemetry, executionEvidence) {
+    const {
+      name,
+      argumentsJson,
+      callerServiceId,
+      securityContext,
+      deadlineMs,
+      invocationId: suppliedInvocationId,
+    } = request;
+    const attemptId = request.attemptId || DEFAULT_ATTEMPT_ID;
+    const pagedExecution = Boolean(request.pagedExecution);
     const resolution = this._routeResolver.resolve({
       callerServiceId,
       invocationId: `${RESOLVE_PROBE_PREFIX}${name}`,
@@ -525,25 +640,12 @@ class CallCellInvoker {
 
     const slotIds = batches.map((_, index) => index + 1);
     await this._reclaimExpiredCoordinationIfSupported();
-    // The reduce lease occupies its own coordination slot above the shard
-    // slots; the completeness gate reads only the shard slots.
     const reduceLeaseSlotId = slotIds.length + 1;
     await this._reduceCoordinator.seedInvocation(
       invocationId,
       [...slotIds, reduceLeaseSlotId],
     );
 
-    // Bounded parallel shard dispatch: independent per-slot pipelines
-    // proceed concurrently up to the policy-owned limit, preferring
-    // slot order. Slot identity, wire identity, and lease identity were
-    // all fixed above, before any dispatch — completion order never
-    // affects them. Shards resolved to the same host node serialize
-    // there (the WASI cell runtime allows one active invocation per
-    // component instance); shards on distinct hosts overlap. The
-    // transport cannot cancel already-dispatched work, so on failure or
-    // deadline the pool only stops admitting new shards; started work
-    // settles, and nothing partial ever becomes visible because
-    // reduction requires the complete slot set.
     telemetry.selectedPartitionCount = batches.length;
     const shardPhaseStartedAt = Date.now();
     const dispatchOutcome = await runBoundedShardDispatch({
@@ -555,10 +657,12 @@ class CallCellInvoker {
         this._runShardSlot(slotRequest, telemetry, executionEvidence),
       slots: batches.map((shard, slotIndex) => ({
         argumentsJson,
+        attemptId,
         callerServiceId,
         deadlineMs,
         invocationId,
         name,
+        pagedExecution,
         parameters: normalizedParams.boundParameters,
         parametersDigest: normalizedParams.parametersDigest,
         resolution,
@@ -569,19 +673,12 @@ class CallCellInvoker {
     });
     telemetry.peakConcurrentShardRuns = dispatchOutcome.peakConcurrent;
     telemetry.shardDispatchMs = Date.now() - shardPhaseStartedAt;
-    // Deterministic failure selection: settled entries are slot-ordered,
-    // so the surfaced failure is the lowest-slot cause after every
-    // started task settled — never network completion order.
-    const rejected = dispatchOutcome.settled.find(
-      (entry) => entry.status === SHARD_TASK_STATUS.REJECTED);
-    if (rejected) {
-      if (dispatchOutcome.settled.some((entry) =>
-        entry.status === SHARD_TASK_STATUS.REJECTED &&
-        !callFailureProvesNoExecution(entry.reason))) {
-        executionEvidence.started = true;
-      }
-      throw rejected.reason;
-    }
+    await this._assertShardDispatchSettled(
+      dispatchOutcome,
+      invocationId,
+      attemptId,
+      executionEvidence,
+    );
     if (dispatchOutcome.unadmitted.length > 0) {
       reportWaitBoundSpent(this._logger, {
         ...SHARD_ADMISSION_WAIT,
