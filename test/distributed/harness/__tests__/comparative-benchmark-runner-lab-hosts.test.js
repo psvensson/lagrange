@@ -8,6 +8,7 @@ import {test} from 'node:test';
 
 import {
   campaignImagesByRole,
+  collectHostFacts,
   resolvePinnedImage,
 } from '../comparative-benchmark-host-preparation.js';
 import {contentIdentityOf} from '../real-product-identity.js';
@@ -229,3 +230,21 @@ test('the load generator needs room for the harness worktree on its checkout fil
     assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
       nodeMinimum: '22.12.0'}), (error) => /host-ineligible: disk_low/u.test(error.message));
   });
+
+// Live campaign bench-live-20261101-b-r3 crashed with an untyped `canonical
+// JSON data required`: adam-laptop and adams-gamla run LC_NUMERIC=sv_SE, their
+// awk printed MemTotal as `15,5`, Number('15,5') is NaN, and the NaN in the
+// run record's host facts failed the record digest. The facts command's
+// numbers are locale-independent, and a fact that is not a number is a typed
+// failure, never NaN.
+test('host facts are read locale-independently; a non-numeric fact is typed', async () => {
+  const hosts = [{name: 'adam-laptop', ip: '10.0.0.1'}];
+  const good = createScriptedSsh([[/MemTotal/u, (command) => (/LC_ALL=C awk/u.test(command) ?
+    'adam|boot-1|8|15.5|eth0' : 'adam|boot-1|8|15,5|eth0')]]);
+  const [fact] = await collectHostFacts({hosts, sshRun: good.sshRun, opts: {}});
+  assert.equal(fact.memGb, 15.5);
+  assert.equal(fact.cpus, 8);
+  const comma = createScriptedSsh([[/MemTotal/u, 'adam|boot-1|8|15,5|eth0']]);
+  await assert.rejects(collectHostFacts({hosts, sshRun: comma.sshRun, opts: {}}),
+    (error) => error.code === 'host_facts_unreadable' && /memGb/u.test(error.message));
+});

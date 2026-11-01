@@ -32,9 +32,24 @@ import {errorText, execWithStatus, shellWord} from './real-product-remote-shell.
 
 const FIELD_SEPARATOR = '|';
 const HOST_FACTS_COMMAND = 'echo "$(hostname)|$(cat /proc/sys/kernel/random/boot_id)|' +
-  '$(nproc)|$(awk \'/MemTotal/ {printf "%.1f", $2/1048576}\' /proc/meminfo)|' +
+  // awk under LC_ALL=C: a host whose LC_NUMERIC uses a decimal comma
+  // (sv_SE on adam-laptop, adams-gamla) printed `15,5` otherwise.
+  '$(nproc)|$(LC_ALL=C awk \'/MemTotal/ {printf "%.1f", $2/1048576}\' /proc/meminfo)|' +
   '$(ip route get 1.1.1.1 | awk \'{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1); exit}\')"';
 const IMAGE_PULL_TIMEOUT_MS = 10 * 60 * 1000;
+
+const HOST_FACTS_UNREADABLE = 'host_facts_unreadable';
+
+// A host fact that is not a plain decimal number is a typed failure, never NaN.
+function numericFact(host, name, text) {
+  const value = Number(text);
+  if (!/^\d+(\.\d+)?$/u.test(String(text)) || !Number.isFinite(value)) {
+    throw deploymentFailure(HOST_FACTS_UNREADABLE,
+      `host ${host.name || host.ip} answered ${name} ${JSON.stringify(text)}, not a number`,
+      {host: host.ip, fact: name, answer: text});
+  }
+  return value;
+}
 
 /**
  * @param {{hosts: Array<{ip: string, name?: string}>, sshRun: Function,
@@ -47,7 +62,8 @@ async function collectHostFacts({hosts, sshRun, opts}) {
     const [hostname, bootId, cpus, memGb, primaryIface] = stringSplit(
       stringTrim(String(await sshRun(host.ip, opts, HOST_FACTS_COMMAND))), FIELD_SEPARATOR);
     facts.push({hostId: host.name || host.ip, ip: host.ip, hostname, bootId,
-      cpus: Number(cpus), memGb: Number(memGb), primaryIface: primaryIface || null});
+      cpus: numericFact(host, 'cpus', cpus), memGb: numericFact(host, 'memGb', memGb),
+      primaryIface: primaryIface || null});
   }
   if (new Set(arrayMap(facts, (fact) => fact.bootId)).size !== facts.length) {
     throw deploymentFailure(SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY,
