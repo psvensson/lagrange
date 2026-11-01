@@ -122,6 +122,14 @@ class PartitionServiceLearnerPromotionProofMethods {
     const configurationRefusal =
       learnerConfigurationRefusal(membership, learnerReplicaId);
     if (configurationRefusal !== null) {
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROOF_REQUEST_REFUSED, {
+          partitionId: this.partitionId,
+          replicaId: this.replicaId,
+          learnerReplicaId,
+          reason: configurationRefusal.reason,
+          cause: configurationRefusal.cause,
+        });
       return {...requestShape, proof: configurationRefusal};
     }
     const status = this.raft.readStatus();
@@ -157,8 +165,8 @@ class PartitionServiceLearnerPromotionProofMethods {
       this.raft?.readStatus?.().role === RaftRole.LEADER;
   }
   /**
-   * Leader-side typed REQUEST_INVALID refusal, logged at info so the two
-   * mints of one reason are distinguishable in a node log.
+   * Leader-side typed REQUEST_INVALID refusal (a malformed request), logged
+   * at info like every leader-side refusal of a configuration fact.
    * @param {Object} requestShape response envelope without the proof
    * @param {string} cause LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE member
    * @param {Object} detail extra log fields

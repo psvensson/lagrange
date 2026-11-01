@@ -462,36 +462,39 @@ test('CL-021: deferred durable services rows converge', async (t) => {
   );
 });
 
-test('CL-021: the on-demand retry kick runs the same bounded pass', async (t) => {
-  // quest learner-promotion-proof-channel-wake: a partition learner whose
-  // promotion proof was refused learner_address_unresolvable kicks the
-  // deferred-row retry now instead of waiting for the tick — through the
-  // same pass, so the per-row backoff still bounds the write rate.
+test('CL-021: the deferred-row retry runs only on its own bounded pass; ' +
+  'no promotion refusal kicks it', async (t) => {
+  // quest learner-host-from-committed-admission: the learner promotion
+  // proof no longer depends on the learner's services row, so the on-demand
+  // kick a learner_address_unresolvable refusal used to fire is deleted.
+  // The tick's pass keeps its per-row backoff.
   const nowRef = {value: 1_760_000_000_000};
   const {gateway, calls} = createGateway();
   const stateMachine = createStateMachine({gateway, nowRef});
   await seedLocalOnlyReplica(stateMachine);
+  t.equal(typeof stateMachine.reconcileLocalOnlyServiceRowsNow, 'undefined',
+    'there is no on-demand retry entry');
 
-  const kicked = await stateMachine.reconcileLocalOnlyServiceRowsNow();
+  const kicked = await stateMachine._reconcileLocalOnlyServiceRows();
   t.equal(kicked, 0, 'control plane still failing: nothing converged');
-  t.equal(calls.mutations.length, 1, 'the kick made one durable attempt');
+  t.equal(calls.mutations.length, 1, 'the pass made one durable attempt');
   t.equal(
     stateMachine.isServiceRowLocalOnly(REPLICA_ID),
     true,
     'the marker stays until a durable commit',
   );
 
-  await stateMachine.reconcileLocalOnlyServiceRowsNow();
+  await stateMachine._reconcileLocalOnlyServiceRows();
   t.equal(
     calls.mutations.length,
     1,
-    'an immediate second kick is bounded by the per-row backoff',
+    'an immediate second pass is bounded by the per-row backoff',
   );
 
   gateway.failNext = false;
   nowRef.value += 60_000;
-  const persisted = await stateMachine.reconcileLocalOnlyServiceRowsNow();
-  t.equal(persisted, 1, 'after the backoff the kick converges the row');
+  const persisted = await stateMachine._reconcileLocalOnlyServiceRows();
+  t.equal(persisted, 1, 'after the backoff the pass converges the row');
   t.equal(
     stateMachine.isServiceRowLocalOnly(REPLICA_ID),
     false,

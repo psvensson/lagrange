@@ -208,7 +208,7 @@ async () => {
     follower.startElection();
     assert.equal(await waitFor(() => {
       const status = leader.raft.readStatus();
-      return status.followerProgress[addressOf(FOLLOWER)] ===
+      return status.followerProgress[FOLLOWER[0]] ===
         status.commitIndex;
     }, ADMISSION_BUDGET_MS), true, 'setup: the follower is admitted');
     const beforeJoiner = durableRecordOf(dbFileOf(LEADER));
@@ -228,7 +228,7 @@ async () => {
     assert.equal(await waitFor(() => {
       const status = leader.raft.readStatus();
       return status.confState.voters.includes(joinerPeerId) &&
-        status.followerProgress[addressOf(JOINER)] === status.commitIndex;
+        status.followerProgress[JOINER[0]] === status.commitIndex;
     }, ADMISSION_BUDGET_MS), true, 'the joiner is admitted and replicated');
     // A redundant proposal forwarded by a non-leader would land after the
     // leader's own; give it the time it would take.
@@ -249,11 +249,9 @@ async () => {
       [...new Set(admissionOutcomes(followerLog, JOINER[0]))],
       [RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER],
       'the follower\'s reconcile recorded a typed no-op for the joiner');
-    assert.deepEqual(
-      [...new Set(admissionOutcomes(joinerLog, LEADER[0]))],
-      [RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER],
-      'the joiner\'s bootstrap-peer proposal is a typed no-op, not a ' +
-      'refused request shape');
+    assert.deepEqual(admissionOutcomes(joinerLog, LEADER[0]), [],
+      'the joiner proposes no admission of a peer its opened configuration ' +
+      'already names (its init loop admits nothing)');
   } finally {
     network.deliver = async () => undefined;
     await Promise.all(services.map((service) => service.shutdown()));

@@ -120,7 +120,7 @@ async function commitOnLeader(harness, type, replicaId) {
   const peerId = deriveRaftRsPeerId(replicaId);
   const shows = () => leaderDurable(harness).applied.voters.includes(peerId) ===
     (type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER);
-  await leader.raft.proposeConfChange({type, replicaIdentity: replicaId});
+  await leader.raft.proposeConfChange({type, replicaIdentity: replicaId, nodeId: 'node-test'});
   assert.equal(await waitFor(shows), true, `setup: ${type} ${replicaId}`);
 }
 
@@ -546,7 +546,8 @@ test('anchor: GENESIS is refused where discovery shows a replica outside ' +
   const harness = createCommittedMembershipHarness(PARTITION_ID);
   const founders = [['gx-t', 'node-t'], ['gx-a', 'node-a'], ['gx-b', 'node-b']];
   const stamp = {kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
-    founders: founders.map(([replicaId]) => replicaId)};
+    founders: founders.map(([replicaId]) => replicaId),
+    founderNodeIds: Object.fromEntries(founders)};
   const resolve = (cache) => {
     const handler = harness.handlerOf('node-t');
     handler.systemTableCache = cache;
@@ -569,7 +570,8 @@ test('anchor: GENESIS is refused where discovery shows a replica outside ' +
       'rows naming a leader and the founders do not make a founder a joiner');
     assert.equal(Object.getPrototypeOf(founding.bootstrapMembership), null,
       'the accepted stamp is the canonical own-data snapshot');
-    assert.deepEqual({...founding.bootstrapMembership}, stamp);
+    assert.deepEqual({...founding.bootstrapMembership, founderNodeIds:
+      {...founding.bootstrapMembership.founderNodeIds}}, stamp);
   } finally {
     await harness.dispose();
   }

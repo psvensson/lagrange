@@ -51,6 +51,7 @@ function committedStamp(overrides = {}) {
     leaderId: REPLICA_ID,
     gateOpen: true,
     identities: {[PEER_ID]: REPLICA_ID},
+    nodeIds: {[PEER_ID]: null},
     ...overrides,
   };
 }
@@ -105,7 +106,8 @@ test('bootstrap decoder rejects inherited/accessor/exotic shapes without ' +
   const forgedEvery = [Object(REPLICA_ID)];
   forgedEvery.every = () => true;
   assertMalformed({kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
-    founders: forgedEvery}, 'caller-controlled array method');
+    founders: forgedEvery, founderNodeIds: {}},
+  'caller-controlled array method');
 });
 
 test('distributed membership decoders reject proxies without executing traps',

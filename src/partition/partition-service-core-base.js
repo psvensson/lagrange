@@ -287,7 +287,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.replicaStateMachine = options.replicaStateMachine || null;
     this.resolveHandlerRetirementLane =
       options.resolveHandlerRetirementLane || null;
-    this.peerAddresses = options.peerAddresses || [];
     this.learnerCatchUpCheckIntervalMs =
       options.learnerCatchUpCheckIntervalMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;

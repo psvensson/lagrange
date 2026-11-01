@@ -476,7 +476,7 @@ test('V2 (real schedule, F1): an unrelated learner joins before the ordered succ
       '(replica_identity, raft_peer_id) VALUES (?, ?)').run(other, deriveRaftRsPeerId(other));
   }
   const added = await f.cluster.node(leader).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: other});
+    type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: other, nodeId: 'node-test'});
   assert.equal(added.outcome, RAFT_OPERATION_OUTCOME.CORE_OK, JSON.stringify(added));
   assert.ok(f.cluster.settle(() => FOUNDERS.every((id) => f.cluster.node(id).readStatus()
     .confState.learners.map(String).includes(deriveRaftRsPeerId(other)))),

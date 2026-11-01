@@ -240,7 +240,7 @@ test('CA9: a leader demoted to learner answers its transfer\'s dropped ' +
   try {
     const {driver} = run;
     assert.equal((await run.act(() => driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: A,
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: A, nodeId: 'node-test',
     }))).outcome, CORE_OK);
     await run.deliver();
     await run.round();

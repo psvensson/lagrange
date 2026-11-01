@@ -217,7 +217,7 @@ test('anchor: a joint configuration is refused to a bootstrap read and as ' +
       reserveIdentity(model, member, 'jnt-t');
     }
     const whileJoint = model.node(leader).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'});
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t', nodeId: 'node-test'});
     assert.equal(whileJoint.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
       `an AddNode while joint is deferred (${JSON.stringify(whileJoint)})`);
     assert.equal(whileJoint.reason, RUNTIME_REASON.CONF_CHANGE_PENDING);
@@ -231,7 +231,7 @@ test('anchor: a joint configuration is refused to a bootstrap read and as ' +
       durableOf(model, leader).applied.voters.length === 2, [leader]),
     'setup: the group left the joint state');
     const afterLeave = model.node(leader).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'});
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t', nodeId: 'node-test'});
     assert.equal(afterLeave.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'the deferred AddNode is taken once the group left the joint state');
     assert.ok(settle(model, () => durableOf(model, leader).applied.voters

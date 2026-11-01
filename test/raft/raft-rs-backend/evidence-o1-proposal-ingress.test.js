@@ -83,7 +83,7 @@ assert.deepEqual([...PROPOSER_CLASS.proposes, ...PROPOSER_CLASS.refusedNotLeader
   .sort(), Object.values(ROLE).sort(), 'every core role is classified');
 
 function addPeer(identity) {
-  return {type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: identity};
+  return {type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: identity, nodeId: 'node-test'};
 }
 
 function removePeer(identity) {

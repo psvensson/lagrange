@@ -248,14 +248,19 @@ export class ControllableConsensusPort {
           return answered;
         }
         if (change?.type === 'remove-peer') {
+          // The production port removes by replica identity only.
           this.peers = this.peers.filter(
-            (peer) => peer?.address !== change.peerAddress,
+            (peer) => peer?.replicaIdentity !== change.replicaIdentity,
           );
         } else if (change?.type === 'add-peer') {
+          // The admission commits the peer's node; the production port then
+          // addresses it through the request's resolver from that node.
           this.peers = [
             ...this.peers,
             {
-              address: change.peerAddress,
+              address: resolvedPeerAddress(
+                this.request[RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS],
+                change.replicaIdentity, change.nodeId ?? null),
               replicaIdentity: change.replicaIdentity || null,
             },
           ];

@@ -118,6 +118,7 @@ test(
         [{
           type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
           replicaIdentity: 'mg-move-peer-reconcile-r2',
+          nodeId: 'node-test',
           peerAddress: 'seed-node/message-group/mg-move-peer-reconcile-r2',
         }],
         'the leader admits the second replica once, by identity, and never proposes its own identity as a peer',
