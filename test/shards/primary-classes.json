@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2179,
+    "unit": 2180,
     "integration": 119,
     "bootstrap": 217,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2522,
-  "digest": "fnv1a32-754844ee",
+  "censusSize": 2523,
+  "digest": "fnv1a32-34438198",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -643,6 +643,7 @@
     "test/control-plane/publication-recovery-state-machine.test.js": "unit",
     "test/control-plane/publication-snapshot-build-sync-section-attribution.test.js": "unit",
     "test/control-plane/publications-catchup-leader-pinned-read.test.js": "unit",
+    "test/control-plane/q9-pilot-cutover-and-rollback-receipts.test.js": "unit",
     "test/control-plane/read-model-contract.test.js": "unit",
     "test/control-plane/readiness-admission-transitions-observed.test.js": "unit",
     "test/control-plane/readiness-authoritative-row-read-contract.test.js": "unit",

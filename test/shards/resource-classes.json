@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2505,
+    "ordinary": 2506,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2522,
-  "digest": "fnv1a32-21b5e616",
+  "censusSize": 2523,
+  "digest": "fnv1a32-2c620cdc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -642,6 +642,7 @@
     "test/control-plane/publication-recovery-state-machine.test.js": "ordinary",
     "test/control-plane/publication-snapshot-build-sync-section-attribution.test.js": "ordinary",
     "test/control-plane/publications-catchup-leader-pinned-read.test.js": "ordinary",
+    "test/control-plane/q9-pilot-cutover-and-rollback-receipts.test.js": "ordinary",
     "test/control-plane/read-model-contract.test.js": "ordinary",
     "test/control-plane/readiness-admission-transitions-observed.test.js": "ordinary",
     "test/control-plane/readiness-authoritative-row-read-contract.test.js": "ordinary",

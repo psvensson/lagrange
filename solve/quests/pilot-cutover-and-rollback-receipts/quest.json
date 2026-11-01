@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "pilot-cutover-and-rollback-receipts",
+  "epic": "pilot-readiness-and-public-proof",
+  "statement": "Implement Q9 pilot cutover and rollback receipts across the pilot cutover workflow contract, pilot cutover workflow owner, and CLI cutover router so external-system migrations progress through draft/loading/syncing/parity/cutover_pending/cutover/complete/rolled_back/failed with immutable sealed plans, consume Q8 initial load receipts, ingest monotonic idempotent incremental change-feed batches, verify key-range SHA-256 and row parity over external pgwire, gate cutover on passing parity, enumerate post-cutover target writes in rollback divergence receipts, and recover workflow state deterministically from durable SQL receipts across restarts.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q9-pilot-cutover-and-rollback-receipts-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "74217c7a9eda56532f1f829218ae11c7a95f43da"
+}

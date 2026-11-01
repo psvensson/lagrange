@@ -7,7 +7,7 @@
     "bootstrap-membership": 329,
     "cdc-metadata": 67,
     "cli-tooling": 99,
-    "control-plane": 224,
+    "control-plane": 225,
     "convergence-topology": 78,
     "distributed-harness": 182,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2522,
-  "digest": "fnv1a32-ba72b2df",
+  "censusSize": 2523,
+  "digest": "fnv1a32-dd669489",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7c4fd8fd",
+  "observationDigest": "fnv1a32-b296d1f1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -662,6 +662,7 @@
     "test/control-plane/publication-recovery-state-machine.test.js": "control-plane",
     "test/control-plane/publication-snapshot-build-sync-section-attribution.test.js": "control-plane",
     "test/control-plane/publications-catchup-leader-pinned-read.test.js": "control-plane",
+    "test/control-plane/q9-pilot-cutover-and-rollback-receipts.test.js": "control-plane",
     "test/control-plane/read-model-contract.test.js": "control-plane",
     "test/control-plane/readiness-admission-transitions-observed.test.js": "control-plane",
     "test/control-plane/readiness-authoritative-row-read-contract.test.js": "control-plane",
@@ -4820,6 +4821,16 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
         "src/control-plane/membership-publication-coordinator-reconcile.js"
+      ]
+    },
+    "test/control-plane/q9-pilot-cutover-and-rollback-receipts.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
     "test/control-plane/read-model-contract.test.js": {
