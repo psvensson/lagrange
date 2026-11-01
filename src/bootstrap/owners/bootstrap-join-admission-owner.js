@@ -34,6 +34,7 @@ import {
 } from '../cluster-identity-constants.js';
 import {getRemainingBudgetMs} from '../../control-plane/timeout-budget.js';
 import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+import {resolveJoinSupportEnvelopeConflict} from './support-envelope-owner.js';
 
 const JOIN_ADMISSION_SPENT_WAIT = Object.freeze({
   RESERVATION_LOCK: Object.freeze({
@@ -72,6 +73,7 @@ const MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME = Object.freeze({
 class BootstrapJoinAdmissionOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.supportEnvelope = options.supportEnvelope || null;
     this.moveReplicaAssignmentReservationLock = Promise.resolve();
   }
 
@@ -240,6 +242,15 @@ class BootstrapJoinAdmissionOwner {
       return BOOTSTRAP_API_ERROR.CLUSTER_ID_MISMATCH;
     }
 
+    const envelopeConflict = this.resolveSupportEnvelopeConflict(
+      nodeId,
+      nodeAddress,
+      options,
+    );
+    if (envelopeConflict !== TAKEOVER_DECISION_ADMIT) {
+      return envelopeConflict;
+    }
+
     return this.resolveTakeoverDecision({
       nodeId,
       nodeAddress,
@@ -247,6 +258,17 @@ class BootstrapJoinAdmissionOwner {
       systemTableCache,
       nodeIdAlreadyRegistered,
       nodeAddressInUse,
+    });
+  }
+
+  resolveSupportEnvelopeConflict(nodeId, nodeAddress, options) {
+    return resolveJoinSupportEnvelopeConflict({
+      defaultEnvelope: this.supportEnvelope,
+      getReleaseVersion: this.delegates.getReleaseVersion,
+      getSupportEnvelope: this.delegates.getSupportEnvelope,
+      nodeAddress,
+      nodeId,
+      options,
     });
   }
 

@@ -17,6 +17,10 @@ const PILOT_CERTIFICATION_SCENARIO_MATRIX = Object.freeze([
     config: 'local-three-node.json',
     name: 'public-path-scale-and-failure-certification',
   }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'supported-upgrade-and-recovery-envelope',
+  }),
 ]);
 
 const CANONICAL_SCENARIO_MATRIX = Object.freeze([

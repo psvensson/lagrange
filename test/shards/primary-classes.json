@@ -4,12 +4,12 @@
   "counts": {
     "unit": 2182,
     "integration": 119,
-    "bootstrap": 217,
+    "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2525,
-  "digest": "fnv1a32-790aa7d0",
+  "censusSize": 2526,
+  "digest": "fnv1a32-dbe8ee11",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -291,6 +291,7 @@
     "test/bootstrap/startup-runtime-handoff-owner.test.js": "bootstrap",
     "test/bootstrap/startup-runtime-surface-owner.test.js": "bootstrap",
     "test/bootstrap/storage-budget-bootstrap.test.js": "bootstrap",
+    "test/bootstrap/support-envelope-owner.test.js": "bootstrap",
     "test/bootstrap/system-leader-readiness-address-gate.test.js": "bootstrap",
     "test/bootstrap/system-partition-classification-owner.test.js": "bootstrap",
     "test/bootstrap/traffic-readiness-utils.test.js": "bootstrap",

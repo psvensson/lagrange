@@ -48,7 +48,7 @@ test('Constants, reason codes, contracts, and validator helpers', async (t) => {
     C.SOURCE_CONTRACT && MANAGEMENT_V1_ROUTE.FACTS);
 
   for (const [obj, len] of [
-    [L4_ROLLING_UPGRADE_REASON_CODE, 10],
+    [L4_ROLLING_UPGRADE_REASON_CODE, 12],
     [L3_BACKUP_RESTORE_REASON_CODE, 10],
     [L6_DECOMMISSION_REASON_CODE, 9],
   ]) {

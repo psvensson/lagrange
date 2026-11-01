@@ -19,6 +19,7 @@ quests:
   - public-path-scale-and-failure-certification
   - resumable-bulk-data-load
   - service-cell-v2-default-multi-operation
+  - supported-upgrade-and-recovery-envelope
   - user-table-leader-handoff-demotion-pairing-v2
   - user-table-leader-handoff-demotion-pairing
   - user-table-leader-placement-spread-v2

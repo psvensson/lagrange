@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "c8e48fbbe80fca67a5a5ddd7ca5a9479dfe9ba435b7f076eb0b279a4fa266a3e"
+        "sha256": "aad06f694e00868b5b46f414a3b9f1953532a433823c097ac0e380a35857e0e0"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3296731,
-        "sha256": "d1ea2aa093f1a1268fb3f06729c4e4d94f80ce2ceed4a06b96492eb84a14bb27"
+        "bytes": 3298890,
+        "sha256": "542de67cf1ab4037bb6079968e5ad4d7766c6956712fb48061ffb4732929b10d"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "1a75c39c1591233330150941889524aab089985fd21165135008349a94f34c98"
+        "sha256": "1ec5fcbf8f87f5e86bc602960f19c4c8e0001f00be7c9563136d92b5b233d2cb"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "077cb83e985a84e24c8556da9299296210cc72a1d22d3d2bebc7e3191d1ce294"
+        "sha256": "2a20685ad211f8194983a25ca1c05987c6c176b720d052117748e39f8c31dbc3"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "e888491a3b0af9bd180b4d910705a9f06c6584a2f9c72a37d7ae4db0547d363b"
+    "inputDigest": "1acd8508c131e4bb00835234a600f3aba82737afd461ca82e3bafac19931143b"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "c8e48fbbe80fca67a5a5ddd7ca5a9479dfe9ba435b7f076eb0b279a4fa266a3e"
+        "sha256": "aad06f694e00868b5b46f414a3b9f1953532a433823c097ac0e380a35857e0e0"
       },
-      "declaredCount": 1736,
-      "observedCount": 1736,
-      "assignedCount": 1736
+      "declaredCount": 1735,
+      "observedCount": 1735,
+      "assignedCount": 1735
     },
     "cognitive": {
       "identity": {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "1a75c39c1591233330150941889524aab089985fd21165135008349a94f34c98"
+          "sha256": "1ec5fcbf8f87f5e86bc602960f19c4c8e0001f00be7c9563136d92b5b233d2cb"
         },
         "cloneGroups": 47,
         "duplicatedLines": 1489,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "077cb83e985a84e24c8556da9299296210cc72a1d22d3d2bebc7e3191d1ce294"
+          "sha256": "2a20685ad211f8194983a25ca1c05987c6c176b720d052117748e39f8c31dbc3"
         },
         "cloneGroups": 650,
         "duplicatedLines": 24417,
@@ -173,29 +173,29 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3296731,
-        "sha256": "d1ea2aa093f1a1268fb3f06729c4e4d94f80ce2ceed4a06b96492eb84a14bb27"
+        "bytes": 3298890,
+        "sha256": "542de67cf1ab4037bb6079968e5ad4d7766c6956712fb48061ffb4732929b10d"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "a1f7d4e6de28d7179b02101843e0b041f4a0c244a2d54465e46ea660db5fe771",
-      "moduleCount": 5901,
-      "edgeCount": 32127,
+      "sourceDigest": "912f735bf20fbbb30827df92b595ad4895bdd1b71ab5510a5b3090b3f380cdc0",
+      "moduleCount": 5905,
+      "edgeCount": 32148,
       "unresolvedCount": 45
     }
   },
   "assignment": {
-    "sourceSignalCount": 2449,
-    "assignedSignalCount": 2449,
-    "uniqueAssignmentCount": 2449,
-    "digest": "4dedfe5e28533c9f346a9c51d483b0b64b576a2e33d73d61b9c61f42b0d17dc3"
+    "sourceSignalCount": 2448,
+    "assignedSignalCount": 2448,
+    "uniqueAssignmentCount": 2448,
+    "digest": "2618956fdf326e14727642e27a6f74a9e1c5fda0aa346d1920ef26a38ff4c068"
   },
   "signalCounts": {
     "cognitive": 147,
-    "complexity": 1736,
+    "complexity": 1735,
     "duplication": 480,
     "fileSize": 47,
     "lintExclusion": 39
@@ -1574,34 +1574,6 @@
       ]
     },
     {
-      "key": "area:test/config",
-      "owner": null,
-      "boundary": "test/config",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/config"
-      ],
-      "fileCount": 8,
-      "signalCount": 9,
-      "complexity": 3,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 238,
-      "cloneTouches": 10,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 0,
-      "importOut": 35,
-      "score": 35.8,
-      "topPaths": [
-        "test/config/latency-topology-ownership-guardrails.test.js",
-        "test/config/code-path-uniqueness.property.test.js",
-        "test/config/architecture-ownership-guardrails.test.js",
-        "test/config/raft-adaptive-timing-controller.test.js",
-        "test/config/dynamic-config-service.test.js"
-      ]
-    },
-    {
       "key": "area:test/convergence",
       "owner": null,
       "boundary": "test/convergence",
@@ -1651,6 +1623,34 @@
       "score": 32,
       "topPaths": [
         "test/distributed/run-runtime-helpers.js"
+      ]
+    },
+    {
+      "key": "area:test/config",
+      "owner": null,
+      "boundary": "test/config",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/config"
+      ],
+      "fileCount": 8,
+      "signalCount": 8,
+      "complexity": 2,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 238,
+      "cloneTouches": 10,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 35,
+      "score": 31.8,
+      "topPaths": [
+        "test/config/latency-topology-ownership-guardrails.test.js",
+        "test/config/architecture-ownership-guardrails.test.js",
+        "test/config/raft-adaptive-timing-controller.test.js",
+        "test/config/dynamic-config-service.test.js",
+        "test/config/test-configuration-compliance.property.test.js"
       ]
     },
     {

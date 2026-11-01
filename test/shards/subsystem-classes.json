@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 118,
     "architecture-governance": 21,
-    "bootstrap-membership": 329,
+    "bootstrap-membership": 330,
     "cdc-metadata": 67,
     "cli-tooling": 99,
     "control-plane": 225,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2525,
-  "digest": "fnv1a32-0c21c95e",
+  "censusSize": 2526,
+  "digest": "fnv1a32-9ff52848",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3360f004",
+  "observationDigest": "fnv1a32-dc38b2df",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -310,6 +310,7 @@
     "test/bootstrap/startup-runtime-handoff-owner.test.js": "bootstrap-membership",
     "test/bootstrap/startup-runtime-surface-owner.test.js": "bootstrap-membership",
     "test/bootstrap/storage-budget-bootstrap.test.js": "bootstrap-membership",
+    "test/bootstrap/support-envelope-owner.test.js": "bootstrap-membership",
     "test/bootstrap/system-leader-readiness-address-gate.test.js": "bootstrap-membership",
     "test/bootstrap/system-partition-classification-owner.test.js": "bootstrap-membership",
     "test/bootstrap/traffic-readiness-utils.test.js": "bootstrap-membership",
@@ -3716,6 +3717,15 @@
         "src/bootstrap/node-joining-service.js",
         "src/control-plane/heartbeat-service.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/bootstrap/support-envelope-owner.test.js": {
+      "files": [
+        "docs/support-envelope.json",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "test/distributed/config"
       ]
     },
     "test/bootstrap/system-partition-classification-owner.test.js": {
@@ -16201,6 +16211,7 @@
         "docs/current-capabilities-and-limitations.md",
         "docs/current-capabilities.json",
         "docs/service-portability-capabilities.json",
+        "docs/support-envelope.json",
         "scripts/check-current-capabilities.js",
         "scripts/generate-current-capabilities-doc.js",
         "src/bootstrap/bootstrap-api-constants.js",
@@ -18431,6 +18442,7 @@
         "docs/reference/javascript-service-reference.md",
         "docs/service-deployment-guide.md",
         "docs/service-portability-capabilities.json",
+        "docs/support-envelope.json",
         "examples/README.md",
         "scripts/check-current-capabilities.js",
         "scripts/checks/service-portability-claims-contract.js",

@@ -27,6 +27,9 @@ import {
   PORTABILITY_PATH,
   generate,
 } from './generate-current-capabilities-doc.js';
+import {
+  validateSupportEnvelopeRecord,
+} from '../src/bootstrap/owners/support-envelope-owner.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEXT_ENCODING = 'utf8';
@@ -42,6 +45,7 @@ const HTTP_AUTHENTICATOR_PATH =
   'src/service/request-cell-http-authenticator.js';
 const SERVICE_SOURCE_CONTRACT_PATH =
   'src/service/service-source-contract.js';
+const SUPPORT_ENVELOPE_PATH = 'docs/support-envelope.json';
 
 // Single owner for the fixture's complete file-backed observation surface.
 // Add every new readText/readJson or generated-document input here so tests
@@ -59,6 +63,7 @@ const CHECKED_FILE_PATHS = Object.freeze([
   RAFT_STORE_CONSTANTS_PATH,
   HTTP_AUTHENTICATOR_PATH,
   SERVICE_SOURCE_CONTRACT_PATH,
+  SUPPORT_ENVELOPE_PATH,
 ]);
 
 const EXPECTED_STATUS = Object.freeze({
@@ -317,6 +322,14 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
   addProblem(problems,
     serviceContractMatchesSource(capabilities, root),
     AUDIT_MARKER.SERVICE_CONTRACT_MISMATCH);
+
+  const supportEnvelope = readJson(SUPPORT_ENVELOPE_PATH, root);
+  const envelopeValidation = validateSupportEnvelopeRecord(supportEnvelope);
+  addProblem(
+    problems,
+    envelopeValidation.valid,
+    `support envelope contract is invalid (${envelopeValidation.reasonCode})`,
+  );
 
   const expectedDocument = generate(root);
   const currentDocument = readText(OUTPUT_PATH, root);

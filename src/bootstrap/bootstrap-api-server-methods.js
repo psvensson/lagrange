@@ -270,8 +270,19 @@ const bootstrapApiServerMethods = {
 
   getManagementV1Owner() {
     if (!this.managementV1Owner) {
+      const configured = this.managementOptions || {};
       this.managementV1Owner = new ManagementV1Owner({
+        ...configured,
+        exportPartitionSnapshots:
+          configured.exportPartitionSnapshots || this.exportPartitionSnapshots,
         getClusterId: () => this.getClusterId?.() || this.seedNodeId,
+        getPartitions: configured.getPartitions || this.getPartitions,
+        hydratePartitionSnapshots:
+          configured.hydratePartitionSnapshots || this.hydratePartitionSnapshots,
+        onHydratePartitions:
+          configured.onHydratePartitions || this.onHydratePartitions,
+        storageAdapter: configured.storageAdapter || this.backupStorageAdapter,
+        supportEnvelope: configured.supportEnvelope || this.supportEnvelope,
       });
     }
     return this.managementV1Owner;
