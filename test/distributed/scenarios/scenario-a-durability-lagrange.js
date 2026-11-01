@@ -44,16 +44,34 @@ async function resolveNodeIncarnation(node) {
   if (node?._dockerProvider &&
       typeof node._dockerProvider.inspectContainer === 'function' &&
       node.containerId) {
-    const info = await node._dockerProvider.inspectContainer(node.containerId);
-    const startedAt = String(info?.State?.StartedAt || '').trim();
-    const pid = info?.State?.Pid != null ? String(info.State.Pid) : '';
-    return startedAt || pid ? `${node.containerId}:${startedAt}:${pid}` : null;
+    try {
+      const info = await node._dockerProvider.inspectContainer(node.containerId);
+      const startedAt = String(info?.State?.StartedAt || '').trim();
+      const pid = info?.State?.Pid != null ? String(info.State.Pid) : '';
+      if (startedAt || pid) {
+        return `${node.containerId}:${startedAt}:${pid}`;
+      }
+    } catch (error) {
+      // An unreadable incarnation fails the proof explicitly; it is never
+      // read as "no incarnation".
+      throw new Error(`durability fault target incarnation unreadable: ${error?.message}`,
+        {cause: error});
+    }
   }
   if (typeof node?.inspectContainerState === 'function') {
-    const state = await node.inspectContainerState();
-    const finishedAt = String(state?.finishedAt || '').trim();
-    const status = String(state?.status || '').trim();
-    return finishedAt || status ? `${node.id || ''}:${status}:${finishedAt}` : null;
+    try {
+      const state = await node.inspectContainerState();
+      const finishedAt = String(state?.finishedAt || '').trim();
+      const status = String(state?.status || '').trim();
+      if (finishedAt || status) {
+        return `${node.id || ''}:${status}:${finishedAt}`;
+      }
+    } catch (error) {
+      // An unreadable incarnation fails the proof explicitly; it is never
+      // read as "no incarnation".
+      throw new Error(`durability fault target incarnation unreadable: ${error?.message}`,
+        {cause: error});
+    }
   }
   return null;
 }

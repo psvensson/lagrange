@@ -520,9 +520,10 @@ async function createTiDbOltpAdapter(options = {}) {
       };
     },
     async close(closeOptions = {}) {
-      if (closed) return;
+      if (closed) return Object.freeze({databaseDropped: false});
       closed = true;
       const failures = [];
+      let databaseDropped = false;
       try {
         await closeConnections(workerConnections);
       } catch (error) {
@@ -531,6 +532,7 @@ async function createTiDbOltpAdapter(options = {}) {
       if (closeOptions.dropDatabase !== false) {
         try {
           await dropDatabase(connect, endpoint, databaseName);
+          databaseDropped = true;
         } catch (error) {
           failures.push(error);
         }
@@ -538,6 +540,7 @@ async function createTiDbOltpAdapter(options = {}) {
       if (failures.length > ZERO) {
         throw new AggregateError(failures, 'TiDB OLTP adapter cleanup failed');
       }
+      return Object.freeze({databaseDropped});
     },
   };
 }

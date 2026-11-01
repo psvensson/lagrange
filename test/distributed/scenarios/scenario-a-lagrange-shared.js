@@ -122,9 +122,14 @@ function buildBasePayload({
   context,
   extra = {},
 }) {
-  const contract = adapter || context?.publicExecutionContract || {};
   if (!PGWIRE_PROOF_SYSTEMS.has(context?.system)) {
     throw new Error(`Scenario A PG-wire proof requires a PG-wire system, got ${context?.system}`);
+  }
+  // The open adapter states the execution contract; once it is closed the
+  // context's admitted contract does. Neither present is a refused payload.
+  const contract = adapter || context.publicExecutionContract;
+  if (!contract) {
+    throw new Error('Scenario A PG-wire proof payload requires an execution contract');
   }
   return Object.freeze({
     schemaVersion: 1,

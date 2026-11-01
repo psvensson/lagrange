@@ -375,23 +375,40 @@ async function tableExists(client, table) {
   }
 }
 
-async function dropExistingTables(client, {tolerateUnsupportedDrop = false} = {}) {
-  const skipped = [];
+// Preparation drops every existing table; an engine that cannot drop is a
+// failed preparation (the dataset is fresh only on a fresh formation).
+async function dropExistingTables(client) {
   for (const table of DROP_TABLES) {
     if (!(await tableExists(client, table))) continue;
+    await client.query(`DROP TABLE IF EXISTS ${table}`);
+  }
+}
+
+const TABLE_DROP_OUTCOME = Object.freeze({
+  DROPPED: 'dropped',
+  ABSENT: 'absent',
+  DROP_UNSUPPORTED: 'drop-unsupported',
+});
+
+// Cleanup reports one typed outcome per table: an engine that refuses DROP
+// TABLE is a named outcome the caller records, not a tolerated skip.
+async function dropTablesForCleanup(client) {
+  const outcomes = [];
+  for (const table of DROP_TABLES) {
+    if (!(await tableExists(client, table))) {
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.ABSENT}));
+      continue;
+    }
     try {
       await client.query(`DROP TABLE IF EXISTS ${table}`);
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROPPED}));
     } catch (error) {
-      const unsupported =
-        String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER);
-      if (unsupported && tolerateUnsupportedDrop) {
-        skipped.push(table);
-        continue;
-      }
-      throw error;
+      if (!String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER)) throw error;
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROP_UNSUPPORTED,
+        error: String(error.message)}));
     }
   }
-  return Object.freeze(skipped);
+  return Object.freeze(outcomes);
 }
 
 // CREATE TABLE on Lagrange is a durable provisioning job. When the job
@@ -403,7 +420,6 @@ async function dropExistingTables(client, {tolerateUnsupportedDrop = false} = {}
 // expires. The CREATE statement is not re-issued (the job already owns it).
 const SCHEMA_PROVISIONING_ACTIVE_SQLSTATE = '55P03';
 const SCHEMA_PROVISIONING_ACTIVE_MARKER = 'Schema provisioning remains active';
-const SCHEMA_PROVISIONING_DEFAULT_RETRY_MS = 500;
 const SCHEMA_PROVISIONING_WAIT_BUDGET_MS = 120000;
 const CREATE_TABLE_NAME_PATTERN = /^\s*CREATE\s+TABLE\s+([A-Za-z0-9_]+)/iu;
 
@@ -416,20 +432,26 @@ function isSchemaProvisioningActive(error) {
     String(error?.message || '').includes(SCHEMA_PROVISIONING_ACTIVE_MARKER);
 }
 
+// The product's retry_after_ms hint is the wait; a missing, unreadable or
+// non-positive hint is a broken provisioning answer, raised with the
+// original error, never replaced by a client-side default.
 function resolveSchemaProvisioningRetryMs(error) {
   const detail = error?.detail;
-  let parsed = null;
-  if (detail && typeof detail === 'object') parsed = detail;
-  else if (typeof detail === 'string') {
+  let parsed = detail && typeof detail === 'object' ? detail : null;
+  if (typeof detail === 'string') {
     try {
       parsed = JSON.parse(detail);
-    } catch {
-      parsed = null;
+    } catch (parseError) {
+      throw new AggregateError([error, parseError],
+        'Schema provisioning answer carries an unreadable retry hint');
     }
   }
   const hinted = Number(parsed?.retry_after_ms);
-  return Number.isFinite(hinted) && hinted > ZERO ?
-    hinted : SCHEMA_PROVISIONING_DEFAULT_RETRY_MS;
+  if (!Number.isFinite(hinted) || hinted <= ZERO) {
+    throw new AggregateError([error],
+      'Schema provisioning answer carries no positive retry_after_ms hint');
+  }
+  return hinted;
 }
 
 async function createSchemaStatement(client, statement) {
@@ -552,12 +574,11 @@ async function queryStateCounts(client) {
   });
 }
 
-// Cleanup is best effort: the harness destroys the cluster after the proof,
-// so a schema the engine cannot drop is reported, not fatal.
+// Cleanup returns the per-table drop outcomes; the caller records them.
 async function cleanupDataset(createClient, options) {
   const client = await openClient(createClient, options);
   try {
-    return await dropExistingTables(client, {tolerateUnsupportedDrop: true});
+    return await dropTablesForCleanup(client);
   } finally {
     await client.end();
   }
@@ -667,9 +688,10 @@ async function createLagrangeOltpAdapter(options = {}) {
       });
     },
     async close(closeOptions = {}) {
-      if (closed) return;
+      if (closed) return Object.freeze({tableDrops: null});
       closed = true;
       const failures = [];
+      let tableDrops = null;
       try {
         await closeClients(workerClients);
       } catch (error) {
@@ -677,7 +699,7 @@ async function createLagrangeOltpAdapter(options = {}) {
       }
       if (closeOptions.dropTables !== false) {
         try {
-          await cleanupDataset(createClient, resolvedClientOptions);
+          tableDrops = await cleanupDataset(createClient, resolvedClientOptions);
         } catch (error) {
           failures.push(error);
         }
@@ -685,11 +707,16 @@ async function createLagrangeOltpAdapter(options = {}) {
       if (failures.length > ZERO) {
         throw new AggregateError(failures, 'Lagrange OLTP adapter cleanup failed');
       }
+      return Object.freeze({tableDrops});
     },
   });
 }
 
 export {
+  LOCKING_READ_MODE as PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE,
+  PUBLIC_EXECUTION_PATH as PGWIRE_OLTP_EXECUTION_PATH,
+  PUBLIC_PROTOCOL as PGWIRE_OLTP_PROTOCOL,
+  TABLE_DROP_OUTCOME as LAGRANGE_OLTP_TABLE_DROP_OUTCOME,
   NATIVE_LOCKING_READ_MODE as PGWIRE_OLTP_NATIVE_LOCKING_READ_MODE,
   SQL as LAGRANGE_OLTP_SQL,
   LAGRANGE_OLTP_TRANSLATION_AUDIT,

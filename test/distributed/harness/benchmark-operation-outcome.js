@@ -150,7 +150,7 @@ function classifyBenchmarkAttemptFailure(error, trace = {}) {
   if (cause?.name === OLTP_CORRECTNESS_VIOLATION_ERROR_NAME) {
     return classification(OUTCOME.TERMINAL_FAILURE, FAILURE_CLASS.CORRECTNESS_FAILURE, {
       ...evidence,
-      violation: cause.oltpCorrectnessViolation || null,
+      violation: cause.oltpCorrectnessViolation,
     });
   }
   if (sqlState === OLTP_SERIALIZATION_FAILURE_SQLSTATE) {

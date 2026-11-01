@@ -49,7 +49,10 @@ function evaluateOltpSweepStepSlo(step, slo) {
   if (step?.profileId !== OLTP_OPEN_LOOP_PROFILE.id || !step.accounting) {
     throw new Error(`Scenario A sweep step must be a ${OLTP_OPEN_LOOP_PROFILE.id} summary`);
   }
-  const p99Ms = requireFiniteOrNull(step.latency?.p99 ?? null, 'latency.p99');
+  if (!step.latency || typeof step.latency !== 'object') {
+    throw new Error('Scenario A sweep step must carry its latency summary');
+  }
+  const p99Ms = requireFiniteOrNull(step.latency.p99, 'latency.p99');
   const errorRate = requireFiniteOrNull(step.errorRate, 'errorRate');
   const completedPerSec = requireFiniteOrNull(step.completedPerSec, 'completedPerSec');
   const latencyPass = step.accounting.committed > 0 && p99Ms !== null && p99Ms <= slo.p99Ms;
@@ -122,7 +125,7 @@ function notMeasured(plan, versionGate) {
     status: SWEEP_STATUS.NOT_MEASURED,
     reason: NOT_MEASURED_REASON.SYSTEM_VERSIONS_UNCHANGED,
     gateReason: versionGate.reason,
-    matchedCombinationSha256: versionGate.matchedCombinationSha256 ?? null,
+    matchedCombinationSha256: versionGate.matchedCombinationSha256,
     sweepPlanSha256: plan.sweepPlanSha256,
     executionOrderLog: Object.freeze([]),
     curves: null,
@@ -135,6 +138,9 @@ async function runScenarioAPairedSweep(options = {}) {
     throw new Error('Scenario A sweep requires executeStep');
   }
   if (options.versionGate && options.versionGate.shouldRun === false) {
+    if (typeof options.versionGate.matchedCombinationSha256 !== 'string') {
+      throw new Error('a version-gated skip must name the matched combination');
+    }
     return notMeasured(plan, options.versionGate);
   }
   const executionOrderLog = [];
