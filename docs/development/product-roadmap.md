@@ -205,8 +205,10 @@ arbitrary WASI HTTP component or Node middleware support.
 | Operator view | Community | Correlated request, shard, partial, placement, retry and failure diagnostics; inspect index and live-query dependency/frontier state |
 
 Security is required on the supported transport in 0.5. It does not wait for
-NATS or Veilid. Advanced exporters and paid telemetry are assigned to 0.9;
-enterprise identity and tenancy are assigned to 1.2.
+NATS or Veilid. Standard telemetry exporters are AGPL work in 0.9;
+enterprise-managed retention, fleet analysis and integrations are separate.
+Core authorization and necessary tenant isolation remain AGPL; enterprise
+identity federation and organization policy administration are 1.2 services.
 Query, standard HTTP/service, comparison and operating acceptance remain
 separate obligations within the same milestone; completing one does not waive
 the others.
