@@ -1,31 +1,32 @@
-// Controlled product substitutes for the comparative-benchmark workload
-// driver tests. The driver under test is the real driver entry; only the wire
-// endpoints are substituted. Evidence ceiling: these fakes prove the driver's
-// classification and accounting of each response class, never native product
-// behaviour.
-import vm from 'node:vm';
-import * as perfHooks from 'node:perf_hooks';
-
+// Drives the real comparative-benchmark workload driver entry
+// (executeBenchmarkWorkload) against the controlled in-memory product of
+// real-product-workload-driver-fake-product.js. Only the native client
+// libraries (pg Client, mysql2 connection) and the watchdog timer are
+// substituted; dispatch, adapters, executor, open-loop and retry owners,
+// outcome classification and reconciliation are the production path.
+// Evidence ceiling: classification/accounting of each response class, not
+// native product behaviour.
 import {
-  buildWorkloadDriverScript,
+  executeBenchmarkWorkload,
 } from '../real-product-workload-drivers.js';
+import {
+  FAKE_PRODUCT_FAULT,
+  createFakeOltpProduct,
+} from './real-product-workload-driver-fake-product.js';
 
-const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
-const stringIncludes = Function.call.bind(String.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
 
-const FAST_TIMER_MS = 5;
-const MODE = Object.freeze({
-  OK: 'ok',
-  NEVER_OPEN: 'never-open',
-  SILENT: 'silent',
-  ERROR_ENVELOPE: 'error-envelope',
-  ZERO_AFFECTED: 'zero-affected',
-  WRONG_VALUE: 'wrong-value',
-  COMMIT_ACK_LOST: 'commit-ack-lost',
-});
-const PRODUCT_ERROR_CODE = 'TABLE_NOT_FOUND';
+const FIXTURE_WATCHDOG_MS = 300;
+const FIXTURE_RATE_PER_SEC = 2000;
 const TABLE_PATTERN = /\b(?:FROM|INTO|UPDATE|JOIN)\s+([A-Za-z_][A-Za-z0-9_]*)/giu;
+const SYSTEM_BY_TARGET = Object.freeze({
+  'lagrange': 'lagrange',
+  'tidb-tikv': 'tidb-tikv',
+  'pg-app': 'postgresql',
+});
+const ENDPOINT = Object.freeze({host: '10.0.0.7', port: 5432});
+const CREDENTIALS = Object.freeze({user: 'bench', password: 'bench', database: 'bench'});
 
 function tablesOfStatements(statements) {
   const tables = new Set();
@@ -35,198 +36,71 @@ function tablesOfStatements(statements) {
   return [...tables].sort();
 }
 
-function createLegacyProbe(mode) {
-  return {mode, statements: [], healthRequests: 0};
+function fixtureTimer(callback) {
+  const handle = setTimeout(callback, FIXTURE_WATCHDOG_MS);
+  return () => clearTimeout(handle);
 }
 
-function createFakeWebSocketClass(probe) {
-  return class FakeWebSocket {
-    constructor(url) {
-      this.url = url;
-      this.readyState = 0;
-      this.handlers = new Map();
-      if (probe.mode !== MODE.NEVER_OPEN) {
-        setImmediate(() => {
-          this.readyState = 1;
-          this.emit('open');
-        });
-      }
-    }
-    setMaxListeners() {}
-    on(event, handler) {
-      const list = this.handlers.get(event) || [];
-      list.push(handler);
-      this.handlers.set(event, list);
-    }
-    once(event, handler) {
-      this.on(event, handler);
-    }
-    emit(event, ...args) {
-      for (const handler of this.handlers.get(event) || []) handler(...args);
-    }
-    close() {
-      this.readyState = 3;
-    }
-    send(raw) {
-      const message = JSON.parse(raw);
-      probe.statements.push(message.sql);
-      const response = legacyEnvelope(probe.mode, message);
-      if (!response) return;
-      setImmediate(() => this.emit('message', Buffer.from(JSON.stringify(response))));
-    }
-  };
+function connectionFor(system) {
+  if (system === 'tidb-tikv') return {endpoint: ENDPOINT, databaseName: 'bench_fixture'};
+  return {endpoint: ENDPOINT, credentials: CREDENTIALS};
 }
 
-function legacyEnvelope(mode, message) {
-  const base = {type: 'query_result', queryId: message.queryId};
-  switch (mode) {
-  case MODE.SILENT:
-    return null;
-  case MODE.ERROR_ENVELOPE:
-    return {...base, error: 'Table not found', errorCode: PRODUCT_ERROR_CODE};
-  case MODE.ZERO_AFFECTED:
-    return {...base, operation: 'update', affectedRows: 0};
-  case MODE.WRONG_VALUE:
-    return {...base, rows: [{next_order_id: 'garbage', balance: 'garbage'}]};
-  default:
-    return {...base, operation: 'update', affectedRows: 1, rows: []};
+function collectKeys(value, keys = new Set()) {
+  if (!value || typeof value !== 'object') return keys;
+  for (const [key, child] of Object.entries(value)) {
+    keys.add(key);
+    collectKeys(child, keys);
   }
+  return keys;
 }
 
-function createFakeHttp(probe) {
+function observe(output, product) {
+  const observations = output.observations;
+  const requests = observations?.requests || [];
+  const classes = new Set(arrayMap(arrayFilter(requests, (r) => r.failureClass),
+    (r) => r.failureClass));
+  if (observations?.setup?.failureClass) classes.add(observations.setup.failureClass);
   return {
-    Agent: class FakeAgent {},
-    request(_options, onResponse) {
-      probe.healthRequests += 1;
-      const request = {
-        on() {},
-        end() {
-          setImmediate(() => {
-            const handlers = new Map();
-            const response = {
-              statusCode: 200,
-              on(event, handler) {
-                handlers.set(event, handler);
-              },
-            };
-            onResponse(response);
-            handlers.get('data')?.(Buffer.from('{"status":"ok"}'));
-            handlers.get('end')?.();
-          });
-        },
-      };
-      return request;
-    },
+    output,
+    product,
+    dispatchStatus: output.dispatch.status,
+    accounting: observations?.accounting ?? null,
+    latencyCount: observations?.latency?.count ?? 0,
+    failureClasses: [...classes],
+    outputKeys: [...collectKeys(output)],
+    statements: [...product.state.statements],
+    tables: tablesOfStatements(product.state.statements),
+    healthRequests: 0,
+    kinds: arrayMap(requests, (request) => request.kind),
   };
 }
 
-function createFakeMysqlPromise(probe) {
-  const connection = {
-    async ping() {},
-    async beginTransaction() {
-      probe.statements.push('BEGIN');
-    },
-    async query(sql) {
-      probe.statements.push(sql);
-      if (probe.mode === MODE.ZERO_AFFECTED) return [{affectedRows: 0}];
-      return stringIncludes(sql, 'SELECT') ? [[{balance: 1, version: 1}]] : [{affectedRows: 1}];
-    },
-    async commit() {
-      probe.statements.push('COMMIT');
-    },
-    release() {},
-  };
-  return {
-    createPool() {
-      return {
-        async getConnection() {
-          return connection;
-        },
-        async end() {},
-      };
-    },
-  };
-}
-
-function legacyEndpoints(targetId) {
-  if (stringIncludes(targetId, 'tidb')) return ['mysql://10.0.0.9:4000'];
-  return ['http://10.0.0.7:8080'];
-}
-
-function legacyAccounting(printed) {
-  return {
-    offered: printed.totalAttempts,
-    committed: printed.completed,
-    unresolved: printed.timeouts,
-    unissued: 0,
-    terminalFailures: {},
-  };
-}
-
-function legacyObserved(printed, probe) {
-  return {
-    dispatchStatus: 'executed',
-    accounting: legacyAccounting(printed),
-    latencyCount: Array.isArray(printed.latenciesMs) ? printed.latenciesMs.length : 0,
-    failureClasses: [],
-    outputKeys: Object.keys(printed),
-    statements: [...probe.statements],
-    tables: tablesOfStatements(probe.statements),
-    healthRequests: probe.healthRequests,
-    kinds: [],
-  };
-}
-
-// Evaluates the generated driver script exactly as the base runner does
-// (`node -e eval(...)`), with the native client modules substituted.
-async function runDriverCase({targetId, scenario, subkind, mode = MODE.OK, operations = 6}) {
-  const probe = createLegacyProbe(mode);
-  const script = buildWorkloadDriverScript({
+async function runDriverCase({targetId, scenario, subkind, mode = FAKE_PRODUCT_FAULT.NONE}) {
+  const product = createFakeOltpProduct(mode);
+  const system = SYSTEM_BY_TARGET[targetId];
+  const output = await executeBenchmarkWorkload({
     targetId,
+    system,
     scenario,
     subkind,
-    endpoints: legacyEndpoints(targetId),
-    totalOps: operations,
-    concurrency: 2,
-    payloadConfig: {keySpace: 4},
-  });
-  const modules = {
-    'node:perf_hooks': perfHooks,
-    'node:http': createFakeHttp(probe),
-    'ws': createFakeWebSocketClass(probe),
-    'mysql2/promise': createFakeMysqlPromise(probe),
-  };
-  let resolvePrinted;
-  const printed = new Promise((resolve) => {
-    resolvePrinted = resolve;
-  });
-  const context = vm.createContext({
-    require(name) {
-      if (!(name in modules)) throw new Error(`unexpected module ${name}`);
-      return modules[name];
+    connection: connectionFor(system),
+    plan: {offeredRatePerSec: FIXTURE_RATE_PER_SEC, repetition: 1, orderIndex: 0},
+    drivers: {
+      createPgClient: product.createPgClient,
+      createMysqlConnection: product.createMysqlConnection,
     },
-    console: {log: (line) => resolvePrinted(JSON.parse(line))},
-    Buffer,
-    URL,
-    setImmediate,
-    setTimeout: (callback, ms) => setTimeout(callback, Math.min(ms, FAST_TIMER_MS)),
-    clearTimeout,
+    runtime: {setWatchdogTimer: fixtureTimer},
   });
-  vm.runInContext(script, context);
-  return legacyObserved(await printed, probe);
+  return observe(output, product);
 }
 
 function workloadStatements(observed) {
-  return arrayFilter(observed.statements, (sql) => sql !== 'BEGIN' && sql !== 'COMMIT');
-}
-
-function kindsOf(observed) {
-  return arrayMap(observed.kinds, (kind) => kind);
+  return observed.statements;
 }
 
 export {
-  MODE as DRIVER_FIXTURE_MODE,
-  kindsOf,
+  FAKE_PRODUCT_FAULT as DRIVER_FIXTURE_MODE,
   runDriverCase,
   tablesOfStatements,
   workloadStatements,

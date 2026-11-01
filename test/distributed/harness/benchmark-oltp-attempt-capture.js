@@ -1,0 +1,306 @@
+// Capture of one physical OLTP attempt on the wire, beneath the canonical
+// adapters: every statement the attempt sends and the product's answer to it
+// (rows, affected rows, SQLSTATE), the endpoint and server connection id,
+// and whether COMMIT was sent. Connections are owned here: a connection whose
+// transaction ended unresolved or on a transport failure is destroyed and is
+// never reused; the next transaction on that worker opens a fresh one.
+import {AsyncLocalStorage} from 'node:async_hooks';
+
+import {
+  BENCHMARK_FAILURE_CLASS,
+  BENCHMARK_OPERATION_OUTCOME,
+  classifyBenchmarkAttemptFailure,
+  createBenchmarkHarnessFault,
+} from './benchmark-operation-outcome.js';
+import {
+  isOltpTransportError,
+  resolveOltpErrorSqlState,
+} from './oltp-error-classification.js';
+
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
+const STATEMENT_STATUS = Object.freeze({
+  PENDING: 'pending',
+  OK: 'ok',
+  ERROR: 'error',
+});
+const TRANSACTION_CONTROL = Object.freeze({
+  BEGIN: 'BEGIN',
+  COMMIT: 'COMMIT',
+  ROLLBACK: 'ROLLBACK',
+});
+const DESTROYED_CONNECTION_MESSAGE =
+  'Connection destroyed after an unresolved or failed transaction';
+const DESTROYING_FAILURE_CLASSES = Object.freeze(new Set([
+  BENCHMARK_FAILURE_CLASS.TRANSPORT_FAILURE,
+  BENCHMARK_FAILURE_CLASS.AMBIGUOUS_COMMIT,
+]));
+
+const attemptStorage = new AsyncLocalStorage();
+
+function createAttemptTrace() {
+  return {
+    statements: [],
+    connections: new Set(),
+    commitSent: false,
+    commitAcknowledged: false,
+    productAnsweredError: false,
+    endpoint: null,
+    serverConnectionId: null,
+  };
+}
+
+function controlWord(sql) {
+  return stringToUpperCase(stringTrim(String(sql)));
+}
+
+function destroyedConnectionError() {
+  const error = new Error(DESTROYED_CONNECTION_MESSAGE);
+  error.code = 'ECONNRESET';
+  return error;
+}
+
+function rowsOfResult(result) {
+  if (Array.isArray(result?.rows)) return result.rows;
+  return Array.isArray(result) ? result : null;
+}
+
+function affectedRowsOfResult(result) {
+  if (Number.isInteger(result?.rowCount)) return result.rowCount;
+  if (Number.isInteger(result?.affectedRows)) return result.affectedRows;
+  return null;
+}
+
+// One statement's exchange, appended to the attempt that sent it. Statements
+// sent outside an attempt (dataset load, snapshots) are not traced.
+async function traceStatement(connection, sql, send) {
+  const trace = attemptStorage.getStore();
+  if (!trace) return send();
+  trace.connections.add(connection);
+  trace.endpoint = connection.endpoint;
+  trace.serverConnectionId = connection.serverConnectionId;
+  const word = controlWord(sql);
+  if (word === TRANSACTION_CONTROL.COMMIT) trace.commitSent = true;
+  const statement = {sql: String(sql), status: STATEMENT_STATUS.PENDING};
+  trace.statements.push(statement);
+  try {
+    const result = await send();
+    statement.status = STATEMENT_STATUS.OK;
+    statement.affectedRows = affectedRowsOfResult(result?.raw ?? result);
+    statement.rows = rowsOfResult(result?.raw ?? result);
+    if (word === TRANSACTION_CONTROL.COMMIT) trace.commitAcknowledged = true;
+    return result;
+  } catch (error) {
+    statement.status = STATEMENT_STATUS.ERROR;
+    statement.sqlState = resolveOltpErrorSqlState(error);
+    statement.code = typeof error?.code === 'string' ? error.code : null;
+    statement.message = String(error?.message || error);
+    if (!isOltpTransportError(error)) trace.productAnsweredError = true;
+    throw error;
+  }
+}
+
+function endpointLabel(options) {
+  return options?.host ? `${options.host}:${options.port}` : null;
+}
+
+function createConnectionRegistry() {
+  return {
+    connections: new Set(),
+    inFlight: new Set(),
+    destroyed: 0,
+  };
+}
+
+// The connection lifecycle shared by both wire families: a destroyed
+// connection reopens only at a transaction start, never mid-transaction.
+function createLifecycle(registry, open, closeInner, destroyInner) {
+  const connection = {
+    inner: null,
+    destroyed: false,
+    inTransaction: false,
+    endpoint: null,
+    serverConnectionId: null,
+    async ensureOpen(word) {
+      if (connection.inner && !connection.destroyed) return;
+      if (connection.destroyed && word !== TRANSACTION_CONTROL.BEGIN) {
+        throw destroyedConnectionError();
+      }
+      await open(connection);
+      connection.destroyed = false;
+    },
+    track(word) {
+      if (word === TRANSACTION_CONTROL.BEGIN) connection.inTransaction = true;
+      if (word === TRANSACTION_CONTROL.COMMIT || word === TRANSACTION_CONTROL.ROLLBACK) {
+        connection.inTransaction = false;
+      }
+    },
+    destroy() {
+      if (connection.destroyed || !connection.inner) return;
+      connection.destroyed = true;
+      connection.inTransaction = false;
+      registry.destroyed += 1;
+      destroyInner(connection.inner);
+      connection.inner = null;
+    },
+    async end() {
+      registry.connections.delete(connection);
+      if (connection.inner && !connection.destroyed) await closeInner(connection.inner);
+      connection.inner = null;
+    },
+  };
+  registry.connections.add(connection);
+  return connection;
+}
+
+function destroyPgInner(inner) {
+  inner.connection?.stream?.destroy?.();
+  Promise.resolve(inner.end()).then(() => undefined, () => undefined);
+}
+
+// pg-protocol clients (Lagrange public PG wire, PostgreSQL).
+function createTrackedPgClientFactory(baseFactory, registry) {
+  return (options) => {
+    const connection = createLifecycle(registry, async (target) => {
+      const inner = baseFactory(options);
+      await inner.connect();
+      target.inner = inner;
+      target.endpoint = endpointLabel(options);
+      target.serverConnectionId = Number.isInteger(inner.processID) ? inner.processID : null;
+    }, (inner) => inner.end(), destroyPgInner);
+    return {
+      async connect() {
+        await connection.ensureOpen(TRANSACTION_CONTROL.BEGIN);
+      },
+      async query(sql, parameters) {
+        const word = controlWord(sql);
+        return traceStatement(connection, sql, async () => {
+          await connection.ensureOpen(word);
+          const result = await connection.inner.query(sql, parameters);
+          connection.track(word);
+          return result;
+        });
+      },
+      async end() {
+        await connection.end();
+      },
+    };
+  };
+}
+
+function destroyMysqlInner(inner) {
+  inner.destroy();
+}
+
+// mysql2 connections (TiDB).
+function createTrackedMysqlConnectionFactory(baseFactory, registry) {
+  return async (options) => {
+    const connection = createLifecycle(registry, async (target) => {
+      const inner = await baseFactory(options);
+      target.inner = inner;
+      target.endpoint = endpointLabel(options);
+      target.serverConnectionId = Number.isInteger(inner.threadId) ? inner.threadId : null;
+    }, (inner) => inner.end(), destroyMysqlInner);
+    await connection.ensureOpen(TRANSACTION_CONTROL.BEGIN);
+    const send = (word, sql, invoke) => traceStatement(connection, sql, async () => {
+      await connection.ensureOpen(word);
+      const result = await invoke(connection.inner);
+      connection.track(word);
+      return result;
+    });
+    const wrapped = (result) => ({raw: result?.[0], value: result});
+    return {
+      async beginTransaction() {
+        await send(TRANSACTION_CONTROL.BEGIN, TRANSACTION_CONTROL.BEGIN,
+          (inner) => inner.beginTransaction());
+      },
+      async commit() {
+        await send(TRANSACTION_CONTROL.COMMIT, TRANSACTION_CONTROL.COMMIT,
+          (inner) => inner.commit());
+      },
+      async rollback() {
+        await send(TRANSACTION_CONTROL.ROLLBACK, TRANSACTION_CONTROL.ROLLBACK,
+          (inner) => inner.rollback());
+      },
+      async execute(sql, parameters) {
+        return (await send(controlWord(sql), sql,
+          async (inner) => wrapped(await inner.execute(sql, parameters)))).value;
+      },
+      async query(sql, parameters) {
+        return (await send(controlWord(sql), sql,
+          async (inner) => wrapped(await inner.query(sql, parameters)))).value;
+      },
+      async end() {
+        await connection.end();
+      },
+      destroy() {
+        connection.destroy();
+      },
+    };
+  };
+}
+
+function attemptEvidenceOf(trace) {
+  return Object.freeze({
+    endpoint: trace.endpoint,
+    serverConnectionId: trace.serverConnectionId,
+    commitSent: trace.commitSent,
+    productAnsweredError: trace.productAnsweredError,
+    statements: Object.freeze(arrayMap(trace.statements, (statement) =>
+      Object.freeze({...statement}))),
+  });
+}
+
+function destroyTraceConnections(trace) {
+  for (const connection of trace.connections) connection.destroy();
+}
+
+// Wraps a canonical adapter: an attempt is committed only when the executor
+// returned (its success invariants held) and the product acknowledged COMMIT.
+function createBenchmarkOutcomeAdapter(adapter, registry) {
+  return Object.freeze({
+    async executeTransaction(operation) {
+      const trace = createAttemptTrace();
+      registry.inFlight.add(trace);
+      try {
+        const result = await attemptStorage.run(trace,
+          () => adapter.executeTransaction(operation));
+        if (!trace.commitAcknowledged) {
+          throw createBenchmarkHarnessFault(
+            'OLTP adapter returned without an acknowledged COMMIT');
+        }
+        return Object.freeze({
+          outcome: BENCHMARK_OPERATION_OUTCOME.COMMITTED,
+          result,
+          attemptEvidence: attemptEvidenceOf(trace),
+        });
+      } catch (error) {
+        const failure = error && typeof error === 'object' ? error : new Error(String(error));
+        const classified = classifyBenchmarkAttemptFailure(failure, trace);
+        if (DESTROYING_FAILURE_CLASSES.has(classified.failureClass)) {
+          destroyTraceConnections(trace);
+        }
+        failure.benchmarkAttemptEvidence = attemptEvidenceOf(trace);
+        throw failure;
+      } finally {
+        registry.inFlight.delete(trace);
+      }
+    },
+    // Watchdog: every connection with an attempt still in flight is destroyed.
+    abortInFlight() {
+      const aborted = registry.inFlight.size;
+      for (const trace of registry.inFlight) destroyTraceConnections(trace);
+      return aborted;
+    },
+  });
+}
+
+export {
+  STATEMENT_STATUS as BENCHMARK_STATEMENT_STATUS,
+  createBenchmarkOutcomeAdapter,
+  createConnectionRegistry as createBenchmarkConnectionRegistry,
+  createTrackedMysqlConnectionFactory,
+  createTrackedPgClientFactory,
+};

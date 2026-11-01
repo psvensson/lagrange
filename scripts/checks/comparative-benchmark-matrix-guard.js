@@ -74,7 +74,7 @@ import {
   removeTcNetemDelay,
 } from '../../test/distributed/harness/real-product-cluster-deployers.js';
 import {
-  buildWorkloadDriverScript,
+  executeBenchmarkWorkload,
 } from '../../test/distributed/harness/real-product-workload-drivers.js';
 import {runDistributedScaleoutProvenanceGuard} from './distributed-scaleout-provenance-guard.js';
 
@@ -493,7 +493,7 @@ function verifyHarnessRendererParity(rootDir, matrix) {
     writeScenarioCComparisonStaticWebArtifacts, writeComparativeLandingArtifacts,
     applyTcNetemDelay, cleanClusterContainers, deployLagrangeCluster,
     deployPostgresCluster, deployTiDbCluster, ensureBenchDepsOnHost,
-    measureRealBackfillAndRecovery, removeTcNetemDelay, buildWorkloadDriverScript,
+    measureRealBackfillAndRecovery, removeTcNetemDelay, executeBenchmarkWorkload,
   ]) {
     assert.equal(typeof fn, TYPE_FUNCTION);
   }

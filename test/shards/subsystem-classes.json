@@ -9,7 +9,7 @@
     "cli-tooling": 98,
     "control-plane": 224,
     "convergence-topology": 78,
-    "distributed-harness": 184,
+    "distributed-harness": 185,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2512,
-  "digest": "fnv1a32-954a80a4",
+  "censusSize": 2513,
+  "digest": "fnv1a32-8ee1a95b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4beabfad",
+  "observationDigest": "fnv1a32-c4c94410",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -830,6 +830,7 @@
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-observation.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/benchmark-operation-outcome.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-partition-convergence.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-resource-live-observation-authority.test.js": "distributed-harness",
@@ -7015,6 +7016,72 @@
         "src/control-plane/control-plane-publication-merge.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/priority-recovery-snapshot.js"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
+        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
+        "test/distributed/harness/benchmark-operation-outcome.js",
+        "test/distributed/harness/benchmark-scenario-a-run.js",
+        "test/distributed/harness/benchmark-workload-dispatch.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/oltp-baseline-dataset.js",
+        "test/distributed/harness/oltp-baseline-transaction-executor.js",
+        "test/distributed/harness/oltp-baseline-workload.js",
+        "test/distributed/harness/oltp-error-classification.js",
+        "test/distributed/harness/oltp-open-loop-step-owner.js",
+        "test/distributed/harness/oltp-paired-retry-owner.js",
+        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
+        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/reference-client/lagrange-oltp-adapter.js",
+        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
+        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
+        "test/distributed/reference-client/postgresql-oltp-adapter.js",
+        "test/distributed/reference-client/tidb-oltp-adapter.js",
+        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
+      ],
+      "directories": [
+        "src"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
+        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
+        "test/distributed/harness/benchmark-operation-outcome.js",
+        "test/distributed/harness/benchmark-scenario-a-run.js",
+        "test/distributed/harness/benchmark-workload-dispatch.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/oltp-baseline-dataset.js",
+        "test/distributed/harness/oltp-baseline-transaction-executor.js",
+        "test/distributed/harness/oltp-baseline-workload.js",
+        "test/distributed/harness/oltp-error-classification.js",
+        "test/distributed/harness/oltp-open-loop-step-owner.js",
+        "test/distributed/harness/oltp-paired-retry-owner.js",
+        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
+        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/reference-client/lagrange-oltp-adapter.js",
+        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
+        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
+        "test/distributed/reference-client/postgresql-oltp-adapter.js",
+        "test/distributed/reference-client/tidb-oltp-adapter.js",
+        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": {
