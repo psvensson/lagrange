@@ -63,8 +63,14 @@ function failureOf(error) {
     diagnostic: error?.diagnostic ?? null};
 }
 
+// A product that never reached its own readiness contract (a typed
+// readiness_exhausted with its denial codes) is a product failure of that arm:
+// recorded, never skipped and never measured.
+const PRODUCT_FAILURE_CODES = Object.freeze([DEPLOYMENT_FAILURE.READINESS_EXHAUSTED]);
+
 function stateOfFailure(failure) {
   if (stringStartsWith(String(failure.code), REFUSAL_PREFIX)) return RUN_STATE.BLOCKED;
+  if (arrayIncludes(PRODUCT_FAILURE_CODES, failure.code)) return RUN_STATE.PRODUCT_FAILURE;
   return failure.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED ? RUN_STATE.INTERRUPTED :
     RUN_STATE.FAILED;
 }
@@ -196,7 +202,8 @@ function runRecord({run, manifest, header, state, failure, attempt, events, clos
     harnessEvents: arrayFilter(events,
       (event) => !arrayIncludes(DEPLOYMENT_EVENT_KINDS, event.kind))};
   record.rawObservationsDigest = recordOwner.computeRunObservationsDigest(record);
-  if (!arrayIncludes(RECORDED_STATES, state)) return record;
+  // Only a run that reached the workload has a complete record to validate.
+  if (!arrayIncludes(RECORDED_STATES, state) || !attempt?.workload) return record;
   try {
     recordOwner.validateRunRecord(record);
   } catch (error) {

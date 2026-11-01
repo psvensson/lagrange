@@ -50,7 +50,10 @@ import {
   verifyProductIdentity,
 } from './real-product-identity.js';
 import {TABLES as CANONICAL_TABLES} from '../reference-client/oltp-state-snapshot-shared.js';
-import {evaluateLagrangeClusterReadiness} from './real-product-lagrange-readiness-evaluation.js';
+import {
+  evaluateLagrangeClusterReadiness,
+  evaluateLagrangeServeLane,
+} from './real-product-lagrange-readiness-evaluation.js';
 import {pollReadiness} from './real-product-readiness.js';
 import {
   dockerRunDetached,
@@ -115,9 +118,9 @@ async function getJson(ctx, url) {
   return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp, url});
 }
 
-function readinessOf(ctx, component, probe) {
+function readinessOf(ctx, component, probe, stablePolls = 1) {
   return pollReadiness({component, probe, attempts: ctx.budget.attempts,
-    intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep});
+    intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep, stablePolls});
 }
 
 function nodeReady(ctx, host) {
@@ -198,14 +201,44 @@ async function readSystemTables(query) {
   return tables;
 }
 
-function clusterReady(ctx, component, query, expectedNodeIds, requiredTables = null) {
+async function controlSnapshots(ctx, roles) {
+  const snapshots = [];
+  for (const role of roles) {
+    const answer = await getJson(ctx,
+      `http://${role.host}:${PORT.ADMIN}/api/admin/control-snapshot`);
+    snapshots.push({nodeId: role.nodeId,
+      snapshot: answer.status === HTTP_OK && answer.json ? answer.json : null});
+  }
+  return snapshots;
+}
+
+// Every canonical table answers a COUNT(*) through the public wire (a result,
+// not a participant failure).
+async function tableRoutingDenials(query, requiredTables) {
+  const denials = [];
+  for (const table of requiredTables || []) {
+    try {
+      await query(`SELECT COUNT(*) AS row_count FROM ${table}`);
+    } catch (error) {
+      denials.push(`table_not_routable:${table}:${errorText(error)}`);
+    }
+  }
+  return denials;
+}
+
+function clusterReady(ctx, component, query, nodeRoles, requiredTables = null) {
+  const expectedNodeIds = arrayMap(nodeRoles, (role) => role.nodeId);
   return readinessOf(ctx, component, async () => {
     const tables = await readSystemTables(query);
     const verdict = evaluateLagrangeClusterReadiness({...tables, expectedNodeIds,
       requiredServiceIds: [PG_WIRE_SERVICE_ID], requiredTables, now: Date.now()});
-    return {ready: verdict.ready, diagnostic: {denials: verdict.denials,
+    const lane = evaluateLagrangeServeLane({snapshots: await controlSnapshots(ctx, nodeRoles)});
+    const routing = verdict.ready && lane.ready ?
+      await tableRoutingDenials(query, requiredTables) : [];
+    const denials = [...verdict.denials, ...lane.denials, ...routing];
+    return {ready: denials.length === 0, diagnostic: {denials,
       nodes: tables.nodes.length, partitions: tables.partitions.length}};
-  });
+  }, ctx.budget.stablePolls);
 }
 
 function probeWriteReadback(ctx, query, campaignId) {
@@ -272,8 +305,8 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const leaders = await leadersReady(ctx, seedHost);
   const query = createPsqlQueryReader({sshRun, opts, from: clientIp, campaignId,
     endpoint: {host: listener.host, port: listener.port}, connection});
-  const expectedNodeIds = arrayMap(roles, (role) => role.nodeId);
-  const cluster = await clusterReady(ctx, 'lagrange-system-tables', query, expectedNodeIds);
+  const nodeRoles = [...roles];
+  const cluster = await clusterReady(ctx, 'lagrange-system-tables', query, nodeRoles);
   const probe = await probeWriteReadback(ctx, query, campaignId);
   const products = verifyProductIdentity(
     await reportedVersions(ctx, await inspectProducts({sshRun, opts, roles})),
@@ -305,13 +338,13 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
       // routable and replicated, or a typed readiness exhaustion.
       observePlacement: async () => {
         const routable = await clusterReady(ctx, 'lagrange-canonical-tables-routable', query,
-          expectedNodeIds, arrayMap(CANONICAL_TABLES, (table) => table.name));
+          nodeRoles, arrayMap(CANONICAL_TABLES, (table) => table.name));
         return {...placementOf(await readPartitions(ctx, seedHost), roles,
           new Date().toISOString()), routable};
       },
       // The arm's readiness contract again (after a product restart).
       awaitReady: async () => ({cluster: await clusterReady(ctx, 'lagrange-system-tables', query,
-        expectedNodeIds), probe: await probeWriteReadback(ctx, query, campaignId)}),
+        nodeRoles), probe: await probeWriteReadback(ctx, query, campaignId)}),
       observeRoles: async () => ({leaders: (await readPartitions(ctx, seedHost))?.leaders ??
         null}),
     },

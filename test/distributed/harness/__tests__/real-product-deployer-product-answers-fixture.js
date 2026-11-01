@@ -7,6 +7,7 @@
 
 import {
   arrayFind,
+  arrayFindIndex,
   arrayFlatMap,
   arrayJoin,
   arrayMap,
@@ -133,18 +134,34 @@ const CANONICAL_TABLE_NAMES = Object.freeze(['warehouse', 'district', 'customer'
 // '|'-separated rows): every node active with a live lease and a ready
 // connection, a healthy sys-postgres-wire endpoint, and every partition led
 // and replicated on all nodes.
-function lagrangeSystemTableRules(nodeIds) {
-  const partitions = arrayMap(CANONICAL_TABLE_NAMES, (table) => `p-${table}|${table}|3`);
-  const services = arrayFlatMap(CANONICAL_TABLE_NAMES, (table) => arrayMap(nodeIds,
-    (nodeId, index) => `p-${table}|${nodeId}|active|${index === 0 ? 'leader' : 'follower'}`));
+const PRIORITY_PARTITIONS = Object.freeze(['control_plane_publications-p1',
+  'replica_operations-p1', 'schema_operations-p1', 'sql_transaction_participants-p1',
+  'sql_transactions-p1', 'sql_write_operations-p1']);
+
+function lagrangeSystemTableRules(nodeIds, hosts) {
+  const partitionIds = [...PRIORITY_PARTITIONS,
+    ...arrayMap(CANONICAL_TABLE_NAMES, (table) => `p-${table}`)];
+  const tableOf = (id) => (stringStartsWith(id, 'p-') ? id.slice(2) : 'system');
+  const partitions = arrayMap(partitionIds, (id) => `${id}|${tableOf(id)}|3|${nodeIds[0]}`);
+  const services = arrayFlatMap(partitionIds, (id) => arrayMap(nodeIds,
+    (nodeId, index) => `${id}|${nodeId}|active|${index === 0 ? 'leader' : 'follower'}`));
+  const snapshotOf = (command) => {
+    const index = arrayFindIndex(hosts, (host) => stringIncludes(command, `//${host}:`));
+    const nodeId = nodeIds[index];
+    return http(200, {nodeId, replicaOperations: {inFlightCount: 0},
+      controlPlaneDiagnostics: {readinessByNodeId: {[nodeId]: {serveEligible: true,
+        reasonCodes: []}}}});
+  };
   return [
     [/FROM nodes'/u, () => arrayJoin(['node_id|status|connection_state|ready_lease_expires_at',
       ...arrayMap(nodeIds, (nodeId) => `${nodeId}|active|ready|${Date.now() + 3600000}`)],
     '\n')],
     [/FROM service_endpoints'/u, arrayJoin(['service_id|node_id|protocol|port|health_status',
       `sys-postgres-wire|${nodeIds[0]}|postgresql|5433|healthy`], '\n')],
-    [/FROM partitions'/u, arrayJoin(['partition_id|table_name|replica_count', ...partitions],
-      '\n')],
+    [/FROM partitions'/u, arrayJoin(['partition_id|table_name|replica_count|leader_node_id',
+      ...partitions], '\n')],
+    [/\/api\/admin\/control-snapshot/u, snapshotOf],
+    [/SELECT COUNT\(\*\) AS row_count FROM/u, 'row_count\n0'],
     [/FROM services WHERE/u, arrayJoin(['partition_id|node_id|status|raft_role', ...services],
       '\n')],
     [/CREATE TABLE IF NOT EXISTS bench_readiness_probe/u, 'CREATE TABLE'],
@@ -161,7 +178,7 @@ function lagrangeSystemTableRules(nodeIds) {
 
 function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.3']} = {}) {
   return [
-    ...lagrangeSystemTableRules(LAGRANGE_NODE_IDS.slice(0, hosts.length)),
+    ...lagrangeSystemTableRules(LAGRANGE_NODE_IDS.slice(0, hosts.length), hosts),
     ...dockerRules(ledger),
     [/\/readyz/u, http(200, {ready: true, phase: 'ready', state: 'ready', reasons: []})],
     [/\/health/u, '{"status":"healthy","ready":true}'],

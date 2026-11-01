@@ -25,7 +25,8 @@ test('D20: every product container the deployer starts carries the campaign labe
     const ledger = createContainerLedger();
     const {sshRun, calls} = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts: HOSTS}));
     await deployers.deployLagrangeCluster({hosts: HOSTS, clientIp: '10.0.0.9', sshRun,
-      opts: {lagrangeImage: LAGRANGE_IMAGE, readiness: {attempts: 2, intervalMs: 0}},
+      opts: {lagrangeImage: LAGRANGE_IMAGE,
+        readiness: {stablePolls: 1, attempts: 2, intervalMs: 0}},
       campaignId: 'camp-77', sleep: async () => {}});
     const runs = arrayFilter(calls, (call) => /^docker run /u.test(call.command));
     assert.ok(runs.length >= HOSTS.length);

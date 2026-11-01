@@ -23,7 +23,7 @@ import {
 const HOSTS = ['10.0.0.1', '10.0.0.2', '10.0.0.3'];
 const CLIENT = '10.0.0.9';
 const OPTS = {lagrangeImage: LAGRANGE_IMAGE,
-  readiness: {attempts: 2, intervalMs: 0, timeoutMs: 30, pollIntervalMs: 1}};
+  readiness: {stablePolls: 1, attempts: 2, intervalMs: 0, timeoutMs: 30, pollIntervalMs: 1}};
 const noSleep = async () => {};
 
 function input(sshRun, extra = {}) {

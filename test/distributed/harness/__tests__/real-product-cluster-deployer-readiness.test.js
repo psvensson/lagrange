@@ -15,6 +15,7 @@ import {
 } from './real-product-deployer-product-answers-fixture.js';
 import {
   arrayFilter,
+  arrayFindIndex,
   arrayIncludes,
   arrayMap,
   arraySome,
@@ -25,7 +26,7 @@ const HOSTS = ['10.0.0.1', '10.0.0.2', '10.0.0.3'];
 const CLIENT = '10.0.0.9';
 const CAMPAIGN = 'camp-readiness';
 const FAST = {lagrangeImage: LAGRANGE_IMAGE,
-  readiness: {attempts: 3, intervalMs: 0, timeoutMs: 30, pollIntervalMs: 1}};
+  readiness: {stablePolls: 1, attempts: 3, intervalMs: 0, timeoutMs: 30, pollIntervalMs: 1}};
 const noSleep = async () => {};
 
 function baseInput(sshRun) {
@@ -133,7 +134,8 @@ test('after the canonical load every partition of every created table must be ro
     connection_state: 'ready', ready_lease_expires_at: String(now + 1000)}];
   const verdict = evaluateLagrangeClusterReadiness({nodes, now,
     endpoints: [{service_id: 'sys-postgres-wire', health_status: 'healthy'}],
-    partitions: [{partition_id: 'p1', table_name: 'stock', replica_count: '2'}],
+    partitions: [{partition_id: 'p1', table_name: 'stock', replica_count: '2',
+      leader_node_id: 'a'}],
     services: [{partition_id: 'p1', node_id: 'a', status: 'active', raft_role: 'leader'}],
     expectedNodeIds: ['a', 'b'], requiredServiceIds: ['sys-postgres-wire'],
     requiredTables: ['stock', 'item']});
@@ -141,3 +143,45 @@ test('after the canonical load every partition of every created table must be ro
   assert.deepEqual(verdict.denials, ['table_without_partitions:item',
     'partition_under_replicated:p1']);
 });
+
+test('live diagnosis 2026-11-01: serve lane closed (priority control-plane recovery ' +
+  'pending) never becomes ready; the exhaustion carries the reason codes and elapsed time',
+{timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  const {sshRun} = createScriptedSsh([
+    [/\/api\/admin\/control-snapshot/u, (command) => {
+      const nodeId = `00000000-0000-4000-8000-00000000000${1 + arrayFindIndex(HOSTS, (host) =>
+        stringIncludes(command, `//${host}:`))}`;
+      return http(200, {replicaOperations: {inFlightCount: 2}, controlPlaneDiagnostics: {
+        readinessByNodeId: {[nodeId]: {serveEligible: false,
+          reasonCodes: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING']}}}});
+    }],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  await assert.rejects(deployers.deployLagrangeCluster(baseInput(sshRun)), (error) => {
+    assert.equal(error.code, 'readiness_exhausted');
+    const denials = error.diagnostic.last.denials;
+    assert.ok(arrayIncludes(denials, 'serve_not_eligible:00000000-0000-4000-8000-000000000001'));
+    assert.ok(arrayIncludes(denials, 'serve_denied:00000000-0000-4000-8000-000000000002:' +
+      'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'));
+    assert.ok(arrayIncludes(denials, 'replica_operations_in_flight:' +
+      '00000000-0000-4000-8000-000000000003:2'));
+    assert.ok(Number.isFinite(error.diagnostic.elapsedMs));
+    return true;
+  });
+});
+
+test('readiness must hold for the stable window: a flapping verdict resets the count',
+  async () => {
+    const {pollReadiness} = await import('../real-product-readiness.js');
+    const verdicts = [true, false, true, true];
+    const ready = await pollReadiness({component: 'x', attempts: 4, intervalMs: 0,
+      sleep: async () => {}, stablePolls: 2, probe: async () => ({ready: verdicts.shift()})});
+    assert.equal(ready.attempts, 4);
+    assert.ok(Number.isFinite(ready.timeToReadyMs));
+    const flapping = [true, false, true, false];
+    await assert.rejects(pollReadiness({component: 'x', attempts: 4, intervalMs: 0,
+      sleep: async () => {}, stablePolls: 2,
+      probe: async () => ({ready: flapping.shift()})}),
+    (error) => error.code === 'readiness_exhausted');
+  });

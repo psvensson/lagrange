@@ -8,6 +8,7 @@
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayFindIndex = Function.call.bind(Array.prototype.findIndex);
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayJoin = Function.call.bind(Array.prototype.join);
@@ -29,6 +30,7 @@ export {
   arrayEvery,
   arrayFilter,
   arrayFind,
+  arrayFindIndex,
   arrayFlatMap,
   arrayIncludes,
   arrayJoin,

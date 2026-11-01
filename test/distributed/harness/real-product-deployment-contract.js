@@ -66,6 +66,8 @@ const SQL_CLIENT_IMAGE = POSTGRES_IMAGE_DEFAULT;
 
 const DEFAULT_READINESS = Object.freeze({
   attempts: 120,
+  // Consecutive ready verdicts the cluster predicate must hold (quiet window).
+  stablePolls: 3,
   intervalMs: 1000,
   timeoutMs: TIDB_REFERENCE_DEFAULTS.readinessTimeoutMs,
   pollIntervalMs: TIDB_REFERENCE_DEFAULTS.readinessPollIntervalMs,

@@ -20,27 +20,33 @@ import {errorText} from './real-product-remote-shell.js';
  *   observedAt: string, evidence: *}>}
  */
 async function pollReadiness({component, probe, attempts, intervalMs, sleep,
-  now = Date.now}) {
+  now = Date.now, stablePolls = 1}) {
   if (!Number.isInteger(attempts) || attempts < 1) {
     throw new Error(`readiness for ${component} needs a positive attempt budget`);
   }
+  const startedAt = now();
   let last = null;
+  let consecutive = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       const outcome = await probe();
       last = outcome?.diagnostic ?? null;
-      if (outcome?.ready === true) {
-        return {state: READINESS_STATE.READY, component, attempts: attempt,
-          observedAt: new Date(now()).toISOString(), evidence: last};
+      consecutive = outcome?.ready === true ? consecutive + 1 : 0;
+      if (consecutive >= stablePolls) {
+        const readyAt = now();
+        return {state: READINESS_STATE.READY, component, attempts: attempt, stablePolls,
+          observedAt: new Date(readyAt).toISOString(), timeToReadyMs: readyAt - startedAt,
+          evidence: last};
       }
     } catch (error) {
+      consecutive = 0;
       last = {error: errorText(error)};
     }
     if (attempt < attempts) await sleep(intervalMs);
   }
   throw deploymentFailure(DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
     `${component} did not report ready after ${attempts} attempts`,
-    {component, attempts, last});
+    {component, attempts, elapsedMs: now() - startedAt, last});
 }
 
 /**

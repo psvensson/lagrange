@@ -118,12 +118,12 @@ test('J7: readiness exhausted - measurement never starts, the run is recorded fa
   assert.deepEqual(calls.workload, []);
   assert.equal(calls.teardown.length, MANIFEST.runs.length);
   const first = records[1];
-  assert.equal(first.execution.state, 'failed');
+  assert.equal(first.execution.state, 'product-failure');
   assert.equal(first.execution.failure.code, 'readiness_exhausted');
   assert.deepEqual(first.execution.failure.diagnostic, {last: 'seed-contact'});
   assert.equal(first.observations, null);
   assert.equal(summary.exitCode, 1);
-  assert.ok(arrayEvery(summary.attempted, (entry) => entry.state === 'failed'));
+  assert.ok(arrayEvery(summary.attempted, (entry) => entry.state === 'product-failure'));
 });
 
 test('J15: product containers removed while the harness lives - no successful completion',

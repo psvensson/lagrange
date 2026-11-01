@@ -24,7 +24,7 @@ import {
 
 const HOSTS = ['10.0.0.1', '10.0.0.2', '10.0.0.3'];
 const OPTS = {lagrangeImage: LAGRANGE_IMAGE,
-  readiness: {attempts: 2, intervalMs: 0, timeoutMs: 50, pollIntervalMs: 1}};
+  readiness: {stablePolls: 1, attempts: 2, intervalMs: 0, timeoutMs: 50, pollIntervalMs: 1}};
 
 function input(sshRun) {
   return {hosts: HOSTS, clientIp: '10.0.0.9', sshRun, opts: OPTS, campaignId: 'camp-topo',

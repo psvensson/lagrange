@@ -7,8 +7,14 @@
  * isNodeRecordReady, src/node/node-readiness-policy.js) and connection_state
  * `ready`; every required service has a healthy endpoint row; and every
  * partition considered has an active leader replica on an expected node and
- * as many active replicas on distinct nodes as its replica count. Not ready is
- * a list of typed denial codes, the last of which an exhaustion carries.
+ * as many active replicas on distinct nodes as its replica count, including
+ * the six priority control-plane partitions; and, from every node's control
+ * snapshot (GET /api/admin/control-snapshot,
+ * src/admin/admin-control-snapshot-local-build-base.js), the serve lane is
+ * open (controlPlaneDiagnostics.readinessByNodeId[node].serveEligible with no
+ * reason codes) and no replica operation is in flight. Not ready is a list of
+ * typed denial codes, the last of which an exhaustion carries.
+ * (Predicate: product-blocker-first-divergence-2026-11-01.md section 5.)
  */
 import {isNodeRecordReady} from '../../../src/node/node-readiness-policy.js';
 import {
@@ -24,7 +30,17 @@ const ACTIVE = 'active';
 const HEALTHY = 'healthy';
 const LEADER = 'leader';
 const CONNECTION_READY = 'ready';
+// The priority control-plane partitions whose spread gates the serve lane.
+const PRIORITY_PARTITION_IDS = Object.freeze(['control_plane_publications-p1',
+  'replica_operations-p1', 'schema_operations-p1', 'sql_transaction_participants-p1',
+  'sql_transactions-p1', 'sql_write_operations-p1']);
 const DENIAL = Object.freeze({
+  PRIORITY_PARTITION_MISSING: 'priority_partition_missing',
+  PARTITION_WITHOUT_LEADER_ROW: 'partition_without_leader_row',
+  CONTROL_SNAPSHOT_UNAVAILABLE: 'control_snapshot_unavailable',
+  SERVE_NOT_ELIGIBLE: 'serve_not_eligible',
+  SERVE_DENIED: 'serve_denied',
+  REPLICA_OPERATIONS_IN_FLIGHT: 'replica_operations_in_flight',
   NODE_MISSING: 'node_missing',
   NODE_NOT_READY: 'node_ready_lease_or_status',
   NODE_CONNECTION: 'node_connection_not_ready',
@@ -96,13 +112,55 @@ function evaluateLagrangeClusterReadiness({nodes, endpoints, partitions, service
         denials.push(`${DENIAL.TABLE_WITHOUT_PARTITIONS}:${table}`);
       }
     }
-  } else if (partitions.length === 0) {
-    denials.push(DENIAL.NO_PARTITIONS);
+  } else {
+    if (partitions.length === 0) denials.push(DENIAL.NO_PARTITIONS);
+    for (const partitionId of PRIORITY_PARTITION_IDS) {
+      if (!arraySome(partitions, (row) => row.partition_id === partitionId)) {
+        denials.push(`${DENIAL.PRIORITY_PARTITION_MISSING}:${partitionId}`);
+      }
+    }
   }
   for (const partition of considered) {
+    if (requiredTables && !partition.leader_node_id) {
+      denials.push(`${DENIAL.PARTITION_WITHOUT_LEADER_ROW}:${partition.partition_id}`);
+    }
     denials.push(...partitionDenials(partition, services, expectedNodeIds));
   }
   return {ready: denials.length === 0, denials};
 }
 
-export {DENIAL as LAGRANGE_READINESS_DENIAL, evaluateLagrangeClusterReadiness};
+/**
+ * The serve lane and the replica-operation ledger from every node's control
+ * snapshot.
+ * @param {{snapshots: Array<{nodeId: string, snapshot: Object|null}>}} input
+ * @return {{ready: boolean, denials: Array<string>}}
+ */
+function evaluateLagrangeServeLane({snapshots}) {
+  const denials = [];
+  for (const {nodeId, snapshot} of snapshots) {
+    if (!snapshot) {
+      denials.push(`${DENIAL.CONTROL_SNAPSHOT_UNAVAILABLE}:${nodeId}`);
+      continue;
+    }
+    const readiness = snapshot.controlPlaneDiagnostics?.readinessByNodeId?.[nodeId];
+    if (readiness?.serveEligible !== true) {
+      denials.push(`${DENIAL.SERVE_NOT_ELIGIBLE}:${nodeId}`);
+    }
+    for (const code of Array.isArray(readiness?.reasonCodes) ? readiness.reasonCodes : []) {
+      denials.push(`${DENIAL.SERVE_DENIED}:${nodeId}:${code}`);
+    }
+    const inFlight = Number(snapshot.replicaOperations?.inFlightCount);
+    if (!Number.isInteger(inFlight) || inFlight !== 0) {
+      denials.push(`${DENIAL.REPLICA_OPERATIONS_IN_FLIGHT}:${nodeId}:` +
+        `${Number.isInteger(inFlight) ? inFlight : 'unknown'}`);
+    }
+  }
+  return {ready: denials.length === 0, denials};
+}
+
+export {
+  DENIAL as LAGRANGE_READINESS_DENIAL,
+  PRIORITY_PARTITION_IDS as LAGRANGE_PRIORITY_PARTITION_IDS,
+  evaluateLagrangeClusterReadiness,
+  evaluateLagrangeServeLane,
+};

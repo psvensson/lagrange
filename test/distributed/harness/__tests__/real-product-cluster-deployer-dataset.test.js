@@ -24,7 +24,8 @@ test('D08: the deployer seeds no hand-written key set of its own', {timeout: 300
     const hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.3'];
     const {sshRun, calls} = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts}));
     await deployers.deployLagrangeCluster({hosts, clientIp: '10.0.0.9', sshRun,
-      opts: {lagrangeImage: LAGRANGE_IMAGE, readiness: {attempts: 2, intervalMs: 0}},
+      opts: {lagrangeImage: LAGRANGE_IMAGE,
+        readiness: {stablePolls: 1, attempts: 2, intervalMs: 0}},
       campaignId: 'camp-dataset', sleep: async () => {}});
     assert.equal(arraySome(calls, (call) => /bench_accounts|acct-0/u.test(call.text)), false);
   });
