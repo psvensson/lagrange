@@ -39,7 +39,9 @@ import {errorText} from './real-product-remote-shell.js';
 const RECORD_SCHEMA = 'lagrange-raw-observation-v2';
 const RECORD_TYPE = Object.freeze({HEADER: 'campaign-header', RUN: 'run'});
 const RUN_STATE = Object.freeze({COMPLETED: 'completed', FAILED: 'failed',
-  INTERRUPTED: 'interrupted', BLOCKED: 'blocked'});
+  INTERRUPTED: 'interrupted', BLOCKED: 'blocked', PRODUCT_FAILURE: 'product-failure'});
+// Run states whose record is complete and goes through A's validator.
+const RECORDED_STATES = Object.freeze([RUN_STATE.COMPLETED, RUN_STATE.PRODUCT_FAILURE]);
 // Harness events outside A's deployment-event vocabulary, kept apart from
 // deployment.events so the record stays in A's shape.
 const EVENT = Object.freeze({WATCHDOG_STOP: 'watchdog-stop', ROLE_CHANGED: 'role-changed',
@@ -117,6 +119,7 @@ async function measureRun({run, manifest, deps, events, signal}) {
   assertEndpointBound(deployment);
   const rolesBefore = await observeRolesSafely(deployment, events, deps.now);
   attempt.workload = await deps.executeWorkloadRun({run, manifest, deployment, signal});
+  events.push(...(attempt.workload.events || []));
   attempt.productsAfter = await deps.inspectProducts(deployment);
   const identityEvents = compareProductIdentity(deployment.identity.products,
     attempt.productsAfter, iso(deps.now()));
@@ -131,6 +134,11 @@ async function measureRun({run, manifest, deps, events, signal}) {
     throw Object.assign(deploymentFailure(DEPLOYMENT_FAILURE.PRODUCT_CHANGED,
       'product containers changed across the measured window', {events: identityEvents}),
     {attempt});
+  }
+  const workloadFailure = attempt.workload.failure;
+  if (workloadFailure) {
+    throw Object.assign(deploymentFailure(workloadFailure.code, workloadFailure.message,
+      workloadFailure.diagnostic ?? null), {attempt});
   }
   if (signal.aborted) {
     throw Object.assign(deploymentFailure(DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
@@ -159,16 +167,18 @@ function runRecord({run, manifest, header, state, failure, attempt, events, clos
     targetId: run.targetId, scenario: run.scenario, subkind: run.subkind,
     executionTarget: header.executionTarget,
     execution: {state, failure, startedAt, endedAt},
-    identity: {harness: header.harness,
-      products: attempt?.deployment?.identity?.products ?? null,
-      productsAfterWindow: attempt?.productsAfter ?? null, publication: null},
+    identity: {harness: attempt?.workload?.harness ?
+      {...header.harness, ...attempt.workload.harness, gitCommit: header.harness.gitCommit} :
+      header.harness,
+    products: attempt?.deployment?.identity?.products ?? null,
+    productsAfterWindow: attempt?.productsAfter ?? null, publication: null},
     plan, deployment: recordedDeployment({attempt, header, events, closure}),
     observations: attempt?.workload?.observations ?? null,
     correctness: attempt?.workload?.correctness ?? null,
     harnessEvents: arrayFilter(events,
       (event) => !arrayIncludes(DEPLOYMENT_EVENT_KINDS, event.kind))};
   record.rawObservationsDigest = recordOwner.computeRunObservationsDigest(record);
-  if (state !== RUN_STATE.COMPLETED) return record;
+  if (!arrayIncludes(RECORDED_STATES, state)) return record;
   try {
     recordOwner.validateRunRecord(record);
   } catch (error) {
@@ -211,9 +221,13 @@ async function attemptRun({run, manifest, header, deps, watchdog}) {
     failure = failureOf(error);
   }
   const closure = await teardownSafely(deps, run, attempt?.deployment ?? null);
-  return runRecord({run, manifest, header, events, closure, attempt, failure,
+  const productFailure = failure ? null : attempt?.workload?.productFailure ?? null;
+  return runRecord({run, manifest, header, events, closure, attempt,
+    failure: failure ?? (productFailure ? {code: 'product_failure',
+      message: `product ${productFailure.runStatus}`, diagnostic: productFailure} : null),
     recordOwner: deps.recordOwner,
-    state: failure ? stateOfFailure(failure) : RUN_STATE.COMPLETED,
+    state: failure ? stateOfFailure(failure) :
+      (productFailure ? RUN_STATE.PRODUCT_FAILURE : RUN_STATE.COMPLETED),
     startedAt, endedAt: iso(deps.now())});
 }
 
@@ -252,7 +266,7 @@ async function runComparativeCampaign({manifest, header, deps}) {
     header: headerRecord, records, attempted,
     exitCode: resolveRunExitCode({
       hasFailures: arraySome(states, (state) => state === RUN_STATE.FAILED ||
-        state === RUN_STATE.INTERRUPTED),
+        state === RUN_STATE.INTERRUPTED || state === RUN_STATE.PRODUCT_FAILURE),
       hasRefusals: arrayIncludes(states, RUN_STATE.BLOCKED)})};
 }
 

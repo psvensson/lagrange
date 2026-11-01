@@ -2,11 +2,9 @@
  * The product-native SQL clients the deployment layer reads products with,
  * each run as a one-shot campaign-labelled container on the load-generator
  * host (the public-interface view): psql for PostgreSQL and the Lagrange PG
- * wire, and the TiDB lifecycle owner's pinned mysql client for TiDB. Also the
- * listener-ownership probe that binds an endpoint to the container that owns
+ * wire. Also the listener-ownership probe that binds an endpoint to the container that owns
  * its listening socket.
  */
-import {buildTiDbPhysicalMysqlCommand} from './tidb-reference-physical-placement-proof.js';
 import {
   arrayFilter,
   arrayJoin,
@@ -20,17 +18,11 @@ import {
   deploymentFailure,
 } from './real-product-deployment-contract.js';
 import {
-  buildTableQuery,
-  rowsFromDelimitedText,
-} from './real-product-dataset-verification.js';
-import {
   dockerRunOnceCommand,
   errorText,
 } from './real-product-remote-shell.js';
 
 const PSQL_SEPARATOR = '|';
-const MYSQL_SEPARATOR = '\t';
-const MYSQL_NULL = 'NULL';
 const LISTENER_OWNER_YES = 'owner=yes';
 // Inode(s) of the LISTEN (state 0A) socket on the port, from the host network
 // namespace's tables, matched against the fds of the processes in the target
@@ -45,22 +37,25 @@ const LISTENER_OWNER_SCRIPT = [
 ].join('\n');
 
 /**
- * psql against a PostgreSQL-protocol endpoint from `from`, unaligned output.
+ * Rows from a client's delimited text output (psql -A -F).
+ * @param {string} text
+ * @param {Array<string>} columns
+ * @param {{separator: string, nullToken?: string|null}} format
+ * @return {Array<Object>}
  */
-function psqlCommand({campaignId, endpoint, connection, sql}) {
-  return dockerRunOnceCommand({campaignId, image: SQL_CLIENT_IMAGE,
-    dockerArgs: ['-e', `PGPASSWORD=${connection.password}`],
-    commandArgs: ['psql', '-h', endpoint.host, '-p', String(endpoint.port),
-      '-U', connection.user, '-d', connection.database, '-v', 'ON_ERROR_STOP=1',
-      '-At', '-F', PSQL_SEPARATOR, '-c', sql]});
-}
-
-/** A canonical-table reader over psql (PostgreSQL, Lagrange PG wire). */
-function createPsqlTableReader({sshRun, opts, from, campaignId, endpoint, connection}) {
-  return async (table) => rowsFromDelimitedText(
-    await sshRun(from, opts, psqlCommand({campaignId, endpoint, connection,
-      sql: buildTableQuery(table)})),
-    table.columns, {separator: PSQL_SEPARATOR, nullToken: ''});
+function rowsFromDelimitedText(text, columns, {separator, nullToken = null}) {
+  const lines = arrayFilter(stringSplit(String(text ?? ''), /\r?\n/u), (line) => line !== '');
+  return arrayMap(lines, (line) => {
+    const cells = stringSplit(line, separator);
+    if (cells.length !== columns.length) {
+      throw new Error(`expected ${columns.length} columns, got ${cells.length}: ${line}`);
+    }
+    const row = {};
+    columns.forEach((column, index) => {
+      row[column] = cells[index] === nullToken ? null : cells[index];
+    });
+    return row;
+  });
 }
 
 /**
@@ -79,20 +74,6 @@ function createPsqlQueryReader({sshRun, opts, from, campaignId, endpoint, connec
     if (header === undefined) return [];
     return rowsFromDelimitedText(arrayJoin(rows, '\n'), stringSplit(header, PSQL_SEPARATOR),
       {separator: PSQL_SEPARATOR, nullToken: ''});
-  };
-}
-
-/** A canonical-table reader over the TiDB mysql client container. */
-function createMysqlTableReader({provider, clientContainerId, endpoint, databaseName}) {
-  return async (table) => {
-    const result = await provider.execInContainer(clientContainerId,
-      buildTiDbPhysicalMysqlCommand(endpoint,
-        `USE \`${databaseName}\`; ${buildTableQuery(table)}`));
-    if (result.exitCode !== 0) {
-      throw new Error(`mysql read of ${table.name} exited ${result.exitCode}`);
-    }
-    return rowsFromDelimitedText(result.stdout, table.columns,
-      {separator: MYSQL_SEPARATOR, nullToken: MYSQL_NULL});
   };
 }
 
@@ -130,8 +111,6 @@ async function bindEndpointToContainer({sshRun, opts, campaignId, endpoint, cand
 
 export {
   bindEndpointToContainer,
-  createMysqlTableReader,
   createPsqlQueryReader,
-  createPsqlTableReader,
-  psqlCommand,
+  rowsFromDelimitedText,
 };

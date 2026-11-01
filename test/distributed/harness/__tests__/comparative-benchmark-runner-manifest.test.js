@@ -27,7 +27,8 @@ function manifest() {
 test('D15: dataset and plan digests come from the canonical owners, not label hashes',
   () => {
     const built = manifest();
-    const sweep = buildScenarioAPairedSweepPlan(COMPARATIVE_SMOKE_PROFILE.sweep);
+    const sweep = buildScenarioAPairedSweepPlan({...COMPARATIVE_SMOKE_PROFILE.sweep,
+      systems: ['lagrange', 'tidb-tikv', 'postgresql'], repetitions: 6});
     assert.equal(built.plan.datasetDigest, `sha256:${sweep.identity.datasetSha256}`);
     assert.equal(built.plan.workloadPlanDigest, `sha256:${sweep.identity.workloadPlanSha256}`);
     assert.equal(built.plan.sweepPlanDigest, `sha256:${sweep.sweepPlanSha256}`);
@@ -36,18 +37,30 @@ test('D15: dataset and plan digests come from the canonical owners, not label ha
   });
 
 test('manifest: every target x rate x repetition is a run with a unique runId and ' +
-  'claimKey, counter-balanced by the sweep owner', () => {
+  'claimKey, the system order rotated by the sweep owner', () => {
   const built = manifest();
-  const {offeredRatesPerSec, repetitions} = COMPARATIVE_SMOKE_PROFILE.sweep;
-  assert.equal(built.runs.length, TARGETS.length * offeredRatesPerSec.length * repetitions);
+  const {offeredRatesPerSec} = COMPARATIVE_SMOKE_PROFILE.sweep;
+  assert.deepEqual(built.plan.systems, ['lagrange', 'tidb-tikv', 'postgresql']);
+  // Three systems lead equally often over both rate directions: 6 repetitions.
+  assert.equal(built.runs.length, TARGETS.length * offeredRatesPerSec.length * 6);
   assert.equal(new Set(arrayMap(built.runs, (run) => run.runId)).size, built.runs.length);
   assert.equal(new Set(arrayMap(built.runs, (run) => run.claimKey)).size, built.runs.length);
-  const targetsOf = (repetition) => arrayMap(arrayFilter(built.runs,
-    (run) => run.repetition === repetition), (run) => run.targetId);
-  const firstRep = targetsOf(1);
-  const secondRep = targetsOf(2);
-  assert.notEqual(firstRep[0], secondRep[0], 'system order alternates per repetition');
-  assert.ok(arrayEvery(built.runs, (run, index) => run.orderIndex === index));
+  const leaderOf = (repetition) => arrayFilter(built.runs,
+    (run) => run.repetition === repetition)[0].targetId;
+  assert.deepEqual(arrayMap([1, 2, 3], leaderOf),
+    ['lagrange', 'tidb-tikv', 'pg-patroni-sync-ha-rf3']);
+  assert.ok(arrayEvery(built.runs, (run, index) => run.orderIndex === index &&
+    run.workloadSubkind === 'smoke'));
+});
+
+test('manifest: the smoke workload is the workload dispatch owner\'s', () => {
+  assert.equal(manifest().plan.workloadProfileId, 'scenario-a-smoke-v1');
+});
+
+test('manifest: two PostgreSQL arms in one campaign are refused', () => {
+  assert.throws(() => buildComparativeCampaignManifest({campaignId: 'bench-m-1',
+    profile: COMPARATIVE_SMOKE_PROFILE, targets: ['pg-single-primary',
+      'pg-patroni-sync-ha-rf3']}), /duplicates/u);
 });
 
 test('D12/D22: runs carry no unobserved knobs; they are all Scenario A main', () => {

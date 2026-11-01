@@ -11,13 +11,16 @@
  */
 import {createHash} from 'node:crypto';
 
+import {
+  BENCHMARK_OPERATION_FAMILY,
+  BENCHMARK_WORKLOAD_PROFILE,
+} from './benchmark-workload-dispatch.js';
 import {COMPARISON_VIEW} from './comparative-system-budget.js';
 import {
   OLTP_PAIRED_SWEEP_SYSTEM,
   buildScenarioAPairedSweepPlan,
 } from './oltp-paired-sweep-plan.js';
 import {
-  arrayFilter,
   arrayIncludes,
   arrayMap,
   stringPadStart,
@@ -32,21 +35,24 @@ const MANIFEST_SCHEMA = 'lagrange-comparative-campaign-manifest/v1';
 const SCENARIO_A = 'scenarioA';
 const RUN_ORDINAL_WIDTH = 3;
 
+const SMOKE_WORKLOAD_PROFILE =
+  BENCHMARK_WORKLOAD_PROFILE[BENCHMARK_OPERATION_FAMILY.SCENARIO_A_SMOKE];
+
 const COMPARATIVE_SMOKE_PROFILE = Object.freeze({
   id: 'comparative-smoke-v1',
   runClass: RUN_CLASS.SMOKE,
   // Stream A's coverage manifest claims Scenario A as subkind `main`; the
-  // smoke character is the plan's profileClass, not a separate subkind.
+  // smoke character is the plan's profileClass. The workload dispatch (B1)
+  // names the smoke family `smoke` and owns its workload.
   subkind: 'main',
+  workloadSubkind: 'smoke',
+  workloadProfileId: SMOKE_WORKLOAD_PROFILE.id,
   campaignBudgetMinutes: 240,
   sweep: Object.freeze({
     comparisonView: COMPARISON_VIEW.ARCHITECTURE_NATIVE,
     offeredRatesPerSec: Object.freeze([5, 10]),
-    repetitions: 2,
     slo: Object.freeze({p99Ms: 2000, maxErrorRate: 0.05}),
-    workload: Object.freeze({warehouseCount: 1, districtsPerWarehouse: 2,
-      customersPerDistrict: 30, itemCount: 200, workers: 4,
-      warmupOperationsPerWorker: 10, measurementOperationsPerWorker: 50}),
+    workload: SMOKE_WORKLOAD_PROFILE.workload,
   }),
 });
 
@@ -86,14 +92,20 @@ function requireTargets(targets) {
   return [...new Set(targets)];
 }
 
-// The sweep owner orders its two systems per repetition; targets outside
-// that pair go after them when TiDB leads and before them when Lagrange
-// leads, so their position alternates the same way.
-function orderedTargets(systemOrder, targets) {
-  const paired = arrayFilter(systemOrder, (system) => arrayIncludes(targets, system));
-  const others = arrayFilter(targets, (target) => !arrayIncludes(systemOrder, target));
-  return systemOrder[0] === OLTP_PAIRED_SWEEP_SYSTEM.TIDB_TIKV ? [...paired, ...others] :
-    [...others, ...paired];
+// The comparison system each target's arm runs (the sweep owner's and the
+// workload dispatch's vocabulary). Two PostgreSQL arms in one campaign would
+// be one system twice; the sweep owner refuses that.
+const SYSTEM_OF_TARGET = Object.freeze({
+  [COMPARATIVE_TARGET.LAGRANGE]: OLTP_PAIRED_SWEEP_SYSTEM.LAGRANGE,
+  [COMPARATIVE_TARGET.TIDB_TIKV]: OLTP_PAIRED_SWEEP_SYSTEM.TIDB_TIKV,
+  [COMPARATIVE_TARGET.PG_SINGLE_PRIMARY]: OLTP_PAIRED_SWEEP_SYSTEM.POSTGRESQL,
+  [COMPARATIVE_TARGET.PG_SYNC_STANDBY_HA]: OLTP_PAIRED_SWEEP_SYSTEM.POSTGRESQL,
+});
+
+// Every system leads equally often and both rate directions are equally
+// represented (the sweep owner's rule): the smallest such repetition count.
+function minimumRepetitions(systemCount) {
+  return systemCount % 2 === 0 ? systemCount : systemCount * 2;
 }
 
 function planOf(sweep, profile) {
@@ -109,6 +121,8 @@ function planOf(sweep, profile) {
     openLoopProfileId: identity.openLoopProfileId,
     retryPolicyId: identity.retryPolicyId,
     comparisonView: identity.comparisonView,
+    workloadProfileId: profile.workloadProfileId,
+    systems: identity.systems,
     profileClass: profile.runClass,
     slo: identity.slo,
     workload: profile.sweep.workload,
@@ -124,16 +138,20 @@ function planOf(sweep, profile) {
 function buildComparativeCampaignManifest({campaignId, profile, targets}) {
   requireCampaignId(campaignId);
   const selected = requireTargets(targets);
-  const sweep = buildScenarioAPairedSweepPlan(profile.sweep);
+  const systems = arrayMap(selected, (target) => SYSTEM_OF_TARGET[target]);
+  const sweep = buildScenarioAPairedSweepPlan({...profile.sweep, systems,
+    repetitions: minimumRepetitions(systems.length)});
+  const targetOf = new Map(arrayMap(selected, (target) => [SYSTEM_OF_TARGET[target], target]));
   const runs = [];
   for (const pair of sweep.pairs) {
-    for (const targetId of orderedTargets(pair.systemOrder, selected)) {
+    for (const targetId of arrayMap(pair.systemOrder, (system) => targetOf.get(system))) {
       const orderIndex = runs.length;
       runs.push({runId: `${campaignId}-r${stringPadStart(String(orderIndex + 1),
         RUN_ORDINAL_WIDTH, '0')}`,
       claimKey: `${targetId}/${SCENARIO_A}/${profile.subkind}/${pair.offeredRatePerSec}/` +
         `${pair.repetition}`,
-      targetId, scenario: SCENARIO_A, subkind: profile.subkind,
+      targetId, system: SYSTEM_OF_TARGET[targetId], scenario: SCENARIO_A,
+      subkind: profile.subkind, workloadSubkind: profile.workloadSubkind,
       offeredRatePerSec: pair.offeredRatePerSec, repetition: pair.repetition, orderIndex,
       freshDeployment: pair.freshDatasetPerSystem});
     }

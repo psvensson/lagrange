@@ -198,3 +198,42 @@ test('a completed run whose record stream A\'s validator rejects is recorded fai
     assert.equal(records[1].execution.failure.code, 'record_rejected');
     assert.equal(summary.exitCode, 1);
   });
+
+test('a product setup failure is a complete, validated product-failure record, not skipped',
+  async () => {
+    let validated = 0;
+    const owner = recordOwner();
+    const {deps, records} = harness({
+      recordOwner: {...owner, validateRunRecord: (record) => {
+        validated += 1;
+        return record;
+      }},
+      executeWorkloadRun: async () => ({observations: {runStatus: 'setup-failed'},
+        correctness: {semanticGate: null}, plan: {operationSliceDigest: 's',
+          plannedOperationCounts: {}}, dataset: {resetMethod: 'fresh-formation'},
+        harness: {driverSourceSha256: 'feed', adapterIds: ['a']},
+        loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
+        events: [], failure: null,
+        productFailure: {runStatus: 'setup-failed', setup: {sqlstate: '55P03'}}}),
+    });
+    const summary = await run(deps);
+    assert.equal(validated, MANIFEST.runs.length);
+    assert.equal(records[1].execution.state, 'product-failure');
+    assert.equal(records[1].execution.failure.diagnostic.setup.sqlstate, '55P03');
+    assert.equal(records[1].identity.harness.driverSourceSha256, 'feed');
+    assert.equal(records[1].identity.harness.gitCommit, HEADER.harness.gitCommit);
+    assert.ok(arrayEvery(summary.attempted, (entry) => entry.state === 'product-failure'));
+    assert.equal(summary.exitCode, 1);
+  });
+
+test('a workload failure (e.g. unverified dataset) keeps the attempt in the record', async () => {
+  const {deps, records} = harness({executeWorkloadRun: async () => ({
+    observations: {runStatus: 'completed'}, correctness: null, plan: null,
+    dataset: {resetMethod: 'fresh-formation', keyCoverage: {present: null}},
+    loadGenerator: {host: '10.0.0.9'}, events: [], productFailure: null,
+    failure: {code: 'dataset_unverified', message: 'loaded dataset mismatch'}})});
+  await run(deps);
+  assert.equal(records[1].execution.failure.code, 'dataset_unverified');
+  assert.equal(records[1].deployment.dataset.keyCoverage.present, null);
+  assert.equal(records[1].deployment.loadGenerator.host, '10.0.0.9');
+});

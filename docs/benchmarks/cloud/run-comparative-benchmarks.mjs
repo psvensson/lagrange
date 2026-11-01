@@ -50,8 +50,8 @@ import {
   selectLabBenchmarkHosts,
 } from '../../../test/distributed/harness/comparative-benchmark-lab-hosts.js';
 import {
+  createRemoteWorkloadRunner,
   createWorkloadRunExecutor,
-  loadCanonicalWorkloadEntry,
 } from '../../../test/distributed/harness/comparative-benchmark-workload-call-site.js';
 import {
   loadRawObservationRecordOwner,
@@ -105,6 +105,8 @@ Options:
   --ssh-hosts <ip,...>          gcp only: external SSH addresses matching --hosts
   --ssh-user <user>             gcp only: SSH user (default: $SSH_USER or $USER)
   --ssh-key <path>              gcp only: SSH private key
+  --client-checkout <path>      gcp only: checkout on the load generator, at this commit
+  --client-node <path>          gcp only: Node >= 22 on the load generator (default: node)
   --targets <a,b,...>           ${Object.values(COMPARATIVE_TARGET).join(', ')}
                                 (default: ${DEFAULT_TARGETS.join(',')})
   --profile <smoke>             Campaign profile (default: smoke)
@@ -128,7 +130,8 @@ const VALUE_FLAGS = Object.freeze({
   '--targets': 'targetsRaw', '--profile': 'profile', '--campaign-id': 'campaignId',
   '--storage-root': 'storageRoot', '--lagrange-image': 'lagrangeImage',
   '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
-  '--lock-wait-minutes': 'lockWaitMinutes',
+  '--lock-wait-minutes': 'lockWaitMinutes', '--client-checkout': 'clientCheckout',
+  '--client-node': 'clientNode',
 });
 
 function list(text) {
@@ -146,7 +149,8 @@ function parseCliArgs(argv, env) {
     targetsRaw: DEFAULT_TARGETS.join(','), profile: 'smoke', campaignId: '',
     storageRoot: '', lagrangeImage: LAGRANGE_IMAGE_DEFAULT,
     rawObservationsPath: DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH, outputPath: '',
-    lockWaitMinutes: String(DEFAULT_LOCK_WAIT_MINUTES), dryRun: false, help: false};
+    lockWaitMinutes: String(DEFAULT_LOCK_WAIT_MINUTES), clientCheckout: '', clientNode: 'node',
+    dryRun: false, help: false};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--help' || arg === '-h') opts.help = true;
@@ -188,7 +192,8 @@ function gcpHosts(opts, dataHostCount) {
   const ssh = list(opts.sshHostsRaw);
   const host = (index, role) => ({name: ips[index], ip: ips[index], role,
     sshTarget: `${opts.sshUser ? `${opts.sshUser}@` : ''}${ssh[index] || ips[index]}`,
-    repoPath: null, nodePath: null});
+    repoPath: role === 'client' ? opts.clientCheckout || null : null,
+    nodePath: role === 'client' ? opts.clientNode : null});
   return [...Array.from({length: dataHostCount}, (_unused, index) => host(index, 'data')),
     host(ips.length - 1, 'client')];
 }
@@ -226,7 +231,9 @@ function harnessIdentity() {
   const git = (args) => spawnSync('git', args, {cwd: REPO_ROOT, encoding: 'utf8'}).stdout.trim();
   return {gitCommit: git(['rev-parse', 'HEAD']),
     worktreeClean: git(['status', '--porcelain']) === '',
-    driverSourceSha256: fileSha256('test/distributed/harness/real-product-canonical-workload.js'),
+    // The workload owner's own source digest arrives per run from the load
+    // generator (identity.harness of each run record).
+    driverSourceSha256: fileSha256('test/distributed/harness/real-product-workload-drivers.js'),
     deploymentSourceSha256: Object.fromEntries(DEPLOYMENT_SOURCES.map((file) =>
       [file, fileSha256(file)])),
     adapterIds: []};
@@ -244,8 +251,12 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
     role: hosts[index].role, ...(physicalExtras[hosts[index].name] || {})}));
   await ensureProductImages({hosts, images: imagesFor(manifest.targets, opts), sshRun, opts});
   const recordOwner = await loadRawObservationRecordOwner();
-  const runCanonicalWorkload = await loadCanonicalWorkloadEntry();
   const client = hosts.find((host) => host.role === 'client');
+  if (!client.repoPath || !client.nodePath) {
+    throw new UsageError('the load generator needs a checkout at the harness commit: ' +
+      'lab hosts record one; for gcp pass --client-checkout <path>');
+  }
+  const harness = harnessIdentity();
   const dataIps = hosts.filter((host) => host.role === 'data').map((host) => host.ip);
   const deployOpts = {lagrangeImage: opts.lagrangeImage, storageRoot: opts.storageRoot || null};
   const deps = {
@@ -255,11 +266,12 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
     deployRun: (run) => deployComparativeTarget(run.targetId, {hosts: dataIps,
       clientIp: client.ip, sshRun, opts: deployOpts, campaignId: manifest.campaignId,
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))}),
-    executeWorkloadRun: createWorkloadRunExecutor({runCanonicalWorkload, sshRun,
-      opts: deployOpts, clientHost: client.ip,
-      describeLoadGenerator: () => describeLoadGenerator({sshRun, opts, host: client,
-        hostFacts: facts[hosts.indexOf(client)], repoPath: client.repoPath,
-        nodePath: client.nodePath})}),
+    executeWorkloadRun: createWorkloadRunExecutor({clientHost: client.ip,
+      runWorkload: createRemoteWorkloadRunner({sshRun, opts, host: client,
+        harnessCommit: harness.gitCommit, campaignId: manifest.campaignId}),
+      evidenceDirOf: (run) => `test-output/bench/${manifest.campaignId}/${run.runId}/evidence`,
+      describeLoadGenerator: () => describeLoadGenerator({host: client,
+        hostFacts: facts[hosts.indexOf(client)]})}),
     inspectProducts: (deployment) => observeProductsAfterWindow({sshRun, opts,
       products: deployment.identity.products}),
     teardownRun: () => removeCampaignContainers({hosts: hosts.map((host) => host.ip),
@@ -275,8 +287,7 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   process.once('SIGTERM', stop);
   try {
     const summary = await runComparativeCampaign({manifest,
-      header: {executionTarget: opts.executionTarget, physicalHosts,
-        harness: harnessIdentity()}, deps});
+      header: {executionTarget: opts.executionTarget, physicalHosts, harness}, deps});
     const admitted = recordOwner.campaignOutcome({header: summary.header,
       runs: summary.records, file: opts.rawObservationsPath, rootDir: REPO_ROOT, manifest});
     const {header: _header, records: _records, ...rest} = summary;

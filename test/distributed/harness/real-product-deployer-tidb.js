@@ -50,7 +50,6 @@ import {
 } from './real-product-remote-shell.js';
 import {
   bindEndpointToContainer,
-  createMysqlTableReader,
 } from './real-product-sql-clients.js';
 
 const ROLE = Object.freeze({PD: 'pd', TIKV: 'tikv', TIDB: 'tidb', SQL_CLIENT: 'sql-client'});
@@ -201,8 +200,6 @@ async function deployTiDbCluster({hosts, clientIp, sshRun, opts, campaignId, sle
     endpoint: {protocol: 'mysql', ...endpoint, containerId: binding.containerId, binding},
     access: {connection: {user: 'root', database: databaseName}},
     operations: {
-      readTableRows: createMysqlTableReader({provider: ctx.provider,
-        clientContainerId: ctx.sqlClient.containerId, endpoint, databaseName}),
       observePlacement: async () => ({observedAt: new Date().toISOString(),
         source: 'tidb-reference-physical-placement-proof', ...(await placement())}),
       observeRoles: async () => ({stores: await observeStores(ctx, endpoint)}),

@@ -59,10 +59,6 @@ export {
 } from './real-product-deployment-contract.js';
 export {removeCampaignContainers} from './real-product-campaign-cleanup.js';
 export {measureComponentRecovery} from './real-product-component-recovery.js';
-export {
-  expectedCanonicalTableRows,
-  verifyCanonicalDataset,
-} from './real-product-dataset-verification.js';
 export {compareProductIdentity, inspectProducts} from './real-product-identity.js';
 export {
   applyNetworkImpairment,

@@ -1,12 +1,12 @@
-// D08: the dataset a run measures is the canonical one, loaded through the
-// canonical adapters and VERIFIED through the product's public interface:
-// the product-content snapshot of all nine canonical tables (stream B1's
-// collectOltpStateSnapshot) against the generator's expected digest, plus rows
-// per table and key coverage against the plan's key space. The product reader
-// is the substitute here: it answers with the generator's rows (or a mutation).
+// D08: the dataset a run measures is the canonical one, loaded by the
+// canonical adapters and verified by the workload owner (stream B1) through
+// the product's public interface; this layer seeds nothing of its own and
+// maps that verification into stream A's dataset shape, claiming key coverage
+// only from a checksum equality.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
+import {datasetRecordOf} from '../comparative-benchmark-workload-call-site.js';
 import * as deployers from '../real-product-cluster-deployers.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
@@ -15,17 +15,8 @@ import {
   lagrangeHealthyRules,
 } from './real-product-deployer-product-answers-fixture.js';
 import {
-  arrayMap,
   arraySome,
 } from '../real-product-captured-intrinsics.js';
-
-const WORKLOAD = Object.freeze({warehouseCount: 1, districtsPerWarehouse: 2,
-  customersPerDistrict: 3, itemCount: 20});
-
-function exactReader() {
-  const expected = deployers.expectedCanonicalTableRows(WORKLOAD);
-  return async (table) => arrayMap(expected[table.name], (row) => ({...row}));
-}
 
 test('D08: the deployer seeds no hand-written key set of its own', {timeout: 300000},
   async () => {
@@ -38,47 +29,23 @@ test('D08: the deployer seeds no hand-written key set of its own', {timeout: 300
     assert.equal(arraySome(calls, (call) => /bench_accounts|acct-0/u.test(call.text)), false);
   });
 
-test('D08: an exactly loaded canonical dataset verifies with full key coverage', async () => {
-  const verified = await deployers.verifyCanonicalDataset({workload: WORKLOAD,
-    readTableRows: exactReader()});
-  assert.equal(verified.keyCoverage.present, verified.keyCoverage.expected);
-  assert.ok(verified.keyCoverage.expected > 0);
-  assert.equal(verified.logicalChecksum, verified.expectedChecksum);
-  assert.equal(verified.method, 'collectOltpStateSnapshot');
-  assert.equal(verified.resetMethod, 'fresh-formation');
-  assert.deepEqual(arrayMap(verified.tables, (one) => one.table), ['warehouse', 'district',
-    'customer', 'item', 'stock', 'orders', 'new_order', 'order_line', 'history']);
+test('D08: a verified load (product snapshot checksum equals the generator\'s) is full ' +
+  'key coverage in stream A\'s dataset shape', () => {
+  const dataset = datasetRecordOf({resetMethod: 'fresh-formation', verification: {
+    status: 'verified', method: 'logical-checksum', expectedLogicalChecksum: 'sha256:x',
+    observedLogicalChecksum: 'sha256:x', expectedTableRows: {item: 20, stock: 20, orders: 0},
+    observedTableRows: {item: 20, stock: 20, orders: 0}}});
+  assert.deepEqual(dataset.keyCoverage, {expected: 40, present: 40,
+    derivation: 'logical-checksum-equality'});
+  assert.equal(dataset.logicalChecksum, 'sha256:x');
+  assert.equal(dataset.resetMethod, 'fresh-formation');
+  assert.deepEqual(dataset.tables[0], {table: 'item', rows: 20, expectedRows: 20});
 });
 
-test('D08: keys missing from the plan key space are a typed dataset failure', async () => {
-  const read = exactReader();
-  await assert.rejects(deployers.verifyCanonicalDataset({workload: WORKLOAD,
-    readTableRows: async (table) => {
-      const rows = await read(table);
-      return table.name === 'customer' ? rows.slice(0, 2) : rows;
-    }}), (error) => {
-    assert.equal(error.code, 'dataset_unverified');
-    assert.ok(error.diagnostic.keyCoverage.present < error.diagnostic.keyCoverage.expected);
-    return true;
-  });
-});
-
-test('D08: a wrong value with full key coverage fails the logical checksum', async () => {
-  const read = exactReader();
-  await assert.rejects(deployers.verifyCanonicalDataset({workload: WORKLOAD,
-    readTableRows: async (table) => {
-      const rows = await read(table);
-      return table.name === 'item' ? [{...rows[0], price_cents: 1}, ...rows.slice(1)] : rows;
-    }}), (error) => {
-    assert.equal(error.code, 'dataset_unverified');
-    assert.notEqual(error.diagnostic.logicalChecksum, error.diagnostic.expectedChecksum);
-    return true;
-  });
-});
-
-test('D08: an unreadable projection is a typed dataset failure, never a pass', async () => {
-  await assert.rejects(deployers.verifyCanonicalDataset({workload: WORKLOAD,
-    readTableRows: async () => {
-      throw new Error('relation "stock" does not exist');
-    }}), (error) => error.code === 'dataset_unverified');
+test('D08: a mismatched or unobserved load claims no key coverage', () => {
+  for (const status of ['mismatch', 'unobserved']) {
+    const dataset = datasetRecordOf({resetMethod: 'fresh-formation', verification: {status,
+      expectedTableRows: {item: 20}, observedTableRows: {item: 2}}});
+    assert.equal(dataset.keyCoverage.present, null, status);
+  }
 });

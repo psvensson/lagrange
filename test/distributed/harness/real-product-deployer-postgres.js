@@ -42,7 +42,6 @@ import {
 } from './real-product-remote-shell.js';
 import {
   bindEndpointToContainer,
-  createPsqlTableReader,
 } from './real-product-sql-clients.js';
 
 // Target ids are stream A's coverage-manifest ids; the HA id predates this
@@ -251,8 +250,6 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, c
       source: 'pg_is_in_recovery + pg_stat_replication', ...(await observeRoles(ctx, roles))},
     endpoint,
     operations: {
-      readTableRows: createPsqlTableReader({sshRun, opts, from: clientIp, campaignId,
-        endpoint, connection}),
       observePlacement: async () => observeRoles(ctx, roles),
       observeRoles: async () => observeRoles(ctx, roles),
     },

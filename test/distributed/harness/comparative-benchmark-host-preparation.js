@@ -3,8 +3,8 @@
  * machine identity of every host (hostname, boot incarnation, cores, memory,
  * primary interface), distinct machines enforced; product images present on
  * every host by reference (pulled, never streamed from the controller - the
- * running containers' image ids are the identity, D18); and the identity of
- * the load generator's host and checkout.
+ * running containers' image ids are the identity, D18); and the machine
+ * identity of the load generator's host.
  */
 import {SCENARIO_REFUSAL} from './scenario-host-topology.js';
 import {
@@ -16,18 +16,13 @@ import {
   DEPLOYMENT_FAILURE,
   deploymentFailure,
 } from './real-product-deployment-contract.js';
-import {errorText, shellQuote, shellWord} from './real-product-remote-shell.js';
+import {errorText, shellWord} from './real-product-remote-shell.js';
 
 const FIELD_SEPARATOR = '|';
 const HOST_FACTS_COMMAND = 'echo "$(hostname)|$(cat /proc/sys/kernel/random/boot_id)|' +
   '$(nproc)|$(awk \'/MemTotal/ {printf "%.1f", $2/1048576}\' /proc/meminfo)|' +
   '$(ip route get 1.1.1.1 | awk \'{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1); exit}\')"';
 const IMAGE_PULL_TIMEOUT_MS = 10 * 60 * 1000;
-// [driver, lockfile, package key]: the drivers the canonical adapters use.
-const LOCKFILE_DRIVERS = Object.freeze([
-  ['pg', 'package-lock.json', 'node_modules/pg'],
-  ['mysql2', 'test/distributed/reference-client/package-lock.json', 'node_modules/mysql2'],
-]);
 
 /**
  * @param {{hosts: Array<{ip: string, name?: string}>, sshRun: Function,
@@ -76,32 +71,14 @@ async function ensureProductImages({hosts, images, sshRun, opts}) {
   return present;
 }
 
-function lockfileVersionsScript() {
-  const reads = arrayMap(LOCKFILE_DRIVERS, ([driver, file, key]) =>
-    `${JSON.stringify(driver)}: (() => { try { return require(${JSON.stringify(`./${file}`)})` +
-    `.packages[${JSON.stringify(key)}].version; } catch { return null; } })()`);
-  return 'console.log(JSON.stringify({nodeVersion: process.version, driverVersions: ' +
-    `{${reads.join(', ')}}}))`;
-}
-
 /**
- * The load generator's identity: its machine, Node version, the driver
- * versions its checkout's lockfiles pin and that checkout's commit. A host
- * without a recorded checkout reports its Node version only, and says so.
+ * The load generator's machine identity. Its Node version, driver versions
+ * and checkout commit are reported by the load-generator CLI itself, from the
+ * process that ran the workload.
  */
-async function describeLoadGenerator({sshRun, opts, host, hostFacts, repoPath, nodePath}) {
-  const base = {host: host.ip, hostname: hostFacts?.hostname ?? null,
+function describeLoadGenerator({host, hostFacts}) {
+  return {host: host.ip, hostname: hostFacts?.hostname ?? null,
     bootId: hostFacts?.bootId ?? null};
-  if (!repoPath || !nodePath) {
-    return {...base, checkout: null, checkoutReason: 'no recorded checkout on this host',
-      nodeVersion: stringTrim(String(await sshRun(host.ip, opts, 'node --version'))),
-      driverVersions: {}};
-  }
-  const cd = `cd ${shellQuote(repoPath)}`;
-  const versions = JSON.parse(await sshRun(host.ip, opts,
-    `${cd} && ${shellQuote(nodePath)} -e ${shellQuote(lockfileVersionsScript())}`));
-  const commit = stringTrim(String(await sshRun(host.ip, opts, `${cd} && git rev-parse HEAD`)));
-  return {...base, checkout: {path: repoPath, commit}, ...versions};
 }
 
 export {collectHostFacts, describeLoadGenerator, ensureProductImages};

@@ -49,7 +49,7 @@ import {
   runClassOf,
   verifyProductIdentity,
 } from './real-product-identity.js';
-import {CANONICAL_TABLES} from './real-product-dataset-verification.js';
+import {TABLES as CANONICAL_TABLES} from '../reference-client/oltp-state-snapshot-shared.js';
 import {evaluateLagrangeClusterReadiness} from './real-product-lagrange-readiness-evaluation.js';
 import {pollReadiness} from './real-product-readiness.js';
 import {
@@ -61,7 +61,6 @@ import {
 import {
   bindEndpointToContainer,
   createPsqlQueryReader,
-  createPsqlTableReader,
 } from './real-product-sql-clients.js';
 
 const PORT = Object.freeze({REST: 8080, ADMIN: 8081, TRANSPORT: 8082});
@@ -302,8 +301,6 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
     endpoint,
     access: {connection},
     operations: {
-      readTableRows: createPsqlTableReader({sshRun, opts, from: clientIp, campaignId,
-        endpoint, connection}),
       // After the canonical load: every partition of every canonical table
       // routable and replicated, or a typed readiness exhaustion.
       observePlacement: async () => {
