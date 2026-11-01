@@ -111,6 +111,19 @@ const ADAPTER_BY_SYSTEM = Object.freeze({
   [OLTP_SCENARIO_A_SYSTEM.POSTGRESQL]: createPostgreSqlOltpAdapter,
 });
 
+// The system's PG-wire adapter. A request that names its PG client factory
+// (the native client the adapter opens every connection with) hands it to the
+// adapter; without one the adapter opens the native pg client.
+function adapterFactoryOf(request) {
+  const createSystemAdapter = ADAPTER_BY_SYSTEM[request.system];
+  if (!Object.hasOwn(request, 'createClient')) return createSystemAdapter;
+  if (typeof request.createClient !== 'function') {
+    throw new Error('Scenario A proof journey createClient must be a function');
+  }
+  return (adapterOptions) => createSystemAdapter({...adapterOptions,
+    createClient: request.createClient});
+}
+
 function requireBinding(binding) {
   if (!binding || typeof binding !== 'object') {
     throw new Error('Scenario A proof journey requires the deployment binding');
@@ -240,6 +253,9 @@ function gateStatusOf(summary) {
  * @param {Function} [request.beforeCase] ({caseId, context}) => {connection,
  *   binding} | null: re-forms the arm before a case (Lagrange cannot DROP
  *   TABLE in place); a rebind is the context of that and every later case
+ * @param {Function} [request.createClient] (clientOptions) => pg client: the
+ *   PG client factory every adapter connection is opened with (the native pg
+ *   Client when absent)
  * @param {Function} [request.observeDeployment] ({caseId, context}) =>
  *   {containerId, endpoint} observed after the case; a mismatch with the
  *   case binding refuses the case (binding_changed_without_rebind)
@@ -269,6 +285,7 @@ async function runScenarioASemanticProofJourney(request = {}) {
     throw new Error(`Scenario A PG-wire proof journey does not run ${request.system}`);
   }
   let context = buildContext(request.system, request.connection, request.binding);
+  const createAdapter = adapterFactoryOf(request);
   const cases = [];
   for (const proofCase of OLTP_SCENARIO_A_PROOF_CASES) {
     try {
@@ -281,7 +298,7 @@ async function runScenarioASemanticProofJourney(request = {}) {
     }
     const current = context;
     const options = Object.freeze({
-      createAdapter: ADAPTER_BY_SYSTEM[request.system],
+      createAdapter,
       prepareContext: async () => current,
       ...(request.restartProduct ?
         {restartCluster: ({context: active}) => request.restartProduct({context: active})} :

@@ -1,9 +1,12 @@
 // The Scenario A semantic proof journey's gate record: bound to the
 // caller's deployment, one shared proof body per case for Lagrange and
 // PostgreSQL, and `incomplete` (never null) when no proof record exists.
-// Evidence ceiling: the endpoint refuses connections (127.0.0.1:1), so this
-// proves the record contract and the unrunnable path, not a passing proof.
+// Evidence ceiling: every connection is refused by the injected PG client
+// factory (an ECONNREFUSED as the native pg client raises it), so this proves
+// the record contract and the unrunnable path, not a passing proof. No real
+// socket is opened: a guard on net.Socket#connect fails the file if one is.
 import assert from 'node:assert/strict';
+import net from 'node:net';
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import {
@@ -20,6 +23,36 @@ const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayMap = Function.call.bind(Array.prototype.map);
 
 const REFUSING_ENDPOINT = Object.freeze({host: '127.0.0.1', port: 1});
+const ECONNREFUSED = 'ECONNREFUSED';
+
+// No test here may reach the network: a real connect throws.
+const socketConnect = net.Socket.prototype.connect;
+net.Socket.prototype.connect = function refuseRealSocket() {
+  throw new Error('scenario-a-semantic-proof-journey.test.js opened a real socket');
+};
+process.once('exit', () => {
+  net.Socket.prototype.connect = socketConnect;
+});
+
+// The seam fixture: a pg client whose connect is refused the way the native
+// client refuses a closed port.
+function createRefusingClientFactory() {
+  const attempts = [];
+  const createClient = (options) => ({
+    connect: async () => {
+      attempts.push(`${options.host}:${options.port}`);
+      throw Object.assign(new Error(`connect ${ECONNREFUSED} ${options.host}:${options.port}`),
+        {code: ECONNREFUSED, errno: -111, syscall: 'connect', address: options.host,
+          port: options.port});
+    },
+    query: async () => {
+      throw new Error('a refused client is never queried');
+    },
+    end: async () => {},
+  });
+  return {createClient, attempts};
+}
+
 const CREDENTIALS = Object.freeze({user: 'bench', password: 'bench', database: 'bench'});
 const BINDING = Object.freeze({
   campaignId: 'campaign-fixture',
@@ -30,11 +63,14 @@ const BINDING = Object.freeze({
 
 test('an unrunnable arm yields an incomplete, deployment-bound gate record', async () => {
   for (const system of ['postgresql', 'lagrange']) {
+    const refusing = createRefusingClientFactory();
     const gate = await runScenarioASemanticProofJourney({
       system,
       connection: {endpoint: REFUSING_ENDPOINT, credentials: CREDENTIALS},
       binding: BINDING,
+      createClient: refusing.createClient,
     });
+    assert.ok(refusing.attempts.length > 0, 'every case connects through the seam');
     assert.equal(gate.system, system);
     assert.equal(gate.status, SCENARIO_A_SEMANTIC_GATE_STATUS.INCOMPLETE);
     assert.deepEqual(gate.binding, BINDING);
@@ -46,18 +82,22 @@ test('an unrunnable arm yields an incomplete, deployment-bound gate record', asy
     for (const entry of gate.cases) {
       if (entry.caseId === 'durability') continue;
       assert.equal(entry.status, SCENARIO_A_PROOF_CASE_STATUS.ERRORED, entry.caseId);
+      assert.match(entry.error, /ECONNREFUSED 127\.0\.0\.1:1/u, entry.caseId);
     }
   }
 });
 
 test('the journey refuses a missing binding and a non-PG-wire system', async () => {
   const connection = {endpoint: REFUSING_ENDPOINT, credentials: CREDENTIALS};
+  const {createClient} = createRefusingClientFactory();
+  await assert.rejects(runScenarioASemanticProofJourney({system: 'postgresql', connection,
+    binding: BINDING, createClient: 'not-a-factory'}), /createClient must be a function/u);
   await assert.rejects(runScenarioASemanticProofJourney({system: 'tidb-tikv', connection,
-    binding: BINDING}), /does not run tidb-tikv/u);
+    binding: BINDING, createClient}), /does not run tidb-tikv/u);
   await assert.rejects(runScenarioASemanticProofJourney({system: 'postgresql', connection,
-    binding: {...BINDING, imageId: ''}}), /binding requires imageId/u);
+    binding: {...BINDING, imageId: ''}, createClient}), /binding requires imageId/u);
   await assert.rejects(runScenarioASemanticProofJourney({system: 'postgresql', connection,
-    binding: {...BINDING, endpoint: 'nowhere'}}), /host:port/u);
+    binding: {...BINDING, endpoint: 'nowhere'}, createClient}), /host:port/u);
 });
 
 test('a rebind from beforeCase becomes the context of that case and every later case',
@@ -68,6 +108,7 @@ test('a rebind from beforeCase becomes the context of that case and every later 
       system: 'postgresql',
       connection: {endpoint: REFUSING_ENDPOINT, credentials: CREDENTIALS},
       binding: BINDING,
+      createClient: createRefusingClientFactory().createClient,
       beforeCase: async ({caseId}) => {
         calls += 1;
         if (caseId !== 'payment') return null;
@@ -93,6 +134,7 @@ test('a case whose connection differs from its binding is refused, typed', async
     system: 'postgresql',
     connection: {endpoint: {host: '127.0.0.1', port: 3}, credentials: CREDENTIALS},
     binding: BINDING,
+    createClient: createRefusingClientFactory().createClient,
   });
   for (const entry of gate.cases) {
     if (entry.caseId === 'durability') continue;
@@ -106,6 +148,7 @@ test('beforeCase must answer a rebind or an explicit null', async () => {
     system: 'postgresql',
     connection: {endpoint: REFUSING_ENDPOINT, credentials: CREDENTIALS},
     binding: BINDING,
+    createClient: createRefusingClientFactory().createClient,
     beforeCase: async () => undefined,
   });
   assert.equal(gate.cases[0].status, 'errored');
