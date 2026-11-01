@@ -6,6 +6,10 @@
 // outcome classification and reconciliation are the production path.
 // Evidence ceiling: classification/accounting of each response class, not
 // native product behaviour.
+import {mkdtempSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+
 import {
   executeBenchmarkWorkload,
 } from '../real-product-workload-drivers.js';
@@ -92,6 +96,7 @@ async function runDriverCase({targetId, scenario, subkind, mode = FAKE_PRODUCT_F
       createMysqlConnection: product.createMysqlConnection,
     },
     runtime: {setWatchdogTimer: fixtureTimer},
+    evidenceDir: mkdtempSync(path.join(tmpdir(), 'bench-driver-evidence-')),
   });
   return observe(output, product);
 }
