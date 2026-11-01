@@ -16,7 +16,7 @@
     "query-sql": 190,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 152,
+    "services-runtime": 153,
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2514,
-  "digest": "fnv1a32-21a0833c",
+  "censusSize": 2515,
+  "digest": "fnv1a32-e0e8e840",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8a9a0680",
+  "observationDigest": "fnv1a32-8b73e31f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2322,6 +2322,7 @@
     "test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js": "services-runtime",
     "test/service/minimal-deployment-request-cell-routing.test.js": "services-runtime",
     "test/service/minimal-deployment-single-contract-owner-guard.test.js": "services-runtime",
+    "test/service/q2-call-selector-typed-parameter-narrowing.test.js": "services-runtime",
     "test/service/replicated-service-topology.test.js": "services-runtime",
     "test/service/request-binding-route-resolver.test.js": "services-runtime",
     "test/service/request-cell-call-bridge.test.js": "services-runtime",
@@ -18412,6 +18413,19 @@
         "src/control-plane/owners/service-install-catalog-contract.js",
         "src/runtime/request-cell-runtime-contract.js",
         "src/service/external-service-manifest.js"
+      ]
+    },
+    "test/service/q2-call-selector-typed-parameter-narrowing.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/unified-service-lifecycle.js",
+        "src/node/runtime-service-call-cell-handler.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "src/service/call-binding-route-resolver.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/call-cell-statement-adapter.js",
+        "src/service/service-component-build.js",
+        "src/service/service-deployment-record-generator.js"
       ]
     },
     "test/service/request-binding-route-resolver.test.js": {

@@ -338,21 +338,19 @@ function createMockReply() {
 }
 
 function createInMemoryTableCache() {
-  const tables = new Map();
+  const store = new Map();
+  const bucket = (name) => {
+    let map = store.get(name);
+    if (!map) {
+      map = new Map();
+      store.set(name, map);
+    }
+    return map;
+  };
   return {
-    get(tableName, key) {
-      return tables.get(tableName)?.get(key) ?? null;
-    },
-    getAll(tableName) {
-      const table = tables.get(tableName);
-      return table ? [...table.values()] : [];
-    },
-    set(tableName, key, row) {
-      if (!tables.has(tableName)) {
-        tables.set(tableName, new Map());
-      }
-      tables.get(tableName).set(key, row);
-    },
+    get: (name, key) => store.get(name)?.get(key) ?? null,
+    getAll: (name) => [...(store.get(name)?.values() ?? [])],
+    set: (name, key, row) => bucket(name).set(key, row),
   };
 }
 

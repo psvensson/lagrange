@@ -50,6 +50,7 @@ const DTS_FRAGMENT = Object.freeze({
   KIND_FIELD: '  readonly kind: \'distributed_operation\';',
   NEVER: 'never',
   OPERATION_SUFFIX: 'Operation',
+  PARAMS_SUFFIX: 'Params',
   PARTIALS_TYPE: 'readonly (readonly [string, unknown])[]',
   READONLY_PREFIX: 'readonly ',
   REQUEST_NAME: 'ServiceRequest',
@@ -62,6 +63,10 @@ const DTS_FRAGMENT = Object.freeze({
     '  readonly query: Readonly<Record<string, string>>;',
   HANDLER_CONTEXTS_NAME: 'HandlerContexts',
   ROW_SUFFIX: 'Row',
+  TS_BOOLEAN: 'boolean',
+  TS_NULL: ' | null',
+  TS_NUMBER: 'number',
+  TS_STRING: 'string',
   UNKNOWN: 'unknown',
   VOID: 'void',
 });
@@ -118,12 +123,52 @@ function pascalCase(id) {
   return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
+const PARAM_SLOT_TYPE_BOOLEAN = 'boolean';
+const PARAM_SLOT_TYPE_TEXT = 'text';
+
 function rowInterfaceName(operationId) {
   return pascalCase(operationId) + DTS_FRAGMENT.ROW_SUFFIX;
 }
 
+function paramsInterfaceName(operationId) {
+  return pascalCase(operationId) + DTS_FRAGMENT.PARAMS_SUFFIX;
+}
+
 function operationInterfaceName(operationId) {
   return pascalCase(operationId) + DTS_FRAGMENT.OPERATION_SUFFIX;
+}
+
+function operationArgsType(operation) {
+  return Array.isArray(operation?.parameters) ?
+    paramsInterfaceName(operation.id) :
+    DTS_FRAGMENT.ARGS_TYPE;
+}
+
+function tsTypeForParameterSlot(slot) {
+  let baseType = DTS_FRAGMENT.TS_NUMBER;
+  if (slot.type === PARAM_SLOT_TYPE_BOOLEAN) {
+    baseType = DTS_FRAGMENT.TS_BOOLEAN;
+  } else if (slot.type === PARAM_SLOT_TYPE_TEXT) {
+    baseType = DTS_FRAGMENT.TS_STRING;
+  }
+  return slot.nullable === true ?
+    `${baseType}${DTS_FRAGMENT.TS_NULL}` :
+    baseType;
+}
+
+function emitParamsInterface(operation) {
+  const lines = [
+    ...doc(
+      `Typed selector parameters declared by the \`${operation.id}\` operation.`),
+    `${DTS_FRAGMENT.EXPORT_INTERFACE}${paramsInterfaceName(operation.id)} {`,
+  ];
+  for (const slot of operation.parameters) {
+    lines.push(
+      `  ${DTS_FRAGMENT.COLUMN_TYPE}${JSON.stringify(slot.name)}: ` +
+        `${tsTypeForParameterSlot(slot)};`);
+  }
+  lines.push(CLOSE_BRACE);
+  return lines.join(TEXT_NEWLINE);
 }
 
 function docLine(text) {
@@ -159,14 +204,15 @@ function emitRowInterface(operation) {
 
 function emitOperationInterface(operation) {
   const rowName = rowInterfaceName(operation.id);
+  const argsType = operationArgsType(operation);
   return [
     ...doc(`The \`${operation.id}\` distributed operation.`),
     `${DTS_FRAGMENT.EXPORT_INTERFACE}${operationInterfaceName(operation.id)} {`,
     DTS_FRAGMENT.KIND_FIELD,
-    `  run(rows: readonly ${rowName}[], args: ${DTS_FRAGMENT.ARGS_TYPE}, ` +
+    `  run(rows: readonly ${rowName}[], args: ${argsType}, ` +
       `${DTS_FRAGMENT.CONTEXT_EMIT}): ${DTS_FRAGMENT.UNKNOWN};`,
     `  reduce(partials: ${DTS_FRAGMENT.PARTIALS_TYPE}, ` +
-      `args: ${DTS_FRAGMENT.ARGS_TYPE}): ${DTS_FRAGMENT.UNKNOWN};`,
+      `args: ${argsType}): ${DTS_FRAGMENT.UNKNOWN};`,
     CLOSE_BRACE,
   ].join(TEXT_NEWLINE);
 }
@@ -257,6 +303,9 @@ function typingsSource(ir) {
   ];
   for (const operation of ir.operations) {
     sections.push(emitRowInterface(operation), EMPTY_TEXT);
+    if (Array.isArray(operation.parameters)) {
+      sections.push(emitParamsInterface(operation), EMPTY_TEXT);
+    }
   }
   for (const operation of ir.operations) {
     sections.push(emitOperationInterface(operation), EMPTY_TEXT);

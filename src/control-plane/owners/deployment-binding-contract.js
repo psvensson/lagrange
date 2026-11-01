@@ -14,6 +14,9 @@ import {
   mountsOverlap,
   normalizeMountRequestSource,
 } from './deployment-binding-request-mount.js';
+import {
+  normalizeBindingSelectorParameters,
+} from '../../service/call-selector-parameter-contract.js';
 
 const DEPLOYMENT_BINDING_SCHEMA_VERSION = 2;
 const DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 = 3;
@@ -42,11 +45,8 @@ const DEPLOYMENT_BINDING_SOURCE_INTERFACE = Object.freeze({
 
 // Binding schema v3 handler interfaces (code-first service compiler,
 // epic sealed decision 5): a v3 target declares the generic-dispatch
-// interface plus handler_id and drops the developer-supplied
-// export_name; the interface maps to the fixed export through
-// src/runtime/component-export-resolution.js (the single mapping
-// owner). Only the two cell kinds the compiler emits carry a v2
-// interface.
+// interface plus handler_id and drops export_name; the interface maps to
+// the fixed export through src/runtime/component-export-resolution.js.
 const DEPLOYMENT_BINDING_V3_INTERFACE = Object.freeze({
   [DEPLOYMENT_BINDING_SOURCE_KIND.CALL]: 'call_v2',
   [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]: 'request_v2',
@@ -54,12 +54,7 @@ const DEPLOYMENT_BINDING_V3_INTERFACE = Object.freeze({
 const DEPLOYMENT_BINDING_V3_INTERFACE_VALUES = new Set(
   Object.values(DEPLOYMENT_BINDING_V3_INTERFACE));
 
-// Interface -> fixed export, mirroring the sealed v2 world's export
-// surface (wit/world.wit service-cell-v2). The runtime-side resolution
-// owner (src/runtime/component-export-resolution.js) maps the same
-// fixed kebab names onto the instantiated component; this constant is
-// the deployment-side anchor of that one mapping, not a second
-// convention.
+// Interface -> fixed export, mirroring wit/world.wit service-cell-v2.
 const DEPLOYMENT_BINDING_V3_FIXED_EXPORT = Object.freeze({
   [DEPLOYMENT_BINDING_V3_INTERFACE[DEPLOYMENT_BINDING_SOURCE_KIND.CALL]]:
     'run',
@@ -71,23 +66,14 @@ function fixedExportForV3Interface(interfaceName) {
   return DEPLOYMENT_BINDING_V3_FIXED_EXPORT[interfaceName];
 }
 
-// The interface a source kind expects on its selected manifest export,
-// by binding schema version. v1-interface bindings (schema v2) keep
-// their existing behavior byte-for-byte.
 function expectedSourceInterface(sourceKind, schemaVersion) {
   return schemaVersion === DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 ?
     DEPLOYMENT_BINDING_V3_INTERFACE[sourceKind] :
     DEPLOYMENT_BINDING_SOURCE_INTERFACE[sourceKind];
 }
-const DEPLOYMENT_BINDING_CELL_SOURCE_KINDS = new Set([
-  DEPLOYMENT_BINDING_SOURCE_KIND.BOOT,
-  DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
-  DEPLOYMENT_BINDING_SOURCE_KIND.CHANGE,
-  DEPLOYMENT_BINDING_SOURCE_KIND.ONCE,
-  DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN,
-  DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
-  DEPLOYMENT_BINDING_SOURCE_KIND.TIME,
-]);
+const DEPLOYMENT_BINDING_CELL_SOURCE_KINDS = new Set(
+  Object.values(DEPLOYMENT_BINDING_SOURCE_KIND),
+);
 
 const DEPLOYMENT_BINDING_ERROR_CODE = Object.freeze({
   ARTIFACT_NOT_FOUND: 'binding_artifact_not_found',
@@ -141,8 +127,12 @@ const SOURCE_FIELDS = Object.freeze({
 });
 
 const SOURCE_OPTIONAL_FIELDS = Object.freeze({
-  [DEPLOYMENT_BINDING_SOURCE_KIND.CALL]: Object.freeze(['statement']),
-  [DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN]: Object.freeze(['statement']),
+  [DEPLOYMENT_BINDING_SOURCE_KIND.CALL]: Object.freeze([
+    'parameters', 'statement',
+  ]),
+  [DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN]: Object.freeze([
+    'parameters', 'statement',
+  ]),
   [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]: Object.freeze([
     'host', 'method', 'path', 'path_prefix',
   ]),
@@ -374,6 +364,18 @@ function normalizeNamedSource(source) {
     source.name, `${DEPLOYMENT_BINDING_PATH.SOURCE}/name`)};
   if (source.statement !== undefined) {
     normalized.statement = requireStatement(source.statement);
+  }
+  const parameters = normalizeBindingSelectorParameters(
+    source.parameters,
+    normalized.statement,
+    (subpath) => fail(
+      DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
+      `${DEPLOYMENT_BINDING_PATH.SOURCE}/${subpath}`,
+      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD,
+    ),
+  );
+  if (parameters !== undefined) {
+    normalized.parameters = parameters;
   }
   return normalized;
 }

@@ -17,6 +17,11 @@ import {
   deepFreeze,
 } from '../authoring/define-service.js';
 import {HTTP_METHOD} from '../authoring/request-handler.js';
+import {
+  assertSelectorParameterCorrespondence,
+  inspectSelectorPlaceholders,
+  normalizeCallSelectorParameterSchema,
+} from './call-selector-parameter-contract.js';
 
 const SERVICE_SOURCE_ERROR_CODE = Object.freeze({
   DEFAULT_EXPORT_NOT_PLAIN_OBJECT: 'default_export_not_plain_object',
@@ -30,6 +35,7 @@ const SERVICE_SOURCE_ERROR_CODE = Object.freeze({
   INVALID_IDENTIFIER: 'invalid_identifier',
   INVALID_MOUNT: 'invalid_mount',
   INVALID_OPERATION: 'invalid_operation',
+  INVALID_PARAMETERS: 'invalid_parameters',
   INVALID_STATEMENT: 'invalid_statement',
   LEGACY_HANDLERS_UNSUPPORTED: 'legacy_handlers_unsupported',
   MISSING_FETCH: 'missing_fetch',
@@ -63,6 +69,8 @@ const SERVICE_SOURCE_MESSAGE = Object.freeze({
   INVALID_MOUNT:
     'mount must declare a valid host and path-segment prefix starting with /',
   INVALID_OPERATION: 'operation must be a distributed-operation descriptor',
+  INVALID_PARAMETERS:
+    'operation parameters must declare typed selector parameter slots matching the statement placeholders',
   INVALID_STATEMENT:
     'operation statement must be a sql template descriptor with non-empty text',
   LEGACY_HANDLERS_UNSUPPORTED:
@@ -193,6 +201,35 @@ function sqlStatementText(statement) {
   return text;
 }
 
+function validateOperationParameters(pointer, text, rawParameters, errors) {
+  if (rawParameters === undefined) {
+    if (text === null) return undefined;
+    try {
+      const info = inspectSelectorPlaceholders(text);
+      if (info.logicalCount > 0) {
+        errors.push(serviceSourceError(
+          SERVICE_SOURCE_ERROR_CODE.INVALID_PARAMETERS,
+          `${pointer}/parameters`));
+      }
+    } catch {
+      errors.push(serviceSourceError(
+        SERVICE_SOURCE_ERROR_CODE.INVALID_STATEMENT, `${pointer}/statement`));
+    }
+    return undefined;
+  }
+  try {
+    const normalized = normalizeCallSelectorParameterSchema(rawParameters);
+    if (text !== null) {
+      assertSelectorParameterCorrespondence(text, normalized);
+    }
+    return normalized;
+  } catch {
+    errors.push(serviceSourceError(
+      SERVICE_SOURCE_ERROR_CODE.INVALID_PARAMETERS, `${pointer}/parameters`));
+    return undefined;
+  }
+}
+
 function validateOperationDescriptor(id, descriptor, collected, errors) {
   const pointer = operationPointer(id);
   if (!IDENTIFIER_PATTERN.test(id)) {
@@ -204,7 +241,8 @@ function validateOperationDescriptor(id, descriptor, collected, errors) {
       SERVICE_SOURCE_ERROR_CODE.INVALID_OPERATION, pointer));
     return;
   }
-  const {kind, reduce, run, statement} = ownRecord(descriptor);
+  const {kind, params, parameters, reduce, run, statement} =
+    ownRecord(descriptor);
   if (kind !== AUTHORING_DESCRIPTOR_KIND.DISTRIBUTED_OPERATION) {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.INVALID_OPERATION, pointer));
@@ -221,6 +259,9 @@ function validateOperationDescriptor(id, descriptor, collected, errors) {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.INVALID_STATEMENT, `${pointer}/statement`));
   }
+  const rawParameters = parameters !== undefined ? parameters : params;
+  const normalizedParameters = validateOperationParameters(
+    pointer, text, rawParameters, errors);
   if (typeof run !== 'function') {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.MISSING_RUN, pointer));
@@ -229,7 +270,15 @@ function validateOperationDescriptor(id, descriptor, collected, errors) {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.MISSING_REDUCE, pointer));
   }
-  collected.operations.push({id, reduce, run, statement: {text}});
+  collected.operations.push({
+    id,
+    ...(normalizedParameters !== undefined ?
+      {parameters: normalizedParameters} :
+      {}),
+    reduce,
+    run,
+    statement: {text},
+  });
 }
 
 function collectOperations(operations, errors, options) {

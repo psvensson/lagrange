@@ -5,6 +5,7 @@ proof: deterministic
 roadmapRow: null
 graduatesTo: null
 quests:
+  - call-selector-typed-parameter-narrowing
   - learner-promotion-progress-proof
   - partition-leader-row-publication-integrity-v2
   - partition-leader-row-publication-integrity-v3
@@ -15,7 +16,36 @@ quests:
   - user-table-leader-placement-spread-v2
   - user-table-leader-placement-spread
   - wasi-cell-busy-health-admission
-authorizes: []
+authorizes:
+  - src/authoring
+  - src/service
+  - src/runtime
+  - src/node
+  - src/bootstrap
+  - src/control-plane/owners
+  - src/cli
+  - src/query
+  - src/partition
+  - src/raft
+  - src/rebalancer
+  - src/transport
+  - src/public-api.js
+  - wit
+  - package.json
+  - package-lock.json
+  - examples
+  - test
+  - architecture
+  - docs
+  - README.md
+  - CHANGELOG.md
+  - scripts/checks
+  - scripts/check-current-capabilities.js
+  - scripts/check-service-portability-claims.js
+  - scripts/generate-current-capabilities-doc.js
+  - solve/epics
+  - solve/specs
+  - solve/quests
 legacyStatus: null
 doneWhen:
   probe: scenario-harness

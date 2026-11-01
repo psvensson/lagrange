@@ -6,9 +6,19 @@
  */
 import {AUTHORING_DESCRIPTOR_KIND, deepFreeze} from './define-service.js';
 
-function distributed({statement, run, reduce}) {
+function distributed({
+  statement,
+  params = undefined,
+  parameters = undefined,
+  run,
+  reduce,
+}) {
+  const declaredParameters = parameters !== undefined ? parameters : params;
   return deepFreeze({
     kind: AUTHORING_DESCRIPTOR_KIND.DISTRIBUTED_OPERATION,
+    ...(declaredParameters !== undefined ?
+      {parameters: declaredParameters} :
+      {}),
     reduce,
     run,
     statement,

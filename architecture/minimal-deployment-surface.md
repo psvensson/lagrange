@@ -86,8 +86,8 @@ compatible Artifact interface:
 | --- | --- | --- |
 | `request` | `kind`, `method` in `DELETE|GET|PATCH|POST|PUT`, exact static `path` | `request_v1` |
 | `change` | `kind`, lexical unique `operations`, lexical unique `tables` | `change_v1` |
-| `call` | `kind`, registration `name`, optional declared partition-local `statement` | `call_v1` |
-| `pushdown` | `kind`, registration `name`, optional declared partition-local `statement` | `pushdown_v1` |
+| `call` | `kind`, registration `name`, optional declared partition-local `statement`, optional typed selector `parameters` | `call_v1` |
+| `pushdown` | `kind`, registration `name`, optional declared partition-local `statement`, optional typed selector `parameters` | `pushdown_v1` |
 | `time` | `kind`, `interval_ms` in `1..86400000` | `time_v1` |
 | `once` | `kind` | `once_v1` |
 | `boot` | `kind` | `boot_v1` |

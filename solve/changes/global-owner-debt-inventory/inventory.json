@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3265736,
-        "sha256": "ff1702c933b7094c4257876b33df88d736da7701fc79af5e48100caec7ae0b37"
+        "bytes": 3269594,
+        "sha256": "dbbb2cc05550697c26a044d49c247a803859606db942dcb7a2208abc083937c5"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "712cf9277f3a86779093ccefa04e21a09e45c83cb82125c623aabb1c2683b3c4"
+        "sha256": "1ebc7e7438387a90e32703ebac55ee8b09a526e093774a90ae48ff049556b7cd"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "7997e2743e4d529c91fa1c0a34e32a696cb1cb9d73b73ae772f87c350438733a"
+        "sha256": "5cdf1dd88cd2ebb09235aff960e9140c10e52e8ea8611988b5c1647c8c224368"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "62b21e1d583894f5317ba2f11fab4b8b8b29e53ad99ca0b908fcccffe9c3b19d"
+    "inputDigest": "d4261382fb1876b71f32695729708a48137149ac23dbc0f9b6d8cab03374166f"
   },
   "reconciliation": {
     "complexity": {
@@ -117,13 +117,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "712cf9277f3a86779093ccefa04e21a09e45c83cb82125c623aabb1c2683b3c4"
+          "sha256": "1ebc7e7438387a90e32703ebac55ee8b09a526e093774a90ae48ff049556b7cd"
         },
-        "cloneGroups": 44,
-        "duplicatedLines": 1411,
-        "sourceCloneTouches": 88,
-        "sourceDuplicatedLineTouches": 2822,
-        "nonzeroSourceCount": 56,
+        "cloneGroups": 45,
+        "duplicatedLines": 1436,
+        "sourceCloneTouches": 90,
+        "sourceDuplicatedLineTouches": 2872,
+        "nonzeroSourceCount": 57,
         "touchMultiplicity": 2
       },
       {
@@ -135,13 +135,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "7997e2743e4d529c91fa1c0a34e32a696cb1cb9d73b73ae772f87c350438733a"
+          "sha256": "5cdf1dd88cd2ebb09235aff960e9140c10e52e8ea8611988b5c1647c8c224368"
         },
-        "cloneGroups": 650,
-        "duplicatedLines": 24368,
-        "sourceCloneTouches": 1300,
-        "sourceDuplicatedLineTouches": 48736,
-        "nonzeroSourceCount": 421,
+        "cloneGroups": 649,
+        "duplicatedLines": 24346,
+        "sourceCloneTouches": 1298,
+        "sourceDuplicatedLineTouches": 48692,
+        "nonzeroSourceCount": 419,
         "touchMultiplicity": 2
       }
     ],
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3265736,
-        "sha256": "ff1702c933b7094c4257876b33df88d736da7701fc79af5e48100caec7ae0b37"
+        "bytes": 3269594,
+        "sha256": "dbbb2cc05550697c26a044d49c247a803859606db942dcb7a2208abc083937c5"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "ee2216914ccc8444cdc7106463ea3a53a303811d02e7f68590d8dd02ac7f3df1",
-      "moduleCount": 5856,
-      "edgeCount": 31798,
+      "sourceDigest": "8e21f676f39a94da7009a4e6747c57466e6ae4bf7fc145af1aad3b6c6dbfabd5",
+      "moduleCount": 5859,
+      "edgeCount": 31848,
       "unresolvedCount": 43
     }
   },
   "assignment": {
-    "sourceSignalCount": 2445,
-    "assignedSignalCount": 2445,
-    "uniqueAssignmentCount": 2445,
-    "digest": "6c97e17d7611576884423d8ddcaf4e1136f49d4dd3fa7259ad278edb9c7924de"
+    "sourceSignalCount": 2444,
+    "assignedSignalCount": 2444,
+    "uniqueAssignmentCount": 2444,
+    "digest": "04bc8cf3e3c09d16aad056823b4eeca303e38630fb653ff1bdb93e0e12607dfc"
   },
   "signalCounts": {
     "cognitive": 147,
     "complexity": 1735,
-    "duplication": 477,
+    "duplication": 476,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1260,
+    "filesWithDebt": 1259,
     "rankedBoundaryCount": 112,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 92,
@@ -1300,6 +1300,34 @@
       ]
     },
     {
+      "key": "area:scripts/checks",
+      "owner": null,
+      "boundary": "scripts/checks",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/checks"
+      ],
+      "fileCount": 9,
+      "signalCount": 9,
+      "complexity": 0,
+      "cognitive": 3,
+      "oversizedFiles": 0,
+      "duplicatedLines": 258,
+      "cloneTouches": 8,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 23,
+      "importOut": 35,
+      "score": 49.8,
+      "topPaths": [
+        "scripts/checks/q2-call-selector-typed-parameter-narrowing-guard.js",
+        "scripts/checks/impact-proof-cone-inputs.js",
+        "scripts/checks/raft-rs-operation-boundary-audit.js",
+        "scripts/checks/test-primary-classification.js",
+        "scripts/checks/h2-hono-source-ir-deployment-cutover-guard.js"
+      ]
+    },
+    {
       "key": "area:src/cache",
       "owner": null,
       "boundary": "src/cache",
@@ -1379,34 +1407,6 @@
         "test/runtime/native-js-driver.test.js",
         "test/runtime/oci-container-driver.test.js",
         "test/runtime/service-runtime-lifecycle-idempotency.test.js"
-      ]
-    },
-    {
-      "key": "area:scripts/checks",
-      "owner": null,
-      "boundary": "scripts/checks",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/checks"
-      ],
-      "fileCount": 8,
-      "signalCount": 8,
-      "complexity": 0,
-      "cognitive": 3,
-      "oversizedFiles": 0,
-      "duplicatedLines": 208,
-      "cloneTouches": 6,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 23,
-      "importOut": 32,
-      "score": 44.8,
-      "topPaths": [
-        "scripts/checks/h4-http-invocation-recovery-and-cancellation-guard.js",
-        "scripts/checks/impact-proof-cone-inputs.js",
-        "scripts/checks/raft-rs-operation-boundary-audit.js",
-        "scripts/checks/test-primary-classification.js",
-        "scripts/checks/h2-hono-source-ir-deployment-cutover-guard.js"
       ]
     },
     {
@@ -1708,34 +1708,6 @@
       ]
     },
     {
-      "key": "area:test/service",
-      "owner": null,
-      "boundary": "test/service",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/service"
-      ],
-      "fileCount": 7,
-      "signalCount": 7,
-      "complexity": 0,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 231,
-      "cloneTouches": 9,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 2,
-      "importOut": 87,
-      "score": 23.1,
-      "topPaths": [
-        "test/service/service-reconciler.test.js",
-        "test/service/adapters/adapter-conformance.test.js",
-        "test/service/call-binding-route-resolver.test.js",
-        "test/service/h2-hono-source-ir-deployment-cutover.test.js",
-        "test/service/h3-fetch-ingress-and-scoped-client.test.js"
-      ]
-    },
-    {
       "key": "area:test/function",
       "owner": null,
       "boundary": "test/function",
@@ -1863,6 +1835,34 @@
       "topPaths": [
         "src/control-plane/control-plane-readiness-service-node-methods.js",
         "src/control-plane/control-plane-readiness-service-shared.js"
+      ]
+    },
+    {
+      "key": "area:test/service",
+      "owner": null,
+      "boundary": "test/service",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/service"
+      ],
+      "fileCount": 5,
+      "signalCount": 5,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 187,
+      "cloneTouches": 7,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 2,
+      "importOut": 48,
+      "score": 18.7,
+      "topPaths": [
+        "test/service/service-reconciler.test.js",
+        "test/service/adapters/adapter-conformance.test.js",
+        "test/service/call-binding-route-resolver.test.js",
+        "test/service/minimal-deployment-request-cell-routing-fixture.js",
+        "test/service/handler-aware-runtime-invocation.test.js"
       ]
     },
     {

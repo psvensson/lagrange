@@ -17,6 +17,9 @@ import {
   createCallRoutingFailure,
   parseCallInvocationIdentity,
 } from './call-cell-routing-contract.js';
+import {
+  computeParameterSchemaDigest,
+} from './call-selector-parameter-contract.js';
 
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
@@ -66,6 +69,55 @@ function resolvedHandlerId(binding) {
     DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 ?
     binding.declaration.target.handler_id :
     null;
+}
+
+function selectHostScopedActual(request, chosenActuals) {
+  const hostNodeId = typeof request.hostNodeId === 'string' &&
+    request.hostNodeId.length > 0 ?
+    request.hostNodeId :
+    null;
+  const selectable = hostNodeId ?
+    chosenActuals.filter((candidate) => candidate.node_id === hostNodeId) :
+    chosenActuals;
+  if (selectable.length === 0) {
+    throw createCallRoutingFailure(
+      CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
+      `${ROUTE_RESOLVER_ERROR.HOST_CELL_UNAVAILABLE}: ${hostNodeId}`,
+      {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+    );
+  }
+  return {
+    actual: selectActual(selectable, request.invocationId),
+    hostNodeId,
+  };
+}
+
+function buildResolvedCallRoute(
+  request,
+  active,
+  statement,
+  hostNodeId,
+  actual,
+) {
+  const {chosenBinding, chosenDefinition, serviceId} = active;
+  const parameters = chosenBinding.declaration.source.parameters;
+  return Object.freeze({
+    bindingDigest: chosenDefinition.binding_digest,
+    bindingId: chosenBinding.bindingId,
+    bindingVersionId: chosenBinding.bindingVersionId,
+    generation: chosenBinding.generation,
+    handlerId: resolvedHandlerId(chosenBinding),
+    hostNodeId,
+    name: request.name,
+    nodeId: actual.node_id,
+    ...(parameters !== undefined ? {parameters} : {}),
+    replicaId: actual.service_id,
+    serviceId,
+    statement,
+    targetAddress: `${actual.node_id}/service/runtime-service-handler`,
+    targetNodeId: actual.node_id,
+    tenantId: chosenBinding.tenantId,
+  });
 }
 
 class CallBindingRouteResolver {
@@ -162,7 +214,7 @@ class CallBindingRouteResolver {
       );
     }
 
-    const {chosenActuals, chosenBinding, chosenDefinition, serviceId} = active;
+    const {chosenActuals, chosenBinding} = active;
     const statement = chosenBinding.declaration.source.statement;
     if (typeof statement !== 'string' || statement.length === 0) {
       throw createCallRoutingFailure(
@@ -171,38 +223,15 @@ class CallBindingRouteResolver {
       );
     }
 
-    const hostNodeId = typeof request.hostNodeId === 'string' &&
-      request.hostNodeId.length > 0 ?
-      request.hostNodeId :
-      null;
-    const selectable = hostNodeId ?
-      chosenActuals.filter((candidate) => candidate.node_id === hostNodeId) :
-      chosenActuals;
-    if (selectable.length === 0) {
-      throw createCallRoutingFailure(
-        CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
-        `${ROUTE_RESOLVER_ERROR.HOST_CELL_UNAVAILABLE}: ${hostNodeId}`,
-        {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
-      );
-    }
-    const actual = selectActual(selectable, request.invocationId);
-    return Object.freeze({
-      bindingDigest: chosenDefinition.binding_digest,
-      bindingId: chosenBinding.bindingId,
-      bindingVersionId: chosenBinding.bindingVersionId,
-      generation: chosenBinding.generation,
-      handlerId: resolvedHandlerId(chosenBinding),
-      hostNodeId,
-      name: request.name,
-      nodeId: actual.node_id,
-      replicaId: actual.service_id,
-      serviceId,
+    const {actual, hostNodeId} =
+      selectHostScopedActual(request, chosenActuals);
+    return buildResolvedCallRoute(
+      request,
+      active,
       statement,
-      targetAddress:
-        `${actual.node_id}/service/runtime-service-handler`,
-      targetNodeId: actual.node_id,
-      tenantId: chosenBinding.tenantId,
-    });
+      hostNodeId,
+      actual,
+    );
   }
 
   assertSelectedRoute(request, expectedRoute) {
@@ -224,8 +253,13 @@ class CallBindingRouteResolver {
       'targetNodeId',
       'tenantId',
     ];
-    if (fields.some((field) =>
-      (current[field] ?? null) !== (expectedRoute?.[field] ?? null))) {
+    const currentParamsDigest = computeParameterSchemaDigest(
+      current.parameters);
+    const expectedParamsDigest = computeParameterSchemaDigest(
+      expectedRoute?.parameters);
+    if (currentParamsDigest !== expectedParamsDigest ||
+        fields.some((field) =>
+          (current[field] ?? null) !== (expectedRoute?.[field] ?? null))) {
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
         ROUTE_RESOLVER_ERROR.TARGET_STALE,

@@ -300,6 +300,9 @@ function buildBindingDeclarations(ir, manifestDigest) {
       source: {
         kind: DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
         name: callBindingName,
+        ...(operation.parameters !== undefined ?
+          {parameters: operation.parameters} :
+          {}),
         statement: operation.statement.text,
       },
       target: bindingTarget(

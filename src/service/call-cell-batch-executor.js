@@ -31,8 +31,11 @@ import {
   CALL_CELL_ROUTE_ERROR_CODE,
   createCallRoutingFailure,
 } from './call-cell-routing-contract.js';
+import {
+  normalizeCallSelectorInvocationParameters,
+  parseSelectorStatementAst,
+} from './call-selector-parameter-contract.js';
 
-const AST_TYPE_SELECT = 'SELECT';
 const EMPTY_WHERE_CLAUSE = null;
 const NO_TIMESTAMP = null;
 const EXECUTE_FOR_READ = true;
@@ -93,30 +96,28 @@ function createCallCellBatchExecutor({
    *   non-SELECT type, or missing table.
    */
   function parseDeclaredStatement(statement) {
-    let ast = null;
-    try {
-      ast = sqlParser.parse(statement);
-    } catch (parseError) {
-      throw createCallRoutingFailure(
-        CALL_CELL_ROUTE_ERROR_CODE.STATEMENT_INVALID,
-        CALL_CELL_BATCH_MESSAGE.STATEMENT_PARSE_FAILED,
-        {cause: parseError},
-      );
+    return parseSelectorStatementAst(sqlParser, statement).ast;
+  }
+
+  function resolveRequestParameters(request) {
+    if (request.parameterSchema !== undefined ||
+        request.argumentsJson !== undefined) {
+      return normalizeCallSelectorInvocationParameters({
+        argumentsJson: request.argumentsJson,
+        parameterSchema: request.parameterSchema,
+        statement: request.statement,
+      });
     }
-    const astType = String(ast?.type || '').toUpperCase();
-    if (astType !== AST_TYPE_SELECT) {
-      throw createCallRoutingFailure(
-        CALL_CELL_ROUTE_ERROR_CODE.STATEMENT_INVALID,
-        CALL_CELL_BATCH_MESSAGE.STATEMENT_SELECT_ONLY,
-      );
-    }
-    if (!ast.from || !ast.from.name) {
-      throw createCallRoutingFailure(
-        CALL_CELL_ROUTE_ERROR_CODE.STATEMENT_INVALID,
-        CALL_CELL_BATCH_MESSAGE.STATEMENT_NO_TABLE,
-      );
-    }
-    return ast;
+    const directParams = Array.isArray(request.parameters) ?
+      Object.freeze([...request.parameters]) :
+      NO_PARAMETERS;
+    return Object.freeze({
+      boundParameters: directParams,
+      logicalParameters: directParams,
+      parameterSchemaDigest: null,
+      parametersDigest: null,
+      parametersJson: null,
+    });
   }
 
   /**
@@ -125,11 +126,16 @@ function createCallCellBatchExecutor({
    *
    * @param {string} tableName - Table named by the statement.
    * @param {object|null} whereClause - Parsed WHERE clause AST.
+   * @param {Array} [boundParameters] - Normalized positional SQL parameters.
    * @return {string[]} Selected partition IDs.
    * @throws {CallCellRoutingError} ROUTE_UNAVAILABLE when the table has
    *   no routable partitions or resolution itself fails.
    */
-  function resolveTargetPartitions(tableName, whereClause) {
+  function resolveTargetPartitions(
+    tableName,
+    whereClause,
+    boundParameters = NO_PARAMETERS,
+  ) {
     let partitions = null;
     try {
       partitions = partitionsProvider(tableName);
@@ -151,6 +157,7 @@ function createCallCellBatchExecutor({
         tableName,
         whereClause,
         partitions,
+        {params: boundParameters},
       );
     } catch (resolutionError) {
       throw createCallRoutingFailure(
@@ -206,12 +213,19 @@ function createCallCellBatchExecutor({
    */
   function planShards(request) {
     const ast = parseDeclaredStatement(request.statement);
+    const normalizedParams = resolveRequestParameters(request);
     const tableName = ast.from.name;
     const partitionIds = resolveTargetPartitions(
       tableName,
       ast.where || EMPTY_WHERE_CLAUSE,
+      normalizedParams.boundParameters,
     );
     return Object.freeze({
+      boundParameters: normalizedParams.boundParameters,
+      logicalParameters: normalizedParams.logicalParameters,
+      parameterSchemaDigest: normalizedParams.parameterSchemaDigest,
+      parametersDigest: normalizedParams.parametersDigest,
+      parametersJson: normalizedParams.parametersJson,
       shards: Object.freeze(partitionIds.map((partitionId) =>
         Object.freeze({partitionId}))),
       tableName,
@@ -241,23 +255,24 @@ function createCallCellBatchExecutor({
     const {
       statement,
       batchRowBound,
-      parameters = NO_PARAMETERS,
       timestamp = NO_TIMESTAMP,
       executionOptions = NO_EXECUTION_OPTIONS,
     } = request;
 
     const ast = parseDeclaredStatement(statement);
+    const normalizedParams = resolveRequestParameters(request);
     const tableName = ast.from.name;
     const partitionIds = resolveTargetPartitions(
       tableName,
       ast.where || EMPTY_WHERE_CLAUSE,
+      normalizedParams.boundParameters,
     );
 
     const sql = queryExecutor.buildSelectSQL(ast);
     const results = await queryExecutor.executeOnPartitions(
       partitionIds,
       sql,
-      parameters,
+      normalizedParams.boundParameters,
       timestamp,
       EXECUTE_FOR_READ,
       NO_PREFER_LEADER,

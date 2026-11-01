@@ -121,3 +121,15 @@ export {
 export {
   emitServiceEntry,
 } from './service-entry-generator.js';
+
+export {
+  CALL_SELECTOR_PARAM_TYPE,
+  FORBIDDEN_AUTHORITY_PARAMETER_NAMES,
+  assertDispatchedSelectorParameters,
+  assertSelectorParameterCorrespondence,
+  computeParameterSchemaDigest,
+  inspectSelectorPlaceholders,
+  normalizeCallSelectorInvocationParameters,
+  normalizeCallSelectorParameterSchema,
+  parseSelectorStatementAst,
+} from './call-selector-parameter-contract.js';
