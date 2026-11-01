@@ -644,7 +644,7 @@ flowchart LR
     E -->|"Commit Ack"| A
 ```
 
-See the live multi-machine measured Scenario A phase latency breakdown table in [`docs/benchmarks/README.md`](README.md).
+Phase timings are admitted only from observed spans; the current admission status is listed in [`docs/benchmarks/README.md`](README.md).
 
 ### Scenario B setup and 4-stage sequential p99 latency breakdown (tidb-distributed-risk-decision)
 
@@ -659,7 +659,7 @@ flowchart LR
     N4 -->|"Return Decision Result"| C
 ```
 
-See the live multi-machine measured Scenario B phase latency breakdown table in [`docs/benchmarks/README.md`](README.md).
+Phase timings are admitted only from observed spans; the current admission status is listed in [`docs/benchmarks/README.md`](README.md).
 
 ### Scenario C setup, decision latency, and rule-change backfill optimization (streaming-feature-risk-decision)
 
@@ -672,20 +672,7 @@ flowchart LR
     D["Risk Decision Client"] -->|"Freshness SLA = 0ms"| Q["Epoch-Watermarked Reader<br/>(Local Storage Node)"]
     Q -->|"Local Lookup"| R
     Q -.->|"Lazy Replay"| P
-    R -->|"Decision (0 B WAN)"| D
+    R -->|"Decision"| D
 ```
 
-See the live multi-machine measured Scenario C phase latency and freshness breakdown table in [`docs/benchmarks/README.md`](README.md).
-
-### Architectural Comparison of Rule-Change Backfill and Colocated Rollups
-
-In colocated in-database execution (`Lagrange 0.4.0` and `PostgreSQL 17 + PL/pgSQL`), deploying a new fraud rule or altering scoring thresholds requires `0.0 s` of external cache backfill downtime because no external feature store tables need network-wide recalculation.
-
-In contrast, an external cache pipeline (`PostgreSQL 17 + Valkey 8`) precomputes rolling aggregations into in-memory Redis/Valkey hashes. While precomputed cache keys serve relaxed-staleness reads rapidly, deploying a new correlated risk rule or altering window boundaries triggers network backfill across historical events, and asynchronous CDC streaming modes introduce stale decisions under a `0 ms` read-your-writes consistency SLA.
-
-To combine `0 ms` read-your-writes freshness with `0.0 s` backfill downtime across multi-machine deployments, Lagrange uses:
-
-1. **In-Partition Raft-Apply Delta Rollups**: State machine apply hooks maintain `O(1)` local accumulators directly inside partition memory as Raft log entries commit.
-2. **Decomposable Multi-Resolution Micro-Buckets**: Aggregations are factored into associative micro-buckets (1-second, 1-minute, and 1-hour sub-aggregates) that recombine algebraically when window durations or scoring thresholds change.
-3. **Epoch-Watermarked Lazy On-Read Cutover + Local Page-Cache Replay**: New feature definitions are watermarked with an epoch boundary and lazily materialized on demand while background workers warm remaining entities from the local page cache with `0 B` of cross-node network backfill traffic.
-
+Freshness and phase claims are admitted only from observed records; the current admission status is listed in [`docs/benchmarks/README.md`](README.md).
