@@ -7,8 +7,10 @@
 
 import {
   arrayFind,
+  arrayJoin,
   arrayMap,
   stringIncludes,
+  stringReplace,
   stringSplit,
   stringStartsWith,
   stringTrim,
@@ -92,8 +94,25 @@ function http(status, body) {
   return `${typeof body === 'string' ? body : JSON.stringify(body)}\nhttp_status=${status}`;
 }
 
+// Which product owns the listener on a port (the listener-ownership probe
+// joins one container's pid namespace and answers owner=yes or owner=no).
+const LISTENER_ROLE_OF_PORT = Object.freeze({4000: '-tidb-', 5432: '-postgres-primary-',
+  5433: '-lagrange-node-'});
+
+function listenerProbe(ledger) {
+  return (command) => {
+    const id = (/container:([0-9a-f]+)/u.exec(command) || [])[1];
+    const port = stringTrim(stringSplit(stringTrim(command), /\s+/u).pop());
+    const entry = ledger.containers.get(id);
+    const role = LISTENER_ROLE_OF_PORT[stringReplace(port, /'/gu, '')];
+    return entry && !entry.removed && role && stringIncludes(entry.name, role) ?
+      'owner=yes' : 'owner=no';
+  };
+}
+
 function dockerRules(ledger) {
   return [
+    [/--pid container:/u, listenerProbe(ledger)],
     [/docker image inspect/u, (command) => ledger.repoDigests(command)],
     [/docker inspect --type container/u, (command) => ledger.inspect(command)],
     [/^docker run -d /u, (command, host) => ledger.run(command, host)],
@@ -135,6 +154,7 @@ function postgresHealthyRules(ledger, {standbys = ['s1', 's2']} = {}) {
     [/FROM pg_stat_replication/u, replication],
     [/SHOW synchronous_standby_names/u, standbys.length > 0 ?
       `FIRST 1 (${standbys.join(', ')})` : ''],
+    [/pg_is_in_recovery/u, (_command, host) => (host === '10.0.0.1' ? 'f' : 't')],
     [/pg_hba_file_rules/u, (command) => stringIncludes(command, 'replication') ?
       'host|{replication}|{replicator}|10.0.0.2|scram-sha-256' :
       'host|{bench}|{bench}|10.0.0.9|scram-sha-256'],
@@ -147,6 +167,15 @@ function tidbHealthyRules(ledger) {
   return [
     ...dockerRules(ledger),
     [/tidb_version\(\)/u, `${TIDB_RELEASE}\n__exit_code=0`],
+    [/CLUSTER_INFO/u, () => {
+      const lines = [];
+      for (const entry of ledger.containers.values()) {
+        const type = (/pingcap\/(pd|tikv|tidb):/u.exec(entry.image) || [])[1];
+        const port = {pd: 2379, tikv: 20160, tidb: 4000}[type];
+        if (type) lines.push(`${type}\t${entry.host}:${port}\t8.5.8`);
+      }
+      return `${arrayJoin(lines, '\n')}\n__exit_code=0`;
+    }],
     [/^docker exec \S+ 'mysql'/u, '1\n__exit_code=0'],
     [/\/pd\/api\/v1\/health/u, http(200, [{name: 'pd1', health: true}])],
   ];

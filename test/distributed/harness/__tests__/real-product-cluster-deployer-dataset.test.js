@@ -20,7 +20,7 @@ import {
 } from '../real-product-captured-intrinsics.js';
 
 const WORKLOAD = Object.freeze({warehouseCount: 1, districtsPerWarehouse: 2,
-  customersPerDistrict: 3, itemCount: 5});
+  customersPerDistrict: 3, itemCount: 20});
 
 function exactReader() {
   const expected = deployers.expectedCanonicalTableRows(WORKLOAD);

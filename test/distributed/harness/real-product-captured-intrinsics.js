@@ -17,10 +17,12 @@ const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringIndexOf = Function.call.bind(String.prototype.indexOf);
 const stringLastIndexOf = Function.call.bind(String.prototype.lastIndexOf);
+const stringPadStart = Function.call.bind(String.prototype.padStart);
 const stringReplace = Function.call.bind(String.prototype.replace);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 export {
@@ -36,9 +38,11 @@ export {
   stringIncludes,
   stringIndexOf,
   stringLastIndexOf,
+  stringPadStart,
   stringReplace,
   stringSplit,
   stringStartsWith,
   stringToLowerCase,
+  stringToUpperCase,
   stringTrim,
 };

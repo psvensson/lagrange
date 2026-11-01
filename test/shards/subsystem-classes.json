@@ -9,7 +9,7 @@
     "cli-tooling": 98,
     "control-plane": 224,
     "convergence-topology": 78,
-    "distributed-harness": 192,
+    "distributed-harness": 195,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2520,
-  "digest": "fnv1a32-cefe32d8",
+  "censusSize": 2523,
+  "digest": "fnv1a32-149981c6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-66cea8e1",
+  "observationDigest": "fnv1a32-bc1e6a5f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -875,7 +875,9 @@
     "test/distributed/harness/__tests__/cluster.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-manifest.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-evidence-contract.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-measured-cell-admission.test.js": "distributed-harness",
@@ -959,6 +961,7 @@
     "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-recovery.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer.property.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer.test.js": "distributed-harness",
@@ -6428,12 +6431,51 @@
         "LAGRANGE_DEBUG_LOGS"
       ]
     },
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": {
       "files": [
         "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
       ],
       "directories": [
         "data"
+      ]
+    },
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-manifest.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
       ]
     },
     "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js": {
@@ -7033,6 +7075,48 @@
         "src/control-plane/priority-recovery-snapshot.js"
       ]
     },
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-cleanup.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-dataset.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-network.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-recovery.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
     "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": {
       "files": [
         "docs/benchmarks/cloud/provision-gcp.sh",
@@ -7040,6 +7124,13 @@
       ],
       "directories": [
         "test/distributed/harness"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
       ]
     },
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": {

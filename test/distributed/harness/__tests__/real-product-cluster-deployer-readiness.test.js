@@ -85,7 +85,7 @@ test('D04: a throwing semantic-proof path never yields a passed count; the deplo
   'runs no ad-hoc proof statements', {timeout: 300000}, async () => {
   const ledger = createContainerLedger();
   const {sshRun, calls} = createScriptedSsh([
-    [/^docker run --rm/u, new Error('proof client failed')],
+    [/^docker run --rm[^\n]*eval\(Buffer/u, new Error('proof client failed')],
     ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
   ]);
   const result = await deployers.deployLagrangeCluster(baseInput(sshRun));

@@ -1,0 +1,213 @@
+/**
+ * TiDB + TiKV arm of the comparative benchmark on remote hosts: one PD, one
+ * TiKV store per data host (three failure domains), one TiDB SQL server and
+ * the pinned mysql client container the TiDB lifecycle owner reads with.
+ *
+ * Readiness and placement are the existing owners', over ssh through the
+ * remote docker provider: waitForTiDbReferenceSqlReady with the N-Up-stores
+ * readiness SQL (tidb-reference-lifecycle.js) and, once the canonical tables
+ * exist, waitForPhysicalTablePlacement (tidb-reference-physical-placement-
+ * proof.js). Versions are TiDB's own report: tidb_version() and
+ * INFORMATION_SCHEMA.CLUSTER_INFO per instance.
+ */
+import {
+  TIDB_REFERENCE_DEFAULTS,
+  buildTiDbReferenceReadinessSql,
+  waitForTiDbReferenceSqlReady,
+} from './tidb-reference-lifecycle.js';
+import {
+  buildTiDbPhysicalMysqlCommand,
+  waitForPhysicalTablePlacement,
+} from './tidb-reference-physical-placement-proof.js';
+import {
+  arrayEvery,
+  arrayFilter,
+  arrayFind,
+  arrayMap,
+  stringSplit,
+  stringToLowerCase,
+} from './real-product-captured-intrinsics.js';
+import {
+  PD_IMAGE_DEFAULT,
+  READINESS_STATE,
+  TIDB_IMAGE_DEFAULT,
+  TIDB_SQL_CLIENT_IMAGE,
+  TIKV_IMAGE_DEFAULT,
+  requireCampaignId,
+  resolveReadinessBudget,
+} from './real-product-deployment-contract.js';
+import {
+  classifyStorage,
+  inspectProducts,
+  runClassOf,
+  verifyProductIdentity,
+} from './real-product-identity.js';
+import {pollReadiness, typedReadiness} from './real-product-readiness.js';
+import {
+  createRemoteDockerProvider,
+  dockerRunDetached,
+  httpFromHost,
+} from './real-product-remote-shell.js';
+import {
+  bindEndpointToContainer,
+  createMysqlTableReader,
+} from './real-product-sql-clients.js';
+
+const ROLE = Object.freeze({PD: 'pd', TIKV: 'tikv', TIDB: 'tidb', SQL_CLIENT: 'sql-client'});
+const DATA_DIR = '/data';
+const STORE_COUNT = 3;
+const DEFAULT_DATABASE = 'lagrange_tidb_oltp';
+const PLACEMENT_TABLE = 'stock';
+const TAG = /:v?(\d+\.\d+\.\d+)$/u;
+// Bounded lifetime of the client container (R13): the campaign's own budget.
+const SQL_CLIENT_LIFETIME_SECONDS = 6 * 60 * 60;
+const P = TIDB_REFERENCE_DEFAULTS;
+const TIKV_STATUS_PORT = 20180;
+
+function storageArgs(opts, campaignId, label) {
+  return opts.storageRoot ? ['-v', `${opts.storageRoot}/${campaignId}/${label}:${DATA_DIR}`] :
+    [];
+}
+
+function versionPatternOf(image) {
+  const match = TAG.exec(String(image));
+  return match ? new RegExp(`(^|[^\\d])${stringSplit(match[1], '.').join('\\.')}([^\\d]|$)`,
+    'u') : /\d/u;
+}
+
+async function start(ctx, role, host, ordinal, image, dockerArgs, commandArgs) {
+  const started = await dockerRunDetached({sshRun: ctx.sshRun, opts: ctx.opts, host,
+    campaignId: ctx.campaignId, role, ordinal, image, dockerArgs, commandArgs});
+  ctx.hostByContainer.set(started.containerId, host);
+  return {role, host, containerId: started.containerId};
+}
+
+function pdReady(ctx, pdHost) {
+  return pollReadiness({component: 'tidb-pd', attempts: ctx.budget.attempts,
+    intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep, probe: async () => {
+      const answer = await httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts,
+        from: ctx.clientIp, url: `http://${pdHost}:${P.pdClientPort}/pd/api/v1/health`});
+      const members = Array.isArray(answer.json) ? answer.json : [];
+      return {ready: members.length > 0 && arrayEvery(members, (member) => member.health === true),
+        diagnostic: answer.json ?? answer.body ?? answer.error};
+    }});
+}
+
+async function sql(ctx, endpoint, statement) {
+  const result = await ctx.provider.execInContainer(ctx.sqlClient.containerId,
+    buildTiDbPhysicalMysqlCommand(endpoint, statement));
+  if (result.exitCode !== 0) throw new Error(`mysql exited ${result.exitCode}`);
+  return result.stdout;
+}
+
+async function reportedVersions(ctx, endpoint, products) {
+  const release = await sql(ctx, endpoint, 'SELECT tidb_version()');
+  const rows = arrayMap(arrayFilter(stringSplit(await sql(ctx, endpoint,
+    'SELECT TYPE, INSTANCE, VERSION FROM INFORMATION_SCHEMA.CLUSTER_INFO'), '\n'), Boolean),
+  (line) => stringSplit(line, '\t'));
+  for (const product of products) {
+    if (product.role === ROLE.TIDB) {
+      product.reportedVersion = release;
+      continue;
+    }
+    const row = arrayFind(rows, ([type, instance]) => stringToLowerCase(type) ===
+      product.role && stringSplit(instance, ':')[0] === product.host);
+    product.reportedVersion = row ? row[2] : null;
+  }
+  return products;
+}
+
+async function observeStores(ctx, endpoint) {
+  return sql(ctx, endpoint, 'SELECT STORE_ID, ADDRESS, STORE_STATE_NAME FROM ' +
+    'INFORMATION_SCHEMA.TIKV_STORE_STATUS ORDER BY STORE_ID');
+}
+
+/**
+ * @param {{hosts: Array<string>, clientIp: string, sshRun: Function,
+ *   opts: Object, campaignId: string, sleep: Function}} input
+ * @return {Promise<Object>}
+ */
+async function deployTiDbCluster({hosts, clientIp, sshRun, opts, campaignId, sleep}) {
+  requireCampaignId(campaignId);
+  if (hosts.length < STORE_COUNT) {
+    throw new Error(`TiDB arm needs ${STORE_COUNT} data hosts, got ${hosts.length}`);
+  }
+  const hostByContainer = new Map();
+  const budget = resolveReadinessBudget(opts);
+  const ctx = {sshRun, opts, clientIp, sleep, campaignId, budget, hostByContainer,
+    provider: createRemoteDockerProvider({sshRun, opts,
+      hostOf: (containerId) => hostByContainer.get(containerId)})};
+  const images = {pd: opts.pdImage || PD_IMAGE_DEFAULT, tikv: opts.tikvImage || TIKV_IMAGE_DEFAULT,
+    tidb: opts.tidbImage || TIDB_IMAGE_DEFAULT};
+  const pdHost = hosts[0];
+  const pd = await start(ctx, ROLE.PD, pdHost, 1, images.pd,
+    storageArgs(opts, campaignId, 'pd'),
+    ['--name=pd', `--data-dir=${DATA_DIR}`, `--client-urls=http://0.0.0.0:${P.pdClientPort}`,
+      `--peer-urls=http://0.0.0.0:${P.pdPeerPort}`,
+      `--advertise-client-urls=http://${pdHost}:${P.pdClientPort}`,
+      `--advertise-peer-urls=http://${pdHost}:${P.pdPeerPort}`,
+      `--initial-cluster=pd=http://${pdHost}:${P.pdPeerPort}`]);
+  const pdReadiness = await pdReady(ctx, pdHost);
+  const roles = [pd];
+  for (let index = 0; index < STORE_COUNT; index += 1) {
+    roles.push(await start(ctx, ROLE.TIKV, hosts[index], index + 1, images.tikv,
+      [...storageArgs(opts, campaignId, `tikv-${index + 1}`),
+        '--ulimit', `nofile=${P.tikvNofileLimit}:${P.tikvNofileLimit}`],
+      [`--addr=0.0.0.0:${P.tikvPort}`, `--advertise-addr=${hosts[index]}:${P.tikvPort}`,
+        `--status-addr=0.0.0.0:${TIKV_STATUS_PORT}`, `--pd=${pdHost}:${P.pdClientPort}`,
+        `--data-dir=${DATA_DIR}`]));
+  }
+  const tidb = await start(ctx, ROLE.TIDB, pdHost, 1, images.tidb, [],
+    ['--store=tikv', `--path=${pdHost}:${P.pdClientPort}`, '--host=0.0.0.0',
+      `-P=${P.tidbPort}`, `--status=${P.tidbStatusPort}`]);
+  roles.push(tidb);
+  ctx.sqlClient = await start(ctx, ROLE.SQL_CLIENT, clientIp, 1, TIDB_SQL_CLIENT_IMAGE,
+    ['--entrypoint', 'sleep'], [String(SQL_CLIENT_LIFETIME_SECONDS)]);
+  const endpoint = {host: tidb.host, port: P.tidbPort};
+  const sqlReadiness = await typedReadiness('tidb-sql-3-up-stores', () =>
+    waitForTiDbReferenceSqlReady(ctx.provider, ctx.sqlClient.containerId, endpoint, {
+      timeoutMs: budget.timeoutMs, pollIntervalMs: budget.pollIntervalMs,
+      readinessSql: buildTiDbReferenceReadinessSql(STORE_COUNT),
+      watchedContainers: arrayMap(roles, (role) => ({role: role.role,
+        containerId: role.containerId}))}));
+  const products = await reportedVersions(ctx, endpoint,
+    await inspectProducts({sshRun, opts, roles}));
+  verifyProductIdentity(products, {
+    [ROLE.PD]: {imageRef: images.pd, versionPattern: versionPatternOf(images.pd)},
+    [ROLE.TIKV]: {imageRef: images.tikv, versionPattern: versionPatternOf(images.tikv)},
+    [ROLE.TIDB]: {imageRef: images.tidb, versionPattern: versionPatternOf(images.tidb)},
+  });
+  const binding = await bindEndpointToContainer({sshRun, opts, campaignId, endpoint,
+    candidates: arrayFilter(roles, (role) => role.host === endpoint.host)});
+  const storage = arrayMap(arrayFilter(products, (product) => product.role !== ROLE.TIDB),
+    (product) => classifyStorage(product, DATA_DIR));
+  const databaseName = opts.tidbDatabase || DEFAULT_DATABASE;
+  const placement = () => typedReadiness('tidb-physical-placement', () =>
+    waitForPhysicalTablePlacement({provider: ctx.provider,
+      clientContainerId: ctx.sqlClient.containerId, endpoint, replicaTarget: STORE_COUNT,
+      expectedAddresses: arrayMap(hosts.slice(0, STORE_COUNT),
+        (host) => `${host}:${P.tikvPort}`),
+      databaseName, tableName: PLACEMENT_TABLE, timeoutMs: budget.timeoutMs,
+      pollIntervalMs: budget.pollIntervalMs}));
+  return {
+    targetId: 'tidb-tikv',
+    topology: {description: `1 PD + ${STORE_COUNT} TiKV stores + 1 TiDB server`,
+      clientPath: 'direct-to-tidb'},
+    roles: [...roles, ctx.sqlClient], storage, runClass: runClassOf(storage),
+    readiness: {state: READINESS_STATE.READY, observedAt: new Date().toISOString(),
+      evidence: {pd: pdReadiness, sql: sqlReadiness}},
+    identity: {products},
+    placement: null,
+    endpoint: {protocol: 'mysql', ...endpoint, containerId: binding.containerId, binding},
+    access: {connection: {user: 'root', database: databaseName}},
+    operations: {
+      readTableRows: createMysqlTableReader({provider: ctx.provider,
+        clientContainerId: ctx.sqlClient.containerId, endpoint, databaseName}),
+      observePlacement: async () => ({observedAt: new Date().toISOString(),
+        source: 'tidb-reference-physical-placement-proof', ...(await placement())}),
+      observeRoles: async () => ({stores: await observeStores(ctx, endpoint)}),
+    },
+  };
+}
+
+export {deployTiDbCluster};

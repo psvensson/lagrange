@@ -41,11 +41,12 @@ function harness(overrides = {}) {
   const calls = {workload: [], teardown: []};
   let clock = 0;
   const deps = {
-    now: () => (clock += 1000),
+    now: () => clock,
     deadlineAt: null,
     deployRun: async (run) => deployment(run.runId),
     executeWorkloadRun: async ({run}) => {
       calls.workload.push(run.runId);
+      clock += 10000;
       return {observations: {accounting: {offered: 1}}, correctness: {semanticGate: null},
         dataset: {resetMethod: 'fresh-formation'}, loadGenerator: {host: '10.0.0.9'}};
     },
@@ -135,7 +136,7 @@ test('endpoint bound to a container outside the recorded roles is topology-false
 
 test('watchdog: past the campaign deadline the remaining runs are recorded interrupted',
   async () => {
-    const {deps, records, calls} = harness({deadlineAt: 2500});
+    const {deps, records, calls} = harness({deadlineAt: 5000});
     const summary = await run(deps);
     assert.equal(calls.workload.length, 1);
     const states = arrayMap(records.slice(1), (record) => record.execution.state);
