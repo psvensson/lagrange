@@ -270,6 +270,19 @@ function requireRate(plan) {
   return rate;
 }
 
+// Schema provisioning observations: the adapter's on success, the ones the
+// failed preparation carried otherwise; TiDB has no provisioning contract.
+const PROVISIONING_NOT_APPLICABLE = Object.freeze({status: 'not-applicable'});
+
+function provisioningEvidenceOf(systemId, adapter, error) {
+  if (systemId === OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV) return PROVISIONING_NOT_APPLICABLE;
+  if (adapter) return adapter.schemaProvisioning;
+  for (const candidate of [error, ...(error?.errors ?? [])]) {
+    if (candidate?.schemaProvisioning) return candidate.schemaProvisioning;
+  }
+  return Object.freeze({status: 'not-reached', reason: String(error?.message || error)});
+}
+
 function setupFailure(error) {
   const classified = classifyBenchmarkAttemptFailure(error, {});
   return Object.freeze({
@@ -411,12 +424,14 @@ async function executeScenarioARun(options) {
   const system = await openSystem(dispatch.system, connection, workload, registry, drivers);
   const identity = planIdentity(profile, plan, workloadPlan, dataset, rate);
   let adapter = null;
+  let setupError = null;
   let measured;
   const startedAtIso = new Date().toISOString();
   let loaded = {snapshot: null, error: 'dataset not loaded'};
   try {
     adapter = await system.open();
   } catch (error) {
+    setupError = error;
     measured = {status: RUN_STATUS.SETUP_FAILED, setup: setupFailure(error), step: null,
       unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)};
   }
@@ -435,6 +450,7 @@ async function executeScenarioARun(options) {
       endpointDiscovery: system.discovery,
       dataset: Object.freeze({
         resetMethod: system.resetMethod,
+        provisioning: provisioningEvidenceOf(dispatch.system, adapter, setupError),
         verification: await verifyOltpLoadedDataset(dataset, loaded, measured.setup ?? null),
       }),
     }),
