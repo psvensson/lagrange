@@ -53,6 +53,7 @@ import {
 import {
   createRemoteWorkloadRunner,
   createWorkloadRunExecutor,
+  prepareLoadGeneratorCheckout,
 } from '../../../test/distributed/harness/comparative-benchmark-workload-call-site.js';
 import {
   loadRawObservationRecordOwner,
@@ -274,6 +275,20 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
       'lab hosts record one; for gcp pass --client-checkout <path>');
   }
   const harness = await harnessIdentity(manifest);
+  // The CLI runs from a worktree of the load generator's checkout at the
+  // harness commit; the checkout itself is never moved.
+  const loadGenerator = await prepareLoadGeneratorCheckout({sshRun, opts, host: client,
+    harnessCommit: harness.gitCommit, campaignId: manifest.campaignId});
+  try {
+    return await runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physicalHosts,
+      pinned, recordOwner, client, harness, loadGeneratorHost: loadGenerator.host});
+  } finally {
+    await loadGenerator.release();
+  }
+}
+
+async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physicalHosts,
+  pinned, recordOwner, client, harness, loadGeneratorHost}) {
   const dataIps = hosts.filter((host) => host.role === 'data').map((host) => host.ip);
   // The semantic proof journey runs here, on the controller; PostgreSQL admits
   // the controller's address (as the data host sees it) next to the load generator.
@@ -303,7 +318,7 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
     deadlineAt: Date.now() + manifest.campaignBudgetMinutes * MS_PER_MINUTE,
     deployRun: deployArm,
     executeWorkloadRun: createWorkloadRunExecutor({clientHost: client.ip,
-      runWorkload: createRemoteWorkloadRunner({sshRun, opts, host: client,
+      runWorkload: createRemoteWorkloadRunner({sshRun, opts, host: loadGeneratorHost,
         harnessCommit: harness.gitCommit, campaignId: manifest.campaignId}),
       evidenceDirOf: (run) => `test-output/bench/${manifest.campaignId}/${run.runId}/evidence`,
       describeLoadGenerator: () => describeLoadGenerator({host: client,

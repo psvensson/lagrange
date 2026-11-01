@@ -28,7 +28,7 @@
   "censusSize": 2534,
   "digest": "fnv1a32-080ebb26",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-eec990de",
+  "observationDigest": "fnv1a32-83a55ada",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5741,6 +5741,7 @@
         "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
       ],
       "directories": [
+        "data",
         "data/tidb-comparison",
         "data/tidb-comparison/forensic",
         "docs/benchmarks",
