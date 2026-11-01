@@ -22,61 +22,83 @@ export const OPERATING_BOUNDARY_MAP = Object.freeze([
     regimeId: 'single-partition-low-latency',
     regimeLabel: 'Single-Partition / Low-Contention SQL',
     winningSystem: 'PostgreSQL 17 + PL/pgSQL Function',
-    whyItWins: 'Zero distributed consensus hop; server-side function executes inside primary shared_buffers.',
+    whyItWins:
+      'Zero distributed consensus hop; server-side function executes inside ' +
+      'primary shared_buffers.',
     runnerUp: 'Lagrange (3-Node RF=3)',
   },
   {
     regimeId: 'multi-stage-entity-graph-lan-wan',
     regimeLabel: 'Multi-Stage Entity Graph (0.2-30 ms RTT)',
     winningSystem: 'Lagrange (5-Node RF=3 Colocated WASI)',
-    whyItWins: 'Partition-affinity routing + compact delta-digest ctx.call eliminates SQL coordinator fan-out.',
-    runnerUp: 'Apache Ignite 3 (JobTarget.colocated)',
+    whyItWins:
+      'Partition-affinity routing + compact delta-digest ctx.call eliminates ' +
+      'SQL coordinator fan-out.',
+    runnerUp: 'PostgreSQL 17 (Patroni Sync HA + PL/pgSQL)',
   },
   {
     regimeId: 'heavy-history-correlation-2048-events',
     regimeLabel: 'Heavy Event History Correlation (2048 Events)',
     winningSystem: 'Lagrange (5-Node RF=3 Colocated WASI)',
-    whyItWins: 'Local WASM linear-memory reduction avoids shipping raw event rows over the network.',
-    runnerUp: 'Citus 13 (Colocated Distributed Function)',
+    whyItWins:
+      'Local WASM linear-memory reduction avoids shipping raw event rows over the network.',
+    runnerUp: 'PostgreSQL 17 (Patroni Sync HA + PL/pgSQL)',
   },
   {
     regimeId: 'live-rebalance-under-steady-load',
     regimeLabel: 'Live Partition Rebalance Under Steady Load',
     winningSystem: 'Lagrange (5-Node RF=3 Colocated WASI)',
-    whyItWins: 'Epoch-fenced Raft learner catch-up and atomic leader handoff achieve 0 ms write stall.',
-    runnerUp: 'Apache Ignite 3 (Colocated)',
+    whyItWins:
+      'Epoch-fenced Raft learner catch-up and atomic leader handoff achieve 0 ms write stall.',
+    runnerUp: 'TiDB + TiKV v8.5.8',
   },
   {
     regimeId: 'zero-ms-freshness-streaming-features-5x',
     regimeLabel: '0ms Freshness Streaming Features at 5x Scale',
     winningSystem: 'Lagrange (5-Node RF=3 Rollup)',
-    whyItWins: 'In-partition Raft-apply delta rollups + lazy epoch cutover give 0ms staleness and 0s backfill.',
-    runnerUp: 'PG 17 Patroni + PL/pgSQL Function',
+    whyItWins:
+      'In-partition Raft-apply delta rollups + lazy epoch cutover give ' +
+      '0ms staleness and 0s backfill.',
+    runnerUp: 'PostgreSQL 17 (Patroni Sync HA + PL/pgSQL)',
+  },
+]);
+
+const BASE_SCALEOUT_MODE_ITEMS = Object.freeze([
+  {targetId: 'lagrange', label: 'Lagrange 0.4.0', cfg: {quorumPeers: 1}},
+  {
+    targetId: 'tidb-tikv',
+    label: 'TiDB + TiKV v8.5.8',
+    cfg: {quorumPeers: 2, twoPhaseCommit: true},
+  },
+  {
+    targetId: 'citus-sql-service',
+    label: 'Citus 13 (Sharded SQL + App)',
+    cfg: {quorumPeers: 2, twoPhaseCommit: true, serialPeers: true},
+  },
+  {
+    targetId: 'yugabytedb-ysql-rf3',
+    label: 'YugabyteDB 2024.2 (YSQL + App)',
+    cfg: {quorumPeers: 2},
+  },
+  {
+    targetId: 'ignite3-colocated-compute',
+    label: 'Apache Ignite 3 (Colocated)',
+    cfg: {quorumPeers: 2},
   },
 ]);
 
 export const SCALEOUT_MODES_SPEC = Object.freeze({
-  fixed: [
-    {targetId: 'lagrange', label: 'Lagrange 0.4.0', cfg: {quorumPeers: 1}},
-    {targetId: 'tidb-tikv', label: 'TiDB + TiKV v8.5.8', cfg: {quorumPeers: 2, twoPhaseCommit: true}},
-    {targetId: 'citus-sql-service', label: 'Citus 13 (Sharded SQL + App)', cfg: {quorumPeers: 2, twoPhaseCommit: true, serialPeers: true}},
-    {targetId: 'yugabytedb-ysql-rf3', label: 'YugabyteDB 2024.2 (YSQL + App)', cfg: {quorumPeers: 2}},
-    {targetId: 'ignite3-colocated-compute', label: 'Apache Ignite 3 (Colocated)', cfg: {quorumPeers: 2}},
-  ],
-  prop: [
-    {targetId: 'lagrange', label: 'Lagrange 0.4.0', cfg: {quorumPeers: 1}},
-    {targetId: 'tidb-tikv', label: 'TiDB + TiKV v8.5.8', cfg: {quorumPeers: 2, twoPhaseCommit: true}},
-    {targetId: 'citus-sql-service', label: 'Citus 13 (Sharded SQL + App)', cfg: {quorumPeers: 2, twoPhaseCommit: true, serialPeers: true}},
-    {targetId: 'yugabytedb-ysql-rf3', label: 'YugabyteDB 2024.2 (YSQL + App)', cfg: {quorumPeers: 2}},
-    {targetId: 'ignite3-colocated-compute', label: 'Apache Ignite 3 (Colocated)', cfg: {quorumPeers: 2}},
-  ],
+  fixed: BASE_SCALEOUT_MODE_ITEMS,
+  prop: BASE_SCALEOUT_MODE_ITEMS,
   hot: [
-    {targetId: 'lagrange', label: 'Lagrange 0.4.0', cfg: {quorumPeers: 1}},
-    {targetId: 'tidb-tikv', label: 'TiDB + TiKV v8.5.8', cfg: {quorumPeers: 2, twoPhaseCommit: true}},
-    {targetId: 'pg-patroni-sync-ha-rf3', label: 'PG 17 (Patroni Sync HA + App)', cfg: {quorumPeers: 2, serialPeers: true}},
-    {targetId: 'citus-sql-service', label: 'Citus 13 (Sharded SQL + App)', cfg: {quorumPeers: 2, twoPhaseCommit: true, serialPeers: true}},
-    {targetId: 'yugabytedb-ysql-rf3', label: 'YugabyteDB 2024.2 (YSQL + App)', cfg: {quorumPeers: 2}},
-    {targetId: 'ignite3-colocated-compute', label: 'Apache Ignite 3 (Colocated)', cfg: {quorumPeers: 2}},
+    BASE_SCALEOUT_MODE_ITEMS[0],
+    BASE_SCALEOUT_MODE_ITEMS[1],
+    {
+      targetId: 'pg-patroni-sync-ha-rf3',
+      label: 'PG 17 (Patroni Sync HA + App)',
+      cfg: {quorumPeers: 2, serialPeers: true},
+    },
+    ...BASE_SCALEOUT_MODE_ITEMS.slice(2),
   ],
 });
 
@@ -86,7 +108,7 @@ export function buildCampaignTargetSpecs(hosts) {
   return [
     {
       targetId: 'lagrange', label: 'Lagrange', version: '0.4.0', category: 'distributed-native',
-      topologyUnits: 3, processCount: 3, rpoZeroSurvivability: true,
+      measured: true, topologyUnits: 3, processCount: 3, rpoZeroSurvivability: true,
       detailPagePrefix: 'tidb-comparison-progress', image: 'psvensson/lagrange:0.4.0',
       clusterIndices: [0, 1, 2], clusterHosts: [h0, h1, h2], clientHost: clientIp, port: 19100,
       txCfg: {concurrency: 28, totalOps: 160, quorumPeers: 1, keySpace: 200},
@@ -105,8 +127,9 @@ export function buildCampaignTargetSpecs(hosts) {
       },
     },
     {
-      targetId: 'lagrange-5node-rf3', label: 'Lagrange (5-Node RF=3)', shortLabel: 'Lagrange (5N RF=3)',
-      version: '0.4.0', category: 'distributed-native-scaleout',
+      targetId: 'lagrange-5node-rf3', label: 'Lagrange (5-Node RF=3)',
+      shortLabel: 'Lagrange (5N RF=3)',
+      version: '0.4.0', category: 'distributed-native-scaleout', measured: true,
       topologyUnits: 5, processCount: 5, rpoZeroSurvivability: true,
       detailPagePrefix: 'scaleout-3to5-node-rf3-progress', image: 'psvensson/lagrange:0.4.0',
       clusterIndices: [0, 1, 2, 3, 4], clusterHosts: [h0, h1, h2, h3, h4],
@@ -128,8 +151,8 @@ export function buildCampaignTargetSpecs(hosts) {
     },
     {
       targetId: 'tidb-tikv', label: 'TiDB + TiKV', version: 'v8.5.8', category: 'distributed-sql',
-      topologyUnits: 5, processCount: 5, rpoZeroSurvivability: true,
-      detailPagePrefix: 'tidb-comparison-progress', image: 'pingcap/tikv:v8.5.8',
+      measured: true, topologyUnits: 5, processCount: 5, rpoZeroSurvivability: true,
+      detailPagePrefix: 'tidb-comparison-progress', image: 'pingcap/tidb:v8.5.8',
       clusterIndices: [0, 1, 2, 3, 4], clusterHosts: [h0, h1, h2, h3, h4],
       clientHost: clientIp, port: 19120,
       txCfg: {concurrency: 28, totalOps: 160, quorumPeers: 2, twoPhaseCommit: true, keySpace: 200},
@@ -138,7 +161,9 @@ export function buildCampaignTargetSpecs(hosts) {
         'local-only': {serialRounds: 1, responseBytes: 1280, zeroWan: false, roundTrips: 1},
         'one-remote-stage': {serialRounds: 2, responseBytes: 1850, zeroWan: false, roundTrips: 2},
         'sequential': {serialRounds: 4, responseBytes: 2048, zeroWan: false, roundTrips: 4},
-        'fan-out': {fanoutCount: 3, serialRounds: 1, responseBytes: 2048, zeroWan: false, roundTrips: 4},
+        'fan-out': {
+          fanoutCount: 3, serialRounds: 1, responseBytes: 2048, zeroWan: false, roundTrips: 4,
+        },
       },
       scenCCfg: {
         c0: {concurrency: 18, onReadScan: true, scanHops: 2},
@@ -149,9 +174,9 @@ export function buildCampaignTargetSpecs(hosts) {
     },
     {
       targetId: 'pg-single-primary', label: 'PostgreSQL 17 (Single Primary + App Service)',
-      version: '17.2', category: 'relational-single-primary',
+      version: '17.2', category: 'relational-single-primary', measured: true,
       topologyUnits: 2, processCount: 2, rpoZeroSurvivability: false,
-      detailPagePrefix: 'postgresql-comparison-progress', image: 'postgres:16',
+      detailPagePrefix: 'postgresql-comparison-progress', image: 'postgres:17-alpine',
       clusterIndices: [0, 1], clusterHosts: [h0, h1], clientHost: clientIp, port: 19130,
       txCfg: {concurrency: 32, totalOps: 180, quorumPeers: 1, keySpace: 200},
       roundTripsB: 3, continuityB: false,
@@ -169,10 +194,11 @@ export function buildCampaignTargetSpecs(hosts) {
       },
     },
     {
-      targetId: 'pg-patroni-sync-ha-rf3', label: 'PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)',
-      version: '17.2-patroni-4.0', category: 'relational-sync-ha',
+      targetId: 'pg-patroni-sync-ha-rf3',
+      label: 'PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)',
+      version: '17.2-patroni-4.0', category: 'relational-sync-ha', measured: true,
       topologyUnits: 4, processCount: 4, rpoZeroSurvivability: true,
-      detailPagePrefix: 'postgresql-comparison-progress', image: 'postgres:16',
+      detailPagePrefix: 'postgresql-comparison-progress', image: 'postgres:17-alpine',
       clusterIndices: [0, 1, 2, 3], clusterHosts: [h0, h1, h2, h3],
       clientHost: clientIp, port: 19140,
       txCfg: {concurrency: 22, totalOps: 140, quorumPeers: 2, serialPeers: true, keySpace: 200},
@@ -191,10 +217,11 @@ export function buildCampaignTargetSpecs(hosts) {
       },
     },
     {
-      targetId: 'pg-plpgsql-single-primary', label: 'PostgreSQL 17 (Single Primary + PL/pgSQL Function)',
-      version: '17.2-plpgsql', category: 'relational-server-function',
+      targetId: 'pg-plpgsql-single-primary',
+      label: 'PostgreSQL 17 (Single Primary + PL/pgSQL Function)',
+      version: '17.2-plpgsql', category: 'relational-server-function', measured: true,
       topologyUnits: 1, processCount: 1, rpoZeroSurvivability: false,
-      detailPagePrefix: 'postgresql-comparison-progress', image: 'postgres:16',
+      detailPagePrefix: 'postgresql-comparison-progress', image: 'postgres:17-alpine',
       clusterIndices: [3], clusterHosts: [h3], clientHost: clientIp, port: 19150,
       txCfg: {concurrency: 36, totalOps: 180, replicate: false, keySpace: 200},
       roundTripsB: 1, continuityB: false,
@@ -212,10 +239,11 @@ export function buildCampaignTargetSpecs(hosts) {
       },
     },
     {
-      targetId: 'pg-plpgsql-sync-ha-rf3', label: 'PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function)',
-      version: '17.2-patroni-4.0-plpgsql', category: 'relational-sync-ha-function',
+      targetId: 'pg-plpgsql-sync-ha-rf3',
+      label: 'PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function)',
+      version: '17.2-patroni-4.0-plpgsql', category: 'relational-sync-ha-function', measured: true,
       topologyUnits: 3, processCount: 3, rpoZeroSurvivability: true,
-      detailPagePrefix: 'postgresql-comparison-progress', image: 'postgres:16',
+      detailPagePrefix: 'postgresql-comparison-progress', image: 'postgres:17-alpine',
       clusterIndices: [0, 1, 2], clusterHosts: [h0, h1, h2], clientHost: clientIp, port: 19160,
       txCfg: {concurrency: 24, totalOps: 140, quorumPeers: 2, serialPeers: true, keySpace: 200},
       roundTripsB: 1, continuityB: true,
@@ -234,7 +262,7 @@ export function buildCampaignTargetSpecs(hosts) {
     },
     {
       targetId: 'citus-sql-service', label: 'Citus 13 (Sharded SQL RF=3 + App Service)',
-      version: '13.0-pg17', category: 'sharded-postgresql-sql',
+      version: '13.0-pg17', category: 'sharded-postgresql-sql', measured: false,
       topologyUnits: 5, processCount: 5, rpoZeroSurvivability: true,
       detailPagePrefix: 'citus-comparison-progress', image: 'citusdata/citus:12.1',
       clusterIndices: [0, 1, 2, 3, 4], clusterHosts: [h0, h1, h2, h3, h4],
@@ -248,7 +276,9 @@ export function buildCampaignTargetSpecs(hosts) {
         'local-only': {serialRounds: 1, responseBytes: 1480, zeroWan: false, roundTrips: 1},
         'one-remote-stage': {serialRounds: 2, responseBytes: 1640, zeroWan: false, roundTrips: 2},
         'sequential': {serialRounds: 4, responseBytes: 1855, zeroWan: false, roundTrips: 4},
-        'fan-out': {fanoutCount: 3, serialRounds: 1, responseBytes: 1855, zeroWan: false, roundTrips: 4},
+        'fan-out': {
+          fanoutCount: 3, serialRounds: 1, responseBytes: 1855, zeroWan: false, roundTrips: 4,
+        },
       },
       scenCCfg: {
         c0: {concurrency: 16, onReadScan: true, scanHops: 3},
@@ -258,8 +288,9 @@ export function buildCampaignTargetSpecs(hosts) {
       },
     },
     {
-      targetId: 'citus-distributed-function', label: 'Citus 13 (Colocated Tables + Distributed Function RF=3)',
-      version: '13.0-pg17-udf', category: 'sharded-postgresql-colocated-udf',
+      targetId: 'citus-distributed-function',
+      label: 'Citus 13 (Colocated Tables + Distributed Function RF=3)',
+      version: '13.0-pg17-udf', category: 'sharded-postgresql-colocated-udf', measured: false,
       topologyUnits: 4, processCount: 4, rpoZeroSurvivability: true,
       detailPagePrefix: 'citus-comparison-progress', image: 'citusdata/citus:12.1',
       clusterIndices: [0, 1, 2, 3], clusterHosts: [h0, h1, h2, h3],
@@ -270,7 +301,9 @@ export function buildCampaignTargetSpecs(hosts) {
         'local-only': {serialRounds: 0, responseBytes: 220, zeroWan: false, roundTrips: 1},
         'one-remote-stage': {serialRounds: 1, responseBytes: 1140, zeroWan: false, roundTrips: 1},
         'sequential': {serialRounds: 3, responseBytes: 1606, zeroWan: false, roundTrips: 1},
-        'fan-out': {fanoutCount: 2, serialRounds: 1, responseBytes: 1540, zeroWan: false, roundTrips: 1},
+        'fan-out': {
+          fanoutCount: 2, serialRounds: 1, responseBytes: 1540, zeroWan: false, roundTrips: 1,
+        },
       },
       scenCCfg: {
         c0: {concurrency: 20, onReadScan: true, scanHops: 1},
@@ -281,9 +314,10 @@ export function buildCampaignTargetSpecs(hosts) {
     },
     {
       targetId: 'yugabytedb-ysql-rf3', label: 'YugabyteDB 2024.2 (YSQL RF=3 + App Service)',
-      version: '2024.2.1', category: 'distributed-sql-ysql',
+      version: '2024.2.1', category: 'distributed-sql-ysql', measured: false,
       topologyUnits: 4, processCount: 4, rpoZeroSurvivability: true,
-      detailPagePrefix: 'yugabyte-ignite-comparison-progress', image: 'yugabytedb/yugabyte:2.20.7.0-b58',
+      detailPagePrefix: 'yugabyte-ignite-comparison-progress',
+      image: 'yugabytedb/yugabyte:2.20.7.0-b58',
       clusterIndices: [0, 1, 2, 3], clusterHosts: [h0, h1, h2, h3],
       clientHost: clientIp, port: 19190,
       txCfg: {concurrency: 22, totalOps: 140, quorumPeers: 2, keySpace: 200},
@@ -292,7 +326,9 @@ export function buildCampaignTargetSpecs(hosts) {
         'local-only': {serialRounds: 1, responseBytes: 1320, zeroWan: false, roundTrips: 1},
         'one-remote-stage': {serialRounds: 2, responseBytes: 1580, zeroWan: false, roundTrips: 2},
         'sequential': {serialRounds: 4, responseBytes: 1620, zeroWan: false, roundTrips: 4},
-        'fan-out': {fanoutCount: 3, serialRounds: 1, responseBytes: 1620, zeroWan: false, roundTrips: 4},
+        'fan-out': {
+          fanoutCount: 3, serialRounds: 1, responseBytes: 1620, zeroWan: false, roundTrips: 4,
+        },
       },
       scenCCfg: {
         c0: {concurrency: 18, onReadScan: true, scanHops: 2},
@@ -303,9 +339,10 @@ export function buildCampaignTargetSpecs(hosts) {
     },
     {
       targetId: 'yugabytedb-stored-proc', label: 'YugabyteDB 2024.2 (YSQL Stored Procedure RF=3)',
-      version: '2024.2.1-proc', category: 'distributed-sql-stored-proc',
+      version: '2024.2.1-proc', category: 'distributed-sql-stored-proc', measured: false,
       topologyUnits: 3, processCount: 3, rpoZeroSurvivability: true,
-      detailPagePrefix: 'yugabyte-ignite-comparison-progress', image: 'yugabytedb/yugabyte:2.20.7.0-b58',
+      detailPagePrefix: 'yugabyte-ignite-comparison-progress',
+      image: 'yugabytedb/yugabyte:2.20.7.0-b58',
       clusterIndices: [0, 1, 2], clusterHosts: [h0, h1, h2], clientHost: clientIp, port: 19200,
       txCfg: {concurrency: 22, totalOps: 140, quorumPeers: 2, keySpace: 200},
       roundTripsB: 1, continuityB: true,
@@ -313,7 +350,9 @@ export function buildCampaignTargetSpecs(hosts) {
         'local-only': {serialRounds: 1, responseBytes: 980, zeroWan: false, roundTrips: 1},
         'one-remote-stage': {serialRounds: 2, responseBytes: 1420, zeroWan: false, roundTrips: 1},
         'sequential': {serialRounds: 3, responseBytes: 1806, zeroWan: false, roundTrips: 1},
-        'fan-out': {fanoutCount: 2, serialRounds: 1, responseBytes: 1640, zeroWan: false, roundTrips: 1},
+        'fan-out': {
+          fanoutCount: 2, serialRounds: 1, responseBytes: 1640, zeroWan: false, roundTrips: 1,
+        },
       },
       scenCCfg: {
         c0: {concurrency: 18, onReadScan: true, scanHops: 1},
@@ -324,7 +363,7 @@ export function buildCampaignTargetSpecs(hosts) {
     },
     {
       targetId: 'ignite3-colocated-compute', label: 'Apache Ignite 3 (JobTarget.colocated RF=3)',
-      version: '3.0.0', category: 'distributed-colocated-compute-grid',
+      version: '3.0.0', category: 'distributed-colocated-compute-grid', measured: false,
       topologyUnits: 3, processCount: 3, rpoZeroSurvivability: true,
       detailPagePrefix: 'yugabyte-ignite-comparison-progress', image: 'apacheignite/ignite:2.16.0',
       clusterIndices: [0, 1, 2], clusterHosts: [h0, h1, h2], clientHost: clientIp, port: 19210,
@@ -346,7 +385,7 @@ export function buildCampaignTargetSpecs(hosts) {
     {
       targetId: 'pg-valkey-sync-write-through',
       label: 'PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service)',
-      version: '17.2-valkey-8.0-sync', category: 'relational-cache-write-through',
+      version: '17.2-valkey-8.0-sync', category: 'relational-cache-write-through', measured: false,
       topologyUnits: 4, processCount: 4, rpoZeroSurvivability: true,
       detailPagePrefix: 'scenario-c-feature-store-progress', image: 'redis:7-alpine',
       clusterIndices: [0, 1, 2, 3], clusterHosts: [h0, h1, h2, h3],
@@ -369,7 +408,7 @@ export function buildCampaignTargetSpecs(hosts) {
     {
       targetId: 'pg-valkey-async-stream',
       label: 'PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service)',
-      version: '17.2-valkey-8.0-async', category: 'relational-cache-async-stream',
+      version: '17.2-valkey-8.0-async', category: 'relational-cache-async-stream', measured: false,
       topologyUnits: 5, processCount: 5, rpoZeroSurvivability: true,
       detailPagePrefix: 'scenario-c-feature-store-progress', image: 'redis:7-alpine',
       clusterIndices: [0, 1, 2, 3, 4], clusterHosts: [h0, h1, h2, h3, h4],
@@ -685,7 +724,10 @@ export async function regenerateAllBenchmarkArtifactsFromAdmitted(rootDir, admit
   await writeComparativeLandingArtifacts({
     matrix,
     svgPath: path.resolve(rootDir, 'docs/benchmarks/comparative-overview.svg'),
-    setupBreakdownSvgPath: path.resolve(rootDir, 'docs/benchmarks/scenario-setup-time-breakdown.svg'),
+    setupBreakdownSvgPath: path.resolve(
+      rootDir,
+      'docs/benchmarks/scenario-setup-time-breakdown.svg',
+    ),
     markdownPath: path.resolve(rootDir, 'docs/benchmarks/README.md'),
     htmlPath: path.resolve(rootDir, 'docs/benchmarks/index.html'),
   });
@@ -741,8 +783,14 @@ export async function regenerateAllBenchmarkArtifactsFromAdmitted(rootDir, admit
   await writeMovementScenarioCScalingStaticWebArtifacts({
     matrix,
     svgPath: path.resolve(rootDir, 'docs/benchmarks/movement-and-scenario-c-scaling-progress.svg'),
-    markdownPath: path.resolve(rootDir, 'docs/benchmarks/movement-and-scenario-c-scaling-progress.md'),
-    htmlPath: path.resolve(rootDir, 'docs/benchmarks/movement-and-scenario-c-scaling-progress.html'),
+    markdownPath: path.resolve(
+      rootDir,
+      'docs/benchmarks/movement-and-scenario-c-scaling-progress.md',
+    ),
+    htmlPath: path.resolve(
+      rootDir,
+      'docs/benchmarks/movement-and-scenario-c-scaling-progress.html',
+    ),
   });
   return {matrix, historyRecords};
 }

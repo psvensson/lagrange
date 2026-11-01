@@ -27,7 +27,7 @@
 
     <div class="card">
       <h2>1. 6-VM Cloud Cluster Sizing &amp; Provisioning Scripts (5 Cluster Nodes + 1 Client VM)</h2>
-      <p class="desc">All 14 benchmarked targets use public container images and zero-dependency Node.js wire-protocol clients, writing immutable raw observations to <code>data/tidb-comparison/raw-observations.ndjson</code> and deriving <code>data/tidb-comparison/admitted-lab-measurements.json</code>.</p>
+      <p class="desc">The runner deploys the 7 measured configurations across Lagrange 0.4.0, TiDB/TiKV v8.5.8, and PostgreSQL 17 using public container images and native wire protocols (<code>mysql2/promise</code>, <code>pg.Pool</code>, and Lagrange Admin WebSocket/HTTP), writing immutable raw observations to <code>data/tidb-comparison/raw-observations.ndjson</code> and deriving <code>data/tidb-comparison/admitted-lab-measurements.json</code> (while marking unmeasured comparators <code>[not measured]</code>).</p>
       <table class="data-table">
         <thead>
           <tr><th>Cloud Provider</th><th>Provisioning Script</th><th>Default Instance Type</th><th>vCPU / RAM</th><th>Disk</th><th>Est. 30-Min Cost (6 VMs)</th></tr>

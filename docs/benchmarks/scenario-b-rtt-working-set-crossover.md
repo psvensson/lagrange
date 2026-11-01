@@ -12,12 +12,12 @@ Evaluating network latency scaling from 0.2 ms LAN to 30 ms cross-region WAN hig
 
 | Target | Hops | Local (0.2ms) | 0.2 ms | 2.0 ms | 10.0 ms | 30.0 ms | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 2 | 2742.3 | 1799.7 | 1131.0 | 296.0 | 113.9 | observed-docker-cluster |
-| Apache Ignite 3 (Colocated) | 6 | 2575.1 | 1517.1 | 1232.3 | 294.0 | 113.7 | observed-docker-cluster |
-| Citus 13 (Dist Function) | 6 | 2644.6 | 1234.1 | 912.2 | 199.1 | 76.6 | observed-docker-cluster |
-| PG 17 Patroni + PL/pgSQL | 6 | 2631.8 | 1492.5 | 1295.3 | 286.7 | 112.8 | observed-docker-cluster |
-| YugabyteDB 2024.2 (Stored Proc) | 6 | 1777.6 | 1282.1 | 925.5 | 197.0 | 76.7 | observed-docker-cluster |
-| TiDB + TiKV | 12 | 2309.0 | 416.6 | 279.6 | 52.4 | 19.5 | observed-docker-cluster |
+| Lagrange | 2 | 56.0 | 36.8 | 24.6 | 20.9 | 20.0 | observed-docker-cluster |
+| Apache Ignite 3 (Colocated) | 6 | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | not-measured |
+| Citus 13 (Dist Function) | 6 | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | not-measured |
+| PG 17 Patroni + PL/pgSQL | 6 | 1118.9 | 576.6 | 828.0 | 359.1 | 141.7 | observed-docker-cluster |
+| YugabyteDB 2024.2 (Stored Proc) | 6 | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | not-measured |
+| TiDB + TiKV | 12 | 816.3 | 460.2 | 268.4 | 58.2 | 20.5 | observed-docker-cluster |
 
 ## Working-set growth (moderate 64-event vs heavy-correlation 2048-event histories)
 
@@ -25,9 +25,9 @@ Increasing historical state from a moderate 64-event history to a heavy-correlat
 
 | Target | Moderate (dec/s) | Moderate p99 (ms) | Moderate WAN | Heavy (dec/s) | Heavy p99 (ms) | Heavy WAN | Drop % | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | 2345.2 | 29.4 | 3216 | 1638.0 | 23.7 | 4008 | -30.2% | observed-docker-cluster |
-| Apache Ignite 3 (Colocated) | 1041.3 | 91.7 | 5310 | 1619.6 | 25.5 | 8364 | 55.5% | observed-docker-cluster |
-| Citus 13 (Dist Function) | 2141.1 | 28.8 | 6374 | 1865.7 | 22.0 | 10086 | -12.9% | observed-docker-cluster |
-| PG 17 Patroni + PL/pgSQL | 2181.6 | 32.4 | 4824 | 1600.2 | 22.8 | 7376 | -26.7% | observed-docker-cluster |
-| YugabyteDB 2024.2 (Stored Proc) | 1448.8 | 38.9 | 11455 | 1289.4 | 25.4 | 18837 | -11.0% | observed-docker-cluster |
-| TiDB + TiKV | 702.9 | 37.7 | 39152 | 639.8 | 42.9 | 67594 | -9.0% | observed-docker-cluster |
+| Lagrange | 74.1 | 971.6 | 69878 | 50.3 | 1253.4 | 115240 | -32.1% | observed-docker-cluster |
+| Apache Ignite 3 (Colocated) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | not-measured |
+| Citus 13 (Dist Function) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | not-measured |
+| PG 17 Patroni + PL/pgSQL | 1139.7 | 104.1 | 1110 | 961.1 | 80.8 | 1476 | -15.7% | observed-docker-cluster |
+| YugabyteDB 2024.2 (Stored Proc) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | not-measured |
+| TiDB + TiKV | 611.7 | 65.3 | 13135 | 541.4 | 80.2 | 16688 | -11.5% | observed-docker-cluster |

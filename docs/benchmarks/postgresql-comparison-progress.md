@@ -27,31 +27,31 @@ Comparative evaluation of three distinct control-flow models across Scenario B g
 
 | Target | Version | Units | Processes | RPO=0 HA | Evidence Tier | Throughput (tx/s) | p50 (ms) | p95 (ms) | p99 (ms) | Proofs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | 0.4.0 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 2014.00 | 11.06 | 23.26 | 25.30 | 33/33 |
-| tidb-tikv | v8.5.8 | 5 | 5 | Yes (RPO=0) | observed-docker-cluster | 1118.70 | 19.40 | 48.81 | 52.76 | 33/33 |
-| pg-single-primary | 17.2 | 2 | 2 | No (data-loss window) | observed-docker-cluster | 1673.50 | 16.41 | 28.38 | 30.15 | 33/33 |
-| pg-patroni-sync-ha-rf3 | 17.2-patroni-4.0 | 4 | 4 | Yes (RPO=0) | observed-docker-cluster | 559.30 | 28.97 | 78.26 | 131.61 | 33/33 |
-| pg-plpgsql-single-primary | 17.2-plpgsql | 1 | 1 | No (data-loss window) | observed-docker-cluster | 2606.10 | 12.22 | 22.74 | 33.08 | 33/33 |
-| pg-plpgsql-sync-ha-rf3 | 17.2-patroni-4.0-plpgsql | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 1506.20 | 14.46 | 22.14 | 23.55 | 33/33 |
+| lagrange | 0.4.0 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 5.30 | 5001.05 | 5002.26 | 5002.79 | 33/33 |
+| tidb-tikv | v8.5.8 | 5 | 5 | Yes (RPO=0) | observed-docker-cluster | 783.00 | 22.40 | 84.47 | 95.89 | 33/33 |
+| pg-single-primary | 17.2 | 2 | 2 | No (data-loss window) | observed-docker-cluster | 956.40 | 16.17 | 140.23 | 155.64 | 33/33 |
+| pg-patroni-sync-ha-rf3 | 17.2-patroni-4.0 | 4 | 4 | Yes (RPO=0) | observed-docker-cluster | 976.10 | 11.57 | 87.83 | 96.95 | 33/33 |
+| pg-plpgsql-single-primary | 17.2-plpgsql | 1 | 1 | No (data-loss window) | observed-docker-cluster | 1020.80 | 10.69 | 157.65 | 170.34 | 33/33 |
+| pg-plpgsql-sync-ha-rf3 | 17.2-patroni-4.0-plpgsql | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 555.90 | 5.92 | 221.97 | 223.26 | 33/33 |
 
 ## Scenario B risk decision and graph-shape comparison ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
 | Target | Evidence Tier | Decisions/s | p50 (ms) | p95 (ms) | p99 (ms) | WAN Bytes/Dec | SQL Round-Trips | Movement Continuity |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | observed-docker-cluster | 2172.30 | 9.88 | 23.42 | 26.78 | 2950 | 1.00 | Passed |
-| tidb-tikv | observed-docker-cluster | 702.90 | 23.85 | 33.45 | 37.66 | 39152 | 3.00 | Passed |
-| pg-single-primary | observed-docker-cluster | 415.50 | 41.63 | 52.91 | 57.61 | 25684 | 3.00 | Not supported |
-| pg-patroni-sync-ha-rf3 | observed-docker-cluster | 256.40 | 64.17 | 100.95 | 107.84 | 27520 | 3.00 | Passed |
-| pg-plpgsql-single-primary | observed-docker-cluster | 2724.30 | 9.67 | 13.26 | 13.36 | 1218 | 1.00 | Not supported |
-| pg-plpgsql-sync-ha-rf3 | observed-docker-cluster | 2181.60 | 9.13 | 24.02 | 32.38 | 4824 | 1.00 | Passed |
+| lagrange | observed-docker-cluster | 51.20 | 114.69 | 1227.43 | 1229.02 | 60207 | 1.00 | Passed |
+| tidb-tikv | observed-docker-cluster | 611.70 | 21.29 | 63.90 | 65.31 | 13135 | 3.00 | Passed |
+| pg-single-primary | observed-docker-cluster | 1017.90 | 10.13 | 67.31 | 76.66 | 4963 | 3.00 | Not supported |
+| pg-patroni-sync-ha-rf3 | observed-docker-cluster | 1003.80 | 10.27 | 76.76 | 80.10 | 5959 | 3.00 | Passed |
+| pg-plpgsql-single-primary | observed-docker-cluster | 1135.80 | 4.12 | 97.17 | 103.55 | 929 | 1.00 | Not supported |
+| pg-plpgsql-sync-ha-rf3 | observed-docker-cluster | 1139.70 | 4.14 | 100.84 | 104.07 | 1110 | 1.00 | Passed |
 
 ## Scenario B four-shape latency and throughput ladder
 
 | Target | Local-Only | One Remote Stage | Sequential | Fan-Out |
 | --- | --- | --- | --- | --- |
-| lagrange | 2662.9 dec/s, p99 26.8ms, 0B, 0RT | 2172.3 dec/s, p99 26.8ms, 2950B, 1RT | 1715.1 dec/s, p99 33.8ms, 4532B, 2RT | 1778.4 dec/s, p99 24.0ms, 4537B, 1RT |
-| tidb-tikv | 2309.0 dec/s, p99 23.7ms, 7181B, 1RT | 702.9 dec/s, p99 37.7ms, 39152B, 2RT | 521.2 dec/s, p99 44.4ms, 74804B, 4RT | 514.8 dec/s, p99 44.8ms, 75097B, 4RT |
-| pg-single-primary | 1779.8 dec/s, p99 27.8ms, 4531B, 1RT | 415.5 dec/s, p99 57.6ms, 25684B, 2RT | 288.9 dec/s, p99 73.8ms, 45643B, 4RT | 390.7 dec/s, p99 57.4ms, 41343B, 4RT |
-| pg-patroni-sync-ha-rf3 | 1028.6 dec/s, p99 76.4ms, 6939B, 1RT | 256.4 dec/s, p99 107.8ms, 27520B, 2RT | 370.2 dec/s, p99 64.3ms, 42459B, 4RT | 536.0 dec/s, p99 47.2ms, 40102B, 4RT |
-| pg-plpgsql-single-primary | 2497.7 dec/s, p99 19.3ms, 1218B, 1RT | 2724.3 dec/s, p99 13.4ms, 1218B, 1RT | 2549.7 dec/s, p99 21.4ms, 1218B, 1RT | 2744.2 dec/s, p99 20.7ms, 1245B, 1RT |
-| pg-plpgsql-sync-ha-rf3 | 2631.8 dec/s, p99 19.8ms, 1761B, 1RT | 2181.6 dec/s, p99 32.4ms, 4824B, 1RT | 1463.2 dec/s, p99 34.0ms, 7274B, 1RT | 1556.8 dec/s, p99 31.4ms, 7407B, 1RT |
+| lagrange | 44.7 dec/s, p99 1192.2ms, 0B, 0RT | 51.2 dec/s, p99 1229.0ms, 60207B, 1RT | 43.6 dec/s, p99 1498.7ms, 73460B, 2RT | 41.9 dec/s, p99 1525.5ms, 64210B, 1RT |
+| tidb-tikv | 816.3 dec/s, p99 74.5ms, 8090B, 1RT | 611.7 dec/s, p99 65.3ms, 13135B, 2RT | 606.2 dec/s, p99 70.8ms, 13877B, 4RT | 698.5 dec/s, p99 59.7ms, 13445B, 4RT |
+| pg-single-primary | 1058.7 dec/s, p99 111.1ms, 3829B, 1RT | 1017.9 dec/s, p99 76.7ms, 4963B, 2RT | 938.2 dec/s, p99 81.1ms, 6233B, 4RT | 928.1 dec/s, p99 80.4ms, 5599B, 4RT |
+| pg-patroni-sync-ha-rf3 | 1107.9 dec/s, p99 106.6ms, 4014B, 1RT | 1003.8 dec/s, p99 80.1ms, 5959B, 2RT | 829.3 dec/s, p99 79.6ms, 7223B, 4RT | 911.0 dec/s, p99 79.7ms, 6492B, 4RT |
+| pg-plpgsql-single-primary | 1121.5 dec/s, p99 104.5ms, 950B, 1RT | 1135.8 dec/s, p99 103.5ms, 929B, 1RT | 1167.1 dec/s, p99 101.4ms, 928B, 1RT | 1123.9 dec/s, p99 102.5ms, 925B, 1RT |
+| pg-plpgsql-sync-ha-rf3 | 1118.9 dec/s, p99 105.1ms, 1156B, 1RT | 1139.7 dec/s, p99 104.1ms, 1110B, 1RT | 1161.0 dec/s, p99 100.1ms, 1113B, 1RT | 1188.2 dec/s, p99 98.5ms, 1135B, 1RT |

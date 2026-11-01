@@ -24,28 +24,24 @@
   <text x="35" y="190" fill="#94a3b8" font-size="9">Fast-Path: single-round Raft commit avoids 2PC</text>
   <text x="365" y="125" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Single Primary + App</text>
   <rect x="590" y="117" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="117" width="57" height="10" fill="#64748b"/><rect x="647" y="117" width="1" height="10" fill="#94a3b8"/><rect x="648" y="117" width="1" height="10" fill="#f59e0b"/><rect x="649" y="117" width="29" height="10" fill="#0284c7"/><rect x="678" y="117" width="1" height="10" fill="#10b981"/>
-  <text x="840" y="125" fill="#e2e8f0" font-size="9" font-family="monospace">28.4 ms</text>
-  <text x="365" y="152" fill="#cbd5e1" font-size="9" font-family="monospace">Citus 13 Sharded RF=3 + App</text>
+  <rect x="590" y="117" width="6" height="10" fill="#64748b"/><rect x="596" y="117" width="1" height="10" fill="#94a3b8"/><rect x="597" y="117" width="1" height="10" fill="#f59e0b"/><rect x="598" y="117" width="1" height="10" fill="#0284c7"/><rect x="599" y="117" width="1" height="10" fill="#10b981"/>
+  <text x="840" y="125" fill="#e2e8f0" font-size="9" font-family="monospace">140.2 ms</text>
+  <text x="365" y="152" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Patroni Sync HA RF=3</text>
   <rect x="590" y="144" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="144" width="31" height="10" fill="#64748b"/><rect x="621" y="144" width="1" height="10" fill="#94a3b8"/><rect x="622" y="144" width="1" height="10" fill="#f59e0b"/><rect x="623" y="144" width="18" height="10" fill="#ec4899"/><rect x="641" y="144" width="24" height="10" fill="#0284c7"/><rect x="665" y="144" width="1" height="10" fill="#10b981"/>
-  <text x="840" y="152" fill="#e2e8f0" font-size="9" font-family="monospace">24.1 ms</text>
-  <text x="365" y="179" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Patroni Sync HA RF=3</text>
+  <rect x="590" y="144" width="3" height="10" fill="#64748b"/><rect x="593" y="144" width="1" height="10" fill="#94a3b8"/><rect x="594" y="144" width="1" height="10" fill="#f59e0b"/><rect x="595" y="144" width="1" height="10" fill="#0284c7"/><rect x="596" y="144" width="1" height="10" fill="#10b981"/>
+  <text x="840" y="152" fill="#e2e8f0" font-size="9" font-family="monospace">87.8 ms</text>
+  <text x="365" y="179" fill="#cbd5e1" font-size="9" font-family="monospace">TiDB + TiKV RF=3 (5-Host)</text>
   <rect x="590" y="171" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="171" width="157" height="10" fill="#64748b"/><rect x="747" y="171" width="1" height="10" fill="#94a3b8"/><rect x="748" y="171" width="1" height="10" fill="#f59e0b"/><rect x="749" y="171" width="82" height="10" fill="#0284c7"/><rect x="831" y="171" width="1" height="10" fill="#10b981"/>
-  <text x="840" y="179" fill="#e2e8f0" font-size="9" font-family="monospace">78.3 ms</text>
-  <text x="365" y="206" fill="#cbd5e1" font-size="9" font-family="monospace">TiDB + TiKV RF=3 (5-Host)</text>
+  <rect x="590" y="171" width="3" height="10" fill="#64748b"/><rect x="593" y="171" width="1" height="10" fill="#94a3b8"/><rect x="594" y="171" width="1" height="10" fill="#f59e0b"/><rect x="595" y="171" width="1" height="10" fill="#ec4899"/><rect x="596" y="171" width="1" height="10" fill="#0284c7"/><rect x="597" y="171" width="1" height="10" fill="#10b981"/>
+  <text x="840" y="179" fill="#e2e8f0" font-size="9" font-family="monospace">84.5 ms</text>
+  <text x="365" y="206" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
   <rect x="590" y="198" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="198" width="90" height="10" fill="#64748b"/><rect x="680" y="198" width="1" height="10" fill="#94a3b8"/><rect x="681" y="198" width="1" height="10" fill="#f59e0b"/><rect x="682" y="198" width="31" height="10" fill="#ec4899"/><rect x="713" y="198" width="27" height="10" fill="#0284c7"/><rect x="740" y="198" width="1" height="10" fill="#10b981"/>
-  <text x="840" y="206" fill="#e2e8f0" font-size="9" font-family="monospace">48.8 ms</text>
-  <text x="365" y="233" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3)</text>
+  <rect x="590" y="198" width="1" height="10" fill="#64748b"/><rect x="591" y="198" width="1" height="10" fill="#94a3b8"/><rect x="592" y="198" width="1" height="10" fill="#f59e0b"/><rect x="593" y="198" width="240" height="10" fill="#0284c7"/><rect x="833" y="198" width="1" height="10" fill="#10b981"/>
+  <text x="840" y="206" fill="#e2e8f0" font-size="9" font-family="monospace">5002.3 ms</text>
+  <text x="365" y="233" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
   <rect x="590" y="225" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="225" width="70" height="10" fill="#64748b"/><rect x="660" y="225" width="1" height="10" fill="#94a3b8"/><rect x="661" y="225" width="1" height="10" fill="#f59e0b"/><rect x="662" y="225" width="23" height="10" fill="#0284c7"/><rect x="685" y="225" width="1" height="10" fill="#10b981"/>
-  <text x="840" y="233" fill="#e2e8f0" font-size="9" font-family="monospace">30.9 ms</text>
-  <text x="365" y="260" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3)</text>
-  <rect x="590" y="252" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="252" width="52" height="10" fill="#64748b"/><rect x="642" y="252" width="1" height="10" fill="#94a3b8"/><rect x="643" y="252" width="1" height="10" fill="#f59e0b"/><rect x="644" y="252" width="18" height="10" fill="#0284c7"/><rect x="662" y="252" width="1" height="10" fill="#10b981"/>
-  <text x="840" y="260" fill="#e2e8f0" font-size="9" font-family="monospace">23.3 ms</text>
+  <rect x="590" y="225" width="1" height="10" fill="#64748b"/><rect x="591" y="225" width="1" height="10" fill="#94a3b8"/><rect x="592" y="225" width="1" height="10" fill="#f59e0b"/><rect x="593" y="225" width="240" height="10" fill="#0284c7"/><rect x="833" y="225" width="1" height="10" fill="#10b981"/>
+  <text x="840" y="233" fill="#e2e8f0" font-size="9" font-family="monospace">5002.3 ms</text>
   <rect x="20" y="294" width="920" height="222" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="35" y="318" fill="#38bdf8" font-size="13" font-weight="bold">Scenario B: Distributed Risk Decision &amp; Partition Movement (p99 Latency)</text></a>
   <text x="500" y="318" fill="#94a3b8" font-size="9">Legend: ingress (slate) | reducer (green) | WAN (amber) | decode (pink)</text>
@@ -65,28 +61,16 @@
   <text x="35" y="424" fill="#94a3b8" font-size="9">Movement: zero-stall epoch-forwarded handoff</text>
   <text x="365" y="359" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (Colocated WASI ctx.call)</text>
   <rect x="590" y="351" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="351" width="1" height="10" fill="#64748b"/><rect x="591" y="351" width="1" height="10" fill="#10b981"/><rect x="592" y="351" width="76" height="10" fill="#f59e0b"/><rect x="668" y="351" width="1" height="10" fill="#ec4899"/>
-  <text x="840" y="359" fill="#e2e8f0" font-size="9" font-family="monospace">29.4 ms (+0.1ms mv)</text>
-  <text x="365" y="386" fill="#cbd5e1" font-size="9" font-family="monospace">Apache Ignite 3 (JobTarget.colocated)</text>
+  <rect x="590" y="351" width="1" height="10" fill="#64748b"/><rect x="591" y="351" width="31" height="10" fill="#10b981"/><rect x="622" y="351" width="202" height="10" fill="#f59e0b"/><rect x="824" y="351" width="7" height="10" fill="#ec4899"/>
+  <text x="840" y="359" fill="#e2e8f0" font-size="9" font-family="monospace">971.6 ms (+574.0ms mv)</text>
+  <text x="365" y="386" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Patroni + PL/pgSQL Function</text>
   <rect x="590" y="378" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="378" width="1" height="10" fill="#64748b"/><rect x="591" y="378" width="1" height="10" fill="#10b981"/><rect x="592" y="378" width="239" height="10" fill="#f59e0b"/><rect x="831" y="378" width="1" height="10" fill="#ec4899"/>
-  <text x="840" y="386" fill="#e2e8f0" font-size="9" font-family="monospace">91.7 ms (+0.1ms mv)</text>
-  <text x="365" y="413" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Patroni + PL/pgSQL Function</text>
+  <rect x="590" y="378" width="1" height="10" fill="#64748b"/><rect x="591" y="378" width="1" height="10" fill="#10b981"/><rect x="592" y="378" width="25" height="10" fill="#f59e0b"/><rect x="617" y="378" width="1" height="10" fill="#ec4899"/>
+  <text x="840" y="386" fill="#e2e8f0" font-size="9" font-family="monospace">104.1 ms (+0.1ms mv)</text>
+  <text x="365" y="413" fill="#cbd5e1" font-size="9" font-family="monospace">TiDB + TiKV (App-Orchestrated SQL)</text>
   <rect x="590" y="405" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="405" width="1" height="10" fill="#64748b"/><rect x="591" y="405" width="1" height="10" fill="#10b981"/><rect x="592" y="405" width="84" height="10" fill="#f59e0b"/><rect x="676" y="405" width="1" height="10" fill="#ec4899"/>
-  <text x="840" y="413" fill="#e2e8f0" font-size="9" font-family="monospace">32.4 ms (+0.1ms mv)</text>
-  <text x="365" y="440" fill="#cbd5e1" font-size="9" font-family="monospace">Citus 13 (Colocated Dist Function)</text>
-  <rect x="590" y="432" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="432" width="1" height="10" fill="#64748b"/><rect x="591" y="432" width="1" height="10" fill="#10b981"/><rect x="592" y="432" width="75" height="10" fill="#f59e0b"/><rect x="667" y="432" width="1" height="10" fill="#ec4899"/>
-  <text x="840" y="440" fill="#e2e8f0" font-size="9" font-family="monospace">28.8 ms (+0.1ms mv)</text>
-  <text x="365" y="467" fill="#cbd5e1" font-size="9" font-family="monospace">YugabyteDB 2024.2 (YSQL Stored Proc)</text>
-  <rect x="590" y="459" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="459" width="1" height="10" fill="#64748b"/><rect x="591" y="459" width="1" height="10" fill="#10b981"/><rect x="592" y="459" width="101" height="10" fill="#f59e0b"/><rect x="693" y="459" width="1" height="10" fill="#ec4899"/>
-  <text x="840" y="467" fill="#e2e8f0" font-size="9" font-family="monospace">38.9 ms (+0.1ms mv)</text>
-  <text x="365" y="494" fill="#cbd5e1" font-size="9" font-family="monospace">TiDB + TiKV (App-Orchestrated SQL)</text>
-  <rect x="590" y="486" width="240" height="10" fill="#334155" rx="2"/>
-  <rect x="590" y="486" width="1" height="10" fill="#64748b"/><rect x="591" y="486" width="1" height="10" fill="#10b981"/><rect x="592" y="486" width="98" height="10" fill="#f59e0b"/><rect x="690" y="486" width="1" height="10" fill="#ec4899"/>
-  <text x="840" y="494" fill="#e2e8f0" font-size="9" font-family="monospace">37.7 ms (+5.3ms mv)</text>
+  <rect x="590" y="405" width="1" height="10" fill="#64748b"/><rect x="591" y="405" width="2" height="10" fill="#10b981"/><rect x="593" y="405" width="13" height="10" fill="#f59e0b"/><rect x="606" y="405" width="1" height="10" fill="#ec4899"/>
+  <text x="840" y="413" fill="#e2e8f0" font-size="9" font-family="monospace">65.3 ms (+9.7ms mv)</text>
   <rect x="20" y="528" width="920" height="238" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="35" y="552" fill="#38bdf8" font-size="13" font-weight="bold">Scenario C: Streaming Feature Risk Decision &amp; Freshness Tradeoff</text></a>
   <text x="540" y="552" fill="#94a3b8" font-size="9">Bar: fresh 0ms decisions/s | label: backfill downtime</text>
@@ -105,18 +89,12 @@
   <text x="35" y="642" fill="#cbd5e1" font-size="9">In-Partition: O(1) local rollup accumulator read</text>
   <text x="35" y="658" fill="#94a3b8" font-size="9">Rule Change: 0.0s backfill downtime vs cache rebuild</text>
   <text x="365" y="593" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (5-Node RF=3 Rollup)</text>
-  <rect x="590" y="585" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="585" width="240" height="10" fill="#38bdf8" rx="2"/>
-  <text x="840" y="593" fill="#e2e8f0" font-size="9" font-family="monospace">2559.5 d/s [0s backfill]</text>
+  <rect x="590" y="585" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="585" width="11" height="10" fill="#10b981" rx="2"/>
+  <text x="840" y="593" fill="#e2e8f0" font-size="9" font-family="monospace">54.9 d/s [0s backfill]</text>
   <text x="365" y="625" fill="#cbd5e1" font-size="9" font-family="monospace">Lagrange 0.4.0 (3-Node RF=3 Rollup)</text>
-  <rect x="590" y="617" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="617" width="240" height="10" fill="#38bdf8" rx="2"/>
-  <text x="840" y="625" fill="#e2e8f0" font-size="9" font-family="monospace">2559.6 d/s [0s backfill]</text>
+  <rect x="590" y="617" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="617" width="7" height="10" fill="#10b981" rx="2"/>
+  <text x="840" y="625" fill="#e2e8f0" font-size="9" font-family="monospace">35.3 d/s [0s backfill]</text>
   <text x="365" y="657" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 Patroni + PL/pgSQL (On-Read Scan)</text>
-  <rect x="590" y="649" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="649" width="206" height="10" fill="#38bdf8" rx="2"/>
-  <text x="840" y="657" fill="#e2e8f0" font-size="9" font-family="monospace">2195.1 d/s [0s backfill]</text>
-  <text x="365" y="689" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 + Valkey 8 (Sync Write-Through)</text>
-  <rect x="590" y="681" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="681" width="218" height="10" fill="#38bdf8" rx="2"/>
-  <text x="840" y="689" fill="#e2e8f0" font-size="9" font-family="monospace">2329.8 d/s [185s backfill]</text>
-  <text x="365" y="721" fill="#cbd5e1" font-size="9" font-family="monospace">PG 17 + Valkey 8 (Async CDC Stream)</text>
-  <rect x="590" y="713" width="240" height="10" fill="#334155" rx="2"/>
-  <text x="840" y="721" fill="#e2e8f0" font-size="9" font-family="monospace">0.0 d/s [240s backfill]</text>
+  <rect x="590" y="649" width="240" height="10" fill="#334155" rx="2"/><rect x="590" y="649" width="240" height="10" fill="#38bdf8" rx="2"/>
+  <text x="840" y="657" fill="#e2e8f0" font-size="9" font-family="monospace">1176.1 d/s [0s backfill]</text>
 </svg>

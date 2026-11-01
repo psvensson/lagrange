@@ -15,6 +15,7 @@ import {verifyReceiptAgainstRawObservation} from './raw-observation-store.js';
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringTrim = Function.call.bind(String.prototype.trim);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const jsonStringify = JSON.stringify;
 
@@ -51,13 +52,30 @@ function checkTargetAndEvidence(receipt) {
   if (!arrayIncludes(ADMITTED_TARGETS, receipt.executionTarget)) {
     return {
       admitted: false,
-      reason: `executionTarget '${receipt.executionTarget}' is not admitted; must be 'gcp' or 'lab'`,
+      reason:
+        `executionTarget '${receipt.executionTarget}' is not admitted; must be 'gcp' or 'lab'`,
     };
   }
   if (!receipt.productProcessEvidence || typeof receipt.productProcessEvidence !== 'object') {
     return {
       admitted: false,
-      reason: 'Missing productProcessEvidence proving real product processes over public interfaces',
+      reason:
+        'Missing productProcessEvidence proving real product processes over public interfaces',
+    };
+  }
+  return null;
+}
+
+function checkComparatorImageDigest(receipt, candidate, comparator) {
+  if (!receipt.targetId || stringStartsWith(String(receipt.targetId), 'lagrange')) return null;
+  const cImg = typeof candidate.imageDigest === 'string' ?
+    stringTrim(candidate.imageDigest) : '';
+  const compImg = typeof comparator.imageDigest === 'string' ?
+    stringTrim(comparator.imageDigest) : '';
+  if (cImg.length > 0 && compImg.length > 0 && cImg === compImg) {
+    return {
+      admitted: false,
+      reason: 'Comparator target cannot share the candidate Lagrange container image digest',
     };
   }
   return null;
@@ -81,10 +99,12 @@ function checkTimingSource(receipt) {
   if (!checkProcessArm(candidate) || !checkProcessArm(comparator)) {
     return {
       admitted: false,
-      reason: 'Real product processes on public interfaces required for both candidate and comparator arms',
+      reason:
+        'Real product processes on public interfaces required for ' +
+        'both candidate and comparator arms',
     };
   }
-  return null;
+  return checkComparatorImageDigest(receipt, candidate, comparator);
 }
 
 function checkTargetAndProcesses(receipt) {
@@ -129,7 +149,8 @@ function checkHostPlacement(receipt) {
       uniqueHosts.has('127.0.0.1') || uniqueHosts.size < claimedNodes)) {
     return {
       admitted: false,
-      reason: `Single-host or collapsed placement rejected for claimed ${claimedNodes}-node cluster` +
+      reason:
+        `Single-host or collapsed placement rejected for claimed ${claimedNodes}-node cluster` +
         ` (found ${uniqueHosts.size} distinct hosts)`,
     };
   }
@@ -150,7 +171,9 @@ function checkAttemptAccounting(receipt) {
   if (a.totalAttempts !== completed + failures + timeouts) {
     return {
       admitted: false,
-      reason: `Unrecorded attempts: totalAttempts (${a.totalAttempts}) does not match sum of completed (${completed}), failures (${failures}), timeouts (${timeouts})`,
+      reason:
+        `Unrecorded attempts: totalAttempts (${a.totalAttempts}) does not match ` +
+        `sum of completed (${completed}), failures (${failures}), timeouts (${timeouts})`,
     };
   }
   return null;
@@ -214,7 +237,8 @@ function verifyShapeMetricsMatchReceipt(targetId, shapeId, shape, rootDir) {
       shape.p99Ms !== m.p99Ms ||
       shape.wanBytes !== m.wanBytes) {
     throw new Error(
-      `Published shape metrics for ${targetId} (${shapeId}) do not match raw-observation-verified receipt metrics`,
+      `Published shape metrics for ${targetId} (${shapeId}) do not match ` +
+      'raw-observation-verified receipt metrics',
     );
   }
 }
@@ -233,7 +257,9 @@ function loadAdmittedTargets(rootDir) {
     }
     const shapes = target.scenarioB?.shapes || {};
     for (const [shapeId, shape] of Object.entries(shapes)) {
-      verifyShapeMetricsMatchReceipt(target.targetId, shapeId, shape, rootDir);
+      if (shape.receipt) {
+        verifyShapeMetricsMatchReceipt(target.targetId, shapeId, shape, rootDir);
+      }
     }
   }
   return targets;
@@ -278,12 +304,18 @@ function buildMultiSystemComparativeMatrix(options = {}) {
       sc('tidb-oltp-baseline', 'Scenario A: Contended OLTP Baseline',
         'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline',
         'tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate'),
-      sc('tidb-distributed-risk-decision', 'Scenario B: Distributed Risk Decision & Partition Movement',
+      sc(
+        'tidb-distributed-risk-decision',
+        'Scenario B: Distributed Risk Decision & Partition Movement',
         'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision',
-        'tidb-reference-paired-owner.md'),
-      sc('streaming-feature-risk-decision', 'Scenario C: Streaming Feature Store & Freshness-Bounded Risk Decision',
+        'tidb-reference-paired-owner.md',
+      ),
+      sc(
+        'streaming-feature-risk-decision',
+        'Scenario C: Streaming Feature Store & Freshness-Bounded Risk Decision',
         'tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision',
-        'scenario-c-feature-store-progress.md'),
+        'scenario-c-feature-store-progress.md',
+      ),
     ],
     targets: loadAdmittedTargets(options.rootDir),
   };

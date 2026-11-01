@@ -28,12 +28,51 @@ const MILESTONE_LABELS = Object.freeze({
 });
 
 const COMMIT_DELTAS = Object.freeze([
-  ['v0.4.0-3node-rf3-multi-host', '0.4.0', '3-node RF=3 cluster across 3 dedicated physical machines (`adam-laptop`, `adams-gamla`, `lenovo-laptop`) with external client on `tv-dator` over 192.168.86.0/24 LAN wire.'],
-  ['v0.4.0-4node-rf3-multi-host', '0.4.0', '4-node RF=3 scale-out across 4 dedicated physical machines (`adam-laptop`, `adams-gamla`, `lenovo-laptop`, `tv-dator`) with external client on `controller` over LAN wire.'],
-  ['v0.4.0-5node-rf3-multi-host', '0.4.0', '5-node RF=3 scale-out (60% per-node replica coverage) across 5 dedicated bare-metal Linux machines with external client on `carinas-windows` over LAN wire.'],
-  ['v0.4.0-5node-rf3-p30-sweet-spot', '0.4.0', '5-node RF=3 partition granularity sweep (P=6, 15, 30, 60) measured over physical LAN wire across 5 dedicated hosts.'],
-  ['v0.4.0-5node-rf3-live-movement', '0.4.0', '5-node RF=3 live partition movement under steady load measured over physical LAN wire across 5 dedicated hosts.'],
-  ['v0.4.0-5node-rf3-scenario-c-5x', '0.4.0', '5-node RF=3 Scenario C streaming feature evaluation under 0ms/100ms/1000ms SLAs and 5x joint load over physical LAN wire.'],
+  [
+    'v0.4.0-3node-rf3-multi-host',
+    '0.4.0',
+    '3-node RF=3 cluster across 3 dedicated GCP e2-standard-4 VMs ' +
+      '(`lagrange-bench-1`..`lagrange-bench-3`) with external client on ' +
+      '`lagrange-bench-6` over GCP VPC internal wire.',
+  ],
+  [
+    'v0.4.0-4node-rf3-multi-host',
+    '0.4.0',
+    '4-node RF=3 scale-out across 4 dedicated GCP e2-standard-4 VMs ' +
+      '(`lagrange-bench-1`..`lagrange-bench-4`) with external client on ' +
+      '`lagrange-bench-6` over GCP VPC internal wire.',
+  ],
+  [
+    'v0.4.0-5node-rf3-multi-host',
+    '0.4.0',
+    '5-node RF=3 scale-out (60% replica coverage) across 5 dedicated GCP ' +
+      'e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with ' +
+      'external client on `lagrange-bench-6` over GCP VPC internal wire.',
+  ],
+  [
+    'v0.4.0-5node-rf3-p30-sweet-spot',
+    '0.4.0',
+    '5-node RF=3 partition granularity sweep (P=6, 15, 30, 60) measured ' +
+      'across 5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..' +
+      '`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC ' +
+      'internal wire.',
+  ],
+  [
+    'v0.4.0-5node-rf3-live-movement',
+    '0.4.0',
+    '5-node RF=3 live partition movement under steady load measured across ' +
+      '5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..' +
+      '`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC ' +
+      'internal wire.',
+  ],
+  [
+    'v0.4.0-5node-rf3-scenario-c-5x',
+    '0.4.0',
+    '5-node RF=3 Scenario C streaming feature evaluation under ' +
+      '0ms/100ms/1000ms SLAs and 5x joint load across 5 GCP e2-standard-4 ' +
+      'VMs (`lagrange-bench-1`..`lagrange-bench-5`) with client on ' +
+      '`lagrange-bench-6` over GCP VPC internal wire.',
+  ],
 ]);
 
 function getMilestoneLabels(m) {

@@ -57,6 +57,25 @@ import {
   buildCampaignTargetSpecs,
   regenerateAllBenchmarkArtifactsFromAdmitted,
 } from '../../test/distributed/harness/raw-observation-campaign-specs.js';
+import {
+  LAGRANGE_33_SEMANTIC_PROOFS,
+  LAGRANGE_IMAGE_DEFAULT,
+  PD_IMAGE_DEFAULT,
+  POSTGRES_IMAGE_DEFAULT,
+  TIDB_IMAGE_DEFAULT,
+  TIKV_IMAGE_DEFAULT,
+  applyTcNetemDelay,
+  cleanClusterContainers,
+  deployLagrangeCluster,
+  deployPostgresCluster,
+  deployTiDbCluster,
+  ensureBenchDepsOnHost,
+  measureRealBackfillAndRecovery,
+  removeTcNetemDelay,
+} from '../../test/distributed/harness/real-product-cluster-deployers.js';
+import {
+  buildWorkloadDriverScript,
+} from '../../test/distributed/harness/real-product-workload-drivers.js';
 import {runDistributedScaleoutProvenanceGuard} from './distributed-scaleout-provenance-guard.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -472,9 +491,19 @@ function verifyHarnessRendererParity(rootDir, matrix) {
     writeMultiSystemComparativeMatrix, writePostgresqlComparisonStaticWebArtifacts,
     writeCitusComparisonStaticWebArtifacts, writeYugabyteIgniteComparisonStaticWebArtifacts,
     writeScenarioCComparisonStaticWebArtifacts, writeComparativeLandingArtifacts,
+    applyTcNetemDelay, cleanClusterContainers, deployLagrangeCluster,
+    deployPostgresCluster, deployTiDbCluster, ensureBenchDepsOnHost,
+    measureRealBackfillAndRecovery, removeTcNetemDelay, buildWorkloadDriverScript,
   ]) {
     assert.equal(typeof fn, TYPE_FUNCTION);
   }
+  assert.equal(
+    Array.isArray(LAGRANGE_33_SEMANTIC_PROOFS) && Boolean(
+      LAGRANGE_IMAGE_DEFAULT && PD_IMAGE_DEFAULT &&
+      POSTGRES_IMAGE_DEFAULT && TIDB_IMAGE_DEFAULT && TIKV_IMAGE_DEFAULT,
+    ),
+    true,
+  );
 
   const testMatrix = matrix || defaultMatrix;
   for (const [renderer, relPath] of [

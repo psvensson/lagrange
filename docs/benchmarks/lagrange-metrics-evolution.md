@@ -12,21 +12,21 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 
 | Milestone | Version | Commit | Date | Evidence Tier | Execution Mode | Scenario A (tx/s) | p95 (ms) | Proofs | Scenario B (dec/s) | Scenario C (dec/s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| v0.4.0-3node-rf3-multi-host | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2014.00 | 23.3 | 33/33 | 2172.3 | 2559.6 |
-| v0.4.0-4node-rf3-multi-host | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2018.20 | 25.6 | 33/33 | 2067.3 | 2703.7 |
-| v0.4.0-5node-rf3-60pct-coverage | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2199.40 | 30.9 | 33/33 | 2345.2 | 2559.5 |
-| v0.4.0-5node-rf3-p30-sweet-spot | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2199.40 | 30.9 | 33/33 | 2044.7 | 2559.5 |
-| v0.4.0-5node-rf3-live-movement | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2199.40 | 30.9 | 33/33 | 2184.5 | 2559.5 |
-| v0.4.0-5node-rf3-scenario-c-5x | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2199.40 | 30.9 | 33/33 | 2345.2 | 2018.6 |
+| v0.4.0-3node-rf3-multi-host | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 5.30 | 5002.3 | 33/33 | 51.2 | 35.3 |
+| v0.4.0-4node-rf3-multi-host | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 135.60 | 453.0 | 33/33 | 113.5 | 248.2 |
+| v0.4.0-5node-rf3-60pct-coverage | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 6.70 | 5002.3 | 33/33 | 74.1 | 54.9 |
+| v0.4.0-5node-rf3-p30-sweet-spot | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 6.70 | 5002.3 | 33/33 | 53.1 | 54.9 |
+| v0.4.0-5node-rf3-live-movement | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 6.70 | 5002.3 | 33/33 | 49.8 | 54.9 |
+| v0.4.0-5node-rf3-scenario-c-5x | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 6.70 | 5002.3 | 33/33 | 74.1 | 56.8 |
 
 ## Commit-over-commit delta progression
 
-- **v0.4.0-3node-rf3-multi-host (commit 0.4.0)**: 3-node RF=3 cluster across 3 dedicated physical machines (`adam-laptop`, `adams-gamla`, `lenovo-laptop`) with external client on `tv-dator` over 192.168.86.0/24 LAN wire.
-- **v0.4.0-4node-rf3-multi-host (commit 0.4.0)**: 4-node RF=3 scale-out across 4 dedicated physical machines (`adam-laptop`, `adams-gamla`, `lenovo-laptop`, `tv-dator`) with external client on `controller` over LAN wire.
-- **v0.4.0-5node-rf3-multi-host (commit 0.4.0)**: 5-node RF=3 scale-out (60% per-node replica coverage) across 5 dedicated bare-metal Linux machines with external client on `carinas-windows` over LAN wire.
-- **v0.4.0-5node-rf3-p30-sweet-spot (commit 0.4.0)**: 5-node RF=3 partition granularity sweep (P=6, 15, 30, 60) measured over physical LAN wire across 5 dedicated hosts.
-- **v0.4.0-5node-rf3-live-movement (commit 0.4.0)**: 5-node RF=3 live partition movement under steady load measured over physical LAN wire across 5 dedicated hosts.
-- **v0.4.0-5node-rf3-scenario-c-5x (commit 0.4.0)**: 5-node RF=3 Scenario C streaming feature evaluation under 0ms/100ms/1000ms SLAs and 5x joint load over physical LAN wire.
+- **v0.4.0-3node-rf3-multi-host (commit 0.4.0)**: 3-node RF=3 cluster across 3 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-3`) with external client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-4node-rf3-multi-host (commit 0.4.0)**: 4-node RF=3 scale-out across 4 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-4`) with external client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-5node-rf3-multi-host (commit 0.4.0)**: 5-node RF=3 scale-out (60% replica coverage) across 5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with external client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-5node-rf3-p30-sweet-spot (commit 0.4.0)**: 5-node RF=3 partition granularity sweep (P=6, 15, 30, 60) measured across 5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-5node-rf3-live-movement (commit 0.4.0)**: 5-node RF=3 live partition movement under steady load measured across 5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-5node-rf3-scenario-c-5x (commit 0.4.0)**: 5-node RF=3 Scenario C streaming feature evaluation under 0ms/100ms/1000ms SLAs and 5x joint load across 5 GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC internal wire.
 
 ## Provenance qualification across historical milestones
 

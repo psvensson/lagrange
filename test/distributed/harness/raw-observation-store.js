@@ -209,7 +209,9 @@ export function verifyReceiptAgainstRawObservation(receipt, options = {}) {
     if (!rec) {
       return {
         admitted: false,
-        reason: `Raw observation artifact not found in ${DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH} for digest '${receipt.rawObservationsDigest}'`,
+        reason:
+          `Raw observation artifact not found in ${DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH} ` +
+          `for digest '${receipt.rawObservationsDigest}'`,
       };
     }
     payload = rec.rawObservationPayload;
@@ -219,7 +221,9 @@ export function verifyReceiptAgainstRawObservation(receipt, options = {}) {
   if (recomputedDigest !== receipt.rawObservationsDigest) {
     return {
       admitted: false,
-      reason: `rawObservationsDigest mismatch: receipt has '${receipt.rawObservationsDigest}', recomputed '${recomputedDigest}'`,
+      reason:
+        `rawObservationsDigest mismatch: receipt has '${receipt.rawObservationsDigest}', ` +
+        `recomputed '${recomputedDigest}'`,
     };
   }
   const derived = deriveMetricsFromRawObservationPayload(payload, {zeroWanOverride});
@@ -248,12 +252,96 @@ function buildReceiptFromRecord(rec, metrics) {
   };
 }
 
-function buildTargetFromRawRecords(spec, byId) {
-  const recA = byId.get(`receipt-${spec.targetId}-scenario-a`);
+function buildUnmeasuredTarget(spec) {
+  const notMeasuredProvenance = (movementSource) => ({
+    executionPath: 'not-measured',
+    latencySource: 'not-measured',
+    wireBytesSource: 'not-measured',
+    movementSource,
+    comparableClusterEvidence: false,
+  });
+  const unmeasuredShape = () => ({
+    status: 'not measured',
+    decisionsPerSec: null,
+    p99Ms: null,
+    wanBytes: null,
+    roundTrips: null,
+  });
+  return {
+    targetId: spec.targetId,
+    label: spec.label,
+    ...(spec.shortLabel ? {shortLabel: spec.shortLabel} : {}),
+    version: spec.version,
+    category: spec.category,
+    topologyUnits: spec.topologyUnits,
+    processCount: spec.processCount,
+    rpoZeroSurvivability: spec.rpoZeroSurvivability,
+    detailPageMd: `${spec.detailPagePrefix}.md`,
+    detailPageHtml: `${spec.detailPagePrefix}.html`,
+    scenarioA: {
+      evidenceTier: 'not-measured',
+      status: 'not measured',
+      throughputTxPerSec: null,
+      commitP50Ms: null,
+      commitP95Ms: null,
+      commitP99Ms: null,
+      semanticProofPassed: null,
+      semanticProofTotal: 33,
+      measurementProvenance: notMeasuredProvenance('not-applicable'),
+    },
+    scenarioB: {
+      evidenceTier: 'not-measured',
+      status: 'not measured',
+      decisionsPerSec: null,
+      p50Ms: null,
+      p95Ms: null,
+      p99Ms: null,
+      wanBytesPerDecision: null,
+      sqlRoundTripsPerDecision: null,
+      movementContinuityPassed: false,
+      shapes: {
+        'local-only': unmeasuredShape(),
+        'one-remote-stage': unmeasuredShape(),
+        'sequential': unmeasuredShape(),
+        'fan-out': unmeasuredShape(),
+      },
+      measurementProvenance: notMeasuredProvenance('not-measured'),
+    },
+    scenarioC: {
+      evidenceTier: 'not-measured',
+      status: 'not measured',
+      freshDecisionsPerSec0ms: null,
+      freshDecisionsPerSec100ms: null,
+      freshDecisionsPerSec1000ms: null,
+      staleDecisionRatePct: null,
+      ruleChangeBackfillSec: null,
+      cacheRestartRecoverySec: null,
+      operationalPipelines: spec.pipelines,
+      measurementProvenance: notMeasuredProvenance('not-applicable'),
+    },
+  };
+}
+
+function extractScenarioCMetrics(spec, recC0) {
+  const pC0 = recC0?.rawObservationPayload || {};
+  const compC0 = Math.max(1, Number(pC0.completed || 1));
+  const staleDecisionRatePct = pC0.staleCount !== undefined ?
+    roundTo((Number(pC0.staleCount) / compC0) * 100, 2) :
+    spec.stalePct;
+  const ruleChangeBackfillSec = pC0.measuredBackfillMs !== undefined ?
+    roundTo(Number(pC0.measuredBackfillMs) / 1000, 2) :
+    spec.backfillSec;
+  const cacheRestartRecoverySec = pC0.measuredRecoveryMs !== undefined ?
+    roundTo(Number(pC0.measuredRecoveryMs) / 1000, 2) :
+    spec.recoverySec;
+  return {staleDecisionRatePct, ruleChangeBackfillSec, cacheRestartRecoverySec};
+}
+
+function buildMeasuredShapes(targetId, byId) {
   const shapeIds = ['local-only', 'one-remote-stage', 'sequential', 'fan-out'];
   const shapes = {};
   for (const sId of shapeIds) {
-    const r = byId.get(`receipt-${spec.targetId}-${sId}`);
+    const r = byId.get(`receipt-${targetId}-${sId}`);
     const metrics = {
       decisionsPerSec: r.derived.rate,
       p99Ms: r.derived.p99,
@@ -265,10 +353,26 @@ function buildTargetFromRawRecords(spec, byId) {
       receipt: buildReceiptFromRecord(r, metrics),
     };
   }
+  return shapes;
+}
+
+function buildTargetFromRawRecords(spec, byId) {
+  if (spec.measured === false || !byId.has(`receipt-${spec.targetId}-scenario-a`)) {
+    return buildUnmeasuredTarget(spec);
+  }
+  const recA = byId.get(`receipt-${spec.targetId}-scenario-a`);
+  const shapes = buildMeasuredShapes(spec.targetId, byId);
   const oneRemoteRec = byId.get(`receipt-${spec.targetId}-one-remote-stage`);
   const recC0 = byId.get(`receipt-${spec.targetId}-scen-c-0ms`);
   const recC100 = byId.get(`receipt-${spec.targetId}-scen-c-100ms`);
   const recC1000 = byId.get(`receipt-${spec.targetId}-scen-c-1000ms`);
+  const semanticProofPassed = Number(recA.rawObservationPayload?.semanticProofsPassed ?? 33);
+  const {
+    staleDecisionRatePct,
+    ruleChangeBackfillSec,
+    cacheRestartRecoverySec,
+  } = extractScenarioCMetrics(spec, recC0);
+
   return {
     targetId: spec.targetId,
     label: spec.label,
@@ -286,7 +390,7 @@ function buildTargetFromRawRecords(spec, byId) {
       commitP50Ms: recA.derived.p50,
       commitP95Ms: recA.derived.p95,
       commitP99Ms: recA.derived.p99,
-      semanticProofPassed: 33,
+      semanticProofPassed,
       semanticProofTotal: 33,
       receipt: buildReceiptFromRecord(recA, {
         throughputTxPerSec: recA.derived.rate,
@@ -325,9 +429,9 @@ function buildTargetFromRawRecords(spec, byId) {
       freshDecisionsPerSec0ms: spec.asyncStreamOnly ? 0.0 : recC0.derived.rate,
       freshDecisionsPerSec100ms: recC100.derived.rate,
       freshDecisionsPerSec1000ms: recC1000.derived.rate,
-      staleDecisionRatePct: spec.stalePct,
-      ruleChangeBackfillSec: spec.backfillSec,
-      cacheRestartRecoverySec: spec.recoverySec,
+      staleDecisionRatePct,
+      ruleChangeBackfillSec,
+      cacheRestartRecoverySec,
       operationalPipelines: spec.pipelines,
       measurementProvenance: {
         executionPath: 'live-cluster-wire',
@@ -444,7 +548,21 @@ function buildEvolutionFromRaw(header, targetsById, byId) {
 
 function buildScaleoutExperimentFromRaw(header, targetsById, byId) {
   const mkScaleRow = (mode, item) => {
-    const r3 = byId.get(`receipt-scaleout-${mode}-${item.targetId}-3node`).derived;
+    const key3 = `receipt-scaleout-${mode}-${item.targetId}-3node`;
+    if (!byId.has(key3)) {
+      return {
+        targetId: item.targetId,
+        label: item.label,
+        status: 'not measured',
+        tx3Node: null,
+        p95Ms3Node: null,
+        tx5Node: null,
+        p95Ms5Node: null,
+        scaleGainPct: null,
+        evidenceTier: 'not-measured',
+      };
+    }
+    const r3 = byId.get(key3).derived;
     const r5 = byId.get(`receipt-scaleout-${mode}-${item.targetId}-5node`).derived;
     return {
       targetId: item.targetId, label: item.label,
@@ -460,12 +578,21 @@ function buildScaleoutExperimentFromRaw(header, targetsById, byId) {
   const covTargets = [
     ['lagrange', 'Lagrange', lag3, lag5, lag3.scenarioB.decisionsPerSec],
     ['tidb-tikv', 'TiDB + TiKV', targetsById.get('tidb-tikv'), targetsById.get('tidb-tikv'), null],
-    ['citus-distributed-function', 'Citus 13 (Dist Function)',
-      targetsById.get('citus-distributed-function'), targetsById.get('citus-distributed-function'), null],
-    ['yugabytedb-stored-proc', 'YugabyteDB 2024.2 (Stored Proc)',
-      targetsById.get('yugabytedb-stored-proc'), targetsById.get('yugabytedb-stored-proc'), null],
-    ['ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)',
-      targetsById.get('ignite3-colocated-compute'), targetsById.get('ignite3-colocated-compute'), null],
+    [
+      'citus-distributed-function', 'Citus 13 (Dist Function)',
+      targetsById.get('citus-distributed-function'),
+      targetsById.get('citus-distributed-function'), null,
+    ],
+    [
+      'yugabytedb-stored-proc', 'YugabyteDB 2024.2 (Stored Proc)',
+      targetsById.get('yugabytedb-stored-proc'),
+      targetsById.get('yugabytedb-stored-proc'), null,
+    ],
+    [
+      'ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)',
+      targetsById.get('ignite3-colocated-compute'),
+      targetsById.get('ignite3-colocated-compute'), null,
+    ],
   ];
   return {
     replicationFactor: 3,
@@ -479,19 +606,36 @@ function buildScaleoutExperimentFromRaw(header, targetsById, byId) {
       'proportional-growth-scaleout': arrayMap(modes.prop, (it) => mkScaleRow('prop', it)),
       'hot-contention-baseline': arrayMap(modes.hot, (it) => mkScaleRow('hot', it)),
     },
-    scenarioBCoverage: arrayMap(covTargets, ([id, label, t3, t5, dec5Override]) => ({
-      targetId: id, label,
-      dec3Node100Pct: t3.scenarioB.shapes['local-only'].decisionsPerSec,
-      p99Ms3Node: t3.scenarioB.shapes['local-only'].p99Ms,
-      wire3Node: id === 'lagrange' ?
-        t3.scenarioB.wanBytesPerDecision :
-        t3.scenarioB.shapes['local-only'].wanBytes,
-      dec5Node60Pct: dec5Override ?? t5.scenarioB.shapes.sequential.decisionsPerSec,
-      p99Ms5Node: t5.scenarioB.p99Ms,
-      wire5Node: t5.scenarioB.wanBytesPerDecision,
-      aggregate5NodeDecPerSec: t5.scenarioB.decisionsPerSec,
-      evidenceTier: 'observed-docker-cluster',
-    })),
+    scenarioBCoverage: arrayMap(covTargets, ([id, label, t3, t5, dec5Override]) => {
+      if (t3.scenarioB.evidenceTier !== 'observed-docker-cluster') {
+        return {
+          targetId: id,
+          label,
+          status: 'not measured',
+          dec3Node100Pct: null,
+          p99Ms3Node: null,
+          wire3Node: null,
+          dec5Node60Pct: null,
+          p99Ms5Node: null,
+          wire5Node: null,
+          aggregate5NodeDecPerSec: null,
+          evidenceTier: 'not-measured',
+        };
+      }
+      return {
+        targetId: id, label,
+        dec3Node100Pct: t3.scenarioB.shapes['local-only'].decisionsPerSec,
+        p99Ms3Node: t3.scenarioB.shapes['local-only'].p99Ms,
+        wire3Node: id === 'lagrange' ?
+          t3.scenarioB.wanBytesPerDecision :
+          t3.scenarioB.shapes['local-only'].wanBytes,
+        dec5Node60Pct: dec5Override ?? t5.scenarioB.shapes.sequential.decisionsPerSec,
+        p99Ms5Node: t5.scenarioB.p99Ms,
+        wire5Node: t5.scenarioB.wanBytesPerDecision,
+        aggregate5NodeDecPerSec: t5.scenarioB.decisionsPerSec,
+        evidenceTier: 'observed-docker-cluster',
+      };
+    }),
   };
 }
 
@@ -526,6 +670,17 @@ function buildPartitionSweepFromRaw(byId) {
       },
     ],
     targets: arrayMap(sweepSpecs, ([id, label, recPrefix, hbBase]) => {
+      if (!byId.has(`receipt-${recPrefix}-part-6`)) {
+        return {
+          targetId: id, label, status: 'not measured', optimalPartitions: null,
+          peakDecisionsPerSec: null, overPartitionDropPct: null,
+          series: arrayMap([6, 15, 30, 60], (p) => ({
+            partitionCount: p, decisionsPerSec: null, p99Ms: null,
+            coordinationOverheadPct: null, raftHeartbeatOpsPerSec: null,
+            evidenceTier: 'not-measured',
+          })),
+        };
+      }
       const pts = arrayMap(
         [6, 15, 30, 60],
         (p) => [p, byId.get(`receipt-${recPrefix}-part-${p}`).derived],
@@ -569,6 +724,16 @@ function buildRttAndWorkingSetFromRaw(targetsById, byId) {
     experimentId: 'scenario-b-rtt-crossover-and-working-set-growth',
     nodeCount: 5, replicationFactor: 3, rttPointsMs: [0.2, 2.0, 10.0, 30.0],
     sequentialRttSeries: arrayMap(rttSpecs, ([rawId, outId, label, hops]) => {
+      if (!byId.has(`receipt-${rawId}-rtt-0.2`)) {
+        return {
+          targetId: outId, label, status: 'not measured',
+          localOnly02msDecPerSec: null, localOnly02msP99Ms: null,
+          oneWayHopsSequential: hops,
+          rttSeries: arrayMap([0.2, 2.0, 10.0, 30.0], (rttMs) => ({
+            rttMs, decisionsPerSec: null, p99Ms: null, evidenceTier: 'not-measured',
+          })),
+        };
+      }
       const t = targetsById.get(rawId);
       const loc = t.scenarioB.shapes['local-only'];
       return {
@@ -586,6 +751,14 @@ function buildRttAndWorkingSetFromRaw(targetsById, byId) {
       };
     }),
     workingSetComparison: arrayMap(rttSpecs, ([rawId, outId, label]) => {
+      if (!byId.has(`receipt-${rawId}-heavy-ws`)) {
+        return {
+          targetId: outId, label, status: 'not measured',
+          moderateDecPerSec: null, moderateP99Ms: null, moderateWanBytes: null,
+          heavyDecPerSec: null, heavyP99Ms: null, heavyWanBytes: null,
+          throughputDropPct: null, evidenceTier: 'not-measured',
+        };
+      }
       const t = targetsById.get(rawId);
       const hvy = byId.get(`receipt-${rawId}-heavy-ws`).derived;
       return {
@@ -606,7 +779,12 @@ function buildRttAndWorkingSetFromRaw(targetsById, byId) {
 function buildMovementAndScenarioCScalingFromRaw(header, targetsById, byId) {
   const moveSpecs = [
     ['lagrange', 'Lagrange', 'lagrange-5node-rf3', true],
-    ['ignite3-colocated-compute', 'Apache Ignite 3 (Colocated)', 'ignite3-colocated-compute', false],
+    [
+      'ignite3-colocated-compute',
+      'Apache Ignite 3 (Colocated)',
+      'ignite3-colocated-compute',
+      false,
+    ],
     ['citus-distributed-function', 'Citus 13 (Dist Function)', 'citus-distributed-function', false],
     ['yugabytedb-stored-proc', 'YugabyteDB 2024.2 (Stored Proc)', 'yugabytedb-stored-proc', false],
     ['tidb-tikv', 'TiDB + TiKV', 'tidb-tikv', false],
@@ -634,6 +812,14 @@ function buildMovementAndScenarioCScalingFromRaw(header, targetsById, byId) {
     experimentId: 'live-movement-under-load-and-scenario-c-joint-scaling',
     nodeCount: 5, replicationFactor: 3,
     liveMovementPhases: arrayMap(moveSpecs, ([id, label, rawId, zeroStall]) => {
+      if (!byId.has(`receipt-${rawId}-move-during`)) {
+        return {
+          targetId: id, label, status: 'not measured',
+          preMoveP99Ms: null, duringMoveP99Ms: null, postMoveP99Ms: null,
+          routingConvergenceMs: null, writeStallMs: null,
+          zeroLossIdentityVerified: false, evidenceTier: 'not-measured',
+        };
+      }
       const t = targetsById.get(rawId);
       const dur = byId.get(`receipt-${rawId}-move-during`).derived;
       const post = byId.get(`receipt-${rawId}-move-post`).derived;
@@ -650,6 +836,16 @@ function buildMovementAndScenarioCScalingFromRaw(header, targetsById, byId) {
     }),
     scenarioCJointScaling: arrayMap(scSpecs, ([id, label, raw1xId, raw5xId, asyncOnly]) => {
       const t1 = targetsById.get(raw1xId);
+      if (!byId.has(`receipt-${raw5xId}-scen-c-5x-1000ms`)) {
+        return {
+          targetId: id, label, status: 'not measured',
+          scale1xFresh0msDecPerSec: null, scale5xFresh0msDecPerSec: null,
+          scale5xFresh1000msDecPerSec: null, staleDecisionRatePct: null,
+          ruleChangeBackfillSec: null, cacheRestartRecoverySec: null,
+          operationalPipelines: t1.scenarioC.operationalPipelines,
+          evidenceTier: 'not-measured',
+        };
+      }
       const r5x0 = byId.get(`receipt-${raw5xId}-scen-c-5x-0ms`).derived;
       const r5x1000 = byId.get(`receipt-${raw5xId}-scen-c-5x-1000ms`).derived;
       return {
@@ -668,125 +864,97 @@ function buildMovementAndScenarioCScalingFromRaw(header, targetsById, byId) {
   };
 }
 
-function buildSetupBreakdownFromRaw(targetsById, byId) {
-  const mkA = (targetId, label, t) => {
-    const d = byId.get(`receipt-${targetId}-scenario-a`).derived;
-    const ph = d.phaseAvgs;
-    const total = roundTo(t.scenarioA.commitP95Ms, 1);
-    const parsePlanMs = roundTo(Math.max(0.1, ph.parseMs || 0.1), 1);
-    const lockWaitMs = roundTo(Math.max(0.1, ph.lockWaitMs || 0.2), 1);
-    const prepare2pcMs = roundTo(ph.prep2pcMs || 0.0, 1);
-    const quorumFsyncMs = roundTo(Math.max(0.1, ph.fsyncMs || 0.2), 1);
-    const applyMs = roundTo(Math.max(0.1, ph.applyMs || 0.1), 1);
-    const subSum = roundTo(parsePlanMs + lockWaitMs + prepare2pcMs + quorumFsyncMs + applyMs, 1);
-    const wireMs = roundTo(Math.max(0.2, total - subSum), 1);
-    return {
-      targetId, label, wireMs, parsePlanMs, lockWaitMs, prepare2pcMs, quorumFsyncMs, applyMs,
-      totalP95Ms: roundTo(wireMs + subSum, 1),
-    };
-  };
-  const mkB = (rawId, outId, label, t) => {
-    const d = byId.get(`receipt-${rawId}-one-remote-stage`).derived;
-    const dur = byId.get(`receipt-${rawId}-move-during`).derived;
-    const ph = d.phaseAvgs;
-    const total = roundTo(t.scenarioB.p99Ms, 1);
-    const ingressMs = roundTo(Math.max(0.1, ph.ingressMs || 0.2), 1);
-    const reducerExecMs = roundTo(Math.max(0.1, ph.reducerMs || 0.2), 1);
-    const wireDecodeMs = roundTo(Math.max(0.1, ph.decodeMs || 0.1), 1);
-    const wanRoundTripsMs = roundTo(
-      Math.max(0.2, total - (ingressMs + reducerExecMs + wireDecodeMs)), 1,
-    );
-    const steadyP99Ms = roundTo(ingressMs + reducerExecMs + wanRoundTripsMs + wireDecodeMs, 1);
-    const moveDeltaMs = roundTo(Math.max(0.1, dur.p99 - steadyP99Ms), 1);
-    return {
-      targetId: outId, label, ingressMs, reducerExecMs, wanRoundTripsMs, wireDecodeMs,
-      steadyP99Ms, moveDeltaMs, duringMoveP99Ms: roundTo(steadyP99Ms + moveDeltaMs, 1),
-      wanBytes: t.scenarioB.wanBytesPerDecision,
-    };
-  };
-  const lag3 = targetsById.get('lagrange');
-  const lag5 = targetsById.get('lagrange-5node-rf3');
-  const pgPlSync = targetsById.get('pg-plpgsql-sync-ha-rf3');
-  const pgValkeySync = targetsById.get('pg-valkey-sync-write-through');
-  const pgValkeyAsync = targetsById.get('pg-valkey-async-stream');
-  const rLag5C5x = byId.get('receipt-lagrange-5node-rf3-scen-c-5x-0ms').derived;
-  const rLag3C5x = byId.get('receipt-lagrange-scen-c-5x-0ms').derived;
-  const rPgPlC5x = byId.get('receipt-pg-plpgsql-sync-ha-rf3-scen-c-5x-0ms').derived;
-  const rVkSyncC5x = byId.get('receipt-pg-valkey-sync-write-through-scen-c-5x-0ms').derived;
-  const rVkAsyncC5x = byId.get('receipt-pg-valkey-async-stream-scen-c-5x-1000ms').derived;
-  const phCPl = byId.get('receipt-pg-plpgsql-sync-ha-rf3-scen-c-0ms').derived.phaseAvgs;
-  const phCVk = byId.get('receipt-pg-valkey-sync-write-through-scen-c-0ms').derived.phaseAvgs;
+function mkSetupBreakdownA(targetId, label, t, byId) {
+  const d = byId.get(`receipt-${targetId}-scenario-a`).derived;
+  const ph = d.phaseAvgs;
+  const total = roundTo(t.scenarioA.commitP95Ms, 1);
+  const parsePlanMs = roundTo(Math.max(0.1, ph.parseMs || 0.1), 1);
+  const lockWaitMs = roundTo(Math.max(0.1, ph.lockWaitMs || 0.2), 1);
+  const prepare2pcMs = roundTo(ph.prep2pcMs || 0.0, 1);
+  const quorumFsyncMs = roundTo(Math.max(0.1, ph.fsyncMs || 0.2), 1);
+  const applyMs = roundTo(Math.max(0.1, ph.applyMs || 0.1), 1);
+  const subSum = roundTo(parsePlanMs + lockWaitMs + prepare2pcMs + quorumFsyncMs + applyMs, 1);
+  const wireMs = roundTo(Math.max(0.2, total - subSum), 1);
   return {
-    scenarioA: [
-      mkA('pg-single-primary', 'PG 17 Single Primary + App', targetsById.get('pg-single-primary')),
-      mkA('citus-sql-service', 'Citus 13 Sharded RF=3 + App', targetsById.get('citus-sql-service')),
-      mkA(
-        'pg-patroni-sync-ha-rf3', 'PG 17 Patroni Sync HA RF=3',
-        targetsById.get('pg-patroni-sync-ha-rf3'),
-      ),
-      mkA('tidb-tikv', 'TiDB + TiKV RF=3 (5-Host)', targetsById.get('tidb-tikv')),
-      mkA('lagrange-5node-rf3', 'Lagrange 0.4.0 (5-Node RF=3)', lag5),
-      mkA('lagrange', 'Lagrange 0.4.0 (3-Node RF=3)', lag3),
-    ],
-    scenarioB: [
-      mkB('lagrange-5node-rf3', 'lagrange', 'Lagrange 0.4.0 (Colocated WASI ctx.call)', lag5),
-      mkB(
-        'ignite3-colocated-compute', 'ignite3-colocated-compute',
-        'Apache Ignite 3 (JobTarget.colocated)', targetsById.get('ignite3-colocated-compute'),
-      ),
-      mkB(
-        'pg-plpgsql-sync-ha-rf3', 'pg-plpgsql-sync-ha-rf3',
-        'PG 17 Patroni + PL/pgSQL Function', pgPlSync,
-      ),
-      mkB(
-        'citus-distributed-function', 'citus-distributed-function',
-        'Citus 13 (Colocated Dist Function)', targetsById.get('citus-distributed-function'),
-      ),
-      mkB(
-        'yugabytedb-stored-proc', 'yugabytedb-stored-proc',
-        'YugabyteDB 2024.2 (YSQL Stored Proc)', targetsById.get('yugabytedb-stored-proc'),
-      ),
-      mkB('tidb-tikv', 'tidb-tikv', 'TiDB + TiKV (App-Orchestrated SQL)', targetsById.get('tidb-tikv')),
-    ],
-    scenarioC: [
-      {
-        targetId: 'lagrange-5node-rf3', label: 'Lagrange 0.4.0 (5-Node RF=3 Rollup)',
-        ingestQuorumMs: roundTo(lag5.scenarioA.commitP50Ms, 1), propagationLagMs: 0.0,
-        decisionComputeMs: 0.1, fresh0msDecPerSec: lag5.scenarioC.freshDecisionsPerSec0ms,
-        scale5xFresh0msDecPerSec: rLag5C5x.rate, ruleBackfillSec: 0.0, decisionDowntimeSec: 0.0,
-      },
-      {
-        targetId: 'lagrange', label: 'Lagrange 0.4.0 (3-Node RF=3 Rollup)',
-        ingestQuorumMs: roundTo(lag3.scenarioA.commitP50Ms, 1), propagationLagMs: 0.0,
-        decisionComputeMs: 0.1, fresh0msDecPerSec: lag3.scenarioC.freshDecisionsPerSec0ms,
-        scale5xFresh0msDecPerSec: rLag3C5x.rate, ruleBackfillSec: 0.0, decisionDowntimeSec: 0.0,
-      },
-      {
-        targetId: 'pg-plpgsql-sync-ha-rf3', label: 'PG 17 Patroni + PL/pgSQL (On-Read Scan)',
-        ingestQuorumMs: roundTo(pgPlSync.scenarioA.commitP50Ms, 1), propagationLagMs: 0.0,
-        decisionComputeMs: roundTo(Math.max(0.5, phCPl.computeMs || 1.2), 1),
-        fresh0msDecPerSec: pgPlSync.scenarioC.freshDecisionsPerSec0ms,
-        scale5xFresh0msDecPerSec: rPgPlC5x.rate, ruleBackfillSec: 0.0, decisionDowntimeSec: 0.0,
-      },
-      {
-        targetId: 'pg-valkey-sync-write-through', label: 'PG 17 + Valkey 8 (Sync Write-Through)',
-        ingestQuorumMs: roundTo(
-          pgValkeySync.scenarioA.commitP50Ms + (phCVk.ingestQuorumMs || 1.0), 1,
-        ),
-        propagationLagMs: 4.2, decisionComputeMs: 0.1,
-        fresh0msDecPerSec: pgValkeySync.scenarioC.freshDecisionsPerSec0ms,
-        scale5xFresh0msDecPerSec: rVkSyncC5x.rate,
-        ruleBackfillSec: 185.0, decisionDowntimeSec: 185.0,
-      },
-      {
-        targetId: 'pg-valkey-async-stream', label: 'PG 17 + Valkey 8 (Async CDC Stream)',
-        ingestQuorumMs: roundTo(pgValkeyAsync.scenarioA.commitP50Ms, 1),
-        propagationLagMs: 65.0, decisionComputeMs: 0.1,
-        fresh0msDecPerSec: 0.0, scale5xFresh0msDecPerSec: rVkAsyncC5x.rate,
-        ruleBackfillSec: 240.0, decisionDowntimeSec: 240.0,
-      },
-    ],
+    targetId, label, wireMs, parsePlanMs, lockWaitMs, prepare2pcMs, quorumFsyncMs, applyMs,
+    totalP95Ms: roundTo(wireMs + subSum, 1),
   };
+}
+
+function mkSetupBreakdownB(rawId, outId, label, t, byId) {
+  const d = byId.get(`receipt-${rawId}-one-remote-stage`).derived;
+  const dur = byId.get(`receipt-${rawId}-move-during`).derived;
+  const ph = d.phaseAvgs;
+  const total = roundTo(t.scenarioB.p99Ms, 1);
+  const ingressMs = roundTo(Math.max(0.1, ph.ingressMs || 0.2), 1);
+  const reducerExecMs = roundTo(Math.max(0.1, ph.reducerMs || 0.2), 1);
+  const wireDecodeMs = roundTo(Math.max(0.1, ph.decodeMs || 0.1), 1);
+  const wanRoundTripsMs = roundTo(
+    Math.max(0.2, total - (ingressMs + reducerExecMs + wireDecodeMs)), 1,
+  );
+  const steadyP99Ms = roundTo(ingressMs + reducerExecMs + wanRoundTripsMs + wireDecodeMs, 1);
+  const moveDeltaMs = roundTo(Math.max(0.1, dur.p99 - steadyP99Ms), 1);
+  return {
+    targetId: outId, label, ingressMs, reducerExecMs, wanRoundTripsMs, wireDecodeMs,
+    steadyP99Ms, moveDeltaMs, duringMoveP99Ms: roundTo(steadyP99Ms + moveDeltaMs, 1),
+    wanBytes: t.scenarioB.wanBytesPerDecision,
+  };
+}
+
+function mkSetupBreakdownCRow(targetId, label, t, byId, isRollup) {
+  if (!byId.has(`receipt-${targetId}-scen-c-5x-0ms`)) return null;
+  const r5x = byId.get(`receipt-${targetId}-scen-c-5x-0ms`).derived;
+  const ph = byId.get(`receipt-${targetId}-scen-c-0ms`)?.derived?.phaseAvgs || {};
+  const computeMs = isRollup ? 0.1 : roundTo(Math.max(0.5, ph.computeMs || 1.2), 1);
+  return {
+    targetId, label,
+    ingestQuorumMs: roundTo(t.scenarioA.commitP50Ms, 1),
+    propagationLagMs: 0.0,
+    decisionComputeMs: computeMs,
+    fresh0msDecPerSec: t.scenarioC.freshDecisionsPerSec0ms,
+    scale5xFresh0msDecPerSec: r5x.rate,
+    ruleBackfillSec: t.scenarioC.ruleChangeBackfillSec,
+    decisionDowntimeSec: t.scenarioC.ruleChangeBackfillSec,
+  };
+}
+
+function buildSetupBreakdownFromRaw(targetsById, byId) {
+  const scenASpecs = [
+    ['pg-single-primary', 'PG 17 Single Primary + App'],
+    ['pg-patroni-sync-ha-rf3', 'PG 17 Patroni Sync HA RF=3'],
+    ['tidb-tikv', 'TiDB + TiKV RF=3 (5-Host)'],
+    ['lagrange-5node-rf3', 'Lagrange 0.4.0 (5-Node RF=3)'],
+    ['lagrange', 'Lagrange 0.4.0 (3-Node RF=3)'],
+  ];
+  const scenarioA = [];
+  for (const [targetId, label] of scenASpecs) {
+    if (byId.has(`receipt-${targetId}-scenario-a`)) {
+      scenarioA.push(mkSetupBreakdownA(targetId, label, targetsById.get(targetId), byId));
+    }
+  }
+  const scenBSpecs = [
+    ['lagrange-5node-rf3', 'lagrange', 'Lagrange 0.4.0 (Colocated WASI ctx.call)'],
+    ['pg-plpgsql-sync-ha-rf3', 'pg-plpgsql-sync-ha-rf3', 'PG 17 Patroni + PL/pgSQL Function'],
+    ['tidb-tikv', 'tidb-tikv', 'TiDB + TiKV (App-Orchestrated SQL)'],
+  ];
+  const scenarioB = [];
+  for (const [rawId, outId, label] of scenBSpecs) {
+    if (byId.has(`receipt-${rawId}-one-remote-stage`) && byId.has(`receipt-${rawId}-move-during`)) {
+      scenarioB.push(mkSetupBreakdownB(rawId, outId, label, targetsById.get(rawId), byId));
+    }
+  }
+  const scenCSpecs = [
+    ['lagrange-5node-rf3', 'Lagrange 0.4.0 (5-Node RF=3 Rollup)', true],
+    ['lagrange', 'Lagrange 0.4.0 (3-Node RF=3 Rollup)', true],
+    ['pg-plpgsql-sync-ha-rf3', 'PG 17 Patroni + PL/pgSQL (On-Read Scan)', false],
+    ['tidb-tikv', 'TiDB + TiKV (On-Read Scan)', false],
+  ];
+  const scenarioC = arrayFilter(
+    arrayMap(scenCSpecs, ([id, label, isRollup]) =>
+      mkSetupBreakdownCRow(id, label, targetsById.get(id), byId, isRollup)),
+    Boolean,
+  );
+  return {scenarioA, scenarioB, scenarioC};
 }
 
 export function deriveAdmittedMeasurementsFromRawObservations(rootDir = REPO_ROOT) {

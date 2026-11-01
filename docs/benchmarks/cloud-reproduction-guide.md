@@ -17,11 +17,12 @@ The full comparative suite runs across **6 identical Linux VMs** (5 cluster node
 | **Microsoft Azure** | [`cloud/provision-azure.sh`](cloud/provision-azure.sh) | `Standard_D4s_v5` | 4 vCPU / 16 GB | 50 GB `StandardSSD_LRS` | ~$0.58 USD |
 | **Any 6 SSH + Docker Hosts** | Bring your own hosts | 4+ vCPU / 16+ GB | Ubuntu 22.04/24.04 + Docker | 50 GB SSD | $0 (existing hardware) |
 
-### Public Container Images Used
-All 14 benchmarked targets pull directly from public container registries (no proprietary licenses or private credentials required):
-- **Lagrange (`v0.4.0`):** `psvensson/lagrange:0.4.0`
-- **Distributed & Single-Primary SQL:** `postgres:16`, `citusdata/citus:12.1`, `pingcap/pd:v8.5.8`, `pingcap/tikv:v8.5.8`, `pingcap/tidb:v8.5.8`, `cockroachdb/cockroach:v24.1.0`, `yugabytedb/yugabyte:2.20.7.0-b58`
-- **In-Memory, KV & NoSQL Comparators:** `apacheignite/ignite:2.16.0`, `redis:7-alpine`, `docker.dragonflydb.io/dragonflydb/dragonfly:latest`, `aerospike/aerospike-server:latest`, `foundationdb/foundationdb:7.1.57`, `scylladb/scylla:5.4`, `mongo:latest`, `node:22-slim` (`node:sqlite` WAL)
+### Public Container Images & Native Protocols Used
+The live runner deploys and benchmarks the 7 measured configurations across the 3 core product families using official public container images and native wire protocols:
+- **Lagrange (`v0.4.0`):** `psvensson/lagrange:0.4.0` (`node src/index.js`, 3-node, 4-node, and 5-node `RF=3` clusters driven over HTTP `:8080` and Admin WebSocket `:8081/api/admin/stream`)
+- **TiDB + TiKV (`v8.5.8`):** `pingcap/pd:v8.5.8`, `pingcap/tikv:v8.5.8`, `pingcap/tidb:v8.5.8` (PD + 3 TiKV stores + TiDB SQL server driven over native MySQL wire protocol `:4000` via `mysql2/promise`)
+- **PostgreSQL 17 (`17-alpine`):** `postgres:17-alpine` (single-primary, synchronous physical streaming replication via `pg_basebackup` + `FIRST 1 (s1, s2)`, and server-side `LANGUAGE plpgsql` functions driven over native PostgreSQL wire protocol `:5432` via `pg.Pool`)
+- **Unmeasured Comparators (`not-measured`):** Citus 13, YugabyteDB 2024.2, Apache Ignite 3, and PostgreSQL 17 + Valkey 8 are explicitly recorded as `[not measured]` (`evidenceTier: 'not-measured'`) in the generated matrix until native product cluster deployers and wire drivers are added.
 
 ---
 
