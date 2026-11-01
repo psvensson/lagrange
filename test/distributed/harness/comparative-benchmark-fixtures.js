@@ -55,7 +55,8 @@ function fixtureHosts(count) {
 }
 
 function fixtureHarness() {
-  return {gitCommit: 'a'.repeat(40), driverSourceSha256: hexDigits('b'), adapterIds: ['pg-wire-v1']};
+  return {gitCommit: 'a'.repeat(40), checkoutDirty: false, driverSourceSha256: hexDigits('b'),
+    adapterIds: ['pg-wire-v1']};
 }
 
 function buildFixtureHeader({campaignId, executionTarget = EXECUTION_TARGET.LAB}) {

@@ -27,13 +27,19 @@ import {
 } from '../comparative-benchmark-fixtures.js';
 import {formatNum} from '../comparative-landing-svg-renderer.js';
 import {computeV1PayloadDigest} from '../raw-observation-forensic-reader.js';
-import {executeBenchmarkWorkload} from '../real-product-workload-drivers.js';
+import {
+  benchmarkDriverSourceIdentity,
+  executeBenchmarkWorkload,
+} from '../real-product-workload-drivers.js';
 import {
   FAKE_PRODUCT_FAULT,
   createFakeOltpProduct,
 } from './real-product-workload-driver-fake-product.js';
 import {FAILURE_CLASS, OPERATION_OUTCOME} from '../benchmark-operation-outcome.js';
-import {BENCHMARK_RUN_STATUS} from '../benchmark-scenario-a-run.js';
+import {
+  BENCHMARK_RUN_STATUS,
+  BENCHMARK_SCENARIO_A_ADAPTER_ID,
+} from '../benchmark-scenario-a-run.js';
 import {BENCHMARK_PROFILE_CLASS} from '../benchmark-workload-dispatch.js';
 import {OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS} from '../oltp-scenario-a-semantic-gate.js';
 import {
@@ -298,6 +304,53 @@ function setupFailed(run, setup) {
   sealFixtureRun(run, {keepPlan: true});
 }
 
+describe('harness identity across a multi-arm campaign', () => {
+  const ARMS = Object.freeze(['lagrange-pgwire', 'tidb-mysql2', 'postgresql-pgwire']);
+
+  async function publishWithHarness(runHarness, headerHarness) {
+    const runs = arrayMap(pair(), (run) => {
+      run.identity.harness = {...run.identity.harness, ...runHarness};
+      return sealFixtureRun(run);
+    });
+    const header = buildFixtureHeader({campaignId: 'fixture-campaign'});
+    header.harness = {...header.harness, ...headerHarness};
+    const {matrix} = await publish([header, ...runs]);
+    return fixtureTargetCell(matrix, LAGRANGE);
+  }
+
+  it('a run whose adapters are a subset of the campaign union is the same harness',
+    async () => {
+      const cell = await publishWithHarness({adapterIds: [ARMS[0]]}, {adapterIds: ARMS});
+      assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED, cell.reasons.join(', '));
+    });
+
+  it('an adapter outside the campaign union is a harness mismatch', async () => {
+    const cell = await publishWithHarness({adapterIds: ['other-adapter']},
+      {adapterIds: ARMS});
+    assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.HARNESS_MISMATCH), true,
+      cell.reasons.join(', '));
+  });
+
+  it('a different driver source digest or commit is a harness mismatch', async () => {
+    for (const change of [{driverSourceSha256: 'e'.repeat(64)}, {gitCommit: 'c'.repeat(40)}]) {
+      const cell = await publishWithHarness(change, {});
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.HARNESS_MISMATCH), true,
+        cell.reasons.join(', '));
+    }
+  });
+
+  it('a dirty checkout is a typed identity fact that refuses the cell', async () => {
+    for (const [runDirty, headerDirty] of [[true, false], [false, true]]) {
+      const cell = await publishWithHarness({checkoutDirty: runDirty},
+        {checkoutDirty: headerDirty});
+      assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.CHECKOUT_DIRTY), true,
+        cell.reasons.join(', '));
+    }
+  });
+});
+
 describe('semantic gate by profile class and stopped runs', () => {
   const incomplete = (run) => {
     run.correctness.semanticGate.status = OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS.INCOMPLETE;
@@ -357,9 +410,13 @@ describe('driver output through admission', () => {
       const base = buildFixtureRun({subkind: 'smoke', offeredRatePerSec: 50,
         profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
       const run = composeFixtureRunFromDriverOutput(base, output);
-      // The campaign header records the harness identity the driver reported.
-      const header = {...buildFixtureHeader({campaignId: 'fixture-campaign'}),
-        harness: run.identity.harness};
+      // The campaign header carries the executed-driver digest from the driver's
+      // own identity function and the adapter union over the three arms.
+      const {driverSourceSha256} = await benchmarkDriverSourceIdentity();
+      assert.equal(run.identity.harness.driverSourceSha256, driverSourceSha256);
+      const header = buildFixtureHeader({campaignId: 'fixture-campaign'});
+      header.harness = {...header.harness, driverSourceSha256,
+        adapterIds: [...Object.values(BENCHMARK_SCENARIO_A_ADAPTER_ID)]};
       const {matrix, readme} = await publish([header, run]);
       const cell = fixtureTargetCell(matrix, LAGRANGE, 'scenarioA/smoke');
       assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE, cell.reasons.join(', '));

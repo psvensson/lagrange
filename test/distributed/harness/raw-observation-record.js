@@ -133,6 +133,7 @@ const IDENTITY_FIELD = Object.freeze({
   PRODUCTS_AFTER_WINDOW: 'productsAfterWindow',
   PUBLICATION: 'publication',
   GIT_COMMIT: 'gitCommit',
+  CHECKOUT_DIRTY: 'checkoutDirty',
   DRIVER_SOURCE_SHA256: 'driverSourceSha256',
   ADAPTER_IDS: 'adapterIds',
 });
@@ -328,9 +329,16 @@ function requireNullableObject(value, at) {
   return requireObject(value, at);
 }
 
+// Harness identity: the checkout commit, whether the checkout was dirty, the
+// digest of the executed driver sources (driverSourceIdentity of
+// real-product-workload-drivers.js) and the adapters. On a campaign header
+// adapterIds is the union over the campaign's arms; on a run it is that arm's.
 function validateHarnessIdentity(harness, at) {
   requireObject(harness, at);
   requireText(harness[IDENTITY_FIELD.GIT_COMMIT], `${at}.gitCommit`);
+  if (typeof harness[IDENTITY_FIELD.CHECKOUT_DIRTY] !== 'boolean') {
+    reject(RECORD_REJECTION.MISSING_FIELD, `${at}.checkoutDirty must be a boolean`);
+  }
   requireText(harness[IDENTITY_FIELD.DRIVER_SOURCE_SHA256], `${at}.driverSourceSha256`);
   const adapterIds = requireArray(harness[IDENTITY_FIELD.ADAPTER_IDS], `${at}.adapterIds`);
   adapterIds.forEach((id, idx) => requireText(id, `${at}.adapterIds[${idx}]`));

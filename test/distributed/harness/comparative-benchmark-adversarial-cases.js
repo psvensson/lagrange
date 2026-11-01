@@ -99,7 +99,7 @@ async function caseValidNegativeResultsStayVisible() {
 
 // J9: a plausible but wrong identity is refused.
 async function caseWrongIdentity() {
-  await expectInvalidLagrange('J9 harness sha', ADMISSION_REASON.IDENTITY_MISMATCH, (run) => {
+  await expectInvalidLagrange('J9 harness sha', ADMISSION_REASON.HARNESS_MISMATCH, (run) => {
     run.identity.harness.gitCommit = 'b'.repeat(40);
     sealFixtureRun(run);
   });

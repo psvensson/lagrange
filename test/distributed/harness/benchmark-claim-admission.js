@@ -92,6 +92,8 @@ const ADMISSION_REASON = Object.freeze({
   CAMPAIGN_HEADER_MISSING: 'campaign-header-missing',
   IDENTITY_MISSING: 'identity-missing',
   IDENTITY_MISMATCH: 'identity-mismatch',
+  HARNESS_MISMATCH: 'harness-mismatch',
+  CHECKOUT_DIRTY: 'checkout-dirty',
   IDENTITY_NOT_RUNNING: 'identity-not-running',
   IDENTITY_CHANGED_DURING_WINDOW: 'identity-changed-during-window',
   RESTART_DURING_WINDOW: 'restart-during-window',
@@ -264,15 +266,27 @@ function forensicEvidence(claim, retainedReferences, invalidations) {
 
 // ---- v2 run checks ----
 
+// Same harness: same commit and executed-driver digest as the campaign header,
+// the run's adapters within the header's union over all arms, and neither
+// checkout dirty (a dirty checkout is its own typed fact). The campaign itself
+// (manifest, execution target) must match as well.
 function checkIdentityAgainstHeader(run, header) {
   if (!header) return [ADMISSION_REASON.CAMPAIGN_HEADER_MISSING];
   const harness = run.identity.harness;
+  const reasons = [];
+  if (harness.checkoutDirty !== false || header.harness.checkoutDirty !== false) {
+    reasons.push(ADMISSION_REASON.CHECKOUT_DIRTY);
+  }
   const sameHarness = harness.gitCommit === header.harness.gitCommit &&
     harness.driverSourceSha256 === header.harness.driverSourceSha256 &&
-    jsonStringify(harness.adapterIds) === jsonStringify(header.harness.adapterIds);
-  const sameCampaign = run.plan.manifestDigest === header.manifestDigest &&
-    run.executionTarget === header.executionTarget;
-  return sameHarness && sameCampaign ? [] : [ADMISSION_REASON.IDENTITY_MISMATCH];
+    harness.adapterIds.length > 0 &&
+    !arraySome(harness.adapterIds, (id) => !arrayIncludes(header.harness.adapterIds, id));
+  if (!sameHarness) reasons.push(ADMISSION_REASON.HARNESS_MISMATCH);
+  if (run.plan.manifestDigest !== header.manifestDigest ||
+      run.executionTarget !== header.executionTarget) {
+    reasons.push(ADMISSION_REASON.IDENTITY_MISMATCH);
+  }
+  return reasons;
 }
 
 function isSentinel(value) {
