@@ -26,20 +26,26 @@ import {
   writeFixtureRoot,
 } from '../comparative-benchmark-fixtures.js';
 import {formatNum} from '../comparative-landing-svg-renderer.js';
-import {executeBenchmarkWorkload} from '../real-product-workload-drivers.js';
+import {computeV1PayloadDigest} from '../raw-observation-forensic-reader.js';
+import {
+  benchmarkDriverSourceIdentity,
+  executeBenchmarkWorkload,
+} from '../real-product-workload-drivers.js';
 import {
   FAKE_PRODUCT_FAULT,
   createFakeOltpProduct,
 } from './real-product-workload-driver-fake-product.js';
 import {FAILURE_CLASS, OPERATION_OUTCOME} from '../benchmark-operation-outcome.js';
-import {BENCHMARK_RUN_STATUS} from '../benchmark-scenario-a-run.js';
+import {
+  BENCHMARK_RUN_STATUS,
+  BENCHMARK_SCENARIO_A_ADAPTER_ID,
+} from '../benchmark-scenario-a-run.js';
 import {BENCHMARK_PROFILE_CLASS} from '../benchmark-workload-dispatch.js';
 import {OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS} from '../oltp-scenario-a-semantic-gate.js';
 import {
   EXECUTION_TARGET,
   READINESS_STATE,
   RECORD_REJECTION,
-  computeV1PayloadDigest,
   validateRunRecord,
 } from '../raw-observation-record.js';
 import {SCENARIO_OUTCOME} from '../scenario-outcome.js';
@@ -52,6 +58,7 @@ const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringReplace = Function.call.bind(String.prototype.replace);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const LAGRANGE = 'lagrange';
 const TIDB = 'tidb-tikv';
@@ -192,8 +199,12 @@ describe('claim admission through the publication path', () => {
       for (const h of run.deployment.hosts) h.bootId = 'same-machine';
     }],
     ['delay formula in the plan', ADMISSION_REASON.DELAY_OR_BYTE_FORMULA, (run) => {
-      run.plan.warmup = {delayFormula: 'execMs + stages * 2 * oneWayMs'};
+      run.deployment.placement = {delayFormula: 'execMs + stages * 2 * oneWayMs'};
     }],
+    ['executed warm-up differs from the plan', ADMISSION_REASON.WARMUP_PLAN_MISMATCH,
+      (run) => {
+        run.plan.warmup = {operations: 10, digest: `sha256:${'6'.repeat(64)}`};
+      }],
     ['wrong dispatch family', ADMISSION_REASON.WRONG_DISPATCH_FAMILY, (run) => {
       run.scenario = 'scenarioC';
       run.claimKey = stringReplace(run.claimKey, '/scenarioA/', '/scenarioC/');
@@ -265,7 +276,8 @@ describe('claim admission through the publication path', () => {
         receiptId: 'receipt-tidb-tikv-scenario-a', rawObservationPayload: payload,
         rawObservationsDigest: computeV1PayloadDigest(payload)};
       const {matrix, readme} = await publish([
-        {schemaVersion: 'lagrange-raw-observation-campaign-v1', gitCommit: 'f'.repeat(40)}, v1]);
+        {schemaVersion: 'lagrange-raw-observation-campaign-v1', recordType: 'campaign-header',
+          gitCommit: 'f'.repeat(40)}, v1]);
       const cell = fixtureTargetCell(matrix, TIDB);
       assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
       assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.FORENSIC_RECORD), true);
@@ -291,6 +303,53 @@ function setupFailed(run, setup) {
   run.correctness = {semanticGate: null, finalState: null};
   sealFixtureRun(run, {keepPlan: true});
 }
+
+describe('harness identity across a multi-arm campaign', () => {
+  const ARMS = Object.freeze(['lagrange-pgwire', 'tidb-mysql2', 'postgresql-pgwire']);
+
+  async function publishWithHarness(runHarness, headerHarness) {
+    const runs = arrayMap(pair(), (run) => {
+      run.identity.harness = {...run.identity.harness, ...runHarness};
+      return sealFixtureRun(run);
+    });
+    const header = buildFixtureHeader({campaignId: 'fixture-campaign'});
+    header.harness = {...header.harness, ...headerHarness};
+    const {matrix} = await publish([header, ...runs]);
+    return fixtureTargetCell(matrix, LAGRANGE);
+  }
+
+  it('a run whose adapters are a subset of the campaign union is the same harness',
+    async () => {
+      const cell = await publishWithHarness({adapterIds: [ARMS[0]]}, {adapterIds: ARMS});
+      assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED, cell.reasons.join(', '));
+    });
+
+  it('an adapter outside the campaign union is a harness mismatch', async () => {
+    const cell = await publishWithHarness({adapterIds: ['other-adapter']},
+      {adapterIds: ARMS});
+    assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.HARNESS_MISMATCH), true,
+      cell.reasons.join(', '));
+  });
+
+  it('a different driver source digest or commit is a harness mismatch', async () => {
+    for (const change of [{driverSourceSha256: 'e'.repeat(64)}, {gitCommit: 'c'.repeat(40)}]) {
+      const cell = await publishWithHarness(change, {});
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.HARNESS_MISMATCH), true,
+        cell.reasons.join(', '));
+    }
+  });
+
+  it('a dirty checkout is a typed identity fact that refuses the cell', async () => {
+    for (const [runDirty, headerDirty] of [[true, false], [false, true]]) {
+      const cell = await publishWithHarness({checkoutDirty: runDirty},
+        {checkoutDirty: headerDirty});
+      assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.CHECKOUT_DIRTY), true,
+        cell.reasons.join(', '));
+    }
+  });
+});
 
 describe('semantic gate by profile class and stopped runs', () => {
   const incomplete = (run) => {
@@ -351,9 +410,13 @@ describe('driver output through admission', () => {
       const base = buildFixtureRun({subkind: 'smoke', offeredRatePerSec: 50,
         profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
       const run = composeFixtureRunFromDriverOutput(base, output);
-      // The campaign header records the harness identity the driver reported.
-      const header = {...buildFixtureHeader({campaignId: 'fixture-campaign'}),
-        harness: run.identity.harness};
+      // The campaign header carries the executed-driver digest from the driver's
+      // own identity function and the adapter union over the three arms.
+      const {driverSourceSha256} = await benchmarkDriverSourceIdentity();
+      assert.equal(run.identity.harness.driverSourceSha256, driverSourceSha256);
+      const header = buildFixtureHeader({campaignId: 'fixture-campaign'});
+      header.harness = {...header.harness, driverSourceSha256,
+        adapterIds: [...Object.values(BENCHMARK_SCENARIO_A_ADAPTER_ID)]};
       const {matrix, readme} = await publish([header, run]);
       const cell = fixtureTargetCell(matrix, LAGRANGE, 'scenarioA/smoke');
       assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE, cell.reasons.join(', '));
@@ -414,7 +477,8 @@ describe('invalidation ledger and offline recomputation', () => {
       const payload = {completed: 1};
       const v1 = {schemaVersion: 'lagrange-raw-observation-v1', receiptId: 'receipt-x',
         rawObservationPayload: payload, rawObservationsDigest: computeV1PayloadDigest(payload)};
-      const header = {schemaVersion: 'lagrange-raw-observation-campaign-v1', gitCommit: 'f'};
+      const header = {schemaVersion: 'lagrange-raw-observation-campaign-v1',
+        recordType: 'campaign-header', gitCommit: 'f'};
       const {root} = await publishFixtureCampaign({rawRecords: [header, v1]});
       try {
         const uncovered = await recomputeComparativeBenchmarks(root);
@@ -455,4 +519,43 @@ describe('adversarial acceptance cases (J9, J10, J12, J13)', () => {
   for (const [name, run] of Object.entries(ADVERSARIAL_CASES)) {
     it(name, run);
   }
+});
+
+// The publication path (regeneration, store, matrix, renderers) must not reach the
+// forensic v1 reader, and no publication module may know the v1 schema names.
+const PUBLICATION_ENTRY_MODULES = Object.freeze([
+  'raw-observation-campaign-specs.js', 'raw-observation-store.js',
+  'comparative-matrix-runner.js', 'scaleout-series-experiments.js',
+  'comparative-landing-page.js', 'oltp-comparison-static-web.js',
+]);
+const FORENSIC_READER = 'raw-observation-forensic-reader.js';
+const IMPORT_PATTERN =
+  /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/gu;
+
+function publicationImportGraph() {
+  const harnessDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  const seen = new Set();
+  const pending = arrayMap(PUBLICATION_ENTRY_MODULES, (name) => path.join(harnessDir, name));
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    for (const match of fs.readFileSync(file, 'utf8').matchAll(IMPORT_PATTERN)) {
+      const specifier = match[1] || match[2];
+      if (stringStartsWith(specifier, '.')) pending.push(path.resolve(path.dirname(file), specifier));
+    }
+  }
+  return seen;
+}
+
+describe('the forensic reader is outside the publication path', () => {
+  it('no publication module imports the v1 reader or names a v1 schema', () => {
+    const graph = publicationImportGraph();
+    assert.ok(graph.size > PUBLICATION_ENTRY_MODULES.length, 'the walk follows imports');
+    for (const file of graph) {
+      assert.notEqual(path.basename(file), FORENSIC_READER, `${file} is publication`);
+      assert.equal(stringIncludes(fs.readFileSync(file, 'utf8'), 'lagrange-raw-observation-v1'),
+        false, `${file} names a v1 schema`);
+    }
+  });
 });

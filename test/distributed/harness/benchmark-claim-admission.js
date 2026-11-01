@@ -92,6 +92,8 @@ const ADMISSION_REASON = Object.freeze({
   CAMPAIGN_HEADER_MISSING: 'campaign-header-missing',
   IDENTITY_MISSING: 'identity-missing',
   IDENTITY_MISMATCH: 'identity-mismatch',
+  HARNESS_MISMATCH: 'harness-mismatch',
+  CHECKOUT_DIRTY: 'checkout-dirty',
   IDENTITY_NOT_RUNNING: 'identity-not-running',
   IDENTITY_CHANGED_DURING_WINDOW: 'identity-changed-during-window',
   RESTART_DURING_WINDOW: 'restart-during-window',
@@ -113,6 +115,7 @@ const ADMISSION_REASON = Object.freeze({
   SEMANTIC_GATE_FAILED: 'semantic-gate-failed',
   SEMANTIC_GATE_INCOMPLETE: 'semantic-gate-incomplete',
   SWEEP_PLAN_MISSING: 'sweep-plan-missing',
+  WARMUP_PLAN_MISMATCH: 'warmup-plan-mismatch',
   DATASET_PREPARATION_FAILED: 'dataset-preparation-failed',
   SETUP_HARNESS_FAULT: 'setup-harness-fault',
   WARMUP_FAILED: 'warmup-failed',
@@ -239,22 +242,22 @@ function invalidationReasons(covering) {
   return {reasons, defectIds};
 }
 
-function forensicEvidence(claim, forensicRecords, invalidations) {
+function forensicEvidence(claim, retainedReferences, invalidations) {
   const wanted = claim.forensicReceiptIds || [];
-  const matched = arrayFilter(forensicRecords, (f) => arrayIncludes(wanted, f.record.receiptId));
+  const matched = arrayFilter(retainedReferences, (f) => arrayIncludes(wanted, f.recordId));
   const reasons = [];
   const defectIds = [];
   const pointers = arrayMap(matched, (f) => {
     const covering = invalidationsCovering({
-      file: f.file, campaignGitCommit: f.campaignGitCommit, recordId: f.record.receiptId,
+      file: f.file, campaignGitCommit: f.campaignGitCommit, recordId: f.recordId,
     }, invalidations);
     const explained = invalidationReasons(covering);
     reasons.push(...explained.reasons);
     defectIds.push(...explained.defectIds);
     return {
       file: f.file,
-      receiptId: f.record.receiptId,
-      rawObservationsDigest: f.record.rawObservationsDigest,
+      receiptId: f.recordId,
+      rawObservationsDigest: f.rawObservationsDigest,
       invalidationIds: arrayMap(covering, (inv) => inv.id),
     };
   });
@@ -263,15 +266,27 @@ function forensicEvidence(claim, forensicRecords, invalidations) {
 
 // ---- v2 run checks ----
 
+// Same harness: same commit and executed-driver digest as the campaign header,
+// the run's adapters within the header's union over all arms, and neither
+// checkout dirty (a dirty checkout is its own typed fact). The campaign itself
+// (manifest, execution target) must match as well.
 function checkIdentityAgainstHeader(run, header) {
   if (!header) return [ADMISSION_REASON.CAMPAIGN_HEADER_MISSING];
   const harness = run.identity.harness;
+  const reasons = [];
+  if (harness.checkoutDirty !== false || header.harness.checkoutDirty !== false) {
+    reasons.push(ADMISSION_REASON.CHECKOUT_DIRTY);
+  }
   const sameHarness = harness.gitCommit === header.harness.gitCommit &&
     harness.driverSourceSha256 === header.harness.driverSourceSha256 &&
-    jsonStringify(harness.adapterIds) === jsonStringify(header.harness.adapterIds);
-  const sameCampaign = run.plan.manifestDigest === header.manifestDigest &&
-    run.executionTarget === header.executionTarget;
-  return sameHarness && sameCampaign ? [] : [ADMISSION_REASON.IDENTITY_MISMATCH];
+    harness.adapterIds.length > 0 &&
+    !arraySome(harness.adapterIds, (id) => !arrayIncludes(header.harness.adapterIds, id));
+  if (!sameHarness) reasons.push(ADMISSION_REASON.HARNESS_MISMATCH);
+  if (run.plan.manifestDigest !== header.manifestDigest ||
+      run.executionTarget !== header.executionTarget) {
+    reasons.push(ADMISSION_REASON.IDENTITY_MISMATCH);
+  }
+  return reasons;
 }
 
 function isSentinel(value) {
@@ -312,21 +327,29 @@ function hasWindow(run) {
     run.observations.runStatus === BENCHMARK_RUN_STATUS.WATCHDOG_STOPPED;
 }
 
+// Counts keyed by operation kind, keys sorted, zero counts omitted, so a planned
+// and an executed slice compare as one canonical value.
+function sortedCounts(counts) {
+  return Object.fromEntries(arrayFilter(Object.entries(counts).sort(),
+    ([, n]) => n !== 0));
+}
+
+function kindCounts(requests) {
+  const counts = Object.fromEntries(arrayMap([...new Set(arrayMap(requests,
+    (r) => r.operationKind))], (kind) => [kind, 0]));
+  for (const r of requests) counts[r.operationKind] += 1;
+  return sortedCounts(counts);
+}
+
 function checkPlannedSlice(run) {
   const requests = run.observations.requests;
   const reasons = [];
   if (run.plan.operationSliceDigest !== run.observations.executedOperationsDigest) {
     reasons.push(ADMISSION_REASON.EXECUTED_OPERATIONS_MISMATCH);
   }
-  const issuedByKind = {};
-  for (const r of requests) {
-    if (r.outcome !== OPERATION_OUTCOME.UNISSUED) {
-      issuedByKind[r.operationKind] = (issuedByKind[r.operationKind] || 0) + 1;
-    }
-  }
-  const planned = run.plan.plannedOperationCounts;
-  const kinds = unique([...Object.keys(planned), ...Object.keys(issuedByKind)]);
-  if (arraySome(kinds, (k) => (planned[k] || 0) !== (issuedByKind[k] || 0))) {
+  if (jsonStringify(kindCounts(arrayFilter(requests,
+    (r) => r.outcome !== OPERATION_OUTCOME.UNISSUED))) !==
+      jsonStringify(sortedCounts(run.plan.plannedOperationCounts))) {
     reasons.push(ADMISSION_REASON.PLANNED_COUNTS_MISMATCH);
   }
   return reasons;
@@ -428,6 +451,14 @@ function checkSemanticGate(run) {
     ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED];
 }
 
+// The executed warm-up (observations.warmup) must be the preregistered one
+// (plan.warmup): same operation count and the same executed slice digest.
+function warmupMatchesPlan(planned, executed) {
+  if (planned.operations === 0) return executed === null || executed === undefined;
+  return Boolean(executed) && executed.accounting.offered === planned.operations &&
+    executed.executedOperationsDigest === planned.digest;
+}
+
 function checkScenarioA(run) {
   const plan = run.plan;
   const reasons = [];
@@ -439,8 +470,11 @@ function checkScenarioA(run) {
       plan.openLoopProfileId !== OLTP_OPEN_LOOP_PROFILE.id) {
     reasons.push(ADMISSION_REASON.NON_CANONICAL_WORKLOAD);
   }
-  if (plan.profileClass === BENCHMARK_PROFILE_CLASS.CAPACITY && plan.sweepPlanDigest === null) {
-    reasons.push(ADMISSION_REASON.SWEEP_PLAN_MISSING);
+  if (plan.profileClass === BENCHMARK_PROFILE_CLASS.CAPACITY) {
+    if (plan.sweepPlanDigest === null) reasons.push(ADMISSION_REASON.SWEEP_PLAN_MISSING);
+    if (!warmupMatchesPlan(plan.warmup, run.observations.warmup)) {
+      reasons.push(ADMISSION_REASON.WARMUP_PLAN_MISMATCH);
+    }
   }
   // A run stopped before its window has no gate verdict or final state to check;
   // it is published as the product failure it is.
@@ -517,15 +551,17 @@ function checkRunSet(entries) {
 
 // ---- metrics and sufficiency ----
 
+// Sums run accountings field by field; every run carries the same fields
+// (validated by the outcome owner), so the first run fixes the shape.
 function sumAccounting(runMetrics) {
-  const total = {offered: 0, issued: 0, unissued: 0, attempts: 0, committed: 0, conflicts: 0,
-    conflictExhausted: 0, unresolved: 0, terminalFailures: {}};
-  for (const m of runMetrics) {
+  const first = runMetrics[0].accounting;
+  const total = {...first, terminalFailures: {...first.terminalFailures}};
+  for (const m of runMetrics.slice(1)) {
     for (const [key, value] of Object.entries(m.accounting)) {
       if (typeof value === 'number') total[key] += value;
     }
     for (const [cls, n] of Object.entries(m.accounting.terminalFailures)) {
-      total.terminalFailures[cls] = (total.terminalFailures[cls] || 0) + n;
+      total.terminalFailures[cls] += n;
     }
   }
   return total;
@@ -668,12 +704,12 @@ function partitionByLedger(entries, campaignHeaders, invalidations) {
 /**
  * Admit one claim.
  * @param {{claim: Object, runs: Array<{file: string, run: Object}>,
- *   campaignHeaders: Map<string, Object>, forensicRecords: Array<Object>,
+ *   campaignHeaders: Map<string, Object>, retainedReferences: Array<Object>,
  *   invalidations: Array<Object>}} input
  * @return {Object} The admission cell.
  */
-function admitClaim({claim, runs, campaignHeaders, forensicRecords, invalidations}) {
-  const forensic = forensicEvidence(claim, forensicRecords, invalidations);
+function admitClaim({claim, runs, campaignHeaders, retainedReferences, invalidations}) {
+  const forensic = forensicEvidence(claim, retainedReferences, invalidations);
   const entries = arrayFilter(runs, (e) =>
     e.run?.targetId === claim.targetId && e.run?.subkind === claim.subkind);
   const {live, invalidated} = partitionByLedger(entries, campaignHeaders, invalidations);

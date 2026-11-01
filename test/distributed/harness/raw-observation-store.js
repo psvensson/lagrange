@@ -51,13 +51,13 @@ function listRawObservationFiles(rootDir) {
  * Read every raw observation file. A missing primary file or a corrupt line throws.
  * @param {string} rootDir
  * @return {{sources: Array<Object>, campaignHeaders: Map<string, Object>,
- *   runs: Array<{file: string, run: Object}>, forensicRecords: Array<Object>}}
+ *   runs: Array<{file: string, run: Object}>, retainedReferences: Array<Object>}}
  */
 function readRawObservationSources(rootDir = REPO_ROOT) {
   const sources = [];
   const campaignHeaders = new Map();
   const runs = [];
-  const forensicRecords = [];
+  const retainedReferences = [];
   for (const relPath of listRawObservationFiles(rootDir)) {
     const absPath = path.resolve(rootDir, relPath);
     if (!fs.existsSync(absPath)) throw new Error(`Raw observation file missing: ${relPath}`);
@@ -70,9 +70,9 @@ function readRawObservationSources(rootDir = REPO_ROOT) {
       campaignHeaders.set(header.campaignId, header);
     }
     for (const run of parsed.runs) runs.push({file: relPath, run});
-    forensicRecords.push(...parsed.forensicRecords);
+    retainedReferences.push(...parsed.retainedReferences);
   }
-  return {sources, campaignHeaders, runs, forensicRecords};
+  return {sources, campaignHeaders, runs, retainedReferences};
 }
 
 function ledgerSource(rootDir) {
@@ -96,7 +96,7 @@ function deriveAdmittedMeasurementsFromRawObservations(rootDir = REPO_ROOT) {
   const manifest = buildCoverageManifest();
   const cells = arrayMap(listManifestClaims(manifest), (claim) => admitClaim({
     claim, runs: raw.runs, campaignHeaders: raw.campaignHeaders,
-    forensicRecords: raw.forensicRecords, invalidations,
+    retainedReferences: raw.retainedReferences, invalidations,
   }));
   return {
     schema: ADMITTED_CLAIM_CELLS_SCHEMA,

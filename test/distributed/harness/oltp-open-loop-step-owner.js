@@ -209,17 +209,21 @@ function freezeRequestRecord(state, disposition, evidenceOptions, closedAtMs = n
     issuedAtMs: state.issuedAtMs,
     executionStartedAtMs: state.executionStartedAtMs,
     completedAtMs,
+    // Unclamped: a negative lag is a clock defect the validator refuses.
     issueLagMs: state.issuedAtMs === null ? null :
-      Math.max(ZERO, state.issuedAtMs - entry.intendedIssueTimeMs),
+      state.issuedAtMs - entry.intendedIssueTimeMs,
     queueDelayMs: state.executionStartedAtMs === null ? null :
-      Math.max(ZERO, state.executionStartedAtMs - entry.intendedIssueTimeMs),
+      state.executionStartedAtMs - entry.intendedIssueTimeMs,
     latencyMs: completedAtMs === null ? null :
-      Math.max(ZERO, completedAtMs - entry.intendedIssueTimeMs),
+      completedAtMs - entry.intendedIssueTimeMs,
     outcome: disposition.outcome,
-    failureClass: disposition.failureClass ?? null,
+    failureClass: disposition.failureClass,
     ...(disposition.unresolvedReason ? {unresolvedReason: disposition.unresolvedReason} : {}),
-    retries: state.retryEvidence?.retries ?? Math.max(ZERO, state.attempts.length - ONE),
-    retryDelayMs: state.retryEvidence?.retryDelayMs ?? null,
+    // Retries are the recorded attempts beyond the first; the retry delay is
+    // known only from the retry owner's evidence (null when the watchdog
+    // closed the request before the owner returned).
+    retries: attempts.length === ZERO ? ZERO : attempts.length - ONE,
+    retryDelayMs: state.retryEvidence ? state.retryEvidence.retryDelayMs : null,
     effectSummary: effectSummaryOf(state, disposition),
     endpoint: attemptOf?.endpoint ?? null,
     serverConnectionId: attemptOf?.serverConnectionId ?? null,
@@ -234,8 +238,17 @@ function effectSummaryOf(state, disposition) {
   return NO_COMMITTED_EFFECT;
 }
 
+// An attempt that failed without passing the wire capture: no statement or
+// answer was observed for it (named, not an empty default).
+const NO_WIRE_EVIDENCE = Object.freeze({
+  wireEvidence: 'not-captured',
+  statements: Object.freeze([]),
+  productAnsweredError: false,
+});
+
 function typedAttemptOf(value) {
-  if (value?.outcome !== OPERATION_OUTCOME.COMMITTED || !value.attemptEvidence) {
+  if (value?.outcome !== OPERATION_OUTCOME.COMMITTED || !value.attemptEvidence ||
+      !value.result || typeof value.result !== 'object') {
     throw createBenchmarkHarnessFault(
       'Open-loop OLTP adapter resolved without a typed committed outcome');
   }
@@ -273,10 +286,10 @@ async function executeTypedAttempt(adapter, state, run, attemptNo) {
       outcome: OPERATION_OUTCOME.COMMITTED,
       result: typed.result,
     }));
-    state.effectSummary = typed.result ?? null;
+    state.effectSummary = typed.result;
     return typed;
   } catch (error) {
-    const evidence = error?.benchmarkAttemptEvidence || {};
+    const evidence = error?.benchmarkAttemptEvidence ?? NO_WIRE_EVIDENCE;
     const classified = classifyBenchmarkAttemptFailure(error, evidence);
     if (run.stopped) {
       recordLateCompletion(run, state, classified.outcome);
@@ -310,8 +323,15 @@ async function runRequest(adapter, state, run) {
     state.final = {outcome: OPERATION_OUTCOME.COMMITTED, failureClass: null};
   } catch (error) {
     if (run.stopped) return;
-    state.retryEvidence = error?.oltpRetryEvidence ?? null;
-    state.completedAtMs = state.retryEvidence?.completedAtMs ?? run.now();
+    if (!error?.oltpRetryEvidence) {
+      // Only the retry owner ends a request; any other error is our fault.
+      state.completedAtMs = run.now();
+      state.final = {outcome: OPERATION_OUTCOME.TERMINAL_FAILURE,
+        failureClass: FAILURE_CLASS.HARNESS_FAULT};
+      return;
+    }
+    state.retryEvidence = error.oltpRetryEvidence;
+    state.completedAtMs = state.retryEvidence.completedAtMs;
     state.final = settleFromError(state);
   }
 }
@@ -350,7 +370,7 @@ function summarizeWindow(issuePlan, records, offeredRatePerSec, run) {
     ({completedAtMs}) => completedAtMs);
   const lastObservedMs = run.stopped ? run.stoppedAtMs :
     (completions.length > ZERO ? Math.max(...completions) : firstIssueMs);
-  const drainMs = Math.max(ZERO, lastObservedMs - firstIssueMs);
+  const drainMs = lastObservedMs - firstIssueMs;
   return Object.freeze({
     scheduledMs,
     drainMs,

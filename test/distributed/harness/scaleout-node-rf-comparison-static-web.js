@@ -13,6 +13,7 @@ function buildPage(matrix) {
     intro: ['A scale-out claim needs Scenario A runs at both node counts with observed process placement; replica placement needs its own observation and is never derived from the replication factor.'],
     sections: [
       buildExperimentSection(matrix, 'scaleout-3to5-node-rf3', ''),
+      buildExperimentSection(matrix, 'replica-placement-5node-rf3', ''),
     ],
     links: SCENARIO_LINKS, sources: matrix.sources,
     svgHref: 'scaleout-3to5-node-rf3-progress.svg',

@@ -3,10 +3,21 @@
 //
 // v2 is the only record publication may consume: one record per run, NDJSON,
 // append-only. The validator throws on anything malformed and never coerces a
-// missing or invalid value to zero. The v1 reader below exists only to parse the
-// retained forensic campaign files; v1 records never feed publication.
-import {createHash} from 'node:crypto';
-
+// missing or invalid value to zero. Lines of earlier schemas are kept only as
+// retention envelopes; the forensic reader (raw-observation-forensic-reader.js)
+// verifies them on the recomputation path and is never imported by publication.
+//
+// Decisions recorded with the coordinator (2026-11-01):
+// - deployment.dataset is the product-content snapshot verification of
+//   benchmark-oltp-state-reconciliation.js: the digest of the snapshot read back
+//   from the product compared with the generator's expected digest, with the
+//   per-table rows observed. It supersedes the design note's
+//   {tables, keyCoverage, logicalChecksum}; there is no second accepted shape.
+// - plan.warmup is the preregistered warm-up specification written before any
+//   run ({operations, digest}: the planned warm-up operation count and the digest
+//   of that slice; digest is null exactly when no warm-up is planned).
+//   observations.warmup is what the driver executed. Admission refuses a capacity
+//   cell whose executed warm-up differs from the planned one.
 import {digest, serializeJsonData} from '../../../src/utils/canonical-json-data.js';
 import {
   FAILURE_CLASS,
@@ -30,8 +41,6 @@ const dateParse = Date.parse;
 
 const RAW_OBSERVATION_SCHEMA = Object.freeze({
   V2: 'lagrange-raw-observation-v2',
-  V1_RUN: 'lagrange-raw-observation-v1',
-  V1_CAMPAIGN: 'lagrange-raw-observation-campaign-v1',
 });
 
 const RAW_RECORD_TYPE = Object.freeze({
@@ -124,6 +133,7 @@ const IDENTITY_FIELD = Object.freeze({
   PRODUCTS_AFTER_WINDOW: 'productsAfterWindow',
   PUBLICATION: 'publication',
   GIT_COMMIT: 'gitCommit',
+  CHECKOUT_DIRTY: 'checkoutDirty',
   DRIVER_SOURCE_SHA256: 'driverSourceSha256',
   ADAPTER_IDS: 'adapterIds',
 });
@@ -319,9 +329,16 @@ function requireNullableObject(value, at) {
   return requireObject(value, at);
 }
 
+// Harness identity: the checkout commit, whether the checkout was dirty, the
+// digest of the executed driver sources (driverSourceIdentity of
+// real-product-workload-drivers.js) and the adapters. On a campaign header
+// adapterIds is the union over the campaign's arms; on a run it is that arm's.
 function validateHarnessIdentity(harness, at) {
   requireObject(harness, at);
   requireText(harness[IDENTITY_FIELD.GIT_COMMIT], `${at}.gitCommit`);
+  if (typeof harness[IDENTITY_FIELD.CHECKOUT_DIRTY] !== 'boolean') {
+    reject(RECORD_REJECTION.MISSING_FIELD, `${at}.checkoutDirty must be a boolean`);
+  }
   requireText(harness[IDENTITY_FIELD.DRIVER_SOURCE_SHA256], `${at}.driverSourceSha256`);
   const adapterIds = requireArray(harness[IDENTITY_FIELD.ADAPTER_IDS], `${at}.adapterIds`);
   adapterIds.forEach((id, idx) => requireText(id, `${at}.adapterIds[${idx}]`));
@@ -380,7 +397,15 @@ function validatePlan(plan) {
   }
   requireCount(plan[PLAN_FIELD.REPETITION], 'plan.repetition');
   requireCount(plan[PLAN_FIELD.ORDER_INDEX], 'plan.orderIndex');
-  requireObject(plan[PLAN_FIELD.WARMUP], 'plan.warmup');
+  const warmup = requireObject(plan[PLAN_FIELD.WARMUP], 'plan.warmup');
+  requireCount(warmup.operations, 'plan.warmup.operations');
+  if (warmup.operations === 0) {
+    if (warmup.digest !== null) {
+      reject(RECORD_REJECTION.INVALID_TEXT, 'plan.warmup.digest must be null without warm-up');
+    }
+  } else {
+    requireText(warmup.digest, 'plan.warmup.digest');
+  }
 }
 
 function validateHosts(hosts, at) {
@@ -638,51 +663,63 @@ function validateCampaignHeader(header) {
   return header;
 }
 
-// ---- v1 forensic reader (retained campaign files only; never publication input) ----
-
-function computeV1PayloadDigest(payload) {
-  const hex = createHash('sha256').update(jsonStringify(payload), 'utf8').digest('hex');
-  return `sha256:${hex}`;
-}
+// ---- retained (non-admissible) lines ----
+//
+// A raw observation file may hold lines of an earlier schema (the retained
+// forensic campaigns). Publication never interprets them: it keeps only the
+// retention envelope (record id, stored digest, the campaign commit of the
+// preceding retained campaign header) so a withdrawn claim can name the record
+// and its invalidation. Reading and verifying those lines is the forensic
+// reader's job (raw-observation-forensic-reader.js), reachable only from the
+// recomputation path.
 
 function parseLine(line, file, lineNo) {
   try {
     return jsonParse(line);
-  } catch {
-    return reject(RECORD_REJECTION.CORRUPT_LINE, `${file}:${lineNo} is not JSON`);
+  } catch (err) {
+    return reject(RECORD_REJECTION.CORRUPT_LINE, `${file}:${lineNo} is not JSON: ${err.message}`);
   }
+}
+
+function retainLine(parsed, file, lineNo, out) {
+  if (parsed?.recordType === RAW_RECORD_TYPE.CAMPAIGN_HEADER) {
+    out.retainedCampaignCommit = requireText(parsed.gitCommit, `${file}:${lineNo} gitCommit`);
+    return;
+  }
+  out.retainedReferences.push(Object.freeze({
+    file,
+    campaignGitCommit: out.retainedCampaignCommit,
+    recordId: requireText(parsed?.receiptId, `${file}:${lineNo} receiptId`),
+    rawObservationsDigest: requireText(parsed?.rawObservationsDigest,
+      `${file}:${lineNo} rawObservationsDigest`),
+  }));
 }
 
 function classifyLine(parsed, file, lineNo, out) {
-  const schema = parsed?.schemaVersion;
-  if (schema === RAW_OBSERVATION_SCHEMA.V1_CAMPAIGN) {
-    out.forensicHeaders.push({file, header: parsed});
-  } else if (schema === RAW_OBSERVATION_SCHEMA.V1_RUN) {
-    if (computeV1PayloadDigest(parsed.rawObservationPayload) !== parsed.rawObservationsDigest) {
-      reject(RECORD_REJECTION.DIGEST_MISMATCH, `${file}:${lineNo} forensic ${parsed.receiptId}`);
-    }
-    const header = out.forensicHeaders[out.forensicHeaders.length - 1]?.header || null;
-    out.forensicRecords.push({file, campaignGitCommit: header?.gitCommit ?? null, record: parsed});
-  } else if (schema === RAW_OBSERVATION_SCHEMA.V2 &&
-      parsed.recordType === RAW_RECORD_TYPE.CAMPAIGN_HEADER) {
+  if (parsed?.schemaVersion !== RAW_OBSERVATION_SCHEMA.V2) {
+    retainLine(parsed, file, lineNo, out);
+  } else if (parsed.recordType === RAW_RECORD_TYPE.CAMPAIGN_HEADER) {
     out.campaignHeaders.push(parsed);
-  } else if (schema === RAW_OBSERVATION_SCHEMA.V2 && parsed.recordType === RAW_RECORD_TYPE.RUN) {
+  } else if (parsed.recordType === RAW_RECORD_TYPE.RUN) {
     out.runs.push(parsed);
   } else {
-    reject(RECORD_REJECTION.UNKNOWN_SCHEMA, `${file}:${lineNo} schema ${schema}`);
+    reject(RECORD_REJECTION.UNKNOWN_SCHEMA, `${file}:${lineNo} recordType ${parsed.recordType}`);
   }
 }
 
-// Splits a raw observation file into v2 campaign headers/runs and v1 forensic
-// records. v2 runs are returned unvalidated: admission validates each one so a
-// malformed run becomes a typed invalid cell instead of hiding its neighbours.
+// Splits a raw observation file into v2 campaign headers and runs, plus the
+// retention envelopes of non-admissible lines. v2 runs are returned unvalidated:
+// admission validates each one so a malformed run becomes a typed invalid cell
+// instead of hiding its neighbours.
 function parseRawObservationText(text, file) {
-  const out = {campaignHeaders: [], runs: [], forensicHeaders: [], forensicRecords: []};
+  const out = {campaignHeaders: [], runs: [], retainedReferences: [],
+    retainedCampaignCommit: null};
   const lines = arrayMap(stringSplit(text, '\n'), (l) => stringTrim(l));
   lines.forEach((line, idx) => {
     if (line !== '') classifyLine(parseLine(line, file, idx + 1), file, idx + 1, out);
   });
-  return out;
+  return {campaignHeaders: out.campaignHeaders, runs: out.runs,
+    retainedReferences: out.retainedReferences};
 }
 
 export {
@@ -712,7 +749,6 @@ export {
   WINDOW_FIELD,
   buildClaimKey,
   computeRunObservationsDigest,
-  computeV1PayloadDigest,
   parseRawObservationText,
   validateCampaignHeader,
   validateRunRecord,
