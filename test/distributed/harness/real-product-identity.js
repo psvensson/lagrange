@@ -16,6 +16,7 @@ import {
   arrayMap,
   arraySome,
   stringIncludes,
+  stringIndexOf,
   stringLastIndexOf,
   stringReplace,
   stringSplit,
@@ -50,8 +51,10 @@ const EVENT_KIND = Object.freeze({
 
 function imageRepository(imageRef) {
   const text = String(imageRef || '');
-  const at = stringLastIndexOf(text, ':');
-  return at > stringLastIndexOf(text, '/') ? text.slice(0, at) : text;
+  const digestAt = stringIndexOf(text, '@');
+  const name = digestAt === -1 ? text : text.slice(0, digestAt);
+  const tagAt = stringLastIndexOf(name, ':');
+  return tagAt > stringLastIndexOf(name, '/') ? name.slice(0, tagAt) : name;
 }
 
 // A field `docker inspect` always returns, read by its path: a missing field
@@ -120,13 +123,19 @@ async function readImageFacts({sshRun, opts, host, imageId, imageRef}) {
   const image = await inspectJson({sshRun, opts, host, subject,
     command: `docker image inspect --format '{{json .}}' ${shellWord(imageId)}`});
   const field = (path) => inspectedField(image, path, subject);
-  const digests = field(['RepoDigests']);
+  const repoDigests = field(['RepoDigests']);
   const repository = imageRepository(imageRef);
-  const repoDigest = arrayFind(digests, (digest) => stringStartsWith(digest,
-    `${repository}@`)) || digests[0] || null;
+  // Only a digest of the pinned reference's repository identifies the pulled
+  // content; a digest of another repository the same image also carries is
+  // recorded in repoDigests and never stands in for it.
+  const pinned = arrayFilter(repoDigests, (digest) => stringStartsWith(digest,
+    `${repository}@`));
+  const repoDigest = pinned.length > 0 ? pinned[0] : null;
   // Provenance is a typed identity fact: pulled from the registry (a repo
-  // digest), or loaded content known only by its image id.
-  return {repoDigest, repoDigestStatus: repoDigest ? 'recorded' : REPO_DIGEST_NONE,
+  // digest of the pinned repository), or loaded content known only by its
+  // image id.
+  return {repoDigests, repoDigest,
+    repoDigestStatus: repoDigest ? 'recorded' : REPO_DIGEST_NONE,
     contentIdentity: contentIdentityOf(field(['RootFS', 'Layers'])),
     provenance: repoDigest ? `registry:${repoDigest}` : `loaded:${imageId}`,
     imageLabels: field(['Config', 'Labels']), imageCreated: field(['Created'])};

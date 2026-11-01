@@ -164,6 +164,35 @@ test('D18: the Lagrange image is pinned by content; a host where it was docker-l
   assert.equal(pulled.provenance, `registry:${registryRef}`);
 });
 
+test('F6: repoDigests records the full list; repoDigest is only the digest of the pinned ' +
+  'repository, and none matching is the typed loaded provenance', {timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  const registryRef = `psvensson/lagrange@sha256:${'1'.repeat(64)}`;
+  const mirror = `mirror.example/other@sha256:${'2'.repeat(64)}`;
+  const foreign = `someone/else@sha256:${'3'.repeat(64)}`;
+  const digestsOf = {'10.0.0.1': [mirror, registryRef], '10.0.0.2': [mirror, foreign],
+    '10.0.0.3': [registryRef]};
+  const {sshRun} = createScriptedSsh([
+    [/docker image inspect/u, (_command, host) => JSON.stringify({Id: LAGRANGE_IMAGE_ID,
+      RepoDigests: digestsOf[host], Created: '2026-10-30T10:00:00Z',
+      Config: {Labels: {}}, RootFS: {Layers: ['sha256:' + '7'.repeat(64)]}})],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  const deployment = await deployers.deployLagrangeCluster(input(sshRun, {opts: {...OPTS,
+    lagrangeImage: registryRef, lagrangeVersion: '0.4.0',
+    lagrangeImageContent: contentIdentityOf(['sha256:' + '7'.repeat(64)])}}));
+  const byHost = (host) => arrayFind(deployment.identity.products, (p) => p.host === host);
+  const unmatched = byHost('10.0.0.2');
+  assert.deepEqual(unmatched.repoDigests, [mirror, foreign]);
+  assert.equal(unmatched.repoDigest, null, 'a digest of another repository is never the pin');
+  assert.equal(unmatched.provenance, `loaded:${LAGRANGE_IMAGE_ID}`);
+  const matchedSecond = byHost('10.0.0.1');
+  assert.deepEqual(matchedSecond.repoDigests, [mirror, registryRef]);
+  assert.equal(matchedSecond.repoDigest, registryRef);
+  assert.equal(matchedSecond.provenance, `registry:${registryRef}`);
+  assert.equal(byHost('10.0.0.3').repoDigest, registryRef);
+});
+
 test('D18: image content identity is the digest of the ordered RootFS diff_ids, the same ' +
   'on a containerd store (.Id = manifest digest) and an overlay2 store (.Id = config ' +
   'digest); .Id is never compared across stores', {timeout: 300000}, async () => {
