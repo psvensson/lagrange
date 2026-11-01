@@ -18,7 +18,7 @@
  */
 
 import {createHash, randomBytes} from 'node:crypto';
-import {execFile, spawnSync} from 'node:child_process';
+import {execFile} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -80,6 +80,7 @@ import {
 import {
   observeProductsAfterWindow,
 } from '../../../test/distributed/harness/real-product-identity.js';
+import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
 import {discoverFleet, fleetRequirement} from '../../../scripts/lab/probe.js';
 import {loadState, selectNodesByRole} from '../../../scripts/lab/state.js';
 
@@ -238,10 +239,14 @@ function fileSha256(relative) {
     `sha256:${createHash('sha256').update(fs.readFileSync(file)).digest('hex')}` : null;
 }
 
+// The harness identity the campaign header and every run carry, read through
+// the repository's one git invocation owner. A git read that fails throws: a
+// campaign never records a substitute commit.
 function harnessIdentity() {
-  const git = (args) => spawnSync('git', args, {cwd: REPO_ROOT, encoding: 'utf8'}).stdout.trim();
+  const git = (args) => String(execGit(args, {cwd: REPO_ROOT, encoding: 'utf8',
+    bound: GIT_OUTPUT_BOUND.COMMAND})).trim();
   return {gitCommit: git(['rev-parse', 'HEAD']),
-    worktreeClean: git(['status', '--porcelain']) === '',
+    checkoutDirty: git(['status', '--porcelain']) !== '',
     // The workload owner's own source digest arrives per run from the load
     // generator (identity.harness of each run record).
     driverSourceSha256: fileSha256('test/distributed/harness/real-product-workload-drivers.js'),
