@@ -14,8 +14,8 @@ import {
   runOpenLoopOltpStep,
 } from '../../test/distributed/harness/oltp-open-loop-step-owner.js';
 import {
-  BENCHMARK_FAILURE_CLASS,
-  BENCHMARK_OPERATION_OUTCOME,
+  FAILURE_CLASS,
+  OPERATION_OUTCOME,
   BENCHMARK_UNRESOLVED_REASON,
 } from '../../test/distributed/harness/benchmark-operation-outcome.js';
 import {
@@ -32,12 +32,13 @@ const PASS_LINE = 'oltp-open-loop-step-owner-guard: PASS\n';
 const RATE_100 = 100;
 const START_1000 = 1000;
 const WATCHDOG = objectFreeze({boundMs: 60, derivation: objectFreeze({rule: 'guard'})});
-const COMMITTED = BENCHMARK_OPERATION_OUTCOME.COMMITTED;
+const COMMITTED = OPERATION_OUTCOME.COMMITTED;
 const PHASE_MEASUREMENT = 'measurement';
 const PROFILE_V2 = 'scenario-a-open-loop-v2';
 const PROFILE_V1 = 'scenario-a-open-loop-v1';
 const EXPECTED_INTENDED = objectFreeze([[1, 1000], [2, 1010], [1, 1020]]);
 const TRANSACTION_MS = 4;
+const BENCHMARK_FAILURE_CLASS_AMBIGUOUS = FAILURE_CLASS.AMBIGUOUS_COMMIT;
 const WATCHDOG_OPERATIONS = 8;
 const EVIDENCE = objectFreeze({
   endpoint: '10.0.0.1:5432',
@@ -128,7 +129,7 @@ async function assertCommittedRequiresTypedOutcome() {
   assert.ok(result.records[0].latencyMs >= TRANSACTION_MS);
   assert.equal(result.latency.count, TWO);
   assert.equal(result.quantileMethod, OLTP_LATENCY_QUANTILE_METHOD);
-  assert.match(result.executedOperationsDigest, /^[0-9a-f]{64}$/u);
+  assert.match(result.executedOperationsDigest, /^sha256:[0-9a-f]{64}$/u);
 }
 
 async function assertRetryInsideRequestClockAndNoBlindRetry() {
@@ -151,11 +152,11 @@ async function assertRetryInsideRequestClockAndNoBlindRetry() {
   const [retried, transport] = result.records;
   assert.equal(retried.outcome, COMMITTED);
   assert.equal(retried.attempts.length, TWO);
-  assert.equal(retried.attempts[0].outcome, BENCHMARK_OPERATION_OUTCOME.SERIALIZATION_CONFLICT);
+  assert.equal(retried.attempts[0].outcome, OPERATION_OUTCOME.SERIALIZATION_CONFLICT);
   assert.equal(retried.retries, ONE);
-  assert.equal(transport.outcome, BENCHMARK_OPERATION_OUTCOME.TERMINAL_FAILURE);
+  assert.equal(transport.outcome, OPERATION_OUTCOME.TERMINAL_FAILURE);
   // EPIPE is a socket outcome, never a SQLSTATE.
-  assert.equal(transport.failureClass, BENCHMARK_FAILURE_CLASS.TRANSPORT_FAILURE);
+  assert.equal(transport.failureClass, FAILURE_CLASS.TRANSPORT_FAILURE);
   assert.equal(transport.attempts.length, ONE);
   assert.equal(result.accounting.conflicts, ONE);
 }
@@ -180,8 +181,9 @@ async function assertWatchdogStopsIssuingAndSummarises() {
   const unresolved = result.records[1];
   assert.equal(unresolved.unresolvedReason, BENCHMARK_UNRESOLVED_REASON.WATCHDOG_IN_FLIGHT);
   assert.equal(unresolved.completedAtMs, null);
-  assert.equal(unresolved.attempts[0].endedMs, null);
-  assert.equal(result.records[TWO].outcome, BENCHMARK_OPERATION_OUTCOME.UNISSUED);
+  assert.equal(unresolved.attempts[0].closedByWatchdog, true);
+  assert.equal(unresolved.failureClass, BENCHMARK_FAILURE_CLASS_AMBIGUOUS);
+  assert.equal(result.records[TWO].outcome, OPERATION_OUTCOME.UNISSUED);
   assert.equal(result.records[TWO].executionStartedAtMs, null);
 }
 

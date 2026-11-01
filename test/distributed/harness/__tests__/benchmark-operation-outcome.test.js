@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import {
-  BENCHMARK_FAILURE_CLASS as CLASS,
-  BENCHMARK_OPERATION_OUTCOME as OUTCOME,
+  FAILURE_CLASS as CLASS,
+  OPERATION_OUTCOME as OUTCOME,
   classifyBenchmarkAttemptFailure,
   validateBenchmarkAccounting,
 } from '../benchmark-operation-outcome.js';
@@ -70,7 +70,8 @@ test('COMMIT failures map by SQLSTATE class, socket codes are never SQLSTATEs', 
 
 function record(overrides) {
   return {opId: 'measurement:1:1', outcome: OUTCOME.COMMITTED, failureClass: null,
-    intendedIssueTimeMs: 0, issuedAtMs: 0, executionStartedAtMs: 0, completedAtMs: 5,
+    intendedStartMs: 0, effectSummary: {paidCents: 1}, issuedAtMs: 0,
+    executionStartedAtMs: 0, completedAtMs: 5,
     issueLagMs: 0, queueDelayMs: 0, latencyMs: 5,
     attempts: [{outcome: OUTCOME.COMMITTED}], ...overrides};
 }
@@ -93,4 +94,6 @@ test('the accounting validator throws, never coerces', async () => {
   /unissued but has attempts/u);
   assert.throws(() => validateBenchmarkAccounting([record({attempts: []})]),
     /issued without an attempt/u);
+  assert.throws(() => validateBenchmarkAccounting([record({effectSummary: null})]),
+    /without an effect summary/u);
 });

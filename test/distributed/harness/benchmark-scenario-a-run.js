@@ -34,12 +34,17 @@ import {
 import {
   benchmarkCanonicalDigest,
   classifyBenchmarkAttemptFailure,
+  describePlannedOperationSlice,
 } from './benchmark-operation-outcome.js';
 import {
+  OLTP_RECONCILIATION_STATUS,
   observeOltpStateSnapshot,
   reconcileOltpFinalState,
   verifyOltpLoadedDataset,
 } from './benchmark-oltp-state-reconciliation.js';
+import {
+  BENCHMARK_PROFILE_CLASS,
+} from './benchmark-workload-dispatch.js';
 import {
   buildOltpBaselineDataset,
   hashOltpBaselineDataset,
@@ -215,9 +220,14 @@ function stepOptions(offeredRatePerSec, operations, runtime, evidence) {
 }
 
 function planIdentity(profile, plan, workloadPlan, dataset, offeredRatePerSec) {
+  const slice = describePlannedOperationSlice(
+    interleaveOltpWorkerPhase(workloadPlan.workers, 'measurement'));
   return Object.freeze({
     workloadProfileId: profile.id,
     publication: profile.publication,
+    profileClass: profile.profileClass,
+    operationSliceDigest: slice.operationSliceDigest,
+    plannedOperationCounts: slice.plannedOperationCounts,
     semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
     semanticProfileDigest: hashScenarioASemanticProfile(),
     retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id,
@@ -317,7 +327,7 @@ async function measure(context) {
   };
 }
 
-function observationsOf(measured, registry) {
+function observationsOf(measured, registry, profileClass) {
   const {step} = measured;
   if (!step) {
     return Object.freeze({
@@ -342,7 +352,9 @@ function observationsOf(measured, registry) {
     accounting: step.accounting,
     window: step.window,
     watchdog: step.watchdog,
-    completedPerSec: step.completedPerSec,
+    // A smoke run never carries a capacity metric.
+    ...(profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ? {} :
+      {completedPerSec: step.completedPerSec}),
     quantileMethod: step.quantileMethod,
     latency: step.latency,
     attemptLatency: step.attemptLatency,
@@ -396,10 +408,14 @@ async function executeScenarioARun(options) {
         verification: await verifyOltpLoadedDataset(dataset, loaded),
       }),
     }),
-    observations: observationsOf(measured, registry),
+    observations: observationsOf(measured, registry, profile.profileClass),
     correctness: Object.freeze({
       semanticGate: null,
-      finalState: measured.reconciliation ?? null,
+      // An unobserved snapshot leaves no final state; the reason is kept.
+      finalState: measured.reconciliation?.status === OLTP_RECONCILIATION_STATUS.UNOBSERVED ?
+        null : (measured.reconciliation ?? null),
+      finalStateObservation: measured.reconciliation?.status ===
+        OLTP_RECONCILIATION_STATUS.UNOBSERVED ? measured.reconciliation : null,
     }),
     cleanup,
   });

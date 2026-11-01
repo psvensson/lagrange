@@ -9,6 +9,7 @@ import {createHash} from 'node:crypto';
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 
+import {digest} from '../../../src/utils/canonical-json-data.js';
 import {
   OLTP_LATENCY_QUANTILE_METHOD,
   summarizeOltpBaselineLatencies,
@@ -83,8 +84,35 @@ function sha256Hex(text) {
   return createHash(SHA256).update(text).digest(HEX);
 }
 
+// The repository's one canonical JSON digest ('sha256:<hex>').
 function canonicalDigest(value) {
-  return sha256Hex(JSON.stringify(value));
+  return digest(value);
+}
+
+// The logical request id of a planned operation.
+function operationId(operation) {
+  return `${operation.phase}:${operation.workerId}:${operation.sequence}`;
+}
+
+// The planner's side of the executed-operations digest: the slice a
+// rate/repetition is planned to issue, digested exactly like the issued
+// requests, and its count per operation kind.
+function describePlannedOperationSlice(operations) {
+  const counts = {};
+  for (const operation of operations) counts[operation.kind] = (counts[operation.kind] || 0) + 1;
+  return Object.freeze({
+    operationSliceDigest: canonicalDigest(arrayMap(operations, (operation) =>
+      ({opId: operationId(operation), operationKind: operation.kind}))),
+    plannedOperationCounts: Object.freeze(counts),
+  });
+}
+
+// Digest over the ordered issued operations ({opId, operationKind}); the
+// planner computes the same digest over the slice a rate/repetition plans.
+function computeExecutedOperationsDigest(requests) {
+  return canonicalDigest(arrayMap(
+    arrayFilter(requests, (request) => request.outcome !== OUTCOME.UNISSUED),
+    (request) => ({opId: request.opId, operationKind: request.operationKind})));
 }
 
 function primaryError(error) {
@@ -168,12 +196,13 @@ function buildBenchmarkAttemptRecord(options) {
   const attempt = {
     attemptNo: safeCount(options.attemptNo, 'attemptNo'),
     startedMs: finiteNonNegative(options.startedMs, 'attempt startedMs'),
-    endedMs: nullableTime(options.endedMs, 'attempt endedMs'),
+    endedMs: finiteNonNegative(options.endedMs, 'attempt endedMs'),
     outcome: options.outcome,
     failureClass: options.failureClass ?? null,
-    sqlState: options.sqlState ?? null,
-    code: options.code ?? null,
+    sqlstate: options.sqlState ?? null,
+    errorCode: options.code ?? null,
     message: options.message ?? null,
+    ...(options.closedByWatchdog ? {closedByWatchdog: true} : {}),
     endpoint: options.endpoint ?? null,
     serverConnectionId: options.serverConnectionId ?? null,
     commitSent: options.commitSent === true,
@@ -184,8 +213,8 @@ function buildBenchmarkAttemptRecord(options) {
     responseDigest: canonicalDigest({
       outcome: attempt.outcome,
       failureClass: attempt.failureClass,
-      sqlState: attempt.sqlState,
-      code: attempt.code,
+      sqlstate: attempt.sqlstate,
+      errorCode: attempt.errorCode,
       statements,
       result: options.result ?? null,
     }),
@@ -195,14 +224,14 @@ function buildBenchmarkAttemptRecord(options) {
 function retainResponseEvidence(attempts, options = {}) {
   const payload = JSON.stringify(arrayMap(attempts, (attempt) => attempt.statements));
   const bytes = Buffer.byteLength(payload);
-  const digest = sha256Hex(payload);
+  const payloadSha256 = sha256Hex(payload);
   const inlineMaxBytes = options.inlineMaxBytes ?? INLINE_EVIDENCE_MAX_BYTES;
   if (bytes <= inlineMaxBytes) {
     return {
       attempts,
       responseEvidence: Object.freeze({
         encoding: RESPONSE_EVIDENCE_ENCODING.INLINE,
-        sha256: digest,
+        sha256: payloadSha256,
         bytes,
       }),
     };
@@ -214,13 +243,13 @@ function retainResponseEvidence(attempts, options = {}) {
     );
   }
   mkdirSync(options.evidenceDir, {recursive: true});
-  const path = join(options.evidenceDir, `${digest}.json`);
+  const path = join(options.evidenceDir, `${payloadSha256}.json`);
   writeFileSync(path, payload);
   return {
     attempts: arrayMap(attempts, (attempt) => Object.freeze({...attempt, statements: null})),
     responseEvidence: Object.freeze({
       encoding: RESPONSE_EVIDENCE_ENCODING.RETAINED_FILE,
-      sha256: digest,
+      sha256: payloadSha256,
       bytes,
       path,
     }),
@@ -232,7 +261,7 @@ function allowedFailureClasses(outcome) {
   case OUTCOME.TERMINAL_FAILURE:
     return TERMINAL_FAILURE_CLASSES;
   case OUTCOME.UNRESOLVED:
-    return [null, FAILURE_CLASS.AMBIGUOUS_COMMIT];
+    return [null, FAILURE_CLASS.AMBIGUOUS_COMMIT, FAILURE_CLASS.TRANSPORT_FAILURE];
   default:
     return [null];
   }
@@ -255,7 +284,7 @@ function requireOutcomeShape(record) {
 }
 
 function requireTimingShape(record) {
-  for (const field of ['intendedIssueTimeMs']) finiteNonNegative(record[field], field);
+  finiteNonNegative(record.intendedStartMs, 'intendedStartMs');
   for (const field of ['issuedAtMs', 'executionStartedAtMs', 'completedAtMs',
     'issueLagMs', 'queueDelayMs', 'latencyMs']) {
     nullableTime(record[field], field);
@@ -278,6 +307,9 @@ function requireTimingShape(record) {
   }
   if (!issued && record.attempts.length !== 0) {
     throw new Error(`benchmark request ${record.opId} is unissued but has attempts`);
+  }
+  if (issued && (!record.effectSummary || typeof record.effectSummary !== 'object')) {
+    throw new Error(`benchmark request ${record.opId} was issued without an effect summary`);
   }
 }
 
@@ -394,13 +426,16 @@ function completedPerSec(committed, accountingWindowMs) {
 }
 
 export {
-  FAILURE_CLASS as BENCHMARK_FAILURE_CLASS,
-  OUTCOME as BENCHMARK_OPERATION_OUTCOME,
+  FAILURE_CLASS,
+  OUTCOME as OPERATION_OUTCOME,
   RESPONSE_EVIDENCE_ENCODING as BENCHMARK_RESPONSE_EVIDENCE_ENCODING,
   UNRESOLVED_REASON as BENCHMARK_UNRESOLVED_REASON,
   buildBenchmarkAttemptRecord,
   canonicalDigest as benchmarkCanonicalDigest,
   classifyBenchmarkAttemptFailure,
+  computeExecutedOperationsDigest,
+  describePlannedOperationSlice,
+  operationId as benchmarkOperationId,
   completedPerSec as benchmarkCompletedPerSec,
   createHarnessFault as createBenchmarkHarnessFault,
   retainResponseEvidence as retainBenchmarkResponseEvidence,

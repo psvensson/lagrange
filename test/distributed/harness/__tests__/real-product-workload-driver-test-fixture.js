@@ -72,7 +72,7 @@ function observe(output, product) {
     statements: [...product.state.statements],
     tables: tablesOfStatements(product.state.statements),
     healthRequests: 0,
-    kinds: arrayMap(requests, (request) => request.kind),
+    kinds: arrayMap(requests, (request) => request.operationKind),
   };
 }
 

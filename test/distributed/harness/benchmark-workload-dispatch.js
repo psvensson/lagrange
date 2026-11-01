@@ -37,10 +37,18 @@ const PUBLICATION = Object.freeze({
   SCENARIO_A: 'scenario-a',
 });
 
+// The profile class admission reads: a smoke profile never carries a
+// capacity metric.
+const PROFILE_CLASS = Object.freeze({
+  SMOKE: 'smoke',
+  CAPACITY: 'capacity',
+});
+
 const WORKLOAD_PROFILE = Object.freeze({
   [FAMILY.SCENARIO_A_SMOKE]: Object.freeze({
     id: 'scenario-a-smoke-v1',
     publication: PUBLICATION.SMOKE,
+    profileClass: PROFILE_CLASS.SMOKE,
     ownsWorkload: true,
     workload: Object.freeze({
       seed: 0x5eed5eed,
@@ -56,6 +64,7 @@ const WORKLOAD_PROFILE = Object.freeze({
   [FAMILY.SCENARIO_A_OLTP]: Object.freeze({
     id: 'scenario-a-oltp-baseline-v1',
     publication: PUBLICATION.SCENARIO_A,
+    profileClass: PROFILE_CLASS.CAPACITY,
     ownsWorkload: false,
     workload: null,
   }),
@@ -149,6 +158,7 @@ export {
   DISPATCH_STATUS as BENCHMARK_DISPATCH_STATUS,
   FAMILY as BENCHMARK_OPERATION_FAMILY,
   NON_EXECUTION_REASON as BENCHMARK_NON_EXECUTION_REASON,
+  PROFILE_CLASS as BENCHMARK_PROFILE_CLASS,
   PUBLICATION as BENCHMARK_PUBLICATION,
   WORKLOAD_PROFILE as BENCHMARK_WORKLOAD_PROFILE,
   isBenchmarkDispatchRefusal,

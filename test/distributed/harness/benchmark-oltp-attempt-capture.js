@@ -7,8 +7,8 @@
 import {AsyncLocalStorage} from 'node:async_hooks';
 
 import {
-  BENCHMARK_FAILURE_CLASS,
-  BENCHMARK_OPERATION_OUTCOME,
+  FAILURE_CLASS,
+  OPERATION_OUTCOME,
   classifyBenchmarkAttemptFailure,
   createBenchmarkHarnessFault,
 } from './benchmark-operation-outcome.js';
@@ -34,8 +34,8 @@ const TRANSACTION_CONTROL = Object.freeze({
 const DESTROYED_CONNECTION_MESSAGE =
   'Connection destroyed after an unresolved or failed transaction';
 const DESTROYING_FAILURE_CLASSES = Object.freeze(new Set([
-  BENCHMARK_FAILURE_CLASS.TRANSPORT_FAILURE,
-  BENCHMARK_FAILURE_CLASS.AMBIGUOUS_COMMIT,
+  FAILURE_CLASS.TRANSPORT_FAILURE,
+  FAILURE_CLASS.AMBIGUOUS_COMMIT,
 ]));
 
 const attemptStorage = new AsyncLocalStorage();
@@ -272,7 +272,7 @@ function createBenchmarkOutcomeAdapter(adapter, registry) {
             'OLTP adapter returned without an acknowledged COMMIT');
         }
         return Object.freeze({
-          outcome: BENCHMARK_OPERATION_OUTCOME.COMMITTED,
+          outcome: OPERATION_OUTCOME.COMMITTED,
           result,
           attemptEvidence: attemptEvidenceOf(trace),
         });

@@ -10,7 +10,7 @@ import {
   collectOltpStateSnapshot,
 } from '../reference-client/oltp-state-snapshot-shared.js';
 import {
-  BENCHMARK_OPERATION_OUTCOME,
+  OPERATION_OUTCOME,
   benchmarkCanonicalDigest,
 } from './benchmark-operation-outcome.js';
 import {
@@ -98,8 +98,8 @@ async function verifyLoadedDataset(dataset, observed) {
     method: LOGICAL_CHECKSUM_METHOD,
     expectedLogicalChecksum: expectedChecksum,
     observedLogicalChecksum: observedChecksum,
-    expectedRowCounts: expected.rowCounts,
-    observedRowCounts: observed.snapshot.rowCounts,
+    expectedTableRows: expected.rowCounts,
+    observedTableRows: observed.snapshot.rowCounts,
   });
 }
 
@@ -117,24 +117,24 @@ function snapshotSummary(observed) {
     observed: true,
     stateSha256: observed.snapshot.stateSha256,
     logicalChecksum: logicalChecksum(observed.snapshot),
-    rowCounts: observed.snapshot.rowCounts,
+    tableRows: observed.snapshot.rowCounts,
   });
 }
 
 function countBy(records, outcome, kind) {
   return arrayFilter(records, (record) =>
-    record.outcome === outcome && record.kind === kind).length;
+    record.outcome === outcome && record.operationKind === kind).length;
 }
 
 function committedSum(records, kind, field) {
   return arrayFilter(records, (record) =>
-    record.outcome === BENCHMARK_OPERATION_OUTCOME.COMMITTED && record.kind === kind)
+    record.outcome === OPERATION_OUTCOME.COMMITTED && record.operationKind === kind)
     .reduce((sum, record) => sum + record.effectSummary[field], 0);
 }
 
 function expectationsOf(records) {
-  const committed = BENCHMARK_OPERATION_OUTCOME.COMMITTED;
-  const unresolved = BENCHMARK_OPERATION_OUTCOME.UNRESOLVED;
+  const committed = OPERATION_OUTCOME.COMMITTED;
+  const unresolved = OPERATION_OUTCOME.UNRESOLVED;
   const newOrders = countBy(records, committed, OLTP_OPERATION_KIND.NEW_ORDER);
   const delivered = committedSum(records, OLTP_OPERATION_KIND.DELIVERY, 'deliveredOrders');
   return {

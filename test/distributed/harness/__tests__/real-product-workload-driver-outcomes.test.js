@@ -122,6 +122,7 @@ test('J14: a lost COMMIT answer stays unresolved, is never retried and is reconc
         if (request.outcome !== 'unresolved') continue;
         assert.equal(request.attempts.length, 1, `${request.opId} was retried`);
         assert.equal(request.failureClass, 'ambiguous_commit');
+        assert.equal(request.effectSummary.status, 'no-committed-effect');
       }
       assert.equal(observed.output.correctness.finalState.status,
         'unresolved-effects-observed', `${targetId}: the applied effects stay visible`);
@@ -153,11 +154,16 @@ test('the happy path commits every request and reconciles the final state', asyn
     assert.equal(output.deployment.dataset.verification.status, 'verified');
     assert.equal(output.correctness.finalState.status, 'reconciled');
     assert.match(output.identity.harness.driverSourceSha256, /^[0-9a-f]{64}$/u);
-    assert.match(output.observations.executedOperationsDigest, /^[0-9a-f]{64}$/u);
+    assert.equal(output.plan.profileClass, 'smoke');
+    assert.equal(Object.hasOwn(output.observations, 'completedPerSec'), false,
+      'a smoke run carries no capacity metric');
+    assert.ok(output.correctness.finalState.after.tableRows.orders > 0);
+    assert.equal(output.observations.executedOperationsDigest, output.plan.operationSliceDigest,
+      'every planned operation was issued, in plan order');
     for (const request of output.observations.requests) {
       assert.ok(request.endpoint, 'each request records its endpoint');
       assert.ok(Number.isInteger(request.serverConnectionId));
-      assert.match(request.attempts[0].responseDigest, /^[0-9a-f]{64}$/u);
+      assert.match(request.attempts[0].responseDigest, /^sha256:[0-9a-f]{64}$/u);
     }
   }
 });

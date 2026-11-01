@@ -4,11 +4,12 @@ import {
   executePairedOltpTransactionWithRetry,
 } from './oltp-paired-retry-owner.js';
 import {
-  BENCHMARK_FAILURE_CLASS,
-  BENCHMARK_OPERATION_OUTCOME,
+  FAILURE_CLASS,
+  OPERATION_OUTCOME,
   BENCHMARK_UNRESOLVED_REASON,
-  benchmarkCanonicalDigest,
+  computeExecutedOperationsDigest,
   benchmarkCompletedPerSec,
+  benchmarkOperationId,
   buildBenchmarkAttemptRecord,
   classifyBenchmarkAttemptFailure,
   createBenchmarkHarnessFault,
@@ -117,14 +118,10 @@ async function defaultWaitUntil(targetTimeMs, now, sleep) {
   }
 }
 
-function operationKey(operation) {
-  return `${operation.phase}:${operation.workerId}:${operation.sequence}`;
-}
-
 function createRequestState(entry) {
   return {
     entry,
-    opId: operationKey(entry.operation),
+    opId: benchmarkOperationId(entry.operation),
     issuedAtMs: null,
     executionStartedAtMs: null,
     completedAtMs: null,
@@ -147,15 +144,15 @@ function settleFromError(state) {
   const attempt = lastAttempt(state);
   if (!attempt) {
     return {
-      outcome: BENCHMARK_OPERATION_OUTCOME.TERMINAL_FAILURE,
-      failureClass: BENCHMARK_FAILURE_CLASS.HARNESS_FAULT,
+      outcome: OPERATION_OUTCOME.TERMINAL_FAILURE,
+      failureClass: FAILURE_CLASS.HARNESS_FAULT,
       unresolvedReason: undefined,
     };
   }
   return {
     outcome: attempt.outcome,
     failureClass: attempt.failureClass,
-    unresolvedReason: attempt.outcome === BENCHMARK_OPERATION_OUTCOME.UNRESOLVED ?
+    unresolvedReason: attempt.outcome === OPERATION_OUTCOME.UNRESOLVED ?
       BENCHMARK_UNRESOLVED_REASON.COMMIT_ANSWER_LOST : undefined,
   };
 }
@@ -163,11 +160,12 @@ function settleFromError(state) {
 function stopDisposition(state) {
   if (state.final) return state.final;
   if (state.executionStartedAtMs === null) {
-    return {outcome: BENCHMARK_OPERATION_OUTCOME.UNISSUED, failureClass: null};
+    return {outcome: OPERATION_OUTCOME.UNISSUED, failureClass: null};
   }
   return {
-    outcome: BENCHMARK_OPERATION_OUTCOME.UNRESOLVED,
-    failureClass: null,
+    outcome: OPERATION_OUTCOME.UNRESOLVED,
+    // In flight: the commit may have been sent, its answer is unknown.
+    failureClass: state.attemptInFlight ? FAILURE_CLASS.AMBIGUOUS_COMMIT : null,
     unresolvedReason: state.attemptInFlight ?
       BENCHMARK_UNRESOLVED_REASON.WATCHDOG_IN_FLIGHT :
       BENCHMARK_UNRESOLVED_REASON.WATCHDOG_BETWEEN_ATTEMPTS,
@@ -176,22 +174,29 @@ function stopDisposition(state) {
 
 // The attempt the watchdog found on the wire: its outcome is unresolved and
 // it has no end.
-function inFlightAttemptRecord(state) {
+// Its end is the moment the watchdog closed it (closedByWatchdog), not an
+// observed answer.
+function inFlightAttemptRecord(state, closedAtMs) {
   return buildBenchmarkAttemptRecord({
     attemptNo: state.inFlightAttempt.attemptNo,
     startedMs: state.inFlightAttempt.startedMs,
-    endedMs: null,
-    outcome: BENCHMARK_OPERATION_OUTCOME.UNRESOLVED,
-    failureClass: null,
+    endedMs: closedAtMs,
+    closedByWatchdog: true,
+    outcome: OPERATION_OUTCOME.UNRESOLVED,
+    failureClass: FAILURE_CLASS.AMBIGUOUS_COMMIT,
     statements: [],
   });
 }
 
-function freezeRequestRecord(state, disposition, evidenceOptions) {
+// An issued request that did not commit has no committed effect: a named
+// state, never an absent summary.
+const NO_COMMITTED_EFFECT = Object.freeze({status: 'no-committed-effect'});
+
+function freezeRequestRecord(state, disposition, evidenceOptions, closedAtMs = null) {
   const {entry} = state;
   const completedAtMs = state.final ? state.completedAtMs : null;
   const attempts = !state.final && state.attemptInFlight ?
-    [...state.attempts, inFlightAttemptRecord(state)] : state.attempts;
+    [...state.attempts, inFlightAttemptRecord(state, closedAtMs)] : state.attempts;
   const retained = retainBenchmarkResponseEvidence(attempts, evidenceOptions);
   const attemptOf = attempts.length > ZERO ? attempts[attempts.length - ONE] : null;
   return Object.freeze({
@@ -200,8 +205,8 @@ function freezeRequestRecord(state, disposition, evidenceOptions) {
     phase: entry.operation.phase,
     workerId: entry.workerId,
     sequence: entry.operation.sequence,
-    kind: entry.operation.kind,
-    intendedIssueTimeMs: entry.intendedIssueTimeMs,
+    operationKind: entry.operation.kind,
+    intendedStartMs: entry.intendedIssueTimeMs,
     issuedAtMs: state.issuedAtMs,
     executionStartedAtMs: state.executionStartedAtMs,
     completedAtMs,
@@ -216,8 +221,7 @@ function freezeRequestRecord(state, disposition, evidenceOptions) {
     ...(disposition.unresolvedReason ? {unresolvedReason: disposition.unresolvedReason} : {}),
     retries: state.retryEvidence?.retries ?? Math.max(ZERO, state.attempts.length - ONE),
     retryDelayMs: state.retryEvidence?.retryDelayMs ?? null,
-    effectSummary: disposition.outcome === BENCHMARK_OPERATION_OUTCOME.COMMITTED ?
-      state.effectSummary : null,
+    effectSummary: effectSummaryOf(state, disposition),
     endpoint: attemptOf?.endpoint ?? null,
     serverConnectionId: attemptOf?.serverConnectionId ?? null,
     attempts: Object.freeze(retained.attempts),
@@ -225,8 +229,14 @@ function freezeRequestRecord(state, disposition, evidenceOptions) {
   });
 }
 
+function effectSummaryOf(state, disposition) {
+  if (disposition.outcome === OPERATION_OUTCOME.UNISSUED) return null;
+  if (disposition.outcome === OPERATION_OUTCOME.COMMITTED) return state.effectSummary;
+  return NO_COMMITTED_EFFECT;
+}
+
 function typedAttemptOf(value) {
-  if (value?.outcome !== BENCHMARK_OPERATION_OUTCOME.COMMITTED || !value.attemptEvidence) {
+  if (value?.outcome !== OPERATION_OUTCOME.COMMITTED || !value.attemptEvidence) {
     throw createBenchmarkHarnessFault(
       'Open-loop OLTP adapter resolved without a typed committed outcome');
   }
@@ -253,7 +263,7 @@ async function executeTypedAttempt(adapter, state, run, attemptNo) {
   try {
     const typed = typedAttemptOf(await adapter.executeTransaction(state.entry.operation));
     if (run.stopped) {
-      recordLateCompletion(run, state, BENCHMARK_OPERATION_OUTCOME.COMMITTED);
+      recordLateCompletion(run, state, OPERATION_OUTCOME.COMMITTED);
       return typed;
     }
     state.attempts.push(buildBenchmarkAttemptRecord({
@@ -261,7 +271,7 @@ async function executeTypedAttempt(adapter, state, run, attemptNo) {
       attemptNo,
       startedMs,
       endedMs: run.now(),
-      outcome: BENCHMARK_OPERATION_OUTCOME.COMMITTED,
+      outcome: OPERATION_OUTCOME.COMMITTED,
       result: typed.result,
     }));
     state.effectSummary = typed.result ?? null;
@@ -298,7 +308,7 @@ async function runRequest(adapter, state, run) {
     if (run.stopped) return;
     state.retryEvidence = outcome.evidence;
     state.completedAtMs = outcome.evidence.completedAtMs;
-    state.final = {outcome: BENCHMARK_OPERATION_OUTCOME.COMMITTED, failureClass: null};
+    state.final = {outcome: OPERATION_OUTCOME.COMMITTED, failureClass: null};
   } catch (error) {
     if (run.stopped) return;
     state.retryEvidence = error?.oltpRetryEvidence ?? null;
@@ -352,11 +362,12 @@ function summarizeWindow(issuePlan, records, offeredRatePerSec, run) {
 
 function summarizeOpenLoopStep(issuePlan, states, run, options) {
   const records = Object.freeze(arrayMap(states, (state) =>
-    freezeRequestRecord(state, stopDisposition(state), options.evidence)));
+    freezeRequestRecord(state, stopDisposition(state), options.evidence, run.stoppedAtMs)));
   const accounting = validateBenchmarkAccounting(records);
   const window = summarizeWindow(issuePlan, records, options.offeredRatePerSec, run);
-  const issued = arrayFilter(records, (record) =>
-    record.outcome !== BENCHMARK_OPERATION_OUTCOME.UNISSUED);
+  const wallClockOf = (monotonicMs) => new Date(
+    Date.parse(run.originWallClockIso) + (monotonicMs - run.originMs)).toISOString();
+  const firstIntendedMs = issuePlan[ZERO].intendedIssueTimeMs;
   return Object.freeze({
     profileId: OPEN_LOOP_PROFILE.id,
     offeredRatePerSec: options.offeredRatePerSec,
@@ -365,7 +376,11 @@ function summarizeOpenLoopStep(issuePlan, states, run, options) {
       monotonicOriginWallClockIso: run.originWallClockIso,
     }),
     accounting,
-    window,
+    window: Object.freeze({
+      ...window,
+      startedAt: wallClockOf(firstIntendedMs),
+      endedAt: wallClockOf(firstIntendedMs + window.drainMs),
+    }),
     watchdog: Object.freeze({
       boundMs: options.watchdog.boundMs,
       derivation: options.watchdog.derivation,
@@ -375,8 +390,7 @@ function summarizeOpenLoopStep(issuePlan, states, run, options) {
     }),
     completedPerSec: benchmarkCompletedPerSec(accounting.committed, window.accountingWindowMs),
     ...summarizeBenchmarkLatencies(records, accounting),
-    executedOperationsDigest: benchmarkCanonicalDigest(
-      arrayMap(issued, (record) => issuePlan[record.index].operation)),
+    executedOperationsDigest: computeExecutedOperationsDigest(records),
     records,
     // Completions observed after the watchdog fired: the request stays
     // unresolved; this live list keeps the late fact beside it.
@@ -473,7 +487,7 @@ function buildUnissuedOpenLoopRecords(operations, offeredRatePerSec, startTimeMs
   const issuePlan = buildOpenLoopIssuePlan(operations, offeredRatePerSec, startTimeMs);
   const records = Object.freeze(arrayMap(issuePlan, (entry) => freezeRequestRecord(
     createRequestState(entry),
-    {outcome: BENCHMARK_OPERATION_OUTCOME.UNISSUED, failureClass: null},
+    {outcome: OPERATION_OUTCOME.UNISSUED, failureClass: null},
     {},
   )));
   return Object.freeze({records, accounting: validateBenchmarkAccounting(records)});
