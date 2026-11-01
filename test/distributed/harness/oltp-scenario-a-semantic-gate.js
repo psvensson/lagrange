@@ -14,6 +14,14 @@ const STATUS = Object.freeze({
   PASSED: 'passed',
   FAILED: 'failed',
 });
+
+// The gate's own verdict over all proofs: failed when any proof failed,
+// incomplete when a required proof is missing, otherwise passed.
+const GATE_STATUS = Object.freeze({
+  PASSED: STATUS.PASSED,
+  FAILED: STATUS.FAILED,
+  INCOMPLETE: 'incomplete',
+});
 const SYSTEMS = Object.freeze(Object.values(OLTP_SCENARIO_A_SYSTEM));
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -199,8 +207,8 @@ function buildScenarioASemanticGateEvidence(options = {}) {
   );
   const semanticEquivalent = !hasFailure && !hasMissing;
   const status = hasFailure ?
-    'failed' :
-    semanticEquivalent ? 'passed' : 'incomplete';
+    GATE_STATUS.FAILED :
+    semanticEquivalent ? GATE_STATUS.PASSED : GATE_STATUS.INCOMPLETE;
   const payload = Object.freeze({
     semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
     semanticProfileSha256: hashScenarioASemanticProfile(),
@@ -219,6 +227,7 @@ function buildScenarioASemanticGateEvidence(options = {}) {
 
 export {
   REQUIRED_SYSTEM_PROOF_IDS as OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
+  GATE_STATUS as OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS,
   STATUS as OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS,
   buildScenarioASemanticGateEvidence,
 };

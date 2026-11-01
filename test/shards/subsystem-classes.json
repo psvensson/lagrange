@@ -9,7 +9,7 @@
     "cli-tooling": 98,
     "control-plane": 224,
     "convergence-topology": 78,
-    "distributed-harness": 201,
+    "distributed-harness": 203,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2529,
-  "digest": "fnv1a32-415a501b",
+  "censusSize": 2531,
+  "digest": "fnv1a32-a90b6559",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d1000127",
+  "observationDigest": "fnv1a32-8d4e5ada",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -829,6 +829,7 @@
     "test/distributed/harness/__tests__/assertions.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-observation.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/benchmark-claim-admission.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-operation-outcome.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-partition-convergence.test.js": "distributed-harness",
@@ -874,6 +875,7 @@
     "test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/cluster.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "distributed-harness",
@@ -5658,6 +5660,90 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
       ]
     },
+    "test/distributed/harness/__tests__/benchmark-claim-admission.test.js": {
+      "files": [
+        "Dockerfile",
+        "README.md",
+        "data/tidb-comparison/admitted-lab-measurements.json",
+        "data/tidb-comparison/history.ndjson",
+        "data/tidb-comparison/invalidations.ndjson",
+        "data/tidb-comparison/multi-system-matrix.json",
+        "data/tidb-comparison/progress-summary.json",
+        "data/tidb-comparison/raw-observations.ndjson",
+        "docs/benchmarks/README.md",
+        "docs/benchmarks/citus-comparison-progress.html",
+        "docs/benchmarks/citus-comparison-progress.md",
+        "docs/benchmarks/citus-comparison-progress.svg",
+        "docs/benchmarks/comparative-overview.svg",
+        "docs/benchmarks/index.html",
+        "docs/benchmarks/lagrange-metrics-evolution.html",
+        "docs/benchmarks/lagrange-metrics-evolution.md",
+        "docs/benchmarks/lagrange-metrics-evolution.svg",
+        "docs/benchmarks/movement-and-scenario-c-scaling-progress.html",
+        "docs/benchmarks/movement-and-scenario-c-scaling-progress.md",
+        "docs/benchmarks/movement-and-scenario-c-scaling-progress.svg",
+        "docs/benchmarks/partition-granularity-sweep-progress.html",
+        "docs/benchmarks/partition-granularity-sweep-progress.md",
+        "docs/benchmarks/partition-granularity-sweep-progress.svg",
+        "docs/benchmarks/postgresql-comparison-progress.html",
+        "docs/benchmarks/postgresql-comparison-progress.md",
+        "docs/benchmarks/postgresql-comparison-progress.svg",
+        "docs/benchmarks/scaleout-3to5-node-rf3-progress.html",
+        "docs/benchmarks/scaleout-3to5-node-rf3-progress.md",
+        "docs/benchmarks/scaleout-3to5-node-rf3-progress.svg",
+        "docs/benchmarks/scenario-b-rtt-working-set-crossover.html",
+        "docs/benchmarks/scenario-b-rtt-working-set-crossover.md",
+        "docs/benchmarks/scenario-b-rtt-working-set-crossover.svg",
+        "docs/benchmarks/scenario-b-shape-crossover.svg",
+        "docs/benchmarks/scenario-c-feature-store-progress.html",
+        "docs/benchmarks/scenario-c-feature-store-progress.md",
+        "docs/benchmarks/scenario-c-feature-store-progress.svg",
+        "docs/benchmarks/scenario-setup-time-breakdown.svg",
+        "docs/benchmarks/tidb-comparison-progress.html",
+        "docs/benchmarks/tidb-comparison-progress.md",
+        "docs/benchmarks/tidb-comparison-progress.svg",
+        "docs/benchmarks/tidb-scenario-b-comparison.svg",
+        "docs/benchmarks/yugabyte-ignite-comparison-progress.html",
+        "docs/benchmarks/yugabyte-ignite-comparison-progress.md",
+        "docs/benchmarks/yugabyte-ignite-comparison-progress.svg",
+        "scripts/checks/comparative-benchmark-recompute.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
+        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
+        "test/distributed/harness/benchmark-operation-outcome.js",
+        "test/distributed/harness/benchmark-scenario-a-run.js",
+        "test/distributed/harness/benchmark-workload-dispatch.js",
+        "test/distributed/harness/comparative-benchmark-adversarial-cases.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/oltp-baseline-dataset.js",
+        "test/distributed/harness/oltp-baseline-transaction-executor.js",
+        "test/distributed/harness/oltp-baseline-workload.js",
+        "test/distributed/harness/oltp-error-classification.js",
+        "test/distributed/harness/oltp-open-loop-step-owner.js",
+        "test/distributed/harness/oltp-paired-retry-owner.js",
+        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
+        "test/distributed/harness/oltp-scenario-a-semantic-gate.js",
+        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
+        "test/distributed/harness/raw-observation-campaign-specs.js",
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/harness/scaleout-series-experiments.js",
+        "test/distributed/reference-client/lagrange-oltp-adapter.js",
+        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
+        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
+        "test/distributed/reference-client/postgresql-oltp-adapter.js",
+        "test/distributed/reference-client/tidb-oltp-adapter.js",
+        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
+      ],
+      "directories": [
+        "data/tidb-comparison",
+        "data/tidb-comparison/forensic",
+        "docs/benchmarks",
+        "src"
+      ]
+    },
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": {
       "files": [
         "Dockerfile",
@@ -6437,6 +6523,13 @@
         "LAGRANGE_DEBUG_LOGS"
       ]
     },
+    "test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js": {
+      "directories": [
+        "data/tidb-comparison",
+        "docs/benchmarks",
+        "test/distributed/harness"
+      ]
+    },
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": {
       "files": [
         "Dockerfile",
@@ -6482,6 +6575,14 @@
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json"
+      ]
+    },
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-record-owner.test.js": {
+      "files": [
+        "test/distributed/harness/benchmark-claim-admission.js",
+        "test/distributed/harness/benchmark-invalidation-ledger.js",
+        "test/distributed/harness/comparative-coverage-manifest.js",
+        "test/distributed/harness/raw-observation-record.js"
       ]
     },
     "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js": {

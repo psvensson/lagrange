@@ -10,6 +10,25 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+### Fixed
+- **Comparative benchmark results withdrawn (correction to 0.4.0 and earlier entries):**
+  every comparative performance figure published under `docs/benchmarks/` and
+  `data/tidb-comparison/` before 2026-11-01, including the throughput, latency,
+  freshness, backfill, scale-out, partition, movement and phase figures quoted in the
+  0.4.0 entries below, is withdrawn. The evidence audit found timeouts counted as
+  successful operations, `/health` responses and error envelopes counted as success,
+  per-arm smoke statements instead of the canonical Scenario A workload, constant
+  phase and byte values, quantiles synthesised from other quantiles, constant
+  semantic-proof counts and label-hash identities (defect ledger
+  `solve/quests/comparative-benchmark-evidence-repair/evidence/defect-ledger.md`).
+  The original records are retained as forensic evidence behind the append-only
+  `data/tidb-comparison/invalidations.ndjson`; the comparison history is append-only
+  again and its overwritten records are restored. Publication now consumes
+  claim-specific admission cells only (`valid-observed`, `product-failure`,
+  `invalid-measurement`, `blocked`, `unsupported`, `not-measured`), and
+  `npm run audit:comparative-recompute` recomputes every published artifact from the
+  raw records.
+
 ## [0.4.0] — 2026-10-31
 
 Scenario A (`tidb-oltp-baseline`) deep-stack throughput and latency optimization,
