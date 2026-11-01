@@ -136,7 +136,8 @@ test('D18: the Lagrange image is pinned by content; a host where it was docker-l
   const registryRef = `psvensson/lagrange@sha256:${'1'.repeat(64)}`;
   const {sshRun, calls} = createScriptedSsh([
     [/docker image inspect/u, (_command, host) => JSON.stringify({Id: LAGRANGE_IMAGE_ID,
-      RepoDigests: host === '10.0.0.2' ? [] : [registryRef], Config: {Labels: {}}})],
+      RepoDigests: host === '10.0.0.2' ? [] : [registryRef], Created: '2026-10-30T10:00:00Z',
+      Config: {Labels: {}}})],
     ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
   ]);
   const deployment = await deployers.deployLagrangeCluster(input(sshRun, {opts: {...OPTS,

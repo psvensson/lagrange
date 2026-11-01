@@ -30,6 +30,7 @@ import {
 } from './oltp-scenario-a-semantic-profile.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
@@ -132,43 +133,52 @@ function classification(outcome, failureClass, extra = {}) {
   return Object.freeze({outcome, failureClass, ...extra});
 }
 
+// What a failure carries as evidence: its SQLSTATE, its error code when it has
+// one, and its message (a thrown value without one is its own message).
+function failureEvidence(cause, sqlState) {
+  return {
+    sqlState,
+    code: typeof cause?.code === 'string' ? cause.code : null,
+    message: typeof cause?.message === 'string' ? cause.message : String(cause),
+  };
+}
+
+// The ordered failure rules of one attempt (first match decides). Order
+// matters: an executor contract violation and a 40001 are decided before
+// transport, a typed unknown commit before a plain SQLSTATE, and a local error
+// with no product exchange is the harness's own fault.
+const ATTEMPT_FAILURE_RULES = Object.freeze([
+  {matches: ({error, cause}) => error?.benchmarkHarnessFault === true ||
+    cause?.benchmarkHarnessFault === true,
+  classify: ({evidence}) => classification(OUTCOME.TERMINAL_FAILURE,
+    FAILURE_CLASS.HARNESS_FAULT, evidence)},
+  {matches: ({cause}) => cause?.name === OLTP_CORRECTNESS_VIOLATION_ERROR_NAME,
+    classify: ({cause, evidence}) => classification(OUTCOME.TERMINAL_FAILURE,
+      FAILURE_CLASS.CORRECTNESS_FAILURE, {...evidence, violation: cause.oltpCorrectnessViolation})},
+  {matches: ({sqlState}) => sqlState === OLTP_SERIALIZATION_FAILURE_SQLSTATE,
+    classify: ({evidence}) => classification(OUTCOME.SERIALIZATION_CONFLICT, null, evidence)},
+  {matches: ({cause}) => cause?.commitOutcomeUnknown === true ||
+    isOltpOutcomeUnknownError(cause),
+  classify: ({evidence}) => classification(OUTCOME.UNRESOLVED, FAILURE_CLASS.AMBIGUOUS_COMMIT,
+    {...evidence, unresolvedReason: UNRESOLVED_REASON.COMMIT_ANSWER_LOST})},
+  {matches: ({cause}) => isOltpTransportError(cause),
+    classify: ({evidence}) => classification(OUTCOME.TERMINAL_FAILURE,
+      FAILURE_CLASS.TRANSPORT_FAILURE, evidence)},
+  {matches: ({sqlState, trace}) => Boolean(sqlState) || trace.productAnsweredError === true,
+    classify: ({evidence}) => classification(OUTCOME.TERMINAL_FAILURE,
+      FAILURE_CLASS.PRODUCT_ERROR, evidence)},
+]);
+
 // One attempt's failure, from the error and the statements the attempt put
-// on the wire. Order matters: an executor contract violation and a 40001 are
-// decided before transport, a typed unknown commit before a plain SQLSTATE,
-// and a local error with no product exchange is the harness's own fault.
+// on the wire; no rule matching is a local error with no product exchange,
+// the harness's own fault.
 function classifyBenchmarkAttemptFailure(error, trace = {}) {
   const cause = primaryError(error);
   const sqlState = resolveOltpErrorSqlState(cause);
-  const evidence = {
-    sqlState,
-    code: typeof cause?.code === 'string' ? cause.code : null,
-    message: String(cause?.message || cause),
-  };
-  if (error?.benchmarkHarnessFault === true || cause?.benchmarkHarnessFault === true) {
-    return classification(OUTCOME.TERMINAL_FAILURE, FAILURE_CLASS.HARNESS_FAULT, evidence);
-  }
-  if (cause?.name === OLTP_CORRECTNESS_VIOLATION_ERROR_NAME) {
-    return classification(OUTCOME.TERMINAL_FAILURE, FAILURE_CLASS.CORRECTNESS_FAILURE, {
-      ...evidence,
-      violation: cause.oltpCorrectnessViolation,
-    });
-  }
-  if (sqlState === OLTP_SERIALIZATION_FAILURE_SQLSTATE) {
-    return classification(OUTCOME.SERIALIZATION_CONFLICT, null, evidence);
-  }
-  if (cause?.commitOutcomeUnknown === true || isOltpOutcomeUnknownError(cause)) {
-    return classification(OUTCOME.UNRESOLVED, FAILURE_CLASS.AMBIGUOUS_COMMIT, {
-      ...evidence,
-      unresolvedReason: UNRESOLVED_REASON.COMMIT_ANSWER_LOST,
-    });
-  }
-  if (isOltpTransportError(cause)) {
-    return classification(OUTCOME.TERMINAL_FAILURE, FAILURE_CLASS.TRANSPORT_FAILURE, evidence);
-  }
-  if (sqlState || trace.productAnsweredError === true) {
-    return classification(OUTCOME.TERMINAL_FAILURE, FAILURE_CLASS.PRODUCT_ERROR, evidence);
-  }
-  return classification(OUTCOME.TERMINAL_FAILURE, FAILURE_CLASS.HARNESS_FAULT, evidence);
+  const facts = {error, cause, sqlState, trace, evidence: failureEvidence(cause, sqlState)};
+  const rule = arrayFind(ATTEMPT_FAILURE_RULES, (candidate) => candidate.matches(facts));
+  return rule ? rule.classify(facts) :
+    classification(OUTCOME.TERMINAL_FAILURE, FAILURE_CLASS.HARNESS_FAULT, facts.evidence);
 }
 
 function createHarnessFault(message) {
@@ -307,6 +317,12 @@ function requireTimingShape(record) {
       completed !== (record.latencyMs !== null)) {
     throw new Error(`benchmark request ${record.opId} completion contradicts outcome`);
   }
+  requireIssueEvidence(record, issued);
+}
+
+// An issued request carries its attempts and its effect summary; an unissued
+// one carries no attempt.
+function requireIssueEvidence(record, issued) {
   if (issued && record.attempts.length < 1) {
     throw new Error(`benchmark request ${record.opId} was issued without an attempt`);
   }

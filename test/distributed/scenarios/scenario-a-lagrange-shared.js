@@ -115,6 +115,30 @@ async function createAndValidateAdapter({
   return adapter;
 }
 
+// The execution contract a proof payload states: the open adapter's, or, once
+// it is closed, the context's admitted contract. Neither present is a refused
+// payload.
+function executionContractOf(adapter, context) {
+  const contract = adapter || context.publicExecutionContract;
+  if (!contract) {
+    throw new Error('Scenario A PG-wire proof payload requires an execution contract');
+  }
+  return {executionPath: contract.executionPath, protocol: contract.protocol,
+    lockingReadMode: contract.lockingReadMode};
+}
+
+// What the proof context contributes: the live Lagrange path is admitted by a
+// certification record (admission, runtime preflight); the proof journey's
+// context carries its deployment binding instead. Absent facts are null.
+function contextFactsOf(context) {
+  return {
+    serviceEndpoint: context.serviceEndpoint ?? null,
+    admissionSha256: context.admission ? context.admission.admissionSha256 : null,
+    runtimePreflight: context.runtimePreflight ?? null,
+    binding: context.binding ?? null,
+  };
+}
+
 function buildBasePayload({
   evidenceId,
   definition,
@@ -125,29 +149,16 @@ function buildBasePayload({
   if (!PGWIRE_PROOF_SYSTEMS.has(context?.system)) {
     throw new Error(`Scenario A PG-wire proof requires a PG-wire system, got ${context?.system}`);
   }
-  // The open adapter states the execution contract; once it is closed the
-  // context's admitted contract does. Neither present is a refused payload.
-  const contract = adapter || context.publicExecutionContract;
-  if (!contract) {
-    throw new Error('Scenario A PG-wire proof payload requires an execution contract');
-  }
   return Object.freeze({
     schemaVersion: 1,
     evidenceId,
     system: context.system,
     caseId: definition.identity.caseId,
     caseSha256: definition.caseSha256,
-    ...(definition.identity?.datasetSha256 ?
+    ...(definition.identity.datasetSha256 ?
       {datasetSha256: definition.identity.datasetSha256} : {}),
-    executionPath: contract.executionPath,
-    protocol: contract.protocol,
-    lockingReadMode: contract.lockingReadMode,
-    serviceEndpoint: context.serviceEndpoint ?? null,
-    // Only the Lagrange live path is admitted by a certification record; the
-    // proof journey's context carries its deployment binding instead.
-    admissionSha256: context.admission ? context.admission.admissionSha256 : null,
-    runtimePreflight: context.runtimePreflight ?? null,
-    binding: context.binding ?? null,
+    ...executionContractOf(adapter, context),
+    ...contextFactsOf(context),
     ...extra,
     comparable: false,
     nonComparableReason: NON_COMPARABLE_REASON,

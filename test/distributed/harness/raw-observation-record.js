@@ -462,12 +462,21 @@ function validateDataset(dataset) {
   }
 }
 
-function validateEndpointAndLoadGenerator(deployment) {
-  const endpoint = requireObject(deployment[DEPLOYMENT_FIELD.ENDPOINT], 'deployment.endpoint');
+// The client endpoint bound to its container. Only a deployment whose
+// readiness was exhausted before the product named its client endpoint has
+// none (null): its run never opened.
+function validateEndpoint(deployment, readinessState) {
+  const value = deployment[DEPLOYMENT_FIELD.ENDPOINT];
+  if (value === null && readinessState === READINESS_STATE.EXHAUSTED) return;
+  const endpoint = requireObject(value, 'deployment.endpoint');
   requireText(endpoint.host, 'deployment.endpoint.host');
   requireCount(endpoint.port, 'deployment.endpoint.port');
   requireText(endpoint.containerId, 'deployment.endpoint.containerId');
   requireText(endpoint.protocol, 'deployment.endpoint.protocol');
+}
+
+function validateEndpointAndLoadGenerator(deployment, readinessState) {
+  validateEndpoint(deployment, readinessState);
   const generator = requireObject(deployment[DEPLOYMENT_FIELD.LOAD_GENERATOR],
     'deployment.loadGenerator');
   requireText(generator.host, 'deployment.loadGenerator.host');
@@ -502,7 +511,7 @@ function validateDeployment(deployment) {
   requireEnum(readiness.state, objectValues(READINESS_STATE), 'deployment.readiness.state');
   requireIsoTime(readiness.observedAt, 'deployment.readiness.observedAt');
   validateDataset(deployment[DEPLOYMENT_FIELD.DATASET]);
-  validateEndpointAndLoadGenerator(deployment);
+  validateEndpointAndLoadGenerator(deployment, readiness.state);
   validateEventsAndClosure(deployment);
   requireNullableObject(deployment[DEPLOYMENT_FIELD.PLACEMENT] ?? null, 'deployment.placement');
 }

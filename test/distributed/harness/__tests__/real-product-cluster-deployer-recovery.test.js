@@ -15,7 +15,7 @@ const COMPONENT = Object.freeze({role: 'tikv', host: '10.0.0.2', containerId: 'f
 function recoveryInput(sshRun, overrides = {}) {
   let clock = 1000;
   return {component: COMPONENT, sshRun, opts: {}, sleep: async () => {},
-    now: () => (clock += 5), attempts: 3,
+    now: () => (clock += 5), attempts: 3, intervalMs: 1,
     observeComponentReady: async () => ({ready: true, evidence: 'store Up'}),
     userOperation: async () => ({ok: true, evidence: 'SELECT 1 -> 1'}),
     ...overrides};

@@ -13,9 +13,27 @@ import {
 } from './real-product-deployment-contract.js';
 import {errorText} from './real-product-remote-shell.js';
 
+// One readiness attempt: the probe's verdict {ready, diagnostic}, or, when the
+// probe throws, a not-ready attempt whose diagnostic is the error. An answer
+// outside that contract is a harness defect and is raised, never read as a
+// verdict.
+async function probeOnce(component, probe) {
+  let outcome;
+  try {
+    outcome = await probe();
+  } catch (error) {
+    return {ready: false, diagnostic: {error: errorText(error)}};
+  }
+  if (!outcome || typeof outcome.ready !== 'boolean' || !('diagnostic' in outcome)) {
+    throw new Error(`readiness probe of ${component} answered outside {ready, diagnostic}`);
+  }
+  return outcome;
+}
+
 /**
  * @param {{component: string, probe: Function, attempts: number,
- *   intervalMs: number, sleep: Function, now?: Function}} input
+ *   intervalMs: number, sleep: Function, now?: Function, stablePolls?: number}} input
+ *   probe answers {ready: boolean, diagnostic}
  * @return {Promise<{state: string, component: string, attempts: number,
  *   observedAt: string, evidence: *}>}
  */
@@ -28,19 +46,14 @@ async function pollReadiness({component, probe, attempts, intervalMs, sleep,
   let last = null;
   let consecutive = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      const outcome = await probe();
-      last = outcome?.diagnostic ?? null;
-      consecutive = outcome?.ready === true ? consecutive + 1 : 0;
-      if (consecutive >= stablePolls) {
-        const readyAt = now();
-        return {state: READINESS_STATE.READY, component, attempts: attempt, stablePolls,
-          observedAt: new Date(readyAt).toISOString(), timeToReadyMs: readyAt - startedAt,
-          evidence: last};
-      }
-    } catch (error) {
-      consecutive = 0;
-      last = {error: errorText(error)};
+    const outcome = await probeOnce(component, probe);
+    last = outcome.diagnostic;
+    consecutive = outcome.ready ? consecutive + 1 : 0;
+    if (consecutive >= stablePolls) {
+      const readyAt = now();
+      return {state: READINESS_STATE.READY, component, attempts: attempt, stablePolls,
+        observedAt: new Date(readyAt).toISOString(), timeToReadyMs: readyAt - startedAt,
+        evidence: last};
     }
     if (attempt < attempts) await sleep(intervalMs);
   }

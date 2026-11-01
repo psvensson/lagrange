@@ -35,6 +35,10 @@ import {
   runClassOf,
   verifyProductIdentity,
 } from './real-product-identity.js';
+import {
+  describeExhaustedDeployment,
+  describingReadinessExhaustion,
+} from './real-product-exhausted-deployment.js';
 import {pollReadiness} from './real-product-readiness.js';
 import {
   dockerRunDetached,
@@ -199,6 +203,30 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, c
   const ctx = {sshRun, opts, sleep, budget: resolveReadinessBudget(opts)};
   const passwords = {superuser: generatedPassword(), app: generatedPassword(),
     replication: generatedPassword()};
+  const formed = {roles: [], endpoint: null};
+  return describingReadinessExhaustion(() => formPostgresCluster({ctx, targetId, hosts,
+    clientIp, campaignId, image, passwords, formed}), (failure) => describeExhaustedDeployment({
+    targetId, topology: postgresTopology(targetId), sshRun, opts, roles: [...formed.roles],
+    endpoint: formed.endpoint, dataDir: DATA_ROOT,
+    readVersions: (products) => reportedVersions(ctx, products), failure}));
+}
+
+function postgresTopology(targetId) {
+  return {description: targetId === TARGET.SYNC_HA ?
+    `primary + ${STANDBY_NAMES.length} synchronous streaming standbys` : 'single primary',
+  clientPath: 'direct-to-primary', haManager: null};
+}
+
+async function reportedVersions(ctx, products) {
+  for (const product of products) {
+    product.reportedVersion = await query(ctx, product, 'SELECT version()');
+  }
+  return products;
+}
+
+async function formPostgresCluster({ctx, targetId, hosts, clientIp, campaignId, image,
+  passwords, formed}) {
+  const {sshRun, opts} = ctx;
   const standbyHosts = targetId === TARGET.SYNC_HA ? hosts.slice(1, 1 + STANDBY_NAMES.length) :
     [];
   const started = await dockerRunDetached({sshRun, opts, host: hosts[0], campaignId,
@@ -208,12 +236,15 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, c
       '-e', `PGDATA=${PGDATA}`],
     commandArgs: ['postgres', ...settingArgs()]});
   const primary = {role: ROLE.PRIMARY, host: started.host, containerId: started.containerId};
+  const roles = formed.roles;
+  roles.push(primary);
+  formed.endpoint = {protocol: 'postgresql', host: primary.host, port: PORT,
+    containerId: primary.containerId, binding: null};
   const readiness = {servers: [await serverReady(ctx, primary)]};
   // The load generator, plus the controller when it runs the semantic proof
   // journey in process (opts.proofClientIps): each one /32, scram, read back.
   const clientIps = [...new Set([clientIp, ...(opts.proofClientIps || [])])];
   const hbaRules = await configureAccess(ctx, primary, {clientIps, standbyHosts, passwords});
-  const roles = [primary];
   if (targetId === TARGET.SYNC_HA) {
     const standbys = await startStandbys(ctx, primary, {hosts, campaignId, image, passwords});
     for (const standby of standbys) readiness.servers.push(await serverReady(ctx, standby));
@@ -225,10 +256,7 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, c
     await query(ctx, primary, 'SELECT pg_reload_conf()');
     readiness.synchronous = await synchronousReady(ctx, primary, setting);
   }
-  const products = await inspectProducts({sshRun, opts, roles});
-  for (const product of products) {
-    product.reportedVersion = await query(ctx, product, 'SELECT version()');
-  }
+  const products = await reportedVersions(ctx, await inspectProducts({sshRun, opts, roles}));
   const expectation = {imageRef: image,
     versionPattern: pinnedVersionPattern(image, MAJOR_TAG, versionPatternOfMajor)};
   verifyProductIdentity(products, {[ROLE.PRIMARY]: expectation, [ROLE.STANDBY]: expectation});
@@ -240,9 +268,7 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, c
     containerId: binding.containerId, binding};
   return {
     targetId,
-    topology: {description: targetId === TARGET.SYNC_HA ?
-      `primary + ${STANDBY_NAMES.length} synchronous streaming standbys` : 'single primary',
-    clientPath: 'direct-to-primary', haManager: null},
+    topology: postgresTopology(targetId),
     roles, storage, runClass: runClassOf(storage),
     readiness: {state: READINESS_STATE.READY, observedAt: new Date().toISOString(),
       evidence: readiness},

@@ -110,36 +110,44 @@ function partitionDenials(partition, services, expectedNodeIds) {
  */
 function evaluateLagrangeClusterReadiness({nodes, endpoints, partitions, services,
   expectedNodeIds, requiredServiceIds, requiredTables = null, now}) {
-  const denials = nodeDenials(nodes, expectedNodeIds, now);
-  for (const serviceId of requiredServiceIds) {
-    if (!arraySome(endpoints, (row) => row.service_id === serviceId &&
-        text(row.health_status) === HEALTHY)) {
-      denials.push(`${DENIAL.SERVICE_ENDPOINT}:${serviceId}`);
-    }
-  }
-  let considered = partitions;
-  if (requiredTables) {
-    considered = arrayFilter(partitions, (row) => arrayIncludes(requiredTables, row.table_name));
-    for (const table of requiredTables) {
-      if (!arraySome(considered, (row) => row.table_name === table)) {
-        denials.push(`${DENIAL.TABLE_WITHOUT_PARTITIONS}:${table}`);
-      }
-    }
-  } else {
-    if (partitions.length === 0) denials.push(DENIAL.NO_PARTITIONS);
-    for (const partitionId of PRIORITY_PARTITION_IDS) {
-      if (!arraySome(partitions, (row) => row.partition_id === partitionId)) {
-        denials.push(`${DENIAL.PRIORITY_PARTITION_MISSING}:${partitionId}`);
-      }
-    }
-  }
-  for (const partition of considered) {
+  const denials = [...nodeDenials(nodes, expectedNodeIds, now),
+    ...serviceEndpointDenials(endpoints, requiredServiceIds)];
+  const scope = partitionScopeOf(partitions, requiredTables);
+  denials.push(...scope.denials);
+  for (const partition of scope.considered) {
     if (requiredTables && !partition.leader_node_id) {
       denials.push(`${DENIAL.PARTITION_WITHOUT_LEADER_ROW}:${partition.partition_id}`);
     }
     denials.push(...partitionDenials(partition, services, expectedNodeIds));
   }
   return {ready: denials.length === 0, denials};
+}
+
+// Every required service has a healthy endpoint row.
+function serviceEndpointDenials(endpoints, requiredServiceIds) {
+  return arrayMap(arrayFilter(requiredServiceIds, (serviceId) => !arraySome(endpoints,
+    (row) => row.service_id === serviceId && text(row.health_status) === HEALTHY)),
+  (serviceId) => `${DENIAL.SERVICE_ENDPOINT}:${serviceId}`);
+}
+
+// The partitions the verdict considers: the required tables' partitions (each
+// required table must have one), or, for the system tables, every partition
+// with the priority partitions present.
+function partitionScopeOf(partitions, requiredTables) {
+  if (requiredTables) {
+    const considered = arrayFilter(partitions,
+      (row) => arrayIncludes(requiredTables, row.table_name));
+    return {considered, denials: arrayMap(arrayFilter(requiredTables, (table) =>
+      !arraySome(considered, (row) => row.table_name === table)),
+    (table) => `${DENIAL.TABLE_WITHOUT_PARTITIONS}:${table}`)};
+  }
+  const denials = partitions.length === 0 ? [DENIAL.NO_PARTITIONS] : [];
+  for (const partitionId of PRIORITY_PARTITION_IDS) {
+    if (!arraySome(partitions, (row) => row.partition_id === partitionId)) {
+      denials.push(`${DENIAL.PRIORITY_PARTITION_MISSING}:${partitionId}`);
+    }
+  }
+  return {considered: partitions, denials};
 }
 
 /**
@@ -151,24 +159,30 @@ function evaluateLagrangeClusterReadiness({nodes, endpoints, partitions, service
 function evaluateLagrangeServeLane({snapshots}) {
   const denials = [];
   for (const {nodeId, snapshot} of snapshots) {
-    if (!snapshot) {
-      denials.push(`${DENIAL.CONTROL_SNAPSHOT_UNAVAILABLE}:${nodeId}`);
-      continue;
-    }
-    const readiness = snapshot.controlPlaneDiagnostics?.readinessByNodeId?.[nodeId];
-    if (readiness?.serveEligible !== true) {
-      denials.push(`${DENIAL.SERVE_NOT_ELIGIBLE}:${nodeId}`);
-    }
-    for (const code of Array.isArray(readiness?.reasonCodes) ? readiness.reasonCodes : []) {
-      denials.push(`${DENIAL.SERVE_DENIED}:${nodeId}:${code}`);
-    }
-    const inFlight = Number(snapshot.replicaOperations?.inFlightCount);
-    if (!Number.isInteger(inFlight) || inFlight !== 0) {
-      denials.push(`${DENIAL.REPLICA_OPERATIONS_IN_FLIGHT}:${nodeId}:` +
-        `${Number.isInteger(inFlight) ? inFlight : 'unknown'}`);
-    }
+    denials.push(...(snapshot ? nodeServeDenials(nodeId, snapshot) :
+      [`${DENIAL.CONTROL_SNAPSHOT_UNAVAILABLE}:${nodeId}`]));
   }
   return {ready: denials.length === 0, denials};
+}
+
+// One node's own serve verdict from its control snapshot: serve-eligible with
+// no denial reason, and no replica operation in flight (an unreadable count is
+// a denial naming `unknown`).
+function nodeServeDenials(nodeId, snapshot) {
+  const denials = [];
+  const readiness = snapshot.controlPlaneDiagnostics?.readinessByNodeId?.[nodeId];
+  if (readiness?.serveEligible !== true) {
+    denials.push(`${DENIAL.SERVE_NOT_ELIGIBLE}:${nodeId}`);
+  }
+  for (const code of Array.isArray(readiness?.reasonCodes) ? readiness.reasonCodes : []) {
+    denials.push(`${DENIAL.SERVE_DENIED}:${nodeId}:${code}`);
+  }
+  const inFlight = Number(snapshot.replicaOperations?.inFlightCount);
+  if (!Number.isInteger(inFlight) || inFlight !== 0) {
+    denials.push(`${DENIAL.REPLICA_OPERATIONS_IN_FLIGHT}:${nodeId}:` +
+      `${Number.isInteger(inFlight) ? inFlight : 'unknown'}`);
+  }
+  return denials;
 }
 
 export {

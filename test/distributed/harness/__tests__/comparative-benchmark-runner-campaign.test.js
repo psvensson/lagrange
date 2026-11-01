@@ -16,6 +16,8 @@ import {
 } from '../comparative-benchmark-campaign-manifest.js';
 import {
   arrayEvery,
+  arrayFilter,
+  arrayFind,
   arrayMap,
   arraySome,
 } from '../real-product-captured-intrinsics.js';
@@ -109,24 +111,123 @@ test('campaign: header first, one v2 run record per attempted run, append only',
     assert.equal(summary.attempted.length, MANIFEST.runs.length);
   });
 
-test('J7: readiness exhausted - measurement never starts, the run is recorded failed and ' +
-  'torn down', async () => {
-  const failure = Object.assign(new Error('readyz 503'), {code: 'readiness_exhausted',
-    diagnostic: {last: 'seed-contact'}});
-  const {deps, records, calls} = harness({deployRun: async () => {
+// The deployer's description of an arm whose readiness was exhausted: its
+// running containers, inspected, and the exhausted readiness evidence.
+function exhaustedFailure(described = true) {
+  return Object.assign(new Error('readyz 503'), {code: 'readiness_exhausted',
+    diagnostic: {last: 'seed-contact'},
+    ...(described ? {deployment: {...deployment('exhausted'), endpoint: null,
+      readiness: {state: 'exhausted', observedAt: '2026-11-01T10:00:00Z',
+        evidence: {last: 'seed-contact'}}}} : {})});
+}
+
+// Pins are taken from each target's first described deployment, so a harness
+// that fails every run fails from the second deployment of a target on.
+function failingAfterFirstDeployOfEachTarget(failure) {
+  const seen = new Set();
+  return async (one) => {
+    if (!seen.has(one.targetId)) {
+      seen.add(one.targetId);
+      return deployment(one.runId);
+    }
     throw failure;
-  }});
+  };
+}
+
+test('J7: readiness exhausted - measurement never starts; the record is a complete ' +
+  'setup-failed product failure with every planned request unissued', async () => {
+  const workloadCalls = [];
+  let validated = 0;
+  const owner = recordOwner();
+  const {deps, records, calls} = harness({
+    deployRun: async () => {
+      throw exhaustedFailure();
+    },
+    recordOwner: {...owner, validateRunRecord: (record) => {
+      validated += 1;
+      return record;
+    }},
+    executeWorkloadRun: async (input) => {
+      workloadCalls.push(input);
+      return {observations: {runStatus: 'setup-failed',
+        setup: input.setupFailure, requests: [{outcome: 'unissued'}],
+        accounting: {offered: 1, issued: 0, unissued: 1}},
+      correctness: {semanticGate: null, finalState: null},
+      plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
+      endpoint: null, harness: {driverSourceSha256: 'feed', adapterIds: ['a']},
+      dataset: {resetMethod: 'fresh-formation', verification: {status: 'failed'}},
+      placement: null, loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
+      events: [], failure: null,
+      productFailure: {runStatus: 'setup-failed', setup: input.setupFailure}};
+    },
+  });
   const summary = await run(deps);
-  assert.deepEqual(calls.workload, []);
+  assert.equal(workloadCalls.length, MANIFEST.runs.length);
+  assert.equal(workloadCalls[0].setupFailure.code, 'readiness_exhausted');
+  assert.equal(workloadCalls[0].setupFailure.failureClass, 'product_error');
+  assert.equal(workloadCalls[0].semanticGate, null);
   assert.equal(calls.teardown.length, MANIFEST.runs.length);
   const first = records[1];
   assert.equal(first.execution.state, 'product-failure');
   assert.equal(first.execution.failure.code, 'readiness_exhausted');
   assert.deepEqual(first.execution.failure.diagnostic, {last: 'seed-contact'});
-  assert.equal(first.observations, null);
+  assert.notEqual(first.observations, null);
+  assert.equal(first.observations.runStatus, 'setup-failed');
+  assert.equal(first.observations.accounting.issued, 0);
+  assert.equal(first.deployment.readiness.state, 'exhausted');
+  assert.equal(first.deployment.endpoint, null);
+  assert.deepEqual(first.identity.products, [product('c1')]);
+  assert.equal(validated, MANIFEST.runs.length);
   assert.equal(summary.exitCode, 1);
   assert.ok(arrayEvery(summary.attempted, (entry) => entry.state === 'product-failure'));
 });
+
+test('J7: a readiness exhaustion the deployer could not describe is a failed run, never ' +
+  'a product failure without its product', async () => {
+  const {deps, records, calls} = harness({deployRun:
+    failingAfterFirstDeployOfEachTarget(exhaustedFailure(false))});
+  await run(deps);
+  const failedRuns = arrayFilter(records.slice(1),
+    (record) => record.execution.failure?.code === 'readiness_exhausted');
+  assert.ok(failedRuns.length > 0);
+  assert.ok(arrayEvery(failedRuns, (record) => record.execution.state === 'failed'));
+  assert.equal(calls.workload.length, MANIFEST.targets.length);
+});
+
+test('header: pins every target\'s product identity from its running containers, ' +
+  'before any run record', async () => {
+  const {deps, records} = harness();
+  await run(deps);
+  const header = records[0];
+  assert.equal(header.recordType, 'campaign-header');
+  assert.deepEqual(header.products, arrayMap(MANIFEST.targets, (targetId) => ({targetId,
+    product: arrayFind(MANIFEST.runs, (one) => one.targetId === targetId).system,
+    role: 'node', imageId: `sha256:${'a'.repeat(64)}`, repoDigest: 'img@sha256:1',
+    reportedVersion: '1'})));
+  assert.ok(arrayEvery(records.slice(1), (record) => record.recordType === 'run'));
+  assert.equal(records.length, MANIFEST.runs.length + 1);
+});
+
+test('header: a target whose containers of one role differ is not pinned, and says why',
+  async () => {
+    const {deps, records} = harness({deployRun: async (one) => (one.targetId === 'lagrange' ?
+      {...deployment(one.runId), identity: {products: [product('c1'),
+        {...product('c2'), reportedVersion: '2'}]}} : deployment(one.runId))});
+    await run(deps);
+    const header = records[0];
+    assert.deepEqual(arrayMap(header.products, (pin) => pin.targetId), ['pg-single-primary']);
+    assert.equal(header.unpinnedTargets[0].targetId, 'lagrange');
+    assert.equal(header.unpinnedTargets[0].failure.code, 'identity_unverified');
+  });
+
+test('header: a campaign that pinned no product identity writes no header and fails',
+  async () => {
+    const {deps, records} = harness({deployRun: async () => {
+      throw Object.assign(new Error('ssh down'), {code: 'deployment_command_failed'});
+    }});
+    await assert.rejects(run(deps), (error) => error.code === 'campaign_products_unpinned');
+    assert.deepEqual(records, []);
+  });
 
 test('J15: product containers removed while the harness lives - no successful completion',
   async () => {
@@ -183,12 +284,10 @@ test('teardown failure is recorded in closure and the campaign continues', async
 });
 
 test('a topology refusal is blocked, never failed or passed', async () => {
-  const {deps, records} = harness({deployRun: async () => {
-    throw Object.assign(new Error('needs 3 hosts'),
-      {code: 'refused_insufficient_host_topology'});
-  }});
+  const {deps, records} = harness({deployRun: failingAfterFirstDeployOfEachTarget(
+    Object.assign(new Error('needs 3 hosts'), {code: 'refused_insufficient_host_topology'}))});
   const summary = await run(deps);
-  assert.equal(records[1].execution.state, 'blocked');
+  assert.equal(records.at(-1).execution.state, 'blocked');
   assert.equal(summary.exitCode, 3);
 });
 

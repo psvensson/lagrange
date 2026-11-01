@@ -402,16 +402,25 @@ function attemptsBoundTo(request, endpointText) {
     a.endpoint === null : a.endpoint === endpointText));
 }
 
+// The endpoint is a recorded role's container and every attempt used it. A
+// deployment exhausted before naming its endpoint (the validator admits null
+// only then) is bound only while no request was issued.
+function endpointBound(run) {
+  const endpoint = run.deployment.endpoint;
+  const requests = run.observations.requests;
+  if (endpoint === null) {
+    return !arraySome(requests, (r) => r.outcome !== OPERATION_OUTCOME.UNISSUED);
+  }
+  const endpointText = `${endpoint.host}:${endpoint.port}`;
+  return arraySome(run.deployment.roles, (r) =>
+    r.containerId === endpoint.containerId && r.host === endpoint.host) &&
+    !arraySome(requests, (r) => !attemptsBoundTo(r, endpointText));
+}
+
 function checkExecution(run) {
   const reasons = [];
   const deployment = run.deployment;
-  const endpoint = deployment.endpoint;
-  const endpointText = `${endpoint.host}:${endpoint.port}`;
-  if (!arraySome(deployment.roles, (r) =>
-    r.containerId === endpoint.containerId && r.host === endpoint.host) ||
-      arraySome(run.observations.requests, (r) => !attemptsBoundTo(r, endpointText))) {
-    reasons.push(ADMISSION_REASON.ENDPOINT_NOT_BOUND);
-  }
+  if (!endpointBound(run)) reasons.push(ADMISSION_REASON.ENDPOINT_NOT_BOUND);
   if (arraySome(deployment.roles, (r) => r.host === deployment.loadGenerator.host)) {
     reasons.push(ADMISSION_REASON.LOAD_GENERATOR_ON_PRODUCT_HOST);
   }

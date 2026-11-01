@@ -14,21 +14,52 @@ const NOT_MEASURED_REASON = Object.freeze({
   USER_OPERATION_FAILED: 'user-operation-failed',
 });
 const RESTART_GRACE_SECONDS = 1;
-const DEFAULT_INTERVAL_MS = 1000;
 
 function notMeasured(component, reason, evidence) {
   return {claim: 'recovery', status: CLAIM_STATUS.NOT_MEASURED, reason, component, evidence};
 }
 
+// One observation through a caller's probe: its answer ({ready|ok, evidence}),
+// or, when the probe throws, a negative observation whose evidence is the error.
+async function observeOnce(probe, component, verdictKey) {
+  try {
+    return await probe(component);
+  } catch (error) {
+    return {[verdictKey]: false, evidence: errorText(error)};
+  }
+}
+
+// The named component's own readiness surface, polled up to `attempts` times
+// `intervalMs` apart; the last observation decides.
+async function awaitComponentReady({component, attempts, intervalMs, sleep,
+  observeComponentReady}) {
+  let readiness = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    readiness = await observeOnce(observeComponentReady, component, 'ready');
+    if (readiness.ready === true) return readiness;
+    if (attempt < attempts) await sleep(intervalMs);
+  }
+  return readiness;
+}
+
+function requirePollPlan(attempts, intervalMs) {
+  if (!Number.isSafeInteger(attempts) || attempts < 1 ||
+      !Number.isFinite(intervalMs) || intervalMs < 0) {
+    throw new Error('recovery observation needs attempts >= 1 and an interval in ms');
+  }
+}
+
 /**
  * @param {{component: {role: string, host: string, containerId: string},
  *   sshRun: Function, opts: Object, sleep: Function, now?: Function,
- *   attempts: number, intervalMs?: number, observeComponentReady: Function,
- *   userOperation: Function}} input
+ *   attempts: number, intervalMs: number, observeComponentReady: Function,
+ *   userOperation: Function}} input observeComponentReady answers
+ *   {ready, evidence}; userOperation answers {ok, evidence}
  * @return {Promise<Object>}
  */
 async function measureComponentRecovery({component, sshRun, opts, sleep, now = Date.now,
-  attempts, intervalMs = DEFAULT_INTERVAL_MS, observeComponentReady, userOperation}) {
+  attempts, intervalMs, observeComponentReady, userOperation}) {
+  requirePollPlan(attempts, intervalMs);
   const interruptedAt = now();
   try {
     await sshRun(component.host, opts,
@@ -36,37 +67,24 @@ async function measureComponentRecovery({component, sshRun, opts, sleep, now = D
   } catch (error) {
     return notMeasured(component, NOT_MEASURED_REASON.INTERRUPT_FAILED, errorText(error));
   }
-  let readiness = null;
-  for (let attempt = 1; attempt <= attempts && readiness?.ready !== true; attempt += 1) {
-    try {
-      readiness = await observeComponentReady(component);
-    } catch (error) {
-      readiness = {ready: false, evidence: errorText(error)};
-    }
-    if (readiness?.ready !== true && attempt < attempts) await sleep(intervalMs);
-  }
-  if (readiness?.ready !== true) {
+  const readiness = await awaitComponentReady({component, attempts, intervalMs, sleep,
+    observeComponentReady});
+  if (readiness.ready !== true) {
     return notMeasured(component, NOT_MEASURED_REASON.COMPONENT_NOT_RECOVERED,
-      readiness?.evidence ?? null);
+      readiness.evidence);
   }
   const recoveredAt = now();
-  let operation;
-  try {
-    operation = await userOperation(component);
-  } catch (error) {
-    operation = {ok: false, evidence: errorText(error)};
-  }
-  if (operation?.ok !== true) {
-    return notMeasured(component, NOT_MEASURED_REASON.USER_OPERATION_FAILED,
-      operation?.evidence ?? null);
+  const operation = await observeOnce(userOperation, component, 'ok');
+  if (operation.ok !== true) {
+    return notMeasured(component, NOT_MEASURED_REASON.USER_OPERATION_FAILED, operation.evidence);
   }
   return {claim: 'recovery', status: CLAIM_STATUS.OBSERVED, component,
     interruption: 'container-restart',
     interruptedAt: new Date(interruptedAt).toISOString(),
     recoveredAt: new Date(recoveredAt).toISOString(),
     recoveryMs: recoveredAt - interruptedAt,
-    readiness: readiness.evidence ?? null,
-    userOperation: {ok: true, evidence: operation.evidence ?? null}};
+    readiness: readiness.evidence,
+    userOperation: {ok: true, evidence: operation.evidence}};
 }
 
 export {NOT_MEASURED_REASON as RECOVERY_NOT_MEASURED_REASON, measureComponentRecovery};

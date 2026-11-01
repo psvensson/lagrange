@@ -108,6 +108,31 @@ function loadGeneratorGap(facts, nodeMinimum) {
  */
 function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimum = null}) {
   const required = dataHostCount + 1;
+  const {eligible, excluded} = partitionEligibleHosts(state, fleet);
+  const free = (entry) => arrayIncludes(USABLE_LOCK_STATES, entry.lock.state);
+  const preferred = [...arrayFilter(eligible, free),
+    ...arrayFilter(eligible, (entry) => !free(entry))];
+  const client = chooseLoadGenerator(preferred, free, nodeMinimum, excluded);
+  const ordered = client ? [...arrayFilter(preferred, (entry) => entry !== client)
+    .slice(0, dataHostCount), client] : [];
+  if (ordered.length < required) {
+    throw deploymentFailure(SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY,
+      `${SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY}: the campaign needs ${required} ` +
+      `harness hosts (${dataHostCount} data + 1 load generator); the inventory offers ` +
+      `${ordered.length}; excluded: ${arrayMap(excluded,
+        (entry) => `${entry.name} (${entry.reason})`).join('; ') || 'none'}`,
+      {required, available: ordered.length, excluded});
+  }
+  return arrayMap(ordered.slice(0, required), ({node, facts, lock}, index) => ({
+    name: node.name, ip: node.ip, sshTarget: node.ssh, bootId: facts.capability.bootId ?? null,
+    repoPath: facts.capability.repoPath ?? null, nodePath: facts.capability.nodePath ?? null,
+    lock, role: index < dataHostCount ? HOST_ROLE.DATA : HOST_ROLE.CLIENT}));
+}
+
+// The inventory's harness nodes in name order, split into eligible hosts (with
+// their facts and recorded lock) and excluded ones with the reason; one host
+// per physical machine (boot id).
+function partitionEligibleHosts(state, fleet) {
   const candidates = [...selectNodesByRole(state, HARNESS_ROLE)]
     .sort((left, right) => (left.name < right.name ? -1 : 1));
   const eligible = [];
@@ -123,32 +148,21 @@ function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimu
     if (facts.capability.bootId) seenBootIds.add(facts.capability.bootId);
     eligible.push({node, facts, lock: lockOf(facts)});
   }
-  const free = (entry) => arrayIncludes(USABLE_LOCK_STATES, entry.lock.state);
-  const preferred = [...arrayFilter(eligible, free),
-    ...arrayFilter(eligible, (entry) => !free(entry))];
-  // The load generator is the LAST capable free host (else the last capable
-  // one), so data hosts keep name order from the front of the list.
+  return {eligible, excluded};
+}
+
+// The load generator is the LAST capable free host (else the last capable
+// one), so data hosts keep name order from the front of the list. Every host
+// that cannot be one is recorded in `excluded` with the gap.
+function chooseLoadGenerator(preferred, free, nodeMinimum, excluded) {
   const capable = arrayFilter(preferred, (entry) => !loadGeneratorGap(entry.facts, nodeMinimum));
-  const capableFree = arrayFilter(capable, free);
-  const client = capableFree[capableFree.length - 1] || capable[capable.length - 1] || null;
   for (const entry of preferred) {
     const gap = loadGeneratorGap(entry.facts, nodeMinimum);
     if (gap) excluded.push({name: entry.node.name, reason: `not a load generator: ${gap}`});
   }
-  const ordered = client ? [...arrayFilter(preferred, (entry) => entry !== client)
-    .slice(0, dataHostCount), client] : [];
-  if (ordered.length < required) {
-    throw deploymentFailure(SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY,
-      `${SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY}: the campaign needs ${required} ` +
-      `harness hosts (${dataHostCount} data + 1 load generator); the inventory offers ` +
-      `${ordered.length}; excluded: ${arrayMap(excluded,
-        (entry) => `${entry.name} (${entry.reason})`).join('; ') || 'none'}`,
-      {required, available: ordered.length, excluded});
-  }
-  return arrayMap(ordered.slice(0, required), ({node, facts, lock}, index) => ({
-    name: node.name, ip: node.ip, sshTarget: node.ssh, bootId: facts.capability.bootId ?? null,
-    repoPath: facts.capability.repoPath ?? null, nodePath: facts.capability.nodePath ?? null,
-    lock, role: index < dataHostCount ? HOST_ROLE.DATA : HOST_ROLE.CLIENT}));
+  const capableFree = arrayFilter(capable, free);
+  if (capableFree.length > 0) return capableFree[capableFree.length - 1];
+  return capable.length > 0 ? capable[capable.length - 1] : null;
 }
 
 /** What a dry run would lock, per host, under the lab convention. */

@@ -152,3 +152,29 @@ test('the remote runner refuses a checkout off the harness commit and runs the B
     const cli = arrayFind(good.calls, (call) => stringIncludes(call.command, 'run-benchmark'));
     assert.match(cli.command, /--manifest 'test-output\/bench\/bench-x\/[^']+\/request\.json'/u);
   });
+
+test('an exhausted deployment is run unopened: the request names the setup failure and ' +
+  'no connection, and B1\'s unissued record is the product failure', async () => {
+  const setupFailure = {failureClass: 'product_error', sqlState: null,
+    code: 'readiness_exhausted', message: 'membership 1 of 3'};
+  const seen = [];
+  const execute = createWorkloadRunExecutor({clientHost: '10.0.0.9',
+    runWorkload: async (request) => {
+      seen.push(request);
+      return b1Record({deployment: {endpoint: null, dataset: {resetMethod: 'fresh-formation',
+        verification: {status: 'failed', failure: setupFailure}}},
+      observations: {runStatus: 'setup-failed', setup: setupFailure,
+        requests: [{outcome: 'unissued'}]}});
+    },
+    describeLoadGenerator: async () => ({hostname: 'lg', bootId: 'b'})});
+  const exhausted = {...deployment(), endpoint: null, access: undefined, operations: undefined};
+  const result = await execute({run: RUN, manifest: MANIFEST, deployment: exhausted,
+    semanticGate: null, setupFailure});
+  assert.deepEqual(seen[0].setupFailure, setupFailure);
+  assert.equal(Object.hasOwn(seen[0], 'connection'), false);
+  assert.equal(result.failure, null);
+  assert.deepEqual(result.productFailure, {runStatus: 'setup-failed', setup: setupFailure});
+  assert.equal(result.endpoint, null);
+  assert.equal(result.placement, null);
+  assert.equal(result.observations.requests[0].outcome, 'unissued');
+});

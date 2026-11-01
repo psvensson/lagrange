@@ -94,7 +94,10 @@ function observe(output, product) {
   };
 }
 
-async function runDriverCase({targetId, scenario, subkind, mode = FAKE_PRODUCT_FAULT.NONE}) {
+// A case with a setupFailure runs unopened: the request carries the
+// deployer's setup failure and no connection.
+async function runDriverCase({targetId, scenario, subkind, mode = FAKE_PRODUCT_FAULT.NONE,
+  setupFailure = null}) {
   const product = createFakeOltpProduct(mode);
   const system = SYSTEM_BY_TARGET[targetId];
   const evidenceDir = mkdtempSync(path.join(tmpdir(), 'bench-driver-evidence-'));
@@ -104,7 +107,7 @@ async function runDriverCase({targetId, scenario, subkind, mode = FAKE_PRODUCT_F
       system,
       scenario,
       subkind,
-      connection: connectionFor(system),
+      ...(setupFailure ? {setupFailure} : {connection: connectionFor(system)}),
       plan: {offeredRatePerSec: FIXTURE_RATE_PER_SEC, repetition: 1, orderIndex: 0},
       drivers: {
         createPgClient: product.createPgClient,

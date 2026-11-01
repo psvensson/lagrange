@@ -57,6 +57,10 @@ import {
   evaluateLagrangeClusterReadiness,
   evaluateLagrangeServeLane,
 } from './real-product-lagrange-readiness-evaluation.js';
+import {
+  describeExhaustedDeployment,
+  describingReadinessExhaustion,
+} from './real-product-exhausted-deployment.js';
 import {pollReadiness} from './real-product-readiness.js';
 import {
   dockerRunDetached,
@@ -340,9 +344,34 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const ctx = {sshRun, opts, clientIp, sleep, budget: resolveReadinessBudget(opts)};
   const connection = {user: REQUEST_CELL_AUTH.USER, password: REQUEST_CELL_AUTH.PASSWORD,
     database: REQUEST_CELL_AUTH.DATABASE};
-  const seedHost = hosts[0];
   const roles = [];
   const nodeReadiness = [];
+  const formed = {listener: null};
+  return describingReadinessExhaustion(() => formLagrangeCluster({ctx, hosts, image, connection,
+    roles, nodeReadiness, formed, campaignId}), (failure) => describeExhaustedDeployment({
+    targetId: 'lagrange', topology: lagrangeTopology(hosts), sshRun, opts,
+    roles: [...roles], endpoint: exhaustedEndpoint(formed.listener, roles), dataDir: DATA_DIR,
+    readVersions: (products) => reportedVersions(ctx, products), failure}));
+}
+
+function lagrangeTopology(hosts) {
+  return {description: `${hosts.length} Lagrange nodes; clients use the public ` +
+    'PostgreSQL wire listener directly', clientPath: 'public-pg-wire'};
+}
+
+// The client endpoint an exhausted formation had named: the public PG-wire
+// listener on its node's container, or none when readiness ran out first.
+function exhaustedEndpoint(listener, roles) {
+  if (!listener) return null;
+  const node = arrayFind(roles, (role) => role.nodeId === listener.nodeId);
+  return {protocol: 'postgresql', serviceId: PG_WIRE_SERVICE_ID, host: listener.host,
+    port: listener.port, containerId: node.containerId, binding: null};
+}
+
+async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeReadiness,
+  formed, campaignId}) {
+  const {sshRun, opts} = ctx;
+  const seedHost = hosts[0];
   for (let index = 0; index < hosts.length; index += 1) {
     const host = hosts[index];
     const nodeId = nodeIdOf(index);
@@ -355,8 +384,9 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   }
   const membership = await membershipReady(ctx, seedHost, hosts.length);
   const listener = await publicPgWireReady(ctx, seedHost, roles);
+  formed.listener = listener;
   const leaders = await leadersReady(ctx, seedHost);
-  const target = {sshRun, opts, from: clientIp, campaignId,
+  const target = {sshRun, opts, from: ctx.clientIp, campaignId,
     endpoint: {host: listener.host, port: listener.port}, connection};
   const query = createPsqlQueryReader(target);
   const sql = {query, statement: createPsqlStatementRunner(target)};
@@ -389,8 +419,7 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const observedAt = new Date().toISOString();
   return {
     targetId: 'lagrange',
-    topology: {description: `${hosts.length} Lagrange nodes; clients use the public ` +
-      'PostgreSQL wire listener directly', clientPath: 'public-pg-wire'},
+    topology: lagrangeTopology(hosts),
     roles, storage, runClass: runClassOf(storage),
     readiness: {state: READINESS_STATE.READY, observedAt,
       evidence: {nodes: nodeReadiness, membership, publicPgWire: listener, leaders, cluster,

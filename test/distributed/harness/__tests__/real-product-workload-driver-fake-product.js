@@ -18,6 +18,7 @@ import {
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySort = Function.call.bind(Array.prototype.sort);
@@ -322,40 +323,52 @@ function renderIntegers(result, fault, armed) {
       [key, typeof value === 'number' ? render(value) : value])))};
 }
 
+// The fake's schema provisioning (lab 2026-11-01, D29): under a provisioning
+// fault, CREATE TABLE of the provisioning table answers 55P03 with a retry
+// hint, and the table's count polls answer the fault's error until
+// UNROUTABLE_POLLS polls have passed.
+const PROVISIONING_FAULTS = Object.freeze([FAULT.PROVISIONING_UNROUTABLE,
+  FAULT.PROVISIONING_OTHER_INTERNAL_ERROR]);
+
+function createTable(state, table) {
+  rowsOf(state, table);
+  if (table === PROVISIONING_TABLE && arrayIncludes(PROVISIONING_FAULTS, state.fault)) {
+    state.provisioningPolls = 0;
+    throw Object.assign(new Error('Schema provisioning remains active'), {
+      code: '55P03', severity: 'ERROR',
+      detail: JSON.stringify({job_id: 'schema-job-fixture',
+        retry_after_ms: PROVISIONING_RETRY_HINT_MS}),
+    });
+  }
+  return {rows: [], rowCount: 0};
+}
+
+function countTable(state, table) {
+  if (!state.tables.has(table)) throw new Error(`Table not found: ${table}`);
+  if (table === PROVISIONING_TABLE && state.provisioningPolls !== undefined &&
+      state.provisioningPolls < UNROUTABLE_POLLS) {
+    state.provisioningPolls += 1;
+    throw provisioningPollError(state.fault);
+  }
+  return {rows: [{row_count: rowsOf(state, table).length}]};
+}
+
+function insertBatch(state, sql, parameters) {
+  if (state.fault === FAULT.LOAD_LOCK_NOT_AVAILABLE) {
+    throw Object.assign(new Error('Schema provisioning remains active'),
+      {code: '55P03', severity: 'ERROR'});
+  }
+  return loadBatch(state, sql, parameters);
+}
+
 // Statements outside the canonical set: schema, load, snapshot, admin.
 function administrative(state, sql, parameters) {
   if (SNAPSHOT_PATTERN.test(sql)) return {rows: snapshotRows(state, sql)};
   const count = COUNT_PATTERN.exec(sql);
-  if (count) {
-    if (!state.tables.has(count[1])) throw new Error(`Table not found: ${count[1]}`);
-    if (count[1] === PROVISIONING_TABLE && state.provisioningPolls !== undefined &&
-        state.provisioningPolls < UNROUTABLE_POLLS) {
-      state.provisioningPolls += 1;
-      throw provisioningPollError(state.fault);
-    }
-    return {rows: [{row_count: rowsOf(state, count[1]).length}]};
-  }
-  if (INSERT_BATCH_PATTERN.test(sql)) {
-    if (state.fault === FAULT.LOAD_LOCK_NOT_AVAILABLE) {
-      throw Object.assign(new Error('Schema provisioning remains active'),
-        {code: '55P03', severity: 'ERROR'});
-    }
-    return loadBatch(state, sql, parameters);
-  }
-  const createTable = /^CREATE TABLE ([a-z_]+)/u.exec(sql);
-  if (createTable) {
-    rowsOf(state, createTable[1]);
-    if (createTable[1] === PROVISIONING_TABLE && (state.fault ===
-        FAULT.PROVISIONING_UNROUTABLE || state.fault === FAULT.PROVISIONING_OTHER_INTERNAL_ERROR)) {
-      state.provisioningPolls = 0;
-      throw Object.assign(new Error('Schema provisioning remains active'), {
-        code: '55P03', severity: 'ERROR',
-        detail: JSON.stringify({job_id: 'schema-job-fixture',
-          retry_after_ms: PROVISIONING_RETRY_HINT_MS}),
-      });
-    }
-    return {rows: [], rowCount: 0};
-  }
+  if (count) return countTable(state, count[1]);
+  if (INSERT_BATCH_PATTERN.test(sql)) return insertBatch(state, sql, parameters);
+  const created = /^CREATE TABLE ([a-z_]+)/u.exec(sql);
+  if (created) return createTable(state, created[1]);
   if (/^SELECT CONNECTION_ID\(\)/u.test(sql)) return {rows: [{connection_id: state.connections}]};
   if (/^(CREATE INDEX|DROP |CREATE DATABASE|USE )/u.test(sql)) return {rows: [], rowCount: 0};
   throw new Error(`fake product does not know statement: ${sql}`);

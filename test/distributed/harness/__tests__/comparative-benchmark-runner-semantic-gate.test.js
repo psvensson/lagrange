@@ -48,7 +48,8 @@ test('Lagrange: fresh formation per case, restart of the endpoint container only
   'a final fresh formation before measurement', async () => {
   const ledger = createContainerLedger();
   const {sshRun, calls} = createScriptedSsh([[/docker image inspect/u,
-    JSON.stringify({RepoDigests: []})], ...dockerRules(ledger), [/docker restart/u, '']]);
+    JSON.stringify({RepoDigests: [], Created: '2026-10-30T10:00:00Z',
+      Config: {Labels: null}})], ...dockerRules(ledger), [/docker restart/u, '']]);
   let generation = 0;
   const first = armOf(ledger, generation);
   const log = [];
@@ -72,7 +73,8 @@ test('Lagrange: fresh formation per case, restart of the endpoint container only
 test('PostgreSQL resets through its adapter; TiDB keeps its own proof harness', async () => {
   const ledger = createContainerLedger();
   const {sshRun} = createScriptedSsh([[/docker image inspect/u,
-    JSON.stringify({RepoDigests: []})], ...dockerRules(ledger)]);
+    JSON.stringify({RepoDigests: [], Created: '2026-10-30T10:00:00Z',
+      Config: {Labels: null}})], ...dockerRules(ledger)]);
   let redeploys = 0;
   const stage = createSemanticGateStage({journey: async ({beforeCase}) => {
     await beforeCase({caseId: 'a'});

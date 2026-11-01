@@ -191,13 +191,30 @@ function inFlightAttemptRecord(state, closedAtMs) {
 // state, never an absent summary.
 const NO_COMMITTED_EFFECT = Object.freeze({status: 'no-committed-effect'});
 
+// The request clock's intervals from the intended issue time; null where the
+// request never reached that point. Unclamped: a negative lag is a clock
+// defect the validator refuses.
+function requestIntervalsOf(state, completedAtMs) {
+  const since = (atMs) => (atMs === null ? null : atMs - state.entry.intendedIssueTimeMs);
+  return {issueLagMs: since(state.issuedAtMs), queueDelayMs: since(state.executionStartedAtMs),
+    latencyMs: since(completedAtMs)};
+}
+
+// The endpoint and server connection of the request's last attempt (every
+// attempt record carries both, null where it reached no connection); a
+// request with no attempt has neither.
+function requestBindingOf(attempts) {
+  if (attempts.length === ZERO) return {endpoint: null, serverConnectionId: null};
+  const last = attempts[attempts.length - ONE];
+  return {endpoint: last.endpoint, serverConnectionId: last.serverConnectionId};
+}
+
 function freezeRequestRecord(state, disposition, evidenceOptions, closedAtMs = null) {
   const {entry} = state;
   const completedAtMs = state.final ? state.completedAtMs : null;
   const attempts = !state.final && state.attemptInFlight ?
     [...state.attempts, inFlightAttemptRecord(state, closedAtMs)] : state.attempts;
   const retained = retainBenchmarkResponseEvidence(attempts, evidenceOptions);
-  const attemptOf = attempts.length > ZERO ? attempts[attempts.length - ONE] : null;
   return Object.freeze({
     index: entry.index,
     opId: state.opId,
@@ -209,13 +226,7 @@ function freezeRequestRecord(state, disposition, evidenceOptions, closedAtMs = n
     issuedAtMs: state.issuedAtMs,
     executionStartedAtMs: state.executionStartedAtMs,
     completedAtMs,
-    // Unclamped: a negative lag is a clock defect the validator refuses.
-    issueLagMs: state.issuedAtMs === null ? null :
-      state.issuedAtMs - entry.intendedIssueTimeMs,
-    queueDelayMs: state.executionStartedAtMs === null ? null :
-      state.executionStartedAtMs - entry.intendedIssueTimeMs,
-    latencyMs: completedAtMs === null ? null :
-      completedAtMs - entry.intendedIssueTimeMs,
+    ...requestIntervalsOf(state, completedAtMs),
     outcome: disposition.outcome,
     failureClass: disposition.failureClass,
     ...(disposition.unresolvedReason ? {unresolvedReason: disposition.unresolvedReason} : {}),
@@ -225,8 +236,7 @@ function freezeRequestRecord(state, disposition, evidenceOptions, closedAtMs = n
     retries: attempts.length === ZERO ? ZERO : attempts.length - ONE,
     retryDelayMs: state.retryEvidence ? state.retryEvidence.retryDelayMs : null,
     effectSummary: effectSummaryOf(state, disposition),
-    endpoint: attemptOf?.endpoint ?? null,
-    serverConnectionId: attemptOf?.serverConnectionId ?? null,
+    ...requestBindingOf(attempts),
     attempts: Object.freeze(retained.attempts),
     responseEvidence: retained.responseEvidence,
   });

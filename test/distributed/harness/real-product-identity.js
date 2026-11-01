@@ -47,18 +47,39 @@ function imageRepository(imageRef) {
   return at > stringLastIndexOf(text, '/') ? text.slice(0, at) : text;
 }
 
+// A field `docker inspect` always returns, read by its path: a missing field
+// is an unreadable inspection (identity_unverified naming the field), never a
+// default. Its value may be null where Docker answers null (Entrypoint, Labels).
+function inspectedField(inspection, path, subject) {
+  let value = inspection;
+  for (const key of path) {
+    if (value === null || typeof value !== 'object' || !(key in value)) {
+      throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+        `${subject}: docker inspect answered without ${path.join('.')}`, {path});
+    }
+    value = value[key];
+  }
+  return value;
+}
+
+async function inspectJson({sshRun, opts, host, command, subject}) {
+  try {
+    return JSON.parse(String(await sshRun(host, opts, command)));
+  } catch (error) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `${subject} could not be inspected: ${errorText(error)}`, {host});
+  }
+}
+
 // Image facts of the running container's image id: its repo digests (empty
 // for an image that was `docker load`ed, which is recorded as such, never
 // filled in), its build labels and creation time.
 async function readImageFacts({sshRun, opts, host, imageId, imageRef}) {
-  const image = JSON.parse(String(await sshRun(host, opts,
-    `docker image inspect --format '{{json .}}' ${shellWord(imageId)}`) || 'null'));
-  if (!image || typeof image !== 'object') {
-    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `image ${imageId} of a running container on ${host} could not be inspected`,
-      {host, imageId});
-  }
-  const digests = Array.isArray(image.RepoDigests) ? image.RepoDigests : [];
+  const subject = `image ${imageId} of a running container on ${host}`;
+  const image = await inspectJson({sshRun, opts, host, subject,
+    command: `docker image inspect --format '{{json .}}' ${shellWord(imageId)}`});
+  const field = (path) => inspectedField(image, path, subject);
+  const digests = field(['RepoDigests']);
   const repository = imageRepository(imageRef);
   const repoDigest = arrayFind(digests, (digest) => stringStartsWith(digest,
     `${repository}@`)) || digests[0] || null;
@@ -66,13 +87,14 @@ async function readImageFacts({sshRun, opts, host, imageId, imageRef}) {
   // digest), or loaded content known only by its image id.
   return {repoDigest, repoDigestStatus: repoDigest ? 'recorded' : REPO_DIGEST_NONE,
     provenance: repoDigest ? `registry:${repoDigest}` : `loaded:${imageId}`,
-    imageLabels: image.Config?.Labels ?? null, imageCreated: image.Created ?? null};
+    imageLabels: field(['Config', 'Labels']), imageCreated: field(['Created'])};
 }
 
-function mountsOf(inspect) {
-  return arrayMap(Array.isArray(inspect?.Mounts) ? inspect.Mounts : [], (mount) => ({
-    type: mount.Type ?? null, source: mount.Source ?? null,
-    destination: mount.Destination ?? null}));
+function mountsOf(mounts, subject) {
+  return arrayMap(mounts, (mount) => ({
+    type: inspectedField(mount, ['Type'], subject),
+    source: inspectedField(mount, ['Source'], subject),
+    destination: inspectedField(mount, ['Destination'], subject)}));
 }
 
 /**
@@ -80,32 +102,25 @@ function mountsOf(inspect) {
  * identity_unverified: dead-process evidence is never identity (D15).
  */
 async function inspectRunningContainer({sshRun, opts, host, containerId, role}) {
-  let inspect;
-  try {
-    inspect = JSON.parse(await sshRun(host, opts, inspectContainerCommand(containerId)));
-  } catch (error) {
+  const subject = `${role} container ${containerId} on ${host}`;
+  const inspect = await inspectJson({sshRun, opts, host, subject,
+    command: inspectContainerCommand(containerId)});
+  const field = (path) => inspectedField(inspect, path, subject);
+  if (field(['State', 'Running']) !== true) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `${role} container ${containerId} on ${host} could not be inspected: ` +
-      errorText(error), {role, host, containerId});
+      `${subject} is not running`, {role, host, containerId, state: field(['State'])});
   }
-  if (inspect?.State?.Running !== true) {
-    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `${role} container ${containerId} on ${host} is not running`,
-      {role, host, containerId, state: inspect?.State ?? null});
-  }
-  const imageRef = inspect.Config?.Image ?? null;
-  const imageId = inspect.Image ?? null;
+  const imageRef = field(['Config', 'Image']);
+  const imageId = field(['Image']);
   return {
-    role, host, containerId: inspect.Id || containerId,
-    name: stringReplace(String(inspect.Name || ''), /^\//u, '') || null,
+    role, host, containerId: field(['Id']),
+    name: stringReplace(String(field(['Name'])), /^\//u, ''),
     imageRef, imageId,
-    ...(imageId ? await readImageFacts({sshRun, opts, host, imageId, imageRef}) :
-      {repoDigest: null, repoDigestStatus: 'no image id', imageLabels: null,
-        imageCreated: null}),
-    entrypoint: inspect.Config?.Entrypoint ?? null,
-    cmd: inspect.Config?.Cmd ?? null,
-    startedAt: inspect.State?.StartedAt ?? null,
-    mounts: mountsOf(inspect),
+    ...await readImageFacts({sshRun, opts, host, imageId, imageRef}),
+    entrypoint: field(['Config', 'Entrypoint']),
+    cmd: field(['Config', 'Cmd']),
+    startedAt: field(['State', 'StartedAt']),
+    mounts: mountsOf(field(['Mounts']), subject),
     reportedVersion: null,
   };
 }

@@ -68,11 +68,14 @@ function connectionOf(run, deployment) {
 }
 
 /**
- * The B1 request for one manifest run against one deployment.
+ * The B1 request for one manifest run against one deployment. A run whose
+ * deployment never became ready carries the deployer's setup failure and no
+ * connection: B1 records it unopened.
  */
-function workloadRequestOf({run, manifest, deployment, evidenceDir}) {
+function workloadRequestOf({run, manifest, deployment, evidenceDir, setupFailure = null}) {
   return {targetId: run.targetId, system: run.system, scenario: run.scenario,
-    subkind: run.workloadSubkind, connection: connectionOf(run, deployment),
+    subkind: run.workloadSubkind,
+    ...(setupFailure ? {setupFailure} : {connection: connectionOf(run, deployment)}),
     plan: {offeredRatePerSec: run.offeredRatePerSec, repetition: run.repetition,
       orderIndex: run.orderIndex, sweepPlanSha256: bareDigest(manifest.plan.sweepPlanDigest)},
     evidenceDir};
@@ -118,95 +121,129 @@ function planFailure(manifest, b1Plan) {
   return null;
 }
 
-function outcomeOf(record, manifest, deployment) {
-  const used = record.deployment?.endpoint;
-  if (!used || used.host !== deployment.endpoint.host ||
-      Number(used.port) !== Number(deployment.endpoint.port)) {
-    return {failure: {code: DEPLOYMENT_FAILURE.ENDPOINT_UNBOUND,
-      message: 'the workload did not use the deployment endpoint', diagnostic: {used}}};
-  }
+// The endpoint B1 used must be the deployment's; an unopened run used none.
+function endpointProblem(record, deployment, unopened) {
+  const used = record.deployment.endpoint;
+  if (unopened) return used === null ? null : {used};
+  return used && used.host === deployment.endpoint.host &&
+    Number(used.port) === Number(deployment.endpoint.port) ? null : {used};
+}
+
+// What B1's answer means for the run, checked in order: the endpoint, a
+// product failure B1 observed, the plan, the dataset, the watchdog.
+function outcomeOf(record, manifest, deployment, unopened) {
   const dataset = record.deployment.dataset;
-  const runStatus = record.observations?.runStatus ?? null;
+  const endpoint = endpointProblem(record, deployment, unopened);
+  if (endpoint) {
+    return {dataset, failure: {code: DEPLOYMENT_FAILURE.ENDPOINT_UNBOUND,
+      message: 'the workload did not use the deployment endpoint', diagnostic: endpoint}};
+  }
+  const runStatus = record.observations.runStatus;
   if (arrayIncludes(PRODUCT_FAILURE_STATUSES, runStatus)) {
-    return {dataset, productFailure: {runStatus, setup: record.observations.setup ?? null}};
+    return {dataset, productFailure: {runStatus, setup: record.observations.setup}};
   }
+  return {dataset, failure: measuredFailure(record, manifest, runStatus)};
+}
+
+function measuredFailure(record, manifest, runStatus) {
   const planProblem = planFailure(manifest, record.plan);
-  if (planProblem) {
-    return {dataset, failure: {code: FAILURE.PLAN_MISMATCH, message: planProblem}};
-  }
-  if (dataset?.verification?.status !== OLTP_DATASET_VERIFICATION_STATUS.VERIFIED) {
-    return {dataset, failure: {code: DEPLOYMENT_FAILURE.DATASET_UNVERIFIED,
-      message: `loaded dataset ${dataset?.verification?.status}`,
-      diagnostic: dataset?.verification ?? null}};
+  if (planProblem) return {code: FAILURE.PLAN_MISMATCH, message: planProblem};
+  const verification = record.deployment.dataset.verification;
+  if (verification.status !== OLTP_DATASET_VERIFICATION_STATUS.VERIFIED) {
+    return {code: DEPLOYMENT_FAILURE.DATASET_UNVERIFIED,
+      message: `loaded dataset ${verification.status}`, diagnostic: verification};
   }
   if (runStatus === BENCHMARK_RUN_STATUS.WATCHDOG_STOPPED) {
-    return {dataset, failure: {code: DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
-      message: 'the workload watchdog stopped issuing'}};
+    return {code: DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
+      message: 'the workload watchdog stopped issuing'};
   }
-  return {dataset};
+  return null;
 }
 
 function productHostsOf(deployment) {
-  return [...new Set(arrayMap(deployment.roles || [], (role) => role.host))];
+  return [...new Set(arrayMap(deployment.roles, (role) => role.host))];
+}
+
+async function workloadRecord(runWorkload, request, run) {
+  try {
+    return await runWorkload(request, run);
+  } catch (error) {
+    if (error?.code) throw error;
+    throw deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
+      `canonical workload failed: ${errorText(error)}`);
+  }
+}
+
+// B1's record from the load generator; refusals and non-executions are typed.
+async function executedRecord(runWorkload, request, run) {
+  const record = await workloadRecord(runWorkload, request, run);
+  if (record.recordKind === REFUSED_RECORD_KIND) {
+    throw deploymentFailure(FAILURE.DISPATCH_REFUSED, record.reason, record.dispatch);
+  }
+  if (record.dispatch.status !== BENCHMARK_DISPATCH_STATUS.EXECUTED) {
+    throw deploymentFailure(FAILURE.NOT_EXECUTED, 'workload dispatch ' +
+      `${record.dispatch.status}: ${record.dispatch.reason}`, record.dispatch);
+  }
+  return record;
+}
+
+// Placement after the window, from the deployer's own observation; an unopened
+// run (no window, no ready deployment) observes none.
+async function placementAfterWindow(deployment, unopened, outcome) {
+  if (unopened || !deployment.operations?.observePlacement) return null;
+  try {
+    return await deployment.operations.observePlacement();
+  } catch (error) {
+    outcome.failure = outcome.failure ?? {code: error?.code || DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
+      message: `placement after the window: ${errorText(error)}`,
+      diagnostic: error?.diagnostic ?? null};
+    return null;
+  }
+}
+
+// The load generator as recorded: the host's facts and what B1 reported of
+// the process that ran the workload.
+async function recordedLoadGenerator({describeLoadGenerator, clientHost, productHosts,
+  generator}) {
+  return {...await describeLoadGenerator(), host: clientHost, productHosts,
+    notProductHost: true, nodeVersion: generator.nodeVersion,
+    driverVersions: generator.nativeClients, checkout: generator.checkout,
+    reportedHostname: generator.hostname};
 }
 
 /**
  * @param {{runWorkload: Function, describeLoadGenerator: Function,
  *   clientHost: string, evidenceDirOf?: Function}} input
  * @return {Function} executeWorkloadRun({run, manifest, deployment,
- *   semanticGate})
+ *   semanticGate, setupFailure?}): setupFailure runs the deployment unopened
  */
 function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHost,
   evidenceDirOf = (run) => `test-output/bench/${run.runId}`}) {
-  return async ({run, manifest, deployment, semanticGate = null}) => {
+  return async ({run, manifest, deployment, semanticGate = null, setupFailure = null}) => {
     const productHosts = productHostsOf(deployment);
     if (arrayIncludes(productHosts, clientHost)) {
       throw deploymentFailure(DEPLOYMENT_FAILURE.LOAD_GENERATOR_COLOCATED,
         `load generator ${clientHost} is a product host of ${run.targetId}`, {productHosts});
     }
-    const request = workloadRequestOf({run, manifest, deployment,
-      evidenceDir: evidenceDirOf(run)});
-    let record;
-    try {
-      record = await runWorkload(request, run);
-    } catch (error) {
-      if (error?.code) throw error;
-      throw deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
-        `canonical workload failed: ${errorText(error)}`);
-    }
-    if (record?.recordKind === REFUSED_RECORD_KIND) {
-      throw deploymentFailure(FAILURE.DISPATCH_REFUSED, record.reason, record.dispatch);
-    }
-    if (record?.dispatch?.status !== BENCHMARK_DISPATCH_STATUS.EXECUTED) {
-      throw deploymentFailure(FAILURE.NOT_EXECUTED, 'workload dispatch ' +
-        `${record?.dispatch?.status}: ${record?.dispatch?.reason}`, record?.dispatch ?? null);
-    }
-    const outcome = outcomeOf(record, manifest, deployment);
-    const generator = record.loadGenerator || {};
-    let placement = null;
-    try {
-      placement = await deployment.operations?.observePlacement?.() ?? null;
-    } catch (error) {
-      outcome.failure = outcome.failure ?? {code: error?.code || DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
-        message: `placement after the window: ${errorText(error)}`,
-        diagnostic: error?.diagnostic ?? null};
-    }
+    const unopened = setupFailure !== null;
+    const record = await executedRecord(runWorkload, workloadRequestOf({run, manifest,
+      deployment, evidenceDir: evidenceDirOf(run), setupFailure}), run);
+    const outcome = outcomeOf(record, manifest, deployment, unopened);
+    const placement = await placementAfterWindow(deployment, unopened, outcome);
     return {
       observations: record.observations,
       correctness: {...record.correctness, semanticGate},
       // B1's answer as stream A composes it: the plan identity B1 executed,
       // the endpoint B1 used, the dataset B1 verified, the harness identity
       // B1 reported (composeFixtureRunFromDriverOutput).
-      plan: record.plan ?? null,
+      plan: record.plan,
       endpoint: record.deployment.endpoint,
-      harness: record.identity?.harness ?? null,
-      dataset: outcome.dataset ?? record.deployment.dataset ?? null,
+      harness: record.identity.harness,
+      dataset: outcome.dataset,
       placement,
-      loadGenerator: {...await describeLoadGenerator(), host: clientHost, productHosts,
-        notProductHost: true, nodeVersion: generator.nodeVersion ?? null,
-        driverVersions: generator.nativeClients ?? {}, checkout: generator.checkout ?? null,
-        reportedHostname: generator.hostname ?? null},
-      cleanup: record.cleanup ?? null,
+      loadGenerator: await recordedLoadGenerator({describeLoadGenerator, clientHost,
+        productHosts, generator: record.loadGenerator}),
+      cleanup: record.cleanup,
       events: [],
       failure: outcome.failure ?? null,
       productFailure: outcome.productFailure ?? null,

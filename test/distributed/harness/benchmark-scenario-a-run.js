@@ -75,6 +75,8 @@ import {
   hashScenarioASemanticProfile,
 } from './oltp-scenario-a-semantic-profile.js';
 
+const arrayEvery = Function.call.bind(Array.prototype.every);
+
 const THOUSAND = 1000;
 // A request awaits at most one blocked body statement and its COMMIT, each
 // bounded by the engine query timeout (unknown-outcome redelivery runs
@@ -157,6 +159,13 @@ async function resolveLagrangeConnection(connection) {
   };
 }
 
+// How the system's dataset is made fresh. Lagrange cannot DROP TABLE: the
+// dataset is fresh only on a fresh formation.
+function resetMethodOf(system) {
+  return system === OLTP_SCENARIO_A_SYSTEM.LAGRANGE ?
+    DATASET_RESET_METHOD.FRESH_FORMATION : DATASET_RESET_METHOD.TRUNCATE_AND_RELOAD;
+}
+
 // The system's native adapter beneath the wire capture, its separate
 // snapshot reader and its dataset reset method.
 async function openSystem(system, connection, workload, registry, drivers) {
@@ -168,7 +177,7 @@ async function openSystem(system, connection, workload, registry, drivers) {
     return {
       endpoint,
       discovery: ENDPOINT_DISCOVERY.CALLER,
-      resetMethod: DATASET_RESET_METHOD.TRUNCATE_AND_RELOAD,
+      resetMethod: resetMethodOf(system),
       open: () => createTiDbOltpAdapter(adapterOptions),
       snapshot: (adapter) => observeTiDbOltpStateSnapshot({endpoint,
         databaseName: adapter.databaseName, createConnection: baseConnect}),
@@ -186,9 +195,7 @@ async function openSystem(system, connection, workload, registry, drivers) {
   return {
     endpoint: resolved.endpoint,
     discovery: resolved.discovery,
-    // Lagrange cannot DROP TABLE: the dataset is fresh only on a fresh formation.
-    resetMethod: system === OLTP_SCENARIO_A_SYSTEM.LAGRANGE ?
-      DATASET_RESET_METHOD.FRESH_FORMATION : DATASET_RESET_METHOD.TRUNCATE_AND_RELOAD,
+    resetMethod: resetMethodOf(system),
     open: () => createAdapter(adapterOptions),
     snapshot: () => observeLagrangeOltpStateSnapshot({endpoint: resolved.endpoint,
       connection: resolved.credentials, createClient: baseClient}),
@@ -428,35 +435,68 @@ function observationsOf(measured, registry, profileClass) {
   });
 }
 
+const SETUP_FAILURE_TEXT_FIELDS = Object.freeze(['failureClass', 'code', 'message']);
+
+// The deployer's setup failure of a run that is never opened: typed like the
+// run owner's own setupFailure (failureClass, sqlState, code, message).
+function requireSetupFailure(value) {
+  const typed = value && typeof value === 'object' &&
+    arrayEvery(SETUP_FAILURE_TEXT_FIELDS, (field) => typeof value[field] === 'string' &&
+      value[field] !== '') &&
+    (value.sqlState === null || typeof value.sqlState === 'string');
+  if (!typed) {
+    throw new Error('an unopened benchmark run requires setupFailure ' +
+      '{failureClass, sqlState, code, message}');
+  }
+  return Object.freeze({failureClass: value.failureClass, sqlState: value.sqlState,
+    code: value.code, message: value.message});
+}
+
+// Open the system and measure, or record the setup failure the product
+// answered with; an unopened run (options.setupFailure: the deployment never
+// became ready) never connects.
+async function openAndMeasure(options, context) {
+  const {dispatch, workload, workloadPlan, rate, startedAtIso, registry} = context;
+  if (Object.hasOwn(options, 'setupFailure')) {
+    const setup = requireSetupFailure(options.setupFailure);
+    return {system: {endpoint: null, discovery: null, resetMethod: resetMethodOf(dispatch.system)},
+      adapter: null, setupError: null, loaded: {snapshot: null, error: 'run never opened'},
+      measured: {status: RUN_STATUS.SETUP_FAILED, setup, step: null,
+        unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)},
+      provisioning: Object.freeze({status: 'not-reached', reason: setup.message})};
+  }
+  const drivers = await loadDefaultDrivers(options.drivers || {});
+  const system = await openSystem(dispatch.system, options.connection, workload, registry,
+    drivers);
+  let adapter;
+  try {
+    adapter = await system.open();
+  } catch (error) {
+    return {system, adapter: null, loaded: {snapshot: null, error: 'dataset not loaded'},
+      measured: {status: RUN_STATUS.SETUP_FAILED, setup: setupFailure(error), step: null,
+        unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)},
+      provisioning: provisioningEvidenceOf(dispatch.system, null, error)};
+  }
+  const loaded = await observeOltpStateSnapshot(() => system.snapshot(adapter));
+  const measured = await measure({adapter, startedAtIso,
+    outcomeAdapter: createBenchmarkOutcomeAdapter(adapter, registry), system, workloadPlan,
+    rate, runtime: options.runtime || {}, evidence: {evidenceDir: options.evidenceDir}});
+  return {system, adapter, loaded, measured,
+    provisioning: provisioningEvidenceOf(dispatch.system, adapter, null)};
+}
+
 async function executeScenarioARun(options) {
-  const {dispatch, connection, plan} = options;
+  const {dispatch, plan} = options;
   const profile = dispatch.profile;
   const workload = resolveWorkload(profile, plan);
   const rate = requireRate(plan);
   const workloadPlan = buildOltpBaselinePlan(workload);
   const dataset = buildOltpBaselineDataset(workload);
-  const drivers = await loadDefaultDrivers(options.drivers || {});
   const registry = createBenchmarkConnectionRegistry();
-  const system = await openSystem(dispatch.system, connection, workload, registry, drivers);
   const identity = planIdentity(profile, plan, workload, rate);
-  let adapter = null;
-  let setupError = null;
-  let measured;
-  const startedAtIso = new Date().toISOString();
-  let loaded = {snapshot: null, error: 'dataset not loaded'};
-  try {
-    adapter = await system.open();
-  } catch (error) {
-    setupError = error;
-    measured = {status: RUN_STATUS.SETUP_FAILED, setup: setupFailure(error), step: null,
-      unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)};
-  }
-  if (adapter) {
-    loaded = await observeOltpStateSnapshot(() => system.snapshot(adapter));
-    measured = await measure({adapter, startedAtIso, outcomeAdapter: createBenchmarkOutcomeAdapter(
-      adapter, registry), system, workloadPlan, rate, runtime: options.runtime || {},
-    evidence: {evidenceDir: options.evidenceDir}});
-  }
+  const {system, adapter, loaded, measured, provisioning} = await openAndMeasure(options,
+    {dispatch, workload, workloadPlan, rate, registry,
+      startedAtIso: new Date().toISOString()});
   const cleanup = await closeAdapter(adapter);
   return Object.freeze({
     adapterId: ADAPTER_ID[dispatch.system],
@@ -466,7 +506,7 @@ async function executeScenarioARun(options) {
       endpointDiscovery: system.discovery,
       dataset: Object.freeze({
         resetMethod: system.resetMethod,
-        provisioning: provisioningEvidenceOf(dispatch.system, adapter, setupError),
+        provisioning,
         verification: await verifyOltpLoadedDataset(dataset, loaded, measured.setup ?? null),
       }),
     }),

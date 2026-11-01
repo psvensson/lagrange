@@ -193,3 +193,26 @@ test('a refused dataset load (55P03) is a complete setup-failed record', async (
   assert.equal(output.correctness.finalState, null);
   assert.equal(output.correctness.finalStateObservation.reason, 'setup-failed');
 });
+
+test('an unopened run (the deployer\'s readiness exhausted) records every planned request ' +
+  'unissued under the deployer\'s setup failure and never connects', async () => {
+  const setupFailure = {failureClass: 'product_error', sqlState: null,
+    code: 'readiness_exhausted', message: 'membership 1 of 3 after 120 polls'};
+  const observed = await runDriverCase({...LAGRANGE_SCENARIO_A, setupFailure});
+  const {output} = observed;
+  assert.equal(observed.product.state.connections, 0, 'the product is never opened');
+  assert.equal(output.observations.runStatus, 'setup-failed');
+  assert.deepEqual(output.observations.setup, setupFailure);
+  assert.equal(observed.accounting.issued, 0);
+  assert.equal(observed.accounting.unissued, observed.accounting.offered);
+  assert.ok(observed.accounting.offered > 0);
+  assert.equal(output.deployment.endpoint, null);
+  assert.equal(output.deployment.dataset.verification.status, 'failed');
+  assert.equal(output.deployment.dataset.resetMethod, 'fresh-formation');
+  assert.equal(output.correctness.finalState, null);
+});
+
+test('an unopened run refuses a setup failure without its typed fields', async () => {
+  await assert.rejects(runDriverCase({...LAGRANGE_SCENARIO_A,
+    setupFailure: {code: 'readiness_exhausted'}}), /setupFailure/u);
+});

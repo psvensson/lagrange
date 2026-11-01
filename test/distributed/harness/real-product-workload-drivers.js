@@ -123,9 +123,12 @@ async function executeBenchmarkWorkload(request = {}) {
       correctness: null,
     });
   }
+  // A run whose deployment never became ready names the deployer's setup
+  // failure instead of a connection: it is recorded unopened.
   const run = await executeScenarioARun({
     dispatch,
-    connection: request.connection,
+    ...(Object.hasOwn(request, 'setupFailure') ? {setupFailure: request.setupFailure} :
+      {connection: request.connection}),
     plan: request.plan,
     drivers: request.drivers,
     runtime: request.runtime,

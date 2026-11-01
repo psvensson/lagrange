@@ -46,6 +46,9 @@ test('D05/J7: Lagrange readiness never reached throws readiness_exhausted with t
   await assert.rejects(deployers.deployLagrangeCluster(baseInput(sshRun)), (error) => {
     assert.equal(error.code, 'readiness_exhausted');
     assert.match(JSON.stringify(error.diagnostic), /seed-contact/u);
+    // Exhausted before the product named its client endpoint.
+    assert.equal(error.deployment.endpoint, null);
+    assert.equal(error.deployment.readiness.state, 'exhausted');
     return true;
   });
   assert.equal(arraySome(calls, (call) => /sys-postgres-wire\/scale/u.test(call.command)), false,
@@ -66,6 +69,11 @@ test('D05: PostgreSQL pg_isready exhaustion throws readiness_exhausted', {timeou
       (error) => {
         assert.equal(error.code, 'readiness_exhausted');
         assert.match(JSON.stringify(error.diagnostic), /no response/u);
+        // The started primary is described, its endpoint named.
+        assert.equal(error.deployment.readiness.state, 'exhausted');
+        assert.equal(error.deployment.endpoint.containerId,
+          error.deployment.roles[0].containerId);
+        assert.equal(error.deployment.identity.products.length, 1);
         return true;
       });
   });
@@ -80,6 +88,10 @@ test('D05: TiDB that never reports 3 Up stores throws readiness_exhausted',
     ]);
     await assert.rejects(deployers.deployTiDbCluster(baseInput(sshRun)), (error) => {
       assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.deployment.readiness.state, 'exhausted');
+      // PD never became ready: only PD was started, no client endpoint named.
+      assert.deepEqual(arrayMap(error.deployment.roles, (role) => role.role), ['pd']);
+      assert.equal(error.deployment.endpoint, null);
       return true;
     });
   });
@@ -122,6 +134,18 @@ test('live diagnosis: /health and /readyz healthy but a node lease lapsed and a 
     assert.ok(arrayIncludes(denials, `node_heartbeat_stale:${nodeIds[0]}`),
       'a live lease on a heartbeat older than the product lease is stale (live diagnosis)');
     assert.ok(arrayIncludes(denials, 'partition_not_routable:p-warehouse'));
+    // The exhausted formation is described from its running containers: the
+    // campaign records the complete product failure, not a run without a product.
+    const described = error.deployment;
+    assert.equal(described.readiness.state, 'exhausted');
+    assert.equal(described.roles.length, HOSTS.length);
+    assert.equal(described.identity.products.length, HOSTS.length);
+    assert.ok(arrayEvery(described.identity.products, (product) =>
+      /^sha256:[0-9a-f]{64}$/u.test(product.imageId) &&
+      typeof product.reportedVersion === 'string'));
+    assert.ok(arraySome(described.roles, (role) =>
+      role.containerId === described.endpoint.containerId &&
+      role.host === described.endpoint.host), 'the named listener is a node container');
     return true;
   });
   assert.equal(arraySome(calls, (call) => /bench_readiness_probe/u.test(call.command)), false);
@@ -180,13 +204,14 @@ test('readiness must hold for the stable window: a flapping verdict resets the c
     const {pollReadiness} = await import('../real-product-readiness.js');
     const verdicts = [true, false, true, true];
     const ready = await pollReadiness({component: 'x', attempts: 4, intervalMs: 0,
-      sleep: async () => {}, stablePolls: 2, probe: async () => ({ready: verdicts.shift()})});
+      sleep: async () => {}, stablePolls: 2,
+      probe: async () => ({ready: verdicts.shift(), diagnostic: null})});
     assert.equal(ready.attempts, 4);
     assert.ok(Number.isFinite(ready.timeToReadyMs));
     const flapping = [true, false, true, false];
     await assert.rejects(pollReadiness({component: 'x', attempts: 4, intervalMs: 0,
       sleep: async () => {}, stablePolls: 2,
-      probe: async () => ({ready: flapping.shift()})}),
+      probe: async () => ({ready: flapping.shift(), diagnostic: null})}),
     (error) => error.code === 'readiness_exhausted');
   });
 

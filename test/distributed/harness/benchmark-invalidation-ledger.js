@@ -46,13 +46,9 @@ function validateScope(scope, at) {
   scope.receiptIds.forEach((id, idx) => requireText(id, `${at}.scope.receiptIds[${idx}]`));
 }
 
-function validateInvalidationEntry(entry, at = 'entry') {
-  if (!entry || typeof entry !== 'object') fail(`${at} must be an object`);
-  if (!ENTRY_ID_PATTERN.test(String(entry.id))) fail(`${at}.id must match inv-NNNN`);
-  if (!Number.isFinite(Date.parse(requireText(entry.recordedAt, `${at}.recordedAt`)))) {
-    fail(`${at}.recordedAt must be an ISO timestamp`);
-  }
-  validateScope(entry.scope, at);
+// The typed codes an invalidation names: admission reason codes (at least
+// one) and defect ledger ids (D01..).
+function validateInvalidationCodes(entry, at) {
   if (!Array.isArray(entry.reasons) || entry.reasons.length === 0) {
     fail(`${at}.reasons must be a non-empty list`);
   }
@@ -65,6 +61,16 @@ function validateInvalidationEntry(entry, at = 'entry') {
   for (const id of entry.defectIds) {
     if (!DEFECT_ID_PATTERN.test(String(id))) fail(`${at}.defectIds has invalid id ${id}`);
   }
+}
+
+function validateInvalidationEntry(entry, at = 'entry') {
+  if (!entry || typeof entry !== 'object') fail(`${at} must be an object`);
+  if (!ENTRY_ID_PATTERN.test(String(entry.id))) fail(`${at}.id must match inv-NNNN`);
+  if (!Number.isFinite(Date.parse(requireText(entry.recordedAt, `${at}.recordedAt`)))) {
+    fail(`${at}.recordedAt must be an ISO timestamp`);
+  }
+  validateScope(entry.scope, at);
+  validateInvalidationCodes(entry, at);
   requireText(entry.note, `${at}.note`);
   requireText(entry.recordedBy, `${at}.recordedBy`);
   return entry;

@@ -401,6 +401,31 @@ describe('semantic gate by profile class and stopped runs', () => {
       assert.equal(stringIncludes(readme, ADMISSION_REASON.DATASET_PREPARATION_FAILED), true);
     });
 
+  it('an exhausted deployment that never named its client endpoint is the ' +
+    'readiness-exhausted product failure, every request unissued', async () => {
+    const {cell} = await publishedLagrangeCell((run) => {
+      run.deployment.readiness = {state: READINESS_STATE.EXHAUSTED,
+        observedAt: run.deployment.readiness.observedAt, evidence: {polls: 120}};
+      run.deployment.endpoint = null;
+      setupFailed(run, {failureClass: FAILURE_CLASS.PRODUCT_ERROR, sqlState: null,
+        code: 'readiness_exhausted', message: 'membership 1 of 3'});
+    }, SMOKE);
+    assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE, cell.reasons.join(', '));
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.READINESS_EXHAUSTED), true);
+    assert.equal(cell.metrics.runs[0].accounting.issued, 0);
+  });
+
+  it('a ready deployment without a client endpoint is a rejected record', async () => {
+    const {cell} = await publishedLagrangeCell((run) => {
+      run.deployment.endpoint = null;
+      sealFixtureRun(run);
+    });
+    assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+    assert.equal(arrayIncludes(arrayMap(cell.reasons,
+      (reason) => stringStartsWith(reason, 'record-rejected')), true), true,
+    cell.reasons.join(', '));
+  });
+
   it('a setup failure of the harness itself is not a product result', async () => {
     const {cell} = await publishedLagrangeCell((run) => setupFailed(run, {
       failureClass: FAILURE_CLASS.HARNESS_FAULT, sqlState: null, code: null, message: 'x'}),

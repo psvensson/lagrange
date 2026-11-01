@@ -43,6 +43,10 @@ import {
   runClassOf,
   verifyProductIdentity,
 } from './real-product-identity.js';
+import {
+  describeExhaustedDeployment,
+  describingReadinessExhaustion,
+} from './real-product-exhausted-deployment.js';
 import {pollReadiness, typedReadiness} from './real-product-readiness.js';
 import {
   createRemoteDockerProvider,
@@ -56,6 +60,8 @@ import {
 const ROLE = Object.freeze({PD: 'pd', TIKV: 'tikv', TIDB: 'tidb', SQL_CLIENT: 'sql-client'});
 const DATA_DIR = '/data';
 const STORE_COUNT = 3;
+const TOPOLOGY = Object.freeze({description: `1 PD + ${STORE_COUNT} TiKV stores + 1 TiDB server`,
+  clientPath: 'direct-to-tidb'});
 const DEFAULT_DATABASE = 'lagrange_tidb_oltp';
 const PLACEMENT_TABLE = 'stock';
 const TAG = /:v?(\d+\.\d+\.\d+)$/u;
@@ -138,6 +144,16 @@ async function deployTiDbCluster({hosts, clientIp, sshRun, opts, campaignId, sle
       hostOf: (containerId) => hostByContainer.get(containerId)})};
   const images = {pd: opts.pdImage || PD_IMAGE_DEFAULT, tikv: opts.tikvImage || TIKV_IMAGE_DEFAULT,
     tidb: opts.tidbImage || TIDB_IMAGE_DEFAULT};
+  const formed = {roles: [], endpoint: null};
+  return describingReadinessExhaustion(() => formTiDbCluster({ctx, hosts, images, formed}),
+    (failure) => describeExhaustedDeployment({targetId: 'tidb-tikv', topology: TOPOLOGY,
+      sshRun, opts, roles: [...formed.roles], endpoint: formed.endpoint, dataDir: DATA_DIR,
+      readVersions: (products) => reportedVersions(ctx, formed.endpoint, products), failure}));
+}
+
+async function formTiDbCluster({ctx, hosts, images, formed}) {
+  const {sshRun, opts, clientIp, campaignId, budget} = ctx;
+  const roles = formed.roles;
   const pdHost = hosts[0];
   const pd = await start(ctx, ROLE.PD, pdHost, 1, images.pd,
     storageArgs(opts, campaignId, 'pd'),
@@ -146,8 +162,8 @@ async function deployTiDbCluster({hosts, clientIp, sshRun, opts, campaignId, sle
       `--advertise-client-urls=http://${pdHost}:${P.pdClientPort}`,
       `--advertise-peer-urls=http://${pdHost}:${P.pdPeerPort}`,
       `--initial-cluster=pd=http://${pdHost}:${P.pdPeerPort}`]);
+  roles.push(pd);
   const pdReadiness = await pdReady(ctx, pdHost);
-  const roles = [pd];
   for (let index = 0; index < STORE_COUNT; index += 1) {
     roles.push(await start(ctx, ROLE.TIKV, hosts[index], index + 1, images.tikv,
       [...storageArgs(opts, campaignId, `tikv-${index + 1}`),
@@ -160,6 +176,8 @@ async function deployTiDbCluster({hosts, clientIp, sshRun, opts, campaignId, sle
     ['--store=tikv', `--path=${pdHost}:${P.pdClientPort}`, '--host=0.0.0.0',
       `-P=${P.tidbPort}`, `--status=${P.tidbStatusPort}`]);
   roles.push(tidb);
+  formed.endpoint = {protocol: 'mysql', host: tidb.host, port: P.tidbPort,
+    containerId: tidb.containerId, binding: null};
   ctx.sqlClient = await start(ctx, ROLE.SQL_CLIENT, clientIp, 1, TIDB_SQL_CLIENT_IMAGE,
     ['--entrypoint', 'sleep'], [String(SQL_CLIENT_LIFETIME_SECONDS)]);
   const endpoint = {host: tidb.host, port: P.tidbPort};
@@ -190,8 +208,7 @@ async function deployTiDbCluster({hosts, clientIp, sshRun, opts, campaignId, sle
       pollIntervalMs: budget.pollIntervalMs}));
   return {
     targetId: 'tidb-tikv',
-    topology: {description: `1 PD + ${STORE_COUNT} TiKV stores + 1 TiDB server`,
-      clientPath: 'direct-to-tidb'},
+    topology: TOPOLOGY,
     roles: [...roles, ctx.sqlClient], storage, runClass: runClassOf(storage),
     readiness: {state: READINESS_STATE.READY, observedAt: new Date().toISOString(),
       evidence: {pd: pdReadiness, sql: sqlReadiness}},
