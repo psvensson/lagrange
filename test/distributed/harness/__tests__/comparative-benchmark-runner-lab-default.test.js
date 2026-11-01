@@ -81,6 +81,14 @@ test('D25: too few free harness hosts is a typed topology refusal', () => {
     {LAGRANGE_LAB_HOME: inventoryDir(FLEET.slice(0, 3))});
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /refused_insufficient_host_topology/u);
+  // Live campaign bench-live-20261101-b failed as campaign_products_unpinned
+  // and the CLI printed only the message: a typed failure's diagnostic (here
+  // the excluded hosts, there each target's failure) reaches the operator.
+  const diagnostic = /^diagnostic: (.*)$/mu.exec(result.stderr);
+  assert.ok(diagnostic, result.stderr);
+  const parsed = JSON.parse(diagnostic[1]);
+  assert.equal(parsed.required, 4);
+  assert.ok(Array.isArray(parsed.excluded));
 });
 
 test('D25: GCP is explicit and requires --hosts; it creates no infrastructure', () => {

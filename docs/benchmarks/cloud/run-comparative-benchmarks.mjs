@@ -436,6 +436,11 @@ main().catch((error) => {
   process.stderr.write(`${error instanceof UsageError ? '' : `${error.code || 'error'}: `}` +
     `${error.message}\n`);
   if (error instanceof UsageError) process.stderr.write(USAGE);
+  // A typed failure's diagnostic (which hosts were excluded, each target's
+  // failure) is the operator's only evidence of a campaign that wrote nothing.
+  if (error?.diagnostic != null) {
+    process.stderr.write(`diagnostic: ${JSON.stringify(error.diagnostic)}\n`);
+  }
   process.exitCode = String(error.code || '').startsWith('refused_') ?
     EXIT_CODES.REFUSED : EXIT_CODES.FAILURE;
 });
