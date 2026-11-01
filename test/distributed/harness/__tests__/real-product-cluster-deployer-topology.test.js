@@ -3,6 +3,7 @@
 // and include the container that owns the client endpoint's listener; a
 // listener no campaign container owns is endpoint_unbound.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {test} from 'node:test';
 
 import * as deployers from '../real-product-cluster-deployers.js';
@@ -124,3 +125,31 @@ test('TiDB: the readiness client runs on the TiDB host and is exited before meas
       command === `docker stop -t 0 ${client.containerId}`));
     assert.equal(ledger.containers.get(client.containerId).running, false);
   });
+
+// Live campaign bench-live-20261101-b-r2: the Lagrange seed exited in seconds
+// with `EACCES: mkdir '/var/lib/lagrange-data'`; the image runs as a non-root
+// USER and only the directory its Dockerfile hands to that user is writable.
+// The deployer's DATA_DIR is that directory (a volume, when given, mounts
+// there too).
+test('Lagrange: DATA_DIR is the data directory the image gives its runtime user', async () => {
+  const dockerfile = fs.readFileSync(new URL('../../../../Dockerfile', import.meta.url), 'utf8');
+  const user = /^USER (\S+)$/mu.exec(dockerfile)[1];
+  const owned = new RegExp(`chown ${user} (\\S+)`, 'u').exec(dockerfile)[1];
+  const ledger = createContainerLedger();
+  const {sshRun, calls} = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts: HOSTS}));
+  await deployers.deployComparativeTarget('lagrange', input(sshRun));
+  const runs = arrayFilter(calls, (call) => /^docker run -d .*lagrange-node/u.test(call.command));
+  assert.equal(runs.length, 3);
+  for (const call of runs) {
+    assert.match(call.command, new RegExp(` -e DATA_DIR=${owned} `, 'u'), call.command);
+  }
+  const volume = createScriptedSsh(lagrangeHealthyRules(createContainerLedger(),
+    {hosts: HOSTS}));
+  await deployers.deployComparativeTarget('lagrange', {...input(volume.sshRun),
+    opts: {...OPTS, storageRoot: '/srv/bench', lagrangeImageContent: undefined}})
+    .catch(() => null);
+  for (const call of arrayFilter(volume.calls, (one) => /^docker run -d .*lagrange-node/u
+    .test(one.command))) {
+    assert.match(call.command, new RegExp(`:${owned} `, 'u'), call.command);
+  }
+});

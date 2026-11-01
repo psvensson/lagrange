@@ -75,7 +75,10 @@ import {
 } from './real-product-sql-clients.js';
 
 const PORT = Object.freeze({REST: 8080, ADMIN: 8081, TRANSPORT: 8082});
-const DATA_DIR = '/var/lib/lagrange-data';
+// The image's data directory: the one its Dockerfile hands to the non-root
+// runtime USER (`chown 10001:10001 /data`); a path outside it fails with
+// EACCES at startup.
+const DATA_DIR = '/data';
 const NODE_ROLE = 'lagrange-node';
 const LISTENER_ROLE = 'sys-postgres-wire';
 const PG_WIRE_SERVICE_ID = 'sys-postgres-wire';
