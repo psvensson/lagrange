@@ -28,6 +28,8 @@ const WORKER_MESSAGE = Object.freeze({
 const WORKER_ERROR_CODE = Object.freeze({
   BUDGET_EXHAUSTED: 'request_cell_budget_exhausted',
   CAPABILITY_DENIED: 'request_cell_capability_denied',
+  CONTEXT_BUDGET_EXCEEDED: 'request_cell_context_budget_exceeded',
+  EMIT_BUFFER_OVERFLOW: 'request_cell_emit_buffer_overflow',
   EXPORT_MISSING: 'request_cell_export_missing',
   INVOCATION_FAILED: 'request_cell_invocation_failed',
   TABLE_READ_DENIED: 'request_cell_table_read_denied',
@@ -68,6 +70,8 @@ const EMIT_ERROR_INDEX = 1;
 const EMIT_DATA_OFFSET = EMIT_BUFFER_META_SLOTS * 4;
 const EMIT_OVERFLOW_MARKER = '__call_cell_emit_overflow__';
 const BYTE_ENCODING = 'utf8';
+const INITIAL_JSON_ARRAY_BYTES = 2;
+const JSON_ARRAY_SEPARATOR_BYTES = 1;
 
 function createWorkerDeny(code) {
   const error = new Error(code);
@@ -97,10 +101,18 @@ const cellWorld = workerData.world || CELL_WORLD.REQUEST;
 let componentExports = null;
 let selectedExport = null;
 let currentEffects = null;
+let currentEffectBytes = 0;
+let currentPolicyError = null;
 let currentTableReads = null;
 let currentTables = null;
 let currentCallContext = null;
 let currentBindingCallBridge = null;
+
+function recordPolicyError(code, message) {
+  const error = new ComponentPolicyError(code, message);
+  currentPolicyError = error;
+  return error;
+}
 
 function requireTable(index, access) {
   const table = currentTables.find((entry) => entry.slot === index);
@@ -136,12 +148,29 @@ const componentContext = Object.freeze({
   },
   write(tableIndex, key, value) {
     const table = requireTable(tableIndex, TABLE_ACCESS.WRITE);
-    currentEffects.push({
+    const effectRecord = {
       context: table.context,
       key,
       operation: TABLE_ACCESS.WRITE,
       value,
-    });
+    };
+    const entryBytes = Buffer.byteLength(
+      JSON.stringify(effectRecord),
+      BYTE_ENCODING,
+    );
+    const nextEffectBytes = currentEffectBytes + entryBytes;
+    if (
+      Number.isFinite(workerData.contextBytes) &&
+      nextEffectBytes > workerData.contextBytes
+    ) {
+      throw recordPolicyError(
+        WORKER_ERROR_CODE.CONTEXT_BUDGET_EXCEEDED,
+        `Binding ${CONTEXT_BUDGET_FIELD} budget exhausted (` +
+          `${nextEffectBytes} > ${workerData.contextBytes})`,
+      );
+    }
+    currentEffectBytes = nextEffectBytes;
+    currentEffects.push(effectRecord);
   },
 });
 
@@ -235,6 +264,25 @@ const callModeCallContextImports = Object.freeze({
     if (context.emits.length >= context.emitBudget) {
       throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
     }
+    const entryBytes = Buffer.byteLength(
+      JSON.stringify([key, partial]),
+      BYTE_ENCODING,
+    );
+    const separatorBytes = context.emits.length > 0 ?
+      JSON_ARRAY_SEPARATOR_BYTES :
+      INITIAL_JSON_ARRAY_BYTES;
+    const nextEmitBytes = context.emitBytes + separatorBytes + entryBytes;
+    if (
+      Number.isFinite(context.maxEmitPayloadBytes) &&
+      nextEmitBytes > context.maxEmitPayloadBytes
+    ) {
+      throw recordPolicyError(
+        WORKER_ERROR_CODE.EMIT_BUFFER_OVERFLOW,
+        `Call Cell emit payload (${nextEmitBytes} bytes) exceeds buffer ` +
+          `capacity (${context.maxEmitPayloadBytes} bytes)`,
+      );
+    }
+    context.emitBytes = nextEmitBytes;
     context.emits.push([key, partial]);
   },
   callBounded(_exportName, _argument) {
@@ -317,18 +365,19 @@ function requireInvocationExport(message) {
 }
 
 function buildWorkerInvocationFailure(error, message) {
+  const effectiveError = currentPolicyError || error;
   const contextBudgetExceeded =
-    error instanceof RequestCellTableReadBoundError;
+    effectiveError instanceof RequestCellTableReadBoundError;
   return {
     error: {
       code: contextBudgetExceeded ?
         WORKER_ERROR_CODE.BUDGET_EXHAUSTED :
-        error.code || WORKER_ERROR_CODE.INVOCATION_FAILED,
+        effectiveError.code || WORKER_ERROR_CODE.INVOCATION_FAILED,
       message: contextBudgetExceeded ?
         `Binding ${CONTEXT_BUDGET_FIELD} budget exhausted (` +
-          `${requestCellTableIndexEstimatedBytes(error.actualRows)} > ` +
+          `${requestCellTableIndexEstimatedBytes(effectiveError.actualRows)} > ` +
           `${workerData.contextBytes})` :
-        error.message,
+        effectiveError.message,
     },
     id: message.id,
     type: WORKER_MESSAGE.INVOKE_RESULT,
@@ -357,6 +406,8 @@ function assertNoGuestLifecycleViolation(value) {
 
 async function invoke(message) {
   currentEffects = [];
+  currentEffectBytes = 0;
+  currentPolicyError = null;
   try {
     currentTableReads = indexRequestCellTableReads(
       message.tableReads,
@@ -365,6 +416,9 @@ async function invoke(message) {
     currentTables = Array.isArray(message.tables) ? message.tables : [];
     const invocationExport = requireInvocationExport(message);
     const value = await invocationExport(...message.args);
+    if (currentPolicyError !== null) {
+      throw currentPolicyError;
+    }
     assertNoGuestLifecycleViolation(value);
     const result = {
       effects: currentEffects,
@@ -378,6 +432,8 @@ async function invoke(message) {
     parentPort.postMessage(buildWorkerInvocationFailure(error, message));
   } finally {
     currentEffects = null;
+    currentEffectBytes = 0;
+    currentPolicyError = null;
     currentTableReads = null;
     currentTables = null;
     currentCallContext = null;
@@ -410,6 +466,16 @@ function resolveMessageBindingCallBridge(message) {
   }
 }
 
+function resolveMaxEmitPayloadBytes(callContext) {
+  if (Number.isSafeInteger(callContext.maxEmitPayloadBytes)) {
+    return callContext.maxEmitPayloadBytes;
+  }
+  const bufferByteLength = callContext.emitBuffer?.byteLength;
+  return Number.isSafeInteger(bufferByteLength) ?
+    bufferByteLength - EMIT_DATA_OFFSET :
+    0;
+}
+
 function resolveMessageCallContext(message) {
   if (message.callContext === undefined) return null;
   return {
@@ -417,7 +483,9 @@ function resolveMessageCallContext(message) {
       message.callContext.emitBudget :
       0,
     emitBuffer: message.callContext.emitBuffer,
+    emitBytes: 0,
     emits: [],
+    maxEmitPayloadBytes: resolveMaxEmitPayloadBytes(message.callContext),
     nestedCallBudget:
       Number.isSafeInteger(message.callContext.nestedCallBudget) ?
         message.callContext.nestedCallBudget :

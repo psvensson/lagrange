@@ -16,6 +16,7 @@ quests:
   - pilot-cutover-and-rollback-receipts
   - postgres-compatibility-certification-matrix
   - public-path-multinode-baseline
+  - public-path-scale-and-failure-certification
   - resumable-bulk-data-load
   - service-cell-v2-default-multi-operation
   - user-table-leader-handoff-demotion-pairing-v2

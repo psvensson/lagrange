@@ -141,3 +141,20 @@ export {
   STANDARD_HTTP_REQUIRED_RECEIPT_IDS,
   validateStandardHttpAcceptanceReport,
 } from './standard-http-service-acceptance-contract.js';
+
+export {
+  CERTIFICATION_NON_TERMINAL_REASON,
+  CERTIFICATION_VERDICT,
+  COMPARISON_OUTCOME,
+  DIMENSION_NAME,
+  PUBLIC_PATH_CERTIFICATION_SCHEMA_VERSION,
+  REPRESENTATIVENESS_AXIS,
+  REQUIRED_CERTIFICATION_DIMENSIONS,
+  REQUIRED_REPRESENTATIVENESS_AXES,
+  SEALED_PUBLIC_PATH_CERTIFICATION_BAR,
+  computeCertificationBarDigest,
+  computeWilsonConfidenceInterval,
+  evaluateScaleAndFailureCertification,
+  evaluateWorkloadRepresentativeness,
+  validateCertificationBar,
+} from './public-path-scale-failure-certification.js';
