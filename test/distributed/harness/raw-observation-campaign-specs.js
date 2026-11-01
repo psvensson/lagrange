@@ -1,7 +1,8 @@
-// Campaign deployment configuration and the one regeneration path for every
-// comparative benchmark artifact. Regeneration reads the raw observation store,
-// the invalidation ledger and the history; it writes only derived files (admitted
-// cells, matrix, progress summary, pages) and never writes the history.
+// The one regeneration path for every comparative benchmark artifact (the
+// advertised configurations are owned by comparative-coverage-manifest.js).
+// Regeneration reads the raw observation store, the invalidation ledger and the
+// history; it writes only derived files (admitted cells, matrix, progress summary,
+// pages) and never writes the history.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -40,54 +41,6 @@ import {writeScenarioCComparisonStaticWebArtifacts} from './scenario-c-compariso
 import {
   writeYugabyteIgniteComparisonStaticWebArtifacts,
 } from './yugabyte-ignite-comparison-static-web.js';
-
-const arrayMap = Function.call.bind(Array.prototype.map);
-
-// Deployment configuration the campaign runner reads: which image runs where and on
-// which port, and the client concurrency/size knobs. It carries no published value:
-// labels and claims live in comparative-coverage-manifest.js, results only come
-// from admitted observations.
-const CAMPAIGN_DEPLOYMENTS = Object.freeze([
-  ['lagrange', 'psvensson/lagrange:0.4.0', [0, 1, 2], 19100, true,
-    {concurrency: 28, totalOps: 160, keySpace: 200}],
-  ['lagrange-5node-rf3', 'psvensson/lagrange:0.4.0', [0, 1, 2, 3, 4], 19110, true,
-    {concurrency: 36, totalOps: 200, keySpace: 300}],
-  ['tidb-tikv', 'pingcap/tidb:v8.5.8', [0, 1, 2, 3, 4], 19120, true,
-    {concurrency: 28, totalOps: 160, keySpace: 200}],
-  ['pg-single-primary', 'postgres:17-alpine', [0, 1], 19130, true,
-    {concurrency: 32, totalOps: 180, keySpace: 200}],
-  ['pg-patroni-sync-ha-rf3', 'postgres:17-alpine', [0, 1, 2, 3], 19140, true,
-    {concurrency: 22, totalOps: 140, keySpace: 200}],
-  ['pg-plpgsql-single-primary', 'postgres:17-alpine', [3], 19150, true,
-    {concurrency: 36, totalOps: 180, keySpace: 200}],
-  ['pg-plpgsql-sync-ha-rf3', 'postgres:17-alpine', [0, 1, 2], 19160, true,
-    {concurrency: 24, totalOps: 140, keySpace: 200}],
-  ['citus-sql-service', 'citusdata/citus:12.1', [0, 1, 2, 3, 4], 19170, false,
-    {concurrency: 18, totalOps: 120, keySpace: 200}],
-  ['citus-distributed-function', 'citusdata/citus:12.1', [0, 1, 2, 3], 19180, false,
-    {concurrency: 22, totalOps: 140, keySpace: 200}],
-  ['yugabytedb-ysql-rf3', 'yugabytedb/yugabyte:2.20.7.0-b58', [0, 1, 2, 3], 19190, false,
-    {concurrency: 22, totalOps: 140, keySpace: 200}],
-  ['yugabytedb-stored-proc', 'yugabytedb/yugabyte:2.20.7.0-b58', [0, 1, 2], 19200, false,
-    {concurrency: 22, totalOps: 140, keySpace: 200}],
-  ['ignite3-colocated-compute', 'apacheignite/ignite:2.16.0', [0, 1, 2], 19210, false,
-    {concurrency: 26, totalOps: 160, keySpace: 200}],
-  ['pg-valkey-sync-write-through', 'redis:7-alpine', [0, 1, 2, 3], 19220, false,
-    {concurrency: 22, totalOps: 140, keySpace: 200}],
-  ['pg-valkey-async-stream', 'redis:7-alpine', [0, 1, 2, 3, 4], 19230, false,
-    {concurrency: 24, totalOps: 150, keySpace: 200}],
-]);
-
-export function buildCampaignTargetSpecs(hosts) {
-  const [h0, h1, h2, h3, h4, hClient] = hosts;
-  const byIndex = [h0, h1, h2, h3, h4];
-  return arrayMap(CAMPAIGN_DEPLOYMENTS, ([targetId, image, clusterIndices, port, measured,
-    txCfg]) => ({
-    targetId, image, clusterIndices, measured, port, txCfg,
-    clusterHosts: arrayMap(clusterIndices, (i) => byIndex[i]),
-    clientHost: hClient || h4,
-  }));
-}
 
 export async function regenerateAllBenchmarkArtifactsFromAdmitted(rootDir, admitted) {
   const {writeAdmittedLabMeasurementsFromRawObservations} = await import(

@@ -165,6 +165,14 @@ describe('comparative benchmark defect regressions', () => {
       'admission must compare recorded identities, not a sentinel literal');
   });
 
+  it('F2: the regeneration module advertises no deployment configuration of its own',
+    async () => {
+      // The coverage manifest is the one owner of advertised configurations; a
+      // second image/port/knob table beside it had no consumer.
+      const module = await harness('raw-observation-campaign-specs.js');
+      assert.deepEqual(Object.keys(module), ['regenerateAllBenchmarkArtifactsFromAdmitted']);
+    });
+
   it('D23: the publication carries no winner prose or forced completion counts', async () => {
     const {buildMultiSystemComparativeMatrix} = await harness('comparative-matrix-runner.js');
     const matrix = buildMultiSystemComparativeMatrix();
