@@ -9,7 +9,7 @@
     "cli-tooling": 98,
     "control-plane": 224,
     "convergence-topology": 78,
-    "distributed-harness": 182,
+    "distributed-harness": 192,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2510,
-  "digest": "fnv1a32-d80fe9e9",
+  "censusSize": 2520,
+  "digest": "fnv1a32-cefe32d8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4beabfad",
+  "observationDigest": "fnv1a32-66cea8e1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -873,6 +873,9 @@
     "test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/cluster.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-manifest.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-evidence-contract.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-measured-cell-admission.test.js": "distributed-harness",
@@ -949,6 +952,13 @@
     "test/distributed/harness/__tests__/publication-convergence-claim.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-cleanup.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-dataset.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-network.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-recovery.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer.property.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer.test.js": "distributed-harness",
@@ -6418,6 +6428,14 @@
         "LAGRANGE_DEBUG_LOGS"
       ]
     },
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": {
+      "files": [
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
+      ],
+      "directories": [
+        "data"
+      ]
+    },
     "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js": {
       "files": [
         "test/distributed/harness/benchmark-capacity-heterogeneous-observation.js",
@@ -7013,6 +7031,15 @@
         "src/control-plane/control-plane-publication-merge.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/priority-recovery-snapshot.js"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": {
+      "files": [
+        "docs/benchmarks/cloud/provision-gcp.sh",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
+      ],
+      "directories": [
+        "test/distributed/harness"
       ]
     },
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": {

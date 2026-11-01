@@ -1,0 +1,91 @@
+// D25: the runner defaults to the lab; lab hosts come from the registered
+// inventory (harness role, reachable, free), each taken with the machine-wide
+// lock under purpose bench:<campaignId> and released failure-safe; GCP is
+// explicit and needs --hosts. Real entry: the CLI and the lab-host owner;
+// substituted: the inventory directory and the lock session.
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {test} from 'node:test';
+import {fileURLToPath} from 'node:url';
+import {
+  arrayEvery,
+  arrayMap,
+  stringIncludes,
+} from '../real-product-captured-intrinsics.js';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
+const RUNNER = path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs');
+
+function labNode(name, ip, {lock = 'free', docker = true, roles = ['harness'],
+  bootId = `boot-${name}`} = {}) {
+  return {name, ip, ssh: `bench@${ip}`, os: 'linux', roles,
+    testCapability: {bootId, dockerReachable: docker, repoPath: '/home/bench/lagrange',
+      nodePath: '/usr/bin/node', machineLock: {state: lock, holder: null}}};
+}
+
+function inventoryDir(nodes) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-lab-'));
+  fs.writeFileSync(path.join(dir, 'inventory.json'), JSON.stringify({version: 1,
+    nodes: Object.fromEntries(arrayMap(nodes, (node) => [node.name, node]))}));
+  return dir;
+}
+
+function runCli(args, env) {
+  const clean = {...process.env};
+  for (const key of ['HOSTS', 'SSH_HOSTS', 'EXECUTION_TARGET']) delete clean[key];
+  return spawnSync(process.execPath, [RUNNER, ...args], {cwd: ROOT, encoding: 'utf8',
+    env: {...clean, ...env}, timeout: 60000});
+}
+
+const FLEET = [
+  labNode('alpha', '192.168.1.11'), labNode('bravo', '192.168.1.12'),
+  labNode('charlie', '192.168.1.13', {lock: 'busy'}),
+  labNode('delta', '192.168.1.14'), labNode('echo', '192.168.1.15', {docker: false}),
+  labNode('foxtrot', '192.168.1.16'), labNode('golf', '192.168.1.17', {roles: ['runner']}),
+];
+
+test('D25: --dry-run defaults to the lab and names the inventory hosts it would lock',
+  () => {
+    const result = runCli(['--dry-run', '--campaign-id', 'bench-test-1'],
+      {LAGRANGE_LAB_HOME: inventoryDir(FLEET)});
+    assert.equal(result.status, 0, result.stderr);
+    const plan = JSON.parse(result.stdout);
+    assert.equal(plan.executionTarget, 'lab');
+    assert.deepEqual(arrayMap(plan.labHosts, (host) => host.name),
+      ['alpha', 'bravo', 'delta', 'foxtrot']);
+    assert.deepEqual(arrayMap(plan.labHosts, (host) => host.role),
+      ['data', 'data', 'data', 'client']);
+    assert.ok(arrayEvery(plan.wouldLock, (lock) => lock.purpose === 'bench:bench-test-1'));
+    assert.equal(plan.wouldLock.length, 4);
+    assert.match(plan.manifestDigest, /^sha256:[0-9a-f]{64}$/u);
+    assert.ok(plan.manifest.runs.length > 0);
+  });
+
+test('D25: the lab target refuses hand-typed hosts', () => {
+  const result = runCli(['--dry-run', '--hosts', '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4'],
+    {LAGRANGE_LAB_HOME: inventoryDir(FLEET)});
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /lab hosts come from the registered lab inventory/u);
+});
+
+test('D25: too few free harness hosts is a typed topology refusal', () => {
+  const result = runCli(['--dry-run'], {LAGRANGE_LAB_HOME: inventoryDir(FLEET.slice(0, 3))});
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /refused_insufficient_host_topology/u);
+});
+
+test('D25: GCP is explicit and requires --hosts; it creates no infrastructure', () => {
+  const missing = runCli(['--dry-run', '--execution-target', 'gcp'], {});
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /--hosts/u);
+  const given = runCli(['--dry-run', '--execution-target', 'gcp', '--hosts',
+    '10.1.0.1,10.1.0.2,10.1.0.3,10.1.0.4', '--campaign-id', 'bench-gcp-1'], {});
+  assert.equal(given.status, 0, given.stderr);
+  const plan = JSON.parse(given.stdout);
+  assert.equal(plan.executionTarget, 'gcp');
+  assert.deepEqual(plan.wouldLock, []);
+  assert.equal(stringIncludes(given.stdout, 'gcloud'), false);
+});
