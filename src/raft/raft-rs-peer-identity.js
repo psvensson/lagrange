@@ -281,6 +281,23 @@ class RaftRsPeerIdentityRegistry {
   }
 
   /**
+   * Record several committed nodes (a stamp's) as one durable write.
+   * @param {Array<Array<string>>} entries - [[replicaIdentity, nodeId]].
+   */
+  recordCommittedNodeIds(entries) {
+    const record = () => {
+      for (const [replicaIdentity, nodeId] of entries) {
+        this.recordCommittedNodeId(replicaIdentity, nodeId);
+      }
+    };
+    if (this.db.inTransaction) {
+      record();
+    } else {
+      this.db.transaction(record)();
+    }
+  }
+
+  /**
    * @param {string} replicaIdentity - The replica.
    * @return {string|null} The committed node it was admitted on, or null
    *   when this registry holds no committed node for it.

@@ -32,6 +32,7 @@ Reading:
 Evidence: `scenario-before-base-20261101T2310Z/` and `scenario-after-20261101T2244Z/` in-tree: run status,
 generated config, lab console, `routability-summary.json` (the scenario's predicates, timings and log
 observations extracted from the harness report). The full harness reports (> 1 MB) and full node logs
-(`full-logs/*.log.gz`) are refused in-tree by the solve binary guard; they are kept untracked at the same
-paths in this worktree for `node scripts/solve.js evidence add` once the quest is sealed. The comparison script output
+(`full-logs/*.log.gz`) are refused in-tree by the solve binary guard; they are kept outside the checkout at
+`/mnt/data/peter/projects/.worktrees/lagrange-learner-host-evidence-20261101/<run>/` (same run directory
+names) for `node scripts/solve.js evidence add` once the quest is sealed. The comparison script output
 above was computed from those node logs.

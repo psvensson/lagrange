@@ -63,12 +63,10 @@ function stampDefect(defect) {
 // Record each identity's committed node the stamp carries. A node the
 // registry already holds otherwise is a stamp contradicting a committed fact.
 function recordStampNodeIds(registry, nodeIdsByIdentity) {
-  for (const [replicaIdentity, nodeId] of nodeIdsByIdentity) {
-    try {
-      registry.recordCommittedNodeId(replicaIdentity, nodeId);
-    } catch {
-      throw stampDefect(COMMITTED_MEMBERSHIP_STAMP_DEFECT.IDENTITY_MISMATCH);
-    }
+  try {
+    registry.recordCommittedNodeIds(nodeIdsByIdentity);
+  } catch {
+    throw stampDefect(COMMITTED_MEMBERSHIP_STAMP_DEFECT.IDENTITY_MISMATCH);
   }
 }
 
