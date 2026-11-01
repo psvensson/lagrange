@@ -10,11 +10,10 @@ import {
 import {
   buildSnapshotCatchupIdentityFromCache,
 } from '../raft/snapshot-catchup.js';
-import {RAFT_OPERATION} from '../raft/raft-operation-port-constants.js';
-import {
-  COMMITTED_MEMBERSHIP_ANSWER_KIND,
-  COMMITTED_MEMBERSHIP_READ_PURPOSE,
-} from '../raft/raft-committed-membership-constants.js';
+import {COMMITTED_MEMBERSHIP_ANSWER_KIND} from
+  '../raft/raft-committed-membership-constants.js';
+import {readPartitionCommittedMembership} from
+  './partition-service-raft-membership-administration.js';
 import {
   TRANSPORT_CONFIG_KEY,
   TRANSPORT_DEFAULT,
@@ -117,8 +116,7 @@ class PartitionServiceLearnerPromotionProofMethods {
       return {...requestShape, proof: evaluateLearnerPromotionProof({
         raftIsLeader: false})};
     }
-    const membership = await this.raft[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]({
-      purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS});
+    const membership = await readPartitionCommittedMembership(this);
     const configurationRefusal =
       learnerConfigurationRefusal(membership, learnerReplicaId);
     if (configurationRefusal !== null) {

@@ -219,9 +219,7 @@ function voterMembershipStateOf(answer, sourceReplicaIdentity) {
  * @return {Promise<Object>} Frozen observation.
  */
 async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
-  const read = service?.raft?.[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP];
-  const answer = typeof read === 'function' ? await read({
-    purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS}) : null;
+  const answer = await readPartitionCommittedMembership(service);
   if (answer?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
     return Object.freeze({
       state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE,
@@ -245,6 +243,19 @@ async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
     votersOutgoingReplicaIds: replicaIdentitiesOf(answer, answer.votersOutgoing),
     transferWindowMaxMs: leadershipTransferWindowMaxMsOf(service),
   });
+}
+
+/**
+ * The partition's one committed-membership read: a witness read of this
+ * replica's own applied configuration through its port, as the port
+ * answered it (COMMITTED or a typed refusal), or null without a port.
+ * @param {Object} service - The partition service.
+ * @return {Promise<Object|null>} The frozen answer.
+ */
+async function readPartitionCommittedMembership(service) {
+  const read = service?.raft?.[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP];
+  return typeof read === 'function' ? read({
+    purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS}) : null;
 }
 
 function replicaIdentitiesOf(answer, peerIds) {
@@ -295,6 +306,7 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
 
 export {
   admitPartitionRaftPeer,
+  readPartitionCommittedMembership,
   readPartitionReplicaMembership,
   proposePeerRetirement,
   reservePartitionRaftPeerIdentity,

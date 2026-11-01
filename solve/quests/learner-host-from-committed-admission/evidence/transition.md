@@ -4,10 +4,9 @@ Quest `learner-host-from-committed-admission` (epic `raft-rs-full-cutover`), 202
 `lagrange-learner-host-20261101`, base `f70f43a29` (`src/` identical to origin/main `62d537313` and the 0.4.0 image).
 Contract-first record (`solver-quests.md`, "Contract-first owner work"). Line numbers are of the base.
 
-**Status: STOPPED before the change on the stated stop condition** (brief, deliverable 3): the committed
-configuration cannot carry the learner's host without a schema change to the raft-rs runtime owner's identity
-record. Section 5 states the exact conflict; section 6 the decision needed. Sections 1-4 are the contract both
-resolutions satisfy; the red tests of section 7 hold for either.
+**Status:** sections 1-7 were written first and the work stopped on the stated stop condition (the host cannot
+be committed without a schema change of the runtime owner's identity record). The lead then chose Option A;
+section 8 records the change as built. Sections 1-4 remain the contract.
 
 ## 1. Transition
 
@@ -119,3 +118,71 @@ Witnesses that change with the deletion (to be updated in the change, not now):
 `test/partition/partition-service-learner-promotion-wake.test.js:287-330`,
 `test/convergence/dt6-learner-promotion-proof-channel-wake.test.js:146, 630-700, 1020-1085` (the `withholdRow`
 fixture asserts the refusal as intended behaviour), `test/node/replica-local-only-row-convergence.test.js:467`.
+
+## 8. Lead decision 2026-11-01: Option A, and how it was built
+
+The lead chose Option A (quest log). Shape as built, against the brief's nine steps:
+
+1. **Conf-change context.** An ADD through `proposeConfChange` (`ADD_PEER`, `ADD_LEARNER`) must name a `nodeId`
+   (refusal `membership-change-without-node-id`) and commits the admission context
+   `{replicaIdentity, peerId, nodeId}` (`raft-rs-committed-membership-context.js`
+   `encodeCommittedAdmissionContext` / `committedAdmissionContext`, an exact three-key shape distinct from the
+   six-key managed context, which is untouched). `normalizedConfChange` (`raft-rs-operation-port.js`) no longer
+   drops what the admission knows. Every replica applying the entry records the node in the same application
+   transaction (`applyCommittedMembershipContext`), including entries folded into a joiner's bootstrap.
+   The node is the unified address's node component, i.e. the logical node identity the transport already
+   routes by; no host string or port is committed (the listener-port model maps node to host:port below this
+   layer and is unchanged).
+2. **Identity record.** `raft_rs_peer_identity.node_id` (ALTER precedent of `learner_admission`), written once
+   from a committed fact (`recordCommittedNodeId`: same value is a no-op, another value a conflict, never a
+   replacement); read by `committedNodeIdOf`. The peer-id derivation stays placement-independent.
+3. **Snapshots.** `peerReservations` are `{replicaIdentity, peerId, nodeId?, learnerAdmission?}`: each recorded
+   fact present exactly when recorded (the canonical descriptor JSON forbids null, so an unrecorded node is an
+   absent key, like `learnerAdmission`), exact key set, compared field by field at install and store; no
+   decoder for the old shape.
+4. **Read.** `READ_COMMITTED_MEMBERSHIP` answers `nodeIds: {peerId: nodeId|null}` beside `identities`
+   (a sibling map rather than changing `identities`' value type, which 27 test files and 9 src consumers read
+   as a string). COMMITTED stamps carry it (exact field set), GENESIS stamps carry `founderNodeIds`
+   (producers: initial table provisioning from its planned placement, the seed allocation (every partition
+   founder on the seed node); message groups and WASM services pass an explicit empty record, their address
+   owners being the named follow-up). Bootstraps record both into the identity record.
+5. **Proof (C2).** `handleLearnerPromotionProofRequest` (now async): request shape; `NOT_LEADER` before any
+   other read; the partition's one committed-membership reader (`readPartitionCommittedMembership`,
+   `partition-service-raft-membership-administration.js`, a witness `READ_COMMITTED_MEMBERSHIP`; the T7 caller
+   census is unchanged) must name the learner as voter or learner under exactly its
+   identity, else `NOT_IN_CONFIGURATION` (an unreadable configuration answers `CONFIGURATION_UNAVAILABLE` with
+   the read's reason as cause: a named state, not a third authority); then the predicate over
+   `followerProgress[replicaIdentity]`. Status shaping keys progress by replica identity and never drops a peer
+   for an unresolvable address; the probe names a replica identity and `configuredPeerOf` maps by id.
+6. **Transport (C3).** The port hands the host resolver each peer's committed node
+   (`resolvePeerAddress(replicaIdentity, committedNodeId)`); the partition binds `committedPartitionPeerAddress`
+   (`src/partition/partition-committed-peer-address.js`), which formats the unified address on that node or
+   throws `peer_not_in_configuration`, recorded by `raft-rs-peer-delivery.js` as the peer's own
+   `address_resolution` delivery failure. Snapshot catch-up consumes the same answer (its follower node is parsed
+   from the committed address). The message-group resolver stays a named follow-up: its FreshMG learner
+   admission commits the frozen six-key managed context, which cannot carry the node without changing the
+   `learner_admission` format the lead ruled untouched (its ADD_PEER admissions do commit the node now).
+7. **Deleted.** `learner_address_unresolvable` (3 files); the learner re-assert wake
+   (`reactToLearnerPromotionRefusalCause`) and `ReplicaStateMachine.reconcileLocalOnlyServiceRowsNow`;
+   partition `buildPeerAddress` / `resolveKnownPeerAddress` / the hint list `peerAddresses`; the init loop's
+   cache-address admission of bootstrap peers (`isBootstrapPeerAdmissible`): configured peers are members;
+   the row-driven stale-address REMOVE/re-ADD (it proposed `REMOVE_PEER` without a replica identity, which
+   the port already refused `membership-change-without-replica-identity`: dead in production); the
+   reconciliation's membership test by address (now by replica identity). A retiring row still retires a
+   configured peer only where its address equals the peer's address, which is now the committed node's
+   address (a row contradicting the committed node is no evidence), and the removal names the replica
+   identity. The unused `src/raft/peer-address-resolver.js`, its constants and its tests are deleted.
+   `resolvePeerAddressFromCache` remains for C4 only (leader address for write forwarding,
+   out of scope, named).
+8. **Witnesses** updated to the new contract: `partition-service-learner-promotion-wake.test.js` (no refusal
+   re-asserts a row), `dt6-learner-promotion-proof-channel-wake.test.js` (withheld row: `not_in_configuration`
+   until admitted; new cpp drive: an admitted learner whose leader cache lost its row is granted within the
+   bound, never refused), `dt6-learner-promotion-progress-proof.test.js`, `replica-local-only-row-convergence`
+   (no on-demand kick), `learner-promotion-progress-proof-contract`, the committed-membership census/static
+   enumerations (`nodeIds`), partition admission/retirement/reconciliation tests, the address-authority
+   witness, and every raft-rs backend fixture that proposes an ADD (now with a node), reads progress or probes
+   (by replica identity), or forges a stamp (with `nodeIds`/`founderNodeIds`).
+9. **Quest tests.** `test/partition/learner-promotion-proof-committed-admission.test.js` (a)-(g): (a)-(d), (f)
+   red on the base as recorded in section 7; (e) restarted leader and (g) transport from the committed fact
+   import `partition-committed-peer-address.js`, which does not exist on the base (red at load); all green on
+   the change.

@@ -110,6 +110,51 @@ function shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) {
   return !isPeerRowStatusAdmissible(serviceRow.status);
 }
 
+function addressMatchesReplica(addressManager, address, replicaId) {
+  if (typeof address !== 'string' || address.length === 0) {
+    return false;
+  }
+  try {
+    const parsed = addressManager.parse(address);
+    return (
+      parsed.serviceType === ENTITY_TYPE.PARTITION &&
+      parsed.serviceId === replicaId
+    );
+  } catch (_error) {
+    return false;
+  }
+}
+
+// The configured peer a retiring row names, matched on the address the
+// peer's COMMITTED node gives it (the port's status address): a row naming
+// another address is no evidence about this member. The removal names the
+// replica identity, the one REMOVE_PEER shape the port takes.
+function retireMatchingRaftAddresses(
+  partitionService,
+  addressManager,
+  replicaId,
+  serviceAddress,
+) {
+  if (!addressMatchesReplica(addressManager, serviceAddress, replicaId)) {
+    return null;
+  }
+  const raftNodes = partitionService.raft?.readStatus?.().peers || [];
+  const retiredAddresses = new Set(
+    raftNodes
+      .map((node) => node?.address)
+      .filter((address) => address === serviceAddress),
+  );
+  if (retiredAddresses.size > 0 &&
+      typeof partitionService.raft?.proposeConfChange ===
+      PARTITION_SERVICE_TYPE.FUNCTION) {
+    proposePeerRetirement(partitionService, {
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+      replicaIdentity: replicaId,
+    });
+  }
+  return retiredAddresses;
+}
+
 function removeExactReplicaId(replicaIds, replicaId) {
   if (!Array.isArray(replicaIds)) {
     return false;
@@ -176,15 +221,24 @@ function retireRaftPeerFromAuthoritativeServiceChange(
     return true;
   }
 
-  // A configured peer is retired by its replica identity: the committed
-  // configuration names it, the row only announced the retirement.
-  if (!isConfiguredPeer(partitionService, replicaId)) {
+  // The row is evidence about the configured peer only where it names the
+  // address the peer's committed node gives it (the port's status address);
+  // the removal names the replica identity.
+  const addressManager = AddressManager.getInstance();
+  const serviceAddress = resolvePeerAddressFromService(
+    addressManager,
+    serviceRow,
+    replicaId,
+  );
+  const retiredAddresses = retireMatchingRaftAddresses(
+    partitionService,
+    addressManager,
+    replicaId,
+    serviceAddress,
+  );
+  if (!retiredAddresses) {
     return false;
   }
-  proposePeerRetirement(partitionService, {
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
-    replicaIdentity: replicaId,
-  });
   removeExactReplicaId(partitionService.replicaIds, replicaId);
   partitionService.logger.debug(
     PARTITION_SERVICE_LOG_MSG.PEER_RETIRED_FROM_AUTHORITATIVE_SERVICE_CHANGE,
@@ -192,22 +246,12 @@ function retireRaftPeerFromAuthoritativeServiceChange(
       operation,
       partitionId: partitionService.partitionId,
       replicaId,
+      retiredAddresses: [...retiredAddresses],
     },
   );
   return true;
 }
 
-// Whether this replica's opened configuration names the replica as a peer.
-function isConfiguredPeer(partitionService, replicaId) {
-  return (partitionService.raft?.readStatus?.().peers || []).some(
-    (peer) => peer?.replicaIdentity === replicaId);
-}
-
-// A row naming a replica the configuration does not hold triggers its
-// admission (rows are discovery, A8); the admission commits the node the row
-// names, and from then on the committed fact alone addresses the peer. A
-// configured peer is never removed or re-admitted because a row disagrees
-// with its committed node.
 function reconcileExpectedRaftPeer({
   partitionService,
   configuredIdentities,

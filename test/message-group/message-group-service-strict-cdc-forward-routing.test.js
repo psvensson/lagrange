@@ -1230,8 +1230,7 @@ test(
         [{
           type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
           replicaIdentity: 'mg-1-r3',
-          nodeId: 'node-test',
-          peerAddress: 'node-3/message-group/mg-1-r3',
+          nodeId: 'node-3',
         }],
         'newly visible replicas should be admitted by identity from later cache rows',
       );

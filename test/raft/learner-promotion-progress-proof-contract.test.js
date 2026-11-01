@@ -34,7 +34,6 @@ const EVALUATED_PROOF_KEYS = [
 ];
 const CHANNEL_REFUSAL_KEYS = [...EVALUATED_PROOF_KEYS, 'cause'];
 const REQUEST_INVALID_CAUSES = [
-  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
   LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.REQUEST_SHAPE,
   LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.RESPONSE_BINDING_MISMATCH,
 ];
@@ -136,12 +135,12 @@ test('channel-level refusals carry a typed cause in the frozen shape', async (t)
     learnerObservation({
       proof: refuseLearnerPromotionProof(
         LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
-        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE),
+        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.REQUEST_SHAPE),
     }),
   );
   t.equal(validation.accepted, false, 'a channel refusal never promotes');
   t.equal(validation.proofCause,
-    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
+    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.REQUEST_SHAPE,
     'the learner-side validation surfaces the typed cause');
   t.equal(validateLearnerPromotionProofResponse(learnerObservation()).proofCause,
     null, 'an evaluated proof has no channel cause to surface');
