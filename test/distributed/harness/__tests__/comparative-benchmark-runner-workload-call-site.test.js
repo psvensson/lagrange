@@ -15,10 +15,10 @@ import {
   createWorkloadRunExecutor,
   prepareLoadGeneratorCheckout,
 } from '../comparative-benchmark-workload-call-site.js';
-import {stringIncludes} from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   arrayFind,
+  stringIncludes,
 } from '../real-product-captured-intrinsics.js';
 
 const MANIFEST = buildComparativeCampaignManifest({campaignId: 'bench-x',

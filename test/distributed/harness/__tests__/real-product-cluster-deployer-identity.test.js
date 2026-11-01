@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import * as deployers from '../real-product-cluster-deployers.js';
+import {contentIdentityOf} from '../real-product-identity.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   LAGRANGE_IMAGE,
@@ -17,6 +18,7 @@ import {
   arrayEvery,
   arrayFilter,
   arrayFind,
+  arrayMap,
   arraySome,
   stringSplit,
   stringStartsWith,
@@ -68,7 +70,7 @@ test('D21: data directories inside the container layer make the deployment a smo
   const durable = await deployers.deployLagrangeCluster(input(volume.sshRun, {
     opts: {...OPTS, storageRoot: '/srv/lagrange-bench', lagrangeVersion: '0.4.0',
       lagrangeImage: `psvensson/lagrange@sha256:${'c'.repeat(64)}`,
-      lagrangeImageId: LAGRANGE_IMAGE_ID},
+      lagrangeImageContent: contentIdentityOf([`sha256:${LAGRANGE_IMAGE_ID.slice(-64)}`])},
   }));
   assert.equal(durable.runClass, 'publishable');
   assert.ok(arrayEvery(durable.storage, (entry) => entry.kind === 'host-volume' &&
@@ -137,11 +139,12 @@ test('D18: the Lagrange image is pinned by content; a host where it was docker-l
   const {sshRun, calls} = createScriptedSsh([
     [/docker image inspect/u, (_command, host) => JSON.stringify({Id: LAGRANGE_IMAGE_ID,
       RepoDigests: host === '10.0.0.2' ? [] : [registryRef], Created: '2026-10-30T10:00:00Z',
-      Config: {Labels: {}}})],
+      Config: {Labels: {}}, RootFS: {Layers: ['sha256:' + '7'.repeat(64)]}})],
     ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
   ]);
   const deployment = await deployers.deployLagrangeCluster(input(sshRun, {opts: {...OPTS,
-    lagrangeImage: registryRef, lagrangeImageId: LAGRANGE_IMAGE_ID, lagrangeVersion: '0.4.0',
+    lagrangeImage: registryRef, lagrangeVersion: '0.4.0',
+    lagrangeImageContent: contentIdentityOf(['sha256:' + '7'.repeat(64)]),
     lagrangeImageByHost: {'10.0.0.1': registryRef, '10.0.0.2': LAGRANGE_IMAGE_ID,
       '10.0.0.3': registryRef}}}));
   const runs = arrayFilter(calls, (call) => /^docker run -d /u.test(call.command));
@@ -151,4 +154,34 @@ test('D18: the Lagrange image is pinned by content; a host where it was docker-l
   assert.equal(loaded.provenance, `loaded:${LAGRANGE_IMAGE_ID}`);
   const pulled = arrayFind(deployment.identity.products, (p) => p.host === '10.0.0.1');
   assert.equal(pulled.provenance, `registry:${registryRef}`);
+});
+
+test('D18: image content identity is the digest of the ordered RootFS diff_ids, the same ' +
+  'on a containerd store (.Id = manifest digest) and an overlay2 store (.Id = config ' +
+  'digest); .Id is never compared across stores', {timeout: 300000}, async () => {
+  const layers = ['sha256:' + '1'.repeat(64), 'sha256:' + '2'.repeat(64)];
+  const content = contentIdentityOf(layers);
+  const facts = (host, otherLayers = null) => JSON.stringify({
+    Id: host === '10.0.0.2' ? `sha256:${'9'.repeat(64)}` : LAGRANGE_IMAGE_ID,
+    RepoDigests: host === '10.0.0.2' ? [] : [`psvensson/lagrange@sha256:${'1'.repeat(64)}`],
+    RootFS: {Type: 'layers', Layers: otherLayers || layers}, Config: {Labels: {}},
+    Created: '2026-10-30T10:00:00Z'});
+  const run = async (layersOf) => {
+    const ledger = createContainerLedger();
+    const {sshRun} = createScriptedSsh([
+      [/docker image inspect/u, (_command, host) => facts(host, layersOf(host))],
+      [/docker info --format/u, (_command, host) => (host === '10.0.0.2' ?
+        'overlay2|[["Backing Filesystem","extfs"]]' :
+        'overlayfs|[["driver-type","io.containerd.snapshotter.v1"]]')],
+      ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+    ]);
+    return deployers.deployLagrangeCluster(input(sshRun, {opts: {...OPTS,
+      lagrangeImageContent: content, lagrangeVersion: '0.4.0'}}));
+  };
+  const deployment = await run(() => null);
+  const stores = arrayMap(deployment.identity.products, (p) => p.imageStore);
+  assert.deepEqual(stores, ['containerd', 'overlay2', 'containerd']);
+  assert.ok(arrayEvery(deployment.identity.products, (p) => p.contentIdentity === content));
+  await assert.rejects(run((host) => (host === '10.0.0.3' ? [layers[0]] : null)),
+    (error) => error.code === 'identity_unverified');
 });

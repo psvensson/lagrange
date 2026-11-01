@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {
+  COMPARATIVE_CAPACITY_PROFILE,
   COMPARATIVE_SMOKE_PROFILE,
   buildComparativeCampaignManifest,
   digestCampaignManifest,
@@ -26,31 +27,32 @@ function manifest() {
 
 test('D15: dataset and plan digests come from the canonical owners, not label hashes',
   () => {
-    const built = manifest();
-    const sweep = buildScenarioAPairedSweepPlan({...COMPARATIVE_SMOKE_PROFILE.sweep,
+    const capacity = buildComparativeCampaignManifest({campaignId: 'bench-m-1',
+      profile: COMPARATIVE_CAPACITY_PROFILE, targets: TARGETS});
+    const sweep = buildScenarioAPairedSweepPlan({...COMPARATIVE_CAPACITY_PROFILE.sweep,
+      slo: COMPARATIVE_CAPACITY_PROFILE.slo, workload: COMPARATIVE_CAPACITY_PROFILE.workload,
       systems: ['lagrange', 'tidb-tikv', 'postgresql'], repetitions: 6});
-    assert.equal(built.plan.datasetDigest, `sha256:${sweep.identity.datasetSha256}`);
-    assert.equal(built.plan.workloadPlanDigest, `sha256:${sweep.identity.workloadPlanSha256}`);
-    assert.equal(built.plan.sweepPlanDigest, `sha256:${sweep.sweepPlanSha256}`);
-    assert.equal(built.plan.semanticProfileDigest,
+    assert.equal(capacity.plan.datasetDigest, `sha256:${sweep.identity.datasetSha256}`);
+    assert.equal(capacity.plan.sweepPlanDigest, `sha256:${sweep.sweepPlanSha256}`);
+    const smoke = manifest();
+    assert.equal(smoke.plan.datasetDigest, capacity.plan.datasetDigest,
+      'the same canonical dataset digest without a sweep');
+    assert.equal(smoke.plan.semanticProfileDigest,
       `sha256:${sweep.identity.semanticProfileSha256}`);
   });
 
-test('manifest: every target x rate x repetition is a run with a unique runId and ' +
-  'claimKey, the system order rotated by the sweep owner', () => {
-  const built = manifest();
-  const {offeredRatesPerSec} = COMPARATIVE_SMOKE_PROFILE.sweep;
+test('capacity manifest: every target x rate x repetition is a run, the system order ' +
+  'rotated by the sweep owner', () => {
+  const built = buildComparativeCampaignManifest({campaignId: 'bench-m-1',
+    profile: COMPARATIVE_CAPACITY_PROFILE, targets: TARGETS});
   assert.deepEqual(built.plan.systems, ['lagrange', 'tidb-tikv', 'postgresql']);
-  // Three systems lead equally often over both rate directions: 6 repetitions.
-  assert.equal(built.runs.length, TARGETS.length * offeredRatesPerSec.length * 6);
-  assert.equal(new Set(arrayMap(built.runs, (run) => run.runId)).size, built.runs.length);
   assert.equal(new Set(arrayMap(built.runs, (run) => run.claimKey)).size, built.runs.length);
   const leaderOf = (repetition) => arrayFilter(built.runs,
     (run) => run.repetition === repetition)[0].targetId;
   assert.deepEqual(arrayMap([1, 2, 3], leaderOf),
     ['lagrange', 'tidb-tikv', 'pg-patroni-sync-ha-rf3']);
   assert.ok(arrayEvery(built.runs, (run, index) => run.orderIndex === index &&
-    run.workloadSubkind === 'smoke'));
+    run.workloadSubkind === 'main'));
 });
 
 test('manifest: the smoke workload is the workload dispatch owner\'s', () => {
@@ -89,4 +91,24 @@ test('manifest: an unknown target is refused', () => {
   assert.throws(() => buildComparativeCampaignManifest({campaignId: 'bench-m-1',
     profile: COMPARATIVE_SMOKE_PROFILE, targets: ['citus-sql-service']}),
   /unknown comparative target/u);
+});
+
+test('smoke plan: one run per arm at one offered rate, recorded order, not comparable, ' +
+  'no sweep plan', () => {
+  const built = manifest();
+  assert.equal(built.comparable, false);
+  assert.equal(built.runs.length, TARGETS.length);
+  assert.deepEqual(arrayMap(built.runs, (run) => run.targetId), TARGETS);
+  assert.equal(new Set(arrayMap(built.runs, (run) => run.offeredRatePerSec)).size, 1);
+  assert.ok(arrayEvery(built.runs, (run) => run.repetition === 1));
+  assert.equal(built.plan.sweepPlanDigest, null);
+  assert.equal(built.plan.executionOrder, 'recorded-not-counterbalanced');
+});
+
+test('capacity plan keeps the v2 paired sweep', () => {
+  const built = buildComparativeCampaignManifest({campaignId: 'bench-m-1',
+    profile: COMPARATIVE_CAPACITY_PROFILE, targets: TARGETS});
+  assert.equal(built.comparable, true);
+  assert.match(built.plan.sweepPlanDigest, /^sha256:/u);
+  assert.equal(built.runs.length, TARGETS.length * 2 * 6);
 });

@@ -375,9 +375,9 @@ function createCampaignLog({manifest, header, deps}) {
   const held = [];
   const headerRecord = {recordType: RECORD_TYPE.HEADER, schemaVersion: RECORD_SCHEMA,
     campaignId: manifest.campaignId, startedAt: iso(deps.now()),
-    manifestDigest: manifest.manifestDigest, manifest, harness: header.harness,
-    executionTarget: header.executionTarget, physicalHosts: header.physicalHosts,
-    products: null, unpinnedTargets: null};
+    manifestDigest: manifest.manifestDigest, comparable: manifest.comparable, manifest,
+    harness: header.harness, executionTarget: header.executionTarget,
+    physicalHosts: header.physicalHosts, products: null, unpinnedTargets: null};
   let written = false;
 
   function pin(run, deployment) {

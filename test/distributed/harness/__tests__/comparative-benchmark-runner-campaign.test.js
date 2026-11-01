@@ -121,16 +121,11 @@ function exhaustedFailure(described = true) {
         evidence: {last: 'seed-contact'}}}} : {})});
 }
 
-// Pins are taken from each target's first described deployment, so a harness
-// that fails every run fails from the second deployment of a target on.
-function failingAfterFirstDeployOfEachTarget(failure) {
-  const seen = new Set();
+// A harness whose lagrange arm fails as given; the other arm deploys and pins.
+function failingLagrange(failure) {
   return async (one) => {
-    if (!seen.has(one.targetId)) {
-      seen.add(one.targetId);
-      return deployment(one.runId);
-    }
-    throw failure;
+    if (one.targetId === 'lagrange') throw failure;
+    return deployment(one.runId);
   };
 }
 
@@ -184,14 +179,15 @@ test('J7: readiness exhausted - measurement never starts; the record is a comple
 
 test('J7: a readiness exhaustion the deployer could not describe is a failed run, never ' +
   'a product failure without its product', async () => {
-  const {deps, records, calls} = harness({deployRun:
-    failingAfterFirstDeployOfEachTarget(exhaustedFailure(false))});
+  const {deps, records, calls} = harness({deployRun: failingLagrange(exhaustedFailure(false))});
   await run(deps);
   const failedRuns = arrayFilter(records.slice(1),
     (record) => record.execution.failure?.code === 'readiness_exhausted');
   assert.ok(failedRuns.length > 0);
-  assert.ok(arrayEvery(failedRuns, (record) => record.execution.state === 'failed'));
-  assert.equal(calls.workload.length, MANIFEST.targets.length);
+  assert.ok(arrayEvery(failedRuns, (record) => record.execution.state === 'failed' &&
+    record.observations === null));
+  assert.equal(calls.workload.length, arrayFilter(MANIFEST.runs,
+    (one) => one.targetId !== 'lagrange').length);
 });
 
 test('header: pins every target\'s product identity from its running containers, ' +
@@ -284,10 +280,12 @@ test('teardown failure is recorded in closure and the campaign continues', async
 });
 
 test('a topology refusal is blocked, never failed or passed', async () => {
-  const {deps, records} = harness({deployRun: failingAfterFirstDeployOfEachTarget(
+  const {deps, records} = harness({deployRun: failingLagrange(
     Object.assign(new Error('needs 3 hosts'), {code: 'refused_insufficient_host_topology'}))});
   const summary = await run(deps);
-  assert.equal(records.at(-1).execution.state, 'blocked');
+  const lagrange = arrayFilter(records.slice(1), (record) => record.targetId === 'lagrange');
+  assert.ok(lagrange.length > 0);
+  assert.ok(arrayEvery(lagrange, (record) => record.execution.state === 'blocked'));
   assert.equal(summary.exitCode, 3);
 });
 

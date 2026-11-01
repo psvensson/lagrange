@@ -15,7 +15,22 @@ import {
   BENCHMARK_OPERATION_FAMILY,
   BENCHMARK_WORKLOAD_PROFILE,
 } from './benchmark-workload-dispatch.js';
+import {benchmarkCanonicalDigest} from './benchmark-operation-outcome.js';
 import {COMPARISON_VIEW} from './comparative-system-budget.js';
+import {
+  buildOltpBaselineDataset,
+  hashOltpBaselineDataset,
+} from './oltp-baseline-dataset.js';
+import {
+  buildOltpBaselinePlan,
+  hashOltpBaselineMeasurementPlan,
+} from './oltp-baseline-workload.js';
+import {OLTP_OPEN_LOOP_PROFILE} from './oltp-open-loop-step-owner.js';
+import {OLTP_PAIRED_RETRY_POLICY} from './oltp-paired-retry-owner.js';
+import {
+  OLTP_SCENARIO_A_SEMANTIC_PROFILE,
+  hashScenarioASemanticProfile,
+} from './oltp-scenario-a-semantic-profile.js';
 import {
   OLTP_PAIRED_SWEEP_SYSTEM,
   buildScenarioAPairedSweepPlan,
@@ -37,22 +52,49 @@ const RUN_ORDINAL_WIDTH = 3;
 
 const SMOKE_WORKLOAD_PROFILE =
   BENCHMARK_WORKLOAD_PROFILE[BENCHMARK_OPERATION_FAMILY.SCENARIO_A_SMOKE];
+const CAPACITY_WORKLOAD_PROFILE =
+  BENCHMARK_WORKLOAD_PROFILE[BENCHMARK_OPERATION_FAMILY.SCENARIO_A_OLTP];
+const PLAN_KIND = Object.freeze({SMOKE: 'smoke', CAPACITY: 'capacity'});
+const SMOKE_EXECUTION_ORDER = 'recorded-not-counterbalanced';
 
+// A smoke campaign is not a comparison: one run per arm at one offered rate,
+// in the recorded order of its targets (not counter-balanced), no sweep plan.
 const COMPARATIVE_SMOKE_PROFILE = Object.freeze({
-  id: 'comparative-smoke-v1',
+  id: 'comparative-smoke-v2',
+  supersedes: 'comparative-smoke-v1',
+  supersededBecause: 'v1 ran the capacity sweep shape (36 fresh deployments) for a smoke',
+  kind: PLAN_KIND.SMOKE,
+  comparable: false,
   runClass: RUN_CLASS.SMOKE,
+  offeredRatePerSec: 5,
   // The smoke claim of stream A's coverage manifest (scenarioA/smoke, smoke
   // targets lagrange, tidb-tikv, pg-single-primary) and the workload
   // dispatch's smoke family share the subkind; the dispatch owns the workload.
   subkind: 'smoke',
   workloadSubkind: 'smoke',
   workloadProfileId: SMOKE_WORKLOAD_PROFILE.id,
+  campaignBudgetMinutes: 60,
+  slo: Object.freeze({p99Ms: 2000, maxErrorRate: 0.05}),
+  workload: SMOKE_WORKLOAD_PROFILE.workload,
+});
+
+// A capacity campaign compares: the v2 paired sweep (counter-balanced system
+// order and rate direction, balanced repetitions) over the capacity family.
+const COMPARATIVE_CAPACITY_PROFILE = Object.freeze({
+  id: 'comparative-capacity-v1',
+  kind: PLAN_KIND.CAPACITY,
+  comparable: true,
+  runClass: RUN_CLASS.PUBLISHABLE,
+  profileClass: 'capacity',
+  subkind: 'main',
+  workloadSubkind: 'main',
+  workloadProfileId: CAPACITY_WORKLOAD_PROFILE.id,
   campaignBudgetMinutes: 240,
+  slo: Object.freeze({p99Ms: 2000, maxErrorRate: 0.05}),
+  workload: SMOKE_WORKLOAD_PROFILE.workload,
   sweep: Object.freeze({
     comparisonView: COMPARISON_VIEW.ARCHITECTURE_NATIVE,
     offeredRatesPerSec: Object.freeze([5, 10]),
-    slo: Object.freeze({p99Ms: 2000, maxErrorRate: 0.05}),
-    workload: SMOKE_WORKLOAD_PROFILE.workload,
   }),
 });
 
@@ -108,6 +150,33 @@ function minimumRepetitions(systemCount) {
   return systemCount % 2 === 0 ? systemCount : systemCount * 2;
 }
 
+// The digests of the canonical owners, without a sweep plan (smoke).
+function smokePlanOf(profile, systems) {
+  const workloadPlan = buildOltpBaselinePlan(profile.workload);
+  return {
+    sweepProfileId: null, sweepPlanDigest: null, executionOrder: SMOKE_EXECUTION_ORDER,
+    datasetDigest: sha(hashOltpBaselineDataset(buildOltpBaselineDataset(profile.workload))),
+    workloadPlanDigest: benchmarkCanonicalDigest(workloadPlan),
+    measurementPlanDigest: sha(hashOltpBaselineMeasurementPlan(workloadPlan)),
+    semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
+    semanticProfileDigest: sha(hashScenarioASemanticProfile()),
+    openLoopProfileId: OLTP_OPEN_LOOP_PROFILE.id, retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id,
+    workloadProfileId: profile.workloadProfileId, systems, profileClass: profile.runClass,
+    slo: profile.slo, workload: profile.workload,
+    warmup: {operationsPerWorker: profile.workload.warmupOperationsPerWorker,
+      beforeMeasurement: true},
+  };
+}
+
+function runOf({campaignId, profile, targetId, offeredRatePerSec, repetition, orderIndex}) {
+  return {runId: `${campaignId}-r${stringPadStart(String(orderIndex + 1),
+    RUN_ORDINAL_WIDTH, '0')}`,
+  claimKey: `${targetId}/${SCENARIO_A}/${profile.subkind}/${offeredRatePerSec}/${repetition}`,
+  targetId, system: SYSTEM_OF_TARGET[targetId], scenario: SCENARIO_A,
+  subkind: profile.subkind, workloadSubkind: profile.workloadSubkind,
+  offeredRatePerSec, repetition, orderIndex, freshDeployment: true};
+}
+
 function planOf(sweep, profile) {
   const identity = sweep.identity;
   return {
@@ -123,10 +192,10 @@ function planOf(sweep, profile) {
     comparisonView: identity.comparisonView,
     workloadProfileId: profile.workloadProfileId,
     systems: identity.systems,
-    profileClass: profile.runClass,
+    profileClass: profile.profileClass,
     slo: identity.slo,
-    workload: profile.sweep.workload,
-    warmup: {operationsPerWorker: profile.sweep.workload.warmupOperationsPerWorker,
+    workload: profile.workload,
+    warmup: {operationsPerWorker: profile.workload.warmupOperationsPerWorker,
       beforeMeasurement: sweep.profile.warmupBeforeMeasurement},
   };
 }
@@ -139,30 +208,38 @@ function buildComparativeCampaignManifest({campaignId, profile, targets}) {
   requireCampaignId(campaignId);
   const selected = requireTargets(targets);
   const systems = arrayMap(selected, (target) => SYSTEM_OF_TARGET[target]);
-  const sweep = buildScenarioAPairedSweepPlan({...profile.sweep, systems,
-    repetitions: minimumRepetitions(systems.length)});
-  const targetOf = new Map(arrayMap(selected, (target) => [SYSTEM_OF_TARGET[target], target]));
+  if (new Set(systems).size !== systems.length) {
+    throw new Error('Scenario A campaign compared systems contain duplicates');
+  }
   const runs = [];
-  for (const pair of sweep.pairs) {
-    for (const targetId of arrayMap(pair.systemOrder, (system) => targetOf.get(system))) {
-      const orderIndex = runs.length;
-      runs.push({runId: `${campaignId}-r${stringPadStart(String(orderIndex + 1),
-        RUN_ORDINAL_WIDTH, '0')}`,
-      claimKey: `${targetId}/${SCENARIO_A}/${profile.subkind}/${pair.offeredRatePerSec}/` +
-        `${pair.repetition}`,
-      targetId, system: SYSTEM_OF_TARGET[targetId], scenario: SCENARIO_A,
-      subkind: profile.subkind, workloadSubkind: profile.workloadSubkind,
-      offeredRatePerSec: pair.offeredRatePerSec, repetition: pair.repetition, orderIndex,
-      freshDeployment: pair.freshDatasetPerSystem});
+  let plan;
+  if (profile.kind === PLAN_KIND.SMOKE) {
+    for (const targetId of selected) {
+      runs.push(runOf({campaignId, profile, targetId, repetition: 1,
+        offeredRatePerSec: profile.offeredRatePerSec, orderIndex: runs.length}));
     }
+    plan = smokePlanOf(profile, systems);
+  } else {
+    const sweep = buildScenarioAPairedSweepPlan({...profile.sweep, slo: profile.slo,
+      workload: profile.workload, systems, repetitions: minimumRepetitions(systems.length)});
+    const targetOf = new Map(arrayMap(selected, (target) => [SYSTEM_OF_TARGET[target],
+      target]));
+    for (const pair of sweep.pairs) {
+      for (const targetId of arrayMap(pair.systemOrder, (system) => targetOf.get(system))) {
+        runs.push(runOf({campaignId, profile, targetId, repetition: pair.repetition,
+          offeredRatePerSec: pair.offeredRatePerSec, orderIndex: runs.length}));
+      }
+    }
+    plan = planOf(sweep, profile);
   }
   const body = {schema: MANIFEST_SCHEMA, campaignId, profileId: profile.id,
-    runClass: profile.runClass, campaignBudgetMinutes: profile.campaignBudgetMinutes,
-    targets: selected, plan: planOf(sweep, profile), runs};
+    comparable: profile.comparable, runClass: profile.runClass,
+    campaignBudgetMinutes: profile.campaignBudgetMinutes, targets: selected, plan, runs};
   return deepFreeze({...body, manifestDigest: digestCampaignManifest(body)});
 }
 
 export {
+  COMPARATIVE_CAPACITY_PROFILE,
   COMPARATIVE_SMOKE_PROFILE,
   MANIFEST_SCHEMA as COMPARATIVE_MANIFEST_SCHEMA,
   buildComparativeCampaignManifest,

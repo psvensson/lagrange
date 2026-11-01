@@ -8,7 +8,6 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {createSemanticGateStage} from '../comparative-benchmark-semantic-gate.js';
-import {arrayMap} from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   createContainerLedger,
@@ -16,6 +15,7 @@ import {
 } from './real-product-deployer-product-answers-fixture.js';
 import {
   arrayFilter,
+  arrayMap,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
 
@@ -49,7 +49,7 @@ test('Lagrange: fresh formation per case, restart of the endpoint container only
   const ledger = createContainerLedger();
   const {sshRun, calls} = createScriptedSsh([[/docker image inspect/u,
     JSON.stringify({RepoDigests: [], Created: '2026-10-30T10:00:00Z',
-      Config: {Labels: null}})], ...dockerRules(ledger), [/docker restart/u, '']]);
+      Config: {Labels: null}, RootFS: {Layers: ['sha256:' + '7'.repeat(64)]}})], ...dockerRules(ledger), [/docker restart/u, '']]);
   let generation = 0;
   const first = armOf(ledger, generation);
   const log = [];
@@ -74,7 +74,7 @@ test('PostgreSQL resets through its adapter; TiDB keeps its own proof harness', 
   const ledger = createContainerLedger();
   const {sshRun} = createScriptedSsh([[/docker image inspect/u,
     JSON.stringify({RepoDigests: [], Created: '2026-10-30T10:00:00Z',
-      Config: {Labels: null}})], ...dockerRules(ledger)]);
+      Config: {Labels: null}, RootFS: {Layers: ['sha256:' + '7'.repeat(64)]}})], ...dockerRules(ledger)]);
   let redeploys = 0;
   const stage = createSemanticGateStage({journey: async ({beforeCase}) => {
     await beforeCase({caseId: 'a'});
