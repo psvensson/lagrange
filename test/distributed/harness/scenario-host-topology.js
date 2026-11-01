@@ -77,6 +77,7 @@ const SCENARIO_REFUSAL = Object.freeze({
   CERTIFICATION_TOPOLOGY: 'refused_certification_topology',
   INSUFFICIENT_HOST_TOPOLOGY: 'refused_insufficient_host_topology',
   INVALID_REQUIREMENT: 'refused_invalid_topology_requirement',
+  NODE_COUNT_MISMATCH: 'refused_node_count_mismatch',
 });
 
 function nonEmptyString(value) {
@@ -181,11 +182,33 @@ function isSpreadUnit(value) {
   return value === SPREAD_UNIT.HOST || value === SPREAD_UNIT.NODE;
 }
 
+// A claim about an exact formation size (a fresh three-node formation)
+// declares `nodeCount`; a config placing another number of nodes cannot
+// carry it. Absent `nodeCount` leaves the size to the scenario.
+function evaluateNodeCountRequirement(requirement, config) {
+  if (requirement.nodeCount === undefined) {
+    return null;
+  }
+  const size = Number(config?.size);
+  const available = Number.isSafeInteger(size) ? size : null;
+  if (!isPositiveInteger(requirement.nodeCount)) {
+    return {available, reason: SCENARIO_REFUSAL.INVALID_REQUIREMENT,
+      required: requirement.nodeCount ?? null, requiredUnit: 'nodes',
+      spreadUnit: requirement.spreadUnit};
+  }
+  return available === requirement.nodeCount ? null : {
+    available, reason: SCENARIO_REFUSAL.NODE_COUNT_MISMATCH,
+    required: requirement.nodeCount, requiredUnit: 'nodes',
+    spreadUnit: requirement.spreadUnit,
+  };
+}
+
 /**
  * Compare a scenario's declared topology requirement with a config's host
  * topology. Returns null when the scenario may run, else the REFUSED
  * outcome with its named reason, the required and the available hosts.
- * @param {Object|null|undefined} requirement {minDistinctHosts, spreadUnit}
+ * @param {Object|null|undefined} requirement {minDistinctHosts, spreadUnit,
+ *   nodeCount?}
  * @param {Object} config
  * @return {Object|null}
  */
@@ -198,6 +221,10 @@ function evaluateScenarioTopologyRequirement(requirement, config) {
       !(Number.isSafeInteger(required) && required >= ZERO)) {
     return {available: null, reason: SCENARIO_REFUSAL.INVALID_REQUIREMENT,
       required: required ?? null, spreadUnit: requirement.spreadUnit ?? null};
+  }
+  const nodeCountRefusal = evaluateNodeCountRequirement(requirement, config);
+  if (nodeCountRefusal !== null) {
+    return nodeCountRefusal;
   }
   if (required <= ONE) {
     return null;

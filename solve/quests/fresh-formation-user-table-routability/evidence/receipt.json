@@ -1,0 +1,24 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "reproducer-red-on-current-product",
+      "passed": false
+    },
+    {
+      "id": "first-divergence-repaired-at-cause",
+      "passed": false
+    },
+    {
+      "id": "scenario-green-three-consecutive",
+      "passed": false
+    },
+    {
+      "id": "independent-verification",
+      "passed": false
+    }
+  ],
+  "evidence": [],
+  "applicability": "proposed child quest of comparative-benchmark-evidence-repair, not started (no solve start); red until each receipt's evidence exists"
+}

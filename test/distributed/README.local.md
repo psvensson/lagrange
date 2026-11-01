@@ -265,17 +265,22 @@ Use these values with `--scenario`:
 ### Canonical 3-node matrix (`local-three-node.json`)
 
 1. `admin-query-smoke`
-2. `network-partition-split-brain`
-3. `node-failure-rebalance`
-4. `public-path-multinode-baseline` — REFUSED (not run) on this single-host
+2. `fresh-formation-user-table-routability` — red witness: a fresh formation
+   opens its serve lane, spreads the six priority partitions, quiets the
+   ledger and routes a new user table within derived bounds; REFUSED
+   (`refused_node_count_mismatch`) on any config that is not exactly three
+   nodes
+3. `network-partition-split-brain`
+4. `node-failure-rebalance`
+5. `public-path-multinode-baseline` — REFUSED (not run) on this single-host
    config: `refused_insufficient_host_topology` (see below)
-5. `public-seam-durability` (zero-cutover validation scenario; see below)
-6. `rolling-restart`
-7. `three-node-seed-rebalance`
-8. `user-table-leader-placement-spread` (certifies distinct-NODE leader spread;
+6. `public-seam-durability` (zero-cutover validation scenario; see below)
+7. `rolling-restart`
+8. `three-node-seed-rebalance`
+9. `user-table-leader-placement-spread` (certifies distinct-NODE leader spread;
    see below)
-9. `wasm-service-failover`
-10. `write-ack-visibility`
+10. `wasm-service-failover`
+11. `write-ack-visibility`
 
 **Host topology and the spread unit (owner ruling 2026-10-04).** A spread
 claim states its unit. `public-path-multinode-baseline` claims child leaders on
