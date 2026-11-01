@@ -6,7 +6,7 @@
 // outcome classification and reconciliation are the production path.
 // Evidence ceiling: classification/accounting of each response class, not
 // native product behaviour.
-import {mkdtempSync} from 'node:fs';
+import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 
@@ -84,21 +84,25 @@ function observe(output, product) {
 async function runDriverCase({targetId, scenario, subkind, mode = FAKE_PRODUCT_FAULT.NONE}) {
   const product = createFakeOltpProduct(mode);
   const system = SYSTEM_BY_TARGET[targetId];
-  const output = await executeBenchmarkWorkload({
-    targetId,
-    system,
-    scenario,
-    subkind,
-    connection: connectionFor(system),
-    plan: {offeredRatePerSec: FIXTURE_RATE_PER_SEC, repetition: 1, orderIndex: 0},
-    drivers: {
-      createPgClient: product.createPgClient,
-      createMysqlConnection: product.createMysqlConnection,
-    },
-    runtime: {setWatchdogTimer: fixtureTimer},
-    evidenceDir: mkdtempSync(path.join(tmpdir(), 'bench-driver-evidence-')),
-  });
-  return observe(output, product);
+  const evidenceDir = mkdtempSync(path.join(tmpdir(), 'bench-driver-evidence-'));
+  try {
+    return observe(await executeBenchmarkWorkload({
+      targetId,
+      system,
+      scenario,
+      subkind,
+      connection: connectionFor(system),
+      plan: {offeredRatePerSec: FIXTURE_RATE_PER_SEC, repetition: 1, orderIndex: 0},
+      drivers: {
+        createPgClient: product.createPgClient,
+        createMysqlConnection: product.createMysqlConnection,
+      },
+      runtime: {setWatchdogTimer: fixtureTimer},
+      evidenceDir,
+    }), product);
+  } finally {
+    rmSync(evidenceDir, {recursive: true, force: true});
+  }
 }
 
 function workloadStatements(observed) {

@@ -2,6 +2,7 @@
 // real publication path (raw store -> admission -> matrix -> renderers), the
 // append-only invalidation ledger and the offline recomputation check.
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -35,7 +36,12 @@ import {
   FAKE_PRODUCT_FAULT,
   createFakeOltpProduct,
 } from './real-product-workload-driver-fake-product.js';
-import {FAILURE_CLASS, OPERATION_OUTCOME} from '../benchmark-operation-outcome.js';
+import {
+  BENCHMARK_RESPONSE_EVIDENCE_ENCODING,
+  FAILURE_CLASS,
+  OPERATION_OUTCOME,
+  retainBenchmarkResponseEvidence,
+} from '../benchmark-operation-outcome.js';
 import {
   BENCHMARK_RUN_STATUS,
   BENCHMARK_SCENARIO_A_ADAPTER_ID,
@@ -394,18 +400,91 @@ describe('semantic gate by profile class and stopped runs', () => {
   });
 });
 
+const REPO_DATA_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname),
+  '../../../../data');
+
+// Every file under a directory with its size and modification time.
+function directoryState(dir) {
+  return arrayMap(fs.readdirSync(dir, {recursive: true}).sort(), (rel) => {
+    const stat = fs.statSync(path.join(dir, rel));
+    return `${rel}:${stat.size}:${stat.mtimeMs}`;
+  });
+}
+
+function retainedEvidence(output) {
+  const out = [];
+  for (const request of output.observations?.requests || []) {
+    if (request.responseEvidence?.encoding === BENCHMARK_RESPONSE_EVIDENCE_ENCODING.RETAINED_FILE) {
+      out.push(request.responseEvidence);
+    }
+  }
+  return out;
+}
+
+// The evidence directory holds exactly the files the record references, each
+// with the sha256 the record states.
+function assertEvidenceFilesReferenced(output, evidenceDir) {
+  const references = retainedEvidence(output);
+  const written = fs.existsSync(evidenceDir) ? fs.readdirSync(evidenceDir).sort() : [];
+  assert.deepEqual(written, arrayMap(references, (r) => path.basename(r.path)).sort(),
+    'every written evidence file is referenced by a request record');
+  for (const reference of references) {
+    assert.equal(path.dirname(reference.path), evidenceDir);
+    const bytes = fs.readFileSync(reference.path);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), reference.sha256,
+      `${reference.path} matches its recorded sha256`);
+  }
+}
+
 describe('driver output through admission', () => {
+  it('response evidence over the inline bound is a retained file the record references',
+    async () => {
+      const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-evidence-'));
+      const dataBefore = directoryState(REPO_DATA_DIR);
+      try {
+        const runs = pair();
+        const request = runs[0].observations.requests[0];
+        const retained = retainBenchmarkResponseEvidence(request.attempts,
+          {evidenceDir, inlineMaxBytes: 1});
+        request.attempts = retained.attempts;
+        request.responseEvidence = retained.responseEvidence;
+        sealFixtureRun(runs[0]);
+        assert.equal(request.responseEvidence.encoding,
+          BENCHMARK_RESPONSE_EVIDENCE_ENCODING.RETAINED_FILE);
+        assertEvidenceFilesReferenced(runs[0], evidenceDir);
+        const {matrix} = await publish([buildFixtureHeader({campaignId: 'fixture-campaign'}),
+          ...runs]);
+        assert.equal(fixtureTargetCell(matrix, LAGRANGE).status,
+          CLAIM_CELL_STATUS.VALID_OBSERVED);
+        assert.deepEqual(directoryState(REPO_DATA_DIR), dataBefore,
+          'nothing is written under the repository data/ directory');
+      } finally {
+        fs.rmSync(evidenceDir, {recursive: true, force: true});
+      }
+    });
+
   it('the Lagrange smoke record that ends setup-failed (55P03) is a product failure',
     async () => {
       const product = createFakeOltpProduct(FAKE_PRODUCT_FAULT.LOAD_LOCK_NOT_AVAILABLE);
       const endpoint = {host: 'lab-host-1', port: 5432};
-      const output = await executeBenchmarkWorkload({
-        targetId: LAGRANGE, system: LAGRANGE, scenario: 'scenarioA', subkind: 'smoke',
-        connection: {endpoint, credentials: {user: 'u', password: 'p', database: 'd'}},
-        plan: {offeredRatePerSec: 50, repetition: 1, orderIndex: 0},
-        drivers: {createPgClient: product.createPgClient,
-          createMysqlConnection: product.createMysqlConnection},
-      });
+      const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-evidence-'));
+      const dataBefore = directoryState(REPO_DATA_DIR);
+      let output;
+      try {
+        output = await executeBenchmarkWorkload({
+          targetId: LAGRANGE, system: LAGRANGE, scenario: 'scenarioA', subkind: 'smoke',
+          connection: {endpoint, credentials: {user: 'u', password: 'p', database: 'd'}},
+          plan: {offeredRatePerSec: 50, repetition: 1, orderIndex: 0},
+          drivers: {createPgClient: product.createPgClient,
+            createMysqlConnection: product.createMysqlConnection},
+          evidenceDir,
+        });
+        assertEvidenceFilesReferenced(output, evidenceDir);
+        assert.deepEqual(directoryState(REPO_DATA_DIR), dataBefore,
+          'the run writes nothing under the repository data/ directory');
+      } finally {
+        fs.rmSync(evidenceDir, {recursive: true, force: true});
+      }
       assert.equal(output.observations.runStatus, BENCHMARK_RUN_STATUS.SETUP_FAILED);
       const base = buildFixtureRun({subkind: 'smoke', offeredRatePerSec: 50,
         profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
