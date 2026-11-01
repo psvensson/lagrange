@@ -93,3 +93,34 @@ test('TiDB: PD, three TiKV stores on three hosts and TiDB, versions from the pro
       assert.match(product.reportedVersion, /8\.5\.8/u, product.role);
     }
   });
+
+// The TiDB readiness client (mysql:8.4.11) is a lifecycle tool, never part of
+// the measured topology: it runs on the TiDB SQL host, never the load
+// generator (which holds no product or client image), is recorded as the
+// role `tidb-readiness-client` with its container identity, and is exited
+// before measurement; a later observation starts it, reads and stops it again.
+test('TiDB: the readiness client runs on the TiDB host and is exited before measurement',
+  async () => {
+    const ledger = createContainerLedger();
+    const {sshRun, calls} = createScriptedSsh(tidbHealthyRules(ledger));
+    const deployment = await deployers.deployComparativeTarget('tidb-tikv', input(sshRun));
+    const tidb = arrayFind(deployment.roles, (role) => role.role === 'tidb');
+    const client = arrayFind(deployment.roles, (role) => role.role === 'tidb-readiness-client');
+    assert.equal(client.host, tidb.host);
+    assert.match(client.containerId, /^[0-9a-f]{64}$/u);
+    assert.equal(client.imageRef, 'mysql:8.4.11');
+    assert.match(client.imageId, /^sha256:[0-9a-f]{64}$/u);
+    assert.equal(client.measured, false);
+    assert.equal(client.stateBeforeMeasurement, 'exited');
+    assert.equal(ledger.containers.get(client.containerId).running, false);
+    assert.equal(arraySome(deployment.roles, (role) => role.host === '10.0.0.9'), false);
+    assert.equal(arraySome(calls, (call) => call.host === '10.0.0.9' &&
+      /docker (run|exec|start)/u.test(call.command)), false);
+    const before = calls.length;
+    await deployment.operations.observeRoles();
+    const later = arrayMap(calls.slice(before), (call) => call.command);
+    assert.ok(arraySome(later, (command) => command === `docker start ${client.containerId}`));
+    assert.ok(arraySome(later, (command) =>
+      command === `docker stop -t 0 ${client.containerId}`));
+    assert.equal(ledger.containers.get(client.containerId).running, false);
+  });

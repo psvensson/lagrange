@@ -24,7 +24,7 @@ function labNode(name, ip, {lock = 'free', docker = true, roles = ['harness'],
   return {name, ip, ssh: `bench@${ip}`, os: 'linux', roles,
     testCapability: {bootId, dockerReachable: docker, repoPath: '/home/bench/lagrange',
       nodePath: '/usr/bin/node', nodeVersion: 'v22.23.2', thermal,
-      dockerRootFreeBytes: 100 * 2 ** 30,
+      dockerRootFreeBytes: 100 * 2 ** 30, repoFreeBytes: 100 * 2 ** 30,
       machineLock: {state: lock, holder: null}}};
 }
 

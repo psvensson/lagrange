@@ -45,6 +45,19 @@ const THERMAL_MEASURED = 'measured';
 // layers and logs of a smoke run (data in the container layer). 6.5 GiB.
 const DATA_HOST_MIN_DOCKER_FREE_BYTES = Math.ceil(6.5 * 2 ** 30);
 
+// Free bytes the load generator's checkout filesystem needs: the detached
+// worktree at the harness commit it runs the workload from
+// (prepareLoadGeneratorCheckout) plus that run's evidence. The load generator
+// holds no image. Measured 2026-11-01 on the controller at 435c426b9 with
+// `du -s -B1 --exclude=./node_modules --exclude=./data --exclude=./test-output
+// --exclude=./.git .`: 177,004,544 B allocated (`du -sb`: 156,666,071 B
+// apparent; tracked tree 152,127,883 B in 9,725 files). The run's evidence
+// under the worktree's test-output is reserved 64 MiB, unmeasured.
+const LOAD_GENERATOR_WORKTREE_BYTES = 177004544;
+const LOAD_GENERATOR_RUN_EVIDENCE_BYTES = 64 * 2 ** 20;
+const LOAD_GENERATOR_MIN_REPO_FREE_BYTES = LOAD_GENERATOR_WORKTREE_BYTES +
+  LOAD_GENERATOR_RUN_EVIDENCE_BYTES;
+
 function dockerDiskLow(facts) {
   const free = Number(facts.capability.dockerRootFreeBytes);
   return !Number.isFinite(free) || free < DATA_HOST_MIN_DOCKER_FREE_BYTES;
@@ -103,6 +116,11 @@ function loadGeneratorGap(facts, nodeMinimum) {
   if (!capability.repoPath || !capability.nodePath) return 'no checkout to run the workload from';
   if (nodeMinimum && !versionAtLeast(capability.nodeVersion, nodeMinimum)) {
     return `node ${capability.nodeVersion || 'unknown'} is below the engines floor ${nodeMinimum}`;
+  }
+  const free = Number(capability.repoFreeBytes);
+  if (!Number.isFinite(free) || free < LOAD_GENERATOR_MIN_REPO_FREE_BYTES) {
+    return `host-ineligible: disk_low (${capability.repoFreeBytes ?? 'unknown'} bytes free on ` +
+      `the checkout filesystem, the harness worktree needs ${LOAD_GENERATOR_MIN_REPO_FREE_BYTES})`;
   }
   return null;
 }
@@ -283,6 +301,7 @@ function dataHostsOf(hosts) {
 
 export {
   HOST_ROLE as LAB_BENCHMARK_HOST_ROLE,
+  LOAD_GENERATOR_MIN_REPO_FREE_BYTES,
   THERMAL_GATE,
   benchPurpose,
   checkLabThermalHeadroom,

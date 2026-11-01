@@ -96,7 +96,15 @@ function createContainerLedger() {
       RootFS: {Type: 'layers', Layers: [`sha256:${imageId.slice(-64)}`]},
       Config: {Labels: {'org.opencontainers.image.version': '0.4.0'}}});
   };
-  return {containers, run, inspect, repoDigests};
+  // `docker start ID` / `docker stop -t 0 ID` flip the recorded state.
+  const setRunning = (running) => (command) => {
+    const entry = containers.get(stringSplit(stringTrim(command), /\s+/u).pop());
+    if (!entry || entry.removed) return new Error('Error: No such container');
+    entry.running = running;
+    return `${entry.id}\n`;
+  };
+  return {containers, run, inspect, repoDigests, start: setRunning(true),
+    stop: setRunning(false)};
 }
 
 function http(status, body) {
@@ -125,6 +133,8 @@ function dockerRules(ledger) {
     [/docker image inspect/u, (command) => ledger.repoDigests(command)],
     [/docker inspect --type container/u, (command) => ledger.inspect(command)],
     [/^docker run -d /u, (command, host) => ledger.run(command, host)],
+    [/^docker start [0-9a-f]+$/u, (command) => ledger.start(command)],
+    [/^docker stop -t 0 [0-9a-f]+$/u, (command) => ledger.stop(command)],
   ];
 }
 

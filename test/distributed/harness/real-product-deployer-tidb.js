@@ -1,7 +1,11 @@
 /**
  * TiDB + TiKV arm of the comparative benchmark on remote hosts: one PD, one
  * TiKV store per data host (three failure domains), one TiDB SQL server and
- * the pinned mysql client container the TiDB lifecycle owner reads with.
+ * the pinned mysql readiness client the TiDB lifecycle owner reads with. The
+ * readiness client is a lifecycle tool, never part of the measured topology:
+ * it runs on the TiDB SQL host (never the load generator), is recorded as the
+ * role `tidb-readiness-client`, and is stopped before measurement; a later
+ * observation (stores, placement) starts it, reads, and stops it again.
  *
  * Readiness and placement are the existing owners', over ssh through the
  * remote docker provider: waitForTiDbReferenceSqlReady with the N-Up-stores
@@ -28,11 +32,13 @@ import {
   stringToLowerCase,
 } from './real-product-captured-intrinsics.js';
 import {
+  DEPLOYMENT_FAILURE,
   PD_IMAGE_DEFAULT,
   READINESS_STATE,
   TIDB_IMAGE_DEFAULT,
   TIDB_SQL_CLIENT_IMAGE,
   TIKV_IMAGE_DEFAULT,
+  deploymentFailure,
   requireCampaignId,
   resolveReadinessBudget,
 } from './real-product-deployment-contract.js';
@@ -57,7 +63,9 @@ import {
   bindEndpointToContainer,
 } from './real-product-sql-clients.js';
 
-const ROLE = Object.freeze({PD: 'pd', TIKV: 'tikv', TIDB: 'tidb', SQL_CLIENT: 'sql-client'});
+const ROLE = Object.freeze({PD: 'pd', TIKV: 'tikv', TIDB: 'tidb',
+  READINESS_CLIENT: 'tidb-readiness-client'});
+const EXITED = 'exited';
 const DATA_DIR = '/data';
 const STORE_COUNT = 3;
 const TOPOLOGY = Object.freeze({description: `1 PD + ${STORE_COUNT} TiKV stores + 1 TiDB server`,
@@ -96,6 +104,33 @@ function pdReady(ctx, pdHost) {
       return {ready: members.length > 0 && arrayEvery(members, (member) => member.health === true),
         diagnostic: answer.json ?? answer.body ?? answer.error};
     }});
+}
+
+function readinessClientCommand(ctx, verb) {
+  return ctx.sshRun(ctx.sqlClient.host, ctx.opts, `${verb} ${ctx.sqlClient.containerId}`);
+}
+
+// Stop the readiness client and observe that it exited: the record says so
+// from the container's own state, never by assumption.
+async function stopReadinessClient(ctx) {
+  await readinessClientCommand(ctx, 'docker stop -t 0');
+  const inspected = await ctx.provider.inspectContainer(ctx.sqlClient.containerId);
+  if (inspected?.State?.Status !== EXITED) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
+      `TiDB readiness client ${ctx.sqlClient.containerId} did not exit ` +
+      `(${inspected?.State?.Status})`, {containerId: ctx.sqlClient.containerId});
+  }
+  return {imageId: inspected.Image ?? null, observedAt: new Date().toISOString()};
+}
+
+// A read after deployment: the readiness client runs only for its duration.
+async function withReadinessClient(ctx, read) {
+  await readinessClientCommand(ctx, 'docker start');
+  try {
+    return await read();
+  } finally {
+    await stopReadinessClient(ctx);
+  }
 }
 
 async function sql(ctx, endpoint, statement) {
@@ -152,7 +187,7 @@ async function deployTiDbCluster({hosts, clientIp, sshRun, opts, campaignId, sle
 }
 
 async function formTiDbCluster({ctx, hosts, images, formed}) {
-  const {sshRun, opts, clientIp, campaignId, budget} = ctx;
+  const {sshRun, opts, campaignId, budget} = ctx;
   const roles = formed.roles;
   const pdHost = hosts[0];
   const pd = await start(ctx, ROLE.PD, pdHost, 1, images.pd,
@@ -178,7 +213,7 @@ async function formTiDbCluster({ctx, hosts, images, formed}) {
   roles.push(tidb);
   formed.endpoint = {protocol: 'mysql', host: tidb.host, port: P.tidbPort,
     containerId: tidb.containerId, binding: null};
-  ctx.sqlClient = await start(ctx, ROLE.SQL_CLIENT, clientIp, 1, TIDB_SQL_CLIENT_IMAGE,
+  ctx.sqlClient = await start(ctx, ROLE.READINESS_CLIENT, tidb.host, 1, TIDB_SQL_CLIENT_IMAGE,
     ['--entrypoint', 'sleep'], [String(SQL_CLIENT_LIFETIME_SECONDS)]);
   const endpoint = {host: tidb.host, port: P.tidbPort};
   const sqlReadiness = await typedReadiness('tidb-sql-3-up-stores', () =>
@@ -206,10 +241,14 @@ async function formTiDbCluster({ctx, hosts, images, formed}) {
         (host) => `${host}:${P.tikvPort}`),
       databaseName, tableName: PLACEMENT_TABLE, timeoutMs: budget.timeoutMs,
       pollIntervalMs: budget.pollIntervalMs}));
+  const stopped = await stopReadinessClient(ctx);
+  const readinessClient = {...ctx.sqlClient, imageRef: TIDB_SQL_CLIENT_IMAGE,
+    imageId: stopped.imageId, measured: false, stateBeforeMeasurement: EXITED,
+    stoppedAt: stopped.observedAt};
   return {
     targetId: 'tidb-tikv',
     topology: TOPOLOGY,
-    roles: [...roles, ctx.sqlClient], storage, runClass: runClassOf(storage),
+    roles: [...roles, readinessClient], storage, runClass: runClassOf(storage),
     readiness: {state: READINESS_STATE.READY, observedAt: new Date().toISOString(),
       evidence: {pd: pdReadiness, sql: sqlReadiness}},
     identity: {products},
@@ -217,9 +256,11 @@ async function formTiDbCluster({ctx, hosts, images, formed}) {
     endpoint: {protocol: 'mysql', ...endpoint, containerId: binding.containerId, binding},
     access: {connection: {user: 'root', database: databaseName}},
     operations: {
-      observePlacement: async () => ({observedAt: new Date().toISOString(),
-        source: 'tidb-reference-physical-placement-proof', ...(await placement())}),
-      observeRoles: async () => ({stores: await observeStores(ctx, endpoint)}),
+      observePlacement: () => withReadinessClient(ctx, async () => ({
+        observedAt: new Date().toISOString(),
+        source: 'tidb-reference-physical-placement-proof', ...(await placement())})),
+      observeRoles: () => withReadinessClient(ctx, async () => ({
+        stores: await observeStores(ctx, endpoint)})),
     },
   };
 }

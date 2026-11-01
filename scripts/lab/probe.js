@@ -491,6 +491,9 @@ const CAPABILITY_SCRIPT = [
     'else say docker_reachable no; fi',
   'if [ -e "$repo/.git" ]; then',
   '  say repo_present yes',
+  // Free bytes on the checkout's filesystem: room for a worktree a run is
+  // placed in (the benchmark load generator's harness worktree).
+  '  say repo_free_bytes "$(df -PB1 "$repo" 2>/dev/null | awk \'NR==2{print $4}\')"',
   '  say repo_head "$(git -C "$repo" rev-parse HEAD 2>/dev/null)"',
   // The dependency graph its lockfile describes, not the lockfile's bytes: a
   // version-only release bump changes the bytes and no package.
@@ -574,6 +577,7 @@ export function parseCapability(text, probedAt = Date.now()) {
     cpuSampleMs: capabilityNumber(values.cpu_sample_ms),
     thermal: capabilityText(values.thermal),
     dockerRootFreeBytes: capabilityNumber(values.docker_root_free_bytes),
+    repoFreeBytes: repoPresent ? capabilityNumber(values.repo_free_bytes) : null,
     machineLock: parseMachineLock(values),
   };
 }

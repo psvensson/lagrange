@@ -57,9 +57,9 @@ async function collectHostFacts({hosts, sshRun, opts}) {
 }
 
 /**
- * The images each host role must hold. Data hosts run the product containers;
- * the load generator runs only the containers it starts itself (the TiDB
- * arm's SQL client, started at the client's address), never a product image.
+ * The images each host role must hold. Data hosts run the product containers
+ * and the TiDB readiness client (a lifecycle tool started on the TiDB SQL
+ * host); the load generator runs no container and holds no image.
  * @param {{targets: Array<string>, lagrangeImage: string}} input
  * @return {{data: Array<string>, client: Array<string>}}
  */
@@ -71,7 +71,7 @@ function campaignImagesByRole({targets, lagrangeImage}) {
     for (const image of [PD_IMAGE_DEFAULT, TIKV_IMAGE_DEFAULT, TIDB_IMAGE_DEFAULT]) {
       data.add(image);
     }
-    client.push(TIDB_SQL_CLIENT_IMAGE);
+    data.add(TIDB_SQL_CLIENT_IMAGE);
   }
   return {data: [...data], client};
 }

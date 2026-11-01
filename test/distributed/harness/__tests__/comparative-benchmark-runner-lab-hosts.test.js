@@ -12,6 +12,7 @@ import {
 } from '../comparative-benchmark-host-preparation.js';
 import {contentIdentityOf} from '../real-product-identity.js';
 import {
+  LOAD_GENERATOR_MIN_REPO_FREE_BYTES,
   checkLabThermalHeadroom,
   holdLabBenchmarkHosts,
   selectLabBenchmarkHosts,
@@ -80,7 +81,7 @@ function inventory(entries) {
       os: 'linux', roles: ['harness'], testCapability: {bootId: `boot-${name}`,
         dockerReachable: true, repoPath: '/srv/lagrange', nodePath: '/usr/bin/node',
         nodeVersion: 'v22.23.2', thermal: 'measured', dockerRootFreeBytes: 100 * 2 ** 30,
-        machineLock: {state: lock, holder: null}}, ...extra}]))};
+        repoFreeBytes: 100 * 2 ** 30, machineLock: {state: lock, holder: null}}, ...extra}]))};
 }
 
 test('selection prefers free hosts, then held ones the hold will wait for; unreachable, ' +
@@ -186,18 +187,45 @@ test('docker disk is a fleet fact: a host below the data-host requirement is not
 // Live campaign bench-live-20261101-b: the runner staged EVERY product image on
 // every host, the load generator included, so a load generator with little
 // docker disk (adam-laptop, 408 MB free) failed staging on images it never
-// runs. Data hosts hold the product images; the load generator holds only
-// the containers it starts itself (the TiDB arm's SQL client).
-test('product images go to the data hosts; the load generator gets only its own client image',
+// runs. Data hosts hold the product images and the TiDB readiness client
+// (it runs on the TiDB SQL host); the load generator holds no image.
+test('product and readiness-client images go to the data hosts; the load generator gets none',
   () => {
     const all = campaignImagesByRole({targets: ['lagrange', 'tidb-tikv', 'pg-single-primary'],
       lagrangeImage: 'psvensson/lagrange@sha256:abc'});
-    assert.deepEqual(all.client, ['mysql:8.4.11']);
-    assert.deepEqual([...all.data].sort(), ['pingcap/pd:v8.5.8', 'pingcap/tidb:v8.5.8',
-      'pingcap/tikv:v8.5.8', 'postgres:17-alpine', 'psvensson/lagrange@sha256:abc']);
+    assert.deepEqual(all.client, []);
+    assert.deepEqual([...all.data].sort(), ['mysql:8.4.11', 'pingcap/pd:v8.5.8',
+      'pingcap/tidb:v8.5.8', 'pingcap/tikv:v8.5.8', 'postgres:17-alpine',
+      'psvensson/lagrange@sha256:abc']);
     const noTidb = campaignImagesByRole({targets: ['lagrange', 'pg-single-primary'],
       lagrangeImage: 'psvensson/lagrange@sha256:abc'});
     assert.deepEqual(noTidb.client, []);
     assert.deepEqual([...noTidb.data].sort(), ['postgres:17-alpine',
       'psvensson/lagrange@sha256:abc']);
+  });
+
+// The load generator holds no image; it needs only the checkout worktree at
+// the harness commit (prepareLoadGeneratorCheckout), Node at the engines
+// floor, and room on its checkout's filesystem for that worktree. A host
+// short of it is refused as `host-ineligible: disk_low`; with no other
+// candidate the campaign is refused for its topology, honestly.
+test('the load generator needs room for the harness worktree on its checkout filesystem',
+  () => {
+    const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
+      ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
+    state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 390 * 1024 * 1024;
+    state.nodes['carinas-windows'].testCapability.thermal = 'unmeasurable';
+    state.nodes['adam-laptop'].testCapability.repoFreeBytes =
+      LOAD_GENERATOR_MIN_REPO_FREE_BYTES;
+    const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0'});
+    assert.equal(hosts[3].name, 'adam-laptop');
+    assert.equal(hosts[3].role, 'client');
+    state.nodes['adam-laptop'].testCapability.repoFreeBytes =
+      LOAD_GENERATOR_MIN_REPO_FREE_BYTES - 1;
+    assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
+      nodeMinimum: '22.12.0'}), (error) => error.code === 'refused_insufficient_host_topology' &&
+      /adam-laptop \(not a load generator: host-ineligible: disk_low/u.test(error.message));
+    delete state.nodes['adam-laptop'].testCapability.repoFreeBytes;
+    assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
+      nodeMinimum: '22.12.0'}), (error) => /host-ineligible: disk_low/u.test(error.message));
   });
