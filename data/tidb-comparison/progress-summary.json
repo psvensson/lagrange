@@ -4,26 +4,26 @@
   "entries": [
     {
       "schemaVersion": 1,
-      "combinationKey": "fw=0.4.0@07206ba1c8bb396f4eb097a753915bb34580d824|scenario=tidb-oltp-baseline|profile=3-node-rf3-multi-host-oltp:0d2a5e7aae167f578eae4e7827562e5b19db50d25d4daef39fffed1aba5113a8|workload=989671eff17945af67a4f3609577d049447855c3a3e8545e08867c8740d2ef28|measure=6d139de4b10d3163573c931f6206c0a0d29f9fb24ea91ce23599bea9e91d8d7a|view=system-default|lagrange=0.4.0@07206ba1c8bb396f4eb097a753915bb34580d824|tidb=v8.5.8@pingcap/tidb:v8.5.8",
-      "combinationSha256": "46ecf4c9d5764b77e07d85db8284ed3dbd174a42b011f518400ccf0a3fabe0a6",
+      "combinationKey": "fw=0.4.0@86e795c441ecf981d66dd3ba1135b17979e1e236|scenario=tidb-distributed-risk-decision|profile=risk-three-island-rf3:-|workload=-|measure=-|view=architecture-native|lagrange=0.4.0@86e795c441ecf981d66dd3ba1135b17979e1e236|tidb=v8.5.8@pingcap/tidb:v8.5.8",
+      "combinationSha256": "761bb3030b4285e76d1ab68759ab2d36fc80e3e78058f4c73dfa5538242013cd",
       "framework": {
         "frameworkVersion": "0.4.0",
-        "frameworkCommitSha": "07206ba1c8bb396f4eb097a753915bb34580d824",
-        "scenarioId": "tidb-oltp-baseline",
-        "profileId": "3-node-rf3-multi-host-oltp",
-        "profileSha256": "0d2a5e7aae167f578eae4e7827562e5b19db50d25d4daef39fffed1aba5113a8",
-        "datasetSha256": "0082201f0e3625cc7469ee04f4a3df7c92c965d73652f4e2dc6fa83126848815",
-        "workloadPlanSha256": "989671eff17945af67a4f3609577d049447855c3a3e8545e08867c8740d2ef28",
-        "measurementPlanSha256": "6d139de4b10d3163573c931f6206c0a0d29f9fb24ea91ce23599bea9e91d8d7a",
-        "retryPolicyId": "exponential-backoff-v1",
+        "frameworkCommitSha": "86e795c441ecf981d66dd3ba1135b17979e1e236",
+        "scenarioId": "tidb-distributed-risk-decision",
+        "profileId": "risk-three-island-rf3",
+        "profileSha256": null,
+        "datasetSha256": null,
+        "workloadPlanSha256": null,
+        "measurementPlanSha256": null,
+        "retryPolicyId": "none",
         "openLoopProfileId": "closed-loop-v1",
-        "comparisonView": "system-default"
+        "comparisonView": "architecture-native"
       },
       "systems": {
         "lagrange": {
           "present": true,
           "version": "0.4.0",
-          "commitSha": "07206ba1c8bb396f4eb097a753915bb34580d824"
+          "commitSha": "86e795c441ecf981d66dd3ba1135b17979e1e236"
         },
         "tidbTikv": {
           "present": true,
@@ -31,66 +31,76 @@
           "commitSha": "pingcap/tidb:v8.5.8"
         }
       },
-      "recordedAt": "2026-11-01T11:56:02.023Z",
+      "recordedAt": "2026-11-01T14:06:39.413Z",
       "evidenceSource": {
         "kind": "observed-paired-run",
-        "runId": "lab-multi-host-v040-3node-scenario-a",
+        "runId": "receipt-lagrange-5node-rf3-one-remote-stage",
         "issueNumber": null,
-        "url": "data/tidb-comparison/admitted-lab-measurements.json",
-        "artifactSha256": "94a0d330aa62ab519b7000370221a9a9ac29cb1e7c15ebe43120d7d68bc4c8a2"
+        "url": "data/tidb-comparison/raw-observations.ndjson",
+        "artifactSha256": "61cc7c8c6e706ca15f1669be3c53f5519eb69251df092e2d4e48edf817bfe227"
       },
       "metrics": {
         "lagrange": {
-          "opsPerSec": 382.9,
+          "opsPerSec": 2345.2,
           "latencyMs": {
-            "p50": 51.94,
-            "p95": 90.84,
-            "p99": 120.29
+            "p50": 9.64,
+            "p95": 22.02,
+            "p99": 29.45
           },
           "transactions": {
-            "attempted": 150,
-            "succeeded": 150,
+            "attempted": 120,
+            "succeeded": 120,
             "failed": 0,
             "retries": 0
           },
           "semanticProofs": {
-            "passedCount": 33,
-            "requiredCount": 33,
+            "passedCount": 8,
+            "requiredCount": 8,
             "allPassed": true
+          },
+          "scenarioBScorecard": {
+            "duringMoveP99Ms": 21.5,
+            "routingConvergenceMs": 21.88,
+            "movementContinuityPassed": true
           }
         },
         "tidbTikv": {
-          "opsPerSec": 104.2,
+          "opsPerSec": 702.9,
           "latencyMs": {
-            "p50": 75.37,
-            "p95": 299,
-            "p99": 327.16
+            "p50": 23.85,
+            "p95": 33.45,
+            "p99": 37.66
           },
           "transactions": {
-            "attempted": 150,
-            "succeeded": 150,
+            "attempted": 120,
+            "succeeded": 120,
             "failed": 0,
             "retries": 0
           },
           "semanticProofs": {
-            "passedCount": 33,
-            "requiredCount": 33,
+            "passedCount": 8,
+            "requiredCount": 8,
             "allPassed": true
+          },
+          "scenarioBScorecard": {
+            "duringMoveP99Ms": 42.95,
+            "routingConvergenceMs": 48.04,
+            "movementContinuityPassed": true
           }
         }
       },
       "comparison": {
         "paired": true,
-        "throughputRatioLagrangeToTiDb": 3.674664,
-        "throughputLagFactorTiDbOverLagrange": 0.272134,
+        "throughputRatioLagrangeToTiDb": 3.336463,
+        "throughputLagFactorTiDbOverLagrange": 0.299719,
         "latencyRatioLagrangeOverTiDb": {
-          "p50": 0.689134,
-          "p95": 0.303813,
-          "p99": 0.367679
+          "p50": 0.404193,
+          "p95": 0.658296,
+          "p99": 0.781997
         },
         "semanticProofDeltaLagrangeMinusTiDb": 0
       },
-      "recordSha256": "59a7afbf1b8ee5519a63615b05d25054f59abf26e0363ea13aefa5149a948e57",
+      "recordSha256": "b31fb159033fa440ed8d20d81d6a4aedce8a96dee95a507f3167311f0e48d4cf",
       "deltas": {
         "lagrangeOpsPerSecDeltaFromPrev": null,
         "lagrangeOpsPerSecDeltaFromFirst": 0,
@@ -112,17 +122,17 @@
     },
     {
       "schemaVersion": 1,
-      "combinationKey": "fw=0.4.0@07206ba1c8bb396f4eb097a753915bb34580d824|scenario=tidb-oltp-baseline|profile=5-node-rf3-multi-host-oltp:afd5acac288d09661f63eec175b1c86ea507c26e5da96d1fc7853c045660246d|workload=5cc3178a884e7019a71ab0102b20c1ca82512f1dc3dc757d22ea47f5691bed39|measure=15726b764cf1ea72aace7687797336dc4cbafd3c5730f94f1530f3fd9465ac9d|view=system-default|lagrange=0.4.0@07206ba1c8bb396f4eb097a753915bb34580d824|tidb=v8.5.8@pingcap/tidb:v8.5.8",
-      "combinationSha256": "2ff656ca742304c96f2af1d52fa58bc9fb4ad90e72c0377c279386f4d1015212",
+      "combinationKey": "fw=0.4.0@86e795c441ecf981d66dd3ba1135b17979e1e236|scenario=tidb-oltp-baseline|profile=5-node-rf3-multi-host-oltp:-|workload=-|measure=-|view=system-default|lagrange=0.4.0@86e795c441ecf981d66dd3ba1135b17979e1e236|tidb=v8.5.8@pingcap/tidb:v8.5.8",
+      "combinationSha256": "a8276e0be975c6b38cb2bab8cf038cd9e30071da69731bf10d2e1f44763f1171",
       "framework": {
         "frameworkVersion": "0.4.0",
-        "frameworkCommitSha": "07206ba1c8bb396f4eb097a753915bb34580d824",
+        "frameworkCommitSha": "86e795c441ecf981d66dd3ba1135b17979e1e236",
         "scenarioId": "tidb-oltp-baseline",
         "profileId": "5-node-rf3-multi-host-oltp",
-        "profileSha256": "afd5acac288d09661f63eec175b1c86ea507c26e5da96d1fc7853c045660246d",
-        "datasetSha256": "7414e66b5cecf3bae36daff7fae2ef6d96e804490e7165844de3940c329c81e8",
-        "workloadPlanSha256": "5cc3178a884e7019a71ab0102b20c1ca82512f1dc3dc757d22ea47f5691bed39",
-        "measurementPlanSha256": "15726b764cf1ea72aace7687797336dc4cbafd3c5730f94f1530f3fd9465ac9d",
+        "profileSha256": null,
+        "datasetSha256": null,
+        "workloadPlanSha256": null,
+        "measurementPlanSha256": null,
         "retryPolicyId": "exponential-backoff-v1",
         "openLoopProfileId": "closed-loop-v1",
         "comparisonView": "system-default"
@@ -131,7 +141,7 @@
         "lagrange": {
           "present": true,
           "version": "0.4.0",
-          "commitSha": "07206ba1c8bb396f4eb097a753915bb34580d824"
+          "commitSha": "86e795c441ecf981d66dd3ba1135b17979e1e236"
         },
         "tidbTikv": {
           "present": true,
@@ -139,25 +149,24 @@
           "commitSha": "pingcap/tidb:v8.5.8"
         }
       },
-      "recordedAt": "2026-11-01T11:57:02.023Z",
+      "recordedAt": "2026-11-01T14:06:39.413Z",
       "evidenceSource": {
         "kind": "observed-paired-run",
-        "runId": "lab-multi-host-v040-5node-scenario-a",
+        "runId": "receipt-lagrange-5node-rf3-scenario-a",
         "issueNumber": null,
-        "url": "data/tidb-comparison/admitted-lab-measurements.json",
-        "artifactSha256": "4147ed4168288cd27e848bea4a59cc1186ab0d072acefea69543e28ac427735d"
+        "url": "data/tidb-comparison/raw-observations.ndjson",
+        "artifactSha256": "6ed26cbc18574c523c95bc26767a9b18bcc8e65f1f0352ee0a3198c4f46bcd32"
       },
       "metrics": {
         "lagrange": {
-          "opsPerSec": 146.8,
+          "opsPerSec": 2199.4,
           "latencyMs": {
-            "p50": 43.4,
-            "p95": 403.93,
-            "p99": 559.47
+            "p50": 13.11,
+            "p95": 30.91,
+            "p99": 49.34
           },
           "transactions": {
-            "attempted": 180,
-            "succeeded": 180,
+            "attempted": 200,
             "failed": 0,
             "retries": 0
           },
@@ -168,15 +177,14 @@
           }
         },
         "tidbTikv": {
-          "opsPerSec": 104.2,
+          "opsPerSec": 1118.7,
           "latencyMs": {
-            "p50": 75.37,
-            "p95": 299,
-            "p99": 327.16
+            "p50": 19.4,
+            "p95": 48.81,
+            "p99": 52.76
           },
           "transactions": {
-            "attempted": 150,
-            "succeeded": 150,
+            "attempted": 160,
             "failed": 0,
             "retries": 0
           },
@@ -189,57 +197,175 @@
       },
       "comparison": {
         "paired": true,
-        "throughputRatioLagrangeToTiDb": 1.408829,
-        "throughputLagFactorTiDbOverLagrange": 0.709809,
+        "throughputRatioLagrangeToTiDb": 1.966032,
+        "throughputLagFactorTiDbOverLagrange": 0.508639,
         "latencyRatioLagrangeOverTiDb": {
-          "p50": 0.575826,
-          "p95": 1.350936,
-          "p99": 1.710081
+          "p50": 0.675773,
+          "p95": 0.633272,
+          "p99": 0.935178
         },
         "semanticProofDeltaLagrangeMinusTiDb": 0
       },
-      "recordSha256": "7aaf3fda8ecae6bd6e5f90810f7169f4ba82bb9bce78e77e2daface5404739bb",
+      "recordSha256": "e2b828ec15deb8786a82ea9f0a8051db18e4f2c0f6e30670c0b41897b045157f",
       "deltas": {
-        "lagrangeOpsPerSecDeltaFromPrev": -236.1,
-        "lagrangeOpsPerSecDeltaFromFirst": -236.1,
-        "tidbOpsPerSecDeltaFromPrev": 0,
+        "lagrangeOpsPerSecDeltaFromPrev": null,
+        "lagrangeOpsPerSecDeltaFromFirst": 0,
+        "tidbOpsPerSecDeltaFromPrev": null,
         "tidbOpsPerSecDeltaFromFirst": 0,
-        "throughputRatioDeltaFromPrev": -2.265835,
-        "throughputLagFactorDeltaFromPrev": 0.437675,
+        "throughputRatioDeltaFromPrev": null,
+        "throughputLagFactorDeltaFromPrev": null,
+        "tidbSemanticProofsDeltaFromPrev": null,
+        "lagrangeSemanticProofsDeltaFromPrev": null
+      },
+      "lagrangeOpsPerSecDeltaFromPrev": null,
+      "lagrangeOpsPerSecDeltaFromFirst": 0,
+      "tidbOpsPerSecDeltaFromPrev": null,
+      "tidbOpsPerSecDeltaFromFirst": 0,
+      "throughputRatioDeltaFromPrev": null,
+      "throughputLagFactorDeltaFromPrev": null,
+      "tidbSemanticProofsDeltaFromPrev": null,
+      "lagrangeSemanticProofsDeltaFromPrev": null
+    },
+    {
+      "schemaVersion": 1,
+      "combinationKey": "fw=0.4.0@86e795c441ecf981d66dd3ba1135b17979e1e236|scenario=tidb-distributed-risk-decision|profile=risk-three-island-rf3-3node-multi-host:-|workload=-|measure=-|view=architecture-native|lagrange=0.4.0@86e795c441ecf981d66dd3ba1135b17979e1e236|tidb=v8.5.8@pingcap/tidb:v8.5.8",
+      "combinationSha256": "bf38ebdef7b9775f60ebe36892951333439effbd699bdf9ff531be4ce49067e7",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "86e795c441ecf981d66dd3ba1135b17979e1e236",
+        "scenarioId": "tidb-distributed-risk-decision",
+        "profileId": "risk-three-island-rf3-3node-multi-host",
+        "profileSha256": null,
+        "datasetSha256": null,
+        "workloadPlanSha256": null,
+        "measurementPlanSha256": null,
+        "retryPolicyId": "none",
+        "openLoopProfileId": "closed-loop-v1",
+        "comparisonView": "architecture-native"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "86e795c441ecf981d66dd3ba1135b17979e1e236"
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "pingcap/tidb:v8.5.8"
+        }
+      },
+      "recordedAt": "2026-11-01T14:06:39.413Z",
+      "evidenceSource": {
+        "kind": "observed-paired-run",
+        "runId": "receipt-lagrange-one-remote-stage",
+        "issueNumber": null,
+        "url": "data/tidb-comparison/raw-observations.ndjson",
+        "artifactSha256": "8e026b041b6e49a0a1d8271e0c914a7cd6edbc7f401d5e453af4212d332527bc"
+      },
+      "metrics": {
+        "lagrange": {
+          "opsPerSec": 2172.3,
+          "latencyMs": {
+            "p50": 9.88,
+            "p95": 23.42,
+            "p99": 26.78
+          },
+          "transactions": {
+            "attempted": 120,
+            "succeeded": 120,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 8,
+            "requiredCount": 8,
+            "allPassed": true
+          },
+          "scenarioBScorecard": {
+            "duringMoveP99Ms": 21.5,
+            "routingConvergenceMs": 21.88,
+            "movementContinuityPassed": true
+          }
+        },
+        "tidbTikv": {
+          "opsPerSec": 2309,
+          "latencyMs": {
+            "p50": 13.04,
+            "p95": 20.15,
+            "p99": 23.71
+          },
+          "transactions": {
+            "attempted": 120,
+            "succeeded": 120,
+            "failed": 0,
+            "retries": 0
+          },
+          "semanticProofs": {
+            "passedCount": 8,
+            "requiredCount": 8,
+            "allPassed": true
+          },
+          "scenarioBScorecard": {
+            "duringMoveP99Ms": 42.95,
+            "routingConvergenceMs": 48.04,
+            "movementContinuityPassed": true
+          }
+        }
+      },
+      "comparison": {
+        "paired": true,
+        "throughputRatioLagrangeToTiDb": 0.940797,
+        "throughputLagFactorTiDbOverLagrange": 1.062929,
+        "latencyRatioLagrangeOverTiDb": {
+          "p50": 0.757669,
+          "p95": 1.162283,
+          "p99": 1.129481
+        },
+        "semanticProofDeltaLagrangeMinusTiDb": 0
+      },
+      "recordSha256": "73f64646115c240ff18ee37ee393ec416ea879893a5b353a8a8f24725e8bf905",
+      "deltas": {
+        "lagrangeOpsPerSecDeltaFromPrev": -172.9,
+        "lagrangeOpsPerSecDeltaFromFirst": -172.9,
+        "tidbOpsPerSecDeltaFromPrev": 1606.1,
+        "tidbOpsPerSecDeltaFromFirst": 1606.1,
+        "throughputRatioDeltaFromPrev": -2.395666,
+        "throughputLagFactorDeltaFromPrev": 0.76321,
         "tidbSemanticProofsDeltaFromPrev": 0,
         "lagrangeSemanticProofsDeltaFromPrev": 0
       },
-      "lagrangeOpsPerSecDeltaFromPrev": -236.1,
-      "lagrangeOpsPerSecDeltaFromFirst": -236.1,
-      "tidbOpsPerSecDeltaFromPrev": 0,
-      "tidbOpsPerSecDeltaFromFirst": 0,
-      "throughputRatioDeltaFromPrev": -2.265835,
-      "throughputLagFactorDeltaFromPrev": 0.437675,
+      "lagrangeOpsPerSecDeltaFromPrev": -172.9,
+      "lagrangeOpsPerSecDeltaFromFirst": -172.9,
+      "tidbOpsPerSecDeltaFromPrev": 1606.1,
+      "tidbOpsPerSecDeltaFromFirst": 1606.1,
+      "throughputRatioDeltaFromPrev": -2.395666,
+      "throughputLagFactorDeltaFromPrev": 0.76321,
       "tidbSemanticProofsDeltaFromPrev": 0,
       "lagrangeSemanticProofsDeltaFromPrev": 0
     },
     {
       "schemaVersion": 1,
-      "combinationKey": "fw=0.4.0@07206ba1c8bb396f4eb097a753915bb34580d824|scenario=tidb-distributed-risk-decision|profile=risk-three-island-rf3-3node-multi-host:28d049c7e712deb8d7ce550ff7cbc86ba336dd7c30d735191623b2e4410e880e|workload=0a91a44cb62d3da51a22416305f9b5f41570140d591c34c8be6744f14e64b7b7|measure=e2569ac192c5202e3721a972c3a19101633affbaadff98a5dced36242052044c|view=architecture-native|lagrange=0.4.0@07206ba1c8bb396f4eb097a753915bb34580d824|tidb=v8.5.8@pingcap/tidb:v8.5.8",
-      "combinationSha256": "72520bccbdcbbd0b514cbab74e53319672474087269a21561537bef93c7eb230",
+      "combinationKey": "fw=0.4.0@86e795c441ecf981d66dd3ba1135b17979e1e236|scenario=tidb-oltp-baseline|profile=3-node-rf3-multi-host-oltp:-|workload=-|measure=-|view=system-default|lagrange=0.4.0@86e795c441ecf981d66dd3ba1135b17979e1e236|tidb=v8.5.8@pingcap/tidb:v8.5.8",
+      "combinationSha256": "c5d2ada54d79a839a47d2144c2d3f195b4987dab998024aea13dcef6bca94b7e",
       "framework": {
         "frameworkVersion": "0.4.0",
-        "frameworkCommitSha": "07206ba1c8bb396f4eb097a753915bb34580d824",
-        "scenarioId": "tidb-distributed-risk-decision",
-        "profileId": "risk-three-island-rf3-3node-multi-host",
-        "profileSha256": "28d049c7e712deb8d7ce550ff7cbc86ba336dd7c30d735191623b2e4410e880e",
-        "datasetSha256": "e4e37b16fdcebe323686c8e496e1fac29870a0ab270f7772977416ec2f149fb6",
-        "workloadPlanSha256": "0a91a44cb62d3da51a22416305f9b5f41570140d591c34c8be6744f14e64b7b7",
-        "measurementPlanSha256": "e2569ac192c5202e3721a972c3a19101633affbaadff98a5dced36242052044c",
-        "retryPolicyId": "none",
+        "frameworkCommitSha": "86e795c441ecf981d66dd3ba1135b17979e1e236",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "3-node-rf3-multi-host-oltp",
+        "profileSha256": null,
+        "datasetSha256": null,
+        "workloadPlanSha256": null,
+        "measurementPlanSha256": null,
+        "retryPolicyId": "exponential-backoff-v1",
         "openLoopProfileId": "closed-loop-v1",
-        "comparisonView": "architecture-native"
+        "comparisonView": "system-default"
       },
       "systems": {
         "lagrange": {
           "present": true,
           "version": "0.4.0",
-          "commitSha": "07206ba1c8bb396f4eb097a753915bb34580d824"
+          "commitSha": "86e795c441ecf981d66dd3ba1135b17979e1e236"
         },
         "tidbTikv": {
           "present": true,
@@ -247,217 +373,84 @@
           "commitSha": "pingcap/tidb:v8.5.8"
         }
       },
-      "recordedAt": "2026-11-01T11:58:02.023Z",
+      "recordedAt": "2026-11-01T14:06:39.413Z",
       "evidenceSource": {
         "kind": "observed-paired-run",
-        "runId": "lab-multi-host-v040-3node-scenario-b",
+        "runId": "receipt-lagrange-scenario-a",
         "issueNumber": null,
-        "url": "data/tidb-comparison/admitted-lab-measurements.json",
-        "artifactSha256": "b1afe397bf295d3788e210b1ef6746e98611c287ba940cd79449a285909136d7"
+        "url": "data/tidb-comparison/raw-observations.ndjson",
+        "artifactSha256": "b21d82829a7aad5d7cdec1cccd7284143c1a36e77600797aa3338a5c31003287"
       },
       "metrics": {
         "lagrange": {
-          "opsPerSec": 391.9,
+          "opsPerSec": 2014,
           "latencyMs": {
-            "p50": 54.31,
-            "p95": 80.56,
-            "p99": 100.36
-          },
-          "transactions": {
-            "attempted": 140,
-            "succeeded": 140,
-            "failed": 0,
-            "retries": 0
-          },
-          "semanticProofs": {
-            "passedCount": 8,
-            "requiredCount": 8,
-            "allPassed": true
-          },
-          "scenarioBScorecard": {
-            "crossIslandBytesPerRequest": 3348,
-            "duringMoveP99Ms": 166.32,
-            "routingConvergenceMs": 164.87,
-            "movementContinuityPassed": true
-          }
-        },
-        "tidbTikv": {
-          "opsPerSec": 247.1,
-          "latencyMs": {
-            "p50": 67.59,
-            "p95": 111.85,
-            "p99": 134.01
-          },
-          "transactions": {
-            "attempted": 120,
-            "succeeded": 120,
-            "failed": 0,
-            "retries": 0
-          },
-          "semanticProofs": {
-            "passedCount": 8,
-            "requiredCount": 8,
-            "allPassed": true
-          },
-          "scenarioBScorecard": {
-            "crossIslandBytesPerRequest": 17603,
-            "duringMoveP99Ms": 180.95,
-            "routingConvergenceMs": 164.28,
-            "movementContinuityPassed": true
-          }
-        }
-      },
-      "comparison": {
-        "paired": true,
-        "throughputRatioLagrangeToTiDb": 1.585998,
-        "throughputLagFactorTiDbOverLagrange": 0.630518,
-        "latencyRatioLagrangeOverTiDb": {
-          "p50": 0.803521,
-          "p95": 0.72025,
-          "p99": 0.748899
-        },
-        "semanticProofDeltaLagrangeMinusTiDb": 0
-      },
-      "recordSha256": "eee2d296135d8c63a94be5c0bdd65decfc3574d63cdf970053cb57ac67de2b3d",
-      "deltas": {
-        "lagrangeOpsPerSecDeltaFromPrev": null,
-        "lagrangeOpsPerSecDeltaFromFirst": 0,
-        "tidbOpsPerSecDeltaFromPrev": null,
-        "tidbOpsPerSecDeltaFromFirst": 0,
-        "throughputRatioDeltaFromPrev": null,
-        "throughputLagFactorDeltaFromPrev": null,
-        "tidbSemanticProofsDeltaFromPrev": null,
-        "lagrangeSemanticProofsDeltaFromPrev": null
-      },
-      "lagrangeOpsPerSecDeltaFromPrev": null,
-      "lagrangeOpsPerSecDeltaFromFirst": 0,
-      "tidbOpsPerSecDeltaFromPrev": null,
-      "tidbOpsPerSecDeltaFromFirst": 0,
-      "throughputRatioDeltaFromPrev": null,
-      "throughputLagFactorDeltaFromPrev": null,
-      "tidbSemanticProofsDeltaFromPrev": null,
-      "lagrangeSemanticProofsDeltaFromPrev": null
-    },
-    {
-      "schemaVersion": 1,
-      "combinationKey": "fw=0.4.0@07206ba1c8bb396f4eb097a753915bb34580d824|scenario=tidb-distributed-risk-decision|profile=risk-three-island-rf3:b9595392e4b32332e38a5394e847d579661ebf9ba0868b3bb539c845841cec35|workload=e5cb29ea5cca4ceeddd548c005e0b730af0b053985d77e80583fa8256e3ff11c|measure=922cb1a3509cdb52fb4c57d479bb3ef6626b04a79eceac41b0a3e45d5959abbe|view=architecture-native|lagrange=0.4.0@07206ba1c8bb396f4eb097a753915bb34580d824|tidb=v8.5.8@pingcap/tidb:v8.5.8",
-      "combinationSha256": "8850297a56d95568500342fd537242a8458dc707d9f51e345857a8600b3a3f16",
-      "framework": {
-        "frameworkVersion": "0.4.0",
-        "frameworkCommitSha": "07206ba1c8bb396f4eb097a753915bb34580d824",
-        "scenarioId": "tidb-distributed-risk-decision",
-        "profileId": "risk-three-island-rf3",
-        "profileSha256": "b9595392e4b32332e38a5394e847d579661ebf9ba0868b3bb539c845841cec35",
-        "datasetSha256": "fd11f41d26d1ce2961a22d9c28a8044c86e82b35080f82213120be0d23ac4c89",
-        "workloadPlanSha256": "e5cb29ea5cca4ceeddd548c005e0b730af0b053985d77e80583fa8256e3ff11c",
-        "measurementPlanSha256": "922cb1a3509cdb52fb4c57d479bb3ef6626b04a79eceac41b0a3e45d5959abbe",
-        "retryPolicyId": "none",
-        "openLoopProfileId": "closed-loop-v1",
-        "comparisonView": "architecture-native"
-      },
-      "systems": {
-        "lagrange": {
-          "present": true,
-          "version": "0.4.0",
-          "commitSha": "07206ba1c8bb396f4eb097a753915bb34580d824"
-        },
-        "tidbTikv": {
-          "present": true,
-          "version": "v8.5.8",
-          "commitSha": "pingcap/tidb:v8.5.8"
-        }
-      },
-      "recordedAt": "2026-11-01T11:59:02.023Z",
-      "evidenceSource": {
-        "kind": "observed-paired-run",
-        "runId": "lab-multi-host-v040-5node-scenario-b",
-        "issueNumber": null,
-        "url": "data/tidb-comparison/admitted-lab-measurements.json",
-        "artifactSha256": "612a353879dab36c4e9cc4a22166d5332dd11ea4752ae4c1106e59278650e6b2"
-      },
-      "metrics": {
-        "lagrange": {
-          "opsPerSec": 538.7,
-          "latencyMs": {
-            "p50": 44.97,
-            "p95": 114.27,
-            "p99": 127.96
+            "p50": 11.06,
+            "p95": 23.26,
+            "p99": 25.3
           },
           "transactions": {
             "attempted": 160,
-            "succeeded": 160,
             "failed": 0,
             "retries": 0
           },
           "semanticProofs": {
-            "passedCount": 8,
-            "requiredCount": 8,
+            "passedCount": 33,
+            "requiredCount": 33,
             "allPassed": true
-          },
-          "scenarioBScorecard": {
-            "crossIslandBytesPerRequest": 8348,
-            "duringMoveP99Ms": 166.32,
-            "routingConvergenceMs": 164.87,
-            "movementContinuityPassed": true
           }
         },
         "tidbTikv": {
-          "opsPerSec": 247.1,
+          "opsPerSec": 1359.4,
           "latencyMs": {
-            "p50": 67.59,
-            "p95": 111.85,
-            "p99": 134.01
+            "p50": 10.39,
+            "p95": 23.08,
+            "p99": 27.23
           },
           "transactions": {
-            "attempted": 120,
-            "succeeded": 120,
+            "attempted": 90,
+            "succeeded": 90,
             "failed": 0,
             "retries": 0
           },
           "semanticProofs": {
-            "passedCount": 8,
-            "requiredCount": 8,
+            "passedCount": 33,
+            "requiredCount": 33,
             "allPassed": true
-          },
-          "scenarioBScorecard": {
-            "crossIslandBytesPerRequest": 17603,
-            "duringMoveP99Ms": 180.95,
-            "routingConvergenceMs": 164.28,
-            "movementContinuityPassed": true
           }
         }
       },
       "comparison": {
         "paired": true,
-        "throughputRatioLagrangeToTiDb": 2.180089,
-        "throughputLagFactorTiDbOverLagrange": 0.458697,
+        "throughputRatioLagrangeToTiDb": 1.481536,
+        "throughputLagFactorTiDbOverLagrange": 0.674975,
         "latencyRatioLagrangeOverTiDb": {
-          "p50": 0.665335,
-          "p95": 1.021636,
-          "p99": 0.954854
+          "p50": 1.064485,
+          "p95": 1.007799,
+          "p99": 0.929122
         },
         "semanticProofDeltaLagrangeMinusTiDb": 0
       },
-      "recordSha256": "0beb212c88a550f4ad97e7d89f77ff3704d109c47ffe88dcb2525166e696e844",
+      "recordSha256": "4ae39281b8b5717d774c6998d27bc5a5b71e489b1bd518f2597c31a1c4d723bd",
       "deltas": {
-        "lagrangeOpsPerSecDeltaFromPrev": 146.8,
-        "lagrangeOpsPerSecDeltaFromFirst": 146.8,
-        "tidbOpsPerSecDeltaFromPrev": 0,
-        "tidbOpsPerSecDeltaFromFirst": 0,
-        "throughputRatioDeltaFromPrev": 0.594091,
-        "throughputLagFactorDeltaFromPrev": -0.171821,
+        "lagrangeOpsPerSecDeltaFromPrev": -185.4,
+        "lagrangeOpsPerSecDeltaFromFirst": -185.4,
+        "tidbOpsPerSecDeltaFromPrev": 240.7,
+        "tidbOpsPerSecDeltaFromFirst": 240.7,
+        "throughputRatioDeltaFromPrev": -0.484496,
+        "throughputLagFactorDeltaFromPrev": 0.166336,
         "tidbSemanticProofsDeltaFromPrev": 0,
         "lagrangeSemanticProofsDeltaFromPrev": 0
       },
-      "lagrangeOpsPerSecDeltaFromPrev": 146.8,
-      "lagrangeOpsPerSecDeltaFromFirst": 146.8,
-      "tidbOpsPerSecDeltaFromPrev": 0,
-      "tidbOpsPerSecDeltaFromFirst": 0,
-      "throughputRatioDeltaFromPrev": 0.594091,
-      "throughputLagFactorDeltaFromPrev": -0.171821,
+      "lagrangeOpsPerSecDeltaFromPrev": -185.4,
+      "lagrangeOpsPerSecDeltaFromFirst": -185.4,
+      "tidbOpsPerSecDeltaFromPrev": 240.7,
+      "tidbOpsPerSecDeltaFromFirst": 240.7,
+      "throughputRatioDeltaFromPrev": -0.484496,
+      "throughputLagFactorDeltaFromPrev": 0.166336,
       "tidbSemanticProofsDeltaFromPrev": 0,
       "lagrangeSemanticProofsDeltaFromPrev": 0
     }
   ],
-  "summarySha256": "d3c1f236db7c7e53571383ede96ac798c8a4f7b793cb941196f5f48a0674bb92"
+  "summarySha256": "183ff0b23cf6c8914e8d65b03c68cb6635264a8e77819043cdb84ddaa51123d8"
 }

@@ -108,12 +108,12 @@ systemctl enable --now docker
 usermod -aG docker ubuntu || true
 '
 
-echo "[aws] Launching 5 EC2 instances (${INSTANCE_TYPE}, AMI ${AMI_ID}) in ${REGION}..."
+echo "[aws] Launching 6 EC2 instances (${INSTANCE_TYPE}, AMI ${AMI_ID}) in ${REGION} (5 cluster + 1 client)..."
 INSTANCE_IDS="$(aws ec2 run-instances \
   --region "${REGION}" \
   --image-id "${AMI_ID}" \
   --instance-type "${INSTANCE_TYPE}" \
-  --count 5 \
+  --count 6 \
   --key-name "${KEY_NAME}" \
   --security-group-ids "${SG_ID}" \
   --subnet-id "${SUBNET_ID}" \
@@ -133,15 +133,23 @@ PRIVATE_IPS="$(aws ec2 describe-instances \
   --instance-ids ${INSTANCE_IDS} \
   --query 'Reservations[].Instances[].PrivateIpAddress' \
   --output text)"
+# shellcheck disable=SC2086
+PUBLIC_IPS="$(aws ec2 describe-instances \
+  --region "${REGION}" \
+  --instance-ids ${INSTANCE_IDS} \
+  --query 'Reservations[].Instances[].PublicIpAddress' \
+  --output text)"
 HOSTS_CSV="$(echo "${PRIVATE_IPS}" | tr '\t ' ',,')"
+SSH_HOSTS_CSV="$(echo "${PUBLIC_IPS}" | tr '\t ' ',,')"
 
 echo ""
-echo "[aws] 5-node AWS EC2 cluster provisioned."
+echo "[aws] 6-VM AWS EC2 benchmark cluster provisioned (5 cluster VMs + 1 dedicated client VM)."
 echo "export HOSTS=\"${HOSTS_CSV}\""
+echo "export SSH_HOSTS=\"${SSH_HOSTS_CSV}\""
 echo "export SSH_USER=\"ubuntu\""
 echo ""
-echo "Run the full comparative suite from the first instance or a runner in ${VPC_ID}:"
-echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts \"\${HOSTS}\" --ssh-user ubuntu --regenerate-docs"
+echo "Run the full comparative suite:"
+echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts \"\${HOSTS}\" --ssh-hosts \"\${SSH_HOSTS}\" --ssh-user ubuntu --execution-target gcp --regenerate-docs"
 echo ""
 echo "When finished, tear down all resources with:"
 echo "  ./docs/benchmarks/cloud/provision-aws.sh --teardown"

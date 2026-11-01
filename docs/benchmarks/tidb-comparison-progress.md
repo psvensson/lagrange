@@ -11,28 +11,28 @@ This page is generated deterministically from [`data/tidb-comparison/history.ndj
 
 | Recorded (UTC) | Framework Version & Commit | Scenario / Profile | Lagrange Version & Commit | TiDB/TiKV Version & Commit | Combination Digest |
 | --- | --- | --- | --- | --- | --- |
-| 2026-11-01T11:56:02.023Z | 0.4.0 (07206ba1c8) | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) / 3-node-rf3-multi-host-oltp | 0.4.0 (07206ba1c8) | v8.5.8 (pingcap/ti) | 46ecf4c9d5764b77 |
-| 2026-11-01T11:57:02.023Z | 0.4.0 (07206ba1c8) | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) / 5-node-rf3-multi-host-oltp | 0.4.0 (07206ba1c8) | v8.5.8 (pingcap/ti) | 2ff656ca742304c9 |
-| 2026-11-01T11:58:02.023Z | 0.4.0 (07206ba1c8) | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) / risk-three-island-rf3-3node-multi-host | 0.4.0 (07206ba1c8) | v8.5.8 (pingcap/ti) | 72520bccbdcbbd0b |
-| 2026-11-01T11:59:02.023Z | 0.4.0 (07206ba1c8) | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) / risk-three-island-rf3 | 0.4.0 (07206ba1c8) | v8.5.8 (pingcap/ti) | 8850297a56d95568 |
+| 2026-11-01T14:06:39.413Z | 0.4.0 (86e795c441) | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) / risk-three-island-rf3 | 0.4.0 (86e795c441) | v8.5.8 (pingcap/ti) | 761bb3030b4285e7 |
+| 2026-11-01T14:06:39.413Z | 0.4.0 (86e795c441) | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) / 5-node-rf3-multi-host-oltp | 0.4.0 (86e795c441) | v8.5.8 (pingcap/ti) | a8276e0be975c6b3 |
+| 2026-11-01T14:06:39.413Z | 0.4.0 (86e795c441) | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) / risk-three-island-rf3-3node-multi-host | 0.4.0 (86e795c441) | v8.5.8 (pingcap/ti) | bf38ebdef7b9775f |
+| 2026-11-01T14:06:39.413Z | 0.4.0 (86e795c441) | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) / 3-node-rf3-multi-host-oltp | 0.4.0 (86e795c441) | v8.5.8 (pingcap/ti) | c5d2ada54d79a839 |
 
 ## Throughput, latency, and semantic proof progression
 
 | Recorded (UTC) | Scenario | Lagrange ops/s (p50 / p95 / p99 ms) | TiDB/TiKV ops/s (p50 / p95 / p99 ms) | Throughput Ratio (Lagrange / TiDB) | Semantic Proofs (Lagrange / TiDB) |
 | --- | --- | --- | --- | --- | --- |
-| 2026-11-01T11:56:02.023Z | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) | 382.90 (51.94 / 90.84 / 120.29) | 104.20 (75.37 / 299.00 / 327.16) | 3.675x (0.27x lag) | 33/33 vs 33/33 |
-| 2026-11-01T11:57:02.023Z | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) | 146.80 (43.40 / 403.93 / 559.47) | 104.20 (75.37 / 299.00 / 327.16) | 1.409x (0.71x lag) | 33/33 vs 33/33 |
-| 2026-11-01T11:58:02.023Z | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | 391.90 (54.31 / 80.56 / 100.36) | 247.10 (67.59 / 111.85 / 134.01) | 1.586x (0.63x lag) | 8/8 vs 8/8 |
-| 2026-11-01T11:59:02.023Z | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | 538.70 (44.97 / 114.27 / 127.96) | 247.10 (67.59 / 111.85 / 134.01) | 2.180x (0.46x lag) | 8/8 vs 8/8 |
+| 2026-11-01T14:06:39.413Z | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | 2345.20 (9.64 / 22.02 / 29.45) | 702.90 (23.85 / 33.45 / 37.66) | 3.336x (0.30x lag) | 8/8 vs 8/8 |
+| 2026-11-01T14:06:39.413Z | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) | 2199.40 (13.11 / 30.91 / 49.34) | 1118.70 (19.40 / 48.81 / 52.76) | 1.966x (0.51x lag) | 33/33 vs 33/33 |
+| 2026-11-01T14:06:39.413Z | [tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | 2172.30 (9.88 / 23.42 / 26.78) | 2309.00 (13.04 / 20.15 / 23.71) | 0.941x (1.06x lag) | 8/8 vs 8/8 |
+| 2026-11-01T14:06:39.413Z | [tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) | 2014.00 (11.06 / 23.26 / 25.30) | 1359.40 (10.39 / 23.08 / 27.23) | 1.482x (0.67x lag) | 33/33 vs 33/33 |
 
 ## Progress deltas over time
 
 | Recorded (UTC) | Framework Commit | Lagrange ops/s Delta (prev / first) | TiDB ops/s Delta (prev / first) | Ratio Delta (prev) | Lag Factor Delta (prev) | TiDB Proofs Delta (prev) |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-01T11:56:02.023Z | 07206ba1c8 | 0.00 / 0.00 | 0.00 / 0.00 | 0.00 | 0.00 | 0.00 |
-| 2026-11-01T11:57:02.023Z | 07206ba1c8 | -236.10 / -236.10 | 0.00 / 0.00 | -2.266 | +0.44 | 0 |
-| 2026-11-01T11:58:02.023Z | 07206ba1c8 | 0.00 / 0.00 | 0.00 / 0.00 | 0.00 | 0.00 | 0.00 |
-| 2026-11-01T11:59:02.023Z | 07206ba1c8 | +146.80 / +146.80 | 0.00 / 0.00 | +0.594 | -0.17 | 0 |
+| 2026-11-01T14:06:39.413Z | 86e795c441 | 0.00 / 0.00 | 0.00 / 0.00 | 0.00 | 0.00 | 0.00 |
+| 2026-11-01T14:06:39.413Z | 86e795c441 | 0.00 / 0.00 | 0.00 / 0.00 | 0.00 | 0.00 | 0.00 |
+| 2026-11-01T14:06:39.413Z | 86e795c441 | -172.90 / -172.90 | +1606.10 / +1606.10 | -2.396 | +0.76 | 0 |
+| 2026-11-01T14:06:39.413Z | 86e795c441 | -185.40 / -185.40 | +240.70 / +240.70 | -0.484 | +0.17 | 0 |
 
 ## Scenario B distributed risk & movement scorecard ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
@@ -42,5 +42,5 @@ This page is generated deterministically from [`data/tidb-comparison/history.ndj
 
 | Recorded (UTC) | Profile | Lagrange Cross-Island Bytes/Req | TiDB Cross-Island Bytes/Req | Lagrange Move p99 (ms) | TiDB Move p99 (ms) | Convergence (Lagrange vs TiDB ms) |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-01T11:58:02.023Z | [risk-three-island-rf3-3node-multi-host](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | 3348 | 17603 | 166.32 | 180.95 | 164.87 vs 164.28 |
-| 2026-11-01T11:59:02.023Z | [risk-three-island-rf3](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | 8348 | 17603 | 166.32 | 180.95 | 164.87 vs 164.28 |
+| 2026-11-01T14:06:39.413Z | [risk-three-island-rf3](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | n/a | n/a | 21.50 | 42.95 | 21.88 vs 48.04 |
+| 2026-11-01T14:06:39.413Z | [risk-three-island-rf3-3node-multi-host](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | n/a | n/a | 21.50 | 42.95 | 21.88 vs 48.04 |

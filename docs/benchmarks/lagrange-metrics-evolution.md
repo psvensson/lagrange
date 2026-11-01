@@ -12,12 +12,12 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 
 | Milestone | Version | Commit | Date | Evidence Tier | Execution Mode | Scenario A (tx/s) | p95 (ms) | Proofs | Scenario B (dec/s) | Scenario C (dec/s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| v0.4.0-3node-rf3-multi-host | 0.4.0 | 07206ba1c8 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 382.90 | 90.8 | 33/33 | 391.9 | 125.3 |
-| v0.4.0-4node-rf3-multi-host | 0.4.0 | 07206ba1c8 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 66.00 | 495.8 | 33/33 | 435.5 | 1128.0 |
-| v0.4.0-5node-rf3-multi-host | 0.4.0 | 07206ba1c8 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 146.80 | 403.9 | 33/33 | 538.7 | 774.1 |
-| v0.4.0-5node-rf3-p30-sweet-spot | 0.4.0 | 07206ba1c8 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 146.80 | 403.9 | 33/33 | 451.1 | 774.1 |
-| v0.4.0-5node-rf3-live-movement | 0.4.0 | 07206ba1c8 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 146.80 | 403.9 | 33/33 | 381.5 | 617.1 |
-| v0.4.0-5node-rf3-scenario-c-5x | 0.4.0 | 07206ba1c8 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 146.80 | 403.9 | 33/33 | 538.7 | 1128.4 |
+| v0.4.0-3node-rf3-multi-host | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2014.00 | 23.3 | 33/33 | 2172.3 | 2559.6 |
+| v0.4.0-4node-rf3-multi-host | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2018.20 | 25.6 | 33/33 | 2067.3 | 2703.7 |
+| v0.4.0-5node-rf3-60pct-coverage | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2199.40 | 30.9 | 33/33 | 2345.2 | 2559.5 |
+| v0.4.0-5node-rf3-p30-sweet-spot | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2199.40 | 30.9 | 33/33 | 2044.7 | 2559.5 |
+| v0.4.0-5node-rf3-live-movement | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2199.40 | 30.9 | 33/33 | 2184.5 | 2559.5 |
+| v0.4.0-5node-rf3-scenario-c-5x | 0.4.0 | 86e795c441 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 2199.40 | 30.9 | 33/33 | 2345.2 | 2018.6 |
 
 ## Commit-over-commit delta progression
 

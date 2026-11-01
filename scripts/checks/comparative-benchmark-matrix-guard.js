@@ -42,6 +42,21 @@ import {
   renderScenarioCComparisonMarkdown, renderScenarioCComparisonSvg,
   writeScenarioCComparisonStaticWebArtifacts,
 } from '../../test/distributed/harness/scenario-c-comparison-static-web.js';
+import {
+  DEFAULT_ADMITTED_LAB_MEASUREMENTS_PATH,
+  DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH,
+  computeRawObservationPayloadDigest,
+  deriveAdmittedMeasurementsFromRawObservations,
+} from '../../test/distributed/harness/raw-observation-store.js';
+import {
+  writeAdmittedLabMeasurementsFromRawObservations,
+} from '../../test/distributed/harness/scaleout-series-experiments.js';
+import {
+  OPERATING_BOUNDARY_MAP,
+  SCALEOUT_MODES_SPEC,
+  buildCampaignTargetSpecs,
+  regenerateAllBenchmarkArtifactsFromAdmitted,
+} from '../../test/distributed/harness/raw-observation-campaign-specs.js';
 import {runDistributedScaleoutProvenanceGuard} from './distributed-scaleout-provenance-guard.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -144,13 +159,25 @@ function verifyEpicDefinition(rootDir) {
 }
 
 function verifyOriginalReceiptAdmissionRules() {
+  const sampleRawPayload = {
+    elapsedMs: 100,
+    totalAttempts: 4,
+    completed: 4,
+    failures: 0,
+    timeouts: 0,
+    clientWireBytesTotal: 1024,
+    netCountersBefore: {total: 0},
+    netCountersAfter: {total: 1024},
+    latenciesMs: [10, 20, 30, 40],
+  };
   const baseValidReceipt = {
     executionTarget: 'gcp',
     gitCommit: 'a1b2c3d4e5f6',
     packageDigest: 'sha256:1111111111111111',
     datasetDigest: 'sha256:2222222222222222',
     planDigest: 'sha256:3333333333333333',
-    rawObservationsDigest: 'sha256:4444444444444444',
+    rawObservationsDigest: computeRawObservationPayloadDigest(sampleRawPayload),
+    rawObservationPayload: sampleRawPayload,
     nodeCount: 3,
     hostPlacement: {
       nodeCount: 3,
@@ -161,10 +188,16 @@ function verifyOriginalReceiptAdmissionRules() {
       comparator: {processId: 'tidb-server-1', publicInterface: '10.0.0.2:4000'},
     },
     attemptAccounting: {
-      totalAttempts: 100,
-      completed: 98,
-      failures: 2,
+      totalAttempts: 4,
+      completed: 4,
+      failures: 0,
       timeouts: 0,
+    },
+    measuredTransportBytes: 1024,
+    metrics: {
+      decisionsPerSec: 40.0,
+      p99Ms: 30.0,
+      wanBytes: 256,
     },
   };
 
@@ -190,7 +223,7 @@ function verifyOriginalReceiptAdmissionRules() {
   });
   assert.equal(c2b.admitted, false, ERR_MODELED_ORACLE_REJECTED);
 
-  // Case 3: Missing or corrupted raw observations digest
+  // Case 3: Missing, unresolved, or corrupted raw observations digest
   const c3a = validateOriginalReceiptAdmission({
     ...baseValidReceipt,
     rawObservationsDigest: '',
@@ -203,6 +236,19 @@ function verifyOriginalReceiptAdmissionRules() {
     false,
     ERR_MISSING_RAW_OBSERVATIONS_REJECTED,
   );
+  const c3c = {...baseValidReceipt, rawObservationsDigest: 'sha256:0000000000000000'};
+  delete c3c.rawObservationPayload;
+  assert.equal(validateOriginalReceiptAdmission(c3c).admitted, false);
+  const c3d = {
+    ...baseValidReceipt,
+    rawObservationPayload: {...sampleRawPayload, latenciesMs: [10, 20, 30, 99]},
+  };
+  assert.equal(validateOriginalReceiptAdmission(c3d).admitted, false);
+  const c3e = {
+    ...baseValidReceipt,
+    metrics: {...baseValidReceipt.metrics, decisionsPerSec: 9999.9},
+  };
+  assert.equal(validateOriginalReceiptAdmission(c3e).admitted, false);
 
   // Case 4: Mismatched commit/version
   const c4a = validateOriginalReceiptAdmission({
@@ -283,7 +329,26 @@ function verifyOriginalReceiptAdmissionRules() {
   assert.equal(formattedNull, STR_NOT_MEASURED_BRACKET);
 }
 
-function verifyComparativeMatrix(matrix) {
+function verifyRawObservationDerivation(rootDir) {
+  const specs = buildCampaignTargetSpecs(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+  assert.equal(specs.length, REQUIRED_TARGET_IDS.length);
+  assert.equal(OPERATING_BOUNDARY_MAP.length > NUM_ZERO, true);
+  assert.equal(SCALEOUT_MODES_SPEC.fixed.length > NUM_ZERO, true);
+  assert.equal(typeof writeAdmittedLabMeasurementsFromRawObservations, TYPE_FUNCTION);
+  assert.equal(typeof regenerateAllBenchmarkArtifactsFromAdmitted, TYPE_FUNCTION);
+  const rawPath = path.resolve(rootDir, DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH);
+  const admittedPath = path.resolve(rootDir, DEFAULT_ADMITTED_LAB_MEASUREMENTS_PATH);
+  assert.equal(fs.existsSync(rawPath), true, `${ERR_FILE_PREFIX}${DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH}`);
+  assert.equal(fs.existsSync(admittedPath), true, `${ERR_FILE_PREFIX}${DEFAULT_ADMITTED_LAB_MEASUREMENTS_PATH}`);
+  const derived = deriveAdmittedMeasurementsFromRawObservations(rootDir);
+  assert.equal(
+    fs.readFileSync(admittedPath, UTF8),
+    `${JSON.stringify(derived, null, 2)}${NEWLINE}`,
+  );
+}
+
+function verifyComparativeMatrix(matrix, rootDir = REPO_ROOT) {
+  verifyRawObservationDerivation(rootDir);
   assert.equal(matrix.schema, MULTI_SYSTEM_MATRIX_SCHEMA);
   assert.equal(matrix.epicId, EPIC_ID);
   assert.equal(matrix.completedSlices.length + matrix.remainingSlicesCount, TOTAL_EPIC_SLICES);

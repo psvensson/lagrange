@@ -10,6 +10,7 @@ import {
   buildLiveMovementAndScenarioCScalingExperiment,
   buildScenarioSetupAndTimeBreakdown,
 } from './scaleout-series-experiments.js';
+import {verifyReceiptAgainstRawObservation} from './raw-observation-store.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -176,13 +177,17 @@ function checkDelayFormulas(receipt) {
   return null;
 }
 
-function checkAccountingAndFormulas(receipt) {
+function checkAccountingAndFormulas(receipt, options = {}) {
   const accountingCheck = checkAttemptAccounting(receipt);
   if (accountingCheck) return accountingCheck;
-  return checkDelayFormulas(receipt);
+  const delayCheck = checkDelayFormulas(receipt);
+  if (delayCheck) return delayCheck;
+  const rawCheck = verifyReceiptAgainstRawObservation(receipt, options);
+  if (!rawCheck.admitted) return rawCheck;
+  return null;
 }
 
-export function validateOriginalReceiptAdmission(receipt) {
+export function validateOriginalReceiptAdmission(receipt, options = {}) {
   if (!receipt || typeof receipt !== 'object') {
     return {admitted: false, reason: 'Original receipt must be a non-null object'};
   }
@@ -192,23 +197,43 @@ export function validateOriginalReceiptAdmission(receipt) {
   if (digestCheck) return digestCheck;
   const hostCheck = checkHostPlacement(receipt);
   if (hostCheck) return hostCheck;
-  const formulaCheck = checkAccountingAndFormulas(receipt);
+  const formulaCheck = checkAccountingAndFormulas(receipt, options);
   if (formulaCheck) return formulaCheck;
   return {admitted: true, receipt};
+}
+
+function verifyShapeMetricsMatchReceipt(targetId, shapeId, shape, rootDir) {
+  const check = validateOriginalReceiptAdmission(shape.receipt, {rootDir});
+  if (!check.admitted) {
+    throw new Error(
+      `Admitted receipt validation failed for ${targetId} (${shapeId}): ${check.reason}`,
+    );
+  }
+  const m = shape.receipt.metrics || {};
+  if (shape.decisionsPerSec !== m.decisionsPerSec ||
+      shape.p99Ms !== m.p99Ms ||
+      shape.wanBytes !== m.wanBytes) {
+    throw new Error(
+      `Published shape metrics for ${targetId} (${shapeId}) do not match raw-observation-verified receipt metrics`,
+    );
+  }
 }
 
 function loadAdmittedTargets(rootDir) {
   const admitted = readAdmittedLabMeasurements(rootDir);
   const targets = admitted.targets || [];
   for (const target of targets) {
-    const shapes = target.scenarioB?.shapes || {};
-    for (const [shapeId, shape] of Object.entries(shapes)) {
-      const check = validateOriginalReceiptAdmission(shape.receipt);
-      if (!check.admitted) {
+    if (target.scenarioA?.receipt) {
+      const checkA = validateOriginalReceiptAdmission(target.scenarioA.receipt, {rootDir});
+      if (!checkA.admitted) {
         throw new Error(
-          `Admitted lab receipt validation failed for ${target.targetId} (${shapeId}): ${check.reason}`,
+          `Admitted Scenario A receipt validation failed for ${target.targetId}: ${checkA.reason}`,
         );
       }
+    }
+    const shapes = target.scenarioB?.shapes || {};
+    for (const [shapeId, shape] of Object.entries(shapes)) {
+      verifyShapeMetricsMatchReceipt(target.targetId, shapeId, shape, rootDir);
     }
   }
   return targets;

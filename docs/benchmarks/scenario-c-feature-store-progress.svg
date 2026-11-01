@@ -20,16 +20,16 @@
   <text x="655" y="128" fill="#64748b" font-size="9">Operational pipeline count</text>
     <text x="35" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="35" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
-    <text x="35" y="170" fill="#cbd5e1" font-size="10">125.3 dec/s (0.00% stale)</text>
+    <text x="35" y="170" fill="#cbd5e1" font-size="10">2559.6 dec/s (0.00% stale)</text>
     <rect x="35" y="176" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="176" width="63" height="8" fill="#38bdf8" rx="3"/>
+    <rect x="35" y="176" width="250" height="8" fill="#38bdf8" rx="3"/>
     <text x="35" y="194" fill="#64748b" font-size="9">Tier: observed-docker-cluster</text>
     <text x="345" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="345" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
-    <text x="345" y="170" fill="#cbd5e1" font-size="10">675.3 dec/s (p99: 100.4ms)</text>
+    <text x="345" y="170" fill="#cbd5e1" font-size="10">2735.9 dec/s (p99: 26.8ms)</text>
     <rect x="345" y="176" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="345" y="176" width="250" height="8" fill="#38bdf8" rx="3"/>
-    <text x="345" y="194" fill="#64748b" font-size="9">100ms: 396.6 dec/s</text>
+    <text x="345" y="194" fill="#64748b" font-size="9">100ms: 2739.1 dec/s</text>
     <text x="655" y="146" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
     <text x="655" y="158" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI Colocated</text>
     <text x="655" y="170" fill="#cbd5e1" font-size="10">Backfill: 0s (Restart: 3.2s)</text>
@@ -38,16 +38,16 @@
     <text x="655" y="194" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: 3.2s</text>
     <text x="35" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="35" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
-    <text x="35" y="242" fill="#cbd5e1" font-size="10">332.4 dec/s (0.00% stale)</text>
+    <text x="35" y="242" fill="#cbd5e1" font-size="10">2195.1 dec/s (0.00% stale)</text>
     <rect x="35" y="248" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="248" width="166" height="8" fill="#d97706" rx="3"/>
+    <rect x="35" y="248" width="250" height="8" fill="#d97706" rx="3"/>
     <text x="35" y="266" fill="#64748b" font-size="9">Tier: observed-docker-cluster</text>
     <text x="345" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="345" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
-    <text x="345" y="242" fill="#cbd5e1" font-size="10">972.8 dec/s (p99: 80.9ms)</text>
+    <text x="345" y="242" fill="#cbd5e1" font-size="10">2554.3 dec/s (p99: 32.4ms)</text>
     <rect x="345" y="248" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="345" y="248" width="250" height="8" fill="#d97706" rx="3"/>
-    <text x="345" y="266" fill="#64748b" font-size="9">100ms: 749.1 dec/s</text>
+    <text x="345" y="266" fill="#64748b" font-size="9">100ms: 2625.2 dec/s</text>
     <text x="655" y="218" fill="#cbd5e1" font-size="11" font-family="monospace">PG Patroni HA (5-unit)</text>
     <text x="655" y="230" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA RF=3</text>
     <text x="655" y="242" fill="#cbd5e1" font-size="10">Backfill: 0s (Restart: 8.5s)</text>
@@ -56,16 +56,16 @@
     <text x="655" y="266" fill="#94a3b8" font-size="9">1 pipeline(s) | Recovery: 8.5s</text>
     <text x="35" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
     <text x="35" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
-    <text x="35" y="314" fill="#cbd5e1" font-size="10">228.7 dec/s (0.42% stale)</text>
+    <text x="35" y="314" fill="#cbd5e1" font-size="10">2329.8 dec/s (0.42% stale)</text>
     <rect x="35" y="320" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="35" y="320" width="114" height="8" fill="#10b981" rx="3"/>
+    <rect x="35" y="320" width="250" height="8" fill="#10b981" rx="3"/>
     <text x="35" y="338" fill="#64748b" font-size="9">Tier: observed-docker-cluster</text>
     <text x="345" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
     <text x="345" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
-    <text x="345" y="314" fill="#cbd5e1" font-size="10">722.2 dec/s (p99: 119.3ms)</text>
+    <text x="345" y="314" fill="#cbd5e1" font-size="10">2644.9 dec/s (p99: 36.7ms)</text>
     <rect x="345" y="320" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="345" y="320" width="250" height="8" fill="#10b981" rx="3"/>
-    <text x="345" y="338" fill="#64748b" font-size="9">100ms: 178.1 dec/s</text>
+    <text x="345" y="338" fill="#64748b" font-size="9">100ms: 2279.0 dec/s</text>
     <text x="655" y="290" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Sync</text>
     <text x="655" y="302" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (8-u)</text>
     <text x="655" y="314" fill="#cbd5e1" font-size="10">Backfill: 185s (Restart: 42.0s)</text>
@@ -80,10 +80,10 @@
     <text x="35" y="410" fill="#64748b" font-size="9">Tier: observed-docker-cluster</text>
     <text x="345" y="362" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Async</text>
     <text x="345" y="374" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (9-u)</text>
-    <text x="345" y="386" fill="#cbd5e1" font-size="10">813.8 dec/s (p99: 136.3ms)</text>
+    <text x="345" y="386" fill="#cbd5e1" font-size="10">2528.3 dec/s (p99: 45.5ms)</text>
     <rect x="345" y="392" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="345" y="392" width="250" height="8" fill="#8b5cf6" rx="3"/>
-    <text x="345" y="410" fill="#64748b" font-size="9">100ms: 357.2 dec/s</text>
+    <text x="345" y="410" fill="#64748b" font-size="9">100ms: 2261.2 dec/s</text>
     <text x="655" y="362" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8 Async</text>
     <text x="655" y="374" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (9-u)</text>
     <text x="655" y="386" fill="#cbd5e1" font-size="10">Backfill: 240s (Restart: 58.0s)</text>

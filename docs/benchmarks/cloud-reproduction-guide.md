@@ -8,14 +8,14 @@ This guide explains how anyone with access to **Google Cloud Platform (GCP)**, *
 
 ## 1. Architecture & Resource Sizing
 
-The full comparative suite runs across **5 Linux VMs** in the same private VPC/VNet so that multi-node Raft/Paxos replication (`RF=3`), distributed SQL coordinators, and client-to-cluster RTT sweeps reflect real network and storage behavior.
+The full comparative suite runs across **6 identical Linux VMs** (5 cluster nodes + 1 dedicated client driver VM) in the same private VPC/VNet so that multi-node Raft/Paxos replication (`RF=3`), distributed SQL coordinators, and client-to-cluster RTT sweeps reflect real network and storage behavior without client-driver CPU contention.
 
-| Cloud Provider | Provisioning Script | Default Instance Type | vCPU / RAM | Disk | Estimated 30-Min Run Cost (5 VMs) |
+| Cloud Provider | Provisioning Script | Default Instance Type | vCPU / RAM | Disk | Estimated 30-Min Run Cost (6 VMs) |
 | --- | --- | --- | --- | --- | --- |
-| **Google Cloud (GCP)** | [`cloud/provision-gcp.sh`](cloud/provision-gcp.sh) | `n2-standard-4` | 4 vCPU / 16 GB | 50 GB `pd-ssd` | ~$0.49 USD |
-| **Amazon Web Services (AWS)** | [`cloud/provision-aws.sh`](cloud/provision-aws.sh) | `m6i.xlarge` | 4 vCPU / 16 GB | 50 GB `gp3` | ~$0.48 USD |
-| **Microsoft Azure** | [`cloud/provision-azure.sh`](cloud/provision-azure.sh) | `Standard_D4s_v5` | 4 vCPU / 16 GB | 50 GB `StandardSSD_LRS` | ~$0.48 USD |
-| **Any 5 SSH + Docker Hosts** | Bring your own hosts | 4+ vCPU / 16+ GB | Ubuntu 24.04 + Docker | 50 GB SSD | $0 (existing hardware) |
+| **Google Cloud (GCP)** | [`cloud/provision-gcp.sh`](cloud/provision-gcp.sh) | `e2-standard-4` | 4 vCPU / 16 GB | 50 GB `pd-balanced` | ~$0.40 USD |
+| **Amazon Web Services (AWS)** | [`cloud/provision-aws.sh`](cloud/provision-aws.sh) | `m6i.xlarge` | 4 vCPU / 16 GB | 50 GB `gp3` | ~$0.58 USD |
+| **Microsoft Azure** | [`cloud/provision-azure.sh`](cloud/provision-azure.sh) | `Standard_D4s_v5` | 4 vCPU / 16 GB | 50 GB `StandardSSD_LRS` | ~$0.58 USD |
+| **Any 6 SSH + Docker Hosts** | Bring your own hosts | 4+ vCPU / 16+ GB | Ubuntu 22.04/24.04 + Docker | 50 GB SSD | $0 (existing hardware) |
 
 ### Public Container Images Used
 All 14 benchmarked targets pull directly from public container registries (no proprietary licenses or private credentials required):
@@ -140,11 +140,15 @@ This executes [`examples/service-data-affinity/run-comparison.js`](../../example
   - [`docs/benchmarks/cloud/provision-aws.sh`](cloud/provision-aws.sh)
   - [`docs/benchmarks/cloud/provision-azure.sh`](cloud/provision-azure.sh)
   - [`docs/benchmarks/cloud/run-comparative-benchmarks.mjs`](cloud/run-comparative-benchmarks.mjs)
-- Benchmark matrix & static web regenerators:
+- Benchmark matrix, raw observation store & static web regenerators:
+  - [`test/distributed/harness/raw-observation-store.js`](../../test/distributed/harness/raw-observation-store.js)
+  - [`test/distributed/harness/raw-observation-campaign-specs.js`](../../test/distributed/harness/raw-observation-campaign-specs.js)
   - [`test/distributed/harness/comparative-matrix-runner.js`](../../test/distributed/harness/comparative-matrix-runner.js)
   - [`test/distributed/harness/scaleout-series-experiments.js`](../../test/distributed/harness/scaleout-series-experiments.js)
   - [`test/distributed/harness/tidb-reference-physical-topology.js`](../../test/distributed/harness/tidb-reference-physical-topology.js)
-- Recorded measurement stores:
+- Recorded measurement & raw observation stores:
+  - [`data/tidb-comparison/raw-observations.ndjson`](../../data/tidb-comparison/raw-observations.ndjson)
+  - [`data/tidb-comparison/admitted-lab-measurements.json`](../../data/tidb-comparison/admitted-lab-measurements.json)
   - [`data/tidb-comparison/history.ndjson`](../../data/tidb-comparison/history.ndjson)
   - [`data/tidb-comparison/progress-summary.json`](../../data/tidb-comparison/progress-summary.json)
   - [`data/tidb-comparison/multi-system-matrix.json`](../../data/tidb-comparison/multi-system-matrix.json)

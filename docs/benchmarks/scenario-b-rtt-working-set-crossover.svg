@@ -18,110 +18,110 @@
   <text x="665" y="114" fill="#94a3b8" font-size="10">2048-event working set scaling drop</text>
     <text x="45" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="45" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="45" y="154" fill="#cbd5e1" font-size="10">10ms: 52 dec/s (0.2ms: 251)</text>
+    <text x="45" y="154" fill="#cbd5e1" font-size="10">10ms: 296 dec/s (0.2ms: 1800)</text>
     <rect x="45" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="158" width="65" height="7" fill="#38bdf8" rx="2"/>
-    <text x="45" y="175" fill="#64748b" font-size="9">30ms: 31 dec/s | 2 sequential hops</text>
+    <rect x="45" y="158" width="250" height="7" fill="#38bdf8" rx="2"/>
+    <text x="45" y="175" fill="#64748b" font-size="9">30ms: 114 dec/s | 2 sequential hops</text>
     <text x="45" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="45" y="213" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
-    <text x="45" y="224" fill="#cbd5e1" font-size="10">10ms: 40 dec/s (0.2ms: 127)</text>
+    <text x="45" y="224" fill="#cbd5e1" font-size="10">10ms: 294 dec/s (0.2ms: 1517)</text>
     <rect x="45" y="228" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="228" width="50" height="7" fill="#ef4444" rx="2"/>
-    <text x="45" y="245" fill="#64748b" font-size="9">30ms: 24 dec/s | 6 sequential hops</text>
+    <rect x="45" y="228" width="250" height="7" fill="#ef4444" rx="2"/>
+    <text x="45" y="245" fill="#64748b" font-size="9">30ms: 114 dec/s | 6 sequential hops</text>
     <text x="45" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
     <text x="45" y="283" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
-    <text x="45" y="294" fill="#cbd5e1" font-size="10">10ms: 32 dec/s (0.2ms: 158)</text>
+    <text x="45" y="294" fill="#cbd5e1" font-size="10">10ms: 199 dec/s (0.2ms: 1234)</text>
     <rect x="45" y="298" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="298" width="40" height="7" fill="#ec4899" rx="2"/>
-    <text x="45" y="315" fill="#64748b" font-size="9">30ms: 16 dec/s | 6 sequential hops</text>
+    <rect x="45" y="298" width="249" height="7" fill="#ec4899" rx="2"/>
+    <text x="45" y="315" fill="#64748b" font-size="9">30ms: 77 dec/s | 6 sequential hops</text>
     <text x="45" y="342" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="45" y="353" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="45" y="364" fill="#cbd5e1" font-size="10">10ms: 49 dec/s (0.2ms: 190)</text>
+    <text x="45" y="364" fill="#cbd5e1" font-size="10">10ms: 287 dec/s (0.2ms: 1493)</text>
     <rect x="45" y="368" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="368" width="62" height="7" fill="#f59e0b" rx="2"/>
-    <text x="45" y="385" fill="#64748b" font-size="9">30ms: 34 dec/s | 6 sequential hops</text>
+    <rect x="45" y="368" width="250" height="7" fill="#f59e0b" rx="2"/>
+    <text x="45" y="385" fill="#64748b" font-size="9">30ms: 113 dec/s | 6 sequential hops</text>
     <text x="45" y="412" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="45" y="423" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
-    <text x="45" y="434" fill="#cbd5e1" font-size="10">10ms: 40 dec/s (0.2ms: 153)</text>
+    <text x="45" y="434" fill="#cbd5e1" font-size="10">10ms: 197 dec/s (0.2ms: 1282)</text>
     <rect x="45" y="438" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="438" width="50" height="7" fill="#8b5cf6" rx="2"/>
-    <text x="45" y="455" fill="#64748b" font-size="9">30ms: 21 dec/s | 6 sequential hops</text>
+    <rect x="45" y="438" width="246" height="7" fill="#8b5cf6" rx="2"/>
+    <text x="45" y="455" fill="#64748b" font-size="9">30ms: 77 dec/s | 6 sequential hops</text>
     <text x="45" y="482" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="45" y="493" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="45" y="504" fill="#cbd5e1" font-size="10">10ms: 23 dec/s (0.2ms: 106)</text>
+    <text x="45" y="504" fill="#cbd5e1" font-size="10">10ms: 52 dec/s (0.2ms: 417)</text>
     <rect x="45" y="508" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="45" y="508" width="29" height="7" fill="#0284c7" rx="2"/>
-    <text x="45" y="525" fill="#64748b" font-size="9">30ms: 12 dec/s | 12 sequential hops</text>
+    <rect x="45" y="508" width="66" height="7" fill="#0284c7" rx="2"/>
+    <text x="45" y="525" fill="#64748b" font-size="9">30ms: 20 dec/s | 12 sequential hops</text>
     <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="355" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="355" y="154" fill="#cbd5e1" font-size="10">223.2ms p99 @ 10ms RTT</text>
+    <text x="355" y="154" fill="#cbd5e1" font-size="10">30.9ms p99 @ 10ms RTT</text>
     <rect x="355" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="158" width="250" height="7" fill="#38bdf8" rx="2"/>
-    <text x="355" y="175" fill="#64748b" font-size="9">Local: 79.3ms | 30ms: 383.8ms</text>
+    <rect x="355" y="158" width="48" height="7" fill="#38bdf8" rx="2"/>
+    <text x="355" y="175" fill="#64748b" font-size="9">Local: 24.5ms | 30ms: 72.7ms</text>
     <text x="355" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="355" y="213" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
-    <text x="355" y="224" fill="#cbd5e1" font-size="10">274.1ms p99 @ 10ms RTT</text>
+    <text x="355" y="224" fill="#cbd5e1" font-size="10">31.9ms p99 @ 10ms RTT</text>
     <rect x="355" y="228" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="228" width="250" height="7" fill="#ef4444" rx="2"/>
-    <text x="355" y="245" fill="#64748b" font-size="9">Local: 92.1ms | 30ms: 411.3ms</text>
+    <rect x="355" y="228" width="50" height="7" fill="#ef4444" rx="2"/>
+    <text x="355" y="245" fill="#64748b" font-size="9">Local: 21.8ms | 30ms: 71.3ms</text>
     <text x="355" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
     <text x="355" y="283" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
-    <text x="355" y="294" fill="#cbd5e1" font-size="10">328.6ms p99 @ 10ms RTT</text>
+    <text x="355" y="294" fill="#cbd5e1" font-size="10">45.4ms p99 @ 10ms RTT</text>
     <rect x="355" y="298" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="298" width="250" height="7" fill="#ec4899" rx="2"/>
-    <text x="355" y="315" fill="#64748b" font-size="9">Local: 32.4ms | 30ms: 608.0ms</text>
+    <rect x="355" y="298" width="71" height="7" fill="#ec4899" rx="2"/>
+    <text x="355" y="315" fill="#64748b" font-size="9">Local: 26.8ms | 30ms: 104.6ms</text>
     <text x="355" y="342" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="355" y="353" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="355" y="364" fill="#cbd5e1" font-size="10">222.7ms p99 @ 10ms RTT</text>
+    <text x="355" y="364" fill="#cbd5e1" font-size="10">33.0ms p99 @ 10ms RTT</text>
     <rect x="355" y="368" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="368" width="250" height="7" fill="#f59e0b" rx="2"/>
-    <text x="355" y="385" fill="#64748b" font-size="9">Local: 78.9ms | 30ms: 259.5ms</text>
+    <rect x="355" y="368" width="52" height="7" fill="#f59e0b" rx="2"/>
+    <text x="355" y="385" fill="#64748b" font-size="9">Local: 19.8ms | 30ms: 72.5ms</text>
     <text x="355" y="412" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="355" y="423" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
-    <text x="355" y="434" fill="#cbd5e1" font-size="10">240.1ms p99 @ 10ms RTT</text>
+    <text x="355" y="434" fill="#cbd5e1" font-size="10">44.1ms p99 @ 10ms RTT</text>
     <rect x="355" y="438" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="438" width="250" height="7" fill="#8b5cf6" rx="2"/>
-    <text x="355" y="455" fill="#64748b" font-size="9">Local: 90.1ms | 30ms: 442.9ms</text>
+    <rect x="355" y="438" width="69" height="7" fill="#8b5cf6" rx="2"/>
+    <text x="355" y="455" fill="#64748b" font-size="9">Local: 46.3ms | 30ms: 105.0ms</text>
     <text x="355" y="482" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="355" y="493" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="355" y="504" fill="#cbd5e1" font-size="10">467.4ms p99 @ 10ms RTT</text>
+    <text x="355" y="504" fill="#cbd5e1" font-size="10">151.2ms p99 @ 10ms RTT</text>
     <rect x="355" y="508" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="355" y="508" width="250" height="7" fill="#0284c7" rx="2"/>
-    <text x="355" y="525" fill="#64748b" font-size="9">Local: 102.0ms | 30ms: 872.2ms</text>
+    <rect x="355" y="508" width="236" height="7" fill="#0284c7" rx="2"/>
+    <text x="355" y="525" fill="#64748b" font-size="9">Local: 23.7ms | 30ms: 394.4ms</text>
     <text x="665" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="665" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="665" y="154" fill="#cbd5e1" font-size="10">456.0 dec/s (-15.4%)</text>
+    <text x="665" y="154" fill="#cbd5e1" font-size="10">1638.0 dec/s (-30.2%)</text>
     <rect x="665" y="158" width="250" height="7" fill="#334155" rx="2"/>
     <rect x="665" y="158" width="250" height="7" fill="#38bdf8" rx="2"/>
-    <text x="665" y="175" fill="#64748b" font-size="9">WAN: 5825 B/req | p99: 101.8ms</text>
+    <text x="665" y="175" fill="#64748b" font-size="9">WAN: 4008 B/req | p99: 23.7ms</text>
     <text x="665" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="665" y="213" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
-    <text x="665" y="224" fill="#cbd5e1" font-size="10">199.4 dec/s (-1.0%)</text>
+    <text x="665" y="224" fill="#cbd5e1" font-size="10">1619.6 dec/s (55.5%)</text>
     <rect x="665" y="228" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="228" width="125" height="7" fill="#ef4444" rx="2"/>
-    <text x="665" y="245" fill="#64748b" font-size="9">WAN: 9270 B/req | p99: 222.4ms</text>
+    <rect x="665" y="228" width="250" height="7" fill="#ef4444" rx="2"/>
+    <text x="665" y="245" fill="#64748b" font-size="9">WAN: 8364 B/req | p99: 25.5ms</text>
     <text x="665" y="272" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13</text>
     <text x="665" y="283" fill="#94a3b8" font-size="10" font-family="monospace">Dist Function (RF=3)</text>
-    <text x="665" y="294" fill="#cbd5e1" font-size="10">159.6 dec/s (-56.2%)</text>
+    <text x="665" y="294" fill="#cbd5e1" font-size="10">1865.7 dec/s (-12.9%)</text>
     <rect x="665" y="298" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="298" width="100" height="7" fill="#ec4899" rx="2"/>
-    <text x="665" y="315" fill="#64748b" font-size="9">WAN: 12380 B/req | p99: 315.0ms</text>
+    <rect x="665" y="298" width="250" height="7" fill="#ec4899" rx="2"/>
+    <text x="665" y="315" fill="#64748b" font-size="9">WAN: 10086 B/req | p99: 22.0ms</text>
     <text x="665" y="342" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="665" y="353" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="665" y="364" fill="#cbd5e1" font-size="10">298.2 dec/s (-17.5%)</text>
+    <text x="665" y="364" fill="#cbd5e1" font-size="10">1600.2 dec/s (-26.7%)</text>
     <rect x="665" y="368" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="368" width="186" height="7" fill="#f59e0b" rx="2"/>
-    <text x="665" y="385" fill="#64748b" font-size="9">WAN: 9252 B/req | p99: 109.6ms</text>
+    <rect x="665" y="368" width="250" height="7" fill="#f59e0b" rx="2"/>
+    <text x="665" y="385" fill="#64748b" font-size="9">WAN: 7376 B/req | p99: 22.8ms</text>
     <text x="665" y="412" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="665" y="423" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
-    <text x="665" y="434" fill="#cbd5e1" font-size="10">175.5 dec/s (-15.5%)</text>
+    <text x="665" y="434" fill="#cbd5e1" font-size="10">1289.4 dec/s (-11.0%)</text>
     <rect x="665" y="438" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="438" width="110" height="7" fill="#8b5cf6" rx="2"/>
-    <text x="665" y="455" fill="#64748b" font-size="9">WAN: 14747 B/req | p99: 151.0ms</text>
+    <rect x="665" y="438" width="250" height="7" fill="#8b5cf6" rx="2"/>
+    <text x="665" y="455" fill="#64748b" font-size="9">WAN: 18837 B/req | p99: 25.4ms</text>
     <text x="665" y="482" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="665" y="493" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="665" y="504" fill="#cbd5e1" font-size="10">190.9 dec/s (-22.7%)</text>
+    <text x="665" y="504" fill="#cbd5e1" font-size="10">639.8 dec/s (-9.0%)</text>
     <rect x="665" y="508" width="250" height="7" fill="#334155" rx="2"/>
-    <rect x="665" y="508" width="119" height="7" fill="#0284c7" rx="2"/>
-    <text x="665" y="525" fill="#64748b" font-size="9">WAN: 28780 B/req | p99: 158.4ms</text>
+    <rect x="665" y="508" width="250" height="7" fill="#0284c7" rx="2"/>
+    <text x="665" y="525" fill="#64748b" font-size="9">WAN: 67594 B/req | p99: 42.9ms</text>
 </svg>

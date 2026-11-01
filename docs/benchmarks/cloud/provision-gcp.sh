@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Provision (or tear down) a 5-node Ubuntu 24.04 + Docker benchmark cluster on Google Cloud (GCP).
+# Provision (or tear down) a 6-VM (5 cluster nodes + 1 dedicated client driver)
+# Ubuntu + Docker benchmark cluster on Google Cloud (GCP).
 #
 # Usage:
-#   ./docs/benchmarks/cloud/provision-gcp.sh              # provisions 5 VMs and prints HOSTS=...
-#   ./docs/benchmarks/cloud/provision-gcp.sh --teardown   # deletes the 5 VMs and firewall rule
+#   ./docs/benchmarks/cloud/provision-gcp.sh              # provisions 6 VMs and prints HOSTS / SSH_HOSTS
+#   ./docs/benchmarks/cloud/provision-gcp.sh --teardown   # deletes the 6 VMs and firewall rule
 #
 # Environment overrides:
 #   PROJECT_ID      GCP project ID (defaults to `gcloud config get-value project`)
 #   ZONE            GCP zone (default: us-central1-a)
-#   MACHINE_TYPE    Compute Engine machine type (default: n2-standard-4)
+#   MACHINE_TYPE    Compute Engine machine type (default: e2-standard-4)
 #   CLUSTER_PREFIX  Instance name prefix (default: lagrange-bench)
 #   SSH_USER        SSH username for benchmark runner (default: $USER)
 
@@ -16,7 +17,7 @@ set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)}"
 ZONE="${ZONE:-us-central1-a}"
-MACHINE_TYPE="${MACHINE_TYPE:-n2-standard-4}"
+MACHINE_TYPE="${MACHINE_TYPE:-e2-standard-4}"
 CLUSTER_PREFIX="${CLUSTER_PREFIX:-lagrange-bench}"
 NETWORK_TAG="${CLUSTER_PREFIX}-node"
 FIREWALL_RULE="${CLUSTER_PREFIX}-internal"
@@ -34,6 +35,7 @@ NODES=(
   "${CLUSTER_PREFIX}-3"
   "${CLUSTER_PREFIX}-4"
   "${CLUSTER_PREFIX}-5"
+  "${CLUSTER_PREFIX}-6"
 )
 
 if [ "${1:-}" = "--teardown" ]; then
@@ -57,8 +59,22 @@ if ! gcloud compute firewall-rules describe "${FIREWALL_RULE}" --project="${PROJ
     --allow=tcp:1-65535,udp:1-65535,icmp \
     --source-tags="${NETWORK_TAG}" \
     --target-tags="${NETWORK_TAG}" \
-    --description="Intra-cluster traffic for Lagrange 5-node comparative benchmarks"
+    --description="Intra-cluster traffic for Lagrange 5-node + 1-client comparative benchmarks"
 fi
+
+IMAGE_ARGS=(--image-family="ubuntu-2404-lts-amd64" --image-project="ubuntu-os-cloud")
+if gcloud compute images describe-from-family lagrange-distributed-harness --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  echo "[gcp] Using pre-baked image family lagrange-distributed-harness in ${PROJECT_ID}..."
+  IMAGE_ARGS=(--image-family="lagrange-distributed-harness" --image-project="${PROJECT_ID}")
+fi
+
+SSH_PUB_KEY=""
+for candidate in "${HOME}/.ssh/id_ecdsa.pub" "${HOME}/.ssh/id_rsa.pub" "${HOME}/.ssh/google_compute_engine.pub"; do
+  if [ -f "${candidate}" ]; then
+    SSH_PUB_KEY="$(cat "${candidate}")"
+    break
+  fi
+done
 
 STARTUP_SCRIPT='#!/usr/bin/env bash
 set -euxo pipefail
@@ -67,41 +83,58 @@ if ! command -v docker >/dev/null 2>&1; then
   apt-get install -y docker.io
   systemctl enable --now docker
 fi
+chmod 666 /var/run/docker.sock || true
 for u in $(ls /home 2>/dev/null || true); do
   usermod -aG docker "$u" || true
 done
 '
 
-echo "[gcp] Creating 5 benchmark VMs (${MACHINE_TYPE}) in ${ZONE}..."
+TMP_META="$(mktemp)"
+trap 'rm -f "${TMP_META}"' EXIT
+printf '%s\n' "${STARTUP_SCRIPT}" > "${TMP_META}"
+
+META_ARGS=(--metadata-from-file="startup-script=${TMP_META}")
+if [ -n "${SSH_PUB_KEY}" ]; then
+  META_ARGS+=(--metadata="ssh-keys=${SSH_USER}:${SSH_PUB_KEY}")
+fi
+
+echo "[gcp] Creating 6 identical benchmark VMs (${MACHINE_TYPE}) in ${ZONE}..."
 gcloud compute instances create "${NODES[@]}" \
   --project="${PROJECT_ID}" \
   --zone="${ZONE}" \
   --machine-type="${MACHINE_TYPE}" \
-  --image-family="ubuntu-2404-lts-amd64" \
-  --image-project="ubuntu-os-cloud" \
+  "${IMAGE_ARGS[@]}" \
   --boot-disk-size="50GB" \
   --boot-disk-type="pd-ssd" \
   --tags="${NETWORK_TAG}" \
-  --metadata="startup-script=${STARTUP_SCRIPT}"
+  "${META_ARGS[@]}"
 
-echo "[gcp] Resolving internal IP addresses..."
-IPS=()
+echo "[gcp] Resolving internal and external IP addresses..."
+INTERNAL_IPS=()
+EXTERNAL_IPS=()
 for node in "${NODES[@]}"; do
-  ip="$(gcloud compute instances describe "${node}" \
+  in_ip="$(gcloud compute instances describe "${node}" \
     --project="${PROJECT_ID}" \
     --zone="${ZONE}" \
     --format='get(networkInterfaces[0].networkIP)')"
-  IPS+=("${ip}")
+  ex_ip="$(gcloud compute instances describe "${node}" \
+    --project="${PROJECT_ID}" \
+    --zone="${ZONE}" \
+    --format='get(networkInterfaces[0].accessConfigs[0].natIP)')"
+  INTERNAL_IPS+=("${in_ip}")
+  EXTERNAL_IPS+=("${ex_ip}")
 done
 
-HOSTS_CSV="$(IFS=,; echo "${IPS[*]}")"
+HOSTS_CSV="$(IFS=,; echo "${INTERNAL_IPS[*]}")"
+SSH_HOSTS_CSV="$(IFS=,; echo "${EXTERNAL_IPS[*]}")"
 echo ""
-echo "[gcp] 5-node GCP cluster provisioned."
+echo "[gcp] 6-VM GCP benchmark cluster provisioned (5 cluster VMs + 1 dedicated client VM)."
 echo "export HOSTS=\"${HOSTS_CSV}\""
+echo "export SSH_HOSTS=\"${SSH_HOSTS_CSV}\""
 echo "export SSH_USER=\"${SSH_USER}\""
 echo ""
-echo "Run the full comparative suite from a VM in the same VPC (e.g. ${NODES[0]}):"
-echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts \"\${HOSTS}\" --ssh-user \"\${SSH_USER}\" --regenerate-docs"
+echo "Run the full comparative suite:"
+echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts \"\${HOSTS}\" --ssh-hosts \"\${SSH_HOSTS}\" --ssh-user \"\${SSH_USER}\" --execution-target gcp --regenerate-docs"
 echo ""
 echo "When finished, tear down all resources with:"
 echo "  ./docs/benchmarks/cloud/provision-gcp.sh --teardown"

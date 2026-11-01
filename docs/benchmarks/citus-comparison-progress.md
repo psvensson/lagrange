@@ -26,28 +26,28 @@ Evaluating server-side distributed function pushdown (`create_distributed_functi
 
 | Target | Local-Only | One Remote Stage | Sequential | Fan-Out |
 | --- | --- | --- | --- | --- |
-| lagrange | 654.1 dec/s, p99 75.4ms, 0B, 0RT | 391.9 dec/s, p99 100.4ms, 3348B, 1RT | 273.7 dec/s, p99 122.3ms, 5164B, 2RT | 288.0 dec/s, p99 127.1ms, 5046B, 1RT |
-| tidb-tikv | 383.8 dec/s, p99 102.0ms, 7600B, 2RT | 247.1 dec/s, p99 134.0ms, 17603B, 4RT | 115.2 dec/s, p99 241.7ms, 49770B, 6RT | 156.7 dec/s, p99 166.2ms, 29169B, 5RT |
-| pg-plpgsql-sync-ha-rf3 | 358.2 dec/s, p99 78.9ms, 5114B, 1RT | 361.4 dec/s, p99 80.9ms, 5735B, 1RT | 233.5 dec/s, p99 120.3ms, 9742B, 1RT | 118.2 dec/s, p99 252.4ms, 10145B, 1RT |
-| citus-sql-service | 319.6 dec/s, p99 107.7ms, 8142B, 1RT | 223.2 dec/s, p99 125.4ms, 13112B, 2RT | 126.4 dec/s, p99 200.8ms, 20487B, 4RT | 80.3 dec/s, p99 388.3ms, 20059B, 3RT |
-| citus-distributed-function | 1286.3 dec/s, p99 32.4ms, 1667B, 1RT | 364.2 dec/s, p99 125.5ms, 6980B, 2RT | 180.0 dec/s, p99 180.1ms, 15251B, 3RT | 248.7 dec/s, p99 116.5ms, 11026B, 2RT |
+| lagrange | 2662.9 dec/s, p99 26.8ms, 0B, 0RT | 2172.3 dec/s, p99 26.8ms, 2950B, 1RT | 1715.1 dec/s, p99 33.8ms, 4532B, 2RT | 1778.4 dec/s, p99 24.0ms, 4537B, 1RT |
+| tidb-tikv | 2309.0 dec/s, p99 23.7ms, 7181B, 1RT | 702.9 dec/s, p99 37.7ms, 39152B, 2RT | 521.2 dec/s, p99 44.4ms, 74804B, 4RT | 514.8 dec/s, p99 44.8ms, 75097B, 4RT |
+| pg-plpgsql-sync-ha-rf3 | 2631.8 dec/s, p99 19.8ms, 1761B, 1RT | 2181.6 dec/s, p99 32.4ms, 4824B, 1RT | 1463.2 dec/s, p99 34.0ms, 7274B, 1RT | 1556.8 dec/s, p99 31.4ms, 7407B, 1RT |
+| citus-sql-service | 2219.1 dec/s, p99 26.8ms, 7744B, 1RT | 660.9 dec/s, p99 35.1ms, 35999B, 2RT | 502.9 dec/s, p99 46.2ms, 69629B, 4RT | 510.9 dec/s, p99 52.0ms, 70110B, 4RT |
+| citus-distributed-function | 2644.6 dec/s, p99 26.8ms, 1873B, 1RT | 2141.1 dec/s, p99 28.8ms, 6374B, 1RT | 1247.0 dec/s, p99 45.4ms, 17370B, 1RT | 1273.6 dec/s, p99 35.6ms, 17126B, 1RT |
 
 ## Scenario A OLTP baseline comparison ([tidb-oltp-baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline))
 
 | Target | Version | Units | Processes | RPO=0 HA | Evidence Tier | Throughput (tx/s) | p50 (ms) | p95 (ms) | p99 (ms) | Proofs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | 0.4.0 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 382.90 | 51.94 | 90.84 | 120.29 | 33/33 |
-| tidb-tikv | v8.5.8 | 5 | 5 | Yes (RPO=0) | observed-docker-cluster | 104.20 | 75.37 | 299.00 | 327.16 | 33/33 |
-| pg-plpgsql-sync-ha-rf3 | 17.2-patroni-4.0-plpgsql | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 233.50 | 65.43 | 176.21 | 222.66 | 33/33 |
-| citus-sql-service | 13.0-pg17 | 5 | 5 | Yes (RPO=0) | observed-docker-cluster | 78.10 | 161.16 | 326.65 | 346.30 | 33/33 |
-| citus-distributed-function | 13.0-pg17-udf | 4 | 4 | Yes (RPO=0) | observed-docker-cluster | 209.60 | 69.30 | 148.93 | 238.42 | 33/33 |
+| lagrange | 0.4.0 | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 2014.00 | 11.06 | 23.26 | 25.30 | 33/33 |
+| tidb-tikv | v8.5.8 | 5 | 5 | Yes (RPO=0) | observed-docker-cluster | 1118.70 | 19.40 | 48.81 | 52.76 | 33/33 |
+| pg-plpgsql-sync-ha-rf3 | 17.2-patroni-4.0-plpgsql | 3 | 3 | Yes (RPO=0) | observed-docker-cluster | 1506.20 | 14.46 | 22.14 | 23.55 | 33/33 |
+| citus-sql-service | 13.0-pg17 | 5 | 5 | Yes (RPO=0) | observed-docker-cluster | 1040.50 | 15.67 | 24.13 | 26.43 | 33/33 |
+| citus-distributed-function | 13.0-pg17-udf | 4 | 4 | Yes (RPO=0) | observed-docker-cluster | 986.10 | 18.21 | 36.54 | 47.20 | 33/33 |
 
 ## Scenario B risk decision and graph-shape comparison ([tidb-distributed-risk-decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision))
 
 | Target | Evidence Tier | Decisions/s | p50 (ms) | p95 (ms) | p99 (ms) | WAN Bytes/Dec | SQL Round-Trips | Movement Continuity |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lagrange | observed-docker-cluster | 391.90 | 54.31 | 80.56 | 100.36 | 3348 | 0.00 | Passed |
-| tidb-tikv | observed-docker-cluster | 247.10 | 67.59 | 111.85 | 134.01 | 17603 | 6.00 | Passed |
-| pg-plpgsql-sync-ha-rf3 | observed-docker-cluster | 361.40 | 47.50 | 80.09 | 80.90 | 5735 | 1.00 | Passed |
-| citus-sql-service | observed-docker-cluster | 223.20 | 65.43 | 101.37 | 125.37 | 13112 | 6.00 | Passed |
-| citus-distributed-function | observed-docker-cluster | 364.20 | 43.17 | 112.08 | 125.52 | 6980 | 2.00 | Passed |
+| lagrange | observed-docker-cluster | 2172.30 | 9.88 | 23.42 | 26.78 | 2950 | 1.00 | Passed |
+| tidb-tikv | observed-docker-cluster | 702.90 | 23.85 | 33.45 | 37.66 | 39152 | 3.00 | Passed |
+| pg-plpgsql-sync-ha-rf3 | observed-docker-cluster | 2181.60 | 9.13 | 24.02 | 32.38 | 4824 | 1.00 | Passed |
+| citus-sql-service | observed-docker-cluster | 660.90 | 25.94 | 34.37 | 35.14 | 35999 | 3.00 | Passed |
+| citus-distributed-function | observed-docker-cluster | 2141.10 | 10.62 | 23.60 | 28.77 | 6374 | 1.00 | Passed |

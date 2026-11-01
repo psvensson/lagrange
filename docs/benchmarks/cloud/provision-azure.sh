@@ -74,8 +74,8 @@ runcmd:
   - usermod -aG docker ${ADMIN_USER}
 EOF
 
-echo "[azure] Creating 5 Ubuntu 24.04 VMs (${VM_SIZE}) in ${RESOURCE_GROUP}..."
-for i in 1 2 3 4 5; do
+echo "[azure] Creating 6 Ubuntu 24.04 VMs (${VM_SIZE}) in ${RESOURCE_GROUP} (5 cluster + 1 client)..."
+for i in 1 2 3 4 5 6; do
   VM_NAME="${CLUSTER_PREFIX}-${i}"
   echo "[azure] Provisioning ${VM_NAME}..."
   az vm create \
@@ -94,31 +94,40 @@ for i in 1 2 3 4 5; do
     --no-wait
 done
 
-echo "[azure] Waiting for all 5 VMs to finish provisioning..."
+echo "[azure] Waiting for all 6 VMs to finish provisioning..."
 VM_IDS=()
-for i in 1 2 3 4 5; do
+for i in 1 2 3 4 5 6; do
   VM_IDS+=("$(az vm show -g "${RESOURCE_GROUP}" -n "${CLUSTER_PREFIX}-${i}" --query id -o tsv)")
 done
 az vm wait --created --ids "${VM_IDS[@]}"
 
 IPS=()
-for i in 1 2 3 4 5; do
+PUB_IPS=()
+for i in 1 2 3 4 5 6; do
   ip="$(az vm list-ip-addresses \
     --resource-group "${RESOURCE_GROUP}" \
     --name "${CLUSTER_PREFIX}-${i}" \
     --query '[0].virtualMachine.network.privateIpAddresses[0]' \
     --output tsv)"
+  pub_ip="$(az vm list-ip-addresses \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${CLUSTER_PREFIX}-${i}" \
+    --query '[0].virtualMachine.network.publicIpAddresses[0].ipAddress' \
+    --output tsv)"
   IPS+=("${ip}")
+  PUB_IPS+=("${pub_ip}")
 done
 
 HOSTS_CSV="$(IFS=,; echo "${IPS[*]}")"
+SSH_HOSTS_CSV="$(IFS=,; echo "${PUB_IPS[*]}")"
 echo ""
-echo "[azure] 5-node Azure cluster provisioned."
+echo "[azure] 6-VM Azure benchmark cluster provisioned (5 cluster VMs + 1 dedicated client VM)."
 echo "export HOSTS=\"${HOSTS_CSV}\""
+echo "export SSH_HOSTS=\"${SSH_HOSTS_CSV}\""
 echo "export SSH_USER=\"${ADMIN_USER}\""
 echo ""
-echo "Run the full comparative suite from a VM in ${VNET_NAME} (e.g. ${CLUSTER_PREFIX}-1):"
-echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts \"\${HOSTS}\" --ssh-user \"\${SSH_USER}\" --regenerate-docs"
+echo "Run the full comparative suite:"
+echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts \"\${HOSTS}\" --ssh-hosts \"\${SSH_HOSTS}\" --ssh-user \"\${SSH_USER}\" --execution-target gcp --regenerate-docs"
 echo ""
 echo "When finished, tear down all resources with:"
 echo "  ./docs/benchmarks/cloud/provision-azure.sh --teardown"

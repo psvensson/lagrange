@@ -14,93 +14,93 @@
   <text x="655" y="100" fill="#38bdf8" font-size="13" font-weight="bold">Scenario B: 4-Shape Ladder</text>
   <text x="655" y="118" fill="#94a3b8" font-size="10">Throughput &amp; WAN bytes</text>
     <text x="35" y="140" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
-    <text x="35" y="154" fill="#94a3b8" font-size="10">382.9 tx/s (p95: 90.8ms)</text>
+    <text x="35" y="154" fill="#94a3b8" font-size="10">2014.0 tx/s (p95: 23.3ms)</text>
     <rect x="35" y="160" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="35" y="160" width="250" height="8" fill="#38bdf8" rx="3"/>
     <text x="35" y="178" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="140" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
-    <text x="345" y="154" fill="#94a3b8" font-size="10">391.9 dec/s (p99: 100.4ms)</text>
+    <text x="345" y="154" fill="#94a3b8" font-size="10">2172.3 dec/s (p99: 26.8ms)</text>
     <rect x="345" y="160" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="160" width="196" height="8" fill="#38bdf8" rx="3"/>
+    <rect x="345" y="160" width="250" height="8" fill="#38bdf8" rx="3"/>
     <text x="345" y="178" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="655" y="140" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange (3-unit)</text>
-    <text x="655" y="154" fill="#94a3b8" font-size="10">WAN: 3348B (0.0 RT)</text>
+    <text x="655" y="154" fill="#94a3b8" font-size="10">WAN: 2950B (1.0 RT)</text>
     <rect x="655" y="160" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="160" width="124" height="8" fill="#38bdf8" rx="3"/>
-    <text x="655" y="178" fill="#94a3b8" font-size="9">654 / 392 / 274 / 288 dec/s</text>
+    <rect x="655" y="160" width="110" height="8" fill="#38bdf8" rx="3"/>
+    <text x="655" y="178" fill="#94a3b8" font-size="9">2663 / 2172 / 1715 / 1778 dec/s</text>
     <text x="35" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV (6-unit)</text>
-    <text x="35" y="216" fill="#94a3b8" font-size="10">104.2 tx/s (p95: 299.0ms)</text>
+    <text x="35" y="216" fill="#94a3b8" font-size="10">1118.7 tx/s (p95: 48.8ms)</text>
     <rect x="35" y="222" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="35" y="222" width="250" height="8" fill="#f59e0b" rx="3"/>
     <text x="35" y="240" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV (6-unit)</text>
-    <text x="345" y="216" fill="#94a3b8" font-size="10">247.1 dec/s (p99: 134.0ms)</text>
+    <text x="345" y="216" fill="#94a3b8" font-size="10">702.9 dec/s (p99: 37.7ms)</text>
     <rect x="345" y="222" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="222" width="124" height="8" fill="#f59e0b" rx="3"/>
+    <rect x="345" y="222" width="250" height="8" fill="#f59e0b" rx="3"/>
     <text x="345" y="240" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="655" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV (6-unit)</text>
-    <text x="655" y="216" fill="#94a3b8" font-size="10">WAN: 17603B (6.0 RT)</text>
+    <text x="655" y="216" fill="#94a3b8" font-size="10">WAN: 39152B (3.0 RT)</text>
     <rect x="655" y="222" width="260" height="8" fill="#334155" rx="3"/>
     <rect x="655" y="222" width="260" height="8" fill="#f59e0b" rx="3"/>
-    <text x="655" y="240" fill="#94a3b8" font-size="9">384 / 247 / 115 / 157 dec/s</text>
+    <text x="655" y="240" fill="#94a3b8" font-size="9">2309 / 703 / 521 / 515 dec/s</text>
     <text x="35" y="264" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
-    <text x="35" y="278" fill="#94a3b8" font-size="10">209.6 tx/s (p95: 148.9ms)</text>
+    <text x="35" y="278" fill="#94a3b8" font-size="10">986.1 tx/s (p95: 36.5ms)</text>
     <rect x="35" y="284" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="35" y="284" width="250" height="8" fill="#ec4899" rx="3"/>
     <text x="35" y="302" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="264" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
-    <text x="345" y="278" fill="#94a3b8" font-size="10">364.2 dec/s (p99: 125.5ms)</text>
+    <text x="345" y="278" fill="#94a3b8" font-size="10">2141.1 dec/s (p99: 28.8ms)</text>
     <rect x="345" y="284" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="284" width="182" height="8" fill="#ec4899" rx="3"/>
+    <rect x="345" y="284" width="250" height="8" fill="#ec4899" rx="3"/>
     <text x="345" y="302" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="655" y="264" fill="#cbd5e1" font-size="11" font-family="monospace">Citus 13 (Dist Function)</text>
-    <text x="655" y="278" fill="#94a3b8" font-size="10">WAN: 6980B (2.0 RT)</text>
+    <text x="655" y="278" fill="#94a3b8" font-size="10">WAN: 6374B (1.0 RT)</text>
     <rect x="655" y="284" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="284" width="259" height="8" fill="#ec4899" rx="3"/>
-    <text x="655" y="302" fill="#94a3b8" font-size="9">1286 / 364 / 180 / 249 dec/s</text>
+    <rect x="655" y="284" width="237" height="8" fill="#ec4899" rx="3"/>
+    <text x="655" y="302" fill="#94a3b8" font-size="9">2645 / 2141 / 1247 / 1274 dec/s</text>
     <text x="35" y="326" fill="#cbd5e1" font-size="11" font-family="monospace">YB 2024.2 (YSQL + App)</text>
-    <text x="35" y="340" fill="#94a3b8" font-size="10">237.3 tx/s (p95: 131.2ms)</text>
+    <text x="35" y="340" fill="#94a3b8" font-size="10">1868.7 tx/s (p95: 17.1ms)</text>
     <rect x="35" y="346" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="35" y="346" width="250" height="8" fill="#8b5cf6" rx="3"/>
     <text x="35" y="364" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="326" fill="#cbd5e1" font-size="11" font-family="monospace">YB 2024.2 (YSQL + App)</text>
-    <text x="345" y="340" fill="#94a3b8" font-size="10">275.6 dec/s (p99: 145.1ms)</text>
+    <text x="345" y="340" fill="#94a3b8" font-size="10">549.0 dec/s (p99: 47.7ms)</text>
     <rect x="345" y="346" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="346" width="138" height="8" fill="#8b5cf6" rx="3"/>
+    <rect x="345" y="346" width="250" height="8" fill="#8b5cf6" rx="3"/>
     <text x="345" y="364" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="655" y="326" fill="#cbd5e1" font-size="11" font-family="monospace">YB 2024.2 (YSQL + App)</text>
-    <text x="655" y="340" fill="#94a3b8" font-size="10">WAN: 11868B (5.0 RT)</text>
+    <text x="655" y="340" fill="#94a3b8" font-size="10">WAN: 35092B (3.0 RT)</text>
     <rect x="655" y="346" width="260" height="8" fill="#334155" rx="3"/>
     <rect x="655" y="346" width="260" height="8" fill="#8b5cf6" rx="3"/>
-    <text x="655" y="364" fill="#94a3b8" font-size="9">377 / 276 / 140 / 172 dec/s</text>
+    <text x="655" y="364" fill="#94a3b8" font-size="9">1815 / 549 / 384 / 481 dec/s</text>
     <text x="35" y="388" fill="#cbd5e1" font-size="11" font-family="monospace">YB 2024.2 (Stored Proc)</text>
-    <text x="35" y="402" fill="#94a3b8" font-size="10">202.1 tx/s (p95: 149.2ms)</text>
+    <text x="35" y="402" fill="#94a3b8" font-size="10">1585.6 tx/s (p95: 21.5ms)</text>
     <rect x="35" y="408" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="35" y="408" width="250" height="8" fill="#a855f7" rx="3"/>
     <text x="35" y="426" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="388" fill="#cbd5e1" font-size="11" font-family="monospace">YB 2024.2 (Stored Proc)</text>
-    <text x="345" y="402" fill="#94a3b8" font-size="10">207.8 dec/s (p99: 125.8ms)</text>
+    <text x="345" y="402" fill="#94a3b8" font-size="10">1448.8 dec/s (p99: 38.9ms)</text>
     <rect x="345" y="408" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="408" width="104" height="8" fill="#a855f7" rx="3"/>
+    <rect x="345" y="408" width="250" height="8" fill="#a855f7" rx="3"/>
     <text x="345" y="426" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="655" y="388" fill="#cbd5e1" font-size="11" font-family="monospace">YB 2024.2 (Stored Proc)</text>
-    <text x="655" y="402" fill="#94a3b8" font-size="10">WAN: 9154B (2.0 RT)</text>
+    <text x="655" y="402" fill="#94a3b8" font-size="10">WAN: 11455B (1.0 RT)</text>
     <rect x="655" y="408" width="260" height="8" fill="#334155" rx="3"/>
     <rect x="655" y="408" width="260" height="8" fill="#a855f7" rx="3"/>
-    <text x="655" y="426" fill="#94a3b8" font-size="9">335 / 208 / 169 / 142 dec/s</text>
+    <text x="655" y="426" fill="#94a3b8" font-size="9">1778 / 1449 / 1015 / 1164 dec/s</text>
     <text x="35" y="450" fill="#cbd5e1" font-size="11" font-family="monospace">Ignite 3 (Colocated)</text>
-    <text x="35" y="464" fill="#94a3b8" font-size="10">203.2 tx/s (p95: 195.3ms)</text>
+    <text x="35" y="464" fill="#94a3b8" font-size="10">680.3 tx/s (p95: 69.6ms)</text>
     <rect x="35" y="470" width="250" height="8" fill="#334155" rx="3"/>
     <rect x="35" y="470" width="250" height="8" fill="#ef4444" rx="3"/>
     <text x="35" y="488" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="345" y="450" fill="#cbd5e1" font-size="11" font-family="monospace">Ignite 3 (Colocated)</text>
-    <text x="345" y="464" fill="#94a3b8" font-size="10">201.5 dec/s (p99: 340.4ms)</text>
+    <text x="345" y="464" fill="#94a3b8" font-size="10">1041.3 dec/s (p99: 91.7ms)</text>
     <rect x="345" y="470" width="250" height="8" fill="#334155" rx="3"/>
-    <rect x="345" y="470" width="101" height="8" fill="#ef4444" rx="3"/>
+    <rect x="345" y="470" width="250" height="8" fill="#ef4444" rx="3"/>
     <text x="345" y="488" fill="#64748b" font-size="9">observed-docker-cluster</text>
     <text x="655" y="450" fill="#cbd5e1" font-size="11" font-family="monospace">Ignite 3 (Colocated)</text>
-    <text x="655" y="464" fill="#94a3b8" font-size="10">WAN: 5773B (2.0 RT)</text>
+    <text x="655" y="464" fill="#94a3b8" font-size="10">WAN: 5310B (1.0 RT)</text>
     <rect x="655" y="470" width="260" height="8" fill="#334155" rx="3"/>
-    <rect x="655" y="470" width="214" height="8" fill="#ef4444" rx="3"/>
-    <text x="655" y="488" fill="#94a3b8" font-size="9">494 / 202 / 83 / 170 dec/s</text>
+    <rect x="655" y="470" width="197" height="8" fill="#ef4444" rx="3"/>
+    <text x="655" y="488" fill="#94a3b8" font-size="9">2575 / 1041 / 753 / 1659 dec/s</text>
 </svg>
