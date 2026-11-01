@@ -131,7 +131,10 @@ Options:
                                 (default: ${DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH})
   --output <path>               Campaign summary JSON
   --lock-wait-minutes <n>       Bounded wait for each lab host lock (default: 30)
-  --dry-run                     Print the manifest and the hosts it would lock
+  --dry-run                     Print the manifest and the hosts it would lock (lab: the
+                                fleet is discovered as for a live run)
+  --from-recorded-facts         With --dry-run: plan from the inventory's recorded facts,
+                                without probing the fleet
   --help                        Show this help
 `;
 
@@ -170,6 +173,7 @@ function parseCliArgs(argv, env) {
     const arg = argv[index];
     if (arg === '--help' || arg === '-h') opts.help = true;
     else if (arg === '--dry-run') opts.dryRun = true;
+    else if (arg === '--from-recorded-facts') opts.fromRecordedFacts = true;
     else if (VALUE_FLAGS[arg] && argv[index + 1] !== undefined) {
       opts[VALUE_FLAGS[arg]] = argv[index + 1];
       index += 1;
@@ -340,10 +344,7 @@ function campaignExitCode(runExitCode, outcome) {
 
 async function runLabCampaign({opts, manifest, dataHostCount}) {
   const state = await loadState({allowMissing: false});
-  const requirement = fleetRequirement(REPO_ROOT);
-  const fleet = await discoverFleet({nodes: selectNodesByRole(state, HARNESS_ROLE),
-    controllerRepoPath: REPO_ROOT, lockGraphSha256: requirement.lockGraphSha256,
-    nodeMinimum: requirement.nodeMinimum});
+  const {requirement, fleet} = await discoverLabFleet(state);
   const hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
     nodeMinimum: requirement.nodeMinimum});
   const budgetMs = manifest.campaignBudgetMinutes * MS_PER_MINUTE;
@@ -361,17 +362,31 @@ async function runLabCampaign({opts, manifest, dataHostCount}) {
   }
 }
 
+// The fleet's current facts through the lab owner's discovery (read-only).
+async function discoverLabFleet(state) {
+  const requirement = fleetRequirement(REPO_ROOT);
+  return {requirement, fleet: await discoverFleet({nodes: selectNodesByRole(state, HARNESS_ROLE),
+    controllerRepoPath: REPO_ROOT, lockGraphSha256: requirement.lockGraphSha256,
+    nodeMinimum: requirement.nodeMinimum})};
+}
+
 async function dryRunPlan({opts, manifest, dataHostCount}) {
   const lab = opts.executionTarget === TARGET.LAB;
-  const hosts = lab ?
-    selectLabBenchmarkHosts({state: await loadState({allowMissing: false}), dataHostCount,
-      nodeMinimum: fleetRequirement(REPO_ROOT).nodeMinimum}) :
-    gcpHosts(opts, dataHostCount);
+  let hosts;
+  if (lab) {
+    const state = await loadState({allowMissing: false});
+    const {requirement, fleet} = opts.fromRecordedFacts ?
+      {requirement: fleetRequirement(REPO_ROOT), fleet: null} : await discoverLabFleet(state);
+    hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
+      nodeMinimum: requirement.nodeMinimum});
+  } else {
+    hosts = gcpHosts(opts, dataHostCount);
+  }
   return {schema: PLAN_SCHEMA, executionTarget: opts.executionTarget,
     campaignId: manifest.campaignId, manifestDigest: manifest.manifestDigest,
     rawObservationsPath: opts.rawObservationsPath,
-    hostSource: lab ?
-      'registered lab inventory (recorded facts; a live run re-discovers the fleet)' :
+    hostSource: lab ? `registered lab inventory (${opts.fromRecordedFacts ?
+      'recorded facts' : 'facts discovered now'})` :
       '--hosts (no infrastructure is created)',
     ...(lab ? {labHosts: hosts.map(({name, ip, role, lock}) => ({name, ip, role, lock}))} :
       {hosts: hosts.map(({ip, sshTarget, role}) => ({ip, sshTarget, role}))}),

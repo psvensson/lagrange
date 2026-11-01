@@ -51,7 +51,7 @@ const FLEET = [
 
 test('D25: --dry-run defaults to the lab and names the inventory hosts it would lock',
   () => {
-    const result = runCli(['--dry-run', '--campaign-id', 'bench-test-1'],
+    const result = runCli(['--dry-run', '--from-recorded-facts', '--campaign-id', 'bench-test-1'],
       {LAGRANGE_LAB_HOME: inventoryDir(FLEET)});
     assert.equal(result.status, 0, result.stderr);
     const plan = JSON.parse(result.stdout);
@@ -67,14 +67,16 @@ test('D25: --dry-run defaults to the lab and names the inventory hosts it would 
   });
 
 test('D25: the lab target refuses hand-typed hosts', () => {
-  const result = runCli(['--dry-run', '--hosts', '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4'],
-    {LAGRANGE_LAB_HOME: inventoryDir(FLEET)});
+  const result = runCli(['--dry-run', '--from-recorded-facts', '--hosts',
+    '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4'],
+  {LAGRANGE_LAB_HOME: inventoryDir(FLEET)});
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /lab hosts come from the registered lab inventory/u);
 });
 
 test('D25: too few free harness hosts is a typed topology refusal', () => {
-  const result = runCli(['--dry-run'], {LAGRANGE_LAB_HOME: inventoryDir(FLEET.slice(0, 3))});
+  const result = runCli(['--dry-run', '--from-recorded-facts'],
+    {LAGRANGE_LAB_HOME: inventoryDir(FLEET.slice(0, 3))});
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /refused_insufficient_host_topology/u);
 });
