@@ -7,19 +7,16 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  createControllableMessageGroupService,
   createTestTransport,
   registerMessageGroupServiceLifecycleHooks,
   setTestPortBase,
 } from './message-group-service-test-support.js';
-import {ControllableConsensusPort} from
-  '../test-helpers/controllable-consensus-port.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
-  RAFT_MEMBERSHIP_OPERATION,
-  RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
-import {RaftRole} from '../../src/message-group/message-group-service.js';
+import {MessageGroupService, RaftRole} from
+  '../../src/message-group/message-group-service.js';
 import {
   CDC_OPERATION,
   COLUMN,
@@ -32,6 +29,8 @@ const GROUP_ID = 'mg-unparsable-address';
 const LOCAL_REPLICA = `${GROUP_ID}-r1`;
 const PEER_REPLICA = `${GROUP_ID}-r2`;
 const PEER_NODE = 'peer-node';
+const WAIT_MS = 5000;
+const POLL_MS = 10;
 
 setTestPortBase(24260);
 registerMessageGroupServiceLifecycleHooks();
@@ -48,40 +47,57 @@ function upsertPeerRow(service, address) {
     });
 }
 
-test('a message group leader proposes no node for an unparsable address ' +
-  'and the node of a corrected one', async (t) => {
+async function waitFor(predicate) {
+  const deadline = Date.now() + WAIT_MS;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+  return predicate();
+}
+
+test('a message group leader refuses an unparsable row at the native port ' +
+  'and admits its correction through the cache wake', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
+  const uncaught = [];
+  const onUncaught = (error) => uncaught.push(error);
+  process.on('uncaughtException', onUncaught);
   try {
-    const port = new ControllableConsensusPort();
-    const service = createControllableMessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: GROUP_ID, replicaId: LOCAL_REPLICA, nodeId, transport: router,
-    }, port);
-    await service.initialize();
-    t.equal(port.role, RaftRole.LEADER, 'the lone replica leads its group');
-
-    // The double answers as the production port does for an ADD with no node.
-    port.setConfChangeHandler(() => Object.freeze({
-      outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
-      reason: RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_NODE_ID,
-      phase: 'membership-admission', retryable: false,
-      recoveryRequired: false,
     }));
-    upsertPeerRow(service, `ws://localhost:7000/message-group/${PEER_REPLICA}`);
-    t.doesNotThrow(() => service.reconcileRaftPeersFromCache(),
-      'an unparsable address raises no untyped failure');
-    t.same(port.confChanges, [{type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
-      replicaIdentity: PEER_REPLICA, nodeId: null}],
-    'the port is the one owner of refusing an ADD that names no node');
+    try {
+      await service.initialize();
+      t.equal(service.raft.readStatus().role, RaftRole.LEADER,
+        'the native lone-replica port leads its group');
+      const admissions = [];
+      const originalLogger = service.logger;
+      const recordingLogger = Object.create(originalLogger);
+      recordingLogger.warn = (message, payload) => {
+        if (payload?.admission) admissions.push(payload.admission);
+        return originalLogger.warn(message, payload);
+      };
+      service.logger = recordingLogger;
 
-    port.confChanges.length = 0;
-    port.setConfChangeHandler(null);
-    upsertPeerRow(service, `${PEER_NODE}/message-group/${PEER_REPLICA}`);
-    service.reconcileRaftPeersFromCache();
-    t.same(port.confChanges.at(-1), {type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
-      replicaIdentity: PEER_REPLICA, nodeId: PEER_NODE},
-    'a corrected row proposes the node it names');
-    await service.shutdown();
+      upsertPeerRow(service, `ws://localhost:7000/message-group/${PEER_REPLICA}`);
+      t.equal(await waitFor(() => admissions.some((admission) =>
+        admission.reason === RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_NODE_ID)),
+      true, 'the actual port refuses an ADD without a committed node');
+      t.same(uncaught, [], 'no error escaped the cache-triggered reconcile hop');
+      t.equal(service.raft.readStatus().peers.some((peer) =>
+        peer.replicaIdentity === PEER_REPLICA), false,
+      'the malformed row did not admit a peer');
+
+      upsertPeerRow(service, `${PEER_NODE}/message-group/${PEER_REPLICA}`);
+      t.equal(await waitFor(() => service.raft.readStatus().peers.some((peer) =>
+        peer.replicaIdentity === PEER_REPLICA)), true,
+      'the corrected row is admitted through the real cache wake');
+      t.same(uncaught, [], 'no error escaped after the correction');
+    } finally {
+      await service.shutdown();
+    }
   } finally {
+    process.off('uncaughtException', onUncaught);
     await cleanup();
   }
 });
