@@ -1,0 +1,48 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "cross-node-founding-release-cut-over",
+      "passed": false,
+      "evidence": "red: test/partition/fresh-create-release-authority-cross-node.integration.test.js test 1 answers release_operator_required{fresh_storage_or_operator_authority}"
+    },
+    {
+      "id": "legacy-and-join-no-origin-still-refused",
+      "passed": false,
+      "evidence": "negative controls tests 2 and 3 (green today, must stay green)"
+    },
+    {
+      "id": "leader-side-authority-unavailability-typed",
+      "passed": false,
+      "evidence": "red: tests 4a and 4b answer release_operator_required"
+    },
+    {
+      "id": "forged-identity-refused",
+      "passed": false,
+      "evidence": "negative control test 7 (green today, must stay green)"
+    },
+    {
+      "id": "configuration-change-still-releases",
+      "passed": false,
+      "evidence": "red: test 8 answers release_operator_required"
+    },
+    {
+      "id": "no-fresh-create-token-remains",
+      "passed": false,
+      "evidence": "red: test/node/fresh-create-release-authority-no-token.test.js"
+    },
+    {
+      "id": "reproducer-user-table-founding-released",
+      "passed": false,
+      "evidence": "not measured: live run after implementation"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "evidence": "not yet"
+    }
+  ],
+  "evidence": [],
+  "applicability": "Red at seal on work/fresh-create-release-authority-20261103: tests 1, 4a, 4b, 5, 6, 8 red through the production refusal; tests 2, 3, 7 are green negative controls."
+}

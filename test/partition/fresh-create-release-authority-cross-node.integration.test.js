@@ -1,65 +1,52 @@
-// Production-bound witness, quest fresh-create-release-authority-from-committed-operation,
-// receipt cross-node-founding-release-cut-over (red test 1; run
-// fresh-create-b-5d7469476-20261102T113540Z, 11:41:55.388).
-//
-// A fresh founding group of the control partition (no write origin) has two
-// GENESIS founders on two nodes, real PartitionServices on the real raft-rs
-// operation port, and one real ReplicaHandler per node. The release route
-// between nodes is JSON-encoded, as the production remote delivery is
-// (message-router-delivery-encoding.js); a node's delivery to itself passes
-// the payload by reference, as production local delivery does. The founder on
-// the non-leader node runs releaseFreshCreate for its committed create
-// operation (MATERIALIZED, GENESIS founding stamp in its first step).
-// Today the leader cannot validate the founder's node-local token and answers
-// OPERATOR_REQUIRED{fresh_storage_or_operator_authority}; the repair makes the
-// answering leader read the committed founding create-operation row, and the
-// release reaches CUT_OVER.
-//
-// Fixture seams (stated): the control-plane gateway of both handlers answers
-// the replica_operations rows of one shared durable map; the founding group
-// is formed directly (GENESIS stamp of both founders) rather than through the
-// provisioning job; the first founder campaigns to lead.
+// Production-bound witnesses, quest fresh-create-release-authority-from-committed-operation
+// (red tests 1, 2, 3, 4, 6, 7, 8 of evidence/design-note.md; run
+// fresh-create-b-5d7469476-20261102T113540Z, 11:41:55.388). A fresh founding
+// group of the control partition (no write origin) with its GENESIS founders on
+// separate nodes, real PartitionServices on the real raft-rs port, one real
+// ReplicaHandler per node and JSON-encoded remote release delivery
+// (fresh-create-release-authority-fixture.js). Today the answering leader
+// cannot validate a founder's node-local token and answers
+// OPERATOR_REQUIRED{fresh_storage_or_operator_authority}; the repair makes it
+// read the committed founding create-operation row (conditions (a)-(d), NOT_LEADER
+// first (f)). Negative controls keep legacy, join and forged identities refused.
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {test} from 'node:test';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
-import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
 import {TABLES} from '../../src/constants/tables.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
-import {OPERATION_METADATA_KEY, OperationType} from '../../src/rebalancer/replica-status.js';
-import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
-  '../../src/partition/partition-participant-transaction-cutover-constants.js';
-import {createLoopbackTransport, waitForCondition} from './partition-service-test-support.js';
+import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
+import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {admitPartitionRaftPeer, reservePartitionRaftPeerIdentity} from
+  '../../src/partition/partition-service-raft-membership-administration.js';
+import {
+  PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
+  PARTICIPANT_RELEASE_ACTION as ACTION,
+  PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_ROUTE_SUFFIX,
+  PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
+  PARTICIPANT_RELEASE_TYPE,
+} from '../../src/partition/partition-participant-transaction-cutover-constants.js';
+import {deliveryAnswerOf} from '../../src/transport/transport-semantic-outcome.js';
+import {waitForCondition} from './partition-service-test-support.js';
+import {BUDGET_MS, PARTITION_ID, formFoundingGroup, founderOperationRow} from
+  './fresh-create-release-authority-fixture.js';
 
-const PARTITION_ID = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
-const NODE_A = 'founder-node-a';
-const NODE_B = 'founder-node-b';
-const REPLICA_A = `${PARTITION_ID}-founder-a`;
-const REPLICA_B = `${PARTITION_ID}-founder-b`;
-const FOUNDERS = Object.freeze([REPLICA_A, REPLICA_B]);
-const FOUNDER_NODES = Object.freeze({[REPLICA_A]: NODE_A, [REPLICA_B]: NODE_B});
-const ADDRESS_OF = (replicaId) => `${FOUNDER_NODES[replicaId]}/partition/${replicaId}`;
-const BUDGET_MS = 15000;
-const TEST_TIMEOUT_MS = 90000;
-const CREATED_AT = 1_793_600_000_000;
+const TEST_TIMEOUT_MS = 120000;
+const OPERATOR_REQUIRED_FACT = 'fresh_storage_or_operator_authority';
+const CREATE_ADMISSION_AUTHORITY = 'create_admission_authority';
 
 function environment(t) {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
-  ConfigurationManager.getInstance().initialize({node: {id: NODE_A}});
+  ConfigurationManager.getInstance().initialize({});
   LoggingService.getInstance().initialize({level: 'error'});
   t.after(() => {
     ConfigurationManager.resetInstance();
@@ -67,138 +54,145 @@ function environment(t) {
   });
 }
 
-// One release-route registry; each node's router passes its own deliveries
-// by reference and encodes every other node's as JSON (remote delivery).
-function nodeRouters() {
-  const handlers = new Map();
-  const make = (nodeId) => ({
-    register(address, handler) {
-      handlers.set(address, handler);
-    },
-    getRegisteredHandler: (address) => handlers.get(address) ?? null,
-    unregisterExact(address, handler) {
-      if (handlers.get(address) !== handler) return false;
-      handlers.delete(address);
-      return true;
-    },
-    async deliver(address, payload, options = {}) {
-      const handler = handlers.get(address);
-      if (!handler) throw new Error(`No handler registered for ${address}`);
-      const local = (options.targetNodeId ?? address.split('/')[0]) === nodeId;
-      const carried = local ? payload : JSON.parse(JSON.stringify(payload));
-      const answer = await handler({payload: carried});
-      return buildDeliveryEnvelope({acknowledged: true},
-        local ? answer : JSON.parse(JSON.stringify(answer)));
-    },
-  });
-  return {[NODE_A]: make(NODE_A), [NODE_B]: make(NODE_B)};
-}
-
-function operationRow(replicaId, nodeId) {
-  return {
-    operation_id: `schema-job-release-authority:operation:${nodeId}`,
-    type: OperationType.ADD, entity_type: 'partition', entity_id: PARTITION_ID,
-    partition_id: PARTITION_ID, replica_id: replicaId, source_node_id: NODE_A,
-    target_node_id: nodeId, status: 'syncing', workflow_step: 'SYNCING',
-    created_at: CREATED_AT, updated_at: CREATED_AT + 10, completed_at: null,
-    create_admission_state: 'MATERIALIZED',
-    create_admission_token: `admission:${replicaId}`,
-    create_admission_replica_created_at: CREATED_AT + 1,
-    create_admission_attempt_token: `attempt:${replicaId}:1`,
-    create_admission_previous_attempt_token: null,
-    create_admission_attempt_seq: 1,
-    create_admission_workflow_updated_at: CREATED_AT + 10,
-    create_admission_owner_incarnation: 1,
-    steps_history: JSON.stringify([{
-      [OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]:
-        genesisStamp([...FOUNDERS], {...FOUNDER_NODES})}]),
-  };
-}
-
-function gatewayOver(rows) {
-  return {
-    async readAuthoritativeRows(tableName, sql, params) {
-      if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-          sql.includes('WHERE operation_id = ?')) {
-        return {success: true, rows: rows.filter((row) =>
-          row.operation_id === params[0]).map((row) => ({...row}))};
-      }
-      return {success: true, rows: []};
-    },
-  };
-}
-
-test('a non-leader founder of a fresh no-origin group releases through the ' +
-  'leader on another node (JSON remote delivery, real ports)',
-{timeout: TEST_TIMEOUT_MS}, async (t) => {
-  environment(t);
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'release-authority-'));
-  const transport = createLoopbackTransport();
-  const routers = nodeRouters();
-  const rows = [operationRow(REPLICA_A, NODE_A), operationRow(REPLICA_B, NODE_B)];
-  const services = [];
-  const handlers = [];
-  t.after(async () => {
-    for (const handler of handlers) {
-      await handler.participantReleaseRecovery.shutdown().catch(() => {});
-    }
-    await Promise.allSettled(services.map((service) => service.shutdown()));
-    fs.rmSync(directory, {recursive: true, force: true});
-  });
-  const build = (replicaId, deferElection) => {
-    const service = new PartitionService({
-      partitionId: PARTITION_ID, replicaId, replicaIds: [...FOUNDERS],
-      peerAddresses: FOUNDERS.map(ADDRESS_OF), nodeId: FOUNDER_NODES[replicaId],
-      tableId: TABLES.SQL_TRANSACTIONS, tableName: TABLES.SQL_TRANSACTIONS,
-      schema: SQL_TRANSACTIONS_SCHEMA, systemTableCache: new SystemTableCache(),
-      transport, dbPath: path.join(directory, `${replicaId}.sqlite`), deferElection,
-      bootstrapMembership: genesisStamp([...FOUNDERS], {...FOUNDER_NODES}),
-    });
-    services.push(service);
-    return service;
-  };
-  const founderA = build(REPLICA_A, false);
-  const founderB = build(REPLICA_B, true);
-  await founderA.initialize();
-  await founderB.initialize();
-  await founderA.raft.campaign();
-  assert.equal(await waitForCondition(() =>
-    founderA.raft.readStatus().role === RAFT_ROLE.LEADER, BUDGET_MS), true,
-  'setup: founder A leads');
-  founderB.startElection?.();
-  const host = (nodeId, service) => {
-    const handler = new ReplicaHandler({nodeId, ownerIncarnation: 1,
-      systemTableCache: service.systemTableCache, cdcIntegrationService: {},
-      controlPlaneSystemTableGateway: gatewayOver(rows),
-      createPartitionService: (options) => new PartitionService(options),
-      messageRouter: routers[nodeId], dataDir: directory});
-    handler.registerWithRouter(routers[nodeId]);
-    handler.replaceLocalReplicaService(service.replicaId, service);
-    handlers.push(handler);
-    return handler;
-  };
-  host(NODE_A, founderA);
-  const handlerB = host(NODE_B, founderB);
-  // B's committed create admission, as its create path holds it.
-  const rowB = rows[1];
-  const evidenceB = await handlerB.getReplicaCreateAdmissionOwner()
-    .authorizeParticipantRelease({operationId: rowB.operation_id,
-      operationType: rowB.type, entityType: rowB.entity_type,
-      entityId: rowB.entity_id, partitionId: PARTITION_ID, replicaId: REPLICA_B,
-      targetNodeId: NODE_B, admissionToken: rowB.create_admission_token,
-      replicaCreatedAt: rowB.create_admission_replica_created_at});
-  assert.ok(evidenceB, 'setup: B holds its MATERIALIZED create admission');
-  const keepAlive = setInterval(() => {}, 250);
-  let answer;
+async function releaseOutcome(group, index, evidence, budgetMs) {
   try {
-    answer = await handlerB.participantReleaseRecovery.releaseFreshCreate(PARTITION_ID, {
-      createAdmissionEvidence: evidenceB, identityExisted: false,
-      deadlineAtMs: Date.now() + BUDGET_MS});
+    return {answer: await group.release(index, evidence, budgetMs), error: null};
   } catch (error) {
-    assert.fail(`the non-leader founder's release failed: ${error.message}`);
-  } finally {
-    clearInterval(keepAlive);
+    return {answer: null, error};
   }
+}
+
+test('1: a non-leader founder of a fresh no-origin group releases through the ' +
+  'leader on another node', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const group = await formFoundingGroup(t);
+  const {answer, error} = await releaseOutcome(group, 1, await group.evidenceFor(1));
+  assert.equal(error, null, `the non-leader founder's release failed: ${error?.message}`);
   assert.equal(answer.outcome, OUTCOME.CUT_OVER,
     'the leader on the other node released the fresh founding group');
+});
+
+test('2: a completed founding operation is no fresh authority (legacy no-origin)',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    environment(t);
+    const group = await formFoundingGroup(t);
+    const evidence = await group.evidenceFor(1);
+    group.rows[1].completed_at = group.rows[1].created_at + 20;
+    const {answer, error} = await releaseOutcome(group, 1, evidence, 4000);
+    assert.equal(answer, null, 'never CUT_OVER');
+    assert.match(String(error?.message), /release_operator_required/u,
+      'the answering leader refuses typed OPERATOR_REQUIRED');
+    assert.match(String(error?.message), new RegExp(OPERATOR_REQUIRED_FACT, 'u'));
+  });
+
+test('3: a join ADD (COMMITTED stamp, not GENESIS) is no fresh authority',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    environment(t);
+    const group = await formFoundingGroup(t, {rowOverrides: {1: {stampKind: 'committed'}}});
+    const {answer, error} = await releaseOutcome(group, 1, await group.evidenceFor(1), 4000);
+    assert.equal(answer, null, 'never CUT_OVER');
+    assert.match(String(error?.message), /release_operator_required/u);
+  });
+
+test('4a: the answering leader retries an unavailable authority read within the ' +
+  'existing deadline', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const faults = {};
+  const group = await formFoundingGroup(t, {faults});
+  const evidence = await group.evidenceFor(1);
+  faults[group.nodes[0]] = {refusals: 2};
+  const {answer, error} = await releaseOutcome(group, 1, evidence);
+  assert.equal(error, null, `release failed: ${error?.message}`);
+  assert.equal(answer.outcome, OUTCOME.CUT_OVER);
+  assert.equal(faults[group.nodes[0]].refused, 2,
+    'the leader read its authority and was refused twice before it confirmed');
+});
+
+test('4b: an authority unavailable forever ends at the deadline with the typed ' +
+  'unavailability, never OPERATOR_REQUIRED', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const faults = {};
+  const group = await formFoundingGroup(t, {faults});
+  const evidence = await group.evidenceFor(1);
+  faults[group.nodes[0]] = {refusals: Infinity};
+  const {answer, error} = await releaseOutcome(group, 1, evidence, 3000);
+  assert.equal(answer, null);
+  assert.match(String(error?.message), new RegExp(CREATE_ADMISSION_AUTHORITY, 'u'),
+    'the final answer names the unavailable create-admission authority');
+  assert.doesNotMatch(String(error?.message), /release_operator_required/u);
+});
+
+test('6: a leadership change between attempts: the new leader decides from the ' +
+  'same committed row', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const faults = {};
+  const group = await formFoundingGroup(t, {founderCount: 3, faults});
+  const evidence = await group.evidenceFor(1);
+  faults[group.nodes[0]] = {refusals: 1, async onRefusal() {
+    await group.services[0].raft.transferLeadership({
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+      replicaIdentity: group.founders[2]});
+  }};
+  const {answer, error} = await releaseOutcome(group, 1, evidence);
+  assert.equal(error, null, `release failed: ${error?.message}`);
+  assert.equal(answer.outcome, OUTCOME.CUT_OVER);
+  assert.equal(group.services[2].raft.readStatus().role, 'leader',
+    'the founder on the third node led when the release completed');
+});
+
+test('7: a forged request naming a foreign create identity is refused (the identity ' +
+  'is a lookup key, never authority)', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const foreign = founderOperationRow({replicaId: 'other-p1-founder-b',
+    nodeId: 'founder-node-b', founders: ['other-p1-founder-a', 'other-p1-founder-b'],
+    founderNodes: {'other-p1-founder-a': 'founder-node-a',
+      'other-p1-founder-b': 'founder-node-b'}, partitionId: 'other-p1'});
+  const group = await formFoundingGroup(t, {extraRows: [foreign]});
+  const build = await runtimeBuildProvenance();
+  const delivery = await group.routers[group.nodes[1]].deliver(
+    `${group.nodes[0]}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`, {
+      type: PARTICIPANT_RELEASE_TYPE, action: ACTION.RELEASE, partitionId: PARTITION_ID,
+      targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
+      deadlineAtMs: Date.now() + 4000,
+      createAdmissionIdentity: {operationId: foreign.operation_id,
+        replicaId: foreign.replica_id, partitionId: foreign.partition_id,
+        targetNodeId: foreign.target_node_id,
+        admissionToken: foreign.create_admission_token}},
+    {targetNodeId: group.nodes[0]});
+  const answer = deliveryAnswerOf(delivery)?.[PARTICIPANT_RELEASE_RESULT_FIELD];
+  assert.equal(answer?.outcome, OUTCOME.OPERATOR_REQUIRED,
+    `a foreign identity never authorizes (${JSON.stringify(answer)})`);
+  assert.equal(answer?.missingFact, OPERATOR_REQUIRED_FACT);
+});
+
+test('8: a fresh group whose committed configuration gained a non-founder ' +
+  'member still releases (the rejected condition (e))',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const group = await formFoundingGroup(t);
+  const joiner = `${PARTITION_ID}-joiner-d`;
+  const joinerAddress = `${group.nodes[1]}/partition/${joiner}`;
+  const joinerService = new PartitionService({partitionId: PARTITION_ID,
+    replicaId: joiner, replicaIds: [...group.founders, joiner],
+    peerAddresses: [...group.founders.map(group.addressOf), joinerAddress],
+    nodeId: group.nodes[1], tableId: TABLES.SQL_TRANSACTIONS,
+    tableName: TABLES.SQL_TRANSACTIONS, schema: SQL_TRANSACTIONS_SCHEMA,
+    systemTableCache: new SystemTableCache(), transport: group.transport,
+    dbPath: `${group.directory}/${joiner}.sqlite`, deferElection: true,
+    bootstrapMembership: genesisStamp([...group.founders, joiner],
+      {...group.founderNodes, [joiner]: group.nodes[1]})});
+  t.after(() => joinerService.shutdown().catch(() => {}));
+  await joinerService.initialize();
+  reservePartitionRaftPeerIdentity(group.services[0], joiner);
+  const admission = admitPartitionRaftPeer(group.services[0],
+    {replicaIdentity: joiner, peerAddress: joinerAddress});
+  await (admission.settled ?? admission);
+  joinerService.startElection?.();
+  assert.equal(await waitForCondition(() => group.services[0].raft.readStatus()
+    .peers.some((peer) => peer.replicaIdentity === joiner), BUDGET_MS), true,
+  'setup: the committed configuration names the non-founder');
+  group.handlers[1].replaceLocalReplicaService(joiner, joinerService);
+  const {answer, error} = await releaseOutcome(group, 1, await group.evidenceFor(1));
+  assert.equal(error, null, `release failed: ${error?.message}`);
+  assert.equal(answer.outcome, OUTCOME.CUT_OVER);
 });

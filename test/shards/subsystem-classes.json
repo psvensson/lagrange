@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 118,
     "architecture-governance": 21,
-    "bootstrap-membership": 334,
+    "bootstrap-membership": 335,
     "cdc-metadata": 67,
     "cli-tooling": 99,
     "control-plane": 225,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2560,
-  "digest": "fnv1a32-a079603a",
+  "censusSize": 2561,
+  "digest": "fnv1a32-5d2a2adb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6d47494c",
+  "observationDigest": "fnv1a32-b381dce9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1240,6 +1240,7 @@
     "test/node/fresh-create-admission-authority-deferral.test.js": "bootstrap-membership",
     "test/node/fresh-create-authority-unavailability-native.integration.test.js": "bootstrap-membership",
     "test/node/fresh-create-claimed-cleanup-never-admitted.test.js": "bootstrap-membership",
+    "test/node/fresh-create-release-authority-no-token.test.js": "bootstrap-membership",
     "test/node/fresh-create-resumed-syncing-claim.test.js": "bootstrap-membership",
     "test/node/group-retired-tombstone-incarnation.test.js": "bootstrap-membership",
     "test/node/group-retired-tombstone.test.js": "bootstrap-membership",
@@ -10013,6 +10014,12 @@
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
+    "test/node/fresh-create-release-authority-no-token.test.js": {
+      "files": [
+        "src/node/participant-release-authorization-owner.js",
+        "src/node/replica-handler-release-recovery.js"
+      ]
+    },
     "test/node/fresh-create-resumed-syncing-claim.test.js": {
       "files": [
         "src/rebalancer/failed-create-cleanup-token.js",
@@ -10861,12 +10868,14 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
-        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/fresh-create-release-authority-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
