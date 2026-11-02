@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 158,
     "solver-tooling": 7,
-    "storage-partition": 212,
+    "storage-partition": 213,
     "storage-raft": 146,
     "test-infrastructure": 155,
     "transactions": 17,
     "transport-messaging": 114,
     "wasm-toolchain": 74
   },
-  "censusSize": 2559,
-  "digest": "fnv1a32-bf2edf31",
+  "censusSize": 2560,
+  "digest": "fnv1a32-a477e13f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-104ff9c8",
+  "observationDigest": "fnv1a32-d9c3145e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1395,6 +1395,7 @@
     "test/partition/partition-coordinator-settlement.test.js": "storage-partition",
     "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js": "storage-partition",
     "test/partition/partition-descriptor-epoch-contract.test.js": "storage-partition",
+    "test/partition/partition-leader-address-from-raft-status.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
     "test/partition/partition-legacy-consensus-state.test.js": "storage-partition",
     "test/partition/partition-participant-release-admission.test.js": "storage-partition",
@@ -11569,6 +11570,17 @@
     "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js": {
       "files": [
         "src/partition/partition-split-merge-manager.js"
+      ]
+    },
+    "test/partition/partition-leader-address-from-raft-status.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-core-base.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-runtime-owner-constants.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/partition/partition-leader-row-publication-integrity.test.js": {
