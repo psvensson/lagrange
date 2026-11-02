@@ -69,7 +69,7 @@ const LEADER_NODE = 'node-1';
 const LEADER_ADDRESS = partitionAddress(LEADER_NODE, LEADER_REPLICA);
 export const LEARNER_REPLICA = 'replica-5';
 export const LEARNER_NODE = 'node-5';
-export const LEARNER_ADDRESS = partitionAddress(LEARNER_NODE, LEARNER_REPLICA);
+const LEARNER_ADDRESS = partitionAddress(LEARNER_NODE, LEARNER_REPLICA);
 const LIVE_FOLLOWERS = Object.freeze([
   ['replica-2', 'node-2'],
   ['replica-3', 'node-3'],
@@ -212,7 +212,7 @@ export function insertServiceRow(cache, replicaId, nodeId, raftRole) {
 // learner-host-from-committed-admission): the cache loses sight of a
 // durably committed row without any change event, so no reconciliation,
 // admission or retirement is triggered by it.
-export function hideServiceRowFromCache(cache, replicaId) {
+function hideServiceRowFromCache(cache, replicaId) {
   cache.tables.get(TABLES.SERVICES).delete(replicaId);
 }
 
