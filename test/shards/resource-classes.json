@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2536,
+    "ordinary": 2539,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2553,
-  "digest": "fnv1a32-16618c67",
+  "censusSize": 2556,
+  "digest": "fnv1a32-cbaf9003",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -366,6 +366,7 @@
     "test/cdc/node-endpoints-cdc.test.js": "ordinary",
     "test/cdc/node-state-tracking.property.test.js": "ordinary",
     "test/cdc/retry-delay-backoff.property.test.js": "ordinary",
+    "test/cdc/routed-system-table-write-answers-at-commit.test.js": "ordinary",
     "test/cdc/runtime-cdc-wiring.test.js": "ordinary",
     "test/cdc/schema-default-application.property.test.js": "ordinary",
     "test/cdc/unique-constraint-handling.property.test.js": "ordinary",
@@ -1436,6 +1437,8 @@
     "test/partition/raft-leadership-stability.property.test.js": "ordinary",
     "test/partition/raft-rs-transport-demux.test.js": "ordinary",
     "test/partition/range-integrity-validation.property.test.js": "ordinary",
+    "test/partition/replica-admission-committed-operation-production.integration.test.js": "ordinary",
+    "test/partition/replica-admission-from-committed-operation.test.js": "ordinary",
     "test/partition/replica-operations-schema-migration.test.js": "ordinary",
     "test/partition/replicated-sql-determinism-three-replica.test.js": "ordinary",
     "test/partition/retiring-source-resume-refusal.test.js": "ordinary",

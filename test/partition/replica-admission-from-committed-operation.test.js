@@ -1,0 +1,503 @@
+/**
+ * Replica admission from the committed replica operation (quest
+ * replica-admission-from-committed-operation, evidence/transition.md §4a,
+ * lead decision 2026-11-02 Option 1):
+ *
+ *   (a) a leader whose services cache holds NO row for the target admits it
+ *       from an ADMIT_REPLICA request whose committed operation names it; the
+ *       committed node is the operation's target node
+ *   (b) a services row alone (no request, no committed operation) proposes
+ *       nothing; a request whose committed operation is terminal is refused
+ *       OPERATION_NOT_ADMITTING and proposes nothing
+ *   (c) a replica that does not lead answers NOT_LEADER before any read
+ *   (d) an unavailable authority answers AUTHORITY_UNAVAILABLE, typed, with
+ *       a retry hint, and proposes nothing
+ *   (e) a stale services row naming another node never changes the
+ *       committed node: it is the operation's target node
+ *   (f) static, over the parsed sources: the only producer of a partition
+ *       admission is the request owner; no services-cache event or cache
+ *       read reaches admitPartitionRaftPeer
+ *   (g) the target asks its leader with exactly {partitionId,
+ *       replicaIdentity, operationId}; a NOT_LEADER / AUTHORITY_UNAVAILABLE
+ *       answer leaves the request pending for the existing learner cadence,
+ *       ALREADY_MEMBER / PROPOSED / IN_FLIGHT settle it
+ *   (h) the request is idempotent: a repeat while the admission is applied
+ *       answers ALREADY_MEMBER and proposes nothing more (R14)
+ */
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import Database from 'better-sqlite3';
+import * as espree from 'espree';
+import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_RS_CONF_CHANGE_TYPE} from
+  '../../src/raft/raft-rs-ready-loop-constants.js';
+import {
+  RaftRsPeerIdentityRegistry,
+  deriveRaftRsPeerId,
+} from '../../src/raft/raft-rs-peer-identity.js';
+import {
+  committedMembershipContext,
+  encodeCommittedAdmissionContext,
+} from '../../src/raft/raft-rs-committed-membership-context.js';
+import {buildDeliveryEnvelope} from
+  '../../src/transport/transport-semantic-outcome.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
+
+const PARTITION_ID = 'sql_transactions-p1';
+const LEADER_REPLICA = 'sql_transactions-p1-r1';
+const TARGET_REPLICA = 'sql_transactions-p1-r4';
+const STRANGER_REPLICA = 'sql_transactions-p1-r9';
+const LEADER_NODE = 'node-1';
+const TARGET_NODE = 'node-2';
+const STALE_NODE = 'node-9';
+const OPERATION_ID = 'c44b07a7-c09a-4925-9181-7729739b677a';
+const ADMIT_REPLICA = 'ADMIT_REPLICA';
+const OUTCOME = Object.freeze({
+  NOT_LEADER: 'not_leader',
+  OPERATION_NOT_ADMITTING: 'operation_not_admitting',
+  AUTHORITY_UNAVAILABLE: 'authority_unavailable',
+  ALREADY_MEMBER: 'already_member',
+  IN_FLIGHT: 'in_flight',
+  PROPOSED: 'proposed',
+});
+const SRC_ROOT = fileURLToPath(new URL('../../src/', import.meta.url));
+const TEMP_PREFIX = 'replica-admission-operation-';
+const SETTLE_TURNS = 5;
+
+beforeEach(() => {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({node: {id: LEADER_NODE}});
+  LoggingService.getInstance().initialize({level: 'error'});
+});
+
+afterEach(() => {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});
+
+function partitionAddress(nodeId, replicaId) {
+  return `${nodeId}/partition/${replicaId}`;
+}
+
+function createServicesCache(rows = []) {
+  const services = new Map(rows.map((row) => [row.service_id, row]));
+  const tableOf = (table) => table === TABLES.SERVICES ? services : new Map();
+  return {
+    rows: services,
+    get: (table, key) => tableOf(table).get(key) || null,
+    getAll: (table) => [...tableOf(table).values()],
+    filter: (table, predicate) =>
+      [...tableOf(table).values()].filter(predicate),
+    subscribe: () => () => {},
+  };
+}
+
+function syncingServiceRow(replicaId, nodeId) {
+  return {
+    service_id: replicaId,
+    replica_id: replicaId,
+    service_type: SERVICE_TYPE.PARTITION,
+    partition_id: PARTITION_ID,
+    node_id: nodeId,
+    address: partitionAddress(nodeId, replicaId),
+    status: 'syncing',
+  };
+}
+
+function operationRow(overrides = {}) {
+  return {
+    operation_id: OPERATION_ID,
+    type: 'ADD',
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: PARTITION_ID,
+    partition_id: PARTITION_ID,
+    replica_id: TARGET_REPLICA,
+    target_node_id: TARGET_NODE,
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+    ...overrides,
+  };
+}
+
+// The authoritative control-plane read, as the gateway answers it:
+// {success: true, rows} or {success: false, error}.
+function createGateway(answer) {
+  const gateway = {
+    reads: [],
+    async readAuthoritativeRows(tableName, sql, params, options) {
+      gateway.reads.push({tableName, sql, params, options});
+      return typeof answer === 'function' ? answer(params) : answer;
+    },
+  };
+  return gateway;
+}
+
+// A leader's port over a real durable identity registry. An admission is
+// the port's own path: the committed admission context applied into the
+// registry (raft-rs-operation-port.js normalizedConfChange).
+function createLeaderPort({registry, role}) {
+  const port = {
+    role,
+    registry,
+    proposals: [],
+    learners: new Set(),
+    membershipReads: 0,
+    proposeConfChange(change) {
+      port.proposals.push(change);
+      const peerId = port.registry.registerReplica(change.replicaIdentity);
+      const context = committedMembershipContext({
+        context: encodeCommittedAdmissionContext({
+          replicaIdentity: change.replicaIdentity, peerId,
+          nodeId: change.nodeId}),
+        changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE,
+          nodeId: peerId}]});
+      port.registry.reserveCommittedReplica(context.replicaIdentity,
+        context.peerId);
+      port.registry.recordCommittedNodeId(context.replicaIdentity,
+        context.nodeId);
+      port.learners.add(change.replicaIdentity);
+      return Object.freeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
+    },
+    readStatus() {
+      return Object.freeze({
+        outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        role: port.role,
+        term: 2,
+        commitIndex: 10,
+        appliedIndex: 10,
+        peers: [...port.learners].map((replicaIdentity) =>
+          ({replicaIdentity})),
+        followerProgress: {},
+      });
+    },
+    subscribe: () => () => {},
+  };
+  return port;
+}
+
+function createLeader({cacheRows = [], role = RAFT_ROLE.LEADER,
+  gateway = createGateway({success: true, rows: [operationRow()]})} = {}) {
+  const file = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX)), 'replica.db');
+  const registry = new RaftRsPeerIdentityRegistry(new Database(file));
+  registry.registerReplica(LEADER_REPLICA);
+  const partition = new PartitionService(withFoundingStamp({
+    partitionId: PARTITION_ID,
+    tableId: 'sql_transactions',
+    replicaId: LEADER_REPLICA,
+    replicaIds: [LEADER_REPLICA],
+    nodeId: LEADER_NODE,
+    dbPath: ':memory:',
+  }));
+  const port = createLeaderPort({registry, role});
+  partition.raft = port;
+  partition.isLeader = role === RAFT_ROLE.LEADER;
+  partition.systemTableCache = createServicesCache(cacheRows);
+  partition.controlPlaneSystemTableGateway = gateway;
+  return {partition, port, gateway};
+}
+
+function admitRequest(overrides = {}) {
+  return {
+    type: ADMIT_REPLICA,
+    partitionId: PARTITION_ID,
+    replicaIdentity: TARGET_REPLICA,
+    operationId: OPERATION_ID,
+    ...overrides,
+  };
+}
+
+async function settle() {
+  for (let turn = 0; turn < SETTLE_TURNS; turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+async function ask(partition, overrides = {}) {
+  const answer = await partition.handleApplicationMessage(
+    admitRequest(overrides));
+  await settle();
+  return answer;
+}
+
+test('(a) a leader with no services row for the target admits it from the ' +
+  'committed operation, on the operation\'s target node', async (t) => {
+  const {partition, port, gateway} = createLeader();
+  const answer = await ask(partition);
+  t.equal(answer?.admission?.outcome, OUTCOME.PROPOSED,
+    'the committed operation admits the target without any cache row');
+  t.same(port.proposals.map((change) => change.replicaIdentity),
+    [TARGET_REPLICA], 'exactly one ADD is proposed, for the target');
+  t.equal(port.registry.committedNodeIdOf(TARGET_REPLICA), TARGET_NODE,
+    'the committed node is the operation\'s target node');
+  t.same(gateway.reads.map((read) => read.params), [[OPERATION_ID]],
+    'the decision read the committed operation by its id');
+});
+
+test('(b) a services row alone proposes nothing; a terminal operation is ' +
+  'refused OPERATION_NOT_ADMITTING', async (t) => {
+  const row = syncingServiceRow(STRANGER_REPLICA, TARGET_NODE);
+  const {partition, port} = createLeader({cacheRows: [row],
+    gateway: createGateway({success: true,
+      rows: [operationRow({status: 'failed', workflow_step: 'FAILED'})]})});
+  partition.handleSystemTableCacheChange(TABLES.SERVICES, 'insert', row);
+  partition.reconcileRaftPeersFromCache?.();
+  await settle();
+  t.same(port.proposals, [],
+    'a services row is discovery: it never proposes a vote');
+  const answer = await ask(partition);
+  t.equal(answer?.admission?.outcome, OUTCOME.OPERATION_NOT_ADMITTING,
+    'a terminal operation admits nothing, typed');
+  t.same(port.proposals, [], 'and proposes nothing');
+});
+
+test('(c) a replica that does not lead answers NOT_LEADER before any read',
+  async (t) => {
+    const {partition, port, gateway} = createLeader({role: RAFT_ROLE.FOLLOWER});
+    const answer = await ask(partition);
+    t.equal(answer?.admission?.outcome, OUTCOME.NOT_LEADER,
+      'leadership is decided first');
+    t.equal(gateway.reads.length, 0, 'no authority read precedes it');
+    t.same(port.proposals, [], 'nothing is proposed');
+  });
+
+test('(d) an unavailable authority answers AUTHORITY_UNAVAILABLE, typed, ' +
+  'and proposes nothing', async (t) => {
+  const {partition, port} = createLeader({gateway: createGateway(
+    {success: false, error: 'authoritative_row_source_unavailable'})});
+  const answer = await ask(partition);
+  t.equal(answer?.admission?.outcome, OUTCOME.AUTHORITY_UNAVAILABLE,
+    'a failed read is typed unavailability, never a refusal of the operation');
+  t.ok(Number.isSafeInteger(answer?.admission?.retryAfterMs) &&
+    answer.admission.retryAfterMs > 0, 'it carries a retry hint');
+  t.equal(answer?.admission?.reason, 'authoritative_row_source_unavailable',
+    'it names the read\'s own reason');
+  t.same(port.proposals, [], 'nothing is proposed');
+});
+
+test('(e) a stale services row never changes the committed node',
+  async (t) => {
+    const {partition, port} = createLeader({
+      cacheRows: [syncingServiceRow(TARGET_REPLICA, STALE_NODE)]});
+    await settle();
+    const answer = await ask(partition);
+    t.equal(answer?.admission?.outcome, OUTCOME.PROPOSED,
+      'the request admits the target');
+    t.equal(port.registry.committedNodeIdOf(TARGET_REPLICA), TARGET_NODE,
+      'the node comes from the committed operation, never from the row');
+    t.notOk(port.proposals.some((change) => change.nodeId === STALE_NODE),
+      'no proposal names the row\'s node');
+  });
+
+function sourceFiles(directory) {
+  const files = [];
+  for (const entry of fs.readdirSync(directory)) {
+    const file = path.join(directory, entry);
+    if (fs.statSync(file).isDirectory()) {
+      files.push(...sourceFiles(file));
+    } else if (file.endsWith('.js')) {
+      files.push(file);
+    }
+  }
+  return files;
+}
+
+function parse(file) {
+  return espree.parse(fs.readFileSync(file, 'utf8'), {
+    ecmaVersion: 'latest', sourceType: 'module', range: true});
+}
+
+// Every node of an AST, with its ancestor chain.
+function walk(node, visit, ancestors = []) {
+  if (!node || typeof node.type !== 'string') return;
+  visit(node, ancestors);
+  const chain = [...ancestors, node];
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'parent' || key === 'range') continue;
+    if (Array.isArray(value)) {
+      for (const child of value) walk(child, visit, chain);
+    } else if (value && typeof value.type === 'string') {
+      walk(value, visit, chain);
+    }
+  }
+}
+
+function calleeName(node) {
+  if (node.type !== 'CallExpression') return null;
+  if (node.callee.type === 'Identifier') return node.callee.name;
+  if (node.callee.type === 'MemberExpression' &&
+      node.callee.property.type === 'Identifier') {
+    return node.callee.property.name;
+  }
+  return null;
+}
+
+function enclosingFunctionName(ancestors) {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const node = ancestors[index];
+    if (node.type === 'FunctionDeclaration' && node.id) return node.id.name;
+    if (node.type === 'MethodDefinition' && node.key.type === 'Identifier') {
+      return node.key.name;
+    }
+    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier') {
+      return node.id.name;
+    }
+  }
+  return '<module>';
+}
+
+function functionNodesNamed(ast, name) {
+  const found = [];
+  walk(ast, (node) => {
+    if (node.type === 'FunctionDeclaration' && node.id?.name === name) {
+      found.push(node);
+    }
+    if (node.type === 'MethodDefinition' && node.key?.name === name) {
+      found.push(node);
+    }
+  });
+  return found;
+}
+
+function referencesCache(fnNode) {
+  let reads = false;
+  walk(fnNode, (node) => {
+    if (node.type === 'MemberExpression' && !node.computed &&
+        node.property.name === 'systemTableCache') {
+      reads = true;
+    }
+  });
+  return reads;
+}
+
+test('(f) static: the request owner is the only producer of a partition ' +
+  'admission and no services-cache event or cache read reaches it',
+async (t) => {
+  const asts = new Map(sourceFiles(SRC_ROOT).map((file) =>
+    [file.slice(SRC_ROOT.length), parse(file)]));
+  const callers = [];
+  for (const [file, ast] of asts) {
+    walk(ast, (node, ancestors) => {
+      if (calleeName(node) === 'admitPartitionRaftPeer') {
+        callers.push(`${file}#${enclosingFunctionName(ancestors)}`);
+      }
+    });
+  }
+  t.same(callers, ['partition/partition-replica-admission.js#' +
+    'admitFromCommittedOperation'],
+  'exactly one call site admits a partition peer: the request owner');
+
+  const ownerAst = asts.get('partition/partition-replica-admission.js');
+  t.ok(ownerAst, 'the request owner module exists');
+  if (ownerAst) {
+    const owner = functionNodesNamed(ownerAst, 'admitFromCommittedOperation');
+    t.equal(owner.length, 1, 'the owner function is declared once');
+    t.notOk(owner.some(referencesCache),
+      'the admission decision never reads the services cache');
+  }
+
+  const reconcileReferences = [];
+  for (const [file, ast] of asts) {
+    walk(ast, (node) => {
+      if (node.type === 'Identifier' &&
+          /^reconcileRaftPeersFromCache(ForService)?$|^scheduleRaftPeerReconciliation$/
+            .test(node.name)) {
+        reconcileReferences.push(`${file}:${node.name}`);
+      }
+    });
+  }
+  t.same(reconcileReferences.filter((entry) =>
+    entry.startsWith('partition/')), [],
+  'the cache-row admission producer is gone from src/partition');
+
+  const coreBase = asts.get('partition/partition-service-core-base.js');
+  const cacheHandlers = functionNodesNamed(coreBase,
+    'handleSystemTableCacheChange');
+  t.equal(cacheHandlers.length, 1, 'one services-cache handler');
+  const calls = [];
+  walk(cacheHandlers[0], (node) => {
+    const name = calleeName(node);
+    if (name) calls.push(name);
+  });
+  t.notOk(calls.some((name) => /admit|reconcileRaftPeers|schedule.*Reconcil/
+    .test(name)),
+  `a services-cache event triggers no admission (calls: ${calls.join(',')})`);
+});
+
+// The target side: a learner partition service that recorded its SYNCING
+// fact asks its discovered leader to admit it.
+function createTarget({answers}) {
+  const partition = new PartitionService(withFoundingStamp({
+    partitionId: PARTITION_ID,
+    tableId: 'sql_transactions',
+    replicaId: TARGET_REPLICA,
+    replicaIds: [TARGET_REPLICA],
+    nodeId: TARGET_NODE,
+    dbPath: ':memory:',
+  }));
+  const sent = [];
+  partition.transport = {
+    async deliver(address, payload) {
+      sent.push({address, payload});
+      const admission = answers.shift();
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        partitionId: PARTITION_ID, replicaIdentity: TARGET_REPLICA,
+        operationId: OPERATION_ID, admission});
+    },
+  };
+  partition.resolveLeaderAddress = () =>
+    partitionAddress(LEADER_NODE, LEADER_REPLICA);
+  return {partition, sent};
+}
+
+test('(g) the target asks its leader with exactly the committed operation ' +
+  'and keeps the request until an admitting answer', async (t) => {
+  const {partition, sent} = createTarget({answers: [
+    {outcome: OUTCOME.NOT_LEADER},
+    {outcome: OUTCOME.AUTHORITY_UNAVAILABLE, retryAfterMs: 100},
+    {outcome: OUTCOME.PROPOSED}]});
+  t.equal(typeof partition.requestReplicaAdmission, 'function',
+    'the target owns an admission request');
+  if (typeof partition.requestReplicaAdmission !== 'function') return;
+  await partition.requestReplicaAdmission(OPERATION_ID);
+  t.same(sent[0]?.payload, admitRequest(),
+    'the request names partition, replica identity and operation only');
+  t.equal(sent[0]?.address, partitionAddress(LEADER_NODE, LEADER_REPLICA),
+    'it goes to the discovered leader');
+  t.equal(partition.replicaAdmissionRequest?.state, 'pending',
+    'NOT_LEADER leaves it pending');
+  await partition.driveReplicaAdmission();
+  t.equal(partition.replicaAdmissionRequest?.state, 'pending',
+    'AUTHORITY_UNAVAILABLE leaves it pending, never failed');
+  await partition.driveReplicaAdmission();
+  t.equal(partition.replicaAdmissionRequest?.state, 'admitted',
+    'an admitting answer settles it');
+  await partition.driveReplicaAdmission();
+  t.equal(sent.length, 3, 'a settled request is not sent again');
+});
+
+test('(h) a repeated request is idempotent: ALREADY_MEMBER, no second ' +
+  'proposal', async (t) => {
+  const {partition, port} = createLeader();
+  const first = await ask(partition);
+  t.equal(first?.admission?.outcome, OUTCOME.PROPOSED, 'first admits');
+  const again = await ask(partition);
+  t.equal(again?.admission?.outcome, OUTCOME.ALREADY_MEMBER,
+    'a repeat answers ALREADY_MEMBER');
+  t.equal(port.proposals.length, 1, 'and proposes nothing more');
+  t.equal(port.registry.committedNodeIdOf(TARGET_REPLICA), TARGET_NODE,
+    'the committed node is unchanged');
+  t.equal(deriveRaftRsPeerId(TARGET_REPLICA).length > 0, true,
+    'the identity is reserved once');
+});

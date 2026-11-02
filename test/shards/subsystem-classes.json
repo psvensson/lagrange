@@ -5,7 +5,7 @@
     "admin-diagnostics": 118,
     "architecture-governance": 21,
     "bootstrap-membership": 330,
-    "cdc-metadata": 67,
+    "cdc-metadata": 68,
     "cli-tooling": 99,
     "control-plane": 225,
     "convergence-topology": 78,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 158,
     "solver-tooling": 7,
-    "storage-partition": 210,
+    "storage-partition": 212,
     "storage-raft": 146,
     "test-infrastructure": 154,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2553,
-  "digest": "fnv1a32-d607a1f6",
+  "censusSize": 2556,
+  "digest": "fnv1a32-d2cb1af6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a3677b35",
+  "observationDigest": "fnv1a32-aa43ff76",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -386,6 +386,7 @@
     "test/cdc/node-endpoints-cdc.test.js": "cdc-metadata",
     "test/cdc/node-state-tracking.property.test.js": "cdc-metadata",
     "test/cdc/retry-delay-backoff.property.test.js": "cdc-metadata",
+    "test/cdc/routed-system-table-write-answers-at-commit.test.js": "cdc-metadata",
     "test/cdc/runtime-cdc-wiring.test.js": "cdc-metadata",
     "test/cdc/schema-default-application.property.test.js": "cdc-metadata",
     "test/cdc/unique-constraint-handling.property.test.js": "cdc-metadata",
@@ -1456,6 +1457,8 @@
     "test/partition/raft-leadership-stability.property.test.js": "storage-partition",
     "test/partition/raft-rs-transport-demux.test.js": "storage-partition",
     "test/partition/range-integrity-validation.property.test.js": "storage-partition",
+    "test/partition/replica-admission-committed-operation-production.integration.test.js": "storage-partition",
+    "test/partition/replica-admission-from-committed-operation.test.js": "storage-partition",
     "test/partition/replica-operations-schema-migration.test.js": "storage-partition",
     "test/partition/replicated-sql-determinism-three-replica.test.js": "storage-partition",
     "test/partition/retiring-source-resume-refusal.test.js": "storage-partition",
@@ -3936,6 +3939,14 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/cdc/routed-system-table-write-answers-at-commit.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/cli/admin-cli-owner-operations.test.js": {
@@ -12180,6 +12191,28 @@
         "test/raft/raft-rs-backend/partition-node-cluster.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/replica-admission-committed-operation-production.integration.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/replica-admission-from-committed-operation.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/partition/replica-operations-schema-migration.test.js": {
