@@ -459,11 +459,10 @@ class PartitionServiceLearnerPromotionMethods {
     if (!isCatchupLearnerRaftRole(this.role)) {
       return;
     }
+    // The leader a learner proves itself to is the live raft leader its
+    // own status names (C4): never a cached row or a leader-address hint.
     if (!this.leaderId) {
-      this.leaderId =
-        this.resolveLeaderIdFromMetadata() ||
-        this.resolveLeaderIdFromHint() ||
-        null;
+      this.leaderId = this.readLiveRaftLeaderId();
     }
     if (!this.leaderId) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
