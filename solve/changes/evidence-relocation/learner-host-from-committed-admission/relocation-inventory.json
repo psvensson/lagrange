@@ -1,0 +1,14 @@
+{
+  "schema": "solve-relocation-inventory/1",
+  "bundles": [
+    {
+      "bundle": "learner-host-from-committed-admission--learner-host-from-committed-admission-evidence-198f2a324-2026-11-02.tar.gz",
+      "bundleSha256": "57b5e1e15403560ab98c75a2ac1acc44eb48c48280a931ab3492539119e6bb67",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/learner-host-from-committed-admission--learner-host-from-committed-admission-evidence-198f2a324-2026-11-02.tar.gz",
+      "sourceCommit": "198f2a324503567bea8f22f0820e3df039075d06",
+      "root": "solve/quests/learner-host-from-committed-admission/evidence/",
+      "files": 10,
+      "shard": "relocation-inventory/learner-host-from-committed-admission--learner-host-from-committed-admission-evidence-198f2a324-2026-11-02.json"
+    }
+  ]
+}
