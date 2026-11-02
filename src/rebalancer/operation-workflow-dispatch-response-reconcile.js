@@ -705,13 +705,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         operation[ReplicaOperationField.REPLICA_IDS];
     }
     if (
-      Array.isArray(operation[ReplicaOperationField.PEER_ADDRESSES]) &&
-      operation[ReplicaOperationField.PEER_ADDRESSES].length > 0
-    ) {
-      request[ReplicaOperationField.PEER_ADDRESSES] =
-        operation[ReplicaOperationField.PEER_ADDRESSES];
-    }
-    if (
       operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] &&
       typeof operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] ===
         OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT

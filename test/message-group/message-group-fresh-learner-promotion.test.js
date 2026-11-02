@@ -118,7 +118,7 @@ function formLearner(t) {
     return target.confState.learners.includes(targetPeer) &&
       target.membershipGenerationIndex ===
         currentLeader.membershipGenerationIndex &&
-      currentLeader.followerProgress[cluster.addressOf(TARGET)] >=
+      currentLeader.followerProgress[TARGET] >=
         currentLeader.commitIndex;
   }, {rounds: 400}), true);
 

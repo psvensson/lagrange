@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 158,
     "solver-tooling": 7,
-    "storage-partition": 208,
-    "storage-raft": 148,
+    "storage-partition": 210,
+    "storage-raft": 146,
     "test-infrastructure": 154,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
   "censusSize": 2553,
-  "digest": "fnv1a32-ff8ebbf7",
+  "digest": "fnv1a32-d607a1f6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a5d61e8a",
+  "observationDigest": "fnv1a32-a3677b35",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1338,8 +1338,10 @@
     "test/partition/group-retirement-resume-claim.test.js": "storage-partition",
     "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js": "storage-partition",
     "test/partition/key-range-manager.test.js": "storage-partition",
+    "test/partition/learner-host-committed-admission-production.integration.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-budget-walk.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
+    "test/partition/learner-promotion-proof-committed-admission.test.js": "storage-partition",
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": "storage-partition",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "storage-partition",
     "test/partition/managed-merge-workflow.test.js": "storage-partition",
@@ -1669,8 +1671,6 @@
     "test/raft/leadership-transfer-single-path.test.js": "storage-raft",
     "test/raft/learner-promotion-progress-proof-contract.test.js": "storage-raft",
     "test/raft/message-group-readiness-delivery-priority.test.js": "storage-raft",
-    "test/raft/peer-address-resolver.property.test.js": "storage-raft",
-    "test/raft/peer-address-resolver.test.js": "storage-raft",
     "test/raft/raft-cleanup-verification.test.js": "storage-raft",
     "test/raft/raft-id-mapper.test.js": "storage-raft",
     "test/raft/raft-log-write-owner.test.js": "storage-raft",
@@ -2609,11 +2609,13 @@
     "test/address/address-manager-peer-location-authority.test.js": {
       "files": [
         "src/address/address-manager.js",
+        "src/partition/partition-committed-peer-address.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -10835,9 +10837,34 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/learner-host-committed-admission-production.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/learner-promotion-count-check-inputs.test.js": {
       "files": [
         "test/partition/fixtures/critical-spread-transition-authority/recorded-guard-shapes.json"
+      ]
+    },
+    "test/partition/learner-promotion-proof-committed-admission.test.js": {
+      "files": [
+        "src/partition/partition-committed-peer-address.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": {
@@ -11679,6 +11706,11 @@
         "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
+    "test/partition/partition-service-learner-promotion-wake.test.js": {
+      "files": [
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
     "test/partition/partition-service-learner-promotion.test.js": {
       "files": [
         "src/raft/raft-operation-port-constants.js",
@@ -11767,6 +11799,7 @@
     },
     "test/partition/partition-service-size-split-transport.test.js": {
       "files": [
+        "src/partition/partition-committed-peer-address.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -11780,6 +11813,7 @@
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/acknowledging-cdc-subscriber.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -13836,6 +13870,7 @@
         "src/raft/raft-rs-group-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
       ]

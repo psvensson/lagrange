@@ -397,12 +397,10 @@ async function buildTargetFromOperation(harness, {target, operation, cache}) {
     targetReplicaId, {
       explicitOperationType: operation.type,
       bootstrapReplicaIds: operation[ReplicaOperationField.REPLICA_IDS],
-      bootstrapPeerAddresses: operation[ReplicaOperationField.PEER_ADDRESSES],
       bootstrapMembership: operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP],
     });
   const service = harness.build(target, {
     replicaIds: context.replicaIds,
-    peerAddresses: context.peerAddresses,
     cache,
     bootstrapMembership: context.bootstrapMembership,
     isJoiningExistingGroup: context.existingReplicaCount > 0,

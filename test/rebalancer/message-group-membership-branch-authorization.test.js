@@ -49,7 +49,8 @@ const learnerStamp = Object.freeze({kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMIT
   voters: [peerOf(S)], votersOutgoing: [], learners: [peerOf(T)], learnersNext: [],
   appliedIndex: 6, commitIndex: 6, membershipGenerationIndex: 5, term: 3,
   configurationKey: raftRsConfStateKey(conf([peerOf(T)])), leaderId: S,
-  gateOpen: true, identities: {[peerOf(S)]: S, [peerOf(T)]: T}});
+  gateOpen: true, identities: {[peerOf(S)]: S, [peerOf(T)]: T},
+  nodeIds: {[peerOf(S)]: null, [peerOf(T)]: null}});
 const prior = Object.freeze({version: 2, transitionIdentity: 'branch-transition',
   permitSequence: 1, permitStage: 'add-learner', permitState: 'committed',
   workflowOwnerNodeId: OWNER, workflowOwnerFence: `${OWNER}:1:1`,

@@ -372,8 +372,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Learner promotion proof response refused by learner',
   LEARNER_PROMOTION_WAKE_COALESCED:
     'Learner promotion wake coalesced into the in-flight check',
-  LEARNER_PROMOTION_ROW_REASSERTED:
-    'Learner promotion re-asserted the durable services row',
   LEADER_DURABILITY_RECOVERED:
     'Replica local durability recovered; leadership fitness restored',
   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
@@ -387,8 +385,9 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   RAFT_TRANSITION_EVIDENCE: 'Raft leadership transition evidence',
   LEADER_CHANGED: 'Leader changed',
   JOINING_PEER_ADDRESS: 'Joining peer with fully qualified address',
-  PEER_ADDRESS_NOT_UNIFIED: 'Peer address must be in unified format',
-  PEER_ADDRESS_FROM_LIST: 'Built peer address from peerAddresses array',
+  // C4 only: the leader address for write forwarding still reads the
+  // services cache (resolvePeerAddressFromCache); no raft peer is addressed
+  // from it (quest learner-host-from-committed-admission).
   PEER_ADDRESS_FROM_CACHE: 'Built peer address from cache',
   PEER_ADDRESS_FROM_LIVE_RAFT_LEADER:
     'Built peer address from the current live Raft leader',

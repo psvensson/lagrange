@@ -46,6 +46,7 @@ import {
   foldAt,
   logFold,
   reservedIdentities,
+  reservedNodeIds,
 } from '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -391,6 +392,8 @@ class RealGroup {
       gateOpen: true,
       identities: Object.fromEntries(voters.map((peerId) =>
         [peerId, reserved.get(peerId)])),
+      nodeIds: Object.fromEntries(voters.map((peerId) =>
+        [peerId, reservedNodeIds(dbFile).get(peerId) ?? null])),
     };
   }
 
@@ -407,7 +410,7 @@ class RealGroup {
     };
     for (let attempt = 0; attempt < 20 && !shows(); attempt += 1) {
       this.cluster.node(this.leader()).proposeConfChange({
-        type, replicaIdentity: replicaId});
+        type, replicaIdentity: replicaId, nodeId: 'node-test'});
       this.settle(shows, 20);
     }
     if (!this.settle(shows, ELECTION_ROUNDS)) {

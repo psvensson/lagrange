@@ -1,13 +1,9 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
-import {
-  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
-} from '../raft/learner-promotion-progress.js';
 
 const {
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_TYPE,
   SERVICE_TYPE,
   TABLES,
 } = PARTITION_SERVICE_SHARED;
@@ -163,50 +159,6 @@ class PartitionServiceLearnerPromotionWakeMethods {
     if (pendingReason && isCatchupLearnerRaftRole(this.role)) {
       this.wakeLearnerPromotion(pendingReason);
     }
-  }
-  /**
-   * React to the typed cause of a channel-level refusal: when the leader
-   * could not resolve this learner's address, its services row has not
-   * landed durably yet — kick the replica state machine's CL-021
-   * deferred-row retry now instead of waiting for its tick. The retry's
-   * own bounds (per-row backoff, in-flight guard) apply inside; nothing is
-   * bypassed. Absent a state machine (bootstrap cohorts, tests) there is
-   * no deferred row to re-assert.
-   * @param {Object} proof refused proof
-   * @private
-   */
-  reactToLearnerPromotionRefusalCause(proof) {
-    if (
-      proof?.cause !==
-      LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE
-    ) {
-      return;
-    }
-    const stateMachine = this.replicaStateMachine;
-    if (
-      typeof stateMachine?.reconcileLocalOnlyServiceRowsNow !==
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return;
-    }
-    this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_ROW_REASSERTED, {
-      replicaId: this.replicaId,
-      partitionId: this.partitionId,
-      learnerReplicaId: this.replicaId,
-      cause: proof.cause,
-    });
-    Promise.resolve(stateMachine.reconcileLocalOnlyServiceRowsNow()).catch(
-      (reassertError) => {
-        this.logger.debug(
-          PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_ROW_REASSERTED,
-          {
-            replicaId: this.replicaId,
-            partitionId: this.partitionId,
-            error: reassertError.message,
-          },
-        );
-      },
-    );
   }
 }
 
