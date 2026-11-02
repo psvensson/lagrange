@@ -180,6 +180,11 @@ test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
       async executeAuthoritativeSystemTableRead(
         tableName, sql, params, options,
       ) {
+        // The serve owner's committed (leader-required) read is a separate
+        // source; this test counts repair reads only.
+        if (options?.readAuthority?.purpose === 'readiness_internal') {
+          return {success: false, rows: []};
+        }
         authoritativeReads.push({tableName, sql, params, options});
         if (tableName === TABLES.NODES) {
           return {
@@ -275,6 +280,11 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
       async executeAuthoritativeSystemTableRead(
         tableName, sql, params, options,
       ) {
+        // The serve owner's committed (leader-required) read is a separate
+        // source; this test counts repair reads only.
+        if (options?.readAuthority?.purpose === 'readiness_internal') {
+          return {success: false, rows: []};
+        }
         authoritativeReads.push({tableName, sql, params, options});
         if (tableName === TABLES.NODES) {
           repairAttempt += 1;
@@ -388,6 +398,11 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
       async executeAuthoritativeSystemTableRead(
         tableName, sql, params, options,
       ) {
+        // The serve owner's committed (leader-required) read is a separate
+        // source; this test counts repair reads only.
+        if (options?.readAuthority?.purpose === 'readiness_internal') {
+          return {success: false, rows: []};
+        }
         authoritativeReads.push({tableName, sql, params, options});
         if (tableName === TABLES.NODES) {
           repairAttempt += 1;

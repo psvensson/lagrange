@@ -188,13 +188,10 @@ function buildSurfaceEngine({tableRows, partitionRows, serviceRows,
   const byType = {tables: tableRows, partitions: partitionRows,
     services: serviceRows};
   const engine = new SQLQueryEngine({
-    // Gateway writes route user tables on the recovery dimension, which
-    // still reads the projection until attempt 3 of quest
-    // serve-eligibility-committed-epoch-read.
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
-      projectedDimensions: {controlPlaneRecoveryEligible: true,
-        repairEligible: true},
-    }),
+    // Gateway writes route user tables on the recovery dimension and pass
+    // mutation admission, which still read the projection until attempt 3
+    // of quest serve-eligibility-committed-epoch-read: a healthy projection.
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: NODE_ID,
     systemCache: {
       get(type, key) {

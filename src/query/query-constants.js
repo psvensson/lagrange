@@ -361,7 +361,6 @@ const QUERY_ROUTING_DIAGNOSTIC_REASON = Object.freeze({
   SERVICE_ADDRESS_MISSING: 'service_address_missing',
   READINESS_UNAVAILABLE: 'readiness_unavailable',
   NODE_NOT_ELIGIBLE: 'node_not_eligible',
-  NODE_NOT_REACHABLE: 'node_not_reachable',
   SERVE_ELIGIBILITY_UNAVAILABLE: 'serve_eligibility_unavailable',
 });
 

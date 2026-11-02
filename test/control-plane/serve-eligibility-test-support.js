@@ -5,10 +5,13 @@
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../src/control-plane/control-plane-readiness-constants.js';
+import {PROJECTION_READINESS_CONTRACT_STATE} from
+  '../../src/control-plane/projection-readiness-constants.js';
 import {
   SERVE_ELIGIBILITY_DECISION,
   SERVE_ELIGIBILITY_STATE,
   SERVE_ELIGIBILITY_UNAVAILABLE_REASON,
+  isServeEligibilityAnswerEligible,
 } from '../../src/control-plane/serve-eligibility-owner.js';
 
 const FIXTURE_EPOCH = Object.freeze({
@@ -123,6 +126,12 @@ export function committedServeEligibilityView({
   };
 }
 
+const HEALTHY_PROJECTED_DIMENSIONS = Object.freeze(Object.fromEntries(
+  Object.values(CONTROL_PLANE_READINESS_DIMENSION)
+    .filter((name) => name !== CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE)
+    .map((name) => [name, true]),
+));
+
 /**
  * A readiness owner as the query layer consumes it: per-node committed
  * answers at a stated epoch with a lease. Every node is eligible unless the
@@ -138,19 +147,39 @@ export function createCommittedServeEligibilityOwner(options = {}) {
   const answers = new Map(Object.entries(options.answers || {}));
   let defaultAnswer = options.defaultAnswer || serveEligibilityAnswer(true);
   const calls = {answers: [], refreshes: 0};
-  // Projected dimensions for non-serve routing dimensions on user partitions
-  // (gateway writes, managed split/merge admission), which still read the
-  // readiness projection until attempt 3: recovery- and repair-eligible
-  // unless the test states otherwise (projectedDimensions: null removes the
-  // projection read entirely).
+  // Projected dimensions for non-serve consumers (gateway writes, managed
+  // split/merge admission, mutation admission), which still read the
+  // readiness projection until attempt 3: a healthy projection - every
+  // non-serve dimension true - unless the test states otherwise
+  // (projectedDimensions: null removes the projection read entirely). The
+  // projected serve dimension mirrors the committed answer, as the readiness
+  // owner's snapshots do.
   const projectedDimensions = Object.hasOwn(options, 'projectedDimensions') ?
     options.projectedDimensions :
-    {controlPlaneRecoveryEligible: true, repairEligible: true};
+    HEALTHY_PROJECTED_DIMENSIONS;
   const projected = projectedDimensions ?
     {
-      getNodeReadinessSync: (nodeId) => ({
-        nodeId, dimensions: {...projectedDimensions},
-      }),
+      getNodeReadinessSync: (nodeId) => {
+        const serving = isServeEligibilityAnswerEligible(
+          answers.get(nodeId) || defaultAnswer);
+        return {
+          nodeId,
+          dimensions: {
+            ...projectedDimensions,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: serving,
+          },
+          // A converged publication: the projection contract a healthy
+          // readiness owner states alongside its dimensions.
+          projectionReadinessContract: {
+            state: serving ?
+              PROJECTION_READINESS_CONTRACT_STATE.SERVE_READY :
+              PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
+            ready: serving,
+            publication: {ready: true},
+            priorityRecovery: {active: false},
+          },
+        };
+      },
     } :
     {};
   return {

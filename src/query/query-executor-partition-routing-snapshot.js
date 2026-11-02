@@ -26,6 +26,14 @@ function readRoutingDenialAnswer(routing) {
   };
 }
 
+// The nodes whose rows a serve-routing repair refreshes: only the canonical
+// leader whose service row is missing (row evidence, never a serve verdict).
+function resolveServiceGapRepairNodeIds(routingSnapshot, shouldRepairServiceGap) {
+  return shouldRepairServiceGap ?
+    new Set([routingSnapshot.canonicalLeaderNodeId]) :
+    new Set();
+}
+
 const queryExecutorPartitionRoutingSnapshotMethods = {
   /**
    * Build one owner-style snapshot for partition routing diagnostics.
@@ -406,18 +414,24 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     if (shouldRepairServiceGap) {
       repairNodeIds.add(routingSnapshot.canonicalLeaderNodeId);
     }
-    const attemptedRepair =
-      routingSnapshot.routingReadinessDimension ===
-        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE ?
-        await this.awaitServeEligibilityRefreshForDenial(
-          deniedNodeIds,
-          allowReadinessAuthoritativeRefresh,
-        ) :
-        await this.awaitProjectionRoutingRepair(
-          routingSnapshot,
-          repairNodeIds,
-          allowReadinessAuthoritativeRefresh,
-        );
+    const serveRouting = routingSnapshot.routingReadinessDimension ===
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+    // A serve denial waits on the committed answer; a missing canonical
+    // leader service row is row evidence, not a serve decision, so it is
+    // repaired through the authoritative row refresh on every dimension.
+    const serveRefreshed = serveRouting &&
+      await this.awaitServeEligibilityRefreshForDenial(
+        deniedNodeIds,
+        allowReadinessAuthoritativeRefresh,
+      );
+    const rowRepaired = await this.awaitProjectionRoutingRepair(
+      routingSnapshot,
+      serveRouting ?
+        resolveServiceGapRepairNodeIds(routingSnapshot, shouldRepairServiceGap) :
+        repairNodeIds,
+      allowReadinessAuthoritativeRefresh,
+    );
+    const attemptedRepair = serveRefreshed || rowRepaired;
     if (!shouldRepairServiceGap && !shouldRepairFilteredRecoveryRouting) {
       return attemptedRepair;
     }

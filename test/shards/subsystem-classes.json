@@ -28,7 +28,7 @@
   "censusSize": 2556,
   "digest": "fnv1a32-1a8d542d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-157a5a09",
+  "observationDigest": "fnv1a32-613be479",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3076,6 +3076,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/storage/data-directory-process-owner.js"
       ]
@@ -3085,6 +3086,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -3226,6 +3228,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/diagnostics/runtime-build-provenance.js",
         "src/node/participant-release-authorization-owner.js",
         "src/storage/data-directory-process-owner.js",
@@ -3280,6 +3283,7 @@
     "test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/node/replica-state-machine.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
@@ -3740,7 +3744,8 @@
     "test/bootstrap/shared/startup-sql-runtime-handoff.test.js": {
       "files": [
         "src/bootstrap/owners/startup-runtime-handoff-owner.js",
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/bootstrap/startup-runtime-handoff-owner.test.js": {
@@ -3943,6 +3948,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -3981,6 +3987,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/runtime/pgwire-runtime-module.js",
         "src/transport/transport-semantic-outcome.js",
@@ -4142,6 +4149,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/runtime/pgwire-runtime-module.js",
         "test/helpers/sqlite-partition-sql-engine.js",
@@ -4289,6 +4297,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/query/query-executor.js",
         "src/query/sql-query-engine.js",
@@ -4345,22 +4354,26 @@
     },
     "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/control-plane/control-plane-readiness-service.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/control-plane/control-plane-system-table-gateway.test.js": {
@@ -4906,6 +4919,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/runtime/pgwire-runtime-module.js",
         "src/transport/transport-semantic-outcome.js",
@@ -4924,6 +4938,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/readiness-planning-snapshot-owner.js"
       ]
     },
@@ -4979,6 +4994,7 @@
         "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-planning-version-key.js",
         "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/readiness-planning-snapshot-owner.js",
         "src/control-plane/readiness-planning-version-contract.js"
       ]
@@ -8262,6 +8278,7 @@
         "src/admin/admin-query-result-message-envelope.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
@@ -8554,6 +8571,7 @@
     "test/index-management/index-service.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-constants.js",
@@ -8578,6 +8596,7 @@
     "test/index-management/queryable-core-j3-local-compound-index-journey.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-constants.js",
@@ -8603,6 +8622,7 @@
     "test/index-management/queryable-core-j5-global-index-journey.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -8654,6 +8674,7 @@
         "src/constants/unified-service-lifecycle.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/runtime/call-cell-driver-invoke.js",
         "src/runtime/pgwire-credential-verifier.js",
         "src/runtime/pgwire-runtime-module.js",
@@ -8687,6 +8708,7 @@
         "src/constants/cdc-lifecycle-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -8695,6 +8717,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -8728,6 +8751,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -8810,6 +8834,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
@@ -8827,6 +8852,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -8855,6 +8881,7 @@
         "src/constants/unified-service-lifecycle.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/runtime/call-cell-driver-invoke.js",
         "src/runtime/wasi-component-cell-runtime.js",
         "src/service/call-activation-lease-owner.js",
@@ -8869,6 +8896,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ],
       "env": [
@@ -8877,7 +8905,8 @@
     },
     "test/integration/developer-journey-j1-j2-j3.integration.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/integration/failure-scenarios.integration.test.js": {
@@ -8885,6 +8914,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -8918,6 +8948,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owners/deployment-binding-contract.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/runtime/call-cell-driver-invoke.js",
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
@@ -8935,6 +8966,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -8979,7 +9011,8 @@
     },
     "test/integration/leader-routable-system-writes.integration.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/integration/load-channel-resilience.integration.test.js": {
@@ -9218,6 +9251,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9241,6 +9275,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
         "src/control-plane/owners/service-install-catalog-contract.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/node/runtime-service-handler.js",
         "src/query/pg/postgres-wire-adapter.js",
         "src/runtime/call-cell-driver-invoke.js",
@@ -9266,6 +9301,7 @@
         "src/constants/unified-service-lifecycle.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/runtime/call-cell-driver-invoke.js",
         "src/runtime/wasi-component-cell-runtime.js",
         "test/wasm-service/fixtures/call-cell-world/guest.js"
@@ -9284,6 +9320,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
         "src/control-plane/owners/service-install-catalog-contract.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/query/pg/postgres-wire-adapter.js",
         "src/runtime/pgwire-auth-handler.js",
         "src/runtime/runtime-driver-registry.js",
@@ -9296,6 +9333,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9304,6 +9342,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9312,6 +9351,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9320,6 +9360,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9328,6 +9369,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/storage/data-directory-process-owner.js"
       ]
@@ -9365,6 +9407,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9477,6 +9520,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9508,12 +9552,14 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/sql-workflow.integration.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -9570,6 +9616,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9580,6 +9627,7 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/constants/transactions.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -9979,7 +10027,8 @@
     },
     "test/migration/migration-observability.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/migration/migration-partition-alter-routing.test.js": {
@@ -10005,7 +10054,8 @@
     },
     "test/migration/migration-pipeline.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/migration/migration-retry-wait-bound-spent.test.js": {
@@ -10015,7 +10065,8 @@
     },
     "test/migration/sql-query-engine-dual-write-mode.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/node/call-cell-partition-fence.test.js": {
@@ -11229,6 +11280,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-coordinator-settlement-constants.js",
         "src/partition/partition-participant-release-contract.js",
@@ -11250,6 +11303,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/control-plane/serve-eligibility-test-support.js",
         "test/partition/participant-release-tx1-decision-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -12495,7 +12549,8 @@
     },
     "test/query/aggregate-function-correctness.property.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/application-database.test.js": {
@@ -12508,12 +12563,14 @@
     },
     "test/query/cache-based-routing.property.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/cache-based-routing.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/create-table-policy-option.test.js": {
@@ -12524,18 +12581,21 @@
     },
     "test/query/cross-partition-join-pushdown.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/cross-partition-join.property.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/deferred-hash.test.js": {
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -12544,6 +12604,7 @@
     "test/query/dialect-wiring.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/query/pg/postgres-wire-adapter.js",
         "src/query/sql-request.js",
         "test/helpers/pgwire-auth-handler.js"
@@ -12551,27 +12612,32 @@
     },
     "test/query/distributed-merge-engine.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/distributed-query-parallelism.property.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/distributed-query-straggler-hedging.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/distributed-select-global-merge-correctness.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/distributed-sql-baseline-gaps.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/distributed-sql-hard-cutover.guard.test.js": {
@@ -12584,6 +12650,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -12617,6 +12684,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owner-contract-outcome.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/timeout-budget.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/table-creation-service.js",
@@ -12643,6 +12711,7 @@
     "test/query/execute-request.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/runtime/runtime-startup-wiring.js"
       ]
     },
@@ -12650,6 +12719,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -12665,6 +12735,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -12685,6 +12756,7 @@
         "src/bootstrap/phases/seed-cache-hydration-phase.js",
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -12716,6 +12788,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-runtime-bundle.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
@@ -12745,6 +12818,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/pg/postgres-wire-adapter.js",
         "test/helpers/pgwire-auth-handler.js",
@@ -12777,6 +12851,7 @@
         "docs/postgres-compatibility-matrix.json",
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -12798,60 +12873,71 @@
     },
     "test/query/query-executor-build-sql-and-routability.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/query-executor-distributed-metrics.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/query-executor-durable-commit-witness.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/query/query-executor-partition-request-builders.js"
       ]
     },
     "test/query/query-executor-executeonpartition-leader-resolution.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-write-kernel.js"
       ]
     },
     "test/query/query-executor-recovery-owned-routing.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/query-executor-routable-services-and-read-delivery.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
     "test/query/query-executor-session-binding-and-build-sql.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/query-executor-warn-throttle.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/query-executor.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/queryable-core-j2-sql-key-read-journey.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -12862,6 +12948,7 @@
         "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/eligibility-snapshot.js",
         "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/readiness-planning-snapshot-owner.js"
       ]
     },
@@ -12878,6 +12965,7 @@
     "test/query/router-envelope-lost-write-answer.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-write-kernel.js",
         "src/transport/transport-error-codes.js"
       ]
@@ -12886,6 +12974,7 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owners/runtime-access-policy-owner.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/query/sql-query-engine-request-dispatch.js"
       ]
     },
@@ -12893,6 +12982,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -12915,6 +13005,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -12945,7 +13036,8 @@
     },
     "test/query/select-no-from.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/service-lifecycle-call-invocation.test.js": {
@@ -12959,6 +13051,7 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owners/index.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/query/pg/postgres-wire-adapter.js",
         "test/test-helpers/transaction-persistence-gateway.js"
       ]
@@ -12966,6 +13059,7 @@
     "test/query/service-partition-access-attribution.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -12973,6 +13067,7 @@
     "test/query/service-read-locality-routing.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -12984,6 +13079,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
@@ -13008,6 +13104,7 @@
     "test/query/sql-mutation-and-constraint-stabilization.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -13015,18 +13112,21 @@
     "test/query/sql-query-engine-create-table-quorum.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/sql-query-engine-dispatch-metrics.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/sql-query-engine-distributed-transactions.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -13035,6 +13135,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/cancellation-token.js",
         "test/test-helpers/participant-protocol-double.js",
@@ -13045,6 +13146,7 @@
       "files": [
         "scripts/test-machine-factor.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/control-plane/serve-eligibility-test-support.js",
         "test/test-helpers/participant-protocol-double.js"
@@ -13054,6 +13156,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -13061,12 +13164,14 @@
     },
     "test/query/sql-query-engine-metrics.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/sql-query-engine-partition-readiness-waits.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -13074,6 +13179,7 @@
     "test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
         "src/rebalancer/rebalance-coordinator-operation-creation-admission.js",
@@ -13084,6 +13190,7 @@
     "test/query/sql-query-engine-provision-partition-quorum.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-write-kernel.js",
         "test/test-helpers/participant-protocol-double.js"
@@ -13093,6 +13200,7 @@
       "files": [
         "scripts/test-machine-factor.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/control-plane/serve-eligibility-test-support.js",
         "test/test-helpers/participant-protocol-double.js"
@@ -13101,6 +13209,7 @@
     "test/query/sql-query-engine-provision-progress-gated-rewait.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -13108,25 +13217,29 @@
     "test/query/sql-query-engine-provisioning-parent-deadline.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/sql-query-engine-split-ingress-adapter.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/sql-query-engine-system-table-local-read.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/control-plane-system-table-gateway.js"
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/sql-query-engine-system-table-write-admission.test.js": {
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-store.js",
         "src/partition/partition-service-remote-query-methods.js",
@@ -13141,6 +13254,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
@@ -13153,19 +13267,22 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/sql-query-pbt.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/sql-statement-refusals.test.js": {
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -13176,6 +13293,7 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/config/configuration-manager.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/migration/migration-coordinator.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-service-constants.js",
@@ -13200,6 +13318,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/query/distributed/distributed-transaction-decision.js",
         "test/test-helpers/transaction-persistence-gateway.js"
       ]
@@ -13208,6 +13327,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
@@ -13228,6 +13348,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -13251,6 +13372,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/query/distributed/distributed-transaction-decision.js",
         "test/test-helpers/transaction-persistence-gateway.js"
       ]
@@ -13268,6 +13390,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
         "src/query/distributed/distributed-transaction-decision.js",
@@ -13318,6 +13441,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/distributed/distributed-transaction-participant-manifest.js",
         "test/test-helpers/participant-protocol-double.js"
@@ -13335,6 +13459,7 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/config/configuration-manager.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-constants.js",
@@ -13364,6 +13489,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-runtime-bundle.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -13395,6 +13521,7 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/owners/endpoint-incarnation-authority.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
@@ -13425,6 +13552,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-runtime-bundle.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -13453,6 +13581,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-runtime-bundle.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -13484,6 +13613,7 @@
         "src/control-plane/control-plane-runtime-bundle.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -13509,6 +13639,7 @@
     "test/query/write-path-internal-pacing.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-constants.js",
@@ -13534,7 +13665,8 @@
     },
     "test/query/write-tracking-recursion-guard.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/raft/leadership-transfer-single-path.test.js": {
@@ -14693,6 +14825,7 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/constants/transactions.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
@@ -15001,6 +15134,7 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/readiness-planning-version-contract.js",
         "src/query/sql-query-engine-initial-partition-provisioning.js",
         "src/rebalancer/provisioning-admission-policy.js",
@@ -16499,6 +16633,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/pg/postgres-wire-adapter.js",
         "src/runtime/pgwire-protocol-handler.js",
@@ -16608,6 +16743,7 @@
     "test/runtime/runtime-replica-state-projection-retained-reconcile.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -16615,6 +16751,7 @@
     "test/runtime/runtime-replica-state-projection-wiring.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/rebalancer/unified-rebalancer.js",
         "test/test-helpers/participant-protocol-double.js"
@@ -19412,6 +19549,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/unified-service-lifecycle.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/node/runtime-service-call-cell-handler.js",
         "src/runtime/wasi-component-cell-runtime.js",
         "src/service/call-binding-route-resolver.js",
@@ -19426,6 +19564,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/unified-service-lifecycle.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/node/runtime-service-call-cell-handler.js",
         "src/runtime/call-cell-reduce-coordinator.js",
         "src/runtime/wasi-component-cell-runtime.js",
@@ -19441,6 +19580,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/unified-service-lifecycle.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/node/runtime-service-call-cell-handler.js",
         "src/runtime/wasi-component-cell-runtime.js",
         "src/service/call-binding-route-resolver.js",
@@ -19901,6 +20041,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -19910,6 +20051,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
@@ -19941,6 +20083,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -20043,6 +20186,7 @@
     "test/transport/router-envelope-pre-send-failure.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
         "src/transport/transport-semantic-outcome.js"
       ]
     },
