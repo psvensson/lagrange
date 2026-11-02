@@ -285,6 +285,15 @@ durable facts without widening permissions or dropping unresolved obligations.
 Runtime bindings connect participant release recovery and canonical pause/resume
 owners to the single-decision-algorithm authority discipline.
 
+Membership-node binding: the node a raft-rs group member runs on is owned by the
+raft-rs runtime owner's committed identity record (`raft_rs_peer_identity.node_id`,
+written from the committed admission context, founding or joining stamp, or
+snapshot image); services rows and caches are discovery only. The binding holds
+for partition groups; message groups still resolve peers from cache and hints, and
+FreshMG learners commit no node (named follow-up, transition record section 8,
+item 6). Transition record:
+`docs/evidence/learner-host-from-committed-admission-2026-11/transition.md`.
+
 ## Model Bindings
 
 Structural audit scripts verify single-owner completion rules and contract

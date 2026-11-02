@@ -74,15 +74,14 @@ const DECISIONS = Object.freeze({
     inputs: [INPUT.ROLE, INPUT.SELF, INPUT.TRANSFER],
     request: (requester) => (driver) =>
       driver.port(requester).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D})},
+        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D, nodeId: 'node-test'})},
   D5: {name: 'campaign eligibility',
     inputs: [INPUT.SELF],
     request: (requester) => (driver) => driver.port(requester).campaign()},
   D6: {name: 'progress probe',
     inputs: [INPUT.ROLE, INPUT.CONF, INPUT.PROGRESS],
     request: (requester, target = C) => (driver) =>
-      driver.port(requester).probePeerProgress(
-        driver.cluster.addressOf(target))},
+      driver.port(requester).probePeerProgress(target)},
 });
 
 // ------------------------------------------------------------ build helpers
@@ -620,7 +619,7 @@ function uncommittedConfCells() {
     moves: [INPUT.CONF],
     build: async (run) => {
       await run.act(() => run.driver.port(A).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D}));
+        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D, nodeId: 'node-test'}));
       await run.deliverOnly([B, C]);
     }})];
 }

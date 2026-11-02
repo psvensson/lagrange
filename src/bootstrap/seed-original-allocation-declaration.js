@@ -61,6 +61,16 @@ function originalSeedMemberDescriptors(dataDir) {
   return members;
 }
 
+// A founder's GENESIS stamp: every seed partition founder is placed on the
+// seed node, and the stamp commits that placement; a message group's founders
+// are addressed by its own resolver, so its stamp commits none.
+function seedMemberMembership(member, nodeId) {
+  const founderNodeIds = member.serviceType === SERVICE_TYPE.PARTITION ?
+    Object.fromEntries(member.replicaIds.map((replicaId) => [replicaId, nodeId])) :
+    {};
+  return genesisStamp(member.replicaIds, founderNodeIds);
+}
+
 function originalSeedAnchor(dataDir) {
   const groupId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
   const replicaId = getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES)[0];
@@ -86,7 +96,7 @@ function createSeedOriginalAllocation({dataDir, nodeId, buildDigest, now}) {
     peerId: deriveRaftRsPeerId(member.replicaId),
     createdAt: mintServiceRowCreatedAt(now),
     createAttemptToken: randomUUID(),
-    membership: genesisStamp(member.replicaIds),
+    membership: seedMemberMembership(member, nodeId),
   }));
   return deepFreeze({version: STATE.VERSION, allocationId: randomUUID(),
     nodeId, dataDir: canonicalDataDir, buildDigest, declaredAt: now,
@@ -186,16 +196,18 @@ function validateAllocation(declaration, identity, complete) {
   }
   const tokens = new Set();
   for (let index = 0; index < expected.length; index++) {
-    validateMember(declaration.members[index], expected[index], tokens, complete);
+    validateMember(declaration.members[index], expected[index], tokens, complete,
+      declaration.nodeId);
   }
   return deepFreeze(declaration);
 }
 
-function validateMember(member, expected, tokens, complete) {
+function validateMember(member, expected, tokens, complete, nodeId) {
   const matches = Object.entries(expected).every(([key, value]) =>
     JSON.stringify(member?.[key]) === JSON.stringify(value));
   if (!matches || member.peerId !== deriveRaftRsPeerId(expected.replicaId) ||
-      JSON.stringify(member.membership) !== JSON.stringify(genesisStamp(expected.replicaIds)) ||
+      JSON.stringify(member.membership) !==
+        JSON.stringify(seedMemberMembership(expected, nodeId)) ||
       !isNonEmptyString(member.createAttemptToken) ||
       !Number.isSafeInteger(member.createdAt) || member.createdAt < 0 ||
       tokens.has(member.createAttemptToken) ||

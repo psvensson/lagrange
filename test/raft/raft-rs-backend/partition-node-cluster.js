@@ -160,7 +160,7 @@ class PartitionNodeCluster {
       // the seed phase hand it (a join passes its own stamp in extraRequest;
       // the port refuses an absent one).
       [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-        genesisStamp(bootstrapReplicaIds),
+        genesisStamp(bootstrapReplicaIds, {}),
       [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: db,
       [RAFT_OPERATION_PORT_REQUEST.TIMING]: this.timingFor === null ?
         PARTITION_TIMING : this.timingFor(replicaId),

@@ -1,4 +1,6 @@
 import {WORKFLOW_STEP} from '../constants/index.js';
+import {REPLICA_CREATE_PHASE, failedReplicaCreateClaimsCleanup,
+  replicaCreatePhaseAfterResume} from './replica-create-admission-input.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {
   ReplicaOperationMessageType,
@@ -263,7 +265,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         partitionId,
         replicaId,
         bootstrapReplicaIds,
-        bootstrapPeerAddresses,
         bootstrapTableMetadata,
         bootstrapPartitionMetadata,
         bootstrapMembership,
@@ -281,6 +282,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         peerTotal: 0,
       });
       let partitionService = null;
+      // A restart of this identity's own admissible durable row (B1) already
+      // carries published admission input before any step of this attempt.
+      let createPhase = replicaCreatePhaseAfterResume(
+        REPLICA_CREATE_PHASE.BEFORE_RUNTIME, request.resumedLifecycleStatus);
       try {
         this.throwIfShuttingDown();
         await this.settlePendingReplicaRuntimeCleanup(replicaId, partitionId);
@@ -310,6 +315,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           createAdmissionEvidence =
             initialStatusOptions.createAdmissionEvidence;
           createAttemptToken = initialStatusOptions.createAttemptToken;
+          createPhase = replicaCreatePhaseAfterResume(
+            createPhase, initialStatusOptions.resumedLifecycleStatus);
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -330,7 +337,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           replicaId,
           {
             bootstrapReplicaIds,
-            bootstrapPeerAddresses,
             bootstrapTableMetadata,
             bootstrapPartitionMetadata,
             bootstrapMembership,
@@ -345,7 +351,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           keyRange,
           leaderAddress,
           replicaIds,
-          peerAddresses,
           existingReplicaCount,
         } = context;
         // Generate database path
@@ -376,8 +381,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           partitionId, tableId, tableName, schema, keyRange,
           replicaId,
           replicaIds,
-          peerAddresses: peerAddresses || [],
-          // Pass unified peer addresses for routing
           nodeId: this.nodeId,
           dbPath,
           leaderAddress,
@@ -392,6 +395,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             this.updateReplicaCreationProgress(progress, stageEvent),
           resolveHandlerRetirementLane: () => this.replicaStateMachine,
         });
+        createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
         if (
           this.shuttingDown &&
           typeof partitionService.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION
@@ -594,6 +598,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           error: error.message,
           stack: error.stack,
         });
+        const claimCleanup = failedReplicaCreateClaimsCleanup(createPhase, error);
         const failedOutcomeOptions = {
           replicaId,
           partitionId,
@@ -614,7 +619,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         ) {
           failedOutcomeOptions.retryAfterMs = Math.floor(error.retryAfterMs);
         }
-        if (error?.deferRetry === true) {
+        // A claimed failure is terminal for its identity: the failed-create
+        // cleanup owner removes it, so the coordinator must not re-dispatch it.
+        if (error?.deferRetry === true && !claimCleanup) {
           failedOutcomeOptions.deferRetry = true;
         }
         try {
@@ -625,7 +632,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               replicaId,
               partitionId,
               errorMessage: error.message,
-              claimCleanup: error?.deferRetry !== true,
+              claimCleanup,
               createAdmissionEvidence,
               createAttemptToken,
             });

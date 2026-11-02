@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "deferred-authority-read-consumed-within-create-deadline",
+      "passed": true,
+      "evidence": "test/node/fresh-create-admission-authority-deferral.test.js 3/3 (red on df28ef54a, green on attempt 1): deferral -> typed UNAVAILABLE{create_admission_authority} with authorityOutcome/authorityError, re-read until confirmed under the unchanged completion loop and deadline; pending token never validates; not-MATERIALIZED -> terminal INVALID; test/node/participant-release-fresh-create-completion.test.js and test/scripts/participant-release-completion-owner.test.js unchanged and green"
+    },
+    {
+      "id": "post-admission-failure-always-claims-cleanup",
+      "passed": true,
+      "evidence": "test/node/replica-handler.test.js L3 cases (red on df28ef54a for after-runtime-open): failure after the runtime opened -> FAILED row carries failed-create:<op>, outcome without deferRetry, coordinator classification fail_operation; failure before the runtime opened on a first create -> unclaimed, deferRetry, coordinator defer_retry. The L3 coordinator case stubs isDispatchRetryableWorkflowStep to true (a fixture seam: the strictest, re-armable step). test/node/fresh-create-resumed-syncing-claim.test.js (attempt 2, verifier B1; red at d387f2939 before the fix): a create re-driven on its own durable SYNCING row that fails deferRetry before its runtime (partition-factory step, and the prior-existence read) carries the claim, emits no deferRetry, is classified fail_operation (isDispatchRetryableWorkflowStep stubbed true) and gets a planner REMOVE carrying the lifecycle precondition from the real decideFailedCreateTargetCleanup; a first create failing before its runtime stays unclaimed and defer_retry. test/node/fresh-create-claimed-cleanup-never-admitted.test.js is a characterization witness (green on base): the claimed REMOVE of a never-admitted replica completes, redelivery COMPLETED."
+    },
+    {
+      "id": "failed-create-without-owner-not-protected",
+      "passed": true,
+      "evidence": "Characterization witness, green on base (no product change in this path): measures that a failed create after its admission input may exist carries a cleanup claim and is removed through decideFailedCreateTargetCleanup with checks 2 (previous_state) and 3 (terminal create target) no longer protecting it - r4's case; an unclaimed pre-admission failed row stays protected and re-dispatchable. test/rebalancer/terminal-failed-add-target-cleanup.test.js 'L3: the claimed FAILED target ...' (claimed -> REMOVE with lifecycle precondition; unclaimed -> no REMOVE). The claim itself is produced by the post-admission-failure-always-claims-cleanup repair. Check 2 kept by R09 supersession (log 2026-11-02T11:24:38Z)."
+    },
+    {
+      "id": "induced-authority-unavailability-production-witness",
+      "passed": true,
+      "evidence": "test/node/fresh-create-authority-unavailability-native.integration.test.js (red on df28ef54a: recovering path fails after 2 refusals, permanent path fails in 21 ms; green on attempt 1): real ReplicaHandler CREATE of a sql_transactions-p1 founder, real PartitionService on the real raft-rs port, real release client/loopback route/cutover owner; gateway authority read refused 3 times -> create completes ACTIVE within the existing 4000 ms deadline; refused forever -> FAILED at the deadline naming create_admission_authority, cleanup_token failed-create:<op> (no null-token FAILED row), the operation owner's admission and cleanup decision (real admitCreateTerminalFailure / decideFailedCreateTargetCleanup over the observation of the resulting durable row) is ELIGIBLE with the recorded lifecycle precondition (verifier N2), and the claimed REMOVE COMPLETED. Live run fresh-create-b-5d7469476-20261102T113540Z: path not exercised live, serve lane opened at 162319 ms, 0 hosted_replica (32 at base)."
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "evidence": "log.ndjson verification entry 2026-11-02T13:44:04.732Z (carried, subagent:a4ecae6f36897031a): approve at a6bf74754 (fingerprint af25e435...) after reject at 5d7469476 (fingerprint b4b0d036...), recorded in the superseded quest fresh-create-failure-after-committed-admission; src/test of this delta identical to a6bf74754 (0-byte diff)."
+    }
+  ],
+  "evidence": [],
+  "applicability": "Successor of fresh-create-failure-after-committed-admission (superseded at 9fe7dfb54 for the post-seal R09 doneWhen supersession), staged on base 311695504 with src/test identical to a6bf74754. Evidence prose: docs/evidence/fresh-create-failure-after-committed-admission-2026-11/; raw run artifacts relocated to the solve-evidence asset fresh-create-failure-after-committed-admission--fresh-create-failure-after-committed-admission-evidence-6f287f51c-2026-11-02.tar.gz (sha256 5f5b4b61d0e2a1dc28b6de75c1454705930e36181da4b6036eca6afee731ff51; inventory solve/changes/evidence-relocation/fresh-create-failure-after-committed-admission/) and three full node logs as solve-evidence assets (superseded quest's log, 2026-11-02T13:35Z). Scope: the bounded L2 + L3 repair; not measured: no live run of the restart (resumed SYNCING) path; the scenario's d-user-table-routable remains red for the next link (fresh-create-release-authority-from-committed-operation)."
+}

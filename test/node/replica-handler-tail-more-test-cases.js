@@ -1177,7 +1177,6 @@ export async function registerReplicaHandlerTailMoreTests({
           partitionId: 'nodes-p1',
           replicaId: 'nodes-p1-r2',
           bootstrapReplicaIds: [],
-          bootstrapPeerAddresses: [],
           bootstrapTableMetadata: null,
           bootstrapPartitionMetadata: null,
         });
@@ -1238,7 +1237,6 @@ export async function registerReplicaHandlerTailMoreTests({
           partitionId: TEST_STATUS_RETRY_PARTITION_ID,
           replicaId: TEST_STATUS_RETRY_REPLICA_ID,
           bootstrapReplicaIds: [],
-          bootstrapPeerAddresses: [],
           bootstrapTableMetadata: null,
           bootstrapPartitionMetadata: null,
         });

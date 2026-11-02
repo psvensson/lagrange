@@ -257,8 +257,10 @@ const RATCHET_TARGETS = [
     // checker's hint.
     // Publisher and corpus-ratchet speedups: tightened 650/24370 -> 649/24346
     // on the checker's hint.
-    baselineCloneGroupCount: 649,
-    baselineDuplicatedLineCount: 24346,
+    // learner-host-from-committed-admission (peer-address-resolver tests
+    // deleted): tightened 649/24346 -> 648/24311 on the checker's hint.
+    baselineCloneGroupCount: 648,
+    baselineDuplicatedLineCount: 24311,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

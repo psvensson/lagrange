@@ -94,7 +94,9 @@ function messageGroupConsensusRequest(service, cdcCommitLifetime) {
       service.bootstrapMembership ?? (
         service.identityExisted === true ?
           durableRecordBootstrap() :
-          genesisStamp(service.replicaIds)
+          // No founding placement is committed for a message group: its
+          // peers are addressed by its own resolver (follow-up of C3).
+          genesisStamp(service.replicaIds, {})
       ),
     // A replica that joins an existing group under that stamp holds no
     // founder's history: with no record it is refused (O4).

@@ -84,10 +84,6 @@ function buildRetainedCreateRequest(row, evidence) {
     stepsHistory,
     OPERATION_METADATA_KEY.REPLICA_IDS,
   );
-  const peerAddresses = getOperationMetadataStringArray(
-    stepsHistory,
-    OPERATION_METADATA_KEY.PEER_ADDRESSES,
-  );
   const metadata = [
     [ReplicaOperationField.BOOTSTRAP_TABLE_METADATA,
       OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA],
@@ -98,9 +94,6 @@ function buildRetainedCreateRequest(row, evidence) {
   ];
   if (replicaIds.length > 0) {
     request[ReplicaOperationField.REPLICA_IDS] = replicaIds;
-  }
-  if (peerAddresses.length > 0) {
-    request[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
   }
   for (const [field, key] of metadata) {
     const value = getOperationMetadataObject(stepsHistory, key);
@@ -427,10 +420,6 @@ async function buildPreparedCreateRequest(handler, request, admissionEvidence) {
       request,
       ReplicaOperationField.REPLICA_IDS,
     ),
-    bootstrapPeerAddresses: optionalArrayField(
-      request,
-      ReplicaOperationField.PEER_ADDRESSES,
-    ),
     bootstrapTableMetadata: optionalObjectField(
       request,
       ReplicaOperationField.BOOTSTRAP_TABLE_METADATA,
@@ -568,6 +557,9 @@ async function restartPendingCreate(handler, existingReplica, createRequest,
   );
   createRequest.pendingStatusPersisted =
     existingReplica.status === ReplicaStatus.PENDING;
+  // The restarted row's status reaches the create's admission-input owner
+  // before any step of the attempt (verifier finding B1).
+  createRequest.resumedLifecycleStatus = existingReplica.status;
   handler.startCreateReplicaAsync(createRequest);
   return handler.buildReplicaOperationResponse(
     ReplicaOperationResponseStatus.INITIATED,

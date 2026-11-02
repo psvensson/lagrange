@@ -177,7 +177,7 @@ test('W3 a learner target is refused as not a voter and nothing is stepped',
     try {
       const learnerId = driver.reserveEverywhere(D);
       assert.equal(driver.port(A).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D,
+        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D, nodeId: 'node-test',
       }).outcome, CORE_OK);
       within(driver, () =>
         driver.status(A).confState.learners.includes(learnerId),
@@ -308,7 +308,7 @@ test('W3 the target crashing mid-transfer: writes and configuration changes ' +
       TRANSFER_REASON.REQUESTED);
     assertTransferInProgress(driver.propose(A, {during: 'transfer'}));
     assertTransferInProgress(driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D}));
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D, nodeId: 'node-test'}));
     const rounds = roundsUntilWritable(driver, A, driver.electionTick());
     assert.notEqual(rounds, null,
       'the leader takes writes again within one election timeout');
@@ -358,7 +358,7 @@ test('W3 a transfer with a configuration change pending converges and ' +
     driver.isolate(B);
     driver.isolate(C);
     assert.equal(driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D,
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D, nodeId: 'node-test',
     }).outcome, CORE_OK);
     driver.deliver();
     driver.heal(C);

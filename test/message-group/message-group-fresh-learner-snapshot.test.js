@@ -149,7 +149,7 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
     const targetPeer = new RaftRsPeerIdentityRegistry(leader.db)
       .registerReplica(TARGET);
     const proposed = await leader.raft.proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: TARGET});
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: TARGET, nodeId: 'node-test'});
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(await waitFor(() => leader.raft.readStatus().confState.learners
       .includes(targetPeer)), true, 'the live leader commits the learner');
