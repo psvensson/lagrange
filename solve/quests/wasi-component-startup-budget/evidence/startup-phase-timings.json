@@ -1,0 +1,35 @@
+{
+  "schema": "lagrange-wasi-startup-phase-timings/1",
+  "measuredAt": "2026-11-02",
+  "source": "origin/main 6d58fdba16157740e6c2f0bae5a2317fa24e0944, src unchanged; instrumented scratch copy of src/runtime/wasi-component-cell-worker.js (evidence/probes/instrumented-worker.diff) driven through the unmodified WasiComponentCellRuntime via its existing workerPath constructor option",
+  "host": {"controller": "20-core controller (nproc 20)", "node": "v22.23.2", "jcoTranspile": "0.4.2", "thermal": "ok before every run (wait-for-thermal-headroom)"},
+  "component": {"what": "h1 DISTRIBUTED_GUEST_ENTRY_SOURCE built with buildServiceComponent worldName service-cell-v2", "bytes": 12912649, "coreModules": {"request-cell.core.wasm": 12910097, "request-cell.core2.wasm": 164, "request-cell.core3.wasm": 112}, "componentizeMs": 1951},
+  "singleStart20Cores": {
+    "runs": 3,
+    "phasesMsFromParentStart": [
+      {"worker_body_start": 57, "transpiled": 3653, "memory_capped": 3657, "bindings_imported": 3665, "instantiated": 3684, "ready": 3684},
+      {"worker_body_start": 51, "transpiled": 3542, "memory_capped": 3547, "bindings_imported": 3552, "instantiated": 3571, "ready": 3571},
+      {"worker_body_start": 47, "transpiled": 3453, "memory_capped": 3456, "bindings_imported": 3463, "instantiated": 3478, "ready": 3479}
+    ],
+    "coreModuleCompileMs": {"request-cell.core.wasm": [15, 15, 11]},
+    "transpileShareOfStart": 0.97
+  },
+  "singleStartPinned": {"taskset 0,1": {"transpiled": 4101, "ready": 4159}, "taskset 0": {"transpiled": 4032, "ready": 4088}},
+  "transpileColdVsWarmSameThread": {"coldMs": 4021, "warmMs": [3119, 3074], "interpretation": "~0.9 s is one-time jco bindgen wasm compile/instantiate per thread; ~3.1 s is per-component transpile work; today every cell worker is a fresh thread so every start pays cold"},
+  "transpileWallVsCpu": {
+    "alone20Cores": {"wallMs": 4098, "cpuMs": 4085},
+    "alone1Core": {"wallMs": 5001, "cpuMs": 4266},
+    "fourConcurrentOn2Cores": {"wallMs": [13356, 13539, 13673, 13725], "cpuMs": [5854, 5858, 6013, 5949]}
+  },
+  "currentRuntimeUnderContention": {"fourProcessesOneStartEachOn2Cores": "4/4 START_FAILED request_cell_start_failed 'Component startup timed out' at 10037-10070 ms (bound 10000; worker terminated, processes exited)"},
+  "instantiateOnlyStart": {
+    "method": "transpile done once before timing; files handed to the cell worker; memory cap, glue import, core compile, instantiate, ready",
+    "oneStart20Cores": 104,
+    "fourConcurrentOn2Cores": [326, 402, 647, 658],
+    "eightConcurrentOn1Core": [1911, 1911, 1911, 1911, 1911, 1911, 1911, 1911]
+  },
+  "serviceTests": {
+    "h1Alone2CoresTaskset": {"result": "ok", "ms": 32679},
+    "h1_h2_h3_q4_jobs4_on2CoresTaskset": {"h1": "ok 110022 ms", "h2": "not ok 102469 ms STARTUP_TIMEOUT_MS", "h3": "not ok 100852 ms STARTUP_TIMEOUT_MS", "q4": "not ok 100304 ms STARTUP_TIMEOUT_MS", "note": "reproduces the hosted gate signature of run 41431327759 locally"}
+  }
+}

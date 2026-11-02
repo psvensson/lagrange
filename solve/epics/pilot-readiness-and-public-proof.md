@@ -25,6 +25,7 @@ quests:
   - user-table-leader-placement-spread-v2
   - user-table-leader-placement-spread
   - wasi-cell-busy-health-admission
+  - wasi-component-startup-budget
 authorizes:
   - src/authoring
   - src/service
