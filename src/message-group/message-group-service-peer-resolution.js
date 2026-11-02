@@ -1,20 +1,20 @@
 /**
- * Message Group Service - peer-address resolution and authoritative cache
- * reconciliation triggering. Resolves unified peer addresses from the services
- * cache, the replica's consensus configuration, and bootstrap hints, and
- * schedules raft peer reconciliation in response to cache changes.
+ * Message Group Service - peer-address resolution and cache reconciliation
+ * triggering. A peer's address is the one its committed configuration places
+ * it at (read through the replica's raft status); a services cache change
+ * only triggers raft peer reconciliation (discovery, A8).
  * Requirements: 1.1, 1.4, 9.1
  */
 import {
-  ADDRESS,
   COLUMN,
-  ENTITY_TYPE,
   SERVICE_TYPE,
   TABLES,
-  isPartitionCleanupServiceRow,
 } from '../constants/index.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {RAFT_RS_PEER_ADDRESS_REFUSAL} from
+  '../raft/raft-rs-peer-identity-constants.js';
+import {PEER_ADDRESS_STATUS} from '../raft/raft-rs-runtime-owner-constants.js';
 import {
-  MESSAGE_GROUP_SERVICE_LITERAL,
   isWebSocketBasedMessageRouterTransport,
 } from './message-group-service-runtime-support.js';
 
@@ -39,143 +39,36 @@ function assignPeerResolution(serviceClass) {
       return this.unifiedAddress;
     },
     /**
-     * Build a unified address for a peer replica.
-     * Looks up the address from the authoritative cache first, then the
-     * address this replica's consensus configuration places the peer at, and
-     * only uses bootstrap hints when a caller explicitly opts in.
-     * Uses AddressManager for consistent address formatting and validation.
-     * Requirements: 1.1, 1.4, 9.1
-     * @param {string} peerId - Peer replica ID.
-     * @param {Object} [options]
-     * @param {boolean} [options.allowBootstrapHints=false] - Permit
-     * bootstrap-time peer hints when authoritative runtime location has not
-     * converged yet.
-     * @param {boolean} [options.consensusResolution=false] - The consensus
-     * runtime itself is resolving the address (it reads no status: the
-     * runtime resolves addresses while it computes one).
-     * @return {string} Unified address for the peer.
+     * The address of a peer replica outside the transport: this replica's
+     * own address, or the address the group's committed configuration
+     * places the peer at, as this replica's raft status reports it (the
+     * port resolves every configured peer from its committed node). No
+     * services row or hint list is read.
+     * @param {string} peerId - Peer replica identity.
+     * @return {string} Its unified address.
+     * @throws {Error} CONFIGURATION_UNAVAILABLE without a usable status;
+     *   PEER_NOT_IN_CONFIGURATION for a peer without a committed address.
      */
-    buildPeerAddress(peerId, options = {}) {
-      // If peerId is already in unified format, validate and return as-is.
-      // Fail fast (and log) when a provided address is not unified.
-      // Requirements: 1.4
-      if (peerId.includes(ADDRESS.SEPARATOR)) {
-        const validation = this.addressManager.validate(peerId);
-        if (validation.valid) {
-          return peerId;
-        }
-        this.logger.error(
-          MESSAGE_GROUP_SERVICE_LITERAL.PEER_ADDRESS_MUST_BE_IN_UNIFIED_FORMAT,
-          {
-            peerId,
-            groupId: this.groupId,
-            replicaId: this.replicaId,
-            error: validation.error,
-          },
-        );
-        throw new Error(`Peer address must be unified: ${peerId}`);
+    resolveCommittedPeerAddress(peerId) {
+      if (peerId === this.replicaId) {
+        return this.unifiedAddress;
       }
-      // Prefer cache-backed topology first so handoff/move metadata wins over
-      // bootstrap-time peer hints.
-      const cachedAddress = this.resolvePeerAddressFromCache(peerId);
-      if (cachedAddress) {
-        this.bootstrapHintFallbackLogged.delete(peerId);
-        return cachedAddress;
+      const status = this.raft?.readStatus?.();
+      if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
+          status.groupId !== this.groupId ||
+          status.replicaIdentity !== this.replicaId) {
+        throw Object.assign(new Error(
+          RAFT_RS_PEER_ADDRESS_REFUSAL.CONFIGURATION_UNAVAILABLE),
+        {replicaIdentity: peerId});
       }
-      const livePeerAddress = options.consensusResolution === true ?
-        null : this.resolveLivePeerAddressFromConsensus(peerId);
-      if (livePeerAddress) {
-        return livePeerAddress;
+      const peer = status.peers.find((candidate) =>
+        candidate.replicaIdentity === peerId);
+      if (peer?.addressStatus !== PEER_ADDRESS_STATUS.RESOLVED) {
+        throw Object.assign(new Error(
+          RAFT_RS_PEER_ADDRESS_REFUSAL.PEER_NOT_IN_CONFIGURATION),
+        {replicaIdentity: peerId});
       }
-      if (options.allowBootstrapHints !== true) {
-        throw new Error(`Unable to resolve unified peer address for ${peerId}`);
-      }
-      const hintedAddress = this.resolvePeerAddressFromHints(peerId);
-      if (hintedAddress) {
-        this.logBootstrapHintFallback(peerId, hintedAddress);
-        return hintedAddress;
-      }
-      throw new Error(`Unable to resolve unified peer address for ${peerId}`);
-    },
-    resolvePeerAddressFromHints(peerId) {
-      if (!this.peerAddresses || this.peerAddresses.length === 0) {
-        return null;
-      }
-      for (const addr of this.peerAddresses) {
-        const validation = this.addressManager.validate(addr);
-        if (!validation.valid) {
-          this.logger.error(
-            MESSAGE_GROUP_SERVICE_LITERAL.PEER_ADDRESS_MUST_BE_IN_UNIFIED_FORMAT,
-            {
-              peerId: addr,
-              groupId: this.groupId,
-              replicaId: this.replicaId,
-              error: validation.error,
-            },
-          );
-          throw new Error(`Peer address must be unified: ${addr}`);
-        }
-        try {
-          const parsed = this.addressManager.parse(addr);
-          if (parsed.serviceId === peerId) {
-            return addr;
-          }
-        } catch (_e) {
-          void _e;
-        }
-      }
-      return null;
-    },
-    /**
-     * Resolve peer address from the services cache.
-     * @param {string} peerId - Peer replica ID.
-     * @return {string|null} Unified address from cache, otherwise null.
-     * @private
-     */
-    resolvePeerAddressFromCache(peerId) {
-      if (!this.systemTableCache) {
-        return null;
-      }
-      const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-      if (!service || isPartitionCleanupServiceRow(service)) {
-        return null;
-      }
-      if (service.address) {
-        const validation = this.addressManager.validate(service.address);
-        if (validation.valid) {
-          return service.address;
-        }
-      }
-      if (service.node_id) {
-        return this.addressManager.format(
-          service.node_id,
-          ENTITY_TYPE.MESSAGE_GROUP,
-          peerId,
-        );
-      }
-      return null;
-    },
-    /**
-     * Emit a structured warning when bootstrap peer hints are used as fallback.
-     * @param {string} peerId - Peer replica ID.
-     * @param {string} address - Resolved bootstrap hint address.
-     * @private
-     */
-    logBootstrapHintFallback(peerId, address) {
-      if (this.bootstrapHintFallbackLogged.has(peerId)) {
-        return;
-      }
-      this.bootstrapHintFallbackLogged.add(peerId);
-      this.logger.warn(
-        MESSAGE_GROUP_SERVICE_LITERAL.USING_BOOTSTRAP_PEER_HINT_BECAUSE_SERVICES_CACHE_HAS_NO_PEER_LOCATION,
-        {
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-          peerId,
-          address,
-          resolutionSource: MESSAGE_GROUP_SERVICE_LITERAL.BOOTSTRAP_HINT,
-        },
-      );
+      return peer.address;
     },
     /**
      * React to authoritative services cache changes for this message group.

@@ -1,5 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {throwIfCancellationRequested} from './query-cancellation.js';
+import {founderNodeIdsOfPlacement} from
+  '../raft/raft-rs-committed-peer-address.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
@@ -404,23 +406,10 @@ class SQLQueryEngineProvisionTargetMethods {
     return {
       replicaIds,
       peerAddresses: uniquePeerAddresses,
-      founderNodeIds: founderNodeIdsOf(addressManager, replicaIds,
+      founderNodeIds: founderNodeIdsOfPlacement(replicaIds,
         uniquePeerAddresses),
     };
   }
-}
-
-// The node each founder is placed on, read from the cohort's unified
-// addresses (the founding placement): the GENESIS stamp commits it.
-function founderNodeIdsOf(addressManager, replicaIds, peerAddresses) {
-  const founderNodeIds = {};
-  for (const address of peerAddresses) {
-    const parsed = addressManager.parse(address);
-    if (replicaIds.includes(parsed.serviceId)) {
-      founderNodeIds[parsed.serviceId] = parsed.nodeId;
-    }
-  }
-  return founderNodeIds;
 }
 
 function createSQLQueryEngineProvisionTargetMethods() {

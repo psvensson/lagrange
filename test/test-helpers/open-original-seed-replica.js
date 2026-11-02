@@ -1,4 +1,4 @@
-import {originalSeedPeerAddresses} from
+import {seedFounderNodeIds} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
 
@@ -12,8 +12,8 @@ async function openOriginalSeedReplica(service, declaration, replicaId) {
     ...(partition ? {partitionId: member.groupId, tableName: member.tableName} :
       {groupId: member.groupId}),
     dbPath: member.dbPath, replicaIds: member.replicaIds,
-    peerAddresses: originalSeedPeerAddresses(
-      declaration.nodeId, member.serviceType, member.replicaIds),
+    ...(partition ? {} : {founderNodeIds:
+      seedFounderNodeIds(member.replicaIds, declaration.nodeId)}),
     deferElection: true, createDelayMs: 0};
   const infrastructure = service.seedInfrastructurePhase;
   const definition = infrastructure.createBootstrapServiceDescriptor(member.serviceType,

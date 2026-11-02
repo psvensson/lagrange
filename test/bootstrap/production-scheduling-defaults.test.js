@@ -289,7 +289,6 @@ async function messageGroupReplica(open, label, authorities) {
     replicaId: `${GROUP_ID}-${label}-r1`,
     replicaIds: [`${GROUP_ID}-${label}-r1`],
     nodeId: NODE_ID,
-    peerAddresses: [],
     transport: messageGroupTransport(),
     deferElection: true,
     ...authorities,

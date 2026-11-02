@@ -8,7 +8,7 @@ quest: peer-and-leader-address-from-committed-configuration
 
 Quest `peer-and-leader-address-from-committed-configuration` (epic `raft-rs-full-cutover`), instances C3
 (message-group half), C4 and U11 of the projection-authority census
-(`solve/epics/raft-rs-full-cutover/evidence/projection-authority-census-2026-11-02/CENSUS.md` on
+(census `projection-authority-census-2026-11-02/CENSUS.md` under `solve/epics/raft-rs-full-cutover/evidence/` on the branch
 `origin/work/projection-authority-census-20261102`, section 2 C3/C4, section 4 Group B, section 6 U11).
 Base `df28ef54a` = `origin/work/learner-committed-admission-rebase-20261102` (PR #184 head: main `e4937c765`
 plus the landed learner quest). The census's file:line for these instances were re-checked on this base and
@@ -86,3 +86,45 @@ the partition or rejoin hint lists, which are not this quest's).
    the live status, attempt-1 deletions. Verified independently before attempt 2.
 2. C4: `resolveLeaderAddress()` from `raft.readStatus()` only, after merging the then-current head of
    `origin/work/replica-admission-committed-operation-20261102`.
+
+## 8. Attempt 1 as built (message-group half, U11, D-C3)
+
+1. **One committed address.** `src/raft/raft-rs-committed-peer-address.js` owns
+   `committedPeerAddress(entityType, replicaIdentity, committedNodeId)` (typed `peer_not_in_configuration`) and
+   `founderNodeIdsOfPlacement` (founding placement -> GENESIS `founderNodeIds`; the query provisioner's local copy
+   is deleted). The partition binding `committedPartitionPeerAddress` delegates to it. The message-group
+   `RESOLVE_PEER_ADDRESS` binding takes the port's two arguments; its only other clause is the replica's own
+   address (a replica knows where it runs; no projection is read).
+2. **Host-side reads.** `MessageGroupService.resolveCommittedPeerAddress(peerId)` answers a configured peer's
+   address from this replica's raft status (whose peer addresses the port resolved from the committed node), or
+   refuses `peer_not_in_configuration` / `peer_configuration_unavailable`. It replaces every non-port
+   `buildPeerAddress` consumer (CDC forward, native durable forward, forward target node, control-plane
+   `forwardToLeader`).
+3. **Founders.** `MessageGroupService` takes `founderNodeIds` (the founding placement) and its GENESIS commits it;
+   the seed allocation declares every message-group founder on the seed node (`seedFounderNodeIds`, the same
+   placement partitions had); the self-hosted join create derives it from the assignment's placement, else this
+   node. The original-allocation admission no longer carries `peerAddresses`; the message-group GENESIS is still
+   compared byte-for-byte with the declaration at native entry.
+4. **D-C3.** The managed context is `{operationId, transitionIdentity, permitSequence, stage, replicaIdentity,
+   peerId, nodeId}` for every stage; the managed transition request names `nodeId` instead of `peerAddress`; the
+   native turn's address fence (`resolvePeerAddress(peerId) === peerAddress`) becomes a committed-node fence
+   (`resolvePeerNodeId(replicaIdentity)` null or equal, else IDENTITY_MISMATCH); the rebalancer takes the node
+   of the permit's replica from the FreshMG identity record (`membershipReplicaNodeId`), for the transition and
+   for the learner-action query; `removalPeerAddress` is deleted. A six-key context or retained origin does not
+   decode (MALFORMED at apply, INVALID -> CORRUPT at the learner-action read).
+5. **U11.** `resolveCanonicalLeaderIdentity()` reads only the live raft status: `live_leader` (node of the
+   committed leader address), `leader_unaddressed`, `no_leader`, `status_unavailable`; the publication-memo,
+   `message_groups` cache-row and role-hint states are deleted. The join-convergence forward target is the live
+   leader at its committed address (no hint list).
+6. **Deleted.** `buildPeerAddress`, message-group `resolvePeerAddressFromCache`, `resolvePeerAddressFromHints`,
+   `logBootstrapHintFallback`, `bootstrapHintFallbackLogged`, `allowBootstrapHints`/`consensusResolution`,
+   `resolveLivePeerAddressFromConsensus`, `resolveCanonicalLeaderIdentityFromCache`/`...NodeIdFromCache`, the
+   message-group `peerAddresses` option and its seed/join/lifecycle plumbing (and the dead partition seed-phase
+   `peerAddresses`), `USING_BOOTSTRAP_PEER_HINT_...`, `BOOTSTRAP_HINT`, `PEER_ADDRESS_MUST_BE_IN_UNIFIED_FORMAT`.
+   `expectedPeersFromServicesCache` stays (A8 trigger).
+7. **Witnesses changed to the new contract** (old ones asserted cache-first or hint resolution): strict-CDC
+   forward routing (cache relocation / hint diagnostics tests replaced by a committed-address test), role
+   publication (publication-memo leader identity test removed; covered by quest test (f)), message-group service
+   (move convergence now targets the live leader), address-manager peer-location authority (stale row ignored,
+   committed node decides), FreshMG fixtures (`nodeId` in transitions and action contexts; the cluster harness
+   commits founder nodes), seed allocation/admission fixtures (`founderNodeIds`), real-port message-group harnesses.

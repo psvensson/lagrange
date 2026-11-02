@@ -137,7 +137,7 @@ test('an unbound durable snapshot never pairs its ConfState with a receiver ' +
     permitSequence: 1,
     stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
     replicaIdentity: leader,
-    peerAddress: cluster.addressOf(leader),
+    nodeId: 'restored-leader-node',
     replicaLifecycleIncarnation: restored.lifecycleIncarnation,
     runtimeGeneration: restored.runtimeGeneration,
     leaderTerm: restored.term,

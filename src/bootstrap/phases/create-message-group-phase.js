@@ -10,6 +10,8 @@ import {
   DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
 } from '../replication-target-authority.js';
 import {NodeService} from '../../node/node-service.js';
+import {founderNodeIdsOfPlacement} from
+  '../../raft/raft-rs-committed-peer-address.js';
 import {
   IDENTITY_WAIT,
   IDENTITY_WAIT_AWAITED,
@@ -36,10 +38,8 @@ import {
   JOINING_UNIFIED_RECONCILE,
 } from '../node-joining-constants.js';
 import {
-  ADDRESS,
   CDC_OPERATION,
   COLUMN,
-  ENTITY_TYPE,
   SERVICE_STATUS,
   TABLES,
   UNIFIED_SERVICE_TYPE,
@@ -289,15 +289,14 @@ class CreateMessageGroupPhase {
       assignment.existingPeerIds :
       replicaIds;
 
-    const peerAddresses = Array.isArray(assignment.peerAddresses) &&
+    // The founding placement the GENESIS stamp commits: the assignment's
+    // placement of each founder, else every founder on this node (the
+    // self-hosted group).
+    const founderNodeIds = Array.isArray(assignment.peerAddresses) &&
       assignment.peerAddresses.length > 0 ?
-      assignment.peerAddresses :
-      allReplicaIds.map(
-        (replicaId) =>
-          `${this.nodeId}${ADDRESS.SEPARATOR}` +
-          `${ENTITY_TYPE.MESSAGE_GROUP}` +
-          `${ADDRESS.SEPARATOR}${replicaId}`,
-      );
+      founderNodeIdsOfPlacement(allReplicaIds, assignment.peerAddresses) :
+      Object.fromEntries(allReplicaIds.map((replicaId) =>
+        [replicaId, this.nodeId]));
 
     this.delegates.resetJoinMessageGroupReplicas();
     for (
@@ -319,7 +318,7 @@ class CreateMessageGroupPhase {
           replicaId,
           replicaIds: allReplicaIds,
           replicaIndex: replicaIndex >= 0 ? replicaIndex : index,
-          peerAddresses,
+          founderNodeIds,
           ...this.observeJoinReplicaIdentity(replicaId, startupReplicaIds),
           deferElection: true,
           deferElectionUntilJoinConvergence:

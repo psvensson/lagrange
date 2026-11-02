@@ -61,14 +61,15 @@ function originalSeedMemberDescriptors(dataDir) {
   return members;
 }
 
-// A founder's GENESIS stamp: every seed partition founder is placed on the
-// seed node, and the stamp commits that placement; a message group's founders
-// are addressed by its own resolver, so its stamp commits none.
+// A founder's GENESIS stamp: every seed founder, partition and message group,
+// is placed on the seed node, and the stamp commits that placement.
+function seedFounderNodeIds(replicaIds, nodeId) {
+  return Object.fromEntries(replicaIds.map((replicaId) => [replicaId, nodeId]));
+}
+
 function seedMemberMembership(member, nodeId) {
-  const founderNodeIds = member.serviceType === SERVICE_TYPE.PARTITION ?
-    Object.fromEntries(member.replicaIds.map((replicaId) => [replicaId, nodeId])) :
-    {};
-  return genesisStamp(member.replicaIds, founderNodeIds);
+  return genesisStamp(member.replicaIds,
+    seedFounderNodeIds(member.replicaIds, nodeId));
 }
 
 function originalSeedAnchor(dataDir) {
@@ -228,4 +229,4 @@ function incarnationRefused(member, tokens, complete) {
 
 export {createSeedOriginalAllocation, validateOriginalSeedDeclaration, validateOriginalSeedDraft,
   completeSeedOriginalAllocation, originalSeedAnchor,
-  originalSeedPeerAddresses};
+  originalSeedPeerAddresses, seedFounderNodeIds};

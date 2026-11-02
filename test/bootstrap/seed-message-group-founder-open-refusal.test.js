@@ -7,6 +7,8 @@
 // database is refused reseed-required and held durably (its lifecycle row
 // says so), never re-founded empty.
 
+import {seedFounderNodeIds} from
+  '../../src/bootstrap/seed-original-allocation-declaration.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,7 +19,7 @@ import Database from 'better-sqlite3';
 
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../../src/raft/raft-committed-membership-constants.js';
-import {ADDRESS, ENTITY_TYPE, SERVICE_TYPE} from '../../src/constants/index.js';
+import {SERVICE_TYPE} from '../../src/constants/index.js';
 import {INITIAL_MESSAGE_GROUP_ID, INITIAL_MESSAGE_GROUP_REPLICA_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {getMessageGroupDbPath} from '../../src/storage/data-directory-manager.js';
@@ -33,8 +35,7 @@ const FOUNDER = Object.freeze({serviceType: SERVICE_TYPE.MESSAGE_GROUP,
   groupId: INITIAL_MESSAGE_GROUP_ID,
   replicaId: REPLICA_ID, replicaIds: [...INITIAL_MESSAGE_GROUP_REPLICA_IDS],
   deferElection: true, replicaIndex: 0,
-  peerAddresses: INITIAL_MESSAGE_GROUP_REPLICA_IDS.map((id) =>
-    [NODE_ID, ENTITY_TYPE.MESSAGE_GROUP, id].join(ADDRESS.SEPARATOR))});
+  founderNodeIds: seedFounderNodeIds(INITIAL_MESSAGE_GROUP_REPLICA_IDS, NODE_ID)});
 
 // One seed start: the production original attempt, the real router, and the
 // bootstrap owner's own seed-message-groups phase. The reopen is the seed's

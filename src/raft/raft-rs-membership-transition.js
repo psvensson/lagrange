@@ -120,7 +120,7 @@ function stageOrdinalFor(stage) {
 
 function validMembershipTransitionRequest(request, stamp, stageOrdinal) {
   const requiredStrings = [request?.operationId, request?.transitionIdentity,
-    request?.replicaIdentity, request?.peerAddress,
+    request?.replicaIdentity, request?.nodeId,
     request?.replicaLifecycleIncarnation, stamp?.configurationKey];
   const requiredChecks = [
     canonicalInteger(request?.permitSequence, {positive: true}),
@@ -142,7 +142,7 @@ function transitionCommand(request, stamp, stageOrdinal, peerId,
     stageOrdinal,
     replicaIdentity: request.replicaIdentity,
     peerId,
-    peerAddress: request.peerAddress,
+    nodeId: request.nodeId,
     replicaLifecycleIncarnation: request.replicaLifecycleIncarnation,
     expectedRuntimeGeneration: request.runtimeGeneration,
     expectedLeaderTerm: request.leaderTerm,
@@ -161,6 +161,7 @@ function transitionCommand(request, stamp, stageOrdinal, peerId,
       stage: request.stage,
       replicaIdentity: request.replicaIdentity,
       peerId,
+      nodeId: request.nodeId,
     })}),
   });
 }

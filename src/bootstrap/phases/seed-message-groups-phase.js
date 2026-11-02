@@ -7,7 +7,7 @@
  */
 
 import {MessageGroupService} from '../../message-group/message-group-service.js';
-import {originalSeedPeerAddresses} from '../seed-original-allocation-declaration.js';
+import {seedFounderNodeIds} from '../seed-original-allocation-declaration.js';
 import {
   initializeRegisteredMessageGroup,
   messageGroupCreationAlreadySettled,
@@ -84,8 +84,9 @@ class SeedMessageGroupsPhase {
 
     d.resetMessageGroupReplicas();
     const nodeId = d.getNodeId();
-    const peerAddresses = originalSeedPeerAddresses(nodeId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP, replicaIds);
+    // The seed allocation places every founder on the seed node; the
+    // GENESIS stamp commits it.
+    const founderNodeIds = seedFounderNodeIds(replicaIds, nodeId);
     for (let index = 0; index < replicaIds.length; index++) {
       const replicaId = replicaIds[index];
       d.queueBootstrapServiceReplica(
@@ -99,7 +100,7 @@ class SeedMessageGroupsPhase {
           replicaId,
           replicaIds,
           replicaIndex: index,
-          peerAddresses,
+          founderNodeIds,
           deferElection: true,
           createDelayMs: index > 0 ?
             index * replicaStaggerDelayMs :
@@ -152,7 +153,7 @@ class SeedMessageGroupsPhase {
       replicaId: options.replicaId,
       nodeId: d.getNodeId(),
       replicaIds: options.replicaIds,
-      peerAddresses: options.peerAddresses,
+      founderNodeIds: options.founderNodeIds,
       transport: d.getMessageRouter(),
       dbPath: options.dbPath,
       originalAllocationOpening: options.originalAllocationOpening,

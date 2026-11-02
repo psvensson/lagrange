@@ -1,5 +1,7 @@
 // Multi-router, multi-target native CDC composition for W1, W2, W7 and W9.
 // Reuses the single-target provisional-route helpers without duplicating code.
+import {founderNodeIdsOfPlacement} from
+  '../../src/raft/raft-rs-committed-peer-address.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -264,7 +266,7 @@ async function openMultiReplica(
     groupId,
     replicaId,
     replicaIds: replicas,
-    peerAddresses: hints,
+    founderNodeIds: founderNodeIdsOfPlacement(replicas, hints),
     nodeId,
     transport: router,
     dbPath: path.join(f.directory, `${replicaId}.sqlite`),
@@ -354,7 +356,7 @@ async function reopenMultiReplica(f, groupId, replicaId, replicas, nodeId, route
   assert.deepEqual(readRaftRsPeerIdentityReservations(service.db), before.reservations);
   assert.equal(service.raft.readStatus().peerId, before.status.peerId);
   assert.deepEqual(service.raft.readStatus().confState, before.status.confState);
-  assert.deepEqual(service.peerAddresses, []);
+  assert.deepEqual({...service.founderNodeIds}, {});
   return service;
 }
 

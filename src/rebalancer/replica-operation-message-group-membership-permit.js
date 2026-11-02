@@ -195,10 +195,19 @@ function messageGroupMembershipLaneKey(groupId) {
   return `${MEMBERSHIP_LANE_KEY_PREFIX}${groupId}`;
 }
 
+/** The node the transition's identity record places a replica the permit
+ * names on: the target's or the source's (the only two replicas a FreshMG
+ * transition moves), else null. The managed context commits it (D-C3). */
+function membershipReplicaNodeId(identity, replicaIdentity) {
+  if (replicaIdentity === identity.targetReplicaId) return identity.targetNodeId;
+  if (replicaIdentity === identity.sourceReplicaId) return identity.sourceNodeId;
+  return null;
+}
+
 export {MEMBERSHIP_BRANCH, MEMBERSHIP_PHASE, MEMBERSHIP_PERMIT_STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, membershipBranchSpec,
   decodeMembershipOwnerClaim, membershipOwnerClaimFence,
   messageGroupMembershipLaneKey, encodeMembershipPermit, membershipActionPhases,
-  membershipActionMatches, sourceRemovalActionMatches,
+  membershipActionMatches, sourceRemovalActionMatches, membershipReplicaNodeId,
   MEMBERSHIP_DEBT_RECOVERY_OUTCOME};

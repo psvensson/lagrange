@@ -296,8 +296,9 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create 3-replica message group (all on same node for this test)
       const replicaIds = ['mg-1-r1', 'mg-1-r2', 'mg-1-r3'];
-      const peerAddresses =
-        replicaIds.map((replicaId) => `${nodeId}/message-group/${replicaId}`);
+      // The founding placement: every founder on this node.
+      const founderNodeIds = Object.fromEntries(
+        replicaIds.map((replicaId) => [replicaId, nodeId]));
 
       for (const replicaId of replicaIds) {
         const messageGroup = new MessageGroupService(withTestDbPath({
@@ -305,7 +306,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
           replicaId,
           nodeId,
           replicaIds,
-          peerAddresses,
+          founderNodeIds,
           transport: router,
         }));
 
@@ -367,8 +368,9 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create 3-replica message group for proper Raft consensus
       const replicaIds = ['mg-cross-r1', 'mg-cross-r2', 'mg-cross-r3'];
-      const peerAddresses =
-        replicaIds.map((replicaId) => `${nodeId}/message-group/${replicaId}`);
+      // The founding placement: every founder on this node.
+      const founderNodeIds = Object.fromEntries(
+        replicaIds.map((replicaId) => [replicaId, nodeId]));
 
       for (const replicaId of replicaIds) {
         const replica = new MessageGroupService(withTestDbPath({
@@ -376,7 +378,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
           replicaId,
           nodeId,
           replicaIds,
-          peerAddresses,
+          founderNodeIds,
           transport: router,
         }));
 

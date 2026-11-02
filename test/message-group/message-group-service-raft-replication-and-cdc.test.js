@@ -539,7 +539,6 @@ test('MessageGroupService - consensus envelopes to message-group peers use the r
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       replicaIds: ['mg-1-r1', 'mg-1-r2'],
-      peerAddresses: ['seed/message-group/mg-1-r2'],
       nodeId: 'node-mg-1',
       transport,
     }, port);
@@ -920,7 +919,6 @@ test(
       service.isLeader = false;
       service.role = RaftRole.FOLLOWER;
       service.leaderId = TEST_STALE_FORWARD_REMOTE_REPLICA_ID;
-      service.peerAddresses = [TEST_STALE_FORWARD_REMOTE_ADDRESS];
       port.peers = [{
         address: TEST_STALE_FORWARD_REMOTE_ADDRESS,
         replicaIdentity: TEST_STALE_FORWARD_REMOTE_REPLICA_ID,

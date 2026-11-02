@@ -19,7 +19,8 @@ import {encodeCommittedLearnerAdmission, decodeCommittedLearnerAdmission,
 import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, membershipBranchSpec,
-  decodeMembershipOwnerClaim, membershipOwnerClaimFence, membershipActionMatches} from
+  decodeMembershipOwnerClaim, membershipOwnerClaimFence, membershipActionMatches,
+  membershipReplicaNodeId} from
   './replica-operation-message-group-membership-permit.js';
 
 import {observeMembershipOperation, membershipRowIdentityMatches,
@@ -339,7 +340,8 @@ function learnerOutcomeQuery(input) {
     groupId: input.identity.groupId, action: Object.freeze({operationId: input.operationId,
       transitionIdentity: input.identity.transitionIdentity,
       permitSequence: input.permit.permitSequence, stage: input.permit.permitStage,
-      replicaIdentity: input.permit.replicaIdentity, peerId: input.permit.peerId})});
+      replicaIdentity: input.permit.replicaIdentity, peerId: input.permit.peerId,
+      nodeId: membershipReplicaNodeId(input.identity, input.permit.replicaIdentity)})});
 }
 function committedLearnerPermit(input, index) {
   return JSON.stringify({...input.permit, permitState: STATE.COMMITTED,

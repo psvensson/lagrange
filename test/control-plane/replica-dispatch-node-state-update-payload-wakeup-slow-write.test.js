@@ -894,7 +894,7 @@ async (t) => {
     forwardMetadataIngressPayloadToLeader: async () => {
       throw new Error('READY must not be forwarded to a message-group leader');
     },
-    buildPeerAddress: () => {
+    resolveCommittedPeerAddress: () => {
       throw new Error('READY must not address a message-group leader');
     },
     sendMessage: async () => {

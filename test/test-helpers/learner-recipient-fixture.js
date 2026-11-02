@@ -56,7 +56,8 @@ function learnerQuery(f) {
   return {purpose: PURPOSE.LEARNER_ACTION, groupId: GROUP,
     action: {operationId: f.request.operationId, transitionIdentity: identity.transitionIdentity,
       permitSequence: permit.permitSequence, stage: permit.permitStage,
-      replicaIdentity: identity.targetReplicaId, peerId: identity.targetPeerId}};
+      replicaIdentity: identity.targetReplicaId, peerId: identity.targetPeerId,
+      nodeId: identity.targetNodeId}};
 }
 function payload(f, replicaId) {
   return {[FIELD.TYPE]: TYPE.READ_COMMITTED_MEMBERSHIP,

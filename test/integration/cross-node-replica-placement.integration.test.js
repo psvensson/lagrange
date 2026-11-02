@@ -250,7 +250,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           replicaId: 'mg-test-1-r1',
           nodeId: seedNodeId,
           replicaIds: ['mg-test-1-r1'],
-          peerAddresses: [`${seedNodeId}/message-group/mg-test-1-r1`],
           transport: resources.bootstrapRouter,
           systemTableCache,
         }));
@@ -479,7 +478,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         replicaId: 'mg-route-test-r1',
         nodeId,
         replicaIds: ['mg-route-test-r1'],
-        peerAddresses: [`${nodeId}/message-group/mg-route-test-r1`],
         transport: resources.router,
       }));
 

@@ -160,12 +160,11 @@ test('B-2. three real MessageGroupService runtimes exist, all on node-0',
       assert.equal(service.deferElection, true, 'with its election deferred');
       assert.deepEqual([...service.replicaIds], REPLICA_IDS,
         'and the whole group as its peers');
-      // The population claim: every peer address names node-0, so all three
-      // replicas of the group are on the one node.
-      for (const address of service.peerAddresses) {
-        assert.ok(address.startsWith(`${NODE_ID}/`),
-          `${address} places a peer on node-0`);
-      }
+      // The population claim: the founding placement commits every founder
+      // on node-0, so all three replicas of the group are on the one node.
+      assert.deepEqual({...service.founderNodeIds},
+        Object.fromEntries(REPLICA_IDS.map((id) => [id, NODE_ID])),
+        'every founder is committed on node-0');
       // Its node-local collaborators are node-0's, not a process singleton's.
       assert.equal(service.systemTableCache,
         world.environment.nodeService.getSystemTableCache(),

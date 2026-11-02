@@ -23,9 +23,6 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
     normalizeLeaderReplicaId(candidate) {
       return this.forwardingOwner.normalizeLeaderReplicaId(candidate);
     }
-    resolveLivePeerAddressFromConsensus(peerId) {
-      return this.forwardingOwner.resolveLivePeerAddressFromConsensus(peerId);
-    }
     resolveCDCForwardSelection(logContext = {}) {
       return this.forwardingOwner.resolveCDCForwardSelection(logContext);
     }

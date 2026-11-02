@@ -80,6 +80,9 @@ const RAFT_RS_LEARNER_ORIGIN_COVERAGE = Object.freeze({
 // no committed fact placed it). The per-peer delivery outcome carries it.
 const RAFT_RS_PEER_ADDRESS_REFUSAL = Object.freeze({
   PEER_NOT_IN_CONFIGURATION: 'peer_not_in_configuration',
+  // A host-side address read with no usable status of its own group: the
+  // configuration that would place the peer could not be read.
+  CONFIGURATION_UNAVAILABLE: 'peer_configuration_unavailable',
 });
 
 const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({

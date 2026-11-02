@@ -1,5 +1,7 @@
 // Real released SERVICES producer, RF1 source MG and RF5 target MG. The only
 // fault is transport custody: native G/F1 traffic and the unchanged B envelope.
+import {founderNodeIdsOfPlacement} from
+  '../../src/raft/raft-rs-committed-peer-address.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -166,7 +168,8 @@ async function openReplica(f, groupId, replicaId, replicas, rows, hints) {
   const cache = new SystemTableCache();
   for (const row of rows) cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, row);
   const service = new MessageGroupService({groupId, replicaId, replicaIds: replicas,
-    peerAddresses: hints, nodeId: NODE_ID, transport: f.router,
+    founderNodeIds: founderNodeIdsOfPlacement(replicas, hints), nodeId: NODE_ID,
+    transport: f.router,
     dbPath: path.join(f.directory, `${replicaId}.sqlite`),
     timeSource: new VirtualTimeSource({startMs: 1000}),
     nodeService: {getSystemTableCache: () => cache, getReadOnlySystemTableCache: () => cache}});
@@ -227,7 +230,8 @@ async function reopen(f, replicaId, rows) {
   assert.deepEqual(readRaftRsPeerIdentityReservations(service.db), before.reservations);
   assert.equal(service.raft.readStatus().peerId, before.status.peerId);
   assert.deepEqual(service.raft.readStatus().confState, before.status.confState);
-  assert.deepEqual(service.peerAddresses, [], 'the reopened service has no bootstrap address hints');
+  assert.deepEqual({...service.founderNodeIds}, {},
+    'the reopened service opens from its durable record, with no founding placement');
   note(f, 'retained-reopen', {replicaId, before, after: service.raft.readStatus()});
   return service;
 }

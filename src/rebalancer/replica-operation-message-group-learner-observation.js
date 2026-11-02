@@ -14,7 +14,8 @@ import {RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME,
   '../raft/raft-operation-port-constants.js';
 import {MEMBERSHIP_PHASE, MEMBERSHIP_PERMIT_STATE as STATE, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, decodeMembershipOwnerClaim,
-  membershipActionMatches, sourceRemovalActionMatches, membershipActionPhases} from
+  membershipActionMatches, sourceRemovalActionMatches, membershipActionPhases,
+  membershipReplicaNodeId} from
   './replica-operation-message-group-membership-permit.js';
 import {observeMembershipOperation, membershipRowIdentityMatches,
   MEMBERSHIP_AUTHORIZATION_READ_OPTIONS as READ} from
@@ -125,7 +126,8 @@ function nativeTransition(input) {
   const {decodedPermit: permit, decodedIdentity: identity} = input;
   return {operationId: input.operationId, transitionIdentity: permit.transitionIdentity,
     permitSequence: permit.permitSequence, stage: permit.permitStage,
-    replicaIdentity: permit.replicaIdentity, peerAddress: identity.targetAddress,
+    replicaIdentity: permit.replicaIdentity,
+    nodeId: membershipReplicaNodeId(identity, permit.replicaIdentity),
     replicaLifecycleIncarnation: permit.replicaLifecycleIncarnation,
     runtimeGeneration: permit.runtimeGeneration, leaderTerm: permit.leaderTerm,
     leaderConfigurationStamp: permit.leaderConfigurationStamp};

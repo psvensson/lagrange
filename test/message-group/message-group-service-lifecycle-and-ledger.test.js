@@ -123,7 +123,6 @@ test('MessageGroupService - single replica becomes leader', async (t) => {
       replicaId: 'mg-1-r1',
       nodeId,
       replicaIds: ['mg-1-r1'],
-      peerAddresses: [`${nodeId}/message-group/mg-1-r1`],
       transport: router,
     }));
 
@@ -169,7 +168,6 @@ test('MessageGroupService - single-replica initialization fails closed ' +
       replicaId: 'mg-campaign-refused-r1',
       nodeId,
       replicaIds: ['mg-campaign-refused-r1'],
-      peerAddresses: [`${nodeId}/message-group/mg-campaign-refused-r1`],
       transport: router,
     }, port);
 
@@ -194,10 +192,6 @@ test('MessageGroupService - leader activation dedupes same-term flaps', async (t
       groupId: 'mg-leader-gate',
       replicaId: 'mg-leader-gate-r1',
       replicaIds: ['mg-leader-gate-r1', 'mg-leader-gate-r2'],
-      peerAddresses: [
-        `${nodeId}/message-group/mg-leader-gate-r1`,
-        `${nodeId}/message-group/mg-leader-gate-r2`,
-      ],
       nodeId,
       transport: router,
       deferElection: true,

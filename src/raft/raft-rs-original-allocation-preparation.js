@@ -581,12 +581,10 @@ class RaftRsOriginalAllocationPreparation {
       entry.replicaId === owned.replicaId);
     const groupBinding = member.serviceType === SERVICE_TYPE.PARTITION ?
       {partitionId: member.groupId, tableName: member.tableName} : {groupId: member.groupId};
-    const peerAddresses = originalSeedPeerAddresses(this.#declaration.nodeId,
-      member.serviceType, member.replicaIds);
     const schema = member.serviceType === SERVICE_TYPE.PARTITION ?
       deepFreeze(structuredClone(getSchemaByTableName(member.tableName))) : undefined;
     const required = {...groupBinding, serviceType: member.serviceType,
-      replicaIds: member.replicaIds, peerAddresses};
+      replicaIds: member.replicaIds};
     if (!Object.entries(required).every(([field, value]) =>
       isDeepStrictEqual(owned[field], value)) ||
         (owned.dbPath !== undefined && path.resolve(owned.dbPath) !== member.dbPath) ||
@@ -601,7 +599,6 @@ class RaftRsOriginalAllocationPreparation {
     const admitted = Object.freeze({...owned,
       dbPath: member.dbPath,
       replicaIds: member.replicaIds,
-      peerAddresses,
       schema,
       bootstrapMembership: this.#openingMode === STATE.COLD_RECOVERY ?
         durableRecordBootstrap() : member.membership,

@@ -81,10 +81,6 @@ class MessageGroupServiceForwardingRuntimeMethods {
     return this.forwardingOwner.resolveJoinConvergenceBootstrapForwardTarget();
   }
 
-  resolveCanonicalLeaderNodeIdFromCache() {
-    return this.forwardingOwner.resolveCanonicalLeaderNodeIdFromCache();
-  }
-
   isLocalForwardTarget(serviceId, address = null) {
     return this.forwardingOwner.isLocalForwardTarget(serviceId, address);
   }

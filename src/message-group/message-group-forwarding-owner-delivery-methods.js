@@ -599,7 +599,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
         let leaderAddress = target.address;
         try {
           if (!leaderAddress) {
-            leaderAddress = service.buildPeerAddress(target.serviceId);
+            leaderAddress = service.resolveCommittedPeerAddress(target.serviceId);
           }
           if (!leaderAddress) {
             throw new Error(

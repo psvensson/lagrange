@@ -7,7 +7,6 @@
  */
 
 import {PartitionService} from '../../partition/partition-service.js';
-import {originalSeedPeerAddresses} from '../seed-original-allocation-declaration.js';
 import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
   '../../raft/raft-rs-original-allocation-constants.js';
 import {assertCritical} from '../../utils/assert.js';
@@ -142,9 +141,6 @@ class SeedPartitionsPhase {
         nodeId: d.getNodeId(),
       });
 
-      const nodeId = d.getNodeId();
-      const peerAddresses = originalSeedPeerAddresses(nodeId,
-        UNIFIED_SERVICE_TYPE.PARTITION, replicaIds);
       for (let index = 0; index < replicaIds.length; index++) {
         const replicaId = replicaIds[index];
         const dbPath = d.resolvePartitionDbPath(
@@ -164,7 +160,6 @@ class SeedPartitionsPhase {
             replicaId,
             replicaIds,
             replicaIndex: index,
-            peerAddresses,
             dbPath,
             deferElection: true,
             createDelayMs: index > 0 ?
@@ -267,7 +262,6 @@ class SeedPartitionsPhase {
         bootstrapMembership: options.bootstrapMembership,
         identityExisted: options.identityExisted,
         originalAllocationOpening: options.originalAllocationOpening,
-        peerAddresses: options.peerAddresses,
         nodeId: d.getNodeId(),
         transport: d.getTransport(),
         dbPath: options.dbPath,
