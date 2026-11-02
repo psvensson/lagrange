@@ -432,6 +432,37 @@ async function casePagesCiteNoDevelopmentRecords() {
   });
 }
 
+// The withdrawal notice states what the ledger and history hold, not a universal:
+// an entry may carry no defect ids and name its records by scope, and a history
+// record may be withdrawn by the forensic admission rule alone.
+const HISTORY_FILE = 'data/tidb-comparison/history.ndjson';
+
+async function caseWithdrawalNoticeStatesTheData() {
+  await withChain(async (chain) => {
+    const [historyLine] = stringSplit(
+      fs.readFileSync(path.join(REPO_ROOT, HISTORY_FILE), 'utf8'), '\n');
+    fs.writeFileSync(chain.path(HISTORY_FILE), `${historyLine}\n`);
+    chain.invalidate([{
+      id: 'inv-0001', recordedAt: '2026-11-02T00:00:00.000Z',
+      scope: {file: RAW_FILE, campaignGitCommit: null, receiptIds: 'all'},
+      reasons: [ADMISSION_REASON.HEALTH_SUBSTITUTE], defectIds: [],
+      note: 'an entry without defect ids', recordedBy: 'chain acceptance',
+    }]);
+    await chain.publish();
+    const expected = [
+      'has 1 entry; 0 of them name the defect ids behind the withdrawal and 0 of them ' +
+        'enumerate the withdrawn records by id',
+      '1 of 1 history records are withdrawn without a ledger entry, by the admission rule',
+      ADMISSION_REASON.FORENSIC_RECORD,
+    ];
+    for (const name of ['README.md', 'index.html', 'tidb-comparison-progress.md']) {
+      for (const fact of expected) {
+        assert.equal(stringIncludes(chain.pages[name], fact), true, `${name} states: ${fact}`);
+      }
+    }
+  });
+}
+
 const PUBLICATION_CASES = Object.freeze([
   ['J8 wrong image, digest, version, comparator-as-candidate, dead or unbound container',
     caseJ8ProductIdentity],
@@ -447,6 +478,8 @@ const PUBLICATION_CASES = Object.freeze([
   ['static census of the benchmark chain sources', caseStaticCensus],
   ['no generated page names a path into development records',
     casePagesCiteNoDevelopmentRecords],
+  ['the withdrawal notice states the ledger and history facts it rests on',
+    caseWithdrawalNoticeStatesTheData],
 ]);
 
 export {PUBLICATION_CASES};

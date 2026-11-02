@@ -20,9 +20,12 @@ releases without a compatibility guarantee.
   per-arm smoke statements instead of the canonical Scenario A workload, constant
   phase and byte values, quantiles synthesised from other quantiles, constant
   semantic-proof counts and label-hash identities. The original records are retained
-  as forensic evidence; each withdrawal is an entry (`inv-NNNN`) in the append-only
-  `data/tidb-comparison/invalidations.ndjson` naming the withdrawn records, the
-  admission reason codes and the defect ids behind it. The benchmark evidence chain
+  as forensic evidence. Each withdrawal is recorded either by an entry (`inv-NNNN`) in
+  the append-only `data/tidb-comparison/invalidations.ndjson`, which names the
+  withdrawn records by id or by file and campaign commit, the admission reason codes
+  and, where a defect applies, its defect ids; or by the admission rule
+  `forensic-record-not-admissible`, under which no history record is admissible as a
+  current claim. The benchmark evidence chain
   is repaired: drivers count only verified responses, the deployer starts the real
   products, the comparison history is append-only again and its overwritten records
   are restored. Publication now consumes

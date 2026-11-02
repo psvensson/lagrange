@@ -19,7 +19,7 @@ function buildCitusComparisonPage(matrix) {
     sections: [section('Scenario A', SCENARIO_A_COLUMNS),
       section('Scenario B locality shapes', SCENARIO_B_COLUMNS),
       section('Scenario C', SCENARIO_C_COLUMNS)],
-    links: SCENARIO_LINKS, sources: matrix.sources, svgHref: 'citus-comparison-progress.svg',
+    links: SCENARIO_LINKS, sources: matrix.sources, withdrawal: matrix.withdrawal, svgHref: 'citus-comparison-progress.svg',
   };
 }
 

@@ -11,7 +11,7 @@ function buildPage(matrix) {
       buildExperimentSection(matrix, 'scenario-b-rtt-sweep', ''),
       buildExperimentSection(matrix, 'scenario-b-working-set', ''),
     ],
-    links: SCENARIO_LINKS, sources: matrix.sources,
+    links: SCENARIO_LINKS, sources: matrix.sources, withdrawal: matrix.withdrawal,
     svgHref: 'scenario-b-rtt-working-set-crossover.svg',
   };
 }

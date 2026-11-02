@@ -2,12 +2,19 @@
 // (14 advertised configurations and the advertised experiments) filled with the
 // admission cells derived from the raw observation store. It carries no metric of
 // its own, no winner and no completion count; every renderer consumes it.
+import fs from 'node:fs';
 import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
 import {CLAIM_CELL_STATUS} from './benchmark-claim-admission.js';
+import {readInvalidationLedger} from './benchmark-invalidation-ledger.js';
 import {buildCoverageManifest} from './comparative-coverage-manifest.js';
+import {
+  DEFAULT_COMPARISON_HISTORY_NDJSON_PATH,
+  parseComparisonHistoryNdjson,
+  summarizeBenchmarkWithdrawal,
+} from './oltp-comparison-history-store.js';
 import {deriveAdmittedMeasurementsFromRawObservations} from './raw-observation-store.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -37,12 +44,15 @@ function buildMultiSystemComparativeMatrix(options = {}) {
   const admitted = deriveAdmittedMeasurementsFromRawObservations(rootDir);
   const cellsByKey = new Map(arrayMap(admitted.cells, (cell) => [cell.claimKey, cell]));
   const manifest = buildCoverageManifest();
+  const history = parseComparisonHistoryNdjson(fs.readFileSync(
+    path.resolve(rootDir, DEFAULT_COMPARISON_HISTORY_NDJSON_PATH), 'utf8'));
   return {
     schema: MULTI_SYSTEM_MATRIX_SCHEMA,
     coverageManifestId: manifest.manifestId,
     sufficiencyRuleId: admitted.sufficiencyRuleId,
     statusVocabulary: Object.values(CLAIM_CELL_STATUS),
     sources: admitted.sources,
+    withdrawal: summarizeBenchmarkWithdrawal(history, readInvalidationLedger(rootDir)),
     scenarios: SCENARIOS,
     targets: arrayMap(manifest.targets, (t) => ({
       targetId: t.targetId,

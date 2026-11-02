@@ -62,6 +62,7 @@ function buildComparisonHistoryPage(summary) {
       historySection('Other history', others, null),
     ],
     sources: [{path: SUMMARY_PATH, sha256: `sha256:${summary.summarySha256}`}],
+    withdrawal: summary.withdrawal,
     svgHref: 'tidb-comparison-progress.svg',
   };
 }

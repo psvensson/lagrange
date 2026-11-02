@@ -17,7 +17,7 @@ function buildLagrangeEvolutionPage(matrix) {
       buildTargetSection(matrix, {heading: 'Lagrange configurations', description: '',
         columns: OVERVIEW_COLUMNS, targetIds: [TARGET_ID.LAGRANGE, TARGET_ID.LAGRANGE_5]}),
     ],
-    links: SCENARIO_LINKS, sources: matrix.sources, svgHref: 'lagrange-metrics-evolution.svg',
+    links: SCENARIO_LINKS, sources: matrix.sources, withdrawal: matrix.withdrawal, svgHref: 'lagrange-metrics-evolution.svg',
   };
 }
 

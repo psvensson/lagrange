@@ -4,7 +4,7 @@
 
 A scale-out claim needs Scenario A runs at both node counts with observed process placement; replica placement needs its own observation and is never derived from the replication factor.
 
-Every comparative result published before 2026-11-01 was withdrawn: the records are retained as forensic evidence and the reasons are recorded in the append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson); each entry (inv-NNNN) names the withdrawn records, the admission reason codes and the defect ids (DNN) behind the withdrawal.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 8 entries; 7 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Three-to-five-node scale-out](scaleout-3to5-node-rf3-progress.svg)
 

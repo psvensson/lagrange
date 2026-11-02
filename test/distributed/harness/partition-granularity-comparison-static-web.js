@@ -10,7 +10,7 @@ function buildPage(matrix) {
     sections: [
       buildExperimentSection(matrix, 'partition-granularity-sweep', ''),
     ],
-    links: SCENARIO_LINKS, sources: matrix.sources,
+    links: SCENARIO_LINKS, sources: matrix.sources, withdrawal: matrix.withdrawal,
     svgHref: 'partition-granularity-sweep-progress.svg',
   };
 }

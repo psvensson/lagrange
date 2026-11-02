@@ -12,7 +12,7 @@ function buildScenarioCComparisonPage(matrix) {
       'no Scenario C value can be admitted.'],
     sections: [buildTargetSection(matrix, {heading: 'Scenario C', description: '',
       columns: SCENARIO_C_COLUMNS, targetIds: ALL_TARGET_IDS})],
-    links: SCENARIO_LINKS, sources: matrix.sources,
+    links: SCENARIO_LINKS, sources: matrix.sources, withdrawal: matrix.withdrawal,
     svgHref: 'scenario-c-feature-store-progress.svg',
   };
 }

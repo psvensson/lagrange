@@ -5,7 +5,7 @@ import {buildExperimentSection, renderClaimPage} from './comparative-landing-tab
 
 function renderScenarioSetupBreakdownSvg(matrix) {
   return renderClaimPage({
-    title: 'Per-phase time breakdown', intro: [], sources: matrix.sources,
+    title: 'Per-phase time breakdown', intro: [], sources: matrix.sources, withdrawal: matrix.withdrawal,
     sections: [buildExperimentSection(matrix, 'scenario-setup-breakdown', '')],
   }).svg;
 }

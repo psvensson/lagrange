@@ -30,13 +30,13 @@ function buildYugabyteIgniteComparisonPage(matrix) {
       section('Scenario C', SCENARIO_C_COLUMNS)],
     links: [...SCENARIO_LINKS,
       {href: 'scenario-b-shape-crossover.svg', label: 'Scenario B shapes, all configurations'}],
-    sources: matrix.sources, svgHref: 'yugabyte-ignite-comparison-progress.svg',
+    sources: matrix.sources, withdrawal: matrix.withdrawal, svgHref: 'yugabyte-ignite-comparison-progress.svg',
   };
 }
 
 function buildScenarioBShapePage(matrix) {
   return {
-    title: 'Scenario B locality shapes, all configurations', intro: [], sources: matrix.sources,
+    title: 'Scenario B locality shapes, all configurations', intro: [], sources: matrix.sources, withdrawal: matrix.withdrawal,
     sections: [buildTargetSection(matrix, {heading: 'Scenario B locality shapes',
       description: '', columns: SCENARIO_B_COLUMNS, targetIds: ALL_TARGET_IDS})],
   };

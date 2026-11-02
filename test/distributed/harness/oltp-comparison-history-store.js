@@ -306,6 +306,23 @@ function buildHistoryAdmission(record, invalidations) {
   });
 }
 
+// What the withdrawal of the published figures rests on, counted from the data:
+// ledger entries that name defect ids, entries that enumerate their records by id
+// (the rest name them by file and campaign commit), and history records no entry
+// covers, withdrawn only by the forensic admission rule.
+function summarizeBenchmarkWithdrawal(records, invalidations) {
+  const count = (items, predicate) => arrayFilter(items, predicate).length;
+  return Object.freeze({
+    ledgerEntries: invalidations.length,
+    entriesWithDefectIds: count(invalidations, (inv) => inv.defectIds.length > 0),
+    entriesWithRecordIds: count(invalidations, (inv) => inv.scope.receiptIds !== ALL_RECORDS),
+    historyRecords: records.length,
+    historyRecordsWithoutEntry: count(records, (record) =>
+      historyInvalidationsFor(record, invalidations).length === 0),
+    admissionRule: ADMISSION_REASON.FORENSIC_RECORD,
+  });
+}
+
 // The progress summary is the mutable index over the history: the latest record
 // per combination key, with its admission status. Every record stays in history.
 function buildComparisonProgressSummary(records, options = {}) {
@@ -338,6 +355,7 @@ function buildComparisonProgressSummary(records, options = {}) {
     totalRecords: validated.length,
     totalCombinations: entries.length,
     entries: Object.freeze(entries),
+    withdrawal: summarizeBenchmarkWithdrawal(validated, invalidations),
   };
   const summarySha256 =
     createHash('sha256').update(JSON.stringify(summaryPayload)).digest('hex');
@@ -433,6 +451,7 @@ export {
   createComparisonHistoryRecord,
   validateComparisonHistoryRecord,
   parseComparisonHistoryNdjson,
+  summarizeBenchmarkWithdrawal,
   buildComparisonProgressSummary,
   recordComparisonResultToDisk,
 };
