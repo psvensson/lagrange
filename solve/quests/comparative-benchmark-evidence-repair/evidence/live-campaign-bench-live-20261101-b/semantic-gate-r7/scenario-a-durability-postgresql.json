@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "lagrange-durable-commit-v1",
+  "system": "postgresql",
+  "caseId": "scenario-a-durable-commit-v1",
+  "caseSha256": "169fa5c75abf7a79d7302553ca3684b408ff3dd570e733250c0c802777c977ff",
+  "datasetSha256": "c910f54f6c8fcaa11da7a22cebe9da838d7b2017cee58cfd4078a5624df72769",
+  "executionPath": "public-sql",
+  "protocol": "postgresql",
+  "lockingReadMode": "native-for-update",
+  "serviceEndpoint": null,
+  "admissionSha256": null,
+  "runtimePreflight": null,
+  "binding": {
+    "campaignId": "bench-live-20261101-b-r7",
+    "containerId": "1c6ba99d74d2c724a1131044d35195ae2d6ad7fc78fc40625d6b4bcda73ca609",
+    "imageId": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+    "endpoint": "192.168.86.41:5432"
+  },
+  "operation": {
+    "kind": "payment",
+    "phase": "measurement",
+    "workerId": 1,
+    "sequence": 2,
+    "warehouseId": 1,
+    "districtId": 1,
+    "customerWarehouseId": 1,
+    "customerDistrictId": 1,
+    "customerId": 5,
+    "amountCents": 23207
+  },
+  "retryEvidence": {
+    "policyId": "scenario-a-retry-v1",
+    "attempts": 1,
+    "retries": 0,
+    "retryDelayMs": 0,
+    "failures": [],
+    "intendedIssueTimeMs": 1793583280274,
+    "completedAtMs": 1793583280315,
+    "requestClockElapsedMs": 41
+  },
+  "paymentBeforeRestart": {
+    "warehouseYtdCents": 23207,
+    "districtYtdCents": 23207,
+    "customerBalanceCents": -23207,
+    "customerYtdPaymentCents": 23207,
+    "customerPaymentCount": 1,
+    "historyCount": 1,
+    "historyAmountCents": 23207
+  },
+  "paymentAfterRestart": {
+    "warehouseYtdCents": 23207,
+    "districtYtdCents": 23207,
+    "customerBalanceCents": -23207,
+    "customerYtdPaymentCents": 23207,
+    "customerPaymentCount": 1,
+    "historyCount": 1,
+    "historyAmountCents": 23207
+  },
+  "stateBeforeRestartSha256": "ee3dbb7feab3338090b2c328b42417ca364e086f1d2cdfef59e7668027f473a7",
+  "stateAfterRestartSha256": "ee3dbb7feab3338090b2c328b42417ca364e086f1d2cdfef59e7668027f473a7",
+  "faultEvidence": {
+    "containerId": "1c6ba99d74d2c724a1131044d35195ae2d6ad7fc78fc40625d6b4bcda73ca609",
+    "restartedAt": "2026-11-02T01:34:40.577Z",
+    "readyAt": "2026-11-02T01:34:42.140Z",
+    "startedAtBefore": "2026-11-02T01:34:23.112731796Z",
+    "startedAtAfter": "2026-11-02T01:34:40.952959763Z",
+    "readiness": {
+      "servers": [
+        {
+          "state": "ready",
+          "component": "postgres-primary@192.168.86.41",
+          "attempts": 1,
+          "stablePolls": 1,
+          "observedAt": "2026-11-02T01:34:41.338Z",
+          "timeToReadyMs": 295,
+          "evidence": "127.0.0.1:5432 - accepting connections"
+        }
+      ]
+    }
+  },
+  "evaluation": {
+    "passed": false,
+    "failures": [
+      "pg_host_only_fault_insufficient",
+      "fault_incarnation_unchanged",
+      "storage_continuity_invalid"
+    ],
+    "actual": {
+      "commitAcknowledged": true,
+      "paymentPassed": true,
+      "stateBeforeRestartSha256": "ee3dbb7feab3338090b2c328b42417ca364e086f1d2cdfef59e7668027f473a7",
+      "stateAfterRestartSha256": "ee3dbb7feab3338090b2c328b42417ca364e086f1d2cdfef59e7668027f473a7",
+      "faultEvidence": {
+        "faultTarget": {
+          "nodeId": "",
+          "role": "",
+          "isDataReplica": false,
+          "pgHostOnly": false
+        },
+        "beforeIncarnation": "",
+        "afterIncarnation": "",
+        "storageContinuity": "",
+        "retainedObligations": []
+      }
+    },
+    "paymentEvaluation": {
+      "passed": true,
+      "failures": [],
+      "actual": {
+        "paidCents": 23207,
+        "warehouseYtdCents": 23207,
+        "districtYtdCents": 23207,
+        "customerBalanceCents": -23207,
+        "customerYtdPaymentCents": 23207,
+        "customerPaymentCount": 1,
+        "historyCount": 1,
+        "historyAmountCents": 23207
+      },
+      "expected": {
+        "paidCents": 23207,
+        "warehouseYtdCents": 23207,
+        "districtYtdCents": 23207,
+        "customerBalanceCents": -23207,
+        "customerYtdPaymentCents": 23207,
+        "customerPaymentCount": 1,
+        "historyCount": 1,
+        "historyAmountCents": 23207
+      },
+      "proofIds": [
+        "transaction:payment:customer_balance_decreases_by_payment_amount",
+        "transaction:payment:customer_payment_counters_advance_once",
+        "transaction:payment:district_ytd_increases_by_payment_amount",
+        "transaction:payment:one_history_row_created_for_logical_payment",
+        "transaction:payment:warehouse_ytd_increases_by_payment_amount"
+      ]
+    },
+    "proofIds": []
+  },
+  "comparable": false,
+  "nonComparableReason": "Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.",
+  "proofRecord": {
+    "evidenceId": "lagrange-durable-commit-v1",
+    "system": "postgresql",
+    "status": "failed",
+    "artifactSha256": "4f4877297a193029853ead7b54afd86779cb4580334869c1a93fd6f96a5d9352",
+    "proofIds": [
+      "isolation:atomicCommitRequired",
+      "isolation:successfulCommitDurable"
+    ]
+  },
+  "artifactSha256": "4f4877297a193029853ead7b54afd86779cb4580334869c1a93fd6f96a5d9352"
+}
