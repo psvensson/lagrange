@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "harness-image-build-leftovers",
+  "class": "fix",
+  "statement": "A successful harness image build (test/distributed/harness/docker-provider.js buildImage, the one build step every lab scenario and cone run uses per docker host for distributed-db:test) retires the image its tag named before the build: it records that id before building, and after the build removes it only when it is now untagged and no container, running or stopped, uses it, never forced. It touches nothing else - no prune, no other dangling image, never a tagged image (pinned product images, redis/node/distroless/pd/postgres bases) - and records the outcome as a typed operation event (recorded, removed, kept-in-use, kept-tagged, kept-remove-failed, kept-unverified, none). A step it cannot verify keeps the image, and retirement never fails the build.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/harness-image-build-leftovers/evidence/receipt.json",
+      "requiredReceipts": [
+        "previous-build-retired",
+        "only-the-replaced-untagged-unused-image",
+        "typed-outcome-events",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "cause",
+      "statement": "Repair at the owner of the harness image build (docker-provider.js buildImage); a blanket docker image prune or any removal of an image the build did not just replace is out."
+    },
+    {
+      "id": "scope",
+      "statement": "Bounded tooling repair. Per-host docker disk headroom as a lab fleet readiness fact is recorded as a finding for the lab owner, not built here."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first with a docker double (no live docker in unit tests); one falsifier per kept case; independent verification before landing."
+    }
+  ],
+  "sealedAt": "b3b3665736875a6d0df5d29edc8b52ab96c53344"
+}

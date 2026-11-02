@@ -1,0 +1,41 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "harness-image-build-leftovers",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "previous-build-retired",
+      "passed": true,
+      "detail": "buildImage records the id the tag named before the build (imageIdOf) and, after a successful build, retirePreviousImage removes it when untagged and unused, without force; red before the fix (6 of 7 tests), green after",
+      "evidence": [
+        "evidence/red-before-fix.log.txt",
+        "evidence/touched-green.log.txt"
+      ],
+      "testFile": "test/distributed/harness/__tests__/docker-image-retirement.test.js"
+    },
+    {
+      "id": "only-the-replaced-untagged-unused-image",
+      "passed": true,
+      "detail": "kept-tagged (another tag names it), kept-in-use (a container, running or stopped, uses it), kept-remove-failed (the daemon refuses, e.g. dependent child images), kept-unverified (a step cannot be read), none (no previous image, the same image, already gone); another dangling image is never touched and there is no prune; a failed build retires nothing; mutations of the tagged, in-use, same-image and removal-error guards each turn their test red",
+      "evidence": [
+        "evidence/mutation-witnesses.log.txt",
+        "evidence/touched-green.log.txt"
+      ],
+      "testFile": "test/distributed/harness/__tests__/docker-image-retirement.test.js"
+    },
+    {
+      "id": "typed-outcome-events",
+      "passed": true,
+      "detail": "operation events image.retire-previous with stage recorded (previousId, before the build) and the outcome stage (previousId, currentId, detail) after it, through the provider's operation sink (the run's docker operation log); asserted in every test",
+      "evidence": [
+        "evidence/touched-green.log.txt"
+      ],
+      "testFile": "test/distributed/harness/__tests__/docker-image-retirement.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "reason": "awaiting the verifier spawned by the lead"
+    }
+  ]
+}

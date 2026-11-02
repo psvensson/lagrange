@@ -1,0 +1,10 @@
+# test-files planned=5
+classified lane ordinary: 5 file(s), jobs=4
+thermal: hold cpu 76C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 71C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/distributed/harness/__tests__/docker-build-context.test.js (14 assertions, 330ms)
+ok test/distributed/harness/__tests__/docker-provider.test.js (46 assertions, 691ms)
+ok test/distributed/harness/__tests__/docker-image-retirement.test.js (7 assertions, 471ms)
+ok test/distributed/harness/__tests__/certification-image-identity.test.js (10 assertions, 911ms)
+ok test/distributed/harness/__tests__/run.test.js (89 assertions, 2376ms)
+# test-files total=5 pass=5 fail=0 assertions=166
