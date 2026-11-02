@@ -1115,8 +1115,8 @@ test('PartitionService - a peer is addressed from its committed node only',
       'no committed node: a typed refusal, never an address-book lookup');
   });
 
-test('PartitionService - cache reconciliation admits new replicas and never ' +
-  'moves a configured peer because its row names another node',
+test('PartitionService - services rows never admit a peer and never move a ' +
+  'configured peer because its row names another node',
 async (t) => {
   const systemTableCache = new SystemTableCache();
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
@@ -1166,7 +1166,12 @@ async (t) => {
     consensusPort.confChanges.length = 0;
     partition.systemTableCache = systemTableCache;
 
-    partition.reconcileRaftPeersFromCache();
+    // A services change reaches the partition: rows are discovery (quest
+    // replica-admission-from-committed-operation); admission is requested.
+    for (const row of systemTableCache.getAll(TABLES.SERVICES)) {
+      partition.handleSystemTableCacheChange(TABLES.SERVICES,
+        CDCOperation.UPDATE, row);
+    }
     await new Promise((resolve) => setImmediate(resolve));
 
     const removedAddresses = consensusPort.confChanges
@@ -1185,19 +1190,10 @@ async (t) => {
       'a configured peer is never removed because a row disagrees with ' +
           'its committed node',
     );
-    t.same(
-      joinedAddresses,
-      [
-        'node-3/partition/replica-3',
-      ],
-      'newly visible peers are proposed with the node their row names, ' +
-          'which the admission commits',
-    );
-    t.ok(
-      partition.replicaIds.includes('replica-2') &&
-        partition.replicaIds.includes('replica-3'),
-      'replicaIds should expand to include cache-discovered peers',
-    );
+    t.same(joinedAddresses, [],
+      'a newly visible row proposes no admission');
+    t.same(partition.replicaIds, ['replica-1'],
+      'rows do not expand the replica identity cohort');
   } finally {
     await partition.shutdown();
   }

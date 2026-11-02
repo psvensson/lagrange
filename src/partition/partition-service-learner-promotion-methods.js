@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {drivePendingReplicaAdmission} from './partition-replica-admission.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   validateLearnerPromotionProofResponse,
@@ -475,6 +476,10 @@ class PartitionServiceLearnerPromotionMethods {
       );
       return;
     }
+    // A pending admission request rides this existing cadence: the
+    // learner asks its leader again until an admitting answer (quest
+    // replica-admission-from-committed-operation; no timer of its own).
+    await drivePendingReplicaAdmission(this);
     const observation = this.observeLearnerPromotionCountCheck();
     const decision = evaluateLearnerPromotionCountCheck(observation);
     const countFields = {

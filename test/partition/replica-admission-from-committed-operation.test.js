@@ -15,8 +15,9 @@
  *   (e) a stale services row naming another node never changes the
  *       committed node: it is the operation's target node
  *   (f) static, over the parsed sources: the only producer of a partition
- *       admission is the request owner; no services-cache event or cache
- *       read reaches admitPartitionRaftPeer
+ *       admission is the request owner; no services-cache event reaches
+ *       admitPartitionRaftPeer, and the one cache read on the admission path
+ *       is the named refuse-only exemption groupRetiringRefusal
  *   (g) the target asks its leader with exactly {partitionId,
  *       replicaIdentity, operationId}; a NOT_LEADER / AUTHORITY_UNAVAILABLE
  *       answer leaves the request pending for the existing learner cadence,
@@ -350,7 +351,8 @@ function enclosingFunctionName(ancestors) {
     if (node.type === 'MethodDefinition' && node.key.type === 'Identifier') {
       return node.key.name;
     }
-    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier') {
+    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier' &&
+        /FunctionExpression$/.test(node.init?.type ?? '')) {
       return node.id.name;
     }
   }
@@ -406,6 +408,21 @@ async (t) => {
     t.notOk(owner.some(referencesCache),
       'the admission decision never reads the services cache');
   }
+
+  // The one exemption, explicit and reasoned (lead decision 2026-11-02,
+  // R17 finding for the projection-authority census): groupRetiringRefusal
+  // reads the cache, refuse-only, owned by the group-retirement owner. No
+  // other function on the admission path reads it.
+  const administration = asts.get(
+    'partition/partition-service-raft-membership-administration.js');
+  const admissionPath = ['admitPartitionRaftPeer',
+    'reservePartitionRaftPeerIdentity', 'admissionGroupOf',
+    'groupRetiringRefusal'];
+  const cacheReaders = admissionPath.filter((name) =>
+    functionNodesNamed(administration, name).some(referencesCache));
+  t.same(cacheReaders, ['groupRetiringRefusal'],
+    'the only cache read on the admission path is the refuse-only ' +
+    'group-retiring fence (named exemption)');
 
   const reconcileReferences = [];
   for (const [file, ast] of asts) {
@@ -500,4 +517,29 @@ test('(h) a repeated request is idempotent: ALREADY_MEMBER, no second ' +
     'the committed node is unchanged');
   t.equal(deriveRaftRsPeerId(TARGET_REPLICA).length > 0, true,
     'the identity is reserved once');
+});
+
+// The target asks only once its SYNCING fact is committed (verifier N3: a
+// replica whose port-opened fact is not durable steps nothing, so it must
+// not be counted a member): in createReplicaAsync the request follows the
+// SYNCING commit (recordReplicaIdentity) and precedes the leader sync and
+// the voter-ready wait. This is the one point at which a partition
+// admission input first exists (Stream B2 binds its cleanup state to it).
+test('(i) static: the target requests admission right after its SYNCING ' +
+  'commit and before it waits to become a voter', async (t) => {
+  const ast = parse(path.join(SRC_ROOT, 'node/replica-handler-create-methods.js'));
+  const [create] = functionNodesNamed(ast, 'createReplicaAsync');
+  t.ok(create, 'createReplicaAsync is declared');
+  const order = [];
+  walk(create, (node) => {
+    const name = calleeName(node);
+    if (['recordReplicaIdentity', 'requestReplicaAdmission', 'syncFromLeader',
+      'waitForVoterReadyActivation'].includes(name)) {
+      order.push([node.range[0], name]);
+    }
+  });
+  t.same(order.sort((a, b) => a[0] - b[0]).map(([, name]) => name),
+    ['recordReplicaIdentity', 'requestReplicaAdmission', 'syncFromLeader',
+      'waitForVoterReadyActivation'],
+    'SYNCING commit, then the admission request, then sync and voter wait');
 });

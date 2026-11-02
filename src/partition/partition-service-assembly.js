@@ -3,6 +3,7 @@ import {createPartitionServiceMetadataDeliveryMethods} from './partition-service
 import {createPartitionServiceLearnerPromotionMethods} from './partition-service-learner-promotion-methods.js';
 import {createPartitionServiceLearnerPromotionProofMethods} from './partition-service-learner-promotion-proof-methods.js';
 import {createPartitionServiceLearnerPromotionWakeMethods} from './partition-service-learner-promotion-wake-methods.js';
+import {createPartitionServiceReplicaAdmissionMethods} from './partition-replica-admission.js';
 import {createPartitionServiceDurabilityFitnessMethods} from './partition-service-durability-fitness.js';
 import {PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS} from
   './partition-service-participant-transaction-cadence-methods.js';
@@ -44,6 +45,7 @@ Object.assign(
   createPartitionServiceLearnerPromotionMethods(),
   createPartitionServiceLearnerPromotionProofMethods(),
   createPartitionServiceLearnerPromotionWakeMethods(),
+  createPartitionServiceReplicaAdmissionMethods(),
   createPartitionServiceDurabilityFitnessMethods(),
   PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS,
   PARTITION_SERVICE_REMOVAL_SERVING_METHODS,

@@ -4,6 +4,8 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
+import {answerCommittedOperations, committedAddOperation} from
+  './committed-operation-gateway-fixture.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   checkLearnerPromotionWithGrantedProof,
@@ -149,6 +151,14 @@ test(
         status: SERVICE_STATUS.ACTIVE,
         raft_role: RaftRole.LEARNER,
       });
+      // The joiner asks its leader to admit it from its committed operation
+      // (quest replica-admission-from-committed-operation); the row above is
+      // discovery only.
+      const operation = committedAddOperation('stable-join-partition',
+        ['replica-2', 'node-2']);
+      answerCommittedOperations(leader, [operation]);
+      joiner.leaderId = 'replica-1';
+      await joiner.requestReplicaAdmission(operation.operation_id);
 
       const peerJoined = await waitForCondition(
         () => leader.raft.readStatus().peers.some(
@@ -157,7 +167,7 @@ test(
         1000,
         10,
       );
-      t.equal(peerJoined, true, 'leader should reconcile the joiner as a raft peer');
+      t.equal(peerJoined, true, 'leader should admit the requesting joiner as a raft peer');
 
       const promoted = await waitForCondition(
         () => joiner.role === RaftRole.FOLLOWER,

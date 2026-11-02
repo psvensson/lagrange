@@ -9,7 +9,7 @@
     "packaging": 4
   },
   "censusSize": 2556,
-  "digest": "fnv1a32-b02b9c55",
+  "digest": "fnv1a32-78bbf386",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1325,6 +1325,7 @@
     "test/partition/learner-promotion-count-check-inputs.test.js": "unit",
     "test/partition/learner-promotion-proof-committed-admission.test.js": "unit",
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": "unit",
+    "test/partition/learner-promotion-proof-epoch-guard.test.js": "unit",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "unit",
     "test/partition/managed-merge-workflow.test.js": "unit",
     "test/partition/managed-split-epoch-persistence-effects.test.js": "unit",
@@ -1379,7 +1380,6 @@
     "test/partition/partition-participant-transaction-apply.test.js": "unit",
     "test/partition/partition-participant-transaction-staging.test.js": "unit",
     "test/partition/partition-participant-transaction-topology.test.js": "unit",
-    "test/partition/partition-peer-cache-identity-record.test.js": "unit",
     "test/partition/partition-port-refusal-outcomes.test.js": "unit",
     "test/partition/partition-raft-storage.test.js": "unit",
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "unit",

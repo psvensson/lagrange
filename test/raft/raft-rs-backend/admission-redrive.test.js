@@ -1,5 +1,5 @@
 // T6 witness (committed-read amendment 1, section 3.5, B10): the leader's
-// row-driven admission re-runs on its port's MEMBERSHIP_CHANGED, so an
+// admission (requested by the targets since 2026-11-02) re-runs on its port's MEMBERSHIP_CHANGED, so an
 // AddNode the core dropped - proposed while another configuration change was
 // unapplied, which raft-rs answers Ok and replaces with an empty entry - is
 // proposed again without a poll and without another row change; and a
@@ -22,6 +22,7 @@ import {
   createJoinOperation,
   formGroup,
   metadataCache,
+  requestAdmission,
   serviceRow,
   statusOf,
   waitFor,
@@ -92,6 +93,9 @@ test('T6: an AddNode the core dropped behind an unapplied one is re-driven ' +
           CDCOperation.INSERT, serviceRow(PARTITION_ID, join));
       }
     }
+    // Both targets request admission in one turn (quest
+    // replica-admission-from-committed-operation): rows admit nothing.
+    await Promise.all(JOINS.map((join) => requestAdmission(harness, join)));
     const peerIds = targets.map((service) => String(statusOf(service).peerId));
     const admitted = await waitFor(() => {
       const voters = durableAppliedState(harness.dbPathOf(leaderMember),

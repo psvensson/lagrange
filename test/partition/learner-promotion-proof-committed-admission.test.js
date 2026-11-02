@@ -210,12 +210,13 @@ function createLeader(_t, {cacheRows = [], role = RAFT_ROLE.LEADER,
   return {partition, port, dbFile: file, db};
 }
 
-// The leader admits the learner with the address its row named at that
-// moment; afterwards the cache row may go missing or turn stale.
+// The leader admits the learner on its committed node (the request owner
+// takes it from the committed operation); the cache row may go missing or
+// turn stale.
 function admitLearner(partition) {
   return admitPartitionRaftPeer(partition, {
     replicaIdentity: LEARNER_REPLICA,
-    peerAddress: partitionAddress(LEARNER_NODE, LEARNER_REPLICA),
+    nodeId: LEARNER_NODE,
   });
 }
 

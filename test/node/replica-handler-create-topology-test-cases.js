@@ -93,6 +93,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -160,6 +165,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -378,6 +388,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -510,6 +525,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             role: RAFT_ROLE.FOLLOWER,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -595,6 +615,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -669,6 +694,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -770,6 +800,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -946,6 +981,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -1013,6 +1053,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });

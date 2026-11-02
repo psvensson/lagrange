@@ -4,14 +4,16 @@
 // rs-raft port, each with its own database file and its own services cache,
 // on a loopback transport. A two-replica group (the leader and a live
 // follower) admits a joiner through the production path: the joiner's
-// ACTIVE services row becomes visible to every replica's cache and each
-// replica's membership reconcile runs. The configuration change the group
+// ACTIVE services row becomes visible to every replica's cache (discovery
+// only), and the joiner, named by a committed ADD operation, requests its
+// admission (quest replica-admission-from-committed-operation) - from the
+// follower first, which answers NOT_LEADER, then from the leader. The configuration change the group
 // commits is read from the leader's durable log on a connection of the
 // test's own; the joiner's membership from the committed ConfState.
 //
 // Exactly one configuration entry may land for one admission: only the
-// leader proposes it. A follower or learner that sees the same row records a
-// typed no-op instead of forwarding a redundant proposal, and the partition's
+// leader proposes it. A follower that receives the request answers a typed
+// NOT_LEADER instead of forwarding a redundant proposal, and the partition's
 // own bootstrap-peer proposals carry the port's one canonical request shape.
 
 import assert from 'node:assert/strict';
@@ -40,8 +42,8 @@ import {
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
-import {RAFT_MEMBERSHIP_ADMISSION_OUTCOME} from
-  '../../../src/raft/raft-operation-port-constants.js';
+import {answerCommittedOperations, committedAddOperation} from
+  '../../partition/committed-operation-gateway-fixture.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
 
 const PARTITION_ID = 'f16-admission';
@@ -170,6 +172,8 @@ async () => {
   const network = createLoopbackTransport();
   const services = [];
   const dbFileOf = ([replicaId]) => path.join(directory, `${replicaId}.db`);
+  const operations = [FOLLOWER, JOINER].map((member) =>
+    committedAddOperation(PARTITION_ID, member));
   const build = (member, members, cache, extra = {}) => {
     const service = new PartitionService(withFoundingStamp({
       partitionId: PARTITION_ID,
@@ -185,9 +189,13 @@ async () => {
       dbPath: dbFileOf(member),
       ...extra,
     }));
+    answerCommittedOperations(service, operations);
     services.push(service);
     return service;
   };
+  const requestOf = (member) => ({partitionId: PARTITION_ID,
+    replicaIdentity: member[0],
+    operationId: committedAddOperation(PARTITION_ID, member).operation_id});
   try {
     const leaderCache = placementCache([LEADER]);
     const leader = build(LEADER, [LEADER], leaderCache);
@@ -205,6 +213,8 @@ async () => {
     await follower.initialize();
     leaderCache.applySystemTableChange(
       TABLES.SERVICES, CDCOperation.INSERT, serviceRow(FOLLOWER));
+    follower.leaderId = LEADER[0];
+    await follower.requestReplicaAdmission(requestOf(FOLLOWER).operationId);
     follower.startElection();
     assert.equal(await waitFor(() => {
       const status = leader.raft.readStatus();
@@ -223,6 +233,10 @@ async () => {
       cache.applySystemTableChange(
         TABLES.SERVICES, CDCOperation.INSERT, serviceRow(JOINER));
     }
+    const atFollower = await follower.handleReplicaAdmissionRequest(
+      requestOf(JOINER));
+    joiner.leaderId = LEADER[0];
+    await joiner.requestReplicaAdmission(requestOf(JOINER).operationId);
     joiner.startElection();
     const joinerPeerId = joiner.raft.readStatus().peerId;
     assert.equal(await waitFor(() => {
@@ -245,10 +259,10 @@ async () => {
       'the committed ConfState names the joiner');
     assert.equal(after.appliedProposals, beforeJoiner.appliedProposals,
       'the admission added no application proposal');
-    assert.deepEqual(
-      [...new Set(admissionOutcomes(followerLog, JOINER[0]))],
-      [RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER],
-      'the follower\'s reconcile recorded a typed no-op for the joiner');
+    assert.equal(atFollower.admission.outcome, 'not_leader',
+      'the follower answers the joiner\'s request with a typed NOT_LEADER');
+    assert.deepEqual(admissionOutcomes(followerLog, JOINER[0]), [],
+      'the follower reached no admission owner for the joiner');
     assert.deepEqual(admissionOutcomes(joinerLog, LEADER[0]), [],
       'the joiner proposes no admission of a peer its opened configuration ' +
       'already names (its init loop admits nothing)');

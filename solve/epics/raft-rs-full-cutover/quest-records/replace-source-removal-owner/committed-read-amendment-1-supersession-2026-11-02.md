@@ -42,6 +42,10 @@ the leader re-drives stored requests on `CONF_CHANGE_APPLIED` / `LEADER`.
 
 ## Authority and record
 
+- **Owner confirmation (the authority for this supersession):** Peter (owner)
+  confirmed the lead decision on 2026-11-02. It is recorded as the
+  `kind: decision` finding "Owner confirmation 2026-11-02 (Peter): ..." in
+  `solve/quests/replica-admission-from-committed-operation/log.ndjson`.
 - **Decision:** lead decision 2026-11-02 on quest
   `replica-admission-from-committed-operation`, Option 1.
 - **Owner brief, 2026-11-02:** "repair replica admission driven by cached

@@ -9,7 +9,6 @@ import {
 const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
-  reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
 } from './partition-service-raft-peer-cache-reconciliation.js';
 import {committedPartitionPeerAddress} from
@@ -105,14 +104,6 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     }
   }
 
-  /**
-   * Join newly visible peers and replace moved peer addresses using the
-   * authoritative services cache. Missing rows are ignored conservatively.
-   * @private
-   */
-  reconcileRaftPeersFromCache() {
-    reconcileRaftPeersFromCacheForService(this);
-  }
   /**
    * Read one system table row from the local cache when present.
    * @param {string} tableName
@@ -564,7 +555,6 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         },
       );
     }
-    this.reconcileRaftPeersFromCache();
     this.maybeInitializeRebalancer();
     // A lone replica below its participation gate (a restore that has not
     // replayed to its gate) does not campaign; its scheduling is armed for

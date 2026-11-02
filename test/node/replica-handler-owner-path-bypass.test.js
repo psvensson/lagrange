@@ -134,6 +134,9 @@ function createMockPartitionServiceFactory() {
     initialized: true,
     async shutdown() {},
     async syncFromLeader() {},
+    async requestReplicaAdmission(operationId) {
+      return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+    },
   }, options);
 }
 
@@ -729,6 +732,9 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         },
         async shutdown() {},
         async syncFromLeader() {},
+        async requestReplicaAdmission(operationId) {
+          return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+        },
       };
       const handler = new ReplicaHandler({
         nodeId: TEST_NODE_ID,
@@ -966,6 +972,9 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
                 }
               },
               async syncFromLeader() {},
+              async requestReplicaAdmission(operationId) {
+                return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+              },
               async checkLearnerPromotion() {
                 if (!this.isShutdown) {
                   promotionCount += 1;

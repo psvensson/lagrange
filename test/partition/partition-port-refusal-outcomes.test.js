@@ -32,17 +32,11 @@ import {
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
-import {
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  TABLES,
-} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {
-  CDCOperation,
-  PartitionService,
-} from '../../src/partition/partition-service.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
 import {ENTITY_TYPE} from '../../src/constants/addresses.js';
+import {answerCommittedOperations, committedAddOperation} from
+  './committed-operation-gateway-fixture.js';
 import {admitPartitionRaftPeer} from
   '../../src/partition/partition-service-raft-membership-administration.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -71,7 +65,7 @@ const CAMPAIGN_REFUSAL = deepFreeze({
 });
 const PEER = Object.freeze({
   replicaIdentity: 'refusal-peer-r2',
-  peerAddress: 'refusal-node-2/partition/refusal-peer-r2',
+  nodeId: 'refusal-node-2',
 });
 
 function quietEnvironment() {
@@ -269,11 +263,11 @@ test('F-h: peer admission records the port\'s actual answer - proposed, ' +
   });
 });
 
-test('F-h: the services-cache reconcile records a refused admission as ' +
+test('F-h: an admission request records a refused admission as ' +
   'refused, with the port\'s reason', {timeout: TEST_TIMEOUT_MS}, async () => {
   await withDirectory(async (dbPath) => {
     const provider = new ControllableConsensusPort();
-    const partitionId = 'fh-reconcile';
+    const partitionId = 'fh-request';
     const cache = new SystemTableCache();
     const service = createControllablePartitionService({
       ...partitionOptions(partitionId, dbPath),
@@ -289,19 +283,18 @@ test('F-h: the services-cache reconcile records a refused admission as ' +
         retryable: false,
         recoveryRequired: false,
       }));
-      cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
-        service_id: PEER.replicaIdentity,
-        replica_id: PEER.replicaIdentity,
-        partition_id: partitionId,
-        service_type: SERVICE_TYPE.PARTITION,
-        address: PEER.peerAddress,
-        status: SERVICE_STATUS.ACTIVE,
-      });
-      service.reconcileRaftPeersFromCache();
+      // The target's request, answered from its committed operation (quest
+      // replica-admission-from-committed-operation).
+      const operation = committedAddOperation(partitionId,
+        [PEER.replicaIdentity, PEER.nodeId]);
+      answerCommittedOperations(service, [operation]);
+      await service.handleReplicaAdmissionRequest({partitionId,
+        replicaIdentity: PEER.replicaIdentity,
+        operationId: operation.operation_id});
 
       const logged = log.filter((entry) =>
         entry.payload?.admission?.replicaIdentity === PEER.replicaIdentity);
-      assert.ok(logged.length > 0, 'the reconcile reached the admission owner');
+      assert.ok(logged.length > 0, 'the request reached the admission owner');
       assert.equal(provider.confChangeOutcomes.length > 0, true,
         'the admission reached the port');
       for (const entry of logged) {
