@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2519,
+    "ordinary": 2520,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2536,
-  "digest": "fnv1a32-9a54f50a",
+  "censusSize": 2537,
+  "digest": "fnv1a32-e57e99c8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2180,6 +2180,7 @@
     "test/scripts/changed-paths.test.js": "ordinary",
     "test/scripts/check-architecture-slices.test.js": "ordinary",
     "test/scripts/check-base-range.test.js": "ordinary",
+    "test/scripts/check-benchmark-history-append-only.test.js": "ordinary",
     "test/scripts/check-cli-docs.test.js": "ordinary",
     "test/scripts/check-current-capabilities.test.js": "ordinary",
     "test/scripts/check-doc-audience.test.js": "ordinary",

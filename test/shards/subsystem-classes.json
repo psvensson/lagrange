@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
-    "test-infrastructure": 153,
+    "test-infrastructure": 154,
     "transactions": 17,
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2536,
-  "digest": "fnv1a32-12485702",
+  "censusSize": 2537,
+  "digest": "fnv1a32-966751ec",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-138d6714",
+  "observationDigest": "fnv1a32-0e10cf58",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2200,6 +2200,7 @@
     "test/scripts/changed-paths.test.js": "test-infrastructure",
     "test/scripts/check-architecture-slices.test.js": "test-infrastructure",
     "test/scripts/check-base-range.test.js": "test-infrastructure",
+    "test/scripts/check-benchmark-history-append-only.test.js": "test-infrastructure",
     "test/scripts/check-cli-docs.test.js": "test-infrastructure",
     "test/scripts/check-current-capabilities.test.js": "test-infrastructure",
     "test/scripts/check-doc-audience.test.js": "test-infrastructure",
@@ -16726,6 +16727,27 @@
         "scripts/checks/git-process-environment.js"
       ],
       "directories": [
+        "src"
+      ]
+    },
+    "test/scripts/check-benchmark-history-append-only.test.js": {
+      "files": [
+        "Dockerfile",
+        "README.md",
+        "data/tidb-comparison/history.ndjson",
+        "data/tidb-comparison/invalidations.ndjson",
+        "data/tidb-comparison/progress-summary.json",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/oltp-scenario-a-semantic-gate.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "solve/epics",
+        "solve/quests",
         "src"
       ]
     },
