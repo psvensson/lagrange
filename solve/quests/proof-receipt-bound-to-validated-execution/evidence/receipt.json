@@ -1,0 +1,47 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "proof-receipt-bound-to-validated-execution",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "report-schema-one-owner",
+      "passed": true,
+      "detail": "scripts/test-execution-report.js owns schema lagrange-test-execution-report/v1, its writer (runner sections, producer report) and its validator executionReportProblems; scripts/run-test-files.js writes sections, run-release-proof.js, push-gate-change-proof.js reportedGateRun and publish-head.js writeLocalCorpusReport build reports through it; scripts/proof-authority.js recordProof validates through it. No second receipt format: the receipt gains an execution record inside the existing lagrange-proof-receipt schema.",
+      "testFile": "test/scripts/proof-receipt-execution-report.test.js",
+      "evidence": ["evidence/touched-green-2.log"]
+    },
+    {
+      "id": "receipt-refuses-absent-partial-mismatched-evidence",
+      "passed": true,
+      "detail": "falsifiers absent, partial, schema, sha-mismatch, tree-mismatch, not-clean, identity-mismatch, identity-unverifiable, run-other-checkout, reused-proof and cli-without-report each refused with the typed execution-report-* code and no proof ref on the remote; red before the fix (red-before-fix.log: 17 of 18 failing) and red on revert (red-on-revert.log; red-on-revert-added-falsifiers.log for schema/not-clean/run-failed)",
+      "testFile": "test/scripts/proof-receipt-execution-report.test.js",
+      "evidence": ["evidence/red-before-fix.log", "evidence/red-on-revert.log", "evidence/red-on-revert-added-falsifiers.log", "evidence/touched-green-2.log"]
+    },
+    {
+      "id": "receipt-refuses-failed-skipped-zero-assertion-truncated",
+      "passed": true,
+      "detail": "falsifiers failed-command, run-failed, failed-file, skipped-file, zero-assertion and truncated refused with typed codes; a local-corpus rest run without its gate's cone report is a partial report (red-local-corpus-cone-missing.log before the fix); a green push-gate exit that ran nothing (as solve-land reuse does) leaves the planned corpus unexecuted (push-gate-change-proof.test.js)",
+      "testFile": "test/scripts/proof-receipt-execution-report.test.js",
+      "evidence": ["evidence/red-local-corpus-cone-missing.log", "evidence/touched-green-2.log"]
+    },
+    {
+      "id": "retry-qualification-never-laundered",
+      "passed": true,
+      "detail": "the runner keeps every attempt (first failure beside the retry pass); passed-on-retry is refused under the sealed REFUSE policy of release-full-v1 and corpus-full-v1; under ADMIT_QUALIFIED the receipt outcome is passed-qualified carrying the attempts and does not resolve as proven under a refusing contract; a test file never inherits the sections file, so a test's own nested runner never enters the proof report (red-nested-runner-sections.log before the fix)",
+      "testFile": "test/scripts/proof-receipt-execution-report.test.js",
+      "evidence": ["evidence/red-nested-runner-sections.log", "evidence/touched-green-2.log"]
+    },
+    {
+      "id": "producers-rebound-lawful-reuse-intact",
+      "passed": true,
+      "detail": "full-gate.yml uploads the gate's report and record_proof passes --report; publish-head recordProvedCorpus and runLocalCorpus, push-gate recordCorpusProof pass --report; run-release-proof writes the report and its hint; RELEASE.md local path records inside the exact checkout from its report. Old receipts resolve unchanged (reuse test), identity-catalogued reuse (release-proof-identity.test.js), canary resolveCorpusProof and release.yml checks are untouched; run-release-proof cites a reused corpus receipt which the authority re-resolves. Not exercised end to end: a live full-gate or check:release run.",
+      "testFile": "test/scripts/local-corpus.test.js",
+      "evidence": ["evidence/touched-green-2.log"]
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "reason": "awaiting the fresh verifier spawned by the lead"
+    }
+  ]
+}
