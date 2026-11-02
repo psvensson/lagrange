@@ -5,7 +5,7 @@
   "sources": [
     {
       "path": "data/tidb-comparison/raw-observations.ndjson",
-      "sha256": "sha256:fc1a0d3ee1194ec64411ec87c0b684748322134934be7d12de945775e9e282cb"
+      "sha256": "sha256:f1490d1f002f36f9cb9d18feb3bf0f2fd5a4c381ae333b348a42faa6207f1549"
     },
     {
       "path": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
@@ -13,7 +13,7 @@
     },
     {
       "path": "data/tidb-comparison/invalidations.ndjson",
-      "sha256": "sha256:31e6da6bd3518b60af16b9c15a62f27b59cb0121843101d4ac8a9bdaba32b17c"
+      "sha256": "sha256:8acfd06a63ea8ab1e9f8a7f75fe3a69100a9703c8ff48e02d5ec77307c9dc49e"
     }
   ],
   "cells": [
@@ -4305,24 +4305,97 @@
     {
       "claimKey": "lagrange/scenarioA/smoke",
       "claimKind": "throughput",
-      "status": "invalid-measurement",
+      "status": "product-failure",
       "reasons": [
-        "record-rejected:invalid-text"
+        "no-committed-operations",
+        "readiness-exhausted"
       ],
-      "defectIds": [],
+      "defectIds": [
+        "D33",
+        "D34",
+        "D35"
+      ],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r7-r001"
+          "bench-live-20261101-b-r8-r001"
         ],
         "rawObservationsDigests": [
-          "sha256:f7b70ba6897286760fbe364930af65caa14a312072c86de4cf939e9af46398dd"
+          "sha256:af2f700fea9455bb2afa9610af6878936d3e8871f631baee1766491d2473e278"
         ],
         "invalidatedRunIds": [
-          "bench-live-20261101-b-r6-r001"
+          "bench-live-20261101-b-r6-r001",
+          "bench-live-20261101-b-r7-r001"
         ],
         "forensic": []
       },
-      "metrics": null
+      "metrics": {
+        "profileClass": "smoke",
+        "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
+        "accounting": {
+          "offered": 100,
+          "issued": 0,
+          "unissued": 100,
+          "attempts": 0,
+          "committed": 0,
+          "conflicts": 0,
+          "conflictExhausted": 0,
+          "terminalFailures": {
+            "product_error": 0,
+            "correctness_failure": 0,
+            "transport_failure": 0,
+            "harness_fault": 0
+          },
+          "unresolved": 0,
+          "ambiguousCommits": 0
+        },
+        "runs": [
+          {
+            "runId": "bench-live-20261101-b-r8-r001",
+            "runStatus": "setup-failed",
+            "offeredRatePerSec": 5,
+            "repetition": 1,
+            "accounting": {
+              "offered": 100,
+              "issued": 0,
+              "unissued": 100,
+              "attempts": 0,
+              "committed": 0,
+              "conflicts": 0,
+              "conflictExhausted": 0,
+              "terminalFailures": {
+                "product_error": 0,
+                "correctness_failure": 0,
+                "transport_failure": 0,
+                "harness_fault": 0
+              },
+              "unresolved": 0,
+              "ambiguousCommits": 0
+            },
+            "drainOverrunMs": 0,
+            "maxLatencyMs": null
+          }
+        ],
+        "setupFailures": [
+          {
+            "runId": "bench-live-20261101-b-r8-r001",
+            "failureClass": "product_error",
+            "sqlState": null,
+            "code": "readiness_exhausted",
+            "message": "lagrange-node@192.168.86.27 did not report ready after 120 attempts",
+            "readinessDenial": {
+              "component": "lagrange-node@192.168.86.27",
+              "attempts": 120,
+              "elapsedMs": 168429,
+              "phase": "DEGRADED",
+              "state": "degraded",
+              "reasons": [
+                "PRIORITY_CONTROL_PLANE_RECOVERY_PENDING"
+              ]
+            }
+          }
+        ],
+        "capacity": null
+      }
     },
     {
       "claimKey": "lagrange/scenarioB/fan-out",
@@ -7095,19 +7168,24 @@
       "status": "valid-observed",
       "reasons": [
         "semantic-gate-incomplete",
-        "semantic-gate-incomplete:durability:evidence_insufficient",
+        "semantic-gate-incomplete:durability:probe_inapplicable",
         "smoke-profile-no-capacity-claim"
       ],
-      "defectIds": [],
+      "defectIds": [
+        "D33",
+        "D34",
+        "D35"
+      ],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r7-r003"
+          "bench-live-20261101-b-r8-r003"
         ],
         "rawObservationsDigests": [
-          "sha256:33e46fa709e6bb794444a5b1b48e7a783a85753ae79f397547fa836c54138af8"
+          "sha256:13edfb9127595ec623ef01727ce3028bdfd9990c4ac01b17a7fdf0374d4a101a"
         ],
         "invalidatedRunIds": [
-          "bench-live-20261101-b-r6-r003"
+          "bench-live-20261101-b-r6-r003",
+          "bench-live-20261101-b-r7-r003"
         ],
         "forensic": []
       },
@@ -7119,11 +7197,11 @@
           "issued": 100,
           "unissued": 0,
           "attempts": 100,
-          "committed": 100,
+          "committed": 99,
           "conflicts": 0,
           "conflictExhausted": 0,
           "terminalFailures": {
-            "product_error": 0,
+            "product_error": 1,
             "correctness_failure": 0,
             "transport_failure": 0,
             "harness_fault": 0
@@ -7133,7 +7211,7 @@
         },
         "runs": [
           {
-            "runId": "bench-live-20261101-b-r7-r003",
+            "runId": "bench-live-20261101-b-r8-r003",
             "runStatus": "completed",
             "offeredRatePerSec": 5,
             "repetition": 1,
@@ -7142,11 +7220,11 @@
               "issued": 100,
               "unissued": 0,
               "attempts": 100,
-              "committed": 100,
+              "committed": 99,
               "conflicts": 0,
               "conflictExhausted": 0,
               "terminalFailures": {
-                "product_error": 0,
+                "product_error": 1,
                 "correctness_failure": 0,
                 "transport_failure": 0,
                 "harness_fault": 0
@@ -7154,8 +7232,8 @@
               "unresolved": 0,
               "ambiguousCommits": 0
             },
-            "drainOverrunMs": 5599.717,
-            "maxLatencyMs": 6401.785
+            "drainOverrunMs": 5371.968,
+            "maxLatencyMs": 5932.366
           }
         ],
         "setupFailures": [],
@@ -9122,16 +9200,21 @@
       "reasons": [
         "semantic-gate-missing"
       ],
-      "defectIds": [],
+      "defectIds": [
+        "D33",
+        "D34",
+        "D35"
+      ],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r7-r002"
+          "bench-live-20261101-b-r8-r002"
         ],
         "rawObservationsDigests": [
-          "sha256:29dd23435a46ccf113abd1eeac26826d068e57c3f8e7a20eb0bf268fb9c254d6"
+          "sha256:9ec5994ebcdc93400b776493e5ff474d82b5039339ad083196b9d4085ea04a91"
         ],
         "invalidatedRunIds": [
-          "bench-live-20261101-b-r6-r002"
+          "bench-live-20261101-b-r6-r002",
+          "bench-live-20261101-b-r7-r002"
         ],
         "forensic": []
       },

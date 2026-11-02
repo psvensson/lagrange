@@ -1,0 +1,5 @@
+2026-11-02T02:17:38Z
+8ef3ab50ddd3a26a863f099108367f5dd283d522
+[bench] campaign bench-live-20261101-b-r8: 3 runs attempted, summary test-output/cloud-benchmarks/comparative-campaign-bench-live-20261101-b-r8.json
+exit=1
+2026-11-02T02:24:24Z

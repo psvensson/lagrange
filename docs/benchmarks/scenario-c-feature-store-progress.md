@@ -4,7 +4,7 @@
 
 Scenario C claims need event ingestion and a freshness observation (recorded event/version causality or an explicit clock method). Until that execution exists no Scenario C value can be admitted.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 9 entries; 7 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 10 entries; 8 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Scenario C: streaming feature store](scenario-c-feature-store-progress.svg)
 
@@ -47,6 +47,6 @@ Every comparative result published before 2026-11-01 was withdrawn; the records 
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:fc1a0d3ee1194ec64411ec87c0b684748322134934be7d12de945775e9e282cb
+- `data/tidb-comparison/raw-observations.ndjson` sha256:f1490d1f002f36f9cb9d18feb3bf0f2fd5a4c381ae333b348a42faa6207f1549
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
-- `data/tidb-comparison/invalidations.ndjson` sha256:31e6da6bd3518b60af16b9c15a62f27b59cb0121843101d4ac8a9bdaba32b17c
+- `data/tidb-comparison/invalidations.ndjson` sha256:8acfd06a63ea8ab1e9f8a7f75fe3a69100a9703c8ff48e02d5ec77307c9dc49e
