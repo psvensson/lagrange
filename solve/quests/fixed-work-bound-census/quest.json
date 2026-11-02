@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "fixed-work-bound-census",
+  "class": "design",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A census of every fixed bound constant in src/ (const <NAME>(_TIMEOUT_MS|_DEADLINE_MS|_BUDGET_MS|BOUND_MS) = <number>, 29 at 6d58fdba1) records for each its owner module, what it waits for, its class (liveness, work, mixed, not a wait, test-only), the outcome when it is spent, whether a re-drive repeats discarded work, and its history; a systemic analysis names the repair shape each work and mixed bound belongs to under R12 (load slows the system, never breaks it); today's three measurements of work measured by a fixed bound are recorded. No source or test bound is changed.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/fixed-work-bound-census/evidence/receipt.json",
+      "requiredReceipts": [
+        "census-table",
+        "systemic-analysis",
+        "measurements-recorded",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Evidence and design only: no src change, no test-bound change (owner rule). The WASI startup repair belongs to quest wasi-component-startup-budget and is cited, not duplicated."
+    },
+    {
+      "id": "proof",
+      "statement": "Static analysis at the sealed base; every classification cites its site; outcomes not traced are said to be not traced; independent review before landing."
+    }
+  ],
+  "sealedAt": "6d58fdba16157740e6c2f0bae5a2317fa24e0944"
+}
