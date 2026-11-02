@@ -1,0 +1,68 @@
+{
+  "schema": "solve-quest/2",
+  "id": "fresh-create-failure-after-committed-admission",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A fresh CREATE whose replica has been admitted into its partition's committed configuration never turns an unavailable authority read into an orphaned configured member. The create-admission authorization of releaseFreshCreate answers a typed UNAVAILABLE{create_admission_authority, retryAfterMs, cause} that the existing participant-release completion operation consumes within the create's existing deadline, so a transient refusal of the replica_operations read (as at 10:29:57 on run b26d2c090) delays the create instead of failing it. When the create does fail after admission committed, its FAILED transition always carries the failed-create cleanup claim, so the existing failed-create cleanup owner removes the member through a committed REMOVE; the cleanup decision is made from the committed admission fact, never from error.deferRetry, and a FAILED row from a create in flight is protected from the planner's FAILED cure only while a claim or a live create owner exists. The one-shot authorization throw, the deferRetry-based claimCleanup arm and the unconditional previous_state protection are deleted.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/fresh-create-failure-after-committed-admission/evidence/receipt.json",
+      "requiredReceipts": [
+        "deferred-authority-read-consumed-within-create-deadline",
+        "post-admission-failure-always-claims-cleanup",
+        "failed-create-without-owner-not-protected",
+        "induced-authority-unavailability-production-witness",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "class-not-instance",
+      "statement": "Instance of the class 'a typed unavailability is converted into a terminal failure that abandons a committed obligation' (authority-and-recovery.md 'A refusal has an owned consequence', :138-145; regression-policy Structured Deferred-Outcome). The repair is made at the create-admission/create-failure owners for every fresh CREATE, not for sql_transactions-p1 or priority partitions only."
+    },
+    {
+      "id": "reuse-completion-owner",
+      "statement": "Reuses participant-release-client.js completeParticipantRelease (quest participant-release-completion-owner, landed at 132ff5185, awaiting certification) unchanged: same trigger, authorization identity, measured build, caller clock and absolute deadline; no budget renewal. Authorization is re-read from the authority on each attempt; a refused or stale row is never authorization; the cached replica_operations row is never consulted."
+    },
+    {
+      "id": "routing-not-in-scope",
+      "statement": "The readiness-projection routing refusal that caused the 10:29:57 read failure (census C5, readiness-observation-currency.md) is not repaired or excepted here: no routing carve-out, fail-open or priority bypass. This quest makes the create survive any authority unavailability, whatever its cause."
+    },
+    {
+      "id": "host-custody-unchanged",
+      "statement": "fenceFailedReplicaCreateRuntime and replica-cleanup-host-custody semantics are consumed unchanged; the target never proposes a configuration change itself and no synthetic REMOVE event is introduced. Removal flows through the existing failed-create cleanup claim and owner."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first at the production entry path (createReplicaAsync through voter-ready with an authority read answering {success:false} then normally; deadline spent; restart after FAILED without claim), then one live witness of fresh-formation-user-table-routability on local-three-node.json showing no FAILED configured member without a cleanup claim and no create failing on a single deferred read. Scenario green is not claimed (C1/C10 and C5 remain)."
+    },
+    {
+      "id": "trace-first-divergence",
+      "statement": "The first divergence is recorded in evidence/first-divergence-2026-11-02.md (run b26d2c090, 10:29:57.228). A new witness that moves the first divergence elsewhere is recorded before any further src/ change; a repair is not called complete because a different later step fails."
+    },
+    {
+      "id": "no-symptom-patches",
+      "statement": "No timeout, deadline or budget increase; no new timer, retry loop, alias, fallback, carve-out, cache wait, synthetic event, '|| default' that turns a missing input into success, or cache/SQL dual path. Rejected remedies listed in evidence/design-note.md (section Deletions) are not reintroduced without new evidence and an explicit owner decision."
+    },
+    {
+      "id": "lab-execution",
+      "statement": "Live runs only through node scripts/lab.js (fleet first, dry-run first, one scenario run at a time, thermal admission, no cluster node on the controller, no pruning on lab hosts). Raw logs are kept outside the repository in lagrange-evidence-store/<run-id>/; quest evidence holds summaries and sha256 digests."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "doneWhen-supersession",
+      "statement": "supersedes: receipt reproducer-no-unclaimed-failed-configured-member superseded 2026-11-02 (R09, lead decision) because its live trigger, an authority read refused by readiness routing, is nondeterministic and its class repair belongs to Group A (C5); one more lab run would be a lottery. Replaced by induced-authority-unavailability-production-witness: a real ReplicaHandler CREATE path, a real PartitionService on the real raft-rs port, the real release client, route and cutover owner, with the gateway's authoritative read of the operation row made unavailable N times then answering (create completes within the existing deadline) and unavailable forever (create fails at the existing deadline with a cleanup claim; the claimed REMOVE completes); no FAILED row with cleanup_token null after admission input existed. An injected fault at the owner boundary in a deterministic test; not a harness repair and not a bound change. The live run fresh-create-b-5d7469476-20261102T113540Z stays recorded: path not exercised live, serve lane opened, no hosted_replica refusals (0 vs 32 at base)."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating",
+    "recovery-replay"
+  ],
+  "sealedAt": "fbd92714f185c3d86ae4e1838db72743c76c7785"
+}

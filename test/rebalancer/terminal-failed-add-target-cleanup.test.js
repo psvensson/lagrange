@@ -996,3 +996,54 @@ test('pre-intent REPLACE failure settles without fabricating cleanup ' +
     });
   }
 });
+
+// Quest fresh-create-failure-after-committed-admission, receipt
+// failed-create-without-owner-not-protected. Run b26d2c090's r4: a FAILED
+// target whose create failed after its admission may have committed
+// (previous_state syncing) under a terminal FAILED ADD. With the target-side
+// cleanup claim, the planner removes it through decideFailedCreateTargetCleanup
+// although check 2 (previous_state) and check 3 (terminal create target)
+// would otherwise protect it; without a claim (a failure before any admission
+// input) the target stays protected for the coordinator's re-dispatch.
+test('L3: the claimed FAILED target of a create that failed after admission ' +
+  'input is removed; an unclaimed one stays protected', async (t) => {
+  t.beforeEach(() => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+  });
+
+  await t.test('claimed: REMOVE with the owner precondition', async (t) => {
+    const harness = await authoritativeCleanupHarness(ReplicaStatus.FAILED);
+    try {
+      await harness.rebalancer.refreshFailedCreateTargetCleanupDecisions();
+      const moves = plannedMoves(harness.rebalancer, ReplicaStatus.FAILED, {
+        targetFields: {previous_state: ReplicaStatus.SYNCING,
+          cleanup_token: buildFailedCreateCleanupToken('op-ADD-failed')},
+      });
+      t.equal(moves.length, 1);
+      t.match(moves[0], {type: REBALANCER_MOVE_TYPE.REMOVE, replicaId: TARGET_ID,
+        reason: MOVE_REASON.REPLICA_FAILED});
+      t.ok(moves[0][ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION],
+        'the REMOVE carries the claimed lifecycle generation');
+    } finally {
+      harness.rebalancer.shutdown();
+      await harness.coordinator.shutdown();
+    }
+  });
+
+  await t.test('unclaimed: no REMOVE (re-dispatchable)', async (t) => {
+    const unclaimed = {
+      getTerminalFailedReplaceTargetReplicaIds: () => new Set(),
+      getTerminalFailedCreateTargetReplicaIds: () => new Set([TARGET_ID]),
+      getTerminalFailedCreateTargetClaims: () => [],
+      getFailedCreateTargetCleanupPrecondition: () => null,
+    };
+    const moves = plannedMoves(unclaimed, ReplicaStatus.FAILED, {
+      targetFields: {previous_state: ReplicaStatus.CREATING, cleanup_token: null},
+    });
+    t.same(moves.filter((move) => move.replicaId === TARGET_ID), [],
+      'an unclaimed pre-admission failed target is not removed by the planner');
+  });
+});

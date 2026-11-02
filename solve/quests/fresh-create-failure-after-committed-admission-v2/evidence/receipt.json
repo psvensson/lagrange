@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "deferred-authority-read-consumed-within-create-deadline",
+      "passed": false,
+      "evidence": "red at seal: not yet recorded for this successor"
+    },
+    {
+      "id": "post-admission-failure-always-claims-cleanup",
+      "passed": false,
+      "evidence": "red at seal: not yet recorded for this successor"
+    },
+    {
+      "id": "failed-create-without-owner-not-protected",
+      "passed": false,
+      "evidence": "red at seal: not yet recorded for this successor"
+    },
+    {
+      "id": "induced-authority-unavailability-production-witness",
+      "passed": false,
+      "evidence": "red at seal: not yet recorded for this successor"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "evidence": "red at seal: not yet recorded for this successor"
+    }
+  ],
+  "evidence": [],
+  "applicability": "Red at seal of the successor quest."
+}

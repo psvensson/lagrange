@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 118,
     "architecture-governance": 21,
-    "bootstrap-membership": 330,
+    "bootstrap-membership": 334,
     "cdc-metadata": 67,
     "cli-tooling": 99,
     "control-plane": 225,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2555,
-  "digest": "fnv1a32-327eed85",
+  "censusSize": 2559,
+  "digest": "fnv1a32-7b63a500",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-506bf05b",
+  "observationDigest": "fnv1a32-e8282785",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1237,6 +1237,10 @@
     "test/node/failure-detector.test.js": "bootstrap-membership",
     "test/node/failure-repair-intent-contract.test.js": "bootstrap-membership",
     "test/node/fault-recovery-behavior.property.test.js": "bootstrap-membership",
+    "test/node/fresh-create-admission-authority-deferral.test.js": "bootstrap-membership",
+    "test/node/fresh-create-authority-unavailability-native.integration.test.js": "bootstrap-membership",
+    "test/node/fresh-create-claimed-cleanup-never-admitted.test.js": "bootstrap-membership",
+    "test/node/fresh-create-resumed-syncing-claim.test.js": "bootstrap-membership",
     "test/node/group-retired-tombstone-incarnation.test.js": "bootstrap-membership",
     "test/node/group-retired-tombstone.test.js": "bootstrap-membership",
     "test/node/group-retirement-as-a-unit.test.js": "bootstrap-membership",
@@ -9979,6 +9983,46 @@
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
+    "test/node/fresh-create-admission-authority-deferral.test.js": {
+      "files": [
+        "src/node/participant-release-authorization-owner.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js"
+      ]
+    },
+    "test/node/fresh-create-authority-unavailability-native.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-replace-terminal-admission.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/lifecycle-state-store.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/node/fresh-create-claimed-cleanup-never-admitted.test.js": {
+      "files": [
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/node/fresh-create-resumed-syncing-claim.test.js": {
+      "files": [
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "src/rebalancer/operation-workflow-replace-terminal-admission.js",
+        "src/rebalancer/rebalancer-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
     "test/node/group-retired-tombstone-incarnation.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -10434,6 +10478,8 @@
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-operation-port.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
         "test/node/replica-handler-identity-entry-test-cases.js",

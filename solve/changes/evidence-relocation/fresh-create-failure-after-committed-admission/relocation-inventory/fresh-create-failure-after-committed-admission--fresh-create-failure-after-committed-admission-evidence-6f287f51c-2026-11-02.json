@@ -1,0 +1,16 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "fresh-create-failure-after-committed-admission--fresh-create-failure-after-committed-admission-evidence-6f287f51c-2026-11-02.tar.gz",
+  "bundleSha256": "5f5b4b61d0e2a1dc28b6de75c1454705930e36181da4b6036eca6afee731ff51",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-create-failure-after-committed-admission--fresh-create-failure-after-committed-admission-evidence-6f287f51c-2026-11-02.tar.gz",
+  "sourceCommit": "6f287f51c36d137ef65777018a205952d6a5e45a",
+  "root": "solve/quests/fresh-create-failure-after-committed-admission/evidence/raw-run-fresh-create-b-5d7469476-20261102T113540Z/",
+  "files": [
+    ["failure-bundle.md.txt","e8922da40546c37828289b8dc6d6dc304bdde7ce991b5d37af82f3e3707adb9b",44747],
+    ["full-logs.sha256","c92ef167e9f95398ecba56a68d606e6aa10831fe17d961689a7f815c9732eda1",804],
+    ["report.json","93957d1401b749caae4adc90ed1377f52f6b4bcda339798bfd3790fd93749f9b",840015],
+    ["run.log.txt","6fa1a502f9b752579ea7f4a57d8ab365191c66d9e59145f23b5b7e2b1faf294c",404020],
+    ["triage-summary.json","4affd0eb09c7bae55714a40b72fd515202e37d003b3a131dec495ff23be1d743",69168],
+    ["triage-summary.md.txt","bcc809425326981f157d1908cdd874696a43f60bca5ac55a4f0bfdbeff2890ef",3204]
+  ]
+}
