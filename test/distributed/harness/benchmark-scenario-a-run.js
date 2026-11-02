@@ -4,6 +4,7 @@
 // open-loop step owner (v2) with the paired retry owner, a run watchdog
 // derived from the product timing ladder, and product-content dataset
 // verification and final-state reconciliation on a separate connection.
+import {createPgWireClient} from '../reference-client/pg-wire-client.js';
 import {
   QUERY_DEFAULTS,
 } from '../../../src/query/query-constants.js';
@@ -202,21 +203,21 @@ async function openSystem(system, connection, workload, registry, drivers) {
   };
 }
 
-// The native client libraries, loaded on first use from the load
-// generator's checkout (never from a product image).
-let pgModule = null;
+// The native client libraries from the load generator's checkout (never from
+// a product image). pg-wire clients come from their one owner; the TiDB
+// driver is loaded on first use, and only by a TiDB run.
 let mysqlModule = null;
 function defaultPgClient(options) {
-  return new pgModule.Client(options);
+  return createPgWireClient(options);
 }
 
 function defaultMysqlConnection(options) {
   return mysqlModule.createConnection(options);
 }
 
-async function loadDefaultDrivers(drivers) {
-  if (!drivers.createPgClient && !pgModule) pgModule = (await import('pg')).default;
-  if (!drivers.createMysqlConnection && !mysqlModule) {
+async function loadDefaultDrivers(drivers, system) {
+  if (system === OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV && !drivers.createMysqlConnection &&
+      !mysqlModule) {
     const loaded = await import('mysql2/promise');
     mysqlModule = loaded.default || loaded;
   }
@@ -473,7 +474,7 @@ async function openAndMeasure(options, context) {
         unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)},
       provisioning: Object.freeze({status: 'not-reached', reason: setup.message})};
   }
-  const drivers = await loadDefaultDrivers(options.drivers || {});
+  const drivers = await loadDefaultDrivers(options.drivers || {}, dispatch.system);
   const system = await openSystem(dispatch.system, options.connection, workload, registry,
     drivers);
   let adapter;

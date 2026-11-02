@@ -1,6 +1,5 @@
-import pg from 'pg';
+import {createPgWireClient} from './pg-wire-client.js';
 
-const {Client} = pg;
 const ONE = 1;
 const DEFAULT_WAREHOUSE_ID = 1;
 const DEFAULT_WRITE_DELTA_CENTS = 100;
@@ -80,7 +79,7 @@ async function induceLagrangeRetryableConflict(options = {}) {
     options.warehouseId : DEFAULT_WAREHOUSE_ID;
   const writeDeltaCents = Number.isInteger(options.writeDeltaCents) ?
     options.writeDeltaCents : DEFAULT_WRITE_DELTA_CENTS;
-  const createClient = options.createClient || ((config) => new Client(config));
+  const createClient = options.createClient || createPgWireClient;
 
   let left = null;
   let right = null;

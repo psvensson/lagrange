@@ -16,6 +16,7 @@ import {
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 
 const LAGRANGE_SCENARIO_A = Object.freeze({
   targetId: 'lagrange',
@@ -240,3 +241,55 @@ test('every run plan carries the preregistered warm-up the executed one must mat
       message: 'node 2 did not report ready'}})).output;
     assert.deepEqual(unopened.plan.warmup, completed.plan.warmup);
   });
+
+// Live campaign bench-live-20261101-b-r5: the PostgreSQL durability proof
+// restarted the server and an idle pg client received FATAL 57P01 as an
+// asynchronous 'error' event; no listener was attached, so Node turned it into
+// an uncaught exception that killed the whole campaign runner (no teardown).
+// One owner creates every pg-wire client of the benchmark chain and keeps such
+// an error on the client as evidence; pg then refuses the client's further
+// queries, which fail through the outcome owner.
+test('an asynchronous pg connection error is kept, never a process crash', async () => {
+  const {createPgWireClient} = await import('../../reference-client/pg-wire-client.js');
+  const client = createPgWireClient({host: '127.0.0.1', port: 1});
+  const terminated = Object.assign(new Error('terminating connection due to administrator ' +
+    'command'), {code: '57P01'});
+  client.emit('error', terminated);
+  assert.equal(client.connectionError, terminated);
+});
+
+test('no other benchmark-chain module constructs a pg client', async () => {
+  const {readdirSync, readFileSync} = await import('node:fs');
+  const roots = [new URL('../../reference-client/', import.meta.url),
+    new URL('../', import.meta.url)];
+  const offenders = [];
+  for (const root of roots) {
+    for (const name of readdirSync(root)) {
+      if (!stringEndsWith(name, '.js') || name === 'pg-wire-client.js') continue;
+      if (stringEndsWith(root.href, '/harness/') && !/^(benchmark-|comparative-benchmark-|real-product-)/u
+        .test(name)) continue;
+      const text = readFileSync(new URL(name, root), 'utf8');
+      if (/new (pg\.|pgModule\.)?Client\(/u.test(text)) offenders.push(name);
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
+// The same campaign's load generator lacked mysql2, which only the TiDB arm
+// uses; the run loaded it for every system. A run loads only its own driver.
+test('a PostgreSQL run never loads the TiDB driver', async () => {
+  const {executeBenchmarkWorkload} = await import('../real-product-workload-drivers.js');
+  const output = await executeBenchmarkWorkload({targetId: 'pg-single-primary',
+    system: 'postgresql', scenario: 'scenarioA', subkind: 'smoke',
+    connection: {endpoint: {host: '127.0.0.1', port: 1},
+      credentials: {user: 'u', password: 'p', database: 'd'}},
+    plan: {offeredRatePerSec: 5, repetition: 1, orderIndex: 0},
+    drivers: {createPgClient: () => ({async connect() {
+      throw Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:1'),
+        {code: 'ECONNREFUSED'});
+    }, async query() {}, async end() {}, on() {}})},
+    evidenceDir: (await import('node:fs')).mkdtempSync(
+      `${(await import('node:os')).tmpdir()}/bench-pg-only-`)});
+  assert.equal(output.observations.runStatus, 'setup-failed');
+  assert.equal(output.observations.setup.failureClass, 'transport_failure');
+});

@@ -1,4 +1,4 @@
-import pg from 'pg';
+import {createPgWireClient} from './pg-wire-client.js';
 
 import {
   buildOltpBaselineDataset,
@@ -20,7 +20,6 @@ import {
   resolveOltpCommitFailureOutcome,
 } from '../harness/oltp-error-classification.js';
 
-const {Client} = pg;
 const ZERO = 0;
 const ONE = 1;
 const INSERT_BATCH_SIZE = 100;
@@ -234,7 +233,7 @@ function clientOptions(endpoint, connection) {
 }
 
 function defaultClientFactory(options) {
-  return new Client(options);
+  return createPgWireClient(options);
 }
 
 async function openClient(createClient, options) {

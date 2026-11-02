@@ -1,6 +1,5 @@
-import pg from 'pg';
+import {createPgWireClient} from './pg-wire-client.js';
 
-const {Client} = pg;
 const ONE = 1;
 const MAX_PORT = 65535;
 
@@ -108,7 +107,7 @@ async function observeLagrangeDeliveryState(options = {}) {
   if (!Array.isArray(options.districts) || options.districts.length === 0) {
     throw new Error('Lagrange delivery observer requires districts');
   }
-  const createClient = options.createClient || ((config) => new Client(config));
+  const createClient = options.createClient || createPgWireClient;
   const client = createClient(clientOptions(endpoint, connection));
   await client.connect();
   try {
