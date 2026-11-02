@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz",
+      "bundleSha256": "023befce836096f119696887c659b1ae25f67e3011b17d3d3045f3e0bc99fc2b",
+      "sourceCommit": "31631326fea13d14faace40c4c2f31d651246958",
+      "shard": "relocation-inventory/harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.json",
+      "shardSha256": "6e42fa038abd22d3295172ad4d2c8183ae0678391f862bc354ce7c376fdb0161",
+      "verifiedAt": "2026-11-02T14:33:21.834Z",
+      "downloadedSha256": "023befce836096f119696887c659b1ae25f67e3011b17d3d3045f3e0bc99fc2b",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 8,
+      "results": "11111111",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

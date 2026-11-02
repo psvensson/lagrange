@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-test-toolchain-classification",
+  "class": "fix",
+  "statement": "The nine 0.5 WASI service test files (test/service/h1-h5, q2-q5) are classified resource class external-toolchain, like their siblings service-cell-worker-modes and service-cell-bridge-roundtrip, under the classification owner's existing rule (test/shards/resource-external-toolchain.txt: tests that drive the real WASM toolchain or start real component Cells run serially, jobs=1, because one such test consumes several cores). Measured cause: at jobs=4 pinned to two cores, 3 of 4 (h2, h3, q4) fail with STARTUP_TIMEOUT_MS; the hosted runner (run 41431327759) failed h1-h5 and q2-q4, and q5 passed at 113 s. This is a resource classification correction consistent with the existing rule, not a bound change; it does not close the R12 product defect (kill-and-redo of the per-start transpile under load), which is owned by quest wasi-component-startup-budget.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/service-test-toolchain-classification/evidence/receipt.json",
+      "requiredReceipts": [
+        "nine-files-classified-external-toolchain",
+        "membership-measured"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-bound-change",
+      "statement": "No src change, no test assertion change, no timeout change; only resource-class membership with measured real/user numbers, and the regenerated manifest."
+    },
+    {
+      "id": "not-the-product-repair",
+      "statement": "Does not close the R12 defect owned by wasi-component-startup-budget; recorded in the quest and CHANGELOG."
+    }
+  ],
+  "verificationTemplates": [
+    "harness-fidelity"
+  ],
+  "sealedAt": "5ee031597d4cecf52a24b20c1ff1d6c030ae1775"
+}

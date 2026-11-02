@@ -46,6 +46,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     BUILD_PROGRESS_ERROR_KEY,
     DOCKER_OP_UNKNOWN,
     DOCKER_OP_IMAGE_BUILD,
+    DOCKER_OP_IMAGE_RETIRE_PREVIOUS,
     DOCKER_OP_NETWORK_CREATE,
     DOCKER_OP_NETWORK_REMOVE,
     DOCKER_OP_CONTAINER_CREATE,
@@ -243,6 +244,14 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         `tag=${String(event?.tag || '-')}` +
         ` dockerfile=${String(event?.dockerfile || '-')}` +
         ` context=${String(event?.contextPath || '.')}`,
+      );
+    case DOCKER_OP_IMAGE_RETIRE_PREVIOUS:
+      return dockerActionLine(
+        `image.retire-previous${statusSuffix}`,
+        `tag=${String(event?.tag || '-')}` +
+        ` previous=${String(event?.previousId || '-')}` +
+        ` current=${String(event?.currentId || '-')}` +
+        ` detail=${String(event?.detail || event?.unreadable || '-')}`,
       );
     case DOCKER_OP_NETWORK_CREATE:
       return dockerActionLine(
