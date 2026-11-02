@@ -109,6 +109,6 @@ typed refusal is present in the decision.
 
 **Red-first record.** R1-R4, R7, R8 and the static R9 are expected red on the attempt-2 head with first failing
 assertion "no delivery to n-stale/message-group/P" (or the missing refusal). R5, R6, R10 are green guards. The
-witnesses go into one new quest file `test/message-group/message-group-cdc-forward-committed-address.test.js`,
+witnesses go into one new quest test file (planned name: message-group-cdc-forward-committed-address, under the message-group tests),
 registered under the `cdc-source-native-delivery` contract and coupled pair. The re-derived native-route witnesses
 (defer-repair, provisional-route, W7) are re-run unchanged.
