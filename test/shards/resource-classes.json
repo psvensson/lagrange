@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2531,
+    "ordinary": 2532,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2557,
-  "digest": "fnv1a32-b8918eb6",
+  "censusSize": 2558,
+  "digest": "fnv1a32-e93aa5be",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -481,6 +481,7 @@
     "test/config/configuration-manager.test.js": "ordinary",
     "test/config/control-plane-gateway-mutation-guardrails.test.js": "ordinary",
     "test/config/control-plane-gateway-registry-guardrails.test.js": "ordinary",
+    "test/config/dynamic-config-cdc-update-shape.test.js": "ordinary",
     "test/config/dynamic-config-service.test.js": "ordinary",
     "test/config/dynamic-config-startup-owned-initialization.test.js": "ordinary",
     "test/config/dynamic-config-startup-wait-bound-spent.test.js": "ordinary",

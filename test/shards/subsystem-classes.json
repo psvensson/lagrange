@@ -7,7 +7,7 @@
     "bootstrap-membership": 330,
     "cdc-metadata": 67,
     "cli-tooling": 99,
-    "control-plane": 226,
+    "control-plane": 227,
     "convergence-topology": 78,
     "distributed-harness": 210,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2557,
-  "digest": "fnv1a32-e78652f2",
+  "censusSize": 2558,
+  "digest": "fnv1a32-6bb775e8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b9d19216",
+  "observationDigest": "fnv1a32-47a0d5f6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -501,6 +501,7 @@
     "test/config/configuration-manager.test.js": "control-plane",
     "test/config/control-plane-gateway-mutation-guardrails.test.js": "architecture-governance",
     "test/config/control-plane-gateway-registry-guardrails.test.js": "architecture-governance",
+    "test/config/dynamic-config-cdc-update-shape.test.js": "control-plane",
     "test/config/dynamic-config-service.test.js": "control-plane",
     "test/config/dynamic-config-startup-owned-initialization.test.js": "control-plane",
     "test/config/dynamic-config-startup-wait-bound-spent.test.js": "control-plane",
@@ -4191,6 +4192,11 @@
         "src"
       ]
     },
+    "test/config/dynamic-config-cdc-update-shape.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js"
+      ]
+    },
     "test/config/dynamic-config-service.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway.js"
@@ -4200,6 +4206,11 @@
       ],
       "env": [
         "NODE_HEARTBEAT_INTERVAL_MS"
+      ]
+    },
+    "test/config/dynamic-config-startup-owned-initialization.test.js": {
+      "files": [
+        "src/config/raft-adaptive-timing-controller.js"
       ]
     },
     "test/config/dynamic-config-startup-wait-bound-spent.test.js": {

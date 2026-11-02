@@ -11,7 +11,6 @@ import {LoggingService} from '../logging/logging-service.js';
 import {
   CONFIG_KEY,
   CONFIG_SUBSYSTEM,
-  CONFIG_TABLE_COLUMN,
 } from './config-constants.js';
 import {DynamicConfigService} from './dynamic-config-service.js';
 import {
@@ -33,8 +32,9 @@ const DYNAMIC_CONFIG_STARTUP_LOG_MSG = Object.freeze({
     'Failed to initialize raft adaptive timing controller',
   ADAPTIVE_CONTROLLER_SHUTDOWN_FAILED:
     'Failed to shutdown raft adaptive timing controller',
-  LATE_READ_DROPPED_STALE:
-    'Late startup dynamic config read dropped: a CDC apply for its key won',
+  STARTUP_READ_SUPERSEDED_BY_CDC:
+    'Startup dynamic config read dropped: a CDC apply for its key won',
+  STARTUP_VALUE_REFUSED: 'Startup dynamic config value refused, not applied',
   ADAPTIVE_CONTROLLER_ADOPTED_LATE:
     'Raft adaptive timing controller initialized after its startup bound and adopted',
 });
@@ -47,11 +47,19 @@ const DYNAMIC_CONFIG_STARTUP_OUTCOME = Object.freeze({
   PENDING: 'pending',
   APPLIED: 'applied',
   APPLIED_LATE: 'applied_late',
+  REFUSED: 'refused',
   DROPPED_STALE: 'dropped_stale',
   FAILED: 'failed',
   CANCELLED: 'cancelled',
   ADOPTED_LATE: 'adopted_late',
   UNAVAILABLE: 'unavailable',
+});
+// What one apply of a startup value did. A raft timing key read before the
+// startup sweep has no answer yet: the sweep decides for all of them.
+const STARTUP_APPLY_RESULT = Object.freeze({
+  APPLIED: 'applied',
+  REFUSED: 'refused',
+  AWAITING_SWEEP: 'awaiting_sweep',
 });
 const DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS = 300; // ends-on: the dynamicConfigService.get(key) read resolves
 const DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS = 300; // ends-on: the adaptiveTimingController.initialize() call resolves
@@ -323,36 +331,40 @@ async function createDynamicConfigStartupWiring(options = {}) {
       key: CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS,
       apply: (value) => {
         if (typeof value !== 'boolean') {
-          return;
+          return false;
         }
         loggingService.setPersistMetricsLogs(value);
+        return true;
       },
     },
     {
       key: CONFIG_KEY.LOGGING_METRICS_DEFAULT_RESOLUTION_MS,
       apply: (value) => {
         if (!Number.isFinite(value) || value < 0) {
-          return;
+          return false;
         }
         loggingService.setMetricsDefaultResolutionMs(value);
+        return true;
       },
     },
     {
       key: CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_TTL_MS,
       apply: (value) => {
         if (!Number.isFinite(value) || value < 1000) {
-          return;
+          return false;
         }
         loggingService.setMetricsDetailedWindowTtlMs(value);
+        return true;
       },
     },
     {
       key: CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_ENABLED,
       apply: (value) => {
         if (typeof value !== 'boolean') {
-          return;
+          return false;
         }
         loggingService.setMetricsDetailedWindowEnabled(value);
+        return true;
       },
     },
   ];
@@ -362,21 +374,37 @@ async function createDynamicConfigStartupWiring(options = {}) {
   // not run, and applies its own sweep after it.
   const loggingApplierByKey = new Map(
     loggingDynamicAppliers.map((entry) => [entry.key, entry.apply]));
+  const readOutcomes = new Map();
+  // Raft timing reads whose value waits on a sweep, key to lateness. A value
+  // refused by one sweep stays held: another late key can make the set valid.
+  const readsHeldForSweep = new Map();
+  const settleHeldReads = (sweep) => {
+    for (const [key, late] of readsHeldForSweep) {
+      if (!sweep.applied) {
+        readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.REFUSED);
+        logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.STARTUP_VALUE_REFUSED, {key});
+        continue;
+      }
+      readOutcomes.set(key, late ?
+        DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED_LATE :
+        DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED);
+      readsHeldForSweep.delete(key);
+    }
+  };
   let startupSweepDone = false;
   const applyStartupValue = (key, value) => {
     const applyLogging = loggingApplierByKey.get(key);
     if (applyLogging) {
-      applyLogging(value);
-      return;
+      return applyLogging(value) ?
+        STARTUP_APPLY_RESULT.APPLIED :
+        STARTUP_APPLY_RESULT.REFUSED;
     }
     const field = DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[key];
     if (!field || !Number.isFinite(value)) {
-      return;
+      return STARTUP_APPLY_RESULT.REFUSED;
     }
     raftTimingConfig[field] = value;
-    if (startupSweepDone) {
-      applyRaftTimingConfig(raftTimingConfig);
-    }
+    return STARTUP_APPLY_RESULT.AWAITING_SWEEP;
   };
 
   for (const entry of loggingDynamicAppliers) {
@@ -400,24 +428,20 @@ async function createDynamicConfigStartupWiring(options = {}) {
           return;
         }
         raftTimingConfig[field] = newValue;
-        applyRaftTimingConfig(raftTimingConfig);
+        readsHeldForSweep.delete(key);
+        settleHeldReads(applyRaftTimingConfig(raftTimingConfig));
       },
     ));
   }
 
-  // CDC applies of the config table, counted per key. Subscribed before any
-  // startup read starts, so a CDC apply during a read is always seen: a late
-  // read whose key was CDC-applied since it started is stale and dropped,
-  // and the CDC value wins.
-  const cdcApplySeqByKey = new Map();
+  // Subscribed before any startup read starts, so a CDC apply during a read
+  // is always seen. The service counts the applies per key; a read whose key
+  // was CDC-applied since it started is stale and dropped, and the CDC value
+  // wins (dynamicConfigService.cdcApplySequence, the one ordering authority).
   const subscribedServices = [];
   const handleCdcApplied = (cdcEvent) => {
     if (!cdcEvent || cdcEvent.tableName !== TABLES.CONFIG) {
       return;
-    }
-    const key = cdcEvent.data?.[CONFIG_TABLE_COLUMN.KEY];
-    if (typeof key === 'string') {
-      cdcApplySeqByKey.set(key, (cdcApplySeqByKey.get(key) ?? 0) + 1);
     }
 
     void dynamicConfigService.handleCDCEvent(cdcEvent).catch((error) => {
@@ -447,34 +471,48 @@ async function createDynamicConfigStartupWiring(options = {}) {
   // each startup read and the controller's initialize.
   const timers = new Set();
   let closed = false;
-  const readOutcomes = new Map();
+  const settleStartupRead = (key, value, cdcSeqAtStart, state) => {
+    if (closed) {
+      readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.CANCELLED);
+      return;
+    }
+    if (dynamicConfigService.cdcApplySequence(key) !== cdcSeqAtStart) {
+      readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.DROPPED_STALE);
+      logger.info?.(DYNAMIC_CONFIG_STARTUP_LOG_MSG.STARTUP_READ_SUPERSEDED_BY_CDC, {key});
+      return;
+    }
+    const result = applyStartupValue(key, value);
+    if (result === STARTUP_APPLY_RESULT.AWAITING_SWEEP) {
+      readsHeldForSweep.set(key, state.late);
+      if (startupSweepDone) {
+        settleHeldReads(applyRaftTimingConfig(raftTimingConfig));
+      }
+      return;
+    }
+    if (result === STARTUP_APPLY_RESULT.REFUSED) {
+      readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.REFUSED);
+      logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.STARTUP_VALUE_REFUSED, {key});
+      return;
+    }
+    readOutcomes.set(key, state.late ?
+      DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED_LATE :
+      DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED);
+  };
   const ownStartupRead = (key) => {
     const startedAtMs = Date.now();
-    const cdcSeqAtStart = cdcApplySeqByKey.get(key) ?? 0;
+    const cdcSeqAtStart = dynamicConfigService.cdcApplySequence(key);
     const state = {late: false};
     readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.PENDING);
-    const read = Promise.resolve().then(() => dynamicConfigService.get(key));
-    read.then((value) => {
-      if (closed) {
-        readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.CANCELLED);
-        return;
-      }
-      if ((cdcApplySeqByKey.get(key) ?? 0) !== cdcSeqAtStart) {
-        readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.DROPPED_STALE);
-        logger.info?.(DYNAMIC_CONFIG_STARTUP_LOG_MSG.LATE_READ_DROPPED_STALE, {key});
-        return;
-      }
-      readOutcomes.set(key, state.late ?
-        DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED_LATE :
-        DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED);
-      applyStartupValue(key, value);
-    }, (error) => {
-      readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.FAILED);
-      logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
-        key,
-        error: error.message,
+    const read = Promise.resolve()
+      .then(() => dynamicConfigService.get(key))
+      .then((value) => settleStartupRead(key, value, cdcSeqAtStart, state))
+      .catch((error) => {
+        readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.FAILED);
+        logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
+          key,
+          error: error?.message,
+        });
       });
-    });
     return waitWithinBound(read, initialReadTimeoutMs, () => {
       state.late = true;
       reportWaitBoundSpent(logger, {
@@ -492,7 +530,7 @@ async function createDynamicConfigStartupWiring(options = {}) {
     ...DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS.map((key) => ownStartupRead(key)),
   ]);
   startupSweepDone = true;
-  applyRaftTimingConfig(raftTimingConfig);
+  settleHeldReads(applyRaftTimingConfig(raftTimingConfig));
 
   // The controller is held from construction until shutdown: one reference,
   // never dropped. A spent bound adopts it when its initialize completes
@@ -533,10 +571,17 @@ async function createDynamicConfigStartupWiring(options = {}) {
       }
     }, (error) => {
       controllerOutcome = DYNAMIC_CONFIG_STARTUP_OUTCOME.FAILED;
-      controller.shutdown();
       logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.ADAPTIVE_CONTROLLER_INIT_FAILED, {
-        error: error.message,
+        error: error?.message,
       });
+      try {
+        controller.shutdown();
+      } catch (shutdownError) {
+        logger.warn(
+          DYNAMIC_CONFIG_STARTUP_LOG_MSG.ADAPTIVE_CONTROLLER_SHUTDOWN_FAILED,
+          {error: shutdownError?.message},
+        );
+      }
     });
     await waitWithinBound(initialization, controllerInitTimeoutMs, () => {
       late = true;
