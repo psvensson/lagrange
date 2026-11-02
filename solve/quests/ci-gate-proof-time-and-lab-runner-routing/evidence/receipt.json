@@ -1,0 +1,21 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "gate-timeout-maximum",
+      "passed": false,
+      "reason": "ci.yml gate job timeout-minutes is 120; run 41431327759 (PR #184) was killed at 120 minutes."
+    },
+    {
+      "id": "lab-routing-design-decided",
+      "passed": false,
+      "reason": "No design for pull-request gates on lab runners has been decided by the lead."
+    },
+    {
+      "id": "lab-pr-gate-routed",
+      "passed": false,
+      "reason": "Pull-request gates run only on the hosted ubuntu-24.04 runner; no lab runner serves psvensson/lagrange."
+    }
+  ]
+}
