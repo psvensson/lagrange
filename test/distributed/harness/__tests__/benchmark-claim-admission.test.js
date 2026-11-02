@@ -714,6 +714,33 @@ describe('content identity and the exhausted arm', () => {
       assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_MISSING), false);
     });
 
+  // D36 (live campaign bench-live-20261101-b-r8): the deployer stops starting
+  // nodes at the first that never becomes ready, so an exhausted Lagrange arm
+  // has roles on two of its three hosts; admission read that as
+  // topology-mismatch before the readiness exhaustion. An arm that never
+  // reached its topology is the readiness-exhausted product failure.
+  it('an exhausted arm short of its planned topology is product-failure (readiness-exhausted)',
+    async () => {
+      const {run} = await exhaustedLagrangeRun();
+      run.deployment.roles = run.deployment.roles.slice(0, 2);
+      run.deployment.storage = run.deployment.storage.slice(0, 2);
+      for (const key of ['products', 'productsAfterWindow']) {
+        run.identity[key] = run.identity[key].slice(0, 2);
+      }
+      run.rawObservationsDigest = computeRunObservationsDigest(run);
+      const {driverSourceSha256} = await benchmarkDriverSourceIdentity();
+      const header = buildFixtureHeader({campaignId: 'fixture-campaign', targetIds: [LAGRANGE]});
+      header.harness = {...header.harness, driverSourceSha256,
+        adapterIds: [...Object.values(BENCHMARK_SCENARIO_A_ADAPTER_ID)]};
+      header.products[0] = {...header.products[0], reportedVersion: null,
+        reportedVersionError: 'management facts answered status 503 without release.version'};
+      const {matrix} = await publish([header, run]);
+      const cell = fixtureTargetCell(matrix, LAGRANGE, 'scenarioA/smoke');
+      assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE, cell.reasons.join(', '));
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.READINESS_EXHAUSTED), true);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.TOPOLOGY_MISMATCH), false);
+    });
+
   it('an exhausted arm publishes product-failure (readiness-exhausted) with its denial',
     async () => {
       const {run} = await exhaustedLagrangeRun();

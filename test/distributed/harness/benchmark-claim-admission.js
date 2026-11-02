@@ -645,7 +645,12 @@ function checkDeployment(run, claim) {
   const hostsByIp = new Map(arrayMap(deployment.hosts, (h) => [h.ip, h]));
   const roleHosts = arrayMap(deployment.roles, (r) => hostsByIp.get(r.host));
   const distinctMachines = new Set(arrayMap(arrayFilter(roleHosts, Boolean), (h) => h.bootId));
-  if (arraySome(roleHosts, (h) => !h) || distinctMachines.size < claim.minDistinctHosts) {
+  // An arm whose readiness was exhausted never reached its planned topology:
+  // the deployer stops starting nodes at the first that never became ready,
+  // and the readiness denial names it (D36). It is the readiness-exhausted
+  // product failure, never a topology mismatch.
+  if (!isReadinessExhaustedRun(run) && (arraySome(roleHosts, (h) => !h) ||
+      distinctMachines.size < claim.minDistinctHosts)) {
     reasons.push(ADMISSION_REASON.TOPOLOGY_MISMATCH);
   }
   const declared = jsonStringify({plan: run.plan, deployment});
