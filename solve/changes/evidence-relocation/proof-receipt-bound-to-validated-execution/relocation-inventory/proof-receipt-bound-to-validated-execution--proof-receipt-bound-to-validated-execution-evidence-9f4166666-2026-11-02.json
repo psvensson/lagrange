@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "proof-receipt-bound-to-validated-execution--proof-receipt-bound-to-validated-execution-evidence-9f4166666-2026-11-02.tar.gz",
+  "bundleSha256": "145f7dc62b256b9e13bf3a85d47d57591d292be37328dbd7b5e659b69b82d5b7",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/proof-receipt-bound-to-validated-execution--proof-receipt-bound-to-validated-execution-evidence-9f4166666-2026-11-02.tar.gz",
+  "sourceCommit": "9f4166666ae2b224d0ece3db510e914982d29cdf",
+  "root": "solve/quests/proof-receipt-bound-to-validated-execution/evidence/",
+  "files": [
+    ["broad-run-2.log.txt","d116c3bb5843bd46e1c16260f7e4f9f88acf58b018e642e2513499eb7bdb1759",1480],
+    ["broad-run.log.txt","d5f43dc8312dd653e597733fe1282c7fe8117ca8265a269e1b91b0e4e38f613e",8576],
+    ["mutation-witnesses-attempt2.log.txt","d6c46a0045a649443697288a3db342a02b2a7b5fd60dc25a74ccb4855da475de",1146],
+    ["red-attempt2-before-fix.log.txt","611146f4359d30545880d43abff100abe57d5b4b2c8a7908d20e9503a1f51a58",12175],
+    ["red-before-fix.log.txt","0ec4b948ca92aae2d2830ca24a23db4ec89ec3154d9232f28d61bcbc87d1fe8a",21091],
+    ["red-local-corpus-cone-missing.log.txt","89c951cf8ab828f2e30e933874ae309e5f1d49dbd38f720425b2a832f2a7e4d3",1184],
+    ["red-nested-runner-sections.log.txt","f8872d23457fd1901497a80d763e56cb2159e0735908ab427c45f57199d81182",1796],
+    ["red-on-revert-added-falsifiers.log.txt","703783f1a596c1a2b098687175f23752523b51368e969d662beb7b39b0fcaac5",3584],
+    ["red-on-revert.log.txt","7589f09ca5f9b83d1d06d3d9ddc6611f2750b1921e29f92fbeed22f84e4f3fe6",20423],
+    ["touched-green-2.log.txt","66002478069041deef2db4e2acc61f64ab2301fb700a5cf3de28fea275270050",953],
+    ["touched-green-3.log.txt","e5962cd20dd8c5d6183cf81921c2fc5f37ea1c18253d50b7dd043f5acf1e9875",951],
+    ["touched-green.log.txt","dac062fcdf51f25a3cc8448556b7feb11df51c810e9b3179bc3055f899d88d35",1119]
+  ]
+}

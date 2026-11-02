@@ -15,13 +15,17 @@ import {parse} from 'yaml';
 
 import {
   LOCAL_CORPUS_OWED, localCorpusPlan, publishExactHead, reconcileLocalCorpus,
-  reportLocalCorpus, runLocalCorpus, startLocalCorpus, supersedeLocalCorpus, wholeCorpusFiles,
+  reportLocalCorpus, runLocalCorpus, startLocalCorpus, supersedeLocalCorpus,
 } from '../../scripts/publish-head.js';
 import {runDecision} from '../../scripts/checks/push-gate-change-proof.js';
+import {wholeCorpusFiles} from '../../scripts/plan-test-lane.js';
 import {PROOF_MODE} from '../../scripts/checks/change-selection-constants.js';
 import {planTestPaths, writeProofScope} from '../../scripts/select-change-tests.js';
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {spawnGit} from '../../scripts/checks/git-invocation.js';
+import {
+  SECTION_KIND, appendExecutionSection, executionReportProblems, fileResultRecord,
+} from '../../scripts/test-execution-report.js';
 
 const HEAD = 'a'.repeat(40);
 
@@ -77,6 +81,7 @@ test('a cone publish starts exactly the rest of the corpus for the pushed commit
       return 0;
     },
     writeScope: (scope) => writeProofScope({...scope, scopeRoot: dir}),
+    reportRoot: dir,
   });
   assert.equal(status, 0);
   const scopeFile = path.join(dir, 'test-output', 'proof-scope.json');
@@ -260,7 +265,7 @@ test('the local corpus records the whole-corpus receipt only when green', (t) =>
   assert.deepEqual(gate.args.slice(0, 6),
     [CORPUS_GATE, '--gate', HEAD, '--run', 'sh', '-c']);
   const corpusScript = '"$2" scripts/run-classified-test-files.js --stdin < "$1"; ' +
-    'status=$?; npm run -s test:convergence-probes || ' +
+    'status=$?; LAGRANGE_EXECUTION_REPORT= npm run -s test:convergence-probes || ' +
     'echo "local corpus: convergence probes red (observed, never the verdict)"; ' +
     'exit "$status"';
   assert.equal(gate.args[6], corpusScript, 'the rest of the corpus, in a fresh exact ' +
@@ -268,7 +273,11 @@ test('the local corpus records the whole-corpus receipt only when green', (t) =>
   assert.deepEqual(gate.args.slice(-2),
     [path.join(stateDir, `${HEAD}.files`), process.execPath]);
   assert.equal(gate.options.cwd, '/main');
-  assert.deepEqual(record.args, ['scripts/proof-authority.js', 'record', 'corpus-full-v1', HEAD]);
+  assert.deepEqual(record.args, ['scripts/proof-authority.js', 'record', 'corpus-full-v1', HEAD,
+    '--report', path.join(stateDir, `${HEAD}.report.json`)],
+  'recorded only from the execution report this run wrote');
+  assert.equal(gate.options.env.LAGRANGE_EXECUTION_REPORT,
+    path.join(stateDir, `${HEAD}.sections.ndjson`), 'the runner writes its sections');
   assert.deepEqual({state: green.state.state, receipt: green.state.receipt},
     {state: 'green', receipt: 'corpus-full-v1'});
 
@@ -290,6 +299,64 @@ test('the local corpus records the whole-corpus receipt only when green', (t) =>
   const superseded = run({change: {state: 'superseded', supersededBy: 'b'.repeat(40)}});
   assert.equal(superseded.calls.length, 1, 'a superseded run records nothing');
   assert.equal(superseded.state.state, 'superseded', 'and keeps the newer head\'s word');
+});
+
+// The rest of a cone is only half the corpus: its report is whole only with
+// the gate's cone report beside it. A rest run whose cone report is missing
+// writes a report without a candidate, which the authority refuses as
+// partial; it never stands in for the whole corpus
+// (proof-receipt-bound-to-validated-execution).
+test('a rest run without the gate\'s cone report is no whole-corpus evidence', (t) => {
+  const dir = scratch(t, 'local-corpus-cone-');
+  const repo = path.join(dir, 'repo');
+  fs.mkdirSync(repo);
+  const git = (...args) => String(spawnGit(args, {cwd: repo, encoding: 'utf8',
+    env: gitProcessEnvironment()}).stdout).trim();
+  git('init', '--quiet');
+  git('config', 'user.name', 'Cone Fixture');
+  git('config', 'user.email', 'cone@example.invalid');
+  fs.writeFileSync(path.join(repo, 'subject.txt'), 'subject\n');
+  git('add', 'subject.txt');
+  git('commit', '--quiet', '-m', 'subject');
+  const head = git('rev-parse', 'HEAD');
+  const tree = git('rev-parse', `${head}^{tree}`);
+  const checkout = {head, tree, clean: true};
+  const cone = ['test/cone.test.js'];
+  const rest = ['test/rest-a.test.js', 'test/rest-b.test.js'];
+  const green = (files) => files.map((file) => fileResultRecord({file, ok: true, assertions: 2}));
+  const coneReportFile = path.join(dir, 'gate', 'execution-report.json');
+  const runRest = (stateDir) => {
+    startLocalCorpus({root: repo, stateDir, head, files: rest, env: {},
+      coneReport: coneReportFile,
+      spawnProcess: () => ({pid: 4242, unref: () => {}})});
+    runLocalCorpus(repo, head, {stateDir, now: () => 99,
+      run: (command, args, options) => {
+        if (args[0] !== CORPUS_GATE) return {status: 0};
+        const sections = options.env.LAGRANGE_EXECUTION_REPORT;
+        appendExecutionSection(sections, {kind: SECTION_KIND.START, runId: 'rest',
+          argv: rest, planned: rest, checkout});
+        appendExecutionSection(sections, {kind: SECTION_KIND.END, runId: 'rest',
+          exitStatus: 0, results: green(rest)});
+        return {status: 0};
+      }});
+    const report = JSON.parse(fs.readFileSync(path.join(stateDir, `${head}.report.json`),
+      'utf8'));
+    return executionReportProblems(report, {sha: head, tree}).problems.map((entry) =>
+      entry.code);
+  };
+
+  assert.deepEqual(runRest(path.join(dir, 'missing')), ['execution-report-partial'],
+    'the rest alone, its cone report missing, is a partial report');
+
+  fs.mkdirSync(path.dirname(coneReportFile), {recursive: true});
+  fs.writeFileSync(coneReportFile, JSON.stringify({schema: 'lagrange-test-execution-report/v1',
+    candidate: {sha: head, tree, clean: true, identity: null},
+    producer: {kind: 'push-gate', id: 'pid-1'},
+    commands: [{label: 'cone', argv: [], exitStatus: 0}], planned: cone, reusedProofs: [],
+    runs: [{runId: 'cone', complete: true, checkout, argv: cone, planned: cone,
+      results: green(cone), exitStatus: 0}]}));
+  assert.deepEqual(runRest(path.join(dir, 'whole')), [],
+    'the cone report and the rest together are the whole corpus');
 });
 
 // A fake run of the exact corpus script - a one-file list, this node, and an

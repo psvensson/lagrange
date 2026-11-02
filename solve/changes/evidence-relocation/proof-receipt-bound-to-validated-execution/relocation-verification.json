@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "proof-receipt-bound-to-validated-execution--proof-receipt-bound-to-validated-execution-evidence-9f4166666-2026-11-02.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/proof-receipt-bound-to-validated-execution--proof-receipt-bound-to-validated-execution-evidence-9f4166666-2026-11-02.tar.gz",
+      "bundleSha256": "145f7dc62b256b9e13bf3a85d47d57591d292be37328dbd7b5e659b69b82d5b7",
+      "sourceCommit": "9f4166666ae2b224d0ece3db510e914982d29cdf",
+      "shard": "relocation-inventory/proof-receipt-bound-to-validated-execution--proof-receipt-bound-to-validated-execution-evidence-9f4166666-2026-11-02.json",
+      "shardSha256": "b03e5ef468644ee9a71c18801f4f3c839051402f864296945006d1cb08a6f5a2",
+      "verifiedAt": "2026-11-02T11:23:48.154Z",
+      "downloadedSha256": "145f7dc62b256b9e13bf3a85d47d57591d292be37328dbd7b5e659b69b82d5b7",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 12,
+      "results": "111111111111",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}
