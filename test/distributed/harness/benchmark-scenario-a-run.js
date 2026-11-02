@@ -240,12 +240,19 @@ function describeWorkloadIdentity(workload) {
   const workloadPlan = buildOltpBaselinePlan(workload);
   const slice = describePlannedOperationSlice(
     interleaveOltpWorkerPhase(workloadPlan.workers, 'measurement'));
+  // The preregistered warm-up (plan.warmup): its operation count and the
+  // digest of the planned warm-up slice; an executed warm-up must equal it.
+  const warmupOperations = interleaveOltpWorkerPhase(workloadPlan.workers, 'warmup');
+  const warmup = warmupOperations.length === 0 ? {operations: 0, digest: null} :
+    {operations: warmupOperations.length,
+      digest: describePlannedOperationSlice(warmupOperations).operationSliceDigest};
   return Object.freeze({
     datasetDigest: hashOltpBaselineDataset(buildOltpBaselineDataset(workload)),
     workloadPlanDigest: benchmarkCanonicalDigest(workloadPlan),
     measurementPlanDigest: hashOltpBaselineMeasurementPlan(workloadPlan),
     operationSliceDigest: slice.operationSliceDigest,
     plannedOperationCounts: slice.plannedOperationCounts,
+    warmup: Object.freeze(warmup),
   });
 }
 
@@ -258,6 +265,7 @@ function planIdentity(profile, plan, workload, offeredRatePerSec) {
     workload,
     operationSliceDigest: identity.operationSliceDigest,
     plannedOperationCounts: identity.plannedOperationCounts,
+    warmup: identity.warmup,
     semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
     semanticProfileDigest: hashScenarioASemanticProfile(),
     retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id,

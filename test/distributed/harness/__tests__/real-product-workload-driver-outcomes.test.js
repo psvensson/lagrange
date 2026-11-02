@@ -216,3 +216,27 @@ test('an unopened run refuses a setup failure without its typed fields', async (
   await assert.rejects(runDriverCase({...LAGRANGE_SCENARIO_A,
     setupFailure: {code: 'readiness_exhausted'}}), /setupFailure/u);
 });
+
+// Live campaign bench-live-20261101-b: the record owner requires the
+// preregistered warm-up as plan.warmup {operations, digest}, but no run plan
+// carried it (only the chain fixture did), so every real record - completed
+// or setup-failed - would be rejected. The run's plan identity carries the
+// planned warm-up: its operation count and the digest of the planned warm-up
+// slice, which a completed run's executed warm-up must equal.
+test('every run plan carries the preregistered warm-up the executed one must match',
+  async () => {
+    const completed = (await runDriverCase(LAGRANGE_SCENARIO_A)).output;
+    const workload = completed.plan.workload;
+    const operations = workload.workers * workload.warmupOperationsPerWorker;
+    assert.ok(operations > 0);
+    assert.deepEqual(Object.keys(completed.plan.warmup).sort(), ['digest', 'operations']);
+    assert.equal(completed.plan.warmup.operations, operations);
+    assert.match(completed.plan.warmup.digest, /^sha256:[0-9a-f]{64}$/u);
+    assert.equal(completed.observations.warmup.accounting.offered, operations);
+    assert.equal(completed.observations.warmup.executedOperationsDigest,
+      completed.plan.warmup.digest, 'the executed warm-up is the preregistered one');
+    const unopened = (await runDriverCase({...LAGRANGE_SCENARIO_A, setupFailure: {
+      failureClass: 'product_error', sqlState: null, code: 'readiness_exhausted',
+      message: 'node 2 did not report ready'}})).output;
+    assert.deepEqual(unopened.plan.warmup, completed.plan.warmup);
+  });
