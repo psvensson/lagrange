@@ -9,7 +9,7 @@
     "cli-tooling": 99,
     "control-plane": 225,
     "convergence-topology": 78,
-    "distributed-harness": 209,
+    "distributed-harness": 210,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2555,
-  "digest": "fnv1a32-4fa960fb",
+  "censusSize": 2556,
+  "digest": "fnv1a32-713ef5b6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c51884de",
+  "observationDigest": "fnv1a32-fa624d97",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -907,6 +907,7 @@
     "test/distributed/harness/__tests__/distributed-failure-analyzer-load-metrics-fallback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/distributed-matrix-plan.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/docker-build-context.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/docker-image-retirement.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/docker-provider.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-dominant-reason-denoise.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-fallback.test.js": "distributed-harness",
@@ -6891,6 +6892,14 @@
       ],
       "directories": [
         "test/distributed/harness/__tests__"
+      ]
+    },
+    "test/distributed/harness/__tests__/docker-image-retirement.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/container-memory-working-set.js"
       ]
     },
     "test/distributed/harness/__tests__/docker-provider.test.js": {
