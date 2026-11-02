@@ -3,7 +3,7 @@
 #
 # Usage:
 #   export KEY_NAME=<your-ec2-keypair-name>
-#   ./docs/benchmarks/cloud/provision-aws.sh              # provisions 5 EC2 instances
+#   ./docs/benchmarks/cloud/provision-aws.sh --ssh-cidr <your-ip>/32   # provisions the EC2 instances
 #   ./docs/benchmarks/cloud/provision-aws.sh --teardown   # terminates instances and deletes SG
 #
 # Environment overrides:
@@ -16,12 +16,29 @@
 
 set -euo pipefail
 
+# Arguments. --ssh-cidr is required to provision and has no default: SSH is
+# opened only to the operator's own network, never to the whole internet.
+TEARDOWN=0
+SSH_CIDR=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --teardown) TEARDOWN=1; shift ;;
+    --ssh-cidr)
+      if [ "$#" -lt 2 ]; then
+        echo "Error: --ssh-cidr needs a value, e.g. --ssh-cidr 203.0.113.7/32" >&2
+        exit 2
+      fi
+      SSH_CIDR="$2"; shift 2 ;;
+    *) echo "Error: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
 REGION="${REGION:-us-east-1}"
 INSTANCE_TYPE="${INSTANCE_TYPE:-m6i.xlarge}"
 CLUSTER_TAG="${CLUSTER_TAG:-lagrange-bench}"
 SG_NAME="${CLUSTER_TAG}-sg"
 
-if [ "${1:-}" = "--teardown" ]; then
+if [ "${TEARDOWN}" = "1" ]; then
   echo "[aws] Finding instances tagged LagrangeBenchmarkCluster=${CLUSTER_TAG} in ${REGION}..."
   INSTANCE_IDS="$(aws ec2 describe-instances \
     --region "${REGION}" \
@@ -47,6 +64,17 @@ if [ "${1:-}" = "--teardown" ]; then
   fi
   echo "[aws] Teardown complete."
   exit 0
+fi
+
+if [ -z "${SSH_CIDR}" ]; then
+  echo "Error: --ssh-cidr <cidr> is required: the IPv4 network allowed to reach SSH (22)," >&2
+  echo "e.g. your own address as --ssh-cidr 203.0.113.7/32. There is no default." >&2
+  exit 2
+fi
+if ! [[ "${SSH_CIDR}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$ ]] ||
+    [[ "${SSH_CIDR}" =~ /0$ ]]; then
+  echo "Error: --ssh-cidr must be an IPv4 CIDR with a prefix of /1 to /32, not ${SSH_CIDR}." >&2
+  exit 2
 fi
 
 if [ -z "${KEY_NAME:-}" ]; then
@@ -97,7 +125,7 @@ if [ -z "${SG_ID}" ] || [ "${SG_ID}" = "None" ]; then
     --group-id "${SG_ID}" \
     --protocol tcp \
     --port 22 \
-    --cidr 0.0.0.0/0 >/dev/null
+    --cidr "${SSH_CIDR}" >/dev/null
 fi
 
 USER_DATA='#!/usr/bin/env bash

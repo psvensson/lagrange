@@ -268,3 +268,29 @@ test('the load-generator worktree installs the reference-client drivers; a faile
   const record = await runner({system: 'postgresql'}, RUN);
   assert.equal(record.dispatch.status, 'executed');
 });
+
+test('a worktree removal that fails is recorded as an incomplete closure, never swallowed',
+  async () => {
+    const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
+    const ssh = createScriptedSsh([[/git worktree add/u, 'abc'],
+      [/git worktree remove/u, new Error('worktree locked')]]);
+    const checkout = await prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
+      harnessCommit: 'abc', campaignId: 'bench-x'});
+    const closure = await checkout.release();
+    assert.equal(closure.status, 'incomplete');
+    assert.match(closure.error, /worktree locked/u);
+  });
+
+test('a failed checkout preparation keeps its cause and records the cleanup it attempted',
+  async () => {
+    const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
+    const ssh = createScriptedSsh([[/git worktree add/u, new Error('fetch failed')],
+      [/git worktree remove/u, new Error('no such worktree')]]);
+    await assert.rejects(prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
+      harnessCommit: 'abc', campaignId: 'bench-x'}), (error) => {
+      assert.match(error.message, /fetch failed/u);
+      assert.equal(error.loadGeneratorWorktree.status, 'incomplete');
+      assert.match(error.loadGeneratorWorktree.error, /no such worktree/u);
+      return true;
+    });
+  });

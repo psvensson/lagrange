@@ -13,13 +13,6 @@ import {
   ALL_TARGET_IDS, SCENARIO_A_COLUMNS, SCENARIO_B_COLUMNS, SCENARIO_C_COLUMNS, SCENARIO_LINKS,
 } from './comparative-page-columns.js';
 
-const DEFAULT_YUGABYTE_IGNITE_PROGRESS_SVG_PATH =
-  'docs/benchmarks/yugabyte-ignite-comparison-progress.svg';
-const DEFAULT_YUGABYTE_IGNITE_PROGRESS_MD_PATH =
-  'docs/benchmarks/yugabyte-ignite-comparison-progress.md';
-const DEFAULT_YUGABYTE_IGNITE_PROGRESS_HTML_PATH =
-  'docs/benchmarks/yugabyte-ignite-comparison-progress.html';
-const DEFAULT_SCENARIO_B_CROSSOVER_SVG_PATH = 'docs/benchmarks/scenario-b-shape-crossover.svg';
 const TARGETS = Object.freeze([TARGET_ID.YUGABYTE_YSQL, TARGET_ID.YUGABYTE_PROC, TARGET_ID.IGNITE]);
 
 function buildYugabyteIgniteComparisonPage(matrix) {
@@ -61,9 +54,5 @@ async function writeYugabyteIgniteComparisonStaticWebArtifacts({matrix, svgPath,
 }
 
 export {
-  DEFAULT_SCENARIO_B_CROSSOVER_SVG_PATH,
-  DEFAULT_YUGABYTE_IGNITE_PROGRESS_HTML_PATH,
-  DEFAULT_YUGABYTE_IGNITE_PROGRESS_MD_PATH,
-  DEFAULT_YUGABYTE_IGNITE_PROGRESS_SVG_PATH,
   writeYugabyteIgniteComparisonStaticWebArtifacts,
 };

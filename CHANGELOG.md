@@ -19,11 +19,13 @@ releases without a compatibility guarantee.
   successful operations, `/health` responses and error envelopes counted as success,
   per-arm smoke statements instead of the canonical Scenario A workload, constant
   phase and byte values, quantiles synthesised from other quantiles, constant
-  semantic-proof counts and label-hash identities (defect ledger
-  `solve/quests/comparative-benchmark-evidence-repair/evidence/defect-ledger.md`).
-  The original records are retained as forensic evidence behind the append-only
-  `data/tidb-comparison/invalidations.ndjson`; the comparison history is append-only
-  again and its overwritten records are restored. Publication now consumes
+  semantic-proof counts and label-hash identities. The original records are retained
+  as forensic evidence; each withdrawal is an entry (`inv-NNNN`) in the append-only
+  `data/tidb-comparison/invalidations.ndjson` naming the withdrawn records, the
+  admission reason codes and the defect ids behind it. The benchmark evidence chain
+  is repaired: drivers count only verified responses, the deployer starts the real
+  products, the comparison history is append-only again and its overwritten records
+  are restored. Publication now consumes
   claim-specific admission cells only (`valid-observed`, `product-failure`,
   `invalid-measurement`, `blocked`, `unsupported`, `not-measured`), and
   `npm run audit:comparative-recompute` recomputes every published artifact from the

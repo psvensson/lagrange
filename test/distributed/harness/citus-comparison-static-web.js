@@ -5,9 +5,6 @@ import {
   SCENARIO_A_COLUMNS, SCENARIO_B_COLUMNS, SCENARIO_C_COLUMNS, SCENARIO_LINKS,
 } from './comparative-page-columns.js';
 
-const DEFAULT_CITUS_PROGRESS_SVG_PATH = 'docs/benchmarks/citus-comparison-progress.svg';
-const DEFAULT_CITUS_PROGRESS_MD_PATH = 'docs/benchmarks/citus-comparison-progress.md';
-const DEFAULT_CITUS_PROGRESS_HTML_PATH = 'docs/benchmarks/citus-comparison-progress.html';
 const TARGETS = Object.freeze([TARGET_ID.CITUS_SQL, TARGET_ID.CITUS_UDF]);
 
 function buildCitusComparisonPage(matrix) {
@@ -32,8 +29,5 @@ async function writeCitusComparisonStaticWebArtifacts({matrix, svgPath, markdown
 }
 
 export {
-  DEFAULT_CITUS_PROGRESS_HTML_PATH,
-  DEFAULT_CITUS_PROGRESS_MD_PATH,
-  DEFAULT_CITUS_PROGRESS_SVG_PATH,
   writeCitusComparisonStaticWebArtifacts,
 };

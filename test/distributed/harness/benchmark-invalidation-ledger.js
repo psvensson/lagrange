@@ -123,5 +123,4 @@ export {
   appendInvalidationEntries,
   parseInvalidationLedger,
   readInvalidationLedger,
-  validateInvalidationEntry,
 };

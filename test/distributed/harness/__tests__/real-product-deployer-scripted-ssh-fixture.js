@@ -49,4 +49,4 @@ function createScriptedSsh(rules = []) {
   return {sshRun, calls};
 }
 
-export {createScriptedSsh, decodedText};
+export {createScriptedSsh};

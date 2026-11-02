@@ -3,10 +3,6 @@
 import {buildExperimentSection, writeClaimPageArtifacts} from './comparative-landing-tables.js';
 import {SCENARIO_LINKS} from './comparative-page-columns.js';
 
-const DEFAULT_SCALEOUT_PROGRESS_SVG_PATH = 'docs/benchmarks/scaleout-3to5-node-rf3-progress.svg';
-const DEFAULT_SCALEOUT_PROGRESS_MD_PATH = 'docs/benchmarks/scaleout-3to5-node-rf3-progress.md';
-const DEFAULT_SCALEOUT_PROGRESS_HTML_PATH = 'docs/benchmarks/scaleout-3to5-node-rf3-progress.html';
-
 function buildPage(matrix) {
   return {
     title: 'Three-to-five-node scale-out',
@@ -26,8 +22,5 @@ async function writeScaleout3To5ComparisonStaticWebArtifacts({matrix, svgPath, m
 }
 
 export {
-  DEFAULT_SCALEOUT_PROGRESS_HTML_PATH,
-  DEFAULT_SCALEOUT_PROGRESS_MD_PATH,
-  DEFAULT_SCALEOUT_PROGRESS_SVG_PATH,
   writeScaleout3To5ComparisonStaticWebArtifacts,
 };

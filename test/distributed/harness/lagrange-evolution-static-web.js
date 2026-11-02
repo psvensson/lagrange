@@ -7,10 +7,6 @@ import {
 } from './comparative-landing-tables.js';
 import {OVERVIEW_COLUMNS, SCENARIO_LINKS} from './comparative-page-columns.js';
 
-const DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH = 'docs/benchmarks/lagrange-metrics-evolution.svg';
-const DEFAULT_LAGRANGE_EVOLUTION_MD_PATH = 'docs/benchmarks/lagrange-metrics-evolution.md';
-const DEFAULT_LAGRANGE_EVOLUTION_HTML_PATH = 'docs/benchmarks/lagrange-metrics-evolution.html';
-
 function buildLagrangeEvolutionPage(matrix) {
   return {
     title: 'Lagrange milestones',
@@ -32,8 +28,5 @@ async function writeLagrangeEvolutionStaticWebArtifacts({matrix, svgPath, markdo
 }
 
 export {
-  DEFAULT_LAGRANGE_EVOLUTION_HTML_PATH,
-  DEFAULT_LAGRANGE_EVOLUTION_MD_PATH,
-  DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH,
   writeLagrangeEvolutionStaticWebArtifacts,
 };

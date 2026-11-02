@@ -107,8 +107,6 @@ function renderStatusGridSvg(page) {
 }
 
 export {
-  NON_NUMERIC_STATUSES,
-  STATUS_COLOR,
   escapeXml,
   formatNum,
   renderStatusGridSvg,

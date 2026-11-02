@@ -30,6 +30,7 @@ import {
   arrayMap,
   stringSplit,
   stringToLowerCase,
+  stringTrim,
 } from './real-product-captured-intrinsics.js';
 import {
   DEPLOYMENT_FAILURE,
@@ -100,9 +101,9 @@ function pdReady(ctx, pdHost) {
     intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep, probe: async () => {
       const answer = await httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts,
         from: ctx.clientIp, url: `http://${pdHost}:${P.pdClientPort}/pd/api/v1/health`});
-      const members = Array.isArray(answer.json) ? answer.json : [];
-      return {ready: members.length > 0 && arrayEvery(members, (member) => member.health === true),
-        diagnostic: answer.json ?? answer.body ?? answer.error};
+      return {ready: Array.isArray(answer.json) && answer.json.length > 0 &&
+        arrayEvery(answer.json, (member) => member.health === true),
+      diagnostic: answer};
     }});
 }
 
@@ -140,6 +141,14 @@ async function sql(ctx, endpoint, statement) {
   return result.stdout;
 }
 
+// A version the product answered; an empty answer is no version (null with why).
+function reportedVersionOf(answer, source) {
+  const version = stringTrim(String(answer));
+  return version === '' ?
+    {reportedVersion: null, reportedVersionError: `${source} answered no version`} :
+    {reportedVersion: version, reportedVersionError: null};
+}
+
 async function reportedVersions(ctx, endpoint, products) {
   const release = await sql(ctx, endpoint, 'SELECT tidb_version()');
   const rows = arrayMap(arrayFilter(stringSplit(await sql(ctx, endpoint,
@@ -147,12 +156,14 @@ async function reportedVersions(ctx, endpoint, products) {
   (line) => stringSplit(line, '\t'));
   for (const product of products) {
     if (product.role === ROLE.TIDB) {
-      product.reportedVersion = release;
+      Object.assign(product, reportedVersionOf(release, 'SELECT tidb_version()'));
       continue;
     }
     const row = arrayFind(rows, ([type, instance]) => stringToLowerCase(type) ===
       product.role && stringSplit(instance, ':')[0] === product.host);
-    product.reportedVersion = row ? row[2] : null;
+    Object.assign(product, row === undefined ?
+      {reportedVersion: null, reportedVersionError: 'CLUSTER_INFO lists no such instance'} :
+      reportedVersionOf(row[2], 'CLUSTER_INFO.VERSION'));
   }
   return products;
 }

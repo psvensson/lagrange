@@ -272,7 +272,6 @@ function reconcileFinalState(records, before, after, scale) {
 }
 
 export {
-  LOGICAL_CHECKSUM_METHOD as OLTP_LOGICAL_CHECKSUM_METHOD,
   RECONCILIATION_STATUS as OLTP_RECONCILIATION_STATUS,
   VERIFICATION_STATUS as OLTP_DATASET_VERIFICATION_STATUS,
   committedTableDeltas as committedOltpTableDeltas,

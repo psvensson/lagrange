@@ -1,0 +1,56 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.tar.gz",
+      "bundleSha256": "3718164dc7b632abbecd39049600efe02c4e9d7ab0566a0ea19b62b7e4b4e6c9",
+      "sourceCommit": "435c426b936ad5183020732edc246616015039ac",
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.json",
+      "shardSha256": "eacf0d821b2a5fc946481f287d8bc5c819a69a253f9f1da865837dff153809da",
+      "verifiedAt": "2026-11-01T22:58:05.394Z",
+      "downloadedSha256": "3718164dc7b632abbecd39049600efe02c4e9d7ab0566a0ea19b62b7e4b4e6c9",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 16,
+      "results": "1111111111111111",
+      "mismatches": [],
+      "verified": true
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+      "bundleSha256": "5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69",
+      "sourceCommit": "2247fccd27740c50f20aef0ebdb42725ee80dff4",
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.json",
+      "shardSha256": "f07e0116ac4fa7fa407b66ab685c3b8b0fe2d5001f9cf78fffdfec5cecd8b357",
+      "verifiedAt": "2026-11-01T23:13:26.606Z",
+      "downloadedSha256": "5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 3,
+      "results": "111",
+      "mismatches": [],
+      "verified": true
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.tar.gz",
+      "bundleSha256": "eaf4c6658612a812504507dffa26a594ff820217898f8df0ba28cf5f7f83b95f",
+      "sourceCommit": "c959e0241087324abf0adccf71408ad86eb22715",
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.json",
+      "shardSha256": "d30360e584a107626fcf454a4c5bd85cb258715a98ff2fd7c3c229d9129f8a78",
+      "verifiedAt": "2026-11-01T23:17:25.094Z",
+      "downloadedSha256": "eaf4c6658612a812504507dffa26a594ff820217898f8df0ba28cf5f7f83b95f",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 2,
+      "results": "11",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

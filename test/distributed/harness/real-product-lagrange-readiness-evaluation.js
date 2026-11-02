@@ -54,7 +54,11 @@ const DENIAL = Object.freeze({
   TABLE_WITHOUT_PARTITIONS: 'table_without_partitions',
   PARTITION_NOT_ROUTABLE: 'partition_not_routable',
   PARTITION_UNDER_REPLICATED: 'partition_under_replicated',
+  PARTITION_REPLICA_COUNT_UNREADABLE: 'partition_replica_count_unreadable',
 });
+const numberIsSafeInteger = Number.isSafeInteger;
+const DECIMAL_COUNT = /^[1-9][0-9]*$/u;
+const regExpTest = Function.call.bind(RegExp.prototype.test);
 
 function text(value) {
   return stringToLowerCase(String(value ?? ''));
@@ -87,6 +91,17 @@ function nodeDenials(nodes, expectedNodeIds, now) {
   return denials;
 }
 
+// The partition's own replication target: a positive decimal integer as the
+// system table reports it, or null when it is absent or unreadable. Neither a
+// missing count nor the cluster size ever lowers the target.
+function replicaCountOf(partition) {
+  const raw = partition.replica_count;
+  if ((typeof raw !== 'string' && typeof raw !== 'number') ||
+      !regExpTest(DECIMAL_COUNT, String(raw))) return null;
+  const count = Number(raw);
+  return numberIsSafeInteger(count) ? count : null;
+}
+
 function partitionDenials(partition, services, expectedNodeIds) {
   const replicas = arrayFilter(services, (row) => row.partition_id === partition.partition_id &&
     text(row.status) === ACTIVE && arrayIncludes(expectedNodeIds, row.node_id));
@@ -94,8 +109,10 @@ function partitionDenials(partition, services, expectedNodeIds) {
   if (!arraySome(replicas, (row) => text(row.raft_role) === LEADER)) {
     denials.push(`${DENIAL.PARTITION_NOT_ROUTABLE}:${partition.partition_id}`);
   }
-  const target = Math.min(Number(partition.replica_count) || 1, expectedNodeIds.length);
-  if (new Set(arrayMap(replicas, (row) => row.node_id)).size < target) {
+  const target = replicaCountOf(partition);
+  if (target === null) {
+    denials.push(`${DENIAL.PARTITION_REPLICA_COUNT_UNREADABLE}:${partition.partition_id}`);
+  } else if (new Set(arrayMap(replicas, (row) => row.node_id)).size < target) {
     denials.push(`${DENIAL.PARTITION_UNDER_REPLICATED}:${partition.partition_id}`);
   }
   return denials;
@@ -186,8 +203,6 @@ function nodeServeDenials(nodeId, snapshot) {
 }
 
 export {
-  DENIAL as LAGRANGE_READINESS_DENIAL,
-  PRIORITY_PARTITION_IDS as LAGRANGE_PRIORITY_PARTITION_IDS,
   evaluateLagrangeClusterReadiness,
   evaluateLagrangeServeLane,
 };

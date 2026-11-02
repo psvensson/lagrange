@@ -1,0 +1,13 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+  "bundleSha256": "5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+  "sourceCommit": "2247fccd27740c50f20aef0ebdb42725ee80dff4",
+  "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/",
+  "files": [
+    ["live-campaign-bench-live-20261101-a/dry-run-plan.json","db04a42bb7c6dc9b0a556a12d2c6e29321ccc30216b0a93dad0e6a399dc58875",19887],
+    ["live-campaign-bench-live-20261101-a/host-preflight.txt","79fb82e9e880354df7636aedd1c9f6d08288af106cfdc7571ead14d095ef117c",3390],
+    ["live-diagnosis-2026-11-01.md","c0980c326aa1ed1e48c878288038eff1e19196069403cef2dc769a030d0a1710",124160]
+  ]
+}

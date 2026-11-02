@@ -3,10 +3,6 @@
 import {buildExperimentSection, writeClaimPageArtifacts} from './comparative-landing-tables.js';
 import {SCENARIO_LINKS} from './comparative-page-columns.js';
 
-const DEFAULT_RTT_WORKING_SET_SVG_PATH = 'docs/benchmarks/scenario-b-rtt-working-set-crossover.svg';
-const DEFAULT_RTT_WORKING_SET_MD_PATH = 'docs/benchmarks/scenario-b-rtt-working-set-crossover.md';
-const DEFAULT_RTT_WORKING_SET_HTML_PATH = 'docs/benchmarks/scenario-b-rtt-working-set-crossover.html';
-
 function buildPage(matrix) {
   return {
     title: 'Scenario B under network delay and a heavy working set',
@@ -26,8 +22,5 @@ async function writeScenarioBRttWorkingSetStaticWebArtifacts({matrix, svgPath, m
 }
 
 export {
-  DEFAULT_RTT_WORKING_SET_HTML_PATH,
-  DEFAULT_RTT_WORKING_SET_MD_PATH,
-  DEFAULT_RTT_WORKING_SET_SVG_PATH,
   writeScenarioBRttWorkingSetStaticWebArtifacts,
 };

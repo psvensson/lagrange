@@ -551,7 +551,7 @@ describe('driver output through admission', () => {
         output = await executeBenchmarkWorkload({
           targetId: LAGRANGE, system: LAGRANGE, scenario: 'scenarioA', subkind: 'smoke',
           connection: {endpoint, credentials: {user: 'u', password: 'p', database: 'd'}},
-          plan: {offeredRatePerSec: 50, repetition: 1, orderIndex: 0},
+          plan: {offeredRatePerSec: 50, repetition: 1, orderIndex: 0, sweepPlanSha256: null},
           drivers: {createPgClient: product.createPgClient,
             createMysqlConnection: product.createMysqlConnection},
           evidenceDir,
@@ -603,7 +603,7 @@ describe('content identity and the exhausted arm', () => {
         setupFailure: {failureClass: 'product_error', sqlState: null,
           code: 'readiness_exhausted',
           message: 'lagrange-node@10.0.0.2 did not report ready after 120 attempts'},
-        plan: {offeredRatePerSec: 5, repetition: 1, orderIndex: 0},
+        plan: {offeredRatePerSec: 5, repetition: 1, orderIndex: 0, sweepPlanSha256: null},
         drivers: {createPgClient: product.createPgClient,
           createMysqlConnection: product.createMysqlConnection},
         evidenceDir,

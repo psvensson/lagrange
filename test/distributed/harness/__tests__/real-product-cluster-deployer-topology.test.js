@@ -174,8 +174,8 @@ test('Lagrange: an unanswered version is null with the product\'s non-answer as 
     const products = error.deployment.identity.products;
     const answered = arrayFind(products, (one) => one.host === '10.0.0.1');
     assert.equal(answered.reportedVersion, '0.4.0');
-    assert.equal(Object.hasOwn(answered, 'reportedVersionError'), false);
+    assert.equal(answered.reportedVersionError, null);
     const silent = arrayFind(products, (one) => one.host === '10.0.0.2');
     assert.equal(silent.reportedVersion, null);
-    assert.match(silent.reportedVersionError, /503/u);
+    assert.match(silent.reportedVersionError, /"status":503/u);
   });

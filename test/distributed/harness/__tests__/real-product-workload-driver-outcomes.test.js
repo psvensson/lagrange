@@ -13,6 +13,7 @@ import {
 import {
   validateBenchmarkAccounting,
 } from '../benchmark-operation-outcome.js';
+import {executeBenchmarkWorkload} from '../real-product-workload-drivers.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const stringIncludes = Function.call.bind(String.prototype.includes);
@@ -283,7 +284,7 @@ test('a PostgreSQL run never loads the TiDB driver', async () => {
     system: 'postgresql', scenario: 'scenarioA', subkind: 'smoke',
     connection: {endpoint: {host: '127.0.0.1', port: 1},
       credentials: {user: 'u', password: 'p', database: 'd'}},
-    plan: {offeredRatePerSec: 5, repetition: 1, orderIndex: 0},
+    plan: {offeredRatePerSec: 5, repetition: 1, orderIndex: 0, sweepPlanSha256: null},
     drivers: {createPgClient: () => ({async connect() {
       throw Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:1'),
         {code: 'ECONNREFUSED'});
@@ -309,3 +310,20 @@ test('native drivers resolve and report versions through the reference-client pa
     assert.deepEqual(Object.keys(versions.mysql2).sort(), ['error', 'version']);
     assert.ok(versions.mysql2.version !== null || /mysql2/u.test(versions.mysql2.error));
   });
+
+test('the plan names its repetition, order and sweep plan (null: no sweep); a missing ' +
+  'one is refused, never recorded as null', async () => {
+  const setupFailure = {failureClass: 'product_error', sqlState: null,
+    code: 'readiness_exhausted', message: 'never ready'};
+  const base = {targetId: 'lagrange', system: 'lagrange', scenario: 'scenarioA',
+    subkind: 'smoke', setupFailure, evidenceDir: '/tmp/unused-bench-evidence'};
+  const complete = {offeredRatePerSec: 50, repetition: 1, orderIndex: 0, sweepPlanSha256: null};
+  const output = await executeBenchmarkWorkload({...base, plan: complete});
+  assert.equal(output.plan.sweepPlanDigest, null);
+  assert.equal(output.plan.repetition, 1);
+  for (const missing of ['repetition', 'orderIndex', 'sweepPlanSha256']) {
+    const plan = {...complete};
+    delete plan[missing];
+    await assert.rejects(executeBenchmarkWorkload({...base, plan}), new RegExp(missing, 'u'));
+  }
+});

@@ -70,4 +70,4 @@ function hasRunForClaim(runs, claim) {
     run.scenario === claim.scenario && run.subkind === claim.subkind);
 }
 
-export {RECORD_OWNER_UNAVAILABLE, loadRawObservationRecordOwner};
+export {loadRawObservationRecordOwner};

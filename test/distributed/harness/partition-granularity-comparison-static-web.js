@@ -3,10 +3,6 @@
 import {buildExperimentSection, writeClaimPageArtifacts} from './comparative-landing-tables.js';
 import {SCENARIO_LINKS} from './comparative-page-columns.js';
 
-const DEFAULT_PARTITION_SWEEP_SVG_PATH = 'docs/benchmarks/partition-granularity-sweep-progress.svg';
-const DEFAULT_PARTITION_SWEEP_MD_PATH = 'docs/benchmarks/partition-granularity-sweep-progress.md';
-const DEFAULT_PARTITION_SWEEP_HTML_PATH = 'docs/benchmarks/partition-granularity-sweep-progress.html';
-
 function buildPage(matrix) {
   return {
     title: 'Partition granularity sweep',
@@ -25,8 +21,5 @@ async function writePartitionGranularityComparisonStaticWebArtifacts({matrix, sv
 }
 
 export {
-  DEFAULT_PARTITION_SWEEP_HTML_PATH,
-  DEFAULT_PARTITION_SWEEP_MD_PATH,
-  DEFAULT_PARTITION_SWEEP_SVG_PATH,
   writePartitionGranularityComparisonStaticWebArtifacts,
 };

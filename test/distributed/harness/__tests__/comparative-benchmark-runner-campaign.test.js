@@ -429,3 +429,17 @@ test('header: a role whose version no container answered pins null with the reas
     await run(mixed.deps);
     assert.equal(mixed.records[0].unpinnedTargets[0].targetId, 'lagrange');
   });
+
+test('an inspection after the window that fails is identity_unverified on a failed run ' +
+  'that keeps its deployment, never read as an absent container', async () => {
+  const {deps, records} = harness({inspectProducts: async () => {
+    throw Object.assign(new Error('ssh: connection timed out'), {code: 'identity_unverified'});
+  }});
+  await run(deps);
+  const first = records[1];
+  assert.equal(first.execution.state, 'failed');
+  assert.equal(first.execution.failure.code, 'identity_unverified');
+  assert.notEqual(first.deployment, null);
+  assert.equal(arraySome(first.harnessEvents, (event) => event.kind === 'container-absent'),
+    false);
+});

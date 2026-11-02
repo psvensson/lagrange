@@ -23,9 +23,6 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 
 const SMOKE_PROFILE_ID =
   BENCHMARK_WORKLOAD_PROFILE[BENCHMARK_OPERATION_FAMILY.SCENARIO_A_SMOKE].id;
-const DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH = 'docs/benchmarks/comparative-overview.svg';
-const DEFAULT_COMPARATIVE_LANDING_MD_PATH = 'docs/benchmarks/README.md';
-const DEFAULT_COMPARATIVE_LANDING_HTML_PATH = 'docs/benchmarks/index.html';
 
 const DETAIL_LINKS = Object.freeze(arrayMap([
   ['tidb-comparison-progress.md', 'TiDB comparison history (forensic records)'],
@@ -85,8 +82,5 @@ async function writeComparativeLandingArtifacts({matrix, svgPath, setupBreakdown
 }
 
 export {
-  DEFAULT_COMPARATIVE_LANDING_HTML_PATH,
-  DEFAULT_COMPARATIVE_LANDING_MD_PATH,
-  DEFAULT_COMPARATIVE_OVERVIEW_SVG_PATH,
   writeComparativeLandingArtifacts,
 };

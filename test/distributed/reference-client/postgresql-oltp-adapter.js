@@ -9,8 +9,6 @@ import {
   createLagrangeOltpAdapter,
 } from './lagrange-oltp-adapter.js';
 
-const POSTGRESQL_ADAPTER_ID = 'postgresql-pgwire-native-for-update';
-
 async function createPostgreSqlOltpAdapter(options = {}) {
   if (Object.hasOwn(options, 'lockingReadMode')) {
     throw new Error('PostgreSQL OLTP adapter owns its locking read mode');
@@ -22,6 +20,5 @@ async function createPostgreSqlOltpAdapter(options = {}) {
 }
 
 export {
-  POSTGRESQL_ADAPTER_ID,
   createPostgreSqlOltpAdapter,
 };

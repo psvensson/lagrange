@@ -13,12 +13,14 @@
     "test/**/*test-cases.js",
     "test/distributed/validate-node-join-under-load.js",
     "test/storage-load/run-storage-load.js",
+    "test/distributed/harness/run-benchmark-workload.js",
     "test/integration/cdc-debug-test.js",
     "test/distributed/scenarios/*.js",
     "test/fixtures/legacy-distributed-sql/**/index.js",
     "test/runtime/pgwire-test-matrix.js",
     "scripts/**/*.js",
-    "examples/**/*.js"
+    "examples/**/*.js",
+    "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
   ],
   "project": [
     "src/**/*.js!",

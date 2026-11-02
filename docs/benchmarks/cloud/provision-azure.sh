@@ -2,7 +2,7 @@
 # Provision (or tear down) a 5-node Ubuntu 24.04 + Docker benchmark cluster on Microsoft Azure.
 #
 # Usage:
-#   ./docs/benchmarks/cloud/provision-azure.sh              # provisions Resource Group + 5 VMs
+#   ./docs/benchmarks/cloud/provision-azure.sh --ssh-cidr <your-ip>/32   # provisions Resource Group + VMs
 #   ./docs/benchmarks/cloud/provision-azure.sh --teardown   # deletes the Resource Group
 #
 # Environment overrides:
@@ -14,6 +14,23 @@
 
 set -euo pipefail
 
+# Arguments. --ssh-cidr is required to provision and has no default: SSH is
+# opened only to the operator's own network, never to the whole internet.
+TEARDOWN=0
+SSH_CIDR=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --teardown) TEARDOWN=1; shift ;;
+    --ssh-cidr)
+      if [ "$#" -lt 2 ]; then
+        echo "Error: --ssh-cidr needs a value, e.g. --ssh-cidr 203.0.113.7/32" >&2
+        exit 2
+      fi
+      SSH_CIDR="$2"; shift 2 ;;
+    *) echo "Error: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
 RESOURCE_GROUP="${RESOURCE_GROUP:-lagrange-bench-rg}"
 LOCATION="${LOCATION:-eastus}"
 VM_SIZE="${VM_SIZE:-Standard_D4s_v5}"
@@ -23,11 +40,22 @@ VNET_NAME="${CLUSTER_PREFIX}-vnet"
 SUBNET_NAME="${CLUSTER_PREFIX}-subnet"
 NSG_NAME="${CLUSTER_PREFIX}-nsg"
 
-if [ "${1:-}" = "--teardown" ]; then
+if [ "${TEARDOWN}" = "1" ]; then
   echo "[azure] Deleting resource group ${RESOURCE_GROUP}..."
   az group delete --name "${RESOURCE_GROUP}" --yes --no-wait
   echo "[azure] Resource group deletion initiated in the background."
   exit 0
+fi
+
+if [ -z "${SSH_CIDR}" ]; then
+  echo "Error: --ssh-cidr <cidr> is required: the IPv4 network allowed to reach SSH (22)," >&2
+  echo "e.g. your own address as --ssh-cidr 203.0.113.7/32. There is no default." >&2
+  exit 2
+fi
+if ! [[ "${SSH_CIDR}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$ ]] ||
+    [[ "${SSH_CIDR}" =~ /0$ ]]; then
+  echo "Error: --ssh-cidr must be an IPv4 CIDR with a prefix of /1 to /32, not ${SSH_CIDR}." >&2
+  exit 2
 fi
 
 echo "[azure] Creating resource group ${RESOURCE_GROUP} in ${LOCATION}..."
@@ -50,6 +78,7 @@ az network nsg rule create \
   --access Allow \
   --protocol Tcp \
   --direction Inbound \
+  --source-address-prefixes "${SSH_CIDR}" \
   --destination-port-ranges 22 \
   --output none
 

@@ -27,6 +27,8 @@ const DEPLOYMENT_FAILURE = Object.freeze({
   THERMAL_UNMEASURABLE: 'thermal_unmeasurable',
   LAB_HOST_UNAVAILABLE: 'lab_host_unavailable',
   WATCHDOG_STOPPED: 'watchdog_stopped',
+  // Docker answered that the container does not exist ("No such container").
+  CONTAINER_ABSENT: 'container_absent',
 });
 
 const BENCH_LABEL = Object.freeze({
@@ -52,8 +54,6 @@ const CLAIM_STATUS = Object.freeze({
 });
 
 const READINESS_STATE = Object.freeze({READY: 'ready', EXHAUSTED: 'exhausted'});
-
-const DATASET_RESET_METHOD = Object.freeze({FRESH_FORMATION: 'fresh-formation'});
 
 const LAGRANGE_IMAGE_DEFAULT = 'psvensson/lagrange:0.4.0';
 const PD_IMAGE_DEFAULT = TIDB_REFERENCE_DEFAULTS.pdImage;
@@ -101,11 +101,8 @@ function resolveReadinessBudget(opts = {}) {
 
 export {
   BENCH_LABEL,
-  CAMPAIGN_ID_PATTERN,
   CLAIM_STATUS,
-  DATASET_RESET_METHOD,
   DEPLOYMENT_FAILURE,
-  DeploymentFailure,
   LAGRANGE_IMAGE_DEFAULT,
   PD_IMAGE_DEFAULT,
   POSTGRES_IMAGE_DEFAULT,

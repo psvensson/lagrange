@@ -46,23 +46,17 @@ function deployComparativeTarget(targetId, input) {
 }
 
 export {
-  BENCH_LABEL,
-  CLAIM_STATUS,
-  DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,
   PD_IMAGE_DEFAULT,
   POSTGRES_IMAGE_DEFAULT,
-  RUN_CLASS,
-  STORAGE_KIND,
   TIDB_IMAGE_DEFAULT,
   TIKV_IMAGE_DEFAULT,
 } from './real-product-deployment-contract.js';
 export {removeCampaignContainers} from './real-product-campaign-cleanup.js';
 export {measureComponentRecovery} from './real-product-component-recovery.js';
-export {compareProductIdentity, inspectProducts} from './real-product-identity.js';
+
 export {
   applyNetworkImpairment,
-  removeNetworkImpairment,
 } from './real-product-network-impairment.js';
 export {
   COMPARATIVE_TARGET,

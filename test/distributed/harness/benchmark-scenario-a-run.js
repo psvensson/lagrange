@@ -80,6 +80,7 @@ import {
 const arrayEvery = Function.call.bind(Array.prototype.every);
 
 const THOUSAND = 1000;
+const SHA256_HEX = /^[0-9a-f]{64}$/u;
 // A request awaits at most one blocked body statement and its COMMIT, each
 // bounded by the engine query timeout (unknown-outcome redelivery runs
 // inside that budget, plus at most one maximum redelivery delay).
@@ -275,9 +276,11 @@ function planIdentity(profile, plan, workload, offeredRatePerSec) {
     workloadPlanDigest: identity.workloadPlanDigest,
     measurementPlanDigest: identity.measurementPlanDigest,
     offeredRatePerSec,
-    repetition: plan.repetition ?? null,
-    orderIndex: plan.orderIndex ?? null,
-    sweepPlanDigest: plan.sweepPlanSha256 ?? null,
+    repetition: plan.repetition,
+    orderIndex: plan.orderIndex,
+    // null is the plan's explicit "no sweep" (a smoke run, comparable: false);
+    // admission refuses a capacity claim without a sweep plan.
+    sweepPlanDigest: plan.sweepPlanSha256,
   });
 }
 
@@ -292,6 +295,21 @@ function resolveWorkload(profile, plan) {
     throw new Error(`workload profile ${profile.id} requires plan.workload`);
   }
   return plan.workload;
+}
+
+// The run's position in its campaign and its sweep plan, named by the plan:
+// repetition >= 1, orderIndex >= 0, sweepPlanSha256 a digest or null (no sweep).
+function requirePlanPosition(plan) {
+  if (!Number.isSafeInteger(plan.repetition) || plan.repetition < 1) {
+    throw new Error('benchmark run requires plan.repetition >= 1');
+  }
+  if (!Number.isSafeInteger(plan.orderIndex) || plan.orderIndex < 0) {
+    throw new Error('benchmark run requires plan.orderIndex >= 0');
+  }
+  if (!Object.hasOwn(plan, 'sweepPlanSha256') || (plan.sweepPlanSha256 !== null &&
+      !SHA256_HEX.test(plan.sweepPlanSha256))) {
+    throw new Error('benchmark run requires plan.sweepPlanSha256 (a sha256 or null: no sweep)');
+  }
 }
 
 function requireRate(plan) {
@@ -367,7 +385,8 @@ async function measure(context) {
       stepOptions(rate, warmupOps, runtime, evidence));
     if (warmup.watchdog.fired) outcomeAdapter.abortInFlight();
     if (warmup.accounting.committed !== warmup.accounting.offered) {
-      return {status: RUN_STATUS.WARMUP_FAILED, warmup: warmupSummary(warmup), step: null,
+      return {status: RUN_STATUS.WARMUP_FAILED, setup: null, warmup: warmupSummary(warmup),
+        step: null, reconciliation: null,
         unissued: unissuedMeasurement(workloadPlan, rate, context.startedAtIso)};
     }
   }
@@ -379,6 +398,7 @@ async function measure(context) {
   const after = await observeOltpStateSnapshot(() => system.snapshot(adapter));
   return {
     status: step.watchdog.fired ? RUN_STATUS.WATCHDOG_STOPPED : RUN_STATUS.COMPLETED,
+    setup: null,
     warmup: warmup ? warmupSummary(warmup) : null,
     step,
     plannedOffered: operations.length,
@@ -389,7 +409,7 @@ async function measure(context) {
 }
 
 function finalStateObservationOf(measured) {
-  if (!measured.reconciliation) {
+  if (measured.reconciliation === null) {
     return Object.freeze({status: OLTP_RECONCILIATION_STATUS.UNOBSERVED,
       reason: measured.status});
   }
@@ -402,8 +422,8 @@ function observationsOf(measured, registry, profileClass) {
   if (!step) {
     return Object.freeze({
       runStatus: measured.status,
-      setup: measured.setup ?? null,
-      warmup: measured.warmup ?? null,
+      setup: measured.setup,
+      warmup: measured.warmup,
       plannedOffered: measured.unissued.records.length,
       offered: measured.unissued.accounting.offered,
       requests: measured.unissued.records,
@@ -470,7 +490,8 @@ async function openAndMeasure(options, context) {
     const setup = requireSetupFailure(options.setupFailure);
     return {system: {endpoint: null, discovery: null, resetMethod: resetMethodOf(dispatch.system)},
       adapter: null, setupError: null, loaded: {snapshot: null, error: 'run never opened'},
-      measured: {status: RUN_STATUS.SETUP_FAILED, setup, step: null,
+      measured: {status: RUN_STATUS.SETUP_FAILED, setup, warmup: null, step: null,
+        reconciliation: null,
         unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)},
       provisioning: Object.freeze({status: 'not-reached', reason: setup.message})};
   }
@@ -482,7 +503,8 @@ async function openAndMeasure(options, context) {
     adapter = await system.open();
   } catch (error) {
     return {system, adapter: null, loaded: {snapshot: null, error: 'dataset not loaded'},
-      measured: {status: RUN_STATUS.SETUP_FAILED, setup: setupFailure(error), step: null,
+      measured: {status: RUN_STATUS.SETUP_FAILED, setup: setupFailure(error), warmup: null,
+        step: null, reconciliation: null,
         unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)},
       provisioning: provisioningEvidenceOf(dispatch.system, null, error)};
   }
@@ -499,6 +521,7 @@ async function executeScenarioARun(options) {
   const profile = dispatch.profile;
   const workload = resolveWorkload(profile, plan);
   const rate = requireRate(plan);
+  requirePlanPosition(plan);
   const workloadPlan = buildOltpBaselinePlan(workload);
   const dataset = buildOltpBaselineDataset(workload);
   const registry = createBenchmarkConnectionRegistry();
@@ -516,15 +539,16 @@ async function executeScenarioARun(options) {
       dataset: Object.freeze({
         resetMethod: system.resetMethod,
         provisioning,
-        verification: await verifyOltpLoadedDataset(dataset, loaded, measured.setup ?? null),
+        verification: await verifyOltpLoadedDataset(dataset, loaded, measured.setup),
       }),
     }),
     observations: observationsOf(measured, registry, profile.profileClass),
     correctness: Object.freeze({
       semanticGate: null,
       // An unobserved snapshot leaves no final state; the reason is kept.
-      finalState: measured.reconciliation?.status === OLTP_RECONCILIATION_STATUS.UNOBSERVED ?
-        null : (measured.reconciliation ?? null),
+      finalState: measured.reconciliation === null ||
+        measured.reconciliation.status === OLTP_RECONCILIATION_STATUS.UNOBSERVED ?
+        null : measured.reconciliation,
       finalStateObservation: finalStateObservationOf(measured),
     }),
     cleanup,
@@ -533,9 +557,7 @@ async function executeScenarioARun(options) {
 
 export {
   ADAPTER_ID as BENCHMARK_SCENARIO_A_ADAPTER_ID,
-  DATASET_RESET_METHOD as BENCHMARK_DATASET_RESET_METHOD,
   RUN_STATUS as BENCHMARK_RUN_STATUS,
-  deriveRunWatchdog as deriveBenchmarkRunWatchdog,
   describeWorkloadIdentity as describeBenchmarkWorkloadIdentity,
   executeScenarioARun,
 };

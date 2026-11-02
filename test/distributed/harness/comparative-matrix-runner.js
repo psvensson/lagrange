@@ -2,7 +2,7 @@
 // (14 advertised configurations and the advertised experiments) filled with the
 // admission cells derived from the raw observation store. It carries no metric of
 // its own, no winner and no completion count; every renderer consumes it.
-import {mkdir, readFile, writeFile} from 'node:fs/promises';
+import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -68,12 +68,6 @@ function serializeMultiSystemComparativeMatrix(matrix) {
   return `${JSON.stringify(matrix, null, 2)}\n`;
 }
 
-async function readMultiSystemComparativeMatrix(options = {}) {
-  const rootDir = options.rootDir || process.cwd();
-  const filePath = options.matrixPath || path.resolve(rootDir, DEFAULT_MULTI_SYSTEM_MATRIX_PATH);
-  return JSON.parse(await readFile(filePath, 'utf8'));
-}
-
 async function writeMultiSystemComparativeMatrix(options = {}) {
   const rootDir = options.rootDir || process.cwd();
   const matrixPath = options.matrixPath || path.resolve(rootDir, DEFAULT_MULTI_SYSTEM_MATRIX_PATH);
@@ -85,9 +79,7 @@ async function writeMultiSystemComparativeMatrix(options = {}) {
 
 export {
   DEFAULT_MULTI_SYSTEM_MATRIX_PATH,
-  MULTI_SYSTEM_MATRIX_SCHEMA,
   buildMultiSystemComparativeMatrix,
-  readMultiSystemComparativeMatrix,
-  serializeMultiSystemComparativeMatrix,
+  MULTI_SYSTEM_MATRIX_SCHEMA,
   writeMultiSystemComparativeMatrix,
 };

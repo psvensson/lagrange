@@ -11,7 +11,6 @@ import {
   CLAIM_CELL_STATUS,
 } from '../benchmark-claim-admission.js';
 import {FAILURE_CLASS} from '../benchmark-operation-outcome.js';
-import {BENCHMARK_RUN_STATUS} from '../benchmark-scenario-a-run.js';
 import {
   BENCHMARK_DISPATCH_REFUSED_CODE,
   BENCHMARK_DISPATCH_STATUS,
@@ -272,7 +271,7 @@ async function dispatchClaim(claim) {
     subkind: claim.subkind,
     connection: system === TIDB ? {endpoint: ENDPOINT, databaseName: 'bench_chain'} :
       {endpoint: ENDPOINT, credentials: CREDENTIALS},
-    plan: {offeredRatePerSec: 2000, repetition: 1, orderIndex: 0,
+    plan: {offeredRatePerSec: 2000, repetition: 1, orderIndex: 0, sweepPlanSha256: null,
       ...(claim.subkind === 'main' ? {workload: CAPACITY_WORKLOAD} : {})},
     drivers: {createPgClient: product.createPgClient,
       createMysqlConnection: product.createMysqlConnection},
@@ -369,4 +368,4 @@ const GATE_CASES = Object.freeze([
     caseJ14DispatchFamilies],
 ]);
 
-export {BENCHMARK_RUN_STATUS, GATE_CASES, readinessExhaustedPair};
+export {GATE_CASES};
