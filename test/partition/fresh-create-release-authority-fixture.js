@@ -33,6 +33,10 @@ import {createLoopbackTransport, waitForCondition} from './partition-service-tes
 const PARTITION_ID = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
 const CREATED_AT = 1_793_600_000_000;
 const BUDGET_MS = 15000;
+// The create-admission owner is shared per (node, owner incarnation) within a
+// process; each formed group takes its own incarnation so no group reads
+// another group's operation rows.
+let nextOwnerIncarnation = 1;
 const AUTHORITY_REFUSAL = Object.freeze({success: false, outcome: 'owner_not_ready',
   error: 'all_services_filtered_by_readiness'});
 
@@ -139,6 +143,8 @@ async function formFoundingGroup(t, {founderCount = 2, leaderIndex = 0,
   const nodes = Array.from({length: founderCount}, (_, index) => nodeOf(index));
   const founderNodes = Object.fromEntries(founders.map((id, index) => [id, nodes[index]]));
   const routers = nodeRouters(nodes);
+  const ownerIncarnation = nextOwnerIncarnation;
+  nextOwnerIncarnation += 1;
   const rows = founders.map((replicaId, index) => founderOperationRow({replicaId,
     nodeId: nodes[index], founders, founderNodes, ...(rowOverrides[index] ?? {})}));
   rows.push(...extraRows);
@@ -171,7 +177,7 @@ async function formFoundingGroup(t, {founderCount = 2, leaderIndex = 0,
   'setup: the chosen founder leads');
   for (const [index, service] of services.entries()) {
     if (index !== leaderIndex) service.startElection?.();
-    const handler = new ReplicaHandler({nodeId: nodes[index], ownerIncarnation: 1,
+    const handler = new ReplicaHandler({nodeId: nodes[index], ownerIncarnation,
       systemTableCache: service.systemTableCache, cdcIntegrationService: {},
       controlPlaneSystemTableGateway: gatewayOver(rows, nodes[index], faults),
       createPartitionService: (options) => new PartitionService(options),
@@ -208,5 +214,4 @@ async function formFoundingGroup(t, {founderCount = 2, leaderIndex = 0,
     evidenceFor, release, directory, transport, addressOf};
 }
 
-export {AUTHORITY_REFUSAL, BUDGET_MS, PARTITION_ID, formFoundingGroup,
-  founderOperationRow, nodeOf, replicaOf};
+export {BUDGET_MS, PARTITION_ID, formFoundingGroup, founderOperationRow};

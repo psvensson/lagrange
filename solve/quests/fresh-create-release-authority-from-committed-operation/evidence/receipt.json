@@ -4,33 +4,33 @@
   "receipts": [
     {
       "id": "cross-node-founding-release-cut-over",
-      "passed": false,
-      "evidence": "red: test/partition/fresh-create-release-authority-cross-node.integration.test.js test 1 answers release_operator_required{fresh_storage_or_operator_authority}"
+      "passed": true,
+      "evidence": "test/partition/fresh-create-release-authority-cross-node.integration.test.js test 1 (red at seal 656b39776 with release_operator_required; green on attempt 1): a non-leader founder's release reaches CUT_OVER through the leader on another node, JSON-encoded remote delivery, real PartitionServices and raft-rs ports."
     },
     {
       "id": "legacy-and-join-no-origin-still-refused",
-      "passed": false,
-      "evidence": "negative controls tests 2 and 3 (green today, must stay green)"
+      "passed": true,
+      "evidence": "test/partition/fresh-create-release-authority-cross-node.integration.test.js tests 2 (completed founding operation, red at seal for its leader-side typed refusal, green now) and 3 (join ADD with COMMITTED stamp, green at seal and now): OPERATOR_REQUIRED{fresh_storage_or_operator_authority}, never CUT_OVER."
     },
     {
       "id": "leader-side-authority-unavailability-typed",
-      "passed": false,
-      "evidence": "red: tests 4a and 4b answer release_operator_required"
+      "passed": true,
+      "evidence": "test/partition/fresh-create-release-authority-cross-node.integration.test.js tests 4a (refused twice then CUT_OVER within the existing deadline), 4b (refused forever: the typed create_admission_authority unavailability, never OPERATOR_REQUIRED) and 6 (leadership moves to a third founder after the first refusal; the new leader decides): red at seal, green now; test/node/fresh-create-authority-unavailability-native.integration.test.js green."
     },
     {
       "id": "forged-identity-refused",
-      "passed": false,
-      "evidence": "negative control test 7 (green today, must stay green)"
+      "passed": true,
+      "evidence": "test/partition/fresh-create-release-authority-cross-node.integration.test.js test 7: a request naming another partition's committed create identity is OPERATOR_REQUIRED (green at seal and now)."
     },
     {
       "id": "configuration-change-still-releases",
-      "passed": false,
-      "evidence": "red: test 8 answers release_operator_required"
+      "passed": true,
+      "evidence": "test/partition/fresh-create-release-authority-cross-node.integration.test.js test 8: a non-founder member admitted before the release; CUT_OVER (red at seal, green now) - the rejected condition (e) stays rejected."
     },
     {
       "id": "no-fresh-create-token-remains",
-      "passed": false,
-      "evidence": "red: test/node/fresh-create-release-authority-no-token.test.js"
+      "passed": true,
+      "evidence": "test/node/fresh-create-release-authority-no-token.test.js (red at seal, green now): no PENDING_FRESH_CREATE, authorizeFreshCreate or confirmFreshCreate; releaseFreshCreate carries createAdmissionIdentity."
     },
     {
       "id": "reproducer-user-table-founding-released",
@@ -44,5 +44,5 @@
     }
   ],
   "evidence": [],
-  "applicability": "Red at seal on work/fresh-create-release-authority-20261103: tests 1, 4a, 4b, 5, 6, 8 red through the production refusal; tests 2, 3, 7 are green negative controls."
+  "applicability": "Attempt 1 on work/fresh-create-release-authority-20261103; focused lanes green; the live reproducer receipt and independent verification are outstanding."
 }

@@ -28,7 +28,7 @@
   "censusSize": 2561,
   "digest": "fnv1a32-5d2a2adb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b381dce9",
+  "observationDigest": "fnv1a32-8aae237c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -9985,13 +9985,6 @@
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
-    "test/node/fresh-create-admission-authority-deferral.test.js": {
-      "files": [
-        "src/node/participant-release-authorization-owner.js",
-        "src/node/replica-handler-release-recovery.js",
-        "src/partition/partition-participant-transaction-cutover-constants.js"
-      ]
-    },
     "test/node/fresh-create-authority-unavailability-native.integration.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -10004,6 +9997,7 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-replace-terminal-admission.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -10424,6 +10418,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
         "test/node/replica-handler-owner-path-admission-fixture.js",
@@ -13421,6 +13416,7 @@
         "src/message-group/message-group-learner-join.js",
         "src/message-group/message-group-service-state.js",
         "src/node/message-group-membership-recipient.js",
+        "src/node/participant-release-authorization-owner.js",
         "src/node/replica-handler-committed-membership-methods.js",
         "src/node/replica-handler-create-admission-methods.js",
         "src/node/replica-handler-create-methods.js",
