@@ -4,7 +4,7 @@
 
 A movement claim needs injection times, the observed authority change, acknowledged operation identities and a final-state check.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 11 entries; 9 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 12 entries; 9 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Partition movement under load and Scenario C at scale](movement-and-scenario-c-scaling-progress.svg)
 
@@ -50,6 +50,6 @@ Every comparative result published before 2026-11-01 was withdrawn; the records 
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:f1490d1f002f36f9cb9d18feb3bf0f2fd5a4c381ae333b348a42faa6207f1549
+- `data/tidb-comparison/raw-observations.ndjson` sha256:a899a5f40c693addea987b85833a0f9836957746eb40e840487de75a1e5286e1
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
-- `data/tidb-comparison/invalidations.ndjson` sha256:609f9bc220557054e7308ca3c87487806571d6362b4d30e6cea389cdecf2f0b5
+- `data/tidb-comparison/invalidations.ndjson` sha256:2d37217a8d18b67cf585437e6b62816ff9419d3930cdb7686597b510fc115a5c

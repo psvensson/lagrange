@@ -5,7 +5,7 @@
   "sources": [
     {
       "path": "data/tidb-comparison/raw-observations.ndjson",
-      "sha256": "sha256:f1490d1f002f36f9cb9d18feb3bf0f2fd5a4c381ae333b348a42faa6207f1549"
+      "sha256": "sha256:a899a5f40c693addea987b85833a0f9836957746eb40e840487de75a1e5286e1"
     },
     {
       "path": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
@@ -13,7 +13,7 @@
     },
     {
       "path": "data/tidb-comparison/invalidations.ndjson",
-      "sha256": "sha256:609f9bc220557054e7308ca3c87487806571d6362b4d30e6cea389cdecf2f0b5"
+      "sha256": "sha256:2d37217a8d18b67cf585437e6b62816ff9419d3930cdb7686597b510fc115a5c"
     }
   ],
   "cells": [
@@ -4322,14 +4322,15 @@
       ],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r8-r001"
+          "bench-live-20261101-b-r9-r001"
         ],
         "rawObservationsDigests": [
-          "sha256:af2f700fea9455bb2afa9610af6878936d3e8871f631baee1766491d2473e278"
+          "sha256:3bd3f6b62dd5cc487dd8962f6d168872fa5e3cafc72c7976d87d551717d8d980"
         ],
         "invalidatedRunIds": [
           "bench-live-20261101-b-r6-r001",
-          "bench-live-20261101-b-r7-r001"
+          "bench-live-20261101-b-r7-r001",
+          "bench-live-20261101-b-r8-r001"
         ],
         "forensic": []
       },
@@ -4355,7 +4356,7 @@
         },
         "runs": [
           {
-            "runId": "bench-live-20261101-b-r8-r001",
+            "runId": "bench-live-20261101-b-r9-r001",
             "runStatus": "setup-failed",
             "offeredRatePerSec": 5,
             "repetition": 1,
@@ -4382,7 +4383,7 @@
         ],
         "setupFailures": [
           {
-            "runId": "bench-live-20261101-b-r8-r001",
+            "runId": "bench-live-20261101-b-r9-r001",
             "failureClass": "product_error",
             "sqlState": null,
             "code": "readiness_exhausted",
@@ -4390,7 +4391,7 @@
             "readinessDenial": {
               "component": "lagrange-node@192.168.86.27",
               "attempts": 120,
-              "elapsedMs": 168429,
+              "elapsedMs": 167045,
               "phase": "DEGRADED",
               "state": "degraded",
               "reasons": [
@@ -7188,14 +7189,15 @@
       ],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r8-r003"
+          "bench-live-20261101-b-r9-r003"
         ],
         "rawObservationsDigests": [
-          "sha256:13edfb9127595ec623ef01727ce3028bdfd9990c4ac01b17a7fdf0374d4a101a"
+          "sha256:c5da8e4f8d7d6a73dbf201f504e2e56465c8e2772a66febccb48c459dc9aa496"
         ],
         "invalidatedRunIds": [
           "bench-live-20261101-b-r6-r003",
-          "bench-live-20261101-b-r7-r003"
+          "bench-live-20261101-b-r7-r003",
+          "bench-live-20261101-b-r8-r003"
         ],
         "forensic": []
       },
@@ -7207,11 +7209,11 @@
           "issued": 100,
           "unissued": 0,
           "attempts": 100,
-          "committed": 99,
+          "committed": 100,
           "conflicts": 0,
           "conflictExhausted": 0,
           "terminalFailures": {
-            "product_error": 1,
+            "product_error": 0,
             "correctness_failure": 0,
             "transport_failure": 0,
             "harness_fault": 0
@@ -7221,7 +7223,7 @@
         },
         "runs": [
           {
-            "runId": "bench-live-20261101-b-r8-r003",
+            "runId": "bench-live-20261101-b-r9-r003",
             "runStatus": "completed",
             "offeredRatePerSec": 5,
             "repetition": 1,
@@ -7230,11 +7232,11 @@
               "issued": 100,
               "unissued": 0,
               "attempts": 100,
-              "committed": 99,
+              "committed": 100,
               "conflicts": 0,
               "conflictExhausted": 0,
               "terminalFailures": {
-                "product_error": 1,
+                "product_error": 0,
                 "correctness_failure": 0,
                 "transport_failure": 0,
                 "harness_fault": 0
@@ -7242,8 +7244,8 @@
               "unresolved": 0,
               "ambiguousCommits": 0
             },
-            "drainOverrunMs": 5371.968,
-            "maxLatencyMs": 5932.366
+            "drainOverrunMs": 6817.312,
+            "maxLatencyMs": 7530.812
           }
         ],
         "setupFailures": [],
@@ -9206,9 +9208,9 @@
     {
       "claimKey": "tidb-tikv/scenarioA/smoke",
       "claimKind": "throughput",
-      "status": "invalid-measurement",
+      "status": "unsupported",
       "reasons": [
-        "semantic-gate-missing"
+        "semantic-gate-client-missing:tidb-tikv"
       ],
       "defectIds": [
         "D33",
@@ -9222,14 +9224,15 @@
       ],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r8-r002"
+          "bench-live-20261101-b-r9-r002"
         ],
         "rawObservationsDigests": [
-          "sha256:9ec5994ebcdc93400b776493e5ff474d82b5039339ad083196b9d4085ea04a91"
+          "sha256:fbe78dce5a61062beae1a4255c9ecf5530976536a277f6d741efb581c2a142ca"
         ],
         "invalidatedRunIds": [
           "bench-live-20261101-b-r6-r002",
-          "bench-live-20261101-b-r7-r002"
+          "bench-live-20261101-b-r7-r002",
+          "bench-live-20261101-b-r8-r002"
         ],
         "forensic": []
       },

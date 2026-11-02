@@ -6,7 +6,7 @@ This page lists every comparative claim the benchmark pages have advertised, one
 
 Scenario definitions and the Scenario A semantic gate are contracts, not results: see the related pages below.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 11 entries; 9 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 12 entries; 9 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Comparative benchmarks](comparative-overview.svg)
 
@@ -46,9 +46,9 @@ The named smoke profile scenario-a-smoke-v1: the canonical workload executed end
 
 | Configuration | Scenario A smoke |
 | --- | --- |
-| Lagrange 0.4.0 (3 nodes) | product-failure (no-committed-operations, readiness-exhausted): smoke profile: offered 100, issued 0, committed 0, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 100; setup failed in bench-live-20261101-b-r8-r001: product_error, sqlstate null, code readiness_exhausted, message lagrange-node@192.168.86.27 did not report ready after 120 attempts; last readiness answer of lagrange-node@192.168.86.27: DEGRADED (degraded), reasons PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, after 120 attempts |
-| TiDB + TiKV v8.5.8 | invalid-measurement (semantic-gate-missing) |
-| PostgreSQL 17 (single primary) | valid-observed (semantic-gate-incomplete, semantic-gate-incomplete:durability:probe_inapplicable, smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 99, conflict-exhausted 0, product_error 1, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| Lagrange 0.4.0 (3 nodes) | product-failure (no-committed-operations, readiness-exhausted): smoke profile: offered 100, issued 0, committed 0, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 100; setup failed in bench-live-20261101-b-r9-r001: product_error, sqlstate null, code readiness_exhausted, message lagrange-node@192.168.86.27 did not report ready after 120 attempts; last readiness answer of lagrange-node@192.168.86.27: DEGRADED (degraded), reasons PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, after 120 attempts |
+| TiDB + TiKV v8.5.8 | unsupported (semantic-gate-client-missing:tidb-tikv) |
+| PostgreSQL 17 (single primary) | valid-observed (semantic-gate-incomplete, semantic-gate-incomplete:durability:probe_inapplicable, smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
 
 ## Per-phase time breakdown
 
@@ -89,6 +89,6 @@ Phase timings are admitted only from observed spans.
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:f1490d1f002f36f9cb9d18feb3bf0f2fd5a4c381ae333b348a42faa6207f1549
+- `data/tidb-comparison/raw-observations.ndjson` sha256:a899a5f40c693addea987b85833a0f9836957746eb40e840487de75a1e5286e1
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
-- `data/tidb-comparison/invalidations.ndjson` sha256:609f9bc220557054e7308ca3c87487806571d6362b4d30e6cea389cdecf2f0b5
+- `data/tidb-comparison/invalidations.ndjson` sha256:2d37217a8d18b67cf585437e6b62816ff9419d3930cdb7686597b510fc115a5c
