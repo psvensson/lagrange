@@ -22,7 +22,8 @@ import {captureOriginalRaftRsTiming} from './raft-rs-runtime-tuning.js';
 import {committedMembershipRefusal, normalizeCommittedLearnerRead,
   unavailableLearnerAction} from
   './raft-rs-committed-membership-read.js';
-import {encodeCommittedLearnerAdmission} from './raft-rs-committed-membership-context.js';
+import {encodeCommittedAdmissionContext, encodeCommittedLearnerAdmission} from
+  './raft-rs-committed-membership-context.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   './raft-operation-port-request.js';
@@ -125,8 +126,16 @@ function containRuntimeThrow(dispatcher, work) {
     result.then(undefined, dispatcher.containUnexpectedThrow) : result;
 }
 
+const ADMITTING_CHANGE_TYPES = Object.freeze(new Set([
+  RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE,
+  RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
+]));
+
 // {change} in the core's ConfChangeV2 shape, or {refusal} naming how the
-// request missed the canonical {type, replicaIdentity} shape.
+// request missed the canonical {type, replicaIdentity, nodeId?} shape. An ADD
+// commits its admission context {replicaIdentity, peerId, nodeId}: the node
+// the peer is admitted on is a fact of the committed log, applied by every
+// replica, so no replica ever looks the peer's node up elsewhere.
 function normalizedConfChange(change, registry) {
   if (Array.isArray(change?.changes)) {
     return {change: deepFreeze({...change, changes: change.changes.map(
@@ -146,13 +155,21 @@ function normalizedConfChange(change, registry) {
       change.replicaIdentity.length === 0) {
     return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_REPLICA_IDENTITY};
   }
-  const nodeId = registry.raftPeerIdOf(change.replicaIdentity);
-  if (nodeId === null) {
+  const admits = ADMITTING_CHANGE_TYPES.has(changeType);
+  if (admits && (typeof change.nodeId !== 'string' ||
+      change.nodeId.length === 0)) {
+    return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_NODE_ID};
+  }
+  const peerId = registry.raftPeerIdOf(change.replicaIdentity);
+  if (peerId === null) {
     return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.PEER_UNRESERVED};
   }
   return {change: deepFreeze({
     transition: 0,
-    changes: [deepFreeze({changeType, nodeId})],
+    changes: [deepFreeze({changeType, nodeId: peerId})],
+    ...(admits ? {context: encodeCommittedAdmissionContext({
+      replicaIdentity: change.replicaIdentity, peerId,
+      nodeId: change.nodeId})} : {}),
   })};
 }
 
@@ -282,20 +299,28 @@ function createRaftRsOperationPort(request) {
     sendToPeer: required(
       request, RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER),
     // An address exists only for a reserved identity; the runtime records
-    // an unreserved peer's delivery as that peer's own outcome.
+    // an unreserved peer's delivery as that peer's own outcome. The host
+    // addresses the peer from its committed node (null where this replica
+    // holds none), never from a lookup of its own.
     resolvePeerAddress: (raftPeerId) => {
       const identity = registry.resolveReplicaIdentity(raftPeerId);
       if (identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED) {
         throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.unreserved(raftPeerId));
       }
-      return resolvePeerAddress(identity.replicaIdentity);
+      return resolvePeerAddress(identity.replicaIdentity,
+        registry.committedNodeIdOf(identity.replicaIdentity));
     },
     resolvePeerIdentity: (raftPeerId) =>
       registry.resolveReplicaIdentity(raftPeerId),
+    resolvePeerNodeId: (replicaIdentity) =>
+      registry.committedNodeIdOf(replicaIdentity),
     applyCommittedEntry: committedEntryApplication(required(
       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
     applyCommittedMembershipContext: (context, position) => {
       registry.reserveCommittedReplica(context.replicaIdentity, context.peerId);
+      if (context.nodeId !== undefined) {
+        registry.recordCommittedNodeId(context.replicaIdentity, context.nodeId);
+      }
       if (context.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
         registry.recordCommittedLearnerAdmission(context.replicaIdentity,
           encodeCommittedLearnerAdmission({groupId, ...position, context}));
@@ -424,8 +449,8 @@ function createRaftRsOperationPort(request) {
         transfer: normalized.command,
       }) : normalized.refusal;
     }),
-    probePeerProgress: (peerAddress) => executeTurn({
-      type: RUNTIME_COMMAND.PROBE_PEER_PROGRESS, peerAddress,
+    probePeerProgress: (replicaIdentity) => executeTurn({
+      type: RUNTIME_COMMAND.PROBE_PEER_PROGRESS, replicaIdentity,
     }),
     tick: () => executeTurn({type: 'tick'}),
     campaign: () => executeTurn({type: 'campaign'}),

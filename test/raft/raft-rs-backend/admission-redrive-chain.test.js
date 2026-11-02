@@ -56,7 +56,8 @@ const PENDING_KINDS = Object.freeze({
     const member = FOUNDERS.find(([replicaId]) =>
       replicaId !== leader.replicaId);
     harness.services.get(leader.replicaId).raft.proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: member[0]});
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: member[0],
+      nodeId: member[1]});
     return null;
   },
   // F2: a founder's row reads REMOVING; the leader's row-driven retirement

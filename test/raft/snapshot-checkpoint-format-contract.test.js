@@ -11,6 +11,7 @@ import {
   matchCheckpointIdentity,
   validateCheckpointDescriptor,
 } from '../../src/raft/snapshot-checkpoint-format.js';
+import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 
 // raft-snapshot-checkpoint-format S1 (R1): the envelope must bind every
 // identity dimension, reject unknown/missing fields exactly, and type every
@@ -22,6 +23,8 @@ const SEALED_EPOCH = 5;
 const PAYLOAD_BYTES = 4096;
 const VALID_DIGEST = `sha256:${'ab'.repeat(32)}`;
 const SEALED_MAX_HLC = '1750000000000-3-node-a';
+const RAFT_RS_REPLICA = 'sql_transactions-p1-r1';
+const RAFT_RS_NODE = 'node-a';
 const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-1234',
   raftGroupId: 'sql_transactions-p1',
@@ -151,3 +154,58 @@ test('every foreign identity dimension is rejected with its own typed outcome',
       RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID,
       'a descriptor sealed under a NEWER epoch than expected is not stale');
   });
+
+// Quest learner-host-from-committed-admission: a raft-rs image carries each
+// reservation's committed node identity (nodeId) exactly when recorded - an
+// absent node is an absent key, never null - so a snapshot-installed replica
+// addresses its peers from the committed fact.
+function raftRsDescriptor(reservation) {
+  const peerId = deriveRaftRsPeerId(RAFT_RS_REPLICA);
+  return buildCheckpointDescriptor({
+    clusterId: IDENTITY.clusterId,
+    raftGroupId: IDENTITY.raftGroupId,
+    entity: IDENTITY.entity,
+    membershipEpoch: SEALED_INDEX,
+    lastIncludedIndex: SEALED_INDEX,
+    lastIncludedTerm: SEALED_TERM,
+    maxCommittedHlc: SEALED_MAX_HLC,
+    payloadKind: RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE,
+    payloadVersion: RAFT_CHECKPOINT_PAYLOAD_VERSION[
+      RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE],
+    payloadByteLength: PAYLOAD_BYTES,
+    payloadDigest: VALID_DIGEST,
+    raftRs: {
+      groupId: IDENTITY.raftGroupId,
+      appliedIndex: String(SEALED_INDEX),
+      appliedTerm: String(SEALED_TERM),
+      membershipGenerationIndex: String(SEALED_INDEX),
+      confState: {voters: [peerId], learners: [], votersOutgoing: [],
+        learnersNext: [], autoLeave: false},
+      peerReservations: [{replicaIdentity: RAFT_RS_REPLICA, peerId,
+        ...reservation}],
+    },
+  });
+}
+
+test('a raft-rs image descriptor carries a reservation\'s committed nodeId ' +
+  'exactly when recorded', async (t) => {
+  const withNode = raftRsDescriptor({nodeId: RAFT_RS_NODE});
+  t.equal(withNode.raftRs.peerReservations[0].nodeId, RAFT_RS_NODE,
+    'the built descriptor carries the committed node');
+  t.equal(validateCheckpointDescriptor(withNode).outcome,
+    RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID,
+    'a reservation with its committed node is valid');
+  t.equal(validateCheckpointDescriptor(raftRsDescriptor({})).outcome,
+    RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID,
+    'a reservation without a recorded node omits the key and is valid');
+  for (const [label, reservation] of [
+    ['a null node', {nodeId: null}],
+    ['an empty node', {nodeId: ''}],
+    ['a non-string node', {nodeId: 7}],
+    ['an unknown reservation key', {nodeId: RAFT_RS_NODE, host: 'h:1'}],
+  ]) {
+    t.equal(validateCheckpointDescriptor(raftRsDescriptor(reservation)).outcome,
+      RAFT_CHECKPOINT_VALIDATION_OUTCOME.CORRUPT_DESCRIPTOR,
+      `${label} is a corrupt descriptor`);
+  }
+});

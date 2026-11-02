@@ -157,10 +157,10 @@ export function waitFor(predicate, timeoutMs, pollMs = POLL_MS) {
 // owner observable production's proof consumes. A witness that must
 // sequence an injected event AFTER a replica is caught up reads this,
 // never elapsed time.
-function readLeaderReplicationTo(leader, address) {
+function readLeaderReplicationTo(leader, replicaId) {
   const status = leader.raft.readStatus();
   const committedIndex = status.commitIndex;
-  const matchIndex = status.followerProgress?.[address];
+  const matchIndex = status.followerProgress?.[replicaId];
   return {
     committedIndex,
     matchIndex,
@@ -169,7 +169,7 @@ function readLeaderReplicationTo(leader, address) {
 }
 
 export function readLeaderReplicationToLearner(leader) {
-  return readLeaderReplicationTo(leader, LEARNER_ADDRESS);
+  return readLeaderReplicationTo(leader, LEARNER_REPLICA);
 }
 
 // Resolves true once the leader has proven the learner's replication
@@ -208,6 +208,14 @@ export function insertServiceRow(cache, replicaId, nodeId, raftRole) {
 // The durable landing of a row the cache already holds locally (the
 // target's local-only seed row converging durably): an UPDATE merge, which
 // the cache notifies to its listeners like any other change.
+// The projection lag of the live defect (quest
+// learner-host-from-committed-admission): the cache loses sight of a
+// durably committed row without any change event, so no reconciliation,
+// admission or retirement is triggered by it.
+export function hideServiceRowFromCache(cache, replicaId) {
+  cache.tables.get(TABLES.SERVICES).delete(replicaId);
+}
+
 export function updateServiceRow(cache, replicaId, nodeId, raftRole) {
   cache.applySystemTableChange(
     TABLES.SERVICES,
@@ -393,7 +401,6 @@ function placementAddresses(placement) {
 // port, so the leader's messages are stepped from then on; the admission is
 // complete when the leader has proven the voter's replication.
 async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
-  const address = partitionAddress(nodeId, replicaId);
   const placement = placementWith(topology, replicaId, nodeId);
   const voterCache = createPlacementCache(placement);
   const voter = new PartitionService(withFoundingStamp({
@@ -424,14 +431,14 @@ async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
   }
   voter.startElection();
   const admitted = await waitFor(
-    () => readLeaderReplicationTo(topology.leader, address).proven,
+    () => readLeaderReplicationTo(topology.leader, replicaId).proven,
     ADMISSION_BUDGET_MS,
   );
   if (!admitted) {
     throw new Error(
       'fixture precondition: the leader never proved the replication of ' +
         `live voter ${replicaId} ` +
-        JSON.stringify(readLeaderReplicationTo(topology.leader, address)),
+        JSON.stringify(readLeaderReplicationTo(topology.leader, replicaId)),
     );
   }
   return voter;
@@ -535,6 +542,9 @@ async function shutdownTopology(topology) {
  * @param {boolean} [options.leaderLearnerRow] seed the learner's row in the
  *   LEADER cache (default = learnerRow; false models the target's deferred
  *   status write — requires splitCaches)
+ * @param {boolean} [options.hideLeaderLearnerRowAfterAdmission] once the
+ *   leader admitted the learner, its cache loses the learner's row without
+ *   a change event (the projection lag of the live defect)
  * @param {number} [options.publishedEpoch] seed one PUBLISHED publication
  *   row at this epoch in every cache before the learner starts
  * @param {number} [options.retryIntervalMs] learner proof retry cadence
@@ -609,6 +619,9 @@ export async function createFiveNodeFixture(options = {}) {
       );
       assertLeaderCommitIndex(
         topology.leader, COMMITTED_ENTRY_COUNT, 'learner admitted');
+      if (options.hideLeaderLearnerRowAfterAdmission === true) {
+        hideServiceRowFromCache(leaderCache, LEARNER_REPLICA);
+      }
     }
   } catch (error) {
     await shutdownTopology(topology);

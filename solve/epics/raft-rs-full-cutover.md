@@ -31,6 +31,7 @@ authorizes:
   - test
   - .github
   - solve/oracle
+  - solve/changes/evidence-relocation
 ---
 
 # Raft-rs full cutover
@@ -1067,3 +1068,11 @@ and any host-side lease.
 > Relocated evidence (2026-10-24): bulk evidence this document cites under `solve/` was moved to the `solve-evidence` release at source commit 31ee37359; look up any old path in `solve/quests/lineage-evidence-relocation/evidence/relocation-inventory.json` (bundle, sha256, URL per path).
 
 > Relocation records moved (2026-10-24, correction to the line above): the inventory now lives at `solve/changes/evidence-relocation/lineage-evidence-relocation/relocation-inventory.json` (shards in `relocation-inventory/`, verification in `relocation-verification.json` beside it), moved byte-identical out of the closed quest so it keeps its closed shape.
+
+## Scope decisions (recorded)
+
+- 2026-11-02: Scope widened (R16, recorded): `solve/changes/evidence-relocation` joins `authorizes`
+  because the relocation owner writes a quest's bundle inventory and verification records there by
+  design (quest learner-host-from-committed-admission relocated 1.17 MB of raw reproducer lab logs to the
+  solve-evidence store so the active solve footprint stays under its budget). Decided by that quest at
+  landing; no other path outside the existing list is touched.

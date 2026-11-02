@@ -287,7 +287,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.replicaStateMachine = options.replicaStateMachine || null;
     this.resolveHandlerRetirementLane =
       options.resolveHandlerRetirementLane || null;
-    this.peerAddresses = options.peerAddresses || [];
     this.learnerCatchUpCheckIntervalMs =
       options.learnerCatchUpCheckIntervalMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
@@ -533,78 +532,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     return this.unifiedAddress;
   }
   /**
-   * Build a unified address for a peer replica.
-   * Looks up the nodeId from the system table cache if available.
-   * Throws if a unified address cannot be resolved.
-   * All addresses use fully qualified network identity format: {nodeId}/partition/{replicaId}
-   * Requirements: 1.1, 1.4, 3.1, 3.2, 3.3, 9.1
-   * @param {string} peerId - Peer replica ID.
-   * @return {string} Unified address for the peer.
-   */
-  buildPeerAddress(peerId) {
-    const address = this.resolveKnownPeerAddress(peerId);
-    if (address === null) {
-      throw new Error(`Unable to resolve unified peer address for ${peerId}`);
-    }
-    return address;
-  }
-  /**
-   * The unified address the address book (dispatched hints, the services
-   * cache) holds for a peer, or null while discovery cannot place it.
-   * @param {string} peerId - Peer replica ID.
-   * @return {string|null} Unified address, or null.
-   */
-  resolveKnownPeerAddress(peerId) {
-    const addressManager = AddressManager.getInstance();
-    const cacheAddress = this.resolvePeerAddressFromCache(peerId);
-    if (peerId.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR)) {
-      const validation = addressManager.validate(peerId);
-      if (validation.valid) {
-        return peerId;
-      }
-      this.logger.error(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_NOT_UNIFIED, {
-        peerId,
-        partitionId: this.partitionId,
-        replicaId: this.replicaId,
-        error: validation.error,
-      });
-      throw new Error(`Peer address must be unified: ${peerId}`);
-    }
-    if (this.peerAddresses && this.peerAddresses.length > 0) {
-      const separator = PARTITION_SERVICE_ADDRESS.SEPARATOR;
-      const partitionPeerSuffix =
-        `${separator}${ENTITY_TYPE.PARTITION}${separator}${peerId}`;
-      const peerSuffix = `${separator}${peerId}`;
-      for (const addr of this.peerAddresses) {
-        const validation = addressManager.validate(addr);
-        if (!validation.valid) {
-          this.logger.error(
-            PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_NOT_UNIFIED,
-            {
-              peerId: addr,
-              partitionId: this.partitionId,
-              replicaId: this.replicaId,
-              error: validation.error,
-            },
-          );
-          throw new Error(`Peer address must be unified: ${addr}`);
-        }
-        if (addr.endsWith(partitionPeerSuffix) || addr.endsWith(peerSuffix)) {
-          if (cacheAddress) {
-            return cacheAddress;
-          }
-          this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_LIST, {
-            peerId,
-            address: addr,
-            partitionId: this.partitionId,
-          });
-          return addr;
-        }
-      }
-    }
-    return cacheAddress || null;
-  }
-  /**
    * Resolve the leader's unified address for write forwarding.
    * @return {string|null} Unified leader address or null if unavailable.
    * @private
@@ -657,8 +584,10 @@ class PartitionServiceCoreBase extends EventEmitter {
     return candidate;
   }
   /**
-   * Resolve one peer address from authoritative services cache state.
-   * Cache-backed rows override stale bootstrap peer hints when ownership moves.
+   * Resolve one peer address from the services cache. Its one remaining
+   * consumer is the leader address for write forwarding (C4, out of scope
+   * of quest learner-host-from-committed-admission and named there): no
+   * raft peer, learner or promotion-proof address is resolved here.
    * @param {string} peerId
    * @return {string|null}
    * @private
