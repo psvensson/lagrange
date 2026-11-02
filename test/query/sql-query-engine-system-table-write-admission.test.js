@@ -9,6 +9,7 @@
  * admitted and not mis-marked client. A routed statement carries its origin
  * to the partition, which refuses a client system-table write itself.
  */
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import Database from 'better-sqlite3';
 import {openParticipantTransactionStore} from
@@ -39,7 +40,6 @@ import {buildDeliveryEnvelope} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
-import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();

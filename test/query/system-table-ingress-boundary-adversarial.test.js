@@ -3,6 +3,7 @@
  * ingress boundary across all 46 system tables, all 6 client entry surfaces,
  * and all parser/lexer evasion vectors.
  */
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import Database from 'better-sqlite3';
@@ -74,7 +75,6 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
-import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();

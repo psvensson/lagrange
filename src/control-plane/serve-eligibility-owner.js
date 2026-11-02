@@ -617,10 +617,8 @@ function isServeEligibilityAnswerEligible(answer) {
 
 export {
   SERVE_ELIGIBILITY_DECISION,
-  SERVE_ELIGIBILITY_REASON,
   SERVE_ELIGIBILITY_STATE,
   SERVE_ELIGIBILITY_UNAVAILABLE_REASON,
   ServeEligibilityOwner,
-  decideServeEligibility,
   isServeEligibilityAnswerEligible,
 };

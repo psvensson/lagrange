@@ -4,13 +4,13 @@
   "receipts": [
     {
       "id": "serve-eligibility-answered-from-committed-epoch",
-      "passed": false,
-      "evidence": "red at a31547321 + red tests: test/control-plane/serve-eligibility-committed-epoch-read.test.js 6/6 tests not ok (owner answer absent)"
+      "passed": true,
+      "evidence": "green at attempt 1 head: test/control-plane/serve-eligibility-committed-epoch-read.test.js 6/6 ok (26 assertions) - committed lease answer over a lagged cache row, unavailable_stale on a newer cached epoch, lease bound, revoking change marks stale, typed unavailability reasons; local lanes LAGRANGE_PLACEMENT=local"
     },
     {
       "id": "system-table-routing-on-leadership-without-carve-outs",
-      "passed": false,
-      "evidence": "red: test/query/query-executor-serve-eligibility-routing.test.js 5/6 not ok (fail-open engaged, bypass module present, UA-1 grace admits, projection decides user-table serving)"
+      "passed": true,
+      "evidence": "green at attempt 1 head: test/query/query-executor-serve-eligibility-routing.test.js ok (34 assertions) - committed-eligible routes, typed stale denial with epoch, UA-1 grace closed, system tables unfiltered (no readiness or transport filter), disconnected replica stays a candidate, bypass module deleted, stale cached leader redirects or NOT_LEADER falls through to the live leader, no owner = typed unavailability, replica_operations leader-required read under planning_snapshot_refresh_pending reaches the live leader"
     },
     {
       "id": "provisioning-typed-cohort-outcomes",
@@ -39,5 +39,5 @@
     }
   ],
   "evidence": [],
-  "applicability": "Red seal receipt for attempt 1 (2026-11-02); every receipt is outstanding."
+  "applicability": "Attempt 1 receipt (2026-11-02): receipts 1-2 green on the attempt-1 head; 3-6 belong to attempts 2-4; independent verification pending (lead spawns the verifier). publication-planning-committed-rows.test.js stays red by design (attempt 4)."
 }

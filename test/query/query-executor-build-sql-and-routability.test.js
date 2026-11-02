@@ -16,7 +16,6 @@ import {
   COLUMN,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  TABLES,
 } from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
@@ -40,99 +39,13 @@ import {
   committedServeEligibilityView,
   serveAnswerFromMock,
 } from '../control-plane/serve-eligibility-test-support.js';
+import {
+  createCache as createReadinessCache,
+  createPublicationService as createReadinessPublicationService,
+} from '../control-plane/control-plane-readiness-service-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-function createReadinessCache({nodes = [], services = []} = {}) {
-  const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], row]));
-  const serviceRows = new Map(
-    services.map((row) => [row[COLUMN.SERVICE_ID], row]),
-  );
-  const listeners = new Set();
-
-  function notify(tableName, operation, row) {
-    for (const listener of listeners) {
-      listener(tableName, operation, row, null);
-    }
-  }
-
-  return {
-    get(tableName, key) {
-      if (tableName === TABLES.NODES) {
-        return nodeRows.get(key) || null;
-      }
-      return null;
-    },
-    filter(tableName, predicate) {
-      if (tableName === TABLES.SERVICES) {
-        return [...serviceRows.values()].filter(predicate);
-      }
-      return [];
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.NODES) {
-        return [...nodeRows.values()];
-      }
-      if (tableName === TABLES.SERVICES) {
-        return [...serviceRows.values()];
-      }
-      return [];
-    },
-    applySystemTableChange(tableName, operation, row) {
-      const normalizedOperation = String(operation || '').toUpperCase();
-      if (tableName === TABLES.NODES) {
-        const key = row?.[COLUMN.NODE_ID];
-        if (!key) {
-          return;
-        }
-        if (normalizedOperation === 'DELETE') {
-          nodeRows.delete(key);
-          notify(tableName, normalizedOperation, row);
-          return;
-        }
-        const existing = nodeRows.get(key) || {};
-        nodeRows.set(
-          key,
-          normalizedOperation === 'UPDATE' ?
-            {...existing, ...row} :
-            {...row},
-        );
-        notify(tableName, normalizedOperation, nodeRows.get(key));
-        return;
-      }
-      if (tableName === TABLES.SERVICES) {
-        const key = row?.[COLUMN.SERVICE_ID];
-        if (!key) {
-          return;
-        }
-        if (normalizedOperation === 'DELETE') {
-          serviceRows.delete(key);
-          notify(tableName, normalizedOperation, row);
-          return;
-        }
-        const existing = serviceRows.get(key) || {};
-        serviceRows.set(
-          key,
-          normalizedOperation === 'UPDATE' ?
-            {...existing, ...row} :
-            {...row},
-        );
-        notify(tableName, normalizedOperation, serviceRows.get(key));
-      }
-    },
-    onCacheChange(listener) {
-      listeners.add(listener);
-    },
-  };
-}
-
-function createReadinessPublicationService(snapshot) {
-  return {
-    getPublicationModeDiagnostics() {
-      return snapshot;
-    },
-  };
-}
 
 test('QueryExecutor - buildExpressionSQL emits searched CASE WHEN',
   async (t) => {

@@ -32,6 +32,27 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 import {serveAnswerFromMock} from '../control-plane/serve-eligibility-test-support.js';
+
+// The partition-cache accessors every fixture below shares: partition rows by
+// id, and service/partition rows by predicate.
+const PARTITION_CACHE_ACCESSORS = Object.freeze({
+  get(type, key) {
+    if (type === 'partitions') {
+      return this.partitions.find((partition) => partition.partition_id === key) || null;
+    }
+    return null;
+  },
+  filter(type, predicate) {
+    if (type === 'services') {
+      return this.services.filter(predicate);
+    }
+    if (type === 'partitions') {
+      return this.partitions.filter(predicate);
+    }
+    return [];
+  },
+});
+
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -47,6 +68,34 @@ const QUERY_EXECUTOR_FANOUT_REPLACE_PENDING_KEY =
   'control-plane:write:replica_operations:replica-operation:op-1:replace';
 
 
+// One steady-state user-table INSERT through a committed-eligible executor:
+// the result and how many deliveries the write path dispatched.
+async function executeSteadyStateWrite(systemCache) {
+  let deliveries = 0;
+  const messageRouter = {
+    deliver: async () => {
+      deliveries += 1;
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
+    },
+  };
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter,
+    systemCache,
+  });
+  executor.queryTimeoutMs = 5;
+  executor.leaderRetryDelayMs = 1;
+  const result = await executor.executeOnPartition(
+    'p1',
+    'INSERT INTO users (id) VALUES (\'1\')',
+    [],
+    false,
+    false,
+    false,
+  );
+  return {result, deliveries};
+}
+
 // Removed with quest serve-eligibility-committed-epoch-read (attempt 1): the
 // retained runtime grace for user-table serving and its system-table
 // counterpart. User tables route on the committed-epoch serve answer; system
@@ -55,7 +104,6 @@ const QUERY_EXECUTOR_FANOUT_REPLACE_PENDING_KEY =
 test('QueryExecutor - executeOnPartition fails closed when the owner row ' +
   'exists but leader_node_id is blank',
 async (t) => {
-  let deliveries = 0;
   const systemCache = {
     partitions: [
       {
@@ -74,45 +122,9 @@ async (t) => {
         status: 'active',
       },
     ],
-    get: function(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
+    ...PARTITION_CACHE_ACCESSORS,
   };
-  const messageRouter = {
-    deliver: async () => {
-      deliveries += 1;
-      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
-    },
-  };
-
-  const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-    messageRouter,
-    systemCache,
-  });
-  executor.queryTimeoutMs = 5;
-  executor.leaderRetryDelayMs = 1;
-
-  const result = await executor.executeOnPartition(
-    'p1',
-    'INSERT INTO users (id) VALUES (\'1\')',
-    [],
-    false,
-    false,
-    false,
-  );
+  const {result, deliveries} = await executeSteadyStateWrite(systemCache);
   t.equal(
     result.success,
     false,
@@ -128,7 +140,6 @@ async (t) => {
 
 test('QueryExecutor - executeOnPartition fails closed on stale service ' +
   'leader hints when no owner row is available', async (t) => {
-  let deliveries = 0;
   const systemCache = {
     services: [
       {
@@ -151,29 +162,7 @@ test('QueryExecutor - executeOnPartition fails closed on stale service ' +
       return [];
     },
   };
-  const messageRouter = {
-    deliver: async () => {
-      deliveries += 1;
-      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
-    },
-  };
-
-  const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-    messageRouter,
-    systemCache,
-  });
-  executor.queryTimeoutMs = 5;
-  executor.leaderRetryDelayMs = 1;
-
-  const result = await executor.executeOnPartition(
-    'p1',
-    'INSERT INTO users (id) VALUES (\'1\')',
-    [],
-    false,
-    false,
-    false,
-  );
+  const {result, deliveries} = await executeSteadyStateWrite(systemCache);
 
   t.equal(result.success, false);
   t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
@@ -182,7 +171,6 @@ test('QueryExecutor - executeOnPartition fails closed on stale service ' +
 
 test('QueryExecutor - executeOnPartition fails closed when canonical leader ' +
   'metadata is known but its service row is missing', async (t) => {
-  let deliveries = 0;
   const systemCache = {
     partitions: [
       {
@@ -210,45 +198,9 @@ test('QueryExecutor - executeOnPartition fails closed when canonical leader ' +
         status: 'active',
       },
     ],
-    get(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
+    ...PARTITION_CACHE_ACCESSORS,
   };
-  const messageRouter = {
-    deliver: async () => {
-      deliveries += 1;
-      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
-    },
-  };
-
-  const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-    messageRouter,
-    systemCache,
-  });
-  executor.queryTimeoutMs = 5;
-  executor.leaderRetryDelayMs = 1;
-
-  const result = await executor.executeOnPartition(
-    'p1',
-    'INSERT INTO users (id) VALUES (\'1\')',
-    [],
-    false,
-    false,
-    false,
-  );
+  const {result, deliveries} = await executeSteadyStateWrite(systemCache);
 
   t.equal(result.success, false);
   t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
@@ -294,21 +246,7 @@ test('QueryExecutor - executeOnPartition widens recovery-owned system-table ' +
         status: 'active',
       },
     ],
-    get(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
+    ...PARTITION_CACHE_ACCESSORS,
   };
   const messageRouter = {
     deliver: async (address) => {
@@ -540,21 +478,7 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
         status: 'active',
       },
     ],
-    get: function(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
+    ...PARTITION_CACHE_ACCESSORS,
   };
   const messageRouter = {
     deliver: async (address) => {
@@ -589,7 +513,6 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
 
 test('QueryExecutor - executeOnPartition fails closed during the fresh ' +
   'bootstrap leader window when only followers are visible', async (t) => {
-  let deliveries = 0;
   const systemCache = {
     partitions: [
       {
@@ -628,45 +551,9 @@ test('QueryExecutor - executeOnPartition fails closed during the fresh ' +
         status: 'active',
       },
     ],
-    get: function(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
+    ...PARTITION_CACHE_ACCESSORS,
   };
-  const messageRouter = {
-    deliver: async () => {
-      deliveries += 1;
-      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
-    },
-  };
-
-  const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-    messageRouter,
-    systemCache,
-  });
-  executor.queryTimeoutMs = 5;
-  executor.leaderRetryDelayMs = 1;
-
-  const result = await executor.executeOnPartition(
-    'p1',
-    'INSERT INTO users (id) VALUES (\'1\')',
-    [],
-    false,
-    false,
-    false,
-  );
+  const {result, deliveries} = await executeSteadyStateWrite(systemCache);
 
   t.equal(result.success, false);
   t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
@@ -782,52 +669,23 @@ test('QueryExecutor - executeOnPartition forwards sessionId through leader redir
     );
   });
 
-test('QueryExecutor - executeOnPartition repairs the canonical leader service ' +
-  'gap before using follower fallback', async (t) => {
+// A canonical leader whose service row is missing from the cache: the write
+// path refreshes that leader's rows once (the refresh makes the row visible)
+// and delivers to the repaired leader.
+async function runCanonicalLeaderGapRepair(t, cachedServices, messages) {
   const deliveries = [];
   const readinessCalls = [];
   const systemCache = {
-    partitions: [
-      {
-        partition_id: 'p1',
-        leader_node_id: 'leader-node',
-      },
-    ],
-    services: [
-      {
-        service_id: 'p1-follower',
-        service_type: 'partition',
-        partition_id: 'p1',
-        node_id: 'follower-node',
-        raft_role: 'follower',
-        address: 'follower-node/partition/p1',
-        status: 'active',
-      },
-    ],
-    get(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
+    partitions: [{partition_id: 'p1', leader_node_id: 'leader-node'}],
+    services: cachedServices,
+    ...PARTITION_CACHE_ACCESSORS,
   };
   const readinessService = {
     answerServeEligibility(id) {
       return serveAnswerFromMock(this, id);
     },
     getNodeReadinessSync() {
-      return {
-        dimensions: {serveEligible: true},
-      };
+      return {dimensions: {serveEligible: true}};
     },
     async getNodeReadiness(nodeId, options) {
       readinessCalls.push({nodeId, options});
@@ -840,9 +698,7 @@ test('QueryExecutor - executeOnPartition repairs the canonical leader service ' 
         address: 'leader-node/partition/p1',
         status: 'active',
       });
-      return {
-        dimensions: {serveEligible: true},
-      };
+      return {dimensions: {serveEligible: true}};
     },
   };
   const messageRouter = {
@@ -855,7 +711,6 @@ test('QueryExecutor - executeOnPartition repairs the canonical leader service ' 
       });
     },
   };
-
   const executor = new QueryExecutor({
     messageRouter,
     systemCache,
@@ -871,105 +726,31 @@ test('QueryExecutor - executeOnPartition repairs the canonical leader service ' 
   );
 
   t.equal(result.success, true);
-  t.same(
-    readinessCalls.map((call) => call.nodeId),
-    ['leader-node'],
-    'write routing should attempt one authoritative refresh for the missing canonical leader row',
-  );
-  t.same(
-    deliveries,
-    ['leader-node/partition/p1'],
-    'the repaired canonical leader should be used once the service row becomes visible',
-  );
+  t.same(readinessCalls.map((call) => call.nodeId), ['leader-node'],
+    messages.refresh);
+  t.same(deliveries, ['leader-node/partition/p1'], messages.delivery);
+}
+
+test('QueryExecutor - executeOnPartition repairs the canonical leader service ' +
+  'gap before using follower fallback', async (t) => {
+  await runCanonicalLeaderGapRepair(t, [{
+    service_id: 'p1-follower',
+    service_type: 'partition',
+    partition_id: 'p1',
+    node_id: 'follower-node',
+    raft_role: 'follower',
+    address: 'follower-node/partition/p1',
+    status: 'active',
+  }], {
+    refresh: 'write routing should attempt one authoritative refresh for the missing canonical leader row',
+    delivery: 'the repaired canonical leader should be used once the service row becomes visible',
+  });
 });
 
 test('QueryExecutor - executeOnPartition repairs a zero-row canonical leader ' +
   'gap before failing the write closed', async (t) => {
-  const deliveries = [];
-  const readinessCalls = [];
-  const systemCache = {
-    partitions: [
-      {
-        partition_id: 'p1',
-        leader_node_id: 'leader-node',
-      },
-    ],
-    services: [],
-    get(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
-  };
-  const readinessService = {
-    answerServeEligibility(id) {
-      return serveAnswerFromMock(this, id);
-    },
-    getNodeReadinessSync() {
-      return {
-        dimensions: {serveEligible: true},
-      };
-    },
-    async getNodeReadiness(nodeId, options) {
-      readinessCalls.push({nodeId, options});
-      systemCache.services.push({
-        service_id: 'p1-leader',
-        service_type: 'partition',
-        partition_id: 'p1',
-        node_id: 'leader-node',
-        raft_role: 'leader',
-        address: 'leader-node/partition/p1',
-        status: 'active',
-      });
-      return {
-        dimensions: {serveEligible: true},
-      };
-    },
-  };
-  const messageRouter = {
-    async deliver(address) {
-      deliveries.push(address);
-      return buildDeliveryEnvelope({acknowledged: true}, {
-        success: true,
-        rows: [],
-        changes: 1,
-      });
-    },
-  };
-
-  const executor = new QueryExecutor({
-    messageRouter,
-    systemCache,
-    controlPlaneReadinessService: readinessService,
-    nodeId: 'local-node',
+  await runCanonicalLeaderGapRepair(t, [], {
+    refresh: 'write routing should attempt one authoritative refresh when the canonical leader is known but no service rows are cached',
+    delivery: 'the repaired canonical leader should be used once the zero-row gap is repaired',
   });
-
-  const result = await executor.executeOnPartition(
-    'p1',
-    'UPDATE users SET name = ?',
-    ['Ada'],
-    false,
-  );
-
-  t.equal(result.success, true);
-  t.same(
-    readinessCalls.map((call) => call.nodeId),
-    ['leader-node'],
-    'write routing should attempt one authoritative refresh when the canonical leader is known but no service rows are cached',
-  );
-  t.same(
-    deliveries,
-    ['leader-node/partition/p1'],
-    'the repaired canonical leader should be used once the zero-row gap is repaired',
-  );
 });

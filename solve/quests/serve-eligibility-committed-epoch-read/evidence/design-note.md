@@ -1,5 +1,6 @@
 ---
 audience: evidence
+documentClass: planning
 recorded: 2026-11-02
 quest: serve-eligibility-committed-epoch-read
 ---
