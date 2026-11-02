@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "h2-hono-source-ir-deployment-cutover",
+  "epic": "standard-http-service-api",
+  "statement": "Implement H2 source/IR/deployment policy cutover: one Fetch entry in defineService({ name, version, operations, fetch, mount, dependencies }), zero/one/many-operation registry, canonical service-cell-v2 target, async Fetch guest entry generator, service ingress mount with path-segment matching, overlapping-mount rejection, URL canonicalization, host-enforced service/dependency authority, and explicit old-artifact refusal.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/h2-hono-source-ir-deployment-cutover-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "898ff008011be6f9566809b73802609835ebc4a6"
+}

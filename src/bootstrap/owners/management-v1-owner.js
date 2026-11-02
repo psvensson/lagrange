@@ -40,7 +40,7 @@ const RESTORE_FENCED_HEALTH = Object.freeze({
 
 function checkDecommissionPreflight(owner, snap, id) {
   const c = L6_DECOMMISSION_REASON_CODE;
-  if (owner.options.decommissionSupported === false) return c.DECOMMISSION_CAPABILITY_UNSUPPORTED;
+  if (!owner.decommissionSupported) return c.DECOMMISSION_CAPABILITY_UNSUPPORTED;
   if (owner.hasActiveOperation()) return c.CONCURRENT_OPERATION_ACTIVE;
   if (snap.underReplicatedPartitionCount > 0) return c.UNDER_REPLICATED_PARTITIONS;
   if (Array.isArray(snap.nodes) && snap.nodes.length > 0 && !snap.nodes.includes(id)) {
@@ -114,12 +114,13 @@ function resolveCapabilityState(supported) {
     CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED;
 }
 
-function buildReleaseSection(rel) {
+function buildReleaseSection(rel, supportEnvelope) {
   const v = MANAGEMENT_V1_CONTRACT;
-  return {
+  const base = {
     version: rel?.version || v.DEFAULT_RELEASE_VERSION,
     artifactDigest: rel?.artifactDigest || v.DEFAULT_ARTIFACT_DIGEST,
   };
+  return supportEnvelope ? {...base, supportEnvelope} : base;
 }
 
 function buildClusterSection(owner, incLin) {
@@ -132,9 +133,12 @@ function buildFacts(owner, incLin) {
   const snap = owner.getClusterSnapshot();
   const cap = owner.options.capacitySnapshot?.() || owner.options.capacity;
   const h = owner.options.healthSnapshot?.() || owner.options.health;
-  return {
+  const baseFacts = {
     cluster: buildClusterSection(owner, incLin),
-    release: buildReleaseSection(owner.rollingUpgradeOwner?.getReleaseFacts?.()),
+    release: buildReleaseSection(
+      owner.rollingUpgradeOwner?.getReleaseFacts?.(),
+      owner.supportEnvelope,
+    ),
     health: buildHealth(owner.backupRestoreOwner, h),
     topology: {
       nodeCount: snap.nodeCount, readyNodeCount: snap.readyNodeCount,
@@ -145,9 +149,13 @@ function buildFacts(owner, incLin) {
     capacity: buildCapacity(cap),
     capabilities: {
       backupRestore: resolveCapabilityState(owner.backupRestoreOwner?.capabilitySupported),
+      decommissionNode: resolveCapabilityState(owner.decommissionSupported),
       rollingUpgrade: resolveCapabilityState(owner.rollingUpgradeOwner?.capabilitySupported),
     },
   };
+  return owner.supportEnvelope ?
+    {...baseFacts, supportEnvelope: owner.supportEnvelope} :
+    baseFacts;
 }
 
 function isExistingConflict(ex, input) {
@@ -164,15 +172,59 @@ function resolveDrainingCount(upg) {
   return Array.isArray(ids) ? ids.length : 0;
 }
 
+function resolveRollingUpgradeSupport(options) {
+  if (options.rollingUpgradeSupported !== undefined) {
+    return Boolean(options.rollingUpgradeSupported);
+  }
+  if (options.capabilitySupported !== undefined) {
+    return Boolean(options.capabilitySupported);
+  }
+  return typeof options.onDrainNodeLeadership === 'function' &&
+    typeof options.onTriggerNodeRestart === 'function';
+}
+
+function resolveBackupRestoreSupport(options) {
+  if (options.backupRestoreSupported !== undefined) {
+    return Boolean(options.backupRestoreSupported);
+  }
+  if (options.capabilitySupported !== undefined) {
+    return Boolean(options.capabilitySupported);
+  }
+  const hasPartitionExporter =
+    typeof options.getPartitions === 'function' ||
+    typeof options.exportPartitionSnapshots === 'function';
+  return Boolean(options.storageAdapter) || hasPartitionExporter;
+}
+
+function resolveDecommissionSupport(options) {
+  if (options.decommissionSupported !== undefined) {
+    return Boolean(options.decommissionSupported);
+  }
+  return typeof options.onDecommissionNode === 'function';
+}
+
 class ManagementV1Owner {
   constructor(options = {}) {
     this.options = options;
     this.clusterId = options.clusterId ?? null;
     this.includeRestoredFromInFacts = options.includeRestoredFromInFacts ?? false;
-    this.rollingUpgradeOwner = options.rollingUpgradeOwner ?? new RollingUpgradeOwner(options);
+    this.supportEnvelope =
+      options.supportEnvelopeOwner?.getEnvelope?.() ??
+      options.supportEnvelope ??
+      null;
+    this.decommissionSupported = resolveDecommissionSupport(options);
+    this.rollingUpgradeOwner = options.rollingUpgradeOwner ?? new RollingUpgradeOwner({
+      ...options,
+      capabilitySupported: resolveRollingUpgradeSupport(options),
+      supportEnvelope: this.supportEnvelope,
+    });
     this.backupRestoreOwner = options.backupRestoreOwner ?? new BackupRestoreOwner({
       ...options,
+      capabilitySupported: resolveBackupRestoreSupport(options),
       getClusterId: () => this.getClusterId(),
+      getPartitions: options.getPartitions || options.exportPartitionSnapshots,
+      onHydratePartitions:
+        options.onHydratePartitions || options.hydratePartitionSnapshots,
       onSetClusterId: (id) => {
         this.clusterId = id;
         options.onSetClusterId?.(id);
@@ -211,7 +263,8 @@ class ManagementV1Owner {
     const n = opts.nodeCount ?? 1;
     const baseReady = opts.readyNodeCount ?? n;
     const nodeList = resolveNodeList(opts);
-    return {
+    const getParts = opts.getPartitions || opts.exportPartitionSnapshots;
+    const snap = {
       clusterId: this.getClusterId(),
       ready: opts.ready !== false && !isBackupFencingReadiness(this.backupRestoreOwner),
       hasPartitionQuorum: opts.hasPartitionQuorum !== false,
@@ -224,6 +277,7 @@ class ManagementV1Owner {
       nodeIds: nodeList,
       versionSkew: Boolean(this.rollingUpgradeOwner?.isVersionSkewActive?.()),
     };
+    return typeof getParts === 'function' ? {...snap, partitions: getParts()} : snap;
   }
 
   _refreshActiveOperation(record) {

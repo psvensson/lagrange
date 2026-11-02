@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "h6-successor-contract-and-evidence-cutover",
+  "statement": "Update scaffold CLI routing, capability producer/checker, reference/architecture documentation, and the standard-http-service-api-acceptance evidence contract together so the Hono Fetch entry, Q2-Q5 distributed service capabilities, and explicit legacy-artifact refusal are enforced consistently across code, checks, and documentation.",
+  "epic": "standard-http-service-api",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/h6-successor-contract-and-evidence-cutover-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "ea48edd65e5bcf1892b72e84413184f6466a4488"
+}

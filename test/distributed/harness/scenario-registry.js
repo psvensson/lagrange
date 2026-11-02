@@ -10,6 +10,18 @@ import {
 
 const SCENARIO_REGISTRY_TYPEOF_STRING = 'string';
 const SCENARIO_REGISTRY_ZERO = 0;
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+
+const PILOT_CERTIFICATION_SCENARIO_MATRIX = Object.freeze([
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'public-path-scale-and-failure-certification',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'supported-upgrade-and-recovery-envelope',
+  }),
+]);
 
 const CANONICAL_SCENARIO_MATRIX = Object.freeze([
   Object.freeze({
@@ -198,8 +210,20 @@ function formatCanonicalScenarioMatrixLines() {
   });
 }
 
+function listPilotCertificationScenarioEntries(configPathOrName = null) {
+  const configName = normalizeScenarioConfigName(configPathOrName);
+  if (!configName) {
+    return [...PILOT_CERTIFICATION_SCENARIO_MATRIX];
+  }
+  return arrayFilter(
+    PILOT_CERTIFICATION_SCENARIO_MATRIX,
+    (entry) => entry.config === configName,
+  );
+}
+
 export {
   CANONICAL_SCENARIO_MATRIX,
+  PILOT_CERTIFICATION_SCENARIO_MATRIX,
   TOPOLOGY_FAILURE_GATE_MATRIX,
   formatCanonicalScenarioMatrixLines,
   formatCanonicalTopologyFailureGateExecutionLines,
@@ -207,6 +231,7 @@ export {
   listCanonicalScenarioEntries,
   listCanonicalTopologyFailureGateExecutionPlan,
   listCanonicalTopologyFailureGateEntries,
+  listPilotCertificationScenarioEntries,
   normalizeScenarioConfigName,
   selectCanonicalScenariosForConfig,
   selectCanonicalTopologyFailureGateScenariosForConfig,

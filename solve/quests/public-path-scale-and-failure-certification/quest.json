@@ -1,0 +1,15 @@
+{
+  "schema": "solve-quest/2",
+  "id": "public-path-scale-and-failure-certification",
+  "statement": "Implement Q11 under epic pilot-readiness-and-public-proof: public-path scale and failure certification across multi-node HTTP/Hono WASI components with typed selectors (Q2), multi-page accumulation (Q3), structured partials (Q4), multi-operation Service Cell v2 (Q5), learner progress proof (Q6), authenticated/encrypted node transport (Q7), RT2 host effect/buffer/cloning pressure accounting and bounded admission (src/runtime/wasi-component-cell-pressure-tracker.js, src/runtime/wasi-component-cell-runtime.js, src/runtime/wasi-component-cell-worker.js), and live fault-injection certification (src/service/public-path-scale-failure-certification.js, test/distributed/scenarios/public-path-scale-and-failure-certification.js).",
+  "epic": "pilot-readiness-and-public-proof",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q11-public-path-scale-and-failure-certification-guard.js --metric",
+      "direction": "low",
+      "target": 0
+    }
+  },
+  "sealedAt": "a2895de7339dcf9379df7352b0544f172391ea84"
+}

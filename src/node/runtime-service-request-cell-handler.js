@@ -26,6 +26,8 @@ const REQUEST_CELL_RUNTIME_MESSAGE = Object.freeze({
   TARGET_MOVED: 'Request Cell actual moved to another node',
 });
 
+const FETCH_HANDLER_ID = 'fetch';
+const UNFINISHED_CHILD_WORK_CODE = 'unfinished_child_work';
 const REQUEST_CELL_DEADLINE_WAIT = Object.freeze({
   wait: 'Request Cell invocation deadlineMs',
   awaited: 'Request Cell invocation reached its local actual before its deadline',
@@ -65,6 +67,15 @@ function valueOrFallback(value, fallback) {
   return value === undefined ? fallback : value;
 }
 
+function resolveFailureCode(error, routingError, overrides) {
+  if (overrides.code !== undefined) return overrides.code;
+  if (routingError.code !== undefined) return routingError.code;
+  if (error?.code === UNFINISHED_CHILD_WORK_CODE) {
+    return UNFINISHED_CHILD_WORK_CODE;
+  }
+  return REQUEST_CELL_ROUTE_ERROR_CODE.COMPONENT_FAILED;
+}
+
 function buildInvocationFailure(error, overrides = {}) {
   const routingError = error instanceof RequestCellRoutingError ?
     error :
@@ -79,13 +90,7 @@ function buildInvocationFailure(error, overrides = {}) {
           REQUEST_CELL_ROUTE_CLASSIFICATION.TERMINAL,
         ),
       ),
-      code: valueOrFallback(
-        overrides.code,
-        valueOrFallback(
-          routingError.code,
-          REQUEST_CELL_ROUTE_ERROR_CODE.COMPONENT_FAILED,
-        ),
-      ),
+      code: resolveFailureCode(error, routingError, overrides),
       invoked: valueOrFallback(
         overrides.invoked,
         valueOrFallback(routingError.invoked, false),
@@ -177,6 +182,7 @@ function assertCurrentRequestCellTarget(
     method: request.method,
     path: request.path,
     securityContext: request.securityContext,
+    url: request.url || request.path,
   }, route);
   if (current.nodeId !== handler.nodeId) {
     throw new RequestCellRoutingError(
@@ -206,6 +212,26 @@ function assertCurrentRequestCellTarget(
   return localReplica;
 }
 
+function isFetchRoute(route) {
+  return route?.handlerId === FETCH_HANDLER_ID ||
+    typeof route?.mountPath === 'string';
+}
+
+function buildGuestRequestEnvelope(request, route, invocation, securityContext) {
+  if (!isFetchRoute(route)) {
+    return request;
+  }
+  return {
+    ...request,
+    deadlineMs: invocation.deadlineMs,
+    invocationId: invocation.id,
+    principal: securityContext.principal,
+    roles: securityContext.roles,
+    tenantId: securityContext.tenantId,
+    url: request.url || route.admittedUrl || request.path,
+  };
+}
+
 function buildRequestCellInvocation(
   handler,
   request,
@@ -219,9 +245,15 @@ function buildRequestCellInvocation(
   // `handler` parameter); v1-interface bindings keep the request-only
   // argument shape. Operation identity never travels inside the
   // request JSON — it is the ABI argument.
+  const guestRequest = buildGuestRequestEnvelope(
+    request,
+    route,
+    invocation,
+    securityContext,
+  );
   const args = typeof route.handlerId === 'string' ?
-    [route.handlerId, canonicalJson(request)] :
-    [canonicalJson(request)];
+    [route.handlerId, canonicalJson(guestRequest)] :
+    [canonicalJson(guestRequest)];
   return {
     args,
     assertCurrentTarget: () =>
@@ -231,15 +263,24 @@ function buildRequestCellInvocation(
         route,
         invocation,
       ),
+    bindingId: route.bindingId || null,
+    bindingVersionId: route.bindingVersionId || null,
     deadlineMs: invocation.deadlineMs,
+    explicitBindingVersionId: invocation.explicitBindingVersionId || null,
+    fetchMode: isFetchRoute(route),
     intentDigest: invocation.intentDigest,
     invocationId: invocation.id,
     invocationServiceId: route.serviceId,
+    pinnedBindingVersionId:
+      invocation.pinnedBindingVersionId || route.bindingVersionId || null,
+    retentionWindowMs: invocation.retentionWindowMs,
     // The full frozen server-derived security context rides with the
     // invocation so the request-call bridge can authorize a bridged
     // binding call as the same principal; tenantId stays for existing
     // consumers.
     securityContext,
+    semanticIntentDigest: invocation.semanticIntentDigest || null,
+    signal: invocation.signal || null,
     tenantId: securityContext.tenantId,
   };
 }

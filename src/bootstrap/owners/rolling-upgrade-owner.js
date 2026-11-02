@@ -7,6 +7,10 @@ import {
   MANAGEMENT_V1_CONTRACT,
   TERMINAL_MANAGEMENT_OPERATION_STATES as TERM_STATES,
 } from './management-v1-constants.js';
+import {
+  evaluateRollbackEligibility,
+  validateVersionPairAdmission,
+} from './support-envelope-owner.js';
 
 const UNSET = null;
 const ARTIFACT_SHA256_PREFIX = 'sha256:';
@@ -24,7 +28,7 @@ const OWNER_DEFAULTS = Object.freeze({
   getClusterSnapshot: UNSET, onDrainNodeLeadership: UNSET, onSetNodeReadyz: UNSET,
   onTriggerNodeRestart: UNSET, onPersistState: UNSET, activeOperation: UNSET,
   nodePlan: UNSET, currentNodeIndex: -1, versionSkew: false,
-  initialOperationState: OP_STATE.ACCEPTED,
+  initialOperationState: OP_STATE.ACCEPTED, supportEnvelope: UNSET, exactVersionPair: UNSET,
 });
 
 function parseSemver(v) {
@@ -61,6 +65,15 @@ function isClusterNotReady(snap) {
   const rdy = snap.readyNodeIds ? snap.readyNodeIds.length : (snap.readyNodeCount ?? tot);
   return snap.ready === false || (tot > 0 && rdy < tot);
 }
+function isOutsideSupportEnvelope(owner, targetVersion) {
+  const configuredEnvelope = owner.supportEnvelope || owner.exactVersionPair;
+  if (!configuredEnvelope) return false;
+  const check = validateVersionPairAdmission(configuredEnvelope, {
+    sourceVersion: owner.currentVersion,
+    targetVersion,
+  });
+  return !check.admitted;
+}
 function findPreflightFailure(owner, params, snap) {
   const [tVer, tDig] = [params?.targetVersion, params?.targetArtifactDigest];
   const lag = snap.underReplicatedPartitionCount || 0;
@@ -68,6 +81,7 @@ function findPreflightFailure(owner, params, snap) {
     [!owner.capabilitySupported, L4_CODE.UPGRADE_CAPABILITY_UNSUPPORTED],
     [snap.hasActiveOperation === true || owner.hasActiveUpgrade(),
       L4_CODE.CONCURRENT_OPERATION_ACTIVE],
+    [isOutsideSupportEnvelope(owner, tVer), L4_CODE.OUTSIDE_SUPPORT_ENVELOPE],
     [!owner.checkVersionCompatible(tVer), L4_CODE.RELEASE_VERSION_INCOMPATIBLE],
     [Boolean(tDig && !owner.checkArtifactDigest(tVer, tDig)), L4_CODE.ARTIFACT_DIGEST_MISMATCH],
     [isClusterNotReady(snap), L4_CODE.CLUSTER_NOT_READY],
@@ -328,6 +342,36 @@ class RollingUpgradeOwner {
     const op = this.operations.get(opId) ||
       (this.activeOperation?.operationId === opId ? this.activeOperation : UNSET);
     return op ? {...op} : UNSET;
+  }
+  executeRollback(options = {}) {
+    const configuredEnvelope = this.supportEnvelope || this.exactVersionPair || {
+      versionPair: {
+        sourceVersion: options.targetVersion || this.currentVersion,
+        targetVersion: this.currentVersion,
+      },
+    };
+    const eligibility = evaluateRollbackEligibility(configuredEnvelope, options);
+    if (!eligibility.eligible) {
+      return {
+        message: eligibility.message,
+        ok: false,
+        reasonCode: eligibility.reasonCode,
+        rollbackCutoff: eligibility.rollbackCutoff,
+      };
+    }
+    this.currentVersion = eligibility.targetVersion;
+    for (const nodeId of Object.keys(this.nodeVersions)) {
+      this.nodeVersions[nodeId] = eligibility.targetVersion;
+    }
+    this.versionSkew = false;
+    this.onPersistState?.(this.getPersistedState());
+    return {
+      message: eligibility.message,
+      ok: true,
+      reasonCode: UNSET,
+      rollbackCutoff: eligibility.rollbackCutoff,
+      targetVersion: eligibility.targetVersion,
+    };
   }
 }
 

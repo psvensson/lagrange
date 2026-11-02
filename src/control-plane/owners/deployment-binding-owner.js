@@ -12,6 +12,7 @@ import {
   canonicalJson,
   deriveBindingId,
   inspectBindingRow,
+  mountsOverlap,
   normalizeDeploymentBinding,
   projectBinding,
   rebindStoredDeploymentArtifact,
@@ -20,6 +21,8 @@ import {
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
 const DEPLOYMENT_BINDING_OWNER_NAME = 'deployment-binding-owner';
+const OVERLAPPING_REQUEST_MOUNT_MESSAGE =
+  'request mount overlaps an existing service mount for this tenant';
 
 // Payload-seal bindable gate (brief
 // docs/development/cluster-owned-artifacts-parallel-dispatch-brief.md §1
@@ -33,12 +36,50 @@ const ARTIFACT_PAYLOAD_NOT_INTERNALIZED = Object.freeze({
     'store; migrate or import the artifact payload before binding',
 });
 
+function isMountRequestSource(source) {
+  return (
+    source.kind === DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST &&
+    source.path_prefix !== undefined
+  );
+}
+
+function selectLatestOtherBindingRows(tenantRows, excludedName) {
+  const latestByName = new Map();
+  for (const row of tenantRows) {
+    const name = row?.binding_name;
+    if (!name || name === excludedName) {
+      continue;
+    }
+    const prev = latestByName.get(name);
+    if (!prev || Number(row.generation) > Number(prev.generation)) {
+      latestByName.set(name, row);
+    }
+  }
+  return [...latestByName.values()];
+}
+
+function requestSourcesMatch(latestSource, requestedSource) {
+  if (
+    latestSource.path_prefix !== undefined ||
+    requestedSource.path_prefix !== undefined
+  ) {
+    return (
+      latestSource.host === requestedSource.host &&
+      latestSource.path_prefix === requestedSource.path_prefix &&
+      latestSource.method === requestedSource.method
+    );
+  }
+  return (
+    latestSource.method === requestedSource.method &&
+    latestSource.path === requestedSource.path
+  );
+}
+
 function bindingSourceIdentitiesMatch(latestSource, requestedSource) {
   if (latestSource.kind !== requestedSource.kind) return false;
   switch (latestSource.kind) {
   case DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST:
-    return latestSource.method === requestedSource.method &&
-      latestSource.path === requestedSource.path;
+    return requestSourcesMatch(latestSource, requestedSource);
   case DEPLOYMENT_BINDING_SOURCE_KIND.CALL:
   case DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN:
     return latestSource.name === requestedSource.name;
@@ -117,7 +158,7 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
     return artifact;
   }
 
-  async readBindingRowsByName(tenantId, bindingName, options = {}) {
+  async readTenantBindingRows(tenantId, options = {}) {
     let rows;
     if (this.getGateway()) {
       const result = await this.listRows(options);
@@ -127,10 +168,38 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
     } else {
       rows = [];
     }
+    return rows.filter((row) => row?.tenant_id === tenantId);
+  }
+
+  async readBindingRowsByName(tenantId, bindingName, options = {}) {
+    const rows = await this.readTenantBindingRows(tenantId, options);
     return rows
-      .filter((row) =>
-        row?.tenant_id === tenantId && row?.binding_name === bindingName)
+      .filter((row) => row?.binding_name === bindingName)
       .sort((a, b) => (a.generation || 0) - (b.generation || 0));
+  }
+
+  async assertNoOverlappingRequestMount(tenantId, declaration, options = {}) {
+    if (!isMountRequestSource(declaration.source)) {
+      return;
+    }
+    const tenantRows = await this.readTenantBindingRows(tenantId, options);
+    const otherRows = selectLatestOtherBindingRows(
+      tenantRows,
+      declaration.name,
+    );
+    for (const row of otherRows) {
+      const existing = inspectBindingRow(row).declaration;
+      if (
+        isMountRequestSource(existing.source) &&
+        mountsOverlap(existing.source, declaration.source)
+      ) {
+        throw new DeploymentBindingError(
+          DEPLOYMENT_BINDING_ERROR_CODE.BINDING_CONFLICT,
+          DEPLOYMENT_BINDING_PATH.SOURCE,
+          OVERLAPPING_REQUEST_MOUNT_MESSAGE,
+        );
+      }
+    }
   }
 
   // Composition-gated: WASM artifacts require a sealed payload in the
@@ -176,6 +245,11 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
     const bindingId = deriveBindingId(context.tenantId, declaration.name);
 
     return this.runSerialized(bindingId, async () => {
+      await this.assertNoOverlappingRequestMount(
+        context.tenantId,
+        declaration,
+        options,
+      );
       const existingRows = await this.readBindingRowsByName(
         context.tenantId, declaration.name, options);
 

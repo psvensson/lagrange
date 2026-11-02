@@ -1,0 +1,15 @@
+{
+  "schema": "solve-quest/2",
+  "id": "supported-upgrade-and-recovery-envelope",
+  "statement": "Implement Q12 under epic pilot-readiness-and-public-proof: a machine-readable, executable supported upgrade and recovery envelope (docs/support-envelope.json, src/bootstrap/owners/support-envelope-owner.js, src/bootstrap/owners/rolling-upgrade-owner.js, src/bootstrap/owners/bootstrap-join-admission-owner.js, src/bootstrap/owners/backup-restore-owner.js, src/bootstrap/owners/management-v1-owner.js, src/bootstrap/bootstrap-api-server-methods.js, scripts/check-current-capabilities.js, test/distributed/scenarios/supported-upgrade-and-recovery-envelope.js) certifying version pair 0.4.1 -> 0.5.0, topology bounds 3..7 nodes RF=3, rollback cutoff BEFORE_TARGET_SCHEMA_FINALIZE, OUTSIDE_SUPPORT_ENVELOPE and ROLLBACK_CUTOFF_EXCEEDED refusals, and 5 live drill receipts with zero lost acknowledged writes.",
+  "epic": "pilot-readiness-and-public-proof",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q12-supported-upgrade-and-recovery-envelope-guard.js --metric",
+      "direction": "low",
+      "target": 0
+    }
+  },
+  "sealedAt": "228385ccb8354f415fa349bb34f5afc2e9e9158e"
+}

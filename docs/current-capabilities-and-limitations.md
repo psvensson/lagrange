@@ -56,19 +56,22 @@ programming model.
 
 | Call property | Current state |
 | --- | --- |
-| Selector | Literal single-table SELECT fixed at deployment |
+| HTTP application boundary | Standard Fetch entry (Hono) with request-scoped Lagrange client |
+| Canonical component target | Canonical service-cell-v2 target (zero, one, or many distributed operations) |
+| Selector | Single-table SELECT with typed positional parameters ($1..$N) |
 | Selector interpolation | No |
 | Default rows per shard | 4096 |
+| Shard paging | Bounded recoverable page accumulator (initialState / step / finish) over pinned shard read view |
 | Default emits per shard run | 64 |
 | Default coordinated partial entries | 1024 |
 | Default concurrent shard runs | 8 |
 | Same-host shard runs | Serialized per component instance |
-| Partial values | Finite numbers |
-| Partial keys | Must be disjoint across shards |
-| Nested calls per HTTP request | 1 |
+| Partial values | Bounded canonical finite JSON (lagrange.partial.v1) |
+| Partial keys | Semantic group keys preserved in deterministic order; distinct delivery identity |
+| Nested calls per HTTP request | Bounded sequential awaited calls (one outstanding child call at a time) |
 | Global cross-partition snapshot | No |
-| Caller cancellation | No |
-| Direct-call caller idempotency key | No |
+| Caller cancellation | Invocation-owned cancellation with multi-waiter detach |
+| Direct-call caller idempotency key | Yes |
 
 Supported lifecycle SQL:
 
@@ -181,8 +184,8 @@ turning evidence into a product claim.
 | Replication | Only what Raft promises to peers (a vote, appended log entries, a snapshot) and the replica lifecycle row are synced to disk before they are acknowledged; other writes (commit index, applied progress, application rows) survive a process crash but may roll back on power loss and are re-applied from the synced log. A disk that acknowledges a flush from a volatile write cache without power-loss protection voids the power-loss guarantee. |
 | Storage lifecycle | Replica cleanup and recreation are durably serialized by services.service_id. A directory-local SQLite ownership lock rejects a second live OS process before provenance, rejoin, or replica storage activity. |
 | Service execution | Request and call Bindings are publicly invocable. Change, time, once, boot, and pushdown Bindings may be declared but have no public invocation adapter. |
-| Service execution | A call selects one bounded shard batch; the public path does not stream or page an unbounded partition scan. |
-| Service execution | Coordinated partial values are finite numbers and their keys must be disjoint across shards. |
+| Service execution | A call selects bounded shard batches (4,096 rows per page by default) or folds multi-page partitions through an explicit bounded accumulator (initialState, step, finish) over a pinned shard read view; it is not an unbounded streaming cursor. |
+| Service execution | Coordinated partial values use the bounded canonical finite-JSON v1 contract (lagrange.partial.v1), separating transport delivery identity from semantic group keys so repeated group keys reach reduce() in deterministic order. |
 | Service portability | Managed OCI container activation is unsupported; the recommended service path is a WASI component. |
 | PostgreSQL compatibility | Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed. |
 | PostgreSQL compatibility | The listener speaks the PostgreSQL wire protocol with a restricted SQL dialect; ORM and psql meta-command compatibility are not claimed. Statements drivers commonly send at startup or for introspection fail: SHOW <setting>, SET, RESET, DISCARD ALL, DEALLOCATE, version(), current_database(), current_setting(), pg_catalog tables, plain EXPLAIN, DROP TABLE, WITH ... SELECT/INSERT/DELETE, IN (subquery) and VALUES (...) as a query. |

@@ -44,6 +44,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
   } = deps;
 
   const {
+    cancelInvocation,
     injectServiceQueryExecutor,
     invokeWithDurableFence,
   } = createRequestCellInvocationOwner({
@@ -692,6 +693,10 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
           {cause: error},
         );
       }
+    }
+
+    cancelInvocation(tenantId, invocationId) {
+      return cancelInvocation(this, tenantId, invocationId);
     }
   }
 

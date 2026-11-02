@@ -65,6 +65,8 @@
       "Cell"
     ],
     "recommendedAuthoring": "code_first_javascript_service",
+    "httpApplicationBoundary": "hono_fetch_entry_with_scoped_client",
+    "canonicalComponentTarget": "service_cell_v2_zero_one_or_many_operations",
     "lifecycleSql": [
       "INSTALL SERVICE $1",
       "UPGRADE SERVICE $1",
@@ -89,19 +91,20 @@
     "servicePortabilityContract": "docs/service-portability-capabilities.json"
   },
   "callExecution": {
-    "selector": "literal_single_table_select_fixed_at_deployment",
+    "selector": "single_table_select_with_typed_positional_parameters",
     "selectorInterpolation": false,
     "defaultShardRowBound": 4096,
+    "shardPaging": "bounded_recoverable_page_accumulator",
     "defaultEmitBound": 64,
     "defaultPartialEntryBound": 1024,
     "defaultConcurrentShardRuns": 8,
     "sameHostShardConcurrency": "serialized_per_component_instance",
-    "partialValues": "finite_numbers",
-    "partialKeys": "must_be_disjoint_across_shards",
-    "nestedCallsPerRequest": 1,
+    "partialValues": "bounded_canonical_finite_json_v1",
+    "partialKeys": "semantic_group_keys_with_distinct_delivery_identity",
+    "nestedCallsPerRequest": "bounded_sequential_calls",
     "globalCrossPartitionSnapshot": false,
-    "callerCancellation": false,
-    "directCallCallerIdempotencyKey": false
+    "callerCancellation": "invocation_owned_with_waiter_detach",
+    "directCallCallerIdempotencyKey": true
   },
   "postgresWire": {
     "authenticationModes": [
@@ -193,12 +196,12 @@
     {
       "id": "bounded-call-input",
       "area": "Service execution",
-      "summary": "A call selects one bounded shard batch; the public path does not stream or page an unbounded partition scan."
+      "summary": "A call selects bounded shard batches (4,096 rows per page by default) or folds multi-page partitions through an explicit bounded accumulator (initialState, step, finish) over a pinned shard read view; it is not an unbounded streaming cursor."
     },
     {
       "id": "numeric-partials",
       "area": "Service execution",
-      "summary": "Coordinated partial values are finite numbers and their keys must be disjoint across shards."
+      "summary": "Coordinated partial values use the bounded canonical finite-JSON v1 contract (lagrange.partial.v1), separating transport delivery identity from semantic group keys so repeated group keys reach reduce() in deterministic order."
     },
     {
       "id": "oci-runtime",

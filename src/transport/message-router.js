@@ -24,6 +24,8 @@ import {requireIssuedBootIncarnation} from
   '../bootstrap/boot-incarnation-contract.js';
 
 const MESSAGE_ROUTER_SUBJECT = 'MessageRouter';
+const WS_PLAIN_PREFIX = 'ws://';
+const WSS_TLS_PREFIX = 'wss://';
 
 const {
   ConfigurationManager,
@@ -92,6 +94,17 @@ class MessageRouter extends EventEmitter {
       configuredWsHost.length > TRANSPORT_NUM.ZERO ?
         configuredWsHost :
         TRANSPORT_DEFAULT.WS_HOST);
+    this.trustProvider = options.trustProvider || null;
+    if (this.trustProvider) {
+      this.trustProvider.validateBindHost(this.wsHost);
+      if (
+        this.trustProvider.isTlsRequired() &&
+        typeof this.advertisedAddress === TRANSPORT_TYPEOF.STRING &&
+        this.advertisedAddress.startsWith(WS_PLAIN_PREFIX)
+      ) {
+        this.advertisedAddress = `${WSS_TLS_PREFIX}${this.advertisedAddress.slice(WS_PLAIN_PREFIX.length)}`;
+      }
+    }
     this.messageTimeoutMs =
       config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS) ||
       TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;

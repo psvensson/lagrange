@@ -27,6 +27,9 @@ import {
   PORTABILITY_PATH,
   generate,
 } from './generate-current-capabilities-doc.js';
+import {
+  validateSupportEnvelopeRecord,
+} from '../src/bootstrap/owners/support-envelope-owner.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEXT_ENCODING = 'utf8';
@@ -40,6 +43,9 @@ const TRANSPORT_SERVER_PATH = 'src/transport/router-server-manager.js';
 const RAFT_STORE_CONSTANTS_PATH = 'src/raft/raft-rs-durable-store-constants.js';
 const HTTP_AUTHENTICATOR_PATH =
   'src/service/request-cell-http-authenticator.js';
+const SERVICE_SOURCE_CONTRACT_PATH =
+  'src/service/service-source-contract.js';
+const SUPPORT_ENVELOPE_PATH = 'docs/support-envelope.json';
 
 // Single owner for the fixture's complete file-backed observation surface.
 // Add every new readText/readJson or generated-document input here so tests
@@ -56,6 +62,8 @@ const CHECKED_FILE_PATHS = Object.freeze([
   TRANSPORT_SERVER_PATH,
   RAFT_STORE_CONSTANTS_PATH,
   HTTP_AUTHENTICATOR_PATH,
+  SERVICE_SOURCE_CONTRACT_PATH,
+  SUPPORT_ENVELOPE_PATH,
 ]);
 
 const EXPECTED_STATUS = Object.freeze({
@@ -70,6 +78,14 @@ const EXPECTED_STATUS = Object.freeze({
   HTTP_AUTHENTICATION: 'basic_against_configured_pgwire_credentials',
   BACKUP_RESTORE_PITR: 'unsupported',
   ROLLING_UPGRADE: 'unsupported_on_0x',
+  HTTP_APPLICATION_BOUNDARY: 'hono_fetch_entry_with_scoped_client',
+  CANONICAL_COMPONENT_TARGET: 'service_cell_v2_zero_one_or_many_operations',
+  CALL_SELECTOR: 'single_table_select_with_typed_positional_parameters',
+  SHARD_PAGING: 'bounded_recoverable_page_accumulator',
+  PARTIAL_VALUES: 'bounded_canonical_finite_json_v1',
+  PARTIAL_KEYS: 'semantic_group_keys_with_distinct_delivery_identity',
+  NESTED_CALLS: 'bounded_sequential_calls',
+  CALLER_CANCELLATION: 'invocation_owned_with_waiter_detach',
 });
 
 const AUDIT_MARKER = Object.freeze({
@@ -101,6 +117,9 @@ const AUDIT_MARKER = Object.freeze({
   OPERATIONS_OVERCLAIM:
     'operations status must not imply backup or upgrade guarantees',
   CALL_BOUNDS_POSITIVE: 'call execution bounds must be positive',
+  SERVICE_V2_TARGET_SOURCE: 'SERVICE_CELL_V2: \'service-cell-v2\'',
+  SERVICE_CONTRACT_MISMATCH:
+    'service deployment and callExecution capabilities no longer match the successor contract',
 });
 
 function readText(relativePath, root = REPO_ROOT) {
@@ -133,6 +152,24 @@ function raftDurabilityMatchesStore(capabilities, replication, root) {
     replication.includes(AUDIT_MARKER.RAFT_SYNCED_BEFORE_SENT) &&
     readText(RAFT_STORE_CONSTANTS_PATH, root)
       .includes(AUDIT_MARKER.RAFT_SYNC_SOURCE);
+}
+
+function serviceContractMatchesSource(capabilities, root) {
+  const sourceContract = readText(SERVICE_SOURCE_CONTRACT_PATH, root);
+  const deployment = capabilities.deployment;
+  const call = capabilities.callExecution;
+  return sourceContract.includes(AUDIT_MARKER.SERVICE_V2_TARGET_SOURCE) &&
+    deployment.httpApplicationBoundary ===
+      EXPECTED_STATUS.HTTP_APPLICATION_BOUNDARY &&
+    deployment.canonicalComponentTarget ===
+      EXPECTED_STATUS.CANONICAL_COMPONENT_TARGET &&
+    call.selector === EXPECTED_STATUS.CALL_SELECTOR &&
+    call.shardPaging === EXPECTED_STATUS.SHARD_PAGING &&
+    call.partialValues === EXPECTED_STATUS.PARTIAL_VALUES &&
+    call.partialKeys === EXPECTED_STATUS.PARTIAL_KEYS &&
+    call.nestedCallsPerRequest === EXPECTED_STATUS.NESTED_CALLS &&
+    call.callerCancellation === EXPECTED_STATUS.CALLER_CANCELLATION &&
+    call.directCallCallerIdempotencyKey === true;
 }
 
 function checkCurrentCapabilities(root = REPO_ROOT) {
@@ -282,6 +319,17 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
       capabilities.callExecution.defaultPartialEntryBound > 0 &&
       capabilities.callExecution.defaultConcurrentShardRuns > 0,
     AUDIT_MARKER.CALL_BOUNDS_POSITIVE);
+  addProblem(problems,
+    serviceContractMatchesSource(capabilities, root),
+    AUDIT_MARKER.SERVICE_CONTRACT_MISMATCH);
+
+  const supportEnvelope = readJson(SUPPORT_ENVELOPE_PATH, root);
+  const envelopeValidation = validateSupportEnvelopeRecord(supportEnvelope);
+  addProblem(
+    problems,
+    envelopeValidation.valid,
+    `support envelope contract is invalid (${envelopeValidation.reasonCode})`,
+  );
 
   const expectedDocument = generate(root);
   const currentDocument = readText(OUTPUT_PATH, root);

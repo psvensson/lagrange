@@ -4,31 +4,31 @@
   "counts": {
     "admin-diagnostics": 118,
     "architecture-governance": 21,
-    "bootstrap-membership": 329,
+    "bootstrap-membership": 330,
     "cdc-metadata": 67,
-    "cli-tooling": 98,
-    "control-plane": 224,
+    "cli-tooling": 99,
+    "control-plane": 225,
     "convergence-topology": 78,
-    "distributed-harness": 208,
+    "distributed-harness": 209,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
-    "query-sql": 190,
+    "query-sql": 191,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 148,
+    "services-runtime": 158,
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
     "test-infrastructure": 154,
     "transactions": 17,
-    "transport-messaging": 112,
+    "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2537,
-  "digest": "fnv1a32-966751ec",
+  "censusSize": 2553,
+  "digest": "fnv1a32-ff8ebbf7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-40ce6b98",
+  "observationDigest": "fnv1a32-a5d61e8a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -310,6 +310,7 @@
     "test/bootstrap/startup-runtime-handoff-owner.test.js": "bootstrap-membership",
     "test/bootstrap/startup-runtime-surface-owner.test.js": "bootstrap-membership",
     "test/bootstrap/storage-budget-bootstrap.test.js": "bootstrap-membership",
+    "test/bootstrap/support-envelope-owner.test.js": "bootstrap-membership",
     "test/bootstrap/system-leader-readiness-address-gate.test.js": "bootstrap-membership",
     "test/bootstrap/system-partition-classification-owner.test.js": "bootstrap-membership",
     "test/bootstrap/traffic-readiness-utils.test.js": "bootstrap-membership",
@@ -439,6 +440,7 @@
     "test/cli/core/viewmodel-computed-caching.property.test.js": "cli-tooling",
     "test/cli/core/visual-indicators.test.js": "cli-tooling",
     "test/cli/index.test.js": "cli-tooling",
+    "test/cli/q8-resumable-bulk-data-load.test.js": "cli-tooling",
     "test/cli/service-init-scaffold.test.js": "cli-tooling",
     "test/cli/service-init-wasm-scaffold.test.js": "cli-tooling",
     "test/cli/service-install-lifecycle-cli.test.js": "cli-tooling",
@@ -661,6 +663,7 @@
     "test/control-plane/publication-recovery-state-machine.test.js": "control-plane",
     "test/control-plane/publication-snapshot-build-sync-section-attribution.test.js": "control-plane",
     "test/control-plane/publications-catchup-leader-pinned-read.test.js": "control-plane",
+    "test/control-plane/q9-pilot-cutover-and-rollback-receipts.test.js": "control-plane",
     "test/control-plane/read-model-contract.test.js": "control-plane",
     "test/control-plane/readiness-admission-transitions-observed.test.js": "control-plane",
     "test/control-plane/readiness-authoritative-row-read-contract.test.js": "control-plane",
@@ -959,6 +962,7 @@
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/progress-wait.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/public-path-scale-and-failure-certification.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-convergence-claim.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "distributed-harness",
@@ -1564,6 +1568,7 @@
     "test/query/primitive-telemetry.test.js": "query-sql",
     "test/query/provision-target-live-transport-rescue.test.js": "query-sql",
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": "query-sql",
+    "test/query/q10-postgres-compatibility-certification-matrix.test.js": "query-sql",
     "test/query/query-constants-vocabulary.test.js": "query-sql",
     "test/query/query-executor-build-sql-and-routability.test.js": "query-sql",
     "test/query/query-executor-delay.test.js": "query-sql",
@@ -2337,6 +2342,12 @@
     "test/service/call-shard-dispatch-pool.test.js": "services-runtime",
     "test/service/data-local-owner-boundaries.test.js": "services-runtime",
     "test/service/external-service-manifest.test.js": "services-runtime",
+    "test/service/h1-pinned-hono-component-proof.test.js": "services-runtime",
+    "test/service/h2-hono-source-ir-deployment-cutover.test.js": "services-runtime",
+    "test/service/h3-fetch-ingress-and-scoped-client.test.js": "services-runtime",
+    "test/service/h4-http-invocation-recovery-and-cancellation.test.js": "services-runtime",
+    "test/service/h5-compiled-public-hono-journey.test.js": "services-runtime",
+    "test/service/h6-successor-contract-and-evidence-cutover.test.js": "services-runtime",
     "test/service/handler-aware-runtime-invocation.test.js": "services-runtime",
     "test/service/installable-service-artifact-resolver.test.js": "services-runtime",
     "test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js": "services-runtime",
@@ -2345,6 +2356,10 @@
     "test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js": "services-runtime",
     "test/service/minimal-deployment-request-cell-routing.test.js": "services-runtime",
     "test/service/minimal-deployment-single-contract-owner-guard.test.js": "services-runtime",
+    "test/service/q2-call-selector-typed-parameter-narrowing.test.js": "services-runtime",
+    "test/service/q3-call-shard-paged-execution.test.js": "services-runtime",
+    "test/service/q4-call-bounded-structured-partials.test.js": "services-runtime",
+    "test/service/q5-service-cell-v2-default-multi-operation.test.js": "services-runtime",
     "test/service/replicated-service-topology.test.js": "services-runtime",
     "test/service/request-binding-route-resolver.test.js": "services-runtime",
     "test/service/request-cell-call-bridge.test.js": "services-runtime",
@@ -2453,6 +2468,7 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": "transport-messaging",
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "transport-messaging",
     "test/transport/owner-retry-budget.test.js": "transport-messaging",
+    "test/transport/q7-node-transport-authenticated-encryption.test.js": "transport-messaging",
     "test/transport/router-envelope-pre-send-failure.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "transport-messaging",
@@ -3730,6 +3746,15 @@
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
+    "test/bootstrap/support-envelope-owner.test.js": {
+      "files": [
+        "docs/support-envelope.json",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "test/distributed/config"
+      ]
+    },
     "test/bootstrap/system-partition-classification-owner.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
@@ -3942,6 +3967,16 @@
         "src/config/listener-port-model.js"
       ]
     },
+    "test/cli/q8-resumable-bulk-data-load.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
+      ]
+    },
     "test/cli/service-init-scaffold.test.js": {
       "files": [
         "Dockerfile",
@@ -3980,6 +4015,7 @@
       "files": [
         "package.json",
         "src/authoring/define-service.js",
+        "src/authoring/index.js",
         "src/cli/service-pipeline-router.js",
         "src/control-plane/owners/deployment-binding-contract.js",
         "src/index.js",
@@ -4824,6 +4860,16 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
         "src/control-plane/membership-publication-coordinator-reconcile.js"
+      ]
+    },
+    "test/control-plane/q9-pilot-cutover-and-rollback-receipts.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
     "test/control-plane/read-model-contract.test.js": {
@@ -7337,6 +7383,26 @@
         "examples/call-binding-account-summary",
         "solve/epics/raft-rs-full-cutover",
         "test/fixtures/scenario-ground-truth"
+      ]
+    },
+    "test/distributed/harness/__tests__/public-path-scale-and-failure-certification.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/run.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js",
+        "test/wasm-service/fixtures/service-cell-world/guest.js"
+      ],
+      "directories": [
+        "test/distributed/config",
+        "wit"
       ]
     },
     "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": {
@@ -12507,6 +12573,18 @@
         "src/query/table-creation-service-partition-provisioning.js"
       ]
     },
+    "test/query/q10-postgres-compatibility-certification-matrix.test.js": {
+      "files": [
+        "docs/postgres-compatibility-matrix.json",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
+      ],
+      "directories": [
+        "test/fixtures/pgwire-tls"
+      ]
+    },
     "test/query/query-constants-vocabulary.test.js": {
       "files": [
         "src/query/query-constants.js"
@@ -16694,6 +16772,7 @@
         "docs/current-capabilities-and-limitations.md",
         "docs/current-capabilities.json",
         "docs/service-portability-capabilities.json",
+        "docs/support-envelope.json",
         "scripts/check-current-capabilities.js",
         "scripts/generate-current-capabilities-doc.js",
         "src/bootstrap/bootstrap-api-constants.js",
@@ -16701,6 +16780,7 @@
         "src/partition/partition-snapshot-cadence.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/service/request-cell-http-authenticator.js",
+        "src/service/service-source-contract.js",
         "src/transport/router-server-manager.js"
       ]
     },
@@ -18888,6 +18968,55 @@
         "src/service/call-partition-topology.js"
       ]
     },
+    "test/service/h2-hono-source-ir-deployment-cutover.test.js": {
+      "directories": [
+        "test/service"
+      ]
+    },
+    "test/service/h4-http-invocation-recovery-and-cancellation.test.js": {
+      "files": [
+        "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/runtime/runtime-driver-registry.js",
+        "src/runtime/service-runtime-lifecycle.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "src/runtime/wasm-component-driver.js"
+      ]
+    },
+    "test/service/h5-compiled-public-hono-journey.test.js": {
+      "files": [
+        "src/authoring/index.js",
+        "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/runtime/runtime-driver-registry.js",
+        "src/runtime/service-runtime-lifecycle.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "src/runtime/wasm-component-driver.js"
+      ]
+    },
+    "test/service/h6-successor-contract-and-evidence-cutover.test.js": {
+      "files": [
+        "README.md",
+        "architecture/process-partitioning.md",
+        "architecture/process-replication.md",
+        "docs/current-capabilities-and-limitations.md",
+        "docs/current-capabilities.json",
+        "docs/native-programming-model.md",
+        "docs/reference/javascript-service-reference.md",
+        "docs/service-deployment-guide.md",
+        "docs/service-portability-capabilities.json",
+        "docs/support-envelope.json",
+        "examples/README.md",
+        "scripts/check-current-capabilities.js",
+        "scripts/checks/service-portability-claims-contract.js",
+        "src/bootstrap/bootstrap-api-constants.js",
+        "src/partition/partition-service-core-base.js",
+        "src/partition/partition-snapshot-cadence.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/runtime/oci-container-driver.js",
+        "src/service/request-cell-http-authenticator.js",
+        "src/service/service-source-contract.js",
+        "src/transport/router-server-manager.js"
+      ]
+    },
     "test/service/handler-aware-runtime-invocation.test.js": {
       "files": [
         "package.json"
@@ -18954,6 +19083,50 @@
         "src/control-plane/owners/service-install-catalog-contract.js",
         "src/runtime/request-cell-runtime-contract.js",
         "src/service/external-service-manifest.js"
+      ]
+    },
+    "test/service/q2-call-selector-typed-parameter-narrowing.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/unified-service-lifecycle.js",
+        "src/node/runtime-service-call-cell-handler.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "src/service/call-binding-route-resolver.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/call-cell-statement-adapter.js",
+        "src/service/service-component-build.js",
+        "src/service/service-deployment-record-generator.js"
+      ]
+    },
+    "test/service/q3-call-shard-paged-execution.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/unified-service-lifecycle.js",
+        "src/node/runtime-service-call-cell-handler.js",
+        "src/runtime/call-cell-reduce-coordinator.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "src/service/call-binding-route-resolver.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/call-cell-routing-contract.js",
+        "src/service/call-cell-statement-adapter.js",
+        "src/service/service-component-build.js"
+      ]
+    },
+    "test/service/q4-call-bounded-structured-partials.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/unified-service-lifecycle.js",
+        "src/node/runtime-service-call-cell-handler.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "src/service/call-binding-route-resolver.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/call-cell-statement-adapter.js",
+        "src/service/service-component-build.js"
+      ]
+    },
+    "test/service/q5-service-cell-v2-default-multi-operation.test.js": {
+      "files": [
+        "src/authoring/index.js"
       ]
     },
     "test/service/request-binding-route-resolver.test.js": {

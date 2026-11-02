@@ -28,6 +28,8 @@ import path from 'node:path';
 
 const EMITTED_FILE_MODE = 'utf8';
 const TEXT_NEWLINE = '\n';
+const TEXT_SPACE = ' ';
+const TS_NULL_KEYWORD = 'null';
 const EMPTY_TEXT = '';
 const COLUMN_SEPARATOR = ',';
 
@@ -50,6 +52,7 @@ const DTS_FRAGMENT = Object.freeze({
   KIND_FIELD: '  readonly kind: \'distributed_operation\';',
   NEVER: 'never',
   OPERATION_SUFFIX: 'Operation',
+  PARAMS_SUFFIX: 'Params',
   PARTIALS_TYPE: 'readonly (readonly [string, unknown])[]',
   READONLY_PREFIX: 'readonly ',
   REQUEST_NAME: 'ServiceRequest',
@@ -61,7 +64,18 @@ const DTS_FRAGMENT = Object.freeze({
   REQUEST_QUERY_FIELD:
     '  readonly query: Readonly<Record<string, string>>;',
   HANDLER_CONTEXTS_NAME: 'HandlerContexts',
+  LAGRANGE_CLIENT_NAME: 'LagrangeRequestClient',
+  LAGRANGE_ENV_NAME: 'LagrangeEnv',
+  LAGRANGE_ENV_FIELD: '  readonly lagrange: LagrangeRequestClient;',
+  PRINCIPAL_FIELD: '  readonly principal: string | null;',
+  PROMISE_UNKNOWN: 'Promise<unknown>',
+  REQUEST_ID_FIELD: '  readonly requestId: string;',
   ROW_SUFFIX: 'Row',
+  TENANT_FIELD: '  readonly tenant: string | null;',
+  TS_BOOLEAN: 'boolean',
+  TS_NULL: ' | null',
+  TS_NUMBER: 'number',
+  TS_STRING: 'string',
   UNKNOWN: 'unknown',
   VOID: 'void',
 });
@@ -70,6 +84,7 @@ const DTS_FRAGMENT = Object.freeze({
 const CLOSE_BRACE = '}';
 const NESTED_CLOSE_BRACE = '  };';
 const UNION_SEPARATOR = ' | ';
+const FETCH_ENTRY_KIND = 'fetch';
 const GENERATED_DOC = Object.freeze({
   ABI_NOTE: 'component ABI; this file never changes runtime behavior.',
   EDITOR_ONLY: '`lagrange service generate`. Editor-level only: JSON ' +
@@ -78,6 +93,10 @@ const GENERATED_DOC = Object.freeze({
   HANDLER_CONTEXT: 'The request-handler collaborator surface.',
   HANDLER_CONTEXTS: 'Per-handler contexts: call() accepts only the ' +
     'operations that handler declared in calls.',
+  LAGRANGE_CLIENT:
+    'Request-scoped Lagrange client injected on `c.env.lagrange` in Hono handlers.',
+  LAGRANGE_ENV:
+    'Hono environment bindings provided by the Lagrange Request Cell host.',
   REGENERATE: 'regenerate with',
   REQUEST: 'The serialized request envelope every http handler receives; ' +
     'body is a JSON record or null when absent.',
@@ -118,12 +137,114 @@ function pascalCase(id) {
   return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
+const PARAM_SLOT_TYPE_BOOLEAN = 'boolean';
+const PARAM_SLOT_TYPE_TEXT = 'text';
+const SCHEMA_TYPE_STRING = 'string';
+const SCHEMA_TYPE_NULL = 'null';
+const SCHEMA_TYPE_ARRAY = 'array';
+const SCHEMA_TYPE_RECORD = 'record';
+const SCHEMA_TYPE_OBJECT = 'object';
+const PARTIAL_SUFFIX = 'Partial';
+const STATE_SUFFIX = 'State';
+const EXPORT_TYPE_PREFIX = 'export type ';
+const OPTIONAL_QUESTION = '?';
+const GROUP_KEY_TS_TYPE = 'string | number';
+
 function rowInterfaceName(operationId) {
   return pascalCase(operationId) + DTS_FRAGMENT.ROW_SUFFIX;
 }
 
+function paramsInterfaceName(operationId) {
+  return pascalCase(operationId) + DTS_FRAGMENT.PARAMS_SUFFIX;
+}
+
+function partialTypeName(operationId) {
+  return pascalCase(operationId) + PARTIAL_SUFFIX;
+}
+
+function stateTypeName(operationId) {
+  return pascalCase(operationId) + STATE_SUFFIX;
+}
+
 function operationInterfaceName(operationId) {
   return pascalCase(operationId) + DTS_FRAGMENT.OPERATION_SUFFIX;
+}
+
+function operationArgsType(operation) {
+  return Array.isArray(operation?.parameters) ?
+    paramsInterfaceName(operation.id) :
+    DTS_FRAGMENT.ARGS_TYPE;
+}
+
+function tsTypeForPartialSchemaNode(schema) {
+  if (!schema || typeof schema !== 'object') return DTS_FRAGMENT.UNKNOWN;
+  let baseType = DTS_FRAGMENT.TS_NUMBER;
+  if (schema.type === SCHEMA_TYPE_NULL) {
+    return TS_NULL_KEYWORD;
+  } else if (schema.type === PARAM_SLOT_TYPE_BOOLEAN) {
+    baseType = DTS_FRAGMENT.TS_BOOLEAN;
+  } else if (schema.type === PARAM_SLOT_TYPE_TEXT ||
+      schema.type === SCHEMA_TYPE_STRING) {
+    baseType = DTS_FRAGMENT.TS_STRING;
+  } else if (schema.type === SCHEMA_TYPE_ARRAY) {
+    baseType = `readonly (${tsTypeForPartialSchemaNode(schema.items)})[]`;
+  } else if ((schema.type === SCHEMA_TYPE_RECORD ||
+      schema.type === SCHEMA_TYPE_OBJECT) && schema.fields) {
+    const props = Object.keys(schema.fields).map((key) => {
+      const f = schema.fields[key];
+      const opt = f.optional === true ? OPTIONAL_QUESTION : EMPTY_TEXT;
+      return `readonly ${JSON.stringify(key)}${opt}: ${tsTypeForPartialSchemaNode(f)};`;
+    });
+    baseType = `{ ${props.join(TEXT_SPACE)} }`;
+  }
+  return schema.nullable === true ?
+    `${baseType}${DTS_FRAGMENT.TS_NULL}` :
+    baseType;
+}
+
+function emitPartialTypeDeclaration(operation) {
+  const typeExpr = tsTypeForPartialSchemaNode(operation.partialSchema);
+  return [
+    ...doc(
+      `Structured partial schema declared by the \`${operation.id}\` operation.`),
+    `${EXPORT_TYPE_PREFIX}${partialTypeName(operation.id)} = ${typeExpr};`,
+  ].join(TEXT_NEWLINE);
+}
+
+function emitStateTypeDeclaration(operation) {
+  const typeExpr = tsTypeForPartialSchemaNode(operation.stateSchema);
+  return [
+    ...doc(
+      `Bounded accumulator state schema declared by the \`${operation.id}\` operation.`),
+    `${EXPORT_TYPE_PREFIX}${stateTypeName(operation.id)} = ${typeExpr};`,
+  ].join(TEXT_NEWLINE);
+}
+
+function tsTypeForParameterSlot(slot) {
+  let baseType = DTS_FRAGMENT.TS_NUMBER;
+  if (slot.type === PARAM_SLOT_TYPE_BOOLEAN) {
+    baseType = DTS_FRAGMENT.TS_BOOLEAN;
+  } else if (slot.type === PARAM_SLOT_TYPE_TEXT) {
+    baseType = DTS_FRAGMENT.TS_STRING;
+  }
+  return slot.nullable === true ?
+    `${baseType}${DTS_FRAGMENT.TS_NULL}` :
+    baseType;
+}
+
+function emitParamsInterface(operation) {
+  const lines = [
+    ...doc(
+      `Typed selector parameters declared by the \`${operation.id}\` operation.`),
+    `${DTS_FRAGMENT.EXPORT_INTERFACE}${paramsInterfaceName(operation.id)} {`,
+  ];
+  for (const slot of operation.parameters) {
+    lines.push(
+      `  ${DTS_FRAGMENT.COLUMN_TYPE}${JSON.stringify(slot.name)}: ` +
+        `${tsTypeForParameterSlot(slot)};`);
+  }
+  lines.push(CLOSE_BRACE);
+  return lines.join(TEXT_NEWLINE);
 }
 
 function docLine(text) {
@@ -157,16 +278,42 @@ function emitRowInterface(operation) {
   return lines.join(TEXT_NEWLINE);
 }
 
+function emitAccumulatorSignatures(operation, rowName, argsType, contextEmit) {
+  if (!operation?.stateSchema && typeof operation?.init !== 'function') {
+    return [];
+  }
+  const sType = operation.stateSchema ?
+    stateTypeName(operation.id) :
+    DTS_FRAGMENT.UNKNOWN;
+  return [
+    `  init(args: ${argsType}): ${sType};`,
+    `  step(state: ${sType}, page: readonly ${rowName}[], args: ${argsType}): ${sType};`,
+    `  finish(state: ${sType}, args: ${argsType}, ${contextEmit}): ${DTS_FRAGMENT.UNKNOWN};`,
+  ];
+}
+
 function emitOperationInterface(operation) {
   const rowName = rowInterfaceName(operation.id);
+  const argsType = operationArgsType(operation);
+  const hasPartialSchema = Boolean(operation?.partialSchema);
+  const pType = hasPartialSchema ?
+    partialTypeName(operation.id) :
+    DTS_FRAGMENT.UNKNOWN;
+  const contextEmit = hasPartialSchema ?
+    `context: { emit(key: ${GROUP_KEY_TS_TYPE}, partial: ${pType}): void }` :
+    DTS_FRAGMENT.CONTEXT_EMIT;
+  const partialsType = hasPartialSchema ?
+    `readonly (readonly [${GROUP_KEY_TS_TYPE}, ${pType}])[]` :
+    DTS_FRAGMENT.PARTIALS_TYPE;
   return [
     ...doc(`The \`${operation.id}\` distributed operation.`),
     `${DTS_FRAGMENT.EXPORT_INTERFACE}${operationInterfaceName(operation.id)} {`,
     DTS_FRAGMENT.KIND_FIELD,
-    `  run(rows: readonly ${rowName}[], args: ${DTS_FRAGMENT.ARGS_TYPE}, ` +
-      `${DTS_FRAGMENT.CONTEXT_EMIT}): ${DTS_FRAGMENT.UNKNOWN};`,
-    `  reduce(partials: ${DTS_FRAGMENT.PARTIALS_TYPE}, ` +
-      `args: ${DTS_FRAGMENT.ARGS_TYPE}): ${DTS_FRAGMENT.UNKNOWN};`,
+    ...emitAccumulatorSignatures(operation, rowName, argsType, contextEmit),
+    `  run(rows: readonly ${rowName}[], args: ${argsType}, ` +
+      `${contextEmit}): ${DTS_FRAGMENT.UNKNOWN};`,
+    `  reduce(partials: ${partialsType}, ` +
+      `args: ${argsType}): ${DTS_FRAGMENT.UNKNOWN};`,
     CLOSE_BRACE,
   ].join(TEXT_NEWLINE);
 }
@@ -242,6 +389,33 @@ function emitHandlerContexts(handlers) {
   return lines.join(TEXT_NEWLINE);
 }
 
+function emitLagrangeRequestClient(operations) {
+  const handleUnion = operations.length === 0 ?
+    DTS_FRAGMENT.NEVER :
+    operations.map((operation) =>
+      `${DTS_FRAGMENT.HANDLES_NAME}[${JSON.stringify(operation.id)}]`)
+      .join(UNION_SEPARATOR);
+  return [
+    ...doc(GENERATED_DOC.LAGRANGE_CLIENT),
+    `${DTS_FRAGMENT.EXPORT_INTERFACE}${DTS_FRAGMENT.LAGRANGE_CLIENT_NAME} {`,
+    DTS_FRAGMENT.REQUEST_ID_FIELD,
+    DTS_FRAGMENT.TENANT_FIELD,
+    DTS_FRAGMENT.PRINCIPAL_FIELD,
+    `  call(operation: ${handleUnion}, args?: ${DTS_FRAGMENT.ARGS_TYPE}): ` +
+      `${DTS_FRAGMENT.PROMISE_UNKNOWN};`,
+    CLOSE_BRACE,
+  ].join(TEXT_NEWLINE);
+}
+
+function emitLagrangeEnv() {
+  return [
+    ...doc(GENERATED_DOC.LAGRANGE_ENV),
+    `${DTS_FRAGMENT.EXPORT_INTERFACE}${DTS_FRAGMENT.LAGRANGE_ENV_NAME} {`,
+    DTS_FRAGMENT.LAGRANGE_ENV_FIELD,
+    CLOSE_BRACE,
+  ].join(TEXT_NEWLINE);
+}
+
 function typingsSource(ir) {
   const sections = [
     DTS_FRAGMENT.DOC_OPEN,
@@ -257,6 +431,15 @@ function typingsSource(ir) {
   ];
   for (const operation of ir.operations) {
     sections.push(emitRowInterface(operation), EMPTY_TEXT);
+    if (Array.isArray(operation.parameters)) {
+      sections.push(emitParamsInterface(operation), EMPTY_TEXT);
+    }
+    if (operation.partialSchema) {
+      sections.push(emitPartialTypeDeclaration(operation), EMPTY_TEXT);
+    }
+    if (operation.stateSchema) {
+      sections.push(emitStateTypeDeclaration(operation), EMPTY_TEXT);
+    }
   }
   for (const operation of ir.operations) {
     sections.push(emitOperationInterface(operation), EMPTY_TEXT);
@@ -267,6 +450,12 @@ function typingsSource(ir) {
     emitHandlerContext(ir.operations), EMPTY_TEXT,
     emitHandlerContexts(ir.handlers || []), EMPTY_TEXT,
   );
+  if (ir.entryKind === FETCH_ENTRY_KIND) {
+    sections.push(
+      emitLagrangeRequestClient(ir.operations), EMPTY_TEXT,
+      emitLagrangeEnv(), EMPTY_TEXT,
+    );
+  }
   return sections.join(TEXT_NEWLINE);
 }
 

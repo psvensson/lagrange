@@ -7,13 +7,13 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "55444cc60d44c3c08d63cfc3a0fad14da4825b6e1f207ff9bdedf81db0a7b35c"
+        "sha256": "2d2bc2b90982ff55d2ec18e55b84240005254464d5c77e699efc17a1bb20c9c3"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "7005b5c83bb8832a0174df73d48ccdcbebfbb6c68e3d1c409ee7a9a311a59927"
+        "sha256": "f1d08a26d2e3e10360f6c8d8ea6bd022f5049bbae78a323d85f7cf2d3eb47380"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3319051,
-        "sha256": "17e87fea9c117b3b33ab59b70b4683db04ad252ab505130bb24c71e8afb9250b"
+        "bytes": 3361069,
+        "sha256": "f2d0536257ddb500bd24b041c913bd75a1d72c7ebc0336b17dfd5fa71a0acb32"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "190c6fb3b8dcdec3136caaa72afb7cc8216f88de71f80fe1c0112387e028912d"
+        "sha256": "c2d6af47cefc6303bb000e59031977e6cdda35b38e7ebf74c0985d86d3e7cfcc"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "641b2324e51914c36b16859525f7dde9c94b14c8dc2734ed3388e782822f367e"
+        "sha256": "3dee644a56d6a1f08b397cad4947d866432c827559306bfa808ea76ae1aad607"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "a389e9f02f4a90482ec24b76c6e0266b9de0c7e1e8088560c1c37a08f31a5a23"
+    "inputDigest": "cde8a51c70675efdb16f63e031507e8ec5409eb86b538a29a903da2df496d474"
   },
   "reconciliation": {
     "complexity": {
@@ -73,7 +73,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "55444cc60d44c3c08d63cfc3a0fad14da4825b6e1f207ff9bdedf81db0a7b35c"
+        "sha256": "2d2bc2b90982ff55d2ec18e55b84240005254464d5c77e699efc17a1bb20c9c3"
       },
       "declaredCount": 1731,
       "observedCount": 1731,
@@ -84,7 +84,7 @@
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "7005b5c83bb8832a0174df73d48ccdcbebfbb6c68e3d1c409ee7a9a311a59927"
+        "sha256": "f1d08a26d2e3e10360f6c8d8ea6bd022f5049bbae78a323d85f7cf2d3eb47380"
       },
       "declaredCount": 147,
       "observedCount": 147,
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "190c6fb3b8dcdec3136caaa72afb7cc8216f88de71f80fe1c0112387e028912d"
+          "sha256": "c2d6af47cefc6303bb000e59031977e6cdda35b38e7ebf74c0985d86d3e7cfcc"
         },
         "cloneGroups": 42,
         "duplicatedLines": 1331,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "641b2324e51914c36b16859525f7dde9c94b14c8dc2734ed3388e782822f367e"
+          "sha256": "3dee644a56d6a1f08b397cad4947d866432c827559306bfa808ea76ae1aad607"
         },
         "cloneGroups": 649,
         "duplicatedLines": 24346,
@@ -173,25 +173,25 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3319051,
-        "sha256": "17e87fea9c117b3b33ab59b70b4683db04ad252ab505130bb24c71e8afb9250b"
+        "bytes": 3361069,
+        "sha256": "f2d0536257ddb500bd24b041c913bd75a1d72c7ebc0336b17dfd5fa71a0acb32"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "14ac0b777ac98508fbe6a5f2b11d4892d55fa5df913b2d15092fd31ee94df60c",
-      "moduleCount": 5932,
-      "edgeCount": 32250,
-      "unresolvedCount": 44
+      "sourceDigest": "eb58ae26ded3ee6bfa6e4894a35d5939946a21039ab0d55158c8f5fc187e1967",
+      "moduleCount": 5993,
+      "edgeCount": 32704,
+      "unresolvedCount": 46
     }
   },
   "assignment": {
     "sourceSignalCount": 2436,
     "assignedSignalCount": 2436,
     "uniqueAssignmentCount": 2436,
-    "digest": "e784be7f9db9c8b764753b98d2ff0120606f2f975928100c738fad1a6711c334"
+    "digest": "4a23d7a0d30d7b0f40cc07eeef6c9836de7be2f237d86614e796fc6ab150ddb7"
   },
   "signalCounts": {
     "cognitive": 147,
@@ -393,7 +393,7 @@
       "cloneTouches": 8,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 75,
+      "importIn": 76,
       "importOut": 140,
       "score": 553.4,
       "topPaths": [
@@ -617,7 +617,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 138,
+      "importIn": 140,
       "importOut": 78,
       "score": 196,
       "topPaths": [
@@ -813,8 +813,8 @@
       "cloneTouches": 1,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 127,
-      "importOut": 63,
+      "importIn": 128,
+      "importOut": 64,
       "score": 122,
       "topPaths": [
         "src/transport/message-router-outbound-queue-admission.js",
@@ -1342,8 +1342,8 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 36,
-      "importOut": 49,
+      "importIn": 37,
+      "importOut": 50,
       "score": 48,
       "topPaths": [
         "src/service/service-lifecycle-command-owner.js",
@@ -1426,7 +1426,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 55,
+      "importIn": 60,
       "importOut": 57,
       "score": 44,
       "topPaths": [
@@ -1826,7 +1826,7 @@
       "cloneTouches": 7,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 1,
+      "importIn": 3,
       "importOut": 48,
       "score": 18.7,
       "topPaths": [

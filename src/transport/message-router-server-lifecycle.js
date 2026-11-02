@@ -1,4 +1,8 @@
+import https from 'node:https';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+
+const AUTH_REJECTED_EVENT = 'authenticationRejected';
+const HTTP_UNAUTHORIZED_CODE = 401;
 
 const {
   ConnectionState,
@@ -101,6 +105,10 @@ class MessageRouterServerLifecycle {
           resolveOnce();
           return;
         }
+        if (this.trustProvider?.isTlsRequired()) {
+          this.startTlsWebSocketServer(resolveOnce, rejectOnce);
+          return;
+        }
         const serverOptions = {
           port: this.wsPort,
         };
@@ -130,6 +138,59 @@ class MessageRouterServerLifecycle {
         rejectOnce(error);
       }
     });
+  }
+  startTlsWebSocketServer(resolveOnce, rejectOnce) {
+    const tlsOptions = this.trustProvider.buildServerTlsOptions();
+    const httpsServer = https.createServer(tlsOptions);
+    this.trustProvider.attachTlsServer(httpsServer);
+    const wsServer = new WebSocketServer({
+      server: httpsServer,
+      verifyClient: (info, cb) => this.verifyIncomingTlsClient(info, cb),
+    });
+    wsServer._server = httpsServer;
+    this.server = wsServer;
+    wsServer.on(TRANSPORT_EVENT.CONNECTION, (ws, req) => {
+      this.handleIncomingConnection(ws, req);
+    });
+    httpsServer.on(TRANSPORT_EVENT.LISTENING, () => {
+      this.logger.info(ROUTER_LOG_MSG.WS_SERVER_LISTENING, {
+        port: this.wsPort,
+        routerId: this.routerId,
+      });
+      resolveOnce();
+    });
+    httpsServer.on(TRANSPORT_EVENT.ERROR, (error) => {
+      this.logger.error(ROUTER_LOG_MSG.WS_SERVER_ERROR, {
+        error: error.message,
+        routerId: this.routerId,
+      });
+      rejectOnce(error);
+    });
+    wsServer.on(TRANSPORT_EVENT.ERROR, (error) => {
+      this.logger.error(ROUTER_LOG_MSG.WS_SERVER_ERROR, {
+        error: error.message,
+        routerId: this.routerId,
+      });
+      rejectOnce(error);
+    });
+    if (this.wsHost) {
+      httpsServer.listen(this.wsPort, this.wsHost);
+    } else {
+      httpsServer.listen(this.wsPort);
+    }
+  }
+  verifyIncomingTlsClient(info, cb) {
+    const peerCert = info?.req?.socket?.getPeerCertificate?.(true) || null;
+    const verification = this.trustProvider.verifyPeerCertificate(peerCert);
+    if (!verification.valid) {
+      this.emit(AUTH_REJECTED_EVENT, {
+        code: verification.code,
+        reason: verification.reason,
+      });
+      cb(false, HTTP_UNAUTHORIZED_CODE, verification.reason);
+      return;
+    }
+    cb(true);
   }
   /**
    * Start an in-process "server" registered by port for test-only transport.
@@ -175,6 +236,7 @@ class MessageRouterServerLifecycle {
    */
   handleIncomingConnection(ws, _req) {
     const connectionId = uuidv4();
+    const peerCertificate = _req?.socket?.getPeerCertificate?.(true) || null;
     const connectionInfo = {
       connectionId,
       ws,
@@ -183,6 +245,8 @@ class MessageRouterServerLifecycle {
       bootIncarnation: TRANSPORT_NUM.ZERO,
       isIncoming: true,
       retired: false,
+      peerCertificate,
+      authenticatedIdentify: !this.trustProvider?.isTlsRequired(),
       createdAt: this.timeSource.now(),
     };
     this.logger.debug(ROUTER_LOG_MSG.INCOMING_CONNECTION, {

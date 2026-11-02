@@ -11,6 +11,8 @@ releases without a compatibility guarantee.
 ## [Unreleased]
 
 ### Fixed
+- **0.4.1 bounded correctness & claim repairs (`call-cell-reduce-coordinator.js`, `runtime-service-call-cell-handler.js`, `management-v1-owner.js`, `bootstrap-api-server-methods.js`):**
+  Fails closed with `REDUCE_INCOMPLETE` (`partial_unbounded`) instead of silently truncating merged partial sets at `limit` across slots or exceeding `maxPartialBytes`, enforces `resultMaxBytes` (`batchByteBound`) during local shard SQL reads before full batch materialization, reports unconfigured `management-v1` capabilities (`rollingUpgrade`, `backupRestore`, `decommissionNode`) as `UNSUPPORTED` by default while enforcing `verifyControlPlaneAuth` on `/management/v1/*` routes, and reconciles comparative benchmark documentation and CI guards against withdrawn modeled claims.
 - **Comparative benchmark results withdrawn (correction to 0.4.0 and earlier entries):**
   every comparative performance figure published under `docs/benchmarks/` and
   `data/tidb-comparison/` before 2026-11-01, including the throughput, latency,
@@ -47,7 +49,7 @@ starved seed`.
 
 ### Added
 - **Scenario C in-partition $O(1)$ micro-bucket feature rollups & epoch-watermarked lazy backfill (`partition-feature-rollup-constants.js`, `partition-feature-rollup-store.js`, `epoch-lazy-feature-backfill.js`, `scenario-c-rollup-comparator.js`):**
-  Maintains synchronous per-entity decomposable micro-buckets (`1 s` / `60 s`) in $O(1)$ inside the partition leader apply path (`584.2 dec/s` on 3-node and `2420.0 dec/s` on 5-node `RF=3` across `0 ms`, `100 ms`, and `1000 ms` SLAs with `0.0%` stale reads), evaluates multi-window sliding rollups (`15m`, `30m`) in $O(1)$ with `0.0 s` backfill on decomposable window/weight changes, and performs epoch-watermarked lazy on-read cutover on hot entities plus bounded in-process background replay (`0 B` WAN traffic) for new raw attributes.
+  Maintains synchronous per-entity decomposable micro-buckets (`1 s` / `60 s`) in $O(1)$ inside the partition leader apply path across `0 ms`, `100 ms`, and `1000 ms` SLAs with `0.0%` stale reads (multi-host comparative throughput and latency remain `[not measured]` pending original multi-host execution receipts), evaluates multi-window sliding rollups (`15m`, `30m`) in $O(1)$ with `0.0 s` backfill on decomposable window/weight changes, and performs epoch-watermarked lazy on-read cutover on hot entities plus bounded in-process background replay (`0 B` WAN traffic) for new raw attributes.
 - **Locking-read bound parameter propagation & split-PK tuple resolution (`sql-query-engine-select-execution.js`, `sql-locking-read-execution.js`):**
   Propagates bound `params` and `queryOptions` into `executeLockingReadReservations`,
   merges equality-bound `WHERE` PK columns with projected `SELECT` columns so both

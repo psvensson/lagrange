@@ -346,17 +346,23 @@ test('Property 14: Code Path Uniqueness', async (t) => {
     // clearly belongs to transport/routing responsibilities. This includes
     // delivery-path resilience helpers (retry-rate budgets, admission control)
     // that bound how a node drives the transport toward a target owner.
+    const transportTokens = [
+      'transport',
+      'router',
+      'connection',
+      'rpc',
+      'address',
+      'resolution',
+      'retry',
+      'budget',
+      'admission',
+      'channel',
+      'trust',
+      'certificate',
+      'join-token',
+    ];
     const belongsToTransport = (transportFile) =>
-      transportFile.includes('transport') ||
-      transportFile.includes('router') ||
-      transportFile.includes('connection') ||
-      transportFile.includes('rpc') ||
-      transportFile.includes('address') ||
-      transportFile.includes('resolution') ||
-      transportFile.includes('retry') ||
-      transportFile.includes('budget') ||
-      transportFile.includes('admission') ||
-      transportFile.includes('channel');
+      transportTokens.some((token) => transportFile.includes(token));
 
     fc.assert(
       fc.property(

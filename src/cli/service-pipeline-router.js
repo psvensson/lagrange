@@ -8,6 +8,7 @@
 
 import {
   runBuild,
+  runCall,
   runDeploy,
   runGenerate,
   runInspect,
@@ -32,17 +33,21 @@ const SERVICE_COMMAND_EXIT_CODE = Object.freeze({
 });
 const PIPELINE_COMMAND = Object.freeze({
   BUILD: 'build',
+  CALL: 'call',
   DEPLOY: 'deploy',
   GENERATE: 'generate',
   INSPECT: 'inspect',
   PUBLISH: 'publish',
 });
 const PIPELINE_FLAG = Object.freeze({
+  ARGUMENTS: '--arguments',
   IDEMPOTENCY_KEY: '--idempotency-key',
+  INVOCATION_KEY: '--invocation-key',
   OPTION_PREFIX: '-',
 });
 const MAXIMUM_IDEMPOTENCY_KEY_LENGTH = 256;
 const PIPELINE_USAGE_MESSAGE = Object.freeze({
+  ARGUMENTS_INVALID: '--arguments must be a valid JSON object',
   DIRECTORY_REQUIRED: 'requires exactly one project directory',
   IDEMPOTENCY_KEY_INVALID:
     '--idempotency-key must contain 1 to 256 characters',
@@ -117,6 +122,41 @@ function parseDeployFlags(command, args, parsed) {
   }
 }
 
+function parseCallArgumentsJson(rawJson) {
+  let parsed;
+  try {
+    parsed = JSON.parse(rawJson);
+  } catch {
+    throw new ServicePipelineUsageError(
+      PIPELINE_USAGE_MESSAGE.ARGUMENTS_INVALID);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new ServicePipelineUsageError(
+      PIPELINE_USAGE_MESSAGE.ARGUMENTS_INVALID);
+  }
+  return parsed;
+}
+
+function parseCallFlags(command, args, parsed) {
+  for (let index = 1; index < args.length; index += 1) {
+    const token = args[index];
+    if (token === PIPELINE_FLAG.ARGUMENTS) {
+      const rawJson = parseFlagValue(command, args, token, index);
+      parsed.arguments = parseCallArgumentsJson(rawJson);
+      index += 1;
+    } else if (token === PIPELINE_FLAG.INVOCATION_KEY) {
+      parsed.invocationKey = parseFlagValue(command, args, token, index);
+      index += 1;
+    } else if (token === PIPELINE_FLAG.IDEMPOTENCY_KEY) {
+      parsed.idempotencyKey = parseFlagValue(command, args, token, index);
+      index += 1;
+    } else {
+      throw new ServicePipelineUsageError(
+        `${PIPELINE_USAGE_MESSAGE.UNKNOWN_OPTION}: ${token}`);
+    }
+  }
+}
+
 function parsePipelineCommand(argv) {
   const [command, ...args] = argv;
   if (args.length === 0 ||
@@ -126,6 +166,11 @@ function parsePipelineCommand(argv) {
   }
   const projectDirectory = args[0];
   const parsed = {command, projectDirectory};
+  if (command === PIPELINE_COMMAND.CALL) {
+    parsed.bindingName = projectDirectory;
+    parseCallFlags(command, args, parsed);
+    return parsed;
+  }
   if (command === PIPELINE_COMMAND.DEPLOY) {
     parseDeployFlags(command, args, parsed);
     return parsed;
@@ -169,6 +214,15 @@ async function runServicePipelineCommand(argv, dependencyOverrides = {}) {
       await runInspect({
         createSqlClient: dependencies.createSqlClient,
         projectDirectory: command.projectDirectory,
+        writeOutput: dependencies.writeOutput,
+      });
+    } else if (command.command === PIPELINE_COMMAND.CALL) {
+      await runCall({
+        arguments: command.arguments,
+        createSqlClient: dependencies.createSqlClient,
+        idempotencyKey: command.idempotencyKey,
+        invocationKey: command.invocationKey,
+        name: command.bindingName,
         writeOutput: dependencies.writeOutput,
       });
     } else if (command.command === PIPELINE_COMMAND.PUBLISH) {

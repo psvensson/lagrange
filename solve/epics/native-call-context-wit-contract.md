@@ -112,6 +112,12 @@ and the typed-API ladder.
 
 ## Decision log
 
+- 2026-11-01 — Typed selector parameters sealed by quest
+  `call-selector-typed-parameter-narrowing` (`pilot-readiness-and-public-proof`
+  Q2): `call` and `pushdown` Binding sources admit optional typed selector
+  `parameters` alongside `statement` (`SOURCE_OPTIONAL_FIELDS` =
+  `['parameters', 'statement']`), validated for 1:1 placeholder correspondence
+  with the fixed SQL selector.
 - 2026-08-02 — Pushdown sealed by quest `native-call-context-contract-sealing`:
   pushdown shares the `call-cell` world; a pushdown invocation IS the
   Binding-declared statement, and the shared `arguments` parameter degenerates

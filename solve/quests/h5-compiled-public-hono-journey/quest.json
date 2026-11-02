@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "h5-compiled-public-hono-journey",
+  "epic": "standard-http-service-api",
+  "statement": "Prove the complete public Hono service journey (H5, Section 7.1 items 1-9) on real compiled WASM components consuming Q2-Q5 and J1-J3: scaffold a Hono service via createHonoServiceProject with LagrangeRequestClient/LagrangeEnv typings, deploy a zero-operation HTTP-only service and a multi-operation service through ArtifactPayloadStore and clean-client receipt deployment, execute sequential operations with typed selector narrowing (Q2), paged multi-batch execution (Q3), and structured partials (Q4) on service-cell-v2 (Q5) verified against an independent oracle, exercise full HTTP Fetch fidelity (binary/text/byte-distinct JSON bodies, repeated query params, multiple Set-Cookie headers, HEAD, 204), overlapping Promise.all concurrency refusal, warm instance isolation, keyed replay/conflict/cross-principal isolation/two-waiter cancellation/uncertain outcome refusal (H4), in-flight generation pinning across live endpoint updates, and node restart/second-node activation from sealed ArtifactPayloadStore rows.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/h5-compiled-public-hono-journey-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "8a5783d93f14303b57c833b2acd46f87b455b184"
+}

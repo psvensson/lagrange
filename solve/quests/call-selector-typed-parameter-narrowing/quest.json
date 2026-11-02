@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "call-selector-typed-parameter-narrowing",
+  "epic": "pilot-readiness-and-public-proof",
+  "statement": "Implement Q2 typed selector parameter narrowing across the distributed-operation authoring descriptor, service source IR, deployment binding contract, generated editor typings, Call Cell planner/batch executor, Call Cell invoker/statement adapter, and shard-host Call Cell runtime handler so authorized invocation arguments supply typed parameter vectors normalized once at the planner, narrow target partitions before dispatch, bind through the existing SQLite parameter mechanism on each shard host, fence both parameter schema and invocation parameter values, and fail closed before dispatch on missing, unknown, wrong-type, non-finite, out-of-range, disallowed-null, or authority-impersonating values.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q2-call-selector-typed-parameter-narrowing-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "292dd13bcb40ade72b41c2cb99465f59cb5fba81"
+}

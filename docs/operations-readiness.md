@@ -197,6 +197,19 @@ Before changing versions:
 A successful rolling-restart test in the repository is engineering evidence,
 not a general mixed-version support promise.
 
+### Certified pilot support envelope
+
+When a deployment configures the bounded pilot support envelope
+([`support-envelope.json`](support-envelope.json)), admission and recovery are
+pinned to the exact certified version pair (`0.4.1 -> 0.5.0`), topology bounds
+(`3..7` nodes, `RF=3`), rollback cutoff (`BEFORE_TARGET_SCHEMA_FINALIZE`), and
+five drill receipts (`rolling_upgrade`, `downgrade_rollback_boundary`,
+`one_node_failure_recovery`, `wiped_replica_rebuild`, and
+`service_artifact_upgrade`) with zero lost acknowledged writes. Version pairs or
+mixed-version peers outside that envelope are refused with
+`OUTSIDE_SUPPORT_ENVELOPE`, and rollback requests after the cutoff are refused
+with `ROLLBACK_CUTOFF_EXCEEDED`.
+
 ## Observability
 
 Available building blocks include structured logs, readiness probes, admin

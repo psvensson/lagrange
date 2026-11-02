@@ -18,6 +18,8 @@ const {
   normalizeToWebSocketAddress,
 } = MESSAGE_ROUTER_SHARED;
 
+const AUTH_REJECTED_EVENT = 'authenticationRejected';
+
 /**
  * Inbound dispatch for the message router: parse incoming frames, record peer
  * liveness, route control frames (IDENTIFY/PING/PONG/ACK), adopt or rekey
@@ -60,40 +62,10 @@ class MessageRouterInboundDispatch {
         this.handleIdentification(connectionId, ws, message);
         return;
       }
-      if (message.type === RouterMessageType.PING) {
-        this.sendRaw(ws, {
-          type: RouterMessageType.PONG,
-          pingId: message.pingId || null,
-          timestamp: this.timeSource.now(),
-        });
+      if (!this.ensureInboundConnectionAuthenticated(connectionId, ws)) {
         return;
       }
-      if (message.type === RouterMessageType.PONG) {
-        if (message.pingId && this.pendingPings.has(message.pingId)) {
-          const pending = this.pendingPings.get(message.pingId);
-          this.timeSource.clearTimeout(pending.timeout);
-          this.pendingPings.delete(message.pingId);
-          pending.resolve(true);
-        }
-        return;
-      }
-      if (message.type === RouterMessageType.ACK) {
-        this.handleAcknowledgment(message);
-        return;
-      }
-      if (message.type === RouterMessageType.SERVICE_RESPONSE) {
-        this.handleServiceResponse(message);
-        return;
-      }
-      if (message.type === RouterMessageType.SERVICE_MESSAGE) {
-        const delivery = this.connectionAuthorityOwner.captureIncomingDelivery(connectionId, ws);
-        this.handleServiceMessage(ws, message, delivery);
-        return;
-      }
-      this.logger.warn(ROUTER_LOG_MSG.MESSAGE_UNKNOWN, {
-        type: message.type,
-        connectionId,
-      });
+      this.routeAuthenticatedInboundFrame(connectionId, ws, message);
     } catch (error) {
       this.logger.error(ROUTER_LOG_MSG.MESSAGE_PARSE_FAILED, {
         connectionId,
@@ -101,6 +73,109 @@ class MessageRouterInboundDispatch {
       });
       throw error;
     }
+  }
+  ensureInboundConnectionAuthenticated(connectionId, ws) {
+    if (this.isInboundMessageAuthenticated(connectionId)) {
+      return true;
+    }
+    try {
+      ws.terminate();
+    } catch (_err) {
+      void _err;
+    }
+    return false;
+  }
+  routeAuthenticatedInboundFrame(connectionId, ws, message) {
+    if (message.type === RouterMessageType.PING) {
+      this.sendRaw(ws, {
+        type: RouterMessageType.PONG,
+        pingId: message.pingId || null,
+        timestamp: this.timeSource.now(),
+      });
+      return;
+    }
+    if (message.type === RouterMessageType.PONG) {
+      if (message.pingId && this.pendingPings.has(message.pingId)) {
+        const pending = this.pendingPings.get(message.pingId);
+        this.timeSource.clearTimeout(pending.timeout);
+        this.pendingPings.delete(message.pingId);
+        pending.resolve(true);
+      }
+      return;
+    }
+    if (message.type === RouterMessageType.ACK) {
+      this.handleAcknowledgment(message);
+      return;
+    }
+    if (message.type === RouterMessageType.SERVICE_RESPONSE) {
+      this.handleServiceResponse(message);
+      return;
+    }
+    if (message.type === RouterMessageType.SERVICE_MESSAGE) {
+      const delivery = this.connectionAuthorityOwner.captureIncomingDelivery(connectionId, ws);
+      this.handleServiceMessage(ws, message, delivery);
+      return;
+    }
+    this.logger.warn(ROUTER_LOG_MSG.MESSAGE_UNKNOWN, {
+      type: message.type,
+      connectionId,
+    });
+  }
+  isInboundMessageAuthenticated(connectionId) {
+    if (!this.trustProvider?.isTlsRequired()) {
+      return true;
+    }
+    const conn = this.nodeConnections.get(connectionId);
+    if (!conn || !conn.isIncoming) {
+      return true;
+    }
+    return conn.authenticatedIdentify === true;
+  }
+  rejectUnauthenticatedIdentify(connectionId, connection, ws, message, authResult) {
+    this.emit(AUTH_REJECTED_EVENT, {
+      connectionId,
+      nodeId: message?.nodeId || null,
+      code: authResult.code,
+      reason: authResult.reason,
+    });
+    if (connection && connection.isIncoming) {
+      this.retireConnection(connection);
+      this.nodeConnections.delete(connectionId);
+      this.nodeInboundActivityAt.delete(connectionId);
+    }
+    try {
+      ws.terminate();
+    } catch (_err) {
+      void _err;
+    }
+    return false;
+  }
+  verifyIncomingIdentifyTrust(connectionId, connection, ws, message) {
+    if (!this.trustProvider?.isTlsRequired()) {
+      return true;
+    }
+    const peerCert =
+      connection?.peerCertificate ||
+      ws?._socket?.getPeerCertificate?.(true) ||
+      null;
+    const authResult = this.trustProvider.verifyIdentifyFrame(
+      message,
+      peerCert,
+      {nowMs: this.timeSource.now()},
+    );
+    if (!authResult.valid) {
+      return this.rejectUnauthenticatedIdentify(
+        connectionId,
+        connection,
+        ws,
+        message,
+        authResult,
+      );
+    }
+    if (connection) {
+      connection.authenticatedIdentify = true;
+    }
+    return true;
   }
   /**
    * Handle identification message from remote node.
@@ -131,6 +206,10 @@ class MessageRouterInboundDispatch {
       }
       return;
     }
+    const connection = this.nodeConnections.get(connectionId);
+    if (!this.verifyIncomingIdentifyTrust(connectionId, connection, ws, message)) {
+      return;
+    }
     this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_RECEIVED, {
       connectionId,
       remoteNodeId: nodeId,
@@ -138,7 +217,6 @@ class MessageRouterInboundDispatch {
       localNodeId: this.nodeId,
       existingConnectionForNode: this.nodeConnections.has(nodeId),
     });
-    const connection = this.nodeConnections.get(connectionId);
     if (connection && connection.isIncoming) {
       if (!this.externalAdmissionEnabled && nodeId !== this.nodeId) {
         connection.state = ConnectionState.CLOSED;
