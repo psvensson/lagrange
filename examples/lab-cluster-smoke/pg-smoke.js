@@ -7,6 +7,7 @@
  * workload readiness tracking, and bounded pg.Client query verification.
  */
 
+import {OLTP_ADAPTER_KEEP_DATASET} from '../../test/distributed/reference-client/oltp-adapter-contract.js';
 import pg from 'pg';
 import process from 'node:process';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
@@ -106,7 +107,7 @@ async function runLiveLagrangeScenarioAComparison(options = {}) {
       },
     };
   } finally {
-    await adapter.close({dropTables: false});
+    await adapter.close(OLTP_ADAPTER_KEEP_DATASET);
   }
 }
 

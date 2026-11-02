@@ -526,7 +526,12 @@ async function testScenarioRunContracts() {
         lockingReadMode: 'snapshot-write-conflict',
         close: async () => {},
       }),
+      // The probe's contract (coordinator decision 5): the observed mechanism,
+      // the loser's SQLSTATE, whether its retry committed and both effects.
       induceConflict: async () => ({
+        observation: {mechanism: 'serialization-conflict', victimSqlState: '40001',
+          retryCommitted: true, retry: {attempts: 2, retries: 1},
+          effects: {baseline: 100, final: 300, delta: 100}},
         victim: {side: 'right', code: '40001', sqlState: '40001', message: 'conflict'},
         results: [],
       }),
@@ -540,7 +545,7 @@ async function testScenarioRunContracts() {
     const admission = makeAdmission('durability');
     const caseDef = buildScenarioADurabilityCase();
     const payment = buildScenarioAPaymentCase();
-    const result = await runDurability(fakeCluster, {
+    const durabilityOptions = (overrides) => ({
       admission,
       prepareContext: () => fakeMockContext(admission),
       createAdapter: async () => ({
@@ -551,6 +556,23 @@ async function testScenarioRunContracts() {
         executeTransaction: async () => ({paidCents: payment.identity.expected.paidCents}),
         close: async () => {},
       }),
+      observePayment: async () => ({
+        warehouseYtdCents: payment.identity.expected.warehouseYtdCents,
+        districtYtdCents: payment.identity.expected.districtYtdCents,
+        customerBalanceCents: payment.identity.expected.customerBalanceCents,
+        customerYtdPaymentCents: payment.identity.expected.customerYtdPaymentCents,
+        customerPaymentCount: payment.identity.expected.customerPaymentCount,
+        historyCount: payment.identity.expected.historyCount,
+        historyAmountCents: payment.identity.expected.historyAmountCents,
+      }),
+      observeSnapshot: async () => ({stateSha256: DUMMY_STATE_SHA}),
+      ...overrides,
+    });
+    const unchangedIncarnationCluster = {
+      getNodes: () => [{id: 'node-1', ip: '127.0.0.1', bootIncarnation: 'inc-same'}],
+      restartNode: async () => {},
+    };
+    const result = await runDurability(fakeCluster, durabilityOptions({
       restartCluster: async () => ({
         faultTarget: {
           nodeId: 'node-1',
@@ -566,76 +588,41 @@ async function testScenarioRunContracts() {
           'full_oltp_state_sha256',
         ],
       }),
-      observePayment: async () => ({
-        warehouseYtdCents: payment.identity.expected.warehouseYtdCents,
-        districtYtdCents: payment.identity.expected.districtYtdCents,
-        customerBalanceCents: payment.identity.expected.customerBalanceCents,
-        customerYtdPaymentCents: payment.identity.expected.customerYtdPaymentCents,
-        customerPaymentCount: payment.identity.expected.customerPaymentCount,
-        historyCount: payment.identity.expected.historyCount,
-        historyAmountCents: payment.identity.expected.historyAmountCents,
-      }),
-      observeSnapshot: async () => ({stateSha256: DUMMY_STATE_SHA}),
       outputPath: '/tmp/test-durability.json',
-    });
+    }));
     assert.equal(result.status, 'passed');
 
     await assert.rejects(
-      runDurability(fakeCluster, {
-        admission,
-        prepareContext: () => fakeMockContext(admission),
-        createAdapter: async () => ({
-          executionPath: 'public-sql',
-          protocol: 'postgresql',
-          lockingReadMode: 'snapshot-write-conflict',
-          datasetSha256: caseDef.identity.datasetSha256,
-          executeTransaction: async () => ({paidCents: payment.identity.expected.paidCents}),
-          close: async () => {},
-        }),
+      runDurability(fakeCluster, durabilityOptions({
         restartCluster: async () => {},
-        observePayment: async () => ({
-          warehouseYtdCents: payment.identity.expected.warehouseYtdCents,
-          districtYtdCents: payment.identity.expected.districtYtdCents,
-          customerBalanceCents: payment.identity.expected.customerBalanceCents,
-          customerYtdPaymentCents: payment.identity.expected.customerYtdPaymentCents,
-          customerPaymentCount: payment.identity.expected.customerPaymentCount,
-          historyCount: payment.identity.expected.historyCount,
-          historyAmountCents: payment.identity.expected.historyAmountCents,
-        }),
-        observeSnapshot: async () => ({stateSha256: DUMMY_STATE_SHA}),
         outputPath: '/tmp/test-durability-noop.json',
-      }),
+      })),
       /fault_evidence_missing/u,
     );
 
     await assert.rejects(
-      runDurability({
-        getNodes: () => [{id: 'node-1', ip: '127.0.0.1', bootIncarnation: 'inc-same'}],
-        restartNode: async () => {},
-      }, {
-        admission,
-        prepareContext: () => fakeMockContext(admission),
-        createAdapter: async () => ({
-          executionPath: 'public-sql',
-          protocol: 'postgresql',
-          lockingReadMode: 'snapshot-write-conflict',
-          datasetSha256: caseDef.identity.datasetSha256,
-          executeTransaction: async () => ({paidCents: payment.identity.expected.paidCents}),
-          close: async () => {},
-        }),
-        observePayment: async () => ({
-          warehouseYtdCents: payment.identity.expected.warehouseYtdCents,
-          districtYtdCents: payment.identity.expected.districtYtdCents,
-          customerBalanceCents: payment.identity.expected.customerBalanceCents,
-          customerYtdPaymentCents: payment.identity.expected.customerYtdPaymentCents,
-          customerPaymentCount: payment.identity.expected.customerPaymentCount,
-          historyCount: payment.identity.expected.historyCount,
-          historyAmountCents: payment.identity.expected.historyAmountCents,
-        }),
-        observeSnapshot: async () => ({stateSha256: DUMMY_STATE_SHA}),
+      runDurability(unchangedIncarnationCluster, durabilityOptions({
+        faultRole: 'data-replica',
         outputPath: '/tmp/test-durability-unchanged-incarnation.json',
-      }),
+      })),
       /fault_incarnation_unchanged/u,
+    );
+
+    // The fault target's role comes from the proof plan; a missing or unknown
+    // role refuses the case instead of presuming a data replica.
+    await assert.rejects(
+      runDurability(unchangedIncarnationCluster, durabilityOptions({
+        outputPath: '/tmp/test-durability-unplanned-role.json',
+      })),
+      /fault_role_unplanned/u,
+    );
+
+    await assert.rejects(
+      runDurability(unchangedIncarnationCluster, durabilityOptions({
+        faultRole: 'any-node',
+        outputPath: '/tmp/test-durability-unknown-role.json',
+      })),
+      /fault_role_unplanned/u,
     );
   }
 }

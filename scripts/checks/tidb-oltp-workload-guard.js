@@ -46,12 +46,12 @@ const EXPECTED_LATENCY_SUMMARY = Object.freeze({
 });
 const EMPTY_LATENCY_SUMMARY = Object.freeze({
   count: 0,
-  avg: 0,
-  p50: 0,
-  p95: 0,
-  p99: 0,
-  min: 0,
-  max: 0,
+  avg: null,
+  p50: null,
+  p95: null,
+  p99: null,
+  min: null,
+  max: null,
 });
 
 const SEED_EXECUTION = 991;

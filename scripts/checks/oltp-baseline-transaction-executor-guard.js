@@ -42,6 +42,7 @@ const STOCK_LEVEL_THRESHOLD = 15;
 const EXPECTED_NEW_ORDER_RESULT = objectFreeze({
   orderId: ORDER_ID_301,
   totalCents: TOTAL_CENTS_500,
+  lineCount: 1,
 });
 const EXPECTED_PAYMENT_RESULT = objectFreeze({paidCents: PAID_CENTS_900});
 const EXPECTED_EMPTY_ORDER_STATUS_RESULT = objectFreeze({orderId: null, lineCount: 0, lines: []});
@@ -188,7 +189,7 @@ async function assertPayment() {
       customerId: 1,
       amountCents: AMOUNT_CENTS_100,
     }, CONFIG_TEN_DISTRICTS),
-    /did not update exactly one customer/u,
+    /customer-payment affected 0 row\(s\), expected 1/u,
   );
 }
 
@@ -250,6 +251,7 @@ async function assertDelivery() {
     [OLTP_SQL_STATEMENT.DELIVERY_LINES_FOR_UPDATE]: {
       rows: [{amount_cents: AMOUNT_CENTS_100}, {amount_cents: 250}], rowCount: TWO,
     },
+    [OLTP_SQL_STATEMENT.DELIVERY_MARK_LINES]: {rows: [], rowCount: TWO},
   });
   const result = await executeOltpBaselineTransaction(session, {
     kind: OLTP_OPERATION_KIND.DELIVERY,

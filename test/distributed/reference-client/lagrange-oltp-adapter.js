@@ -1,4 +1,5 @@
-import pg from 'pg';
+import {dropsDataset} from './oltp-adapter-contract.js';
+import {createPgWireClient} from './pg-wire-client.js';
 
 import {
   buildOltpBaselineDataset,
@@ -12,8 +13,14 @@ import {
   OLTP_SQL_STATEMENT,
   executeOltpBaselineTransaction,
 } from '../harness/oltp-baseline-transaction-executor.js';
+import {
+  OLTP_COMMIT_FAILURE_OUTCOME,
+  OLTP_PROVISIONING_STATE,
+  OLTP_SCHEMA_PROVISIONING_BOUND as SCHEMA_PROVISIONING_BOUND,
+  classifyOltpProvisioningState,
+  resolveOltpCommitFailureOutcome,
+} from '../harness/oltp-error-classification.js';
 
-const {Client} = pg;
 const ZERO = 0;
 const ONE = 1;
 const INSERT_BATCH_SIZE = 100;
@@ -23,6 +30,13 @@ const PUBLIC_EXECUTION_PATH = 'public-sql';
 const LOCKING_READ_MODE = 'snapshot-write-conflict';
 const NATIVE_LOCKING_READ_MODE = 'native-for-update';
 const FOR_UPDATE_SUFFIX = ' FOR UPDATE';
+
+const NATIVE_FOR_UPDATE_TRANSLATION_AUDIT = Object.freeze({
+  lockingReadMode: NATIVE_LOCKING_READ_MODE,
+  forUpdateStripped: false,
+  nativeLockingReadProved: false,
+  strippedStatementIds: Object.freeze([]),
+});
 
 const LAGRANGE_OLTP_TRANSLATION_AUDIT = Object.freeze({
   lockingReadMode: LOCKING_READ_MODE,
@@ -220,7 +234,7 @@ function clientOptions(endpoint, connection) {
 }
 
 function defaultClientFactory(options) {
-  return new Client(options);
+  return createPgWireClient(options);
 }
 
 async function openClient(createClient, options) {
@@ -247,17 +261,17 @@ async function closeClients(clients) {
   }
 }
 
-function resolveErrorSqlState(error) {
-  return String(
-    error?.sqlState || error?.sqlstate || error?.code || '',
-  ).toUpperCase();
-}
-
-function isExplicitCommitSerializationAbort(error) {
-  return resolveErrorSqlState(error) === '40001' &&
-    error?.commitOutcomeUnknown !== true &&
-    error?.outcome !== 'OUTCOME_UNKNOWN' &&
-    error?.code !== 'OUTCOME_UNKNOWN';
+// An aborted COMMIT is already rolled back by the product; the explicit
+// ROLLBACK only clears a driver-side transaction state. Its failure is kept
+// on the commit error as evidence, never swallowed.
+async function rollbackAfterAbortedCommit(rollback, commitError) {
+  try {
+    await rollback();
+  } catch (rollbackError) {
+    if (commitError && typeof commitError === 'object') {
+      commitError.rollbackAfterAbortError = String(rollbackError?.message || rollbackError);
+    }
+  }
 }
 
 function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
@@ -285,12 +299,12 @@ function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
         await client.query('COMMIT');
         return result;
       } catch (commitError) {
-        if (isExplicitCommitSerializationAbort(commitError)) {
-          try {
-            await client.query('ROLLBACK');
-          } catch {
-            // best-effort rollback, ignore if already aborted
-          }
+        // The retry owner maps the COMMIT failure: a product-answered
+        // SQLSTATE (40001, 25P04, ...) is a definite rollback; a lost answer
+        // or a typed unknown outcome leaves the commit unresolved.
+        if (resolveOltpCommitFailureOutcome(commitError) ===
+            OLTP_COMMIT_FAILURE_OUTCOME.ABORTED) {
+          await rollbackAfterAbortedCommit(() => client.query('ROLLBACK'), commitError);
           if (commitError && typeof commitError === 'object') {
             commitError.commitAborted = true;
           }
@@ -312,7 +326,9 @@ function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
       const result = await client.query(sql, parameters);
       return {
         rows: Array.isArray(result?.rows) ? result.rows : [],
-        rowCount: Number.isFinite(result?.rowCount) ? Number(result.rowCount) : ZERO,
+        // A write without a reported count stays unreported (null); the
+        // executor refuses it rather than reading zero.
+        rowCount: Number.isFinite(result?.rowCount) ? Number(result.rowCount) : null,
       };
     },
   };
@@ -344,38 +360,67 @@ async function insertRows(client, table, columns, rows) {
 // actually exist: a fresh cluster skips every drop honestly, and a reused
 // cluster that still holds the schema fails loudly on the product gap rather
 // than silently loading on top of stale rows.
-const TABLE_NOT_FOUND_MARKER = 'Table not found';
 const DROP_TABLE_UNSUPPORTED_MARKER = 'Unsupported statement type: DROP_TABLE';
+// A table the product answers is present; every other observation is one
+// of the classification owner's provisioning states.
+const TABLE_PRESENT = 'present';
 
-async function tableExists(client, table) {
+// The table as the product answers it now: present, or a typed
+// provisioning state; any other answer is raised as the product's error.
+async function observeTableState(client, table) {
   try {
     await client.query(`SELECT COUNT(*) AS row_count FROM ${table}`);
-    return true;
+    return TABLE_PRESENT;
   } catch (error) {
-    if (String(error?.message || '').includes(TABLE_NOT_FOUND_MARKER)) {
-      return false;
-    }
-    throw error;
+    const state = classifyOltpProvisioningState(error);
+    if (state === null) throw error;
+    return {state, error};
   }
 }
 
-async function dropExistingTables(client, {tolerateUnsupportedDrop = false} = {}) {
-  const skipped = [];
+// Outside provisioning a table is present or missing; an unroutable or
+// pending table there is the product's error.
+async function tableExists(client, table) {
+  const observed = await observeTableState(client, table);
+  if (observed === TABLE_PRESENT) return true;
+  if (observed.state === OLTP_PROVISIONING_STATE.TABLE_MISSING) return false;
+  throw observed.error;
+}
+
+// Preparation drops every existing table; an engine that cannot drop is a
+// failed preparation (the dataset is fresh only on a fresh formation).
+async function dropExistingTables(client) {
   for (const table of DROP_TABLES) {
     if (!(await tableExists(client, table))) continue;
+    await client.query(`DROP TABLE IF EXISTS ${table}`);
+  }
+}
+
+const TABLE_DROP_OUTCOME = Object.freeze({
+  DROPPED: 'dropped',
+  ABSENT: 'absent',
+  DROP_UNSUPPORTED: 'drop-unsupported',
+});
+
+// Cleanup reports one typed outcome per table: an engine that refuses DROP
+// TABLE is a named outcome the caller records, not a tolerated skip.
+async function dropTablesForCleanup(client) {
+  const outcomes = [];
+  for (const table of DROP_TABLES) {
+    if (!(await tableExists(client, table))) {
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.ABSENT}));
+      continue;
+    }
     try {
       await client.query(`DROP TABLE IF EXISTS ${table}`);
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROPPED}));
     } catch (error) {
-      const unsupported =
-        String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER);
-      if (unsupported && tolerateUnsupportedDrop) {
-        skipped.push(table);
-        continue;
-      }
-      throw error;
+      if (!String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER)) throw error;
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROP_UNSUPPORTED,
+        error: String(error.message)}));
     }
   }
-  return Object.freeze(skipped);
+  return Object.freeze(outcomes);
 }
 
 // CREATE TABLE on Lagrange is a durable provisioning job. When the job
@@ -385,58 +430,110 @@ async function dropExistingTables(client, {tolerateUnsupportedDrop = false} = {}
 // schema load honours that contract: it waits the hinted interval and polls
 // the table's existence until the provisioning settles or the bounded wait
 // expires. The CREATE statement is not re-issued (the job already owns it).
-const SCHEMA_PROVISIONING_ACTIVE_SQLSTATE = '55P03';
-const SCHEMA_PROVISIONING_ACTIVE_MARKER = 'Schema provisioning remains active';
-const SCHEMA_PROVISIONING_DEFAULT_RETRY_MS = 500;
-const SCHEMA_PROVISIONING_WAIT_BUDGET_MS = 120000;
+const PROVISIONING_OUTCOME = Object.freeze({
+  CREATED: 'created',
+  ROUTABLE: 'routable',
+  BOUND_EXHAUSTED: 'bound-exhausted',
+  // An answer that is no provisioning state; raised as the product's error.
+  PRODUCT_ERROR: 'product-error',
+});
 const CREATE_TABLE_NAME_PATTERN = /^\s*CREATE\s+TABLE\s+([A-Za-z0-9_]+)/iu;
 
 function sleepMs(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isSchemaProvisioningActive(error) {
-  return error?.code === SCHEMA_PROVISIONING_ACTIVE_SQLSTATE ||
-    String(error?.message || '').includes(SCHEMA_PROVISIONING_ACTIVE_MARKER);
-}
 
+// The product's retry_after_ms hint is the wait; a missing, unreadable or
+// non-positive hint is a broken provisioning answer, raised with the
+// original error, never replaced by a client-side default.
 function resolveSchemaProvisioningRetryMs(error) {
   const detail = error?.detail;
-  let parsed = null;
-  if (detail && typeof detail === 'object') parsed = detail;
-  else if (typeof detail === 'string') {
+  let parsed = detail && typeof detail === 'object' ? detail : null;
+  if (typeof detail === 'string') {
     try {
       parsed = JSON.parse(detail);
-    } catch {
-      parsed = null;
+    } catch (parseError) {
+      throw new AggregateError([error, parseError],
+        'Schema provisioning answer carries an unreadable retry hint');
     }
   }
   const hinted = Number(parsed?.retry_after_ms);
-  return Number.isFinite(hinted) && hinted > ZERO ?
-    hinted : SCHEMA_PROVISIONING_DEFAULT_RETRY_MS;
+  if (!Number.isFinite(hinted) || hinted <= ZERO) {
+    throw new AggregateError([error],
+      'Schema provisioning answer carries no positive retry_after_ms hint');
+  }
+  return hinted;
 }
 
-async function createSchemaStatement(client, statement) {
+function stateEntry(startedMs, state, error) {
+  return Object.freeze({
+    atMs: Date.now() - startedMs,
+    state,
+    sqlState: error?.code ?? null,
+    message: error ? String(error.message) : null,
+  });
+}
+
+function provisioningFailure(error, record) {
+  if (error && typeof error === 'object') error.schemaProvisioning = record;
+  return error;
+}
+
+// CREATE TABLE under the product's provisioning contract: a pending answer
+// is waited through the typed states (pending, not routable, missing) at
+// the product's hinted interval within the derived bound; every observation
+// is recorded; any other answer is the product's error.
+async function createSchemaStatement(client, statement, provisioning) {
+  const table = CREATE_TABLE_NAME_PATTERN.exec(statement)?.[1] ?? null;
+  const startedMs = Date.now();
+  const states = [];
+  const record = () => ({table, states: Object.freeze([...states])});
   try {
     await client.query(statement);
+    provisioning.push(Object.freeze({table, outcome: PROVISIONING_OUTCOME.CREATED,
+      states: Object.freeze([])}));
     return;
   } catch (error) {
-    if (!isSchemaProvisioningActive(error)) throw error;
-    const table = CREATE_TABLE_NAME_PATTERN.exec(statement)?.[1];
-    if (!table) throw error;
-    const deadline = Date.now() + SCHEMA_PROVISIONING_WAIT_BUDGET_MS;
-    const retryMs = resolveSchemaProvisioningRetryMs(error);
-    while (Date.now() < deadline) {
-      await sleepMs(retryMs);
-      if (await tableExists(client, table)) return;
+    if (classifyOltpProvisioningState(error) !== OLTP_PROVISIONING_STATE.PROVISIONING_PENDING ||
+        table === null) {
+      throw error;
     }
-    throw error;
+    states.push(stateEntry(startedMs, OLTP_PROVISIONING_STATE.PROVISIONING_PENDING, error));
+    const retryMs = resolveSchemaProvisioningRetryMs(error);
+    let lastError = error;
+    while (Date.now() - startedMs < SCHEMA_PROVISIONING_BOUND.boundMs) {
+      await sleepMs(retryMs);
+      let observed;
+      try {
+        observed = await observeTableState(client, table);
+      } catch (answer) {
+        states.push(stateEntry(startedMs, PROVISIONING_OUTCOME.PRODUCT_ERROR, answer));
+        provisioning.push(Object.freeze({
+          ...record(),
+          outcome: PROVISIONING_OUTCOME.PRODUCT_ERROR,
+        }));
+        throw answer;
+      }
+      if (observed === TABLE_PRESENT) {
+        states.push(stateEntry(startedMs, TABLE_PRESENT, null));
+        provisioning.push(Object.freeze({...record(), outcome: PROVISIONING_OUTCOME.ROUTABLE}));
+        return;
+      }
+      states.push(stateEntry(startedMs, observed.state, observed.error));
+      lastError = observed.error;
+    }
+    const exhausted = Object.freeze({...record(), outcome: PROVISIONING_OUTCOME.BOUND_EXHAUSTED});
+    provisioning.push(exhausted);
+    throw provisioningFailure(new AggregateError([lastError],
+      `Schema provisioning of ${table} did not become routable within ` +
+      `${SCHEMA_PROVISIONING_BOUND.boundMs} ms`), exhausted);
   }
 }
 
-async function createSchema(client) {
+async function createSchema(client, provisioning) {
   for (const statement of CREATE_SCHEMA) {
-    await createSchemaStatement(client, statement);
+    await createSchemaStatement(client, statement, provisioning);
   }
 }
 
@@ -508,12 +605,20 @@ async function loadDataset(client, dataset) {
   );
 }
 
+// The provisioning observations are returned, and attached to a failure,
+// as {boundMs, derivation, tables}.
 async function prepareDataset(createClient, options, dataset) {
+  const tables = [];
+  const evidence = () => Object.freeze({...SCHEMA_PROVISIONING_BOUND,
+    tables: Object.freeze([...tables])});
   const client = await openClient(createClient, options);
   try {
     await dropExistingTables(client);
-    await createSchema(client);
+    await createSchema(client, tables);
     await loadDataset(client, dataset);
+    return evidence();
+  } catch (error) {
+    throw provisioningFailure(error, evidence());
   } finally {
     await client.end();
   }
@@ -536,12 +641,11 @@ async function queryStateCounts(client) {
   });
 }
 
-// Cleanup is best effort: the harness destroys the cluster after the proof,
-// so a schema the engine cannot drop is reported, not fatal.
+// Cleanup returns the per-table drop outcomes; the caller records them.
 async function cleanupDataset(createClient, options) {
   const client = await openClient(createClient, options);
   try {
-    return await dropExistingTables(client, {tolerateUnsupportedDrop: true});
+    return await dropTablesForCleanup(client);
   } finally {
     await client.end();
   }
@@ -566,14 +670,17 @@ async function createLagrangeOltpAdapter(options = {}) {
     options.lockingReadMode,
   );
   const resolvedClientOptions = clientOptions(endpoint, connection);
+  const translationAudit = resolvedLockingReadMode === NATIVE_LOCKING_READ_MODE ?
+    NATIVE_FOR_UPDATE_TRANSLATION_AUDIT : LAGRANGE_OLTP_TRANSLATION_AUDIT;
   const workerClients = [];
   const workerSessions = [];
   const busyWorkers = new Set();
   let closed = false;
   let datasetPrepared = false;
+  let schemaProvisioning = null;
 
   try {
-    await prepareDataset(createClient, resolvedClientOptions, dataset);
+    schemaProvisioning = await prepareDataset(createClient, resolvedClientOptions, dataset);
     datasetPrepared = true;
     for (let index = ZERO; index < config.workers; index += ONE) {
       const client = await openClient(createClient, resolvedClientOptions);
@@ -608,10 +715,11 @@ async function createLagrangeOltpAdapter(options = {}) {
     protocol: PUBLIC_PROTOCOL,
     executionPath: PUBLIC_EXECUTION_PATH,
     lockingReadMode: resolvedLockingReadMode,
-    translationAudit: LAGRANGE_OLTP_TRANSLATION_AUDIT,
+    translationAudit,
     datasetSha256,
     datasetSummary,
     workerSessionIds,
+    schemaProvisioning,
     async executeTransaction(operation) {
       if (closed) throw new Error('Lagrange OLTP adapter is closed');
       const workerIndex = Number(operation?.workerId) - ONE;
@@ -641,7 +749,7 @@ async function createLagrangeOltpAdapter(options = {}) {
         protocol: PUBLIC_PROTOCOL,
         executionPath: PUBLIC_EXECUTION_PATH,
         lockingReadMode: resolvedLockingReadMode,
-        translationAudit: LAGRANGE_OLTP_TRANSLATION_AUDIT,
+        translationAudit,
         datasetSha256,
         datasetSummary,
         workerSessionIds,
@@ -649,17 +757,18 @@ async function createLagrangeOltpAdapter(options = {}) {
       });
     },
     async close(closeOptions = {}) {
-      if (closed) return;
+      if (closed) return Object.freeze({tableDrops: null});
       closed = true;
       const failures = [];
+      let tableDrops = null;
       try {
         await closeClients(workerClients);
       } catch (error) {
         failures.push(error);
       }
-      if (closeOptions.dropTables !== false) {
+      if (dropsDataset(closeOptions)) {
         try {
-          await cleanupDataset(createClient, resolvedClientOptions);
+          tableDrops = await cleanupDataset(createClient, resolvedClientOptions);
         } catch (error) {
           failures.push(error);
         }
@@ -667,11 +776,16 @@ async function createLagrangeOltpAdapter(options = {}) {
       if (failures.length > ZERO) {
         throw new AggregateError(failures, 'Lagrange OLTP adapter cleanup failed');
       }
+      return Object.freeze({tableDrops});
     },
   });
 }
 
 export {
+  LOCKING_READ_MODE as PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE,
+  PUBLIC_EXECUTION_PATH as PGWIRE_OLTP_EXECUTION_PATH,
+  PUBLIC_PROTOCOL as PGWIRE_OLTP_PROTOCOL,
+  NATIVE_LOCKING_READ_MODE as PGWIRE_OLTP_NATIVE_LOCKING_READ_MODE,
   SQL as LAGRANGE_OLTP_SQL,
   LAGRANGE_OLTP_TRANSLATION_AUDIT,
   createLagrangeOltpAdapter,

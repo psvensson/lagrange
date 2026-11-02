@@ -78,7 +78,9 @@ async function runTiDbRetryableConflictProof(options = {}) {
       endpoint,
       databaseName: state.adapter.databaseName,
     });
-    const observation = Object.freeze({sqlState: probe.victim.sqlState});
+    // The shared probe's observation: mechanism, the loser's SQLSTATE, its
+    // retry and both effects (one implementation for every arm).
+    const observation = probe.observation;
     const evaluation =
       evaluateScenarioARetryableConflictObservation(observation);
     const payload = Object.freeze({
@@ -127,7 +129,7 @@ async function main() {
     PASS_PREFIX +
     JSON.stringify({
       artifactSha256: evidence.artifactSha256,
-      sqlState: evidence.observation.sqlState,
+      sqlState: evidence.observation.victimSqlState,
       victimSide: evidence.victim.side,
     }) + NEWLINE,
   );

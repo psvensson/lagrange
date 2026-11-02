@@ -134,7 +134,10 @@ const TARGET_THRESHOLD = 12;
 // 2026-10-31: tightened 1738 -> 1737 on the checker's hint.
 // 2026-10-31 (developer-journey-and-measured-comparisons): tightened 1737 -> 1735
 // on the checker's hint after decomposing comparison renderers and route resolvers.
-const BASELINE_COUNT = 1735;
+// 2026-11-01 (comparative-benchmark-evidence-repair): tightened 1735 -> 1731 on
+// the checker's hint after restoring ownership in the benchmark chain (campaign
+// runner, workload call site, identity inspection, readiness, durability proof).
+const BASELINE_COUNT = 1731;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

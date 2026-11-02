@@ -1,0 +1,59 @@
+{
+  "schema": "solve-relocation-inventory/1",
+  "bundles": [
+    {
+      "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.tar.gz",
+      "bundleSha256": "3718164dc7b632abbecd39049600efe02c4e9d7ab0566a0ea19b62b7e4b4e6c9",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.tar.gz",
+      "sourceCommit": "435c426b936ad5183020732edc246616015039ac",
+      "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/formation-repro/multi-host-lab-run1-20261101T2118Z/",
+      "files": 16,
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.json"
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+      "bundleSha256": "5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz",
+      "sourceCommit": "2247fccd27740c50f20aef0ebdb42725ee80dff4",
+      "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/",
+      "files": 3,
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.json"
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.tar.gz",
+      "bundleSha256": "eaf4c6658612a812504507dffa26a594ff820217898f8df0ba28cf5f7f83b95f",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.tar.gz",
+      "sourceCommit": "c959e0241087324abf0adccf71408ad86eb22715",
+      "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/",
+      "files": 2,
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.json"
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.tar.gz",
+      "bundleSha256": "6c31e60492515cae595d7691d81df7c934f1e589aea969c01a40f05bec27c312",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.tar.gz",
+      "sourceCommit": "4d0fae96c393dddf64e0895e0330b0201a67358f",
+      "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/live-campaign-bench-live-20261101-b/",
+      "files": 17,
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.json"
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--live-campaign-b-r8-load-generator-5731151b8-2026-11-02.tar.gz",
+      "bundleSha256": "1a3c2e43a947df24d37bc33ec8399d79631da5e71fee13331b2274edfe784bae",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--live-campaign-b-r8-load-generator-5731151b8-2026-11-02.tar.gz",
+      "sourceCommit": "5731151b896b286e9627513322b2e958ab4668c6",
+      "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/live-campaign-bench-live-20261101-b/load-generator/r8/bench-live-20261101-b-r8/",
+      "files": 13,
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--live-campaign-b-r8-load-generator-5731151b8-2026-11-02.json"
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--live-campaign-b-r9-load-generator-c64d11b90-2026-11-02.tar.gz",
+      "bundleSha256": "b648f9aa6bdfc5011a33826d12faec8e47778c4f6c11cc69a52fb8a09e7598f1",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--live-campaign-b-r9-load-generator-c64d11b90-2026-11-02.tar.gz",
+      "sourceCommit": "c64d11b904151b4e6647d0d66e0cd1004453776c",
+      "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/live-campaign-bench-live-20261101-b/load-generator/r9/bench-live-20261101-b-r9/",
+      "files": 13,
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--live-campaign-b-r9-load-generator-c64d11b90-2026-11-02.json"
+    }
+  ]
+}

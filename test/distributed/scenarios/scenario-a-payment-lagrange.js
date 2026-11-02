@@ -27,60 +27,65 @@ async function preStart(options = {}) {
   return runScenarioPreStart(options, PROOF_CASE_ID);
 }
 
+// The proof body, independent of how its context was admitted: the live
+// Lagrange run and the PG-wire proof journey (Lagrange, PostgreSQL) share it.
+async function executeProof({context, options = {}}) {
+  const definition = buildScenarioAPaymentCase();
+  const adapter = await createAndValidateAdapter({
+    createAdapter: options.createAdapter,
+    context,
+    workload: OLTP_SCENARIO_A_PAYMENT_WORKLOAD,
+    expectedDatasetSha256: definition.identity.datasetSha256,
+    proofCaseId: PROOF_CASE_ID,
+  });
+
+  const retryOutcome = await executePairedOltpTransactionWithRetry({
+    executeAttempt: () => adapter.executeTransaction(definition.identity.operation),
+  });
+  const observePayment = options.observePayment || observeLagrangePaymentState;
+  const observedState = await observePayment({
+    endpoint: context.endpoint,
+    connection: context.connection,
+    operation: definition.identity.operation,
+  });
+  const observation = Object.freeze({
+    paidCents: Number(retryOutcome.result?.paidCents),
+    ...observedState,
+  });
+  const evaluation = evaluateScenarioAPaymentObservation(observation);
+  const payload = buildBasePayload({
+    evidenceId: EVIDENCE_ID,
+    definition,
+    adapter,
+    context,
+    extra: {
+      operation: definition.identity.operation,
+      retryEvidence: retryOutcome.evidence,
+      observation,
+      evaluation,
+    },
+  });
+
+  return {
+    adapter,
+    payload,
+    proofIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
+    evaluation,
+  };
+}
+
 async function run(cluster, preflight = null) {
   return executeScenarioRun({
     cluster,
     preflight,
     proofCaseId: PROOF_CASE_ID,
     defaultOutputPath: OUTPUT_PATH,
-    execute: async ({context, options}) => {
-      const definition = buildScenarioAPaymentCase();
-      const adapter = await createAndValidateAdapter({
-        createAdapter: options.createAdapter,
-        context,
-        workload: OLTP_SCENARIO_A_PAYMENT_WORKLOAD,
-        expectedDatasetSha256: definition.identity.datasetSha256,
-        proofCaseId: PROOF_CASE_ID,
-      });
-
-      const retryOutcome = await executePairedOltpTransactionWithRetry({
-        executeAttempt: () => adapter.executeTransaction(definition.identity.operation),
-      });
-      const observePayment = options.observePayment || observeLagrangePaymentState;
-      const observedState = await observePayment({
-        endpoint: context.endpoint,
-        connection: context.connection,
-        operation: definition.identity.operation,
-      });
-      const observation = Object.freeze({
-        paidCents: Number(retryOutcome.result?.paidCents),
-        ...observedState,
-      });
-      const evaluation = evaluateScenarioAPaymentObservation(observation);
-      const payload = buildBasePayload({
-        evidenceId: EVIDENCE_ID,
-        definition,
-        adapter,
-        context,
-        extra: {
-          operation: definition.identity.operation,
-          retryEvidence: retryOutcome.evidence,
-          observation,
-          evaluation,
-        },
-      });
-
-      return {
-        adapter,
-        payload,
-        proofIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-        evaluation,
-      };
-    },
+    execute: ({context, options}) => executeProof({context, options}),
   });
 }
 
 export {
+  executeProof,
   preStart,
   run,
 };

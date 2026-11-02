@@ -466,4 +466,3 @@ export function runObservedScenarioBHarnessComparison(options = {}) {
   });
 }
 
-export const runModeledScenarioBHarnessComparison = runObservedScenarioBHarnessComparison;

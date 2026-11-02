@@ -24,13 +24,21 @@ function freezeRecord(value) {
   return Object.freeze(value);
 }
 
+// The semantic profile's observable contract for two concurrent conflicting
+// logical requests (coordinator decision 5, 2026-11-02): both end committed
+// with BOTH effects in the final state - either because the engine blocked
+// the second until the first committed, or because the loser got exactly one
+// retryable conflict (40001) and committed on retry through the retry owner.
+// A lost effect or any other SQLSTATE is a product anomaly. The mechanism is
+// a recorded fact, not a requirement.
 function buildScenarioARetryableConflictCase() {
   const identity = freezeRecord({
     caseId: CASE_ID,
     expected: {
-      sqlState: OLTP_SERIALIZATION_FAILURE_SQLSTATE,
-      retryable: true,
-      outcome: OLTP_PAIRED_RETRY_OUTCOME.SERIALIZATION_CONFLICT,
+      effectsPresent: 2,
+      loserSqlStateWhenConflicting: OLTP_SERIALIZATION_FAILURE_SQLSTATE,
+      loserOutcomeWhenConflicting: OLTP_PAIRED_RETRY_OUTCOME.SERIALIZATION_CONFLICT,
+      loserCommitsOnRetry: true,
     },
     claimedProofIds: CLAIMED_PROOF_IDS,
   });
@@ -46,21 +54,33 @@ function normalizeSqlState(value) {
   return stringToUpperCase(stringTrim(String(value || '')));
 }
 
+function effectsObserved(effects) {
+  return Boolean(effects) && Number.isFinite(effects.baseline) &&
+    Number.isFinite(effects.final) && Number.isFinite(effects.delta);
+}
+
 function evaluateScenarioARetryableConflictObservation(observation = {}) {
   const definition = buildScenarioARetryableConflictCase();
   const expected = definition.identity.expected;
-  const classification = classifyOltpAttemptError({
-    sqlState: normalizeSqlState(observation.sqlState),
-  });
-  const actual = freezeRecord({
-    sqlState: classification.sqlState,
-    retryable: classification.retryable,
-    outcome: classification.outcome,
-  });
   const failures = [];
-  if (actual.sqlState !== expected.sqlState) failures.push('sql_state');
-  if (actual.retryable !== expected.retryable) failures.push('retryable');
-  if (actual.outcome !== expected.outcome) failures.push('outcome');
+  const effects = observation.effects;
+  const victimSqlState = observation.victimSqlState ?? null;
+  if (!effectsObserved(effects)) {
+    failures.push('effects_unobserved');
+  } else {
+    if (victimSqlState !== null) {
+      const classification = classifyOltpAttemptError({
+        sqlState: normalizeSqlState(victimSqlState),
+      });
+      if (!classification.retryable) failures.push('unexpected_sql_state');
+      else if (observation.retryCommitted !== true) failures.push('retry_not_committed');
+    }
+    if (effects.final !== effects.baseline + expected.effectsPresent * effects.delta) {
+      failures.push('lost_update');
+    }
+  }
+  const actual = freezeRecord({mechanism: observation.mechanism ?? null, victimSqlState,
+    retryCommitted: observation.retryCommitted ?? null, effects: effects ?? null});
   return freezeRecord({
     passed: failures.length === ZERO,
     failures,

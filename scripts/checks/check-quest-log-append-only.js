@@ -84,15 +84,16 @@ const REMEDIATION = 'A quest log is append-only durable memory and the one ' +
   'file the live-surface guards exempt as history. Append a correcting entry ' +
   'instead of editing a recorded one.';
 
-// Every canonical quest log tracked at a commit.
-function committedQuestLogs(root, rev) {
-  return trackedAt(root, rev, isQuestLogPath);
+// Every append-only record file (as `accepts` classifies paths) tracked at a
+// commit.
+function committedRecords(root, rev, accepts) {
+  return trackedAt(root, rev, accepts);
 }
 
-// Canonical quest logs a commit changed relative to its parent.
-function changedQuestLogs(root, parent, child) {
+// Append-only record files a commit changed relative to its parent.
+function changedRecords(root, parent, child, accepts) {
   return arrayFilter(changedPathsBetween(root, parent, child),
-    (entry) => isQuestLogPath(entry.path));
+    (entry) => accepts(entry.path));
 }
 
 function prefixOffence(before, after) {
@@ -170,10 +171,10 @@ function mergeLogOffences(file, parentBlobs, after, child) {
 
 // One merge commit: the logs any parent edge changed, judged across all its
 // parents together.
-function mergeOffences(root, parents, child) {
+function mergeOffences(root, parents, child, accepts) {
   const files = new Set();
   for (const parent of parents) {
-    for (const entry of changedQuestLogs(root, parent, child)) {
+    for (const entry of changedRecords(root, parent, child, accepts)) {
       if (entry.status !== STATUS_ADDED) files.add(entry.path);
     }
   }
@@ -208,8 +209,8 @@ function commitsOf(edges) {
 }
 
 // One parent -> child transition: the parent's bytes must survive as a prefix.
-function edgeOffences(root, parent, child) {
-  const changed = arrayFilter(changedQuestLogs(root, parent, child),
+function edgeOffences(root, parent, child, accepts) {
+  const changed = arrayFilter(changedRecords(root, parent, child, accepts),
     (entry) => entry.status !== STATUS_ADDED);
   if (changed.length === 0) return NO_EDGES;
   const blobs = readBlobs(root, arrayFlatMap(changed, (entry) => [
@@ -244,8 +245,8 @@ function workingCopyOffence(root, file, committed) {
 
 // The final edge: HEAD -> the working tree, so a rewrite is refused before it
 // can be committed as well as after.
-function workingTreeOffences(root) {
-  const files = committedQuestLogs(root, HEAD_REV);
+function workingTreeOffences(root, accepts) {
+  const files = committedRecords(root, HEAD_REV, accepts);
   const blobs = readBlobs(root, arrayMap(files, (file) =>
     ({key: file, rev: `${HEAD_REV}:${file}`})));
   const offences = [];
@@ -259,19 +260,31 @@ function workingTreeOffences(root) {
 }
 
 /**
- * Every quest log whose committed history was not preserved append-only,
- * across each admitted commit transition and finally in the working tree.
+ * Every append-only record file (the paths `accepts` admits) whose committed
+ * history was not preserved, across each admitted commit transition and
+ * finally in the working tree. The one owner of the append-only transition
+ * rule: quest logs here, the comparative-benchmark history and invalidation
+ * ledger in check-benchmark-history-append-only.js.
+ * @param {{root: string, base: string|null, accepts: Function}} options
+ * @return {Array<{path: string, reason: string, at: string}>}
+ */
+function appendOnlyRecordOffences({root, base, accepts}) {
+  const offences = arrayFlatMap(commitsOf(admittedEdges(root, base)),
+    ({child, parents}) => (parents.length > 1 ?
+      mergeOffences(root, parents, child, accepts) :
+      edgeOffences(root, parents[0], child, accepts)));
+  return [...offences, ...workingTreeOffences(root, accepts)];
+}
+
+/**
+ * Every quest log whose committed history was not preserved append-only.
  * @param {{root?: string, base?: string}} [options]
  * @return {Array<{path: string, reason: string, at: string}>}
  */
 function questLogOffences(options = {}) {
   const root = options.root || REPO_ROOT;
-  const base = options.base || repositoryCheckBase(root);
-  const offences = arrayFlatMap(commitsOf(admittedEdges(root, base)),
-    ({child, parents}) => (parents.length > 1 ?
-      mergeOffences(root, parents, child) :
-      edgeOffences(root, parents[0], child)));
-  return [...offences, ...workingTreeOffences(root)];
+  return appendOnlyRecordOffences({root, base: options.base || repositoryCheckBase(root),
+    accepts: isQuestLogPath});
 }
 
 function main(argv) {
@@ -285,4 +298,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   process.exitCode = main(process.argv.slice(ARGV_OFFSET));
 }
 
-export {OFFENCE, questLogOffences};
+export {OFFENCE, appendOnlyRecordOffences, questLogOffences};

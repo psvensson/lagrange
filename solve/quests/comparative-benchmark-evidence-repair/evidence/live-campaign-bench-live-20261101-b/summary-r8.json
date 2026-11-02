@@ -1,0 +1,68 @@
+{
+  "schema": "lagrange-comparative-campaign-summary/v1",
+  "executionTarget": "lab",
+  "rawObservationsPath": "data/tidb-comparison/raw-observations.ndjson",
+  "campaignId": "bench-live-20261101-b-r8",
+  "manifestDigest": "sha256:8ac764853501be4c65569f491ea6f8403f30ceffcc4dbb74b3f11a3b4487f4c4",
+  "attempted": [
+    {
+      "runId": "bench-live-20261101-b-r8-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    },
+    {
+      "runId": "bench-live-20261101-b-r8-r002",
+      "claimKey": "tidb-tikv/scenarioA/smoke/5/1",
+      "targetId": "tidb-tikv",
+      "state": "completed",
+      "failureCode": null,
+      "closureComplete": true
+    },
+    {
+      "runId": "bench-live-20261101-b-r8-r003",
+      "claimKey": "pg-single-primary/scenarioA/smoke/5/1",
+      "targetId": "pg-single-primary",
+      "state": "completed",
+      "failureCode": null,
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admission": {
+    "outcome": "failed",
+    "cells": [
+      {
+        "claimKey": "lagrange/scenarioA/smoke",
+        "status": "invalid-measurement",
+        "reasons": [
+          "topology-mismatch"
+        ]
+      },
+      {
+        "claimKey": "pg-single-primary/scenarioA/smoke",
+        "status": "valid-observed",
+        "reasons": [
+          "semantic-gate-incomplete",
+          "semantic-gate-incomplete:durability:probe_inapplicable",
+          "smoke-profile-no-capacity-claim"
+        ]
+      },
+      {
+        "claimKey": "tidb-tikv/scenarioA/smoke",
+        "status": "invalid-measurement",
+        "reasons": [
+          "semantic-gate-missing"
+        ]
+      }
+    ]
+  },
+  "closure": {
+    "loadGeneratorWorktree": {
+      "status": "complete",
+      "error": null
+    }
+  }
+}

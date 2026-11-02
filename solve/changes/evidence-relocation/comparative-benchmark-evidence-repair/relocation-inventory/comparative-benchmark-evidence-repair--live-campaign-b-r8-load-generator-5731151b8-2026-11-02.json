@@ -1,0 +1,23 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "comparative-benchmark-evidence-repair--live-campaign-b-r8-load-generator-5731151b8-2026-11-02.tar.gz",
+  "bundleSha256": "1a3c2e43a947df24d37bc33ec8399d79631da5e71fee13331b2274edfe784bae",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--live-campaign-b-r8-load-generator-5731151b8-2026-11-02.tar.gz",
+  "sourceCommit": "5731151b896b286e9627513322b2e958ab4668c6",
+  "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/live-campaign-bench-live-20261101-b/load-generator/r8/bench-live-20261101-b-r8/",
+  "files": [
+    ["bench-live-20261101-b-r8-r001/records.ndjson","bb83b0c8f0c566de18f37e7bcb04f48521608403aadf003d206f79be523243fa",61972],
+    ["bench-live-20261101-b-r8-r001/request.json","0f040af89eae3d8a983be168ffc1152b96b36925d6b532a531dc42805c79d55f",439],
+    ["bench-live-20261101-b-r8-r002/evidence/461b278342aec62c692b56fd554d1a7a3055f55fcf1dc9d768ab6ed8c8014776.json","461b278342aec62c692b56fd554d1a7a3055f55fcf1dc9d768ab6ed8c8014776",18392],
+    ["bench-live-20261101-b-r8-r002/evidence/5f19aeb336ffad524092e85cc5f339c7509f0dfdc0170264e102d435346ca28a.json","5f19aeb336ffad524092e85cc5f339c7509f0dfdc0170264e102d435346ca28a",18392],
+    ["bench-live-20261101-b-r8-r002/evidence/8717acf71ae3e60513aef37297e25a947e4fa3cc6c52f13a72eadef96bb31df2.json","8717acf71ae3e60513aef37297e25a947e4fa3cc6c52f13a72eadef96bb31df2",18392],
+    ["bench-live-20261101-b-r8-r002/evidence/d64ce295d78d7314c4544fe20fb618e14639846ee46bbd9eff411fcadbff9b75.json","d64ce295d78d7314c4544fe20fb618e14639846ee46bbd9eff411fcadbff9b75",17258],
+    ["bench-live-20261101-b-r8-r002/evidence/e8db3bb5893578e53b2a4533573b5f58d8f3b63150f0dc850ac63a1b96e25b2b.json","e8db3bb5893578e53b2a4533573b5f58d8f3b63150f0dc850ac63a1b96e25b2b",18394],
+    ["bench-live-20261101-b-r8-r002/evidence/fa334497dcf4be627545d956d6fb77b6970df0de10e6c95924425bbfce77ba1a.json","fa334497dcf4be627545d956d6fb77b6970df0de10e6c95924425bbfce77ba1a",18391],
+    ["bench-live-20261101-b-r8-r002/evidence/fd0d358b074864c4d247cc57539a382fb9e6b618cc71d57bf9e7ab9663006102.json","fd0d358b074864c4d247cc57539a382fb9e6b618cc71d57bf9e7ab9663006102",17259],
+    ["bench-live-20261101-b-r8-r002/evidence/ff5bf7fc5fe4e3ff95a73713380b553ce2835e8ce0d288f08748dbff593ca76c.json","ff5bf7fc5fe4e3ff95a73713380b553ce2835e8ce0d288f08748dbff593ca76c",17258],
+    ["bench-live-20261101-b-r8-r002/records.ndjson","5af3f6ea55b422cc5c5f57730431c0c2c7c00a021a2b379d55989ec3ce089297",822245],
+    ["bench-live-20261101-b-r8-r002/request.json","48dc186dabab3498c571a086f3138be72ca5dce89d10ab6f23240c87c206279b",367],
+    ["bench-live-20261101-b-r8-r003/request.json","e32bc911ce77ae21854ddff9716f7a089e31ff61111c6103a8b5d0ca53048c8f",428]
+  ]
+}

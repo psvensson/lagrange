@@ -16,14 +16,21 @@ import {
   recordComparisonResultToDisk,
 } from '../../test/distributed/harness/oltp-comparison-history-store.js';
 import {
+  OLTP_PAIRED_SWEEP_STATUS,
   runScenarioAPairedSweep,
 } from '../../test/distributed/harness/oltp-paired-sweep-runner.js';
 import {
+  buildScenarioAPairedSweepPlan,
+} from '../../test/distributed/harness/oltp-paired-sweep-plan.js';
+import {
+  OLTP_SCENARIO_A_SYSTEM,
+} from '../../test/distributed/harness/oltp-scenario-a-comparison-systems.js';
+import {
+  COMPARISON_VIEW,
+} from '../../test/distributed/harness/comparative-system-budget.js';
+import {
   getScenarioDefinitionHref,
-  renderComparisonProgressHtml,
-  renderComparisonProgressMarkdown,
-  renderComparisonProgressSvg,
-  renderScenarioBComparisonSvg,
+  renderComparisonProgress,
 } from '../../test/distributed/harness/oltp-comparison-static-web.js';
 import {
   runObservedScenarioBHarnessComparison,
@@ -45,21 +52,19 @@ const STR_TIDB_V859 = 'v8.5.9';
 const STR_TIMING_OBSERVED = 'observed';
 const STR_MODELED_HARNESS_BASELINE = 'local-oracle-plus-network-model';
 const STR_SMOKE_PROFILE = 'smoke';
-const STR_CONTRACT_MODEL = 'deterministic-contract-model';
-const STR_SCORECARD_MD_HEADER = '## Scenario B distributed risk & movement scorecard';
-const STR_SCORECARD_HTML_HEADER = 'Scenario B Distributed Risk &amp; Movement Scorecard';
+const STR_SCORECARD_MD_HEADER = '## Scenario B history';
+const STR_SCORECARD_HTML_HEADER = '<h2>Scenario B history</h2>';
 const STR_TMP_PREFIX = 'scenario-b-version-gate-';
 const STR_TMP_NDJSON = 'history.ndjson';
 const STR_TMP_SUMMARY = 'summary.json';
-const STR_RISK_DECISIONS_PER_SEC = 'Risk Decisions/sec';
-const STR_CROSS_ISLAND_WAN_TRAFFIC = 'Cross-Island WAN Traffic';
-const STR_SCENARIO_B_SVG_FILENAME = 'tidb-scenario-b-comparison.svg';
+const STR_RISK_DECISIONS_PER_SEC = 'dec/s';
+const STR_SCENARIO_B_SVG_TITLE = 'Scenario B comparison history';
+const STR_INVALID_MEASUREMENT = 'invalid-measurement';
 const STR_SCENARIO_B_DOC_HREF = 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision';
 
 const NUM_BYTES_192 = 192;
 const NUM_RATE_ONE = 1;
 const NUM_RATE_TWO = 2;
-const NUM_STEP_DURATION_MS = 10;
 const NUM_SEED = 42;
 
 function createSatisfiedScenarioBEvidence() {
@@ -91,15 +96,29 @@ async function verifyScenarioASystemVersionGate(existingRecords) {
   assert.equal(gateUnchanged.shouldRun, false);
   assert.equal(gateUnchanged.skippedBecauseSystemVersionsUnchanged, true);
 
+  // An unchanged-version sweep is a typed not-measured outcome: no step is
+  // executed and no cached record or number is returned.
+  let executedSteps = 0;
   const sweepUnchanged = await runScenarioAPairedSweep({
-    existingRecords,
-    scenarioId: STR_SCENARIO_A,
-    systems: systemsBase,
-    profile: STR_SMOKE_PROFILE,
+    sweepPlan: buildScenarioAPairedSweepPlan({
+      systems: [OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV, OLTP_SCENARIO_A_SYSTEM.LAGRANGE],
+      comparisonView: COMPARISON_VIEW.ARCHITECTURE_NATIVE,
+      offeredRatesPerSec: [NUM_RATE_ONE, NUM_RATE_TWO],
+      repetitions: NUM_RATE_TWO,
+      slo: {p99Ms: 50, maxErrorRate: 0.01},
+      workload: {seed: NUM_SEED, workers: 1, warmupOperationsPerWorker: 0,
+        measurementOperationsPerWorker: 2, warehouseCount: 1, districtsPerWarehouse: 1,
+        customersPerDistrict: 1, itemCount: 15},
+    }),
+    executeStep: async () => {
+      executedSteps += 1;
+    },
+    versionGate: gateUnchanged,
   });
-  assert.equal(sweepUnchanged.skipped, true);
-  assert.equal(sweepUnchanged.skippedBecauseSystemVersionsUnchanged, true);
+  assert.equal(sweepUnchanged.status, OLTP_PAIRED_SWEEP_STATUS.NOT_MEASURED);
+  assert.equal(sweepUnchanged.curves, null);
   assert.equal(sweepUnchanged.executionOrderLog.length, 0);
+  assert.equal(executedSteps, 0);
 
   const systemsLagrangeBumped = {
     lagrange: {version: STR_LAGRANGE_V031},
@@ -113,22 +132,6 @@ async function verifyScenarioASystemVersionGate(existingRecords) {
   assert.equal(gateLagrangeBumped.shouldRun, true);
   assert.equal(gateLagrangeBumped.lagrangeVersionChanged, true);
 
-  const sweepLagrangeBumped = await runScenarioAPairedSweep({
-    existingRecords,
-    scenarioId: STR_SCENARIO_A,
-    systems: systemsLagrangeBumped,
-    profile: STR_SMOKE_PROFILE,
-    offeredRatesPerSec: Object.freeze([NUM_RATE_ONE, NUM_RATE_TWO]),
-    repetitions: NUM_RATE_TWO,
-    stepDurationMs: NUM_STEP_DURATION_MS,
-    warmupOperationsPerSystem: 0,
-    seed: NUM_SEED,
-    timingSource: STR_CONTRACT_MODEL,
-    executeSystemTx: async () => ({committed: true}),
-  });
-  assert.equal(sweepLagrangeBumped.skipped, false);
-  assert.equal(sweepLagrangeBumped.skippedBecauseSystemVersionsUnchanged, false);
-
   const systemsTidbBumped = {
     lagrange: {version: STR_LAGRANGE_V030},
     tidbTikv: {version: STR_TIDB_V859},
@@ -140,22 +143,6 @@ async function verifyScenarioASystemVersionGate(existingRecords) {
   });
   assert.equal(gateTidbBumped.shouldRun, true);
   assert.equal(gateTidbBumped.tidbTikvVersionChanged, true);
-
-  const sweepTidbBumped = await runScenarioAPairedSweep({
-    existingRecords,
-    scenarioId: STR_SCENARIO_A,
-    systems: systemsTidbBumped,
-    profile: STR_SMOKE_PROFILE,
-    offeredRatesPerSec: Object.freeze([NUM_RATE_ONE, NUM_RATE_TWO]),
-    repetitions: NUM_RATE_TWO,
-    stepDurationMs: NUM_STEP_DURATION_MS,
-    warmupOperationsPerSystem: 0,
-    seed: NUM_SEED,
-    timingSource: STR_CONTRACT_MODEL,
-    executeSystemTx: async () => ({committed: true}),
-  });
-  assert.equal(sweepTidbBumped.skipped, false);
-  assert.equal(sweepTidbBumped.skippedBecauseSystemVersionsUnchanged, false);
 }
 
 function verifyScenarioBFairnessGateEvaluation() {
@@ -240,20 +227,18 @@ async function verifyScenarioBVersionGatedExecution(existingRecords) {
   assert.equal(runTidbBumped.skipped, false);
 
   const summary = buildComparisonProgressSummary(recordsWithScenarioB);
-  const markdown = renderComparisonProgressMarkdown(summary);
-  const html = renderComparisonProgressHtml(summary);
-  const progressSvg = renderComparisonProgressSvg(summary);
-  const scenarioBSvg = renderScenarioBComparisonSvg(summary);
+  const {markdown, html, scenarioBSvg} = renderComparisonProgress(summary);
   assert.equal(getScenarioDefinitionHref(STR_SCENARIO_B), STR_SCENARIO_B_DOC_HREF);
   assert.equal(stringIncludes(markdown, STR_SCORECARD_MD_HEADER), true);
   assert.equal(stringIncludes(html, STR_SCORECARD_HTML_HEADER), true);
-  assert.equal(stringIncludes(markdown, STR_SCENARIO_B_SVG_FILENAME), true);
+  assert.equal(stringIncludes(markdown, STR_INVALID_MEASUREMENT), true);
   assert.equal(stringIncludes(markdown, STR_SCENARIO_B_DOC_HREF), true);
   assert.equal(stringIncludes(html, STR_SCENARIO_B_DOC_HREF), true);
-  assert.equal(stringIncludes(progressSvg, STR_RISK_DECISIONS_PER_SEC), true);
-  assert.equal(stringIncludes(progressSvg, STR_CROSS_ISLAND_WAN_TRAFFIC), true);
-  assert.equal(stringIncludes(scenarioBSvg, STR_RISK_DECISIONS_PER_SEC), true);
-  assert.equal(stringIncludes(scenarioBSvg, STR_CROSS_ISLAND_WAN_TRAFFIC), true);
+  // History records are forensic: the pages name them and their admission status
+  // and republish no decision rate.
+  assert.equal(stringIncludes(markdown, STR_RISK_DECISIONS_PER_SEC), false);
+  assert.equal(stringIncludes(html, STR_RISK_DECISIONS_PER_SEC), false);
+  assert.equal(stringIncludes(scenarioBSvg, STR_SCENARIO_B_SVG_TITLE), true);
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), STR_TMP_PREFIX));
   try {

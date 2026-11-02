@@ -1,0 +1,58 @@
+{
+  "schema": "campaign-attempts/v1",
+  "campaign": "bench-live-20261101-b",
+  "profile": "comparative-smoke-v2",
+  "runs": 3,
+  "comparable": false,
+  "hostPlan": {
+    "data": [
+      "adams-gamla 192.168.86.41",
+      "lenovo-laptop 192.168.86.27",
+      "tv-dator 192.168.86.32"
+    ],
+    "loadGenerator": "adam-laptop 192.168.86.34"
+  },
+  "lagrangeImage": {
+    "content": "sha256:3c263af6030eea3c663dcd863813bcbcb03acdeb3c7ded8870199f4c251e2270",
+    "provenance": "psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb"
+  },
+  "attempts": [
+    {
+      "id": "bench-live-20261101-b",
+      "harness": "8e2c42fd2",
+      "console": "console-b.log",
+      "result": "campaign_products_unpinned; no record written; per-run failures not printed (fixed 08bb50458, a6bb9a45d)"
+    },
+    {
+      "id": "bench-live-20261101-b-r2",
+      "harness": "08bb50458",
+      "console": "console-r2.log",
+      "result": "Lagrange seed EACCES mkdir /var/lib/lagrange-data (fixed 2c67ae2b0); unpinned; no record"
+    },
+    {
+      "id": "bench-live-20261101-b-r3",
+      "harness": "a6bb9a45d",
+      "console": "console-r3.log",
+      "result": "untyped crash: canonical JSON data required (NaN memGb from sv_SE locale awk; fixed 732a2c30e); no record"
+    },
+    {
+      "id": "bench-live-20261101-b-r4",
+      "harness": "732a2c30e",
+      "console": "console-r4.log",
+      "result": "unpinned; Lagrange record_rejected (plan.warmup, fixed 5beb86bf7; reportedVersion null: escalated), TiDB LG exit 1 (stderr dropped, fixed e729fc579), PG Config.Labels absent (fixed e729fc579); no record"
+    },
+    {
+      "id": "bench-live-20261101-b-r5",
+      "harness": "e729fc579",
+      "console": "console-r5.log",
+      "result": "runner killed by unhandled pg 57P01 error during PG durability proof (fixed feb17629f); PG container and LG worktree removed by hand; no record"
+    },
+    {
+      "id": "bench-live-20261101-b-r6",
+      "harness": "feb17629f",
+      "console": "console-r6.log",
+      "result": "header + 3 run records appended; runner then crashed in campaignOutcome (forensicRecords/retainedReferences, fixed 41a424302); summary JSON not written; cells from regeneration at 41a424302"
+    }
+  ],
+  "manifestDigestR6": "sha256:9e034a0f9a3471b1bcc9e5aae9a5ecaf3a6b6f91f973202f5d328a45f485be56"
+}
