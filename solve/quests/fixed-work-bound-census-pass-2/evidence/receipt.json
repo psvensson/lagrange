@@ -22,7 +22,7 @@
     {
       "id": "independent-verification",
       "passed": false,
-      "reason": "verification of 0fe9ab168 rejected (narrow); awaiting re-verification of the corrective attempt"
+      "reason": "verification of 40ba42c04 rejected (narrow); awaiting re-verification of the corrective attempt"
     }
   ]
 }
