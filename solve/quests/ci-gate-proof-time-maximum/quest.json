@@ -1,0 +1,23 @@
+{
+  "schema": "solve-quest/2",
+  "id": "ci-gate-proof-time-maximum",
+  "class": "fix",
+  "statement": "Successor of ci-gate-proof-time-and-lab-runner-routing under R09: the required ci.yml gate job runs under GitHub's 360-minute maximum for every event (landed by PR #188, main 6d58fdba1), and the attempt-2 lab-routing question has a recorded decision: pull-request gates stay on the hosted runner by owner policy (home-lab.md) and the lead's acceptance of the attempt-2 recommendation; the lab-routing design is retained as evidence for a future owner decision (docs/evidence/ci-gate-proof-time-2026-11/). Routing pull-request gates to lab runners is not part of this claim.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/ci-gate-proof-time-maximum/evidence/receipt.json",
+      "requiredReceipts": [
+        "gate-timeout-maximum",
+        "lab-routing-design-decided"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "records-only",
+      "statement": "Records and evidence only: no workflow, runner, setting or source change."
+    }
+  ],
+  "sealedAt": "6d58fdba16157740e6c2f0bae5a2317fa24e0944"
+}
