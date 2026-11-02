@@ -1,4 +1,0 @@
-[proof-checkout] prepared import-graph
-[push-gate] proving b3b3665736875a6d0df5d29edc8b52ab96c53344 in /mnt/data/peter/projects/.worktrees/lagrange-clean-import-graph-20261102/test-output/push-gate-worktrees/session-worktree-b5EEI7/tree: node scripts/run-test-files.js test/scripts/push-gate-change-proof.test.js
-ok test/scripts/push-gate-change-proof.test.js (21 assertions, 15576ms)
-# test-files total=1 pass=1 fail=0 assertions=21
