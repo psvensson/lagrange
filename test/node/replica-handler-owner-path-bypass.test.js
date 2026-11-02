@@ -26,6 +26,8 @@ import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
+import {buildFailedCreateCleanupToken} from
+  '../../src/rebalancer/failed-create-cleanup-token.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -1067,11 +1069,14 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
           0,
           `${failureCase.label} failed learner cannot promote after failure`,
         );
-        t.equal(
-          failedOutcome?.deferRetry === true,
-          failureCase.deferRetry,
-          `${failureCase.label} failure preserves its owner retry type`,
-        );
+        // R09 (quest owner-path-bypass-retry-type-after-runtime-opened): after
+        // the runtime opened any owner failure is terminal with a cleanup claim
+        // and no deferRetry; recovery re-drives a fresh identity (K3 below).
+        t.equal(failedOutcome?.deferRetry, undefined,
+          `${failureCase.label} failure after the runtime opened carries no deferRetry`);
+        t.equal(cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId)?.cleanup_token,
+          buildFailedCreateCleanupToken(operationId), `${failureCase.label} failure ` +
+            'after the runtime opened carries the failed-create cleanup claim');
 
         if (failureCase.deferRetry) {
           await handler.replicaStateMachine.clear();
