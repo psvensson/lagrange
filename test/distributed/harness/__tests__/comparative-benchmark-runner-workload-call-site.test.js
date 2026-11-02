@@ -18,6 +18,7 @@ import {
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   arrayFind,
+  arraySome,
   stringIncludes,
 } from '../real-product-captured-intrinsics.js';
 
@@ -224,7 +225,8 @@ test('a worktree that is not at the harness commit refuses the campaign', async 
 // to stderr, which the ssh seam does not return. The CLI's stderr is kept in
 // the run directory and its tail is part of the typed failure.
 test('a load generator that exits non-zero reports its stderr', async () => {
-  const host = {ip: '10.0.0.9', repoPath: '/srv/wt', nodePath: '/usr/bin/node'};
+  const host = {ip: '10.0.0.9', repoPath: '/srv/wt', nodePath: '/usr/bin/node',
+    driverInstall: {status: 'installed', exitCode: 0, output: ''}};
   const ssh = createScriptedSsh([[/git rev-parse HEAD/u, 'abc'],
     [/run-benchmark-workload\.js/u, '\n__exit_code=1'],
     [/tail -n \d+ '[^']*stderr\.log'/u, 'run-benchmark-workload: Error: boom at x.js:1']]);
@@ -294,3 +296,20 @@ test('a failed checkout preparation keeps its cause and records the cleanup it a
       return true;
     });
   });
+
+// Independent verification N5: the TiDB arm needs the reference-client
+// drivers the worktree installed; a host without an install record is not
+// known to have them and refuses it too, fail-closed.
+test('a TiDB run on a load generator with no driver-install record is refused', async () => {
+  const host = {ip: '10.0.0.9', repoPath: '/srv/wt', nodePath: '/usr/bin/node'};
+  const ssh = createScriptedSsh([[/git rev-parse HEAD/u, 'abc'],
+    [/run-benchmark-workload\.js/u, '\n__exit_code=0'],
+    [/tail -n 1 /u, JSON.stringify(b1Record())]]);
+  const runner = createRemoteWorkloadRunner({sshRun: ssh.sshRun, opts: {}, host,
+    harnessCommit: 'abc', campaignId: 'bench-x'});
+  await assert.rejects(runner({system: 'tidb-tikv'}, RUN),
+    (error) => error.code === 'load_generator_driver_missing' &&
+      error.diagnostic.reason === 'install_not_recorded');
+  assert.equal(arraySome(ssh.calls, (call) => stringIncludes(call.command, 'run-benchmark')),
+    false);
+});

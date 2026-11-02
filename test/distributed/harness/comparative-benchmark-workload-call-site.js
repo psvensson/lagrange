@@ -110,11 +110,7 @@ function workloadRequestOf({run, manifest, deployment, evidenceDir, setupFailure
 function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaignId}) {
   const cd = `cd ${shellQuote(host.repoPath)}`;
   return async (request, run) => {
-    if (request.system === TIDB_SYSTEM && host.driverInstall?.status === DRIVER_INSTALL.FAILED) {
-      throw deploymentFailure(FAILURE.DRIVER_MISSING, `load generator ${host.ip} could not ` +
-        `install the reference-client drivers (npm ci exit ${host.driverInstall.exitCode})`,
-      {output: host.driverInstall.output});
-    }
+    if (request.system === TIDB_SYSTEM) refuseWithoutDrivers(host);
     const commit = stringTrim(String(await sshRun(host.ip, opts, `${cd} && git rev-parse HEAD`)));
     if (commit !== harnessCommit) {
       throw deploymentFailure(FAILURE.COMMIT_MISMATCH, `load generator ${host.ip} checkout ` +
@@ -205,6 +201,20 @@ async function installReferenceClient({sshRun, opts, host, worktree}) {
   const output = String(result.stdout ?? '').slice(-DRIVER_INSTALL_OUTPUT_CHARS);
   return {status: result.exitCode === 0 ? DRIVER_INSTALL.INSTALLED : DRIVER_INSTALL.FAILED,
     exitCode: result.exitCode, output};
+}
+
+// The TiDB arm needs the reference-client drivers the worktree installed: a
+// failed install or none recorded refuses it, fail-closed.
+function refuseWithoutDrivers(host) {
+  const install = host.driverInstall;
+  if (install?.status === DRIVER_INSTALL.INSTALLED) return;
+  if (!install) {
+    throw deploymentFailure(FAILURE.DRIVER_MISSING, `load generator ${host.ip} has no ` +
+      'record of installing the reference-client drivers', {reason: 'install_not_recorded'});
+  }
+  throw deploymentFailure(FAILURE.DRIVER_MISSING, `load generator ${host.ip} could not ` +
+    `install the reference-client drivers (npm ci exit ${install.exitCode})`,
+  {reason: 'install_failed', output: install.output});
 }
 
 function planFailure(manifest, b1Plan) {
