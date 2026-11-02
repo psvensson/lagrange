@@ -11,8 +11,10 @@
 import fs from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
-import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
+import {ERRORS, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
+  QUERY_RESPONSE_TYPE,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
 } from '../../src/query/query-constants.js';
 import {createMockMessageRouter} from './query-executor-mock-message-router.js';
@@ -212,5 +214,80 @@ test('the priority-recovery bootstrap routing bypass is deleted', async (t) => {
     import.meta.url)), 'the bypass module no longer exists');
   t.notOk('SYSTEM_TABLE_LEADER_FAIL_OPEN' in QUERY_ROUTING_DIAGNOSTIC_REASON,
     'the fail-open reason no longer exists');
+  t.end();
+});
+
+// Guardrail 1 (lead, 2026-11-02): the structural route is only the candidate
+// hint. With a stale cached leader, a system-table write lands on the live
+// leader through the target's typed redirect, or answers the typed
+// NOT_LEADER refusal; never a wrong-leader answer, never an empty
+// readiness-filtered candidate set.
+function staleLeaderExecutor(answerOfStaleLeader) {
+  const partitionId = 'sql_transactions-p1';
+  const deliveries = [];
+  const staleAddress = `${LEADER_NODE_ID}/partition/${partitionId}`;
+  const liveAddress = `${FOLLOWER_NODE_ID}/partition/${partitionId}`;
+  const readiness = readinessService({});
+  const router = connectedRouter([LEADER_NODE_ID, FOLLOWER_NODE_ID]);
+  router.deliver = async (address) => {
+    deliveries.push(address);
+    if (address === staleAddress) {
+      return buildDeliveryEnvelope({acknowledged: true},
+        answerOfStaleLeader(liveAddress));
+    }
+    return buildDeliveryEnvelope({acknowledged: true},
+      {success: true, rows: [], changes: 1, answeredBy: liveAddress});
+  };
+  const executor = new QueryExecutor({
+    nodeId: LOCAL_NODE_ID,
+    messageRouter: router,
+    // The cache still names the old leader.
+    systemCache: createCache(partitionId),
+    controlPlaneReadinessService: readiness,
+  });
+  executor.queryTimeoutMs = 2000;
+  executor.leaderRetryDelayMs = 1;
+  return {executor, partitionId, deliveries, staleAddress, liveAddress,
+    readiness};
+}
+
+test('a stale cached system-table leader redirects the write to the live ' +
+  'leader without consulting readiness', async (t) => {
+  const {executor, partitionId, deliveries, staleAddress, liveAddress,
+    readiness} = staleLeaderExecutor((liveAddress) => ({
+    success: false, redirect: QUERY_RESPONSE_TYPE.LEADER_REDIRECT,
+    leaderAddress: liveAddress}));
+  const result = await executor.executeOnPartition(partitionId,
+    'UPDATE sql_transactions SET status = ? WHERE transaction_id = ?',
+    ['active', 'tx-1'], false, true, false);
+  t.equal(result.success, true, 'the write succeeds on the live leader');
+  t.same(deliveries.slice(0, 2), [staleAddress, liveAddress],
+    'the stale leader is tried first and its redirect is followed');
+  t.equal(readiness.calls.readinessReads + readiness.calls.answers, 0,
+    'no readiness was consulted');
+  t.end();
+});
+
+test('a stale cached system-table leader that knows no leader answers ' +
+  'NOT_LEADER; the write lands on the live leader or fails typed, never on ' +
+  'the stale one', async (t) => {
+  const {executor, partitionId, deliveries, staleAddress, liveAddress} =
+    staleLeaderExecutor(() => ({
+      success: false, error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+      failureCode: 'not_leader'}));
+  const result = await executor.executeOnPartition(partitionId,
+    'UPDATE sql_transactions SET status = ? WHERE transaction_id = ?',
+    ['active', 'tx-1'], false, true, false);
+  t.equal(deliveries[0], staleAddress,
+    'the candidate set was not empty: the cached leader was tried first');
+  if (result.success === true) {
+    t.equal(deliveries[deliveries.length - 1], liveAddress,
+      'the success came from the live leader');
+  } else {
+    t.ok(String(result.error || '').length > 0, 'the refusal is typed');
+    t.notEqual(result.reasonCode,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
+      'never a readiness-filtered empty candidate set');
+  }
   t.end();
 });

@@ -1,7 +1,6 @@
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READ_PURPOSE,
-  CONTROL_PLANE_READ_RECOVERY_ROUTING,
 } from './control-plane-readiness-constants.js';
 import {CONTROL_PLANE_CACHE_RECONCILE_INTENT} from './control-plane-cache-reconcile-constants.js';
 import {
@@ -80,17 +79,6 @@ function normalizeReadLeaderMode(value) {
     return CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
   }
   return CONTROL_PLANE_READ_LEADER_MODE.ANY;
-}
-
-// Only the typed bootstrap lane value opts a read in; anything else (absent,
-// a boolean, an unknown string) is the eligible-only lane.
-function normalizeReadRecoveryRouting(value) {
-  if (
-    value === CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP
-  ) {
-    return CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP;
-  }
-  return CONTROL_PLANE_READ_RECOVERY_ROUTING.ELIGIBLE_ONLY;
 }
 
 function normalizeReadProfile(value) {
@@ -315,7 +303,6 @@ function buildControlPlaneReadAuthority(options = {}) {
     routingReadinessDimension:
       options?.routingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    recoveryRouting: normalizeReadRecoveryRouting(options?.recoveryRouting),
     phaseScope: normalizePhaseScope(options?.phaseScope),
     authoritativeObservationScope:
       options?.authoritativeObservationScope || null,

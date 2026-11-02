@@ -6,6 +6,7 @@ import {
   buildProjectionReadinessGeneration,
 } from './projection-readiness-evidence-generation.js';
 import {ProjectionReadinessEvidenceOwner} from './projection-readiness-evidence-owner.js';
+import {isServeEligibilityAnswerEligible} from './serve-eligibility-owner.js';
 import {
   PRIORITY_RECOVERY_PLANNING_PROJECTION,
 } from './control-plane-readiness-constants.js';
@@ -24,16 +25,10 @@ const {
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   READINESS_ERROR_MSG,
-  STATE,
   buildProjectionReadinessContract,
   buildPublicationRecoveryGateSnapshot,
   pickProjectionReadinessEvidenceSource,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
-
-const SERVE_ADMISSION_STATE = Object.freeze({
-  ADMITTED: 'admitted',
-  BLOCKED_RUNTIME: 'blocked_runtime',
-});
 
 class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessParticipationBase {
   constructor(options = {}) {
@@ -241,45 +236,6 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
   }
 
   /**
-   * Build the runtime serve-admission input from normalized transport, load,
-   * and service evidence. Projection readiness owns publication and recovery
-   * lane closure after this local runtime input is normalized.
-   * @param {Object} context
-   * @return {Object}
-   * @private
-   */
-  buildServeAdmissionSnapshot(context = {}) {
-    const runtimeAuthority =
-      context?.runtimeAuthority &&
-      typeof context.runtimeAuthority === 'object' ?
-        context.runtimeAuthority :
-        this.buildRuntimeAuthoritySnapshot(context);
-    const evidence = Object.freeze({
-      repairEligible: runtimeAuthority.repairEligible === true,
-      loadReady: context.loadReady === true,
-      transportNotExplicitlyNegative:
-        context.transportNotExplicitlyNegative === true,
-      serveEligibleControlPlaneService:
-        context.serveEligibleControlPlaneService === true,
-    });
-    const runtimeServeEligible =
-      evidence.repairEligible &&
-      evidence.loadReady &&
-      evidence.transportNotExplicitlyNegative &&
-      evidence.serveEligibleControlPlaneService;
-    const state = runtimeServeEligible ?
-      SERVE_ADMISSION_STATE.ADMITTED :
-      SERVE_ADMISSION_STATE.BLOCKED_RUNTIME;
-
-    return Object.freeze({
-      state,
-      eligible: state === SERVE_ADMISSION_STATE.ADMITTED,
-      evidence,
-      reasonCodes: Object.freeze([]),
-    });
-  }
-
-  /**
    * Build the readiness dimensions together with the single per-build
    * projection-contract evaluation they derive from. One readiness build
    * performs exactly one runtime serve admission, one priority-recovery
@@ -365,22 +321,17 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
       typeof context.runtimeAuthority === 'object' ?
         context.runtimeAuthority :
         this.buildRuntimeAuthoritySnapshot(context);
-    const serveEligibleControlPlaneService =
-      this.hasServeEligibleControlPlaneService(context.serviceRows);
+    // Serving is the readiness owner's committed-epoch answer (quest
+    // serve-eligibility-committed-epoch-read); the projection carries it, it
+    // does not re-derive it.
+    const serveEligibility = this.answerServeEligibility(context.nodeId);
+    const committedServeEligible =
+      isServeEligibilityAnswerEligible(serveEligibility);
     const loadReady = this.isLoadReady(context.nodeRow);
     const placementEligible =
       runtimeAuthority.provisioning?.eligible === true &&
       loadReady &&
       this.isCapacityPlacementEligible(context.capacity);
-    const serveAdmission = this.buildServeAdmissionSnapshot({
-      ...context,
-      runtimeAuthority,
-      loadReady,
-      transportNotExplicitlyNegative:
-        this.getNodeTransportState(context.nodeId, context.nodeRow)
-          .routerState !== STATE.DISCONNECTED,
-      serveEligibleControlPlaneService,
-    });
     const baseDimensions = Object.freeze({
       [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]:
         runtimeAuthority.processAlive === true,
@@ -403,7 +354,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
       [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
         runtimeAuthority.repairEligible === true,
       [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
-        serveAdmission.eligible,
+        committedServeEligible,
     });
     const priorityControlPlaneRecovery =
       this.getPriorityControlPlaneRecoveryState({
@@ -423,12 +374,12 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
         dimensions: baseDimensions,
         priorityControlPlaneRecovery,
         runtimeAuthority,
-        runtimeServeEligible: serveAdmission.eligible,
+        runtimeServeEligible: committedServeEligible,
       }, {
         baseDimensions,
         priorityControlPlaneRecovery,
         runtimeAuthority,
-        runtimeServeEligible: serveAdmission.eligible,
+        runtimeServeEligible: committedServeEligible,
       });
 
     return Object.freeze({
@@ -440,7 +391,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
       priorityControlPlaneRecovery,
       projectionReadinessContract,
       runtimeAuthority,
-      serveAdmission,
+      serveEligibility,
     });
   }
 

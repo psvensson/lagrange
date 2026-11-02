@@ -49,6 +49,9 @@ const READINESS_PLANNING_OWNER_DEPENDENCIES = objectFreeze([
   'cdcGroupPropagationService',
   'heartbeatService',
   'controlPlaneSystemTableGateway',
+  // The committed-epoch serve-eligibility record: a new epoch rotates every
+  // planning snapshot (the projection is a memo keyed by that epoch).
+  'serveEligibilityOwner',
   'authoritativeControlPlaneView',
   'localClusterIncarnationFenceProvider',
 ]);

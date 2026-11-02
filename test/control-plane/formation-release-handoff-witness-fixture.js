@@ -49,8 +49,8 @@ import {
   ControlPlanePublicationsOwner,
 } from '../../src/control-plane/owners/control-plane-publications-owner.js';
 import {
-  shouldAllowPriorityRecoveryBootstrapRoutingGrace,
-} from '../../src/query/query-executor-priority-recovery-bootstrap-routing.js';
+  isSystemTableRouteStructurallyReady,
+} from '../../src/query/query-executor-bootstrap-deferred-routing.js';
 import {QUERY_EXECUTOR_SHARED} from '../../src/query/query-executor-shared.js';
 import {
   buildClusterIncarnationFence,
@@ -66,9 +66,7 @@ import {NodeService} from '../../src/node/node-service.js';
 const {STARTUP_JOIN_MODE} = NODE_JOINING_SERVICE_SHARED;
 const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON: RECOVERY_REASON,
-  CONTROL_PLANE_READINESS_DIMENSION: DIMENSION,
   CONTROL_PLANE_READINESS_REASON: READINESS_REASON,
-  QUERY_EXECUTOR_ROUTING_OPTION_FIELD: ROUTING_OPTION,
 } = QUERY_EXECUTOR_SHARED;
 
 // ── hoisted constants ──────────────────────────────────────────────────────
@@ -110,10 +108,10 @@ const FENCE_ABSENT = Symbol('fence-absent');
 // token, and the typed contract-source outcomes of the publication module.
 const CPP_PARTITION_ID = 'control_plane_publications-p1';
 const RECOVERY_ROUTING_FIELD = 'recoveryRouting';
-const RECOVERY_ROUTING_ELIGIBLE_ONLY = 'eligible_only';
-const RECOVERY_ROUTING_PRIORITY_RECOVERY_BOOTSTRAP =
-  'priority_recovery_bootstrap';
-const RECOVERY_ROUTING_ABSENT = 'absent';
+const CPP_HOST_NODE_ID = 'cpp-replica-host';
+const CPP_READER_NODE_ID = 'cpp-non-hosting-reader';
+const TRANSPORT_CONNECTED = 'connected';
+const TRANSPORT_DISCONNECTED = 'disconnected';
 const BOOTSTRAP_GRACE_REASON_CODES = Object.freeze([
   READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
   RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
@@ -284,33 +282,18 @@ function buildStorageOwner() {
   };
 }
 
-// The replica host exactly as the readiness owner reports it to query routing
-// during the priority-spread reopen: every liveness dimension holds and only
-// recovery eligibility fails, for the two bootstrap-grace reasons. Extra
-// failed dimensions/reasons model a host that is genuinely unhealthy.
+// The replica host as system-table routing sees it (quest
+// serve-eligibility-committed-epoch-read, lead decision D2): system-table
+// routing decides on raft leadership and live transport only. A host whose
+// readiness is recovery-pending is still reachable; a genuinely unhealthy host
+// is one the live router cannot reach.
 function buildRecoveryPendingHostReport({
   reasonCodes = BOOTSTRAP_GRACE_REASON_CODES,
-  failedDimensions = [DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
+  connectionState = TRANSPORT_CONNECTED,
 } = {}) {
-  const dimensions = {
-    [DIMENSION.PROCESS_ALIVE]: true,
-    [DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-    [DIMENSION.LOAD_READY]: true,
-    [DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
-    [DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
-    [DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-  };
-  for (const dimension of failedDimensions) dimensions[dimension] = false;
   return Object.freeze({
-    readiness: Object.freeze({
-      dimensions: Object.freeze(dimensions),
-      reasons: Object.freeze(reasonCodes.map((code) => Object.freeze({code}))),
-    }),
-    decision: Object.freeze({
-      eligible: false,
-      failedDimensions: Object.freeze([...failedDimensions]),
-      reasonCodes: Object.freeze([...reasonCodes]),
-    }),
+    readinessReasonCodes: Object.freeze([...reasonCodes]),
+    connectionState,
   });
 }
 
@@ -320,17 +303,13 @@ const UNHEALTHY_HOST_REPORT = buildRecoveryPendingHostReport({
     ...BOOTSTRAP_GRACE_REASON_CODES,
     READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY,
   ],
-  failedDimensions: [
-    DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    DIMENSION.CLUSTER_MEMBER_HEALTHY,
-  ],
+  connectionState: TRANSPORT_DISCONNECTED,
 });
 
 // A joiner hosting no control_plane_publications replica: its durable reads
 // route through the real owner read options -> the real frozen read-authority
-// token -> the real priority-recovery bootstrap routing grace against the
-// reported replica host. A refused read unwraps to no row, as the owner
-// reports all_services_filtered_by_readiness controlPlaneRecoveryEligible.
+// token -> the real system-table structural route against the replica host.
+// A refused read (host unreachable) unwraps to no row.
 function buildNonHostingStorageOwner(storageOwner, hostReport) {
   const readOptionsOwner = Object.create(ControlPlanePublicationsOwner.prototype);
   const reads = [];
@@ -343,21 +322,14 @@ function buildNonHostingStorageOwner(storageOwner, hostReport) {
       const readAuthority = buildControlPlaneReadAuthority(
         readOptionsOwner.buildPublicationReadOptions(options),
       );
-      const routable = shouldAllowPriorityRecoveryBootstrapRoutingGrace({
-        partitionId: CPP_PARTITION_ID,
-        partitionRow: null,
-        routingReadinessDimension: readAuthority.routingReadinessDimension,
-        routingOptions: {
-          [ROUTING_OPTION.FOR_READ]: true,
-          [ROUTING_OPTION.ALLOW_PRIORITY_RECOVERY_BOOTSTRAP]: false,
-          [ROUTING_OPTION.READ_AUTHORITY]: readAuthority,
-        },
-        readiness: hostReport.readiness,
-        decision: hostReport.decision,
+      const routable = isSystemTableRouteStructurallyReady({
+        service: {node_id: CPP_HOST_NODE_ID, partition_id: CPP_PARTITION_ID},
+        localNodeId: CPP_READER_NODE_ID,
+        messageRouter: {getConnectionState: () => hostReport.connectionState},
       });
       reads.push({
-        recoveryRouting: readAuthority[RECOVERY_ROUTING_FIELD] ??
-          RECOVERY_ROUTING_ABSENT,
+        recoveryRoutingDeclared:
+          Object.hasOwn(readAuthority, RECOVERY_ROUTING_FIELD),
         routable,
       });
       return routable ?
@@ -572,9 +544,7 @@ export {
   REASON_NOT_SPREAD,
   REASON_NOT_WRITABLE,
   RECOVERY_PENDING_HOST_REPORT,
-  RECOVERY_ROUTING_ELIGIBLE_ONLY,
   RECOVERY_ROUTING_FIELD,
-  RECOVERY_ROUTING_PRIORITY_RECOVERY_BOOTSTRAP,
   REGRESSED_EPOCH,
   REOPEN_AT,
   RESTARTED_BOOT_INCARNATION,

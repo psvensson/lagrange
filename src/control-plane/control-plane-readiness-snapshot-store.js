@@ -7,6 +7,8 @@ import {installControlPlaneReadinessStoredSnapshotReuseMethods} from
   './control-plane-readiness-stored-snapshot-reuse.js';
 import {installControlPlaneReadinessLifecycleMethods} from
   './control-plane-readiness-lifecycle.js';
+import {installControlPlaneReadinessServeEligibilityMethods} from
+  './control-plane-readiness-serve-eligibility-methods.js';
 import {readOwnDataValue} from './readiness-planning-version-contract.js';
 import {installControlPlaneReadinessRecoveryEpochSummaryMethods} from
   './control-plane-readiness-recovery-epoch-summary-methods.js';
@@ -572,6 +574,9 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     const capturePlanningSourceError = (error) => {
       firstPlanningSourceError = firstPlanningSourceError || error;
     };
+    // A projected change is a trigger for the committed serve record only:
+    // it can make the record stale, never grant or deny.
+    this.noteServeEligibilitySourceChange(tableName, record);
     this.readinessPlanningSnapshotOwner?.beginCacheChangeTransaction();
     try {
       try {
@@ -762,6 +767,7 @@ function installControlPlaneReadinessSnapshotStoreMethods(prototype) {
   installControlPlaneReadinessStoredSnapshotReuseMethods(prototype);
   installControlPlaneReadinessRecoveryEpochSummaryMethods(prototype);
   installControlPlaneReadinessLifecycleMethods(prototype);
+  installControlPlaneReadinessServeEligibilityMethods(prototype);
 }
 
 export {installControlPlaneReadinessSnapshotStoreMethods};
