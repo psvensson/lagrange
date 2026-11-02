@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "learner-admission-malformed-address-refusal",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A services row whose address is not a unified address must not raise an untyped failure in peer admission. Quest learner-host-from-committed-admission made the admission derive the committed node by parsing the row's address, and on PR #184's gate 41482547014 a row with address ws://localhost:<port>/partition/<id> threw MalformedAddressError out of the reconcile setImmediate hop (test/integration/services-p1-self-referential-write.integration.test.js), where main answers a typed outcome. An unparsable address now resolves to no node, so the admission reaches the port's one typed refusal for an ADD that names no node (RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_NODE_ID), reconcile treats it as unadmitted and records it, for the partition and the message group alike; a founding cohort with such a row records no node for that founder instead of throwing.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/learner-admission-malformed-address-refusal/evidence/receipt.json",
+      "requiredReceipts": [
+        "partition-admission-refuses-typed",
+        "message-group-admission-refuses-typed",
+        "founding-cohort-does-not-throw",
+        "no-uncaught-failure-from-the-reconcile-hop",
+        "row-derived-parse-census-recorded"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Only the three PR-added parses of a row-derived address and their witnesses: src/partition/partition-service-raft-membership-administration.js, src/message-group/message-group-service-raft-lifecycle.js, src/query/sql-query-engine-provision-target-methods.js, the one AddressManager accessor they share, tests, and this quest's records."
+    },
+    {
+      "id": "one-refusal",
+      "statement": "No new admission outcome and no second refusal path: the port's existing WITHOUT_NODE_ID refusal is the answer. No fallback to the row's node_id column (a row input swapped for a row input; rejected by the coordinator as option 2), no retry, no timer, no default node."
+    },
+    {
+      "id": "epoch-of-address",
+      "statement": "A follower and an existing member keep their existing typed outcomes for such a row; the refusal arises only where a proposal would need the node."
+    }
+  ],
+  "sealedAt": "eba822874d5baf59c9342365474f17a063e753a7"
+}

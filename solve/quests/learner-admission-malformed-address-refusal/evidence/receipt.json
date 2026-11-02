@@ -1,0 +1,31 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "partition-admission-refuses-typed",
+      "passed": false,
+      "evidence": "not yet measured"
+    },
+    {
+      "id": "message-group-admission-refuses-typed",
+      "passed": false,
+      "evidence": "not yet measured"
+    },
+    {
+      "id": "founding-cohort-does-not-throw",
+      "passed": false,
+      "evidence": "not yet measured"
+    },
+    {
+      "id": "no-uncaught-failure-from-the-reconcile-hop",
+      "passed": false,
+      "evidence": "not yet measured"
+    },
+    {
+      "id": "row-derived-parse-census-recorded",
+      "passed": false,
+      "evidence": "not yet measured"
+    }
+  ]
+}
