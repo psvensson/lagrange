@@ -45,6 +45,15 @@
       "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/live-campaign-bench-live-20261101-b/load-generator/r8/bench-live-20261101-b-r8/",
       "files": 13,
       "shard": "relocation-inventory/comparative-benchmark-evidence-repair--live-campaign-b-r8-load-generator-5731151b8-2026-11-02.json"
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--live-campaign-b-r9-load-generator-c64d11b90-2026-11-02.tar.gz",
+      "bundleSha256": "b648f9aa6bdfc5011a33826d12faec8e47778c4f6c11cc69a52fb8a09e7598f1",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--live-campaign-b-r9-load-generator-c64d11b90-2026-11-02.tar.gz",
+      "sourceCommit": "c64d11b904151b4e6647d0d66e0cd1004453776c",
+      "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/live-campaign-bench-live-20261101-b/load-generator/r9/bench-live-20261101-b-r9/",
+      "files": 13,
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--live-campaign-b-r9-load-generator-c64d11b90-2026-11-02.json"
     }
   ]
 }

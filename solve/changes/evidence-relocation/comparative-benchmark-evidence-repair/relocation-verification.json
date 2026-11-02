@@ -85,6 +85,23 @@
       "results": "1111111111111",
       "mismatches": [],
       "verified": true
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--live-campaign-b-r9-load-generator-c64d11b90-2026-11-02.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--live-campaign-b-r9-load-generator-c64d11b90-2026-11-02.tar.gz",
+      "bundleSha256": "b648f9aa6bdfc5011a33826d12faec8e47778c4f6c11cc69a52fb8a09e7598f1",
+      "sourceCommit": "c64d11b904151b4e6647d0d66e0cd1004453776c",
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--live-campaign-b-r9-load-generator-c64d11b90-2026-11-02.json",
+      "shardSha256": "a757d2af873d4118551a1bd17059967e21ff5f3187f263e5b24bfbdb0e8572d4",
+      "verifiedAt": "2026-11-02T05:41:50.461Z",
+      "downloadedSha256": "b648f9aa6bdfc5011a33826d12faec8e47778c4f6c11cc69a52fb8a09e7598f1",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 13,
+      "results": "1111111111111",
+      "mismatches": [],
+      "verified": true
     }
   ]
 }
