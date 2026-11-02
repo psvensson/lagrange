@@ -29,9 +29,22 @@ import {
   prepareCallEmitPayload,
 } from './wasi-component-cell-pressure-tracker.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  WASI_COMPONENT_CELL_ERROR_CODE,
+  WASI_COMPONENT_CELL_ERROR_MESSAGE,
+  WasiComponentCellError,
+} from './wasi-component-cell-errors.js';
+import {
+  DERIVATION_OUTCOME,
+  WasiComponentDerivationOwner,
+} from './wasi-component-derivation.js';
 
 const BYTE_ENCODING = 'utf8';
+// Liveness bound over spawn, memory cap, glue import, core compile and
+// instantiate: the transpile is derived beforehand by the derivation owner
+// (measured 0.1 s alone, 1.9 s at 8-way contention on one core).
 const STARTUP_TIMEOUT_MS = 10_000; // ends-on: the cell worker posts its ready message
+const CELL_START_PHASE_SPAWN = 'spawn';
 const HEALTH_TIMEOUT_MS = 1_000; // ends-on: the cell worker answers the health probe
 const CPU_SAMPLE_INTERVAL_MS = 2;
 const CELL_STARTUP_WAIT = Object.freeze({
@@ -51,7 +64,6 @@ const CELL_WORLD = Object.freeze({
 const CELL_EMIT_LENGTH_INDEX = 0;
 const CELL_EMIT_ERROR_INDEX = 1;
 const CELL_EMIT_OVERFLOW_MARKER = '__call_cell_emit_overflow__';
-const WASI_COMPONENT_CELL_ERROR_NAME = 'WasiComponentCellError';
 const WALL_BUDGET_EXHAUSTED_ACTUAL_OFFSET_MS = 1;
 const CELL_BUDGET_FIELD = Object.freeze({
   CONTEXT_BYTES: 'context_bytes',
@@ -70,46 +82,17 @@ const CELL_OPERATION_TYPE = Object.freeze({
   START: 'start',
   STOP: 'stop',
 });
-const WASI_COMPONENT_CELL_ERROR_MESSAGE = Object.freeze({
-  ALREADY_INVOKING: 'Component instance already has an active invocation',
-  INVOCATION_FAILED: 'Component invocation failed',
-  NOT_READY: 'Component instance is not ready',
-  START_FAILED: 'Component startup failed',
-  STOPPED: 'Component instance stopped',
-});
 const CELL_RUNTIME_MODULE_DIR = resolveModuleDirectory(resolveModuleDirectory);
-
-const WASI_COMPONENT_CELL_ERROR_CODE = Object.freeze({
-  BUDGET_EXHAUSTED: 'request_cell_budget_exhausted',
-  COMPONENT_FAILED: 'request_cell_component_failed',
-  COMPONENT_UNAVAILABLE: 'request_cell_component_unavailable',
-  CONCURRENT_INVOCATION: 'request_cell_concurrent_invocation',
-  CONTEXT_BUDGET_EXCEEDED: 'request_cell_context_budget_exceeded',
-  EMIT_BUFFER_OVERFLOW: 'request_cell_emit_buffer_overflow',
-  RUNTIME_MEMORY_PRESSURE_EXCEEDED:
-    'request_cell_runtime_memory_pressure_exceeded',
-  START_FAILED: 'request_cell_start_failed',
-});
 
 const CELL_MESSAGE = Object.freeze({
   INVOKE: 'invoke',
   INVOKE_RESULT: 'invoke_result',
   PING: 'ping',
+  PHASE: 'phase',
   PONG: 'pong',
   READY: 'ready',
   START_FAILED: 'start_failed',
 });
-
-class WasiComponentCellError extends Error {
-  constructor(code, message, options = {}) {
-    super(message, {cause: options.cause});
-    this.name = WASI_COMPONENT_CELL_ERROR_NAME;
-    this.code = code;
-    if (options.preserveReplicaState === true) {
-      this.preserveReplicaState = true;
-    }
-  }
-}
 
 function encodedBytes(value) {
   return Buffer.byteLength(
@@ -178,6 +161,10 @@ function releaseInvocationHostCall(state) {
   state.hostCallResponder = HOST_CALL_RESPONDER_RETIRED;
 }
 
+function cellWorld(cell) {
+  return cell.world === CELL_WORLD.CALL ? CELL_WORLD.CALL : CELL_WORLD.REQUEST;
+}
+
 function resolveCellWorkerPath() {
   return resolvePackagedRuntimeFile({
     bundledFileName: CELL_WORKER_BUNDLE_FILE,
@@ -194,6 +181,7 @@ class WasiComponentCellRuntime {
     this.nextMessageId = 1;
     this.workerPath = options.workerPath || resolveCellWorkerPath();
     this.pressureTracker = new WasiComponentCellPressureTracker(options);
+    this.derivations = new WasiComponentDerivationOwner();
     this.maxAggregateEmitBufferBytes =
       this.pressureTracker.maxAggregateEmitBufferBytes;
   }
@@ -204,6 +192,23 @@ class WasiComponentCellRuntime {
 
   getRuntimePressureTelemetry() {
     return this.pressureTracker.getTelemetry(this.cells);
+  }
+
+  getDerivationTelemetry() {
+    return this.derivations.telemetry();
+  }
+
+  // Driver prepare triggers the single-flight derivation; start awaits the
+  // same outcome. Resolves to a named outcome and never rejects.
+  prepareComponent(cell) {
+    return this.derivations.acquire(cell.serviceId, {
+      bytes: cell.bytes,
+      world: cellWorld(cell),
+    });
+  }
+
+  releaseComponent(serviceId) {
+    this.derivations.release(serviceId);
   }
 
   start(cell) {
@@ -229,17 +234,15 @@ class WasiComponentCellRuntime {
     return promise;
   }
 
-  workerDataForCell(cell) {
+  workerDataForCell(cell, derivedFiles) {
     return {
-      bytes: new Uint8Array(cell.bytes),
       capabilities: cell.capabilities,
       contextBytes: cell.budgets.context_bytes,
+      derivedFiles,
       exportName: cell.exportName,
       memoryBytes: cell.budgets.memory_bytes,
       requestCellWorker: true,
-      world: cell.world === CELL_WORLD.CALL ?
-        CELL_WORLD.CALL :
-        CELL_WORLD.REQUEST,
+      world: cellWorld(cell),
     };
   }
 
@@ -247,12 +250,17 @@ class WasiComponentCellRuntime {
     const existing = this.cells.get(cell.serviceId);
     if (existing && await this.health(cell.serviceId)) return;
     if (existing) await this._stop(cell.serviceId);
+    const derivation = await this.prepareComponent(cell);
+    if (derivation.outcome !== DERIVATION_OUTCOME.DERIVED) {
+      throw derivation.error;
+    }
 
     const worker = new Worker(this.workerPath, {
-      workerData: this.workerDataForCell(cell),
+      workerData: this.workerDataForCell(cell, derivation.files),
     });
     const state = {
       activeDeadlineMs: null,
+      startPhase: CELL_START_PHASE_SPAWN,
       busy: false,
       busySinceMs: null,
       cell,
@@ -284,6 +292,10 @@ class WasiComponentCellRuntime {
   }
 
   onMessage(state, message) {
+    if (message.type === CELL_MESSAGE.PHASE) {
+      state.startPhase = message.phase;
+      return;
+    }
     if (message.type === CELL_MESSAGE.READY) {
       state.ready = true;
       state.readyResolve?.();
@@ -360,6 +372,11 @@ class WasiComponentCellRuntime {
         reject(new WasiComponentCellError(
           WASI_COMPONENT_CELL_ERROR_CODE.START_FAILED,
           'Component startup timed out',
+          {detail: {
+            budgetMs: STARTUP_TIMEOUT_MS,
+            elapsedMs: Date.now() - startedAtMs,
+            phase: state.startPhase,
+          }},
         ));
       }, STARTUP_TIMEOUT_MS);
       state.readyResolve = () => {
@@ -748,6 +765,7 @@ class WasiComponentCellRuntime {
   async shutdown() {
     const serviceIds = [...this.cells.keys()];
     await Promise.all(serviceIds.map((serviceId) => this.stop(serviceId)));
+    await this.derivations.shutdown();
   }
 
   async _stop(serviceId) {

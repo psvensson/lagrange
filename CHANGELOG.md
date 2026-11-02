@@ -11,6 +11,21 @@ releases without a compatibility guarantee.
 ## [Unreleased]
 
 ### Fixed
+- **WASI component Cell startup no longer redoes the transpile on every start
+  (`wasi-component-derivation.js`, `wasi-component-cell-runtime.js`, `wasi-component-cell-worker.js`, `wasm-component-driver.js`):**
+  the jco transpile, which was 97% of a Cell start (3.4-3.6 s for the 12.9 MB h1 Hono
+  component), is now derived once per (component sha256, toolchain, world,
+  instantiation mode) per node. The derivation is single-flight on one derivation lane,
+  triggered at driver prepare, and reused across starts, restarts and replicas. It is
+  bounded by the 256 MiB size cap, the single lane, a CPU-time ceiling (2 s/MiB plus
+  5 s, measured with `worker.cpuUsage()`) and owner cancellation. Refusals are typed and
+  permanent for that digest: `request_cell_component_derivation_failed` and
+  `request_cell_component_derivation_exhausted`. A Cell start is now instantiate-only
+  under the unchanged 10 s liveness bound and, on expiry, fails as `request_cell_start_failed`
+  with `phase`, `budgetMs` and `elapsedMs` after its worker is terminated. Before this
+  change, concurrent starts on slow or shared hosts (the 2-core hosted runner and the lab
+  hosts) were killed and redone indefinitely. h1, h2, h3 and q4 at four jobs pinned to two cores now
+  pass 4/4; on the base commit 3/4 failed. Quest `wasi-component-startup-budget`.
 - **CI gate proof time (`.github/workflows/ci.yml`, `test/manifests/ci-resource-plan.json`):**
   the required `gate` job's `timeout-minutes` is raised from 120 to GitHub's 360-minute
   maximum for every event. Measured cause: PR #184's gate run 41431327759 (a 1892-file

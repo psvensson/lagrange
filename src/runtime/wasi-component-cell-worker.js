@@ -1,6 +1,5 @@
 import {parentPort, workerData} from 'node:worker_threads';
 
-import {transpileBytes} from '@bytecodealliance/jco-transpile';
 import {capComponentCoreMemory} from
   './wasi-component-core-memory-budget.js';
 import {
@@ -19,12 +18,14 @@ import {resolveComponentExport} from './component-export-resolution.js';
 const WORKER_MESSAGE = Object.freeze({
   INVOKE: 'invoke',
   INVOKE_RESULT: 'invoke_result',
+  PHASE: 'phase',
   PING: 'ping',
   PONG: 'pong',
   READY: 'ready',
   START_FAILED: 'start_failed',
 });
 
+const CELL_START_PHASE_INSTANTIATE = 'instantiate';
 const WORKER_ERROR_CODE = Object.freeze({
   BUDGET_EXHAUSTED: 'request_cell_budget_exhausted',
   CAPABILITY_DENIED: 'request_cell_capability_denied',
@@ -314,26 +315,26 @@ function resolveWorkerHostImports() {
   });
 }
 
+// The component arrives already derived (glue JS plus core modules) from
+// the runtime's derivation owner; this worker only caps memory, imports the
+// glue, compiles and instantiates under the parent's liveness bound.
 async function instantiateComponent() {
-  const transpiled = await transpileBytes(
-    new Uint8Array(workerData.bytes),
-    {
-      emitTypescriptDeclarations: false,
-      instantiation: 'async',
-      name: cellWorld,
-    },
-  );
+  parentPort.postMessage({
+    phase: CELL_START_PHASE_INSTANTIATE,
+    type: WORKER_MESSAGE.PHASE,
+  });
+  const derivedFiles = workerData.derivedFiles;
   const boundedCoreModules = capComponentCoreMemory(
-    transpiled.files,
+    derivedFiles,
     workerData.memoryBytes,
   );
-  const moduleBytes = transpiled.files[`${cellWorld}.js`];
+  const moduleBytes = derivedFiles[`${cellWorld}.js`];
   const moduleUrl = `data:text/javascript;base64,${
     Buffer.from(moduleBytes).toString('base64')}`;
   const generated = await import(moduleUrl);
   componentExports = await generated.instantiate(
     async (path) => globalThis.WebAssembly.compile(
-      boundedCoreModules[path] || transpiled.files[path],
+      boundedCoreModules[path] || derivedFiles[path],
     ),
     resolveWorkerHostImports(),
   );

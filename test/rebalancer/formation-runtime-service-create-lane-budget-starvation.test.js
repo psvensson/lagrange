@@ -235,6 +235,12 @@ function createPlacementComponentRuntime() {
     health(serviceId) {
       return running.has(serviceId);
     },
+    // The driver triggers the runtime's component derivation at prepare and
+    // releases it at stop; this placement fake derives nothing.
+    prepareComponent() {
+      return Promise.resolve({files: {}, outcome: 'derived'});
+    },
+    releaseComponent() {},
     start(cell) {
       running.add(cell.serviceId);
     },
