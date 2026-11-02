@@ -17,6 +17,7 @@ import {answerParticipantTransactionRequest} from
 import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TABLE = 'users';
 const PARTITION_ID = 'p1';
 const INSERT = `INSERT INTO ${TABLE} (id, name) VALUES (?, ?)`;
@@ -87,6 +88,7 @@ function createHarness(answer) {
     },
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: router,
     controlPlaneSystemTableGateway: gateway,

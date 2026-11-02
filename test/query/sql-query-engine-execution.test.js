@@ -44,6 +44,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -69,6 +70,7 @@ test('SQLQueryEngine preserves canonical result and deadline budgets for ' +
     }],
   );
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -113,6 +115,7 @@ test('SQLQueryEngine emits shared pressure diagnostics with query-plane ' +
   'resource keys', async (t) => {
   const metricEvents = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'query-pressure-node',
     systemCache: createMockSystemCache([], [], []),
     messageRouter: {
@@ -161,6 +164,7 @@ test('SQLQueryEngine logs typed admission defer reasons for harness playback',
   async (t) => {
     const warnings = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       nodeId: 'query-admission-node',
       systemCache: createMockSystemCache([], [], []),
       messageRouter: {
@@ -226,6 +230,7 @@ test('Shared pressure policy preserves plane isolation between query ingress ' +
     },
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'pressure-node',
     systemCache: createMockSystemCache([], [], []),
     messageRouter,
@@ -279,6 +284,7 @@ test('SQLQueryEngine - shuts down lifecycle-owned table creation services', asyn
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     partitionSplitMergeManager,
   });
 
@@ -322,6 +328,7 @@ test('SQLQueryEngine - requests debounced managed split evaluation after ' +
     },
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'test-node',
     systemCache: cache,
     partitionSplitMergeManager,
@@ -397,6 +404,7 @@ test('SQLQueryEngine - resolves partitions by table_id when table_name is missin
     );
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
     });
@@ -469,6 +477,7 @@ test('SQLQueryEngine - falls back to tables.find when tables.get is keyed by tab
     };
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
     });
@@ -535,6 +544,7 @@ test('SQLQueryEngine - resolves partitions when table metadata is only available
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -562,6 +572,7 @@ test('SQLQueryEngine - routes SELECT with key filter to single partition', async
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -590,6 +601,7 @@ test('SQLQueryEngine - executes INSERT and routes to correct partition', async (
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -623,6 +635,7 @@ test('SQLQueryEngine - routes INSERT to multiple partitions', async (t) => {
   // A multi-partition statement is a STATEMENT_AUTOCOMMIT transaction: its
   // engine persists transaction state (TX1 seam S4b).
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -665,6 +678,7 @@ test('SQLQueryEngine - refuses INSERT ... RETURNING before any write',
       },
     };
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: recordingRouter,
     });
@@ -709,6 +723,7 @@ test('SQLQueryEngine - surfaces partial failure for distributed UPDATE', async (
     },
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: failingRouter,
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -738,6 +753,7 @@ test('SQLQueryEngine - executes UPDATE with key filter', async (t) => {
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -769,6 +785,7 @@ test('SQLQueryEngine - executes UPDATE on all partitions without key filter', as
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -799,6 +816,7 @@ test('SQLQueryEngine - executes DELETE with key filter', async (t) => {
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -817,6 +835,7 @@ test('SQLQueryEngine - returns error for non-existent table', async (t) => {
   const cache = createMockSystemCache([], []);
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -832,6 +851,7 @@ test('SQLQueryEngine - handles transaction statements', async (t) => {
 
   // An explicit BEGIN persists transaction state first (TX1 seam S4b).
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -857,6 +877,7 @@ test('SQLQueryEngine - handles transaction statements', async (t) => {
 
 test('SQLQueryEngine - returns syntax error for invalid SQL', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], []),
     messageRouter: createMockMessageRouter(),
   });
@@ -870,6 +891,7 @@ test('SQLQueryEngine - returns syntax error for invalid SQL', async (t) => {
 test('SQLQueryEngine - preserves structured retry metadata from thrown ' +
   'execution errors', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], []),
     messageRouter: createMockMessageRouter(),
   });
@@ -917,6 +939,7 @@ test('SQLQueryEngine - preserves structured retry metadata from thrown ' +
 
 test('SQLQueryEngine - parse method returns AST', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], []),
     messageRouter: createMockMessageRouter(),
   });
@@ -939,6 +962,7 @@ test('SQLQueryEngine - resolvePartitions method works', async (t) => {
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -950,6 +974,7 @@ test('SQLQueryEngine - resolvePartitions method works', async (t) => {
 
 test('SQLQueryEngine - throws error when system cache not available', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: null,
     messageRouter: createMockMessageRouter(),
   });
@@ -964,6 +989,7 @@ test('SQLQueryEngine - returns empty array when no partitions found in cache', a
   const cache = createMockSystemCache([], []);
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -1004,6 +1030,7 @@ async (t) => {
     },
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     cdcIntegrationService,
@@ -1100,6 +1127,7 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
     // transaction whose engine persists its state and whose participants
     // answer the transaction protocol (TX1 seam S4b, design 2.2).
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
       messageRouter: {
@@ -1205,6 +1233,7 @@ test('SQLQueryEngine - recovers and replays distributed transactions from system
     participantRows.forEach((row) =>
       gateway.seed(TABLES.SQL_TRANSACTION_PARTICIPANTS, row));
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
       controlPlaneSystemTableGateway: gateway,
@@ -1270,6 +1299,7 @@ test('SQLQueryEngine - startup recovery invokes coordinator replay hook once',
     };
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
       transactionCoordinator,

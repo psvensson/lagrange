@@ -2,6 +2,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {TABLES} from '../../src/constants/index.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 export function registerQueryExecutorDeferredControlPlaneWriteTests({test}) {
   test('QueryExecutor - executeOnPartition widens deferred priority ' +
     'control-plane transport failures to another live replica', async (t) => {
@@ -97,6 +98,7 @@ export function registerQueryExecutorDeferredControlPlaneWriteTests({test}) {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
       nodeId: 'local-node',
@@ -205,6 +207,7 @@ export function registerQueryExecutorDeferredControlPlaneWriteTests({test}) {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
       nodeId: 'local-node',
@@ -296,6 +299,7 @@ export function registerQueryExecutorDeferredControlPlaneWriteTests({test}) {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
       nodeId: 'local-node',

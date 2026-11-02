@@ -8,6 +8,7 @@ import {
   uniqueNodeIds,
 } from './sql-query-engine-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -161,6 +162,7 @@ test('SQLQueryEngine - default CREATE TABLE quorum can temporarily fall back ' +
 test('SQLQueryEngine - default CREATE TABLE fallback rejects permanent ' +
   'provisioning shortfalls', (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: {
       filter: () => [],

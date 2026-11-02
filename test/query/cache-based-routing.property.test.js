@@ -28,6 +28,7 @@ import {
   createDeliveryTrackingMessageRouter,
 } from './cache-based-routing-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 /**
  * Generator for valid table names. Reserved words are excluded: the
  * unfiltered pattern once generated the table name `in`, which fails
@@ -127,6 +128,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
           const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             systemCache,
             messageRouter,
             nodeId: 'test-node',
@@ -192,6 +194,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
           const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             systemCache,
             messageRouter,
             nodeId: 'test-node',
@@ -275,6 +278,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
           const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             systemCache,
             messageRouter,
             nodeId: 'test-node',
@@ -340,6 +344,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
           const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             systemCache,
             messageRouter,
             nodeId: 'test-node',
@@ -392,6 +397,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
           const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             systemCache,
             messageRouter,
             nodeId: 'test-node',
@@ -441,6 +447,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
           const messageRouter = createDeliveryTrackingMessageRouter();
 
           const engine = new SQLQueryEngine({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             systemCache,
             messageRouter,
             nodeId: 'test-node',

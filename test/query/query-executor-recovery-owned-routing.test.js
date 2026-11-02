@@ -35,6 +35,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -95,6 +96,7 @@ async (t) => {
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
     bootstrapTopologySnapshotOwner,
@@ -183,6 +185,7 @@ test('QueryExecutor - canonical leader routing reuses the richer bootstrap owner
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
       bootstrapTopologySnapshotOwner,
@@ -258,6 +261,7 @@ test('QueryExecutor - recovery-owned priority control-plane partitions retain ' 
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
@@ -357,6 +361,7 @@ async (t) => {
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
@@ -469,6 +474,7 @@ async (t) => {
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
@@ -593,6 +599,7 @@ test('QueryExecutor - executeOnPartition applies recovery candidate ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -706,6 +713,7 @@ async (t) => {
       },
     };
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
       nowFn: () => now,
@@ -791,6 +799,7 @@ test('QueryExecutor - user-table writes stay fail-closed when canonical ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
@@ -865,6 +874,7 @@ test('QueryExecutor - executeOnPartition retries reads with ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });

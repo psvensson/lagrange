@@ -10,6 +10,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -31,6 +32,7 @@ test('getPartitionServiceCandidates throttles warnings for the same partition', 
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: null,
     systemCache: createEmptySystemCache(),
   });
@@ -67,6 +69,7 @@ test('getPartitionServiceCandidates warns independently per partition', async (t
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: null,
     systemCache: createEmptySystemCache(),
   });
@@ -98,6 +101,7 @@ test('executeOnPartition throttles NO_SERVICE warnings for reads', async (t) => 
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: false}))},
     systemCache: createEmptySystemCache(),
   });

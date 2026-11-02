@@ -27,6 +27,7 @@ import {
   createMockSystemCache,
 } from './sql-query-engine-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 ConfigurationManager.getInstance().initialize();
 
 const PG = {dialect: PARSER_DIALECT.POSTGRESQL};
@@ -179,6 +180,7 @@ function createRecordingEngine() {
   // Transactions BEGIN on an engine that persists their state (TX1 seam
   // S4b).
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache(
       [{table_name: 'users', primaryKey: 'id'}],
       [{partition_id: 'p1', table_name: 'users', partition_key_start: null,

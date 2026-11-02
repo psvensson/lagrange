@@ -64,6 +64,7 @@ import {WasiComponentCellRuntime} from
 import {liveActivationPinNodeIds} from
   '../../src/service/call-activation-lease-owner.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const NODE_A = 'activation-node-a';
 const NODE_B = 'activation-node-b';
 const TENANT_ID = 'tenant-a';
@@ -431,6 +432,7 @@ describe('data-local call missing-cell activation', () => {
     const messageRouter =
       createSharedMessageRouter(partitionStores, systemTableCache);
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       autoStartDistributedTransactionRecovery: false,
       messageRouter,
       nodeId: NODE_A,

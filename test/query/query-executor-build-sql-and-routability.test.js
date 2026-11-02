@@ -43,6 +43,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -140,6 +141,7 @@ function createReadinessPublicationService(snapshot) {
 test('QueryExecutor - buildExpressionSQL emits searched CASE WHEN',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -167,6 +169,7 @@ test('QueryExecutor - buildExpressionSQL emits searched CASE WHEN',
 test('QueryExecutor - buildExpressionSQL emits CASE with multiple WHEN',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -206,6 +209,7 @@ test('QueryExecutor - buildExpressionSQL emits CASE with multiple WHEN',
 test('QueryExecutor - buildExpressionSQL emits simple CASE with operand',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -230,6 +234,7 @@ test('QueryExecutor - buildExpressionSQL emits simple CASE with operand',
 test('QueryExecutor - buildExpressionSQL emits subquery',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -257,6 +262,7 @@ test('QueryExecutor - buildExpressionSQL emits subquery',
 test('QueryExecutor - buildExpressionSQL emits EXISTS subquery',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -293,6 +299,7 @@ test('QueryExecutor - buildExpressionSQL emits EXISTS subquery',
 test('QueryExecutor - buildExpressionSQL emits function_call',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -311,6 +318,7 @@ test('QueryExecutor - buildExpressionSQL emits function_call',
 test('QueryExecutor - buildExpressionSQL emits function_call with multiple args',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -331,6 +339,7 @@ test('QueryExecutor - buildExpressionSQL emits function_call with multiple args'
 test('QueryExecutor - buildExpressionSQL emits function_call with no args',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -349,6 +358,7 @@ test('QueryExecutor - buildExpressionSQL emits function_call with no args',
 test('QueryExecutor - buildSelectSQL emits CTE prefix',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -394,6 +404,7 @@ test('QueryExecutor - buildSelectSQL emits CTE prefix',
 test('QueryExecutor - buildSelectSQL emits WITH RECURSIVE prefix',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -432,6 +443,7 @@ test('QueryExecutor - buildSelectSQL emits WITH RECURSIVE prefix',
 test('QueryExecutor - buildSelectSQL emits multiple CTEs',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -472,6 +484,7 @@ test('QueryExecutor - buildSelectSQL emits multiple CTEs',
 test('QueryExecutor - buildSelectSQL omits CTE when ctes is empty',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -486,6 +499,7 @@ test('QueryExecutor - buildSelectSQL omits CTE when ctes is empty',
 test('QueryExecutor - buildSelectSQL emits UNION',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -520,6 +534,7 @@ test('QueryExecutor - buildSelectSQL emits UNION',
 test('QueryExecutor - buildSelectSQL emits UNION ALL',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -554,6 +569,7 @@ test('QueryExecutor - buildSelectSQL emits UNION ALL',
 test('QueryExecutor - buildSelectSQL emits INTERSECT',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -588,6 +604,7 @@ test('QueryExecutor - buildSelectSQL emits INTERSECT',
 test('QueryExecutor - buildSelectSQL emits EXCEPT',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -622,6 +639,7 @@ test('QueryExecutor - buildSelectSQL emits EXCEPT',
 test('QueryExecutor - buildSelectSQL omits set operation when absent',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });

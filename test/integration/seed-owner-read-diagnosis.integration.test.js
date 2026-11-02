@@ -21,6 +21,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const REPLICA_OPERATIONS_PROBE_SQL =
   'SELECT * FROM replica_operations WHERE 1 = 0';
 
@@ -87,6 +88,7 @@ async function createSeedFixture() {
 
   const systemTableCache = NodeService.getInstance().getSystemTableCache();
   const sqlQueryEngine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: systemTableCache,
     messageRouter: bootstrapResult.messageRouter,
     nodeId: seedNodeId,

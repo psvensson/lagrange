@@ -9,6 +9,7 @@ import {buildTransactionDecisionRecord} from
 import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const FIRST_ID = '1'.repeat(32);
 const SECOND_ID = '2'.repeat(32);
 const SESSION_ID = 'begin-collision-production';
@@ -26,6 +27,7 @@ function cloneRow(gateway, transactionId) {
 function createHarness(gateway, mintedIds) {
   const deliveries = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     autoStartDistributedTransactionRecovery: false,
     controlPlaneSystemTableGateway: gateway,
     messageRouter: {

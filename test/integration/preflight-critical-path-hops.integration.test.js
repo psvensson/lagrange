@@ -52,6 +52,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 // The shared owner resolves the hardware factor; these budgets retain their
 // existing multiplication at the point of use.
 const TEST_MACHINE_FACTOR = resolveTestMachineFactor();
@@ -210,6 +211,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
     await seedApi.initialize(0, {listen: false});
 
     seedQueryEngine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: seedNodeId,

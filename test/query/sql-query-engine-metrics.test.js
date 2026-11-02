@@ -10,6 +10,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -72,6 +73,7 @@ function createMockSystemCache(tables, partitions) {
 
 function createEngine(cache) {
   return new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });

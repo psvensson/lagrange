@@ -42,6 +42,7 @@ import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEMP_PREFIX = 'unknown-outcome-surface-';
 const NODE_ID = 'uo-node';
 const EXECUTOR_RETRY_DELAY_MS = 5;
@@ -187,6 +188,7 @@ function buildSurfaceEngine({tableRows, partitionRows, serviceRows,
   const byType = {tables: tableRows, partitions: partitionRows,
     services: serviceRows};
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: NODE_ID,
     systemCache: {
       get(type, key) {

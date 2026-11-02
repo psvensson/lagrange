@@ -18,6 +18,7 @@ import {
   createMockMessageRouter,
 } from './sql-query-engine-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 // =========================================================================
 // Q03: Storage-Compatible Key Ordering
 // =========================================================================
@@ -97,6 +98,7 @@ test('Q01: UPDATE permits column references and rejects subqueries/aggregates', 
 
 test('Q01: QueryExecutor buildExpressionSQL safely escapes single quotes and supports CAST/CASE', async () => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache([], [{partition_id: 'p1'}], [], []),
   });
@@ -122,6 +124,7 @@ test('Q01: QueryExecutor buildExpressionSQL safely escapes single quotes and sup
 
 test('Q01: QueryExecutor buildInsertSQL & buildUpdateSQL bind literals to params and inline expressions', async () => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache([], [{partition_id: 'p1'}], [], []),
   });

@@ -38,6 +38,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -335,6 +336,7 @@ async (t) => {
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -395,6 +397,7 @@ test('QueryExecutor - executeOnPartition fails closed on stale service ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -469,6 +472,7 @@ test('QueryExecutor - executeOnPartition fails closed when canonical leader ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -569,6 +573,7 @@ test('QueryExecutor - executeOnPartition widens recovery-owned system-table ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -625,6 +630,7 @@ test('QueryExecutor - executeOnPartition forwards router delivery overrides',
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache: createMockSystemCache(['p1']),
     });
@@ -683,6 +689,7 @@ test('QueryExecutor - executeOnPartitions forwards router delivery source',
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache: createMockSystemCache(['p1', 'p2']),
     });
@@ -794,6 +801,7 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -880,6 +888,7 @@ test('QueryExecutor - executeOnPartition fails closed during the fresh ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -916,6 +925,7 @@ test('QueryExecutor - executeOnPartition forwards migration operation metadata',
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
     });
@@ -979,6 +989,7 @@ test('QueryExecutor - executeOnPartition forwards sessionId through leader redir
       },
     };
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
     });

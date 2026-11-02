@@ -36,6 +36,7 @@ import {
   send,
 } from '../test-helpers/participant-transaction-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const QUIET_LOGGER = Object.freeze({
   debug() {},
   info() {},
@@ -63,6 +64,7 @@ test('Scenario A fast path: payment transaction breakdown tracer and Priority 1 
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     logger: QUIET_LOGGER,
     controlPlaneSystemTableGateway: gateway,
     autoStartDistributedTransactionRecovery: false,

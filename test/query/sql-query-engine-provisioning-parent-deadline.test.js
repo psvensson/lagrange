@@ -10,6 +10,7 @@ import {
   createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -246,6 +247,7 @@ test('provisioning parent deadline - a direct cache-success wait still honors ' 
   const cancellationToken = new CancellationToken();
   cancellationToken.cancel('caller cancelled before cache success');
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
   });
   engine.hasServiceMetadata = () => true;

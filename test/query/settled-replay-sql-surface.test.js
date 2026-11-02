@@ -46,6 +46,7 @@ import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} = outcomeConstants;
 const REPLAY = outcomeConstants.PARTITION_SETTLED_REPLAY ?? {};
 const TEMP_PREFIX = 'settled-replay-sql-surface-';
@@ -152,6 +153,7 @@ async function withSurface(body) {
     partition.startElection();
     await resumeFixtureParticipantAdmission(partition);
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemCacheOf({partitionId, replicaId, address}),
       messageRouter: {
         async deliver(_address, message) {

@@ -18,6 +18,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TABLE_NAME = 'benchmark_events';
 const CREATE_TABLE_SQL = `
   CREATE TABLE benchmark_events (
@@ -83,6 +84,7 @@ async function composeSeedWithTableProvisioningEngine({
   assert.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
   const systemTableCache = NodeService.getInstance().getSystemTableCache();
   const sqlQueryEngine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: systemTableCache,
     messageRouter: bootstrapResult.messageRouter,
     cdcIntegrationService: bootstrapService.cdcIntegrationService,

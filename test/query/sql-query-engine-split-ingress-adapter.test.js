@@ -25,6 +25,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -80,6 +81,7 @@ function createMockSystemCache(tables, partitions, services) {
 test('executeManagedSplit fails closed when workflow owner lacks execute',
   async (t) => {
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       managedSplitWorkflow: {},
     });
 
@@ -111,6 +113,7 @@ test('executeManagedSplit delegates to ManagedSplitWorkflow.execute ' +
 
   const workflowCalls = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     cdcIntegrationService: mockCDCService,
     managedSplitWorkflow: {
       async execute(partitionId) {
@@ -146,6 +149,7 @@ test('executeManagedSplit propagates workflow owner errors without fallback',
   async (t) => {
     const ownerError = new Error('workflow-owner-rejection');
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       managedSplitWorkflow: {
         async execute(_partitionId) {
           throw ownerError;
@@ -196,6 +200,7 @@ test('split helper methods are injected into ManagedSplitWorkflow as ' +
   const cache = createSingleUsersSplitCache();
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},
@@ -257,6 +262,7 @@ test('split source routability helper uses control-plane recovery eligibility ' 
   'dimension for owner-path convergence', (t) => {
   const cache = createSingleUsersSplitCache();
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},
@@ -326,6 +332,7 @@ test('listManagedSplitPartitions is read-only and does not mutate ' +
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: cache,
     cdcIntegrationService: {
@@ -442,6 +449,7 @@ test('listManagedSplitPartitions keeps retryable split states eligible ' +
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: cache,
     nowFn: () => 1000,

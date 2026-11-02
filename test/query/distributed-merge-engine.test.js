@@ -5,6 +5,7 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -12,6 +13,7 @@ if (!config.isInitialized()) {
 
 function createExecutor() {
   return new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: {
       async deliver() {
         return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});

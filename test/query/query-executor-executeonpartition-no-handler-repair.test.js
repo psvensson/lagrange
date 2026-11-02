@@ -39,6 +39,7 @@ import {
 import {registerQueryExecutorDeferredControlPlaneWriteTests} from './query-executor-deferred-control-plane-write-test-cases.js';
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -147,6 +148,7 @@ test('QueryExecutor - executeOnPartition fails closed when the canonical ' +
 test('QueryExecutor - getLeaderRecoveryCandidates includes one refreshed ' +
   'candidate when stale address was already attempted', (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
     nodeId: 'local-node',
@@ -484,6 +486,7 @@ test('QueryExecutor - executeOnPartition skips duplicate queued ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
     nodeId: 'local-node',
@@ -513,6 +516,7 @@ test('QueryExecutor - executeOnPartition repairs stale no-handler read ' +
   });
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: fixture.messageRouter,
     systemCache: fixture.systemCache,
     routingMetadataOverlay: fixture.routingMetadataOverlay,
@@ -638,6 +642,7 @@ async (t) => {
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
     nodeId: 'local-node',
@@ -755,6 +760,7 @@ test('QueryExecutor - executeOnPartition widens owner-missing priority ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
     nodeId: 'local-node',
@@ -790,6 +796,7 @@ test('QueryExecutor - executeOnPartition honors overlay refresh when service id 
   });
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: fixture.messageRouter,
     systemCache: fixture.systemCache,
     routingMetadataOverlay: fixture.routingMetadataOverlay,
@@ -898,6 +905,7 @@ test('QueryExecutor - executeOnPartition falls back to live replica ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
     nodeId: 'local-node',
@@ -1011,6 +1019,7 @@ test('QueryExecutor - executeOnPartition quarantines stale no-handler ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
     routingMetadataOverlay,
@@ -1130,6 +1139,7 @@ test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
     nodeId: 'local-node',

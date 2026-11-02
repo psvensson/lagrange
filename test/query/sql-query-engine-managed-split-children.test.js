@@ -42,6 +42,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -120,6 +121,7 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
   const childInsertCalls = [];
   const provisionCalls = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -346,6 +348,7 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -471,6 +474,7 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -899,6 +903,7 @@ test('SQLQueryEngine - provisionInitialTablePartition starts replica metadata ' 
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),

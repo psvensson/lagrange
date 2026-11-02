@@ -84,6 +84,7 @@ import {createCallCellRoutingSurface} from
   '../../src/service/call-cell-routing-surface.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const NODE_ID = 'call-cell-live-node';
 const TENANT_ID = 'tenant-a';
 const PRINCIPAL = 'alice';
@@ -715,6 +716,7 @@ describe('minimal deployment call-cell invocation live wiring', () => {
     const partitionStores = createPartitionStores();
     const messageRouter = createLiveMessageRouter(partitionStores);
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       autoStartDistributedTransactionRecovery: false,
       messageRouter,
       nodeId: NODE_ID,

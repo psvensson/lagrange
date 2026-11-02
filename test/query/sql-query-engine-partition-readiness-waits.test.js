@@ -45,6 +45,7 @@ import {createSqlRequest} from '../../src/query/sql-request.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -373,6 +374,7 @@ test('SQLQueryEngine - waitForPartitionLeaderService accepts a fresh ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -560,7 +562,9 @@ test('SQLQueryEngine - waitForCondition honors a predicate that flips exactly ' 
 test('SQLQueryEngine - waitForCondition classifies exact deadline exhaustion',
   async (t) => {
     let fakeNow = 1000;
-    const engine = new SQLQueryEngine({nowFn: () => fakeNow});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      nowFn: () => fakeNow});
 
     engine.sleep = async (ms) => {
       fakeNow += ms;
@@ -597,6 +601,7 @@ test('SQLQueryEngine - waitForRoutablePartitionServiceCount succeeds when the ' 
   'cohort is already routable even after budget exhaustion', async (t) => {
   let fakeNow = 2000;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     tablePartitionProvisioningPollIntervalMs: 10,
     nowFn: () => fakeNow,
   });
@@ -697,6 +702,7 @@ test('SQLQueryEngine - executeRequest forwards timeout budget to CREATE TABLE ' 
   });
   let receivedOptions = null;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
   });
   engine.tableCreationService = {
@@ -852,6 +858,7 @@ async (t) => {
   let repairCalls = 0;
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     tablePartitionProvisioningPollIntervalMs: 5,
     autoStartDistributedTransactionRecovery: false,
   });
@@ -909,6 +916,7 @@ async (t) => {
   let repairCalls = 0;
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     tablePartitionProvisioningPollIntervalMs: 5,
     autoStartDistributedTransactionRecovery: false,
   });
@@ -955,6 +963,7 @@ test('SQLQueryEngine - waitForPartitionLeaderService succeeds when leader route 
   'is already known even after budget exhaustion', async (t) => {
   let fakeNow = 3000;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     tablePartitionProvisioningPollIntervalMs: 10,
     nowFn: () => fakeNow,
   });

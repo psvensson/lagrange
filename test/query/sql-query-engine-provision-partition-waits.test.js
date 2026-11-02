@@ -43,6 +43,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -1083,6 +1084,7 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),

@@ -44,6 +44,7 @@ import {
   runCutoverCommand,
 } from '../../src/cli/cutover-router.js';
 
+import {createCommittedServeEligibilityOwner} from './serve-eligibility-test-support.js';
 const HOST = '127.0.0.1';
 const DB_NAME = 'pilot_cutover_db';
 const DB_USER = 'pilot_operator';
@@ -279,6 +280,7 @@ function buildClusterEngine() {
 
   const persistenceGateway = createTransactionPersistenceGateway();
   const queryEngine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     controlPlaneSystemTableGateway: persistenceGateway,
     messageRouter,
     systemCache,

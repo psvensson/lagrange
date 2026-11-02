@@ -42,6 +42,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TARGET_VOTER_COUNT = 3;
 const SETTLE_TIMEOUT_MS = 20000;
 const QUIET_WINDOW_MS = 5000;
@@ -487,6 +488,7 @@ test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async 
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
       const seedQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -701,6 +703,7 @@ test('Node join convergence SLO real-network readiness path',
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
       const seedQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -850,6 +853,7 @@ test('Readiness endpoint remains reachable during background log buffer flush',
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
       const seedQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -1037,6 +1041,7 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
       const seedQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

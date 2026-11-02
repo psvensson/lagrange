@@ -106,6 +106,7 @@ import {
 } from '../../src/service/service-source-contract.js';
 import {typingsSource} from '../../src/service/service-typings-generator.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const SERVICE_WORLD_V2 = 'service-cell-v2';
 const CALL_WORLD_NAME = 'call-cell';
 const RUN_EXPORT = 'run';
@@ -573,6 +574,7 @@ function createTableRoutingFixture() {
   };
   const partitionResolver = new PartitionResolver({systemCache});
   const queryExecutor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: {send: async () => ({success: true})},
     nodeId: NODE_ID,
     partitionResolver,

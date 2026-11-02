@@ -11,6 +11,7 @@ import {ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} 
   '../../src/transport/transport-error-codes.js';
 import {createMockSystemCache} from './query-executor-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const PARTITION = 'q6-write';
 const ENTRY = 'q6-original-entry';
 const BUDGET_MS = 50;
@@ -24,6 +25,7 @@ for (const errorCode of [ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIM
         let now = 1000;
         const entries = [];
         const executor = new QueryExecutor({
+          controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
           nodeId: 'test-node', systemCache: createMockSystemCache([PARTITION]),
           messageRouter: {
             async deliver(_address, request) {

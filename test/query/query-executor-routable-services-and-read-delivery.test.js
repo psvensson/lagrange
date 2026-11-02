@@ -33,6 +33,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -589,6 +590,7 @@ test('QueryExecutor - executeOnPartition retries reads across ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -696,6 +698,7 @@ test('QueryExecutor - reconnect delivery deferral falls through to another ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -803,6 +806,7 @@ test('QueryExecutor - read candidate delivery reserves timeout budget for ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -894,6 +898,7 @@ test('QueryExecutor - read delivery defers cold reconnect for a disconnected ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -984,6 +989,7 @@ test('QueryExecutor - read delivery defers cold reconnect for an unobserved ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -1075,6 +1081,7 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });

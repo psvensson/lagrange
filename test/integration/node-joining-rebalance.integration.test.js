@@ -44,6 +44,7 @@ import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../src/control-plane/control-plane-readiness-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 async function shutdownOrFail(t, promise, label) {
   try {
     await promise;
@@ -230,6 +231,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create SQL query engine for RebalanceCoordinator
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -375,6 +377,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create SQL query engine for BootstrapAPI
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -488,6 +491,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create SQL query engine for RebalanceCoordinator
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -659,6 +663,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create real SQL query engine
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

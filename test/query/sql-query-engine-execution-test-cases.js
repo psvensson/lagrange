@@ -27,6 +27,7 @@ import {
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const SQL_ENGINE_SYSTEM_TABLE_UPDATE_SQL =
   'UPDATE nodes SET status = \'active\' WHERE node_id = \'node-a\'';
 const SQL_ENGINE_SYSTEM_TABLE_WRITE_DELIVERY_SOURCE =
@@ -53,6 +54,7 @@ function registerSqlQueryEngineExecutionTestCases({
     'local replica fallback before owner RPC', async (t) => {
     const authoritativeReads = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache([], [], [], []),
       messageRouter: createMockMessageRouter(),
       authoritativeControlPlaneView: {
@@ -107,6 +109,7 @@ function registerSqlQueryEngineExecutionTestCases({
     });
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: fixture.systemCache,
       messageRouter: fixture.messageRouter,
       routingMetadataOverlay: fixture.routingMetadataOverlay,
@@ -138,6 +141,7 @@ function registerSqlQueryEngineExecutionTestCases({
   test('SQLQueryEngine - routes priority control-plane transaction delivery ' +
     'through recovery eligibility', async (t) => {
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache([], [], [], []),
       messageRouter: {
         deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
@@ -199,6 +203,7 @@ function registerSqlQueryEngineExecutionTestCases({
   test('SQLQueryEngine - keeps user transaction delivery on the default ' +
     'routing dimension', async (t) => {
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache([], [], [], []),
       messageRouter: {
         deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
@@ -279,6 +284,7 @@ function registerSqlQueryEngineExecutionTestCases({
       ],
     );
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       nodeId: 'select-node',
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
@@ -358,6 +364,7 @@ function registerSqlQueryEngineExecutionTestCases({
         ],
       );
       const engine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         nodeId: 'select-node',
         systemCache: cache,
         messageRouter: createMockMessageRouter(),
@@ -440,6 +447,7 @@ function registerSqlQueryEngineExecutionTestCases({
       );
       let capturedExecutionOptions = null;
       const engine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         nodeId: 'write-node',
         systemCache: cache,
         messageRouter: createMockMessageRouter(),
@@ -533,6 +541,7 @@ function registerSqlQueryEngineExecutionTestCases({
     };
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: fixture.systemCache,
       messageRouter: fixture.messageRouter,
       routingMetadataOverlay: fixture.routingMetadataOverlay,
@@ -578,6 +587,7 @@ function registerSqlQueryEngineExecutionTestCases({
     );
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
     });
@@ -595,6 +605,7 @@ function registerSqlQueryEngineExecutionTestCases({
     'demotes high-volume transaction metadata',
   async (t) => {
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache([], [], []),
       messageRouter: createMockMessageRouter(),
     });
@@ -623,6 +634,7 @@ function registerSqlQueryEngineExecutionTestCases({
   async (t) => {
     const submissions = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache([], [], []),
       messageRouter: createMockMessageRouter(),
     });
@@ -718,6 +730,7 @@ function registerSqlQueryEngineExecutionTestCases({
   async (t) => {
     const submissions = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache([], [], []),
       messageRouter: createMockMessageRouter(),
     });
@@ -776,6 +789,7 @@ function registerSqlQueryEngineExecutionTestCases({
       maxPendingUtilization: 1,
     };
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       nodeId: 'pressure-node',
       systemCache: createMockSystemCache([], [], []),
       messageRouter: {

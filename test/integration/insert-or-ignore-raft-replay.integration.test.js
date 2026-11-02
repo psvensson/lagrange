@@ -33,6 +33,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const ports = createPortAllocator(import.meta.url);
 
 let nodeIdCounter = 0xA00000000000;
@@ -92,6 +93,7 @@ test('INSERT OR IGNORE lost through SQL rebuild', {timeout: 30000}, async (t) =>
         const systemTableCache =
           NodeService.getInstance().getSystemTableCache();
         const sqlEngine = new SQLQueryEngine({
+          controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
           systemCache: systemTableCache,
           messageRouter: bootstrapResult.messageRouter,
           nodeId: seedNodeId,

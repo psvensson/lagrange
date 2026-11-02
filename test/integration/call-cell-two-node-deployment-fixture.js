@@ -61,6 +61,7 @@ import {HEALTH_STATUS} from '../../src/runtime/runtime-driver.js';
 import {WasiComponentCellRuntime} from
   '../../src/runtime/wasi-component-cell-runtime.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 function digestSha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -426,6 +427,7 @@ async function composeTwoNodeDeployment(testContext, options = {}) {
   const partitionStores = createPartitionStores();
   const messageRouter = createSharedMessageRouter(partitionStores);
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     autoStartDistributedTransactionRecovery: false,
     messageRouter,
     nodeId: NODE_A,

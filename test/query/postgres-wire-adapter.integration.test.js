@@ -28,6 +28,7 @@ import {
   QUERY_OPERATION,
 } from '../../src/query/query-constants.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 // Initialize configuration for tests
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -140,6 +141,7 @@ function createAdapterWithEngine(opts = {}) {
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),

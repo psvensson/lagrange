@@ -10,6 +10,7 @@ import {SQLQueryEngine} from '../../../src/query/sql-query-engine.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../../src/control-plane/control-plane-readiness-constants.js';
 
+import {createCommittedServeEligibilityOwner} from '../../control-plane/serve-eligibility-test-support.js';
 const STARTUP_SQL_RUNTIME_HANDOFF_SUITE = 'startup-sql-runtime-handoff';
 const STARTUP_SQL_RUNTIME_HANDOFF_TEST = Object.freeze({
   runtimeAccessPolicy:
@@ -119,6 +120,7 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
       };
       const owner = {serviceLifecycleCommandOwner: commandOwner};
       const provisionalEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         autoStartDistributedTransactionRecovery: false,
         messageRouter: {deliver: async () => ({success: true})},
         systemCache: systemTableCache,
@@ -126,6 +128,7 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
       provisionalEngine.setServiceLifecycleCommandOwner(commandOwner);
       gateway.setSqlQueryEngine(provisionalEngine);
       finalEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         autoStartDistributedTransactionRecovery: false,
         messageRouter: {deliver: async () => ({success: true})},
         systemCache: systemTableCache,
@@ -177,6 +180,7 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
         getAll: () => [],
       };
       const finalEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         autoStartDistributedTransactionRecovery: false,
         messageRouter: {deliver: async () => ({success: true})},
         systemCache: systemTableCache,

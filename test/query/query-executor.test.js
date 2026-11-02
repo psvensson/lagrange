@@ -38,6 +38,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -49,6 +50,7 @@ test('QueryExecutor - executes SELECT on single partition', async (t) => {
   ]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -69,6 +71,7 @@ test('QueryExecutor - executes SELECT on multiple partitions', async (t) => {
   mockPartitionData.set('p3', [{id: 3, name: 'Charlie'}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2', 'p3']),
   });
@@ -87,6 +90,7 @@ test('QueryExecutor - sends bounded SELECT result limits and deadline to ' +
   'the partition', async (t) => {
   const delivered = [];
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: {
       async deliver(_address, message) {
         delivered.push(message);
@@ -118,6 +122,7 @@ test('QueryExecutor - sends bounded SELECT result limits and deadline to ' +
 test('QueryExecutor - executeSelect forwards explicit routing readiness to ' +
   'partition fanout', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['nodes-p1']),
   });
@@ -172,6 +177,7 @@ test('QueryExecutor - executeSelect forwards explicit routing readiness to ' +
 test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
   'readiness to each table fanout', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['users-p1', 'profiles-p1']),
   });
@@ -241,6 +247,7 @@ test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
 
 test('QueryExecutor - returns empty for no partitions', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache([]),
   });
@@ -256,6 +263,7 @@ test('QueryExecutor - fails closed when a partition is missing', async (t) => {
   mockPartitionData.set('p1', [{id: 1, name: 'Alice'}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']), // Only p1 has service
   });
@@ -281,6 +289,7 @@ test('QueryExecutor - applies ORDER BY across partitions', async (t) => {
   ]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -302,6 +311,7 @@ test('QueryExecutor - applies ORDER BY DESC', async (t) => {
   mockPartitionData.set('p2', [{id: 3, age: 25}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -321,6 +331,7 @@ test('QueryExecutor - applies LIMIT across partitions', async (t) => {
   mockPartitionData.set('p2', [{id: 3}, {id: 4}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -338,6 +349,7 @@ test('QueryExecutor - applies LIMIT with OFFSET', async (t) => {
   mockPartitionData.set('p2', [{id: 3}, {id: 4}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -356,6 +368,7 @@ test('QueryExecutor - applies DISTINCT across partitions', async (t) => {
   mockPartitionData.set('p2', [{status: 'active'}, {status: 'pending'}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -373,6 +386,7 @@ test('QueryExecutor - computes COUNT aggregate', async (t) => {
   mockPartitionData.set('p2', [{id: 3}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -391,6 +405,7 @@ test('QueryExecutor - computes SUM aggregate', async (t) => {
   mockPartitionData.set('p2', [{amount: 150}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -408,6 +423,7 @@ test('QueryExecutor - computes AVG aggregate', async (t) => {
   mockPartitionData.set('p2', [{score: 100}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -425,6 +441,7 @@ test('QueryExecutor - computes MIN/MAX aggregates', async (t) => {
   mockPartitionData.set('p2', [{price: 75}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -451,6 +468,7 @@ test('QueryExecutor - applies GROUP BY across partitions', async (t) => {
   ]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -470,6 +488,7 @@ test('QueryExecutor - executes INSERT on partition', async (t) => {
   mockPartitionData.set('p1', []);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -486,6 +505,7 @@ test('QueryExecutor - executes INSERT on partition', async (t) => {
 
 test('QueryExecutor - preserves INSERT OR REPLACE when rebuilding SQL', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -499,6 +519,7 @@ test('QueryExecutor - preserves INSERT OR REPLACE when rebuilding SQL', async (t
 
 test('QueryExecutor - preserves INSERT OR IGNORE when rebuilding SQL', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -513,6 +534,7 @@ test('QueryExecutor - preserves INSERT OR IGNORE when rebuilding SQL', async (t)
 test('QueryExecutor - preserves zero affected rows for INSERT OR IGNORE no-op',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache(['p1']),
     });
@@ -535,6 +557,7 @@ test('QueryExecutor - executes UPDATE on partitions', async (t) => {
   mockPartitionData.set('p2', [{id: 2}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1', 'p2']),
   });
@@ -553,6 +576,7 @@ test('QueryExecutor - executes DELETE on partitions', async (t) => {
   mockPartitionData.set('p1', [{id: 1}]);
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -568,6 +592,7 @@ test('QueryExecutor - executes DELETE on partitions', async (t) => {
 
 test('QueryExecutor - throws for INSERT on missing partition', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache([]), // No services
   });
@@ -592,6 +617,7 @@ test('QueryExecutor - routes writes when canonical owner is present but raft rol
     }));
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: router,
       systemCache,
     });
@@ -607,6 +633,7 @@ test('QueryExecutor - routes writes when canonical owner is present but raft rol
 
 test('QueryExecutor - builds correct SELECT SQL', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache([]),
   });
@@ -628,6 +655,7 @@ test('QueryExecutor - builds correct SELECT SQL', async (t) => {
 
 test('QueryExecutor - preserves NOT IN when rebuilding SQL', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache([]),
   });
@@ -642,6 +670,7 @@ test('QueryExecutor - preserves NOT IN when rebuilding SQL', async (t) => {
 
 test('QueryExecutor - preserves IS NULL when rebuilding SQL', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache([]),
   });
@@ -655,6 +684,7 @@ test('QueryExecutor - preserves IS NULL when rebuilding SQL', async (t) => {
 
 test('QueryExecutor - preserves IS NOT NULL when rebuilding SQL', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache([]),
   });
@@ -679,6 +709,7 @@ test('QueryExecutor - fails closed on partition query errors', async (t) => {
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: errorRouter,
     systemCache: createMockSystemCache(['p1']),
   });
@@ -694,6 +725,7 @@ test('QueryExecutor - fails closed on partition query errors', async (t) => {
 test('QueryExecutor - findPartitionLeaderAddress returns leader address', (t) => {
   const systemCache = createMockSystemCache(['p1']);
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
@@ -715,6 +747,7 @@ test('QueryExecutor - findPartitionLeaderAddress returns null when no leader', (
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
@@ -728,6 +761,7 @@ test('QueryExecutor - findPartitionLeaderAddress returns null when no leader', (
 test('QueryExecutor - findPartitionLeaderAddress forwards one explicit routing ' +
   'readiness dimension', (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: null,
   });
@@ -763,6 +797,7 @@ test('QueryExecutor - findPartitionLeaderAddress forwards one explicit routing '
 
 test('QueryExecutor - findPartitionLeaderAddress returns null when cache unavailable', (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: null,
   });
@@ -820,6 +855,7 @@ test('QueryExecutor - findPartitionLeaderAddress uses canonical partition leader
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -876,6 +912,7 @@ test('QueryExecutor - findPartitionLeaderAddress filters by active status', (t) 
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
@@ -924,6 +961,7 @@ test('QueryExecutor - findPartitionLeaderAddress stays closed when the ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
     nodeId: 'local-node',
@@ -965,6 +1003,7 @@ test('QueryExecutor - findPartitionLeaderAddress fails closed without canonical 
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -1033,6 +1072,7 @@ test('QueryExecutor - findPartitionLeaderAddress allows a fresh bootstrap ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
@@ -1092,6 +1132,7 @@ test('QueryExecutor - fresh bootstrap fallback still fails closed when leader ' 
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });

@@ -51,6 +51,7 @@ import {
 } from './sql-query-engine-test-support.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -65,6 +66,7 @@ function buildEngine() {
     status: 'active',
   }];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache(tables, partitions, null),
     messageRouter: createMockMessageRouter(),
     nodeId: NODE_ID,

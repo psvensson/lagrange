@@ -22,6 +22,7 @@ import {
   buildSelectFanoutPlan,
 } from '../../src/query/distributed/distributed-select-fanout-plan.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -85,7 +86,9 @@ function buildCluster(partitionRows) {
     },
   };
 
-  const executor = new QueryExecutor({messageRouter, systemCache});
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter, systemCache});
   return {executor, deliveredSql, partitionIds: [...partitionDbs.keys()]};
 }
 

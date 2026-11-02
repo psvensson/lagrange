@@ -35,6 +35,7 @@ import {answerParticipantTransactionRequest} from
 import {transactionOutcomeAnswerOf} from
   '../../src/query/sql-query-engine-participant-wire.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TABLE = 'users';
 const PARTITIONS = Object.freeze({
   p1: {partition_id: 'p1', table_name: TABLE, partition_key_start: null,
@@ -121,7 +122,9 @@ function harness(options = {}) {
     const getAll = cache.getAll.bind(cache);
     cache.getAll = (type) => options.seed[type] ?? getAll(type);
   }
-  const engine = new SQLQueryEngine({systemCache: cache, messageRouter: router,
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache: cache, messageRouter: router,
     controlPlaneSystemTableGateway: gateway,
     autoStartDistributedTransactionRecovery: false,
     unrefRetryDelayTimers: true,
@@ -714,6 +717,7 @@ test('TX1 protocol W-SELECTOR: delivery is bound to the transaction, never to ' 
   'and distinct delivery keys', async () => {
   resetEnvironment();
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], [], [], []),
     autoStartDistributedTransactionRecovery: false,
   });

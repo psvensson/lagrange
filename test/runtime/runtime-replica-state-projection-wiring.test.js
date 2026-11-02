@@ -34,6 +34,7 @@ import {
 } from '../query/sql-query-engine-test-support.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -97,6 +98,7 @@ function buildHarness() {
     },
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], [], null),
     messageRouter: createMockMessageRouter(),
     nodeId: HOST_NODE_ID,
@@ -327,6 +329,7 @@ test('a start failure projects the failed state onto the existing row',
 
 test('an engine composed without a lifecycle stays inert', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], [], null),
     messageRouter: createMockMessageRouter(),
     nodeId: HOST_NODE_ID,

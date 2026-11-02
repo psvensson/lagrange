@@ -30,6 +30,7 @@ import {
   QUERY_OPERATION,
 } from '../../src/query/query-constants.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 // Initialize configuration for tests
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -140,6 +141,7 @@ function createAdapterWithEngine(cacheOverride) {
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -323,6 +325,7 @@ test('integration: adapter preserves syntax error from engine',
 test('integration: adapter preserves system-cache-unavailable error',
   async (t) => {
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: null,
       messageRouter: createMockMessageRouter(),
       controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -421,11 +424,13 @@ test('integration: adapter result matches direct engine result for INSERT',
 
     // Create two separate engines with the same cache to avoid shared state
     const engine1 = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
       controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     });
     const engine2 = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
       controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -449,11 +454,13 @@ test('integration: adapter result matches direct engine for error cases',
     const cache = createMockSystemCache([], []);
 
     const engine1 = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
       controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     });
     const engine2 = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
       controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),

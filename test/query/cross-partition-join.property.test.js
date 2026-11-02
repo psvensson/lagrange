@@ -14,6 +14,7 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 // Initialize configuration
 const config = ConfigurationManager.getInstance();
 config.initialize();
@@ -104,6 +105,7 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
           mockPartitionData.set('orders_p1', orders);
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             messageRouter: createMockMessageRouter(),
             systemCache: createMockSystemCache(['users_p1', 'orders_p1']),
           });
@@ -180,6 +182,7 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
           mockPartitionData.set('table_p2', partition2Data);
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             messageRouter: createMockMessageRouter(),
             systemCache: createMockSystemCache(['table_p1', 'table_p2']),
           });
@@ -221,6 +224,7 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
           }
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             messageRouter: createMockMessageRouter(),
             systemCache: createMockSystemCache(partitionIds),
           });
@@ -262,6 +266,7 @@ test('Property 50: Cross-Partition JOIN Support', async (t) => {
           mockPartitionData.set('p2', p2Data);
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             messageRouter: createMockMessageRouter(),
             systemCache: createMockSystemCache(['p1', 'p2']),
           });

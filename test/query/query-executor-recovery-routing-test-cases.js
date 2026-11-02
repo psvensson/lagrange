@@ -21,6 +21,7 @@ import {
 } from '../../src/query/canonical-leader-routing.js';
 import {createMockMessageRouter} from './query-executor-mock-message-router.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 export function registerQueryExecutorRecoveryRoutingTests() {
   test('QueryExecutor - priority recovery write defers cold reconnect and ' +
     'widens to a live peer', async (t) => {
@@ -102,6 +103,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       },
     };
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
     });
@@ -607,6 +609,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       },
     };
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
     });
@@ -700,6 +703,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
     });
@@ -760,6 +764,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
       routingMetadataOverlay: {
@@ -1185,6 +1190,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -1279,6 +1285,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -1366,6 +1373,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       },
     };
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
     });
@@ -1449,6 +1457,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       },
     };
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });

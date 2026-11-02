@@ -5,6 +5,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {MIGRATION_STATUS} from '../../src/migration/migration-constants.js';
 import {TABLES} from '../../src/constants/tables.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -113,6 +114,7 @@ function createEngineHarness(options = {}) {
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     messageRouter: {
       async deliver() {

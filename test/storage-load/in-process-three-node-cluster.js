@@ -26,6 +26,7 @@ import {
   waitFor,
 } from '../integration/helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const SEED_NODE_ID = '7a1d3d2e-0001-4c4e-9d2f-0000000a0001';
 const JOINER_NODE_IDS = Object.freeze([
   '7a1d3d2e-0002-4c4e-9d2f-0000000a0002',
@@ -92,6 +93,7 @@ function pumpRebalanceChecks(seed, joiners) {
 
 function buildSqlEngine(seed, nodeId, extra = {}) {
   return new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: seed.systemTableCache,
     messageRouter: seed.bootstrapResult.messageRouter,
     cdcIntegrationService: seed.bootstrapService.cdcIntegrationService,

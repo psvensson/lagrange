@@ -12,6 +12,7 @@ import {answerParticipantTransactionRequest} from
 import {PARTITION_ID, startLeader, send, shutdownAll} from
   '../test-helpers/participant-transaction-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 ConfigurationManager.getInstance().initialize();
 
 function harness() {
@@ -24,7 +25,9 @@ function harness() {
         partition_key_start: null, partition_key_end: null})),
   );
   const gateway = createTransactionPersistenceGateway();
-  const engine = new SQLQueryEngine({systemCache: cache,
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache: cache,
     controlPlaneSystemTableGateway: gateway,
     messageRouter: {async deliver(address, message) {
       messages.push({address, ...message});
@@ -117,7 +120,9 @@ test('TX1 Q5: the real participant SELECT sees its staged write', async (t) => {
     [{table_name: 'test_table', primaryKey: 'id'}],
     [{table_name: 'test_table', partition_id: PARTITION_ID,
       partition_key_start: null, partition_key_end: null}]);
-  const engine = new SQLQueryEngine({systemCache: cache,
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache: cache,
     controlPlaneSystemTableGateway: gateway,
     messageRouter: {async deliver(_address, message) {
       messages.push(message);

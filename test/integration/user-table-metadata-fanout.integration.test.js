@@ -25,6 +25,7 @@ import {
   gracefulShutdown,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEST_TIMEOUT_MS = 360000;
 const TABLE_NAME = 'user_table_metadata_fanout';
 const CREATE_TABLE_SQL = `
@@ -158,6 +159,7 @@ test('Later-created user-table metadata fans out to all node-local system caches
       await seedApi.initialize(0, {listen: false});
 
       seedSqlEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: seedSystemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         cdcIntegrationService: bootstrapService.cdcIntegrationService,
@@ -243,6 +245,7 @@ test('Later-created user-table metadata fans out to all node-local system caches
       ConfigurationManager.getInstance()
         .setByPath('partition.defaultReplicaCount', 1);
       const createEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: seedSystemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         cdcIntegrationService: bootstrapService.cdcIntegrationService,

@@ -29,6 +29,7 @@ import {
   initializeTestEnvironment,
 } from '../integration/helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEST_TIMEOUT_MS = 120000;
 const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440701';
 const NODE_B_ID = '550e8400-e29b-41d4-a716-446655440702';
@@ -92,6 +93,7 @@ async function exposeJoinerBootstrapApi(joiningService, joinResult, identity) {
       null,
   });
   bootstrapApi.setSqlQueryEngine(new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: systemTableCache,
     messageRouter: joinResult.messageRouter,
     nodeId: identity.nodeId,
@@ -144,6 +146,7 @@ test('fresh join completes through a non-seed node when the first candidate is d
     });
     await seedApi.initialize(0, {listen: false});
     seedApi.setSqlQueryEngine(new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: SEED_NODE_ID,

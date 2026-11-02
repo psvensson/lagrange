@@ -26,6 +26,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const SYSTEM_PARTITION_IDS = new Set(
   Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
 );
@@ -178,6 +179,7 @@ test('Critical partition learner safety', {
       await seedApi.initialize(0, {listen: false});
 
       const seedQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

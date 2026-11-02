@@ -14,6 +14,7 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 // Initialize configuration
 const config = ConfigurationManager.getInstance();
 config.initialize();
@@ -121,6 +122,7 @@ test('Property 49: Distributed Query Parallelism', async (t) => {
           }
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             messageRouter: createTimedMockMessageRouter(delay),
             systemCache: createMockSystemCache(partitionIds),
           });
@@ -185,6 +187,7 @@ test('Property 49: Distributed Query Parallelism', async (t) => {
           }
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             messageRouter: createMockMessageRouter(),
             systemCache: createMockSystemCache(partitionIds),
           });
@@ -217,6 +220,7 @@ test('Property 49: Distributed Query Parallelism', async (t) => {
           }
 
           const executor = new QueryExecutor({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             messageRouter: createMockMessageRouter(),
             systemCache: createMockSystemCache(partitionIds),
           });

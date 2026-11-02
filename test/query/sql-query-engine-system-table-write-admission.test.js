@@ -39,6 +39,7 @@ import {buildDeliveryEnvelope} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -114,6 +115,7 @@ function createSystemCache() {
 function createEngine(queryHandler = null) {
   const delivered = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createSystemCache(),
     messageRouter: {
       async deliver(address, message) {

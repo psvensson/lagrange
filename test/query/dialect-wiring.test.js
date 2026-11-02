@@ -16,6 +16,7 @@ import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -137,6 +138,7 @@ test('PostgresWireAdapter - dialect is present alongside other ' +
 test('SQLQueryEngine - executeQuery with dialect=postgresql ' +
   'parses PG syntax', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMinimalSystemCache(),
     messageRouter: createMockRouter(),
   });
@@ -156,6 +158,7 @@ test('SQLQueryEngine - executeQuery with dialect=postgresql ' +
 test('SQLQueryEngine - executeRequest forwards dialect from ' +
   'SqlRequest to executeQuery', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMinimalSystemCache(),
     messageRouter: createMockRouter(),
   });
@@ -181,6 +184,7 @@ test('SQLQueryEngine - executeRequest forwards dialect from ' +
 test('SQLQueryEngine - executeQuery without dialect uses ' +
   'SQLite mode', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMinimalSystemCache(),
     messageRouter: createMockRouter(),
   });
@@ -198,6 +202,7 @@ test('SQLQueryEngine - executeQuery without dialect uses ' +
 test('SQLQueryEngine - executeQuery with dialect=null uses ' +
   'SQLite mode', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMinimalSystemCache(),
     messageRouter: createMockRouter(),
   });

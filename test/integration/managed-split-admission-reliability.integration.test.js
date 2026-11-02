@@ -39,6 +39,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const POLL_INTERVAL_MS = 50;
 const ROUTING_TIMEOUT_MS = 8000;
 const TEST_TIMEOUT_MS = 120000;
@@ -140,6 +141,7 @@ async function bootstrapManagedSplitFixture(tableName) {
     const bootstrapResult = await bootstrapService.bootstrap();
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
     const sqlQueryEngine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       cdcIntegrationService: bootstrapService.cdcIntegrationService,

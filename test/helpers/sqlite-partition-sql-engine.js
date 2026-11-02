@@ -19,6 +19,7 @@ import {answerParticipantTransactionRequest} from
 import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const FIXTURE_NODE = 'sqlite-partition-node';
 const QUERY_MESSAGE = 'QUERY';
 const SQL_READ_PATTERN = /^\s*(SELECT|WITH|PRAGMA)\b/iu;
@@ -116,6 +117,7 @@ function createSqlitePartitionSqlEngine({
   }));
   const gateway = createTransactionPersistenceGateway();
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createSystemCache(table, partitions),
     controlPlaneSystemTableGateway: gateway,
     messageRouter: createPartitionRouter(

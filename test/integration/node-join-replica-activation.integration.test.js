@@ -26,6 +26,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 function createInProcHttpPost(seedApi) {
   return async (url, body) => {
     const {pathname} = new URL(url);
@@ -237,6 +238,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
 
       await seedApi.initialize(0, {listen: false});
       sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -391,6 +393,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
 
       await seedApi.initialize(0, {listen: false});
       const seedSqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -579,6 +582,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       };
 
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: staleCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -625,6 +629,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -722,6 +727,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
 
       sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

@@ -31,6 +31,7 @@ import {
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 function createAlwaysReadyControlPlaneReadinessService() {
   const dimensions = {
     [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
@@ -217,6 +218,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
       // (patching only the rebalancer option would be bypassed by the
       // production coordinator's real readiness service).
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

@@ -44,6 +44,7 @@ import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {createTransactionPersistenceGateway} from
   './transaction-persistence-gateway.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 // A CDC-carrying table: the TX1 witnesses measure the committed decision's
 // CDC obligation, which only a propagated table owes (owner decision D2).
 const GROUP_TABLE = CDC_TABLE;
@@ -227,7 +228,9 @@ async function withTransactionGroup(name, body) {
           }
         }
       }
-      const engine = new SQLQueryEngine({systemCache: cache,
+      const engine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+        systemCache: cache,
         messageRouter: group.services[0].transport,
         controlPlaneSystemTableGateway: gateway,
         nodeId: COORDINATOR_NODE_ID,

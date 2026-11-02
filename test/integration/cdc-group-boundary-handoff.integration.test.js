@@ -46,6 +46,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEST_TIMEOUT_MS = 480000;
 const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440d40';
 const FIRST_JOINER_ID = '550e8400-e29b-41d4-a716-446655440d41';
@@ -200,6 +201,7 @@ test('W-D4b: a joiner whose self-hosted group was non-active while >256 node_end
     });
     await seedApi.initialize(0, {listen: false});
     seedApi.setSqlQueryEngine(new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: SEED_NODE_ID,
