@@ -1,0 +1,19 @@
+# test-files planned=15
+classified lane ordinary: 15 file(s), jobs=4
+thermal: ok cpu 72C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/scripts/lab-fleet-discovery.test.js (21 assertions, 11882ms)
+ok test/solve/commands.test.js (21 assertions, 1868ms)
+ok test/scripts/local-corpus.test.js (12 assertions, 1217ms)
+ok test/scripts/proof-authority-falsifiers.test.js (10 assertions, 16038ms)
+ok test/scripts/pre-push-hook-control-flow.test.js (20 assertions, 1129ms)
+ok test/scripts/push-gate-change-proof.test.js (21 assertions, 16596ms)
+ok test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js (13 assertions, 702ms)
+ok test/scripts/lab-worker-provisioning.test.js (6 assertions, 1111ms)
+ok test/scripts/apparatus-release-consolidation-budget.test.js (7 assertions, 743ms)
+ok test/scripts/proof-checkout-preparation.test.js (5 assertions, 531ms)
+ok test/scripts/lab-test-base.test.js (4 assertions, 432ms)
+ok test/scripts/test-placement-lab-split.test.js (8 assertions, 269ms)
+ok test/scripts/pre-push-stage-manifest.test.js (5 assertions, 178ms)
+ok test/release/project-hardening-contracts.test.js (14 assertions, 404ms)
+ok test/scripts/test-placement.test.js (26 assertions, 59560ms)
+# test-files total=15 pass=15 fail=0 assertions=193

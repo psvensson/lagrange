@@ -23,13 +23,16 @@
     {
       "id": "one-preparation-owner-green",
       "passed": true,
-      "detail": "scripts/checks/proof-checkout-preparation.js owns PROOF_CHECKOUT_GENERATORS and prepareProofCheckout; the materializer's gateExactSha prepares every exact checkout before its command (refusing on a producer failure, keeping the commit's bytes of any tracked file a producer rewrote); scripts/lab/probe.js takes PLACEMENT_IMPORT_GRAPH from the same list. The same --gate run at b3b366573 through the repaired materializer: prepared import-graph, push-gate-change-proof.test.js 21 assertions green. test/scripts/proof-checkout-preparation.test.js 4 tests, each mutation of the owner turns its test red; touched lane 15 files pass=15 assertions=192 (before and after the intrinsic-capture refactor); npm run test:static all 33 audits passed.",
+      "detail": "scripts/checks/proof-checkout-preparation.js owns PROOF_CHECKOUT_GENERATORS and prepareProofCheckout; the materializer's gateExactSha prepares every exact checkout before its command and refuses, before the command, a producer that fails, is killed (named), or rewrites tracked metadata (a stale seal: 'regenerate and commit <file>'); an absent producer is announced. The lab placement shell takes its producer from the same list and refuses a stale seal with its SETUP exit. The owner is a full-corpus trigger (selection-machinery), as every module in the gate's own import closure must be: red at 841cc2b9b once the graph is generated (subtest 9 names it), green at 88663e2e3. The owner test (5) and the lab witness were red before the attempt-2 change; touched lane on the committed tree 15 files pass=15 assertions=193; the falsifier and placement fixtures commit their regenerated seal; the falsifier receipt regenerated (6/6). Owner mutations (stale refusal removed, producer failure ignored, signal not named, absent producer silent) each turn a test red.",
       "testFile": "test/scripts/proof-checkout-preparation.test.js",
       "evidence": [
         "evidence/green-clean-materialized-b3b366573.log.txt",
-        "evidence/mutation-witnesses.log.txt",
-        "evidence/touched-green.log.txt",
-        "evidence/touched-green-2.log.txt"
+        "evidence/red-attempt2-refusal-before-fix.log.txt",
+        "evidence/red-attempt2-lab-stale.log.txt",
+        "evidence/red-attempt2-closure-at-841cc2b9b.log.txt",
+        "evidence/green-attempt2-closure-at-head.log.txt",
+        "evidence/touched-green-3-committed.log.txt",
+        "evidence/mutation-witnesses-attempt2.log.txt"
       ]
     },
     {
@@ -44,7 +47,7 @@
     {
       "id": "independent-verification",
       "passed": false,
-      "reason": "awaiting the verifier spawned by the lead"
+      "reason": "verification of 841cc2b9b rejected; awaiting re-verification of the corrective attempt"
     }
   ]
 }

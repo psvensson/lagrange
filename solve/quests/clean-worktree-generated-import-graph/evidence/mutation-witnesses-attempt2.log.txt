@@ -1,0 +1,13 @@
+=== mutation: stale refusal removed
+not ok 3 - a producer that rewrites tracked metadata refuses the gate before the command runs
+# test-files total=1 pass=0 fail=1 assertions=5
+=== mutation: producer failure ignored
+not ok 2 - a producer that fails refuses the gate before the command runs
+not ok 4 - a producer killed by a signal is named as killed
+# test-files total=1 pass=0 fail=1 assertions=5
+=== mutation: signal not named
+not ok 4 - a producer killed by a signal is named as killed
+# test-files total=1 pass=0 fail=1 assertions=5
+=== mutation: absent producer silent
+not ok 5 - a commit without the producer has nothing to generate, and says so
+# test-files total=1 pass=0 fail=1 assertions=5
