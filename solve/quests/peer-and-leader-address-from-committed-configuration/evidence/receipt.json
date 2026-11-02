@@ -1,0 +1,14 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "message-group-peer-address-from-committed-node", "passed": false, "evidence": "pending: red on the base"},
+    {"id": "founders-and-managed-learner-carry-node-id", "passed": false, "evidence": "pending: red on the base"},
+    {"id": "forwarding-leader-from-committed-status", "passed": false, "evidence": "pending: red on the base"},
+    {"id": "leader-address-from-raft-status-only", "passed": false, "evidence": "pending: attempt 2"},
+    {"id": "deletions-complete-no-fallback", "passed": false, "evidence": "pending"},
+    {"id": "independent-verification", "passed": false, "evidence": "pending"}
+  ],
+  "evidence": [],
+  "applicability": "Red probe at quest start: no receipt is set."
+}

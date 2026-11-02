@@ -22,13 +22,13 @@
     "storage-raft": 146,
     "test-infrastructure": 154,
     "transactions": 17,
-    "transport-messaging": 113,
+    "transport-messaging": 114,
     "wasm-toolchain": 74
   },
-  "censusSize": 2554,
-  "digest": "fnv1a32-708216e7",
+  "censusSize": 2555,
+  "digest": "fnv1a32-83803f5e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-80332f4b",
+  "observationDigest": "fnv1a32-e15e5c85",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1190,6 +1190,7 @@
     "test/message-group/message-group-native-mixed-vector.test.js": "transport-messaging",
     "test/message-group/message-group-native-provisional-route.test.js": "transport-messaging",
     "test/message-group/message-group-native-w7-multi-target-route.integration.test.js": "transport-messaging",
+    "test/message-group/message-group-peer-address-committed-configuration.test.js": "transport-messaging",
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "transport-messaging",
     "test/message-group/message-group-registration-exact-birth.test.js": "transport-messaging",
@@ -9752,6 +9753,34 @@
         "test/message-group/message-group-native-provisional-route-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/message-group/message-group-peer-address-committed-configuration.test.js": {
+      "files": [
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/replica-dispatch-readiness-capture.js",
+        "src/message-group/message-group-service.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js",
+        "test/test-helpers/boot-incarnation-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js"
+      ],
+      "directories": [
+        "src/message-group"
       ]
     },
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": {
