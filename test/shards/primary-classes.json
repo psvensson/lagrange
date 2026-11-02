@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2212,
+    "unit": 2213,
     "integration": 121,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2558,
-  "digest": "fnv1a32-4538c625",
+  "censusSize": 2559,
+  "digest": "fnv1a32-72ca3823",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2268,6 +2268,7 @@
     "test/scripts/proof-authority-falsifiers.test.js": "unit",
     "test/scripts/proof-authority.test.js": "unit",
     "test/scripts/proof-cone-cli-output-completeness.test.js": "unit",
+    "test/scripts/proof-receipt-execution-report.test.js": "unit",
     "test/scripts/prune-test-output.test.js": "unit",
     "test/scripts/publish-head-workspace-links.test.js": "unit",
     "test/scripts/publish-head.test.js": "unit",
