@@ -1,0 +1,43 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "serve-eligibility-answered-from-committed-epoch",
+      "passed": false,
+      "evidence": "red at a31547321 + red tests: test/control-plane/serve-eligibility-committed-epoch-read.test.js 6/6 tests not ok (owner answer absent)"
+    },
+    {
+      "id": "system-table-routing-on-leadership-without-carve-outs",
+      "passed": false,
+      "evidence": "red: test/query/query-executor-serve-eligibility-routing.test.js 5/6 not ok (fail-open engaged, bypass module present, UA-1 grace admits, projection decides user-table serving)"
+    },
+    {
+      "id": "provisioning-typed-cohort-outcomes",
+      "passed": false,
+      "evidence": "not yet measured"
+    },
+    {
+      "id": "rebalancer-decisions-from-committed-leases-and-one-operation-source",
+      "passed": false,
+      "evidence": "not yet measured"
+    },
+    {
+      "id": "publication-planning-without-serve-cycle",
+      "passed": false,
+      "evidence": "red: test/control-plane/publication-planning-committed-rows.test.js 2/2 not ok (cache rows merged into the planning census; unavailable read answered from the cache)"
+    },
+    {
+      "id": "serve-lane-opens-on-fresh-formation",
+      "passed": false,
+      "evidence": "not yet measured"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "evidence": "not yet measured"
+    }
+  ],
+  "evidence": [],
+  "applicability": "Red seal receipt for attempt 1 (2026-11-02); every receipt is outstanding."
+}

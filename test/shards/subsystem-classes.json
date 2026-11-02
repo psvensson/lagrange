@@ -7,13 +7,13 @@
     "bootstrap-membership": 330,
     "cdc-metadata": 67,
     "cli-tooling": 99,
-    "control-plane": 225,
+    "control-plane": 227,
     "convergence-topology": 78,
     "distributed-harness": 209,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
-    "query-sql": 191,
+    "query-sql": 192,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 158,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2554,
-  "digest": "fnv1a32-708216e7",
+  "censusSize": 2557,
+  "digest": "fnv1a32-c77f405e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-80332f4b",
+  "observationDigest": "fnv1a32-9422ccfc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -655,6 +655,7 @@
     "test/control-plane/projection-readiness-semantic-core-envelope.receipt.test.js": "control-plane",
     "test/control-plane/publication-active-gate-handoff-contract.test.js": "control-plane",
     "test/control-plane/publication-owner-stream.test.js": "control-plane",
+    "test/control-plane/publication-planning-committed-rows.test.js": "control-plane",
     "test/control-plane/publication-readiness-churn-liveness.test.js": "control-plane",
     "test/control-plane/publication-recovery-evidence-open-membership.test.js": "control-plane",
     "test/control-plane/publication-recovery-evidence.test.js": "control-plane",
@@ -717,6 +718,7 @@
     "test/control-plane/replica-dispatch-startup-operation-replay.test.js": "control-plane",
     "test/control-plane/request-binding-service-definition-owner.test.js": "control-plane",
     "test/control-plane/runtime-access-policy-owner.test.js": "control-plane",
+    "test/control-plane/serve-eligibility-committed-epoch-read.test.js": "control-plane",
     "test/control-plane/service-install-catalog-owner.test.js": "control-plane",
     "test/control-plane/service-instance-creation-cas.test.js": "control-plane",
     "test/control-plane/service-instance-selection-admission.test.js": "control-plane",
@@ -1581,6 +1583,7 @@
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": "query-sql",
     "test/query/query-executor-recovery-owned-routing.test.js": "query-sql",
     "test/query/query-executor-routable-services-and-read-delivery.test.js": "query-sql",
+    "test/query/query-executor-serve-eligibility-routing.test.js": "query-sql",
     "test/query/query-executor-session-binding-and-build-sql.test.js": "query-sql",
     "test/query/query-executor-session-pin-state.test.js": "query-sql",
     "test/query/query-executor-system-table-leader-fail-open.test.js": "query-sql",
@@ -4814,6 +4817,12 @@
         "src/control-plane/membership-publication-row-contract.js"
       ]
     },
+    "test/control-plane/publication-planning-committed-rows.test.js": {
+      "files": [
+        "src/control-plane/membership-publication-coordinator-reads.js",
+        "src/control-plane/membership-publication-row-contract.js"
+      ]
+    },
     "test/control-plane/publication-readiness-churn-liveness.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -5196,6 +5205,11 @@
         "src/config/configuration-manager.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
         "src/control-plane/owners/service-install-catalog-contract.js"
+      ]
+    },
+    "test/control-plane/serve-eligibility-committed-epoch-read.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-service.js"
       ]
     },
     "test/control-plane/service-instance-creation-cas.test.js": {
@@ -12647,6 +12661,11 @@
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": {
       "files": [
         "src/partition/partition-write-kernel.js"
+      ]
+    },
+    "test/query/query-executor-serve-eligibility-routing.test.js": {
+      "files": [
+        "src/query/query-executor-priority-recovery-bootstrap-routing.js"
       ]
     },
     "test/query/queryable-core-j2-sql-key-read-journey.test.js": {
