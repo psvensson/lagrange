@@ -17,6 +17,7 @@ import {
   OLTP_SCENARIO_A_SYSTEM,
 } from '../harness/oltp-scenario-a-comparison-systems.js';
 import {
+  OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
   buildScenarioASemanticGateEvidence,
 } from '../harness/oltp-scenario-a-semantic-gate.js';
 import {
@@ -78,15 +79,8 @@ const CASE_STATUS = Object.freeze({
   REFUSED: 'refused',
 });
 
-// What a failed or unobtained case says (coordinator decision 4, 2026-11-02):
-// the product violated the contract, the evidence the proof needs could not
-// be obtained, or the probe does not apply to this deployment. Only a product
-// anomaly fails the gate; the other two leave its proofs missing.
-const FAILURE_KIND = Object.freeze({
-  PRODUCT_ANOMALY: 'product_anomaly',
-  EVIDENCE_INSUFFICIENT: 'evidence_insufficient',
-  PROBE_INAPPLICABLE: 'probe_inapplicable',
-});
+// The failure kinds are the gate owner's (oltp-scenario-a-semantic-gate.js).
+const FAILURE_KIND = OLTP_SCENARIO_A_PROOF_FAILURE_KIND;
 const FAILURE_REASON = Object.freeze({
   CASE_ERRORED: 'case_errored',
   DURABILITY_REQUIRES_PERSISTENT_STORAGE: 'durability_requires_persistent_storage',

@@ -28,7 +28,7 @@
   "censusSize": 2537,
   "digest": "fnv1a32-966751ec",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-44dd88fc",
+  "observationDigest": "fnv1a32-26ac5f75",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5700,7 +5700,6 @@
         "test/distributed/harness/oltp-open-loop-step-owner.js",
         "test/distributed/harness/oltp-paired-retry-owner.js",
         "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-gate.js",
         "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
         "test/distributed/harness/raw-observation-campaign-specs.js",
         "test/distributed/harness/run-benchmark-workload.js",
@@ -5774,7 +5773,6 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-gate.js",
         "test/distributed/harness/raw-observation-campaign-specs.js",
         "test/distributed/harness/scaleout-series-experiments.js"
       ],
@@ -6565,7 +6563,6 @@
         "test/distributed/harness/oltp-open-loop-step-owner.js",
         "test/distributed/harness/oltp-paired-retry-owner.js",
         "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-gate.js",
         "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
         "test/distributed/harness/raw-observation-campaign-specs.js",
         "test/distributed/harness/run-benchmark-workload.js",
@@ -6613,8 +6610,7 @@
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-gate.js"
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "data/tidb-comparison",
@@ -16671,8 +16667,7 @@
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-gate.js"
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "scripts/checks",

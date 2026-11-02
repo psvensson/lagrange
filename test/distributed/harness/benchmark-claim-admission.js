@@ -10,8 +10,10 @@ import {COMPARATIVE_PARITY_STATUS} from './comparative-efficiency-evidence-contr
 import {resolveOltpBaselineConfig} from './oltp-baseline-workload.js';
 import {OLTP_OPEN_LOOP_PROFILE} from './oltp-open-loop-step-owner.js';
 import {OLTP_PAIRED_RETRY_POLICY} from './oltp-paired-retry-owner.js';
-import {OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS as GATE_STATUS} from
-  './oltp-scenario-a-semantic-gate.js';
+import {
+  OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
+  OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS as GATE_STATUS,
+} from './oltp-scenario-a-semantic-gate.js';
 import {
   OLTP_SCENARIO_A_SEMANTIC_PROFILE,
   hashScenarioASemanticProfile,
@@ -43,6 +45,7 @@ import {
   computeRunObservationsDigest,
   validateCampaignHeader,
   validateRunRecord,
+  isContentIdentity,
 } from './raw-observation-record.js';
 import {deriveRunMetrics} from './raw-observation-metrics.js';
 import {serializeJsonData} from '../../../src/utils/canonical-json-data.js';
@@ -161,9 +164,6 @@ const ADMISSION_REASON = Object.freeze({
   FABRICATED_HISTORY_METRICS: 'fabricated-history-metrics',
 });
 
-// The proof journey's failure kinds (scenario-a-semantic-proof-journey.js).
-const PROOF_FAILURE_KIND = Object.freeze({PRODUCT_ANOMALY: 'product_anomaly'});
-
 // Reasons that explain a valid or product-failure cell without blocking admission.
 const NON_BLOCKING_REASONS = Object.freeze([
   ADMISSION_REASON.SEMANTIC_GATE_FAILED,
@@ -220,7 +220,6 @@ const CELL_STATUS_MAPPING = Object.freeze({
 });
 
 const IMAGE_ID_PATTERN = /^sha256:[0-9a-f]{64}$/u;
-const CONTENT_IDENTITY_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const FORMULA_PATTERNS = Object.freeze([
   /stages\s*\*\s*oneWayMs/iu,
   /execMs\s*\+\s*stages/iu,
@@ -298,7 +297,7 @@ function sharedContentIdentities(pins) {
 }
 
 function hasContentIdentity(subject) {
-  return CONTENT_IDENTITY_PATTERN.test(String(subject?.contentIdentity ?? ''));
+  return isContentIdentity(subject?.contentIdentity);
 }
 
 // Every product the run inspected must run the content the campaign pinned for
@@ -509,7 +508,8 @@ function gateBindingHolds(run, binding) {
 // probe that does not apply. They explain the gate status; they never decide it.
 function gateCaseReasons(gate) {
   const kinds = Array.isArray(gate.failureKinds) ? gate.failureKinds : [];
-  return arrayMap(kinds, (entry) => (entry.kind === PROOF_FAILURE_KIND.PRODUCT_ANOMALY ?
+  const anomaly = OLTP_SCENARIO_A_PROOF_FAILURE_KIND.PRODUCT_ANOMALY;
+  return arrayMap(kinds, (entry) => (entry.kind === anomaly ?
     `${ADMISSION_REASON.SEMANTIC_GATE_FAILED}:${entry.caseId}` :
     `${ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE}:${entry.caseId}:${entry.kind}`));
 }

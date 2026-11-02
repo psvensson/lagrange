@@ -173,7 +173,14 @@ const PRODUCT_FIELD = Object.freeze({
   CONTENT_IDENTITY: 'contentIdentity',
   PROVENANCE: 'provenance',
 });
+// An image content identity: the digest real-product-identity.js
+// contentIdentityOf derives from the ordered RootFS diff_ids. The one
+// predicate every reader of a record or pin uses.
 const CONTENT_IDENTITY_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+
+function isContentIdentity(value) {
+  return typeof value === 'string' && CONTENT_IDENTITY_PATTERN.test(value);
+}
 const LOADED_PROVENANCE_PREFIX = 'loaded:';
 
 const PLAN_FIELD = Object.freeze({
@@ -363,7 +370,7 @@ function validateHarnessIdentity(harness, at) {
 // product-identity-unverified (never admitted), so the record keeps it visible.
 function requireContentIdentity(value, at) {
   if (value === undefined || value === null) return null;
-  if (typeof value !== 'string' || !CONTENT_IDENTITY_PATTERN.test(value)) {
+  if (!isContentIdentity(value)) {
     reject(RECORD_REJECTION.INVALID_TEXT, `${at} must be sha256:<64 hex>`);
   }
   return value;
@@ -807,6 +814,7 @@ function parseRawObservationText(text, file) {
 }
 
 export {
+  isContentIdentity,
   BENCHMARK_SCENARIO,
   CLOSURE_STATUS,
   DEPLOYMENT_EVENT_KIND,

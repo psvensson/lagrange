@@ -16,12 +16,11 @@
  * so as an event.
  */
 import {
-  arrayEvery,
   arrayFind,
   arrayMap,
 } from './real-product-captured-intrinsics.js';
-import {STORAGE_KIND} from './real-product-deployment-contract.js';
-import {inspectProducts} from './real-product-identity.js';
+import {RUN_CLASS} from './real-product-deployment-contract.js';
+import {inspectProducts, runClassOf} from './real-product-identity.js';
 import {shellWord} from './real-product-remote-shell.js';
 
 const SYSTEM = Object.freeze({LAGRANGE: 'lagrange', POSTGRESQL: 'postgresql'});
@@ -56,11 +55,10 @@ function bindingOf(manifest, deployment) {
  * @return {Function} ({run, manifest, deployment}) => {gate, deployment, events}
  */
 // Durability is provable only where every data directory survives its
-// container: explicit host volumes (a smoke arm's container layer does not).
+// container: the storage the identity owner classes as publishable.
 function hasPersistentStorage(deployment) {
-  const storage = Array.isArray(deployment.storage) ? deployment.storage : [];
-  return storage.length > 0 &&
-    arrayEvery(storage, (entry) => entry.kind === STORAGE_KIND.HOST_VOLUME);
+  return runClassOf(Array.isArray(deployment.storage) ? deployment.storage : []) ===
+    RUN_CLASS.PUBLISHABLE;
 }
 
 function createSemanticGateStage({journey, redeploy, sshRun, opts, evidenceDirOf,

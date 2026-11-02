@@ -225,7 +225,19 @@ function buildScenarioASemanticGateEvidence(options = {}) {
   });
 }
 
+// What a failed or unobtained proof case says (coordinator decision 4,
+// 2026-11-02): the product violated the contract, the evidence the proof
+// needs could not be obtained, or the probe does not apply to the deployment.
+// Only a product anomaly fails the gate. The proof journey records them; the
+// claim admission reads them.
+const PROOF_FAILURE_KIND = Object.freeze({
+  PRODUCT_ANOMALY: 'product_anomaly',
+  EVIDENCE_INSUFFICIENT: 'evidence_insufficient',
+  PROBE_INAPPLICABLE: 'probe_inapplicable',
+});
+
 export {
+  PROOF_FAILURE_KIND as OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
   REQUIRED_SYSTEM_PROOF_IDS as OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
   GATE_STATUS as OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS,
   STATUS as OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS,

@@ -26,8 +26,8 @@ import {
   DEPLOYMENT_FAILURE,
   deploymentFailure,
 } from './real-product-deployment-contract.js';
+import {isContentIdentity} from './raw-observation-record.js';
 
-const CONTENT_IDENTITY = /^sha256:[0-9a-f]{64}$/u;
 
 function isText(value) {
   return typeof value === 'string' && value !== '';
@@ -50,7 +50,7 @@ function versionProblems(role, containers) {
 function pinOfRole(targetId, product, role, containers) {
   const first = containers[0];
   const problems = [];
-  if (!CONTENT_IDENTITY.test(String(first.contentIdentity ?? ''))) {
+  if (!isContentIdentity(first.contentIdentity)) {
     problems.push(`${role}: no contentIdentity`);
   }
   if (arraySome(containers, (other) => other.contentIdentity !== first.contentIdentity)) {
