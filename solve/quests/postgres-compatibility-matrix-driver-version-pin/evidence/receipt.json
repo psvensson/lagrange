@@ -1,0 +1,54 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "postgres-compatibility-matrix-driver-version-pin",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "measured-host-dependence-recorded",
+      "passed": true,
+      "detail": "hosted run 41431327759: q10 red at the committed-matrix deep-equal with psql 16.15 on first pass and retry; the printed actual matrix's 71 cells and 9 controls equal the committed content, only driver-version fields differ; recorded as the first finding with the adams-gamla lab cone as reported by the lead",
+      "evidence": [
+        "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz:hosted-run-41431327759-q10-excerpt.log.txt (inventory solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-inventory.json)",
+        "log.ndjson finding 2026-11-03 (measured host dependence)"
+      ],
+      "testFile": "test/query/q10-postgres-compatibility-certification-matrix.test.js"
+    },
+    {
+      "id": "claim-independent-of-client-build",
+      "passed": true,
+      "detail": "cells and cell receipt digests no longer carry the driver version, the matrix digest covers the declared supportedClientMajors instead, and the generating host's builds are environment.driverVersions outside both; the live run's certified content equals the committed matrix (deepEqual without environment) and its digest, and the same live observations reported as psql 16.15 certify the same content and digest: red before the fix (evidence/red-before-fix-verdicts.log.txt), green after (evidence/green-verdicts.log.txt, 10 of 10); the committed matrix was regenerated through generatePostgresCompatibilityMatrix from its own recorded observations, and the live run confirms it; putting the driver version back in either digest turns the tests red (evidence/mutation-witnesses.log.txt)",
+      "evidence": [
+        "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz:red-before-fix-verdicts.log.txt (inventory solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-inventory.json)",
+        "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz:green-verdicts.log.txt (inventory solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-inventory.json)",
+        "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz:mutation-witnesses.log.txt (inventory solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-inventory.json)",
+        "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz:touched-green.log.txt (inventory solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-inventory.json)"
+      ],
+      "testFile": "test/query/q10-postgres-compatibility-certification-matrix.test.js"
+    },
+    {
+      "id": "unsupported-client-build-refused",
+      "passed": true,
+      "detail": "psql 9.6, node-pg 7.18.2 and an unparsable psql version are each refused with DRIVER_VERSION_UNSUPPORTED naming the client; red before the fix; removing the range check turns it red",
+      "evidence": [
+        "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz:red-before-fix-verdicts.log.txt (inventory solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-inventory.json)",
+        "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz:green-verdicts.log.txt (inventory solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-inventory.json)",
+        "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz:mutation-witnesses.log.txt (inventory solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-inventory.json)"
+      ],
+      "testFile": "test/query/q10-postgres-compatibility-certification-matrix.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "evidence": [
+        "log.ndjson verification entry 2026-11-02 (subagent:a12216c118daecce5): approve at 88e49ceb2"
+      ]
+    }
+  ],
+  "evidenceBundle": {
+    "asset": "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz",
+    "sourceCommit": "af8483c67",
+    "inventory": "solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-inventory.json",
+    "verification": "solve/changes/evidence-relocation/postgres-compatibility-matrix-driver-version-pin/relocation-verification.json"
+  }
+}

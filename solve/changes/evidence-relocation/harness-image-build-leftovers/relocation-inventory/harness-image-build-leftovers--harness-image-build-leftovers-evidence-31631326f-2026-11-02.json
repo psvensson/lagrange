@@ -1,0 +1,18 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz",
+  "bundleSha256": "023befce836096f119696887c659b1ae25f67e3011b17d3d3045f3e0bc99fc2b",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz",
+  "sourceCommit": "31631326fea13d14faace40c4c2f31d651246958",
+  "root": "solve/quests/harness-image-build-leftovers/evidence/",
+  "files": [
+    ["mutation-witnesses-attempt2.log.txt","5859a380524ef86a88a2d43488e21d60a1ee293cb2e57d719665025e04c6354f",2597],
+    ["mutation-witnesses.log.txt","ead3a67c9787306b7cc0be7a7c037e4c5c946be2d115c9a72fe664d4e6df498b",665],
+    ["red-attempt2-before-fix.log.txt","08d9956a1b0afb03f242006fc53d55659a2f46babea45948ded9f9fe2b74e848",6899],
+    ["red-attempt2-run-log-line.log.txt","3de02088aac47a73919d872e527443d37e8fa607a60ed4c7950ec31a4f364e8a",20751],
+    ["red-before-fix.log.txt","91bf73d045c57126e315440bccac7aebfe438f91c782e1c0928817cdb050a56f",9098],
+    ["touched-green-2.log.txt","3e207936751c050b7ca3d303f8fcec867e86240488e5803b4cd12868e10dc1dd",826],
+    ["touched-green-merged.log.txt","57067ea8b8edaa3977ca019ca8e9ecfe845556d805c4a4d27fb0cc0078b52c0a",705],
+    ["touched-green.log.txt","11cc62312ce8d753bc373756b7d4beaafb5b5725d0fbee4cccb4041f2f205751",746]
+  ]
+}

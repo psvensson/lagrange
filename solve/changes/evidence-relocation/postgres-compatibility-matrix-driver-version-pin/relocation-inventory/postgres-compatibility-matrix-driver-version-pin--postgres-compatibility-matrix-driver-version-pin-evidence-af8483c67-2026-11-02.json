@@ -1,0 +1,17 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz",
+  "bundleSha256": "fac44cdb8760510c555aa710e7fcbfec1e99617d221f52b27712ec1ea28741b9",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz",
+  "sourceCommit": "af8483c67aff68b0ad1049a2de5387e6b1128db7",
+  "root": "solve/quests/postgres-compatibility-matrix-driver-version-pin/evidence/",
+  "files": [
+    ["green-verdicts.log.txt","301e3e570f9fd0c809f7b2f5f5fd48f953410d15e585a42bba96465e6a697464",945],
+    ["hosted-run-41431327759-q10-excerpt.log.txt","d17694a865edd0b1a98fbb942e8affaac4e945fe426d64d329072b5418e6de7b",976],
+    ["mutation-witnesses.log.txt","96a564ee8c186a097285f8dd44ce8ee3046e2ac13d7862929a08934fa9e4b8e0",558],
+    ["red-before-fix-verdicts.log.txt","57042ca72792deae88ce65667bfaa3c1b7c0193d65680c4299470b23c4618954",946],
+    ["red-before-fix.log.txt","e4cfb2672c03d23f4cfe8ef0df81cbf3a0e1dc006441baf0635ac0ebed78728f",137987],
+    ["touched-green-correction.log.txt","b7b9dd635e512318b89347496dd3676c32b9b789b4c85cf932978e2f073facfa",400],
+    ["touched-green.log.txt","9541c54daf954dd0b8fd0b3b9bc4fa4226d9a4464a0abab38d5c48d6ea2f4f4d",279]
+  ]
+}
