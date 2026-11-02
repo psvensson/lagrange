@@ -9,13 +9,13 @@
 import {COMPARATIVE_PARITY_STATUS} from './comparative-efficiency-evidence-contract.js';
 import {resolveOltpBaselineConfig} from './oltp-baseline-workload.js';
 import {OLTP_OPEN_LOOP_PROFILE} from './oltp-open-loop-step-owner.js';
-import {OLTP_PAIRED_RETRY_POLICY} from './oltp-paired-retry-owner.js';
+import {OLTP_PAIRED_RETRY_POLICIES} from './oltp-paired-retry-owner.js';
 import {
   OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
   OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS as GATE_STATUS,
 } from './oltp-scenario-a-semantic-gate.js';
 import {
-  OLTP_SCENARIO_A_SEMANTIC_PROFILE,
+  OLTP_SCENARIO_A_SEMANTIC_PROFILES,
   hashScenarioASemanticProfile,
 } from './oltp-scenario-a-semantic-profile.js';
 import {
@@ -130,6 +130,7 @@ const ADMISSION_REASON = Object.freeze({
   UNRESOLVED_EFFECTS_OBSERVED: 'unresolved-effects-observed',
   CORRECTNESS_FAILURES_OBSERVED: 'correctness-failures-observed',
   SEMANTIC_GATE_MISSING: 'semantic-gate-missing',
+  SEMANTIC_GATE_CLIENT_MISSING: 'semantic-gate-client-missing',
   SEMANTIC_GATE_NOT_PASSED: 'semantic-gate-not-passed',
   SEMANTIC_GATE_UNBOUND: 'semantic-gate-unbound',
   SEMANTIC_GATE_FAILED: 'semantic-gate-failed',
@@ -163,6 +164,10 @@ const ADMISSION_REASON = Object.freeze({
   LOCAL_ORACLE_NOT_COMPARISON_TARGET: 'local-oracle-not-comparison-target',
   FABRICATED_HISTORY_METRICS: 'fabricated-history-metrics',
 });
+
+// The gate stage's event for a system the chain has no gate client for
+// (comparative-benchmark-semantic-gate.js EVENT.NOT_RUN).
+const GATE_NOT_RUN_EVENT = 'semantic-gate-not-run';
 
 // Reasons that explain a valid or product-failure cell without blocking admission.
 const NON_BLOCKING_REASONS = Object.freeze([
@@ -516,7 +521,15 @@ function gateCaseReasons(gate) {
 
 function checkSemanticGate(run) {
   const gate = run.correctness.semanticGate;
-  if (!gate) return [ADMISSION_REASON.SEMANTIC_GATE_MISSING];
+  if (!gate) {
+    // The chain has no gate client for this system (the gate stage said so):
+    // the claim is unsupported, naming the missing client (decision 1,
+    // 2026-11-02); a gate record that is simply absent stays missing.
+    const notRun = arrayFind(run.harnessEvents || [],
+      (event) => event.kind === GATE_NOT_RUN_EVENT && typeof event.missingClient === 'string');
+    return [notRun ? `${ADMISSION_REASON.SEMANTIC_GATE_CLIENT_MISSING}:${notRun.missingClient}` :
+      ADMISSION_REASON.SEMANTIC_GATE_MISSING];
+  }
   if (!gateBindingHolds(run, gate.binding)) return [ADMISSION_REASON.SEMANTIC_GATE_UNBOUND];
   if (gate.status === GATE_STATUS.PASSED) return [];
   const details = gateCaseReasons(gate);
@@ -602,11 +615,16 @@ function checkWorkload(run) {
 function checkScenarioA(run) {
   const plan = run.plan;
   const reasons = [...checkWorkload(run)];
-  if (plan.semanticProfileId !== OLTP_SCENARIO_A_SEMANTIC_PROFILE.id ||
-      plan.semanticProfileDigest !== hashScenarioASemanticProfile()) {
+  // A record is read under the registered profile it was made under (v1 runs
+  // stay v1; coordinator decision R09): its digest and its retry policy must
+  // be that profile's own.
+  const profile = arrayFind(OLTP_SCENARIO_A_SEMANTIC_PROFILES,
+    (one) => one.id === plan.semanticProfileId);
+  if (!profile || plan.semanticProfileDigest !== hashScenarioASemanticProfile(profile)) {
     reasons.push(ADMISSION_REASON.SEMANTIC_PROFILE_MISMATCH);
   }
-  if (plan.retryPolicyId !== OLTP_PAIRED_RETRY_POLICY.id ||
+  if (!arraySome(OLTP_PAIRED_RETRY_POLICIES, (one) => one.id === plan.retryPolicyId) ||
+      (profile && profile.retryPolicyId !== plan.retryPolicyId) ||
       plan.openLoopProfileId !== OLTP_OPEN_LOOP_PROFILE.id) {
     reasons.push(ADMISSION_REASON.NON_CANONICAL_WORKLOAD);
   }
@@ -907,6 +925,13 @@ function admitClaim({claim, runs, campaignHeaders, retainedReferences, invalidat
   }
   const reasons = [...checkRunSet(live)];
   for (const entry of live) reasons.push(...checkRun(entry, claim, {campaignHeaders}));
+  const clientMissing = arrayFilter(unique(reasons), (r) => stringStartsWith(String(r),
+    `${ADMISSION_REASON.SEMANTIC_GATE_CLIENT_MISSING}:`));
+  if (clientMissing.length > 0 && !arraySome(reasons, (r) => !isNonBlockingReason(r) &&
+      !arrayIncludes(clientMissing, r))) {
+    return buildCell(claim, CLAIM_CELL_STATUS.UNSUPPORTED, {reasons: clientMissing,
+      defectIds, evidence});
+  }
   if (arraySome(reasons, (r) => !isNonBlockingReason(r))) {
     return buildCell(claim, CLAIM_CELL_STATUS.INVALID_MEASUREMENT,
       {reasons, defectIds, evidence});

@@ -49,6 +49,10 @@ import {
 import {BENCHMARK_PROFILE_CLASS} from '../benchmark-workload-dispatch.js';
 import {OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS} from '../oltp-scenario-a-semantic-gate.js';
 import {
+  OLTP_SCENARIO_A_SEMANTIC_PROFILES,
+  hashScenarioASemanticProfile,
+} from '../oltp-scenario-a-semantic-profile.js';
+import {
   EXECUTION_TARGET,
   READINESS_STATE,
   RECORD_REJECTION,
@@ -287,6 +291,67 @@ describe('claim admission through the publication path', () => {
     const {cell} = await publishedLagrangeCell(() => {}, SMOKE);
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.TOPOLOGY_MISMATCH), false,
       JSON.stringify(cell.reasons));
+  });
+
+  // Coordinator decision R09 (2026-11-02): scenario-a-retry-v2 and
+  // scenario-a-semantic-v2 supersede v1; a record made under v1 is read under
+  // v1 (the published r8 records), never re-labelled. An unregistered policy
+  // or a profile paired with another profile's retry policy is not canonical.
+  it('a run made under the superseded v1 profile and policy is still read under them',
+    async () => {
+      const v1 = OLTP_SCENARIO_A_SEMANTIC_PROFILES[0];
+      const runs = pair(SMOKE);
+      for (const run of runs) {
+        run.plan.semanticProfileId = v1.id;
+        run.plan.semanticProfileDigest = hashScenarioASemanticProfile(v1);
+        run.plan.retryPolicyId = v1.retryPolicyId;
+        sealFixtureRun(run, {keepFinalState: true});
+      }
+      const {matrix} = await publish([buildFixtureHeader({campaignId: 'fixture-campaign',
+        targetIds: [LAGRANGE]}), ...runs]);
+      const underV1 = fixtureTargetCell(matrix, LAGRANGE, 'scenarioA/smoke');
+      assert.equal(underV1.status, CLAIM_CELL_STATUS.VALID_OBSERVED, underV1.reasons.join(', '));
+      const unknown = await publishedLagrangeCell((run) => {
+        run.plan.retryPolicyId = 'scenario-a-retry-v0';
+      }, SMOKE);
+      assert.equal(arrayIncludes(unknown.cell.reasons, ADMISSION_REASON.NON_CANONICAL_WORKLOAD),
+        true);
+      const crossed = await publishedLagrangeCell((run) => {
+        run.plan.retryPolicyId = v1.retryPolicyId;
+      }, SMOKE);
+      assert.equal(arrayIncludes(crossed.cell.reasons, ADMISSION_REASON.NON_CANONICAL_WORKLOAD),
+        true, 'the v2 profile names retry v2');
+    });
+
+  // Coordinator decision 1 (2026-11-02), acceptance case: every completed run
+  // has a gate record, or its cell is unsupported naming the missing gate
+  // client - never invalid-measurement (semantic-gate-missing) for a system
+  // the chain has no gate client for (live campaign r8: TiDB).
+  it('a completed run whose system has no gate client is unsupported, naming it', async () => {
+    const runs = pair(SMOKE);
+    for (const run of runs) {
+      run.correctness.semanticGate = null;
+      run.harnessEvents = [{kind: 'semantic-gate-not-run', at: '2026-11-02T00:00:00.000Z',
+        missingClient: 'lagrange', reason: 'no semantic-gate client for lagrange'}];
+      sealFixtureRun(run, {keepFinalState: true});
+    }
+    const {matrix, readme} = await publish([buildFixtureHeader({campaignId: 'fixture-campaign',
+      targetIds: [LAGRANGE]}), ...runs]);
+    const cell = fixtureTargetCell(matrix, LAGRANGE, 'scenarioA/smoke');
+    assert.equal(cell.status, CLAIM_CELL_STATUS.UNSUPPORTED, cell.reasons.join(', '));
+    assert.deepEqual(cell.reasons, ['semantic-gate-client-missing:lagrange']);
+    assert.equal(stringIncludes(readme, 'unsupported (semantic-gate-client-missing:lagrange)'),
+      true);
+    const silent = pair(SMOKE);
+    for (const run of silent) {
+      run.correctness.semanticGate = null;
+      sealFixtureRun(run, {keepFinalState: true});
+    }
+    const gone = await publish([buildFixtureHeader({campaignId: 'fixture-campaign',
+      targetIds: [LAGRANGE]}), ...silent]);
+    const missing = fixtureTargetCell(gone.matrix, LAGRANGE, 'scenarioA/smoke');
+    assert.equal(missing.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+    assert.equal(arrayIncludes(missing.reasons, ADMISSION_REASON.SEMANTIC_GATE_MISSING), true);
   });
 
   it('a smoke profile never publishes a capacity figure', async () => {

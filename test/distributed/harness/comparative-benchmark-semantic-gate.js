@@ -68,7 +68,8 @@ function createSemanticGateStage({journey, redeploy, sshRun, opts, evidenceDirOf
     const at = () => new Date(now()).toISOString();
     if (run.system !== SYSTEM.LAGRANGE && run.system !== SYSTEM.POSTGRESQL) {
       return {gate: null, deployment, events: [{kind: EVENT.NOT_RUN, at: at(),
-        reason: `${run.system} keeps its own live proof harness`}]};
+        missingClient: run.system,
+        reason: `the chain has no semantic-gate client for ${run.system}`}]};
     }
     const events = [];
     let current = deployment;

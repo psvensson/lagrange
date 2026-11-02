@@ -49,11 +49,13 @@ A product-specific mechanism such as `FOR UPDATE`, snapshot isolation, or a
 particular database isolation-level name is evidence about how a system meets
 the contract; it is not itself the benchmark contract.
 
-### Preregistered Scenario A semantic profile v1
+### Preregistered Scenario A semantic profile
 
 The canonical semantic profile is owned by
-`test/distributed/harness/oltp-scenario-a-semantic-profile.js` and has identity
-`scenario-a-semantic-v1`.
+`test/distributed/harness/oltp-scenario-a-semantic-profile.js`. Its current
+identity is `scenario-a-semantic-v2`, which supersedes `scenario-a-semantic-v1`
+only in naming the retry policy `scenario-a-retry-v2` and the SQLSTATEs below.
+Both stay registered: a record is read under the profile it was made under.
 
 It deliberately specifies only externally observable guarantees needed by this
 workload. It does not require serializable isolation or any particular locking
@@ -103,11 +105,24 @@ The paired owner must:
 
 ### Preregistered Scenario A retry profile v1
 
-The first paired Scenario A profile is fixed by
-`test/distributed/harness/oltp-paired-retry-owner.js`:
+The paired Scenario A retry policy is fixed by
+`test/distributed/harness/oltp-paired-retry-owner.js`. The current policy is
+`scenario-a-retry-v2` (decision R09, 2026-11-02), which supersedes
+`scenario-a-retry-v1`:
 
-- policy identity: `scenario-a-retry-v1`;
-- only SQLSTATE `40001` is retryable;
+| SQLSTATE | Meaning | `scenario-a-retry-v1` | `scenario-a-retry-v2` |
+| --- | --- | --- | --- |
+| `40001` | serialization failure (TiDB's 1213 deadlock answers it) | retried | retried |
+| `40P01` | deadlock detected | terminal | retried |
+| `40003` | statement completion unknown | terminal | ambiguous commit, never retried |
+
+Class 40 rollbacks are retried because the database told the client to retry
+(TPC-C practice). Records made under v1 (up to campaign attempt r8, including
+one PostgreSQL `new_order` that ended with a terminal `40P01`) stay published
+under v1; the campaign manifest pins v2 from attempt r9 on. Both policies
+share:
+
+- policy identity: `scenario-a-retry-v2` (current);
 - at most three retries after the first attempt;
 - deterministic backoff: 5 ms, 10 ms, then 20 ms;
 - the request clock starts at the intended open-loop issue time and is never
@@ -117,7 +132,8 @@ The first paired Scenario A profile is fixed by
 - database adapters may expose conflict details but may not own retry loops.
 
 Changing this policy requires a new policy identity. An observed result must
-never cause an in-place mutation of `scenario-a-retry-v1`.
+never cause an in-place mutation of a registered policy (`scenario-a-retry-v1`,
+`scenario-a-retry-v2`).
 
 ## Open-loop issue and latency owner
 

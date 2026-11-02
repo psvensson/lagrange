@@ -72,7 +72,7 @@ const runProofOwnershipGuard = () => {
     assert.equal(entry.coreGuaranteeRequired, true);
     assert.equal(entry.comparativeMilestone, '0.4');
     assert.equal(entry.comparativeOwner, 'RM-0.4-scenario-a-comparison');
-    assert.equal(entry.profileId, 'scenario-a-semantic-v1');
+    assert.equal(entry.profileId, 'scenario-a-semantic-v2');
     assert.ok(entry.scenarioModule && typeof entry.scenarioModule === 'string');
     assert.equal(
       entry.scenarioModule,

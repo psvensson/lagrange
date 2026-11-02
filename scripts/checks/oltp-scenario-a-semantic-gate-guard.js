@@ -53,7 +53,7 @@ const ISOLATION_LOST_SUCCESSFUL_WRITE_FORBIDDEN =
 const OUTCOME_RETRYABLE_CONFLICT_SQL_STATE =
   'outcome:retryableConflictSqlState:40001';
 
-const SEMANTIC_PROFILE_ID_V1 = 'scenario-a-semantic-v1';
+const SEMANTIC_PROFILE_ID = 'scenario-a-semantic-v2';
 const STATUS_INCOMPLETE = 'incomplete';
 const STATUS_FAILED = 'failed';
 const STATUS_PASSED = 'passed';
@@ -127,7 +127,7 @@ function assertRequiredProofsComeFromProfile() {
 
 function assertEmptyEvidenceFailsClosed() {
   const gate = buildScenarioASemanticGateEvidence({systems: COMPARED_SYSTEMS});
-  assert.equal(gate.semanticProfileId, SEMANTIC_PROFILE_ID_V1);
+  assert.equal(gate.semanticProfileId, SEMANTIC_PROFILE_ID);
   assert.equal(gate.semanticProfileSha256, hashScenarioASemanticProfile());
   assert.equal(gate.status, STATUS_INCOMPLETE);
   assert.equal(gate.semanticEquivalent, false);

@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 
 import {
   OLTP_PAIRED_RETRY_OUTCOME,
+  OLTP_PAIRED_RETRY_POLICIES,
   OLTP_PAIRED_RETRY_POLICY,
   OLTP_SERIALIZATION_FAILURE_SQLSTATE,
   classifyOltpAttemptError,
@@ -33,7 +34,7 @@ const SQLSTATE_40001 = '40001';
 
 const OP_RETRY_ONCE = 'retry-once';
 const OP_TERMINAL = 'terminal';
-const POLICY_ID = 'scenario-a-retry-v1';
+const POLICY_ID = 'scenario-a-retry-v2';
 
 const START_TIME_100 = 100;
 const INTENDED_TIME_90 = 90;
@@ -68,14 +69,27 @@ const EXPECTED_RECORDED_EVENTS = objectFreeze([
   objectFreeze({delayMs: DELAY_10, sqlState: SQLSTATE_40001}),
 ]);
 
+// scenario-a-retry-v2 supersedes v1 (coordinator decision R09, 2026-11-02):
+// SQLSTATE class 40 rollbacks 40001 and 40P01 are retryable (the database told
+// the client to retry); 40003 (statement completion unknown) is an ambiguous
+// commit, never retried.
+const POLICY_ID_V1 = 'scenario-a-retry-v1';
+const SQLSTATE_40P01 = '40P01';
+const SQLSTATE_40003 = '40003';
+const V1_KEPT_MESSAGE = 'v1 stays as it was executed';
+const V1_DEADLOCK_MESSAGE = 'under v1 a deadlock was terminal';
+const arrayMapIds = (policies) => Array.prototype.map.call(policies, (p) => p.id);
+
 const EXPECTED_RETRY_POLICY = objectFreeze({
   id: POLICY_ID,
   maxRetries: COUNT_3,
   baseDelayMs: DELAY_5,
   maxDelayMs: DELAY_20,
-  retryableSqlStates: objectFreeze([SQLSTATE_40001]),
+  retryableSqlStates: objectFreeze([SQLSTATE_40001, SQLSTATE_40P01]),
+  outcomeUnknownSqlStates: objectFreeze([SQLSTATE_40003]),
   ambiguousCommitIsFailure: true,
   adapterRetriesAllowed: false,
+  supersedes: POLICY_ID_V1,
 });
 
 const EXPECTED_INITIAL_RETRY_EVIDENCE = objectFreeze({
@@ -265,6 +279,17 @@ async function assertAdaptersDoNotOwnRetries() {
 
 async function main() {
   assert.deepEqual(OLTP_PAIRED_RETRY_POLICY, EXPECTED_RETRY_POLICY);
+  assert.deepEqual(arrayMapIds(OLTP_PAIRED_RETRY_POLICIES), [POLICY_ID_V1, POLICY_ID]);
+  assert.deepEqual(OLTP_PAIRED_RETRY_POLICIES[0].retryableSqlStates, [SQLSTATE_40001],
+    V1_KEPT_MESSAGE);
+  const deadlock = classifyOltpAttemptError({sqlState: SQLSTATE_40P01});
+  assert.equal(deadlock.retryable, true);
+  assert.equal(deadlock.outcome, OLTP_PAIRED_RETRY_OUTCOME.SERIALIZATION_CONFLICT);
+  const unknown = classifyOltpAttemptError({sqlState: SQLSTATE_40003});
+  assert.equal(unknown.retryable, false);
+  assert.equal(unknown.commitOutcomeUnknown, true);
+  assert.equal(classifyOltpAttemptError({sqlState: SQLSTATE_40P01},
+    OLTP_PAIRED_RETRY_POLICIES[0]).retryable, false, V1_DEADLOCK_MESSAGE);
   assert.equal(resolvePairedOltpRetryDelayMs(1), DELAY_5);
   assert.equal(resolvePairedOltpRetryDelayMs(TWO), DELAY_10);
   assert.equal(resolvePairedOltpRetryDelayMs(COUNT_3), DELAY_20);
