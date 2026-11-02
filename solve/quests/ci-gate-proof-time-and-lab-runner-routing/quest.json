@@ -27,5 +27,6 @@
       "id": "stop-for-decision",
       "statement": "Attempt 2 changes no workflow until the lead decides the design note."
     }
-  ]
+  ],
+  "sealedAt": "22becf575c9fc52b3e80894fafad388d291ad6b5"
 }
