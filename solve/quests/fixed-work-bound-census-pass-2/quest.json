@@ -1,0 +1,29 @@
+{
+  "schema": "solve-quest/2",
+  "id": "fixed-work-bound-census-pass-2",
+  "class": "design",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Declared, not sealed: the second pass of the fixed-work-bound census (first pass: quest fixed-work-bound-census, landed with PR #195, solve/epics/raft-rs-full-cutover/evidence/fixed-work-bound-census-2026-11-02/CENSUS.md). Carried items: (1) the 2 MESSAGE_GROUP_RETRY_MAX_ATTEMPTS (direct delivery) attempt-count spends excluded from the first pass's spent table (251 of 253): classify attempt-count bounds as their own class; (2) row 16 typed spend visibility and (3) row 5 class, both corrected in the first pass after its approving verification, to be re-checked against the code at this pass's base; (4) the 52 object-member bounds (NAME_MS: <number> in constants objects, and the TIME_MS-computed replica-operation repository bounds) outside the first pass's regex, to be classified with the same columns; (5) the seed participant release budget of 3000 ms (single-path-partition-cutover, release_fact_unavailable / replica_release_reply spent at 3004 ms on hosted runs of PR #184 and PR #194): find the constant and classify it, likely in the un-cancelled-race family; (6) the fixed file-level {timeout: 60000} of test/integration/leader-metadata-validation.integration.test.js:226 beside its machine-scaled readiness budget (line 210), spent on hosted runs of PR #194: a test bound, recorded with its owner; (7) the online bound of the WASI derivation lane, as named by the lead. No src and no test-bound change; each classification cites its site.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/fixed-work-bound-census-pass-2/evidence/receipt.json",
+      "requiredReceipts": [
+        "carried-items-classified",
+        "object-member-bounds-classified",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Evidence and design only, as the first pass: no src change, no test-bound change; repairs are separate fix quests."
+    },
+    {
+      "id": "proof",
+      "statement": "Static analysis at the sealed base; outcomes not traced are said to be not traced; independent review before landing. Not sealed until the lead starts the pass."
+    }
+  ],
+  "sealedAt": "c88a06ab069bc372260788ec004452e2511ab5fc"
+}

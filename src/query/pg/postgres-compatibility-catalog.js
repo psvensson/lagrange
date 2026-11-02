@@ -9,7 +9,7 @@
 const objectFreeze = Object.freeze;
 const objectValues = Object.values;
 
-const PG_COMPAT_MATRIX_SCHEMA = 'lagrange-postgres-compatibility-matrix/1';
+const PG_COMPAT_MATRIX_SCHEMA = 'lagrange-postgres-compatibility-matrix/2';
 const PG_COMPAT_QUEST_ID = 'postgres-compatibility-certification-matrix';
 const PG_COMPAT_EDITION_SCOPE = 'community-agpl';
 const PG_COMPAT_ORM_CLAIM_POLICY =
@@ -28,6 +28,20 @@ const PG_COMPAT_ALL_CLIENTS = objectFreeze([
   PG_COMPAT_CLIENT_ID.PSQL,
   PG_COMPAT_CLIENT_ID.PG_POOL,
 ]);
+
+// The client builds the matrix certifies, by major version. The claim is
+// about the product's SQL surface; the generating host's exact builds are
+// environment, recorded beside the matrix and outside its digest
+// (postgres-compatibility-matrix-driver-version-pin). Admitted by
+// measurement: psql 14 (14.24, the controller) and psql 16 (16.15, the
+// hosted runner of run 41431327759) observed every cell and negative control
+// identically; node-pg 8 and pg-pool 3 are the locked dependencies. A build
+// outside these majors is refused, never certified by assumption.
+const PG_COMPAT_SUPPORTED_CLIENT_MAJORS = objectFreeze({
+  [PG_COMPAT_CLIENT_ID.NODE_PG]: objectFreeze([8]),
+  [PG_COMPAT_CLIENT_ID.PSQL]: objectFreeze([14, 16]),
+  [PG_COMPAT_CLIENT_ID.PG_POOL]: objectFreeze([3]),
+});
 
 const PG_COMPAT_EXTENDED_PROTOCOL_CLIENTS = objectFreeze([
   PG_COMPAT_CLIENT_ID.NODE_PG,
@@ -78,6 +92,7 @@ const PG_COMPAT_MATRIX_ERROR_CODE = objectFreeze({
   MATRIX_RECEIPT_DIGEST_MISMATCH: 'MATRIX_RECEIPT_DIGEST_MISMATCH',
   NEGATIVE_CONTROL_BREACH: 'NEGATIVE_CONTROL_BREACH',
   ORM_OVERCLAIM_FORBIDDEN: 'ORM_OVERCLAIM_FORBIDDEN',
+  DRIVER_VERSION_UNSUPPORTED: 'DRIVER_VERSION_UNSUPPORTED',
 });
 
 const PG_COMPAT_SQLSTATE = objectFreeze({
@@ -428,6 +443,7 @@ export {
   PG_COMPAT_ORM_CLAIM_POLICY,
   PG_COMPAT_QUEST_ID,
   PG_COMPAT_SQLSTATE,
+  PG_COMPAT_SUPPORTED_CLIENT_MAJORS,
   PostgresCompatibilityMatrixError,
   buildCompatibilityCellId,
 };

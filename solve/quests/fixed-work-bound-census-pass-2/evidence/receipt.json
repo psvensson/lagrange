@@ -1,0 +1,31 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "fixed-work-bound-census-pass-2",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "carried-items-classified",
+      "passed": true,
+      "detail": "the seed release budget is leadershipWaitTimeoutMs (test value 3000 at single-path-partition-cutover.test.js:347, product default 30000), a shared deadline over every cohort's release, mixed, no typed spend under its name, not an un-cancelled race (the deadline is passed down and caps each request), repair shape (3) or a per-cohort budget; leader-metadata-validation's fixed 60 s file cap beside its machine-scaled readiness budget, a work/mixed test bound, recorded under the no-bound-change rule; attempt-count bounds named as their own class with 29 typed count, retry, cycle or run reporters and the MESSAGE_GROUP_RETRY_MAX_ATTEMPTS sites, four time bounds moved out, and a rule covering time-spent and failure-driven attempts; pass-1 rows 16 and 5 re-checked at 81992f8a8 (both corrections hold; row 5's repair is the dynamic-config quest under verification); the WASI derivation lane at 69a618984: the CPU-time ceiling is a work bound measured in CPU time (load-proof), and there is no bound before 'online' (a missing liveness bound, the WASI verifier's R17), with the caution that an online bound must itself be generous or machine-scaled",
+      "evidence": [
+        "solve/epics/raft-rs-full-cutover/evidence/fixed-work-bound-census-2026-11-02/CENSUS-PASS-2.md"
+      ]
+    },
+    {
+      "id": "object-member-bounds-classified",
+      "passed": true,
+      "detail": "55 rows (the 52 object-member bounds outside pass 1's regex plus the 3 TIME_MS-computed replica-operation repository bounds) with pass 1's columns: work 2, mixed 21, liveness 17, not a wait 13, dead 2 (corrected after the rejection of 0fe9ab168: P2-29 and P2-31 are liveness); four work-heavy mixed bounds named as shape-(3) candidates, each read at its site (SYNCING, REBALANCE, SPLIT, MIGRATION); three value changes found (P2-53 5000 to 15000, P2-7 5000 to 1000, P2-48 3000 to 15000); the two dead entries left to their owners",
+      "evidence": [
+        "solve/epics/raft-rs-full-cutover/evidence/fixed-work-bound-census-2026-11-02/CENSUS-PASS-2.md"
+      ]
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "detail": "log.ndjson verification entries 2026-11-02 (subagent:adc0b674ea26e3f81): reject at 0fe9ab168, reject at 40ba42c04, approve at e9c99ab5d",
+      "evidence": [
+        "solve/quests/fixed-work-bound-census-pass-2/log.ndjson"
+      ]
+    }
+  ]
+}
