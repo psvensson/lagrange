@@ -151,7 +151,8 @@ function assignRaftLifecycle(serviceClass) {
           localReplicaIdentity: this.replicaId,
           logger: this.logger,
         }, {replicaIdentity, peerAddress,
-          nodeId: AddressManager.getInstance().getNodeId(peerAddress)});
+          nodeId: AddressManager.getInstance()
+            .nodeIdOfProjectedAddress(peerAddress)});
       }
     },
     /**
