@@ -55,3 +55,40 @@ Carinasdator
   bench-worktrees=0 staging-keep=0
 flock -n: free 00:43:19
 holder=none
+
+## After attempts r7 and r8 (2026-11-02)
+== 192.168.86.34 2026-11-02T02:34:46Z
+adam-Aspire-A515-52G
+  bench-live-20261101-b-r7 containers=0
+  bench-live-20261101-b-r8 containers=0
+  holder=none
+  flock -n: free
+  bench-worktrees=0
+== 192.168.86.41 2026-11-02T02:34:46Z
+peter-All-Series
+  bench-live-20261101-b-r7 containers=0
+  bench-live-20261101-b-r8 containers=0
+  holder=none
+  flock -n: free
+  bench-worktrees=0
+== 192.168.86.27 2026-11-02T02:34:47Z
+peter-Lenovo-Y50-70
+  bench-live-20261101-b-r7 containers=0
+  bench-live-20261101-b-r8 containers=0
+  holder=none
+  flock -n: free
+  bench-worktrees=0
+== 192.168.86.32 2026-11-02T02:34:47Z
+peter-RB102
+  bench-live-20261101-b-r7 containers=0
+  bench-live-20261101-b-r8 containers=0
+  holder=none
+  flock -n: free
+  bench-worktrees=0
+== 192.168.86.26 2026-11-02T02:34:47Z
+Carinasdator
+  bench-live-20261101-b-r7 containers=0
+  bench-live-20261101-b-r8 containers=0
+  holder=none
+  flock -n: free
+  bench-worktrees=0
