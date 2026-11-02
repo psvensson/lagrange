@@ -552,7 +552,7 @@ export async function registerReplicaHandlerIdentityEntryTests({
         await node.handler.createReplicaAsync({operationId: 'f3c-resume-op',
           explicitOperationType: OperationType.ADD, partitionId: PARTITION_ID,
           replicaId: 'f3c-resume', bootstrapReplicaIds: [],
-          bootstrapPeerAddresses: [], bootstrapTableMetadata: null,
+          bootstrapTableMetadata: null,
           bootstrapPartitionMetadata: null}).catch(() => undefined);
         t.equal(node.opened.length, 1, 'no second open over the runtime');
       } finally {

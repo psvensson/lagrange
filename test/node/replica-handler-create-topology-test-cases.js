@@ -232,6 +232,17 @@ export async function registerReplicaHandlerCreateTopologyTests({
         0,
         'should not count roleless active rows as established voters',
       );
+      t.notOk(Object.hasOwn(context, 'peerAddresses'),
+        'the creation context carries no peer-address hint list: peers are ' +
+          'addressed from their committed nodes');
+      const hinted = handler.resolveReplicaContext(partitionId, 'replica-1', {
+        bootstrapMembership: genesisStampFor(
+          ['replica-1', 'replica-2', 'replica-3']),
+        bootstrapPeerAddresses: ['node-x/partition/replica-9'],
+      });
+      t.same(hinted, context,
+        'bootstrapPeerAddresses is not part of the context contract: a ' +
+          'dispatched hint list changes nothing');
 
       handler.shutdown();
     },
@@ -847,12 +858,6 @@ export async function registerReplicaHandlerCreateTopologyTests({
       // target; the REPLACE source (r3 here) is in it while it is a member.
       const targetReplicaId = 'replica_operations-p1-r5';
       const bootstrapReplicaIds = [...stampedReplicaIds, targetReplicaId];
-      const bootstrapPeerAddresses = [
-        'node-1/partition/replica_operations-p1-r1',
-        'node-2/partition/replica_operations-p1-r4',
-        'node-3/partition/replica_operations-p1-r3',
-        `node-target/partition/${targetReplicaId}`,
-      ];
       const handler = new ReplicaHandler({
         nodeId: 'node-target',
         cdcIntegrationService: createMockCDCService(cache),
@@ -865,7 +870,6 @@ export async function registerReplicaHandlerCreateTopologyTests({
         handler.resolveReplicaContext(partitionId, targetReplicaId, {
           explicitOperationType,
           bootstrapReplicaIds,
-          bootstrapPeerAddresses,
           bootstrapMembership: committedStampFor(stampedReplicaIds),
         });
 
@@ -875,11 +879,6 @@ export async function registerReplicaHandlerCreateTopologyTests({
         replaceContext.replicaIds.slice().sort(),
         addContext.replicaIds.slice().sort(),
         'a REPLACE target resolves the membership an ADD target resolves',
-      );
-      t.same(
-        replaceContext.peerAddresses.slice().sort(),
-        addContext.peerAddresses.slice().sort(),
-        'and the same peer addresses',
       );
       for (const replicaId of bootstrapReplicaIds) {
         t.ok(

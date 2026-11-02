@@ -553,7 +553,6 @@ test('anchor: GENESIS is refused where discovery shows a replica outside ' +
     handler.systemTableCache = cache;
     return handler.resolveReplicaContext(PARTITION_ID, 'gx-t', {
       bootstrapReplicaIds: stamp.founders,
-      bootstrapPeerAddresses: founders.map(addressOf),
       bootstrapMembership: stamp,
     });
   };

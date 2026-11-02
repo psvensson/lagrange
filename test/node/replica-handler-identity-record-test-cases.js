@@ -224,7 +224,6 @@ export async function registerReplicaHandlerIdentityRecordTests({
         partitionId: PARTITION_ID,
         replicaId,
         bootstrapReplicaIds: [],
-        bootstrapPeerAddresses: [],
         bootstrapTableMetadata: null,
         bootstrapPartitionMetadata: null,
         ...request,

@@ -263,7 +263,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         partitionId,
         replicaId,
         bootstrapReplicaIds,
-        bootstrapPeerAddresses,
         bootstrapTableMetadata,
         bootstrapPartitionMetadata,
         bootstrapMembership,
@@ -330,7 +329,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           replicaId,
           {
             bootstrapReplicaIds,
-            bootstrapPeerAddresses,
             bootstrapTableMetadata,
             bootstrapPartitionMetadata,
             bootstrapMembership,

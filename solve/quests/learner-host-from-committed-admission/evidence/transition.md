@@ -204,6 +204,10 @@ the lab console kept with the run; each disposition was re-checked locally on th
 | `test/integration/critical-replica-placement-causal-trace.integration.test.js` | tv-dator | base-red (same timeout on the base) |
 | `test/integration/three-node-seed-rebalance.integration.test.js` | controller | flaky (after-end `timeout!` subtest; 1 of 3 base runs and 1 of 3 change runs) |
 
+Note (independent verifier, 2026-11-02): on the base the verifier observed `three-node-seed-rebalance` fail on its
+substantive assertion `moves at least one partition replica off seed node` (12.7 s), not on the after-end timeout the
+row records; the disposition stays flaky-on-change/base-red.
+
 ## 11. Refusal set (verifier F3 wording)
 
 The refusals that REPLACE address resolution in the proof handler are `NOT_LEADER`, `NOT_IN_CONFIGURATION` and

@@ -23,9 +23,6 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {NUM} from '../constants/index.js';
-import {
-  classifySystemPartition,
-} from '../bootstrap/system-partition-classification.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {PartitionServiceRowOwner} from '../partition/partition-service-row-owner.js';
@@ -241,7 +238,6 @@ assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   SYSTEM_TABLE_HYDRATION_SQL,
   SYSTEM_TABLE_NAME,
   TABLE_METADATA_MISSING_PREFIX,
-  classifySystemPartition,
   createControlPlaneRuntimeBundle,
   createSystemMetadataGatewayRequiredError,
   fs,

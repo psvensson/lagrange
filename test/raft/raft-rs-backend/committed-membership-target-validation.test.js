@@ -59,7 +59,6 @@ function resolveFor(harness, stamp, cache = metadataCache(PARTITION_ID,
   handler.systemTableCache = cache;
   return handler.resolveReplicaContext(PARTITION_ID, TARGET[0], {
     bootstrapReplicaIds: FOUNDERS.map(([replicaId]) => replicaId),
-    bootstrapPeerAddresses: FOUNDERS.map(addressOf),
     bootstrapMembership: stamp,
   });
 }
