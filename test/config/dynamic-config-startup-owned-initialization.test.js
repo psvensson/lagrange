@@ -592,6 +592,162 @@ test('F5 c4: startLoop on a stopped controller starts nothing', async (t) => {
   t.equal(started.length, 0, 'no interval');
 });
 
+const HEARTBEAT = CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS;
+const ELECTION_MIN = CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS;
+const ELECTION_MAX = CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS;
+const TICK = CONFIG_KEY.RAFT_TICK_INTERVAL_MS;
+
+// A wiring whose raft keys are stored as `rows`. `lateKeys` answer when
+// released, after the bound; `failFirst` keys fail their first read only, so
+// the durable row stays valid and later reads find it.
+async function blockedStart(t, {rows, lateKeys = [], failFirst = []}) {
+  trackFailures(t);
+  // Every wiring writes accepted timing to the singleton: start on defaults.
+  ConfigurationManager.resetInstance();
+  ConfigurationManager.getInstance().initialize({node: {id: 'owned-startup-node'}});
+  const group = new EventEmitter();
+  const partition = raftService();
+  const engine = heldSqlQueryEngine(rows, new Set(lateKeys));
+  const failing = new Set(failFirst);
+  const executeQuery = engine.executeQuery.bind(engine);
+  engine.executeQuery = async (sql, params = []) => {
+    if (failing.delete(params[0])) throw new Error('read failed');
+    return executeQuery(sql, params);
+  };
+  const wiring = await createDynamicConfigStartupWiring(wiringOptions({
+    sqlQueryEngine: engine,
+    messageGroupServices: new Map([['group-1', group]]),
+    partitionServices: new Map([['partition-1', partition.service]]),
+    initialReadTimeoutMs: 20,
+    controllerInitTimeoutMs: 20,
+  }));
+  engine.release();
+  await tick(40);
+  return {group, partition, wiring, reads: () => wiring.startupOutcome().reads};
+}
+
+// Three good CDC writes of another key reach the replicas.
+async function assertCdcNotBlocked(t, {group, partition}) {
+  for (const value of ['61', '62', '63']) {
+    group.emit('cdcApplied', cdcUpdate(HEARTBEAT, value));
+    await tick(5);
+    t.equal(partition.calls.at(-1)?.heartbeatIntervalMs, Number(value),
+      `heartbeat ${value} reaches the replicas`);
+  }
+}
+
+function storedTiming(overrides) {
+  const rows = {};
+  for (const [key, value] of Object.entries({...STORED_RAFT_TIMING, ...overrides})) {
+    rows[key] = storedRow(key, value);
+  }
+  return rows;
+}
+
+test('R1 B1: an on-time bad tick blocks no CDC, and its own CDC heals it', async (t) => {
+  const run = await blockedStart(t, {rows: storedTiming({[TICK]: '0'})});
+  t.equal(run.reads()[TICK], OUTCOME.REFUSED, 'tick refused');
+  await assertCdcNotBlocked(t, run);
+  run.group.emit('cdcApplied', cdcUpdate(TICK, '25'));
+  await tick(5);
+  t.equal(run.partition.calls.at(-1).tickIntervalMs, 25, 'the fixed tick applies');
+  t.equal(run.partition.calls.at(-1).electionTimeoutMinMs, 1800,
+    'and the held stored values with it');
+  t.equal(run.reads()[TICK], OUTCOME.HEALED_BY_CDC, 'the refused outcome clears');
+  t.equal(run.reads()[ELECTION_MIN], OUTCOME.APPLIED, 'the held reads resolve');
+  run.wiring.shutdown();
+});
+
+test('R1 B2: a late bad tick blocks no CDC', async (t) => {
+  const run = await blockedStart(t, {rows: storedTiming({[TICK]: '0'}), lateKeys: [TICK]});
+  t.equal(run.reads()[TICK], OUTCOME.REFUSED, 'tick refused');
+  await assertCdcNotBlocked(t, run);
+  t.notOk(run.partition.calls.some((call) => call.tickIntervalMs === 0), '0 reached no replica');
+  run.wiring.shutdown();
+});
+
+test('R1 B3 and the equal-value heal: an on-time failed read of a valid durable max',
+  async (t) => {
+    const run = await blockedStart(t, {
+      rows: storedTiming({[ELECTION_MIN]: '3500', [ELECTION_MAX]: '5400'}),
+      failFirst: [ELECTION_MAX],
+    });
+    t.equal(run.reads()[ELECTION_MAX], OUTCOME.FAILED, 'the failed read is named');
+    t.equal(run.reads()[ELECTION_MIN], OUTCOME.REFUSED, 'the min it would have allowed is refused');
+    t.equal(await run.wiring.dynamicConfigService.get(ELECTION_MAX), 5400,
+      'the service cache already holds the durable value');
+    await assertCdcNotBlocked(t, run);
+    run.group.emit('cdcApplied', cdcUpdate(ELECTION_MAX, '5400'));
+    await tick(5);
+    t.equal(run.partition.calls.at(-1).electionTimeoutMaxMs, 5400,
+      'a CDC equal to the cache is adopted');
+    t.equal(run.partition.calls.at(-1).electionTimeoutMinMs, 3500,
+      'and the held min applies with it');
+    t.equal(run.reads()[ELECTION_MAX], OUTCOME.HEALED_BY_CDC, 'the outcome names the heal');
+    t.equal(run.reads()[ELECTION_MIN], OUTCOME.APPLIED, 'the held read is applied');
+    run.wiring.shutdown();
+  });
+
+test('R1 B4: a late refused min with a failed max blocks no CDC, and heals', async (t) => {
+  const run = await blockedStart(t, {
+    rows: storedTiming({[ELECTION_MIN]: '3500', [ELECTION_MAX]: '5400'}),
+    lateKeys: [ELECTION_MIN],
+    failFirst: [ELECTION_MAX],
+  });
+  t.equal(run.reads()[ELECTION_MIN], OUTCOME.REFUSED, 'min refused');
+  t.equal(run.reads()[ELECTION_MAX], OUTCOME.FAILED, 'max failed');
+  await assertCdcNotBlocked(t, run);
+  run.group.emit('cdcApplied', cdcUpdate(ELECTION_MAX, '5400'));
+  await tick(5);
+  t.equal(run.partition.calls.at(-1).electionTimeoutMinMs, 3500, 'the held min applies');
+  t.equal(run.reads()[ELECTION_MIN], OUTCOME.APPLIED_LATE, 'and its refusal clears');
+  t.equal(run.reads()[ELECTION_MAX], OUTCOME.HEALED_BY_CDC, 'max is healed');
+  run.wiring.shutdown();
+});
+
+test('R1: a refused CDC value is held, blocks nothing, and a held refusal clears on ' +
+  'its own key', async (t) => {
+  const run = await blockedStart(t, {rows: {[ELECTION_MIN]: storedRow(ELECTION_MIN, '3500')},
+    lateKeys: [ELECTION_MIN]});
+  t.equal(run.reads()[ELECTION_MIN], OUTCOME.REFUSED, 'min refused');
+  run.group.emit('cdcApplied', cdcUpdate(TICK, '0'));
+  await tick(5);
+  await assertCdcNotBlocked(t, run);
+  run.group.emit('cdcApplied', cdcUpdate(TICK, '30'));
+  await tick(5);
+  t.equal(run.partition.calls.at(-1).tickIntervalMs, 30, 'tick 30 supersedes the held 0');
+  run.group.emit('cdcApplied', cdcUpdate(ELECTION_MIN, '2000'));
+  await tick(5);
+  t.equal(run.partition.calls.at(-1).electionTimeoutMinMs, 2000, 'the CDC min applies');
+  t.equal(run.reads()[ELECTION_MIN], OUTCOME.HEALED_BY_CDC, 'the held refusal cleared');
+  run.wiring.shutdown();
+});
+
+test('R1 pair: CDC keys valid only together apply when the second arrives', async (t) => {
+  const run = await blockedStart(t, {rows: {}});
+  const calls = run.partition.calls.length;
+  run.group.emit('cdcApplied', cdcUpdate(ELECTION_MIN, '3500'));
+  await tick(5);
+  t.equal(run.partition.calls.length, calls, 'the first alone is refused');
+  run.group.emit('cdcApplied', cdcUpdate(ELECTION_MAX, '5000'));
+  await tick(5);
+  t.equal(run.partition.calls.at(-1).electionTimeoutMinMs, 3500, 'min applies');
+  t.equal(run.partition.calls.at(-1).electionTimeoutMaxMs, 5000, 'with max');
+  run.wiring.shutdown();
+});
+
+test('heal: an equal-value CDC adopts a failed logging key', async (t) => {
+  const key = CONFIG_KEY.LOGGING_METRICS_DEFAULT_RESOLUTION_MS;
+  const run = await blockedStart(t, {rows: {[key]: storedRow(key, '7000')},
+    failFirst: [key]});
+  t.equal(run.reads()[key], OUTCOME.FAILED, 'failed');
+  await run.wiring.dynamicConfigService.handleCDCEvent(cdcUpdate(key, '7000'));
+  run.group.emit('cdcApplied', cdcUpdate(key, '7000'));
+  await tick(5);
+  t.equal(run.reads()[key], OUTCOME.HEALED_BY_CDC, 'healed though the cache was equal');
+  run.wiring.shutdown();
+});
+
 test('teardown', async (t) => {
   clearInterval(keepAlive);
   t.pass('keep-alive released');

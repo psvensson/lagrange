@@ -15,7 +15,7 @@
     {
       "id": "late-read-value-applied-by-the-owner",
       "passed": true,
-      "detail": "a startup read that completes after its 300 ms bound is applied through the wiring's one apply path (applyStartupValue: a logging key at once; a raft key into the startup sweep, or its own sweep after it): a restarting node's stored raft timing reaches the replicas (row-4 witness, red before: heartbeat stayed at the default 50); ordering rule: CDC applies of the config table are counted per key from before any read starts, and a late read whose key was CDC-applied since it started is dropped as stale, the CDC value winning, exactly once (row-4 ordering witness); typed outcomes applied, applied_late, dropped_stale, failed, cancelled",
+      "detail": "a startup read that completes after its 300 ms bound is applied through the wiring's one apply path (applyStartupValue: a logging key at once; a raft key into the startup sweep, or its own sweep after it): a restarting node's stored raft timing reaches the replicas (row-4 witness, red before: heartbeat stayed at the default 50); ordering rule: CDC applies of the config table are counted per key from before any read starts, and a late read whose key was CDC-applied since it started is dropped as stale, the CDC value winning, exactly once (row-4 ordering witness); typed outcomes applied, applied_late, dropped_stale, failed, cancelled; a raft value is held beside the working set until a sweep accepts it, so a refused value blocks no CDC. Open evidence gap: restart replay is traced, never run, and convergence holds only if a tail entry follows; no distributed run",
       "evidence": [
         "evidence/red-before-fix.log.txt",
         "evidence/touched-green.log.txt",

@@ -5,12 +5,13 @@
  * can be applied without restart.
  */
 
-import {TABLES} from '../constants/index.js';
+import {CDC_OPERATION, TABLES} from '../constants/index.js';
 import {ConfigurationManager} from './configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {
   CONFIG_KEY,
   CONFIG_SUBSYSTEM,
+  CONFIG_TABLE_COLUMN,
 } from './config-constants.js';
 import {DynamicConfigService} from './dynamic-config-service.js';
 import {
@@ -48,6 +49,7 @@ const DYNAMIC_CONFIG_STARTUP_OUTCOME = Object.freeze({
   APPLIED: 'applied',
   APPLIED_LATE: 'applied_late',
   REFUSED: 'refused',
+  HEALED_BY_CDC: 'healed_by_cdc',
   DROPPED_STALE: 'dropped_stale',
   FAILED: 'failed',
   CANCELLED: 'cancelled',
@@ -59,7 +61,7 @@ const DYNAMIC_CONFIG_STARTUP_OUTCOME = Object.freeze({
 const STARTUP_APPLY_RESULT = Object.freeze({
   APPLIED: 'applied',
   REFUSED: 'refused',
-  AWAITING_SWEEP: 'awaiting_sweep',
+  HELD_FOR_SWEEP: 'held_for_sweep',
 });
 const DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS = 300; // ends-on: the dynamicConfigService.get(key) read resolves
 const DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS = 300; // ends-on: the adaptiveTimingController.initialize() call resolves
@@ -375,65 +377,113 @@ async function createDynamicConfigStartupWiring(options = {}) {
   const loggingApplierByKey = new Map(
     loggingDynamicAppliers.map((entry) => [entry.key, entry.apply]));
   const readOutcomes = new Map();
-  // Raft timing reads whose value waits on a sweep, key to lateness. A value
-  // refused by one sweep stays held: another late key can make the set valid.
-  const readsHeldForSweep = new Map();
-  const settleHeldReads = (sweep) => {
-    for (const [key, late] of readsHeldForSweep) {
-      if (!sweep.applied) {
-        readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.REFUSED);
-        logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.STARTUP_VALUE_REFUSED, {key});
-        continue;
-      }
-      readOutcomes.set(key, late ?
-        DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED_LATE :
-        DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED);
-      readsHeldForSweep.delete(key);
+  // raftTimingConfig is the working set: only values a sweep accepted. A raft
+  // value waiting on a sweep, or refused by one, is held here beside it, so it
+  // can never block a later sweep, and a value only valid together with
+  // another key still applies when that key arrives.
+  const heldRaftValues = new Map();
+  let startupSweepDone = false;
+  // A failed read is not retried and a refused value is not re-read: the key
+  // stays named so until a CDC apply for it resolves it.
+  const healFromCdc = (key) => {
+    const outcome = readOutcomes.get(key);
+    if (outcome === DYNAMIC_CONFIG_STARTUP_OUTCOME.FAILED ||
+      outcome === DYNAMIC_CONFIG_STARTUP_OUTCOME.REFUSED) {
+      readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.HEALED_BY_CDC);
     }
   };
-  let startupSweepDone = false;
-  const applyStartupValue = (key, value) => {
+  const settleHeldAsApplied = () => {
+    for (const [key, held] of heldRaftValues) {
+      if (held.fromCdc) {
+        healFromCdc(key);
+      } else {
+        readOutcomes.set(key, held.late ?
+          DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED_LATE :
+          DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED);
+      }
+    }
+    heldRaftValues.clear();
+  };
+  const refuseHeldReads = () => {
+    for (const [key, held] of heldRaftValues) {
+      if (!held.fromCdc &&
+        readOutcomes.get(key) !== DYNAMIC_CONFIG_STARTUP_OUTCOME.REFUSED) {
+        readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.REFUSED);
+        logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.STARTUP_VALUE_REFUSED, {key});
+      }
+    }
+  };
+  // The one raft timing sweep, for a read and for a CDC apply (`change`).
+  const sweepRaftTiming = (change = null) => {
+    const withChange = {...raftTimingConfig};
+    if (change) {
+      heldRaftValues.delete(change.key);
+      withChange[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[change.key]] = change.value;
+    }
+    const withHeld = {...withChange};
+    for (const [key, held] of heldRaftValues) {
+      withHeld[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[key]] = held.value;
+    }
+    if (applyRaftTimingConfig(withHeld).applied) {
+      Object.assign(raftTimingConfig, withHeld);
+      settleHeldAsApplied();
+      if (change) {
+        healFromCdc(change.key);
+      }
+      return;
+    }
+    if (startupSweepDone) {
+      refuseHeldReads();
+    }
+    if (!change) {
+      return;
+    }
+    if (applyRaftTimingConfig(withChange).applied) {
+      Object.assign(raftTimingConfig, withChange);
+      healFromCdc(change.key);
+      return;
+    }
+    heldRaftValues.set(change.key, {value: change.value, fromCdc: true});
+    logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.STARTUP_VALUE_REFUSED, {key: change.key});
+  };
+  const applyStartupValue = (key, value, late) => {
     const applyLogging = loggingApplierByKey.get(key);
     if (applyLogging) {
       return applyLogging(value) ?
         STARTUP_APPLY_RESULT.APPLIED :
         STARTUP_APPLY_RESULT.REFUSED;
     }
-    const field = DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[key];
-    if (!field || !Number.isFinite(value)) {
+    if (!DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[key] || !Number.isFinite(value)) {
       return STARTUP_APPLY_RESULT.REFUSED;
     }
-    raftTimingConfig[field] = value;
-    return STARTUP_APPLY_RESULT.AWAITING_SWEEP;
+    heldRaftValues.set(key, {value, late});
+    return STARTUP_APPLY_RESULT.HELD_FOR_SWEEP;
+  };
+  // A CDC value for a key, through the watcher or the heal below.
+  const adoptCdcValue = (key, value) => {
+    const applyLogging = loggingApplierByKey.get(key);
+    if (applyLogging) {
+      if (applyLogging(value)) {
+        healFromCdc(key);
+      }
+      return;
+    }
+    if (Number.isFinite(value)) {
+      sweepRaftTiming({key, value});
+    }
   };
 
-  for (const entry of loggingDynamicAppliers) {
-    watcherUnsubscribers.push(dynamicConfigService.watch(
-      entry.key,
-      (newValue) => {
-        entry.apply(newValue);
-      },
-    ));
-  }
-
-  for (const key of DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS) {
+  for (const key of [
+    ...loggingDynamicAppliers.map((entry) => entry.key),
+    ...DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS,
+  ]) {
     watcherUnsubscribers.push(dynamicConfigService.watch(
       key,
-      (newValue) => {
-        if (!Number.isFinite(newValue)) {
-          return;
-        }
-        const field = DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[key];
-        if (!field) {
-          return;
-        }
-        raftTimingConfig[field] = newValue;
-        readsHeldForSweep.delete(key);
-        settleHeldReads(applyRaftTimingConfig(raftTimingConfig));
-      },
+      (newValue) => adoptCdcValue(key, newValue),
     ));
   }
 
+  let closed = false;
   // Subscribed before any startup read starts, so a CDC apply during a read
   // is always seen. The service counts the applies per key; a read whose key
   // was CDC-applied since it started is stale and dropped, and the CDC value
@@ -444,7 +494,18 @@ async function createDynamicConfigStartupWiring(options = {}) {
       return;
     }
 
-    void dynamicConfigService.handleCDCEvent(cdcEvent).catch((error) => {
+    // A CDC value equal to the cached one fires no watcher, so a key still
+    // failed or refused here adopts it directly.
+    void dynamicConfigService.handleCDCEvent(cdcEvent).then(async () => {
+      const key = cdcEvent.data[CONFIG_TABLE_COLUMN.KEY];
+      const outcome = readOutcomes.get(key);
+      if (closed || cdcEvent.operation === CDC_OPERATION.DELETE ||
+        (outcome !== DYNAMIC_CONFIG_STARTUP_OUTCOME.FAILED &&
+          outcome !== DYNAMIC_CONFIG_STARTUP_OUTCOME.REFUSED)) {
+        return;
+      }
+      adoptCdcValue(key, await dynamicConfigService.get(key));
+    }).catch((error) => {
       logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.CDC_APPLY_FAILED, {
         error: error.message,
       });
@@ -470,7 +531,6 @@ async function createDynamicConfigStartupWiring(options = {}) {
   // Everything the wiring starts it owns until shutdown: the bound timers,
   // each startup read and the controller's initialize.
   const timers = new Set();
-  let closed = false;
   const settleStartupRead = (key, value, cdcSeqAtStart, state) => {
     if (closed) {
       readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.CANCELLED);
@@ -481,11 +541,10 @@ async function createDynamicConfigStartupWiring(options = {}) {
       logger.info?.(DYNAMIC_CONFIG_STARTUP_LOG_MSG.STARTUP_READ_SUPERSEDED_BY_CDC, {key});
       return;
     }
-    const result = applyStartupValue(key, value);
-    if (result === STARTUP_APPLY_RESULT.AWAITING_SWEEP) {
-      readsHeldForSweep.set(key, state.late);
+    const result = applyStartupValue(key, value, state.late);
+    if (result === STARTUP_APPLY_RESULT.HELD_FOR_SWEEP) {
       if (startupSweepDone) {
-        settleHeldReads(applyRaftTimingConfig(raftTimingConfig));
+        sweepRaftTiming();
       }
       return;
     }
@@ -511,6 +570,7 @@ async function createDynamicConfigStartupWiring(options = {}) {
         logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
           key,
           error: error?.message,
+          retried: false,
         });
       });
     return waitWithinBound(read, initialReadTimeoutMs, () => {
@@ -530,7 +590,7 @@ async function createDynamicConfigStartupWiring(options = {}) {
     ...DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS.map((key) => ownStartupRead(key)),
   ]);
   startupSweepDone = true;
-  settleHeldReads(applyRaftTimingConfig(raftTimingConfig));
+  sweepRaftTiming();
 
   // The controller is held from construction until shutdown: one reference,
   // never dropped. A spent bound adopts it when its initialize completes
