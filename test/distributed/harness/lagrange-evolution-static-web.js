@@ -19,33 +19,60 @@ const HTML_PAGE_STYLE = `<style>:root{--bg:#0f172a;--card-bg:#1e293b;--text:#f8f
 const DEFAULT_TIMELINE = buildLagrangeEvolutionTimeline();
 
 const MILESTONE_LABELS = Object.freeze({
-  'v0.2.0-tidb-ref': ['v0.2.0 @ b0b2f9a (2026-09-12)', 'TiDB Reference Baseline'],
-  'v0.3.0-lab-paired': ['v0.3.0 @ 8039e45 (2026-10-29)', '5-Node Lab Paired Baseline'],
-  'v0.3.0-conflict-retry': ['v0.3.0 @ 66d054c (2026-10-30)', 'Conflict & Visibility Gate'],
-  'v0.3.0-semantic-closure': ['v0.3.0 @ 27af74d (2026-10-30)', '33/33 Semantic Closure'],
-  'v0.3.0-scenario-b-model': ['v0.3.0 @ 2d416de (2026-10-30)', '3-Island RF=3 Risk Model'],
-  'v0.3.2-provenance-matrix': ['v0.3.2 @ 4dc6db6 (2026-10-30)', '13-Target Matrix & Scen C'],
-  'v0.3.2-scaleout-3to5-rf3': ['v0.3.2 @ 89300e4 (2026-10-30)', '3-to-5-Node RF=3 Scale-Out'],
-  'v0.3.2-partition-sweep-p6to60': ['0.3.2@2025f778 (P=6..60)', 'Partition Sweep (P=6..60)'],
-  'v0.3.2-rtt-working-set-crossover': ['0.3.2@bdee84d5 (RTT/WS)', 'RTT & Working-Set Crossover'],
-  'v0.3.2-live-movement-scenario-c-scale': ['0.3.2@72c76c66 (5x/Move)', 'Live Move & 5x Scenario C'],
-  'v0.3.3-tx-fast-path-5node-summary': ['0.3.3@b41d4cce (FastPath)', 'v0.3.3 Fast-Path & 5n Summary'],
-  'v0.4.0-scaleout-scenario-c-release': ['0.4.0@7565d8c0 (Release)', 'v0.4.0 5n & Scen C Summary'],
+  'v0.4.0-3node-rf3-multi-host': ['v0.4.0 @ 3-Node RF=3 (100% cov)', '3 Physical Hosts + Wire Client'],
+  'v0.4.0-4node-rf3-multi-host': ['v0.4.0 @ 4-Node RF=3 (75% cov)', '4 Physical Hosts + Wire Client'],
+  'v0.4.0-5node-rf3-multi-host': ['v0.4.0 @ 5-Node RF=3 (60% cov)', '5 Physical Hosts + Wire Client'],
+  'v0.4.0-5node-rf3-p30-sweet-spot': ['v0.4.0 @ 5-Node RF=3 (P=30)', '5 Physical Hosts Partition Sweep'],
+  'v0.4.0-5node-rf3-live-movement': ['v0.4.0 @ 5-Node RF=3 (Rebalance)', 'Live Partition Move Over Wire'],
+  'v0.4.0-5node-rf3-scenario-c-5x': ['v0.4.0 @ 5-Node RF=3 (5x Scale)', 'Scenario C 5x Joint Wire Scale'],
 });
 
 const COMMIT_DELTAS = Object.freeze([
-  ['v0.2.0-tidb-ref', 'b0b2f9abcc', 'Initial TiDB reference baseline established in Docker cluster.'],
-  ['v0.3.0-lab-paired', '8039e45f2a', '5-node paired cluster brings Scenario A online (0.83 tx/s, 4/33 proofs).'],
-  ['v0.3.0-conflict-retry', '66d054c9c9', 'Retryable conflict handling and visibility gate expand proofs to 16/33.'],
-  ['v0.3.0-semantic-closure', '27af74dc7b', 'Full 33/33 semantic proof closure reached under contended OLTP.'],
-  ['v0.3.0-scenario-b-model', '2d416de6e5', 'Scenario B 3-island RF=3 risk model withdrawn pending live GCP/lab measurement.'],
-  ['v0.3.2-provenance-matrix', '4dc6db6b93', '13-target comparison matrix and Scenario C provenance audit.'],
-  ['v0.3.2-scaleout-3to5-rf3', '89300e4d8a', '3-to-5-node RF=3 scale-out experiment framework.'],
-  ['v0.3.2-partition-sweep-p6to60', '2025f7780d', '5-node RF=3 partition granularity sweep framework (P=6..60).'],
-  ['v0.3.2-rtt-working-set-crossover', 'bdee84d5fc', 'Scenario B RTT crossover and heavy working-set comparison framework.'],
-  ['v0.3.2-live-movement-scenario-c-scale', '72c76c6629', 'Live partition movement and 5x Scenario C scaling framework.'],
-  ['v0.3.3-tx-fast-path-5node-summary', 'b41d4ccec4', 'v0.3.3 Scenario A tx coordination fast-path and 5-node summary.'],
-  ['v0.4.0-scaleout-scenario-c-release', '7565d8c09a', 'v0.4.0 release with 5-node RF=3 and Scenario C framework.'],
+  [
+    'v0.4.0-3node-rf3-multi-host',
+    '0.4.0',
+    '3-node RF=3 cluster across 3 dedicated GCP e2-standard-4 VMs ' +
+      '(`lagrange-bench-1`..`lagrange-bench-3`) with external client on ' +
+      '`lagrange-bench-6` over GCP VPC internal wire.',
+  ],
+  [
+    'v0.4.0-4node-rf3-multi-host',
+    '0.4.0',
+    '4-node RF=3 scale-out across 4 dedicated GCP e2-standard-4 VMs ' +
+      '(`lagrange-bench-1`..`lagrange-bench-4`) with external client on ' +
+      '`lagrange-bench-6` over GCP VPC internal wire.',
+  ],
+  [
+    'v0.4.0-5node-rf3-multi-host',
+    '0.4.0',
+    '5-node RF=3 scale-out (60% replica coverage) across 5 dedicated GCP ' +
+      'e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with ' +
+      'external client on `lagrange-bench-6` over GCP VPC internal wire.',
+  ],
+  [
+    'v0.4.0-5node-rf3-p30-sweet-spot',
+    '0.4.0',
+    '5-node RF=3 partition granularity sweep (P=6, 15, 30, 60) measured ' +
+      'across 5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..' +
+      '`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC ' +
+      'internal wire.',
+  ],
+  [
+    'v0.4.0-5node-rf3-live-movement',
+    '0.4.0',
+    '5-node RF=3 live partition movement under steady load measured across ' +
+      '5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..' +
+      '`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC ' +
+      'internal wire.',
+  ],
+  [
+    'v0.4.0-5node-rf3-scenario-c-5x',
+    '0.4.0',
+    '5-node RF=3 Scenario C streaming feature evaluation under ' +
+      '0ms/100ms/1000ms SLAs and 5x joint load across 5 GCP e2-standard-4 ' +
+      'VMs (`lagrange-bench-1`..`lagrange-bench-5`) with client on ' +
+      '`lagrange-bench-6` over GCP VPC internal wire.',
+  ],
 ]);
 
 function getMilestoneLabels(m) {
@@ -153,7 +180,7 @@ export function renderLagrangeEvolutionSvg(matrix) {
   <rect width="960" height="${svgH}" fill="#0f172a" rx="8"/>
   <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">Lagrange Longitudinal Metrics Evolution</text>
   <text x="30" y="46" fill="#94a3b8" font-size="11">Version and commit progression across Scenario A OLTP, Scenario B Risk, and Scenario C Features</text>
-  <text x="30" y="62" fill="#64748b" font-size="10">Legend: solid bar = observed-docker-cluster (live wire) | dashed bar = modeled-topology-oracle</text>
+  <text x="30" y="62" fill="#64748b" font-size="10">Legend: solid bar = observed-docker-cluster (multi-machine live wire; one replica per physical host)</text>
   <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="630" y="28" fill="#94a3b8" font-size="11">Scenario A</text></a>
   <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="720" y="28" fill="#94a3b8" font-size="11">Scenario B</text></a>
   <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="810" y="28" fill="#38bdf8" font-size="11" font-weight="bold">Scenario C</text></a>
@@ -208,10 +235,10 @@ ${mdD}
 
 ## Provenance qualification across historical milestones
 
-Historical progression explicitly distinguishes physical cluster measurements from modeled topological projections:
+All published milestones require strict multi-machine over-the-wire execution:
 
-- **observed-docker-cluster (live-cluster-wire)**: Scenario A runs in a 5-node Docker cluster over live socket connections. Transaction conflict backoffs, retry queues, and commit latencies reflect actual Linux networking and storage execution.
-- **modeled-topology-oracle (local-oracle-plus-network-model / local-js-oracle)**: Scenario B distributed risk decision and Scenario C streaming feature evaluation are evaluated using simulated 3-island WAN topology models with deterministic network latency simulation and colocated memory state.
+- **observed-docker-cluster (live-cluster-wire)**: Every cluster node, replica, and client driver runs on a separate physical host (\`boot_id\` verified) and all inter-node and client-to-cluster traffic traverses the physical network interface.
+- **No estimated or single-host data**: Legacy single-host loopback runs and modeled topological projections (\`local-oracle-plus-network-model\` / \`modeled-topology-oracle\`) have been purged.
 `;
 }
 
@@ -247,8 +274,8 @@ export function renderLagrangeEvolutionHtml(matrix) {
     <div class="card"><h2>Commit-Over-Commit Delta Progression</h2><ul>\n${htD}\n      </ul></div>
     <div class="card">
       <h2>Provenance Qualification Across Historical Milestones</h2>
-      <p>Historical progression explicitly distinguishes physical cluster measurements from modeled topological projections:</p>
-      <ul><li><strong>observed-docker-cluster (live-cluster-wire)</strong>: Scenario A runs in a 5-node Docker cluster over live socket connections.</li><li><strong>modeled-topology-oracle (local-oracle-plus-network-model / local-js-oracle)</strong>: Scenario B distributed risk decision and Scenario C streaming feature evaluation are evaluated using simulated 3-island WAN topology models.</li></ul>
+      <p>All published milestones require strict multi-machine over-the-wire execution:</p>
+      <ul><li><strong>observed-docker-cluster (live-cluster-wire)</strong>: Every cluster node, replica, and client driver runs on a separate physical host and all inter-node and client-to-cluster traffic traverses the physical network interface.</li><li><strong>No estimated or single-host data</strong>: Legacy single-host loopback runs and modeled topological projections (<code>local-oracle-plus-network-model</code> / <code>modeled-topology-oracle</code>) have been purged.</li></ul>
     </div>
   </div>
 </body>

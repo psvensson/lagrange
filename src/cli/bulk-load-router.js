@@ -236,8 +236,6 @@ async function runBulkLoadCommand(argv, dependencyOverrides = {}) {
 
 export {
   BULK_LOAD_CLI_EXIT_CODE,
-  BULK_LOAD_SUBCOMMAND,
-  BulkLoadUsageError,
   parseBulkLoadCommand,
   runBulkLoadCommand,
 };

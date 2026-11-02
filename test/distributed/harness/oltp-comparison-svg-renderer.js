@@ -146,14 +146,14 @@ function computeThroughputRatios(comp, tidbOps, lagOps) {
 
 function getSystemVersions(perfRec) {
   const tidbVer = escapeXml(perfRec?.systems?.tidbTikv?.version || 'v8.5.8');
-  const lagVer = escapeXml(perfRec?.systems?.lagrange?.version || '0.3.0');
+  const lagVer = escapeXml(perfRec?.systems?.lagrange?.version || '0.4.0');
   return {tidbVer, lagVer};
 }
 
 function getScenarioAThroughput(perfRec) {
   const m = perfRec?.metrics;
-  const tidbOps = m?.tidbTikv?.opsPerSec ?? 6.75;
-  const lagOps = m?.lagrange?.opsPerSec ?? 0.83;
+  const tidbOps = m?.tidbTikv?.opsPerSec ?? 0;
+  const lagOps = m?.lagrange?.opsPerSec ?? 0;
   const {ratio, lagFactor} = computeThroughputRatios(perfRec?.comparison, tidbOps, lagOps);
   const maxOps = Math.max(tidbOps, lagOps, 1);
   return {
@@ -175,8 +175,8 @@ function resolveLatencyValues(lat, defaultP50, defaultP95, defaultP99) {
 
 function getScenarioALatency(perfRec) {
   const m = perfRec?.metrics;
-  const tidb = resolveLatencyValues(m?.tidbTikv?.latencyMs, 120, 210, 350);
-  const lag = resolveLatencyValues(m?.lagrange?.latencyMs, 450, 850, 1200);
+  const tidb = resolveLatencyValues(m?.tidbTikv?.latencyMs, 0, 0, 0);
+  const lag = resolveLatencyValues(m?.lagrange?.latencyMs, 0, 0, 0);
   const maxLat = Math.max(tidb.p99, lag.p99, 1);
   return {
     tP50: tidb.p50,
@@ -221,8 +221,8 @@ function renderScenarioAPanelsSvg(targetEntries, yOffset) {
 
 function resolveScenarioBLatency(perfRec) {
   const m = perfRec?.metrics;
-  const lag = resolveLatencyValues(m?.lagrange?.latencyMs, 12.06, 18.09, 18.09);
-  const tidb = resolveLatencyValues(m?.tidbTikv?.latencyMs, 24.06, 36.08, 36.08);
+  const lag = resolveLatencyValues(m?.lagrange?.latencyMs, 0, 0, 0);
+  const tidb = resolveLatencyValues(m?.tidbTikv?.latencyMs, 0, 0, 0);
   const maxLat = Math.max(lag.p99, tidb.p99, 1);
   return {
     lag,
@@ -235,10 +235,10 @@ function resolveScenarioBLatency(perfRec) {
 }
 
 function resolveScenarioBMovement(ls, ts) {
-  const lMoveP99 = ls?.duringMoveP99Ms ?? 18;
-  const tMoveP99 = ts?.duringMoveP99Ms ?? 64;
-  const lConv = ls?.routingConvergenceMs ?? 45;
-  const tConv = ts?.routingConvergenceMs ?? 180;
+  const lMoveP99 = ls?.duringMoveP99Ms ?? 0;
+  const tMoveP99 = ts?.duringMoveP99Ms ?? 0;
+  const lConv = ls?.routingConvergenceMs ?? 0;
+  const tConv = ts?.routingConvergenceMs ?? 0;
   const maxMoveLat = Math.max(lMoveP99, tMoveP99, 1);
   const maxConv = Math.max(lConv, tConv, 1);
   return {
@@ -253,7 +253,7 @@ function resolveScenarioBMovement(ls, ts) {
 
 function getScenarioBOracleProofs(perfRec) {
   const proofs = perfRec?.metrics?.lagrange?.semanticProofs;
-  const lProofs = proofs?.passedCount ?? 8;
+  const lProofs = proofs?.passedCount ?? 0;
   const lReq = proofs?.requiredCount ?? 8;
   return `${lProofs}/${lReq} PASS`;
 }
@@ -274,8 +274,8 @@ function renderScenarioBPanel3(perfRec, ls, ts, yOffset) {
 
 function getScenarioBThroughput(perfRec) {
   const m = perfRec?.metrics;
-  const lagOps = m?.lagrange?.opsPerSec ?? 441.15;
-  const tidbOps = m?.tidbTikv?.opsPerSec ?? 221.44;
+  const lagOps = m?.lagrange?.opsPerSec ?? 0;
+  const tidbOps = m?.tidbTikv?.opsPerSec ?? 0;
   const {ratio, lagFactor} = computeThroughputRatios(perfRec?.comparison, tidbOps, lagOps);
   const maxOps = Math.max(lagOps, tidbOps, 1);
   return {
@@ -289,8 +289,8 @@ function getScenarioBThroughput(perfRec) {
 }
 
 function getScenarioBWanTraffic(ls, ts) {
-  const tBytes = ts?.crossIslandBytesPerRequest ?? 6144;
-  const lBytes = ls?.crossIslandBytesPerRequest ?? 144;
+  const tBytes = ts?.crossIslandBytesPerRequest ?? 0;
+  const lBytes = ls?.crossIslandBytesPerRequest ?? 0;
   const maxBytes = Math.max(tBytes, lBytes, 1);
   const tidbByteBarW = barW(tBytes, maxBytes);
   const lagByteBarW = barW(lBytes, maxBytes, 230, 6);
@@ -307,8 +307,8 @@ function getScenarioBWanTraffic(ls, ts) {
 function renderScenarioBPanel1(tp, sys, yOffset) {
   return `  <rect x="30" y="${yOffset}" width="280" height="335" rx="8" fill="#1e293b" stroke="#334155"/>\n` +
     `  <text x="45" y="${yOffset + 30}" fill="#38bdf8" font-size="14" font-weight="600" font-family="system-ui, sans-serif">Risk Decisions/sec (ops/sec)</text>\n  <text x="45" y="${yOffset + 50}" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Co-located WASM vs SQL+Coprocessor</text>\n` +
-    `  <text x="45" y="${yOffset + 80}" fill="#cbd5e1" font-size="12" font-family="monospace">Lagrange ${sys.lagVer}: ${formatNum(tp.lagOps)} ops/s</text>\n  <rect x="45" y="${yOffset + 90}" width="${tp.lagBarW}" height="22" fill="#6366f1" rx="4" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>\n` +
-    `  <text x="45" y="${yOffset + 140}" fill="#cbd5e1" font-size="12" font-family="monospace">TiDB ${sys.tidbVer}: ${formatNum(tp.tidbOps)} ops/s</text>\n  <rect x="45" y="${yOffset + 150}" width="${tp.tidbBarW}" height="22" fill="#0284c7" rx="4" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>\n` +
+    `  <text x="45" y="${yOffset + 80}" fill="#cbd5e1" font-size="12" font-family="monospace">Lagrange ${sys.lagVer}: ${formatNum(tp.lagOps)} ops/s</text>\n  <rect x="45" y="${yOffset + 90}" width="${tp.lagBarW}" height="22" fill="#6366f1" rx="4"/>\n` +
+    `  <text x="45" y="${yOffset + 140}" fill="#cbd5e1" font-size="12" font-family="monospace">TiDB ${sys.tidbVer}: ${formatNum(tp.tidbOps)} ops/s</text>\n  <rect x="45" y="${yOffset + 150}" width="${tp.tidbBarW}" height="22" fill="#0284c7" rx="4"/>\n` +
     `  <rect x="45" y="${yOffset + 200}" width="250" height="70" fill="#0f172a" rx="6" stroke="#334155"/>\n  <text x="60" y="${yOffset + 225}" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">Paired Ratio (Lagrange / TiDB)</text>\n` +
     `  <text x="60" y="${yOffset + 250}" fill="#38bdf8" font-size="16" font-weight="700" font-family="system-ui, sans-serif">${formatNum(tp.ratio, 3)}x</text>\n  <text x="140" y="${yOffset + 250}" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif">(${formatNum(tp.lagFactor, 2)}x lag factor)</text>`;
 }
@@ -316,8 +316,8 @@ function renderScenarioBPanel1(tp, sys, yOffset) {
 function renderScenarioBPanel2(wan, yOffset) {
   return `  <rect x="340" y="${yOffset}" width="280" height="335" rx="8" fill="#1e293b" stroke="#334155"/>\n` +
     `  <text x="355" y="${yOffset + 30}" fill="#38bdf8" font-size="14" font-weight="600" font-family="system-ui, sans-serif">Cross-Island WAN Traffic (B/req)</text>\n  <text x="355" y="${yOffset + 50}" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">3-Island 5-Node RF=3 Topology</text>\n` +
-    `  <text x="355" y="${yOffset + 80}" fill="#cbd5e1" font-size="12" font-family="monospace">TiDB: ${wan.tBytes} B/req</text>\n  <rect x="355" y="${yOffset + 90}" width="${wan.tidbByteBarW}" height="22" fill="#0284c7" rx="4" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>\n` +
-    `  <text x="355" y="${yOffset + 140}" fill="#cbd5e1" font-size="12" font-family="monospace">Lagrange: ${wan.lBytes} B/req</text>\n  <rect x="355" y="${yOffset + 150}" width="${wan.lagByteBarW}" height="22" fill="#10b981" rx="4" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"/>\n` +
+    `  <text x="355" y="${yOffset + 80}" fill="#cbd5e1" font-size="12" font-family="monospace">TiDB: ${wan.tBytes} B/req</text>\n  <rect x="355" y="${yOffset + 90}" width="${wan.tidbByteBarW}" height="22" fill="#0284c7" rx="4"/>\n` +
+    `  <text x="355" y="${yOffset + 140}" fill="#cbd5e1" font-size="12" font-family="monospace">Lagrange: ${wan.lBytes} B/req</text>\n  <rect x="355" y="${yOffset + 150}" width="${wan.lagByteBarW}" height="22" fill="#10b981" rx="4"/>\n` +
     `  <rect x="355" y="${yOffset + 200}" width="250" height="70" fill="#0f172a" rx="6" stroke="#334155"/>\n  <text x="370" y="${yOffset + 225}" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">WAN Payload Reduction</text>\n` +
     `  <text x="370" y="${yOffset + 248}" fill="#10b981" font-size="15" font-weight="700" font-family="system-ui, sans-serif">${wan.wanReduction}</text>\n  <text x="370" y="${yOffset + 263}" fill="#94a3b8" font-size="11" font-family="system-ui, sans-serif">(${wan.lBytes} vs ${wan.tBytes} B/req)</text>`;
 }
@@ -340,7 +340,7 @@ function renderScenarioBComparisonSvg(summary) {
   const bEntries = getScenarioBEntries(summary?.entries);
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-label="Scenario B distributed risk decision and movement comparison">\n' +
     '  <rect width="960" height="420" fill="#0f172a" rx="12"/>\n' +
-    '  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="36" fill="#f8fafc" font-size="18" font-family="system-ui, sans-serif" font-weight="700">Scenario B: Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision | local-oracle-plus-network-model)</text></a>\n' +
+    '  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="36" fill="#f8fafc" font-size="18" font-family="system-ui, sans-serif" font-weight="700">Scenario B: Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision | observed-docker-cluster)</text></a>\n' +
     `  <text x="930" y="36" text-anchor="end" fill="#94a3b8" font-size="12" font-family="monospace">Runs: ${bEntries.length}</text>\n` +
     `${renderScenarioBPanelsSvg(bEntries, 55)}\n` +
     '</svg>\n';
@@ -370,7 +370,7 @@ function renderComparisonProgressSvg(summary) {
     `  <text x="930" y="32" text-anchor="end" fill="#94a3b8" font-size="12" font-family="monospace">Runs: ${entries.length}</text>\n` +
     '  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="30" y="54" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif" font-weight="600">Scenario A - Contended OLTP Baseline (tidb-oltp-baseline)</text></a>\n' +
     `${renderScenarioAPanelsSvg(targetEntries, 65)}\n` +
-    '  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="424" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif" font-weight="600">Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision | local-oracle-plus-network-model)</text></a>\n' +
+    '  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="30" y="424" fill="#94a3b8" font-size="12" font-family="system-ui, sans-serif" font-weight="600">Scenario B - Distributed Risk Decision &amp; Partition Movement (tidb-distributed-risk-decision | observed-docker-cluster)</text></a>\n' +
     `${renderScenarioBPanelsSvg(bEntries, 435)}\n` +
     '</svg>\n';
 }

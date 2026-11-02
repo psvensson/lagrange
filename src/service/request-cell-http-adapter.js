@@ -785,6 +785,5 @@ class RequestCellHttpAdapter extends CellIngressAdapterBase {
 }
 
 export {
-  CONSUMED_INGRESS_CREDENTIAL_HEADERS, HOP_BY_HOP_REQUEST_HEADERS,
-  RequestCellHttpAdapter, normalizeFetchHttpRequest,
+  RequestCellHttpAdapter,
 };

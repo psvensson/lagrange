@@ -21,7 +21,6 @@ import {
 import {
   CELL_EMIT_BUFFER_META_SLOTS,
   DEFAULT_CELL_EMIT_BUFFER_BYTES as CELL_EMIT_BUFFER_BYTES,
-  DEFAULT_MAX_AGGREGATE_EMIT_BUFFER_BYTES,
   WasiComponentCellPressureTracker,
   clearCellBusy,
   isCellBusyWithinDeadline,
@@ -769,8 +768,5 @@ class WasiComponentCellRuntime {
 }
 
 export {
-  DEFAULT_MAX_AGGREGATE_EMIT_BUFFER_BYTES,
-  WASI_COMPONENT_CELL_ERROR_CODE,
-  WasiComponentCellError,
   WasiComponentCellRuntime,
 };

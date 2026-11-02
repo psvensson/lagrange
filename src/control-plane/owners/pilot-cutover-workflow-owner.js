@@ -790,5 +790,4 @@ export {
   CUTOVER_TABLES,
   PilotCutoverWorkflowOwner,
   createPilotCutoverWorkflowOwner,
-  ensureCutoverWorkflowTables,
 };

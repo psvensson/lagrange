@@ -24,7 +24,7 @@ const TARGET_COLORS = Object.freeze({
 });
 
 const TARGET_LABELS = Object.freeze({
-  'lagrange': ['Lagrange 0.3.3', 'Native WASI (RF=3)'],
+  'lagrange': ['Lagrange 0.4.0', 'Native WASI (RF=3)'],
   'tidb-tikv': ['TiDB + TiKV', 'Distributed SQL (RF=3)'],
   'citus-sql-service': ['Citus 13', 'Sharded SQL + App (RF=3)'],
   'citus-distributed-function': ['Citus 13', 'Distributed Function (RF=3)'],
@@ -68,7 +68,7 @@ function renderSvgPanels(exp) {
     const sub = hasTx ? `p95: ${f(t.p95Ms3Node, 0)}ms -> ${f(t.p95Ms5Node, 0)}ms` : `[${t.status || 'not measured'}]`;
     return renderSvgItem(45, 132 + i * 53,
       TARGET_LABELS[t.targetId] || [t.label, ''],
-      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', true, sub);
+      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', false, sub);
   }), '\n');
   const r2 = arrayJoin(arrayMap(pB, (t, i) => {
     const hasDec = typeof t.dec5Node60Pct === 'number' && Number.isFinite(t.dec5Node60Pct);
@@ -77,7 +77,7 @@ function renderSvgPanels(exp) {
     const sub = hasDec ? `5n p99: ${f(t.p99Ms5Node, 1)}ms | WAN: ${t.wire5Node} B/dec` : `[${t.status || 'not measured'}]`;
     return renderSvgItem(355, 132 + i * 53,
       TARGET_LABELS[t.targetId] || [t.label, ''],
-      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', true, sub);
+      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', false, sub);
   }), '\n');
   const r3 = arrayJoin(arrayMap(pB, (t, i) => {
     const hasAgg = typeof t.aggregate5NodeDecPerSec === 'number' &&
@@ -92,7 +92,7 @@ function renderSvgPanels(exp) {
       `[${t.status || 'not measured'}]`;
     return renderSvgItem(665, 132 + i * 53,
       TARGET_LABELS[t.targetId] || [t.label, ''],
-      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', true, sub);
+      met, w, TARGET_COLORS[t.targetId] || '#94a3b8', false, sub);
   }), '\n');
   return `${r1}\n${r2}\n${r3}`;
 }
@@ -101,7 +101,7 @@ export function renderScaleout3To5ComparisonSvg(matrix) {
   const exp = matrix?.scaleout3To5Rf3Experiment || buildScaleout3To5Rf3Experiment();
   const title = '3-to-5-Node RF=3 Scale-Out &amp; Scenario A 3-Mode Separation';
   const sub1 = 'Replica-coverage transition (100% at 3 nodes vs 60% at 5 nodes) and cross-target scaling';
-  const sub2 = 'Legend: solid bar = observed-docker-cluster | dashed border = modeled-topology-oracle';
+  const sub2 = 'Legend: solid bar = observed-docker-cluster (multi-machine live wire)';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440">
   <rect width="960" height="440" fill="#0f172a" rx="8"/>
   <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">${title}</text>

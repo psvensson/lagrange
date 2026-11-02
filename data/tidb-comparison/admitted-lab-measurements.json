@@ -1,0 +1,4534 @@
+{
+  "schema": "lagrange-admitted-multi-host-lab-measurements/v1",
+  "generatedFrom": "data/tidb-comparison/raw-observations.ndjson",
+  "rawObservationsFileSha256": "sha256:be8cc03e7abe44b18ff869e2470debe8800724f973fae7bbd9116e401911f56f",
+  "recordedAt": "2026-11-01T17:35:57.365Z",
+  "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+  "executionTarget": "gcp",
+  "physicalHosts": [
+    {
+      "hostId": "node-1",
+      "ip": "10.128.0.35",
+      "sshHost": "35.255.66.141",
+      "hostname": "lagrange-bench-1.us-central1-a.c.something-2e584.internal",
+      "bootId": "72053556-04ea-415b-9dd8-4f542ac7d269",
+      "cpus": 4,
+      "memGb": 15.6,
+      "primaryIface": "ens4"
+    },
+    {
+      "hostId": "node-2",
+      "ip": "10.128.0.36",
+      "sshHost": "35.223.196.71",
+      "hostname": "lagrange-bench-2.us-central1-a.c.something-2e584.internal",
+      "bootId": "f1e57884-092d-4df7-bea6-a144504f59c5",
+      "cpus": 4,
+      "memGb": 15.6,
+      "primaryIface": "ens4"
+    },
+    {
+      "hostId": "node-3",
+      "ip": "10.128.0.34",
+      "sshHost": "34.27.92.59",
+      "hostname": "lagrange-bench-3.us-central1-a.c.something-2e584.internal",
+      "bootId": "ef179210-b7a2-4db0-8846-0bb1fea59f1f",
+      "cpus": 4,
+      "memGb": 15.6,
+      "primaryIface": "ens4"
+    },
+    {
+      "hostId": "node-4",
+      "ip": "10.128.0.33",
+      "sshHost": "34.55.51.182",
+      "hostname": "lagrange-bench-4.us-central1-a.c.something-2e584.internal",
+      "bootId": "f65e93a3-ca07-4577-8400-174045c69152",
+      "cpus": 4,
+      "memGb": 15.6,
+      "primaryIface": "ens4"
+    },
+    {
+      "hostId": "node-5",
+      "ip": "10.128.0.37",
+      "sshHost": "34.60.18.103",
+      "hostname": "lagrange-bench-5.us-central1-a.c.something-2e584.internal",
+      "bootId": "a55bd4f0-ae54-4b29-8a7d-e4714c934436",
+      "cpus": 4,
+      "memGb": 15.6,
+      "primaryIface": "ens4"
+    },
+    {
+      "hostId": "node-6",
+      "ip": "10.128.0.32",
+      "sshHost": "35.202.14.196",
+      "hostname": "lagrange-bench-6.us-central1-a.c.something-2e584.internal",
+      "bootId": "975aa7ee-6539-446d-be3c-b5311bd9d9f5",
+      "cpus": 4,
+      "memGb": 15.6,
+      "primaryIface": "ens4"
+    }
+  ],
+  "targets": [
+    {
+      "targetId": "lagrange",
+      "label": "Lagrange",
+      "version": "0.4.0",
+      "category": "distributed-native",
+      "topologyUnits": 3,
+      "processCount": 3,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "tidb-comparison-progress.md",
+      "detailPageHtml": "tidb-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "observed-docker-cluster",
+        "throughputTxPerSec": 5.3,
+        "commitP50Ms": 5001.05,
+        "commitP95Ms": 5002.26,
+        "commitP99Ms": 5002.79,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33,
+        "receipt": {
+          "receiptId": "receipt-lagrange-scenario-a",
+          "executionTarget": "gcp",
+          "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+          "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+          "datasetDigest": "sha256:e9a426ac392065fc6314cb8e2b2d2d5e3adb34db6ffe3556f207e254ad02c1f0",
+          "planDigest": "sha256:ee22658a5df9037f4a7f80c15c06f6821089544de33214202b61933d280fc6aa",
+          "rawObservationsDigest": "sha256:bd85744dd8e38b3709474ba11c5a3f85456b842fd0d123ac1a9930a2d433bb89",
+          "nodeCount": 3,
+          "hostPlacement": {
+            "nodeCount": 3,
+            "hosts": [
+              "10.128.0.35",
+              "10.128.0.36",
+              "10.128.0.34"
+            ],
+            "mapping": {
+              "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+              "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+              "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+            }
+          },
+          "productProcessEvidence": {
+            "candidate": {
+              "processId": "3e920439fba8",
+              "publicInterface": "http://10.128.0.35:8080",
+              "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+              "processNames": [
+                "node",
+                "lagrange"
+              ]
+            },
+            "comparator": {
+              "processId": "06a731ed433d",
+              "publicInterface": "http://10.128.0.34:8080",
+              "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+              "processNames": [
+                "node",
+                "lagrange"
+              ]
+            }
+          },
+          "attemptAccounting": {
+            "totalAttempts": 160,
+            "completed": 160,
+            "failures": 0,
+            "timeouts": 0
+          },
+          "measuredTransportBytes": 32234653,
+          "metrics": {
+            "throughputTxPerSec": 5.3,
+            "p50Ms": 5001.05,
+            "p95Ms": 5002.26,
+            "p99Ms": 5002.79
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "observed-docker-cluster",
+        "decisionsPerSec": 51.2,
+        "p50Ms": 114.69,
+        "p95Ms": 1227.43,
+        "p99Ms": 1229.02,
+        "wanBytesPerDecision": 60207,
+        "sqlRoundTripsPerDecision": 1,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 44.7,
+            "p99Ms": 1192.21,
+            "wanBytes": 0,
+            "roundTrips": 0,
+            "receipt": {
+              "receiptId": "receipt-lagrange-local-only",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+              "datasetDigest": "sha256:e9a426ac392065fc6314cb8e2b2d2d5e3adb34db6ffe3556f207e254ad02c1f0",
+              "planDigest": "sha256:c40e7a1993fd07ee89fd15e073e8cb2f968b764dcd1479fe2e4eb5c7967b2e0c",
+              "rawObservationsDigest": "sha256:6ee090e81afc95d29e847db5fbc4e12ff7bacf51176fe6ffeb7826242fc3f705",
+              "nodeCount": 3,
+              "hostPlacement": {
+                "nodeCount": 3,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "06a731ed433d",
+                  "publicInterface": "http://10.128.0.34:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 7854541,
+              "metrics": {
+                "decisionsPerSec": 44.7,
+                "p99Ms": 1192.21,
+                "wanBytes": 0,
+                "roundTrips": 0
+              }
+            }
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 51.2,
+            "p99Ms": 1229.02,
+            "wanBytes": 60207,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-lagrange-one-remote-stage",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+              "datasetDigest": "sha256:e9a426ac392065fc6314cb8e2b2d2d5e3adb34db6ffe3556f207e254ad02c1f0",
+              "planDigest": "sha256:7bf63c6fe0a9ad192234c04809faa316b67f3b87172d05a39629c020a6fb8b32",
+              "rawObservationsDigest": "sha256:cae53591cbb9a99b727ef90ac2ad71e00e5e3266881570fc8bccc4fa78ed1ed3",
+              "nodeCount": 3,
+              "hostPlacement": {
+                "nodeCount": 3,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "06a731ed433d",
+                  "publicInterface": "http://10.128.0.34:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 7224800,
+              "metrics": {
+                "decisionsPerSec": 51.2,
+                "p99Ms": 1229.02,
+                "wanBytes": 60207,
+                "roundTrips": 1
+              }
+            }
+          },
+          "sequential": {
+            "decisionsPerSec": 43.6,
+            "p99Ms": 1498.74,
+            "wanBytes": 73460,
+            "roundTrips": 2,
+            "receipt": {
+              "receiptId": "receipt-lagrange-sequential",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+              "datasetDigest": "sha256:e9a426ac392065fc6314cb8e2b2d2d5e3adb34db6ffe3556f207e254ad02c1f0",
+              "planDigest": "sha256:7fcb03ee836d8ba0e3b1b9570ab56e5c987886d82a862356c46decf73ee72358",
+              "rawObservationsDigest": "sha256:e056baa182e0f7771fa7b1c5ba496106062b7794985391bd842b2c1fe50afd2d",
+              "nodeCount": 3,
+              "hostPlacement": {
+                "nodeCount": 3,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "06a731ed433d",
+                  "publicInterface": "http://10.128.0.34:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 8815151,
+              "metrics": {
+                "decisionsPerSec": 43.6,
+                "p99Ms": 1498.74,
+                "wanBytes": 73460,
+                "roundTrips": 2
+              }
+            }
+          },
+          "fan-out": {
+            "decisionsPerSec": 41.9,
+            "p99Ms": 1525.46,
+            "wanBytes": 64210,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-lagrange-fan-out",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+              "datasetDigest": "sha256:e9a426ac392065fc6314cb8e2b2d2d5e3adb34db6ffe3556f207e254ad02c1f0",
+              "planDigest": "sha256:ae58f9dfbe25712976d4ec2c6346009367886aa4b2128705c55e2b12ddb0e31f",
+              "rawObservationsDigest": "sha256:e7e7dd43b00a1a6e27730591b2bcbb2ebc57a153385d5f4bd168812b2603c6b6",
+              "nodeCount": 3,
+              "hostPlacement": {
+                "nodeCount": 3,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "06a731ed433d",
+                  "publicInterface": "http://10.128.0.34:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 7705230,
+              "metrics": {
+                "decisionsPerSec": 41.9,
+                "p99Ms": 1525.46,
+                "wanBytes": 64210,
+                "roundTrips": 1
+              }
+            }
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "live-partition-move",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "observed-docker-cluster",
+        "freshDecisionsPerSec0ms": 35.3,
+        "freshDecisionsPerSec100ms": 39.8,
+        "freshDecisionsPerSec1000ms": 65.3,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0.01,
+        "cacheRestartRecoverySec": 0,
+        "operationalPipelines": 1,
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      }
+    },
+    {
+      "targetId": "lagrange-5node-rf3",
+      "label": "Lagrange (5-Node RF=3)",
+      "shortLabel": "Lagrange (5N RF=3)",
+      "version": "0.4.0",
+      "category": "distributed-native-scaleout",
+      "topologyUnits": 5,
+      "processCount": 5,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "scaleout-3to5-node-rf3-progress.md",
+      "detailPageHtml": "scaleout-3to5-node-rf3-progress.html",
+      "scenarioA": {
+        "evidenceTier": "observed-docker-cluster",
+        "throughputTxPerSec": 6.7,
+        "commitP50Ms": 5000.74,
+        "commitP95Ms": 5002.32,
+        "commitP99Ms": 5002.46,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33,
+        "receipt": {
+          "receiptId": "receipt-lagrange-5node-rf3-scenario-a",
+          "executionTarget": "gcp",
+          "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+          "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+          "datasetDigest": "sha256:61bbaf59555fc69c7eb5296b627e6cdcadeffb4691b9ffee18fd61be2bd8e161",
+          "planDigest": "sha256:cb6551e8a0ab51f0ac5226df3ac1703e4605b8f3c51cf7924ac5bcb735f65dbf",
+          "rawObservationsDigest": "sha256:9c748dbd9c84c8c1e768519e015637107d4067728aa2af50e8e2eb6950b022e9",
+          "nodeCount": 5,
+          "hostPlacement": {
+            "nodeCount": 5,
+            "hosts": [
+              "10.128.0.35",
+              "10.128.0.36",
+              "10.128.0.34",
+              "10.128.0.33",
+              "10.128.0.37"
+            ],
+            "mapping": {
+              "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+              "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+              "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+              "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+              "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+            }
+          },
+          "productProcessEvidence": {
+            "candidate": {
+              "processId": "3e920439fba8",
+              "publicInterface": "http://10.128.0.35:8080",
+              "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+              "processNames": [
+                "node",
+                "lagrange"
+              ]
+            },
+            "comparator": {
+              "processId": "7c8d00e2f97b",
+              "publicInterface": "http://10.128.0.37:8080",
+              "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+              "processNames": [
+                "node",
+                "lagrange"
+              ]
+            }
+          },
+          "attemptAccounting": {
+            "totalAttempts": 200,
+            "completed": 200,
+            "failures": 0,
+            "timeouts": 0
+          },
+          "measuredTransportBytes": 63301462,
+          "metrics": {
+            "throughputTxPerSec": 6.7,
+            "p50Ms": 5000.74,
+            "p95Ms": 5002.32,
+            "p99Ms": 5002.46
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "observed-docker-cluster",
+        "decisionsPerSec": 74.1,
+        "p50Ms": 111.81,
+        "p95Ms": 865.52,
+        "p99Ms": 971.61,
+        "wanBytesPerDecision": 69878,
+        "sqlRoundTripsPerDecision": 1,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 56,
+            "p99Ms": 1585.39,
+            "wanBytes": 0,
+            "roundTrips": 0,
+            "receipt": {
+              "receiptId": "receipt-lagrange-5node-rf3-local-only",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+              "datasetDigest": "sha256:61bbaf59555fc69c7eb5296b627e6cdcadeffb4691b9ffee18fd61be2bd8e161",
+              "planDigest": "sha256:70cc5c577ae7a7f59df5e1f78adf15bad22731047bd0fff50228bef3ed6521a0",
+              "rawObservationsDigest": "sha256:ab4177a9a0beb26dd75d9b50e037d6a49f797711897fa59b572909a37c4683c8",
+              "nodeCount": 5,
+              "hostPlacement": {
+                "nodeCount": 5,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33",
+                  "10.128.0.37"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+                  "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "7c8d00e2f97b",
+                  "publicInterface": "http://10.128.0.37:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 7491531,
+              "metrics": {
+                "decisionsPerSec": 56,
+                "p99Ms": 1585.39,
+                "wanBytes": 0,
+                "roundTrips": 0
+              }
+            }
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 74.1,
+            "p99Ms": 971.61,
+            "wanBytes": 69878,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-lagrange-5node-rf3-one-remote-stage",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+              "datasetDigest": "sha256:61bbaf59555fc69c7eb5296b627e6cdcadeffb4691b9ffee18fd61be2bd8e161",
+              "planDigest": "sha256:6fbd7c08c72bf36171707255529a58d690f11f9a82ba6ea9742212bd2cfa94fb",
+              "rawObservationsDigest": "sha256:988de2be78b7990faa73139e10dfc63b064d977ece2422efc95d635b61707bf9",
+              "nodeCount": 5,
+              "hostPlacement": {
+                "nodeCount": 5,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33",
+                  "10.128.0.37"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+                  "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "7c8d00e2f97b",
+                  "publicInterface": "http://10.128.0.37:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 8385316,
+              "metrics": {
+                "decisionsPerSec": 74.1,
+                "p99Ms": 971.61,
+                "wanBytes": 69878,
+                "roundTrips": 1
+              }
+            }
+          },
+          "sequential": {
+            "decisionsPerSec": 40.3,
+            "p99Ms": 2257.18,
+            "wanBytes": 109173,
+            "roundTrips": 2,
+            "receipt": {
+              "receiptId": "receipt-lagrange-5node-rf3-sequential",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+              "datasetDigest": "sha256:61bbaf59555fc69c7eb5296b627e6cdcadeffb4691b9ffee18fd61be2bd8e161",
+              "planDigest": "sha256:642facbeeb856b948bf742f2c3a057645a3f53ab7390d5368f4c3dcabfaf474a",
+              "rawObservationsDigest": "sha256:1e46e5e24797274984932cbb90e468780235cbe37efddcb09bdcb1262675caf9",
+              "nodeCount": 5,
+              "hostPlacement": {
+                "nodeCount": 5,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33",
+                  "10.128.0.37"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+                  "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "7c8d00e2f97b",
+                  "publicInterface": "http://10.128.0.37:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 13100743,
+              "metrics": {
+                "decisionsPerSec": 40.3,
+                "p99Ms": 2257.18,
+                "wanBytes": 109173,
+                "roundTrips": 2
+              }
+            }
+          },
+          "fan-out": {
+            "decisionsPerSec": 37.7,
+            "p99Ms": 1890.2,
+            "wanBytes": 89304,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-lagrange-5node-rf3-fan-out",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:de4f302acb35ebd54e1b61495397dfa900d2ec18815bc8c49f307b04b8cef400",
+              "datasetDigest": "sha256:61bbaf59555fc69c7eb5296b627e6cdcadeffb4691b9ffee18fd61be2bd8e161",
+              "planDigest": "sha256:25a410a134b13cefbdb9b0a694997feda785ff5fe461cf650d3a4833b7f4e167",
+              "rawObservationsDigest": "sha256:d4b3615f41911063780b19c7a05b0567f9162f654b4edd5dd32f812e7c6f15ab",
+              "nodeCount": 5,
+              "hostPlacement": {
+                "nodeCount": 5,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33",
+                  "10.128.0.37"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+                  "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "7c8d00e2f97b",
+                  "publicInterface": "http://10.128.0.37:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 10716444,
+              "metrics": {
+                "decisionsPerSec": 37.7,
+                "p99Ms": 1890.2,
+                "wanBytes": 89304,
+                "roundTrips": 1
+              }
+            }
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "live-partition-move",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "observed-docker-cluster",
+        "freshDecisionsPerSec0ms": 54.9,
+        "freshDecisionsPerSec100ms": 61.7,
+        "freshDecisionsPerSec1000ms": 51.1,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0.01,
+        "cacheRestartRecoverySec": 0,
+        "operationalPipelines": 1,
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      }
+    },
+    {
+      "targetId": "tidb-tikv",
+      "label": "TiDB + TiKV",
+      "version": "v8.5.8",
+      "category": "distributed-sql",
+      "topologyUnits": 5,
+      "processCount": 5,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "tidb-comparison-progress.md",
+      "detailPageHtml": "tidb-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "observed-docker-cluster",
+        "throughputTxPerSec": 783,
+        "commitP50Ms": 22.4,
+        "commitP95Ms": 84.47,
+        "commitP99Ms": 95.89,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33,
+        "receipt": {
+          "receiptId": "receipt-tidb-tikv-scenario-a",
+          "executionTarget": "gcp",
+          "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+          "packageDigest": "sha256:4265330bb6c4cf29c3e0dcbed33e1370b687e00d6c732feb8366dbe175508985",
+          "datasetDigest": "sha256:829d544995751faefbf3a9ab98a226b124e02fba314643b70909344edf69f809",
+          "planDigest": "sha256:9936fb9fe71dddcc2f78bb6aa83f70c071b78dbb983ec93d1929909d1384c4bd",
+          "rawObservationsDigest": "sha256:0b1c0fb55750206f89ce2b553c81ff9023a5a5b7c338a0c5fc4f852893d816ec",
+          "nodeCount": 5,
+          "hostPlacement": {
+            "nodeCount": 5,
+            "hosts": [
+              "10.128.0.35",
+              "10.128.0.36",
+              "10.128.0.34",
+              "10.128.0.33",
+              "10.128.0.37"
+            ],
+            "mapping": {
+              "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+              "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+              "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+              "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+              "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+            }
+          },
+          "productProcessEvidence": {
+            "candidate": {
+              "processId": "3e920439fba8",
+              "publicInterface": "http://10.128.0.35:8080",
+              "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+              "processNames": [
+                "node",
+                "lagrange"
+              ]
+            },
+            "comparator": {
+              "processId": "9f3dca1b681e",
+              "publicInterface": "mysql://10.128.0.37:4000",
+              "imageDigest": "pingcap/tidb@sha256:df168c764bf2dfdb166dc37a5c3b0e210d29d5f3ab2d33317fd0fdf7b32037f5",
+              "processNames": [
+                "pd-server",
+                "tikv-server",
+                "tidb-server"
+              ]
+            }
+          },
+          "attemptAccounting": {
+            "totalAttempts": 160,
+            "completed": 160,
+            "failures": 0,
+            "timeouts": 0
+          },
+          "measuredTransportBytes": 2556404,
+          "metrics": {
+            "throughputTxPerSec": 783,
+            "p50Ms": 22.4,
+            "p95Ms": 84.47,
+            "p99Ms": 95.89
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "observed-docker-cluster",
+        "decisionsPerSec": 611.7,
+        "p50Ms": 21.29,
+        "p95Ms": 63.9,
+        "p99Ms": 65.31,
+        "wanBytesPerDecision": 13135,
+        "sqlRoundTripsPerDecision": 3,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 816.3,
+            "p99Ms": 74.48,
+            "wanBytes": 8090,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-tidb-tikv-local-only",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:4265330bb6c4cf29c3e0dcbed33e1370b687e00d6c732feb8366dbe175508985",
+              "datasetDigest": "sha256:829d544995751faefbf3a9ab98a226b124e02fba314643b70909344edf69f809",
+              "planDigest": "sha256:5e2908af942a5afd1b2a9aa286ac843f6f66d85149daca9ac827ba8a7bcd44dd",
+              "rawObservationsDigest": "sha256:b0e41fea6023ba26039834860aea5d4ef83f1cf98b765d744fac942fac096838",
+              "nodeCount": 5,
+              "hostPlacement": {
+                "nodeCount": 5,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33",
+                  "10.128.0.37"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+                  "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "9f3dca1b681e",
+                  "publicInterface": "mysql://10.128.0.37:4000",
+                  "imageDigest": "pingcap/tidb@sha256:df168c764bf2dfdb166dc37a5c3b0e210d29d5f3ab2d33317fd0fdf7b32037f5",
+                  "processNames": [
+                    "pd-server",
+                    "tikv-server",
+                    "tidb-server"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 970764,
+              "metrics": {
+                "decisionsPerSec": 816.3,
+                "p99Ms": 74.48,
+                "wanBytes": 8090,
+                "roundTrips": 1
+              }
+            }
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 611.7,
+            "p99Ms": 65.31,
+            "wanBytes": 13135,
+            "roundTrips": 2,
+            "receipt": {
+              "receiptId": "receipt-tidb-tikv-one-remote-stage",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:4265330bb6c4cf29c3e0dcbed33e1370b687e00d6c732feb8366dbe175508985",
+              "datasetDigest": "sha256:829d544995751faefbf3a9ab98a226b124e02fba314643b70909344edf69f809",
+              "planDigest": "sha256:1773eb62627cd8207046379caae3f40c9be60707a4c6345de346aeaa25434ec1",
+              "rawObservationsDigest": "sha256:9558de7f8f64688a92c0987db41c41528680da82ba73085666a6bbd815fc296d",
+              "nodeCount": 5,
+              "hostPlacement": {
+                "nodeCount": 5,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33",
+                  "10.128.0.37"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+                  "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "9f3dca1b681e",
+                  "publicInterface": "mysql://10.128.0.37:4000",
+                  "imageDigest": "pingcap/tidb@sha256:df168c764bf2dfdb166dc37a5c3b0e210d29d5f3ab2d33317fd0fdf7b32037f5",
+                  "processNames": [
+                    "pd-server",
+                    "tikv-server",
+                    "tidb-server"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 1576248,
+              "metrics": {
+                "decisionsPerSec": 611.7,
+                "p99Ms": 65.31,
+                "wanBytes": 13135,
+                "roundTrips": 2
+              }
+            }
+          },
+          "sequential": {
+            "decisionsPerSec": 606.2,
+            "p99Ms": 70.78,
+            "wanBytes": 13877,
+            "roundTrips": 4,
+            "receipt": {
+              "receiptId": "receipt-tidb-tikv-sequential",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:4265330bb6c4cf29c3e0dcbed33e1370b687e00d6c732feb8366dbe175508985",
+              "datasetDigest": "sha256:829d544995751faefbf3a9ab98a226b124e02fba314643b70909344edf69f809",
+              "planDigest": "sha256:e7922ac2f2133cb69d5d0ac80b92a2c2720a038f70c82072eb242e10eada9757",
+              "rawObservationsDigest": "sha256:c2b140a58c927874b03326c784ab485315c06ad70fe59c3b1b8b1c911a4b710c",
+              "nodeCount": 5,
+              "hostPlacement": {
+                "nodeCount": 5,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33",
+                  "10.128.0.37"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+                  "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "9f3dca1b681e",
+                  "publicInterface": "mysql://10.128.0.37:4000",
+                  "imageDigest": "pingcap/tidb@sha256:df168c764bf2dfdb166dc37a5c3b0e210d29d5f3ab2d33317fd0fdf7b32037f5",
+                  "processNames": [
+                    "pd-server",
+                    "tikv-server",
+                    "tidb-server"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 1665277,
+              "metrics": {
+                "decisionsPerSec": 606.2,
+                "p99Ms": 70.78,
+                "wanBytes": 13877,
+                "roundTrips": 4
+              }
+            }
+          },
+          "fan-out": {
+            "decisionsPerSec": 698.5,
+            "p99Ms": 59.67,
+            "wanBytes": 13445,
+            "roundTrips": 4,
+            "receipt": {
+              "receiptId": "receipt-tidb-tikv-fan-out",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:4265330bb6c4cf29c3e0dcbed33e1370b687e00d6c732feb8366dbe175508985",
+              "datasetDigest": "sha256:829d544995751faefbf3a9ab98a226b124e02fba314643b70909344edf69f809",
+              "planDigest": "sha256:0363e8e50c9038e847d749a7f830f8f50e06414fee8bdffb05ff5d1be832c25d",
+              "rawObservationsDigest": "sha256:d56e54a3daa0ec199c2bbe768a6fa6dbdb549ff7329838da59db9c55eea49467",
+              "nodeCount": 5,
+              "hostPlacement": {
+                "nodeCount": 5,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33",
+                  "10.128.0.37"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)",
+                  "node-5": "10.128.0.37 (lagrange-bench-5.us-central1-a.c.something-2e584.internal:a55bd4f0)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "9f3dca1b681e",
+                  "publicInterface": "mysql://10.128.0.37:4000",
+                  "imageDigest": "pingcap/tidb@sha256:df168c764bf2dfdb166dc37a5c3b0e210d29d5f3ab2d33317fd0fdf7b32037f5",
+                  "processNames": [
+                    "pd-server",
+                    "tikv-server",
+                    "tidb-server"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 1613374,
+              "metrics": {
+                "decisionsPerSec": 698.5,
+                "p99Ms": 59.67,
+                "wanBytes": 13445,
+                "roundTrips": 4
+              }
+            }
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "live-partition-move",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "observed-docker-cluster",
+        "freshDecisionsPerSec0ms": 969.4,
+        "freshDecisionsPerSec100ms": 855.8,
+        "freshDecisionsPerSec1000ms": 1179.7,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0.03,
+        "cacheRestartRecoverySec": 5.01,
+        "operationalPipelines": 2,
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      }
+    },
+    {
+      "targetId": "pg-single-primary",
+      "label": "PostgreSQL 17 (Single Primary + App Service)",
+      "version": "17.2",
+      "category": "relational-single-primary",
+      "topologyUnits": 2,
+      "processCount": 2,
+      "rpoZeroSurvivability": false,
+      "detailPageMd": "postgresql-comparison-progress.md",
+      "detailPageHtml": "postgresql-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "observed-docker-cluster",
+        "throughputTxPerSec": 956.4,
+        "commitP50Ms": 16.17,
+        "commitP95Ms": 140.23,
+        "commitP99Ms": 155.64,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33,
+        "receipt": {
+          "receiptId": "receipt-pg-single-primary-scenario-a",
+          "executionTarget": "gcp",
+          "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+          "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+          "datasetDigest": "sha256:13da2b5967cbe57332ca7ef6385f93a08a87334c1f5ea214b5d061cce67a0bba",
+          "planDigest": "sha256:aaf584d1495bc68d459db22b4845c34f532680edc1208315039f1bce8edf3d13",
+          "rawObservationsDigest": "sha256:5e51af4ada7bf0ad29aa5bfeaa38392bdb3a736091fdb586aedb952848c116ee",
+          "nodeCount": 2,
+          "hostPlacement": {
+            "nodeCount": 2,
+            "hosts": [
+              "10.128.0.35",
+              "10.128.0.36"
+            ],
+            "mapping": {
+              "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+              "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)"
+            }
+          },
+          "productProcessEvidence": {
+            "candidate": {
+              "processId": "3e920439fba8",
+              "publicInterface": "http://10.128.0.35:8080",
+              "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+              "processNames": [
+                "node",
+                "lagrange"
+              ]
+            },
+            "comparator": {
+              "processId": "901dfc73b92d",
+              "publicInterface": "postgres://10.128.0.36:5432",
+              "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+              "processNames": [
+                "postgres"
+              ]
+            }
+          },
+          "attemptAccounting": {
+            "totalAttempts": 180,
+            "completed": 180,
+            "failures": 0,
+            "timeouts": 0
+          },
+          "measuredTransportBytes": 962275,
+          "metrics": {
+            "throughputTxPerSec": 956.4,
+            "p50Ms": 16.17,
+            "p95Ms": 140.23,
+            "p99Ms": 155.64
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "observed-docker-cluster",
+        "decisionsPerSec": 1017.9,
+        "p50Ms": 10.13,
+        "p95Ms": 67.31,
+        "p99Ms": 76.66,
+        "wanBytesPerDecision": 4963,
+        "sqlRoundTripsPerDecision": 3,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 1058.7,
+            "p99Ms": 111.11,
+            "wanBytes": 3829,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-single-primary-local-only",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:13da2b5967cbe57332ca7ef6385f93a08a87334c1f5ea214b5d061cce67a0bba",
+              "planDigest": "sha256:12cd12d00182c8c4c35e197bcdc1f0df92dc4ab043240af4a328ba2404275cce",
+              "rawObservationsDigest": "sha256:fc3864297b495113516b8ebb9de14d5dcfac58aff081d5144fb3baa7230b4bff",
+              "nodeCount": 2,
+              "hostPlacement": {
+                "nodeCount": 2,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "901dfc73b92d",
+                  "publicInterface": "postgres://10.128.0.36:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 459494,
+              "metrics": {
+                "decisionsPerSec": 1058.7,
+                "p99Ms": 111.11,
+                "wanBytes": 3829,
+                "roundTrips": 1
+              }
+            }
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 1017.9,
+            "p99Ms": 76.66,
+            "wanBytes": 4963,
+            "roundTrips": 2,
+            "receipt": {
+              "receiptId": "receipt-pg-single-primary-one-remote-stage",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:13da2b5967cbe57332ca7ef6385f93a08a87334c1f5ea214b5d061cce67a0bba",
+              "planDigest": "sha256:d201dbf2a2df13e83196fb76f6b650b1ca1d5064e1438ac1655b978deea59dbd",
+              "rawObservationsDigest": "sha256:326e4693da8ac2516caf174ac8ea81276219dc1c37e6bf8f11ff47348ca0b29a",
+              "nodeCount": 2,
+              "hostPlacement": {
+                "nodeCount": 2,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "901dfc73b92d",
+                  "publicInterface": "postgres://10.128.0.36:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 595564,
+              "metrics": {
+                "decisionsPerSec": 1017.9,
+                "p99Ms": 76.66,
+                "wanBytes": 4963,
+                "roundTrips": 2
+              }
+            }
+          },
+          "sequential": {
+            "decisionsPerSec": 938.2,
+            "p99Ms": 81.1,
+            "wanBytes": 6233,
+            "roundTrips": 4,
+            "receipt": {
+              "receiptId": "receipt-pg-single-primary-sequential",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:13da2b5967cbe57332ca7ef6385f93a08a87334c1f5ea214b5d061cce67a0bba",
+              "planDigest": "sha256:602c7d26e405c69ee988294a437d814782550ec8a95cdc967a5e0d21c2f068d0",
+              "rawObservationsDigest": "sha256:1b72fb70d448a7cd09aa8df3b1fd4e9f81d78e8a07c7b71a3d7326b5cb4a31a8",
+              "nodeCount": 2,
+              "hostPlacement": {
+                "nodeCount": 2,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "901dfc73b92d",
+                  "publicInterface": "postgres://10.128.0.36:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 747994,
+              "metrics": {
+                "decisionsPerSec": 938.2,
+                "p99Ms": 81.1,
+                "wanBytes": 6233,
+                "roundTrips": 4
+              }
+            }
+          },
+          "fan-out": {
+            "decisionsPerSec": 928.1,
+            "p99Ms": 80.4,
+            "wanBytes": 5599,
+            "roundTrips": 4,
+            "receipt": {
+              "receiptId": "receipt-pg-single-primary-fan-out",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:13da2b5967cbe57332ca7ef6385f93a08a87334c1f5ea214b5d061cce67a0bba",
+              "planDigest": "sha256:5c94ea53c86b6db483b73087d3083398fcb3fab3216831f63d52fad67c8ea255",
+              "rawObservationsDigest": "sha256:50055929c29fefdd8545b12f55b4bc366b33397708bde4758972c01c0077524e",
+              "nodeCount": 2,
+              "hostPlacement": {
+                "nodeCount": 2,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "901dfc73b92d",
+                  "publicInterface": "postgres://10.128.0.36:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 671844,
+              "metrics": {
+                "decisionsPerSec": 928.1,
+                "p99Ms": 80.4,
+                "wanBytes": 5599,
+                "roundTrips": 4
+              }
+            }
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "live-partition-move",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "observed-docker-cluster",
+        "freshDecisionsPerSec0ms": 1178.7,
+        "freshDecisionsPerSec100ms": 968.8,
+        "freshDecisionsPerSec1000ms": 916.6,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0.05,
+        "cacheRestartRecoverySec": 3.54,
+        "operationalPipelines": 2,
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      }
+    },
+    {
+      "targetId": "pg-patroni-sync-ha-rf3",
+      "label": "PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)",
+      "version": "17.2-patroni-4.0",
+      "category": "relational-sync-ha",
+      "topologyUnits": 4,
+      "processCount": 4,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "postgresql-comparison-progress.md",
+      "detailPageHtml": "postgresql-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "observed-docker-cluster",
+        "throughputTxPerSec": 976.1,
+        "commitP50Ms": 11.57,
+        "commitP95Ms": 87.83,
+        "commitP99Ms": 96.95,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33,
+        "receipt": {
+          "receiptId": "receipt-pg-patroni-sync-ha-rf3-scenario-a",
+          "executionTarget": "gcp",
+          "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+          "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+          "datasetDigest": "sha256:851aceda03015aa7226a1e587ed2192bf0566ab61e06708ac38aaa6974ee06c6",
+          "planDigest": "sha256:05c34be4d956480ee1a8d3f86acd89b0a250d73ebffdec282db78e3f03e50362",
+          "rawObservationsDigest": "sha256:e344c98e6f5d79bd184a9366e4c6603b8de95a28c108f027908a1331c127bee8",
+          "nodeCount": 4,
+          "hostPlacement": {
+            "nodeCount": 4,
+            "hosts": [
+              "10.128.0.35",
+              "10.128.0.36",
+              "10.128.0.34",
+              "10.128.0.33"
+            ],
+            "mapping": {
+              "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+              "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+              "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+              "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+            }
+          },
+          "productProcessEvidence": {
+            "candidate": {
+              "processId": "3e920439fba8",
+              "publicInterface": "http://10.128.0.35:8080",
+              "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+              "processNames": [
+                "node",
+                "lagrange"
+              ]
+            },
+            "comparator": {
+              "processId": "55be3fa96716",
+              "publicInterface": "postgres://10.128.0.33:5432",
+              "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+              "processNames": [
+                "postgres"
+              ]
+            }
+          },
+          "attemptAccounting": {
+            "totalAttempts": 140,
+            "completed": 140,
+            "failures": 0,
+            "timeouts": 0
+          },
+          "measuredTransportBytes": 972878,
+          "metrics": {
+            "throughputTxPerSec": 976.1,
+            "p50Ms": 11.57,
+            "p95Ms": 87.83,
+            "p99Ms": 96.95
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "observed-docker-cluster",
+        "decisionsPerSec": 1003.8,
+        "p50Ms": 10.27,
+        "p95Ms": 76.76,
+        "p99Ms": 80.1,
+        "wanBytesPerDecision": 5959,
+        "sqlRoundTripsPerDecision": 3,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 1107.9,
+            "p99Ms": 106.57,
+            "wanBytes": 4014,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-patroni-sync-ha-rf3-local-only",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:851aceda03015aa7226a1e587ed2192bf0566ab61e06708ac38aaa6974ee06c6",
+              "planDigest": "sha256:b39a79f96f13c72fc8d4197fd8305f9f694fb2864d43dd9b26ebe7d93ec180db",
+              "rawObservationsDigest": "sha256:fedd8ae5af402960609ba7f815980032a2fbf5da9359fb7cf7a754b7a07ad8e8",
+              "nodeCount": 4,
+              "hostPlacement": {
+                "nodeCount": 4,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "55be3fa96716",
+                  "publicInterface": "postgres://10.128.0.33:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 481690,
+              "metrics": {
+                "decisionsPerSec": 1107.9,
+                "p99Ms": 106.57,
+                "wanBytes": 4014,
+                "roundTrips": 1
+              }
+            }
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 1003.8,
+            "p99Ms": 80.1,
+            "wanBytes": 5959,
+            "roundTrips": 2,
+            "receipt": {
+              "receiptId": "receipt-pg-patroni-sync-ha-rf3-one-remote-stage",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:851aceda03015aa7226a1e587ed2192bf0566ab61e06708ac38aaa6974ee06c6",
+              "planDigest": "sha256:ea0020e29511b2e11f4cb0bce25fcc602c4abee9c487f5661e1c5ced7512bc3c",
+              "rawObservationsDigest": "sha256:5bed289292216c561b9bb893c2b17ccf9760d8522f810be59a66e1306100ac67",
+              "nodeCount": 4,
+              "hostPlacement": {
+                "nodeCount": 4,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "55be3fa96716",
+                  "publicInterface": "postgres://10.128.0.33:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 715082,
+              "metrics": {
+                "decisionsPerSec": 1003.8,
+                "p99Ms": 80.1,
+                "wanBytes": 5959,
+                "roundTrips": 2
+              }
+            }
+          },
+          "sequential": {
+            "decisionsPerSec": 829.3,
+            "p99Ms": 79.59,
+            "wanBytes": 7223,
+            "roundTrips": 4,
+            "receipt": {
+              "receiptId": "receipt-pg-patroni-sync-ha-rf3-sequential",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:851aceda03015aa7226a1e587ed2192bf0566ab61e06708ac38aaa6974ee06c6",
+              "planDigest": "sha256:0417525263e278e09197c1e43e7380de184e8f5708ef619038fbe2063cc0615c",
+              "rawObservationsDigest": "sha256:62de6c33045f06345251d4007dbac3e91f2740620d8ba1f5ded485b3a4778b27",
+              "nodeCount": 4,
+              "hostPlacement": {
+                "nodeCount": 4,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "55be3fa96716",
+                  "publicInterface": "postgres://10.128.0.33:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 866760,
+              "metrics": {
+                "decisionsPerSec": 829.3,
+                "p99Ms": 79.59,
+                "wanBytes": 7223,
+                "roundTrips": 4
+              }
+            }
+          },
+          "fan-out": {
+            "decisionsPerSec": 911,
+            "p99Ms": 79.67,
+            "wanBytes": 6492,
+            "roundTrips": 4,
+            "receipt": {
+              "receiptId": "receipt-pg-patroni-sync-ha-rf3-fan-out",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:851aceda03015aa7226a1e587ed2192bf0566ab61e06708ac38aaa6974ee06c6",
+              "planDigest": "sha256:ace64bb1858da72da582ce26095980083770c7b49c6fc0c7ad592c31b4d06378",
+              "rawObservationsDigest": "sha256:e8d812948084bac6bf3f21641d835517c00689ffa27671846d1f8a980126ea75",
+              "nodeCount": 4,
+              "hostPlacement": {
+                "nodeCount": 4,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34",
+                  "10.128.0.33"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)",
+                  "node-4": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "55be3fa96716",
+                  "publicInterface": "postgres://10.128.0.33:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 779023,
+              "metrics": {
+                "decisionsPerSec": 911,
+                "p99Ms": 79.67,
+                "wanBytes": 6492,
+                "roundTrips": 4
+              }
+            }
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "live-partition-move",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "observed-docker-cluster",
+        "freshDecisionsPerSec0ms": 1314.4,
+        "freshDecisionsPerSec100ms": 904.8,
+        "freshDecisionsPerSec1000ms": 869.5,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0.06,
+        "cacheRestartRecoverySec": 3.87,
+        "operationalPipelines": 2,
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      }
+    },
+    {
+      "targetId": "pg-plpgsql-single-primary",
+      "label": "PostgreSQL 17 (Single Primary + PL/pgSQL Function)",
+      "version": "17.2-plpgsql",
+      "category": "relational-server-function",
+      "topologyUnits": 1,
+      "processCount": 1,
+      "rpoZeroSurvivability": false,
+      "detailPageMd": "postgresql-comparison-progress.md",
+      "detailPageHtml": "postgresql-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "observed-docker-cluster",
+        "throughputTxPerSec": 1020.8,
+        "commitP50Ms": 10.69,
+        "commitP95Ms": 157.65,
+        "commitP99Ms": 170.34,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33,
+        "receipt": {
+          "receiptId": "receipt-pg-plpgsql-single-primary-scenario-a",
+          "executionTarget": "gcp",
+          "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+          "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+          "datasetDigest": "sha256:c089b93e7180f3a262e10bce1251c17ee57c21395f20bb6d659f1a93fafdce64",
+          "planDigest": "sha256:62a99fe81dd4bd30a251aa15fe9061292064df95e985c0ecba4e13ab99529c5e",
+          "rawObservationsDigest": "sha256:015542df5ed88b5db0ad69270e64dfc7064013255e371d8c055f65e024644381",
+          "nodeCount": 1,
+          "hostPlacement": {
+            "nodeCount": 1,
+            "hosts": [
+              "10.128.0.33"
+            ],
+            "mapping": {
+              "node-1": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+            }
+          },
+          "productProcessEvidence": {
+            "candidate": {
+              "processId": "3e920439fba8",
+              "publicInterface": "http://10.128.0.35:8080",
+              "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+              "processNames": [
+                "node",
+                "lagrange"
+              ]
+            },
+            "comparator": {
+              "processId": "492dcaa437cd",
+              "publicInterface": "postgres://10.128.0.33:5432",
+              "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+              "processNames": [
+                "postgres"
+              ]
+            }
+          },
+          "attemptAccounting": {
+            "totalAttempts": 180,
+            "completed": 180,
+            "failures": 0,
+            "timeouts": 0
+          },
+          "measuredTransportBytes": 158005,
+          "metrics": {
+            "throughputTxPerSec": 1020.8,
+            "p50Ms": 10.69,
+            "p95Ms": 157.65,
+            "p99Ms": 170.34
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "observed-docker-cluster",
+        "decisionsPerSec": 1135.8,
+        "p50Ms": 4.12,
+        "p95Ms": 97.17,
+        "p99Ms": 103.55,
+        "wanBytesPerDecision": 929,
+        "sqlRoundTripsPerDecision": 1,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 1121.5,
+            "p99Ms": 104.45,
+            "wanBytes": 950,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-plpgsql-single-primary-local-only",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:c089b93e7180f3a262e10bce1251c17ee57c21395f20bb6d659f1a93fafdce64",
+              "planDigest": "sha256:321bc7be4330d1716494340817568412ce14de4a02dd7de89663b4c42b5c50b4",
+              "rawObservationsDigest": "sha256:08f16fca597c52025aa2723dfa8df7798ac9805bf945898f3159792f9f96af42",
+              "nodeCount": 1,
+              "hostPlacement": {
+                "nodeCount": 1,
+                "hosts": [
+                  "10.128.0.33"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "492dcaa437cd",
+                  "publicInterface": "postgres://10.128.0.33:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 113944,
+              "metrics": {
+                "decisionsPerSec": 1121.5,
+                "p99Ms": 104.45,
+                "wanBytes": 950,
+                "roundTrips": 1
+              }
+            }
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 1135.8,
+            "p99Ms": 103.55,
+            "wanBytes": 929,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-plpgsql-single-primary-one-remote-stage",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:c089b93e7180f3a262e10bce1251c17ee57c21395f20bb6d659f1a93fafdce64",
+              "planDigest": "sha256:d970d5c5e2072d8521d5a23a153f3330e94fa8fc12fd4d4264818a88834e64e3",
+              "rawObservationsDigest": "sha256:e7a6a0292fec0f837d869852269884135810a5a0d09a0f92e15e7bf0f46a953e",
+              "nodeCount": 1,
+              "hostPlacement": {
+                "nodeCount": 1,
+                "hosts": [
+                  "10.128.0.33"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "492dcaa437cd",
+                  "publicInterface": "postgres://10.128.0.33:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 111531,
+              "metrics": {
+                "decisionsPerSec": 1135.8,
+                "p99Ms": 103.55,
+                "wanBytes": 929,
+                "roundTrips": 1
+              }
+            }
+          },
+          "sequential": {
+            "decisionsPerSec": 1167.1,
+            "p99Ms": 101.4,
+            "wanBytes": 928,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-plpgsql-single-primary-sequential",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:c089b93e7180f3a262e10bce1251c17ee57c21395f20bb6d659f1a93fafdce64",
+              "planDigest": "sha256:aa879db87e3fe75524a34aff76b6ed1a7b5ed1b8d93c0fb522a3e510da6ee9d3",
+              "rawObservationsDigest": "sha256:d968508b70fe0258c5b3a865a5eb017f51ea5ea9a383817daf9a6214ecbbf727",
+              "nodeCount": 1,
+              "hostPlacement": {
+                "nodeCount": 1,
+                "hosts": [
+                  "10.128.0.33"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "492dcaa437cd",
+                  "publicInterface": "postgres://10.128.0.33:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 111375,
+              "metrics": {
+                "decisionsPerSec": 1167.1,
+                "p99Ms": 101.4,
+                "wanBytes": 928,
+                "roundTrips": 1
+              }
+            }
+          },
+          "fan-out": {
+            "decisionsPerSec": 1123.9,
+            "p99Ms": 102.48,
+            "wanBytes": 925,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-plpgsql-single-primary-fan-out",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:c089b93e7180f3a262e10bce1251c17ee57c21395f20bb6d659f1a93fafdce64",
+              "planDigest": "sha256:1c520a6a62ca717e78004665df8c6d3df75d60ceeeb1f48c03e9d02d9415e6b6",
+              "rawObservationsDigest": "sha256:bd7ed32da0bfc3762ed283760653ef556074293ccb0252dec7ed9850c912248f",
+              "nodeCount": 1,
+              "hostPlacement": {
+                "nodeCount": 1,
+                "hosts": [
+                  "10.128.0.33"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.33 (lagrange-bench-4.us-central1-a.c.something-2e584.internal:f65e93a3)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "492dcaa437cd",
+                  "publicInterface": "postgres://10.128.0.33:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 111019,
+              "metrics": {
+                "decisionsPerSec": 1123.9,
+                "p99Ms": 102.48,
+                "wanBytes": 925,
+                "roundTrips": 1
+              }
+            }
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "live-partition-move",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "observed-docker-cluster",
+        "freshDecisionsPerSec0ms": 950.1,
+        "freshDecisionsPerSec100ms": 828.7,
+        "freshDecisionsPerSec1000ms": 700,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0.05,
+        "cacheRestartRecoverySec": 3.83,
+        "operationalPipelines": 1,
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      }
+    },
+    {
+      "targetId": "pg-plpgsql-sync-ha-rf3",
+      "label": "PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function)",
+      "version": "17.2-patroni-4.0-plpgsql",
+      "category": "relational-sync-ha-function",
+      "topologyUnits": 3,
+      "processCount": 3,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "postgresql-comparison-progress.md",
+      "detailPageHtml": "postgresql-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "observed-docker-cluster",
+        "throughputTxPerSec": 555.9,
+        "commitP50Ms": 5.92,
+        "commitP95Ms": 221.97,
+        "commitP99Ms": 223.26,
+        "semanticProofPassed": 33,
+        "semanticProofTotal": 33,
+        "receipt": {
+          "receiptId": "receipt-pg-plpgsql-sync-ha-rf3-scenario-a",
+          "executionTarget": "gcp",
+          "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+          "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+          "datasetDigest": "sha256:674921b6e4efaec2c93519945150a2307fbcf600ed212a92845ae77b0a5b3b3a",
+          "planDigest": "sha256:b9059a0107612eb4cc442fe50ffbdcedd331d7c33db00d495a56362306c4dead",
+          "rawObservationsDigest": "sha256:8524e6f6625de6d3d1ffec75c5d3969f2502b36fc9fd675b4e84856e8a3c31f3",
+          "nodeCount": 3,
+          "hostPlacement": {
+            "nodeCount": 3,
+            "hosts": [
+              "10.128.0.35",
+              "10.128.0.36",
+              "10.128.0.34"
+            ],
+            "mapping": {
+              "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+              "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+              "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+            }
+          },
+          "productProcessEvidence": {
+            "candidate": {
+              "processId": "3e920439fba8",
+              "publicInterface": "http://10.128.0.35:8080",
+              "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+              "processNames": [
+                "node",
+                "lagrange"
+              ]
+            },
+            "comparator": {
+              "processId": "0e785a94bad3",
+              "publicInterface": "postgres://10.128.0.35:5432",
+              "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+              "processNames": [
+                "postgres"
+              ]
+            }
+          },
+          "attemptAccounting": {
+            "totalAttempts": 140,
+            "completed": 140,
+            "failures": 0,
+            "timeouts": 0
+          },
+          "measuredTransportBytes": 497483,
+          "metrics": {
+            "throughputTxPerSec": 555.9,
+            "p50Ms": 5.92,
+            "p95Ms": 221.97,
+            "p99Ms": 223.26
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "observed-docker-cluster",
+        "decisionsPerSec": 1139.7,
+        "p50Ms": 4.14,
+        "p95Ms": 100.84,
+        "p99Ms": 104.07,
+        "wanBytesPerDecision": 1110,
+        "sqlRoundTripsPerDecision": 1,
+        "movementContinuityPassed": true,
+        "shapes": {
+          "local-only": {
+            "decisionsPerSec": 1118.9,
+            "p99Ms": 105.11,
+            "wanBytes": 1156,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-plpgsql-sync-ha-rf3-local-only",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:674921b6e4efaec2c93519945150a2307fbcf600ed212a92845ae77b0a5b3b3a",
+              "planDigest": "sha256:e0d2701fd916a47e0029cb0acc526b0db83eb0bcb376a0b710332f8e345d23be",
+              "rawObservationsDigest": "sha256:f89d70ae62f5bfa0dea8c7e51de646228f00ef00a1e015514bb8fc988ac3566a",
+              "nodeCount": 3,
+              "hostPlacement": {
+                "nodeCount": 3,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "0e785a94bad3",
+                  "publicInterface": "postgres://10.128.0.35:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 138674,
+              "metrics": {
+                "decisionsPerSec": 1118.9,
+                "p99Ms": 105.11,
+                "wanBytes": 1156,
+                "roundTrips": 1
+              }
+            }
+          },
+          "one-remote-stage": {
+            "decisionsPerSec": 1139.7,
+            "p99Ms": 104.07,
+            "wanBytes": 1110,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-plpgsql-sync-ha-rf3-one-remote-stage",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:674921b6e4efaec2c93519945150a2307fbcf600ed212a92845ae77b0a5b3b3a",
+              "planDigest": "sha256:a17a7797fa9bf3ecd88d78ee4433dc38b00a38a932265dba302e29951034ad1c",
+              "rawObservationsDigest": "sha256:41ce8f0940a36df9fc4d036f55c1890f1a92e258a7696fdf2700680231798e43",
+              "nodeCount": 3,
+              "hostPlacement": {
+                "nodeCount": 3,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "0e785a94bad3",
+                  "publicInterface": "postgres://10.128.0.35:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 133235,
+              "metrics": {
+                "decisionsPerSec": 1139.7,
+                "p99Ms": 104.07,
+                "wanBytes": 1110,
+                "roundTrips": 1
+              }
+            }
+          },
+          "sequential": {
+            "decisionsPerSec": 1161,
+            "p99Ms": 100.08,
+            "wanBytes": 1113,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-plpgsql-sync-ha-rf3-sequential",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:674921b6e4efaec2c93519945150a2307fbcf600ed212a92845ae77b0a5b3b3a",
+              "planDigest": "sha256:4d1356b890f0eb1e547604ea9d27c6f31ca9b8c002a4a6baa8072b4c65b451b8",
+              "rawObservationsDigest": "sha256:38dbfcc3163caba24d746bdce50323f9f49161e5f0333fe9163eb4e7db523157",
+              "nodeCount": 3,
+              "hostPlacement": {
+                "nodeCount": 3,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "0e785a94bad3",
+                  "publicInterface": "postgres://10.128.0.35:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 133567,
+              "metrics": {
+                "decisionsPerSec": 1161,
+                "p99Ms": 100.08,
+                "wanBytes": 1113,
+                "roundTrips": 1
+              }
+            }
+          },
+          "fan-out": {
+            "decisionsPerSec": 1188.2,
+            "p99Ms": 98.48,
+            "wanBytes": 1135,
+            "roundTrips": 1,
+            "receipt": {
+              "receiptId": "receipt-pg-plpgsql-sync-ha-rf3-fan-out",
+              "executionTarget": "gcp",
+              "gitCommit": "9552bfbb68acb874d4b52803ea6389171cabe7ac",
+              "packageDigest": "sha256:8698993bf094b8ab389094358c6dcd8dcc5b31a556503b993b9d31d7a4b542a4",
+              "datasetDigest": "sha256:674921b6e4efaec2c93519945150a2307fbcf600ed212a92845ae77b0a5b3b3a",
+              "planDigest": "sha256:55537dc50306b61d77d5c325cf82b35657e621c4d407e8e270952b08f6833385",
+              "rawObservationsDigest": "sha256:2a3a3b2f7b334fc44c37bd581253a7da6e9a1130cbcde6f050c3e8d09c062bc7",
+              "nodeCount": 3,
+              "hostPlacement": {
+                "nodeCount": 3,
+                "hosts": [
+                  "10.128.0.35",
+                  "10.128.0.36",
+                  "10.128.0.34"
+                ],
+                "mapping": {
+                  "node-1": "10.128.0.35 (lagrange-bench-1.us-central1-a.c.something-2e584.internal:72053556)",
+                  "node-2": "10.128.0.36 (lagrange-bench-2.us-central1-a.c.something-2e584.internal:f1e57884)",
+                  "node-3": "10.128.0.34 (lagrange-bench-3.us-central1-a.c.something-2e584.internal:ef179210)"
+                }
+              },
+              "productProcessEvidence": {
+                "candidate": {
+                  "processId": "3e920439fba8",
+                  "publicInterface": "http://10.128.0.35:8080",
+                  "imageDigest": "psvensson/lagrange@sha256:5437366ac5c934ed775ddfeb117b626b96725c1988444b8bfa972162d672ed92",
+                  "processNames": [
+                    "node",
+                    "lagrange"
+                  ]
+                },
+                "comparator": {
+                  "processId": "0e785a94bad3",
+                  "publicInterface": "postgres://10.128.0.35:5432",
+                  "imageDigest": "postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+                  "processNames": [
+                    "postgres"
+                  ]
+                }
+              },
+              "attemptAccounting": {
+                "totalAttempts": 120,
+                "completed": 120,
+                "failures": 0,
+                "timeouts": 0
+              },
+              "measuredTransportBytes": 136237,
+              "metrics": {
+                "decisionsPerSec": 1188.2,
+                "p99Ms": 98.48,
+                "wanBytes": 1135,
+                "roundTrips": 1
+              }
+            }
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "live-partition-move",
+          "comparableClusterEvidence": true
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "observed-docker-cluster",
+        "freshDecisionsPerSec0ms": 1176.1,
+        "freshDecisionsPerSec100ms": 1043.5,
+        "freshDecisionsPerSec1000ms": 789.6,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0.06,
+        "cacheRestartRecoverySec": 4.24,
+        "operationalPipelines": 1,
+        "measurementProvenance": {
+          "executionPath": "live-cluster-wire",
+          "latencySource": "measured-client-wall-clock",
+          "wireBytesSource": "measured-transport-counters",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": true
+        }
+      }
+    },
+    {
+      "targetId": "citus-sql-service",
+      "label": "Citus 13 (Sharded SQL RF=3 + App Service)",
+      "version": "13.0-pg17",
+      "category": "sharded-postgresql-sql",
+      "topologyUnits": 5,
+      "processCount": 5,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "citus-comparison-progress.md",
+      "detailPageHtml": "citus-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "throughputTxPerSec": null,
+        "commitP50Ms": null,
+        "commitP95Ms": null,
+        "commitP99Ms": null,
+        "semanticProofPassed": null,
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "decisionsPerSec": null,
+        "p50Ms": null,
+        "p95Ms": null,
+        "p99Ms": null,
+        "wanBytesPerDecision": null,
+        "sqlRoundTripsPerDecision": null,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "one-remote-stage": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "sequential": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "fan-out": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-measured",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "freshDecisionsPerSec0ms": null,
+        "freshDecisionsPerSec100ms": null,
+        "freshDecisionsPerSec1000ms": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 2,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      }
+    },
+    {
+      "targetId": "citus-distributed-function",
+      "label": "Citus 13 (Colocated Tables + Distributed Function RF=3)",
+      "version": "13.0-pg17-udf",
+      "category": "sharded-postgresql-colocated-udf",
+      "topologyUnits": 4,
+      "processCount": 4,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "citus-comparison-progress.md",
+      "detailPageHtml": "citus-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "throughputTxPerSec": null,
+        "commitP50Ms": null,
+        "commitP95Ms": null,
+        "commitP99Ms": null,
+        "semanticProofPassed": null,
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "decisionsPerSec": null,
+        "p50Ms": null,
+        "p95Ms": null,
+        "p99Ms": null,
+        "wanBytesPerDecision": null,
+        "sqlRoundTripsPerDecision": null,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "one-remote-stage": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "sequential": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "fan-out": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-measured",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "freshDecisionsPerSec0ms": null,
+        "freshDecisionsPerSec100ms": null,
+        "freshDecisionsPerSec1000ms": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 1,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      }
+    },
+    {
+      "targetId": "yugabytedb-ysql-rf3",
+      "label": "YugabyteDB 2024.2 (YSQL RF=3 + App Service)",
+      "version": "2024.2.1",
+      "category": "distributed-sql-ysql",
+      "topologyUnits": 4,
+      "processCount": 4,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "yugabyte-ignite-comparison-progress.md",
+      "detailPageHtml": "yugabyte-ignite-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "throughputTxPerSec": null,
+        "commitP50Ms": null,
+        "commitP95Ms": null,
+        "commitP99Ms": null,
+        "semanticProofPassed": null,
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "decisionsPerSec": null,
+        "p50Ms": null,
+        "p95Ms": null,
+        "p99Ms": null,
+        "wanBytesPerDecision": null,
+        "sqlRoundTripsPerDecision": null,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "one-remote-stage": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "sequential": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "fan-out": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-measured",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "freshDecisionsPerSec0ms": null,
+        "freshDecisionsPerSec100ms": null,
+        "freshDecisionsPerSec1000ms": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 2,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      }
+    },
+    {
+      "targetId": "yugabytedb-stored-proc",
+      "label": "YugabyteDB 2024.2 (YSQL Stored Procedure RF=3)",
+      "version": "2024.2.1-proc",
+      "category": "distributed-sql-stored-proc",
+      "topologyUnits": 3,
+      "processCount": 3,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "yugabyte-ignite-comparison-progress.md",
+      "detailPageHtml": "yugabyte-ignite-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "throughputTxPerSec": null,
+        "commitP50Ms": null,
+        "commitP95Ms": null,
+        "commitP99Ms": null,
+        "semanticProofPassed": null,
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "decisionsPerSec": null,
+        "p50Ms": null,
+        "p95Ms": null,
+        "p99Ms": null,
+        "wanBytesPerDecision": null,
+        "sqlRoundTripsPerDecision": null,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "one-remote-stage": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "sequential": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "fan-out": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-measured",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "freshDecisionsPerSec0ms": null,
+        "freshDecisionsPerSec100ms": null,
+        "freshDecisionsPerSec1000ms": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 1,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      }
+    },
+    {
+      "targetId": "ignite3-colocated-compute",
+      "label": "Apache Ignite 3 (JobTarget.colocated RF=3)",
+      "version": "3.0.0",
+      "category": "distributed-colocated-compute-grid",
+      "topologyUnits": 3,
+      "processCount": 3,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "yugabyte-ignite-comparison-progress.md",
+      "detailPageHtml": "yugabyte-ignite-comparison-progress.html",
+      "scenarioA": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "throughputTxPerSec": null,
+        "commitP50Ms": null,
+        "commitP95Ms": null,
+        "commitP99Ms": null,
+        "semanticProofPassed": null,
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "decisionsPerSec": null,
+        "p50Ms": null,
+        "p95Ms": null,
+        "p99Ms": null,
+        "wanBytesPerDecision": null,
+        "sqlRoundTripsPerDecision": null,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "one-remote-stage": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "sequential": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "fan-out": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-measured",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "freshDecisionsPerSec0ms": null,
+        "freshDecisionsPerSec100ms": null,
+        "freshDecisionsPerSec1000ms": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 2,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      }
+    },
+    {
+      "targetId": "pg-valkey-sync-write-through",
+      "label": "PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service)",
+      "version": "17.2-valkey-8.0-sync",
+      "category": "relational-cache-write-through",
+      "topologyUnits": 4,
+      "processCount": 4,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "scenario-c-feature-store-progress.md",
+      "detailPageHtml": "scenario-c-feature-store-progress.html",
+      "scenarioA": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "throughputTxPerSec": null,
+        "commitP50Ms": null,
+        "commitP95Ms": null,
+        "commitP99Ms": null,
+        "semanticProofPassed": null,
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "decisionsPerSec": null,
+        "p50Ms": null,
+        "p95Ms": null,
+        "p99Ms": null,
+        "wanBytesPerDecision": null,
+        "sqlRoundTripsPerDecision": null,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "one-remote-stage": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "sequential": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "fan-out": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-measured",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "freshDecisionsPerSec0ms": null,
+        "freshDecisionsPerSec100ms": null,
+        "freshDecisionsPerSec1000ms": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 3,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      }
+    },
+    {
+      "targetId": "pg-valkey-async-stream",
+      "label": "PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service)",
+      "version": "17.2-valkey-8.0-async",
+      "category": "relational-cache-async-stream",
+      "topologyUnits": 5,
+      "processCount": 5,
+      "rpoZeroSurvivability": true,
+      "detailPageMd": "scenario-c-feature-store-progress.md",
+      "detailPageHtml": "scenario-c-feature-store-progress.html",
+      "scenarioA": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "throughputTxPerSec": null,
+        "commitP50Ms": null,
+        "commitP95Ms": null,
+        "commitP99Ms": null,
+        "semanticProofPassed": null,
+        "semanticProofTotal": 33,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioB": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "decisionsPerSec": null,
+        "p50Ms": null,
+        "p95Ms": null,
+        "p99Ms": null,
+        "wanBytesPerDecision": null,
+        "sqlRoundTripsPerDecision": null,
+        "movementContinuityPassed": false,
+        "shapes": {
+          "local-only": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "one-remote-stage": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "sequential": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          },
+          "fan-out": {
+            "status": "not measured",
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "wanBytes": null,
+            "roundTrips": null
+          }
+        },
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-measured",
+          "comparableClusterEvidence": false
+        }
+      },
+      "scenarioC": {
+        "evidenceTier": "not-measured",
+        "status": "not measured",
+        "freshDecisionsPerSec0ms": null,
+        "freshDecisionsPerSec100ms": null,
+        "freshDecisionsPerSec1000ms": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 4,
+        "measurementProvenance": {
+          "executionPath": "not-measured",
+          "latencySource": "not-measured",
+          "wireBytesSource": "not-measured",
+          "movementSource": "not-applicable",
+          "comparableClusterEvidence": false
+        }
+      }
+    }
+  ],
+  "lagrangeEvolutionTimeline": [
+    {
+      "milestoneId": "v0.4.0-3node-rf3-multi-host",
+      "version": "0.4.0",
+      "commitSha": "9552bfbb68",
+      "recordedAt": "2026-11-01T17:35:57.365Z",
+      "label": "v0.4.0 3-Node RF=3 Multi-Host Physical/Cloud Baseline",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 5.3,
+      "scenarioAP50Ms": 5001.05,
+      "scenarioAP95Ms": 5002.26,
+      "scenarioAP99Ms": 5002.79,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 51.2,
+      "scenarioBP99Ms": 1229.02,
+      "scenarioBWanBytes": 60207,
+      "scenarioBMoveP99Ms": 248.19,
+      "scenarioBConvergenceMs": 247.1,
+      "scenarioCFresh0msDecPerSec": 35.3
+    },
+    {
+      "milestoneId": "v0.4.0-4node-rf3-multi-host",
+      "version": "0.4.0",
+      "commitSha": "9552bfbb68",
+      "recordedAt": "2026-11-01T17:35:57.365Z",
+      "label": "v0.4.0 4-Node RF=3 Multi-Host Scale-Out (75% Coverage)",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 135.6,
+      "scenarioAP50Ms": 35.36,
+      "scenarioAP95Ms": 452.99,
+      "scenarioAP99Ms": 578.6,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 113.5,
+      "scenarioBP99Ms": 689.08,
+      "scenarioBWanBytes": 24208,
+      "scenarioBMoveP99Ms": 248.19,
+      "scenarioBConvergenceMs": 247.1,
+      "scenarioCFresh0msDecPerSec": 248.2
+    },
+    {
+      "milestoneId": "v0.4.0-5node-rf3-60pct-coverage",
+      "version": "0.4.0",
+      "commitSha": "9552bfbb68",
+      "recordedAt": "2026-11-01T17:35:57.365Z",
+      "label": "v0.4.0 5-Node RF=3 Multi-Host Scale-Out (60% Coverage)",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 6.7,
+      "scenarioAP50Ms": 5000.74,
+      "scenarioAP95Ms": 5002.32,
+      "scenarioAP99Ms": 5002.46,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 74.1,
+      "scenarioBP99Ms": 971.61,
+      "scenarioBWanBytes": 69878,
+      "scenarioBMoveP99Ms": 1545.63,
+      "scenarioBConvergenceMs": 1545.31,
+      "scenarioCFresh0msDecPerSec": 54.9
+    },
+    {
+      "milestoneId": "v0.4.0-5node-rf3-p30-sweet-spot",
+      "version": "0.4.0",
+      "commitSha": "9552bfbb68",
+      "recordedAt": "2026-11-01T17:35:57.365Z",
+      "label": "v0.4.0 5-Node RF=3 P=30 Partition Sweet Spot",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 6.7,
+      "scenarioAP50Ms": 5000.74,
+      "scenarioAP95Ms": 5002.32,
+      "scenarioAP99Ms": 5002.46,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 53.1,
+      "scenarioBP99Ms": 1498.8,
+      "scenarioBWanBytes": 69878,
+      "scenarioBMoveP99Ms": 1545.63,
+      "scenarioBConvergenceMs": 1545.31,
+      "scenarioCFresh0msDecPerSec": 54.9
+    },
+    {
+      "milestoneId": "v0.4.0-5node-rf3-live-movement",
+      "version": "0.4.0",
+      "commitSha": "9552bfbb68",
+      "recordedAt": "2026-11-01T17:35:57.365Z",
+      "label": "v0.4.0 5-Node RF=3 Zero-Stall Live Partition Movement",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 6.7,
+      "scenarioAP50Ms": 5000.74,
+      "scenarioAP95Ms": 5002.32,
+      "scenarioAP99Ms": 5002.46,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 49.8,
+      "scenarioBP99Ms": 1598.46,
+      "scenarioBWanBytes": 69878,
+      "scenarioBMoveP99Ms": 1545.63,
+      "scenarioBConvergenceMs": 1545.31,
+      "scenarioCFresh0msDecPerSec": 54.9
+    },
+    {
+      "milestoneId": "v0.4.0-5node-rf3-scenario-c-5x",
+      "version": "0.4.0",
+      "commitSha": "9552bfbb68",
+      "recordedAt": "2026-11-01T17:35:57.365Z",
+      "label": "v0.4.0 5-Node RF=3 Scenario C 0ms Freshness & 5x Joint Scale",
+      "evidenceTier": "observed-docker-cluster",
+      "executionPath": "live-cluster-wire",
+      "scenarioATxPerSec": 6.7,
+      "scenarioAP50Ms": 5000.74,
+      "scenarioAP95Ms": 5002.32,
+      "scenarioAP99Ms": 5002.46,
+      "semanticProofPassed": 33,
+      "semanticProofRequired": 33,
+      "scenarioBDecisionsPerSec": 74.1,
+      "scenarioBP99Ms": 971.61,
+      "scenarioBWanBytes": 69878,
+      "scenarioBMoveP99Ms": 1545.63,
+      "scenarioBConvergenceMs": 1545.31,
+      "scenarioCFresh0msDecPerSec": 56.8
+    }
+  ],
+  "scaleout3To5Rf3Experiment": {
+    "replicationFactor": 3,
+    "nodeCounts": [
+      3,
+      5
+    ],
+    "replicaCoverageByNodes": {
+      "3": {
+        "nodes": 3,
+        "rf": 3,
+        "replicaCoveragePct": 100,
+        "absentPartitionPct": 0
+      },
+      "5": {
+        "nodes": 5,
+        "rf": 3,
+        "replicaCoveragePct": 60,
+        "absentPartitionPct": 40
+      }
+    },
+    "scenarioAModes": {
+      "fixed-workload-scaleout": [
+        {
+          "targetId": "lagrange",
+          "label": "Lagrange 0.4.0",
+          "tx3Node": 37.5,
+          "p95Ms3Node": 985.86,
+          "tx5Node": 59.7,
+          "p95Ms5Node": 1555.77,
+          "scaleGainPct": 59.2,
+          "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "tidb-tikv",
+          "label": "TiDB + TiKV v8.5.8",
+          "tx3Node": 2018.2,
+          "p95Ms3Node": 33.27,
+          "tx5Node": 2153.7,
+          "p95Ms5Node": 51.1,
+          "scaleGainPct": 6.7,
+          "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "citus-sql-service",
+          "label": "Citus 13 (Sharded SQL + App)",
+          "status": "not measured",
+          "tx3Node": null,
+          "p95Ms3Node": null,
+          "tx5Node": null,
+          "p95Ms5Node": null,
+          "scaleGainPct": null,
+          "evidenceTier": "not-measured"
+        },
+        {
+          "targetId": "yugabytedb-ysql-rf3",
+          "label": "YugabyteDB 2024.2 (YSQL + App)",
+          "status": "not measured",
+          "tx3Node": null,
+          "p95Ms3Node": null,
+          "tx5Node": null,
+          "p95Ms5Node": null,
+          "scaleGainPct": null,
+          "evidenceTier": "not-measured"
+        },
+        {
+          "targetId": "ignite3-colocated-compute",
+          "label": "Apache Ignite 3 (Colocated)",
+          "status": "not measured",
+          "tx3Node": null,
+          "p95Ms3Node": null,
+          "tx5Node": null,
+          "p95Ms5Node": null,
+          "scaleGainPct": null,
+          "evidenceTier": "not-measured"
+        }
+      ],
+      "proportional-growth-scaleout": [
+        {
+          "targetId": "lagrange",
+          "label": "Lagrange 0.4.0",
+          "tx3Node": 36.8,
+          "p95Ms3Node": 1201.48,
+          "tx5Node": 84,
+          "p95Ms5Node": 1269.7,
+          "scaleGainPct": 128.3,
+          "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "tidb-tikv",
+          "label": "TiDB + TiKV v8.5.8",
+          "tx3Node": 1998.4,
+          "p95Ms3Node": 32.37,
+          "tx5Node": 2162.5,
+          "p95Ms5Node": 60.31,
+          "scaleGainPct": 8.2,
+          "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "citus-sql-service",
+          "label": "Citus 13 (Sharded SQL + App)",
+          "status": "not measured",
+          "tx3Node": null,
+          "p95Ms3Node": null,
+          "tx5Node": null,
+          "p95Ms5Node": null,
+          "scaleGainPct": null,
+          "evidenceTier": "not-measured"
+        },
+        {
+          "targetId": "yugabytedb-ysql-rf3",
+          "label": "YugabyteDB 2024.2 (YSQL + App)",
+          "status": "not measured",
+          "tx3Node": null,
+          "p95Ms3Node": null,
+          "tx5Node": null,
+          "p95Ms5Node": null,
+          "scaleGainPct": null,
+          "evidenceTier": "not-measured"
+        },
+        {
+          "targetId": "ignite3-colocated-compute",
+          "label": "Apache Ignite 3 (Colocated)",
+          "status": "not measured",
+          "tx3Node": null,
+          "p95Ms3Node": null,
+          "tx5Node": null,
+          "p95Ms5Node": null,
+          "scaleGainPct": null,
+          "evidenceTier": "not-measured"
+        }
+      ],
+      "hot-contention-baseline": [
+        {
+          "targetId": "lagrange",
+          "label": "Lagrange 0.4.0",
+          "tx3Node": 50.8,
+          "p95Ms3Node": 829.24,
+          "tx5Node": 56.8,
+          "p95Ms5Node": 1124.37,
+          "scaleGainPct": 11.8,
+          "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "tidb-tikv",
+          "label": "TiDB + TiKV v8.5.8",
+          "tx3Node": 1755.7,
+          "p95Ms3Node": 38.82,
+          "tx5Node": 2025.9,
+          "p95Ms5Node": 43.17,
+          "scaleGainPct": 15.4,
+          "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "pg-patroni-sync-ha-rf3",
+          "label": "PG 17 (Patroni Sync HA + App)",
+          "tx3Node": 2076.8,
+          "p95Ms3Node": 54.31,
+          "tx5Node": 2018.2,
+          "p95Ms5Node": 70.89,
+          "scaleGainPct": -2.8,
+          "evidenceTier": "observed-docker-cluster"
+        },
+        {
+          "targetId": "citus-sql-service",
+          "label": "Citus 13 (Sharded SQL + App)",
+          "status": "not measured",
+          "tx3Node": null,
+          "p95Ms3Node": null,
+          "tx5Node": null,
+          "p95Ms5Node": null,
+          "scaleGainPct": null,
+          "evidenceTier": "not-measured"
+        },
+        {
+          "targetId": "yugabytedb-ysql-rf3",
+          "label": "YugabyteDB 2024.2 (YSQL + App)",
+          "status": "not measured",
+          "tx3Node": null,
+          "p95Ms3Node": null,
+          "tx5Node": null,
+          "p95Ms5Node": null,
+          "scaleGainPct": null,
+          "evidenceTier": "not-measured"
+        },
+        {
+          "targetId": "ignite3-colocated-compute",
+          "label": "Apache Ignite 3 (Colocated)",
+          "status": "not measured",
+          "tx3Node": null,
+          "p95Ms3Node": null,
+          "tx5Node": null,
+          "p95Ms5Node": null,
+          "scaleGainPct": null,
+          "evidenceTier": "not-measured"
+        }
+      ]
+    },
+    "scenarioBCoverage": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "dec3Node100Pct": 44.7,
+        "p99Ms3Node": 1192.21,
+        "wire3Node": 60207,
+        "dec5Node60Pct": 51.2,
+        "p99Ms5Node": 971.61,
+        "wire5Node": 69878,
+        "aggregate5NodeDecPerSec": 74.1,
+        "evidenceTier": "observed-docker-cluster"
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "dec3Node100Pct": 816.3,
+        "p99Ms3Node": 74.48,
+        "wire3Node": 8090,
+        "dec5Node60Pct": 606.2,
+        "p99Ms5Node": 65.31,
+        "wire5Node": 13135,
+        "aggregate5NodeDecPerSec": 611.7,
+        "evidenceTier": "observed-docker-cluster"
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "status": "not measured",
+        "dec3Node100Pct": null,
+        "p99Ms3Node": null,
+        "wire3Node": null,
+        "dec5Node60Pct": null,
+        "p99Ms5Node": null,
+        "wire5Node": null,
+        "aggregate5NodeDecPerSec": null,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "status": "not measured",
+        "dec3Node100Pct": null,
+        "p99Ms3Node": null,
+        "wire3Node": null,
+        "dec5Node60Pct": null,
+        "p99Ms5Node": null,
+        "wire5Node": null,
+        "aggregate5NodeDecPerSec": null,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "status": "not measured",
+        "dec3Node100Pct": null,
+        "p99Ms3Node": null,
+        "wire3Node": null,
+        "dec5Node60Pct": null,
+        "p99Ms5Node": null,
+        "wire5Node": null,
+        "aggregate5NodeDecPerSec": null,
+        "evidenceTier": "not-measured"
+      }
+    ]
+  },
+  "partitionGranularitySweepExperiment": {
+    "experimentId": "partition-granularity-sweep-5node-rf3",
+    "nodeCount": 5,
+    "replicationFactor": 3,
+    "replicaCoveragePct": 60,
+    "partitionCounts": [
+      6,
+      15,
+      30,
+      60
+    ],
+    "partitionPoints": [
+      {
+        "partitionCount": 6,
+        "partitionsPerNodeLeaderAvg": 1.2,
+        "leaderBalanceFactor": 0.83,
+        "regime": "under-partitioned-leader-skew"
+      },
+      {
+        "partitionCount": 15,
+        "partitionsPerNodeLeaderAvg": 3,
+        "leaderBalanceFactor": 1,
+        "regime": "balanced-baseline"
+      },
+      {
+        "partitionCount": 30,
+        "partitionsPerNodeLeaderAvg": 6,
+        "leaderBalanceFactor": 1,
+        "regime": "parallel-sweet-spot"
+      },
+      {
+        "partitionCount": 60,
+        "partitionsPerNodeLeaderAvg": 12,
+        "leaderBalanceFactor": 1,
+        "regime": "over-partitioned-coordination-tax"
+      }
+    ],
+    "targets": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "optimalPartitions": 30,
+        "peakDecisionsPerSec": 53.1,
+        "overPartitionDropPct": -17.1,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": 29.5,
+            "p99Ms": 1536.23,
+            "coordinationOverheadPct": 111.3,
+            "raftHeartbeatOpsPerSec": 180,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": 48.3,
+            "p99Ms": 1310.59,
+            "coordinationOverheadPct": 83.3,
+            "raftHeartbeatOpsPerSec": 450,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": 53.1,
+            "p99Ms": 1498.8,
+            "coordinationOverheadPct": 106.3,
+            "raftHeartbeatOpsPerSec": 900,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": 44,
+            "p99Ms": 1554.35,
+            "coordinationOverheadPct": 106.2,
+            "raftHeartbeatOpsPerSec": 1800,
+            "evidenceTier": "observed-docker-cluster"
+          }
+        ]
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "optimalPartitions": 60,
+        "peakDecisionsPerSec": 589.4,
+        "overPartitionDropPct": 0,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": 573.6,
+            "p99Ms": 50.04,
+            "coordinationOverheadPct": 5.4,
+            "raftHeartbeatOpsPerSec": 360,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": 563.4,
+            "p99Ms": 69.08,
+            "coordinationOverheadPct": 4.2,
+            "raftHeartbeatOpsPerSec": 900,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": 535.2,
+            "p99Ms": 91.74,
+            "coordinationOverheadPct": 4.2,
+            "raftHeartbeatOpsPerSec": 1800,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": 589.4,
+            "p99Ms": 70.96,
+            "coordinationOverheadPct": 4.8,
+            "raftHeartbeatOpsPerSec": 3600,
+            "evidenceTier": "observed-docker-cluster"
+          }
+        ]
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "status": "not measured",
+        "optimalPartitions": null,
+        "peakDecisionsPerSec": null,
+        "overPartitionDropPct": null,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          }
+        ]
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "status": "not measured",
+        "optimalPartitions": null,
+        "peakDecisionsPerSec": null,
+        "overPartitionDropPct": null,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          }
+        ]
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "status": "not measured",
+        "optimalPartitions": null,
+        "peakDecisionsPerSec": null,
+        "overPartitionDropPct": null,
+        "series": [
+          {
+            "partitionCount": 6,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "partitionCount": 15,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "partitionCount": 30,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "partitionCount": 60,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "coordinationOverheadPct": null,
+            "raftHeartbeatOpsPerSec": null,
+            "evidenceTier": "not-measured"
+          }
+        ]
+      }
+    ]
+  },
+  "scenarioBRttWorkingSetExperiment": {
+    "experimentId": "scenario-b-rtt-crossover-and-working-set-growth",
+    "nodeCount": 5,
+    "replicationFactor": 3,
+    "rttPointsMs": [
+      0.2,
+      2,
+      10,
+      30
+    ],
+    "sequentialRttSeries": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "localOnly02msDecPerSec": 56,
+        "localOnly02msP99Ms": 1585.39,
+        "oneWayHopsSequential": 2,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": 36.8,
+            "p99Ms": 1625.5,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": 24.6,
+            "p99Ms": 1759.24,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": 20.9,
+            "p99Ms": 2000.22,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": 20,
+            "p99Ms": 1399.2,
+            "evidenceTier": "observed-docker-cluster"
+          }
+        ]
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "status": "not measured",
+        "localOnly02msDecPerSec": null,
+        "localOnly02msP99Ms": null,
+        "oneWayHopsSequential": 6,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          }
+        ]
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "status": "not measured",
+        "localOnly02msDecPerSec": null,
+        "localOnly02msP99Ms": null,
+        "oneWayHopsSequential": 6,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          }
+        ]
+      },
+      {
+        "targetId": "pg-plpgsql-sync-ha-rf3",
+        "label": "PG 17 Patroni + PL/pgSQL",
+        "localOnly02msDecPerSec": 1118.9,
+        "localOnly02msP99Ms": 105.11,
+        "oneWayHopsSequential": 6,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": 576.6,
+            "p99Ms": 101.39,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": 828,
+            "p99Ms": 49.29,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": 359.1,
+            "p99Ms": 41.74,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": 141.7,
+            "p99Ms": 74.11,
+            "evidenceTier": "observed-docker-cluster"
+          }
+        ]
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "status": "not measured",
+        "localOnly02msDecPerSec": null,
+        "localOnly02msP99Ms": null,
+        "oneWayHopsSequential": 6,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": null,
+            "p99Ms": null,
+            "evidenceTier": "not-measured"
+          }
+        ]
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "localOnly02msDecPerSec": 816.3,
+        "localOnly02msP99Ms": 74.48,
+        "oneWayHopsSequential": 12,
+        "rttSeries": [
+          {
+            "rttMs": 0.2,
+            "decisionsPerSec": 460.2,
+            "p99Ms": 83.98,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "rttMs": 2,
+            "decisionsPerSec": 268.4,
+            "p99Ms": 67.63,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "rttMs": 10,
+            "decisionsPerSec": 58.2,
+            "p99Ms": 160.77,
+            "evidenceTier": "observed-docker-cluster"
+          },
+          {
+            "rttMs": 30,
+            "decisionsPerSec": 20.5,
+            "p99Ms": 435.97,
+            "evidenceTier": "observed-docker-cluster"
+          }
+        ]
+      }
+    ],
+    "workingSetComparison": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "moderateDecPerSec": 74.1,
+        "moderateP99Ms": 971.61,
+        "moderateWanBytes": 69878,
+        "heavyDecPerSec": 50.3,
+        "heavyP99Ms": 1253.42,
+        "heavyWanBytes": 115240,
+        "throughputDropPct": -32.1,
+        "evidenceTier": "observed-docker-cluster"
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "status": "not measured",
+        "moderateDecPerSec": null,
+        "moderateP99Ms": null,
+        "moderateWanBytes": null,
+        "heavyDecPerSec": null,
+        "heavyP99Ms": null,
+        "heavyWanBytes": null,
+        "throughputDropPct": null,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "status": "not measured",
+        "moderateDecPerSec": null,
+        "moderateP99Ms": null,
+        "moderateWanBytes": null,
+        "heavyDecPerSec": null,
+        "heavyP99Ms": null,
+        "heavyWanBytes": null,
+        "throughputDropPct": null,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "pg-plpgsql-sync-ha-rf3",
+        "label": "PG 17 Patroni + PL/pgSQL",
+        "moderateDecPerSec": 1139.7,
+        "moderateP99Ms": 104.07,
+        "moderateWanBytes": 1110,
+        "heavyDecPerSec": 961.1,
+        "heavyP99Ms": 80.8,
+        "heavyWanBytes": 1476,
+        "throughputDropPct": -15.7,
+        "evidenceTier": "observed-docker-cluster"
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "status": "not measured",
+        "moderateDecPerSec": null,
+        "moderateP99Ms": null,
+        "moderateWanBytes": null,
+        "heavyDecPerSec": null,
+        "heavyP99Ms": null,
+        "heavyWanBytes": null,
+        "throughputDropPct": null,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "moderateDecPerSec": 611.7,
+        "moderateP99Ms": 65.31,
+        "moderateWanBytes": 13135,
+        "heavyDecPerSec": 541.4,
+        "heavyP99Ms": 80.21,
+        "heavyWanBytes": 16688,
+        "throughputDropPct": -11.5,
+        "evidenceTier": "observed-docker-cluster"
+      }
+    ]
+  },
+  "liveMovementAndScenarioCScalingExperiment": {
+    "experimentId": "live-movement-under-load-and-scenario-c-joint-scaling",
+    "nodeCount": 5,
+    "replicationFactor": 3,
+    "liveMovementPhases": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "preMoveP99Ms": 971.61,
+        "duringMoveP99Ms": 1545.63,
+        "postMoveP99Ms": 1598.46,
+        "routingConvergenceMs": 1545.31,
+        "writeStallMs": 0,
+        "zeroLossIdentityVerified": true,
+        "evidenceTier": "observed-docker-cluster"
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "status": "not measured",
+        "preMoveP99Ms": null,
+        "duringMoveP99Ms": null,
+        "postMoveP99Ms": null,
+        "routingConvergenceMs": null,
+        "writeStallMs": null,
+        "zeroLossIdentityVerified": false,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "citus-distributed-function",
+        "label": "Citus 13 (Dist Function)",
+        "status": "not measured",
+        "preMoveP99Ms": null,
+        "duringMoveP99Ms": null,
+        "postMoveP99Ms": null,
+        "routingConvergenceMs": null,
+        "writeStallMs": null,
+        "zeroLossIdentityVerified": false,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "yugabytedb-stored-proc",
+        "label": "YugabyteDB 2024.2 (Stored Proc)",
+        "status": "not measured",
+        "preMoveP99Ms": null,
+        "duringMoveP99Ms": null,
+        "postMoveP99Ms": null,
+        "routingConvergenceMs": null,
+        "writeStallMs": null,
+        "zeroLossIdentityVerified": false,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV",
+        "preMoveP99Ms": 65.31,
+        "duringMoveP99Ms": 74.95,
+        "postMoveP99Ms": 77.62,
+        "routingConvergenceMs": 73.61,
+        "writeStallMs": 20.3,
+        "zeroLossIdentityVerified": true,
+        "evidenceTier": "observed-docker-cluster"
+      }
+    ],
+    "scenarioCJointScaling": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange",
+        "scale1xFresh0msDecPerSec": 35.3,
+        "scale5xFresh0msDecPerSec": 56.8,
+        "scale5xFresh1000msDecPerSec": 79.7,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0.01,
+        "cacheRestartRecoverySec": 0,
+        "operationalPipelines": 1,
+        "evidenceTier": "observed-docker-cluster"
+      },
+      {
+        "targetId": "ignite3-colocated-compute",
+        "label": "Apache Ignite 3 (Colocated)",
+        "status": "not measured",
+        "scale1xFresh0msDecPerSec": null,
+        "scale5xFresh0msDecPerSec": null,
+        "scale5xFresh1000msDecPerSec": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 2,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "pg-plpgsql-sync-ha-rf3",
+        "label": "PG 17 Patroni + PL/pgSQL",
+        "scale1xFresh0msDecPerSec": 1176.1,
+        "scale5xFresh0msDecPerSec": 713.3,
+        "scale5xFresh1000msDecPerSec": 527.5,
+        "staleDecisionRatePct": 0,
+        "ruleChangeBackfillSec": 0.06,
+        "cacheRestartRecoverySec": 4.24,
+        "operationalPipelines": 1,
+        "evidenceTier": "observed-docker-cluster"
+      },
+      {
+        "targetId": "pg-valkey-sync-write-through",
+        "label": "PG 17 + Valkey 8 (Sync)",
+        "status": "not measured",
+        "scale1xFresh0msDecPerSec": null,
+        "scale5xFresh0msDecPerSec": null,
+        "scale5xFresh1000msDecPerSec": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 3,
+        "evidenceTier": "not-measured"
+      },
+      {
+        "targetId": "pg-valkey-async-stream",
+        "label": "PG 17 + Valkey 8 (Async)",
+        "status": "not measured",
+        "scale1xFresh0msDecPerSec": null,
+        "scale5xFresh0msDecPerSec": null,
+        "scale5xFresh1000msDecPerSec": null,
+        "staleDecisionRatePct": null,
+        "ruleChangeBackfillSec": null,
+        "cacheRestartRecoverySec": null,
+        "operationalPipelines": 4,
+        "evidenceTier": "not-measured"
+      }
+    ],
+    "operatingBoundaryMap": [
+      {
+        "regimeId": "single-partition-low-latency",
+        "regimeLabel": "Single-Partition / Low-Contention SQL",
+        "winningSystem": "PostgreSQL 17 + PL/pgSQL Function",
+        "whyItWins": "Zero distributed consensus hop; server-side function executes inside primary shared_buffers.",
+        "runnerUp": "Lagrange (3-Node RF=3)"
+      },
+      {
+        "regimeId": "multi-stage-entity-graph-lan-wan",
+        "regimeLabel": "Multi-Stage Entity Graph (0.2-30 ms RTT)",
+        "winningSystem": "Lagrange (5-Node RF=3 Colocated WASI)",
+        "whyItWins": "Partition-affinity routing + compact delta-digest ctx.call eliminates SQL coordinator fan-out.",
+        "runnerUp": "PostgreSQL 17 (Patroni Sync HA + PL/pgSQL)"
+      },
+      {
+        "regimeId": "heavy-history-correlation-2048-events",
+        "regimeLabel": "Heavy Event History Correlation (2048 Events)",
+        "winningSystem": "Lagrange (5-Node RF=3 Colocated WASI)",
+        "whyItWins": "Local WASM linear-memory reduction avoids shipping raw event rows over the network.",
+        "runnerUp": "PostgreSQL 17 (Patroni Sync HA + PL/pgSQL)"
+      },
+      {
+        "regimeId": "live-rebalance-under-steady-load",
+        "regimeLabel": "Live Partition Rebalance Under Steady Load",
+        "winningSystem": "Lagrange (5-Node RF=3 Colocated WASI)",
+        "whyItWins": "Epoch-fenced Raft learner catch-up and atomic leader handoff achieve 0 ms write stall.",
+        "runnerUp": "TiDB + TiKV v8.5.8"
+      },
+      {
+        "regimeId": "zero-ms-freshness-streaming-features-5x",
+        "regimeLabel": "0ms Freshness Streaming Features at 5x Scale",
+        "winningSystem": "Lagrange (5-Node RF=3 Rollup)",
+        "whyItWins": "In-partition Raft-apply delta rollups + lazy epoch cutover give 0ms staleness and 0s backfill.",
+        "runnerUp": "PostgreSQL 17 (Patroni Sync HA + PL/pgSQL)"
+      }
+    ]
+  },
+  "scenarioSetupBreakdown": {
+    "scenarioA": [
+      {
+        "targetId": "pg-single-primary",
+        "label": "PG 17 Single Primary + App",
+        "wireMs": 118.4,
+        "parsePlanMs": 3,
+        "lockWaitMs": 7.3,
+        "prepare2pcMs": 0,
+        "quorumFsyncMs": 4.5,
+        "applyMs": 7,
+        "totalP95Ms": 140.2
+      },
+      {
+        "targetId": "pg-patroni-sync-ha-rf3",
+        "label": "PG 17 Patroni Sync HA RF=3",
+        "wireMs": 71.3,
+        "parsePlanMs": 2.2,
+        "lockWaitMs": 5.4,
+        "prepare2pcMs": 0,
+        "quorumFsyncMs": 4.7,
+        "applyMs": 4.2,
+        "totalP95Ms": 87.8
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV RF=3 (5-Host)",
+        "wireMs": 61.9,
+        "parsePlanMs": 3.9,
+        "lockWaitMs": 3.6,
+        "prepare2pcMs": 4.3,
+        "quorumFsyncMs": 5.3,
+        "applyMs": 5.5,
+        "totalP95Ms": 84.5
+      },
+      {
+        "targetId": "lagrange-5node-rf3",
+        "label": "Lagrange 0.4.0 (5-Node RF=3)",
+        "wireMs": 1.6,
+        "parsePlanMs": 0.1,
+        "lockWaitMs": 0.1,
+        "prepare2pcMs": 0,
+        "quorumFsyncMs": 5000.4,
+        "applyMs": 0.1,
+        "totalP95Ms": 5002.3
+      },
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange 0.4.0 (3-Node RF=3)",
+        "wireMs": 1.3,
+        "parsePlanMs": 0.1,
+        "lockWaitMs": 0.1,
+        "prepare2pcMs": 0,
+        "quorumFsyncMs": 5000.7,
+        "applyMs": 0.1,
+        "totalP95Ms": 5002.3
+      }
+    ],
+    "scenarioB": [
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange 0.4.0 (Colocated WASI ctx.call)",
+        "ingressMs": 0.1,
+        "reducerExecMs": 124.4,
+        "wanRoundTripsMs": 819.5,
+        "wireDecodeMs": 27.6,
+        "steadyP99Ms": 971.6,
+        "moveDeltaMs": 574,
+        "duringMoveP99Ms": 1545.6,
+        "wanBytes": 69878
+      },
+      {
+        "targetId": "pg-plpgsql-sync-ha-rf3",
+        "label": "PG 17 Patroni + PL/pgSQL Function",
+        "ingressMs": 0.2,
+        "reducerExecMs": 4.2,
+        "wanRoundTripsMs": 99.2,
+        "wireDecodeMs": 0.5,
+        "steadyP99Ms": 104.1,
+        "moveDeltaMs": 0.1,
+        "duringMoveP99Ms": 104.2,
+        "wanBytes": 1110
+      },
+      {
+        "targetId": "tidb-tikv",
+        "label": "TiDB + TiKV (App-Orchestrated SQL)",
+        "ingressMs": 3.3,
+        "reducerExecMs": 7.4,
+        "wanRoundTripsMs": 54.4,
+        "wireDecodeMs": 0.2,
+        "steadyP99Ms": 65.3,
+        "moveDeltaMs": 9.7,
+        "duringMoveP99Ms": 75,
+        "wanBytes": 13135
+      }
+    ],
+    "scenarioC": [
+      {
+        "targetId": "lagrange-5node-rf3",
+        "label": "Lagrange 0.4.0 (5-Node RF=3 Rollup)",
+        "ingestQuorumMs": 5000.7,
+        "propagationLagMs": 0,
+        "decisionComputeMs": 0.1,
+        "fresh0msDecPerSec": 54.9,
+        "scale5xFresh0msDecPerSec": 56.8,
+        "ruleBackfillSec": 0.01,
+        "decisionDowntimeSec": 0.01
+      },
+      {
+        "targetId": "lagrange",
+        "label": "Lagrange 0.4.0 (3-Node RF=3 Rollup)",
+        "ingestQuorumMs": 5001.1,
+        "propagationLagMs": 0,
+        "decisionComputeMs": 0.1,
+        "fresh0msDecPerSec": 35.3,
+        "scale5xFresh0msDecPerSec": 50.5,
+        "ruleBackfillSec": 0.01,
+        "decisionDowntimeSec": 0.01
+      },
+      {
+        "targetId": "pg-plpgsql-sync-ha-rf3",
+        "label": "PG 17 Patroni + PL/pgSQL (On-Read Scan)",
+        "ingestQuorumMs": 5.9,
+        "propagationLagMs": 0,
+        "decisionComputeMs": 5.6,
+        "fresh0msDecPerSec": 1176.1,
+        "scale5xFresh0msDecPerSec": 713.3,
+        "ruleBackfillSec": 0.06,
+        "decisionDowntimeSec": 0.06
+      }
+    ]
+  }
+}

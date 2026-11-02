@@ -560,7 +560,6 @@ export {
   PGWIRE_SCRAM_ERROR_CODE,
   ScramSha256ServerSession,
   createScramCredentialRecord,
-  computeTlsServerEndPointBindingData,
   createScramClientFirstMessage,
   createScramClientFinalMessage,
   createScramAndCertAuthenticator,

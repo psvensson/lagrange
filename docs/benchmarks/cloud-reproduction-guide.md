@@ -1,0 +1,155 @@
+# Reproducing Comparative Benchmarks on GCP, AWS, and Azure
+
+Back to [Comparative Benchmark Landing Page](README.md) ([HTML Dashboard](index.html)) | [Scenario Specifications](tidb-reference-scenarios.md)
+
+This guide explains how anyone with access to **Google Cloud Platform (GCP)**, **Amazon Web Services (AWS)**, **Microsoft Azure**, or any **5 Linux hosts with Docker and SSH** can reproduce the 14-system comparative benchmark suite (`v0.4.0`) for themselves.
+
+---
+
+## 1. Architecture & Resource Sizing
+
+The full comparative suite runs across **6 identical Linux VMs** (5 cluster nodes + 1 dedicated client driver VM) in the same private VPC/VNet so that multi-node Raft/Paxos replication (`RF=3`), distributed SQL coordinators, and client-to-cluster RTT sweeps reflect real network and storage behavior without client-driver CPU contention.
+
+| Cloud Provider | Provisioning Script | Default Instance Type | vCPU / RAM | Disk | Estimated 30-Min Run Cost (6 VMs) |
+| --- | --- | --- | --- | --- | --- |
+| **Google Cloud (GCP)** | [`cloud/provision-gcp.sh`](cloud/provision-gcp.sh) | `e2-standard-4` | 4 vCPU / 16 GB | 50 GB `pd-balanced` | ~$0.40 USD |
+| **Amazon Web Services (AWS)** | [`cloud/provision-aws.sh`](cloud/provision-aws.sh) | `m6i.xlarge` | 4 vCPU / 16 GB | 50 GB `gp3` | ~$0.58 USD |
+| **Microsoft Azure** | [`cloud/provision-azure.sh`](cloud/provision-azure.sh) | `Standard_D4s_v5` | 4 vCPU / 16 GB | 50 GB `StandardSSD_LRS` | ~$0.58 USD |
+| **Any 6 SSH + Docker Hosts** | Bring your own hosts | 4+ vCPU / 16+ GB | Ubuntu 22.04/24.04 + Docker | 50 GB SSD | $0 (existing hardware) |
+
+### Public Container Images & Native Protocols Used
+The live runner deploys and benchmarks the 7 measured configurations across the 3 core product families using official public container images and native wire protocols:
+- **Lagrange (`v0.4.0`):** `psvensson/lagrange:0.4.0` (`node src/index.js`, 3-node, 4-node, and 5-node `RF=3` clusters driven over HTTP `:8080` and Admin WebSocket `:8081/api/admin/stream`)
+- **TiDB + TiKV (`v8.5.8`):** `pingcap/pd:v8.5.8`, `pingcap/tikv:v8.5.8`, `pingcap/tidb:v8.5.8` (PD + 3 TiKV stores + TiDB SQL server driven over native MySQL wire protocol `:4000` via `mysql2/promise`)
+- **PostgreSQL 17 (`17-alpine`):** `postgres:17-alpine` (single-primary, synchronous physical streaming replication via `pg_basebackup` + `FIRST 1 (s1, s2)`, and server-side `LANGUAGE plpgsql` functions driven over native PostgreSQL wire protocol `:5432` via `pg.Pool`)
+- **Unmeasured Comparators (`not-measured`):** Citus 13, YugabyteDB 2024.2, Apache Ignite 3, and PostgreSQL 17 + Valkey 8 are explicitly recorded as `[not measured]` (`evidenceTier: 'not-measured'`) in the generated matrix until native product cluster deployers and wire drivers are added.
+
+---
+
+## 2. Option A: Run on Google Cloud Platform (GCP)
+
+### Prerequisites
+- [`gcloud` CLI](https://cloud.google.com/sdk/docs/install) authenticated (`gcloud auth login`) with Compute Engine API enabled.
+- Node.js `>= 22.13.0` on the runner machine.
+
+### Step 1 - Provision the 5 GCP VMs
+```sh
+export PROJECT_ID="your-gcp-project-id"
+export ZONE="us-central1-a"
+./docs/benchmarks/cloud/provision-gcp.sh
+```
+The script creates 5 `n2-standard-4` Ubuntu 24.04 VMs (`lagrange-bench-1` .. `lagrange-bench-5`), configures an intra-cluster VPC firewall rule, installs Docker on each VM, and prints the `export HOSTS=...` and `export SSH_USER=...` variables.
+
+### Step 2 - Run the Comparative Benchmark Suite
+From `lagrange-bench-1` (or any machine with VPC SSH connectivity to the 5 internal IPs):
+```sh
+git clone https://github.com/psvensson/lagrange.git
+cd lagrange
+npm ci
+
+# Preview the 5-node execution plan without SSHing:
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts "$HOSTS" --dry-run
+
+# Run the live 5-node Docker suite and regenerate docs/benchmarks/*:
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs \
+  --hosts "$HOSTS" \
+  --ssh-user "$SSH_USER" \
+  --regenerate-docs
+```
+
+### Step 3 - Tear Down GCP Resources
+```sh
+./docs/benchmarks/cloud/provision-gcp.sh --teardown
+```
+
+---
+
+## 3. Option B: Run on Amazon Web Services (AWS)
+
+### Prerequisites
+- [`aws` CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) configured (`aws configure`) and an existing EC2 SSH key pair in your target region.
+
+### Step 1 - Provision the 5 AWS EC2 Instances
+```sh
+export REGION="us-east-1"
+export KEY_NAME="your-ec2-keypair-name"
+./docs/benchmarks/cloud/provision-aws.sh
+```
+The script resolves the latest Ubuntu 24.04 LTS `gp3` AMI via AWS SSM, creates security group `lagrange-bench-sg` allowing intra-cluster traffic and SSH, launches 5 `m6i.xlarge` instances with Docker installed via `user-data`, and prints `export HOSTS=...`.
+
+### Step 2 - Run the Comparative Benchmark Suite
+```sh
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs \
+  --hosts "$HOSTS" \
+  --ssh-user ubuntu \
+  --ssh-key ~/.ssh/your-ec2-keypair.pem \
+  --regenerate-docs
+```
+
+### Step 3 - Tear Down AWS Resources
+```sh
+./docs/benchmarks/cloud/provision-aws.sh --teardown
+```
+
+---
+
+## 4. Option C: Run on Microsoft Azure
+
+### Prerequisites
+- [`az` CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) authenticated (`az login`).
+
+### Step 1 - Provision the 5 Azure VMs
+```sh
+export RESOURCE_GROUP="lagrange-bench-rg"
+export LOCATION="eastus"
+./docs/benchmarks/cloud/provision-azure.sh
+```
+The script creates resource group `lagrange-bench-rg`, VNet `10.42.0.0/16`, NSG `lagrange-bench-nsg`, and 5 `Standard_D4s_v5` Ubuntu 24.04 VMs (`lagrange-bench-1` .. `lagrange-bench-5`) with Docker enabled via cloud-init, then outputs `export HOSTS=...`.
+
+### Step 2 - Run the Comparative Benchmark Suite
+```sh
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs \
+  --hosts "$HOSTS" \
+  --ssh-user azureuser \
+  --regenerate-docs
+```
+
+### Step 3 - Tear Down Azure Resources
+```sh
+./docs/benchmarks/cloud/provision-azure.sh --teardown
+```
+
+---
+
+## 5. Option D: Single-Machine Quick Comparison (No Cloud Account Required)
+
+If you want to verify Lagrange's co-located compute-near-data speedup vs. client-fetched remote execution on a single laptop or workstation without provisioning 5 VMs:
+
+```sh
+npm ci
+npm run demo:movielens
+```
+
+This executes [`examples/service-data-affinity/run-comparison.js`](../../examples/service-data-affinity/run-comparison.js) locally and prints the side-by-side latency and throughput comparison.
+
+---
+
+## 6. Reference Files & Regenerators
+
+- Cloud provisioning & runner scripts:
+  - [`docs/benchmarks/cloud/provision-gcp.sh`](cloud/provision-gcp.sh)
+  - [`docs/benchmarks/cloud/provision-aws.sh`](cloud/provision-aws.sh)
+  - [`docs/benchmarks/cloud/provision-azure.sh`](cloud/provision-azure.sh)
+  - [`docs/benchmarks/cloud/run-comparative-benchmarks.mjs`](cloud/run-comparative-benchmarks.mjs)
+- Benchmark matrix, raw observation store & static web regenerators:
+  - [`test/distributed/harness/raw-observation-store.js`](../../test/distributed/harness/raw-observation-store.js)
+  - [`test/distributed/harness/raw-observation-campaign-specs.js`](../../test/distributed/harness/raw-observation-campaign-specs.js)
+  - [`test/distributed/harness/comparative-matrix-runner.js`](../../test/distributed/harness/comparative-matrix-runner.js)
+  - [`test/distributed/harness/scaleout-series-experiments.js`](../../test/distributed/harness/scaleout-series-experiments.js)
+  - [`test/distributed/harness/tidb-reference-physical-topology.js`](../../test/distributed/harness/tidb-reference-physical-topology.js)
+- Recorded measurement & raw observation stores:
+  - [`data/tidb-comparison/raw-observations.ndjson`](../../data/tidb-comparison/raw-observations.ndjson)
+  - [`data/tidb-comparison/admitted-lab-measurements.json`](../../data/tidb-comparison/admitted-lab-measurements.json)
+  - [`data/tidb-comparison/history.ndjson`](../../data/tidb-comparison/history.ndjson)
+  - [`data/tidb-comparison/progress-summary.json`](../../data/tidb-comparison/progress-summary.json)
+  - [`data/tidb-comparison/multi-system-matrix.json`](../../data/tidb-comparison/multi-system-matrix.json)

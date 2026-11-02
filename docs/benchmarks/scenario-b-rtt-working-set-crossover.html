@@ -27,7 +27,7 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
   <rect width="960" height="560" fill="#0f172a" rx="8"/>
   <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">Scenario B Network RTT Crossover &amp; Working-Set Growth</text>
   <text x="30" y="44" fill="#94a3b8" font-size="11">Sequential graph shape across 0.2..30ms RTT &amp; heavy 2048-event working set</text>
-  <text x="30" y="58" fill="#64748b" font-size="10">Legend: dashed border = modeled-topology-oracle (simulated cluster wire)</text>
+  <text x="30" y="58" fill="#64748b" font-size="10">Legend: solid bar = observed-docker-cluster (multi-machine live wire)</text>
   <a href="README.md"><text x="590" y="28" fill="#38bdf8" font-size="11">Overview</text></a>
   <a href="lagrange-metrics-evolution.md"><text x="660" y="28" fill="#38bdf8" font-size="11">Evolution</text></a>
   <a href="scaleout-3to5-node-rf3-progress.md"><text x="735" y="28" fill="#38bdf8" font-size="11">3-to-5 Scale</text></a>
@@ -43,9 +43,10 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
   <text x="665" y="114" fill="#94a3b8" font-size="10">2048-event working set scaling drop</text>
     <text x="45" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="45" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="45" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="45" y="154" fill="#cbd5e1" font-size="10">10ms: 21 dec/s (0.2ms: 37)</text>
     <rect x="45" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="45" y="175" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 2 sequential hops</text>
+    <rect x="45" y="158" width="26" height="7" fill="#38bdf8" rx="2"/>
+    <text x="45" y="175" fill="#64748b" font-size="9">30ms: 20 dec/s | 2 sequential hops</text>
     <text x="45" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="45" y="213" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
     <text x="45" y="224" fill="#cbd5e1" font-size="10">[not measured]</text>
@@ -58,9 +59,10 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
     <text x="45" y="315" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 6 sequential hops</text>
     <text x="45" y="342" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="45" y="353" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="45" y="364" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="45" y="364" fill="#cbd5e1" font-size="10">10ms: 359 dec/s (0.2ms: 577)</text>
     <rect x="45" y="368" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="45" y="385" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 6 sequential hops</text>
+    <rect x="45" y="368" width="250" height="7" fill="#f59e0b" rx="2"/>
+    <text x="45" y="385" fill="#64748b" font-size="9">30ms: 142 dec/s | 6 sequential hops</text>
     <text x="45" y="412" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="45" y="423" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
     <text x="45" y="434" fill="#cbd5e1" font-size="10">[not measured]</text>
@@ -68,14 +70,16 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
     <text x="45" y="455" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 6 sequential hops</text>
     <text x="45" y="482" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="45" y="493" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="45" y="504" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="45" y="504" fill="#cbd5e1" font-size="10">10ms: 58 dec/s (0.2ms: 460)</text>
     <rect x="45" y="508" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="45" y="525" fill="#64748b" font-size="9">30ms: [not measured] dec/s | 12 sequential hops</text>
+    <rect x="45" y="508" width="73" height="7" fill="#0284c7" rx="2"/>
+    <text x="45" y="525" fill="#64748b" font-size="9">30ms: 21 dec/s | 12 sequential hops</text>
     <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="355" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="355" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="355" y="154" fill="#cbd5e1" font-size="10">2000.2ms p99 @ 10ms RTT</text>
     <rect x="355" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="355" y="175" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
+    <rect x="355" y="158" width="250" height="7" fill="#38bdf8" rx="2"/>
+    <text x="355" y="175" fill="#64748b" font-size="9">Local: 1585.4ms | 30ms: 1399.2ms</text>
     <text x="355" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="355" y="213" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
     <text x="355" y="224" fill="#cbd5e1" font-size="10">[not measured]</text>
@@ -88,9 +92,10 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
     <text x="355" y="315" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
     <text x="355" y="342" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="355" y="353" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="355" y="364" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="355" y="364" fill="#cbd5e1" font-size="10">41.7ms p99 @ 10ms RTT</text>
     <rect x="355" y="368" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="355" y="385" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
+    <rect x="355" y="368" width="65" height="7" fill="#f59e0b" rx="2"/>
+    <text x="355" y="385" fill="#64748b" font-size="9">Local: 105.1ms | 30ms: 74.1ms</text>
     <text x="355" y="412" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="355" y="423" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
     <text x="355" y="434" fill="#cbd5e1" font-size="10">[not measured]</text>
@@ -98,14 +103,16 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
     <text x="355" y="455" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
     <text x="355" y="482" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="355" y="493" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="355" y="504" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="355" y="504" fill="#cbd5e1" font-size="10">160.8ms p99 @ 10ms RTT</text>
     <rect x="355" y="508" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="355" y="525" fill="#64748b" font-size="9">Local: [not measured]ms | 30ms: [not measured]ms</text>
+    <rect x="355" y="508" width="250" height="7" fill="#0284c7" rx="2"/>
+    <text x="355" y="525" fill="#64748b" font-size="9">Local: 74.5ms | 30ms: 436.0ms</text>
     <text x="665" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="665" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="665" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="665" y="154" fill="#cbd5e1" font-size="10">50.3 dec/s (-32.1%)</text>
     <rect x="665" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="665" y="175" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
+    <rect x="665" y="158" width="31" height="7" fill="#38bdf8" rx="2"/>
+    <text x="665" y="175" fill="#64748b" font-size="9">WAN: 115240 B/req | p99: 1253.4ms</text>
     <text x="665" y="202" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="665" y="213" fill="#94a3b8" font-size="10" font-family="monospace">Colocated (RF=3)</text>
     <text x="665" y="224" fill="#cbd5e1" font-size="10">[not measured]</text>
@@ -118,9 +125,10 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
     <text x="665" y="315" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
     <text x="665" y="342" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="665" y="353" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="665" y="364" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="665" y="364" fill="#cbd5e1" font-size="10">961.1 dec/s (-15.7%)</text>
     <rect x="665" y="368" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="665" y="385" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
+    <rect x="665" y="368" width="250" height="7" fill="#f59e0b" rx="2"/>
+    <text x="665" y="385" fill="#64748b" font-size="9">WAN: 1476 B/req | p99: 80.8ms</text>
     <text x="665" y="412" fill="#cbd5e1" font-size="11" font-family="monospace">YugabyteDB 2024.2</text>
     <text x="665" y="423" fill="#94a3b8" font-size="10" font-family="monospace">Stored Proc (RF=3)</text>
     <text x="665" y="434" fill="#cbd5e1" font-size="10">[not measured]</text>
@@ -128,9 +136,10 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
     <text x="665" y="455" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
     <text x="665" y="482" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="665" y="493" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="665" y="504" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="665" y="504" fill="#cbd5e1" font-size="10">541.4 dec/s (-11.5%)</text>
     <rect x="665" y="508" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="665" y="525" fill="#64748b" font-size="9">WAN: [not measured] | p99: [not measured]ms</text>
+    <rect x="665" y="508" width="250" height="7" fill="#0284c7" rx="2"/>
+    <text x="665" y="525" fill="#64748b" font-size="9">WAN: 16688 B/req | p99: 80.2ms</text>
 </svg>
     </div>
     <div class="card">
@@ -138,12 +147,12 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
       <p>Evaluating network latency scaling from 0.2 ms LAN to 30 ms cross-region WAN highlights the architectural overhead of multi-hop sequential orchestration across distributed nodes. Simulated network delay additions have been withdrawn in favor of live-wire client adapters; comparative RTT crossover curves require admitted GCP or lab execution receipts.</p>
       <table><thead><tr><th>Target</th><th>Hops</th><th>Local (0.2ms)</th><th>0.2 ms</th><th>2.0 ms</th><th>10.0 ms</th><th>30.0 ms</th><th>Evidence Tier</th></tr></thead>
         <tbody>
-<tr><td><strong>Lagrange</strong></td><td>2</td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td>6</td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>Citus 13 (Dist Function)</strong></td><td>6</td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>PG 17 Patroni + PL/pgSQL</strong></td><td>6</td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>YugabyteDB 2024.2 (Stored Proc)</strong></td><td>6</td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>TiDB + TiKV</strong></td><td>12</td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
+<tr><td><strong>Lagrange</strong></td><td>2</td><td>56.0</td><td>36.8</td><td>24.6</td><td>20.9</td><td>20.0</td><td>observed-docker-cluster</td></tr>
+<tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td>6</td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>not-measured</td></tr>
+<tr><td><strong>Citus 13 (Dist Function)</strong></td><td>6</td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>not-measured</td></tr>
+<tr><td><strong>PG 17 Patroni + PL/pgSQL</strong></td><td>6</td><td>1118.9</td><td>576.6</td><td>828.0</td><td>359.1</td><td>141.7</td><td>observed-docker-cluster</td></tr>
+<tr><td><strong>YugabyteDB 2024.2 (Stored Proc)</strong></td><td>6</td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>not-measured</td></tr>
+<tr><td><strong>TiDB + TiKV</strong></td><td>12</td><td>816.3</td><td>460.2</td><td>268.4</td><td>58.2</td><td>20.5</td><td>observed-docker-cluster</td></tr>
       </tbody></table>
     </div>
     <div class="card">
@@ -151,12 +160,12 @@ th{color:var(--muted);font-weight:600}.chart-box{margin-bottom:24px;display:flex
       <p>Increasing historical state from a moderate 64-event history to a heavy-correlation 2048-event working set evaluates the wire efficiency and serialization overhead of candidate architectures. Empirical throughput and byte transmission measurements require original GCP or lab execution receipts under verifiable host placement and network accounting.</p>
       <table><thead><tr><th>Target</th><th>Moderate (dec/s)</th><th>Moderate p99 (ms)</th><th>Moderate WAN</th><th>Heavy (dec/s)</th><th>Heavy p99 (ms)</th><th>Heavy WAN</th><th>Drop %</th><th>Evidence Tier</th></tr></thead>
         <tbody>
-<tr><td><strong>Lagrange</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>Citus 13 (Dist Function)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>PG 17 Patroni + PL/pgSQL</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>YugabyteDB 2024.2 (Stored Proc)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>TiDB + TiKV</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
+<tr><td><strong>Lagrange</strong></td><td>74.1</td><td>971.6</td><td>69878</td><td>50.3</td><td>1253.4</td><td>115240</td><td>-32.1%</td><td>observed-docker-cluster</td></tr>
+<tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>not-measured</td></tr>
+<tr><td><strong>Citus 13 (Dist Function)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>not-measured</td></tr>
+<tr><td><strong>PG 17 Patroni + PL/pgSQL</strong></td><td>1139.7</td><td>104.1</td><td>1110</td><td>961.1</td><td>80.8</td><td>1476</td><td>-15.7%</td><td>observed-docker-cluster</td></tr>
+<tr><td><strong>YugabyteDB 2024.2 (Stored Proc)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>not-measured</td></tr>
+<tr><td><strong>TiDB + TiKV</strong></td><td>611.7</td><td>65.3</td><td>13135</td><td>541.4</td><td>80.2</td><td>16688</td><td>-11.5%</td><td>observed-docker-cluster</td></tr>
       </tbody></table>
     </div>
   </div>

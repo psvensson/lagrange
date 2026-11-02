@@ -276,8 +276,6 @@ async function runCutoverCommand(argv, dependencyOverrides = {}) {
 
 export {
   CUTOVER_CLI_EXIT_CODE,
-  CUTOVER_SUBCOMMAND,
-  CutoverUsageError,
   parseCutoverCommand,
   runCutoverCommand,
 };

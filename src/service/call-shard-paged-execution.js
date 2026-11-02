@@ -33,7 +33,6 @@ import {
 import {
   createShardReadViewManager,
   executeLocalShardPageRead,
-  getHandlerReadViewManager,
 } from './call-shard-read-view-manager.js';
 
 const UTF8_ENCODING = 'utf8';
@@ -785,13 +784,11 @@ export {
   buildKeysetPageCursor,
   buildKeysetPageQuery,
   compareKeyTuples,
-  createPagedRoutingError,
   createPagedShardProgressTracker,
   createShardReadViewManager,
   executeLocalShardPageRead,
   executePagedShardSlot,
   extractUserArgumentsJson,
-  getHandlerReadViewManager,
   resolveDeterministicKeyColumns,
   stampPagedCallArguments,
   validateKeysetPageCursor,

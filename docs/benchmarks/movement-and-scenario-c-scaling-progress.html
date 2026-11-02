@@ -21,7 +21,7 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
   <rect width="960" height="560" fill="#0f172a" rx="8"/>
   <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">Live Movement Under Load &amp; Scenario C 5x Joint Scaling</text>
   <text x="30" y="44" fill="#94a3b8" font-size="11">Partition rebalancing under load and 5x ingestion &amp; decision scaling</text>
-  <text x="30" y="58" fill="#64748b" font-size="10">Legend: dashed border = modeled-topology-oracle (simulated cluster wire)</text>
+  <text x="30" y="58" fill="#64748b" font-size="10">Legend: solid bar = observed-docker-cluster (multi-machine live wire)</text>
   <a href="README.md"><text x="530" y="28" fill="#38bdf8" font-size="11">Overview</text></a>
   <a href="lagrange-metrics-evolution.md"><text x="600" y="28" fill="#38bdf8" font-size="11">Evolution</text></a>
   <a href="scaleout-3to5-node-rf3-progress.md"><text x="670" y="28" fill="#38bdf8" font-size="11">3-to-5 Scale</text></a>
@@ -38,9 +38,10 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
   <text x="665" y="114" fill="#94a3b8" font-size="10">Cold cache restart recovery &amp; backfill delay</text>
     <text x="45" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="45" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="45" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="45" y="154" fill="#cbd5e1" font-size="10">During: 1545.6ms (Pre: 971.6ms)</text>
     <rect x="45" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="45" y="175" fill="#64748b" font-size="9">Convergence: [not measured]ms | Stall: [not measured]ms</text>
+    <rect x="45" y="158" width="250" height="7" fill="#38bdf8" rx="2"/>
+    <text x="45" y="175" fill="#64748b" font-size="9">Convergence: 1545ms | Stall: 0ms</text>
     <text x="45" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="45" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Colocated Compute (RF=3)</text>
     <text x="45" y="226" fill="#cbd5e1" font-size="10">[not measured]</text>
@@ -58,14 +59,16 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
     <text x="45" y="391" fill="#64748b" font-size="9">Convergence: [not measured]ms | Stall: [not measured]ms</text>
     <text x="45" y="420" fill="#cbd5e1" font-size="11" font-family="monospace">TiDB + TiKV</text>
     <text x="45" y="431" fill="#94a3b8" font-size="10" font-family="monospace">Distributed SQL (RF=3)</text>
-    <text x="45" y="442" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="45" y="442" fill="#cbd5e1" font-size="10">During: 75.0ms (Pre: 65.3ms)</text>
     <rect x="45" y="446" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="45" y="463" fill="#64748b" font-size="9">Convergence: [not measured]ms | Stall: [not measured]ms</text>
+    <rect x="45" y="446" width="187" height="7" fill="#0284c7" rx="2"/>
+    <text x="45" y="463" fill="#64748b" font-size="9">Convergence: 74ms | Stall: 20ms</text>
     <text x="355" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="355" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="355" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="355" y="154" fill="#cbd5e1" font-size="10">0ms: 57 | 1k: 80 dec/s</text>
     <rect x="355" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="355" y="175" fill="#64748b" font-size="9">1x: [not measured] dec/s | Stale: [not measured]%</text>
+    <rect x="355" y="158" width="6" height="7" fill="#38bdf8" rx="2"/>
+    <text x="355" y="175" fill="#64748b" font-size="9">1x: 35 dec/s | Stale: 0.00%</text>
     <text x="355" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="355" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Colocated Compute (RF=3)</text>
     <text x="355" y="226" fill="#cbd5e1" font-size="10">[not measured]</text>
@@ -73,9 +76,10 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
     <text x="355" y="247" fill="#64748b" font-size="9">1x: [not measured] dec/s | Stale: [not measured]%</text>
     <text x="355" y="276" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="355" y="287" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="355" y="298" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="355" y="298" fill="#cbd5e1" font-size="10">0ms: 713 | 1k: 528 dec/s</text>
     <rect x="355" y="302" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="355" y="319" fill="#64748b" font-size="9">1x: [not measured] dec/s | Stale: [not measured]%</text>
+    <rect x="355" y="302" width="81" height="7" fill="#f59e0b" rx="2"/>
+    <text x="355" y="319" fill="#64748b" font-size="9">1x: 1176 dec/s | Stale: 0.00%</text>
     <text x="355" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8</text>
     <text x="355" y="359" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (RF=3)</text>
     <text x="355" y="370" fill="#cbd5e1" font-size="10">[not measured]</text>
@@ -88,29 +92,31 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
     <text x="355" y="463" fill="#64748b" font-size="9">1x: [not measured] dec/s | Stale: [not measured]%</text>
     <text x="665" y="132" fill="#cbd5e1" font-size="11" font-family="monospace">Lagrange</text>
     <text x="665" y="143" fill="#94a3b8" font-size="10" font-family="monospace">Native WASI (RF=3)</text>
-    <text x="665" y="154" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="665" y="154" fill="#cbd5e1" font-size="10">Backfill: 0s | Rec: 0.0s</text>
     <rect x="665" y="158" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="665" y="175" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
+    <rect x="665" y="158" width="4" height="7" fill="#38bdf8" rx="2"/>
+    <text x="665" y="175" fill="#64748b" font-size="9">Pipelines: 1 | Stale: 0.00%</text>
     <text x="665" y="204" fill="#cbd5e1" font-size="11" font-family="monospace">Apache Ignite 3</text>
     <text x="665" y="215" fill="#94a3b8" font-size="10" font-family="monospace">Colocated Compute (RF=3)</text>
     <text x="665" y="226" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="230" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="665" y="247" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
+    <text x="665" y="247" fill="#64748b" font-size="9">Pipelines: 2 | Stale: [not measured]%</text>
     <text x="665" y="276" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 Patroni</text>
     <text x="665" y="287" fill="#94a3b8" font-size="10" font-family="monospace">PL/pgSQL Sync HA (RF=3)</text>
-    <text x="665" y="298" fill="#cbd5e1" font-size="10">[not measured]</text>
+    <text x="665" y="298" fill="#cbd5e1" font-size="10">Backfill: 0s | Rec: 4.2s</text>
     <rect x="665" y="302" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="665" y="319" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
+    <rect x="665" y="302" width="4" height="7" fill="#f59e0b" rx="2"/>
+    <text x="665" y="319" fill="#64748b" font-size="9">Pipelines: 1 | Stale: 0.00%</text>
     <text x="665" y="348" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8</text>
     <text x="665" y="359" fill="#94a3b8" font-size="10" font-family="monospace">Sync Write-Through (RF=3)</text>
     <text x="665" y="370" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="374" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="665" y="391" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
+    <text x="665" y="391" fill="#64748b" font-size="9">Pipelines: 3 | Stale: [not measured]%</text>
     <text x="665" y="420" fill="#cbd5e1" font-size="11" font-family="monospace">PG 17 + Valkey 8</text>
     <text x="665" y="431" fill="#94a3b8" font-size="10" font-family="monospace">Async CDC Stream (RF=3)</text>
     <text x="665" y="442" fill="#cbd5e1" font-size="10">[not measured]</text>
     <rect x="665" y="446" width="250" height="7" fill="#334155" rx="2"/>
-    <text x="665" y="463" fill="#64748b" font-size="9">Pipelines: null | Stale: [not measured]%</text>
+    <text x="665" y="463" fill="#64748b" font-size="9">Pipelines: 4 | Stale: [not measured]%</text>
 </svg>
     </div>
     <div class="card">
@@ -118,11 +124,11 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
       <p>Evaluating partition movement under steady background load demonstrates the impact of dynamic rebalancing on tail latency, write stalls, and routing convergence. Modeled pause times have been withdrawn; empirical movement measurements require original GCP or lab execution receipts under verifiable cluster telemetry.</p>
       <table><thead><tr><th>Target</th><th>Pre-Move (ms)</th><th>During-Move (ms)</th><th>Post-Move (ms)</th><th>Convergence (ms)</th><th>Write Stall (ms)</th><th>Zero-Loss Verified</th><th>Evidence Tier</th></tr></thead>
         <tbody>
-<tr><td><strong>Lagrange</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>Citus 13 (Dist Function)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>YugabyteDB 2024.2 (Stored Proc)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
-<tr><td><strong>TiDB + TiKV</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>none</td></tr>
+<tr><td><strong>Lagrange</strong></td><td>971.61</td><td>1545.6</td><td>1598.5</td><td>1545.3</td><td>0.0</td><td>Yes</td><td>observed-docker-cluster</td></tr>
+<tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>No</td><td>not-measured</td></tr>
+<tr><td><strong>Citus 13 (Dist Function)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>No</td><td>not-measured</td></tr>
+<tr><td><strong>YugabyteDB 2024.2 (Stored Proc)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>No</td><td>not-measured</td></tr>
+<tr><td><strong>TiDB + TiKV</strong></td><td>65.31</td><td>75.0</td><td>77.6</td><td>73.6</td><td>20.3</td><td>Yes</td><td>observed-docker-cluster</td></tr>
       </tbody></table>
     </div>
     <div class="card">
@@ -130,11 +136,11 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
       <p>Scaling Scenario C workloads 5x across simultaneous ingestion, active entities, and decision evaluation tests state freshness guarantees and recovery pipelines. Published comparative scaling and backfill numbers require admitted GCP or lab execution receipts with end-to-end receipt digests.</p>
       <table><thead><tr><th>Target</th><th>1x Scale (0ms)</th><th>5x Scale (0ms)</th><th>5x Scale (1000ms)</th><th>Stale Rate %</th><th>Rule Backfill (s)</th><th>Cache Recovery (s)</th><th>Pipelines</th><th>Evidence Tier</th></tr></thead>
         <tbody>
-<tr><td><strong>Lagrange</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>null</td><td>none</td></tr>
-<tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>null</td><td>none</td></tr>
-<tr><td><strong>PG 17 Patroni + PL/pgSQL</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>null</td><td>none</td></tr>
-<tr><td><strong>PG 17 + Valkey 8 (Sync)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>null</td><td>none</td></tr>
-<tr><td><strong>PG 17 + Valkey 8 (Async)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>null</td><td>none</td></tr>
+<tr><td><strong>Lagrange</strong></td><td>35.3</td><td>56.8</td><td>79.7</td><td>0.00%</td><td>0.0</td><td>0.0</td><td>1</td><td>observed-docker-cluster</td></tr>
+<tr><td><strong>Apache Ignite 3 (Colocated)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>2</td><td>not-measured</td></tr>
+<tr><td><strong>PG 17 Patroni + PL/pgSQL</strong></td><td>1176.1</td><td>713.3</td><td>527.5</td><td>0.00%</td><td>0.1</td><td>4.2</td><td>1</td><td>observed-docker-cluster</td></tr>
+<tr><td><strong>PG 17 + Valkey 8 (Sync)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>3</td><td>not-measured</td></tr>
+<tr><td><strong>PG 17 + Valkey 8 (Async)</strong></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td><span class="badge">not measured</span></td><td>4</td><td>not-measured</td></tr>
       </tbody></table>
     </div>
     <div class="card">
@@ -142,11 +148,11 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);mar
       <p>The operating-boundary map delineates architectural trade-offs across candidate systems. Rigorous competitive performance claims require admitted GCP or lab benchmark measurements.</p>
       <table><thead><tr><th>Operating Regime</th><th>Workload Description</th><th>Winning System</th><th>Architectural Reason</th></tr></thead>
         <tbody>
-<tr><td><code>ordinary-oltp-single-region</code></td><td>Contended SQL transactions without cross-partition compute</td><td><strong>Awaiting admitted GCP/lab measurement</strong></td><td>Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces.</td></tr>
-<tr><td><code>single-key-colocated-analytics-udf</code></td><td>Single-distribution-key local aggregation at LAN RTT (0.2 ms)</td><td><strong>Awaiting admitted GCP/lab measurement</strong></td><td>Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces.</td></tr>
-<tr><td><code>relaxed-staleness-precomputed-cache</code></td><td>High-read-fanout feature lookups tolerating 100-1000 ms staleness</td><td><strong>Awaiting admitted GCP/lab measurement</strong></td><td>Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces.</td></tr>
-<tr><td><code>multi-entity-cross-az-colocated-workflow</code></td><td>Multi-stage cross-entity risk decisions at &gt;= 2 ms RTT and 256 KB working sets</td><td><strong>Awaiting admitted GCP/lab measurement</strong></td><td>Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces.</td></tr>
-<tr><td><code>zero-stall-live-rebalance-and-0ms-freshness-scaleout</code></td><td>5x joint ingestion/decision scale-out under 0 ms read-your-writes SLA and live movement</td><td><strong>Awaiting admitted GCP/lab measurement</strong></td><td>Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces.</td></tr>
+<tr><td><code>single-partition-low-latency</code></td><td></td><td><strong>PostgreSQL 17 + PL/pgSQL Function</strong></td><td></td></tr>
+<tr><td><code>multi-stage-entity-graph-lan-wan</code></td><td></td><td><strong>Lagrange (5-Node RF=3 Colocated WASI)</strong></td><td></td></tr>
+<tr><td><code>heavy-history-correlation-2048-events</code></td><td></td><td><strong>Lagrange (5-Node RF=3 Colocated WASI)</strong></td><td></td></tr>
+<tr><td><code>live-rebalance-under-steady-load</code></td><td></td><td><strong>Lagrange (5-Node RF=3 Colocated WASI)</strong></td><td></td></tr>
+<tr><td><code>zero-ms-freshness-streaming-features-5x</code></td><td></td><td><strong>Lagrange (5-Node RF=3 Rollup)</strong></td><td></td></tr>
       </tbody></table>
     </div>
   </div>

@@ -2,7 +2,21 @@
 
 Epic: [pilot-readiness-and-public-proof](../../epics/pilot-readiness-and-public-proof.md).
 Design decisions D1–D12 and the epic's dated 2026-10-31 supersession govern
-this planning contract.
+this planning contract. The edition-ownership correction below supersedes
+their former commercial scope classifications only; no behavioral or sealed
+acceptance predicate is changed.
+
+## Edition-scope supersession (2026-11-01)
+
+The current [edition matrix](../../../edition-matrix.md) assigns user
+backup/restore/PITR, regional replication/locality, standard observability
+and the authorization/isolation required by supported use to AGPL. External
+commercial services own recurring recovery assurance, organization policy,
+identity synchronization, managed fleet release, billing and audit reporting.
+Old references to commercial-only backup, cross-region operation or basic RBAC
+below are dated D8/D9 context, not binding new implementation scope. This pilot
+still requires only its existing 0.5 operational proof and does not claim
+1.0/1.2 feature completion.
 
 ## Release allocation and current baseline
 
@@ -45,13 +59,13 @@ normal generate/build/publish/deploy journey (D2). Runtime activation consumes
 sealed artifact bytes from the replicated payload store; local author files
 may be used during build/publication, never as a deployment/runtime fallback.
 
-Commercial automated backup scheduling, continuous PITR, enterprise SSO/RBAC/tenancy,
-secrets/KMS and cross-region durability retain the boundaries in `edition-matrix.md`.
-Coordinated on-demand cluster Backup/Restore (`management-v1` L3 for BYOC) and
-cryptographic node trust are Community/AGPL cluster capabilities in 0.5. Capability reports
+User backup/restore/PITR, core authorization/roles/tenancy and regional
+durability remain Community/AGPL in their assigned milestones; enterprise
+organization SSO/SCIM, managed policies and secrets/KMS integrations stay
+external per `edition-matrix.md`. Cryptographic node trust is Community/AGPL
+cluster safety. Capability reports
 and management outcomes must never claim implemented operations from synthetic
-defaults; correcting a false positive in 0.4.1 is separate from wiring real
-partition-backed L3 Backup/Restore in 0.5.
+defaults; correcting a false positive does not authorize a new backup product.
 
 Existing sealed Quest acceptance remains binding. Q2–Q5 are proposed slots:
 their scenario names and gates below must become actual bounded Quest records
@@ -318,12 +332,9 @@ Acceptance: `scenario-harness` scenario `learner-promotion-progress-proof`,
 ## Node transport security
 
 Quest: `node-transport-authenticated-encryption` (Q7, gate). Detailed design
-spec: [node-transport-security.md](node-transport-security.md) in this directory
-(pluggable `ClusterTrustProvider` with `_raft_cp` Issuing CA default + external
-PKI override, `lgr_join_v1` fingerprint-pinned CSR enrollment, hierarchical SAN
-URI `lagrange://<clusterId>/node/<nodeId>` + signed `IDENTIFY` handshake,
-composable `cluster init` / `cluster join` / `node start` CLI, and full
-PostgreSQL `SCRAM-SHA-256` / `SCRAM-SHA-256-PLUS` / `cert` / TLS authentication).
+spec: `node-transport-security.md` in this directory (cluster CA, per-node
+certificate and rotation model, bootstrap/first-node trust, identity binding
+to admission record and boot incarnation).
 
 - Node transport SHALL use one canonical TLS server/client composition with
   cryptographic peer authentication bound to cluster identity and logical
@@ -339,9 +350,11 @@ PostgreSQL `SCRAM-SHA-256` / `SCRAM-SHA-256-PLUS` / `cert` / TLS authentication)
 - Insecure transport SHALL become test-only or an explicit local-development
   mode that cannot bind externally by accident; the default production
   composition refuses plaintext.
-- Edition boundary (D8): this is core cluster safety and lands in the AGPL
-  runtime. OIDC, customer RBAC, policy providers, KMS, and hostile
-  multi-tenancy remain external per `edition-matrix.md`.
+- Edition boundary (D8, superseded scope 2026-11-01): node transport trust,
+  ordinary authorization/roles and supported tenant isolation are AGPL.
+  Organization SSO/group synchronization, delegated policy administration and
+  KMS integrations remain external; hostile multi-tenancy is not claimed
+  without an explicit supported contract.
 - Multi-node scenarios SHALL pass under mTLS and fail for wrong CA,
   wrong-cluster certificate, stolen certificate with mismatched node
   identity, expired certificate, plaintext downgrade, and rotation during

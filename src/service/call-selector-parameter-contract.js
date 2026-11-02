@@ -665,9 +665,6 @@ function normalizeBindingSelectorParameters(
 export {
   CALL_SELECTOR_PARAM_TYPE,
   FORBIDDEN_AUTHORITY_PARAMETER_NAMES,
-  INVALID_PARAMETERS_CODE,
-  PLACEHOLDER_MODE,
-  SELECTOR_PARAM_MESSAGE,
   assertDispatchedSelectorParameters,
   assertSelectorParameterCorrespondence,
   computeParameterSchemaDigest,

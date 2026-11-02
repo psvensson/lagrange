@@ -44,9 +44,8 @@ function getExperiment(matrix) {
 }
 
 function renderSvgItem(x, y, [l1, l2], metric, valW, color, sub) {
-  const dash = ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"';
   const fillBar = valW > 0 ?
-    `\n    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"${dash}/>` : '';
+    `\n    <rect x="${x}" y="${y + 26}" width="${valW}" height="7" fill="${color}" rx="2"/>` : '';
   return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="11" font-family="monospace">${l1}</text>
     <text x="${x}" y="${y + 11}" fill="#94a3b8" font-size="10" font-family="monospace">${l2}</text>
     <text x="${x}" y="${y + 22}" fill="#cbd5e1" font-size="10">${escapeXml(metric)}</text>
@@ -90,7 +89,7 @@ export function renderMovementScenarioCScalingSvg(matrix) {
   const exp = getExperiment(matrix);
   const title = 'Live Movement Under Load &amp; Scenario C 5x Joint Scaling';
   const sub1 = 'Partition rebalancing under load and 5x ingestion &amp; decision scaling';
-  const sub2 = 'Legend: dashed border = modeled-topology-oracle (simulated cluster wire)';
+  const sub2 = 'Legend: solid bar = observed-docker-cluster (multi-machine live wire)';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560">
   <rect width="960" height="560" fill="#0f172a" rx="8"/>
   <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">${title}</text>

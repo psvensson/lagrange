@@ -1,20 +1,13 @@
 #!/usr/bin/env node
 
-import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {runTokenCheckGuard} from
+  './q2-call-selector-typed-parameter-narrowing-guard.js';
 
-const arrayIncludes = Function.call.bind(Array.prototype.includes);
-const stringIncludes = Function.call.bind(String.prototype.includes);
-
-const UTF8_ENCODING = 'utf8';
 const CURRENT_FILE_PATH = fileURLToPath(import.meta.url);
 const CURRENT_DIR_PATH = path.dirname(CURRENT_FILE_PATH);
 const ROOT_DIR_PATH = path.resolve(CURRENT_DIR_PATH, '../..');
-const METRIC_FLAG = '--metric';
-const NEWLINE = '\n';
-const EXIT_SUCCESS = 0;
-const EXIT_FAILURE = 1;
 
 const HTTP_ADAPTER_REL_PATH = 'src/service/request-cell-http-adapter.js';
 const ROUTING_CONTRACT_REL_PATH =
@@ -110,41 +103,4 @@ const FILE_TOKEN_CHECKS = Object.freeze([
   [H3_TEST_REL_PATH, H3_TEST_TOKENS, ISSUE_H3_TEST],
 ]);
 
-function readTextIfPresent(relPath) {
-  const fullPath = path.join(ROOT_DIR_PATH, relPath);
-  if (!fs.existsSync(fullPath)) {
-    return null;
-  }
-  return fs.readFileSync(fullPath, UTF8_ENCODING);
-}
-
-function checkRequiredTokens(relPath, requiredTokens, issueCode, issues) {
-  const content = readTextIfPresent(relPath);
-  if (content === null) {
-    issues.push(issueCode);
-    return;
-  }
-  for (const token of requiredTokens) {
-    if (!stringIncludes(content, token)) {
-      issues.push(issueCode);
-      return;
-    }
-  }
-}
-
-function evaluateGuard() {
-  const issues = [];
-  for (const [relPath, tokens, issueCode] of FILE_TOKEN_CHECKS) {
-    checkRequiredTokens(relPath, tokens, issueCode, issues);
-  }
-  return issues;
-}
-
-const detectedIssues = evaluateGuard();
-const isMetricMode = arrayIncludes(process.argv, METRIC_FLAG);
-if (isMetricMode) {
-  process.stdout.write(`${detectedIssues.length}${NEWLINE}`);
-} else if (detectedIssues.length > 0) {
-  process.stderr.write(`${detectedIssues.join(NEWLINE)}${NEWLINE}`);
-}
-process.exitCode = detectedIssues.length === 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+runTokenCheckGuard(ROOT_DIR_PATH, FILE_TOKEN_CHECKS);

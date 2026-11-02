@@ -473,5 +473,4 @@ async function executeLocalShardPageRead({
 export {
   createShardReadViewManager,
   executeLocalShardPageRead,
-  getHandlerReadViewManager,
 };

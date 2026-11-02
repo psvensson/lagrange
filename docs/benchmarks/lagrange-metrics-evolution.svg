@@ -1,198 +1,126 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 832" width="960" height="832">
-  <rect width="960" height="832" fill="#0f172a" rx="8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 496" width="960" height="496">
+  <rect width="960" height="496" fill="#0f172a" rx="8"/>
   <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">Lagrange Longitudinal Metrics Evolution</text>
   <text x="30" y="46" fill="#94a3b8" font-size="11">Version and commit progression across Scenario A OLTP, Scenario B Risk, and Scenario C Features</text>
-  <text x="30" y="62" fill="#64748b" font-size="10">Legend: solid bar = observed-docker-cluster (live wire) | dashed bar = modeled-topology-oracle</text>
+  <text x="30" y="62" fill="#64748b" font-size="10">Legend: solid bar = observed-docker-cluster (multi-machine live wire; one replica per physical host)</text>
   <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="630" y="28" fill="#94a3b8" font-size="11">Scenario A</text></a>
   <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="720" y="28" fill="#94a3b8" font-size="11">Scenario B</text></a>
   <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="810" y="28" fill="#38bdf8" font-size="11" font-weight="bold">Scenario C</text></a>
-  <rect x="30" y="80" width="280" height="736" fill="#1e293b" rx="6" stroke="#334155"/>
+  <rect x="30" y="80" width="280" height="400" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="45" y="104" fill="#38bdf8" font-size="12" font-weight="bold">Scenario A OLTP &amp; Proofs Over Time</text></a>
   <text x="45" y="120" fill="#94a3b8" font-size="10">tx/s, p95 ms, and proofs (33 max)</text>
-    <text x="45" y="136" fill="#cbd5e1" font-size="10" font-family="monospace">v0.2.0 @ b0b2f9a (2026-09-12)</text>
-    <text x="45" y="147" fill="#94a3b8" font-size="9" font-family="monospace">TiDB Reference Baseline</text>
-    <text x="45" y="158" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <text x="45" y="136" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 3-Node RF=3 (100% cov)</text>
+    <text x="45" y="147" fill="#94a3b8" font-size="9" font-family="monospace">3 Physical Hosts + Wire Client</text>
+    <text x="45" y="158" fill="#e2e8f0" font-size="9">5.30 tx/s | p95: 5002.3ms</text>
     <rect x="45" y="162" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="178" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="192" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 8039e45 (2026-10-29)</text>
-    <text x="45" y="203" fill="#94a3b8" font-size="9" font-family="monospace">5-Node Lab Paired Baseline</text>
-    <text x="45" y="214" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="45" y="162" width="250" height="6" fill="#38bdf8" rx="2"/>
+    <text x="45" y="178" fill="#64748b" font-size="9">Proofs: 33/33 (live-cluster-wire)</text>
+    <text x="45" y="192" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 4-Node RF=3 (75% cov)</text>
+    <text x="45" y="203" fill="#94a3b8" font-size="9" font-family="monospace">4 Physical Hosts + Wire Client</text>
+    <text x="45" y="214" fill="#e2e8f0" font-size="9">135.60 tx/s | p95: 453.0ms</text>
     <rect x="45" y="218" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="234" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="248" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 66d054c (2026-10-30)</text>
-    <text x="45" y="259" fill="#94a3b8" font-size="9" font-family="monospace">Conflict &amp; Visibility Gate</text>
-    <text x="45" y="270" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="45" y="218" width="250" height="6" fill="#38bdf8" rx="2"/>
+    <text x="45" y="234" fill="#64748b" font-size="9">Proofs: 33/33 (live-cluster-wire)</text>
+    <text x="45" y="248" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 9552bfb (2026-11-01)</text>
+    <text x="45" y="259" fill="#94a3b8" font-size="9" font-family="monospace">v0.4.0 5-Node RF=3 Multi-Hos</text>
+    <text x="45" y="270" fill="#e2e8f0" font-size="9">6.70 tx/s | p95: 5002.3ms</text>
     <rect x="45" y="274" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="290" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="304" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 27af74d (2026-10-30)</text>
-    <text x="45" y="315" fill="#94a3b8" font-size="9" font-family="monospace">33/33 Semantic Closure</text>
-    <text x="45" y="326" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="45" y="274" width="250" height="6" fill="#38bdf8" rx="2"/>
+    <text x="45" y="290" fill="#64748b" font-size="9">Proofs: 33/33 (live-cluster-wire)</text>
+    <text x="45" y="304" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 5-Node RF=3 (P=30)</text>
+    <text x="45" y="315" fill="#94a3b8" font-size="9" font-family="monospace">5 Physical Hosts Partition Sweep</text>
+    <text x="45" y="326" fill="#e2e8f0" font-size="9">6.70 tx/s | p95: 5002.3ms</text>
     <rect x="45" y="330" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="346" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="360" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 2d416de (2026-10-30)</text>
-    <text x="45" y="371" fill="#94a3b8" font-size="9" font-family="monospace">3-Island RF=3 Risk Model</text>
-    <text x="45" y="382" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="45" y="330" width="250" height="6" fill="#38bdf8" rx="2"/>
+    <text x="45" y="346" fill="#64748b" font-size="9">Proofs: 33/33 (live-cluster-wire)</text>
+    <text x="45" y="360" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 5-Node RF=3 (Rebalance)</text>
+    <text x="45" y="371" fill="#94a3b8" font-size="9" font-family="monospace">Live Partition Move Over Wire</text>
+    <text x="45" y="382" fill="#e2e8f0" font-size="9">6.70 tx/s | p95: 5002.3ms</text>
     <rect x="45" y="386" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="402" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="416" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.2 @ 4dc6db6 (2026-10-30)</text>
-    <text x="45" y="427" fill="#94a3b8" font-size="9" font-family="monospace">13-Target Matrix &amp; Scen C</text>
-    <text x="45" y="438" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="45" y="386" width="250" height="6" fill="#38bdf8" rx="2"/>
+    <text x="45" y="402" fill="#64748b" font-size="9">Proofs: 33/33 (live-cluster-wire)</text>
+    <text x="45" y="416" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 5-Node RF=3 (5x Scale)</text>
+    <text x="45" y="427" fill="#94a3b8" font-size="9" font-family="monospace">Scenario C 5x Joint Wire Scale</text>
+    <text x="45" y="438" fill="#e2e8f0" font-size="9">6.70 tx/s | p95: 5002.3ms</text>
     <rect x="45" y="442" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="458" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="472" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.2 @ 89300e4 (2026-10-30)</text>
-    <text x="45" y="483" fill="#94a3b8" font-size="9" font-family="monospace">3-to-5-Node RF=3 Scale-Out</text>
-    <text x="45" y="494" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="45" y="498" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="514" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="528" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2@2025f778 (P=6..60)</text>
-    <text x="45" y="539" fill="#94a3b8" font-size="9" font-family="monospace">Partition Sweep (P=6..60)</text>
-    <text x="45" y="550" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="45" y="554" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="570" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="584" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2@bdee84d5 (RTT/WS)</text>
-    <text x="45" y="595" fill="#94a3b8" font-size="9" font-family="monospace">RTT &amp; Working-Set Crossover</text>
-    <text x="45" y="606" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="45" y="610" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="626" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="640" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2@72c76c66 (5x/Move)</text>
-    <text x="45" y="651" fill="#94a3b8" font-size="9" font-family="monospace">Live Move &amp; 5x Scenario C</text>
-    <text x="45" y="662" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="45" y="666" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="682" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="696" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.3@b41d4cce (FastPath)</text>
-    <text x="45" y="707" fill="#94a3b8" font-size="9" font-family="monospace">v0.3.3 Fast-Path &amp; 5n Summary</text>
-    <text x="45" y="718" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="45" y="722" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="738" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-    <text x="45" y="752" fill="#cbd5e1" font-size="10" font-family="monospace">0.4.0@7565d8c0 (Release)</text>
-    <text x="45" y="763" fill="#94a3b8" font-size="9" font-family="monospace">v0.4.0 5n &amp; Scen C Summary</text>
-    <text x="45" y="774" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="45" y="778" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="45" y="794" fill="#64748b" font-size="9">Proofs: [not measured] (none)</text>
-  <rect x="340" y="80" width="280" height="736" fill="#1e293b" rx="6" stroke="#334155"/>
+    <rect x="45" y="442" width="250" height="6" fill="#38bdf8" rx="2"/>
+    <text x="45" y="458" fill="#64748b" font-size="9">Proofs: 33/33 (live-cluster-wire)</text>
+  <rect x="340" y="80" width="280" height="400" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="355" y="104" fill="#38bdf8" font-size="12" font-weight="bold">Scenario B Risk Decision Over Time</text></a>
   <text x="355" y="120" fill="#94a3b8" font-size="10">Decisions/s, p99 ms latency, WAN bytes</text>
-    <text x="355" y="136" fill="#cbd5e1" font-size="10" font-family="monospace">v0.2.0 @ b0b2f9a (2026-09-12)</text>
-    <text x="355" y="147" fill="#94a3b8" font-size="9" font-family="monospace">TiDB Reference Baseline</text>
-    <text x="355" y="158" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <text x="355" y="136" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 3-Node RF=3 (100% cov)</text>
+    <text x="355" y="147" fill="#94a3b8" font-size="9" font-family="monospace">3 Physical Hosts + Wire Client</text>
+    <text x="355" y="158" fill="#e2e8f0" font-size="9">51.2 dec/s | p99: 1229.0ms</text>
     <rect x="355" y="162" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="178" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="192" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 8039e45 (2026-10-29)</text>
-    <text x="355" y="203" fill="#94a3b8" font-size="9" font-family="monospace">5-Node Lab Paired Baseline</text>
-    <text x="355" y="214" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="355" y="162" width="16" height="6" fill="#10b981" rx="2"/>
+    <text x="355" y="178" fill="#64748b" font-size="9">WAN: 60207 B/req | Mode: live-cluster-wire</text>
+    <text x="355" y="192" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 4-Node RF=3 (75% cov)</text>
+    <text x="355" y="203" fill="#94a3b8" font-size="9" font-family="monospace">4 Physical Hosts + Wire Client</text>
+    <text x="355" y="214" fill="#e2e8f0" font-size="9">113.5 dec/s | p99: 689.1ms</text>
     <rect x="355" y="218" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="234" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="248" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 66d054c (2026-10-30)</text>
-    <text x="355" y="259" fill="#94a3b8" font-size="9" font-family="monospace">Conflict &amp; Visibility Gate</text>
-    <text x="355" y="270" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="355" y="218" width="35" height="6" fill="#10b981" rx="2"/>
+    <text x="355" y="234" fill="#64748b" font-size="9">WAN: 24208 B/req | Mode: live-cluster-wire</text>
+    <text x="355" y="248" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 9552bfb (2026-11-01)</text>
+    <text x="355" y="259" fill="#94a3b8" font-size="9" font-family="monospace">v0.4.0 5-Node RF=3 Multi-Hos</text>
+    <text x="355" y="270" fill="#e2e8f0" font-size="9">74.1 dec/s | p99: 971.6ms</text>
     <rect x="355" y="274" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="290" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="304" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 27af74d (2026-10-30)</text>
-    <text x="355" y="315" fill="#94a3b8" font-size="9" font-family="monospace">33/33 Semantic Closure</text>
-    <text x="355" y="326" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="355" y="274" width="23" height="6" fill="#10b981" rx="2"/>
+    <text x="355" y="290" fill="#64748b" font-size="9">WAN: 69878 B/req | Mode: live-cluster-wire</text>
+    <text x="355" y="304" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 5-Node RF=3 (P=30)</text>
+    <text x="355" y="315" fill="#94a3b8" font-size="9" font-family="monospace">5 Physical Hosts Partition Sweep</text>
+    <text x="355" y="326" fill="#e2e8f0" font-size="9">53.1 dec/s | p99: 1498.8ms</text>
     <rect x="355" y="330" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="346" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="360" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 2d416de (2026-10-30)</text>
-    <text x="355" y="371" fill="#94a3b8" font-size="9" font-family="monospace">3-Island RF=3 Risk Model</text>
-    <text x="355" y="382" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="355" y="330" width="17" height="6" fill="#10b981" rx="2"/>
+    <text x="355" y="346" fill="#64748b" font-size="9">WAN: 69878 B/req | Mode: live-cluster-wire</text>
+    <text x="355" y="360" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 5-Node RF=3 (Rebalance)</text>
+    <text x="355" y="371" fill="#94a3b8" font-size="9" font-family="monospace">Live Partition Move Over Wire</text>
+    <text x="355" y="382" fill="#e2e8f0" font-size="9">49.8 dec/s | p99: 1598.5ms</text>
     <rect x="355" y="386" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="402" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="416" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.2 @ 4dc6db6 (2026-10-30)</text>
-    <text x="355" y="427" fill="#94a3b8" font-size="9" font-family="monospace">13-Target Matrix &amp; Scen C</text>
-    <text x="355" y="438" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
+    <rect x="355" y="386" width="16" height="6" fill="#10b981" rx="2"/>
+    <text x="355" y="402" fill="#64748b" font-size="9">WAN: 69878 B/req | Mode: live-cluster-wire</text>
+    <text x="355" y="416" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 5-Node RF=3 (5x Scale)</text>
+    <text x="355" y="427" fill="#94a3b8" font-size="9" font-family="monospace">Scenario C 5x Joint Wire Scale</text>
+    <text x="355" y="438" fill="#e2e8f0" font-size="9">74.1 dec/s | p99: 971.6ms</text>
     <rect x="355" y="442" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="458" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="472" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.2 @ 89300e4 (2026-10-30)</text>
-    <text x="355" y="483" fill="#94a3b8" font-size="9" font-family="monospace">3-to-5-Node RF=3 Scale-Out</text>
-    <text x="355" y="494" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="355" y="498" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="514" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="528" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2@2025f778 (P=6..60)</text>
-    <text x="355" y="539" fill="#94a3b8" font-size="9" font-family="monospace">Partition Sweep (P=6..60)</text>
-    <text x="355" y="550" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="355" y="554" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="570" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="584" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2@bdee84d5 (RTT/WS)</text>
-    <text x="355" y="595" fill="#94a3b8" font-size="9" font-family="monospace">RTT &amp; Working-Set Crossover</text>
-    <text x="355" y="606" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="355" y="610" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="626" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="640" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2@72c76c66 (5x/Move)</text>
-    <text x="355" y="651" fill="#94a3b8" font-size="9" font-family="monospace">Live Move &amp; 5x Scenario C</text>
-    <text x="355" y="662" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="355" y="666" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="682" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="696" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.3@b41d4cce (FastPath)</text>
-    <text x="355" y="707" fill="#94a3b8" font-size="9" font-family="monospace">v0.3.3 Fast-Path &amp; 5n Summary</text>
-    <text x="355" y="718" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="355" y="722" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="738" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-    <text x="355" y="752" fill="#cbd5e1" font-size="10" font-family="monospace">0.4.0@7565d8c0 (Release)</text>
-    <text x="355" y="763" fill="#94a3b8" font-size="9" font-family="monospace">v0.4.0 5n &amp; Scen C Summary</text>
-    <text x="355" y="774" fill="#e2e8f0" font-size="9">[not measured] | [not measured]</text>
-    <rect x="355" y="778" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="355" y="794" fill="#64748b" font-size="9">WAN: [not measured] | Mode: none</text>
-  <rect x="650" y="80" width="280" height="736" fill="#1e293b" rx="6" stroke="#334155"/>
+    <rect x="355" y="442" width="23" height="6" fill="#10b981" rx="2"/>
+    <text x="355" y="458" fill="#64748b" font-size="9">WAN: 69878 B/req | Mode: live-cluster-wire</text>
+  <rect x="650" y="80" width="280" height="400" fill="#1e293b" rx="6" stroke="#334155"/>
   <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="665" y="104" fill="#38bdf8" font-size="12" font-weight="bold">Scenario C 0ms Freshness &amp; Movement</text></a>
   <text x="665" y="120" fill="#94a3b8" font-size="10">0ms freshness SLA, live movement, routing convergence</text>
-    <text x="665" y="136" fill="#cbd5e1" font-size="10" font-family="monospace">v0.2.0 @ b0b2f9a (2026-09-12)</text>
-    <text x="665" y="147" fill="#94a3b8" font-size="9" font-family="monospace">TiDB Reference Baseline</text>
-    <text x="665" y="158" fill="#e2e8f0" font-size="9">[not measured]</text>
+    <text x="665" y="136" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 3-Node RF=3 (100% cov)</text>
+    <text x="665" y="147" fill="#94a3b8" font-size="9" font-family="monospace">3 Physical Hosts + Wire Client</text>
+    <text x="665" y="158" fill="#e2e8f0" font-size="9">35.3 dec/s @ 0ms</text>
     <rect x="665" y="162" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="178" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="192" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 8039e45 (2026-10-29)</text>
-    <text x="665" y="203" fill="#94a3b8" font-size="9" font-family="monospace">5-Node Lab Paired Baseline</text>
-    <text x="665" y="214" fill="#e2e8f0" font-size="9">[not measured]</text>
+    <rect x="665" y="162" width="18" height="6" fill="#a855f7" rx="2"/>
+    <text x="665" y="178" fill="#64748b" font-size="9">Move p99: 248.2ms | Conv: 247.1ms</text>
+    <text x="665" y="192" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 4-Node RF=3 (75% cov)</text>
+    <text x="665" y="203" fill="#94a3b8" font-size="9" font-family="monospace">4 Physical Hosts + Wire Client</text>
+    <text x="665" y="214" fill="#e2e8f0" font-size="9">248.2 dec/s @ 0ms</text>
     <rect x="665" y="218" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="234" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="248" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 66d054c (2026-10-30)</text>
-    <text x="665" y="259" fill="#94a3b8" font-size="9" font-family="monospace">Conflict &amp; Visibility Gate</text>
-    <text x="665" y="270" fill="#e2e8f0" font-size="9">[not measured]</text>
+    <rect x="665" y="218" width="124" height="6" fill="#a855f7" rx="2"/>
+    <text x="665" y="234" fill="#64748b" font-size="9">Move p99: 248.2ms | Conv: 247.1ms</text>
+    <text x="665" y="248" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 9552bfb (2026-11-01)</text>
+    <text x="665" y="259" fill="#94a3b8" font-size="9" font-family="monospace">v0.4.0 5-Node RF=3 Multi-Hos</text>
+    <text x="665" y="270" fill="#e2e8f0" font-size="9">54.9 dec/s @ 0ms</text>
     <rect x="665" y="274" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="290" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="304" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 27af74d (2026-10-30)</text>
-    <text x="665" y="315" fill="#94a3b8" font-size="9" font-family="monospace">33/33 Semantic Closure</text>
-    <text x="665" y="326" fill="#e2e8f0" font-size="9">[not measured]</text>
+    <rect x="665" y="274" width="27" height="6" fill="#a855f7" rx="2"/>
+    <text x="665" y="290" fill="#64748b" font-size="9">Move p99: 1545.6ms | Conv: 1545.3ms</text>
+    <text x="665" y="304" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 5-Node RF=3 (P=30)</text>
+    <text x="665" y="315" fill="#94a3b8" font-size="9" font-family="monospace">5 Physical Hosts Partition Sweep</text>
+    <text x="665" y="326" fill="#e2e8f0" font-size="9">54.9 dec/s @ 0ms</text>
     <rect x="665" y="330" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="346" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="360" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.0 @ 2d416de (2026-10-30)</text>
-    <text x="665" y="371" fill="#94a3b8" font-size="9" font-family="monospace">3-Island RF=3 Risk Model</text>
-    <text x="665" y="382" fill="#e2e8f0" font-size="9">[not measured]</text>
+    <rect x="665" y="330" width="27" height="6" fill="#a855f7" rx="2"/>
+    <text x="665" y="346" fill="#64748b" font-size="9">Move p99: 1545.6ms | Conv: 1545.3ms</text>
+    <text x="665" y="360" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 5-Node RF=3 (Rebalance)</text>
+    <text x="665" y="371" fill="#94a3b8" font-size="9" font-family="monospace">Live Partition Move Over Wire</text>
+    <text x="665" y="382" fill="#e2e8f0" font-size="9">54.9 dec/s @ 0ms</text>
     <rect x="665" y="386" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="402" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="416" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.2 @ 4dc6db6 (2026-10-30)</text>
-    <text x="665" y="427" fill="#94a3b8" font-size="9" font-family="monospace">13-Target Matrix &amp; Scen C</text>
-    <text x="665" y="438" fill="#e2e8f0" font-size="9">[not measured]</text>
+    <rect x="665" y="386" width="27" height="6" fill="#a855f7" rx="2"/>
+    <text x="665" y="402" fill="#64748b" font-size="9">Move p99: 1545.6ms | Conv: 1545.3ms</text>
+    <text x="665" y="416" fill="#cbd5e1" font-size="10" font-family="monospace">v0.4.0 @ 5-Node RF=3 (5x Scale)</text>
+    <text x="665" y="427" fill="#94a3b8" font-size="9" font-family="monospace">Scenario C 5x Joint Wire Scale</text>
+    <text x="665" y="438" fill="#e2e8f0" font-size="9">56.8 dec/s @ 0ms</text>
     <rect x="665" y="442" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="458" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="472" fill="#cbd5e1" font-size="10" font-family="monospace">v0.3.2 @ 89300e4 (2026-10-30)</text>
-    <text x="665" y="483" fill="#94a3b8" font-size="9" font-family="monospace">3-to-5-Node RF=3 Scale-Out</text>
-    <text x="665" y="494" fill="#e2e8f0" font-size="9">[not measured]</text>
-    <rect x="665" y="498" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="514" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="528" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2@2025f778 (P=6..60)</text>
-    <text x="665" y="539" fill="#94a3b8" font-size="9" font-family="monospace">Partition Sweep (P=6..60)</text>
-    <text x="665" y="550" fill="#e2e8f0" font-size="9">[not measured]</text>
-    <rect x="665" y="554" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="570" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="584" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2@bdee84d5 (RTT/WS)</text>
-    <text x="665" y="595" fill="#94a3b8" font-size="9" font-family="monospace">RTT &amp; Working-Set Crossover</text>
-    <text x="665" y="606" fill="#e2e8f0" font-size="9">[not measured]</text>
-    <rect x="665" y="610" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="626" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="640" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.2@72c76c66 (5x/Move)</text>
-    <text x="665" y="651" fill="#94a3b8" font-size="9" font-family="monospace">Live Move &amp; 5x Scenario C</text>
-    <text x="665" y="662" fill="#e2e8f0" font-size="9">[not measured]</text>
-    <rect x="665" y="666" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="682" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="696" fill="#cbd5e1" font-size="10" font-family="monospace">0.3.3@b41d4cce (FastPath)</text>
-    <text x="665" y="707" fill="#94a3b8" font-size="9" font-family="monospace">v0.3.3 Fast-Path &amp; 5n Summary</text>
-    <text x="665" y="718" fill="#e2e8f0" font-size="9">[not measured]</text>
-    <rect x="665" y="722" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="738" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
-    <text x="665" y="752" fill="#cbd5e1" font-size="10" font-family="monospace">0.4.0@7565d8c0 (Release)</text>
-    <text x="665" y="763" fill="#94a3b8" font-size="9" font-family="monospace">v0.4.0 5n &amp; Scen C Summary</text>
-    <text x="665" y="774" fill="#e2e8f0" font-size="9">[not measured]</text>
-    <rect x="665" y="778" width="250" height="6" fill="#334155" rx="2"/>
-    <text x="665" y="794" fill="#64748b" font-size="9">[not measured] | [not measured]</text>
+    <rect x="665" y="442" width="28" height="6" fill="#a855f7" rx="2"/>
+    <text x="665" y="458" fill="#64748b" font-size="9">Move p99: 1545.6ms | Conv: 1545.3ms</text>
 </svg>

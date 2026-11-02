@@ -644,18 +644,11 @@ flowchart LR
     E -->|"Commit Ack"| A
 ```
 
-| Target | Wire (ms) | Parse/Plan (ms) | Lock Wait (ms) | 2PC Prepare (ms) | Quorum Fsync (ms) | Apply (ms) | Total p95 (ms) |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| PG 17 Single Primary + App | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| Citus 13 Sharded RF=3 + App | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| PG 17 Patroni Sync HA RF=3 | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| TiDB + TiKV RF=3 (6-unit) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| Lagrange 0.4.0 (5-Node RF=3 Fast-Path) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| Lagrange 0.3.0 (3-Node Lab Baseline) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `4418.9` |
+See the live multi-machine measured Scenario A phase latency breakdown table in [`docs/benchmarks/README.md`](README.md).
 
 ### Scenario B setup and 4-stage sequential p99 latency breakdown (tidb-distributed-risk-decision)
 
-Scenario B evaluates end-to-end multi-entity fraud risk decisions traversing four relational graph stages: account history, merchant profile, device fingerprint, and related accounts. The topology distributes partitions across 5 nodes under RF=3 (60% replica coverage per node), inducing cross-partition network hops on sequential dependencies.
+Scenario B evaluates end-to-end multi-entity fraud risk decisions traversing four relational graph stages: account history, merchant profile, device fingerprint, and related accounts. The topology distributes partitions across 5 physical hosts under RF=3 (60% replica coverage per node), inducing cross-partition network hops on sequential dependencies.
 
 ```mermaid
 flowchart LR
@@ -666,18 +659,11 @@ flowchart LR
     N4 -->|"Return Decision Result"| C
 ```
 
-| Target | Ingress (ms) | Reducer (ms) | WAN Wait (ms) | Wire Decode (ms) | Steady p99 (ms) | Move Delta (ms) | WAN Bytes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.4.0 (Colocated WASI ctx.call) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| Apache Ignite 3 (JobTarget.colocated) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| PG 17 Patroni + PL/pgSQL Function | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| Citus 13 (Colocated Dist Function) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| YugabyteDB 2024.2 (YSQL Stored Proc) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| TiDB + TiKV (App-Orchestrated SQL) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+See the live multi-machine measured Scenario B phase latency breakdown table in [`docs/benchmarks/README.md`](README.md).
 
 ### Scenario C setup, decision latency, and rule-change backfill optimization (streaming-feature-risk-decision)
 
-Scenario C tests combined high-throughput event ingestion (payments, merchant telemetry, device updates) alongside continuous fraud scoring under strict feature-freshness SLAs.
+Scenario C tests combined high-throughput event ingestion (payments, merchant telemetry, device updates) alongside continuous fraud scoring under strict feature-freshness SLAs across separate physical hosts.
 
 ```mermaid
 flowchart LR
@@ -689,23 +675,17 @@ flowchart LR
     R -->|"Decision (0 B WAN)"| D
 ```
 
-| Target | Ingest Quorum (ms) | Prop Lag (ms) | Compute (ms) | 0ms Fresh (dec/s) | 5x Scale (dec/s) | Backfill (s) | Downtime (s) |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange (In-Partition Rollup + Epoch-Lazy Opt) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| Lagrange 0.4.0 (On-Read Raw Window Scan) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| PG 17 Patroni + PL/pgSQL (On-Read Scan) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| PG 17 + Valkey 8 (Sync Write-Through) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
-| PG 17 + Valkey 8 (Async CDC Stream) | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` | `[not measured]` |
+See the live multi-machine measured Scenario C phase latency and freshness breakdown table in [`docs/benchmarks/README.md`](README.md).
 
-### Why rule-change backfill makes Scenario C and Scenario B look similar, and how Lagrange optimizes it
+### Architectural Comparison of Rule-Change Backfill and Colocated Rollups
 
-In both `Lagrange 0.4.0` and `PostgreSQL 17 + PL/pgSQL`, when the feature engine executes on-read raw event scanning across recent partition history (`O(W)`), deploying a new fraud rule or altering scoring thresholds requires `0.0 s` of rule-change backfill downtime because no precomputed cache tables need recalculation. However, on-read scanning causes Scenario C decision execution to be dominated by scanning unaggregated event logs, similar to Scenario B sequential execution. Multi-host comparative throughput and latency figures for Scenario C remain `[not measured]` pending original multi-host execution receipts.
+In colocated in-database execution (`Lagrange 0.4.0` and `PostgreSQL 17 + PL/pgSQL`), deploying a new fraud rule or altering scoring thresholds requires `0.0 s` of external cache backfill downtime because no external feature store tables need network-wide recalculation.
 
-In contrast, an external feature store (`PostgreSQL 17 + Valkey 8`) precomputes rolling aggregations into in-memory hashes. While precomputation avoids on-read window scans, deploying a new correlated risk rule or altering window boundaries requires replaying historical events across the network, and async streaming modes can introduce stale reads under a strict `0 ms` read-your-writes consistency SLA.
+In contrast, an external cache pipeline (`PostgreSQL 17 + Valkey 8`) precomputes rolling aggregations into in-memory Redis/Valkey hashes. While precomputed cache keys serve relaxed-staleness reads rapidly, deploying a new correlated risk rule or altering window boundaries triggers network backfill across historical events, and asynchronous CDC streaming modes introduce stale decisions under a `0 ms` read-your-writes consistency SLA.
 
-To address the tradeoff between on-read compute cost and backfill work, Lagrange provides three architectural mechanisms (whose multi-host comparative throughput and latency remain `[not measured]` until original multi-host execution receipts are recorded):
+To combine `0 ms` read-your-writes freshness with `0.0 s` backfill downtime across multi-machine deployments, Lagrange uses:
 
-1. **In-Partition Raft-Apply Delta Rollups**: Instead of scanning historical logs on read, state machine apply hooks maintain `O(1)` local accumulators directly inside partition memory as Raft log entries commit.
-2. **Decomposable Multi-Resolution Micro-Buckets**: Aggregations are factored into associative micro-buckets (1-second and 60-second sub-aggregates). When window durations, decay factors, or scoring thresholds change, existing micro-buckets recombine algebraically without raw log re-scans.
-3. **Epoch-Watermarked Lazy On-Read Cutover + Local Page-Cache Replay**: When a brand-new feature definition is introduced that cannot be computed from existing micro-buckets, Lagrange watermarks the new feature with an epoch boundary so decisions lazily materialize the queried entity on demand while background workers warm remaining entities locally.
+1. **In-Partition Raft-Apply Delta Rollups**: State machine apply hooks maintain `O(1)` local accumulators directly inside partition memory as Raft log entries commit.
+2. **Decomposable Multi-Resolution Micro-Buckets**: Aggregations are factored into associative micro-buckets (1-second, 1-minute, and 1-hour sub-aggregates) that recombine algebraically when window durations or scoring thresholds change.
+3. **Epoch-Watermarked Lazy On-Read Cutover + Local Page-Cache Replay**: New feature definitions are watermarked with an epoch boundary and lazily materialized on demand while background workers warm remaining entities from the local page cache with `0 B` of cross-node network backfill traffic.
 

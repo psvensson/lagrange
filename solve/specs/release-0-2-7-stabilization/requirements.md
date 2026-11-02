@@ -5,6 +5,16 @@ documentClass: planning
 
 # Stable-core stabilization requirements and work packages
 
+## Edition-scope supersession (2026-11-01)
+
+The [current edition matrix](../../../edition-matrix.md) supersedes this
+historical stabilization plan's classification of all backup/restore/PITR
+as external commercial work. Supported user recovery mechanisms are AGPL
+1.0 scope; enterprise organization operations remain external. No Q01-Q18
+acceptance, old version allocation, audit history or retained evidence is
+changed, and this stabilization work does not implement the later recovery
+product.
+
 ## Purpose and authority
 
 The [release epic](../../epics/release-0-2-7-stabilization.md) owns coordination.
@@ -635,7 +645,7 @@ correct stale active instructions when encountered through their own owner.
 | [Apparatus and release consolidation](../../epics/apparatus-release-consolidation.md) | Existing proof provenance, release journeys and workflow-budget owners; no generic tooling expansion |
 | [Pilot readiness](../../epics/pilot-readiness-and-public-proof.md) | Existing public-path, transport trust and support-envelope homes; no blanket pilot-readiness claim from this patch |
 | [Core architecture convergence](../../epics/core-architecture-convergence.md) | Broad owner/decision cleanup retains its activation and proof gates |
-| [Edition matrix](../../../edition-matrix.md) | First-party commercial backup/restore/PITR and enterprise tenancy/identity remain external |
+| [Edition matrix](../../../edition-matrix.md) | Superseded 2026-11-01: user backup/restore/PITR and supported tenant isolation are AGPL later milestones; organization identity/governance remains external; no stabilization Quest scope changes |
 
 The release integration owner links actual Quest IDs into the epic as they are
 created or selected. A linked existing Quest keeps its owning epic and seal;

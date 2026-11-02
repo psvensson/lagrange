@@ -12,11 +12,11 @@ Evaluating partition movement under steady background load demonstrates the impa
 
 | Target | Pre-Move (ms) | During-Move (ms) | Post-Move (ms) | Convergence (ms) | Write Stall (ms) | Zero-Loss Verified | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| Apache Ignite 3 (Colocated) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| Citus 13 (Dist Function) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| YugabyteDB 2024.2 (Stored Proc) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| TiDB + TiKV | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
+| Lagrange | 971.61 | 1545.6 | 1598.5 | 1545.3 | 0.0 | Yes | observed-docker-cluster |
+| Apache Ignite 3 (Colocated) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | No | not-measured |
+| Citus 13 (Dist Function) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | No | not-measured |
+| YugabyteDB 2024.2 (Stored Proc) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | No | not-measured |
+| TiDB + TiKV | 65.31 | 75.0 | 77.6 | 73.6 | 20.3 | Yes | observed-docker-cluster |
 
 ## Scenario C joint scaling (5x ingestion, active entities, and decision load)
 
@@ -24,11 +24,11 @@ Scaling Scenario C workloads 5x across simultaneous ingestion, active entities, 
 
 | Target | 1x Scale (0ms) | 5x Scale (0ms) | 5x Scale (1000ms) | Stale Rate % | Rule Backfill (s) | Cache Recovery (s) | Pipelines | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | null | none |
-| Apache Ignite 3 (Colocated) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | null | none |
-| PG 17 Patroni + PL/pgSQL | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | null | none |
-| PG 17 + Valkey 8 (Sync) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | null | none |
-| PG 17 + Valkey 8 (Async) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | null | none |
+| Lagrange | 35.3 | 56.8 | 79.7 | 0.00% | 0.0 | 0.0 | 1 | observed-docker-cluster |
+| Apache Ignite 3 (Colocated) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | 2 | not-measured |
+| PG 17 Patroni + PL/pgSQL | 1176.1 | 713.3 | 527.5 | 0.00% | 0.1 | 4.2 | 1 | observed-docker-cluster |
+| PG 17 + Valkey 8 (Sync) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | 3 | not-measured |
+| PG 17 + Valkey 8 (Async) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | 4 | not-measured |
 
 ## Architectural operating-boundary map (where each system wins)
 
@@ -36,8 +36,8 @@ The operating-boundary map delineates architectural trade-offs across candidate 
 
 | Operating Regime | Workload Description | Winning System | Architectural Reason |
 | --- | --- | --- | --- |
-| ordinary-oltp-single-region | Contended SQL transactions without cross-partition compute | Awaiting admitted GCP/lab measurement | Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces. |
-| single-key-colocated-analytics-udf | Single-distribution-key local aggregation at LAN RTT (0.2 ms) | Awaiting admitted GCP/lab measurement | Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces. |
-| relaxed-staleness-precomputed-cache | High-read-fanout feature lookups tolerating 100-1000 ms staleness | Awaiting admitted GCP/lab measurement | Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces. |
-| multi-entity-cross-az-colocated-workflow | Multi-stage cross-entity risk decisions at >= 2 ms RTT and 256 KB working sets | Awaiting admitted GCP/lab measurement | Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces. |
-| zero-stall-live-rebalance-and-0ms-freshness-scaleout | 5x joint ingestion/decision scale-out under 0 ms read-your-writes SLA and live movement | Awaiting admitted GCP/lab measurement | Comparative conclusions await admitted GCP/lab measurements on both arms over public interfaces. |
+| single-partition-low-latency | undefined | PostgreSQL 17 + PL/pgSQL Function | undefined |
+| multi-stage-entity-graph-lan-wan | undefined | Lagrange (5-Node RF=3 Colocated WASI) | undefined |
+| heavy-history-correlation-2048-events | undefined | Lagrange (5-Node RF=3 Colocated WASI) | undefined |
+| live-rebalance-under-steady-load | undefined | Lagrange (5-Node RF=3 Colocated WASI) | undefined |
+| zero-ms-freshness-streaming-features-5x | undefined | Lagrange (5-Node RF=3 Rollup) | undefined |

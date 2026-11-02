@@ -438,10 +438,6 @@ function runCertOrClusterCommand(argv = [], options = {}) {
 }
 
 export {
-  CERT_CLI_COMMAND,
-  CERT_SUBCOMMAND,
-  CLUSTER_SUBCOMMAND,
   CERT_CLI_EXIT_CODE,
-  CERT_FILE_MODE,
   runCertOrClusterCommand,
 };

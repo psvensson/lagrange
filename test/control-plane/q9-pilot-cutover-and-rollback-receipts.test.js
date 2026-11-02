@@ -210,94 +210,87 @@ function buildClusterEngine() {
     },
   ];
 
-  const databases = new Map();
-  const tables = [];
-  const partitionRows = [];
-  const services = [];
+  const sqliteByPartition = new Map();
+  const tableMetadata = new Map();
+  const catalogEntries = {
+    tables: [],
+    partitions: [],
+    services: [],
+  };
 
   for (const spec of tableSpecs) {
-    tables.push({table_name: spec.name, primaryKey: spec.primaryKey});
+    const tableRecord = {table_name: spec.name, primaryKey: spec.primaryKey};
+    tableMetadata.set(spec.name, tableRecord);
+    catalogEntries.tables.push(tableRecord);
     for (const part of spec.partitions) {
-      const db = new Database(':memory:');
-      db.exec(spec.ddl);
-      databases.set(part.partition_id, db);
-      partitionRows.push({
-        ...part,
+      const conn = new Database(':memory:');
+      conn.exec(spec.ddl);
+      sqliteByPartition.set(part.partition_id, conn);
+      catalogEntries.partitions.push(Object.assign({}, part, {
         table_name: spec.name,
         leader_node_id: FIXTURE_NODE,
-      });
-      services.push({
+      }));
+      catalogEntries.services.push({
+        address: [FIXTURE_NODE, 'partition', part.partition_id].join('/'),
+        node_id: FIXTURE_NODE,
+        partition_id: part.partition_id,
+        raft_role: 'leader',
         service_id: part.partition_id,
         service_type: 'partition',
-        partition_id: part.partition_id,
-        node_id: FIXTURE_NODE,
-        raft_role: 'leader',
-        address: `${FIXTURE_NODE}/partition/${part.partition_id}`,
         status: 'active',
       });
     }
   }
 
-  const byType = {partitions: partitionRows, services, tables};
   const systemCache = {
-    get(type, key) {
-      return type === 'tables' ?
-        tables.find((entry) => entry.table_name === key) :
-        null;
-    },
-    filter(type, predicate) {
-      return (byType[type] || []).filter(predicate);
-    },
-    getAll(type) {
-      return byType[type] || [];
-    },
+    filter: (kind, fn) => (catalogEntries[kind] ?? []).filter(fn),
+    get: (kind, key) =>
+      kind === 'tables' ? (tableMetadata.get(key) ?? null) : null,
+    getAll: (kind) => catalogEntries[kind] ?? [],
   };
+
+  function handlePartitionSql(conn, sqlText, boundParams) {
+    const stmt = conn.prepare(sqlText);
+    if (SQL_READ_PATTERN.test(sqlText)) {
+      return {rows: stmt.all(...boundParams), success: true};
+    }
+    const result = stmt.run(...boundParams);
+    return {changes: result.changes, rows: [], success: true};
+  }
 
   const messageRouter = {
-    async deliver(address, message) {
-      const partitionId = address.split('/')[ADDRESS_PARTITION_SEGMENT];
-      if (message.type === QUERY_OPERATION.TRANSACTION) {
-        return buildDeliveryEnvelope(
-          {acknowledged: true},
-          answerParticipantTransactionRequest(message, partitionId),
+    async deliver(destination, envelope) {
+      const targetPartition = destination.split('/')[ADDRESS_PARTITION_SEGMENT];
+      if (envelope.type === QUERY_OPERATION.TRANSACTION) {
+        const txReply = answerParticipantTransactionRequest(
+          envelope,
+          targetPartition,
         );
+        return buildDeliveryEnvelope({acknowledged: true}, txReply);
       }
-      const database = databases.get(partitionId);
-      if (message.type !== QUERY_MESSAGE || !database) {
-        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
-      }
-      const prepared = database.prepare(message.sql);
-      const params = message.params || [];
-      if (SQL_READ_PATTERN.test(message.sql)) {
-        return buildDeliveryEnvelope({acknowledged: true}, {
-          success: true,
-          rows: prepared.all(...params),
-        });
-      }
-      const {changes} = prepared.run(...params);
-      return buildDeliveryEnvelope(
-        {acknowledged: true},
-        {success: true, rows: [], changes},
-      );
+      const conn = sqliteByPartition.get(targetPartition);
+      const outcome =
+        envelope.type === QUERY_MESSAGE && conn ?
+          handlePartitionSql(conn, envelope.sql, envelope.params ?? []) :
+          {success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, outcome);
     },
   };
 
-  const gateway = createTransactionPersistenceGateway();
-  const engine = new SQLQueryEngine({
-    systemCache,
-    controlPlaneSystemTableGateway: gateway,
+  const persistenceGateway = createTransactionPersistenceGateway();
+  const queryEngine = new SQLQueryEngine({
+    controlPlaneSystemTableGateway: persistenceGateway,
     messageRouter,
+    systemCache,
   });
 
   return {
-    engine,
-    databases,
     close() {
-      gateway.db.close();
-      for (const db of databases.values()) {
-        db.close();
-      }
+      persistenceGateway.db.close();
+      sqliteByPartition.forEach((conn) => conn.close());
     },
+    databases: sqliteByPartition,
+    engine: queryEngine,
   };
 }
 

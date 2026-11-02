@@ -785,14 +785,12 @@ function renderGuestCanonicalPartialCodecSource() {
 }
 
 export {
-  CANONICAL_PARTIAL_GOLDEN_VECTORS, DEFAULT_PARTIAL_CODEC_LIMITS,
-  DEFAULT_PARTIAL_SCHEMA_ID, PARTIAL_CODEC_ERROR_CODE, PARTIAL_CODEC_VERSION,
-  PARTIAL_SCHEMA_TYPE, PartialCodecError, compareCanonicalStrings,
-  createPartialCodecError, decodeCanonicalGroupKey,
-  decodeCanonicalPartialEnvelope, decodeCanonicalPartialValue,
-  decodeCanonicalPartialWire, encodeCanonicalGroupKey,
-  encodeCanonicalPartialEnvelope, encodeCanonicalPartialValue,
-  isWellFormedUnicode, normalizePartialValueSchema,
-  renderGuestCanonicalPartialCodecSource, serializeCanonicalNode,
-  utf8ByteLength, validateCanonicalPartialValue, validateValueAgainstSchema,
+  CANONICAL_PARTIAL_GOLDEN_VECTORS, DEFAULT_PARTIAL_SCHEMA_ID,
+  PARTIAL_CODEC_ERROR_CODE, PARTIAL_CODEC_VERSION, compareCanonicalStrings,
+  decodeCanonicalGroupKey, decodeCanonicalPartialEnvelope,
+  decodeCanonicalPartialValue, decodeCanonicalPartialWire,
+  encodeCanonicalGroupKey, encodeCanonicalPartialEnvelope,
+  encodeCanonicalPartialValue, isWellFormedUnicode,
+  normalizePartialValueSchema, renderGuestCanonicalPartialCodecSource,
+  validateCanonicalPartialValue, validateValueAgainstSchema,
 };

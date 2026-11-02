@@ -6,7 +6,18 @@ documentClass: planning
 # Lagrange Roadmap
 
 Lagrange is one product: a distributed runtime for data-intensive services,
-backed by partitioned and replicated SQL storage.
+backed by partitioned and replicated SQL storage. Its AGPL runtime remains
+complete for supported regional placement, latency groups, security, recovery
+and efficient operation. Enterprise adds organization-wide operating services,
+governance, identity/billing integrations and continuing evidence without an
+alternative placement or service lifecycle.
+
+Lagrange Images and Lagrange Object Environment are optional development
+companions, never prerequisites for any Lagrange Enterprise operation.
+They can contribute application-specific checks through public extension
+contracts. Ordinary SQL applications, and planned Hono/WASM and OCI application
+paths as they qualify, must remain usable without either companion. Companion
+licensing is owned by their repositories.
 
 This is one ordered release programme. Each planned deliverable has one version
 that owns its initial completion, including its research, documentation and
@@ -32,14 +43,14 @@ for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 | --- | --- | --- |
 | 0.4.0 | Published implementation baseline | Released alpha implementation; outstanding feature and comparison acceptance remains explicit. |
 | 0.4.1 | Bounded correctness and claim repairs | Complete admitted generic results or refuse them explicitly, enforce byte bounds, repair stale checks and align published claims with measured support. |
-| 0.5 | Standard HTTP services and pilot-ready operation | Hono/Fetch authoring, remaining query and practical-service journeys, reproducible measured comparisons, and a secure, recoverable pilot envelope. |
+| 0.5 | Standard HTTP services and pilot-ready operation | Hono/Fetch authoring, remaining query and practical-service journeys, reproducible measured comparisons, working latency groups with topology-scoped locality diagnostics, and a secure, recoverable pilot envelope (not yet named cross-region qualification). |
 | 0.6 | Native OCI Call Cells | Real managed native services execute functions at the data through the same service model. |
 | 0.7 | Transport independence and NATS | Complete NATS-only cluster operation and effective Raft timing profiles follow a measured transport baseline. |
 | 0.8 | Veilid-only networking | The complete cluster workload works over Veilid alone within a measured envelope. |
 | 0.9 | Customer-installable service products | A separately released service completes installation, operation, upgrade, rollback and removal through one lifecycle. |
-| 1.0 | Production-supported release | Named profiles have supported correctness, durability, recovery, compatibility and capacity guarantees. |
+| 1.0 | Production-supported release | Named profiles have supported correctness, durability, usable backup/restore/PITR, compatibility and capacity guarantees. |
 | 1.1 | Broader SQL compatibility | Additional SQL and ordered-index features preserve the established distributed contracts. |
-| 1.2 | Enterprise deployment and cross-region operation | Assigned enterprise identity, policy, secrets and cross-region profiles have explicit support contracts. |
+| 1.2 | AGPL cross-region qualification and enterprise operations | Open regional durability/locality profiles are measured; separate enterprise identity, policy, fleet, billing and release-governance services have explicit contracts. |
 | 2.0 | Deeper distributed execution and planning | Dynamic multi-stage execution, advanced planning and the complete Scenario B comparison are demonstrated. |
 | 2.1 | Specialized search services | Vector, full-text, spatial and related services have their own semantics, lifecycle and acceptance. |
 
@@ -263,9 +274,10 @@ clients, diagnose failure and rehearse recovery within a measured pilot profile.
   failures, plus index build/state and live-query dependency/frontier diagnostics.
 
 Completion includes a fresh-install journey and failure, recovery, upgrade and
-exit rehearsals. The production backup/PITR service is assigned to 1.0 in its
-commercial implementation home; pilot recovery limitations and independent
-export/reload procedures must already be explicit here. See
+exit rehearsals. The supported AGPL backup/restore/PITR mechanisms are assigned to 1.0;
+commercial verification and operating services may consume them. Pilot
+recovery limitations and independent export/reload procedures must already
+be explicit here. See
 [Operations Readiness](docs/operations-readiness.md),
 [Migration and Adoption](docs/migration.md), and [Security](docs/security.md).
 
@@ -362,8 +374,9 @@ Support named configurations with explicit, evidenced guarantees:
 - durability, availability, consistency, recovery, balance and capacity contracts;
 - stable service, SQL, upgrade and support policies;
 - security appropriate to the declared network and tenancy model;
-- supported backup/restore/PITR and measured disaster-recovery procedures in
-  their assigned implementation homes; replica snapshots are not user backups;
+- supported AGPL backup/restore/PITR and measured disaster-recovery procedures;
+  replica snapshots are not user backups; paid assurance orchestrates the same
+  recovery API and adds recurring isolated restore/application checks;
 - unique global secondary indexes with transactional uniqueness enforcement;
 - supported index rebuild/backfill, restart/failover and write-amplification
   envelopes; and
@@ -386,17 +399,29 @@ concurrent build behavior, window functions and sequences. Each admitted feature
 needs public SQL and lifecycle evidence; the enumerated compatibility profile is
 the completion boundary.
 
-## Planned - 1.2 Enterprise deployment and cross-region operation
+## Planned - 1.2 AGPL cross-region qualification and enterprise operations
 
-Deliver the assigned enterprise identity/SSO, policy/RBAC, tenant isolation and
-quota controls, advanced secrets/KMS integrations, and named cross-region
-replication, durability and recovery profiles in their designated implementation
-homes. Consume 0.9's integration contracts and 1.0's support discipline.
+Qualify named AGPL cross-region replication, durability, failover, locality and
+recovery profiles through the existing cluster, placement and latency-group
+owners. The Community implementation must identify real regions/failure domains
+separately from measured latency groups, preserve safety under infeasible
+constraints, and demonstrate useful regional efficiency and recovery on
+physical machines. This does not assert that 0.4.0 supports cross-region use.
 
-Completion names supported identity providers, tenancy boundaries, region and
-failure-domain configurations, and measured recovery/security behavior. These
-features do not replace 0.5's basic security. The
-[Edition Matrix](edition-matrix.md) continues to govern repository ownership.
+The external commercial offering separately supplies organization-wide policy
+templates, approvals, drift/exception management, delegated identity and audit,
+secrets/KMS integrations, fleet maintenance and service-release governance.
+Measured traffic/cost attribution can be combined with provider rates, billing
+reconciliation and approved change recommendations. Core retains ordinary
+placement-policy enforcement, traffic visibility, efficient algorithms,
+authentication, authorization, and the supported tenancy/isolation guarantees.
+
+Completion names the distinct AGPL regional operating profiles and evidence,
+and the commercial integration/management contracts. Enterprise services
+consume the same public core operations; loss or expiry of a commercial
+controller cannot disable replication, safety, ordinary recovery or current
+policy enforcement. Lagrange Images remains an optional consumer, not a
+dependency. The [Edition Matrix](edition-matrix.md) governs ownership.
 
 ## Planned - 2.0 Deeper distributed execution and planning
 

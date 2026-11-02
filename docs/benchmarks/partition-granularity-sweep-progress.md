@@ -22,11 +22,11 @@ Throughput and latency sweep across all evaluated systems:
 
 | Target | Optimal P | Peak (dec/s) | P=6 (dec/s) | P=15 (dec/s) | P=30 (dec/s) | P=60 (dec/s) | Drop at P=60 (%) | Evidence Tier |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| TiDB + TiKV | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| Citus 13 (Dist Function) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| YugabyteDB 2024.2 (Stored Proc) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
-| Apache Ignite 3 (Colocated) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | none |
+| Lagrange | 30 | 53.1 | 29.5 | 48.3 | 53.1 | 44.0 | -17.1% | observed-docker-cluster |
+| TiDB + TiKV | 60 | 589.4 | 573.6 | 563.4 | 535.2 | 589.4 | 0.0% | observed-docker-cluster |
+| Citus 13 (Dist Function) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | not-measured |
+| YugabyteDB 2024.2 (Stored Proc) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | not-measured |
+| Apache Ignite 3 (Colocated) | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] | not-measured |
 
 ## Parallelism sweet spot vs over-partitioning coordination overhead
 

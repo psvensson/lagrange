@@ -364,11 +364,9 @@ async function buildServiceComponent({
 const componentizeService = buildServiceComponent;
 
 export {
-  PINNED_HONO_TOOLCHAIN_VERSIONS,
   SERVICE_COMPONENT_BUILD_ERROR_CODE,
   ServiceComponentBuildError,
   buildServiceComponent,
   bundleGuestEntry,
   componentizeService,
-  inferServiceWorldFromEntrySource,
 };

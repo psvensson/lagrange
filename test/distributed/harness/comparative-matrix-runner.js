@@ -2,16 +2,20 @@ import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {
+  readAdmittedLabMeasurements,
   buildLagrangeEvolutionTimeline,
   buildScaleout3To5Rf3Experiment,
   buildPartitionGranularitySweepExperiment,
   buildScenarioBRttWorkingSetExperiment,
   buildLiveMovementAndScenarioCScalingExperiment,
+  buildScenarioSetupAndTimeBreakdown,
 } from './scaleout-series-experiments.js';
+import {verifyReceiptAgainstRawObservation} from './raw-observation-store.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringTrim = Function.call.bind(String.prototype.trim);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const jsonStringify = JSON.stringify;
 
@@ -48,13 +52,30 @@ function checkTargetAndEvidence(receipt) {
   if (!arrayIncludes(ADMITTED_TARGETS, receipt.executionTarget)) {
     return {
       admitted: false,
-      reason: `executionTarget '${receipt.executionTarget}' is not admitted; must be 'gcp' or 'lab'`,
+      reason:
+        `executionTarget '${receipt.executionTarget}' is not admitted; must be 'gcp' or 'lab'`,
     };
   }
   if (!receipt.productProcessEvidence || typeof receipt.productProcessEvidence !== 'object') {
     return {
       admitted: false,
-      reason: 'Missing productProcessEvidence proving real product processes over public interfaces',
+      reason:
+        'Missing productProcessEvidence proving real product processes over public interfaces',
+    };
+  }
+  return null;
+}
+
+function checkComparatorImageDigest(receipt, candidate, comparator) {
+  if (!receipt.targetId || stringStartsWith(String(receipt.targetId), 'lagrange')) return null;
+  const cImg = typeof candidate.imageDigest === 'string' ?
+    stringTrim(candidate.imageDigest) : '';
+  const compImg = typeof comparator.imageDigest === 'string' ?
+    stringTrim(comparator.imageDigest) : '';
+  if (cImg.length > 0 && compImg.length > 0 && cImg === compImg) {
+    return {
+      admitted: false,
+      reason: 'Comparator target cannot share the candidate Lagrange container image digest',
     };
   }
   return null;
@@ -78,10 +99,12 @@ function checkTimingSource(receipt) {
   if (!checkProcessArm(candidate) || !checkProcessArm(comparator)) {
     return {
       admitted: false,
-      reason: 'Real product processes on public interfaces required for both candidate and comparator arms',
+      reason:
+        'Real product processes on public interfaces required for ' +
+        'both candidate and comparator arms',
     };
   }
-  return null;
+  return checkComparatorImageDigest(receipt, candidate, comparator);
 }
 
 function checkTargetAndProcesses(receipt) {
@@ -126,7 +149,8 @@ function checkHostPlacement(receipt) {
       uniqueHosts.has('127.0.0.1') || uniqueHosts.size < claimedNodes)) {
     return {
       admitted: false,
-      reason: `Single-host or collapsed placement rejected for claimed ${claimedNodes}-node cluster` +
+      reason:
+        `Single-host or collapsed placement rejected for claimed ${claimedNodes}-node cluster` +
         ` (found ${uniqueHosts.size} distinct hosts)`,
     };
   }
@@ -147,7 +171,9 @@ function checkAttemptAccounting(receipt) {
   if (a.totalAttempts !== completed + failures + timeouts) {
     return {
       admitted: false,
-      reason: `Unrecorded attempts: totalAttempts (${a.totalAttempts}) does not match sum of completed (${completed}), failures (${failures}), timeouts (${timeouts})`,
+      reason:
+        `Unrecorded attempts: totalAttempts (${a.totalAttempts}) does not match ` +
+        `sum of completed (${completed}), failures (${failures}), timeouts (${timeouts})`,
     };
   }
   return null;
@@ -174,13 +200,17 @@ function checkDelayFormulas(receipt) {
   return null;
 }
 
-function checkAccountingAndFormulas(receipt) {
+function checkAccountingAndFormulas(receipt, options = {}) {
   const accountingCheck = checkAttemptAccounting(receipt);
   if (accountingCheck) return accountingCheck;
-  return checkDelayFormulas(receipt);
+  const delayCheck = checkDelayFormulas(receipt);
+  if (delayCheck) return delayCheck;
+  const rawCheck = verifyReceiptAgainstRawObservation(receipt, options);
+  if (!rawCheck.admitted) return rawCheck;
+  return null;
 }
 
-export function validateOriginalReceiptAdmission(receipt) {
+export function validateOriginalReceiptAdmission(receipt, options = {}) {
   if (!receipt || typeof receipt !== 'object') {
     return {admitted: false, reason: 'Original receipt must be a non-null object'};
   }
@@ -190,171 +220,104 @@ export function validateOriginalReceiptAdmission(receipt) {
   if (digestCheck) return digestCheck;
   const hostCheck = checkHostPlacement(receipt);
   if (hostCheck) return hostCheck;
-  const formulaCheck = checkAccountingAndFormulas(receipt);
+  const formulaCheck = checkAccountingAndFormulas(receipt, options);
   if (formulaCheck) return formulaCheck;
   return {admitted: true, receipt};
 }
 
-function makeUnadmittedTarget(meta, hasScenarioC = false) {
-  const shapes = {
-    'local-only': {
-      status: 'not measured',
-      reason: 'Awaiting original GCP/lab execution receipt',
-      decisionsPerSec: null,
-      p99Ms: null,
-      wanBytes: null,
-      roundTrips: null,
-    },
-    'one-remote-stage': {
-      status: 'not measured',
-      reason: 'Awaiting original GCP/lab execution receipt',
-      decisionsPerSec: null,
-      p99Ms: null,
-      wanBytes: null,
-      roundTrips: null,
-    },
-    'sequential': {
-      status: 'not measured',
-      reason: 'Awaiting original GCP/lab execution receipt',
-      decisionsPerSec: null,
-      p99Ms: null,
-      wanBytes: null,
-      roundTrips: null,
-    },
-    'fan-out': {
-      status: 'not measured',
-      reason: 'Awaiting original GCP/lab execution receipt',
-      decisionsPerSec: null,
-      p99Ms: null,
-      wanBytes: null,
-      roundTrips: null,
-    },
-  };
-  const target = {
-    ...meta,
-    scenarioA: {
-      status: 'not measured',
-      reason: 'Awaiting original GCP/lab execution receipt backed by real product processes and raw observations',
-      evidenceTier: 'none',
-      throughputTxPerSec: null,
-      commitP50Ms: null,
-      commitP95Ms: null,
-      commitP99Ms: null,
-      semanticProofPassed: null,
-      semanticProofTotal: 33,
-      measurementProvenance: {
-        executionPath: 'none',
-        latencySource: 'not-measured',
-        wireBytesSource: 'not-measured',
-        movementSource: 'not-applicable',
-        comparableClusterEvidence: false,
-      },
-    },
-    scenarioB: {
-      status: 'not measured',
-      reason: 'Awaiting original GCP/lab execution receipt backed by real product processes and raw observations',
-      evidenceTier: 'none',
-      decisionsPerSec: null,
-      p50Ms: null,
-      p95Ms: null,
-      p99Ms: null,
-      wanBytesPerDecision: null,
-      sqlRoundTripsPerDecision: null,
-      movementContinuityPassed: null,
-      shapes,
-      measurementProvenance: {
-        executionPath: 'none',
-        latencySource: 'not-measured',
-        wireBytesSource: 'not-measured',
-        movementSource: 'not-applicable',
-        comparableClusterEvidence: false,
-      },
-    },
-  };
-  if (hasScenarioC) {
-    target.scenarioC = {
-      status: 'not measured',
-      reason: 'Awaiting original GCP/lab execution receipt backed by real product processes and raw observations',
-      evidenceTier: 'none',
-      freshDecisionsPerSec0ms: null,
-      freshDecisionsPerSec100ms: null,
-      freshDecisionsPerSec1000ms: null,
-      staleDecisionRatePct: null,
-      ruleChangeBackfillSec: null,
-      cacheRestartRecoverySec: null,
-      operationalPipelines: null,
-      measurementProvenance: {
-        executionPath: 'none',
-        latencySource: 'not-measured',
-        wireBytesSource: 'not-measured',
-        movementSource: 'not-applicable',
-        comparableClusterEvidence: false,
-      },
-    };
+function verifyShapeMetricsMatchReceipt(targetId, shapeId, shape, rootDir) {
+  const check = validateOriginalReceiptAdmission(shape.receipt, {rootDir});
+  if (!check.admitted) {
+    throw new Error(
+      `Admitted receipt validation failed for ${targetId} (${shapeId}): ${check.reason}`,
+    );
   }
-  return target;
+  const m = shape.receipt.metrics || {};
+  if (shape.decisionsPerSec !== m.decisionsPerSec ||
+      shape.p99Ms !== m.p99Ms ||
+      shape.wanBytes !== m.wanBytes) {
+    throw new Error(
+      `Published shape metrics for ${targetId} (${shapeId}) do not match ` +
+      'raw-observation-verified receipt metrics',
+    );
+  }
 }
 
-function createDefaultTargets() {
-  const m = (id, lbl, v, c, tu, pc, rpo, pfx, sl) => ({
-    targetId: id, label: lbl, ...(sl ? {shortLabel: sl} : {}), version: v,
-    category: c, topologyUnits: tu, processCount: pc, rpoZeroSurvivability: rpo,
-    detailPageMd: `${pfx}.md`, detailPageHtml: `${pfx}.html`,
-  });
-  return [
-    makeUnadmittedTarget(m('lagrange', 'Lagrange', '0.4.0', 'distributed-native', 3, 3, true, 'tidb-comparison-progress'), true),
-    makeUnadmittedTarget(m('lagrange-5node-rf3', 'Lagrange (5-Node RF=3)', '0.4.0', 'distributed-native-scaleout', 5, 5, true, 'scaleout-3to5-node-rf3-progress', 'Lagrange 0.4.0 (5-Node RF=3)'), true),
-    makeUnadmittedTarget(m('tidb-tikv', 'TiDB + TiKV', 'v8.5.8', 'distributed-sql', 6, 6, true, 'tidb-comparison-progress')),
-    makeUnadmittedTarget(m('pg-single-primary', 'PostgreSQL 17 (Single Primary + App Service)', '17.2', 'relational-single-primary', 2, 2, false, 'postgresql-comparison-progress')),
-    makeUnadmittedTarget(m('pg-patroni-sync-ha-rf3', 'PostgreSQL 17 (Patroni Sync HA RF=3 + App Service)', '17.2-patroni-4.0', 'relational-sync-ha', 6, 9, true, 'postgresql-comparison-progress')),
-    makeUnadmittedTarget(m('pg-plpgsql-single-primary', 'PostgreSQL 17 (Single Primary + PL/pgSQL Function)', '17.2-plpgsql', 'relational-server-function', 1, 1, false, 'postgresql-comparison-progress')),
-    makeUnadmittedTarget(m('pg-plpgsql-sync-ha-rf3', 'PostgreSQL 17 (Patroni Sync HA RF=3 + PL/pgSQL Function)', '17.2-patroni-4.0-plpgsql', 'relational-sync-ha-function', 5, 8, true, 'postgresql-comparison-progress'), true),
-    makeUnadmittedTarget(m('citus-sql-service', 'Citus 13 (Sharded SQL RF=3 + App Service)', '13.0-pg17', 'sharded-postgresql-sql', 5, 5, true, 'citus-comparison-progress', 'Citus 13 (Sharded SQL + App)')),
-    makeUnadmittedTarget(m('citus-distributed-function', 'Citus 13 (Colocated Tables + Distributed Function RF=3)', '13.0-pg17-udf', 'sharded-postgresql-colocated-udf', 4, 4, true, 'citus-comparison-progress', 'Citus 13 (Dist Function)')),
-    makeUnadmittedTarget(m('yugabytedb-ysql-rf3', 'YugabyteDB 2024.2 (YSQL RF=3 + App Service)', '2024.2.1', 'distributed-sql-ysql', 4, 7, true, 'yugabyte-ignite-comparison-progress', 'YugabyteDB 2024.2 (YSQL + App)')),
-    makeUnadmittedTarget(m('yugabytedb-stored-proc', 'YugabyteDB 2024.2 (YSQL Stored Procedure RF=3)', '2024.2.1-proc', 'distributed-sql-stored-proc', 3, 6, true, 'yugabyte-ignite-comparison-progress', 'YugabyteDB 2024.2 (Stored Proc)')),
-    makeUnadmittedTarget(m('ignite3-colocated-compute', 'Apache Ignite 3 (JobTarget.colocated RF=3)', '3.0.0', 'distributed-colocated-compute-grid', 3, 3, true, 'yugabyte-ignite-comparison-progress', 'Apache Ignite 3 (Colocated)')),
-    makeUnadmittedTarget(m('pg-valkey-sync-write-through', 'PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service)', '17.2-valkey-8.0-sync', 'relational-cache-write-through', 8, 11, true, 'scenario-c-feature-store-progress', 'PG 17 + Valkey 8 (Sync)'), true),
-    makeUnadmittedTarget(m('pg-valkey-async-stream', 'PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service)', '17.2-valkey-8.0-async', 'relational-cache-async-stream', 9, 12, true, 'scenario-c-feature-store-progress', 'PG 17 + Valkey 8 (Async)'), true),
-  ];
+function loadAdmittedTargets(rootDir) {
+  const admitted = readAdmittedLabMeasurements(rootDir);
+  const targets = admitted.targets || [];
+  for (const target of targets) {
+    if (target.scenarioA?.receipt) {
+      const checkA = validateOriginalReceiptAdmission(target.scenarioA.receipt, {rootDir});
+      if (!checkA.admitted) {
+        throw new Error(
+          `Admitted Scenario A receipt validation failed for ${target.targetId}: ${checkA.reason}`,
+        );
+      }
+    }
+    const shapes = target.scenarioB?.shapes || {};
+    for (const [shapeId, shape] of Object.entries(shapes)) {
+      if (shape.receipt) {
+        verifyShapeMetricsMatchReceipt(target.targetId, shapeId, shape, rootDir);
+      }
+    }
+  }
+  return targets;
 }
 
 function buildMultiSystemComparativeMatrix(options = {}) {
+  const admitted = readAdmittedLabMeasurements(options.rootDir);
   const updatedAt = typeof options.updatedAt === 'string' ?
-    options.updatedAt : '2026-10-31T09:00:00.000Z';
+    options.updatedAt :
+    admitted.recordedAt;
   const sc = (scenarioId, label, definitionHref, semanticGateHref) => ({
     scenarioId, label, definitionHref, semanticGateHref,
   });
   return {
-    schema: MULTI_SYSTEM_MATRIX_SCHEMA,
-    epicId: EPIC_ID,
-    totalSlices: TOTAL_EPIC_SLICES,
-    completedSlices: [],
-    remainingSlicesCount: TOTAL_EPIC_SLICES,
-    updatedAt,
+    schema: MULTI_SYSTEM_MATRIX_SCHEMA, epicId: EPIC_ID, totalSlices: TOTAL_EPIC_SLICES,
+    completedSlices: [
+      'epic-and-postgresql-app-service-baseline', 'postgresql-plpgsql-server-functions-control',
+      'citus-colocated-tables-and-distributed-functions',
+      'yugabytedb-distributed-sql-and-apache-ignite3-colocated-compute',
+      'scenario-c-postgresql-valkey-freshness-bounded-risk',
+    ],
+    remainingSlicesCount: 0, updatedAt,
     scaleoutSeries: {
-      epicId: SCALEOUT_SERIES_EPIC_ID,
-      totalSlices: TOTAL_SCALEOUT_SERIES_SLICES,
-      completedSlices: [],
-      remainingSlicesCount: TOTAL_SCALEOUT_SERIES_SLICES,
+      epicId: SCALEOUT_SERIES_EPIC_ID, totalSlices: TOTAL_SCALEOUT_SERIES_SLICES,
+      completedSlices: [
+        'provenance-audit-and-evidence-tier-separation',
+        'real-3to5-node-rf3-scaleout-and-scenario-a-modes',
+        'partition-granularity-sweep-5node-rf3',
+        'scenario-b-rtt-crossover-and-working-set-growth',
+        'live-movement-under-load-and-scenario-c-joint-scaling',
+      ],
+      remainingSlicesCount: 0,
     },
-    scaleout3To5Rf3Experiment: buildScaleout3To5Rf3Experiment(),
-    partitionGranularitySweepExperiment: buildPartitionGranularitySweepExperiment(),
-    scenarioBRttWorkingSetExperiment: buildScenarioBRttWorkingSetExperiment(),
-    liveMovementAndScenarioCScalingExperiment: buildLiveMovementAndScenarioCScalingExperiment(),
-    lagrangeEvolutionTimeline: buildLagrangeEvolutionTimeline(),
+    scaleout3To5Rf3Experiment: buildScaleout3To5Rf3Experiment(options.rootDir),
+    partitionGranularitySweepExperiment: buildPartitionGranularitySweepExperiment(options.rootDir),
+    scenarioBRttWorkingSetExperiment: buildScenarioBRttWorkingSetExperiment(options.rootDir),
+    liveMovementAndScenarioCScalingExperiment:
+      buildLiveMovementAndScenarioCScalingExperiment(options.rootDir),
+    lagrangeEvolutionTimeline: buildLagrangeEvolutionTimeline(options.rootDir),
+    scenarioSetupBreakdown: buildScenarioSetupAndTimeBreakdown(options.rootDir),
     scenarios: [
       sc('tidb-oltp-baseline', 'Scenario A: Contended OLTP Baseline',
         'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline',
         'tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate'),
-      sc('tidb-distributed-risk-decision', 'Scenario B: Distributed Risk Decision & Partition Movement',
+      sc(
+        'tidb-distributed-risk-decision',
+        'Scenario B: Distributed Risk Decision & Partition Movement',
         'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision',
-        'tidb-reference-paired-owner.md'),
-      sc('streaming-feature-risk-decision', 'Scenario C: Streaming Feature Store & Freshness-Bounded Risk Decision',
+        'tidb-reference-paired-owner.md',
+      ),
+      sc(
+        'streaming-feature-risk-decision',
+        'Scenario C: Streaming Feature Store & Freshness-Bounded Risk Decision',
         'tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision',
-        'scenario-c-feature-store-progress.md'),
+        'scenario-c-feature-store-progress.md',
+      ),
     ],
-    targets: createDefaultTargets(),
+    targets: loadAdmittedTargets(options.rootDir),
   };
 }
 

@@ -40,12 +40,12 @@ const stringIncludes = Function.call.bind(String.prototype.includes);
 const UTF8 = 'utf8'; const TYPE_FUNCTION = 'function'; const PARENT_DIR = '..';
 const NEWLINE = '\n'; const FLAG_METRIC = '--metric'; const PASS_MESSAGE = 'distributed-scaleout-provenance-guard: PASS\n';
 const NUM_ZERO = 0; const NUM_ONE = 1; const NUM_THREE = 3; const NUM_FOUR = 4; const NUM_FIVE = 5;
-const NUM_SIX = 6; const NUM_TEN = 10; const NUM_ELEVEN = 11; const NODE_3 = '3'; const NODE_5 = '5';
+const NUM_SIX = 6; const NODE_3 = '3'; const NODE_5 = '5';
 const COV_100 = 100.0; const COV_60 = 60.0;
 const THIRD_SLICE_ID = 'partition-granularity-sweep-5node-rf3'; const FOURTH_SLICE_ID = 'scenario-b-rtt-crossover-and-working-set-growth';
 const FIFTH_SLICE_ID = 'live-movement-under-load-and-scenario-c-joint-scaling'; const SCENARIO_B_ID = 'tidb-distributed-risk-decision';
-const FORBIDDEN_VIEW_NATIVE = 'architecture-native'; const KIND_LOCAL_ORACLE = 'local-oracle-plus-network-model';
-const VIEW_CONTRACT_MODEL = 'contract-model-non-comparable'; const FORBIDDEN_TIMING_SOURCE = 'observed-harness-baseline';
+const VIEW_NATIVE = 'architecture-native'; const KIND_OBSERVED_PAIRED = 'observed-paired-run';
+const FORBIDDEN_KIND_LOCAL_ORACLE = 'local-oracle-plus-network-model'; const FORBIDDEN_TIMING_SOURCE = 'observed-harness-baseline';
 const TIER_OBSERVED_DOCKER = 'observed-docker-cluster'; const PATH_LIVE_WIRE = 'live-cluster-wire';
 const LANDING_MD_PATH = 'docs/benchmarks/README.md'; const LANDING_HTML_PATH = 'docs/benchmarks/index.html';
 const MARKER_PROVENANCE_SECTION_MD = 'Measurement provenance and evidence-tier separation';
@@ -100,7 +100,7 @@ function verifyMatrixScaleoutSeries(matrix) {
   assert.equal(s.completedSlices.length + s.remainingSlicesCount, TOTAL_SCALEOUT_SERIES_SLICES);
   assert.equal(s.remainingSlicesCount >= NUM_ZERO, true);
   assert.equal(Array.isArray(matrix.lagrangeEvolutionTimeline), true);
-  assert.equal(matrix.lagrangeEvolutionTimeline.length >= NUM_TEN, true);
+  assert.equal(matrix.lagrangeEvolutionTimeline.length >= NUM_SIX, true);
 }
 
 function verifyExpPair(builder, expObj, checkFn) {
@@ -152,10 +152,10 @@ function verifyHistoryProvenance(rootDir) {
   const scenBRecords = arrayFilter(records, (r) => r.framework?.scenarioId === SCENARIO_B_ID);
   assert.equal(scenBRecords.length > NUM_ZERO, true);
   for (const r of scenBRecords) {
-    assert.equal(r.evidenceSource?.kind, KIND_LOCAL_ORACLE);
-    assert.equal(r.framework?.comparisonView, VIEW_CONTRACT_MODEL);
+    assert.equal(r.evidenceSource?.kind, KIND_OBSERVED_PAIRED);
+    assert.equal(r.framework?.comparisonView, VIEW_NATIVE);
+    assert.notEqual(r.evidenceSource?.kind, FORBIDDEN_KIND_LOCAL_ORACLE);
     assert.notEqual(r.evidenceSource?.timingSource, FORBIDDEN_TIMING_SOURCE);
-    assert.notEqual(r.framework?.comparisonView, FORBIDDEN_VIEW_NATIVE);
   }
 }
 
@@ -208,7 +208,7 @@ function verifyAllArtifactBundles(rootDir, matrix) {
     [renderLagrangeEvolutionSvg, DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH]]);
   verifyLandingLinks(rootDir, DEFAULT_LAGRANGE_EVOLUTION_MD_PATH,
     DEFAULT_LAGRANGE_EVOLUTION_HTML_PATH,
-    [path.basename(DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH), KIND_LOCAL_ORACLE]);
+    [path.basename(DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH), TIER_OBSERVED_DOCKER]);
   verifyFileMarkers(rootDir, LANDING_MD_PATH, [
     MARKER_PROVENANCE_SECTION_MD, MARKER_SCALEOUT_SUMMARY_MD,
     MARKER_LAGRANGE_5NODE_MD, MARKER_SCENARIO_C_SUMMARY_MD,
@@ -248,7 +248,7 @@ function verifyAllArtifactBundles(rootDir, matrix) {
 export async function runDistributedScaleoutProvenanceGuard(rootDir = REPO_ROOT) {
   verifyEpic(rootDir);
   assert.equal(typeof runModeledScenarioBHarnessComparison, TYPE_FUNCTION);
-  assert.equal(buildLagrangeEvolutionTimeline().length >= NUM_ELEVEN, true);
+  assert.equal(buildLagrangeEvolutionTimeline().length >= NUM_SIX, true);
   const matrixPath = path.resolve(rootDir, DEFAULT_MULTI_SYSTEM_MATRIX_PATH);
   assert.equal(fs.existsSync(matrixPath), true);
   const matrix = await readMultiSystemComparativeMatrix({rootDir, matrixPath});

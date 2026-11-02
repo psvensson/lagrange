@@ -5,6 +5,8 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayJoin = Function.call.bind(Array.prototype.join);
+const arraySlice = Function.call.bind(Array.prototype.slice);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 
 const UTF8_ENCODING = 'utf8';
@@ -13,6 +15,9 @@ const CURRENT_DIR_PATH = path.dirname(CURRENT_FILE_PATH);
 const ROOT_DIR_PATH = path.resolve(CURRENT_DIR_PATH, '../..');
 const METRIC_FLAG = '--metric';
 const NEWLINE = '\n';
+const EMPTY_STRING = '';
+const ARGV_SCRIPT_INDEX = 1;
+const ARGV_SLICE_START = 2;
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 
@@ -79,16 +84,22 @@ const FILE_TOKEN_CHECKS = Object.freeze([
   [Q2_TEST_REL_PATH, Q2_TEST_TOKENS, ISSUE_Q2_TEST],
 ]);
 
-function readTextIfPresent(relPath) {
-  const fullPath = path.join(ROOT_DIR_PATH, relPath);
+function readTextIfPresent(rootDirPath, relPath) {
+  const fullPath = path.join(rootDirPath, relPath);
   if (!fs.existsSync(fullPath)) {
     return null;
   }
   return fs.readFileSync(fullPath, UTF8_ENCODING);
 }
 
-function checkRequiredTokens(relPath, requiredTokens, issueCode, issues) {
-  const content = readTextIfPresent(relPath);
+function checkRequiredTokens(
+  rootDirPath,
+  relPath,
+  requiredTokens,
+  issueCode,
+  issues,
+) {
+  const content = readTextIfPresent(rootDirPath, relPath);
   if (content === null) {
     issues.push(issueCode);
     return;
@@ -101,22 +112,33 @@ function checkRequiredTokens(relPath, requiredTokens, issueCode, issues) {
   }
 }
 
-function evaluateIssues() {
+export function runTokenCheckGuard(
+  rootDirPath,
+  fileTokenChecks,
+  argv = process.argv,
+) {
   const issues = [];
-  for (const [relPath, tokens, issueCode] of FILE_TOKEN_CHECKS) {
-    checkRequiredTokens(relPath, tokens, issueCode, issues);
+  for (const [relPath, tokens, issueCode] of fileTokenChecks) {
+    checkRequiredTokens(rootDirPath, relPath, tokens, issueCode, issues);
   }
-  return issues;
+  const isMetric = arrayIncludes(
+    arraySlice(argv, ARGV_SLICE_START),
+    METRIC_FLAG,
+  );
+  if (isMetric) {
+    process.stdout.write(`${issues.length}${NEWLINE}`);
+    process.exit(EXIT_SUCCESS);
+  }
+  if (issues.length > EXIT_SUCCESS) {
+    process.stderr.write(`${arrayJoin(issues, NEWLINE)}${NEWLINE}`);
+    process.exit(EXIT_FAILURE);
+  }
+  process.stdout.write(`${EXIT_SUCCESS}${NEWLINE}`);
 }
 
-const issues = evaluateIssues();
-const isMetric = arrayIncludes(process.argv.slice(2), METRIC_FLAG);
-if (isMetric) {
-  process.stdout.write(`${issues.length}${NEWLINE}`);
-  process.exit(EXIT_SUCCESS);
+if (
+  path.resolve(process.argv[ARGV_SCRIPT_INDEX] || EMPTY_STRING) ===
+  CURRENT_FILE_PATH
+) {
+  runTokenCheckGuard(ROOT_DIR_PATH, FILE_TOKEN_CHECKS);
 }
-if (issues.length > 0) {
-  process.stderr.write(`${issues.join(NEWLINE)}${NEWLINE}`);
-  process.exit(EXIT_FAILURE);
-}
-process.stdout.write(`0${NEWLINE}`);

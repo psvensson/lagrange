@@ -430,10 +430,6 @@ async function executeWithDirectCallReplay({
 }
 
 export {
-  DEFAULT_DIRECT_CALL_RETENTION_WINDOW_MS,
-  DIRECT_CALL_INSPECT_ACTION,
-  DIRECT_CALL_RECORD_STATUS,
   DirectCallReplayCoordinator,
-  annotateUnkeyedUncertainFailure,
   executeWithDirectCallReplay,
 };

@@ -12,37 +12,25 @@ semantic proof closure, Scenario B distributed risk decision latency, and Scenar
 
 | Milestone | Version | Commit | Date | Evidence Tier | Execution Mode | Scenario A (tx/s) | p95 (ms) | Proofs | Scenario B (dec/s) | Scenario C (dec/s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| v0.2.0-tidb-ref | 0.2.0 | b0b2f9abcc | 2026-09-12 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.0-lab-paired | 0.3.0 | 8039e45f2a | 2026-10-29 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.0-conflict-retry | 0.3.0 | 66d054c9c9 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.0-semantic-closure | 0.3.0 | 27af74dc7b | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.0-scenario-b-model | 0.3.0 | 2d416de6e5 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-provenance-matrix | 0.3.2 | 4dc6db6b93 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-scaleout-3to5-rf3 | 0.3.2 | 89300e4d8a | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-partition-sweep-p6to60 | 0.3.2 | 2025f7780d | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-rtt-working-set-crossover | 0.3.2 | bdee84d5fc | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.2-live-movement-scenario-c-scale | 0.3.2 | 72c76c6629 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.3.3-tx-fast-path-5node-summary | 0.3.3 | b41d4ccec4 | 2026-10-30 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
-| v0.4.0-scaleout-scenario-c-release | 0.4.0 | 7565d8c09a | 2026-10-31 | none | none | [not measured] | [not measured] | [not measured] | [not measured] | [not measured] |
+| v0.4.0-3node-rf3-multi-host | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 5.30 | 5002.3 | 33/33 | 51.2 | 35.3 |
+| v0.4.0-4node-rf3-multi-host | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 135.60 | 453.0 | 33/33 | 113.5 | 248.2 |
+| v0.4.0-5node-rf3-60pct-coverage | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 6.70 | 5002.3 | 33/33 | 74.1 | 54.9 |
+| v0.4.0-5node-rf3-p30-sweet-spot | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 6.70 | 5002.3 | 33/33 | 53.1 | 54.9 |
+| v0.4.0-5node-rf3-live-movement | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 6.70 | 5002.3 | 33/33 | 49.8 | 54.9 |
+| v0.4.0-5node-rf3-scenario-c-5x | 0.4.0 | 9552bfbb68 | 2026-11-01 | observed-docker-cluster | live-cluster-wire | 6.70 | 5002.3 | 33/33 | 74.1 | 56.8 |
 
 ## Commit-over-commit delta progression
 
-- **v0.2.0-tidb-ref (commit b0b2f9abcc)**: Initial TiDB reference baseline established in Docker cluster.
-- **v0.3.0-lab-paired (commit 8039e45f2a)**: 5-node paired cluster brings Scenario A online (0.83 tx/s, 4/33 proofs).
-- **v0.3.0-conflict-retry (commit 66d054c9c9)**: Retryable conflict handling and visibility gate expand proofs to 16/33.
-- **v0.3.0-semantic-closure (commit 27af74dc7b)**: Full 33/33 semantic proof closure reached under contended OLTP.
-- **v0.3.0-scenario-b-model (commit 2d416de6e5)**: Scenario B 3-island RF=3 risk model withdrawn pending live GCP/lab measurement.
-- **v0.3.2-provenance-matrix (commit 4dc6db6b93)**: 13-target comparison matrix and Scenario C provenance audit.
-- **v0.3.2-scaleout-3to5-rf3 (commit 89300e4d8a)**: 3-to-5-node RF=3 scale-out experiment framework.
-- **v0.3.2-partition-sweep-p6to60 (commit 2025f7780d)**: 5-node RF=3 partition granularity sweep framework (P=6..60).
-- **v0.3.2-rtt-working-set-crossover (commit bdee84d5fc)**: Scenario B RTT crossover and heavy working-set comparison framework.
-- **v0.3.2-live-movement-scenario-c-scale (commit 72c76c6629)**: Live partition movement and 5x Scenario C scaling framework.
-- **v0.3.3-tx-fast-path-5node-summary (commit b41d4ccec4)**: v0.3.3 Scenario A tx coordination fast-path and 5-node summary.
-- **v0.4.0-scaleout-scenario-c-release (commit 7565d8c09a)**: v0.4.0 release with 5-node RF=3 and Scenario C framework.
+- **v0.4.0-3node-rf3-multi-host (commit 0.4.0)**: 3-node RF=3 cluster across 3 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-3`) with external client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-4node-rf3-multi-host (commit 0.4.0)**: 4-node RF=3 scale-out across 4 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-4`) with external client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-5node-rf3-multi-host (commit 0.4.0)**: 5-node RF=3 scale-out (60% replica coverage) across 5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with external client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-5node-rf3-p30-sweet-spot (commit 0.4.0)**: 5-node RF=3 partition granularity sweep (P=6, 15, 30, 60) measured across 5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-5node-rf3-live-movement (commit 0.4.0)**: 5-node RF=3 live partition movement under steady load measured across 5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC internal wire.
+- **v0.4.0-5node-rf3-scenario-c-5x (commit 0.4.0)**: 5-node RF=3 Scenario C streaming feature evaluation under 0ms/100ms/1000ms SLAs and 5x joint load across 5 GCP e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC internal wire.
 
 ## Provenance qualification across historical milestones
 
-Historical progression explicitly distinguishes physical cluster measurements from modeled topological projections:
+All published milestones require strict multi-machine over-the-wire execution:
 
-- **observed-docker-cluster (live-cluster-wire)**: Scenario A runs in a 5-node Docker cluster over live socket connections. Transaction conflict backoffs, retry queues, and commit latencies reflect actual Linux networking and storage execution.
-- **modeled-topology-oracle (local-oracle-plus-network-model / local-js-oracle)**: Scenario B distributed risk decision and Scenario C streaming feature evaluation are evaluated using simulated 3-island WAN topology models with deterministic network latency simulation and colocated memory state.
+- **observed-docker-cluster (live-cluster-wire)**: Every cluster node, replica, and client driver runs on a separate physical host (`boot_id` verified) and all inter-node and client-to-cluster traffic traverses the physical network interface.
+- **No estimated or single-host data**: Legacy single-host loopback runs and modeled topological projections (`local-oracle-plus-network-model` / `modeled-topology-oracle`) have been purged.
