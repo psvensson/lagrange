@@ -5,7 +5,8 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {TABLES} from '../constants/tables.js';
 import {INITIAL_PARTITION_IDS} from
   '../bootstrap/system-table-schemas-constants.js';
-import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
+import {COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE} from
+  '../raft/raft-committed-membership-constants.js';
 import {raiseParticipantCutoverPause, readParticipantReleaseFacts} from
   '../partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from
@@ -266,6 +267,26 @@ async function proveCurrentControlCohort(handler, service, request,
     {census: pausedCensus});
 }
 
+function committedMemberIds(membership) {
+  return [membership.voters, membership.votersOutgoing, membership.learners,
+    membership.learnersNext].flatMap((peers) => peers ?? [])
+    .map((peerId) => membership.identities?.[peerId]);
+}
+
+// The founding facts include the committed configuration: a replaced founder
+// leading the group still releases.
+async function freshCreateRefusal(handler, service, request) {
+  const membership = await service.raft.readCommittedMembership(
+    {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS});
+  if (membership.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
+    return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+      {missingFact: MISSING_FACT.COMMITTED_MEMBERSHIP, reason: membership.reason});
+  }
+  return handler.participantReleaseAuthorizationOwner.decideFreshCreateRelease(request,
+    {partitionId: service.partitionId, replicaId: service.replicaId,
+      memberIds: committedMemberIds(membership)});
+}
+
 // NOT_LEADER first: a non-leader never grants or refuses on authority. A
 // partition with no write origin needs release authority: a node-local
 // FRESH_SEED or OPERATOR token of this handler, or - for a fresh CREATE - the
@@ -277,18 +298,19 @@ async function localReleaseRefusal(handler, service, request) {
       {leaderAddress: status.leaderAddress, leaderReplicaId: status.leaderId});
   }
   if (readPartitionWriteOrigin(service.db) !== null) return null;
-  const owner = handler.participantReleaseAuthorizationOwner;
   if (request.trigger === TRIGGER.FRESH_CREATE) {
-    return owner.decideFreshCreateRelease(request,
-      {partitionId: service.partitionId, replicaId: service.replicaId});
+    return freshCreateRefusal(handler, service, request);
   }
-  return owner.validates(request.authorization, {partitionId: service.partitionId,
-    targetBuildDigest: request.targetBuildDigest}) ? null :
-    releaseAnswer(OUTCOME.OPERATOR_REQUIRED, request,
+  return handler.participantReleaseAuthorizationOwner.validates(request.authorization,
+    {partitionId: service.partitionId, targetBuildDigest: request.targetBuildDigest}) ?
+    null : releaseAnswer(OUTCOME.OPERATOR_REQUIRED, request,
       {missingFact: MISSING_FACT.FRESH_STORAGE_OR_OPERATOR_AUTHORITY});
 }
 
-async function runCutoverAttempt(handler, request) {
+// Decided per request, before any join: a run shares only the cutover work,
+// so a request never inherits another identity's answer and a refusal reaches
+// only the request it belongs to.
+async function requestRefusal(handler, request) {
   if (Number.isSafeInteger(request.deadlineAtMs) &&
       handler.timeSource.now() >= request.deadlineAtMs) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
@@ -299,8 +321,11 @@ async function runCutoverAttempt(handler, request) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.HOSTED_PARTITION});
   }
-  const localRefusal = await localReleaseRefusal(handler, service, request);
-  if (localRefusal !== null) return localRefusal;
+  return localReleaseRefusal(handler, service, request);
+}
+
+async function runCutoverAttempt(handler, request) {
+  const service = localLeader(handler, request);
   const controlOwner = await releaseControlOwnerFirst(handler, service, request);
   if (controlOwner !== null) return controlOwner;
   // Close the current leader before any awaited remote observation. A
@@ -408,6 +433,9 @@ async function joinParticipantCutover(handler, current) {
 }
 
 async function runParticipantCutover(handler, request) {
+  const refusal = await requestRefusal(handler, request).catch((error) =>
+    attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
+  if (refusal !== null) return refusal;
   let runs = RUNS.get(handler);
   if (runs === undefined) {
     runs = new Map();
