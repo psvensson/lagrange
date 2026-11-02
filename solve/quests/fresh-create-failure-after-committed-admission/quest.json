@@ -12,7 +12,7 @@
         "deferred-authority-read-consumed-within-create-deadline",
         "post-admission-failure-always-claims-cleanup",
         "failed-create-without-owner-not-protected",
-        "reproducer-no-unclaimed-failed-configured-member",
+        "induced-authority-unavailability-production-witness",
         "independent-verification"
       ]
     }
@@ -53,6 +53,10 @@
     {
       "id": "source-change-subagent-verification",
       "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "doneWhen-supersession",
+      "statement": "supersedes: receipt reproducer-no-unclaimed-failed-configured-member superseded 2026-11-02 (R09, lead decision) because its live trigger, an authority read refused by readiness routing, is nondeterministic and its class repair belongs to Group A (C5); one more lab run would be a lottery. Replaced by induced-authority-unavailability-production-witness: a real ReplicaHandler CREATE path, a real PartitionService on the real raft-rs port, the real release client, route and cutover owner, with the gateway's authoritative read of the operation row made unavailable N times then answering (create completes within the existing deadline) and unavailable forever (create fails at the existing deadline with a cleanup claim; the claimed REMOVE completes); no FAILED row with cleanup_token null after admission input existed. An injected fault at the owner boundary in a deterministic test; not a harness repair and not a bound change. The live run fresh-create-b-5d7469476-20261102T113540Z stays recorded: path not exercised live, serve lane opened, no hosted_replica refusals (0 vs 32 at base)."
     }
   ],
   "verificationTemplates": [
