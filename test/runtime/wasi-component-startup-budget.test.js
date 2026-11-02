@@ -13,7 +13,9 @@
  *   3. a typed derivation failure before any Cell worker exists, kept
  *      permanently for that digest;
  *   4. the CPU-ceiling constants, toolchain identity, and owner
- *      cancellation of a superseded derivation.
+ *      cancellation of a RUNNING derivation (release and supersede);
+ *   5. infrastructure failures (an early CPU sample, a worker that exits
+ *      before deriving) are typed on this start and never retained.
  */
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
@@ -33,9 +35,18 @@ import {
 import {
   STARTUP_WITNESS_CELL_BUDGETS,
   STARTUP_WITNESS_COMPONENT_BYTES,
-  STARTUP_WITNESS_SECOND_COMPONENT_BYTES,
 } from './wasi-component-startup-witness-fixture.js';
 
+const CANCEL_CHILD_PATH = new URL(
+  './wasi-component-derivation-cancel-child.js',
+  import.meta.url,
+).pathname;
+const EXIT_WORKER_PATH = new URL(
+  './wasi-component-derivation-exit-worker-child.js',
+  import.meta.url,
+).pathname;
+const EARLY_SAMPLE_INTERVAL_MS = 1;
+const EARLY_SAMPLE_ROUNDS = 8;
 const LIVENESS_CHILD_PATH = new URL(
   './wasi-component-startup-liveness-child.js',
   import.meta.url,
@@ -143,45 +154,80 @@ test('the derivation key names the pinned transpile toolchain', () => {
   );
 });
 
-test('a superseded derivation is cancelled with a typed outcome and the ' +
-  'new digest derives', {timeout: FILE_TIMEOUT_MS}, async () => {
+function runCancelChild(mode) {
+  const child = spawnSync(process.execPath, [CANCEL_CHILD_PATH, mode], {
+    encoding: 'utf8',
+    timeout: CHILD_KILL_MS,
+  });
+  assert.equal(child.error, undefined, 'the child exits before the kill bound');
+  assert.equal(child.status, 0, `child exits by itself: ${child.stderr}`);
+  return JSON.parse(child.stdout.trim().split('\n').at(-1));
+}
+
+test('superseding the digest of a RUNNING derivation cancels it typed, ' +
+  'terminates its worker, and the new digest derives',
+{timeout: FILE_TIMEOUT_MS}, () => {
+  const result = runCancelChild('supersede');
+  assert.equal(result.runningAtRelease, 1, 'the derivation was running');
+  assert.equal(result.outcome, DERIVATION_OUTCOME.CANCELLED);
+  assert.equal(result.cancelledCode, ERROR_CODE.UNAVAILABLE);
+  assert.equal(result.successorDerived, true);
+  assert.equal(result.telemetry.cancelled, 1);
+  assert.equal(result.telemetry.inFlight, 0);
+});
+
+test('releasing the last holder of a RUNNING derivation cancels it typed ' +
+  'and terminates its worker', {timeout: FILE_TIMEOUT_MS}, () => {
+  const result = runCancelChild('release');
+  assert.equal(result.runningAtRelease, 1, 'the derivation was running');
+  assert.equal(result.outcome, DERIVATION_OUTCOME.CANCELLED);
+  assert.equal(result.cancelledCode, ERROR_CODE.UNAVAILABLE);
+  assert.equal(result.telemetry.inFlight, 0);
+  assert.equal(result.telemetry.retained, 0);
+});
+
+// The CPU sampler must not decide an outcome before the derivation thread
+// runs: Worker.cpuUsage() rejects ERR_WORKER_NOT_RUNNING until 'online'.
+// The production 250 ms interval hides that window on a fast host, so the
+// witness samples every 1 ms (the window a slow or contended host opens).
+test('an early CPU sample never refuses a valid component',
+  {timeout: FILE_TIMEOUT_MS}, async () => {
+    for (let round = 0; round < EARLY_SAMPLE_ROUNDS; round += 1) {
+      const owner = new WasiComponentDerivationOwner();
+      owner.cpuSampleIntervalMs = EARLY_SAMPLE_INTERVAL_MS;
+      try {
+        const result = await owner.acquire('early-sample', {
+          bytes: STARTUP_WITNESS_COMPONENT_BYTES,
+          world: REQUEST_WORLD,
+        });
+        assert.equal(result.outcome, DERIVATION_OUTCOME.DERIVED,
+          `round ${round}: ${result.error?.message}`);
+      } finally {
+        await owner.shutdown();
+      }
+    }
+  });
+
+test('a derivation worker that exits before deriving is unavailable on ' +
+  'this start and derives on the next acquire', {timeout: FILE_TIMEOUT_MS},
+async () => {
   const owner = new WasiComponentDerivationOwner();
+  const productionWorkerPath = owner.workerPath;
+  owner.workerPath = EXIT_WORKER_PATH;
+  const component = {
+    bytes: STARTUP_WITNESS_COMPONENT_BYTES,
+    world: REQUEST_WORLD,
+  };
   try {
-    const first = owner.acquire('holder', {
-      bytes: STARTUP_WITNESS_COMPONENT_BYTES,
-      world: REQUEST_WORLD,
-    });
-    const second = owner.acquire('holder', {
-      bytes: STARTUP_WITNESS_SECOND_COMPONENT_BYTES,
-      world: REQUEST_WORLD,
-    });
-    const cancelled = await first;
-    assert.equal(cancelled.outcome, DERIVATION_OUTCOME.CANCELLED);
-    assert.equal(cancelled.error.code, ERROR_CODE.UNAVAILABLE);
-    const derived = await second;
+    const lost = await owner.acquire('exit-holder', component);
+    assert.equal(lost.outcome, DERIVATION_OUTCOME.UNAVAILABLE);
+    assert.equal(lost.error.code, ERROR_CODE.UNAVAILABLE);
+    assert.equal(owner.telemetry().refused, 0, 'not a permanent refusal');
+    owner.workerPath = productionWorkerPath;
+    const derived = await owner.acquire('exit-holder', component);
     assert.equal(derived.outcome, DERIVATION_OUTCOME.DERIVED);
-    const telemetry = owner.telemetry();
-    assert.equal(telemetry.cancelled, 1);
-    assert.equal(telemetry.inFlight, 0);
+    assert.equal(owner.telemetry().runs, 2);
   } finally {
     await owner.shutdown();
   }
 });
-
-test('releasing the last holder of a running derivation terminates it',
-  {timeout: FILE_TIMEOUT_MS}, async () => {
-    const owner = new WasiComponentDerivationOwner();
-    try {
-      const pending = owner.acquire('only-holder', {
-        bytes: STARTUP_WITNESS_COMPONENT_BYTES,
-        world: REQUEST_WORLD,
-      });
-      owner.release('only-holder');
-      const result = await pending;
-      assert.equal(result.outcome, DERIVATION_OUTCOME.CANCELLED);
-      assert.equal(owner.telemetry().inFlight, 0);
-      assert.equal(owner.telemetry().retained, 0);
-    } finally {
-      await owner.shutdown();
-    }
-  });

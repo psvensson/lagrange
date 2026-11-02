@@ -60,10 +60,17 @@ const MICROSECONDS_PER_MS = 1000;
 // admission-cap component's worth of bytes, oldest evicted first.
 const DERIVATION_RETAINED_UNHELD_BYTES = 256 * BYTES_PER_MIB;
 
+// DERIVED and REFUSED are retained for the key; CANCELLED and UNAVAILABLE
+// are typed on this start only and never retained, so the next acquire
+// derives again (the caller's own cadence is the re-drive; the owner has no
+// retry loop). REFUSED is reserved for the two outcomes that are properties
+// of the component: a transpile failure the worker reports, and the CPU
+// ceiling.
 const DERIVATION_OUTCOME = Object.freeze({
   CANCELLED: 'cancelled',
   DERIVED: 'derived',
   REFUSED: 'refused',
+  UNAVAILABLE: 'unavailable',
 });
 const DERIVATION_STATE = Object.freeze({
   QUEUED: 'queued',
@@ -80,6 +87,7 @@ const DERIVATION_ERROR_MESSAGE = Object.freeze({
   EXHAUSTED: 'Component derivation CPU ceiling exhausted',
   EXITED: 'Component derivation worker exited before deriving',
   FAILED: 'Component derivation failed',
+  UNAVAILABLE: 'Component derivation unavailable',
 });
 const DERIVATION_WORKER_MESSAGE = Object.freeze({
   DERIVED: 'derived',
@@ -89,6 +97,7 @@ const DERIVATION_WORKER_EVENT = Object.freeze({
   ERROR: 'error',
   EXIT: 'exit',
   MESSAGE: 'message',
+  ONLINE: 'online',
 });
 const DERIVATION_WORKER_SOURCE_FILE = 'wasi-component-derivation-worker.js';
 const DERIVATION_WORKER_BUNDLE_FILE = 'component-derivation-worker.bundle.mjs';
@@ -138,6 +147,19 @@ function cancelledOutcome() {
   });
 }
 
+// An infrastructure failure (thread init, OOM at creation, killed before
+// deriving): typed on this start, not a property of the component.
+function unavailableOutcome(cause) {
+  return Object.freeze({
+    error: new WasiComponentCellError(
+      DERIVATION_ERROR_CODE.UNAVAILABLE,
+      `${DERIVATION_ERROR_MESSAGE.UNAVAILABLE}: ${cause.message}`,
+      {cause},
+    ),
+    outcome: DERIVATION_OUTCOME.UNAVAILABLE,
+  });
+}
+
 function resolveDerivationWorkerPath() {
   return resolvePackagedRuntimeFile({
     bundledFileName: DERIVATION_WORKER_BUNDLE_FILE,
@@ -149,10 +171,13 @@ function resolveDerivationWorkerPath() {
 class WasiComponentDerivationOwner {
   constructor() {
     this.workerPath = resolveDerivationWorkerPath();
+    this.cpuSampleIntervalMs = DERIVATION_CPU_SAMPLE_INTERVAL_MS;
     this.entries = new Map();
     this.holderKeys = new Map();
     this.lane = Promise.resolve();
-    this.counts = {cancelled: 0, completed: 0, refused: 0, runs: 0};
+    this.counts = {
+      cancelled: 0, completed: 0, refused: 0, runs: 0, unavailable: 0,
+    };
   }
 
   /**
@@ -214,13 +239,21 @@ class WasiComponentDerivationOwner {
     entry.state = DERIVATION_STATE.RUNNING;
     this.counts.runs += 1;
     const cpuBudgetMs = derivationCpuBudgetMs(entry.byteLength);
-    const worker = new Worker(this.workerPath, {
-      workerData: {
-        bytes: new Uint8Array(entry.bytes),
-        instantiation: DERIVATION_INSTANTIATION,
-        name: entry.world,
-      },
-    });
+    let worker;
+    try {
+      worker = new Worker(this.workerPath, {
+        workerData: {
+          bytes: new Uint8Array(entry.bytes),
+          instantiation: DERIVATION_INSTANTIATION,
+          name: entry.world,
+        },
+      });
+    } catch (error) {
+      // A thread that cannot be created settles this entry and leaves the
+      // lane usable for the next derivation.
+      this.settle(entry, unavailableOutcome(error));
+      return undefined;
+    }
     return new Promise((laneResolve) => {
       let timer = null;
       const finish = (outcome) => {
@@ -240,7 +273,10 @@ class WasiComponentDerivationOwner {
           {componentBytes: entry.byteLength, cpuBudgetMs, cpuMs},
         ) : null;
       };
-      function scheduleCpuSample() {
+      // Sampled only once the thread runs: before 'online', cpuUsage()
+      // rejects ERR_WORKER_NOT_RUNNING. A rejected sample is no sample and
+      // is rescheduled; it never decides the outcome.
+      const scheduleCpuSample = () => {
         timer = setTimeout(() => {
           worker.cpuUsage().then((usage) => {
             const exhausted = exhaustedOrNull(usage);
@@ -248,12 +284,12 @@ class WasiComponentDerivationOwner {
             else if (entry.state === DERIVATION_STATE.RUNNING) {
               scheduleCpuSample();
             }
-          }, (error) => finish(refused(
-            DERIVATION_ERROR_CODE.FAILED, error.message,
-            {componentBytes: entry.byteLength},
-          )));
-        }, DERIVATION_CPU_SAMPLE_INTERVAL_MS);
-      }
+          }, () => {
+            if (entry.state === DERIVATION_STATE.RUNNING) scheduleCpuSample();
+          });
+        }, this.cpuSampleIntervalMs);
+      };
+      worker.once(DERIVATION_WORKER_EVENT.ONLINE, scheduleCpuSample);
       worker.on(DERIVATION_WORKER_EVENT.MESSAGE, (message) => {
         finish(message.type === DERIVATION_WORKER_MESSAGE.DERIVED ?
           Object.freeze({files: message.files,
@@ -262,15 +298,10 @@ class WasiComponentDerivationOwner {
             message.message || DERIVATION_ERROR_MESSAGE.FAILED,
             {componentBytes: entry.byteLength}));
       });
-      worker.on(DERIVATION_WORKER_EVENT.ERROR, (error) => finish(refused(
-        DERIVATION_ERROR_CODE.FAILED, error.message,
-        {componentBytes: entry.byteLength},
-      )));
-      worker.on(DERIVATION_WORKER_EVENT.EXIT, () => finish(refused(
-        DERIVATION_ERROR_CODE.FAILED, DERIVATION_ERROR_MESSAGE.EXITED,
-        {componentBytes: entry.byteLength},
-      )));
-      scheduleCpuSample();
+      worker.on(DERIVATION_WORKER_EVENT.ERROR,
+        (error) => finish(unavailableOutcome(error)));
+      worker.on(DERIVATION_WORKER_EVENT.EXIT, () => finish(
+        unavailableOutcome(new Error(DERIVATION_ERROR_MESSAGE.EXITED))));
     });
   }
 
@@ -285,11 +316,22 @@ class WasiComponentDerivationOwner {
     } else if (outcome.outcome === DERIVATION_OUTCOME.REFUSED) {
       this.counts.refused += 1;
     } else {
-      this.counts.cancelled += 1;
-      this.entries.delete(entry.key);
+      this.counts[outcome.outcome] += 1;
+      this.forget(entry);
     }
     entry.resolve(outcome);
     if (entry.holders.size === 0) this.enforceRetention();
+  }
+
+  // A non-retained outcome drops the entry and its holders' claims, so the
+  // next acquire of the key enqueues a fresh derivation.
+  forget(entry) {
+    if (this.entries.get(entry.key) === entry) this.entries.delete(entry.key);
+    for (const holderId of entry.holders) {
+      if (this.holderKeys.get(holderId) === entry.key) {
+        this.holderKeys.delete(holderId);
+      }
+    }
   }
 
   enforceRetention() {

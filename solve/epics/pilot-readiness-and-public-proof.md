@@ -383,8 +383,9 @@ correctness regression or reopen completed optimization work.
   measurements are in its `evidence/`.
 - Immediate CI trigger: the nine files are resource class `ordinary` (four
   jobs), unlike their toolchain siblings. Owner: `class: fix` quest
-  `service-test-toolchain-classification`. That quest does not close the
-  R12 defect.
+  `solve/quests/service-test-toolchain-classification` (branch
+  `fix/service-test-toolchain-classification-20261102`, PR #193). That quest
+  does not close the R12 defect.
 - R17 finding for `postgres-compatibility-certification-matrix`: the
   committed `docs/postgres-compatibility-matrix.json` pins
   `driverVersions.psql` 14.24, which is the controller's psql. The hosted

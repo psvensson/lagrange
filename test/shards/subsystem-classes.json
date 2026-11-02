@@ -28,7 +28,7 @@
   "censusSize": 2555,
   "digest": "fnv1a32-5e75931d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-983f5421",
+  "observationDigest": "fnv1a32-16a65a88",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -16399,6 +16399,8 @@
       "files": [
         "package.json",
         "src/runtime/wasi-component-cell-runtime.js",
+        "test/runtime/wasi-component-derivation-cancel-child.js",
+        "test/runtime/wasi-component-derivation-exit-worker-child.js",
         "test/runtime/wasi-component-startup-liveness-child.js"
       ]
     },
