@@ -1,3 +1,9 @@
+---
+audience: evidence
+recorded: 2026-11-02
+quest: comparative-benchmark-evidence-repair
+---
+
 # Model challenge (verification protocol phase 3), 2026-11-01
 
 Read-only challenger run against the design note and the base-commit code before stream evidence

@@ -1,6 +1,0 @@
-pull pingcap/pd:v8.5.8: docker.io/pingcap/pd:v8.5.8
-pull pingcap/tidb:v8.5.8: docker.io/pingcap/tidb:v8.5.8
-present pingcap/tikv:v8.5.8
-pull postgres:17-alpine: docker.io/library/postgres:17-alpine
-present psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb
- 374G

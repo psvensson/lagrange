@@ -1,6 +1,0 @@
-peter-RB102 holder=none free state=gone mysql=
-absent
-peter-All-Series holder=none free state=gone mysql=
-absent
-peter-Lenovo-Y50-70 holder=none free state=gone mysql=
-absent

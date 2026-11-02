@@ -1,3 +1,9 @@
+---
+audience: evidence
+recorded: 2026-11-02
+quest: comparative-benchmark-evidence-repair
+---
+
 # One canonical comparative-benchmark chain (design note, 2026-11-01)
 
 Owner of this note: the quest `comparative-benchmark-evidence-repair`. It binds the implementers of

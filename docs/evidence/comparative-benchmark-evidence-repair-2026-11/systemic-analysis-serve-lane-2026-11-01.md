@@ -1,3 +1,9 @@
+---
+audience: evidence
+recorded: 2026-11-02
+quest: comparative-benchmark-evidence-repair
+---
+
 # Systemic analysis: projection-gated serving decisions (serve lane never opens), 2026-11-01
 
 Read-only investigation in worktree `lagrange-benchmark-repair-20261101`, HEAD `b20f94dc7`; `src/` is identical to the

@@ -1,6 +1,0 @@
-== adams-gamla pull 2026-11-01T22:59:02Z
-docker.io/library/mysql:8.4.11
-  61G
-== controller -> lenovo 2026-11-01T23:00:04Z
-Loaded image: mysql:8.4.11
-rc=0 0 secs=334
