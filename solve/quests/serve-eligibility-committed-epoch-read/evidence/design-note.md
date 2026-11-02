@@ -373,3 +373,17 @@ whether DDL results can carry a NoticeResponse; the observed composition of read
 run (section 1 check); remaining readers of `shouldBypassLocalPriorityControlPlaneStartupReadiness` beyond those
 listed; whether the leader-local read's deposed-leader window matters at the lease length (15 s,
 `constants/time.js:5-6`).
+
+## 13. Lead decisions and resolved unknowns (appended 2026-11-02)
+Decisions D1-D7 are recorded in the quest log (`kind: decision`); F10 and D3 are confirmed by the owner (Peter,
+2026-11-02). D1: the quest runs under `raft-rs-full-cutover`; the core-architecture-convergence and Q6 gates are
+not superseded; the Q6 record carries a pointer entry (its section 13). D2 approved as section 3.2. D3: provisioning
+unavailability is the existing `deferred`/`retry` state with the typed reason; `UNDER_REPLICATED` joins the shared
+vocabulary. D4: R09 supersession of predicate (d) recorded in that quest's log. D5: the startup bypass and its
+bootstrap readers go together (fifth attempt if another owner). D6: the C12 loop is deleted. D7: residual.
+Resolved: `priority_partition_summary` is built from cached and merged rows (same class, attempt 4, red test now);
+a successful DDL cannot carry a NoticeResponse today (attempt 2 adds it at the pgwire owner). Existing primitives
+attempt 1 reuses: `AuthoritativeControlPlaneView.readReadinessOwnerRows` (`authoritative-control-plane-view.js:470-494`,
+OWNER_RPC_REQUIRED + leader REQUIRED + READINESS_INTERNAL) for the committed read, and the structural route
+`isReadinessInternalRouteStructurallyReady` (`query/query-executor-bootstrap-deferred-routing.js`) for system-table
+routing on leadership.
