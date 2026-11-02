@@ -741,6 +741,29 @@ describe('content identity and the exhausted arm', () => {
       assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.TOPOLOGY_MISMATCH), false);
     });
 
+  // Live campaign bench-live-20261101-b-r8: the deployer's last readiness
+  // answer is the HTTP answer {status, body, json}; the product's own denial
+  // is its json. The cell rendered `null (null), reasons none`.
+  it('the readiness denial is read from the product\'s answer inside the HTTP answer',
+    async () => {
+      const {run} = await exhaustedLagrangeRun();
+      run.deployment.readiness.evidence.diagnostic.last = {status: 503,
+        body: JSON.stringify(EXHAUSTED_LAST), json: EXHAUSTED_LAST, error: null};
+      run.rawObservationsDigest = computeRunObservationsDigest(run);
+      const {driverSourceSha256} = await benchmarkDriverSourceIdentity();
+      const header = buildFixtureHeader({campaignId: 'fixture-campaign', targetIds: [LAGRANGE]});
+      header.harness = {...header.harness, driverSourceSha256,
+        adapterIds: [...Object.values(BENCHMARK_SCENARIO_A_ADAPTER_ID)]};
+      header.products[0] = {...header.products[0], reportedVersion: null,
+        reportedVersionError: 'management facts answered status 503 without release.version'};
+      const {matrix, readme} = await publish([header, run]);
+      const cell = fixtureTargetCell(matrix, LAGRANGE, 'scenarioA/smoke');
+      assert.deepEqual(cell.metrics.setupFailures[0].readinessDenial.reasons,
+        ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING']);
+      assert.equal(cell.metrics.setupFailures[0].readinessDenial.phase, 'DEGRADED');
+      assert.equal(stringIncludes(readme, 'DEGRADED (degraded)'), true);
+    });
+
   it('an exhausted arm publishes product-failure (readiness-exhausted) with its denial',
     async () => {
       const {run} = await exhaustedLagrangeRun();

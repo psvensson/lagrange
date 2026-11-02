@@ -668,7 +668,10 @@ function textOrNull(value) {
 
 function readinessDenialOf(run) {
   const diagnostic = run.deployment.readiness.evidence?.diagnostic || {};
-  const last = diagnostic.last || {};
+  // The deployer's last answer is the product's own readiness body, or the
+  // HTTP answer that carries it as json.
+  const answer = diagnostic.last || {};
+  const last = answer.json && typeof answer.json === 'object' ? answer.json : answer;
   return {component: diagnostic.component ?? null, attempts: diagnostic.attempts ?? null,
     elapsedMs: diagnostic.elapsedMs ?? null, phase: textOrNull(last.phase),
     state: textOrNull(last.state), reasons: Array.isArray(last.reasons) ? [...last.reasons] : []};
