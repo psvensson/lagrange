@@ -52,6 +52,8 @@ import {
   EXECUTION_TARGET,
   READINESS_STATE,
   RECORD_REJECTION,
+  computeRunObservationsDigest,
+  validateCampaignHeader,
   validateRunRecord,
 } from '../raw-observation-record.js';
 import {SCENARIO_OUTCOME} from '../scenario-outcome.js';
@@ -549,6 +551,133 @@ describe('driver output through admission', () => {
       assert.equal(cell.metrics.setupFailures[0].sqlState, '55P03');
       assert.equal(cell.metrics.accounting.unissued, cell.metrics.accounting.offered);
       assert.equal(stringIncludes(readme, '55P03'), true, 'the 55P03 evidence is visible');
+    });
+});
+
+// Coordinator decisions 1 and 2 (2026-11-02), from live campaign
+// bench-live-20261101-b-r6: identity compares content (RootFS diff_ids) per
+// role, never per-host image facts; an exhausted arm's unanswered version is
+// null with its reason, admitted only on an exhausted or setup-failed run.
+describe('content identity and the exhausted arm', () => {
+  const EXHAUSTED_LAST = Object.freeze({ready: false, phase: 'DEGRADED', state: 'degraded',
+    reasons: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING']});
+
+  async function exhaustedLagrangeRun() {
+    const product = createFakeOltpProduct(FAKE_PRODUCT_FAULT.NONE);
+    const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-evidence-'));
+    let output;
+    try {
+      output = await executeBenchmarkWorkload({
+        targetId: LAGRANGE, system: LAGRANGE, scenario: 'scenarioA', subkind: 'smoke',
+        setupFailure: {failureClass: 'product_error', sqlState: null,
+          code: 'readiness_exhausted',
+          message: 'lagrange-node@10.0.0.2 did not report ready after 120 attempts'},
+        plan: {offeredRatePerSec: 5, repetition: 1, orderIndex: 0},
+        drivers: {createPgClient: product.createPgClient,
+          createMysqlConnection: product.createMysqlConnection},
+        evidenceDir,
+      });
+    } finally {
+      fs.rmSync(evidenceDir, {recursive: true, force: true});
+    }
+    const base = buildFixtureRun({subkind: 'smoke', offeredRatePerSec: 5,
+      profileClass: BENCHMARK_PROFILE_CLASS.SMOKE});
+    const run = composeFixtureRunFromDriverOutput(base, output);
+    run.deployment.endpoint = null;
+    run.deployment.readiness = {state: 'exhausted', observedAt: run.deployment.readiness.observedAt,
+      evidence: {failure: 'lagrange-node@10.0.0.2 did not report ready after 120 attempts',
+        diagnostic: {component: 'lagrange-node@10.0.0.2', attempts: 120, elapsedMs: 166915,
+          last: EXHAUSTED_LAST}}};
+    for (const key of ['products', 'productsAfterWindow']) {
+      run.identity[key] = arrayMap(run.identity[key], (p) => ({...p, reportedVersion: null,
+        reportedVersionError: 'management facts answered status 503 without release.version'}));
+    }
+    run.rawObservationsDigest = computeRunObservationsDigest(run);
+    return {run, output};
+  }
+
+  it('a docker-loaded copy (no repo digest) of the pinned content is the same product', () => {
+    const run = buildFixtureRun();
+    run.identity.products[1] = {...run.identity.products[1], repoDigest: null,
+      imageId: `sha256:${'9'.repeat(64)}`, provenance: `loaded:sha256:${'9'.repeat(64)}`};
+    run.identity.productsAfterWindow[1] = {...run.identity.products[1]};
+    sealFixtureRun(run);
+    assert.doesNotThrow(() => validateRunRecord(run));
+  });
+
+  it('a malformed content identity is rejected; a missing one stays visible', () => {
+    const run = buildFixtureRun();
+    run.identity.products[0].contentIdentity = 'sha256:short';
+    sealFixtureRun(run);
+    assertRejected(run, 'invalid-text');
+    const missing = buildFixtureRun();
+    delete missing.identity.products[0].contentIdentity;
+    sealFixtureRun(missing);
+    assert.doesNotThrow(() => validateRunRecord(missing));
+  });
+
+  it('a null version is admitted only on an exhausted or setup-failed run', async () => {
+    const {run} = await exhaustedLagrangeRun();
+    assert.doesNotThrow(() => validateRunRecord(run));
+    const ready = buildFixtureRun();
+    ready.identity.products[0] = {...ready.identity.products[0], reportedVersion: null,
+      reportedVersionError: 'x'};
+    sealFixtureRun(ready);
+    assertRejected(ready, 'invalid-text');
+    const silent = buildFixtureRun();
+    silent.identity.products[0] = {...silent.identity.products[0], reportedVersion: null};
+    sealFixtureRun(silent);
+    assertRejected(silent, 'invalid-text');
+  });
+
+  it('mixed image stores admit; different content is a mismatch; missing is unverified',
+    async () => {
+      const mixed = await publishedLagrangeCell((run) => {
+        for (const key of ['products', 'productsAfterWindow']) {
+          run.identity[key][1] = {...run.identity[key][1], repoDigest: null,
+            imageId: `sha256:${'9'.repeat(64)}`, imageStore: 'overlay2',
+            provenance: `loaded:sha256:${'9'.repeat(64)}`};
+        }
+      }, SMOKE);
+      assert.equal(mixed.cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED,
+        mixed.cell.reasons.join(', '));
+      const other = await publishedLagrangeCell((run) => {
+        for (const key of ['products', 'productsAfterWindow']) {
+          run.identity[key][0] = {...run.identity[key][0],
+            contentIdentity: `sha256:${'8'.repeat(64)}`};
+        }
+      }, SMOKE);
+      assert.equal(arrayIncludes(other.cell.reasons, ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH),
+        true, other.cell.reasons.join(', '));
+      const missing = await publishedLagrangeCell((run) => {
+        for (const key of ['products', 'productsAfterWindow']) {
+          delete run.identity[key][0].contentIdentity;
+        }
+      }, SMOKE);
+      assert.equal(arrayIncludes(missing.cell.reasons,
+        ADMISSION_REASON.PRODUCT_IDENTITY_UNVERIFIED), true, missing.cell.reasons.join(', '));
+      const header = buildFixtureHeader({campaignId: 'fixture-campaign', targetIds: [LAGRANGE]});
+      header.products[0] = {...header.products[0], contentIdentity: 'not-a-digest'};
+      assert.throws(() => validateCampaignHeader(header), (err) => err.code === 'invalid-text');
+    });
+
+  it('an exhausted arm publishes product-failure (readiness-exhausted) with its denial',
+    async () => {
+      const {run} = await exhaustedLagrangeRun();
+      const {driverSourceSha256} = await benchmarkDriverSourceIdentity();
+      const header = buildFixtureHeader({campaignId: 'fixture-campaign', targetIds: [LAGRANGE]});
+      header.harness = {...header.harness, driverSourceSha256,
+        adapterIds: [...Object.values(BENCHMARK_SCENARIO_A_ADAPTER_ID)]};
+      header.products[0] = {...header.products[0], reportedVersion: null,
+        reportedVersionError: 'management facts answered status 503 without release.version'};
+      const {matrix, readme} = await publish([header, run]);
+      const cell = fixtureTargetCell(matrix, LAGRANGE, 'scenarioA/smoke');
+      assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE, cell.reasons.join(', '));
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.READINESS_EXHAUSTED), true);
+      assert.deepEqual(cell.metrics.setupFailures[0].readinessDenial.reasons,
+        ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING']);
+      assert.equal(stringIncludes(readme, 'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'), true);
+      assert.equal(stringIncludes(readme, 'DEGRADED'), true);
     });
 });
 

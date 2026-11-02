@@ -1,13 +1,23 @@
 /**
  * The product identity a comparative-benchmark campaign pins in its header
  * (stream A's campaign header `products`): one pin per target and role,
- * {targetId, product, role, imageId, repoDigest, reportedVersion}, read from
- * the identity inspection of the target's RUNNING containers (the deployer's
- * deployment.identity.products, real-product-identity.js). Admission compares
- * every run's inspected products with these pins and refuses an image pinned
- * for two product families.
+ * read from the identity inspection of the target's RUNNING containers (the
+ * deployer's deployment.identity.products, real-product-identity.js).
+ *
+ * A role is pinned by its image CONTENT identity (the digest of the ordered
+ * RootFS diff_ids) and its reported version, the same on every container of
+ * the role. The image id, repo digest, image store and provenance of each
+ * host's copy differ legitimately across Docker image stores (a containerd
+ * store's id is the manifest digest, an overlay2 store's the config digest; a
+ * docker-loaded copy has no repo digest): they are recorded in `images`,
+ * never compared (coordinator decision 1, 2026-11-02). A role whose product
+ * answered its version on no container (a readiness-exhausted arm) pins the
+ * version null with the reason (decision 2). Admission compares every run's
+ * inspected products with these pins and refuses content pinned for two
+ * product families.
  */
 import {
+  arrayEvery,
   arrayFilter,
   arrayMap,
   arraySome,
@@ -17,25 +27,47 @@ import {
   deploymentFailure,
 } from './real-product-deployment-contract.js';
 
-const PIN_FIELDS = Object.freeze(['imageId', 'repoDigest', 'reportedVersion']);
+const CONTENT_IDENTITY = /^sha256:[0-9a-f]{64}$/u;
+
+function isText(value) {
+  return typeof value === 'string' && value !== '';
+}
+
+// The role's version: every container answered the same text, or none did
+// and each says why.
+function versionProblems(role, containers) {
+  const first = containers[0];
+  if (arrayEvery(containers, (one) => one.reportedVersion === null &&
+      isText(one.reportedVersionError))) return [];
+  const problems = [];
+  if (!isText(first.reportedVersion)) problems.push(`${role}: no reportedVersion`);
+  if (arraySome(containers, (other) => other.reportedVersion !== first.reportedVersion)) {
+    problems.push(`${role}: containers differ in reportedVersion`);
+  }
+  return problems;
+}
 
 function pinOfRole(targetId, product, role, containers) {
   const first = containers[0];
   const problems = [];
-  for (const field of PIN_FIELDS) {
-    if (typeof first[field] !== 'string' || first[field] === '') {
-      problems.push(`${role}: no ${field}`);
-    }
-    if (arraySome(containers, (other) => other[field] !== first[field])) {
-      problems.push(`${role}: containers differ in ${field}`);
-    }
+  if (!CONTENT_IDENTITY.test(String(first.contentIdentity ?? ''))) {
+    problems.push(`${role}: no contentIdentity`);
   }
+  if (arraySome(containers, (other) => other.contentIdentity !== first.contentIdentity)) {
+    problems.push(`${role}: containers differ in contentIdentity`);
+  }
+  problems.push(...versionProblems(role, containers));
   if (problems.length > 0) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
       `product identity of ${targetId} cannot be pinned: ${problems[0]}`, {targetId, problems});
   }
-  return Object.freeze({targetId, product, role, imageId: first.imageId,
-    repoDigest: first.repoDigest, reportedVersion: first.reportedVersion});
+  return Object.freeze({targetId, product, role, contentIdentity: first.contentIdentity,
+    reportedVersion: first.reportedVersion,
+    ...(first.reportedVersion === null ?
+      {reportedVersionError: first.reportedVersionError} : {}),
+    images: arrayMap(containers, (one) => ({host: one.host, imageId: one.imageId,
+      repoDigest: one.repoDigest ?? null, imageStore: one.imageStore ?? null,
+      provenance: one.provenance ?? null}))});
 }
 
 /**

@@ -19,10 +19,16 @@
 //   observations.warmup is what the driver executed. Admission refuses a capacity
 //   cell whose executed warm-up differs from the planned one.
 // - The campaign header pins, before any run, the product identity every target
-//   role must run ({targetId, product, role, imageId, repoDigest,
-//   reportedVersion}) and lists every adapter the campaign's arms may use;
-//   admission compares each run's inspected products with the pin and refuses an
-//   image pinned for two product families (stream C, 2026-11-01).
+//   role must run ({targetId, product, role, contentIdentity, reportedVersion,
+//   images}) and lists every adapter the campaign's arms may use; admission
+//   compares each run's inspected products with the pin by CONTENT identity (the
+//   digest of the ordered RootFS diff_ids) and refuses content pinned for two
+//   product families. Per-host image facts (image id, repo digest, image store,
+//   provenance) differ across Docker image stores and are recorded, never
+//   compared (coordinator decision 1, 2026-11-02).
+// - A product's reportedVersion is text, or null with reportedVersionError
+//   only on a run whose readiness was exhausted or whose run status is
+//   setup-failed: the product never answered (decision 2).
 // - plan.workloadProfileId and plan.workload name the executed workload profile
 //   and configuration; admission recomputes the dataset, plan and slice digests
 //   from the workload through the run owner's derivation.
@@ -40,6 +46,7 @@ const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const numberIsFinite = Number.isFinite;
 const numberIsSafeInteger = Number.isSafeInteger;
 const objectValues = Object.values;
@@ -117,9 +124,9 @@ const PINNED_PRODUCT_FIELD = Object.freeze({
   TARGET_ID: 'targetId',
   PRODUCT: 'product',
   ROLE: 'role',
-  IMAGE_ID: 'imageId',
-  REPO_DIGEST: 'repoDigest',
+  CONTENT_IDENTITY: 'contentIdentity',
   REPORTED_VERSION: 'reportedVersion',
+  IMAGES: 'images',
 });
 
 const RUN_FIELD = Object.freeze({
@@ -162,7 +169,12 @@ const PRODUCT_FIELD = Object.freeze({
   ENTRYPOINT: 'entrypoint',
   CMD: 'cmd',
   REPORTED_VERSION: 'reportedVersion',
+  REPORTED_VERSION_ERROR: 'reportedVersionError',
+  CONTENT_IDENTITY: 'contentIdentity',
+  PROVENANCE: 'provenance',
 });
+const CONTENT_IDENTITY_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const LOADED_PROVENANCE_PREFIX = 'loaded:';
 
 const PLAN_FIELD = Object.freeze({
   MANIFEST_DIGEST: 'manifestDigest',
@@ -359,28 +371,65 @@ function validateHarnessIdentity(harness, at) {
   adapterIds.forEach((id, idx) => requireText(id, `${at}.adapterIds[${idx}]`));
 }
 
-function validateProduct(product, at) {
+// The content identity, or none observed: admission reads a missing one as
+// product-identity-unverified (never admitted), so the record keeps it visible.
+function requireContentIdentity(value, at) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || !CONTENT_IDENTITY_PATTERN.test(value)) {
+    reject(RECORD_REJECTION.INVALID_TEXT, `${at} must be sha256:<64 hex>`);
+  }
+  return value;
+}
+
+// A version is the product's own text; null only with the reason it was not
+// answered, and only where the run allows an unanswered product.
+function validateReportedVersion(holder, at, unansweredAllowed) {
+  const version = holder[PRODUCT_FIELD.REPORTED_VERSION];
+  if (version === null && unansweredAllowed) {
+    requireText(holder[PRODUCT_FIELD.REPORTED_VERSION_ERROR], `${at}.reportedVersionError`);
+    return;
+  }
+  requireText(version, `${at}.reportedVersion`);
+}
+
+function validateProduct(product, at, unansweredAllowed) {
   requireObject(product, at);
   for (const field of [
     PRODUCT_FIELD.ROLE, PRODUCT_FIELD.HOST, PRODUCT_FIELD.CONTAINER_ID, PRODUCT_FIELD.IMAGE_REF,
-    PRODUCT_FIELD.IMAGE_ID, PRODUCT_FIELD.REPO_DIGEST, PRODUCT_FIELD.REPORTED_VERSION,
+    PRODUCT_FIELD.IMAGE_ID,
   ]) {
     requireText(product[field], `${at}.${field}`);
   }
+  requireContentIdentity(product[PRODUCT_FIELD.CONTENT_IDENTITY], `${at}.contentIdentity`);
+  // A docker-loaded copy carries no repo digest; its provenance says so.
+  if (product[PRODUCT_FIELD.REPO_DIGEST] !== null ||
+      !stringStartsWith(String(product[PRODUCT_FIELD.PROVENANCE] ?? ''),
+        LOADED_PROVENANCE_PREFIX)) {
+    requireText(product[PRODUCT_FIELD.REPO_DIGEST], `${at}.repoDigest`);
+  }
+  validateReportedVersion(product, at, unansweredAllowed);
   requireIsoTime(product[PRODUCT_FIELD.STARTED_AT], `${at}.startedAt`);
 }
 
-function validateProducts(products, at) {
+function validateProducts(products, at, unansweredAllowed) {
   requireArray(products, at);
   if (products.length === 0) reject(RECORD_REJECTION.MISSING_FIELD, `${at} must not be empty`);
-  products.forEach((p, idx) => validateProduct(p, `${at}[${idx}]`));
+  products.forEach((p, idx) => validateProduct(p, `${at}[${idx}]`, unansweredAllowed));
 }
 
-function validateIdentity(identity) {
+// The product never answered its version only where the run says it never
+// became ready or never got past setup.
+function productMayBeUnanswered(run) {
+  return run?.deployment?.readiness?.state === READINESS_STATE.EXHAUSTED ||
+    run?.observations?.runStatus === BENCHMARK_RUN_STATUS.SETUP_FAILED;
+}
+
+function validateIdentity(identity, unansweredAllowed) {
   requireObject(identity, RUN_FIELD.IDENTITY);
   validateHarnessIdentity(identity[IDENTITY_FIELD.HARNESS], 'identity.harness');
-  validateProducts(identity[IDENTITY_FIELD.PRODUCTS], 'identity.products');
-  validateProducts(identity[IDENTITY_FIELD.PRODUCTS_AFTER_WINDOW], 'identity.productsAfterWindow');
+  validateProducts(identity[IDENTITY_FIELD.PRODUCTS], 'identity.products', unansweredAllowed);
+  validateProducts(identity[IDENTITY_FIELD.PRODUCTS_AFTER_WINDOW], 'identity.productsAfterWindow',
+    unansweredAllowed);
   if (!Object.hasOwn(identity, IDENTITY_FIELD.PUBLICATION)) {
     reject(RECORD_REJECTION.MISSING_FIELD, 'identity.publication must be present (null until set)');
   }
@@ -659,7 +708,7 @@ function validateRunRecord(run) {
   }
   requireEnum(run[RUN_FIELD.SCENARIO], objectValues(BENCHMARK_SCENARIO), 'scenario');
   requireEnum(run[RUN_FIELD.EXECUTION_TARGET], objectValues(EXECUTION_TARGET), 'executionTarget');
-  validateIdentity(run[RUN_FIELD.IDENTITY]);
+  validateIdentity(run[RUN_FIELD.IDENTITY], productMayBeUnanswered(run));
   validatePlan(run[RUN_FIELD.PLAN]);
   validateDeployment(run[RUN_FIELD.DEPLOYMENT]);
   validateObservations(run[RUN_FIELD.OBSERVATIONS]);
@@ -690,10 +739,19 @@ function validateCampaignHeader(header) {
   if (pinned.length === 0) reject(RECORD_REJECTION.MISSING_FIELD, 'products must not be empty');
   const keys = new Set();
   pinned.forEach((pin, idx) => {
-    requireObject(pin, `products[${idx}]`);
-    for (const field of objectValues(PINNED_PRODUCT_FIELD)) {
-      requireText(pin[field], `products[${idx}].${field}`);
+    const at = `products[${idx}]`;
+    requireObject(pin, at);
+    for (const field of [PINNED_PRODUCT_FIELD.TARGET_ID, PINNED_PRODUCT_FIELD.PRODUCT,
+      PINNED_PRODUCT_FIELD.ROLE]) {
+      requireText(pin[field], `${at}.${field}`);
     }
+    requireContentIdentity(pin[PINNED_PRODUCT_FIELD.CONTENT_IDENTITY], `${at}.contentIdentity`);
+    validateReportedVersion(pin, at, true);
+    requireArray(pin[PINNED_PRODUCT_FIELD.IMAGES], `${at}.images`).forEach((image, n) => {
+      requireObject(image, `${at}.images[${n}]`);
+      requireText(image.host, `${at}.images[${n}].host`);
+      requireText(image.imageId, `${at}.images[${n}].imageId`);
+    });
     const key = `${pin.targetId}|${pin.role}`;
     if (keys.has(key)) reject(RECORD_REJECTION.INVALID_TEXT, `products pins ${key} twice`);
     keys.add(key);

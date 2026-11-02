@@ -27,10 +27,13 @@ const MANIFEST = buildComparativeCampaignManifest({campaignId: 'bench-c-1',
 const HEADER = Object.freeze({executionTarget: 'lab', physicalHosts: [],
   harness: {gitCommit: 'f'.repeat(40), driverSourceSha256: null, adapterIds: []}});
 
+const CONTENT = `sha256:${'c'.repeat(64)}`;
+
 function product(containerId, startedAt = '2026-11-01T10:00:00Z') {
   return {role: 'node', host: '10.0.0.1', containerId, imageRef: 'img:1',
     imageId: `sha256:${'a'.repeat(64)}`, repoDigest: 'img@sha256:1', entrypoint: ['x'],
-    cmd: [], startedAt, reportedVersion: '1'};
+    cmd: [], startedAt, reportedVersion: '1', contentIdentity: CONTENT,
+    imageStore: 'containerd', provenance: 'registry:img@sha256:1'};
 }
 
 function deployment(runId) {
@@ -198,8 +201,10 @@ test('header: pins every target\'s product identity from its running containers,
   assert.equal(header.recordType, 'campaign-header');
   assert.deepEqual(header.products, arrayMap(MANIFEST.targets, (targetId) => ({targetId,
     product: arrayFind(MANIFEST.runs, (one) => one.targetId === targetId).system,
-    role: 'node', imageId: `sha256:${'a'.repeat(64)}`, repoDigest: 'img@sha256:1',
-    reportedVersion: '1'})));
+    role: 'node', contentIdentity: CONTENT, reportedVersion: '1',
+    images: [{host: '10.0.0.1', imageId: `sha256:${'a'.repeat(64)}`,
+      repoDigest: 'img@sha256:1', imageStore: 'containerd',
+      provenance: 'registry:img@sha256:1'}]})));
   assert.ok(arrayEvery(records.slice(1), (record) => record.recordType === 'run'));
   assert.equal(records.length, MANIFEST.runs.length + 1);
 });
@@ -372,4 +377,55 @@ test('without a gate stage the run records that the semantic gate was unavailabl
     const {deps, records} = harness();
     await run(deps);
     assert.equal(records[1].harnessEvents[0].kind, 'semantic-gate-unavailable');
+  });
+
+// Coordinator decision 1 (2026-11-02), from live campaign bench-live-20261101-b-r6:
+// the pin compares content identity per role; image ids, repo digests, image
+// stores and provenance differ legitimately across hosts (lenovo-laptop's
+// overlay2 store holds a docker-loaded copy) and are recorded, never compared.
+// Decision 2: a role whose product never answered its version on any container
+// (an exhausted arm) pins version null with the reason.
+test('header: a role pins its content identity; per-host image facts are recorded only',
+  async () => {
+    const loaded = {...product('c2'), host: '10.0.0.2', imageId: `sha256:${'b'.repeat(64)}`,
+      repoDigest: null, imageStore: 'overlay2', provenance: `loaded:sha256:${'b'.repeat(64)}`};
+    const {deps, records} = harness({deployRun: async (one) => (one.targetId === 'lagrange' ?
+      {...deployment(one.runId), identity: {products: [product('c1'), loaded]}} :
+      deployment(one.runId))});
+    await run(deps);
+    const pin = arrayFind(records[0].products, (one) => one.targetId === 'lagrange');
+    assert.equal(pin.contentIdentity, CONTENT);
+    assert.deepEqual(arrayMap(pin.images, (image) => [image.host, image.imageStore]),
+      [['10.0.0.1', 'containerd'], ['10.0.0.2', 'overlay2']]);
+    assert.equal(records[0].unpinnedTargets.length, 0);
+  });
+
+test('header: different or missing content identity in one role is not pinned', async () => {
+  for (const other of [{contentIdentity: `sha256:${'e'.repeat(64)}`},
+    {contentIdentity: null}]) {
+    const {deps, records} = harness({deployRun: async (one) => (one.targetId === 'lagrange' ?
+      {...deployment(one.runId), identity: {products: [product('c1'),
+        {...product('c2'), ...other}]}} : deployment(one.runId))});
+    await run(deps);
+    assert.equal(records[0].unpinnedTargets[0].targetId, 'lagrange');
+    assert.equal(records[0].unpinnedTargets[0].failure.code, 'identity_unverified');
+  }
+});
+
+test('header: a role whose version no container answered pins null with the reason',
+  async () => {
+    const unread = (id) => ({...product(id), reportedVersion: null,
+      reportedVersionError: 'facts endpoint did not answer'});
+    const {deps, records} = harness({deployRun: async (one) => (one.targetId === 'lagrange' ?
+      {...deployment(one.runId), identity: {products: [unread('c1'), unread('c2')]}} :
+      deployment(one.runId))});
+    await run(deps);
+    const pin = arrayFind(records[0].products, (one) => one.targetId === 'lagrange');
+    assert.equal(pin.reportedVersion, null);
+    assert.equal(pin.reportedVersionError, 'facts endpoint did not answer');
+    const mixed = harness({deployRun: async (one) => (one.targetId === 'lagrange' ?
+      {...deployment(one.runId), identity: {products: [product('c1'), unread('c2')]}} :
+      deployment(one.runId))});
+    await run(mixed.deps);
+    assert.equal(mixed.records[0].unpinnedTargets[0].targetId, 'lagrange');
   });

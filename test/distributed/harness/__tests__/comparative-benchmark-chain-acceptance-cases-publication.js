@@ -99,12 +99,15 @@ function setIdentity(run, fields) {
 
 // J8: the product that answered is not the product the campaign pinned.
 async function caseJ8ProductIdentity() {
-  const wrongImage = `sha256:${plausibleSha('another-build')}`;
-  await expectLagrangeRefused('J8 imageId', ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH,
-    ({lagrange}) => lagrange.forEach((r) => setIdentity(r, {imageId: wrongImage})));
-  await expectLagrangeRefused('J8 repoDigest', ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH,
-    ({lagrange}) => lagrange.forEach((r) => setIdentity(r,
-      {repoDigest: `example/lagrange@sha256:${plausibleSha('other-repo')}`})));
+  // Identity is the image CONTENT (RootFS diff_ids); a host's image id and repo
+  // digest differ across Docker image stores and are recorded, never compared
+  // (coordinator decision 1, 2026-11-02).
+  const otherContent = `sha256:${plausibleSha('another-build')}`;
+  await expectLagrangeRefused('J8 content identity', ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH,
+    ({lagrange}) => lagrange.forEach((r) => setIdentity(r, {contentIdentity: otherContent})));
+  await expectLagrangeRefused('J8 content identity missing',
+    ADMISSION_REASON.PRODUCT_IDENTITY_UNVERIFIED,
+    ({lagrange}) => lagrange.forEach((r) => setIdentity(r, {contentIdentity: null})));
   await expectLagrangeRefused('J8 emulator version', ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH,
     ({lagrange}) => lagrange.forEach((r) => setIdentity(r,
       {reportedVersion: 'lagrange-emulator 0.4.0'})));
@@ -112,7 +115,7 @@ async function caseJ8ProductIdentity() {
   await expectLagrangeRefused('J8 candidate is comparator',
     ADMISSION_REASON.CANDIDATE_IMAGE_IS_COMPARATOR_IMAGE, ({header}) => {
       const tidbPin = arrayFind(header.products, (p) => p.targetId === TIDB);
-      tidbPin.imageId = fixtureProductIdentity(LAGRANGE).imageId;
+      tidbPin.contentIdentity = fixtureProductIdentity(LAGRANGE).contentIdentity;
     });
   await expectLagrangeRefused('J8 dead container', ADMISSION_REASON.IDENTITY_CHANGED_DURING_WINDOW,
     ({lagrange}) => lagrange.forEach((r) => {

@@ -48,6 +48,14 @@ function formatCapacity(metrics) {
   return `${arrayJoin(rates, '; ')}; ${arrayJoin(p99, '; ')}`;
 }
 
+// The product's own last readiness answer of an exhausted arm.
+function formatReadinessDenial(denial) {
+  if (!denial) return '';
+  const reasons = denial.reasons.length > 0 ? arrayJoin(denial.reasons, ', ') : 'none';
+  return `; last readiness answer of ${denial.component}: ${denial.phase} ` +
+    `(${denial.state}), reasons ${reasons}, after ${denial.attempts} attempts`;
+}
+
 /**
  * One cell as text: status word, reason codes, and for metric-bearing cells the
  * accounting (and capacity figures only when the sufficiency rule admitted them).
@@ -61,7 +69,7 @@ function formatCell(cell) {
   if (!cell.metrics) return head;
   const setup = arrayMap(cell.metrics.setupFailures || [], (f) =>
     `; setup failed in ${f.runId}: ${f.failureClass}, sqlstate ${f.sqlState}, ` +
-    `code ${f.code}, message ${f.message}`);
+    `code ${f.code}, message ${f.message}${formatReadinessDenial(f.readinessDenial)}`);
   const counts = `${cell.metrics.profileClass} profile: ` +
     `${formatAccounting(cell.metrics.accounting)}${arrayJoin(setup, '')}`;
   return cell.metrics.capacity ?

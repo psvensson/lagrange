@@ -86,10 +86,14 @@ function fixtureProductFamily(targetId) {
 
 // The fixture identity of a target's product image, distinct per target.
 function fixtureProductIdentity(targetId) {
+  const repoDigest = `example/${targetId}@sha256:${sha256Hex(`repo:${targetId}`)}`;
   return {
     imageRef: `example/${targetId}:fixture`,
     imageId: `sha256:${sha256Hex(`image:${targetId}`)}`,
-    repoDigest: `example/${targetId}@sha256:${sha256Hex(`repo:${targetId}`)}`,
+    repoDigest,
+    contentIdentity: `sha256:${sha256Hex(`content:${targetId}`)}`,
+    imageStore: 'containerd',
+    provenance: `registry:${repoDigest}`,
     reportedVersion: `0.0.0-fixture-${targetId}`,
   };
 }
@@ -115,9 +119,11 @@ function buildFixtureHeader({campaignId, targetIds, harness = fixtureHarness(),
     campaignId, startedAt: FIXTURE_TIME, manifestDigest: `sha256:${hexDigits('c')}`,
     harness, executionTarget, physicalHosts: fixtureHosts(4),
     products: arrayMap(targetIds, (targetId) => {
-      const {imageId, repoDigest, reportedVersion} = fixtureProductIdentity(targetId);
+      const {imageId, repoDigest, contentIdentity, imageStore, provenance, reportedVersion} =
+        fixtureProductIdentity(targetId);
       return {targetId, product: fixtureProductFamily(targetId),
-        role: fixtureProductRole(targetId), imageId, repoDigest, reportedVersion};
+        role: fixtureProductRole(targetId), contentIdentity, reportedVersion,
+        images: [{host: '10.0.0.1', imageId, repoDigest, imageStore, provenance}]};
     }),
   };
 }

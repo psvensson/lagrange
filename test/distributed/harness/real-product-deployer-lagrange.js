@@ -323,6 +323,12 @@ async function reportedVersions(ctx, products) {
   for (const product of products) {
     const facts = await getJson(ctx, `http://${product.host}:${PORT.REST}/management/v1/facts`);
     product.reportedVersion = facts.json?.release?.version ?? null;
+    // A version the product did not answer is null with the product's own
+    // non-answer, never a substitute (an exhausted arm's unready node).
+    if (product.reportedVersion === null) {
+      product.reportedVersionError = facts.error ??
+        `management facts answered status ${facts.status} without release.version`;
+    }
     product.bootProvenance = await bootProvenance(ctx, product);
   }
   return products;

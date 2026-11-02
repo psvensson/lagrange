@@ -105,6 +105,7 @@ const ADMISSION_REASON = Object.freeze({
   IDENTITY_NOT_RUNNING: 'identity-not-running',
   IDENTITY_CHANGED_DURING_WINDOW: 'identity-changed-during-window',
   PRODUCT_IDENTITY_MISMATCH: 'product-identity-mismatch',
+  PRODUCT_IDENTITY_UNVERIFIED: 'product-identity-unverified',
   CANDIDATE_IMAGE_IS_COMPARATOR_IMAGE: 'candidate-image-is-comparator-image',
   RESTART_DURING_WINDOW: 'restart-during-window',
   ENDPOINT_NOT_BOUND: 'endpoint-not-bound',
@@ -215,7 +216,7 @@ const CELL_STATUS_MAPPING = Object.freeze({
 });
 
 const IMAGE_ID_PATTERN = /^sha256:[0-9a-f]{64}$/u;
-const REPO_DIGEST_PATTERN = /^[^\s@]+@sha256:[0-9a-f]{64}$/u;
+const CONTENT_IDENTITY_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const FORMULA_PATTERNS = Object.freeze([
   /stages\s*\*\s*oneWayMs/iu,
   /execMs\s*\+\s*stages/iu,
@@ -281,27 +282,40 @@ function forensicEvidence(claim, retainedReferences, invalidations) {
 
 // Image ids the header pins for more than one product family: a comparator arm
 // that runs the candidate's image (or the reverse) is not a comparison.
-function sharedImageIds(pins) {
+// Content pinned for two product families: a candidate image is a comparator's.
+function sharedContentIdentities(pins) {
   const families = new Map();
   for (const pin of pins) {
-    families.set(pin.imageId, new Set([...(families.get(pin.imageId) || []), pin.product]));
+    families.set(pin.contentIdentity,
+      new Set([...(families.get(pin.contentIdentity) || []), pin.product]));
   }
   return new Set(arrayMap(arrayFilter([...families.entries()], ([, f]) => f.size > 1),
-    ([imageId]) => imageId));
+    ([contentIdentity]) => contentIdentity));
 }
 
-// Every product the run inspected must be the one the campaign pinned for its
-// target and role, identically (image id, repo digest, reported version).
+function hasContentIdentity(subject) {
+  return CONTENT_IDENTITY_PATTERN.test(String(subject?.contentIdentity ?? ''));
+}
+
+// Every product the run inspected must run the content the campaign pinned for
+// its target and role, and report the pinned version (null only where the pin
+// recorded the product's unanswered version). Image id, repo digest, image
+// store and provenance differ across Docker image stores: recorded, never
+// compared (coordinator decision 1, 2026-11-02).
 function checkPinnedProducts(run, pins) {
   const reasons = [];
-  const shared = sharedImageIds(pins);
+  const shared = sharedContentIdentities(pins);
   for (const product of run.identity.products) {
     const pin = arrayFind(pins, (p) => p.targetId === run.targetId && p.role === product.role);
-    if (!pin || pin.imageId !== product.imageId || pin.repoDigest !== product.repoDigest ||
+    if (!pin || !hasContentIdentity(pin) || !hasContentIdentity(product)) {
+      reasons.push(ADMISSION_REASON.PRODUCT_IDENTITY_UNVERIFIED);
+      continue;
+    }
+    if (pin.contentIdentity !== product.contentIdentity ||
         pin.reportedVersion !== product.reportedVersion) {
       reasons.push(ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH);
     }
-    if (shared.has(product.imageId) || (pin && shared.has(pin.imageId))) {
+    if (shared.has(product.contentIdentity)) {
       reasons.push(ADMISSION_REASON.CANDIDATE_IMAGE_IS_COMPARATOR_IMAGE);
     }
   }
@@ -345,8 +359,7 @@ function checkProducts(run) {
   const running = new Set(arrayMap(run.deployment.roles, (r) => `${r.host}|${r.containerId}`));
   const after = new Set(arrayMap(run.identity.productsAfterWindow, productKey));
   for (const product of run.identity.products) {
-    if (!IMAGE_ID_PATTERN.test(product.imageId) ||
-        !REPO_DIGEST_PATTERN.test(product.repoDigest)) {
+    if (!IMAGE_ID_PATTERN.test(product.imageId) || !hasContentIdentity(product)) {
       reasons.push(ADMISSION_REASON.IDENTITY_MISSING);
     }
     if (!running.has(`${product.host}|${product.containerId}`)) {
@@ -616,6 +629,18 @@ function checkDeployment(run, claim) {
   return reasons;
 }
 
+// The product's last answer before its readiness bound ran out: the component,
+// the attempts spent and the denial the product itself reported.
+function readinessDenialOf(run) {
+  const diagnostic = run.deployment.readiness.evidence?.diagnostic ?? null;
+  const last = diagnostic?.last ?? null;
+  return {component: diagnostic?.component ?? null, attempts: diagnostic?.attempts ?? null,
+    elapsedMs: diagnostic?.elapsedMs ?? null,
+    phase: typeof last?.phase === 'string' ? last.phase : null,
+    state: typeof last?.state === 'string' ? last.state : null,
+    reasons: Array.isArray(last?.reasons) ? [...last.reasons] : []};
+}
+
 function isReadinessExhaustedRun(run) {
   return run.deployment.readiness.state === READINESS_STATE.EXHAUSTED &&
     run.observations.runStatus === BENCHMARK_RUN_STATUS.SETUP_FAILED;
@@ -754,7 +779,8 @@ function admittedCell(claim, entries, evidence, defectIds, notes) {
   const accounting = sumAccounting(runMetrics);
   const profileClass = entries[0].run.plan.profileClass;
   const setupFailures = arrayMap(arrayFilter(entries, (e) => e.run.observations.setup),
-    (e) => ({runId: e.run.runId, ...e.run.observations.setup}));
+    (e) => ({runId: e.run.runId, ...e.run.observations.setup,
+      ...(isReadinessExhaustedRun(e.run) ? {readinessDenial: readinessDenialOf(e.run)} : {})}));
   const counts = {profileClass, sufficiencyRuleId: SUFFICIENCY_RULE.id, accounting,
     runs: arrayMap(runMetrics, countsOnly), setupFailures, capacity: null};
   const failed = failureReasons(entries, accounting);

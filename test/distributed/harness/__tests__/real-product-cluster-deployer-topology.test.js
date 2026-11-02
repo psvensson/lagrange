@@ -13,11 +13,13 @@ import {
   arrayFind,
   arrayMap,
   arraySome,
+  stringIncludes,
 } from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   LAGRANGE_IMAGE,
   createContainerLedger,
+  http,
   lagrangeHealthyRules,
   postgresHealthyRules,
   tidbHealthyRules,
@@ -153,3 +155,27 @@ test('Lagrange: DATA_DIR is the data directory the image gives its runtime user'
     assert.match(call.command, new RegExp(`:${owned} `, 'u'), call.command);
   }
 });
+
+// Coordinator decision 2 (2026-11-02): an exhausted Lagrange arm's version is
+// null only with the reason the product did not answer it (live campaign
+// bench-live-20261101-b-r6: node 2 never ready, its facts endpoint silent).
+test('Lagrange: an unanswered version is null with the product\'s non-answer as reason',
+  async () => {
+    const ledger = createContainerLedger();
+    const {sshRun} = createScriptedSsh([
+      [(command) => stringIncludes(command, '//10.0.0.2:8080/readyz'), http(503, {ready: false,
+        phase: 'DEGRADED', reasons: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING']})],
+      [(command) => stringIncludes(command, '//10.0.0.2:8080/management/v1/facts'),
+        http(503, {error: 'not ready'})],
+      ...lagrangeHealthyRules(ledger, {hosts: HOSTS})]);
+    const error = await deployers.deployComparativeTarget('lagrange', input(sshRun))
+      .then(() => null, (failure) => failure);
+    assert.equal(error?.code, 'readiness_exhausted');
+    const products = error.deployment.identity.products;
+    const answered = arrayFind(products, (one) => one.host === '10.0.0.1');
+    assert.equal(answered.reportedVersion, '0.4.0');
+    assert.equal(Object.hasOwn(answered, 'reportedVersionError'), false);
+    const silent = arrayFind(products, (one) => one.host === '10.0.0.2');
+    assert.equal(silent.reportedVersion, null);
+    assert.match(silent.reportedVersionError, /503/u);
+  });
