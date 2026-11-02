@@ -1,0 +1,19 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "wasi-component-startup-budget--wasi-startup-design-evidence-2fad21f7f-2026-11-02.tar.gz",
+  "bundleSha256": "f8e02f27d45b6b7a06f93fe6a557ada9e6718ac8075aba882c398d415b37bf9e",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/wasi-component-startup-budget--wasi-startup-design-evidence-2fad21f7f-2026-11-02.tar.gz",
+  "sourceCommit": "2fad21f7fbf8aa79e3ef55382419bb0ff4871d5a",
+  "root": "solve/quests/wasi-component-startup-budget/evidence/",
+  "files": [
+    ["design-note.md","b2887a35227b110d8759071ee936ae84a0f87b0744181eb29dfe0be487b21c50",18904],
+    ["probes/build-component.mjs","56274908e47a07e617bc3f602778daec4d3a62f0d08d0133277d4a4eedd2c607",381],
+    ["probes/cpu.mjs","022d8ed67a44746e64be13c84efecac3eb9ff282ba1f77ae6e2edc1c944bdf1f",398],
+    ["probes/drive-pre.mjs","d2a1c2228543406fbb26aa2e16735fd88aeb1a289d52ccaa26a9f3c7967e8e97",1147],
+    ["probes/drive.mjs","91a69b7c2090ba10cdc4389aa97d52bce1c5eefd66420f05b5aec8f02fd53e4b",924],
+    ["probes/instrumented-worker.diff","3f8e59ec033a937884bb7865cde85e6c63b62f76d8a0b39fe6709b1db4e89ba8",2511],
+    ["probes/transpile-once.mjs","981351f8e02d7a49c64d20221f179906533ab346b4af9a2e48ff9838f17dacd6",383],
+    ["probes/transpile-twice.mjs","26af9a7edd689dfa93b688bbc9ba588e3941ce68e5789f1182a883fa59b4200b",485],
+    ["startup-phase-timings.json","6a6a8b48d7f1d3284791d6b67c495ef53488f856f7f73a42618a06a4ee57cd47",2994]
+  ]
+}

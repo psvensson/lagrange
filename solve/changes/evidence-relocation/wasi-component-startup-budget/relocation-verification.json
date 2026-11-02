@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "wasi-component-startup-budget--wasi-startup-design-evidence-2fad21f7f-2026-11-02.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/wasi-component-startup-budget--wasi-startup-design-evidence-2fad21f7f-2026-11-02.tar.gz",
+      "bundleSha256": "f8e02f27d45b6b7a06f93fe6a557ada9e6718ac8075aba882c398d415b37bf9e",
+      "sourceCommit": "2fad21f7fbf8aa79e3ef55382419bb0ff4871d5a",
+      "shard": "relocation-inventory/wasi-component-startup-budget--wasi-startup-design-evidence-2fad21f7f-2026-11-02.json",
+      "shardSha256": "6c782cb41a3f48fc99c4e5f6161b20d1e24043807ed95c6bc972f7ea8039fac4",
+      "verifiedAt": "2026-11-02T18:09:31.474Z",
+      "downloadedSha256": "f8e02f27d45b6b7a06f93fe6a557ada9e6718ac8075aba882c398d415b37bf9e",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 9,
+      "results": "111111111",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

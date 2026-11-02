@@ -1,6 +1,6 @@
 {
   "schema": "test-receipt/1",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
     {
       "id": "slow-startup-liveness-witness-typed-and-terminated",
@@ -30,14 +30,14 @@
     {
       "id": "service-0-5-tests-green-two-core-jobs4",
       "passed": true,
-      "evidence": "production-bound R12 witness: taskset -c 0,1 node scripts/run-classified-test-files.js test/service/h1-pinned-hono-component-proof.test.js test/service/h2-hono-source-ir-deployment-cutover.test.js test/service/h3-fetch-ingress-and-scoped-client.test.js test/service/q4-call-bounded-structured-partials.test.js (ordinary lane, jobs=4) -> 4/4 ok (h2 117.0s, h3 118.3s, q4 119.1s, h1 127.0s), no STARTUP_TIMEOUT_MS; red on 6d58fdba1 (3/4 not ok). Re-run after attempt 2 (derivation infrastructure-outcome repair): 4/4 ok (h2 104.1 s, h3 104.2 s, q4 104.7 s, h1 113.0 s), no STARTUP_TIMEOUT_MS. Lab hardware at 75206bf41: the nine tests at four jobs all ok on tv-dator and adams-gamla (log)."
+      "evidence": "production-bound R12 witness: taskset -c 0,1 node scripts/run-classified-test-files.js test/service/h1-pinned-hono-component-proof.test.js test/service/h2-hono-source-ir-deployment-cutover.test.js test/service/h3-fetch-ingress-and-scoped-client.test.js test/service/q4-call-bounded-structured-partials.test.js (ordinary lane, jobs=4) -> 4/4 ok (h2 117.0s, h3 118.3s, q4 119.1s, h1 127.0s), no STARTUP_TIMEOUT_MS; red on 6d58fdba1 (3/4 not ok). Re-run after attempt 2 (derivation infrastructure-outcome repair): 4/4 ok (h2 104.1 s, h3 104.2 s, q4 104.7 s, h1 113.0 s), no STARTUP_TIMEOUT_MS. Lab hardware at 75206bf41: the nine tests at four jobs all ok on tv-dator and adams-gamla (log). Final-head lab cone at 4c0b8f54d: the nine tests ok at four jobs on tv-dator, lenovo-laptop and adam-laptop (log)."
     },
     {
       "id": "independent-verification",
-      "passed": false,
-      "evidence": "REJECT (bounded) at 75206bf41 by subagent:a3d024861e3b35dac (F1 HIGH, F2 MEDIUM, F5/F4/F6 LOW); attempt 2 answers F1/F2/F3/F5 and records F4/F6 as R17; re-verification pending."
+      "passed": true,
+      "evidence": "log.ndjson verification entries 2026-11-02 (subagent:a3d024861e3b35dac): reject at 75206bf41, approve at 69a618984"
     }
   ],
   "evidence": [],
-  "applicability": "Candidate = this branch after the implementation commit; also green: minimal-deployment-request-cell-runtime-readiness, service-cell-worker-modes, service-cell-bridge-roundtrip, call-cell-worker, node-shutdown-cell-worker-teardown, movielens-public-request-component-validation, formation-runtime-service-create-lane-budget-starvation, minimal-deployment-runtime-access-policy-live-validation, sea-bundle-smoke; npm run test:static 33/33."
+  "applicability": "Candidate approved at 69a618984, merged with origin/main at 2fad21f7f; after the merge the quest test and five related runtime files were re-run green; also green: minimal-deployment-request-cell-runtime-readiness, service-cell-worker-modes, service-cell-bridge-roundtrip, call-cell-worker, node-shutdown-cell-worker-teardown, movielens-public-request-component-validation, formation-runtime-service-create-lane-budget-starvation, minimal-deployment-runtime-access-policy-live-validation, sea-bundle-smoke; npm run test:static 33/33. The design note, timings and probes are relocated to the verified evidence bundle (solve/changes/evidence-relocation/wasi-component-startup-budget). Open R17 findings are in the log."
 }
