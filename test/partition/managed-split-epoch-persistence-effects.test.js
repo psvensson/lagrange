@@ -102,8 +102,13 @@ test('split fenced cutover refuses when another owner claimed the record ' +
     PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING, 'no phase landed');
 });
 
-test('split cutover transition disallows pending visibility on the ' +
-  'epoch flip while routine transitions still tolerate it', async (t) => {
+// Re-derived for answers at commit (quest
+// replica-admission-from-committed-operation, attempt 2): no transition write
+// carries a visibility opt-out any more; routine and epoch-flip writes alike
+// answer at their commit, and a reader that needs the flipped epoch in its
+// projection waits for it at the write's position (census site 7).
+test('split cutover: routine transitions and the epoch flip both answer at ' +
+  'their commit with no visibility opt-out', async (t) => {
   const updateCalls = [];
   const {workflow} = buildWorkflow({updateCalls});
   const record = buildCutoverWorkflowRecord('split-epoch-options');
@@ -122,9 +127,9 @@ test('split cutover transition disallows pending visibility on the ' +
       PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
   );
   t.equal(
-    catchupUpdate.options?.allowPendingVisibility,
-    true,
-    'routine transitions keep tolerating pending cache visibility',
+    'allowPendingVisibility' in (catchupUpdate.options ?? {}),
+    false,
+    'a routine transition carries no visibility opt-out',
   );
 
   await workflow.advanceSplitPhase(
@@ -137,10 +142,9 @@ test('split cutover transition disallows pending visibility on the ' +
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
   );
   t.equal(
-    cutoverUpdate.options?.allowPendingVisibility,
+    'allowPendingVisibility' in (cutoverUpdate.options ?? {}),
     false,
-    'the epoch flip must not tolerate pending visibility: an ' +
-    'unconverged cutover is a failed cutover',
+    'the epoch flip carries no visibility opt-out: it answers at its commit',
   );
 });
 
@@ -250,10 +254,10 @@ test('split FAILED transition withdraws the pending partition epoch ' +
     'same mutation — the source stays authoritative at the active epoch',
   );
   t.equal(
-    failedUpdate.options?.allowPendingVisibility,
+    'allowPendingVisibility' in (failedUpdate.options ?? {}),
     false,
-    'the pending-version withdrawal is an epoch transition: it must ' +
-    'not tolerate pending cache visibility',
+    'the pending-version withdrawal answers at its commit with no ' +
+    'visibility opt-out',
   );
 });
 

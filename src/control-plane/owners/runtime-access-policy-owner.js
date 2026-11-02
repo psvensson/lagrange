@@ -53,6 +53,7 @@ const RUNTIME_ACCESS_POLICY_ERROR_CODE = Object.freeze({
   BINDING_NOT_FOUND: 'runtime_access_binding_not_found',
   DEPENDENCY_REQUIRED: 'runtime_access_dependency_required',
   INVALID_FIELD: 'runtime_access_invalid_field',
+  PROJECTION_UNAVAILABLE: 'runtime_access_policy_projection_unavailable',
 });
 const RUNTIME_ACCESS_POLICY_PATH = Object.freeze({
   BINDING_NAME: '/binding_name',
@@ -68,7 +69,14 @@ const RUNTIME_ACCESS_POLICY_MESSAGE = Object.freeze({
   DEPENDENCY_REQUIRED:
     'runtime access policy owner requires the deployment Binding owner',
   INVALID_FIELD: 'runtime access policy is outside the supported contract',
+  PROJECTION_UNAVAILABLE:
+    'runtime access policy committed, but this node cannot yet answer it ' +
+    'visible: the projection wait ended',
 });
+// The projection wait's typed endings (the one projection wait owner,
+// CDCIntegrationService.awaitProjectionAt).
+const PROJECTION_WAIT_ENDINGS = Object.freeze(new Set(['shutdown',
+  'position_unknown', 'position_invalid', 'projection_unavailable']));
 const RUNTIME_ACCESS_POLICY_ERROR_NAME = 'RuntimeAccessPolicyError';
 const POLICY_INPUT_FIELDS = Object.freeze([
   'binding_name',
@@ -122,11 +130,12 @@ const TRANSACTION_CONTROL_TYPES = new Set([
 ]);
 
 class RuntimeAccessPolicyError extends Error {
-  constructor(code, path, message) {
+  constructor(code, path, message, detail = {}) {
     super(message);
     this.name = RUNTIME_ACCESS_POLICY_ERROR_NAME;
     this.code = code;
     this.path = path;
+    this.detail = detail;
   }
 }
 
@@ -578,7 +587,7 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
     }
     const now = this.timestamp();
     const configValue = JSON.stringify(stored);
-    await this.upsertRow({
+    const written = await this.upsertRow({
       config_key: this.configKey(serviceId),
       config_value: configValue,
       value_type: RUNTIME_ACCESS_POLICY_VALUE_TYPE,
@@ -588,14 +597,36 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
       updated_by: securityContext.principal,
       updated_at: now,
       created_at: now,
-    }, {
-      ...options,
-      expectedCacheFields: {
-        config_value: configValue,
-        updated_at: now,
-      },
-    });
+    }, options);
+    await this.awaitOwnPolicyProjection(written?.position);
     return normalizeStoredPolicy(stored, serviceId);
+  }
+
+  /**
+   * The policy write answers at its commit; the client's answer waits until
+   * this node's projection holds that commit, so a CONFIGURE followed by an
+   * invoke on this node is authorized (lead decision a1, quest
+   * replica-admission-from-committed-operation attempt 2). The wait has no
+   * timer: it ends when the projection reaches the position or at shutdown.
+   * The DDL path has no request deadline and no cancel path, so the wait is
+   * unbounded by design on a live node; a typed ending answers the DDL typed
+   * unavailable and the committed write stays committed. Other nodes stay
+   * eventually consistent, as before.
+   * @param {Object|undefined} position - The write answer's position.
+   * @return {Promise<void>}
+   */
+  async awaitOwnPolicyProjection(position) {
+    try {
+      await this.requireGateway().awaitProjectionAt(position);
+    } catch (error) {
+      if (!PROJECTION_WAIT_ENDINGS.has(error?.code)) throw error;
+      throw new RuntimeAccessPolicyError(
+        RUNTIME_ACCESS_POLICY_ERROR_CODE.PROJECTION_UNAVAILABLE,
+        RUNTIME_ACCESS_POLICY_PATH.POLICY,
+        RUNTIME_ACCESS_POLICY_MESSAGE.PROJECTION_UNAVAILABLE,
+        {projectionOutcome: error.code},
+      );
+    }
   }
 
   async getRuntimePolicy(serviceId, options = {}) {
@@ -677,6 +708,7 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
 export {
   RUNTIME_ACCESS_POLICY_BINDING_PATTERN,
   RUNTIME_ACCESS_POLICY_DECISION,
+  RUNTIME_ACCESS_POLICY_ERROR_CODE,
   RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS,
   RUNTIME_ACCESS_POLICY_REASON,
   RUNTIME_ACCESS_POLICY_STATUS,

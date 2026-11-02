@@ -18,9 +18,9 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import * as espree from 'espree';
+import {sourceFiles, walk} from '../test-helpers/source-tree-walk.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -125,7 +125,7 @@ test('(a) insert and update answer at commit with the position, ' +
     t.same(outcome?.value?.position, EXPECTED_POSITION,
       `${name} answers its commit position`);
   }
-  await service.shutdown?.();
+  service.markShuttingDown();
 });
 
 test('(b) awaitProjectionAt resolves exactly at the position, and only ' +
@@ -150,11 +150,43 @@ test('(b) awaitProjectionAt resolves exactly at the position, and only ' +
     key: 'never-applied'});
   t.equal(await within(never, 50), PENDING,
     'there is no timer: an unapplied position stays pending');
-  await service.shutdown();
+  service.markShuttingDown();
   const ended = await within(never, 50);
   t.not(ended, PENDING, 'shutdown ends the wait');
   t.equal(ended?.error?.code ?? ended?.value?.outcome, 'shutdown',
     'the end is typed shutdown, never visible');
+});
+
+// (b2) The position is a lower bound: a later write's row (a newer origin
+// HLC) satisfies it; a deletion's position is satisfied once the
+// pre-deletion row is gone.
+test('(b2) a later HLC satisfies the position; a deletion position is ' +
+  'satisfied by the row\'s absence', async (t) => {
+  const {service, cache} = createService();
+  const laterHlc = new HLCTimestamp(1793615397288, 9, 'node-3').toString();
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT',
+    serviceRow({updated_at_hlc: laterHlc}));
+  const reached = await within(
+    service.awaitProjectionAt(EXPECTED_POSITION), PROMPT_MS);
+  t.equal(reached?.value?.outcome, 'reached',
+    'a row stamped later than the position satisfies it');
+
+  service.markShuttingDown();
+
+  // A second projection still holds the row as it was before the deletion.
+  const other = createService();
+  other.cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT',
+    serviceRow({updated_at_hlc: OLDER_HLC}));
+  const deletion = Object.freeze({...EXPECTED_POSITION, deleted: true});
+  const waiting = other.service.awaitProjectionAt(deletion);
+  t.equal(await within(waiting, 50), PENDING,
+    'the pre-deletion row is still present: the deletion is not projected');
+  other.cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'DELETE',
+    serviceRow({updated_at_hlc: COMMIT_HLC}));
+  const removed = await within(waiting, PROMPT_MS);
+  t.equal(removed?.value?.outcome, 'reached',
+    'the row\'s absence satisfies the deletion position');
+  other.service.markShuttingDown();
 });
 
 test('(c) a failed commit is a failure; no visibility or repair read ' +
@@ -169,34 +201,8 @@ test('(c) a failed commit is a failure; no visibility or repair read ' +
   t.ok(outcome?.error, 'it is a failure even though the cache holds the row');
   t.notOk(outcome?.value?.committed, 'never committed');
   t.equal(engine.calls.length, 1, 'no repair read follows the failure');
-  await service.shutdown?.();
+  service.markShuttingDown();
 });
-
-function sourceFiles(directory) {
-  const files = [];
-  for (const entry of fs.readdirSync(directory)) {
-    const file = path.join(directory, entry);
-    if (fs.statSync(file).isDirectory()) {
-      files.push(...sourceFiles(file));
-    } else if (file.endsWith('.js')) {
-      files.push(file);
-    }
-  }
-  return files;
-}
-
-function walk(node, visit) {
-  if (!node || typeof node.type !== 'string') return;
-  visit(node);
-  for (const [key, value] of Object.entries(node)) {
-    if (key === 'range') continue;
-    if (Array.isArray(value)) {
-      for (const child of value) walk(child, visit);
-    } else if (value && typeof value.type === 'string') {
-      walk(value, visit);
-    }
-  }
-}
 
 const REMOVED_NAMES = new Set([
   'waitForCacheUpdate',

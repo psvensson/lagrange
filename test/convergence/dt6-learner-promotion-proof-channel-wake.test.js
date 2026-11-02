@@ -310,10 +310,15 @@ function createRowLanding(clock) {
     insertServiceRow(
       fixture.leaderCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER,
     );
-    landing.settled = waitForLeaderReplicationToLearner(
+    // The withheld status write lands: the learner's admission request
+    // reaches the leader, which admits it from the committed operation
+    // (quest replica-admission-from-committed-operation; the cache-driven
+    // reconcile is deleted).
+    const admission = fixture.requestLearnerAdmission();
+    landing.settled = admission.then(() => waitForLeaderReplicationToLearner(
       fixture.leader, DRIVE_BUDGET_S * VIRTUAL_SECOND_MS,
       {isCancelled: () => landing.cancelled},
-    ).then((proven) => {
+    )).then((proven) => {
       landing.replicationProven = proven;
       landing.replicationAtLanding =
         readLeaderReplicationToLearner(fixture.leader);

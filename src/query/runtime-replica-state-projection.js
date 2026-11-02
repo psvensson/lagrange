@@ -28,7 +28,7 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {ADAPTER_ERROR_MSG} from './sql-adapter-constants.js';
 
-const PROJECTION_WRITE_OPTIONS = Object.freeze({skipCacheWait: true});
+const PROJECTION_WRITE_OPTIONS = Object.freeze({});
 const SERVICES_OWNER_METHODS = Object.freeze([
   'insertService',
   'removeService',

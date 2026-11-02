@@ -207,7 +207,6 @@ class SQLQueryEngineTransactionRecoveryMethods
         workClass === PRESSURE_WORK_CLASS.CRITICAL ?
           'critical' :
           this.resolveRoutedDeliveryPriority(tableName),
-      skipCacheWait: true,
       mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
     };
     if (workloadProfile) {

@@ -14,7 +14,6 @@ const SELECT_NONTERMINAL =
   'WHERE status NOT IN (\'SUCCEEDED\', \'FAILED\')';
 
 const WRITE_OPTIONS = Object.freeze({
-  allowPendingVisibility: true,
   workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
   deliveryPriority: 'critical',
 });

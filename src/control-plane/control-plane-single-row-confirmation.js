@@ -13,7 +13,7 @@ function confirmationError(reason, effect, result, deferRetry) {
 
 function requireConfirmedSingleRowMutation(result, contract) {
   const effect = classifyControlPlaneMutationResult(result);
-  if (effect.applied && !effect.deferred && !effect.visibilityPending &&
+  if (effect.applied && !effect.deferred &&
       effect.affectedRowsPresent && effect.affectedRows === 1) return;
   if (effect.failed || effect.terminal) {
     const error = buildSystemMetadataMutationError(result, contract);

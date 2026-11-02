@@ -349,7 +349,6 @@ async (t) => {
         queryTimeoutMs: Math.floor(
           NodeReadyLeaseAuthority.fromConfiguration().readyLeaseMs / 3,
         ),
-        skipCacheWait: true,
         workloadClass: 'node_state_publication_critical',
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
       },
@@ -372,7 +371,6 @@ async (t) => {
         mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
         pressureRetryAfterMs: service.heartbeatIntervalMs,
         queryTimeoutMs: service.resolveHeartbeatWriteQueryTimeoutMs(),
-        skipCacheWait: true,
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
         // The endpoint authority names the logical write (its birth at this
         // incarnation), so a re-drive after an unknown outcome is one entry.

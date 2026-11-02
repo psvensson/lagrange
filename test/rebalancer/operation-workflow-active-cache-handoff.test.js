@@ -110,7 +110,6 @@ function buildProductionCacheRefreshHost({
     },
   } : cache;
   host.getPrimaryKeyField = () => 'service_id';
-  host.shouldWaitForCacheUpdate = () => true;
   host.executeAuthoritativeSystemTableRead =
     async () => ({success: true, rows: [authoritativeRow]});
   host.insertSystemTableRow = async () => ({success: true});

@@ -15,9 +15,6 @@ import {
   resolveMutationCompletionState,
 } from '../../src/control-plane/control-plane-system-table-gateway-mutation-contracts.js';
 import {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
-} from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
-import {
   PRESSURE_GOVERNOR_ACTION,
 } from '../../src/control-plane/pressure-governor.js';
 
@@ -28,10 +25,6 @@ const EXPECTED_EFFECT_BY_OUTCOME = Object.freeze({
   }),
   [CONTROL_PLANE_MUTATION_OUTCOME.NO_OP]: Object.freeze({
     applied: false, accepted: true, deferred: false,
-    retryable: true, terminal: false,
-  }),
-  [CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY]: Object.freeze({
-    applied: true, accepted: true, deferred: true,
     retryable: true, terminal: false,
   }),
   [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED]: Object.freeze({
@@ -207,7 +200,6 @@ test('control-plane mutation view reads every gateway field without accessors',
       'partitionResult',
       'affectedRows',
       'completionState',
-      'visibilityState',
       'pressureAction',
     ];
     for (const field of gatewayFields) {
@@ -298,8 +290,6 @@ test('ordinary legacy envelopes ignore Object.prototype pollution', (t) => {
     partitionResult: {affectedRows: 0},
     affectedRows: 0,
     completionState: CONTROL_PLANE_MUTATION_OUTCOME.REJECTED,
-    visibilityState:
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY,
     pressureAction: PRESSURE_GOVERNOR_ACTION.REJECT,
   };
   const savedDescriptors = {};
@@ -397,7 +387,7 @@ test('mutation view reads each gateway data field exactly once', (t) => {
     const target = {
       outcome: 'applied', success: true, partitionResult: nested,
       affectedRows: 9, completionState: 'durable',
-      visibilityState: 'visible', pressureAction: 'allow',
+      pressureAction: 'allow',
     };
     const original = Object.getOwnPropertyDescriptor;
     const counts = Object.create(null);
@@ -430,7 +420,6 @@ test('mutation view reads each gateway data field exactly once', (t) => {
     'root:success': 1,
     'root:partitionResult': 1,
     'root:completionState': 1,
-    'root:visibilityState': 1,
     'root:pressureAction': 1,
     'nested:affectedRows': 1,
     'root:affectedRows': 1,
@@ -464,7 +453,6 @@ test('mutation view accepts null prototypes and ignores inherited accessors',
       'partitionResult',
       'affectedRows',
       'completionState',
-      'visibilityState',
       'pressureAction',
       'settledReplay',
     ];
@@ -548,7 +536,6 @@ test('mutation view rejects hostile scalar values without executing hooks',
       'success',
       'affectedRows',
       'completionState',
-      'visibilityState',
       'pressureAction',
     ];
     for (const field of scalarFields) {
@@ -599,7 +586,6 @@ test('mutation view uses captured reflection and numeric intrinsics', (t) => {
       success: true,
       affectedRows: 1,
       completionState: 'durable',
-      visibilityState: CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
       pressureAction: PRESSURE_GOVERNOR_ACTION.ALLOW,
     });
   } finally {
@@ -627,7 +613,6 @@ test('normalized mutation view is detached from later source mutation', (t) => {
     partitionResult,
     affectedRows: 9,
     completionState: 'durable',
-    visibilityState: CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
     pressureAction: PRESSURE_GOVERNOR_ACTION.ALLOW,
   };
   const view = classifyControlPlaneMutationResult(source);
@@ -636,8 +621,6 @@ test('normalized mutation view is detached from later source mutation', (t) => {
   source.outcome = CONTROL_PLANE_MUTATION_OUTCOME.REJECTED;
   source.success = false;
   source.completionState = 'changed';
-  source.visibilityState =
-    CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE;
   source.pressureAction = PRESSURE_GOVERNOR_ACTION.REJECT;
   source.affectedRows = 0;
   partitionResult.affectedRows = 0;
@@ -648,7 +631,6 @@ test('normalized mutation view is detached from later source mutation', (t) => {
     applied: true,
     affectedRows: 1,
     completionState: 'durable',
-    visibilityState: CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
     pressureAction: PRESSURE_GOVERNOR_ACTION.ALLOW,
   });
   t.same(outcomeSnapshot, {
@@ -785,8 +767,6 @@ test('gateway completion and outcome consume one normalized precedence view',
         outcome: CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
         success: false,
         completionState: explicitCompletion,
-        visibilityState:
-          CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY,
         pressureAction: PRESSURE_GOVERNOR_ACTION.REJECT,
         affectedRows: 0,
       }),
@@ -796,18 +776,19 @@ test('gateway completion and outcome consume one normalized precedence view',
       },
       'known outcome and explicit completion retain independent precedence',
     );
+    // No write answer carries a visibility state any more (answers at
+    // commit, replica-admission-from-committed-operation attempt 2): pressure
+    // owns both the outcome and the completion of an untyped failure.
     t.same(
       resolveControlPlaneMutationOutcomeSnapshot({
         success: false,
-        visibilityState:
-          CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE,
         pressureAction: PRESSURE_GOVERNOR_ACTION.REJECT,
       }),
       {
         outcome: CONTROL_PLANE_MUTATION_OUTCOME.REJECTED,
-        completionState: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
+        completionState: CONTROL_PLANE_MUTATION_OUTCOME.REJECTED,
       },
-      'visibility owns completion while pressure owns an untyped failed outcome',
+      'pressure owns an untyped failed outcome and its completion',
     );
     t.same(
       resolveControlPlaneMutationOutcomeSnapshot({

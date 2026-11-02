@@ -684,12 +684,11 @@ function registerSqlQueryEngineExecutionTestCases({
       CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
       'participant rows should carry the shared transaction-control workload class',
     );
-    t.equal(submissions[0].options.skipCacheWait, true,
-      'transaction rows should not fail closed on cache visibility lag');
-    t.equal(submissions[1].options.skipCacheWait, true,
-      'participant rows should not fail closed on cache visibility lag');
-    t.equal(submissions[2].options.skipCacheWait, true,
-      'write-operation telemetry should also bypass cache visibility lag');
+    // Writes answer at their commit: no cache-wait opt-out exists.
+    for (const submission of submissions.slice(0, 3)) {
+      t.equal('skipCacheWait' in submission.options, false,
+        'no cache-wait opt-out on transaction state writes');
+    }
     t.equal(submissions[0].options.mergePolicy, 'replace_pending',
       'transaction rows should coalesce to the latest durable state');
     t.equal(submissions[1].options.mergePolicy, 'replace_pending',

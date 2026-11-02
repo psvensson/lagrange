@@ -204,7 +204,6 @@ test(
       systemTableCache: cache,
     });
     service.initialize();
-    service.cacheWaitTimeoutMs = 10;
     const gateway = createControlPlaneRuntimeBundle({
       nodeId: SOURCE_NODE_ID,
       cdcIntegrationService: service,
@@ -213,12 +212,17 @@ test(
     await gateway.deleteSystemTableRow(
       SYSTEM_TABLE_NAME.SERVICES,
       {service_id: serviceId},
-      {allowCoalescing: false, skipCacheWait: true},
+      {allowCoalescing: false},
     );
+    // The committed zero-row deletion triggers its projection reconcile;
+    // the write answered at its commit without waiting for it.
+    for (let turn = 0; turn < 20 && ownerReads.length === 0; turn += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
 
     t.equal(ownerReads.length, 1,
       'owner-to-gateway zero-row cleanup should trigger one exact ' +
-        'authoritative read despite the owner skipCacheWait option');
+        'authoritative reconcile read after its commit');
     t.equal(ownerReads[0]?.observedPartitionId, SERVICES_PARTITION_ID,
       'repair should read the canonical SERVICES owner partition');
     t.equal(ownerReads[0]?.preferLeader, true,

@@ -66,16 +66,13 @@ function classifyMutationFailure(error) {
 
 // Every frozen gateway outcome has one explicit Raft disposition. Apply and
 // zero-row truth remain owned by classifyControlPlaneMutationResult; this
-// table is consulted only after canonical apply is false, so APPLIED and
-// PENDING_VISIBILITY represent contradictory failed envelopes here.
+// table is consulted only after canonical apply is false, so APPLIED
+// represents a contradictory failed envelope here.
 const GATEWAY_OUTCOME_MUTATION_REASON = objectCreate(null);
 GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.APPLIED] =
   AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
 GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.NO_OP] =
   AUTHORITATIVE_ROW_MUTATION_REASON.NOOP;
-GATEWAY_OUTCOME_MUTATION_REASON[
-  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY
-] = AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
 GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED] =
   AUTHORITATIVE_ROW_MUTATION_REASON.DEFERRED;
 GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.REJECTED] =

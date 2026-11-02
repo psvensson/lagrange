@@ -309,13 +309,16 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
       executeRead: async ({readFromCache}) => ({rows: readFromCache()}),
-      submitMutation: async (mutation, options) => {
-        assert.deepEqual(options.expectedCacheFields, {
-          table_policies: mutation.data.table_policies,
-        });
-        assert.deepEqual(options.minimumCacheFields, {
-          updated_at: mutation.data.updated_at,
-        });
+      // The policy write's base is the committed row (census site 6).
+      readAuthoritativeRows: async (_tableName, _sql, params) => ({
+        success: true,
+        rows: cachedTables.has(params[0]) ?
+          [{...cachedTables.get(params[0])}] : [],
+      }),
+      submitMutation: async (_mutation, options) => {
+        // The policy write answers at its commit: no projection-field wait.
+        assert.equal(options.expectedCacheFields, undefined);
+        assert.equal(options.minimumCacheFields, undefined);
         return {
           success: true,
           outcome: 'applied',

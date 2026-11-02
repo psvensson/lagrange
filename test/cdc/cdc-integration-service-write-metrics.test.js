@@ -127,11 +127,8 @@ test('insertSystemTableRow emits metrics.cdc.write on success',
     t.equal(metric.data.operation, CDC_OPERATION.INSERT);
     t.equal(typeof metric.data.sqlDurationMs, 'number');
     t.ok(metric.data.sqlDurationMs >= 0, 'sqlDurationMs non-negative');
-    t.equal(typeof metric.data.cacheWaitDurationMs, 'number');
-    t.ok(
-      metric.data.cacheWaitDurationMs >= 0,
-      'cacheWaitDurationMs non-negative',
-    );
+    // A write answers at its commit: no cache-wait phase is measured.
+    t.equal('cacheWaitDurationMs' in metric.data, false);
     t.equal(typeof metric.data.totalDurationMs, 'number');
     t.ok(metric.data.totalDurationMs >= 0, 'totalDurationMs non-negative');
     t.end();
@@ -156,17 +153,14 @@ test('updateSystemTableRow emits metrics.cdc.write on success',
     t.equal(metric.data.operation, CDC_OPERATION.UPDATE);
     t.equal(typeof metric.data.sqlDurationMs, 'number');
     t.ok(metric.data.sqlDurationMs >= 0, 'sqlDurationMs non-negative');
-    t.equal(typeof metric.data.cacheWaitDurationMs, 'number');
-    t.ok(
-      metric.data.cacheWaitDurationMs >= 0,
-      'cacheWaitDurationMs non-negative',
-    );
+    // A write answers at its commit: no cache-wait phase is measured.
+    t.equal('cacheWaitDurationMs' in metric.data, false);
     t.equal(typeof metric.data.totalDurationMs, 'number');
     t.ok(metric.data.totalDurationMs >= 0, 'totalDurationMs non-negative');
     t.end();
   });
 
-test('CDC write metric totalDurationMs equals sql + cacheWait',
+test('CDC write metric totalDurationMs covers the sql phase (no cache wait)',
   async (t) => {
     const service = createService();
     const infoCalls = collectInfoCalls(service);
@@ -178,11 +172,8 @@ test('CDC write metric totalDurationMs equals sql + cacheWait',
     const metric = infoCalls.find(
       (c) => c.tag === METRICS_LOG_TAG.CDC_WRITE,
     );
-    t.equal(
-      metric.data.totalDurationMs,
-      metric.data.sqlDurationMs + metric.data.cacheWaitDurationMs,
-      'totalDurationMs is sum of sql and cacheWait',
-    );
+    t.ok(metric.data.totalDurationMs >= metric.data.sqlDurationMs,
+      'totalDurationMs covers the sql phase');
     t.end();
   });
 
@@ -261,15 +252,11 @@ test('CDC write metric has structured fields with correct types',
     t.ok('tableName' in metric.data, 'has tableName');
     t.ok('operation' in metric.data, 'has operation');
     t.ok('sqlDurationMs' in metric.data, 'has sqlDurationMs');
-    t.ok('cacheWaitDurationMs' in metric.data, 'has cacheWaitDurationMs');
+    t.notOk('cacheWaitDurationMs' in metric.data, 'no cacheWaitDurationMs');
     t.ok('totalDurationMs' in metric.data, 'has totalDurationMs');
     t.equal(
       Number.isInteger(metric.data.sqlDurationMs), true,
       'sqlDurationMs is integer',
-    );
-    t.equal(
-      Number.isInteger(metric.data.cacheWaitDurationMs), true,
-      'cacheWaitDurationMs is integer',
     );
     t.equal(
       Number.isInteger(metric.data.totalDurationMs), true,

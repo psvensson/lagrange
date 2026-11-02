@@ -562,12 +562,6 @@ class HeartbeatServicePublicationMethods {
         SYSTEM_TABLE_NAME.NODES,
         whereClause,
         {connection_state: STATE.DISCONNECTED, ready_lease_expires_at: null},
-        {
-          expectedCacheFields: {
-            connection_state: STATE.DISCONNECTED,
-            ready_lease_expires_at: null,
-          },
-        },
       );
     } catch (error) {
       this.logger.error(HEARTBEAT_LOG_MSG.LEASE_EXPIRY_DISCONNECT_FAILED, {
@@ -643,7 +637,6 @@ class HeartbeatServicePublicationMethods {
       // convergence on the write path.
       pressureRetryAfterMs: this.heartbeatIntervalMs,
       queryTimeoutMs,
-      skipCacheWait: true,
       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
     };
   }

@@ -307,8 +307,8 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
 
     t.ok(upsertCalls.length > 0, 'should upsert endpoint rows during registration');
     t.ok(
-      upsertCalls.every((call) => call.options?.skipCacheWait === true),
-      'join-time endpoint upserts should skip cache waits before subscriptions are active',
+      upsertCalls.every((call) => !('skipCacheWait' in (call.options ?? {}))),
+      'join-time endpoint upserts carry no cache-wait opt-out (no cache-wait opt-out exists: writes answer at their commit)',
     );
     t.ok(
       upsertCalls.every((call) => Number.isFinite(call.options?.queryTimeoutMs) &&
@@ -372,8 +372,8 @@ test('registerNodeInCluster() - should skip cache waits even after CDC subscript
     t.ok(upsertCalls.length > 0,
       'should upsert join admission rows during registration');
     t.ok(
-      upsertCalls.every((call) => call.options?.skipCacheWait === true),
-      'join admission writes should always skip cache waits while join readiness still owns convergence',
+      upsertCalls.every((call) => !('skipCacheWait' in (call.options ?? {}))),
+      'join admission writes carry no cache-wait opt-out (no cache-wait opt-out exists: writes answer at their commit)',
     );
     t.ok(
       upsertCalls.every((call) => Number.isFinite(call.options?.queryTimeoutMs) &&
@@ -437,8 +437,8 @@ test('registerNodeInCluster() - should use join phase SQL fallback when CDC muta
       'join-phase SQL fallback should carry explicit join phase scope',
     );
     t.ok(
-      queryCalls.every((call) => call.options?.skipCacheWait === true),
-      'join-phase SQL fallback should still skip cache waits during join admission',
+      queryCalls.every((call) => !('skipCacheWait' in (call.options ?? {}))),
+      'the join-phase SQL path is gated by its phase scope alone (no cache-wait opt-out exists: writes answer at their commit)',
     );
     // D-7: the registration is a monotonic birth (plain INSERT, which can
     // never replace a newer incarnation's row), not INSERT OR REPLACE.

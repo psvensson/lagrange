@@ -7,7 +7,7 @@
     "bootstrap-membership": 330,
     "cdc-metadata": 69,
     "cli-tooling": 99,
-    "control-plane": 225,
+    "control-plane": 227,
     "convergence-topology": 78,
     "distributed-harness": 209,
     "examples-e2e": 8,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 158,
     "solver-tooling": 7,
-    "storage-partition": 212,
+    "storage-partition": 213,
     "storage-raft": 146,
     "test-infrastructure": 155,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2558,
-  "digest": "fnv1a32-c46b24d4",
+  "censusSize": 2561,
+  "digest": "fnv1a32-fba3ac1d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9912e555",
+  "observationDigest": "fnv1a32-141ee68d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -574,7 +574,9 @@
     "test/control-plane/formation-release-handoff-consumer-parity.test.js": "control-plane",
     "test/control-plane/formation-release-handoff-interaction-registry.test.js": "control-plane",
     "test/control-plane/formation-release-handoff-post-reopen-capture.test.js": "control-plane",
+    "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js": "control-plane",
     "test/control-plane/heartbeat-joining-fence-preservation.test.js": "control-plane",
+    "test/control-plane/heartbeat-liveness-at-commit.test.js": "control-plane",
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "control-plane",
     "test/control-plane/heartbeat-memory-trend.test.js": "control-plane",
     "test/control-plane/heartbeat-periodic-writes.property.test.js": "control-plane",
@@ -1430,6 +1432,7 @@
     "test/partition/partition-service-transactions-query-routing.test.js": "storage-partition",
     "test/partition/partition-service-write-commit.test.js": "storage-partition",
     "test/partition/partition-service.test.js": "storage-partition",
+    "test/partition/partition-size-persist-own-column-keep.test.js": "storage-partition",
     "test/partition/partition-size-write-retry-spent-owner.test.js": "storage-partition",
     "test/partition/partition-snapshot-cadence.test.js": "storage-partition",
     "test/partition/partition-split-merge-manager.test.js": "storage-partition",
@@ -3918,7 +3921,7 @@
     "test/cdc/cdc-shutdown-terminal-owner-write.test.js": {
       "files": [
         "src/bootstrap/phases/seed-cleanup-handler.js",
-        "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+        "src/cdc/cdc-integration-service-projection-wait.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
         "src/partition/proposal-queue-constants.js"
@@ -4483,6 +4486,16 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js"
+      ]
+    },
+    "test/control-plane/heartbeat-liveness-at-commit.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js",
+        "test/test-helpers/boot-incarnation-fixture.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": {
@@ -5214,6 +5227,11 @@
         "src/config/configuration-manager.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
         "src/control-plane/owners/service-install-catalog-contract.js"
+      ]
+    },
+    "test/control-plane/runtime-access-policy-owner.test.js": {
+      "files": [
+        "src/control-plane/owners/request-binding-service-definition-contract.js"
       ]
     },
     "test/control-plane/service-instance-creation-cas.test.js": {
@@ -11962,6 +11980,11 @@
         "test/test-helpers/acknowledging-cdc-subscriber.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/partition-size-persist-own-column-keep.test.js": {
+      "files": [
+        "src/partition/partition-service-split-accessor-base.js"
       ]
     },
     "test/partition/partition-size-write-retry-spent-owner.test.js": {

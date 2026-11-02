@@ -236,8 +236,8 @@ test(
     );
     const joinMutationOptions = publicationCalls.map((call) => call.options);
     t.ok(
-      joinMutationOptions.every((options) => options?.skipCacheWait === true),
-      'membership owner join writes should skip cache wait during registration',
+      joinMutationOptions.every((options) => !('skipCacheWait' in (options ?? {}))),
+      'membership owner join writes carry no cache-wait opt-out (no cache-wait opt-out exists: writes answer at their commit)',
     );
     t.ok(
       joinMutationOptions.every((options) =>
@@ -604,7 +604,7 @@ test(
     t.ok(
       updateCalls.every((call) =>
         call.options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN &&
-        call.options?.skipCacheWait === true,
+        !('skipCacheWait' in call.options),
       ),
       'withdrawal writes should keep join phase control-plane options',
     );
@@ -665,8 +665,6 @@ test(
         {success: true, accepted: true, withdrawalDeferred: false},
       [CONTROL_PLANE_MUTATION_OUTCOME.NO_OP]:
         {success: false, accepted: true, withdrawalDeferred: true},
-      [CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY]:
-        {success: true, accepted: true, withdrawalDeferred: true},
       [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED]:
         {success: false, accepted: true, withdrawalDeferred: true},
       [CONTROL_PLANE_MUTATION_OUTCOME.REJECTED]:

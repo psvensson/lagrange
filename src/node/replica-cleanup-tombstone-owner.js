@@ -161,7 +161,6 @@ class ReplicaCleanupTombstoneOwner {
         coalescingKey: `services:${replicaId}:cleanup:${row.cleanup_token}`,
         deliveryPriority: REPLICA_CLEANUP_CRITICAL_WORK,
         workClass: REPLICA_CLEANUP_CRITICAL_WORK,
-        skipCacheWait: true,
       });
     } catch (_error) {
       result = null;
@@ -278,7 +277,6 @@ class ReplicaCleanupTombstoneOwner {
           ownerToken,
         deliveryPriority: REPLICA_CLEANUP_CRITICAL_WORK,
         workClass: REPLICA_CLEANUP_CRITICAL_WORK,
-        skipCacheWait: true,
       });
     } catch (error) {
       mutationError = error;
@@ -332,7 +330,6 @@ class ReplicaCleanupTombstoneOwner {
           authority.ownerToken,
         deliveryPriority: REPLICA_CLEANUP_CRITICAL_WORK,
         workClass: REPLICA_CLEANUP_CRITICAL_WORK,
-        skipCacheWait: true,
       });
     } catch (error) {
       this.logger.warn(REPLICA_CLEANUP_LOG_MSG.COMPLETE_ACK_UNCERTAIN, {
@@ -419,7 +416,6 @@ class ReplicaCleanupTombstoneOwner {
           authority.ownerToken,
         deliveryPriority: REPLICA_CLEANUP_CRITICAL_WORK,
         workClass: REPLICA_CLEANUP_CRITICAL_WORK,
-        skipCacheWait: true,
       });
     } catch (_error) {
       result = null;

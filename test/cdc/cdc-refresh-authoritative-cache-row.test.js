@@ -24,7 +24,6 @@ function createHost({readResult}) {
   host.cachedRecord = null;
   host.logger = {info: () => {}, warn: () => {}, debug: () => {}, error: () => {}};
   host.getPrimaryKeyField = () => 'partition_id';
-  host.shouldWaitForCacheUpdate = () => true;
   host.getCacheRecord = () => host.cachedRecord;
   host.executeAuthoritativeSystemTableRead = async (tableName, sql, params) => {
     host.reads.push({tableName, sql, params});
@@ -98,7 +97,6 @@ test(
     host.systemTableCache = cache;
     host.cacheMutationTarget = cache;
     host.getPrimaryKeyField = () => 'service_id';
-    host.shouldWaitForCacheUpdate = () => true;
     host.executeAuthoritativeSystemTableRead =
       async () => ({success: true, rows: [authoritativeRow]});
 

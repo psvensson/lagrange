@@ -628,7 +628,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         timeoutMs: this.resolveOperationMutationQueryTimeoutMs(
           timeoutBudget || null,
         ),
-        skipCacheWait: true,
         timeoutBudget,
         ...(typeof sessionId === 'string' && sessionId.length > 0 ?
           {sessionId} :

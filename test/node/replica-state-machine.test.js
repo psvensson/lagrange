@@ -211,8 +211,9 @@ test('ReplicaStateMachine demotes transitional persistence and skips cache waits
 
     t.equal(calls.length, 2, 'should persist both transitions');
     for (const call of calls) {
-      t.equal(call.options.skipCacheWait, true,
-        'replica-state persistence should not wait on cache propagation');
+      t.equal('skipCacheWait' in call.options, false,
+        'replica-state persistence carries no cache-wait opt-out (writes ' +
+          'answer at their commit)');
       t.equal(call.options.deliveryPriority, 'background',
         'transitional replica-state writes should use background delivery');
       t.equal(call.options.workClass, 'background',
@@ -272,8 +273,8 @@ test('ReplicaStateMachine keeps stable-state persistence on the critical lane',
     t.equal(calls.length, 3, 'should persist both service transitions plus canonical leader clear');
     const failedUpdate = calls[1];
     t.equal(failedUpdate.type, 'update', 'stable follow-up transition should use update');
-    t.equal(failedUpdate.options.skipCacheWait, true,
-      'stable state writes should also avoid cache-retention waits');
+    t.equal('skipCacheWait' in failedUpdate.options, false,
+      'stable state writes carry no cache-wait opt-out either');
     t.equal(failedUpdate.options.deliveryPriority, 'critical',
       'stable state writes should remain critical');
     t.equal(failedUpdate.options.workClass, 'critical',

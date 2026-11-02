@@ -550,7 +550,6 @@ class MoveReplicaHandoffOwner {
         },
         data: this.buildRegisteredServiceMutationRow(previousServiceRow),
       }, {
-        skipCacheWait: true,
       });
       if (rollbackResult?.success === false) {
         throw this.buildBootstrapControlPlaneQueryError(

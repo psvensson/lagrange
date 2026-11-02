@@ -10,14 +10,14 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {TABLES} from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {
-  CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
-import {requireConfirmedSingleRowMutation} from
-  '../control-plane/control-plane-single-row-confirmation.js';
+import {
+  readCommittedPolicyBase,
+  writePolicyConditionally,
+} from './table-policy-committed-base.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
-import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {assertTablePolicyCdcRequestSupported} from '../cache/cdc-table-policy.js';
 import {
   DEFAULT_MESSAGE_GROUP_POLICY,
@@ -45,15 +45,6 @@ const LOCAL_STR_PLACEMENTCONSTRAINTS = 'placementConstraints';
 const LOCAL_STR_OBJECT = 'object';
 const TABLE_POLICY_FUNCTION_TYPE = 'function';
 const LOCAL_STR_COMMA_SPACE = ', ';
-const LOCAL_STR_CRITICAL = 'critical';
-const POLICY_MUTATION_CONFIRMATION = Object.freeze({
-  ownerName: POLICY_SUBSYSTEM.TABLE_POLICY,
-  tableName: TABLES.TABLES,
-  changed: Object.freeze({code: POLICY_ERROR_CODE.OBSERVATION_CHANGED,
-    message: 'The table policy mutation affected no row'}),
-  unconfirmed: Object.freeze({code: POLICY_ERROR_CODE.OUTCOME_UNCONFIRMED,
-    message: 'The table policy mutation application is not confirmed'}),
-});
 
 /**
  * TablePolicyService manages table policies for partition behavior.
@@ -70,6 +61,7 @@ function buildPolicyRefusal(code, message) {
   error.code = code;
   return error;
 }
+
 
 class TablePolicyService extends EventEmitter {
   /**
@@ -365,7 +357,7 @@ class TablePolicyService extends EventEmitter {
         `${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
     }
 
-    const table = await this.readTableRow(tableId);
+    const table = await readCommittedPolicyBase(this, tableId);
     const storedPolicy = this.parseStoredTablePolicy(table, tableId);
     const currentPolicy = this.mergeWithDefaults(storedPolicy);
     const updatedStoredPolicy = mergeStoredTablePolicyOverrides(
@@ -391,22 +383,8 @@ class TablePolicyService extends EventEmitter {
       const serializedPolicy = JSON.stringify(updatedStoredPolicy);
       const updatedAt = Date.now();
       // Update via CDC integration service
-      const mutationResult = await this.getControlPlaneSystemTableGateway().submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: TABLES.TABLES,
-        whereClause: {table_id: tableId},
-        data: {
-          table_policies: serializedPolicy,
-          updated_at: updatedAt,
-        },
-      }, {
-        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: LOCAL_STR_CRITICAL,
-        expectedCacheFields: {table_policies: serializedPolicy},
-        minimumCacheFields: {updated_at: updatedAt},
-      });
-
-      requireConfirmedSingleRowMutation(mutationResult, POLICY_MUTATION_CONFIRMATION);
+      await writePolicyConditionally(this, tableId, table, serializedPolicy,
+        updatedAt);
 
       this.committedPolicyFences.set(tableId, {
         previousTablePolicies: table?.table_policies ?? null,

@@ -32,9 +32,6 @@ import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
 
 
-const TABLE_PARTITION_METADATA_WAIT_TIMEOUT_DRIFT_MS = 1;
-
-
 test('SQLQueryEngine - provisionInitialTablePartition includes active-service ' +
   'nodes despite transient disconnected cache state', async (t) => {
   const tableId = 'tbl-benchmark';
@@ -791,83 +788,80 @@ test('SQLQueryEngine - executeManagedSplit delegates to the injected managed spl
     t.same(result, {success: true, partitionId: 'users-p1'});
   });
 
-test('SQLQueryEngine - waitForTablePartitionMetadata reuses CDC cache repair waits',
-  async (t) => {
-    const waitCalls = [];
-    const engine = new SQLQueryEngine({
-      systemCache: {
-        onCacheChange() {},
+// Re-derived for answers at commit (quest
+// replica-admission-from-committed-operation, attempt 2): the write path's
+// cache wait (waitForCacheUpdate) is deleted, so the metadata wait has one
+// path - the engine's own poll of its local metadata view inside the budget.
+// Whether this routing-readiness read becomes awaitProjectionAt or a commit
+// read is Group A's decision (C5); this witnesses what exists.
+function metadataPollEngine(nowMs, options = {}) {
+  const cdcCalls = [];
+  const sleeps = [];
+  const engine = new SQLQueryEngine({
+    systemCache: {onCacheChange() {}},
+    cdcIntegrationService: new Proxy({}, {
+      get(_target, name) {
+        return (...args) => {
+          // Construction-time background reads are not the wait: record
+          // only CDC waits and repairs.
+          if (/wait|repair|refresh|projection/iu.test(String(name))) {
+            cdcCalls.push({name, args});
+          }
+        };
       },
-      cdcIntegrationService: {
-        async waitForCacheUpdate(tableName, key, expectPresent, options) {
-          waitCalls.push({tableName, key, expectPresent, options});
-        },
-      },
-    });
-
-    await engine.waitForTablePartitionMetadata('tbl-users', 'users-p-left');
-
-    t.equal(waitCalls.length, 2);
-    t.same(waitCalls.map((call) => ({
-      tableName: call.tableName,
-      key: call.key,
-      expectPresent: call.expectPresent,
-      fallbackPhase: call.options?.fallbackPhase,
-    })), [
-      {
-        tableName: TABLES.PARTITIONS,
-        key: 'users-p-left',
-        expectPresent: true,
-        fallbackPhase: 'steady_state',
-      },
-      {
-        tableName: TABLES.TABLES,
-        key: 'tbl-users',
-        expectPresent: true,
-        fallbackPhase: 'steady_state',
-      },
-    ]);
-    for (const call of waitCalls) {
-      t.ok(
-        call.options?.timeoutMs <= engine.tablePartitionProvisioningTimeoutMs &&
-        call.options?.timeoutMs >=
-          engine.tablePartitionProvisioningTimeoutMs -
-            TABLE_PARTITION_METADATA_WAIT_TIMEOUT_DRIFT_MS,
-        'nested cache wait should receive the full default budget minus at most one scheduling tick',
-      );
-    }
+    }),
+    nowFn: () => nowMs.value,
   });
+  engine.queryExecutor = {
+    hasPartitionRecord: () => options.visibleAfterSleeps !== undefined &&
+      sleeps.length >= options.visibleAfterSleeps,
+  };
+  engine.hasTableMetadata = () => true;
+  engine.sleep = async (ms) => {
+    sleeps.push(ms);
+    nowMs.value += ms;
+  };
+  return {engine, cdcCalls, sleeps};
+}
 
-test('SQLQueryEngine - waitForTablePartitionMetadata uses remaining budget ' +
-  'for nested cache waits', async (t) => {
-  const waitCalls = [];
-  const nowMs = 1012;
+test('SQLQueryEngine - waitForTablePartitionMetadata polls the local ' +
+  'metadata view and calls no CDC wait', async (t) => {
+  const nowMs = {value: 1000};
+  const {engine, cdcCalls, sleeps} =
+    metadataPollEngine(nowMs, {visibleAfterSleeps: 2});
+
+  await engine.waitForTablePartitionMetadata('tbl-users', 'users-p-left');
+
+  t.equal(sleeps.length, 2, 'the wait polls until the rows are visible');
+  t.same(cdcCalls, [], 'no CDC wait or repair is called');
+});
+
+test('SQLQueryEngine - waitForTablePartitionMetadata spends at most the ' +
+  'remaining parent budget and answers a typed cache-visibility timeout',
+async (t) => {
+  const nowMs = {value: 1012};
   const parentBudget = createTimeoutBudget({
     configuredBudgetMs: 30,
     startedAtMs: 1000,
     now: () => 1000,
   });
-  const engine = new SQLQueryEngine({
-    systemCache: {
-      onCacheChange() {},
-    },
-    cdcIntegrationService: {
-      async waitForCacheUpdate(tableName, key, expectPresent, options) {
-        waitCalls.push({tableName, key, expectPresent, options});
-      },
-    },
-    nowFn: () => nowMs,
-  });
+  const {engine, cdcCalls, sleeps} = metadataPollEngine(nowMs);
 
-  await engine.waitForTablePartitionMetadata(
-    'tbl-users',
-    'users-p-left',
-    parentBudget,
-  );
+  let failure = null;
+  try {
+    await engine.waitForTablePartitionMetadata(
+      'tbl-users', 'users-p-left', parentBudget);
+  } catch (error) {
+    failure = error;
+  }
 
-  t.equal(waitCalls.length, 2);
-  t.equal(waitCalls[0].options.timeoutMs, 18);
-  t.equal(waitCalls[1].options.timeoutMs, 18);
+  t.ok(failure instanceof Error, 'an unseen row answers a failure');
+  t.equal(failure.timeoutClassification?.classification,
+    TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
+    'classified as a cache-visibility timeout');
+  t.ok(sleeps.reduce((sum, ms) => sum + ms, 0) <= 18,
+    'the polls spend at most the 18 ms the parent budget has left');
+  t.same(cdcCalls, [], 'no CDC wait or repair is called');
 });
 
 test('SQLQueryEngine - executeManagedSplit dispatches both child metadata writes ' +
@@ -998,9 +992,9 @@ test('SQLQueryEngine - executeManagedSplit dispatches both child metadata writes
     'managed split should enqueue both child partition rows before waiting',
   );
   t.same(
-    childInsertCalls.map((call) => call.options.skipCacheWait),
-    [true, true],
-    'child metadata writes should skip per-row cache waits and defer visibility gating',
+    childInsertCalls.map((call) => 'skipCacheWait' in call.options),
+    [false, false],
+    'child metadata writes carry no cache-wait opt-out (they answer at commit)',
   );
 
   resolveLeftInsert();

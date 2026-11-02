@@ -176,15 +176,6 @@ const SYSTEM_TABLE_VISIBILITY_STATE =
 function normalizeSystemTableVisibilityState(value, fallback = null) {
   return normalizeControlPlaneSystemTableVisibilityState(value, fallback);
 }
-function buildPendingVisibilityTimeoutResult(result = {}) {
-  return buildSystemTableVisibilityResult({
-    visibilityState:
-      SYSTEM_TABLE_VISIBILITY_STATE.AUTHORITATIVE_CONFIRMATION_PENDING,
-    pressureAction: result?.pressureAction,
-    pressureReason: result?.pressureReason,
-    retryAfterMs: result?.retryAfterMs,
-  });
-}
 function resolveSystemTableVisibilityContractOutcome(visibilityState) {
   if (visibilityState === SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE) {
     return buildOwnerContractOutcome({
@@ -724,7 +715,6 @@ export const CDC_INTEGRATION_SERVICE_SHARED = {
   buildCDCNodeJoinedResult,
   buildDivergenceEvent,
   buildOwnerContractOutcome,
-  buildPendingVisibilityTimeoutResult,
   buildPressureAdmissionFailure,
   buildSystemTableMutationError,
   buildSystemTableVisibilityResult,

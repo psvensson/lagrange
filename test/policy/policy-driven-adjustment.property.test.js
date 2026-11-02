@@ -34,11 +34,14 @@ const validTablePolicy = fc.record({
   mergeTrafficThreshold: trafficThreshold,
 });
 
-// Mock CDC integration service that tracks updates
-function createMockCDCService() {
+// Mock CDC integration service that tracks updates; `engine` is the
+// committed authority a policy write's base is read from (census site 6).
+function createMockCDCService(engine = createMutableMockSqlEngine()) {
   const updates = [];
   return {
     updates,
+    executeAuthoritativeSystemTableRead: async (_tableName, sql, params) =>
+      ({success: true, ...await engine.executeQuery(sql, params)}),
     updateSystemTableRow: async (tableName, whereClause, data, options) => {
       updates.push({
         tableName,
@@ -99,7 +102,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
           validTablePolicy,
           async (newPolicy) => {
             const engine = createMutableMockSqlEngine();
-            const mockCDC = createMockCDCService();
+            const mockCDC = createMockCDCService(engine);
             const service = new TablePolicyService({
               sqlQueryEngine: engine,
               cdcIntegrationService: mockCDC,
@@ -138,7 +141,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
           validTablePolicy,
           async (newPolicy) => {
             const engine = createMutableMockSqlEngine();
-            const mockCDC = createMockCDCService();
+            const mockCDC = createMockCDCService(engine);
             const service = new TablePolicyService({
               sqlQueryEngine: engine,
               cdcIntegrationService: mockCDC,
@@ -183,7 +186,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
             validTablePolicy,
             async (firstPolicy, secondPolicy) => {
               const engine = createMutableMockSqlEngine();
-              const mockCDC = createMockCDCService();
+              const mockCDC = createMockCDCService(engine);
               const service = new TablePolicyService({
                 sqlQueryEngine: engine,
                 cdcIntegrationService: mockCDC,
@@ -227,7 +230,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
             ),
             async (evenReplicaCount) => {
               const engine = createMutableMockSqlEngine();
-              const mockCDC = createMockCDCService();
+              const mockCDC = createMockCDCService(engine);
               const service = new TablePolicyService({
                 sqlQueryEngine: engine,
                 cdcIntegrationService: mockCDC,
@@ -267,7 +270,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
           validTablePolicy,
           async (newPolicy) => {
             const engine = createMutableMockSqlEngine();
-            const mockCDC = createMockCDCService();
+            const mockCDC = createMockCDCService(engine);
             const service = new TablePolicyService({
               sqlQueryEngine: engine,
               cdcIntegrationService: mockCDC,
@@ -299,7 +302,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
           validTablePolicy,
           async (newPolicy) => {
             const engine = createMutableMockSqlEngine();
-            const mockCDC = createMockCDCService();
+            const mockCDC = createMockCDCService(engine);
             const service = new TablePolicyService({
               sqlQueryEngine: engine,
               cdcIntegrationService: mockCDC,

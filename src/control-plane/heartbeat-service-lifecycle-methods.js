@@ -546,7 +546,7 @@ class HeartbeatServiceLifecycleMethods {
       },
       write: (whereClause) => this.writeShutdownRowAtIncarnation(
         gateway, whereClause, shutdownRow,
-        {skipCacheWait: true, queryTimeoutMs}),
+        {queryTimeoutMs}),
     });
     if (!isNodeTerminalTransitionCompleted(transition.outcome)) {
       if (transition.error &&

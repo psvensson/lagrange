@@ -914,8 +914,39 @@ test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
   );
 });
 
+// Re-derived for answers at commit (quest
+// replica-admission-from-committed-operation, attempt 2): the write path's
+// cache wait (waitForCacheUpdate) is deleted, so a created service row's
+// metadata wait has one path - the engine's poll of its local view inside the
+// provisioning budget. The seam is the poll's sleep: each sleep is one turn
+// in which the projection applies the rows the polls asked for. Whether this
+// routing-readiness read becomes awaitProjectionAt or a commit read is Group
+// A's decision (C5); these witness what exists.
+function serviceRowPollSeam(engine, services, rowFor, options = {}) {
+  const polled = new Set();
+  const sleeps = [];
+  const cache = engine.systemCache;
+  const get = cache.get?.bind(cache);
+  cache.get = (type, key) => {
+    const row = get ? get(type, key) : null;
+    if (type === TABLES.SERVICES && !row) polled.add(key);
+    return row;
+  };
+  engine.sleep = async (ms) => {
+    sleeps.push(ms);
+    if (options.beforeApply) await options.beforeApply([...polled]);
+    for (const key of polled) {
+      if (!services.some((row) => row.service_id === key)) {
+        services.push(rowFor(key));
+      }
+    }
+  };
+  return {polled, sleeps};
+}
+
 test('SQLQueryEngine - provisionInitialTablePartition waits for created ' +
-  'service rows through CDC cache repair before final routing checks', async (t) => {
+  'service rows by polling the local view before final routing checks',
+async (t) => {
   const partitionId = 'tbl-service-visibility-p1';
   const localNodeId = 'node-a';
   const nodes = [
@@ -923,10 +954,15 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for created ' +
     {node_id: 'node-b', status: 'active'},
   ];
   const services = [];
-  const waitCalls = [];
 
   const cache = {
     onCacheChange() {},
+    get(type, key) {
+      if (type === TABLES.SERVICES) {
+        return services.find((row) => row.service_id === key) || null;
+      }
+      return null;
+    },
     filter(type, predicate) {
       if (type === TABLES.NODES) {
         return nodes.filter(predicate);
@@ -968,64 +1004,32 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for created ' +
     controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
-    cdcIntegrationService: {
-      async waitForCacheUpdate(tableName, key, expectPresent, options) {
-        waitCalls.push({tableName, key, expectPresent, options});
-        if (tableName === TABLES.SERVICES && expectPresent === true) {
-          const existing = services.find((row) =>
-            row.service_id === key || row.replica_id === key,
-          );
-          if (!existing) {
-            services.push({
-              service_id: key,
-              replica_id: key,
-              partition_id: partitionId,
-              service_type: 'partition',
-              status: 'active',
-              node_id: localNodeId,
-              address: `${localNodeId}/partition/${key}`,
-            });
-          }
-        }
-      },
-    },
   });
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
+  const seam = serviceRowPollSeam(engine, services, (key) => ({
+    service_id: key,
+    replica_id: key,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    node_id: localNodeId,
+    address: `${localNodeId}/partition/${key}`,
+  }));
 
   await engine.provisionInitialTablePartition({
     partitionId,
     replicaCount: 2,
   });
 
-  t.equal(waitCalls.length, 2);
-  t.same(waitCalls.map((call) => ({
-    tableName: call.tableName,
-    key: call.key,
-    expectPresent: call.expectPresent,
-    fallbackPhase: call.options?.fallbackPhase,
-  })), [
-    {
-      tableName: TABLES.SERVICES,
-      key: `${partitionId}-r1`,
-      expectPresent: true,
-      fallbackPhase: 'steady_state',
-    },
-    {
-      tableName: TABLES.SERVICES,
-      key: `${partitionId}-r2`,
-      expectPresent: true,
-      fallbackPhase: 'steady_state',
-    },
-  ]);
-  for (const call of waitCalls) {
-    t.ok(
-      Number.isFinite(call.options?.timeoutMs) &&
-      call.options.timeoutMs > 0 &&
-      call.options.timeoutMs <= 30000,
-      'cache wait should use the remaining 30s provisioning budget',
-    );
-  }
+  t.same([...seam.polled].sort(),
+    [`${partitionId}-r1`, `${partitionId}-r2`],
+    'each created service row is waited for in the local view');
+  t.ok(seam.sleeps.length > 0 &&
+    seam.sleeps.every((ms) => ms > 0 && ms <= 30000),
+  'the polls sleep inside the remaining 30s provisioning budget');
+  t.same(services.map((row) => row.service_id).sort(),
+    [`${partitionId}-r1`, `${partitionId}-r2`]);
 });
 
 test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
@@ -1034,7 +1038,6 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
   const localNodeId = 'node-a';
   const targetNodeIds = [localNodeId, 'node-b', 'node-c'];
   const services = [];
-  const waitCalls = [];
   const replicaIdByNodeId = {
     'node-a': `${partitionId}-r1`,
     'node-b': `${partitionId}-r2`,
@@ -1087,33 +1090,33 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
-    cdcIntegrationService: {
-      async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-        waitCalls.push({tableName, key, expectPresent, options});
-        if (tableName !== TABLES.SERVICES || expectPresent !== true) {
-          return;
-        }
-        if (!services.some((row) => row.service_id === key)) {
-          services.push({
-            service_id: key,
-            replica_id: key,
-            partition_id: partitionId,
-            service_type: 'partition',
-            status: 'active',
-            node_id: nodeIdByReplicaId[key],
-            address: `${nodeIdByReplicaId[key]}/partition/${key}`,
-          });
-        }
-      },
-    },
     tablePartitionProvisioningTimeoutMs: scaleByMachineFactor(30),
     tablePartitionProvisioningPollIntervalMs: 1,
   });
   engine.queryExecutor.isRoutablePartitionService = (service) =>
     service?.node_id !== localNodeId;
-  engine.waitForCondition = async () => {
-    throw new Error('per-replica routability wait should not run');
+  // The service-row metadata wait is the one condition wait allowed here;
+  // a per-replica routability wait must not run.
+  const conditionWaits = [];
+  const waitForCondition = engine.waitForCondition.bind(engine);
+  engine.waitForCondition = async (predicate, timeoutMs, intervalMs,
+    timeoutError, timeoutOptions = {}) => {
+    conditionWaits.push(timeoutOptions.nestedOperation);
+    if (timeoutOptions.nestedOperation !== 'partition_service_metadata_wait') {
+      throw new Error('per-replica routability wait should not run');
+    }
+    return waitForCondition(predicate, timeoutMs, intervalMs, timeoutError,
+      timeoutOptions);
   };
+  const seam = serviceRowPollSeam(engine, services, (key) => ({
+    service_id: key,
+    replica_id: key,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    node_id: nodeIdByReplicaId[key],
+    address: `${nodeIdByReplicaId[key]}/partition/${key}`,
+  }));
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
 
@@ -1127,34 +1130,18 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
   );
 
   t.same(
-    waitCalls.map((call) => ({
-      tableName: call.tableName,
-      key: call.key,
-      expectPresent: call.expectPresent,
-      expectedFields: call.options?.expectedFields || null,
-    })),
+    [...seam.polled].sort(),
     [
-      {
-        tableName: TABLES.SERVICES,
-        key: replicaIdByNodeId['node-a'],
-        expectPresent: true,
-        expectedFields: null,
-      },
-      {
-        tableName: TABLES.SERVICES,
-        key: replicaIdByNodeId['node-b'],
-        expectPresent: true,
-        expectedFields: null,
-      },
-      {
-        tableName: TABLES.SERVICES,
-        key: replicaIdByNodeId['node-c'],
-        expectPresent: true,
-        expectedFields: null,
-      },
+      replicaIdByNodeId['node-a'],
+      replicaIdByNodeId['node-b'],
+      replicaIdByNodeId['node-c'],
     ],
-    'per-replica waits should only hydrate service rows before the later routing owners run',
+    'per-replica waits only wait for the service rows before the later ' +
+      'routing owners run',
   );
+  t.ok(conditionWaits.every((name) =>
+    name === 'partition_service_metadata_wait'),
+  'the only condition waits are the service-row metadata waits');
 });
 
 // The claim under test is ORDERING: both CREATE_REPLICA dispatches happen
@@ -1251,58 +1238,38 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
     },
   };
 
-  const cdcIntegrationService = {
-    async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-      cacheWaitCalls.push({
-        tableName,
-        key,
-        expectPresent,
-        timeoutMs: options.timeoutMs,
-      });
-      if (tableName !== TABLES.SERVICES || expectPresent !== true) {
-        return;
-      }
-
-      if (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0) {
-        throw new Error(
-          `cache wait budget ${String(options.timeoutMs)}ms is not usable ` +
-          `for ${key}`,
-        );
-      }
-
-      // Block until the test releases this replica, recording what had already
-      // been dispatched at the instant the wait began.
-      dispatchedWhenWaitBegan.push([...executedTargetNodeIds]);
-      await new Promise((resolve) => {
-        releaseWait.push(resolve);
-        if (releaseWait.length === REPLICA_COUNT) bothWaitsPending();
-      });
-      if (!services.some((row) => row.service_id === key)) {
-        services.push({
-          service_id: key,
-          replica_id: key,
-          partition_id: partitionId,
-          service_type: 'partition',
-          status: 'active',
-          node_id: key === replicaIdByNodeId['node-a'] ? 'node-a' : 'node-b',
-          address: `node/${key}`,
-        });
-      }
-    },
-  };
-
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
     controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
-    cdcIntegrationService,
     tablePartitionProvisioningTimeoutMs: PROVISIONING_BUDGET_MS,
     tablePartitionProvisioningPollIntervalMs: 1,
   });
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
+  // Each replica's metadata wait polls once, then blocks in its sleep on a
+  // barrier the test releases, recording what had already been dispatched
+  // at the instant the wait began.
+  serviceRowPollSeam(engine, services, (key) => ({
+    service_id: key,
+    replica_id: key,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    node_id: key === replicaIdByNodeId['node-a'] ? 'node-a' : 'node-b',
+    address: `node/${key}`,
+  }), {
+    async beforeApply(polledKeys) {
+      cacheWaitCalls.push(polledKeys);
+      dispatchedWhenWaitBegan.push([...executedTargetNodeIds]);
+      await new Promise((resolve) => {
+        releaseWait.push(resolve);
+        if (releaseWait.length === REPLICA_COUNT) bothWaitsPending();
+      });
+    },
+  });
 
   const provisioning = engine.provisionInitialTablePartition({
     partitionId,
@@ -1332,6 +1299,6 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
   t.equal(
     cacheWaitCalls.length,
     REPLICA_COUNT,
-    'each replica should still wait for authoritative service-row visibility',
+    'each replica waits for its service row in the local view',
   );
 });

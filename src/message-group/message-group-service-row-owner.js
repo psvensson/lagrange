@@ -50,7 +50,6 @@ const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
   deliveryPriority: 'critical',
   pressureRetryAfterMs: 250,
-  skipCacheWait: true,
   workClass: 'critical',
 });
 const MESSAGE_GROUP_SERVICE_POINT_READ_SQL =

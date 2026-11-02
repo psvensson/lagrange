@@ -11,6 +11,8 @@ import {COLUMN, NUM, TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {classifyControlPlaneMutationResult} from
+  '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
@@ -29,6 +31,7 @@ import {
   LATENCY_MEASUREMENT_SUBSYSTEM,
 } from './latency-measurement-constants.js';
 
+const LATENCY_EDGE_DELIVERY_PRIORITY = 'background';
 const INTER_GROUP_LATENCY_SQL = Object.freeze({
   SELECT_BY_EDGE_ID:
     'SELECT * FROM inter_group_latencies WHERE latency_edge_id = ?',
@@ -84,6 +87,9 @@ class LatencyMeasurementService extends EventEmitter {
     this.nodeId = options.nodeId || null;
     this.messageRouter = options.messageRouter || null;
     this.systemTableCache = options.systemTableCache || null;
+    // Committed edge rows this node wrote: the base of its next conditional
+    // edge write (census site 5).
+    this.committedEdgeBases = new Map();
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
@@ -338,7 +344,15 @@ class LatencyMeasurementService extends EventEmitter {
       sample.sourceGroupId,
       sample.targetGroupId,
     );
-    const existing = await this.getExistingEdgeRow(edgeId);
+    const base = await this.resolveCommittedEdgeBase(edgeId);
+    if (!base.known) {
+      return {
+        success: false,
+        reason: LATENCY_MEASUREMENT_REASON.EDGE_BASE_UNAVAILABLE,
+        retryAfterMs: base.retryAfterMs,
+      };
+    }
+    const existing = base.row;
     const smoothedLatencyMs = this.smoothLatency(
       Number(existing?.[COLUMN.LATENCY_MS]),
       sample.rttMs,
@@ -361,15 +375,11 @@ class LatencyMeasurementService extends EventEmitter {
       [COLUMN.UPDATED_AT]: now,
     };
 
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-      tableName: TABLES.INTER_GROUP_LATENCIES,
-      row,
-    }, {
-      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-      deliveryPriority: 'background',
-      coalescingKey: `latency-edge:${edgeId}`,
-    });
+    const result = await this.writeEdgeConditionally(edgeId, existing, row);
+    const refusal = this.keepCommittedEdge(edgeId, row, result);
+    if (refusal !== null) {
+      return refusal;
+    }
 
     this.logger.debug(LATENCY_MEASUREMENT_LOG_MSG.SAMPLE_RECORDED, {
       nodeId: this.nodeId,
@@ -466,27 +476,100 @@ class LatencyMeasurementService extends EventEmitter {
   }
 
   /**
-   * Resolve existing aggregate row for smoothing/sample-count updates.
+   * The base of the next edge write (census site 5, three-class rule,
+   * shared row: any node of the source group may write the edge). After a
+   * committed write this node keeps that row; at an unknown position (first
+   * write, a failed or conflicted write, a restart) the base is one
+   * committed read through the gateway, never the projection.
    * @param {string} edgeId
-   * @return {Promise<Object|null>}
+   * @return {Promise<Object>} {known: true, row} or
+   *   {known: false, retryAfterMs}.
    * @private
    */
-  async getExistingEdgeRow(edgeId) {
-    if (this.systemTableCache &&
-      typeof this.systemTableCache.get === 'function') {
-      return this.systemTableCache.get(TABLES.INTER_GROUP_LATENCIES, edgeId);
+  async resolveCommittedEdgeBase(edgeId) {
+    if (this.committedEdgeBases.has(edgeId)) {
+      return {known: true, row: this.committedEdgeBases.get(edgeId)};
     }
+    const read = await this.getControlPlaneSystemTableGateway()
+      .readAuthoritativeRows(
+        TABLES.INTER_GROUP_LATENCIES,
+        INTER_GROUP_LATENCY_SQL.SELECT_BY_EDGE_ID,
+        [edgeId],
+        {workClass: PRESSURE_WORK_CLASS.BACKGROUND},
+      );
+    if (read?.success !== true || !Array.isArray(read.rows)) {
+      return {
+        known: false,
+        retryAfterMs: Number.isFinite(read?.retryAfterMs) ?
+          read.retryAfterMs : null,
+      };
+    }
+    return {known: true, row: read.rows[0] ?? null};
+  }
 
-    const executeQuery = this.cdcIntegrationService?.sqlQueryEngine?.executeQuery;
-    if (typeof executeQuery !== 'function') {
+  /**
+   * Keep an applied edge write as the next base; otherwise drop the kept
+   * base (the next sample re-reads it from the committed authority) and
+   * answer the refusal: a zero-row answer is another writer's change (typed
+   * conflict), anything else an unconfirmed write.
+   * @param {string} edgeId
+   * @param {Object} row - The row the write carried.
+   * @param {Object} result - The gateway's answer.
+   * @return {Object|null} The refusal, or null when applied.
+   * @private
+   */
+  keepCommittedEdge(edgeId, row, result) {
+    const view = classifyControlPlaneMutationResult(result);
+    if (view.valid && view.applied) {
+      this.committedEdgeBases.set(edgeId, row);
       return null;
     }
+    this.committedEdgeBases.delete(edgeId);
+    const conflict = view.valid && view.zeroAffectedRows;
+    return {
+      success: false,
+      conflict,
+      reason: conflict ? LATENCY_MEASUREMENT_REASON.EDGE_CONFLICT :
+        LATENCY_MEASUREMENT_REASON.EDGE_WRITE_UNCONFIRMED,
+      row,
+      result,
+    };
+  }
 
-    const result = await executeQuery(
-      INTER_GROUP_LATENCY_SQL.SELECT_BY_EDGE_ID,
-      [edgeId],
-    );
-    return result?.rows?.[0] || null;
+  /**
+   * Write the edge conditionally on the committed base: a new edge only if
+   * no other writer created it (INSERT OR IGNORE), an existing edge only at
+   * the base's sample_count (the monotonic stored column). A zero-row
+   * answer is a conflict.
+   * @param {string} edgeId
+   * @param {Object|null} base - The committed base row.
+   * @param {Object} row - The next row.
+   * @return {Promise<Object>} The gateway's answer.
+   * @private
+   */
+  writeEdgeConditionally(edgeId, base, row) {
+    const options = {
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      deliveryPriority: LATENCY_EDGE_DELIVERY_PRIORITY,
+    };
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (base === null) {
+      return gateway.submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: TABLES.INTER_GROUP_LATENCIES,
+        row,
+      }, {...options, ignoreExisting: true});
+    }
+    const {[COLUMN.LATENCY_EDGE_ID]: _key, ...data} = row;
+    return gateway.submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.INTER_GROUP_LATENCIES,
+      whereClause: {
+        [COLUMN.LATENCY_EDGE_ID]: edgeId,
+        [COLUMN.SAMPLE_COUNT]: base[COLUMN.SAMPLE_COUNT],
+      },
+      data,
+    }, options);
   }
 
   /**

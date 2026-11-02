@@ -4,6 +4,10 @@ import {
   getLocalControlPlaneMutationReadinessBlocker,
   requiresStableLocalControlPlaneMutationReadiness,
 } from './control-plane-system-table-gateway-shared.js';
+import {
+  PROJECTION_WAIT_OUTCOME,
+  projectionWaitError,
+} from '../cdc/cdc-integration-service-projection-wait.js';
 
 const controlPlaneSystemTableGatewayDependencyResolutionMethods = {
   /**
@@ -126,6 +130,23 @@ const controlPlaneSystemTableGatewayDependencyResolutionMethods = {
 
   resolveCdcIntegrationService() {
     return this.cdcIntegrationService;
+  },
+
+  /**
+   * Wait until this node's projection holds a committed write's position.
+   * The gateway owns no wait of its own: it hands the position to the one
+   * projection wait owner (CDCIntegrationService.awaitProjectionAt), and
+   * without that owner refuses typed (projection_unavailable).
+   * @param {Object} position - The write answer's position.
+   * @return {Promise<Object>}
+   */
+  awaitProjectionAt(position) {
+    const cdcIntegrationService = this.resolveCdcIntegrationService();
+    if (typeof cdcIntegrationService?.awaitProjectionAt !== 'function') {
+      return Promise.reject(projectionWaitError(
+        PROJECTION_WAIT_OUTCOME.PROJECTION_UNAVAILABLE));
+    }
+    return cdcIntegrationService.awaitProjectionAt(position);
   },
 
   resolveSystemTableCache() {

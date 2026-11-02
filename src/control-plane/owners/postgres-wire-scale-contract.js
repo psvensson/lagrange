@@ -59,7 +59,7 @@ function compilePostgresWireScaleRequest(request) {
 
 function describePostgresWireScaleResult(result, desired) {
   const effect = classifyControlPlaneMutationResult(result);
-  if (effect.applied && !effect.deferred && !effect.visibilityPending &&
+  if (effect.applied && !effect.deferred &&
       effect.affectedRowsPresent && effect.affectedRows === 1) {
     return Object.freeze({
       serviceId: META_SERVICE_ID.POSTGRES_WIRE,

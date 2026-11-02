@@ -7,8 +7,6 @@ import {
 import {QUERY_OPERATION} from './query-constants.js';
 
 
-const LOCAL_STR_OBJECT = 'object';
-
 const TABLE_CREATION_SERVICE_LITERAL = Object.freeze({
   BOOLEAN: 'boolean',
   FUNCTION: 'function',
@@ -18,7 +16,6 @@ const TABLE_CREATION_SERVICE_LITERAL = Object.freeze({
   INSERT: 'INSERT',
   TABLE_POLICY_CHANGED: 'table_policy_changed',
   PARTITION_SIZE_CHANGED: 'partition_size_changed',
-  VISIBLE: 'visible',
   EMPTY: ',',
   UNABLE_TO_RESTORE_MISSING_INITIAL_PARTITION_METADATA_FOR_TABLE:
     'Unable to restore missing initial partition metadata for table ',
@@ -35,13 +32,12 @@ const TABLE_CREATION_COMPLETION_STATE = Object.freeze({
   ACTIVE: 'active',
   PENDING_CREATION: 'pending_creation',
 });
+// The metadata half of CREATE TABLE answers from the commit of its routed
+// writes; the only pending answer comes from provisioning convergence
+// (quest replica-admission-from-committed-operation, attempt 2; the client
+// words stay as they are until Group A's F10 vocabulary replaces them).
 const TABLE_CREATION_COMPLETION_REASON = Object.freeze({
-  METADATA_VISIBILITY_PENDING: 'metadata_visibility_pending',
   REPLICA_CONVERGENCE_PENDING: 'replica_convergence_pending',
-});
-const TABLE_CREATION_VISIBILITY_STATE = Object.freeze({
-  VISIBLE: 'visible',
-  DEFERRED_BY_PRESSURE: 'deferred_by_pressure',
 });
 const TABLE_CREATION_CONTRACT_PRIORITY = Object.freeze({
   [OWNER_CONTRACT_STATE.READY]: 0,
@@ -133,26 +129,11 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
   };
 }
 
-function resolveTableCreationVisibilityContractOutcome(visibilityState) {
-  if (
-    visibilityState === TABLE_CREATION_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
-  ) {
-    return buildOwnerContractOutcome({
-      contractState: OWNER_CONTRACT_STATE.DEFERRED,
-      nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
-    });
-  }
-  if (visibilityState !== TABLE_CREATION_VISIBILITY_STATE.VISIBLE) {
-    return buildOwnerContractOutcome({
-      contractState: OWNER_CONTRACT_STATE.PENDING,
-      nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
-    });
-  }
-  return buildOwnerContractOutcome({
-    contractState: OWNER_CONTRACT_STATE.READY,
-    nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
-  });
-}
+// Metadata committed: the metadata half is ready.
+const METADATA_COMMITTED_CONTRACT_OUTCOME = buildOwnerContractOutcome({
+  contractState: OWNER_CONTRACT_STATE.READY,
+  nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+});
 
 function pickStrongerTableCreationContractOutcome(currentOutcome, nextOutcome) {
   if (!currentOutcome) {
@@ -168,41 +149,6 @@ function pickStrongerTableCreationContractOutcome(currentOutcome, nextOutcome) {
     TABLE_CREATION_CONTRACT_PRIORITY[nextOutcome.contractState] ??
     Number.NEGATIVE_INFINITY;
   return nextPriority > currentPriority ? nextOutcome : currentOutcome;
-}
-
-function resolveTableCreationMutationContractOutcome(
-  mutationResults = [],
-  fallbackVisibilityState = TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
-) {
-  let strongestOutcome = resolveTableCreationVisibilityContractOutcome(
-    fallbackVisibilityState,
-  );
-  for (const mutationResult of Array.isArray(mutationResults) ?
-    mutationResults :
-    []) {
-    if (!mutationResult || typeof mutationResult !== LOCAL_STR_OBJECT) {
-      continue;
-    }
-    const mutationOutcome =
-      typeof mutationResult.contractState ===
-        TABLE_CREATION_SERVICE_LITERAL.STRING &&
-      mutationResult.contractState.length > 0 ?
-        buildOwnerContractOutcome({
-          contractState: mutationResult.contractState,
-          nextAction: mutationResult.nextAction,
-        }) :
-        resolveTableCreationVisibilityContractOutcome(
-          String(
-            mutationResult.visibilityState ||
-                TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
-          ),
-        );
-    strongestOutcome = pickStrongerTableCreationContractOutcome(
-      strongestOutcome,
-      mutationOutcome,
-    );
-  }
-  return strongestOutcome;
 }
 
 function buildTableCreationCompletionDecision(decision) {
@@ -235,19 +181,10 @@ function resolveTableCreationProvisioningCompletionDecision(
 }
 
 function resolveTableCreationCompletionDecision(
-  visibilityState,
   provisioningSummary,
   contractOutcome,
   provisioningContractOutcome,
 ) {
-  if (visibilityState !== TABLE_CREATION_VISIBILITY_STATE.VISIBLE) {
-    return buildTableCreationCompletionDecision({
-      completionState: TABLE_CREATION_COMPLETION_STATE.PENDING_CREATION,
-      completionReason:
-        TABLE_CREATION_COMPLETION_REASON.METADATA_VISIBILITY_PENDING,
-      contractOutcome,
-    });
-  }
   if (
     provisioningSummary &&
     provisioningSummary.fullReplicaCountConverged === false
@@ -265,9 +202,6 @@ function resolveTableCreationCompletionDecision(
 }
 
 function resolveTableCreationCompletion(options = {}) {
-  const visibilityState = String(
-    options?.visibilityState || TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
-  );
   const provisioningSummary = options?.provisioningSummary || null;
   const provisioningContractOutcome =
     provisioningSummary &&
@@ -277,17 +211,8 @@ function resolveTableCreationCompletion(options = {}) {
         nextAction: provisioningSummary.nextAction,
       }) :
       null;
-  const contractOutcome =
-    options?.metadataContractOutcome &&
-    typeof options.metadataContractOutcome ===
-      TABLE_CREATION_SERVICE_LITERAL.OBJECT ?
-      buildOwnerContractOutcome({
-        contractState: options.metadataContractOutcome.contractState,
-        nextAction: options.metadataContractOutcome.nextAction,
-      }) :
-      resolveTableCreationVisibilityContractOutcome(visibilityState);
+  const contractOutcome = METADATA_COMMITTED_CONTRACT_OUTCOME;
   const completionDecision = resolveTableCreationCompletionDecision(
-    visibilityState,
     provisioningSummary,
     contractOutcome,
     provisioningContractOutcome,
@@ -311,10 +236,7 @@ function buildCreateTableSuccessResult(options = {}) {
 export {
   TABLE_CREATION_SERVICE_LITERAL,
   TABLE_CREATION_SQL,
-  TABLE_CREATION_VISIBILITY_STATE,
   buildCreateTableSuccessResult,
   normalizeProvisioningSummary,
   resolveTableCreationCompletion,
-  resolveTableCreationMutationContractOutcome,
-  resolveTableCreationVisibilityContractOutcome,
 };

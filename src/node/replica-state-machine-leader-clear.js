@@ -145,7 +145,6 @@ async function clearCanonicalPartitionLeaderIfNeeded(
     coalescingKey: `partitions:leader:${replicaState.partitionId}`,
     deliveryPriority: CRITICAL_WORK_CLASS,
     workClass: CRITICAL_WORK_CLASS,
-    skipCacheWait: true,
   });
 }
 

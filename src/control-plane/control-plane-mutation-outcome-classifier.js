@@ -3,9 +3,6 @@ import {types as nodeUtilTypes} from 'node:util';
 import {
   CONTROL_PLANE_MUTATION_OUTCOME,
 } from './control-plane-system-table-gateway-constants.js';
-import {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
-} from './control-plane-system-table-visibility-constants.js';
 import {PRESSURE_GOVERNOR_ACTION} from './pressure-governor.js';
 import {isAppliedWithUnknownCount} from
   '../partition/partition-write-kernel.js';
@@ -68,16 +65,6 @@ CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION[
   false,
   true,
   false,
-  true,
-  false,
-);
-CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION[
-  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY
-] = freezeEffect(
-  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-  true,
-  true,
-  true,
   true,
   false,
 );
@@ -179,16 +166,6 @@ function normalizeOptionalString(property, allowedValues) {
   };
 }
 
-function isKnownVisibilityState(value) {
-  return value === CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE ||
-    value ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY ||
-    value === CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
-      .AUTHORITATIVE_CONFIRMATION_PENDING ||
-    value ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE;
-}
-
 function isKnownPressureAction(value) {
   return value === PRESSURE_GOVERNOR_ACTION.ALLOW ||
     value === PRESSURE_GOVERNOR_ACTION.DEFER ||
@@ -263,7 +240,6 @@ function freezeNormalizedView({
   applied,
   affectedRows,
   completionState,
-  visibilityState,
   pressureAction,
 }) {
   const view = objectCreate(null);
@@ -283,11 +259,6 @@ function freezeNormalizedView({
     affectedRows.value === 0;
   view.completionState = completionState.value;
   view.completionStatePresent = completionState.present;
-  view.visibilityState = visibilityState.value;
-  view.visibilityStatePresent = visibilityState.present;
-  view.visibilityPending = visibilityState.present &&
-    visibilityState.value !==
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE;
   view.pressureAction = pressureAction.value;
   view.pressureActionPresent = pressureAction.present;
   return objectFreeze(view);
@@ -306,11 +277,6 @@ function classifyControlPlaneMutationResult(result) {
         valid: false,
         value: EMPTY_NORMALIZED_TEXT,
       },
-      visibilityState: {
-        present: false,
-        valid: false,
-        value: EMPTY_NORMALIZED_TEXT,
-      },
       pressureAction: {
         present: false,
         valid: false,
@@ -324,10 +290,6 @@ function classifyControlPlaneMutationResult(result) {
   const partitionResultProperty = readOwnDataProperty(result, 'partitionResult');
   const completionState = normalizeOptionalString(
     readOwnDataProperty(result, 'completionState'),
-  );
-  const visibilityState = normalizeOptionalString(
-    readOwnDataProperty(result, 'visibilityState'),
-    isKnownVisibilityState,
   );
   const pressureAction = normalizeOptionalString(
     readOwnDataProperty(result, 'pressureAction'),
@@ -358,7 +320,6 @@ function classifyControlPlaneMutationResult(result) {
     (successIsAbsent || successIsBoolean) &&
     affectedRows.valid &&
     completionState.valid &&
-    visibilityState.valid &&
     pressureAction.valid;
   const failed = successIsBoolean && successProperty.value === false;
   let applied = false;
@@ -378,7 +339,6 @@ function classifyControlPlaneMutationResult(result) {
     applied,
     affectedRows,
     completionState,
-    visibilityState,
     pressureAction,
   });
 }

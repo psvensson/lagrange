@@ -57,10 +57,17 @@ function createPolicyCache() {
   };
 }
 
-function createPolicyMutationCapture() {
+// `cache` doubles as the committed authority a policy write's base is read
+// from (census site 6); the fixture has one consistent state.
+function createPolicyMutationCapture(cache) {
   const updates = [];
   return {
     updates,
+    async executeAuthoritativeSystemTableRead(_tableName, _sql, params) {
+      const rows = cache.tables.filter((row) => row.table_id === params[0]);
+      return {success: true, rows: rows.map((row) => ({...row})),
+        rowCount: rows.length};
+    },
     async updateSystemTableRow(tableName, whereClause, data) {
       updates.push({tableName, whereClause, data});
       return {success: true, partitionResult: {affectedRows: 1}};
@@ -135,7 +142,7 @@ test('managed split policy uses configured defaults and explicit table ' +
 test('unrelated policy updates preserve configured split threshold ' +
   'provenance', async (t) => {
   const cache = createPolicyCache();
-  const cdcIntegrationService = createPolicyMutationCapture();
+  const cdcIntegrationService = createPolicyMutationCapture(cache);
   const policyService = new TablePolicyService({
     systemTableCache: cache,
     cdcIntegrationService,

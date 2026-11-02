@@ -48,6 +48,8 @@ function fixture(t, operation, initialResult) {
     [{table_id: TABLE_ID, table_name: 'events', table_policies: '{}'}] :
     (operation.existing ? [{config_key: CONFIG_KEY, config_value: 'info',
       value_type: 'string'}] : [])});
+  // The policy write's base is one committed read (census site 6).
+  gateway.readAuthoritativeRows = gateway.readRows;
   const config = new DynamicConfigService({nodeId: 'owner-effect-node',
     controlPlaneSystemTableGateway: gateway});
   const policy = new TablePolicyService({controlPlaneSystemTableGateway: gateway,
@@ -84,8 +86,6 @@ test('owners preserve negative gateway outcomes without publishing applied succe
     {answer: {success: true, affectedRows: 0}, status: 409, suffix: '_OBSERVATION_CHANGED'},
     {answer: {success: true}, status: 503, suffix: '_OUTCOME_UNCONFIRMED'},
     {answer: {success: true, affectedRows: '1'}, status: 503, suffix: '_OUTCOME_UNCONFIRMED'},
-    {answer: {success: true, affectedRows: 1, visibilityState: 'pending_visibility'},
-      status: 503, suffix: '_OUTCOME_UNCONFIRMED'},
   ];
   for (const operation of OPERATIONS) {
     for (const outcome of outcomes) {

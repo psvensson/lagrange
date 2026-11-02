@@ -99,11 +99,9 @@ class ManagedSplitWorkflowPersistenceMethods {
             this.buildPersistedTransitionMetadata(candidate)),
           updated_at: candidate.updatedAt,
         },
-        // Claim/renew writes are not epoch transitions: they tolerate pending
-        // cache visibility (the compare-and-swap carries the race guarantee).
-        options: this.buildManagedSplitMutationOptions({
-          allowPendingVisibility: true,
-        }),
+        // Claim/renew writes answer at their commit like every routed
+        // write (the compare-and-swap carries the race guarantee).
+        options: this.buildManagedSplitMutationOptions(),
       };
     }
     const cdcIntegrationService = this.getCDCIntegrationService();
@@ -116,9 +114,9 @@ class ManagedSplitWorkflowPersistenceMethods {
     const built = this.buildSplitTransitionUpdatePayload(candidate);
     return {
       data: built.updatePayload,
-      options: this.buildSplitTransitionMutationOptions(candidate,
-        built.updatePayload, built.serializedMetadata,
-        built.isEpochTransition),
+      // An epoch transition is the committed write: it answers at its commit
+      // like every routed write (no cache-visibility condition).
+      options: this.buildManagedSplitMutationOptions(),
     };
   }
 
@@ -135,13 +133,7 @@ class ManagedSplitWorkflowPersistenceMethods {
         pending_partition_version: null,
         updated_at: this.now(),
       },
-      options: this.buildManagedSplitMutationOptions({
-        allowPendingVisibility: false,
-        expectedCacheFields: {
-          partition_transition_state: null,
-          partition_transition_metadata: null,
-        },
-      }),
+      options: this.buildManagedSplitMutationOptions(),
     };
   }
 
@@ -212,35 +204,6 @@ class ManagedSplitWorkflowPersistenceMethods {
   }
 
   /**
-   * Build the mutation options for one split transition row write.
-   * Routine transitions tolerate pending cache visibility; the epoch
-   * transitions (cutover promotion, FAILED pending withdrawal) do not —
-   * an unconverged epoch mutation is a failed epoch mutation.
-   * @param {Object} workflow - Workflow state.
-   * @param {Object} updatePayload - Mutation data payload.
-   * @param {string} serializedMetadata - Durable transition metadata.
-   * @param {boolean} isEpochTransition - Epoch-changing transition.
-   * @return {Object} Gateway mutation options.
-   * @private
-   */
-  buildSplitTransitionMutationOptions(
-    workflow,
-    updatePayload,
-    serializedMetadata,
-    isEpochTransition,
-  ) {
-    return this.buildManagedSplitMutationOptions({
-      allowPendingVisibility: !isEpochTransition,
-      expectedCacheFields: {
-        pending_partition_version:
-          updatePayload.pending_partition_version,
-        partition_transition_state: workflow.status,
-        partition_transition_metadata: serializedMetadata,
-      },
-    });
-  }
-
-  /**
    * Assert the cutover epoch flip landed exactly one row. A zero-row
    * "success" (duplicate/coalesced delivery, stale where-clause) means
    * the tables row did NOT change; advancing in-memory status on that
@@ -292,7 +255,7 @@ class ManagedSplitWorkflowPersistenceMethods {
           partition_version: targetVersion,
           updated_at: this.now(),
         },
-      }, this.buildManagedSplitMutationOptions({skipCacheWait: true}));
+      }, this.buildManagedSplitMutationOptions());
     this.assertSplitEpochMutationEffect(mutationResult, {
       workflowId: `sibling:${partitionId}`,
     });
@@ -571,7 +534,7 @@ class ManagedSplitWorkflowPersistenceMethods {
       operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
       tableName: TABLES.PARTITIONS,
       row: partitionMetadata,
-    }, this.buildManagedSplitMutationOptions({skipCacheWait: true}));
+    }, this.buildManagedSplitMutationOptions());
   }
 
   /**
@@ -591,7 +554,7 @@ class ManagedSplitWorkflowPersistenceMethods {
       operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
       tableName: TABLES.PARTITIONS,
       whereClause: {partition_id: partitionId},
-    }, this.buildManagedSplitMutationOptions({skipCacheWait: true}));
+    }, this.buildManagedSplitMutationOptions());
   }
 
   /**

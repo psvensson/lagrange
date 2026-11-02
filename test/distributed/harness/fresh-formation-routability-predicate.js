@@ -25,14 +25,13 @@
  *      row was durably committed before the refusal;
  *   g. the class (owner rule 2026-11-01): no serve-gating projection disagrees
  *      with its authoritative committed state for longer than the owner-stated
- *      cache-visibility bound (CDC_DEFAULTS.CACHE_WAIT_TIMEOUT_MS,
- *      src/cdc/cdc-constants.js);
+ *      cache-visibility bound (PROJECTION_PERSISTENCE_BOUND_MS below);
  *   integrity: every read the evaluation needed succeeded. A failed or absent
  *      read is a named unmet reason, never a default (no count defaults to 0,
  *      an absent projection summary is never "satisfied").
  *
  * Reused owners (no parallel logic): PRIORITY_CONTROL_PLANE_TABLE_IDS,
- * isTerminalReplicaOperationRecord, CDC_DEFAULTS from src; the projection
+ * isTerminalReplicaOperationRecord from src; the projection
  * summary normaliser normalizePriorityPartitionSummaryForDiagnostics from
  * priority-recovery-summary-normalization.js. The sealed formation quests'
  * own scenarios (formation-joining-ready-phase-fence,
@@ -43,7 +42,6 @@
 import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
 } from '../../../src/bootstrap/system-partition-classification.js';
-import {CDC_DEFAULTS} from '../../../src/cdc/cdc-constants.js';
 import {
   isTerminalReplicaOperationRecord,
 } from '../../../src/rebalancer/replica-operation-progress.js';
@@ -58,6 +56,13 @@ const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringIndexOf = Function.call.bind(String.prototype.indexOf);
 
 const ZERO = 0;
+// Predicate (g)'s preregistered bound, 1000 ms: the value of the deleted
+// CDC_DEFAULTS.CACHE_WAIT_TIMEOUT_MS this predicate was sealed against
+// (R09 supersession by reference only, lead approval 2026-11-02, quest
+// replica-admission-from-committed-operation attempt 2). The bound is not
+// changed; only its source moves here because the write-path cache wait
+// it was read from is deleted.
+const PROJECTION_PERSISTENCE_BOUND_MS = 1000;
 const ONE = 1;
 const TWO = 2;
 const SERVICE_TYPE_PARTITION = 'partition';
@@ -102,9 +107,16 @@ const LOG_OBSERVATION = Object.freeze({
   LEARNER_ADDRESS_UNRESOLVABLE: Object.freeze({
     key: 'learner_address_unresolvable',
     needle: '"cause":"learner_address_unresolvable"'}),
+  // Kept after attempt 2 deleted the wait: expected count zero.
   CACHE_WAIT_TIMEOUT: Object.freeze({
     key: 'CACHE_WAIT_TIMEOUT_MS',
     needle: '"wait":"CACHE_WAIT_TIMEOUT_MS"'}),
+  // A routed write that cannot reach its commit is answered typed by the
+  // existing partition delivery deadline; attempt 2 introduced no new wait
+  // name for commit unavailability.
+  PARTITION_EXECUTION_DEADLINE: Object.freeze({
+    key: 'partition_execution_deadline',
+    needle: '"wait":"partition_execution_deadline"'}),
   CDC_ACCEPTANCE_UNKNOWN: Object.freeze({
     key: 'cdc_committed_acceptance_unknown',
     needle: 'cdc_committed_acceptance_unknown'}),
@@ -443,7 +455,7 @@ function evaluateFormationObservation(observation) {
  * @return {Object} predicate result
  */
 function evaluateProjectionAgreement(evaluations,
-  boundMs = CDC_DEFAULTS.CACHE_WAIT_TIMEOUT_MS) {
+  boundMs = PROJECTION_PERSISTENCE_BOUND_MS) {
   const firstSeenAtMs = new Map();
   const persistent = new Map();
   let previousKeys = new Set();

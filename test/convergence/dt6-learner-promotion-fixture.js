@@ -112,6 +112,57 @@ function partitionAddress(nodeId, replicaId) {
   return `${nodeId}/partition/${replicaId}`;
 }
 
+// Admission from the committed operation (quest
+// replica-admission-from-committed-operation; the cache-driven membership
+// reconcile this fixture used is deleted). Each admitted replica has a
+// committed ADD operation naming it, the partition and its node at SYNCING;
+// the leader reads it through its committed control-plane read and admits
+// the replica when its ADMIT_REPLICA request arrives - the request a target
+// sends right after its SYNCING commit, delivered here to the leader's
+// production handler. The services rows stay what the promotion gates count.
+const ADMIT_REPLICA = 'ADMIT_REPLICA';
+const COMMITTED_OPERATION_STEP = 'SYNCING';
+
+function installCommittedOperationAuthority(leader) {
+  const operations = new Map();
+  const gateway = leader.controlPlaneSystemTableGateway;
+  const readAuthoritativeRows = async (tableName, sql, params, options) => {
+    if (tableName === TABLES.REPLICA_OPERATIONS) {
+      const row = operations.get(params[0]);
+      return {success: true, rows: row ? [{...row}] : []};
+    }
+    return gateway.readAuthoritativeRows(tableName, sql, params, options);
+  };
+  if (gateway) {
+    gateway.readAuthoritativeRows = readAuthoritativeRows;
+  } else {
+    leader.controlPlaneSystemTableGateway = {readAuthoritativeRows};
+  }
+  return operations;
+}
+
+async function requestAdmissionFromCommittedOperation(topology, replicaId,
+  nodeId) {
+  const operationId = `dt6-add-${replicaId}`;
+  topology.committedOperations.set(operationId, {
+    operation_id: operationId,
+    type: 'ADD',
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: PARTITION_ID,
+    partition_id: PARTITION_ID,
+    replica_id: replicaId,
+    target_node_id: nodeId,
+    status: 'syncing',
+    workflow_step: COMMITTED_OPERATION_STEP,
+  });
+  return topology.leader.handleApplicationMessage({
+    type: ADMIT_REPLICA,
+    partitionId: PARTITION_ID,
+    replicaIdentity: replicaId,
+    operationId,
+  });
+}
+
 export function configureFixtureRuntime() {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -395,8 +446,9 @@ function placementAddresses(placement) {
 // A live voter, admitted by the leader through its production peer path:
 // the replica is constructed and registered first (a peer the leader names
 // is always reachable), then its ACTIVE services row lands in every cache
-// the control plane serves, the leader's membership reconcile proposes it,
-// and the voter starts its deferred election timer (the replica worker's
+// the control plane serves, the leader admits it from its committed
+// operation on its ADMIT_REPLICA request, and the voter starts its deferred
+// election timer (the replica worker's
 // start once the replica is wired). The timer is what drives a replica's
 // port, so the leader's messages are stepped from then on; the admission is
 // complete when the leader has proven the voter's replication.
@@ -429,6 +481,7 @@ async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
   for (const cache of hydratedCaches) {
     insertServiceRow(cache, replicaId, nodeId, RaftRole.FOLLOWER);
   }
+  await requestAdmissionFromCommittedOperation(topology, replicaId, nodeId);
   voter.startElection();
   const admitted = await waitFor(
     () => readLeaderReplicationTo(topology.leader, replicaId).proven,
@@ -579,6 +632,7 @@ export async function createFiveNodeFixture(options = {}) {
     voterCaches: [],
     surplusPlacement: [],
     learner: null,
+    committedOperations: null,
   };
   const learnerTransport =
     typeof options.wrapLearnerTransport === 'function' ?
@@ -586,6 +640,8 @@ export async function createFiveNodeFixture(options = {}) {
       network;
   try {
     topology.leader = await createLeader(leaderTransport, leaderCache);
+    topology.committedOperations =
+      installCommittedOperationAuthority(topology.leader);
     for (const [replicaId, nodeId] of LIVE_FOLLOWERS) {
       await admitLiveVoter(topology, replicaId, nodeId);
     }
@@ -608,6 +664,11 @@ export async function createFiveNodeFixture(options = {}) {
     if (leaderLearnerRow) {
       insertServiceRow(
         leaderCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER);
+      // The learner's SYNCING commit is the request's trigger; a target
+      // whose status write is deferred (leaderLearnerRow false) has not
+      // asked yet.
+      await requestAdmissionFromCommittedOperation(
+        topology, LEARNER_REPLICA, LEARNER_NODE);
     }
     if (leaderLearnerRow) {
       // The learner's admission is one membership entry; the committed
@@ -643,6 +704,13 @@ export async function createFiveNodeFixture(options = {}) {
     // followers' included — it is a placement they were not created with).
     async admitSurplusVoter(replicaId, nodeId) {
       return admitLiveVoter(topology, replicaId, nodeId, {surplus: true});
+    },
+    // The learner's admission request, as its SYNCING commit sends it (a
+    // withheld status write lands later): the leader admits it from the
+    // committed operation.
+    async requestLearnerAdmission() {
+      return requestAdmissionFromCommittedOperation(
+        topology, LEARNER_REPLICA, LEARNER_NODE);
     },
     async shutdown() {
       await shutdownTopology(topology);

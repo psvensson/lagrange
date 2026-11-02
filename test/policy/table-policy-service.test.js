@@ -30,13 +30,19 @@ function createMockSqlEngine(data = {}) {
 }
 
 // Mock CDC integration service
-function createMockCDCService() {
+// `committedTables` is the committed authority a policy write's base is
+// read from (census site 6: never the projection).
+function createMockCDCService(committedTables = {}) {
   const updates = [];
   return {
     updates,
     updateSystemTableRow: async (tableName, whereClause, updateData) => {
       updates.push({tableName, whereClause, data: updateData});
       return {success: true, affectedRows: 1};
+    },
+    executeAuthoritativeSystemTableRead: async (_tableName, _sql, params) => {
+      const row = committedTables[params[0]];
+      return {success: true, rows: row ? [{...row}] : [], rowCount: row ? 1 : 0};
     },
   };
 }
@@ -306,15 +312,14 @@ test('TablePolicyService - validatePolicy rejects invalid placement constraints'
 
 test('TablePolicyService - updateTablePolicy writes via CDC',
   async (t) => {
-    const mockEngine = createMockSqlEngine({
-      tables: {
-        'table-1': {
-          table_id: 'table-1',
-          table_policies: '{}',
-        },
+    const tables = {
+      'table-1': {
+        table_id: 'table-1',
+        table_policies: '{}',
       },
-    });
-    const mockCDC = createMockCDCService();
+    };
+    const mockEngine = createMockSqlEngine({tables});
+    const mockCDC = createMockCDCService(tables);
 
     const service = new TablePolicyService({
       sqlQueryEngine: mockEngine,
@@ -327,8 +332,9 @@ test('TablePolicyService - updateTablePolicy writes via CDC',
       'Should have one CDC update');
     t.equal(mockCDC.updates[0].tableName, 'tables',
       'Should update tables table');
-    t.same(mockCDC.updates[0].whereClause, {table_id: 'table-1'},
-      'Should update correct table');
+    t.same(mockCDC.updates[0].whereClause,
+      {table_id: 'table-1', table_policies: '{}', updated_at: null},
+      'Should update the table, conditional on its committed policy');
 
     const updatedPolicy =
       JSON.parse(mockCDC.updates[0].data.table_policies);
@@ -369,10 +375,9 @@ test('TablePolicyService - updateTablePolicy rejects invalid updates',
 
 test('TablePolicyService - updateTablePolicy refuses an external CDC request typed, ' +
   'before any write (owner decision D2)', async (t) => {
-  const mockEngine = createMockSqlEngine({
-    tables: {'table-1': {table_id: 'table-1', table_policies: '{}'}},
-  });
-  const mockCDC = createMockCDCService();
+  const tables = {'table-1': {table_id: 'table-1', table_policies: '{}'}};
+  const mockEngine = createMockSqlEngine({tables});
+  const mockCDC = createMockCDCService(tables);
   const service = new TablePolicyService({
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
@@ -898,6 +903,7 @@ test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
       executeRead: async ({readFromCache}) => ({rows: readFromCache()}),
+      readAuthoritativeRows: async () => ({success: true, rows: [{...tableRow}]}),
       submitMutation: async (_mutation, options) => {
         capturedOptions = options;
         // Simulate CDC cache update lagging behind durable commit completion.
@@ -919,10 +925,10 @@ test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
     mergeStorageThreshold: 1,
     mergeTrafficThreshold: 0,
   });
-  t.ok(capturedOptions?.expectedCacheFields?.table_policies,
-    'submitMutation receives expectedCacheFields.table_policies');
-  t.ok(Number.isFinite(capturedOptions?.minimumCacheFields?.updated_at),
-    'submitMutation receives minimumCacheFields.updated_at');
+  t.equal(capturedOptions?.expectedCacheFields, undefined,
+    'submitMutation carries no projection-field wait: writes answer at their commit');
+  t.equal(capturedOptions?.minimumCacheFields, undefined,
+    'submitMutation carries no minimum projection fields');
 
   // Even before systemTableCache receives the CDC event, getTablePolicy
   // must return the newly committed policy and never cache the stale pre-update row.
@@ -938,5 +944,127 @@ test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
   const advancedPolicy = await service.getTablePolicy('table-fence');
   t.equal(advancedPolicy.replicaCount, 7,
     'policyCache invalidates when systemTableCache table_policies advances');
+  t.end();
+});
+
+// Census site 6 (lead decision 2026-11-02): the TABLES row is shared (table
+// creation, split, policy). A policy update's base is this node's own last
+// committed policy (the committed policy fence) or, at an unknown position,
+// one committed read through the gateway - never the projection - and the
+// write is conditional on that base (table_policies and updated_at), with a
+// typed conflict and a committed re-read after it.
+function committedPolicyGateway(row) {
+  const gateway = {
+    row: {...row},
+    writes: [],
+    committedReads: 0,
+    projectionReads: 0,
+    readUnavailable: false,
+    async readAuthoritativeRows(_tableName, _sql, params) {
+      gateway.committedReads += 1;
+      if (gateway.readUnavailable) {
+        return {success: false, error: 'authoritative_row_source_unavailable',
+          retryAfterMs: 250};
+      }
+      return {success: true,
+        rows: params[0] === gateway.row.table_id ? [{...gateway.row}] : []};
+    },
+    async executeRead() {
+      gateway.projectionReads += 1;
+      return {rows: []};
+    },
+    async submitMutation(mutation) {
+      gateway.writes.push(mutation);
+      const matches = Object.entries(mutation.whereClause).every(
+        ([column, value]) => (gateway.row[column] ?? null) === value);
+      if (!matches) {
+        return {success: true, outcome: 'applied',
+          partitionResult: {affectedRows: 0}};
+      }
+      Object.assign(gateway.row, mutation.data);
+      return {success: true, outcome: 'applied',
+        partitionResult: {affectedRows: 1}};
+    },
+  };
+  return gateway;
+}
+
+function policyServiceOver(gateway) {
+  return new TablePolicyService({
+    systemTableCache: {filter: () => [], getAll: () => []},
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: gateway,
+  });
+}
+
+test('site 6: with the projection paused, consecutive policy updates keep ' +
+  'the committed policy as their base - one committed read, no projection ' +
+  'read, each write conditional on its base', async (t) => {
+  const gateway = committedPolicyGateway(
+    {table_id: 'table-site6', table_policies: null, updated_at: 1000});
+  const service = policyServiceOver(gateway);
+
+  await service.updateTablePolicy('table-site6', {replicaCount: 5});
+  const afterFirst = {...gateway.row};
+  await service.updateTablePolicy('table-site6', {mergeStorageThreshold: 1});
+
+  t.equal(gateway.committedReads, 1,
+    'only the first update (unknown position) reads the committed row');
+  t.equal(gateway.projectionReads, 0, 'no projection read');
+  t.same(gateway.writes[0].whereClause,
+    {table_id: 'table-site6', table_policies: null, updated_at: 1000},
+    'the first write is conditional on the committed base');
+  t.same(gateway.writes[1].whereClause, {table_id: 'table-site6',
+    table_policies: afterFirst.table_policies,
+    updated_at: afterFirst.updated_at},
+  'the second write is conditional on the kept committed policy');
+  t.same(JSON.parse(gateway.row.table_policies),
+    {replicaCount: 5, mergeStorageThreshold: 1},
+    'both updates applied, none lost');
+  t.end();
+});
+
+test('site 6: a second writer between policy updates answers a typed ' +
+  'conflict, loses no update, and the next update re-reads the committed row',
+async (t) => {
+  const gateway = committedPolicyGateway(
+    {table_id: 'table-site6', table_policies: null, updated_at: 1000});
+  const service = policyServiceOver(gateway);
+  await service.updateTablePolicy('table-site6', {replicaCount: 5});
+  // Another writer of the shared TABLES row (another node's policy update).
+  gateway.row.table_policies = JSON.stringify({replicaCount: 7});
+  gateway.row.updated_at += 1;
+  const otherWriter = {...gateway.row};
+
+  const conflict = await service.updateTablePolicy('table-site6',
+    {mergeStorageThreshold: 1}).then(() => null, (error) => error);
+  t.equal(conflict?.code, 'TABLE_POLICY_MUTATION_OBSERVATION_CHANGED',
+    'the conditional write answers a typed conflict');
+  t.same(gateway.row, otherWriter,
+    'the other writer\'s committed policy is not overwritten');
+
+  const readsBefore = gateway.committedReads;
+  await service.updateTablePolicy('table-site6', {mergeStorageThreshold: 1});
+  t.equal(gateway.committedReads, readsBefore + 1,
+    'after a conflict the base is re-read from the committed authority');
+  t.same(JSON.parse(gateway.row.table_policies),
+    {replicaCount: 7, mergeStorageThreshold: 1},
+    'the retry builds on the other writer\'s committed policy');
+  t.equal(gateway.projectionReads, 0, 'no projection read');
+  t.end();
+});
+
+test('site 6: an unavailable committed read refuses the update typed and ' +
+  'writes nothing', async (t) => {
+  const gateway = committedPolicyGateway(
+    {table_id: 'table-site6', table_policies: null, updated_at: 1000});
+  gateway.readUnavailable = true;
+  const service = policyServiceOver(gateway);
+  const refusal = await service.updateTablePolicy('table-site6',
+    {replicaCount: 5}).then(() => null, (error) => error);
+  t.equal(refusal?.code, 'TABLE_POLICY_BASE_UNAVAILABLE', 'typed unavailable');
+  t.equal(refusal?.retryAfterMs, 250, 'with the authority\'s retryAfterMs');
+  t.equal(gateway.writes.length, 0, 'no write without a committed base');
+  t.equal(gateway.projectionReads, 0, 'no projection read');
   t.end();
 });

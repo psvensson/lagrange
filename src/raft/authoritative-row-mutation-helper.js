@@ -361,9 +361,6 @@ class AuthoritativeRowMutationHelper {
       typeof updateOptionsCandidate === 'object' ?
       updateOptionsCandidate :
       {};
-    const expectedCacheFields = optionalFunction(
-      this.buildExpectedCacheFields,
-    )?.(value, updateData) || null;
     return {
       mutation: {
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
@@ -371,10 +368,7 @@ class AuthoritativeRowMutationHelper {
         whereClause: this.buildWhereClause(value, mutationContext),
         data: updateData,
       },
-      options: {
-        ...updateOptions,
-        ...(expectedCacheFields ? {expectedCacheFields} : {}),
-      },
+      options: {...updateOptions},
     };
   }
 

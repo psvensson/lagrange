@@ -72,6 +72,7 @@ const OUTCOME = Object.freeze({
   ALREADY_MEMBER: 'already_member',
   IN_FLIGHT: 'in_flight',
   PROPOSED: 'proposed',
+  REFUSED: 'refused',
 });
 const SRC_ROOT = fileURLToPath(new URL('../../src/', import.meta.url));
 const TEMP_PREFIX = 'replica-admission-operation-';
@@ -376,11 +377,19 @@ function functionNodesNamed(ast, name) {
   return found;
 }
 
+// A reference to the cache by property name, dotted or computed with a
+// string key (service['systemTableCache']; attempt-1 verifier residual R3),
+// or any identifier named systemTableCache.
 function referencesCache(fnNode) {
   let reads = false;
   walk(fnNode, (node) => {
-    if (node.type === 'MemberExpression' && !node.computed &&
-        node.property.name === 'systemTableCache') {
+    if (node.type === 'MemberExpression') {
+      const key = node.computed ?
+        (node.property.type === 'Literal' ? node.property.value : null) :
+        node.property.name;
+      if (key === 'systemTableCache') reads = true;
+    }
+    if (node.type === 'Identifier' && node.name === 'systemTableCache') {
       reads = true;
     }
   });
@@ -592,6 +601,47 @@ test('(k) a terminal operation settles the request: no read on re-drive',
     const answer = await ask(partition);
     t.equal(answer?.admission?.outcome, OUTCOME.OPERATION_NOT_ADMITTING,
       'the terminal operation refuses');
+    const readsBefore = gateway.reads.length;
+    redriveAcceptedAdmissionRequests(partition);
+    await settle();
+    t.equal(gateway.reads.length, readsBefore,
+      'the settled request is not re-read on the next re-drive');
+  });
+
+// Attempt-1 verifier residual R1 (mutants N5/N6): a settled answer drops the
+// request from the kept set, so the next re-drive reads nothing for it.
+// A settled ALREADY_MEMBER request is not kept: when the member later
+// leaves the configuration, a re-drive must not read or re-admit it from
+// the old request (a kept one would, since it is no longer a member).
+test('(n) an ALREADY_MEMBER answer settles the request: after the member ' +
+  'leaves, a re-drive reads nothing and re-admits nothing', async (t) => {
+  const {partition, port, gateway} = createLeader();
+  await ask(partition);
+  const again = await ask(partition);
+  t.equal(again?.admission?.outcome, OUTCOME.ALREADY_MEMBER,
+    'the repeat answers ALREADY_MEMBER');
+  port.learners.delete(TARGET_REPLICA);
+  const readsBefore = gateway.reads.length;
+  const proposalsBefore = port.proposals.length;
+  redriveAcceptedAdmissionRequests(partition);
+  await settle();
+  t.equal(gateway.reads.length, readsBefore,
+    'the settled request is not re-read on the next re-drive');
+  t.equal(port.proposals.length, proposalsBefore,
+    'and the departed member is not re-admitted from it');
+});
+
+test('(o) a port-REFUSED answer settles the request: no read on re-drive',
+  async (t) => {
+    const {partition, port, gateway} = createLeader();
+    port.proposeConfChange = (change) => {
+      port.proposals.push(change);
+      return Object.freeze({outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        reason: 'refused_for_witness'});
+    };
+    const answer = await ask(partition);
+    t.equal(answer?.admission?.outcome, OUTCOME.REFUSED,
+      'the port refusal answers REFUSED');
     const readsBefore = gateway.reads.length;
     redriveAcceptedAdmissionRequests(partition);
     await settle();

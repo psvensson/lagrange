@@ -108,12 +108,10 @@ test('MessageGroupService - publishes leader state as follower metadata in servi
     );
 
     t.ok(roleUpdate, 'raft role update should be persisted via CDC');
-    t.same(
+    t.equal(
       roleUpdate?.options?.expectedCacheFields,
-      {
-        raft_role: RaftRole.FOLLOWER,
-      },
-      'raft role cache wait should converge only the role field',
+      undefined,
+      'raft role update carries no projection-field wait: writes answer at their commit',
     );
     t.equal(
       roleUpdate?.options?.routingReadinessDimension,
@@ -786,10 +784,10 @@ test('MessageGroupService - persists leader node updates to message groups table
     );
 
     t.ok(leaderUpdate, 'leader node update should be persisted via CDC');
-    t.same(
+    t.equal(
       leaderUpdate?.options?.expectedCacheFields,
-      {[COLUMN.LEADER_NODE_ID]: nodeId},
-      'leader cache wait should only require canonical leader identity',
+      undefined,
+      'leader update carries no projection-field wait: writes answer at their commit',
     );
     t.equal(
       leaderUpdate?.options?.routingReadinessDimension,

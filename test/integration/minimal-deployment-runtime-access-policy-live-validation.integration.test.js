@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {createHash} from 'node:crypto';
 import {describe, it} from 'node:test';
 
@@ -129,6 +130,18 @@ function parseColumnAssignments(fragment) {
 function createCdcBackedStore(systemTableCache) {
   const tables = new Map();
   const cacheApplies = [];
+  // Like the partition's commit, each fixture commit stamps an origin HLC
+  // on the row it projects and answers it, so a routed write's answer
+  // carries its position (quest replica-admission-from-committed-operation,
+  // attempt 2).
+  let commitSequence = 0;
+  // The projection applies in its own context, not the writer's async chain
+  // (the CDC delivery is not part of the write path).
+  const inProjectionContext = AsyncLocalStorage.snapshot();
+  const nextOriginHlc = () => {
+    commitSequence += 1;
+    return `1793615397288-${commitSequence}-fixture-commit`;
+  };
 
   function table(tableName) {
     if (!tables.has(tableName)) tables.set(tableName, new Map());
@@ -137,14 +150,14 @@ function createCdcBackedStore(systemTableCache) {
 
   function scheduleCacheUpsert(tableName, row) {
     const pending = new Promise((resolve) => {
-      setImmediate(() => {
+      setImmediate(() => inProjectionContext(() => {
         systemTableCache.applySystemTableChange(
           tableName,
           CDC_OPERATION.UPSERT,
           row,
         );
         resolve();
-      });
+      }));
     });
     cacheApplies.push(pending);
   }
@@ -159,9 +172,11 @@ function createCdcBackedStore(systemTableCache) {
           [column.trim(), params[index]]),
       );
       const primaryKey = getSystemCachePrimaryKeyField(tableName);
+      const originHlc = nextOriginHlc();
+      row.updated_at_hlc = originHlc;
       table(tableName).set(row[primaryKey], {...row});
       scheduleCacheUpsert(tableName, row);
-      return {affectedRows: 1, rows: [], success: true};
+      return {affectedRows: 1, originHlc, rows: [], success: true};
     }
 
     const update = /^UPDATE ([a-z_]+) SET (.+) WHERE (.+)$/iu.exec(sql);
@@ -172,6 +187,7 @@ function createCdcBackedStore(systemTableCache) {
       const setValues = params.slice(0, setColumns.length);
       const whereValues = params.slice(setColumns.length);
       let affectedRows = 0;
+      const originHlc = nextOriginHlc();
       for (const [key, current] of table(tableName)) {
         if (!whereColumns.every((column, index) =>
           current[column] === whereValues[index])) {
@@ -181,12 +197,13 @@ function createCdcBackedStore(systemTableCache) {
           ...current,
           ...Object.fromEntries(setColumns.map((column, index) =>
             [column, setValues[index]])),
+          updated_at_hlc: originHlc,
         };
         table(tableName).set(key, row);
         scheduleCacheUpsert(tableName, row);
         affectedRows += 1;
       }
-      return {affectedRows, rows: [], success: true};
+      return {affectedRows, originHlc, rows: [], success: true};
     }
 
     throw new Error(`unsupported fixture SQL: ${sql}`);
@@ -326,20 +343,33 @@ describe('minimal deployment runtime access production path', () => {
       cdcIntegrationService.executeSQL = durableStore.execute;
       cdcIntegrationService.executeAuthoritativeSystemTableRead =
         durableStore.read;
-      const visibilityChecks = [];
-      const waitForCacheUpdate =
-        cdcIntegrationService.waitForCacheUpdate
-          .bind(cdcIntegrationService);
-      cdcIntegrationService.waitForCacheUpdate =
-        (tableName, key, expectPresent, options) => {
-          visibilityChecks.push({key, options, tableName});
-          return waitForCacheUpdate(
-            tableName,
-            key,
-            expectPresent,
-            options,
-          );
-        };
+      // Each routed system-table write answers at its commit with its
+      // position (quest replica-admission-from-committed-operation, attempt
+      // 2); the write path no longer waits for the cache, so the witness
+      // records the committed answers rather than cache waits.
+      // The census fence: the write path itself reads no projection of the
+      // table it writes. A read counts when it runs in a write's own async
+      // chain (AsyncLocalStorage), not a concurrent reader's.
+      const committedAnswers = [];
+      const projectionReadsDuringWrites = [];
+      const writePath = new AsyncLocalStorage();
+      const cacheGet = systemTableCache.get.bind(systemTableCache);
+      systemTableCache.get = (tableName, ...args) => {
+        if (writePath.getStore() === true && tableName === TABLES.CONFIG) {
+          projectionReadsDuringWrites.push(tableName);
+        }
+        return cacheGet(tableName, ...args);
+      };
+      for (const method of ['insertSystemTableRow', 'updateSystemTableRow',
+        'upsertSystemTableRow']) {
+        const write = cdcIntegrationService[method].bind(cdcIntegrationService);
+        cdcIntegrationService[method] = (tableName, ...args) =>
+          writePath.run(true, async () => {
+            const answer = await write(tableName, ...args);
+            committedAnswers.push({answer, tableName});
+            return answer;
+          });
+      }
 
       const setup = await ControlPlaneSetup.create({
         bootIncarnation: TEST_BOOT_INCARNATION,
@@ -504,14 +534,17 @@ describe('minimal deployment runtime access production path', () => {
       const policyAfterRevoke =
         await engine.runtimeAccessPolicyOwner.getRuntimePolicy(serviceId);
       assert.deepEqual(policyAfterRevoke.policy.tables, []);
-      const configVisibilityChecks = visibilityChecks.filter(
+      const configAnswers = committedAnswers.filter(
         (entry) => entry.tableName === TABLES.CONFIG,
       );
-      assert.equal(configVisibilityChecks.length, 2);
-      assert.equal(
-        configVisibilityChecks[1].options.expectedFields.config_value,
-        durableStore.get(TABLES.CONFIG, configKey).config_value,
-      );
+      assert.equal(configAnswers.length, 2);
+      for (const {answer} of configAnswers) {
+        assert.equal(answer.committed, true, JSON.stringify(answer));
+        assert.equal(answer.position.tableName, TABLES.CONFIG);
+        assert.equal(answer.position.key, configKey);
+      }
+      assert.deepEqual(projectionReadsDuringWrites, [],
+        'the policy write path reads no projection of CONFIG');
       assert.notEqual(
         durableStore.get(TABLES.CONFIG, configKey).config_value,
         configBeforeAffinity,

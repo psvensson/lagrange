@@ -48,7 +48,7 @@ const FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE = objectFreeze({
 // The durable readback that acknowledges a formation-release write is bound to
 // the authoritative store (Raft/SQL), never the local cache; the cache is only
 // a hint elsewhere, never the acknowledgement truth (system-guidelines §3).
-const DURABLE_PUBLICATION_READ_OPTIONS = objectFreeze({skipCacheWait: true});
+const DURABLE_PUBLICATION_READ_OPTIONS = objectFreeze({});
 // The consumer's durable read of the authority publication is the one read
 // exempt from the controlPlaneRecoveryEligible routing gate, exactly as the
 // authority's publication write already is: while every replica host is
@@ -56,7 +56,6 @@ const DURABLE_PUBLICATION_READ_OPTIONS = objectFreeze({skipCacheWait: true});
 // routable candidate (all_services_filtered_by_readiness) for the contract
 // written for it.
 const CONSUMER_DURABLE_PUBLICATION_READ_OPTIONS = objectFreeze({
-  skipCacheWait: true,
   recoveryRouting:
     CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP,
 });

@@ -13,10 +13,6 @@ import {
 } from './owner-outcome-contract.js';
 import {buildControlPlaneWorkloadProfile} from './control-plane-workload-profile.js';
 import {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
-  normalizeControlPlaneSystemTableVisibilityState,
-} from './control-plane-system-table-visibility-constants.js';
-import {
   getControlPlaneErrorCode,
   getControlPlaneFailureSummary,
   getControlPlaneRetryAfterMs,
@@ -49,9 +45,6 @@ function resolveMutationCompletionStateFromClassification(classification) {
   }
   if (classification.completionStatePresent) {
     return classification.completionState;
-  }
-  if (classification.visibilityPending) {
-    return CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY;
   }
   if (classification.failed) {
     return resolveFailedMutationOutcome(classification);
@@ -188,12 +181,6 @@ function resolveControlPlaneMutationOutcomeSnapshot(result = {}) {
       completionState,
     );
   }
-  if (classification.visibilityPending) {
-    return buildControlPlaneMutationOutcomeSnapshot(
-      CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-      completionState,
-    );
-  }
   if (classification.zeroAffectedRows) {
     return buildControlPlaneMutationOutcomeSnapshot(
       CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
@@ -210,30 +197,6 @@ function resolveControlPlaneMutationContractOutcome(
   result = {},
   normalizedOutcome,
 ) {
-  const visibilityState = normalizeControlPlaneSystemTableVisibilityState(
-    result?.visibilityState,
-    null,
-  );
-  if (
-    visibilityState ===
-    CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
-  ) {
-    return buildOwnerContractOutcome({
-      contractState: OWNER_CONTRACT_STATE.DEFERRED,
-      nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
-    });
-  }
-  if (
-    visibilityState ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY ||
-    visibilityState ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.AUTHORITATIVE_CONFIRMATION_PENDING
-  ) {
-    return buildOwnerContractOutcome({
-      contractState: OWNER_CONTRACT_STATE.PENDING,
-      nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
-    });
-  }
   if (
     normalizedOutcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED ||
     normalizedOutcome === CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY
@@ -261,21 +224,7 @@ function resolveControlPlaneMutationContractOutcome(
   });
 }
 
-function resolveControlPlaneMutationOutcomeFreshness(
-  visibilityState,
-  contractOutcome,
-) {
-  if (
-    visibilityState ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY ||
-    visibilityState ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
-        .AUTHORITATIVE_CONFIRMATION_PENDING ||
-    visibilityState ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
-  ) {
-    return OWNER_OUTCOME_FRESHNESS.STALE;
-  }
+function resolveControlPlaneMutationOutcomeFreshness(contractOutcome) {
   if (contractOutcome.contractState === OWNER_CONTRACT_STATE.READY) {
     return OWNER_OUTCOME_FRESHNESS.FRESH;
   }
@@ -307,12 +256,9 @@ function resolveControlPlaneMutationOutcomeReasonCodes(result = {}) {
   return [];
 }
 
-function resolveControlPlaneWakeSource(result = {}, visibilityState) {
+function resolveControlPlaneWakeSource(result = {}) {
   if (typeof result?.wakeSource === 'string' && result.wakeSource.length > 0) {
     return result.wakeSource;
-  }
-  if (visibilityState === CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE) {
-    return 'pressure_governor';
   }
   return 'retry_registry';
 }
@@ -369,14 +315,10 @@ function buildControlPlaneMutationOwnerOutcomeEnvelope(
     result,
     resolvedOutcome,
   );
-  const visibilityState = normalizeControlPlaneSystemTableVisibilityState(
-    result?.visibilityState,
-    null,
-  );
   const isDeferredOrBackpressured =
     contractOutcome.contractState === OWNER_CONTRACT_STATE.DEFERRED;
 
-  const wakeSource = resolveControlPlaneWakeSource(result, visibilityState);
+  const wakeSource = resolveControlPlaneWakeSource(result);
   const attemptKey = resolveControlPlaneAttemptKey(result);
   const maxProgressBound = Number.isFinite(result?.maxProgressBound) ?
     result.maxProgressBound :
@@ -392,10 +334,7 @@ function buildControlPlaneMutationOwnerOutcomeEnvelope(
     outcome: resolvedOutcome,
     reasonCodes: resolveControlPlaneMutationOutcomeReasonCodes(result),
     nextAction: contractOutcome.nextAction,
-    freshness: resolveControlPlaneMutationOutcomeFreshness(
-      visibilityState,
-      contractOutcome,
-    ),
+    freshness: resolveControlPlaneMutationOutcomeFreshness(contractOutcome),
     revision: Number.isFinite(result?.revision) ?
       result.revision :
       0,
@@ -405,7 +344,6 @@ function buildControlPlaneMutationOwnerOutcomeEnvelope(
       contractOutcome.contractState === OWNER_OUTCOME_STATE.FAILED,
     evidence: {
       completionState: outcomeSnapshot.completionState,
-      visibilityState,
       success: result?.success === true,
       failureSummary: getControlPlaneFailureSummary(result?.error || result),
       wakeSource,

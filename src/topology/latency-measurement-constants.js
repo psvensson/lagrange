@@ -54,6 +54,12 @@ const LATENCY_MEASUREMENT_REASON = Object.freeze({
   INVALID_SHAPE: 'invalid_shape',
   INVALID_RTT: 'invalid_rtt',
   STALE_SAMPLE: 'stale_sample',
+  // Another writer changed the edge since this node's committed base.
+  EDGE_CONFLICT: 'latency_edge_conflict',
+  // No committed base could be read (unknown position).
+  EDGE_BASE_UNAVAILABLE: 'latency_edge_base_unavailable',
+  // The conditional write answered neither applied nor a conflict.
+  EDGE_WRITE_UNCONFIRMED: 'latency_edge_write_unconfirmed',
 });
 
 export {

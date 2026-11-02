@@ -366,42 +366,32 @@ test('(i) shutdown wins before the membership side continues: the released ' +
   await box.done;
 });
 
-test('(ii-a) the write crossed its accepted boundary immediately before ' +
-  'shutdown wins: terminal, its outcome not known here', async () => {
-  const composed = composeSeedWriters();
-  const box = startPublication(composed);
-  await untilWriteInFlight(composed);
-
-  composed.engine.accept();
-  await composed.shutDownSqlQueryEngine();
-  await yieldTurns(SETTLE_TURNS);
-
-  assertTerminalAfterShutdown(composed, box);
-  assertOutcomeUnknownCause(box);
-  await box.done;
-});
-
-test('(ii-b) the accepted write is waiting for cache visibility when ' +
-  'shutdown wins: the wait ends at once, its outcome not known here',
+// Re-derived for answers at commit (quest
+// replica-admission-from-committed-operation, attempt 2): an accepted write
+// has committed and answered at its commit before shutdown; the persist
+// loop's read-back that follows is what shutdown overtakes - refused
+// terminal and not routed - and the committed write is never re-issued.
+test('(ii-a) the write committed immediately before shutdown wins: the ' +
+  'read-back that follows is refused terminal, the write is not re-issued',
 async () => {
   const composed = composeSeedWriters();
   const box = startPublication(composed);
   await untilWriteInFlight(composed);
-  composed.engine.accept();
-  for (let turn = 0; turn < SETTLE_TURNS &&
-    composed.timeSource.pendingTimerCount() === 0; turn += 1) {
-    await yieldTurns(1);
-  }
-  assert.equal(composed.timeSource.pendingTimerCount(), 1,
-    'the accepted write waits for its cache visibility on the CDC clock');
 
+  composed.engine.accept();
   await composed.shutDownSqlQueryEngine();
   await yieldTurns(SETTLE_TURNS);
 
   assertTerminalAfterShutdown(composed, box);
-  assertOutcomeUnknownCause(box);
+  assert.equal(box.outcome.error.writeOutcome,
+    CDC_CONSTANTS.CDC_SHUT_DOWN_WRITE_OUTCOME?.NOT_ROUTED,
+    'the overtaken step is the read-back, refused before it was routed');
   await box.done;
 });
+
+// (ii-b) is deleted with the path it witnessed: an accepted write no longer
+// waits for its cache visibility (attempt 2 of
+// replica-admission-from-committed-operation); (ii-a) is that state now.
 
 test('(iii) shutdown lands while the owner\'s retry loop sleeps: no ' +
   'further attempt, terminal', async () => {
@@ -499,50 +489,9 @@ test('(vi) a write that arrives after shutdown began is refused before any ' +
   await box.done;
 });
 
-test('(vii) shutdown lands while the cache-visibility repair holds its ' +
-  'retry delay: the delay ends at once, no further authoritative read',
-async () => {
-  const composed = composeSeedWriters();
-  // The second seam: the authoritative row source answers the accepted row
-  // not yet visible, so the repair is not confirmed and arms its retry delay.
-  const authoritativeReads = {total: 0, afterShutdown: 0};
-  composed.cdcIntegrationService.executeAuthoritativeSystemTableRead =
-    async () => {
-      authoritativeReads.total += 1;
-      if (composed.cdcIntegrationService.isShuttingDown === true) {
-        authoritativeReads.afterShutdown += 1;
-      }
-      return {success: true, rows: [], count: 0, rowCount: 0};
-    };
-  // The reconcile driver's write: it confirms through the CDC service's own
-  // visibility repair rather than a publication read-back.
-  const box = startPublication(composed, {skipPublicationWriteReadback: true});
-  await untilWriteInFlight(composed);
-  composed.engine.accept();
-  // Move the CDC clock one step at a time until the visibility wait's budget
-  // fires and the repair's first read has answered.
-  for (let step = 0; step < composed.cdcIntegrationService.cacheWaitTimeoutMs &&
-    authoritativeReads.total === 0; step += 1) {
-    composed.timeSource.advance(1);
-    await yieldTurns(2);
-  }
-  await yieldTurns(SETTLE_TURNS);
-  assert.equal(authoritativeReads.total, 1, 'the repair read once');
-  assert.equal(composed.timeSource.pendingTimerCount(), 1,
-    'the repair holds its retry delay on the CDC clock');
-
-  await composed.shutDownSqlQueryEngine();
-  await yieldTurns(SETTLE_TURNS);
-  assertTerminalAfterShutdown(composed, box);
-  // Even a clock that moves on arms no second repair read.
-  composed.timeSource.advance(
-    composed.cdcIntegrationService.authoritativeFallbackRetryDelayMs * 100);
-  await yieldTurns(SETTLE_TURNS);
-  assert.equal(authoritativeReads.afterShutdown, 0,
-    'no authoritative read is issued after shutdown');
-  assertOutcomeUnknownCause(box);
-  await box.done;
-});
+// (vii) is deleted with the path it witnessed: the cache-visibility repair
+// no longer runs inside a write and holds no retry delay (its in-budget
+// retry, confirmCacheVisibilityHoleWithinBudget, is deleted).
 
 // The persist loop: a failed answer does not prove the row is absent, so it
 // reads the durable row back, except through a torn-down writer.
@@ -779,10 +728,6 @@ const CLASSIFIED_TIMER_SITES = Object.freeze([
   // (P-L belongs to PartitionService, not CDCIntegrationService); cleared in
   // closeIfSettled when the subscriber invocation settles or times out.
   'src/cdc/cdc-delivery-invocation.js:beginCdcDeliveryInvocation:setTimeout',
-  // (a) The visibility wait's budget timer, held by holdUntilShutdown: the
-  // mark releases the wait and its cleanup clears the timer.
-  'src/cdc/cdc-integration-service-cache-visibility-wait.js:' +
-    'waitForCacheUpdate:setTimeout',
   // (a) The primitive.
   'src/cdc/cdc-integration-service-lifecycle.js:delayUntilShutdown:setTimeout',
 ]);
@@ -815,10 +760,13 @@ test('census: every CDC delayed-work site is the primitive or classified, ' +
   const census = censusDelayedWorkSites(REPOSITORY_ROOT, CDC_OWNER_FILES);
   assert.deepEqual(census.timerSites, [...CLASSIFIED_TIMER_SITES],
     'no CDC timer outside the owner\'s primitive and the classified sites');
-  const visibilityWait = census.text.get(
-    'src/cdc/cdc-integration-service-cache-visibility-wait.js');
-  assert.match(visibilityWait, /holdUntilShutdown\(/u,
-    'the visibility wait is held by the owner\'s primitive');
+  // The one projection wait (attempt 2 of
+  // replica-admission-from-committed-operation) arms no timer and is held by
+  // the owner's primitive, so the mark ends it.
+  const projectionWait = census.text.get(
+    'src/cdc/cdc-integration-service-projection-wait.js');
+  assert.match(projectionWait, /holdUntilShutdown\(/u,
+    'the projection wait is held by the owner\'s primitive');
   assert.deepEqual(census.forbiddenImports, [],
     'no node:timers or timers/promises import in the owner');
   assert.deepEqual(census.refreshCalls, [],
@@ -1055,8 +1003,9 @@ test('in flight (S2): the catch-up\'s local read is in flight at the mark ' +
   assertCatchupSummaryHonest(catchup.outcome.value, ['nodes']);
 });
 
-// The visibility repair behind a write's cache wait: attempt 1 or its retry
-// has its authoritative read in flight when the mark lands.
+// The visibility repair (its one remaining entry: the projection owner's
+// repairCacheVisibilityHole) has its authoritative read in flight when the
+// mark lands.
 async function visibilityRepairInFlight(heldAttempt) {
   const held = heldAnswers();
   let reads = 0;
@@ -1070,8 +1019,8 @@ async function visibilityRepairInFlight(heldAttempt) {
         held.hold();
     },
   });
-  const wait = track(composed.cdcIntegrationService.waitForCacheUpdate(
-    'nodes', IN_FLIGHT_ROW.node_id, true, {timeoutMs: 1000}));
+  const wait = track(composed.cdcIntegrationService.repairCacheVisibilityHole(
+    'nodes', IN_FLIGHT_ROW.node_id, true));
   for (let step = 0; step < PAST_EVERY_DELAY_MS && held.queue.length === 0;
     step += 1) {
     composed.timeSource.advance(1);
@@ -1084,11 +1033,9 @@ async function visibilityRepairInFlight(heldAttempt) {
   await assertNothingAfterTheMark(composed);
   assert.equal(composed.cache.has('nodes', IN_FLIGHT_ROW.node_id), false,
     'the repair is not applied after the mark');
-  assert.notEqual(wait.outcome, null, 'the waiter settles');
-  assert.ok(wait.outcome.error instanceof Error,
-    'the waiter is not answered visible');
-  assert.equal(isRetryableControlPlaneError(wait.outcome.error), false,
-    'the waiter\'s answer is terminal');
+  assert.notEqual(wait.outcome, null, 'the repair settles');
+  assert.notEqual(wait.outcome.value?.visible, true,
+    'the repair is never answered visible after the mark');
 }
 
 test('in flight (S4): the first visibility-repair read is in flight at the ' +
@@ -1096,10 +1043,7 @@ test('in flight (S4): the first visibility-repair read is in flight at the ' +
   await visibilityRepairInFlight(1);
 });
 
-test('in flight (S3): the visibility-repair retry\'s read is in flight at ' +
-  'the mark: the repair is not applied', async () => {
-  await visibilityRepairInFlight(2);
-});
+// (S3) is deleted with the repair's in-budget retry it witnessed.
 
 test('after the mark (S5, S6): the repair entry points read nothing and ' +
   'apply nothing', async () => {
@@ -1335,10 +1279,10 @@ test('routing: every read, reseed, repair apply and submission is gated in ' +
   rpcAnswers.push({success: false, deferRetry: true, retryAfterMs: 1,
     error: 'deferred'});
   await settle(service.refreshAuthoritativeCacheRow('nodes', 'other-node'));
-  // The visibility repair and its retry.
+  // The visibility repair (the projection owner's entry point).
   rpcAnswers.push({success: true, rows: []});
-  await settle(service.waitForCacheUpdate('nodes', 'repair-node', true,
-    {timeoutMs: 1000}));
+  await settle(service.repairCacheVisibilityHole('nodes', 'repair-node',
+    true));
   // The routed write: the local leg answers transient, the engine takes it.
   await settle(service.executeSQL(
     'INSERT OR REPLACE INTO nodes (node_id, node_address, status) ' +
