@@ -26,4 +26,4 @@ async function loadMysql2Promise() {
   return loaded.default || loaded;
 }
 
-export {NATIVE_CLIENT_PACKAGES, loadMysql2Promise, nativeClientVersions};
+export {loadMysql2Promise, nativeClientVersions};

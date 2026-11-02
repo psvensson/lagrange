@@ -657,14 +657,16 @@ function checkDeployment(run, claim) {
 
 // The product's last answer before its readiness bound ran out: the component,
 // the attempts spent and the denial the product itself reported.
+function textOrNull(value) {
+  return typeof value === 'string' ? value : null;
+}
+
 function readinessDenialOf(run) {
-  const diagnostic = run.deployment.readiness.evidence?.diagnostic ?? null;
-  const last = diagnostic?.last ?? null;
-  return {component: diagnostic?.component ?? null, attempts: diagnostic?.attempts ?? null,
-    elapsedMs: diagnostic?.elapsedMs ?? null,
-    phase: typeof last?.phase === 'string' ? last.phase : null,
-    state: typeof last?.state === 'string' ? last.state : null,
-    reasons: Array.isArray(last?.reasons) ? [...last.reasons] : []};
+  const diagnostic = run.deployment.readiness.evidence?.diagnostic || {};
+  const last = diagnostic.last || {};
+  return {component: diagnostic.component ?? null, attempts: diagnostic.attempts ?? null,
+    elapsedMs: diagnostic.elapsedMs ?? null, phase: textOrNull(last.phase),
+    state: textOrNull(last.state), reasons: Array.isArray(last.reasons) ? [...last.reasons] : []};
 }
 
 function isReadinessExhaustedRun(run) {

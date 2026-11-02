@@ -29,7 +29,7 @@ import {
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayMap = Function.call.bind(Array.prototype.map);
-const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringSplit = Function.call.bind(String.prototype.split);
 
 const REFUSING_ENDPOINT = Object.freeze({host: '127.0.0.1', port: 1});
 const ECONNREFUSED = 'ECONNREFUSED';
@@ -242,42 +242,39 @@ test('the retryable-conflict contract: both effects survive, by either mechanism
 function createConflictEngine(mode) {
   const state = {value: 100, version: 0};
   const createClient = () => {
-    let snapshot = null;
-    let pending = 0;
+    const session = {snapshot: null, pending: 0};
+    const conflicted = () => session.snapshot !== null && state.version !== session.snapshot;
+    const handlers = {
+      BEGIN: () => {
+        session.snapshot = state.version;
+        session.pending = 0;
+        return {rows: []};
+      },
+      ROLLBACK: () => {
+        session.snapshot = null;
+        session.pending = 0;
+        return {rows: []};
+      },
+      COMMIT: () => {
+        state.value += session.pending;
+        if (session.pending !== 0) state.version += 1;
+        session.snapshot = null;
+        session.pending = 0;
+        return {rows: []};
+      },
+      SELECT: () => ({rows: [{ytd_cents: state.value}]}),
+      UPDATE: (parameters) => {
+        if (mode === 'serialization' && conflicted()) {
+          throw Object.assign(new Error('could not serialize access'), {code: '40001'});
+        }
+        if (!(mode === 'lost' && conflicted())) session.pending += parameters[0];
+        return {rowCount: 1, rows: []};
+      },
+    };
     return {
       connect: async () => {},
       end: async () => {},
-      query: async (sql, parameters = []) => {
-        if (sql === 'BEGIN') {
-          snapshot = state.version;
-          pending = 0;
-          return {rows: []};
-        }
-        if (sql === 'ROLLBACK') {
-          snapshot = null;
-          pending = 0;
-          return {rows: []};
-        }
-        if (sql === 'COMMIT') {
-          state.value += pending;
-          if (pending !== 0) state.version += 1;
-          snapshot = null;
-          pending = 0;
-          return {rows: []};
-        }
-        if (stringStartsWith(sql, 'SELECT')) return {rows: [{ytd_cents: state.value}]};
-        if (stringStartsWith(sql, 'UPDATE')) {
-          if (mode === 'serialization' && snapshot !== null && state.version !== snapshot) {
-            throw Object.assign(new Error('could not serialize access'), {code: '40001'});
-          }
-          if (mode === 'lost' && snapshot !== null && state.version !== snapshot) {
-            return {rowCount: 1, rows: []};
-          }
-          pending += parameters[0];
-          return {rowCount: 1, rows: []};
-        }
-        throw new Error(`unexpected statement ${sql}`);
-      },
+      query: async (sql, parameters = []) => handlers[stringSplit(sql, ' ')[0]](parameters),
     };
   };
   return {createClient, state};

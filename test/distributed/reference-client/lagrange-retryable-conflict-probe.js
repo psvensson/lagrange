@@ -90,6 +90,45 @@ async function readYtd(client, warehouseId) {
   return Number(result.rows[0].ytd_cents);
 }
 
+// The loser's logical request through the retry owner: its first attempt is
+// the open transaction; a retried attempt opens a fresh one.
+async function runLoserRequest(right, statement, retrySleep) {
+  let firstError = null;
+  try {
+    const outcome = await executePairedOltpTransactionWithRetry({
+      sleep: retrySleep,
+      executeAttempt: async ({attempts}) => {
+        try {
+          if (attempts > ONE) await right.query('BEGIN');
+          await right.query(UPDATE_YTD, statement);
+          await right.query('COMMIT');
+        } catch (error) {
+          if (!firstError) firstError = error;
+          await safeRollback(right);
+          throw error;
+        }
+      },
+    });
+    return {firstError, retry: outcome.evidence, retryCommitted: firstError ? true : null};
+  } catch (error) {
+    return {firstError, retry: error?.oltpRetryEvidence ?? null, retryCommitted: false};
+  }
+}
+
+function mechanismOf(victim) {
+  if (!victim) return MECHANISM.BLOCKING_THEN_COMMIT;
+  return classifyOltpAttemptError({sqlState: victim.sqlState}).retryable ?
+    MECHANISM.SERIALIZATION_CONFLICT : MECHANISM.OTHER_ERROR;
+}
+
+function observationOf({loser, victim, baseline, final, delta}) {
+  return Object.freeze({mechanism: mechanismOf(victim), victimSqlState: victim?.sqlState ?? null,
+    retryCommitted: loser.retryCommitted,
+    retry: loser.retry ? Object.freeze({attempts: loser.retry.attempts,
+      retries: loser.retry.retries}) : null,
+    effects: Object.freeze({baseline, final, delta})});
+}
+
 /**
  * Two concurrent logical requests that update one warehouse row from the same
  * read. The loser's request runs through the retry owner: a retryable
@@ -103,71 +142,40 @@ async function induceLagrangeRetryableConflict(options = {}) {
   const connection = normalizeConnection(options.connection);
   const warehouseId = Number.isInteger(options.warehouseId) ?
     options.warehouseId : DEFAULT_WAREHOUSE_ID;
-  const writeDeltaCents = Number.isInteger(options.writeDeltaCents) ?
+  const delta = Number.isInteger(options.writeDeltaCents) ?
     options.writeDeltaCents : DEFAULT_WRITE_DELTA_CENTS;
   const createClient = options.createClient || createPgWireClient;
-  let left = null;
-  let right = null;
-  let observer = null;
+  const clients = [];
+  const open = async () => {
+    const client = createClient(clientOptions(endpoint, connection));
+    clients.push(client);
+    await client.connect();
+    return client;
+  };
   try {
-    left = createClient(clientOptions(endpoint, connection));
-    right = createClient(clientOptions(endpoint, connection));
-    observer = createClient(clientOptions(endpoint, connection));
-    await left.connect();
-    await right.connect();
-    await observer.connect();
+    const [left, right, observer] = [await open(), await open(), await open()];
     const baseline = await readYtd(observer, warehouseId);
     await left.query('BEGIN');
     await right.query('BEGIN');
     await left.query(SELECT_YTD, [warehouseId]);
     await right.query(SELECT_YTD, [warehouseId]);
-    await left.query(UPDATE_YTD, [writeDeltaCents, warehouseId]);
+    await left.query(UPDATE_YTD, [delta, warehouseId]);
     await left.query('COMMIT');
-    let firstError = null;
-    let retry;
-    let retryCommitted;
-    try {
-      const outcome = await executePairedOltpTransactionWithRetry({
-        sleep: options.retrySleep,
-        executeAttempt: async ({attempts}) => {
-          try {
-            if (attempts > ONE) await right.query('BEGIN');
-            await right.query(UPDATE_YTD, [writeDeltaCents, warehouseId]);
-            await right.query('COMMIT');
-          } catch (error) {
-            if (!firstError) firstError = error;
-            await safeRollback(right);
-            throw error;
-          }
-        },
-      });
-      retry = outcome.evidence;
-      retryCommitted = firstError ? true : null;
-    } catch (error) {
-      retry = error?.oltpRetryEvidence ?? null;
-      retryCommitted = false;
-    }
+    const loser = await runLoserRequest(right, [delta, warehouseId], options.retrySleep);
     const final = await readYtd(observer, warehouseId);
-    const victim = firstError ? normalizeError(firstError, 'right') : null;
-    const classified = victim ? classifyOltpAttemptError({sqlState: victim.sqlState}) : null;
-    const mechanism = !victim ? MECHANISM.BLOCKING_THEN_COMMIT :
-      (classified.retryable ? MECHANISM.SERIALIZATION_CONFLICT : MECHANISM.OTHER_ERROR);
-    const observation = Object.freeze({mechanism, victimSqlState: victim?.sqlState ?? null,
-      retryCommitted,
-      retry: retry ? Object.freeze({attempts: retry.attempts, retries: retry.retries}) : null,
-      effects: Object.freeze({baseline, final, delta: writeDeltaCents})});
+    const victim = loser.firstError ? normalizeError(loser.firstError, 'right') : null;
     const results = Object.freeze([
       Object.freeze({side: 'left', succeeded: true, error: null}),
-      Object.freeze({side: 'right', succeeded: retryCommitted !== false, error: victim}),
+      Object.freeze({side: 'right', succeeded: loser.retryCommitted !== false, error: victim}),
     ]);
-    return Object.freeze({observation, victim, results});
+    return Object.freeze({observation: observationOf({loser, victim, baseline, final, delta}),
+      victim, results});
   } finally {
-    await Promise.all([safeRollback(left), safeRollback(right)]);
-    await Promise.all([safeEnd(left), safeEnd(right), safeEnd(observer)]);
+    await Promise.all([safeRollback(clients[0]), safeRollback(clients[1])]);
+    await Promise.all(clients.map((client) => safeEnd(client)));
   }
 }
 
 export {
-  MECHANISM as RETRYABLE_CONFLICT_MECHANISM,
   induceLagrangeRetryableConflict,
 };

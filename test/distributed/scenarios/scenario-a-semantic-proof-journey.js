@@ -236,20 +236,32 @@ function refusal(result, extra) {
     reason: REFUSAL_REASON.BINDING_CHANGED_WITHOUT_REBIND, ...extra});
 }
 
-async function runCase(proofCase, context, options, journey) {
-  const result = {caseId: proofCase.id, proofIds: proofCase.proofIds,
-    binding: context.binding};
-  if (proofCase.id === DURABILITY_CASE_ID && options.persistentStorage === false) {
-    // By the contract: a restart of container-layer storage proves nothing
-    // about durability. Recorded as such, never run and never passed.
+// A durability case that cannot run here: on container-layer storage it does
+// not apply (by the contract: recorded as such, never run, never passed);
+// without a restart capability it is not executed.
+function durabilityPrecondition(proofCase, options, result) {
+  if (proofCase.id !== DURABILITY_CASE_ID) return null;
+  if (options.persistentStorage === false) {
     return {...result, status: CASE_STATUS.FAILED,
       failureKind: FAILURE_KIND.PROBE_INAPPLICABLE,
       failureReasons: [FAILURE_REASON.DURABILITY_REQUIRES_PERSISTENT_STORAGE]};
   }
-  if (proofCase.id === DURABILITY_CASE_ID && !options.restartCluster) {
-    return {...result, status: CASE_STATUS.NOT_EXECUTED,
-      reason: NOT_EXECUTED_REASON.NO_RESTART_CAPABILITY};
-  }
+  return options.restartCluster ? null : {...result, status: CASE_STATUS.NOT_EXECUTED,
+    reason: NOT_EXECUTED_REASON.NO_RESTART_CAPABILITY};
+}
+
+function recordEvaluation(result, proofCase, evaluation) {
+  result.status = evaluation.passed ? CASE_STATUS.PASSED : CASE_STATUS.FAILED;
+  if (evaluation.passed) return;
+  result.failureReasons = [...(evaluation.failures || [])];
+  result.failureKind = classifyProofCaseFailure(proofCase.id, result.failureReasons);
+}
+
+async function runCase(proofCase, context, options, journey) {
+  const result = {caseId: proofCase.id, proofIds: proofCase.proofIds,
+    binding: context.binding};
+  const precondition = durabilityPrecondition(proofCase, options, result);
+  if (precondition) return precondition;
   if (endpointLabel(context.endpoint) !== context.binding.endpoint) {
     return refusal(result, {observedEndpoint: endpointLabel(context.endpoint)});
   }
@@ -265,11 +277,7 @@ async function runCase(proofCase, context, options, journey) {
       await closeQuietly(adapter, result);
       return refusal(result, {});
     }
-    result.status = outcome.evaluation.passed ? CASE_STATUS.PASSED : CASE_STATUS.FAILED;
-    if (!outcome.evaluation.passed) {
-      result.failureReasons = [...(outcome.evaluation.failures || [])];
-      result.failureKind = classifyProofCaseFailure(proofCase.id, result.failureReasons);
-    }
+    recordEvaluation(result, proofCase, outcome.evaluation);
     result.proofRecord = evidence.proofRecord;
     result.evidencePath = await persistEvidence(journey.evidenceDir, context.system,
       proofCase.id, evidence);

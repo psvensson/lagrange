@@ -1647,8 +1647,9 @@
         "scenarioA/smoke": {
           "claimKey": "pg-single-primary/scenarioA/smoke",
           "claimKind": "throughput",
-          "status": "product-failure",
+          "status": "invalid-measurement",
           "reasons": [
+            "record-rejected:missing-field",
             "semantic-gate-failed"
           ],
           "defectIds": [],
@@ -1662,56 +1663,7 @@
             "invalidatedRunIds": [],
             "forensic": []
           },
-          "metrics": {
-            "profileClass": "smoke",
-            "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
-            "accounting": {
-              "offered": 100,
-              "issued": 100,
-              "unissued": 0,
-              "attempts": 100,
-              "committed": 100,
-              "conflicts": 0,
-              "conflictExhausted": 0,
-              "terminalFailures": {
-                "product_error": 0,
-                "correctness_failure": 0,
-                "transport_failure": 0,
-                "harness_fault": 0
-              },
-              "unresolved": 0,
-              "ambiguousCommits": 0
-            },
-            "runs": [
-              {
-                "runId": "bench-live-20261101-b-r6-r003",
-                "runStatus": "completed",
-                "offeredRatePerSec": 5,
-                "repetition": 1,
-                "accounting": {
-                  "offered": 100,
-                  "issued": 100,
-                  "unissued": 0,
-                  "attempts": 100,
-                  "committed": 100,
-                  "conflicts": 0,
-                  "conflictExhausted": 0,
-                  "terminalFailures": {
-                    "product_error": 0,
-                    "correctness_failure": 0,
-                    "transport_failure": 0,
-                    "harness_fault": 0
-                  },
-                  "unresolved": 0,
-                  "ambiguousCommits": 0
-                },
-                "drainOverrunMs": 5600.436,
-                "maxLatencyMs": 6393.231
-              }
-            ],
-            "setupFailures": [],
-            "capacity": null
-          }
+          "metrics": null
         },
         "scenarioB/local-only": {
           "claimKey": "pg-single-primary/scenarioB/local-only",

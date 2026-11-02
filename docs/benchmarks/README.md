@@ -48,7 +48,7 @@ The named smoke profile scenario-a-smoke-v1: the canonical workload executed end
 | --- | --- |
 | Lagrange 0.4.0 (3 nodes) | invalid-measurement (record-rejected:invalid-text) |
 | TiDB + TiKV v8.5.8 | invalid-measurement (record-rejected:missing-field) |
-| PostgreSQL 17 (single primary) | product-failure (semantic-gate-failed): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| PostgreSQL 17 (single primary) | invalid-measurement (record-rejected:missing-field, semantic-gate-failed) |
 
 ## Per-phase time breakdown
 
