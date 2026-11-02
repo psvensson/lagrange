@@ -1,5 +1,9 @@
-import Fastify from 'fastify';
 import {test} from '../../src/test-helpers/tap.js';
+import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
+import {CLUSTER_ID_CONFIG_KEY} from '../../src/bootstrap/cluster-identity-constants.js';
+import {TABLES} from '../../src/constants/index.js';
+import {MemoryBackupStorageAdapter} from '../helpers/management-v1-memory-storage-adapter.js';
+import {initializeTestEnvironment} from './bootstrap-api-test-fixtures.js';
 import {
   ACTIVE_MANAGEMENT_OPERATION_STATES, ALLOWED_MANAGEMENT_OPERATION_KINDS,
   BACKUP_MANIFEST_CONSTANTS, CLUSTER_FACTS_CONSTANTS, FORBIDDEN_MANAGEMENT_OPERATION_KINDS,
@@ -21,6 +25,33 @@ import {
 } from '../../src/bootstrap/owners/management-v1-owner.js';
 
 const C = MANAGEMENT_V1_CONTRACT;
+const PRIMARY_CLUSTER_ID = 'lagrange-cluster-primary';
+const NODES = Object.freeze(['node-1', 'node-2', 'node-3']);
+const PARTITIONS = Object.freeze([1, 2, 3].map((partitionId) => Object.freeze({
+  partitionId, raftLogIndex: 1000 + partitionId, raftTerm: 2, payload: `rows-${partitionId}`,
+})));
+const READY_BACKUP_SNAPSHOT = Object.freeze({ready: true, hasPartitionQuorum: true});
+
+/** Physical rolling-upgrade ports; without both the capability is unsupported. */
+const upgradePorts = (extra = {}) => ({
+  onDrainNodeLeadership: () => {}, onTriggerNodeRestart: () => {}, ...extra,
+});
+
+/** Backup/restore ports injected through the owner's declared adapter port. */
+const backupPorts = (extra = {}, failures = {}) => ({
+  clusterId: 'source-cluster-alpha',
+  storageAdapter: new MemoryBackupStorageAdapter(failures),
+  exportPartitionSnapshots: () => PARTITIONS,
+  hydratePartitionSnapshots: () => {},
+  ...extra,
+});
+
+/** A complete runtime cluster snapshot port for the management owner. */
+const snapshotPort = (overrides = {}) => () => ({
+  nodeCount: 3, readyNodeCount: 3, underReplicatedPartitionCount: 0,
+  nodeIds: [...NODES], ready: true, hasPartitionQuorum: true, ...overrides,
+});
+
 let opSeq = 1;
 function makeEnv(kind, params, overrides = {}) {
   opSeq += 1;
@@ -49,8 +80,8 @@ test('Constants, reason codes, contracts, and validator helpers', async (t) => {
 
   for (const [obj, len] of [
     [L4_ROLLING_UPGRADE_REASON_CODE, 12],
-    [L3_BACKUP_RESTORE_REASON_CODE, 10],
-    [L6_DECOMMISSION_REASON_CODE, 9],
+    [L3_BACKUP_RESTORE_REASON_CODE, 11],
+    [L6_DECOMMISSION_REASON_CODE, 10],
   ]) {
     t.equal(Object.keys(obj).length, len);
     for (const k of Object.keys(obj)) t.equal(obj[k], k);
@@ -68,42 +99,57 @@ test('Constants, reason codes, contracts, and validator helpers', async (t) => {
 });
 
 test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (t) => {
-  const snap = {nodeIds: ['node-1', 'node-2'], readyNodeIds: ['node-1', 'node-2']};
+  const snap = {
+    nodeIds: ['node-1', 'node-2'], readyNodeIds: ['node-1', 'node-2'],
+    underReplicatedPartitionCount: 0,
+  };
   const dSha = 'sha256:05000000000000000000000000000000';
   const p = {targetVersion: '0.5.0', targetArtifactDigest: dSha};
 
   for (const [fn, code] of [
     [() => new RollingUpgradeOwner({capabilitySupported: false}).evaluatePreflight(p, snap),
       L4_ROLLING_UPGRADE_REASON_CODE.UPGRADE_CAPABILITY_UNSUPPORTED],
-    [() => new RollingUpgradeOwner().evaluatePreflight(p, {...snap, hasActiveOperation: true}),
-      L4_ROLLING_UPGRADE_REASON_CODE.CONCURRENT_OPERATION_ACTIVE],
-    [() => new RollingUpgradeOwner().evaluatePreflight({targetVersion: '0.3.0'}, snap),
-      L4_ROLLING_UPGRADE_REASON_CODE.RELEASE_VERSION_INCOMPATIBLE],
-    [() => new RollingUpgradeOwner({expectedArtifactDigests: {'0.5.0': 'sha256:different'}})
-      .evaluatePreflight(p, snap), L4_ROLLING_UPGRADE_REASON_CODE.ARTIFACT_DIGEST_MISMATCH],
-    [() => new RollingUpgradeOwner().evaluatePreflight(p, {...snap, ready: false}),
+    [() => new RollingUpgradeOwner({onDrainNodeLeadership: () => {}}).evaluatePreflight(p, snap),
+      L4_ROLLING_UPGRADE_REASON_CODE.UPGRADE_CAPABILITY_UNSUPPORTED],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
+      p, {...snap, hasActiveOperation: true}),
+    L4_ROLLING_UPGRADE_REASON_CODE.CONCURRENT_OPERATION_ACTIVE],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
+      {targetVersion: '0.3.0'}, snap),
+    L4_ROLLING_UPGRADE_REASON_CODE.RELEASE_VERSION_INCOMPATIBLE],
+    [() => new RollingUpgradeOwner(upgradePorts({
+      expectedArtifactDigests: {'0.5.0': 'sha256:different'},
+    })).evaluatePreflight(p, snap), L4_ROLLING_UPGRADE_REASON_CODE.ARTIFACT_DIGEST_MISMATCH],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(p, {...snap, ready: false}),
       L4_ROLLING_UPGRADE_REASON_CODE.CLUSTER_NOT_READY],
-    [() => new RollingUpgradeOwner().evaluatePreflight(
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(p, undefined),
+      L4_ROLLING_UPGRADE_REASON_CODE.CLUSTER_NOT_READY],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(p, {...snap, nodeIds: []}),
+      L4_ROLLING_UPGRADE_REASON_CODE.CLUSTER_NOT_READY],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
+      p, {nodeIds: snap.nodeIds, readyNodeIds: snap.readyNodeIds}),
+    L4_ROLLING_UPGRADE_REASON_CODE.CLUSTER_NOT_READY],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
       p, {...snap, underReplicatedPartitionCount: 1}),
     L4_ROLLING_UPGRADE_REASON_CODE.UNDER_REPLICATED_PARTITIONS],
-    [() => new RollingUpgradeOwner().evaluatePreflight(
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
       p, {...snap, capacityState: CLUSTER_FACTS_CONSTANTS.CAPACITY_PRESSURED}),
     L4_ROLLING_UPGRADE_REASON_CODE.STORAGE_CAPACITY_PRESSURED],
   ]) {
     t.equal(fn().reasonCode, code);
   }
 
-  const toOwner = new RollingUpgradeOwner({nodeUpgradeTimeoutMs: 50});
+  const toOwner = new RollingUpgradeOwner(upgradePorts({nodeUpgradeTimeoutMs: 50}));
   toOwner.startUpgrade({operationId: 'op-to-1', parameters: p, clusterSnapshot: snap, nowMs: 100});
   t.equal(toOwner.checkTimeoutsAndSafety({nowMs: 200}).reasonCode,
     L4_ROLLING_UPGRADE_REASON_CODE.NODE_UPGRADE_TIMEOUT);
 
-  const qOwner = new RollingUpgradeOwner();
+  const qOwner = new RollingUpgradeOwner(upgradePorts());
   qOwner.startUpgrade({operationId: 'op-qs-1', parameters: p, clusterSnapshot: snap, nowMs: 100});
   t.equal(qOwner.completeNodeCatchUp('node-1', {quorumHealthy: false}).reasonCode,
     L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
 
-  const mOwner = new RollingUpgradeOwner();
+  const mOwner = new RollingUpgradeOwner(upgradePorts());
   mOwner.startUpgrade({operationId: 'op-mv-1', parameters: p, clusterSnapshot: snap, nowMs: 100});
   t.equal(mOwner.recordNodeRestarted('node-1', {version: '0.8.0'}).reasonCode,
     L4_ROLLING_UPGRADE_REASON_CODE.MIXED_VERSION_INVARIANT_VIOLATED);
@@ -118,7 +164,8 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
   const nodes = ['node-1', 'node-2', 'node-3'];
   uOwner.startUpgrade({
     operationId: 'op-roll-1', parameters: {targetVersion: '0.5.0', targetArtifactDigest: dSha},
-    clusterSnapshot: {nodeIds: nodes, readyNodeIds: nodes}, nowMs: 1000,
+    clusterSnapshot: {nodeIds: nodes, readyNodeIds: nodes, underReplicatedPartitionCount: 0},
+    nowMs: 1000,
   });
 
   t.equal(drained[0], 'node-1');
@@ -143,7 +190,7 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
   t.equal(drained[1], 'node-2');
   t.same(readyzCalls[2], {id: 'node-2', val: false});
 
-  const recovered = new RollingUpgradeOwner();
+  const recovered = new RollingUpgradeOwner(upgradePorts());
   recovered.resumeFromPersistedState(uOwner.pauseUpgrade(1250));
   t.ok(recovered.currentNodeIndex === 1 && recovered.nodeVersions['node-1'] === '0.5.0' &&
     recovered.nodeVersions['node-2'] === '0.4.0' && recovered.hasActiveUpgrade());
@@ -161,21 +208,34 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
     recovered.isFeatureGateEnabled('0.5.0') && !recovered.getReleaseFacts().versionSkew);
 });
 
-test('L3 Backup and Restore: 10 reason codes, cut, Rule 6 proof, restore', async (t) => {
-  const bSnap = {ready: true, hasPartitionQuorum: true};
+test('L3 Backup and Restore: 11 reason codes, cut, Rule 6 proof, restore', async (t) => {
+  const bSnap = READY_BACKUP_SNAPSHOT;
   const bParams = {backupId: 'bkp-test-1', destinationUri: 'memory://test/bkp-1'};
+  const backup = (owner, parameters, extra = {}) =>
+    owner.createBackup({parameters, clusterSnapshot: bSnap, ...extra});
 
   for (const [fn, code] of [
-    [() => new BackupRestoreOwner({capabilitySupported: false}).evaluatePreflight(bParams, bSnap),
+    [() => new BackupRestoreOwner({capabilitySupported: true}).evaluatePreflight(bParams, bSnap),
       L3_BACKUP_RESTORE_REASON_CODE.BACKUP_CAPABILITY_UNSUPPORTED],
-    [() => new BackupRestoreOwner().evaluatePreflight(
+    [() => new BackupRestoreOwner(backupPorts({exportPartitionSnapshots: undefined}))
+      .evaluatePreflight(bParams, bSnap),
+    L3_BACKUP_RESTORE_REASON_CODE.BACKUP_CAPABILITY_UNSUPPORTED],
+    [() => new BackupRestoreOwner(backupPorts({clusterId: undefined}))
+      .evaluatePreflight(bParams, bSnap),
+    L3_BACKUP_RESTORE_REASON_CODE.CLUSTER_IDENTITY_UNESTABLISHED],
+    [() => new BackupRestoreOwner(backupPorts()).evaluatePreflight(
       bParams, {...bSnap, hasActiveOperation: true}),
     L3_BACKUP_RESTORE_REASON_CODE.CONCURRENT_OPERATION_ACTIVE],
-    [() => new BackupRestoreOwner().evaluatePreflight(bParams, {...bSnap, ready: false}),
+    [() => new BackupRestoreOwner(backupPorts()).evaluatePreflight(
+      bParams, {...bSnap, ready: false}),
+    L3_BACKUP_RESTORE_REASON_CODE.CLUSTER_NOT_READY],
+    [() => new BackupRestoreOwner(backupPorts()).evaluatePreflight(bParams, undefined),
       L3_BACKUP_RESTORE_REASON_CODE.CLUSTER_NOT_READY],
-    [() => new BackupRestoreOwner().evaluatePreflight(
+    [() => new BackupRestoreOwner(backupPorts()).evaluatePreflight(
       bParams, {...bSnap, hasPartitionQuorum: false}),
     L3_BACKUP_RESTORE_REASON_CODE.PARTITION_QUORUM_UNAVAILABLE],
+    [() => new BackupRestoreOwner(backupPorts()).evaluatePreflight(bParams, {ready: true}),
+      L3_BACKUP_RESTORE_REASON_CODE.PARTITION_QUORUM_UNAVAILABLE],
   ]) {
     t.equal(fn().reasonCode, code);
   }
@@ -185,20 +245,20 @@ test('L3 Backup and Restore: 10 reason codes, cut, Rule 6 proof, restore', async
     'https://control-plane.byoc/x', 'https://vendor-control-plane/x',
   ]) {
     t.equal(
-      new BackupRestoreOwner().evaluatePreflight({backupId: 'b', destinationUri: u}, bSnap)
-        .reasonCode, L3_BACKUP_RESTORE_REASON_CODE.DESTINATION_URI_INVALID,
+      new BackupRestoreOwner(backupPorts()).evaluatePreflight(
+        {backupId: 'b', destinationUri: u}, bSnap).reasonCode,
+      L3_BACKUP_RESTORE_REASON_CODE.DESTINATION_URI_INVALID,
     );
   }
 
-  const confOwner = new BackupRestoreOwner();
-  await confOwner.createBackup({operationId: 'op-b1-111111111111', parameters: bParams});
-  const dupIdRes = await confOwner.createBackup({
-    operationId: 'op-b2-111111111111',
-    parameters: {backupId: 'bkp-test-1', destinationUri: 'memory://test/bkp-diff'},
-  });
+  const confOwner = new BackupRestoreOwner(backupPorts());
+  await backup(confOwner, bParams, {operationId: 'op-b1-111111111111'});
+  const dupIdRes = await backup(confOwner,
+    {backupId: 'bkp-test-1', destinationUri: 'memory://test/bkp-diff'},
+    {operationId: 'op-b2-111111111111'});
   t.equal(dupIdRes.reasonCode, L3_BACKUP_RESTORE_REASON_CODE.BACKUP_ID_CONFLICT);
 
-  for (const [opts, uri, code] of [
+  for (const [failures, uri, code] of [
     [{unreachableUris: ['unreach']}, 'memory://unreach/b',
       L3_BACKUP_RESTORE_REASON_CODE.DESTINATION_UNREACHABLE],
     [{writeDeniedUris: ['denied']}, 'memory://denied/b',
@@ -210,17 +270,23 @@ test('L3 Backup and Restore: 10 reason codes, cut, Rule 6 proof, restore', async
     [{corruptSegmentUris: ['corrupt-s']}, 'memory://corrupt-s/b',
       L3_BACKUP_RESTORE_REASON_CODE.BACKUP_VERIFICATION_FAILED],
   ]) {
-    const res = await new BackupRestoreOwner(opts).createBackup({
-      parameters: {backupId: 'b', destinationUri: uri},
-    });
+    const res = await backup(new BackupRestoreOwner(backupPorts({}, failures)),
+      {backupId: 'b', destinationUri: uri});
     t.equal(res.reasonCode, code);
   }
 
-  const validOwner = new BackupRestoreOwner({clusterId: 'source-cluster-alpha'});
-  const backupRes = await validOwner.createBackup({
-    operationId: 'op-valid-111111111111',
-    parameters: {backupId: 'bkp-cut-1', destinationUri: 'memory://cluster-data/backup-cut'},
-  });
+  const partialExport = new BackupRestoreOwner(backupPorts({
+    exportPartitionSnapshots: () => [{partitionId: 9, payload: 'rows'}],
+  }));
+  const partialRes = await backup(partialExport, {backupId: 'b', destinationUri: 'memory://p/b'});
+  t.equal(partialRes.state, MANAGEMENT_OPERATION_STATE.FAILED,
+    'a partition without its Raft position is never backed up with an invented one');
+  t.equal(partialRes.reasonCode, L3_BACKUP_RESTORE_REASON_CODE.BACKUP_VERIFICATION_FAILED);
+
+  const validOwner = new BackupRestoreOwner(backupPorts());
+  const backupRes = await backup(validOwner,
+    {backupId: 'bkp-cut-1', destinationUri: 'memory://cluster-data/backup-cut'},
+    {operationId: 'op-valid-111111111111'});
   t.equal(backupRes.state, MANAGEMENT_OPERATION_STATE.SUCCEEDED);
 
   const adapter = validOwner.storageAdapter;
@@ -236,29 +302,33 @@ test('L3 Backup and Restore: 10 reason codes, cut, Rule 6 proof, restore', async
   t.same(Object.keys(backupRes).sort(), EXP_KEYS.sort());
   t.equal('payload' in backupRes || 'rows' in backupRes, false);
 
-  const rOwner = new BackupRestoreOwner({storageAdapter: adapter, clusterId: 'new-clean-cluster'});
-  const mgmtFencing = new ManagementV1Owner({backupRestoreOwner: rOwner});
+  const rOwner = new BackupRestoreOwner(backupPorts({
+    storageAdapter: adapter, clusterId: 'new-clean-cluster',
+  }));
+  const mgmtFencing = new ManagementV1Owner({
+    backupRestoreOwner: rOwner, getClusterSnapshot: snapshotPort(),
+  });
   rOwner.restoreInProgress = true;
   const hFact = mgmtFencing.getClusterFacts().facts.health;
   t.ok(!mgmtFencing.getClusterSnapshot().ready && !hFact.ready &&
     hFact.state === CLUSTER_FACTS_CONSTANTS.HEALTH_UNAVAILABLE);
   rOwner.restoreInProgress = false;
 
-  const tamperedAdapter = new BackupRestoreOwner({clusterId: 'src'}).storageAdapter;
-  await new BackupRestoreOwner({storageAdapter: tamperedAdapter, clusterId: 'src'}).createBackup({
-    parameters: {backupId: 'bkp-tamp', destinationUri: 'memory://tampered/b'},
-  });
+  const tamperedAdapter = new MemoryBackupStorageAdapter();
+  await backup(new BackupRestoreOwner(backupPorts({storageAdapter: tamperedAdapter,
+    clusterId: 'src'})), {backupId: 'bkp-tamp', destinationUri: 'memory://tampered/b'});
   tamperedAdapter.storage.set(
     'memory://tampered/b/segments/partition-1.seg', Buffer.from('corrupt_bytes'),
   );
-  const tampOwner = new BackupRestoreOwner({storageAdapter: tamperedAdapter});
+  const tampOwner = new BackupRestoreOwner(backupPorts({storageAdapter: tamperedAdapter}));
   await t.rejects(
     () => tampOwner.restoreFromBackup({destinationUri: 'memory://tampered/b'}),
     /BACKUP_VERIFICATION_FAILED/,
   );
   t.equal(tampOwner.isRestoreAborted(), true);
 
-  const cleanRestore = new BackupRestoreOwner({storageAdapter: adapter});
+  const cleanRestore = new BackupRestoreOwner(backupPorts({storageAdapter: adapter,
+    clusterId: undefined}));
   const restResult = await cleanRestore.restoreFromBackup({
     destinationUri: 'memory://cluster-data/backup-cut',
   });
@@ -268,7 +338,8 @@ test('L3 Backup and Restore: 10 reason codes, cut, Rule 6 proof, restore', async
     sourceClusterIdentity: 'source-cluster-alpha', backupId: 'bkp-cut-1',
   });
 
-  const drRestore = new BackupRestoreOwner({storageAdapter: adapter});
+  const drRestore = new BackupRestoreOwner(backupPorts({storageAdapter: adapter,
+    clusterId: undefined}));
   const drResult = await drRestore.restoreFromBackup({
     destinationUri: 'memory://cluster-data/backup-cut',
     cliFlags: [BACKUP_MANIFEST_CONSTANTS.PRESERVE_IDENTITY_FLAG],
@@ -286,10 +357,9 @@ test('ManagementV1Owner: facts, idempotency, conflicts, and decommission', async
   t.equal(defaultFacts.decommissionNode, CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED);
 
   const mOwner = new ManagementV1Owner({
-    clusterId: 'lagrange-cluster-primary',
-    decommissionSupported: true,
-    nodeCount: 3,
-    nodes: ['node-1', 'node-2', 'node-3'],
+    clusterId: PRIMARY_CLUSTER_ID,
+    onDecommissionNode: () => {},
+    getClusterSnapshot: snapshotPort(),
   });
 
   const allFacts = mOwner.getClusterFacts();
@@ -329,19 +399,26 @@ test('ManagementV1Owner: facts, idempotency, conflicts, and decommission', async
   await t.rejects(() => mOwner.submitOperation(badDigEnv), /OPERATION_DIGEST_MISMATCH/);
 
   for (const [opts, param, code] of [
-    [{decommissionSupported: false}, 'node-1',
+    [{onDecommissionNode: undefined, decommissionSupported: true}, 'node-1',
       L6_DECOMMISSION_REASON_CODE.DECOMMISSION_CAPABILITY_UNSUPPORTED],
+    [{getClusterSnapshot: undefined}, 'node-1', L6_DECOMMISSION_REASON_CODE.CLUSTER_NOT_READY],
+    [{getClusterSnapshot: snapshotPort({nodeCount: undefined})}, 'node-1',
+      L6_DECOMMISSION_REASON_CODE.CLUSTER_NOT_READY],
+    [{getClusterSnapshot: snapshotPort({ready: undefined})}, 'node-1',
+      L6_DECOMMISSION_REASON_CODE.CLUSTER_NOT_READY],
     [{}, 'node-missing', L6_DECOMMISSION_REASON_CODE.NODE_NOT_FOUND],
-    [{underReplicatedPartitionCount: 3}, 'node-1',
+    [{getClusterSnapshot: snapshotPort({nodeIds: []})}, 'node-1',
+      L6_DECOMMISSION_REASON_CODE.NODE_NOT_FOUND],
+    [{getClusterSnapshot: snapshotPort({underReplicatedPartitionCount: 3})}, 'node-1',
       L6_DECOMMISSION_REASON_CODE.UNDER_REPLICATED_PARTITIONS],
-    [{nodeCount: 2, nodes: ['node-1', 'node-2']}, 'node-1',
-      L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],
+    [{getClusterSnapshot: snapshotPort({nodeCount: 2, readyNodeCount: 2,
+      nodeIds: ['node-1', 'node-2']})}, 'node-1',
+    L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],
   ]) {
     const o = new ManagementV1Owner({
-      clusterId: 'lagrange-cluster-primary',
-      decommissionSupported: true,
-      nodeCount: 3,
-      nodes: ['node-1', 'node-2', 'node-3'], ...opts,
+      clusterId: PRIMARY_CLUSTER_ID,
+      onDecommissionNode: () => {},
+      getClusterSnapshot: snapshotPort(), ...opts,
     });
     const decRes = await o.submitOperation(makeEnv('DECOMMISSION_NODE', {lagrangeNodeId: param}));
     t.equal(decRes.reasonCode, code);
@@ -353,37 +430,47 @@ test('ManagementV1Owner: facts, idempotency, conflicts, and decommission', async
   t.equal(validDec.state, MANAGEMENT_OPERATION_STATE.ACCEPTED);
 });
 
-test('Fastify HTTP route handlers return correct status codes', async (t) => {
-  const fastify = Fastify({logger: false, bodyLimit: 1048576});
-  const owner = new ManagementV1Owner({
-    clusterId: 'lagrange-cluster-primary',
-    nodeCount: 3,
-    nodes: ['node-1', 'node-2', 'node-3'],
+test('management routes on the BootstrapAPI server return contract status codes', async (t) => {
+  initializeTestEnvironment();
+  const env = {
+    PGWIRE_AUTH_USER: 'mgmt-user', PGWIRE_AUTH_PASSWORD: 'mgmt-pass',
+    PGWIRE_AUTH_DATABASE: 'mgmt-db',
+  };
+  const api = new BootstrapAPI({
+    seedNodeId: 'mgmt-status-seed', seedNodeAddress: 'ws://mgmt-status-seed:8082',
+    requestCellEnv: env,
+    systemTableCache: {
+      get: (table, key) => (table === TABLES.CONFIG && key === CLUSTER_ID_CONFIG_KEY ?
+        {config_value: PRIMARY_CLUSTER_ID} : null),
+      getAll: () => [], filter: () => [], find: () => null, getReadyNodes: () => [],
+    },
   });
-  owner.registerRoutes(fastify);
-  await fastify.ready();
+  await api.initialize(0, {listen: false});
+  t.teardown(() => api.shutdown());
+  const authorization =
+    `Basic ${Buffer.from(`${env.PGWIRE_AUTH_USER}:${env.PGWIRE_AUTH_PASSWORD}`).toString('base64')}`;
+  const fastify = api.getFastify();
 
-  const factsRes = await fastify.inject({method: 'GET', url: MANAGEMENT_V1_ROUTE.FACTS});
+  const factsRes = await fastify.inject({
+    method: 'GET', url: MANAGEMENT_V1_ROUTE.FACTS, headers: {authorization},
+  });
   t.equal(factsRes.statusCode, 200);
-  t.equal(factsRes.json().facts.cluster.identity, 'lagrange-cluster-primary');
+  t.equal(factsRes.json().facts.cluster.identity, PRIMARY_CLUSTER_ID);
 
-  const env = makeEnv('NOOP', {reason: 'heartbeat'});
+  const noop = makeEnv('NOOP', {reason: 'heartbeat'});
   for (const [method, url, payload, headers, code] of [
-    ['POST', MANAGEMENT_V1_ROUTE.OPERATIONS, env, null, 200],
-    ['GET', `/management/v1/operations/${env.operationId}`, null, null, 200],
-    ['GET', '/management/v1/operations/non-existent-op-123456789', null, null, 404],
-    ['POST', MANAGEMENT_V1_ROUTE.OPERATIONS, makeEnv('EXEC', {}), null, 400],
+    ['POST', MANAGEMENT_V1_ROUTE.OPERATIONS, noop, {}, 200],
+    ['GET', `/management/v1/operations/${noop.operationId}`, null, {}, 200],
+    ['GET', '/management/v1/operations/non-existent-op-123456789', null, {}, 404],
+    ['POST', MANAGEMENT_V1_ROUTE.OPERATIONS, makeEnv('EXEC', {}), {}, 400],
     ['POST', MANAGEMENT_V1_ROUTE.OPERATIONS,
-      makeEnv('NOOP', {reason: 'c'}, {operationId: env.operationId}), null, 409],
+      makeEnv('NOOP', {reason: 'c'}, {operationId: noop.operationId}), {}, 409],
     ['POST', MANAGEMENT_V1_ROUTE.OPERATIONS, JSON.stringify({pad: 'a'.repeat(70000)}),
       {'content-type': 'application/json'}, 413],
   ]) {
-    const opts = {method, url};
+    const opts = {method, url, headers: {authorization, ...headers}};
     if (payload) opts.payload = payload;
-    if (headers) opts.headers = headers;
     const res = await fastify.inject(opts);
-    t.equal(res.statusCode, code);
+    t.equal(res.statusCode, code, `${method} ${url}`);
   }
-
-  await fastify.close();
 });

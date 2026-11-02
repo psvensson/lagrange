@@ -277,8 +277,12 @@ function verifyManagementV1TruthfulSupportAndAuth(rootDir) {
   installBootstrapApiServerMethods(StubBootstrapApi);
   const serverStub = new StubBootstrapApi();
   serverStub.seedNodeId = TEST_NODE_ID;
+  // The real BootstrapAPI reads the identity from the cluster record; an
+  // unestablished record is null and must never become the seed node id.
+  serverStub.getClusterId = () => null;
   const bootstrapOwner = serverStub.getManagementV1Owner();
   const {facts: bootstrapFacts} = bootstrapOwner.getClusterFacts();
+  assert.equal(bootstrapFacts.cluster.identity, null);
   assert.equal(bootstrapFacts.capabilities.rollingUpgrade, CAPABILITY_UNSUPPORTED);
   assert.equal(bootstrapFacts.capabilities.backupRestore, CAPABILITY_UNSUPPORTED);
   assert.equal(bootstrapFacts.capabilities.decommissionNode, CAPABILITY_UNSUPPORTED);

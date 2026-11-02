@@ -313,6 +313,24 @@ const BOOTSTRAP_API_PROBE_REASON = Object.freeze({
     'BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED',
 });
 
+/**
+ * Named outcomes of control-plane request authentication. UNCONFIGURED means
+ * no credential and no authenticator is installed; each route policy decides
+ * on it explicitly (management routes refuse it).
+ */
+const CONTROL_PLANE_AUTHORITY = Object.freeze({
+  AUTHORIZED: 'AUTHORIZED',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  UNCONFIGURED: 'UNCONFIGURED',
+});
+
+const CONTROL_PLANE_AUTH_REFUSAL = Object.freeze({
+  UNAUTHORIZED_CODE: 'CONTROL_PLANE_UNAUTHORIZED',
+  UNAUTHORIZED_MESSAGE: 'Authentication required',
+  UNCONFIGURED_CODE: 'CONTROL_PLANE_AUTH_UNCONFIGURED',
+  UNCONFIGURED_MESSAGE: 'Control-plane authentication is not configured',
+});
+
 const BOOTSTRAP_API_LIVENESS = Object.freeze({
   ALIVE: true,
   STATE_RUNNING: 'running',
@@ -345,4 +363,6 @@ export {
   BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
   BOOTSTRAP_API_SQL,
   BOOTSTRAP_API_SUBSYSTEM,
+  CONTROL_PLANE_AUTH_REFUSAL,
+  CONTROL_PLANE_AUTHORITY,
 };

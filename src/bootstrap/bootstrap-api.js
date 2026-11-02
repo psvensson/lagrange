@@ -210,6 +210,10 @@ class BootstrapAPI {
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(BOOTSTRAP_API_SUBSYSTEM) : console;
     this.controlAuthEnv = options.requestCellEnv || null;
+    // Declared management adapter ports (storage, partition export/hydrate,
+    // runtime snapshots, physical drain/restart/decommission). Production
+    // composition passes none; only tests inject adapters here.
+    this.managementAdapters = options.managementAdapters ?? null;
     this.authenticateControlRequest =
       typeof options.authenticateControlRequest === 'function' ?
         options.authenticateControlRequest :

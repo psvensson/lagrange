@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2509,
+    "ordinary": 2510,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2526,
-  "digest": "fnv1a32-d59d179b",
+  "censusSize": 2527,
+  "digest": "fnv1a32-8e09b3ab",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -188,6 +188,7 @@
     "test/bootstrap/lifecycle-owner-replica-routing.test.js": "ordinary",
     "test/bootstrap/lifecycle-unification.test.js": "ordinary",
     "test/bootstrap/management-v1-l4-l3.test.js": "ordinary",
+    "test/bootstrap/management-v1-route-authority.test.js": "ordinary",
     "test/bootstrap/mesh-reconcile-terminal-revive.test.js": "ordinary",
     "test/bootstrap/message-group-activation-handler-boundary.test.js": "ordinary",
     "test/bootstrap/message-group-assignment-centralization.test.js": "ordinary",
