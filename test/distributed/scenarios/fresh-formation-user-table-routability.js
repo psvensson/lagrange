@@ -50,7 +50,7 @@
  */
 
 import assert from 'node:assert/strict';
-import pg from 'pg';
+import {createPgWireClient} from '../reference-client/pg-wire-client.js';
 
 import {TIMEOUTS} from '../harness/constants.js';
 import {
@@ -132,8 +132,7 @@ function resolveDependencies(cluster) {
     formationBoundMs: overrides.formationBoundMs ?? FORMATION_BOUND_MS,
     now: overrides.now || Date.now,
     openPublicPg: overrides.openPublicPg || openLagrangePublicPgEndpoint,
-    pgClient: overrides.pgClient ||
-      ((config) => new pg.Client(config)),
+    pgClient: overrides.pgClient || createPgWireClient,
     quietWindowMs: overrides.quietWindowMs ?? QUIET_WINDOW_MS,
     routabilityBoundMs: overrides.routabilityBoundMs ?? ROUTABILITY_BOUND_MS,
     sleep: overrides.sleep || defaultSleep,

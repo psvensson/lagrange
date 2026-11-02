@@ -262,8 +262,10 @@ test('an asynchronous pg connection error is kept, never a process crash', async
 
 test('no other benchmark-chain module constructs a pg client', async () => {
   const {readdirSync, readFileSync} = await import('node:fs');
+  // The scenarios too (coordinator decision 3, 2026-11-02): every pg-wire
+  // client of the repository's distributed tests comes from the one owner.
   const roots = [new URL('../../reference-client/', import.meta.url),
-    new URL('../', import.meta.url)];
+    new URL('../', import.meta.url), new URL('../../scenarios/', import.meta.url)];
   const offenders = [];
   for (const root of roots) {
     for (const name of readdirSync(root)) {
