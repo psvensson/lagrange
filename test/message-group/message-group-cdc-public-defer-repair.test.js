@@ -47,8 +47,8 @@ test('public durable DEFER_STRICT_TARGET_UNKNOWN repairs once and re-decides in 
     const f = await provisionalRouteFixture(t);
     const follower = f.follower;
     const status = follower.raft.readStatus();
-    assert.equal(status.leaderAddressStatus, PEER_ADDRESS_STATUS.UNAVAILABLE,
-      'setup: the native leader route is unavailable');
+    assert.equal(status.leaderAddressStatus, PEER_ADDRESS_STATUS.NO_LEADER,
+      'setup: the follower has no live leader yet, so no native leader route');
     const first = occurrence(1);
     const second = occurrence(2);
     const decision = follower.resolveCdcIngressDecision({...first, targetGroupId: TARGET_GROUP,
@@ -89,7 +89,7 @@ test('public durable DEFER_STRICT_TARGET_UNKNOWN repairs once and re-decides in 
         sendsBefore, 'no target exists, so nothing is forwarded');
       assert.equal(follower.cdcCommitWaiters.size, 0, 'both admitted waits released');
       assert.equal(follower.raft.readStatus().leaderAddressStatus,
-        PEER_ADDRESS_STATUS.UNAVAILABLE, 'the probe rows did not change the native route');
+        PEER_ADDRESS_STATUS.NO_LEADER, 'the probe rows did not change the native route');
     } finally {
       follower.maybeRepairAuthoritativeForwardTopology = maybeRepair;
       follower.repairAuthoritativeForwardTopology = read;

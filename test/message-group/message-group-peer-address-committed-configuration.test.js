@@ -274,6 +274,35 @@ async (t) => {
     `${replicaId} records the learner's committed node at apply`);
   }
 
+  // A later stage of the transition naming another node than the one the
+  // learner was admitted on is refused before any proposal: the committed
+  // node is written once and never replaced.
+  const admitted = cluster.node(leader).readStatus();
+  const lengthBefore = admitted.lastIndex;
+  const mismatched = cluster.node(leader)[
+    RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]({
+    operationId: 'dc3-operation',
+    transitionIdentity: 'dc3-transition',
+    permitSequence: 2,
+    stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE,
+    replicaIdentity: target,
+    nodeId: 'node-elsewhere',
+    replicaLifecycleIncarnation: admitted.lifecycleIncarnation,
+    runtimeGeneration: admitted.runtimeGeneration,
+    leaderTerm: admitted.term,
+    leaderConfigurationStamp: {configurationKey: admitted.configurationKey,
+      membershipGenerationIndex: admitted.membershipGenerationIndex},
+  });
+  t.equal(mismatched.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.IDENTITY_MISMATCH,
+    'a transition naming a node other than the target\'s committed node refuses');
+  t.equal(cluster.node(leader).readStatus().lastIndex, lengthBefore,
+    'the refused transition appends nothing');
+  for (const replicaId of FOUNDERS) {
+    t.equal(new RaftRsPeerIdentityRegistry(cluster.replica(replicaId).db)
+      .committedNodeIdOf(target), targetNode,
+    `${replicaId} still records the admitted node`);
+  }
+
   const sixKey = {operationId: 'dc3-operation',
     transitionIdentity: 'dc3-transition', permitSequence: 1,
     stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,

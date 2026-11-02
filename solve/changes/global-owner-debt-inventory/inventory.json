@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "39d1001c2e0b9e68d2051cff99a1a225ea6aac4d437aa12fb33e0037e16fe648"
+        "sha256": "74bef87806fda6972459618f6120ea89012b8b0d8922cadb6b7d3d9c8ebe1188"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -24,7 +24,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3368353,
-        "sha256": "caaa877e24c617badf5ac60fb3a9143386d2f5f721474d4c90a1290afb1c1d75"
+        "sha256": "d5e8fcf4d42012eae826595dbd7f2ea465dea87744ffc19f8ff3d88358af4326"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "d5bb0260e6279fbb6b488ec41227e635eab54d33b468fb9dc58b38f0510dff4f"
+        "sha256": "1725190f6bfd73a198565e4e05bc83dbeacb485ae474ccf31a09d8eb9c5a5d50"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "2f2f2bfd8601de676d10937ccfe18bf440e6b2809144fe648bd50da71f56d14b"
+    "inputDigest": "14491098df5809d3a83826098fc99954e851836c98ca91c128ecc4f460e8418f"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "39d1001c2e0b9e68d2051cff99a1a225ea6aac4d437aa12fb33e0037e16fe648"
+        "sha256": "74bef87806fda6972459618f6120ea89012b8b0d8922cadb6b7d3d9c8ebe1188"
       },
-      "declaredCount": 1729,
-      "observedCount": 1729,
-      "assignedCount": 1729
+      "declaredCount": 1730,
+      "observedCount": 1730,
+      "assignedCount": 1730
     },
     "cognitive": {
       "identity": {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "d5bb0260e6279fbb6b488ec41227e635eab54d33b468fb9dc58b38f0510dff4f"
+          "sha256": "1725190f6bfd73a198565e4e05bc83dbeacb485ae474ccf31a09d8eb9c5a5d50"
         },
         "cloneGroups": 648,
         "duplicatedLines": 24311,
@@ -174,34 +174,34 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3368353,
-        "sha256": "caaa877e24c617badf5ac60fb3a9143386d2f5f721474d4c90a1290afb1c1d75"
+        "sha256": "d5e8fcf4d42012eae826595dbd7f2ea465dea87744ffc19f8ff3d88358af4326"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "f39928b55204b6f8f36da87c1eb505faa521b5e58f6fdb6f8073cec3f4feedce",
+      "sourceDigest": "8a5e8f36acbf08b8900258a2eede025dfde3064993fa2fe3bde97ed050fe2ed7",
       "moduleCount": 5995,
       "edgeCount": 32793,
       "unresolvedCount": 46
     }
   },
   "assignment": {
-    "sourceSignalCount": 2431,
-    "assignedSignalCount": 2431,
-    "uniqueAssignmentCount": 2431,
-    "digest": "8d5b3622f3255ff232a7092b73115ce04a3867d41e89f0a0fedaa0a2b64f7d5a"
+    "sourceSignalCount": 2432,
+    "assignedSignalCount": 2432,
+    "uniqueAssignmentCount": 2432,
+    "digest": "59c3e023ca3c4f56df78b1ef96be00cce62294591f037925de649967a4d211b6"
   },
   "signalCounts": {
     "cognitive": 146,
-    "complexity": 1729,
+    "complexity": 1730,
     "duplication": 470,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1250,
+    "filesWithDebt": 1251,
     "rankedBoundaryCount": 112,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 92,
@@ -1188,6 +1188,34 @@
       ]
     },
     {
+      "key": "area:test/message-group",
+      "owner": null,
+      "boundary": "test/message-group",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/message-group"
+      ],
+      "fileCount": 14,
+      "signalCount": 14,
+      "complexity": 3,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 417,
+      "cloneTouches": 14,
+      "cycleGroups": 0,
+      "lintExclusions": 2,
+      "importIn": 20,
+      "importOut": 174,
+      "score": 59.7,
+      "topPaths": [
+        "test/message-group/no-silent-delivery-failures.property.test.js",
+        "test/message-group/error-message-consistency.property.test.js",
+        "test/message-group/message-group-native-provisional-route-fixture.js",
+        "test/message-group/message-group-service-raft-replication-and-cdc.test.js",
+        "test/message-group/message-group-service-strict-cdc-forward-routing.test.js"
+      ]
+    },
+    {
       "key": "semantic:message_group_service_owner/message_group_service_workflow",
       "owner": "message_group_service_owner",
       "boundary": "message_group_service_workflow",
@@ -1241,34 +1269,6 @@
         "src/logging/logs-table-service-pressure-helpers.js",
         "src/logging/log-query-service.js",
         "src/logging/log-retention-service.js"
-      ]
-    },
-    {
-      "key": "area:test/message-group",
-      "owner": null,
-      "boundary": "test/message-group",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/message-group"
-      ],
-      "fileCount": 13,
-      "signalCount": 13,
-      "complexity": 2,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 417,
-      "cloneTouches": 14,
-      "cycleGroups": 0,
-      "lintExclusions": 2,
-      "importIn": 17,
-      "importOut": 146,
-      "score": 55.7,
-      "topPaths": [
-        "test/message-group/no-silent-delivery-failures.property.test.js",
-        "test/message-group/error-message-consistency.property.test.js",
-        "test/message-group/message-group-service-raft-replication-and-cdc.test.js",
-        "test/message-group/message-group-service-strict-cdc-forward-routing.test.js",
-        "test/message-group/message-group-replica-distribution.property.test.js"
       ]
     },
     {
