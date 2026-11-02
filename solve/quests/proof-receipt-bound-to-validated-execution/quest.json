@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "proof-receipt-bound-to-validated-execution",
+  "class": "fix",
+  "statement": "A passing durable proof receipt (scripts/proof-authority.js recordProof) can only be recorded from a validated execution report of the exact candidate. The runner owns one report schema (candidate sha and release proof identity, producer, commands with exit statuses, planned vs executed vs skipped files, per-file results with assertion counts, retry record). recordProof refuses with typed problem codes an absent or partial report, a sha or identity mismatch, a failed or skipped planned file, a zero-assertion pass, a truncated corpus, a failed command, and a passed-on-retry file unless the sealed policy for that proof id admits qualified results, in which case the receipt carries the qualification and is never a clean pass. Existing lawful reuse (resolveProof, identity-catalogued proofs, append-only receipt history) is unchanged and old receipts are not reinterpreted.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/proof-receipt-bound-to-validated-execution/evidence/receipt.json",
+      "requiredReceipts": [
+        "report-schema-one-owner",
+        "receipt-refuses-absent-partial-mismatched-evidence",
+        "receipt-refuses-failed-skipped-zero-assertion-truncated",
+        "retry-qualification-never-laundered",
+        "producers-rebound-lawful-reuse-intact",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "cause",
+      "statement": "Repair at the existing owner scripts/proof-authority.js: buildReceipt asserts outcome passed and recordProof never receives or validates execution evidence; the pass is asserted by the caller's control flow. The report writer is the runner (scripts/run-test-files.js) through one schema owner; no second certification framework or parallel receipt format."
+    },
+    {
+      "id": "scope",
+      "statement": "Bounded 0.4.1 repair. Producers rebound: full-gate workflow record step, scripts/publish-head.js, scripts/run-release-proof.js, scripts/checks/push-gate-change-proof.js. release.yml keeps checking the durable proof. Lab-placed shard reporting, land-proof reuse folding and the placement controller's own red-then-green re-decision are recorded as remaining blockers, not enlarged into this repair."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first: one falsifier per rejection class failing at the behavioural assertion, a positive complete report, and an old receipt still resolving through resolveProof. No fallback that turns absent evidence into a pass, no baseline raise, no hook bypass, independent verification before landing."
+    }
+  ],
+  "sealedAt": "2fca51dc9a2f0344e23f0535dfa50fe0e000b674"
+}

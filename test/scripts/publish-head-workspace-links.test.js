@@ -76,8 +76,9 @@ test('the publisher records the corpus receipt the gate proved', () => {
     assert.equal(recordProvedCorpus(run, workspace, worktree, head, say), true);
     assert.equal(calls.length, 1, 'one recording');
     assert.deepEqual(calls[0].args,
-      ['scripts/proof-authority.js', 'record', 'corpus-full-v1', head],
-      'the authority records its own contract for the published sha');
+      ['scripts/proof-authority.js', 'record', 'corpus-full-v1', head,
+        '--report', path.join(worktree, 'test-output/reports/execution-report.json')],
+      'the authority records its own contract for the published sha, from the gate\'s report');
     assert.equal(calls[0].cwd, workspace,
       'recorded from the repository, not the disposable gate worktree');
     assert.ok(calls[0].timeout > 0,

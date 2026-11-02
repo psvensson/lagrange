@@ -17,6 +17,7 @@
 // Usage:
 //   node scripts/plan-test-lane.js --primary unit,packaging --resource ordinary
 
+import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
@@ -90,6 +91,31 @@ export function planLane(repoRoot, filters) {
       return true;
     })
     .sort();
+}
+
+// The whole behavioural corpus is what `npm run test:all` runs: the classified
+// runner's own lane filter, read from package.json so the two cannot differ.
+// The manifest every whole-corpus proof is planned against (the release proof,
+// the push gate, the local corpus).
+const WHOLE_CORPUS_SCRIPT = 'test:all';
+const WHOLE_CORPUS_RUNNER = 'scripts/run-classified-test-files.js';
+const SCRIPT_WORD = /\s+/u;
+const NO_RUNNER_ERROR = ' does not run ';
+
+/**
+ * The files `npm run test:all` runs in a checkout.
+ * @param {string} checkout
+ * @return {string[]}
+ */
+export function wholeCorpusFiles(checkout) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(checkout, 'package.json'), 'utf8'));
+  const words = String(manifest.scripts?.[WHOLE_CORPUS_SCRIPT] || '').trim()
+    .split(SCRIPT_WORD);
+  const at = words.indexOf(WHOLE_CORPUS_RUNNER);
+  if (at < 0) {
+    throw new Error(`${WHOLE_CORPUS_SCRIPT}${NO_RUNNER_ERROR}${WHOLE_CORPUS_RUNNER}`);
+  }
+  return planLane(checkout, parseLaneArgs(words.slice(at + 1)));
 }
 
 function main() {

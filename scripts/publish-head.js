@@ -14,9 +14,13 @@ import {
   PROOF_SCOPE_PATH,
   WORKSPACE_INJECTION_ENV,
 } from './checks/change-selection-constants.js';
-import {parseLaneArgs, planLane} from './plan-test-lane.js';
+import {wholeCorpusFiles} from './plan-test-lane.js';
 import {THERMAL_REFUSAL_EXIT} from './checks/wait-for-thermal-headroom.js';
 import {spawnGit} from './checks/git-invocation.js';
+import {
+  EXECUTION_REPORT_PATH, EXECUTION_SECTIONS_ENV, buildExecutionReport, openExecutionSections,
+  readExecutionReport, readExecutionRuns, writeExecutionReport,
+} from './test-execution-report.js';
 
 const ZERO_SHA = '0'.repeat(40);
 const PIPE_STDIO = 'pipe';
@@ -109,6 +113,9 @@ const PUSH_REFUSED_PREFIX = 'publish: pushing the gated head is ';
 // decided writes it, and it names the sha it proved.
 const PROOF_AUTHORITY_SCRIPT = 'scripts/proof-authority.js';
 const PROOF_RECORD_COMMAND = 'record';
+// The receipt is recorded only from the run's execution report
+// (proof-receipt-bound-to-validated-execution).
+const PROOF_REPORT_FLAG = '--report';
 const CORPUS_PROOF_ID = 'corpus-full-v1';
 const RECORD_TIMEOUT_MS = 60000;
 const FIELD_FULL_CORPUS = 'fullCorpus';
@@ -578,7 +585,8 @@ export function recordProvedCorpus(run, root, worktree, head,
   let recorded = null;
   try {
     recorded = run(process.execPath,
-      [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, head],
+      [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, head,
+        PROOF_REPORT_FLAG, path.join(worktree, EXECUTION_REPORT_PATH)],
       {cwd: root, encoding: UTF8, timeout: RECORD_TIMEOUT_MS});
   } catch (error) {
     write(`${RECEIPT_FAILED_PREFIX}${error.message}`);
@@ -632,7 +640,6 @@ const LOCAL_CORPUS_GIT_DIR_NAME = '.git';
 const LOCAL_CORPUS_STATE = Object.freeze({
   RUNNING: 'running', GREEN: 'green', RED: 'red', SUPERSEDED: 'superseded', LOST: 'lost',
 });
-const LOCAL_CORPUS_SCRIPT = 'test:all';
 const LOCAL_CORPUS_RUNNER = 'scripts/run-classified-test-files.js';
 const LOCAL_CORPUS_GATE = 'scripts/checks/push-gate-corpus-worktree.js';
 const LOCAL_CORPUS_GATE_FLAG = '--gate';
@@ -641,16 +648,22 @@ const LOCAL_CORPUS_SHELL = 'sh';
 const LOCAL_CORPUS_SHELL_COMMAND = '-c';
 // $1 the file list, $2 this node. The convergence probes follow, observed as
 // the hosted canary observed them: their result never decides the verdict.
+// The probes run with the execution sections off: observed, they are no part
+// of the corpus the receipt rests on.
 const LOCAL_CORPUS_RUN_SCRIPT =
   `"$2" ${LOCAL_CORPUS_RUNNER} --stdin < "$1"; status=$?; ` +
-  'npm run -s test:convergence-probes || ' +
+  `${EXECUTION_SECTIONS_ENV}= npm run -s test:convergence-probes || ` +
   'echo "local corpus: convergence probes red (observed, never the verdict)"; ' +
   'exit "$status"';
 const LOCAL_CORPUS_RETRY_ENV = 'LAGRANGE_RETRY_FAILED_ONCE';
 const LOCAL_CORPUS_FIELD_TESTS = 'testPaths';
-const LOCAL_CORPUS_WORD = /\s+/u;
 const LOCAL_CORPUS_SIGNAL = 'SIGTERM';
-const LOCAL_CORPUS_SUFFIX = Object.freeze({STATE: '.json', LOG: '.log', FILES: '.files'});
+const LOCAL_CORPUS_SUFFIX = Object.freeze({STATE: '.json', LOG: '.log', FILES: '.files',
+  CONE_REPORT: '.cone-report.json', SECTIONS: '.sections.ndjson', REPORT: '.report.json'});
+const LOCAL_CORPUS_REPORT = Object.freeze({
+  PRODUCER_KIND: 'local-corpus', PRODUCER_ID_PREFIX: 'pid-', LABEL: 'local-corpus',
+  TREE_SUFFIX: '^{tree}',
+});
 const LOCAL_CORPUS_PROC = Object.freeze({DIRECTORY: '/proc', COMMAND: 'cmdline'});
 const LOCAL_CORPUS_PS = Object.freeze(['ps', '-o', 'command=', '-p']);
 const LOCAL_CORPUS_OWED = Object.freeze({
@@ -674,7 +687,6 @@ const LOCAL_CORPUS_TEXT = Object.freeze({
   HOT: 'the machine stayed too hot to run it (thermal-headroom-exhausted)',
   UNRECORDED: 'receipt not recorded: ',
   BOOKKEEPING: 'bookkeeping failed: ',
-  NO_RUNNER: ' does not run ',
   ALREADY: 'already ',
   FOR_THIS_COMMIT: ' for this commit',
 });
@@ -721,23 +733,6 @@ function writeLocalCorpusState(stateDir, state) {
   fs.renameSync(`${file}.tmp`, file);
 }
 
-/**
- * The files `npm run test:all` runs in a checkout: the classified runner's own
- * filter, read from package.json so the two cannot differ.
- * @param {string} checkout
- * @return {string[]}
- */
-export function wholeCorpusFiles(checkout) {
-  const manifest = JSON.parse(fs.readFileSync(path.join(checkout, 'package.json'), UTF8));
-  const words = String(manifest.scripts?.[LOCAL_CORPUS_SCRIPT] || '').trim()
-    .split(LOCAL_CORPUS_WORD);
-  const at = words.indexOf(LOCAL_CORPUS_RUNNER);
-  if (at < 0) {
-    throw new Error(`${LOCAL_CORPUS_SCRIPT}${LOCAL_CORPUS_TEXT.NO_RUNNER}${LOCAL_CORPUS_RUNNER}`);
-  }
-  return planLane(checkout, parseLaneArgs(words.slice(at + 1)));
-}
-
 // What a pushed commit is owed after its gate: the rest of the corpus,
 // nothing (the gate proved the whole corpus), or - named - why it cannot know.
 function localCorpusOwed(scope, head) {
@@ -775,17 +770,26 @@ export function localCorpusPlan(checkout, head,
 /**
  * Start the local corpus for a pushed commit, detached; returns its pid.
  * @param {{root: string, stateDir: string, head: string, files: string[],
- *   spawnProcess?: Function, env?: Object, now?: number}} input
+ *   spawnProcess?: Function, env?: Object, now?: number, coneReport?: string}} input
  * @return {number}
  */
 export function startLocalCorpus({root, stateDir, head, files, spawnProcess = spawn,
-  env = process.env, now = Date.now()}) {
+  env = process.env, now = Date.now(), coneReport = null}) {
   fs.mkdirSync(stateDir, {recursive: true});
   const base = path.join(stateDir, head);
   fs.writeFileSync(`${base}${LOCAL_CORPUS_SUFFIX.FILES}`, files.join(NEWLINE) + NEWLINE);
+  // The gate's report of the cone it proved: the rest completes it. A stale
+  // one from an earlier publish of this head never stands in for it.
+  fs.rmSync(`${base}${LOCAL_CORPUS_SUFFIX.CONE_REPORT}`, {force: true});
+  if (coneReport && fs.existsSync(coneReport)) {
+    fs.copyFileSync(coneReport, `${base}${LOCAL_CORPUS_SUFFIX.CONE_REPORT}`);
+  }
   const log = fs.openSync(`${base}${LOCAL_CORPUS_SUFFIX.LOG}`, 'w');
+  // A run handed the rest of a cone owes the cone's report: without it the
+  // rest is no whole corpus, whatever the run finds.
   const record = {sha: head, state: LOCAL_CORPUS_STATE.RUNNING, pid: null,
-    files: files.length, startedAt: now, log: `${base}${LOCAL_CORPUS_SUFFIX.LOG}`};
+    files: files.length, startedAt: now, log: `${base}${LOCAL_CORPUS_SUFFIX.LOG}`,
+    ...(coneReport ? {coneOwed: true} : {})};
   const child = spawnProcess(process.execPath,
     [fileURLToPath(import.meta.url), LOCAL_CORPUS_ARGUMENT, head], {
       cwd: root,
@@ -815,11 +819,14 @@ export function startLocalCorpus({root, stateDir, head, files, spawnProcess = sp
  */
 export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Date.now}) {
   const current = () => readLocalCorpusRecords(stateDir).find((entry) => entry.sha === head);
-  const files = path.join(stateDir, `${head}${LOCAL_CORPUS_SUFFIX.FILES}`);
-  const gated = run(process.execPath, [LOCAL_CORPUS_GATE, LOCAL_CORPUS_GATE_FLAG, head,
+  const base = path.join(stateDir, head);
+  const files = `${base}${LOCAL_CORPUS_SUFFIX.FILES}`;
+  const sections = openExecutionSections(`${base}${LOCAL_CORPUS_SUFFIX.SECTIONS}`);
+  const gateArgs = [LOCAL_CORPUS_GATE, LOCAL_CORPUS_GATE_FLAG, head,
     LOCAL_CORPUS_RUN_FLAG, LOCAL_CORPUS_SHELL, LOCAL_CORPUS_SHELL_COMMAND,
-    LOCAL_CORPUS_RUN_SCRIPT, LOCAL_CORPUS_SHELL, files, process.execPath],
-  {cwd: root, stdio: INHERIT_STDIO});
+    LOCAL_CORPUS_RUN_SCRIPT, LOCAL_CORPUS_SHELL, files, process.execPath];
+  const gated = run(process.execPath, gateArgs,
+    {cwd: root, stdio: INHERIT_STDIO, env: {...process.env, [EXECUTION_SECTIONS_ENV]: sections}});
   const state = current();
   // Superseded meanwhile: a newer head on main owns the verdict now.
   if (state?.state !== LOCAL_CORPUS_STATE.RUNNING) return gated.status ?? 1;
@@ -833,13 +840,68 @@ export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Dat
       status: gated.status, finishedAt: now()});
     return gated.status ?? 1;
   }
+  const report = writeLocalCorpusReport({root, base, head, sections,
+    coneOwed: state.coneOwed === true,
+    command: {label: LOCAL_CORPUS_REPORT.LABEL, argv: [process.execPath, ...gateArgs],
+      exitStatus: gated.status}});
   const recorded = run(process.execPath,
-    [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, head],
+    [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, head,
+      PROOF_REPORT_FLAG, report],
     {cwd: root, encoding: UTF8, timeout: RECORD_TIMEOUT_MS});
   writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.GREEN,
     finishedAt: now(), receipt: recorded?.status === 0 ? CORPUS_PROOF_ID :
       String(recorded?.stderr || recorded?.stdout || RECEIPT_NO_REASON).trim()});
   return 0;
+}
+
+/**
+ * The whole-corpus execution report of a local corpus run: the gate's cone
+ * report (when the gate proved one) completed by this run's sections. The
+ * planned manifest is the cone plus the rest this run was handed; the
+ * candidate is the cone's, or this head's tree when the whole corpus ran here.
+ * A rest run whose cone report is missing has no candidate: the authority
+ * refuses that report as partial, never a whole corpus.
+ * @return {string} the report file
+ */
+function writeLocalCorpusReport({root, base, head, sections, command, coneOwed}) {
+  const coneReport = readExecutionReport(`${base}${LOCAL_CORPUS_SUFFIX.CONE_REPORT}`);
+  // A malformed cone report contributes nothing; what it fails to carry the
+  // authority then finds missing.
+  const cone = {commands: listOf(coneReport?.commands), planned: listOf(coneReport?.planned),
+    runs: listOf(coneReport?.runs)};
+  const runs = [...cone.runs, ...readExecutionRuns(sections)];
+  const candidate = coneReport ? coneReport.candidate ?? null :
+    (coneOwed ? null : localCorpusCandidate(root, head, runs));
+  return writeExecutionReport(`${base}${LOCAL_CORPUS_SUFFIX.REPORT}`, buildExecutionReport({
+    candidate,
+    producer: {kind: LOCAL_CORPUS_REPORT.PRODUCER_KIND,
+      id: `${LOCAL_CORPUS_REPORT.PRODUCER_ID_PREFIX}${process.pid}`},
+    commands: [...cone.commands, command],
+    planned: [...cone.planned, ...localCorpusRest(base)],
+    runs,
+  }));
+}
+
+function listOf(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+// The files this run was handed. The gate script reads the same list, so a
+// missing one fails the run before any report is written.
+function localCorpusRest(base) {
+  const restFile = `${base}${LOCAL_CORPUS_SUFFIX.FILES}`;
+  if (!fs.existsSync(restFile)) return [];
+  return fs.readFileSync(restFile, UTF8).split(NEWLINE).filter((line) => line.trim() !== '');
+}
+
+// The whole corpus ran here, in a fresh exact checkout of head: its tree, and
+// clean only when every run recorded a clean checkout.
+function localCorpusCandidate(root, head, runs) {
+  const tree = spawnGit([REV_PARSE_COMMAND, `${head}${LOCAL_CORPUS_REPORT.TREE_SUFFIX}`],
+    {cwd: root, encoding: UTF8});
+  return {sha: head, tree: String(tree.stdout || '').trim(),
+    clean: runs.length > 0 && runs.every((entry) => entry.checkout?.clean === true),
+    identity: null};
 }
 
 // Whether a pid is a live local corpus of ours. Fails closed: a pid it cannot
@@ -962,7 +1024,8 @@ function localCorpusAfterPush(worktree, head, localCorpus) {
     }
     return;
   }
-  startLocalCorpus({root: mainRoot, stateDir, head, files, spawnProcess});
+  startLocalCorpus({root: mainRoot, stateDir, head, files, spawnProcess,
+    coneReport: path.join(worktree, EXECUTION_REPORT_PATH)});
   write(`${LOCAL_CORPUS_TEXT.PREFIX}${LOCAL_CORPUS_TEXT.STARTED}${head}: ${files.length}` +
     `${LOCAL_CORPUS_TEXT.FILES}${path.join(stateDir, head)}${LOCAL_CORPUS_SUFFIX.LOG}`);
 }
