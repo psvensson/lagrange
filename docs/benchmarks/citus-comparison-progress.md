@@ -4,7 +4,7 @@
 
 Advertised Citus configurations. No Citus deployment has been executed by the comparative benchmark runner.
 
-Every comparative result published before 2026-11-01 was withdrawn: the records are retained as forensic evidence and the reasons are recorded in the append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson); each entry (inv-NNNN) names the withdrawn records, the admission reason codes and the defect ids (DNN) behind the withdrawal.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 8 entries; 7 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Citus comparison](citus-comparison-progress.svg)
 
@@ -53,6 +53,6 @@ Citus with client-side SQL and with colocated tables plus a distributed function
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:7f6ee93385b3f073e08695cff87bd28a1b2f7adb8d9be03b0a8f810d02ab4a7f
+- `data/tidb-comparison/raw-observations.ndjson` sha256:fc1a0d3ee1194ec64411ec87c0b684748322134934be7d12de945775e9e282cb
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
 - `data/tidb-comparison/invalidations.ndjson` sha256:20a3bf4fcc44c4116ce0166850c694e1c37946fcae27277fb0bc418fd2822972

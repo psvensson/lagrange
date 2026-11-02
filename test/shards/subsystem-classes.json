@@ -28,7 +28,7 @@
   "censusSize": 2537,
   "digest": "fnv1a32-966751ec",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4cbd7d24",
+  "observationDigest": "fnv1a32-44dd88fc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6604,8 +6604,10 @@
       "files": [
         "Dockerfile",
         "data/tidb-comparison/admitted-lab-measurements.json",
+        "data/tidb-comparison/history.ndjson",
         "data/tidb-comparison/invalidations.ndjson",
         "data/tidb-comparison/multi-system-matrix.json",
+        "data/tidb-comparison/progress-summary.json",
         "data/tidb-comparison/raw-observations.ndjson",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",

@@ -63,7 +63,7 @@ function buildComparativeLandingPage(matrix) {
         'Phase timings are admitted only from observed spans.'),
     ],
     links: [...SCENARIO_LINKS.slice(0, 3), ...DETAIL_LINKS],
-    sources: matrix.sources,
+    sources: matrix.sources, withdrawal: matrix.withdrawal,
     svgHref: 'comparative-overview.svg',
   };
 }

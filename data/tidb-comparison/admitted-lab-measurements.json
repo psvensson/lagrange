@@ -5,7 +5,7 @@
   "sources": [
     {
       "path": "data/tidb-comparison/raw-observations.ndjson",
-      "sha256": "sha256:7f6ee93385b3f073e08695cff87bd28a1b2f7adb8d9be03b0a8f810d02ab4a7f"
+      "sha256": "sha256:fc1a0d3ee1194ec64411ec87c0b684748322134934be7d12de945775e9e282cb"
     },
     {
       "path": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
@@ -4307,15 +4307,19 @@
       "claimKind": "throughput",
       "status": "invalid-measurement",
       "reasons": [
+        "duplicate-claim",
+        "mixed-campaign",
         "record-rejected:invalid-text"
       ],
       "defectIds": [],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r6-r001"
+          "bench-live-20261101-b-r6-r001",
+          "bench-live-20261101-b-r7-r001"
         ],
         "rawObservationsDigests": [
-          "sha256:6e86ed34b58842506020d2bd686d2689d8074277955b0f48d12188bd0ed1646f"
+          "sha256:6e86ed34b58842506020d2bd686d2689d8074277955b0f48d12188bd0ed1646f",
+          "sha256:f7b70ba6897286760fbe364930af65caa14a312072c86de4cf939e9af46398dd"
         ],
         "invalidatedRunIds": [],
         "forensic": []
@@ -7092,16 +7096,22 @@
       "claimKind": "throughput",
       "status": "invalid-measurement",
       "reasons": [
+        "duplicate-claim",
+        "mixed-campaign",
         "record-rejected:missing-field",
-        "semantic-gate-failed"
+        "semantic-gate-failed",
+        "semantic-gate-incomplete",
+        "semantic-gate-incomplete:durability:evidence_insufficient"
       ],
       "defectIds": [],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r6-r003"
+          "bench-live-20261101-b-r6-r003",
+          "bench-live-20261101-b-r7-r003"
         ],
         "rawObservationsDigests": [
-          "sha256:6b4c7a829c5890aa452ad005745e5563c4006e93992a2cac1772c4c79d53779f"
+          "sha256:6b4c7a829c5890aa452ad005745e5563c4006e93992a2cac1772c4c79d53779f",
+          "sha256:33e46fa709e6bb794444a5b1b48e7a783a85753ae79f397547fa836c54138af8"
         ],
         "invalidatedRunIds": [],
         "forensic": []
@@ -9066,15 +9076,21 @@
       "claimKind": "throughput",
       "status": "invalid-measurement",
       "reasons": [
-        "record-rejected:missing-field"
+        "duplicate-claim",
+        "mixed-campaign",
+        "mixed-profile",
+        "record-rejected:missing-field",
+        "semantic-gate-missing"
       ],
       "defectIds": [],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r6-r002"
+          "bench-live-20261101-b-r6-r002",
+          "bench-live-20261101-b-r7-r002"
         ],
         "rawObservationsDigests": [
-          "sha256:b8e567430398fd4981bea558d1d2231720103e99b80191e42e66ec530a803474"
+          "sha256:b8e567430398fd4981bea558d1d2231720103e99b80191e42e66ec530a803474",
+          "sha256:29dd23435a46ccf113abd1eeac26826d068e57c3f8e7a20eb0bf268fb9c254d6"
         ],
         "invalidatedRunIds": [],
         "forensic": []

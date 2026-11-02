@@ -11,7 +11,7 @@ function buildPage(matrix) {
       buildExperimentSection(matrix, 'live-movement-under-load', ''),
       buildExperimentSection(matrix, 'scenario-c-joint-scaling', ''),
     ],
-    links: SCENARIO_LINKS, sources: matrix.sources,
+    links: SCENARIO_LINKS, sources: matrix.sources, withdrawal: matrix.withdrawal,
     svgHref: 'movement-and-scenario-c-scaling-progress.svg',
   };
 }

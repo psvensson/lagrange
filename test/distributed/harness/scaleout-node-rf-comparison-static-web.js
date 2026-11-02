@@ -11,7 +11,7 @@ function buildPage(matrix) {
       buildExperimentSection(matrix, 'scaleout-3to5-node-rf3', ''),
       buildExperimentSection(matrix, 'replica-placement-5node-rf3', ''),
     ],
-    links: SCENARIO_LINKS, sources: matrix.sources,
+    links: SCENARIO_LINKS, sources: matrix.sources, withdrawal: matrix.withdrawal,
     svgHref: 'scaleout-3to5-node-rf3-progress.svg',
   };
 }
