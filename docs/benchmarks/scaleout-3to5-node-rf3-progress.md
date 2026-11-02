@@ -4,7 +4,7 @@
 
 A scale-out claim needs Scenario A runs at both node counts with observed process placement; replica placement needs its own observation and is never derived from the replication factor.
 
-Every comparative result published before 2026-11-01 was withdrawn: the records are retained as forensic evidence and the reasons are recorded in the append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) and the [defect ledger](../../solve/quests/comparative-benchmark-evidence-repair/evidence/defect-ledger.md).
+Every comparative result published before 2026-11-01 was withdrawn: the records are retained as forensic evidence and the reasons are recorded in the append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson); each entry (inv-NNNN) names the withdrawn records, the admission reason codes and the defect ids (DNN) behind the withdrawal.
 
 ![Three-to-five-node scale-out](scaleout-3to5-node-rf3-progress.svg)
 

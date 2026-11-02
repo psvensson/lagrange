@@ -417,6 +417,21 @@ async function caseStaticCensus() {
     '\'mismatched\''), false);
 }
 
+// Generated pages are public documentation: they cite the withdrawal by
+// invalidation entry and defect id, never by a path into development records.
+const DEVELOPMENT_RECORD_PATH = 'solve/';
+
+async function casePagesCiteNoDevelopmentRecords() {
+  await publish([], (chain) => {
+    const names = Object.keys(chain.pages);
+    assert.ok(names.length > 0, 'the regeneration renders pages');
+    for (const name of names) {
+      assert.equal(stringIncludes(chain.pages[name], DEVELOPMENT_RECORD_PATH), false,
+        `${name} names a path under ${DEVELOPMENT_RECORD_PATH}`);
+    }
+  });
+}
+
 const PUBLICATION_CASES = Object.freeze([
   ['J8 wrong image, digest, version, comparator-as-candidate, dead or unbound container',
     caseJ8ProductIdentity],
@@ -430,6 +445,8 @@ const PUBLICATION_CASES = Object.freeze([
   ['a 100-op smoke run cannot publish p99 or throughput', caseSmokeCannotPublishCapacity],
   ['a campaign of non-valid cells never reports as passed', caseCampaignOutcome],
   ['static census of the benchmark chain sources', caseStaticCensus],
+  ['no generated page names a path into development records',
+    casePagesCiteNoDevelopmentRecords],
 ]);
 
 export {PUBLICATION_CASES};

@@ -4,7 +4,7 @@
 
 A movement claim needs injection times, the observed authority change, acknowledged operation identities and a final-state check.
 
-Every comparative result published before 2026-11-01 was withdrawn: the records are retained as forensic evidence and the reasons are recorded in the append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) and the [defect ledger](../../solve/quests/comparative-benchmark-evidence-repair/evidence/defect-ledger.md).
+Every comparative result published before 2026-11-01 was withdrawn: the records are retained as forensic evidence and the reasons are recorded in the append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson); each entry (inv-NNNN) names the withdrawn records, the admission reason codes and the defect ids (DNN) behind the withdrawal.
 
 ![Partition movement under load and Scenario C at scale](movement-and-scenario-c-scaling-progress.svg)
 
