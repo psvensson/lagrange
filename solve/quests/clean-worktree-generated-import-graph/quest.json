@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "clean-worktree-generated-import-graph",
+  "class": "fix",
+  "statement": "Every exact checkout the push-gate materializer (scripts/checks/push-gate-corpus-worktree.js --gate) proves a command in - the pre-push gate, the publisher's local corpus and post-merge corpus, the local release proof - is brought to the generated state a CI or lab-placed proof checkout has before the command starts: the sealed import graph (test-output/analysis/global-owner-debt-import-graph.json) generated for that commit by its own producer, through one preparation owner that the lab placement shares. A clean checkout of b3b366573 then runs test/scripts/push-gate-change-proof.test.js green through the materializer, where it ran red (subtests 9, 10, 12, 13: import graph is not generated) in the post-merge corpus. A commit whose generated preparation fails or rewrites tracked metadata is refused, never run without it.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/clean-worktree-generated-import-graph/evidence/receipt.json",
+      "requiredReceipts": [
+        "cause-and-history-established",
+        "red-in-clean-materialized-checkout",
+        "one-preparation-owner-green",
+        "generated-material-census",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "cause",
+      "statement": "Repair at the owner of the proof checkout (the materializer's exact-sha preparation), shared with the lab placement's generated-state list; no per-test regeneration, no skip, no fallback that runs a test without the material it reads."
+    },
+    {
+      "id": "scope",
+      "statement": "Bounded repair of proof-checkout preparation. The tests that read the sealed graph are correct to read it (the gate's own import closure is what they assert); they are not rewritten. Unrelated corpus failures seen in the same post-merge run are recorded, not absorbed."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first in a clean materialized checkout at b3b366573 without the dev checkout's generated files, then green through the repaired materializer; a test of the preparation owner that fails when the preparation is removed; independent verification before landing."
+    }
+  ],
+  "sealedAt": "b3b3665736875a6d0df5d29edc8b52ab96c53344"
+}

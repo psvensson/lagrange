@@ -29,6 +29,21 @@
 #    9.82s /  14.55s / 1.5x  movielens-public-request-component-validation
 #    6.52s /  12.64s / 1.9x  service-compiler-editor-typings
 #
+# Added 2026-11-02 (quest service-test-toolchain-classification), measured at
+# jobs=1 on the same 20-core box on 6d58fdba1. They compile real Hono/service
+# components and start real component Cells; at jobs=4 pinned to two cores
+# 3 of 4 failed with STARTUP_TIMEOUT_MS:
+#
+#   40.24s /  88.63s / 2.2x  h5-compiled-public-hono-journey
+#   25.38s /  68.96s / 2.7x  h4-http-invocation-recovery-and-cancellation
+#   24.18s /  57.55s / 2.4x  q5-service-cell-v2-default-multi-operation
+#   23.05s /  50.15s / 2.2x  h1-pinned-hono-component-proof
+#   19.30s /  47.10s / 2.4x  q3-call-shard-paged-execution
+#   18.22s /  43.81s / 2.4x  h3-fetch-ingress-and-scoped-client
+#   15.23s /  42.37s / 2.8x  q4-call-bounded-structured-partials
+#   15.17s /  42.30s / 2.8x  q2-call-selector-typed-parameter-narrowing
+#   14.91s /  41.54s / 2.8x  h2-hono-source-ir-deployment-cutover
+#
 # Measured and deliberately EXCLUDED as ordinary despite matching the toolchain
 # grep — they reference the toolchain without driving it:
 #    1.10s /   0.94s / 0.9x  test/runtime/node-shutdown-cell-worker-teardown.test.js
@@ -45,7 +60,16 @@ test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js
 test/runtime/movielens-public-request-component-validation.test.js
 test/runtime/service-cell-bridge-roundtrip.test.js
 test/runtime/service-cell-worker-modes.test.js
+test/service/h1-pinned-hono-component-proof.test.js
+test/service/h2-hono-source-ir-deployment-cutover.test.js
+test/service/h3-fetch-ingress-and-scoped-client.test.js
+test/service/h4-http-invocation-recovery-and-cancellation.test.js
+test/service/h5-compiled-public-hono-journey.test.js
 test/service/handler-aware-runtime-invocation.test.js
+test/service/q2-call-selector-typed-parameter-narrowing.test.js
+test/service/q3-call-shard-paged-execution.test.js
+test/service/q4-call-bounded-structured-partials.test.js
+test/service/q5-service-cell-v2-default-multi-operation.test.js
 test/service/service-compiler-editor-typings.test.js
 test/wasm-service/call-cell-world-abi.test.js
 test/wasm-service/service-cell-v2-world-abi.test.js

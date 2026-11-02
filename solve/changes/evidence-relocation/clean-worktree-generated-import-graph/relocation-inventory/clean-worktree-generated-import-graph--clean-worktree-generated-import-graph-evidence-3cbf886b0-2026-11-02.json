@@ -1,0 +1,25 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz",
+  "bundleSha256": "5de274f4c35573dac9d8fae74b902c2dfdc3c66058b5b5e1e2fe6c113d58ef51",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz",
+  "sourceCommit": "3cbf886b0f4eb91358e1d7deb1b2dfd19c571e61",
+  "root": "solve/quests/clean-worktree-generated-import-graph/evidence/",
+  "files": [
+    ["census-prepared-b3b366573.log.txt","f9f091ace7f40e66b99f802cc1fc018aeb8c25dd46741469ade0d8ae5a60d7a2",4851],
+    ["census-unprepared-b3b366573.log.txt","5a91c1b7610571fad82c09c45944d0b9eaf21c28313b1c1dea80f1805d57ed6c",20581],
+    ["green-attempt2-closure-at-head.log.txt","c52143131496591a00818acf5eb2cf803b17e175f7b81ac7a574199ab5541c8f",434],
+    ["green-clean-materialized-b3b366573.log.txt","d1d3c7eb2fdbdb0086b7d8bfd6b6f528fb3e8edac05c4aa424cd8103d71fc317",434],
+    ["mutation-witnesses-attempt2.log.txt","a4f93e4dff8c6b72bb22876f7dbc9c70fa5644bb2f14e4c8eb577998b50f0a35",701],
+    ["mutation-witnesses.log.txt","6dd1fbe8c46bb302631ad78c14db2cde2db7490e38c536d82e679656bab264fb",549],
+    ["red-attempt2-closure-at-841cc2b9b.log.txt","8b3c05d7e8c83960d39536a643f96a6d6c34cd08205e7c00c61de26a3f167127",6046],
+    ["red-attempt2-lab-stale.log.txt","ede3e7b2aad5e7e35039df493cfe868127b932b92be2d4bb4907cd8b46eefef1",1119],
+    ["red-attempt2-refusal-before-fix.log.txt","42c803eb307e2c479ff154de3053f902758e5fd05e0ebc896d917b31aec3cc1a",5405],
+    ["red-clean-materialized-b3b366573.log.txt","c968f45dd1e2d5da33c20df0ffcb7361ae299343335948969e0e3a3c645372c6",10513],
+    ["red-preparation-owner-unwired.log.txt","4b180357033fcd6c432ef6c193bfae4e1a1447576ec7aa570991e5ca8abb43ce",4028],
+    ["touched-green-2.log.txt","4b2304caa142a7a1b90cb71d82322e5b556471044793dd40fa55e71ab895fea4",1274],
+    ["touched-green-3-committed.log.txt","e4df13972832e40ae0693ddb81936022e5ac9474614e3112b217995f79659c9c",1275],
+    ["touched-green-merged.log.txt","29b5a28283e8f846498b798082900963b033928389ad32f29facdc53f400e65f",1273],
+    ["touched-green.log.txt","9e4abef6ed7f8bf31ae007632f818a68c9c279706d051bee6195e632c49ee70e",1275]
+  ]
+}
