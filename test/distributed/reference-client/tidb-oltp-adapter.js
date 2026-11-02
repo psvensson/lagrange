@@ -1,3 +1,4 @@
+import {dropsDataset} from './oltp-adapter-contract.js';
 import {
   buildOltpBaselineDataset,
   hashOltpBaselineDataset,
@@ -529,7 +530,7 @@ async function createTiDbOltpAdapter(options = {}) {
       } catch (error) {
         failures.push(error);
       }
-      if (closeOptions.dropDatabase !== false) {
+      if (dropsDataset(closeOptions)) {
         try {
           await dropDatabase(connect, endpoint, databaseName);
           databaseDropped = true;

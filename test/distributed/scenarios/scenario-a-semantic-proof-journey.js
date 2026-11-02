@@ -7,6 +7,7 @@
 // as failed, a case that cannot run leaves its proof ids missing, and a
 // system without proof records is `incomplete`, never null. TiDB keeps its
 // own proof scripts.
+import {OLTP_ADAPTER_KEEP_DATASET} from '../reference-client/oltp-adapter-contract.js';
 import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
@@ -185,7 +186,7 @@ function requireConnection(connection) {
 async function closeQuietly(adapter, caseResult) {
   if (!adapter) return;
   try {
-    await adapter.close({dropTables: false});
+    await adapter.close(OLTP_ADAPTER_KEEP_DATASET);
   } catch (error) {
     caseResult.cleanupError = String(error?.message || error);
   }

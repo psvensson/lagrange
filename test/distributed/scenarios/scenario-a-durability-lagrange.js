@@ -1,3 +1,4 @@
+import {OLTP_ADAPTER_KEEP_DATASET} from '../reference-client/oltp-adapter-contract.js';
 import {
   prepareLagrangeScenarioAPublicPgContext,
 } from '../harness/oltp-scenario-a-lagrange-public-pg-context.js';
@@ -195,7 +196,7 @@ async function executeProof({context, options = {}, cluster = null}) {
     connection: context.connection,
   });
 
-  await adapter.close({dropTables: false});
+  await adapter.close(OLTP_ADAPTER_KEEP_DATASET);
 
   const faultEvidence = await faultEvidenceOf({options, cluster, context});
 

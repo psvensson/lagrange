@@ -1,3 +1,4 @@
+import {OLTP_ADAPTER_KEEP_DATASET} from '../reference-client/oltp-adapter-contract.js';
 import {createHash} from 'node:crypto';
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -205,7 +206,7 @@ async function finalizeScenarioExecution({
 }) {
   let cleanupError = null;
   try {
-    if (adapter) await adapter.close({dropTables: false});
+    if (adapter) await adapter.close(OLTP_ADAPTER_KEEP_DATASET);
     if (evidence) {
       const outputPath = options.outputPath || defaultOutputPath;
       await mkdir(path.dirname(outputPath), {recursive: true});

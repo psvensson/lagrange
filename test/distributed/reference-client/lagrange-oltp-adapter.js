@@ -1,3 +1,4 @@
+import {dropsDataset} from './oltp-adapter-contract.js';
 import {createPgWireClient} from './pg-wire-client.js';
 
 import {
@@ -765,7 +766,7 @@ async function createLagrangeOltpAdapter(options = {}) {
       } catch (error) {
         failures.push(error);
       }
-      if (closeOptions.dropTables !== false) {
+      if (dropsDataset(closeOptions)) {
         try {
           tableDrops = await cleanupDataset(createClient, resolvedClientOptions);
         } catch (error) {

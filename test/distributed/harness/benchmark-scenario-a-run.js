@@ -5,6 +5,7 @@
 // derived from the product timing ladder, and product-content dataset
 // verification and final-state reconciliation on a separate connection.
 import {loadMysql2Promise} from '../reference-client/native-clients.js';
+import {OLTP_ADAPTER_KEEP_DATASET} from '../reference-client/oltp-adapter-contract.js';
 import {createPgWireClient} from '../reference-client/pg-wire-client.js';
 import {
   QUERY_DEFAULTS,
@@ -346,9 +347,7 @@ function setupFailure(error) {
 // Each run's arm is a fresh deployment the campaign tears down, and the
 // deployment observes placement after the window (TiDB regions, Lagrange
 // partitions of the canonical tables): the run keeps its dataset in place.
-// The pg-wire adapter names the option dropTables, the TiDB adapter
-// dropDatabase; each reads its own.
-const KEEP_DATASET_ON_CLOSE = Object.freeze({dropTables: false, dropDatabase: false});
+const KEEP_DATASET_ON_CLOSE = OLTP_ADAPTER_KEEP_DATASET;
 
 async function closeAdapter(adapter) {
   if (!adapter) return Object.freeze({status: 'not-opened'});
