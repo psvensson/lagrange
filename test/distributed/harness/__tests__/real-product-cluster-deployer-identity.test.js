@@ -300,7 +300,7 @@ test('the reproduction guide\'s content-identity recipe equals contentIdentityOf
 // explicit host directory the deployer mounted (a bind mount under
 // --storage-root) is persistent storage; an anonymous volume lives and dies
 // with its container.
-test('D21: only an explicit host bind mount is persistent storage', async () => {
+test('D34: only an explicit host bind mount is persistent storage', async () => {
   const product = (mounts) => ({role: 'postgres-primary', host: '10.0.0.1',
     containerId: 'c1', mounts});
   const anonymous = classifyStorage(product([{type: 'volume',

@@ -41,6 +41,8 @@ import {
 import {OLTP_DATASET_VERIFICATION_STATUS} from './benchmark-oltp-state-reconciliation.js';
 import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
 import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
+// The storage vocabulary is the deployment contract's (one declaration).
+import {STORAGE_KIND} from './real-product-deployment-contract.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -67,10 +69,6 @@ const EXECUTION_TARGET = Object.freeze({LAB: 'lab', GCP: 'gcp'});
 
 const READINESS_STATE = Object.freeze({READY: 'ready', EXHAUSTED: 'exhausted'});
 
-const STORAGE_KIND = Object.freeze({
-  HOST_VOLUME: 'host-volume',
-  CONTAINER_LAYER: 'container-layer',
-});
 
 const NETWORK_SCOPE = Object.freeze({HOST_NIC_TOTAL: 'host-nic-total'});
 

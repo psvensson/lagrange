@@ -10,6 +10,7 @@ import {COMPARATIVE_PARITY_STATUS} from './comparative-efficiency-evidence-contr
 import {resolveOltpBaselineConfig} from './oltp-baseline-workload.js';
 import {OLTP_OPEN_LOOP_PROFILE} from './oltp-open-loop-step-owner.js';
 import {OLTP_PAIRED_RETRY_POLICIES} from './oltp-paired-retry-owner.js';
+import {isImageId} from './real-product-deployment-contract.js';
 import {
   OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
   OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS as GATE_STATUS,
@@ -224,7 +225,6 @@ const CELL_STATUS_MAPPING = Object.freeze({
     arrayMap(Object.values(OPERATION_OUTCOME), (o) => [o, null]))),
 });
 
-const IMAGE_ID_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const FORMULA_PATTERNS = Object.freeze([
   /stages\s*\*\s*oneWayMs/iu,
   /execMs\s*\+\s*stages/iu,
@@ -367,7 +367,7 @@ function checkProducts(run) {
   const running = new Set(arrayMap(run.deployment.roles, (r) => `${r.host}|${r.containerId}`));
   const after = new Set(arrayMap(run.identity.productsAfterWindow, productKey));
   for (const product of run.identity.products) {
-    if (!IMAGE_ID_PATTERN.test(product.imageId) || !hasContentIdentity(product)) {
+    if (!isImageId(product.imageId) || !hasContentIdentity(product)) {
       reasons.push(ADMISSION_REASON.IDENTITY_MISSING);
     }
     if (!running.has(`${product.host}|${product.containerId}`)) {

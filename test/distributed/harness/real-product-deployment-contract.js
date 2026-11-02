@@ -47,6 +47,14 @@ const STORAGE_KIND = Object.freeze({
 
 const RUN_CLASS = Object.freeze({PUBLISHABLE: 'publishable', SMOKE: 'smoke'});
 
+// A docker image id (`docker image inspect .Id`): the one predicate the
+// identity owner and the claim admission share.
+const IMAGE_ID_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+
+function isImageId(value) {
+  return typeof value === 'string' && IMAGE_ID_PATTERN.test(value);
+}
+
 const CLAIM_STATUS = Object.freeze({
   OBSERVED: 'observed',
   NOT_MEASURED: 'not-measured',
@@ -101,6 +109,7 @@ function resolveReadinessBudget(opts = {}) {
 
 export {
   BENCH_LABEL,
+  isImageId,
   CLAIM_STATUS,
   DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,

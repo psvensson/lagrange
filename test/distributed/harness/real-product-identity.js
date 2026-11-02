@@ -28,6 +28,7 @@ import {
   RUN_CLASS,
   STORAGE_KIND,
   deploymentFailure,
+  isImageId,
 } from './real-product-deployment-contract.js';
 import {
   errorText,
@@ -40,7 +41,6 @@ import {
 // (postgres: VOLUME /var/lib/postgresql/data) lives and dies with its
 // container: it is not the explicit storage a publishable run needs (D21, D34).
 const PERSISTENT_MOUNT_TYPES = Object.freeze(['bind']);
-const IMAGE_ID_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const IMAGE_STORE = Object.freeze({CONTAINERD: 'containerd', OVERLAY2: 'overlay2',
   UNKNOWN: 'unknown'});
 const REPO_DIGEST_NONE = 'none: the image carries no repo digest (loaded, not pulled)';
@@ -274,7 +274,7 @@ function identityProblems(product, expectation) {
   } else if (product.imageRef !== expectation.imageRef) {
     problems.push(`${product.role}: runs ${product.imageRef}, expected ${expectation.imageRef}`);
   }
-  if (!IMAGE_ID_PATTERN.test(String(product.imageId || ''))) {
+  if (!isImageId(product.imageId)) {
     problems.push(`${product.role}: no image id`);
   }
   if (!expectation.versionPattern.test(String(product.reportedVersion || ''))) {

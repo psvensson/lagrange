@@ -234,7 +234,9 @@ test('the load generator needs room for the harness worktree on its checkout fil
     delete state.nodes['adam-laptop'].testCapability.repoFreeBytes;
     assert.throws(select, (error) => /host-ineligible: disk_low/u.test(error.message));
     assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
-      nodeMinimum: '22.12.0'}), /load-generator requirement/u, 'never selected unmeasured');
+      nodeMinimum: '22.12.0'}), (error) =>
+      error.code === 'refused_load_generator_requirement_unmeasured',
+    'never selected unmeasured: a typed refusal');
   });
 
 // Independent verification N3: the requirement is measured at preparation

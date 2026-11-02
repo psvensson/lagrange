@@ -54,6 +54,9 @@ const DATA_HOST_MIN_DOCKER_FREE_BYTES = Math.ceil(6.5 * 2 ** 30);
 // that will be checked out, plus the run's evidence under the worktree's
 // test-output (reserved, unmeasured). The load generator holds no image.
 const LOAD_GENERATOR_RUN_EVIDENCE_BYTES = 64 * 2 ** 20;
+// A selection asked for without the measured requirement is refused (the
+// campaign is blocked), never run with an assumed one.
+const LOAD_GENERATOR_REQUIREMENT_UNMEASURED = 'refused_load_generator_requirement_unmeasured';
 const CHECKOUT_EXCLUDED_DIRS = Object.freeze(['node_modules', 'data', 'test-output', '.git']);
 const DU_ARGS = Object.freeze(['-s', '-B1',
   ...arrayMap(CHECKOUT_EXCLUDED_DIRS, (dir) => `--exclude=./${dir}`), '.']);
@@ -160,7 +163,9 @@ function loadGeneratorGap(facts, nodeMinimum, requirement) {
 function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimum = null,
   loadGeneratorRequirement = null}) {
   if (!Number.isSafeInteger(loadGeneratorRequirement?.requiredBytes)) {
-    throw new Error('lab host selection needs the measured load-generator requirement');
+    throw deploymentFailure(LOAD_GENERATOR_REQUIREMENT_UNMEASURED,
+      `${LOAD_GENERATOR_REQUIREMENT_UNMEASURED}: lab host selection needs the measured ` +
+      'load-generator requirement (measureLoadGeneratorRequirement)', {loadGeneratorRequirement});
   }
   const required = dataHostCount + 1;
   const {eligible, excluded} = partitionEligibleHosts(state, fleet);
