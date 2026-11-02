@@ -43,6 +43,10 @@ authorizes:
   - solve/specs
   - solve/quests
   - .github/workflows
+  - .gitignore
+  - knip.json
+  - package.json
+  - solve/changes/evidence-relocation
 ---
 
 # One deployment path, a complete developer journey, and measured comparisons
@@ -98,6 +102,14 @@ records remain intact; successor work records the correction explicitly.
 
 ## Decision log
 
+- 2026-11-02: Scope widened (R16, recorded): `package.json` (the two benchmark audit commands
+  `audit:comparative-recompute` and `audit:benchmark-history-append-only` join the static chain),
+  `knip.json` (the two documented command-line entry points of the chain are declared, so their
+  consumed exports are not reported unused), `.gitignore` (the forensic raw-observation copies under
+  `data/tidb-comparison/forensic/` are kept), and `solve/changes/evidence-relocation` (the relocation
+  owner writes a quest's bundle inventory and verification records there by design) join
+  `authorizes`. Decided by the quest comparative-benchmark-evidence-repair at landing; no other path
+  outside the quest directory and the existing list is touched.
 - 2026-11-01: Scope widened (R16, recorded): `scripts/lab` joins `authorizes` so the
   comparative benchmark runner can default to the registered lab machines through the
   existing lab owners (fleet probe gains a thermal-sensor fact; host selection consumes it).
