@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "fixed-work-bound-census",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "census-table",
+      "passed": true,
+      "detail": "30 fixed bound constants in src/ at 6d58fdba1 (29 in JavaScript, 1 in the admin dashboard HTML), each with owner module, awaited event, class (work 1, mixed 11, liveness 9, not a wait 7, test-only 2), spent outcome (or 'not traced'), re-drive behaviour, typed spend visibility (rows without a wait_bound_spent of their own named) and history; the cross-row pattern of bounds that expire while their work keeps running un-cancelled (#4, #5, #6, #7); the grouped spent-bound table of the b3b366573 post-merge corpus (251 of 253 events, the 2 attempt-count events excluded, remaining-budget variants folded with their ranges); the 52 object-member bounds outside the regex listed by owner, unclassified",
+      "evidence": [
+        "solve/epics/raft-rs-full-cutover/evidence/fixed-work-bound-census-2026-11-02/CENSUS.md"
+      ]
+    },
+    {
+      "id": "systemic-analysis",
+      "passed": true,
+      "detail": "four repair shapes by what each bound waits for and what happens to its work: take the work out of the bound (#1 WASI quest in progress and unlanded, #2, #6); re-drive and apply rather than silently default (#4 alone: a spent startup read skips the dynamic override); one node-level machine factor with one input source, the scripts/calibrate-machine.js measurement (the harness's measured clamped mechanism, LAGRANGE_MACHINE_FACTOR, convergence-budget-calibration.js) for #3 and #7 to #12; own or cancel the in-flight work (R13) for #5, whose spent initialize orphans a live adaptive timing controller, and for the un-cancelled races at #4, #6, #7; the verifier's deterministic witness recorded as the first red test of the #5 fix quest; liveness bounds stay wall-clock",
+      "evidence": [
+        "solve/epics/raft-rs-full-cutover/evidence/fixed-work-bound-census-2026-11-02/CENSUS.md"
+      ]
+    },
+    {
+      "id": "measurements-recorded",
+      "passed": true,
+      "detail": "the three measurements of 2026-11-02 (WASI transpile, partition_execution_deadline 2500 in the b3b366573 post-merge corpus, GROUP_BUDGET_MS W-B6-3) recorded as the first evidence finding",
+      "evidence": [
+        "log.ndjson finding 2026-11-02 (measurements)"
+      ]
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "evidence": [
+        "log.ndjson verification entries 2026-11-02 (subagent:adc0b674ea26e3f81): reject at ddfe38745, approve at c8984f915"
+      ]
+    }
+  ]
+}
