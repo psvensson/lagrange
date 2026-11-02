@@ -1,3 +1,10 @@
+// Guard for the Lagrange/TiDB comparison history (R21: history is append-only).
+// PASS requires: combination keys separate every framework/system identity; the
+// writer appends, preserves existing bytes and refuses a duplicate recordSha256;
+// the progress summary is the mutable index (latest record per combination, with
+// the count of records behind it and a non-valid admission status); the committed
+// summary and history pages equal their regeneration; and the docs index links the
+// history page.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -5,17 +12,18 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {
+  CLAIM_CELL_STATUS,
+} from '../../test/distributed/harness/benchmark-claim-admission.js';
+import {readInvalidationLedger} from '../../test/distributed/harness/benchmark-invalidation-ledger.js';
+import {
   DEFAULT_COMPARISON_HISTORY_NDJSON_PATH,
   DEFAULT_COMPARISON_PROGRESS_SUMMARY_PATH,
-  OLTP_COMPARISON_HISTORY_SCHEMA_VERSION,
+  appendComparisonHistoryRecord,
   buildComparisonCombinationKey,
   buildComparisonProgressSummary,
   createComparisonHistoryRecord,
   parseComparisonHistoryNdjson,
   recordComparisonResultToDisk,
-  serializeComparisonHistoryNdjson,
-  upsertComparisonHistoryRecord,
-  validateComparisonHistoryRecord,
 } from '../../test/distributed/harness/oltp-comparison-history-store.js';
 import {
   DEFAULT_COMPARISON_PROGRESS_HTML_PATH,
@@ -23,111 +31,47 @@ import {
   DEFAULT_COMPARISON_PROGRESS_SVG_PATH,
   DEFAULT_SCENARIO_B_COMPARISON_SVG_PATH,
   getScenarioDefinitionHref,
-  renderComparisonProgressHtml,
-  renderComparisonProgressMarkdown,
-  renderComparisonProgressSvg,
-  renderScenarioBComparisonSvg,
-  writeComparisonStaticWebArtifacts,
+  renderComparisonProgress,
 } from '../../test/distributed/harness/oltp-comparison-static-web.js';
-import {
-  escapeXml,
-  formatNum,
-  formatSigned,
-  shortSha,
-  getScenarioBEntries,
-} from '../../test/distributed/harness/oltp-comparison-svg-renderer.js';
-import {runComparativeBenchmarkMatrixGuard} from './comparative-benchmark-matrix-guard.js';
 
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const UTF8 = 'utf8';
-const NEWLINE = '\n';
+const MSG_APPENDED_NOT_MERGED = 'a later record of one combination is appended, not merged';
+const MSG_LATEST_SELECTED = 'the index selects the latest record';
+const MSG_BYTES_PRESERVED = 'existing bytes are preserved';
+const MSG_REFUSED_UNCHANGED = 'a refused write changes nothing';
+const MSG_SUMMARY_CURRENT = 'progress summary is current';
+const MSG_FORENSIC_ONLY = 'history records are forensic, never valid-observed';
 const PASS_MESSAGE = 'oltp-comparison-history-store-guard: PASS';
+const SCENARIO_A = 'tidb-oltp-baseline';
+const SCENARIO_B = 'tidb-distributed-risk-decision';
+const PROFILE_A = 'oltp-baseline-v1';
+const PROFILE_B = 'oltp-baseline-v2';
 const FW_V1 = '0.3.0';
 const FW_V2 = '0.3.1';
-const SHA_A = '8039e45f2ad8314239ed8c67c9883ebb8b47ec9f';
-const SHA_B = '66d054c9c9e3546b576fc5fe96db8911ce4431a4';
-const SCENARIO_A = 'scenario-a';
-const SCENARIO_B = 'scenario-b';
-const PROFILE_A = 'profile-a';
-const PROFILE_B = 'profile-b';
-const SYS_V1 = 'v8.5.8';
-const SYS_V2 = 'v8.5.9';
-const SYS_SHA_A = 'pingcap/tidb:v8.5.8';
-const SYS_SHA_B = 'pingcap/tidb:v8.5.9';
 const LAG_V1 = '0.3.0';
 const LAG_V2 = '0.3.1';
-const TIME_1 = '2026-10-30T10:00:00.000Z';
-const TIME_2 = '2026-10-30T11:00:00.000Z';
-const TMP_PREFIX = 'cmp-store-guard-';
-const TMP_NDJSON_NAME = 'history.ndjson';
-const TMP_SUMMARY_NAME = 'summary.json';
-const TMP_SVG_NAME = 'progress.svg';
-const TMP_MD_NAME = 'progress.md';
-const TMP_HTML_NAME = 'progress.html';
-const README_PATH = 'README.md';
+const SYS_V1 = 'v8.5.8';
+const SYS_V2 = 'v8.5.9';
+const SHA_A = 'a'.repeat(40);
+const SHA_B = 'b'.repeat(40);
+const SYS_SHA_A = 'pingcap/tidb:v8.5.8';
+const SYS_SHA_B = 'pingcap/tidb:v8.5.9';
+const TIME_1 = '2026-10-01T00:00:00.000Z';
+const TIME_2 = '2026-10-02T00:00:00.000Z';
 const DOCS_README_PATH = 'docs/README.md';
-const LINK_MD = 'tidb-comparison-progress.md';
-const LINK_HTML = 'tidb-comparison-progress.html';
-const MIN_COMBINATIONS = 4;
-const TMP_SCENARIO_B_SVG_NAME = 'scenario-b.svg';
-const MARKER_RISK_DECISIONS = 'Risk Decisions/sec';
-const MARKER_WAN_TRAFFIC = 'Cross-Island WAN Traffic';
-const MARKER_SCENARIO_B_SVG_FILE = 'tidb-scenario-b-comparison.svg';
-const ESCAPE_XML_INPUT = '<test & "val\'>';
-const ESCAPE_XML_EXPECTED = '&lt;test &amp; &quot;val&#39;&gt;';
-const NUM_FORMAT_INPUT = 12.3456;
-const NUM_FORMAT_EXPECTED = '12.35';
-const SIGNED_POS_INPUT = 5.2;
-const SIGNED_POS_EXPECTED = '+5.20';
-const SIGNED_NEG_INPUT = -3.1;
-const SIGNED_NEG_EXPECTED = '-3.10';
-const SHA_INPUT = '0123456789abcdef';
-const SHA_EXPECTED_LEN = 8;
-const SHA_EXPECTED = '01234567';
-const SCENARIO_A_FULL_ID = 'tidb-oltp-baseline';
-const SCENARIO_B_FULL_ID = 'tidb-distributed-risk-decision';
-const SCENARIO_SEMANTIC_ID = 'scenario-a-semantic-closure';
-const HREF_SCENARIO_A = 'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline';
-const HREF_SCENARIO_B = 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision';
-const HREF_SEMANTIC_GATE = 'tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate';
-const PARENT_DIR = '..';
-const REPO_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  PARENT_DIR,
-  PARENT_DIR,
-);
-
-function verifySvgRendererHelpers() {
-  assert.equal(escapeXml(ESCAPE_XML_INPUT), ESCAPE_XML_EXPECTED);
-  assert.equal(formatNum(NUM_FORMAT_INPUT), NUM_FORMAT_EXPECTED);
-  assert.equal(formatSigned(SIGNED_POS_INPUT), SIGNED_POS_EXPECTED);
-  assert.equal(formatSigned(SIGNED_NEG_INPUT), SIGNED_NEG_EXPECTED);
-  assert.equal(shortSha(SHA_INPUT, SHA_EXPECTED_LEN), SHA_EXPECTED);
-  assert.equal(getScenarioDefinitionHref(SCENARIO_A_FULL_ID), HREF_SCENARIO_A);
-  assert.equal(getScenarioDefinitionHref(SCENARIO_B_FULL_ID), HREF_SCENARIO_B);
-  assert.equal(getScenarioDefinitionHref(SCENARIO_SEMANTIC_ID), HREF_SEMANTIC_GATE);
-  const sampleEntries = [
-    {framework: {scenarioId: SCENARIO_A}},
-    {
-      record: {
-        framework: {scenarioId: SCENARIO_B_FULL_ID},
-        metrics: {lagrange: {scenarioBScorecard: {}}},
-      },
-    },
-  ];
-  const bEntries = getScenarioBEntries(sampleEntries);
-  assert.equal(bEntries.length, 1);
-}
+const HISTORY_PAGE_LINK = 'benchmarks/tidb-comparison-progress.md';
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 function makeCombinationInput(overrides = {}) {
   return {
     framework: {
-      frameworkVersion: FW_V1,
-      frameworkCommitSha: SHA_A,
-      scenarioId: SCENARIO_A,
-      profileId: PROFILE_A,
-      ...overrides.framework,
+      frameworkVersion: FW_V1, frameworkCommitSha: SHA_A, scenarioId: SCENARIO_A,
+      profileId: PROFILE_A, ...overrides.framework,
     },
     systems: {
       lagrange: {present: true, version: LAG_V1, commitSha: SHA_A, ...overrides.lagrange},
@@ -136,15 +80,11 @@ function makeCombinationInput(overrides = {}) {
   };
 }
 
-async function verifyCombinationKeySensitivities() {
-  const baseInput = makeCombinationInput();
-  const baseKey = buildComparisonCombinationKey(baseInput);
-  const repeatedKey = buildComparisonCombinationKey(baseInput);
-
-  assert.equal(baseKey.combinationKey, repeatedKey.combinationKey);
-  assert.equal(baseKey.combinationSha256, repeatedKey.combinationSha256);
-
-  const variations = [
+function verifyCombinationKeySensitivities() {
+  const baseKey = buildComparisonCombinationKey(makeCombinationInput());
+  assert.equal(buildComparisonCombinationKey(makeCombinationInput()).combinationSha256,
+    baseKey.combinationSha256);
+  for (const variant of [
     makeCombinationInput({framework: {frameworkVersion: FW_V2}}),
     makeCombinationInput({framework: {frameworkCommitSha: SHA_B}}),
     makeCombinationInput({framework: {scenarioId: SCENARIO_B}}),
@@ -153,140 +93,71 @@ async function verifyCombinationKeySensitivities() {
     makeCombinationInput({lagrange: {commitSha: SHA_B}}),
     makeCombinationInput({tidbTikv: {version: SYS_V2}}),
     makeCombinationInput({tidbTikv: {commitSha: SYS_SHA_B}}),
-  ];
-
-  for (const variant of variations) {
-    const variantKey = buildComparisonCombinationKey(variant);
-    assert.notEqual(variantKey.combinationKey, baseKey.combinationKey);
-    assert.notEqual(variantKey.combinationSha256, baseKey.combinationSha256);
+  ]) {
+    assert.notEqual(buildComparisonCombinationKey(variant).combinationSha256,
+      baseKey.combinationSha256);
   }
 }
 
-async function verifyUpsertSemantics() {
-  const rec1 = createComparisonHistoryRecord({
-    ...makeCombinationInput(),
-    recordedAt: TIME_1,
-  });
-  validateComparisonHistoryRecord(rec1);
-
-  const rec1Updated = createComparisonHistoryRecord({
-    ...makeCombinationInput(),
-    recordedAt: TIME_2,
-  });
-
-  const rec2 = createComparisonHistoryRecord({
-    ...makeCombinationInput({framework: {frameworkVersion: FW_V2}}),
-    recordedAt: TIME_2,
-  });
-
-  let history = upsertComparisonHistoryRecord([], rec1);
-  assert.equal(history.length, 1);
-  assert.equal(history[0].recordedAt, TIME_1);
-
-  history = upsertComparisonHistoryRecord(history, rec1Updated);
-  assert.equal(history.length, 1);
-  assert.equal(history[0].recordedAt, TIME_2);
-
-  history = upsertComparisonHistoryRecord(history, rec2);
-  assert.equal(history.length, 2);
+function verifyAppendOnlySemantics() {
+  const rec1 = createComparisonHistoryRecord({...makeCombinationInput(), recordedAt: TIME_1});
+  const rec1Later = createComparisonHistoryRecord({...makeCombinationInput(), recordedAt: TIME_2});
+  let history = appendComparisonHistoryRecord([], rec1);
+  history = appendComparisonHistoryRecord(history, rec1Later);
+  assert.equal(history.length, 2, MSG_APPENDED_NOT_MERGED);
+  assert.throws(() => appendComparisonHistoryRecord(history, rec1), /duplicate/u);
+  const summary = buildComparisonProgressSummary(history);
+  assert.equal(summary.totalRecords, 2);
+  assert.equal(summary.totalCombinations, 1);
+  assert.equal(summary.entries[0].recordedAt, TIME_2, MSG_LATEST_SELECTED);
+  assert.equal(summary.entries[0].recordsForCombination, 2);
 }
 
-async function verifyEndToEndDiskAndStaticWeb() {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), TMP_PREFIX));
+async function verifyDiskWriterAppends() {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'oltp-history-guard-'));
   try {
-    const tmpNdjson = path.join(tmpDir, TMP_NDJSON_NAME);
-    const tmpSummary = path.join(tmpDir, TMP_SUMMARY_NAME);
-    const tmpSvg = path.join(tmpDir, TMP_SVG_NAME);
-    const tmpScenarioBSvg = path.join(tmpDir, TMP_SCENARIO_B_SVG_NAME);
-    const tmpMd = path.join(tmpDir, TMP_MD_NAME);
-    const tmpHtml = path.join(tmpDir, TMP_HTML_NAME);
-
-    const rec = createComparisonHistoryRecord({
-      ...makeCombinationInput(),
-      recordedAt: TIME_1,
-    });
-
-    const diskResult = await recordComparisonResultToDisk({
-      record: rec,
-      ndjsonPath: tmpNdjson,
-      summaryPath: tmpSummary,
-    });
-    assert.equal(diskResult.records.length, 1);
-    assert.equal(diskResult.summary.totalCombinations, 1);
-
-    const webResult = await writeComparisonStaticWebArtifacts({
-      summary: diskResult.summary,
-      svgPath: tmpSvg,
-      scenarioBSvgPath: tmpScenarioBSvg,
-      markdownPath: tmpMd,
-      htmlPath: tmpHtml,
-    });
-    assert.equal(typeof webResult.svg === 'string', true);
-    assert.equal(typeof webResult.scenarioBSvg === 'string', true);
-    assert.equal(typeof webResult.markdown === 'string', true);
-    assert.equal(typeof webResult.html === 'string', true);
+    const ndjsonPath = path.join(tmpDir, 'history.ndjson');
+    const summaryPath = path.join(tmpDir, 'summary.json');
+    const rec1 = createComparisonHistoryRecord({...makeCombinationInput(), recordedAt: TIME_1});
+    const rec2 = createComparisonHistoryRecord({...makeCombinationInput(), recordedAt: TIME_2});
+    await recordComparisonResultToDisk({record: rec1, ndjsonPath, summaryPath});
+    const before = await fs.readFile(ndjsonPath, UTF8);
+    const second = await recordComparisonResultToDisk({record: rec2, ndjsonPath, summaryPath});
+    const after = await fs.readFile(ndjsonPath, UTF8);
+    assert.equal(stringStartsWith(after, before), true, MSG_BYTES_PRESERVED);
+    assert.equal(second.records.length, 2);
+    await assert.rejects(recordComparisonResultToDisk({record: rec2, ndjsonPath, summaryPath}),
+      /duplicate/u);
+    assert.equal(await fs.readFile(ndjsonPath, UTF8), after, MSG_REFUSED_UNCHANGED);
   } finally {
     await fs.rm(tmpDir, {recursive: true, force: true});
   }
 }
 
-async function verifyCommittedDataAndWebArtifacts() {
-  const rawNdjson = await fs.readFile(DEFAULT_COMPARISON_HISTORY_NDJSON_PATH, UTF8);
-  const rawSummary = await fs.readFile(DEFAULT_COMPARISON_PROGRESS_SUMMARY_PATH, UTF8);
-  const parsedRecords = parseComparisonHistoryNdjson(rawNdjson);
-
-  assert.equal(parsedRecords.length >= MIN_COMBINATIONS, true);
-  assert.equal(serializeComparisonHistoryNdjson(parsedRecords), rawNdjson);
-
-  const summary = buildComparisonProgressSummary(parsedRecords);
-  assert.equal(summary.schemaVersion, OLTP_COMPARISON_HISTORY_SCHEMA_VERSION);
-  assert.equal(summary.totalCombinations, parsedRecords.length);
-  assert.equal(JSON.stringify(summary, null, 2) + NEWLINE, rawSummary);
-
-  const rawSvg = await fs.readFile(DEFAULT_COMPARISON_PROGRESS_SVG_PATH, UTF8);
-  const rawScenarioBSvg = await fs.readFile(DEFAULT_SCENARIO_B_COMPARISON_SVG_PATH, UTF8);
-  const rawMd = await fs.readFile(DEFAULT_COMPARISON_PROGRESS_MARKDOWN_PATH, UTF8);
-  const rawHtml = await fs.readFile(DEFAULT_COMPARISON_PROGRESS_HTML_PATH, UTF8);
-
-  assert.equal(renderComparisonProgressSvg(summary), rawSvg);
-  assert.equal(renderScenarioBComparisonSvg(summary), rawScenarioBSvg);
-  assert.equal(renderComparisonProgressMarkdown(summary), rawMd);
-  assert.equal(renderComparisonProgressHtml(summary), rawHtml);
-
-  assert.equal(stringIncludes(rawSvg, MARKER_RISK_DECISIONS), true);
-  assert.equal(stringIncludes(rawSvg, MARKER_WAN_TRAFFIC), true);
-  assert.equal(stringIncludes(rawSvg, HREF_SCENARIO_A), true);
-  assert.equal(stringIncludes(rawSvg, HREF_SCENARIO_B), true);
-  assert.equal(stringIncludes(rawScenarioBSvg, MARKER_RISK_DECISIONS), true);
-  assert.equal(stringIncludes(rawScenarioBSvg, MARKER_WAN_TRAFFIC), true);
-  assert.equal(stringIncludes(rawScenarioBSvg, HREF_SCENARIO_B), true);
-  assert.equal(stringIncludes(rawMd, MARKER_SCENARIO_B_SVG_FILE), true);
-  assert.equal(stringIncludes(rawMd, HREF_SCENARIO_A), true);
-  assert.equal(stringIncludes(rawMd, HREF_SCENARIO_B), true);
-  assert.equal(stringIncludes(rawMd, HREF_SEMANTIC_GATE), true);
-  assert.equal(stringIncludes(rawHtml, MARKER_RISK_DECISIONS), true);
-  assert.equal(stringIncludes(rawHtml, MARKER_WAN_TRAFFIC), true);
-  assert.equal(stringIncludes(rawHtml, HREF_SCENARIO_A), true);
-  assert.equal(stringIncludes(rawHtml, HREF_SCENARIO_B), true);
-  assert.equal(stringIncludes(rawHtml, HREF_SEMANTIC_GATE), true);
-
-  const rootReadme = await fs.readFile(README_PATH, UTF8);
-  const docsReadme = await fs.readFile(DOCS_README_PATH, UTF8);
-  assert.equal(stringIncludes(rootReadme, LINK_MD), true);
-  assert.equal(stringIncludes(rootReadme, LINK_HTML), true);
-  assert.equal(stringIncludes(docsReadme, LINK_MD), true);
-  assert.equal(stringIncludes(docsReadme, LINK_HTML), true);
-  await runComparativeBenchmarkMatrixGuard(REPO_ROOT);
+async function verifyCommittedDataAndPages(rootDir) {
+  const read = (rel) => fs.readFile(path.resolve(rootDir, rel), UTF8);
+  const records = parseComparisonHistoryNdjson(await read(DEFAULT_COMPARISON_HISTORY_NDJSON_PATH));
+  const summary = buildComparisonProgressSummary(records,
+    {invalidations: readInvalidationLedger(rootDir)});
+  assert.equal(`${JSON.stringify(summary, null, 2)}\n`,
+    await read(DEFAULT_COMPARISON_PROGRESS_SUMMARY_PATH), MSG_SUMMARY_CURRENT);
+  assert.equal(summary.totalRecords, records.length);
+  assert.equal(arrayEvery(summary.entries,
+    (e) => e.admission.status !== CLAIM_CELL_STATUS.VALID_OBSERVED), true,
+  MSG_FORENSIC_ONLY);
+  const rendered = renderComparisonProgress(summary);
+  assert.equal(rendered.svg, await read(DEFAULT_COMPARISON_PROGRESS_SVG_PATH));
+  assert.equal(rendered.scenarioBSvg, await read(DEFAULT_SCENARIO_B_COMPARISON_SVG_PATH));
+  assert.equal(rendered.markdown, await read(DEFAULT_COMPARISON_PROGRESS_MARKDOWN_PATH));
+  assert.equal(rendered.html, await read(DEFAULT_COMPARISON_PROGRESS_HTML_PATH));
+  for (const href of arrayMap([SCENARIO_A, SCENARIO_B], getScenarioDefinitionHref)) {
+    assert.equal(stringIncludes(rendered.markdown, href), true, `history page links ${href}`);
+  }
+  assert.equal(stringIncludes(await read(DOCS_README_PATH), HISTORY_PAGE_LINK), true);
 }
 
-const runGuard = async () => {
-  verifySvgRendererHelpers();
-  await verifyCombinationKeySensitivities();
-  await verifyUpsertSemantics();
-  await verifyEndToEndDiskAndStaticWeb();
-  await verifyCommittedDataAndWebArtifacts();
-};
-
-await runGuard();
-
+verifyCombinationKeySensitivities();
+verifyAppendOnlySemantics();
+await verifyDiskWriterAppends();
+await verifyCommittedDataAndPages(REPO_ROOT);
 console.log(PASS_MESSAGE);

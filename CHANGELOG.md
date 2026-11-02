@@ -13,6 +13,28 @@ releases without a compatibility guarantee.
 ### Fixed
 - **0.4.1 bounded correctness & claim repairs (`call-cell-reduce-coordinator.js`, `runtime-service-call-cell-handler.js`, `management-v1-owner.js`, `bootstrap-api-server-methods.js`):**
   Fails closed with `REDUCE_INCOMPLETE` (`partial_unbounded`) instead of silently truncating merged partial sets at `limit` across slots or exceeding `maxPartialBytes`, enforces `resultMaxBytes` (`batchByteBound`) during local shard SQL reads before full batch materialization, reports unconfigured `management-v1` capabilities (`rollingUpgrade`, `backupRestore`, `decommissionNode`) as `UNSUPPORTED` by default while enforcing `verifyControlPlaneAuth` on `/management/v1/*` routes, and reconciles comparative benchmark documentation and CI guards against withdrawn modeled claims.
+- **Comparative benchmark results withdrawn (correction to 0.4.0 and earlier entries):**
+  every comparative performance figure published under `docs/benchmarks/` and
+  `data/tidb-comparison/` before 2026-11-01, including the throughput, latency,
+  freshness, backfill, scale-out, partition, movement and phase figures quoted in the
+  0.4.0 entries below, is withdrawn. The evidence audit found timeouts counted as
+  successful operations, `/health` responses and error envelopes counted as success,
+  per-arm smoke statements instead of the canonical Scenario A workload, constant
+  phase and byte values, quantiles synthesised from other quantiles, constant
+  semantic-proof counts and label-hash identities. The original records are retained
+  as forensic evidence. Each withdrawal is recorded either by an entry (`inv-NNNN`) in
+  the append-only `data/tidb-comparison/invalidations.ndjson`, which names the
+  withdrawn records by id or by file and campaign commit, the admission reason codes
+  and, where a defect applies, its defect ids; or by the admission rule
+  `forensic-record-not-admissible`, under which no history record is admissible as a
+  current claim. The benchmark evidence chain
+  is repaired: drivers count only verified responses, the deployer starts the real
+  products, the comparison history is append-only again and its overwritten records
+  are restored. Publication now consumes
+  claim-specific admission cells only (`valid-observed`, `product-failure`,
+  `invalid-measurement`, `blocked`, `unsupported`, `not-measured`), and
+  `npm run audit:comparative-recompute` recomputes every published artifact from the
+  raw records.
 
 ## [0.4.0] — 2026-10-31
 

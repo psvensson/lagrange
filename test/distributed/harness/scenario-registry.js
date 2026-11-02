@@ -28,6 +28,13 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
     config: 'local-three-node.json',
     name: 'admin-query-smoke',
   }),
+  // Red witness (quest comparative-benchmark-evidence-repair, 2026-11-01):
+  // a fresh three-node formation must open its serve lane and route a new
+  // user table. REFUSED on any config that is not exactly three nodes.
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'fresh-formation-user-table-routability',
+  }),
   Object.freeze({
     config: 'local-three-node.json',
     name: 'network-partition-split-brain',

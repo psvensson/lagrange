@@ -9,14 +9,21 @@ import {OLTP_PAIRED_RETRY_POLICY} from
   '../../test/distributed/harness/oltp-paired-retry-owner.js';
 import {
   OLTP_SCENARIO_A_SEMANTIC_PROFILE,
+  OLTP_SCENARIO_A_SEMANTIC_PROFILES,
   hashScenarioASemanticProfile,
 } from '../../test/distributed/harness/oltp-scenario-a-semantic-profile.js';
 
 const PASS_LINE = 'oltp-scenario-a-semantic-profile-guard: PASS\n';
-const PROFILE_ID = 'scenario-a-semantic-v1';
+const PROFILE_ID = 'scenario-a-semantic-v2';
 const RETRYABLE_CONFLICT_SQL_STATE = '40001';
 const TERMINAL_FAILURE = 'terminal_failure';
 const DEADLINE_MODE_NONE = 'none-v1';
+// The superseded profile as campaign attempt r8 recorded it (digest kept).
+const PROFILE_ID_V1 = 'scenario-a-semantic-v1';
+const RETRY_POLICY_ID_V1 = 'scenario-a-retry-v1';
+const PROFILE_V1_DIGEST = '81b94b29c875bdb47bd972050be1cf511efdef50c7846806077f59eb978814ec';
+const RETRYABLE_CONFLICT_SQL_STATES_V2 = Object.freeze(['40001', '40P01']);
+const STATEMENT_COMPLETION_UNKNOWN_SQL_STATE = '40003';
 const HASH_ALGORITHM = 'sha256';
 const HASH_DIGEST_ENCODING = 'hex';
 
@@ -79,6 +86,16 @@ function assertDigest() {
     .digest(HASH_DIGEST_ENCODING);
   assert.equal(digest, independentlyHashed);
   assert.equal(hashScenarioASemanticProfile(), digest);
+  // v1 stays as it was executed (coordinator decision R09, 2026-11-02): its
+  // own identity, its retry policy v1, its digest unchanged.
+  const v1 = OLTP_SCENARIO_A_SEMANTIC_PROFILES[0];
+  assert.equal(v1.id, PROFILE_ID_V1);
+  assert.equal(v1.retryPolicyId, RETRY_POLICY_ID_V1);
+  assert.equal(hashScenarioASemanticProfile(v1), PROFILE_V1_DIGEST);
+  assert.deepEqual(OLTP_SCENARIO_A_SEMANTIC_PROFILE.outcomes.retryableConflictSqlStates,
+    RETRYABLE_CONFLICT_SQL_STATES_V2);
+  assert.equal(OLTP_SCENARIO_A_SEMANTIC_PROFILE.outcomes.statementCompletionUnknownSqlState,
+    STATEMENT_COMPLETION_UNKNOWN_SQL_STATE);
 }
 
 function assertFrozen() {

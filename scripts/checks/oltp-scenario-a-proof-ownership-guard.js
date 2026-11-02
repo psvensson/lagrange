@@ -72,7 +72,7 @@ const runProofOwnershipGuard = () => {
     assert.equal(entry.coreGuaranteeRequired, true);
     assert.equal(entry.comparativeMilestone, '0.4');
     assert.equal(entry.comparativeOwner, 'RM-0.4-scenario-a-comparison');
-    assert.equal(entry.profileId, 'scenario-a-semantic-v1');
+    assert.equal(entry.profileId, 'scenario-a-semantic-v2');
     assert.ok(entry.scenarioModule && typeof entry.scenarioModule === 'string');
     assert.equal(
       entry.scenarioModule,
@@ -103,6 +103,7 @@ const runProofOwnershipGuard = () => {
   }
 
   const gate = buildScenarioASemanticGateEvidence({
+    systems: [OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV, OLTP_SCENARIO_A_SYSTEM.LAGRANGE],
     proofs: arrayMap(
       OLTP_SCENARIO_A_PROOF_CASES,
       (proofCase) => proofFor(proofCase, OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV),

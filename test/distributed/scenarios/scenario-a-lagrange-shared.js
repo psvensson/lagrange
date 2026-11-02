@@ -1,3 +1,4 @@
+import {OLTP_ADAPTER_KEEP_DATASET} from '../reference-client/oltp-adapter-contract.js';
 import {createHash} from 'node:crypto';
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -22,6 +23,11 @@ import {
 } from '../reference-client/lagrange-oltp-adapter.js';
 
 const ADMISSION_ENV = 'LAGRANGE_SCENARIO_A_ADMISSION_PATH';
+// Systems whose Scenario A proofs run through these PG-wire proof bodies.
+const PGWIRE_PROOF_SYSTEMS = Object.freeze(new Set([
+  OLTP_SCENARIO_A_SYSTEM.LAGRANGE,
+  OLTP_SCENARIO_A_SYSTEM.POSTGRESQL,
+]));
 const NON_COMPARABLE_REASON =
   'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.';
 
@@ -88,7 +94,8 @@ async function prepareAdmittedScenarioContext(
     throw new Error(`Lagrange ${proofCaseId} runtime changed after pre-start check`);
   }
   const prepareContext = options.prepareContext || prepareLagrangeScenarioAPublicPgContext;
-  return prepareContext({cluster, admission});
+  const context = await prepareContext({cluster, admission});
+  return Object.freeze({...context, system: OLTP_SCENARIO_A_SYSTEM.LAGRANGE});
 }
 
 async function createAndValidateAdapter({
@@ -109,6 +116,30 @@ async function createAndValidateAdapter({
   return adapter;
 }
 
+// The execution contract a proof payload states: the open adapter's, or, once
+// it is closed, the context's admitted contract. Neither present is a refused
+// payload.
+function executionContractOf(adapter, context) {
+  const contract = adapter || context.publicExecutionContract;
+  if (!contract) {
+    throw new Error('Scenario A PG-wire proof payload requires an execution contract');
+  }
+  return {executionPath: contract.executionPath, protocol: contract.protocol,
+    lockingReadMode: contract.lockingReadMode};
+}
+
+// What the proof context contributes: the live Lagrange path is admitted by a
+// certification record (admission, runtime preflight); the proof journey's
+// context carries its deployment binding instead. Absent facts are null.
+function contextFactsOf(context) {
+  return {
+    serviceEndpoint: context.serviceEndpoint ?? null,
+    admissionSha256: context.admission ? context.admission.admissionSha256 : null,
+    runtimePreflight: context.runtimePreflight ?? null,
+    binding: context.binding ?? null,
+  };
+}
+
 function buildBasePayload({
   evidenceId,
   definition,
@@ -116,30 +147,29 @@ function buildBasePayload({
   context,
   extra = {},
 }) {
-  const contract = adapter || context?.publicExecutionContract || {};
+  if (!PGWIRE_PROOF_SYSTEMS.has(context?.system)) {
+    throw new Error(`Scenario A PG-wire proof requires a PG-wire system, got ${context?.system}`);
+  }
   return Object.freeze({
     schemaVersion: 1,
     evidenceId,
-    system: OLTP_SCENARIO_A_SYSTEM.LAGRANGE,
+    system: context.system,
     caseId: definition.identity.caseId,
     caseSha256: definition.caseSha256,
-    ...(definition.identity?.datasetSha256 ?
+    ...(definition.identity.datasetSha256 ?
       {datasetSha256: definition.identity.datasetSha256} : {}),
-    executionPath: contract.executionPath,
-    protocol: contract.protocol,
-    lockingReadMode: contract.lockingReadMode,
-    serviceEndpoint: context.serviceEndpoint,
-    admissionSha256: context.admission.admissionSha256,
-    runtimePreflight: context.runtimePreflight,
+    ...executionContractOf(adapter, context),
+    ...contextFactsOf(context),
     ...extra,
     comparable: false,
     nonComparableReason: NON_COMPARABLE_REASON,
   });
 }
 
-function buildScenarioEvidence({payload, proofIds, evaluation, proofCaseId}) {
+// The proof record of one executed case, passed or failed; never thrown away.
+function buildProofEvidence({payload, proofIds, evaluation}) {
   const artifactSha256 = payloadDigest(payload);
-  const evidence = Object.freeze({
+  return Object.freeze({
     ...payload,
     proofRecord: Object.freeze({
       evidenceId: payload.evidenceId,
@@ -152,6 +182,10 @@ function buildScenarioEvidence({payload, proofIds, evaluation, proofCaseId}) {
     }),
     artifactSha256,
   });
+}
+
+function buildScenarioEvidence({payload, proofIds, evaluation, proofCaseId}) {
+  const evidence = buildProofEvidence({payload, proofIds, evaluation});
   if (!evaluation.passed) {
     throw new Error(
       `Lagrange ${proofCaseId} semantic proof failed: ` +
@@ -172,7 +206,7 @@ async function finalizeScenarioExecution({
 }) {
   let cleanupError = null;
   try {
-    if (adapter) await adapter.close({dropTables: false});
+    if (adapter) await adapter.close(OLTP_ADAPTER_KEEP_DATASET);
     if (evidence) {
       const outputPath = options.outputPath || defaultOutputPath;
       await mkdir(path.dirname(outputPath), {recursive: true});
@@ -245,6 +279,8 @@ async function executeScenarioRun({
 }
 
 export {
+  PGWIRE_PROOF_SYSTEMS,
+  buildProofEvidence,
   runScenarioPreStart,
   createAndValidateAdapter,
   buildBasePayload,

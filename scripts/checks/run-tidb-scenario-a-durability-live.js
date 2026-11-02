@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import {OLTP_ADAPTER_KEEP_DATASET} from '../../test/distributed/reference-client/oltp-adapter-contract.js';
 import {DockerProvider} from
   '../../test/distributed/harness/docker-provider.js';
 import {
@@ -228,7 +229,7 @@ async function runTiDbDurabilityProof(options = {}) {
       endpoint,
       databaseName,
     });
-    await state.adapter.close({dropDatabase: false});
+    await state.adapter.close(OLTP_ADAPTER_KEEP_DATASET);
     const restart = await restartPersistentTiDbTopology(provider, state);
 
     const after = await observeTiDbOltpStateSnapshot({

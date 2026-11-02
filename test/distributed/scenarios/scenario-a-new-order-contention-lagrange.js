@@ -53,64 +53,69 @@ async function preStart(options = {}) {
   return runScenarioPreStart(options, PROOF_CASE_ID);
 }
 
+// The proof body, independent of how its context was admitted: the live
+// Lagrange run and the PG-wire proof journey (Lagrange, PostgreSQL) share it.
+async function executeProof({context, options = {}}) {
+  const definition = buildScenarioANewOrderContentionCase();
+  const adapter = await createAndValidateAdapter({
+    createAdapter: options.createAdapter,
+    context,
+    workload: OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_WORKLOAD,
+    expectedDatasetSha256: definition.identity.datasetSha256,
+    proofCaseId: PROOF_CASE_ID,
+  });
+
+  const observeState = options.observeState ||
+    observeLagrangeNewOrderContentionState;
+  const logicalResults = await Promise.all(
+    OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS.map((operation) =>
+      executeLogicalRequest(adapter, operation)),
+  );
+  const observedState = await observeState({
+    endpoint: context.endpoint,
+    connection: context.connection,
+    itemIds: itemIds(),
+  });
+  const logicalCommitted = logicalResults.filter(
+    ({status}) => status === 'committed',
+  ).length;
+  const observation = Object.freeze({
+    logicalCommitted,
+    ...observedState,
+  });
+  const evaluation = evaluateScenarioANewOrderContentionObservation(observation);
+  const payload = buildBasePayload({
+    evidenceId: EVIDENCE_ID,
+    definition,
+    adapter,
+    context,
+    extra: {
+      logicalResults,
+      observation,
+      evaluation,
+    },
+  });
+
+  return {
+    adapter,
+    payload,
+    proofIds: OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_PROOF_IDS,
+    evaluation,
+  };
+}
+
 async function run(cluster, preflight = null) {
   return executeScenarioRun({
     cluster,
     preflight,
     proofCaseId: PROOF_CASE_ID,
     defaultOutputPath: OUTPUT_PATH,
-    execute: async ({context, options}) => {
-      const definition = buildScenarioANewOrderContentionCase();
-      const adapter = await createAndValidateAdapter({
-        createAdapter: options.createAdapter,
-        context,
-        workload: OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_WORKLOAD,
-        expectedDatasetSha256: definition.identity.datasetSha256,
-        proofCaseId: PROOF_CASE_ID,
-      });
-
-      const observeState = options.observeState ||
-        observeLagrangeNewOrderContentionState;
-      const logicalResults = await Promise.all(
-        OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS.map((operation) =>
-          executeLogicalRequest(adapter, operation)),
-      );
-      const observedState = await observeState({
-        endpoint: context.endpoint,
-        connection: context.connection,
-        itemIds: itemIds(),
-      });
-      const logicalCommitted = logicalResults.filter(
-        ({status}) => status === 'committed',
-      ).length;
-      const observation = Object.freeze({
-        logicalCommitted,
-        ...observedState,
-      });
-      const evaluation = evaluateScenarioANewOrderContentionObservation(observation);
-      const payload = buildBasePayload({
-        evidenceId: EVIDENCE_ID,
-        definition,
-        adapter,
-        context,
-        extra: {
-          logicalResults,
-          observation,
-          evaluation,
-        },
-      });
-
-      return {
-        adapter,
-        payload,
-        proofIds: OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_PROOF_IDS,
-        evaluation,
-      };
-    },
+    execute: ({context, options}) => executeProof({context, options}),
   });
 }
 
 export {
+  executeProof,
   preStart,
   run,
 };

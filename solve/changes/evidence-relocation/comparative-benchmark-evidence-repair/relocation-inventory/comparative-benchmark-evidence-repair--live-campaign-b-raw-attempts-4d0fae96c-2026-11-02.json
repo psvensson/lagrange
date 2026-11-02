@@ -1,0 +1,27 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.tar.gz",
+  "bundleSha256": "6c31e60492515cae595d7691d81df7c934f1e589aea969c01a40f05bec27c312",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.tar.gz",
+  "sourceCommit": "4d0fae96c393dddf64e0895e0330b0201a67358f",
+  "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/live-campaign-bench-live-20261101-b/",
+  "files": [
+    ["console-b.log.txt","213b23e6782aa517f32ddcee2fc5c785a0dd1d325d43bd623caed818ec14a643",175],
+    ["console-r2.log.txt","1a3e79dbd0015388209982dc4bb6edf02dbbe961e1200361077821b49bb4133d",203],
+    ["console-r3.log.txt","48b42ad81f14527c2ef6eee31b4884401e1ed5d944bb0f559882295232ad9895",126],
+    ["console-r4.log.txt","cf0f78d0be76d3cadd001b83dad4ed793550329ad388453ea9e88614c73c0952",1319],
+    ["console-r5.log.txt","76334d25c25cf9a65861883641a4a427398f422b621ba497ffa118ab2f263349",2161],
+    ["console-r6.log.txt","6fd09eef465007f11e9854d82882755781f57a65dc6648fddcbef8297017151a",148],
+    ["load-generator/r3/bench-live-20261101-b-r3/bench-live-20261101-b-r3-r001/request.json","65e31081e6145fcc295b11eb25f0888a2ce6de3c52e7ff7c6c0efaac95050d48",439],
+    ["load-generator/r4/bench-live-20261101-b-r4/bench-live-20261101-b-r4-r001/records.ndjson","beb233008e0b19eea70fcba76c47aba7589843592e9fd816437d187f1a1a999c",62046],
+    ["load-generator/r4/bench-live-20261101-b-r4/bench-live-20261101-b-r4-r001/request.json","072c65d665766e3700de391c8e7f87606d800f8d8a2961742587e784ef4fc3e3",439],
+    ["load-generator/r4/bench-live-20261101-b-r4/bench-live-20261101-b-r4-r002/request.json","b02086ab830dcd6b0fb31a3a4a852b6f005dcd35cc5185187e8c6fe435a4028b",367],
+    ["load-generator/r5/bench-live-20261101-b-r5/bench-live-20261101-b-r5-r001/records.ndjson","7bdc40c0b374f6f2bd53052302434b56fec5bf498e61f56ede0b4dc2f3a70752",62156],
+    ["load-generator/r5/bench-live-20261101-b-r5/bench-live-20261101-b-r5-r001/request.json","cf0064c6fadecccc9026f8ba52a7e9ab1b55fe4058c2609aeed0449ba057786a",439],
+    ["load-generator/r5/bench-live-20261101-b-r5/bench-live-20261101-b-r5-r002/request.json","cd5b05af9024415256c821b947be62f7d0ff77d054ee6d5ace3925c1b473169b",367],
+    ["load-generator/r6/bench-live-20261101-b-r6/bench-live-20261101-b-r6-r001/records.ndjson","4a377541a9947661f338d7a7b8325c46f660abdbc4541ca0789c40dfd725a3d4",62156],
+    ["load-generator/r6/bench-live-20261101-b-r6/bench-live-20261101-b-r6-r001/request.json","18d8adb866324c211e8274d6f394c83daffa9ed29e5986f11277f903c087b957",439],
+    ["load-generator/r6/bench-live-20261101-b-r6/bench-live-20261101-b-r6-r002/request.json","d1a7ee46b403df48c42ede457582b4f3a0480569628bca469ba07ae299f02640",367],
+    ["load-generator/r6/bench-live-20261101-b-r6/bench-live-20261101-b-r6-r003/request.json","c4e76ce878e6f22ed77c40c3e439427eb804b977e7bcd85b4f1ed820b4b17e22",428]
+  ]
+}

@@ -33,53 +33,58 @@ async function preStart(options = {}) {
   return runScenarioPreStart(options, PROOF_CASE_ID);
 }
 
+// The proof body, independent of how its context was admitted: the live
+// Lagrange run and the PG-wire proof journey (Lagrange, PostgreSQL) share it.
+async function executeProof({context, options = {}}) {
+  const definition = buildScenarioARetryableConflictCase();
+  const adapter = await createAndValidateAdapter({
+    createAdapter: options.createAdapter,
+    context,
+    workload: WORKLOAD,
+    proofCaseId: PROOF_CASE_ID,
+  });
+
+  const induceConflict = options.induceConflict ||
+    induceLagrangeRetryableConflict;
+  const probe = await induceConflict({
+    endpoint: context.endpoint,
+    connection: context.connection,
+  });
+  const observation = probe.observation;
+  const evaluation = evaluateScenarioARetryableConflictObservation(observation);
+  const payload = buildBasePayload({
+    evidenceId: EVIDENCE_ID,
+    definition,
+    adapter,
+    context,
+    extra: {
+      observation,
+      evaluation,
+      victim: probe.victim,
+      probeResults: probe.results,
+    },
+  });
+
+  return {
+    adapter,
+    payload,
+    proofIds: OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS,
+    evaluation,
+  };
+}
+
 async function run(cluster, preflight = null) {
   return executeScenarioRun({
     cluster,
     preflight,
     proofCaseId: PROOF_CASE_ID,
     defaultOutputPath: OUTPUT_PATH,
-    execute: async ({context, options}) => {
-      const definition = buildScenarioARetryableConflictCase();
-      const adapter = await createAndValidateAdapter({
-        createAdapter: options.createAdapter,
-        context,
-        workload: WORKLOAD,
-        proofCaseId: PROOF_CASE_ID,
-      });
-
-      const induceConflict = options.induceConflict ||
-        induceLagrangeRetryableConflict;
-      const probe = await induceConflict({
-        endpoint: context.endpoint,
-        connection: context.connection,
-      });
-      const observation = Object.freeze({sqlState: probe.victim.sqlState});
-      const evaluation = evaluateScenarioARetryableConflictObservation(observation);
-      const payload = buildBasePayload({
-        evidenceId: EVIDENCE_ID,
-        definition,
-        adapter,
-        context,
-        extra: {
-          observation,
-          evaluation,
-          victim: probe.victim,
-          probeResults: probe.results,
-        },
-      });
-
-      return {
-        adapter,
-        payload,
-        proofIds: OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS,
-        evaluation,
-      };
-    },
+    execute: ({context, options}) => executeProof({context, options}),
   });
 }
 
 export {
+  executeProof,
   preStart,
   run,
 };

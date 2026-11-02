@@ -2,18 +2,29 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import {
+  ADMISSION_REASON,
+  CLAIM_CELL_STATUS,
+  REASON_PREFIX,
+} from './benchmark-claim-admission.js';
+import {ALL_RECORDS, parseInvalidationLedger} from './benchmark-invalidation-ledger.js';
+
 const stringTrim = Function.call.bind(String.prototype.trim);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const stringSplit = Function.call.bind(String.prototype.split);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
-const arrayJoin = Function.call.bind(Array.prototype.join);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const arraySome = Function.call.bind(Array.prototype.some);
 const arraySort = Function.call.bind(Array.prototype.sort);
 const arraySlice = Function.call.bind(Array.prototype.slice);
 const numberIsFinite = Number.isFinite;
 const numberToFixed = Function.call.bind(Number.prototype.toFixed);
 
 const OLTP_COMPARISON_HISTORY_SCHEMA_VERSION = 1;
+const OLTP_COMPARISON_HISTORY_SUMMARY_SCHEMA_VERSION = 2;
+const INVALIDATIONS_FILE_NAME = 'invalidations.ndjson';
 const DEFAULT_COMPARISON_HISTORY_NDJSON_PATH = 'data/tidb-comparison/history.ndjson';
 const DEFAULT_COMPARISON_PROGRESS_SUMMARY_PATH = 'data/tidb-comparison/progress-summary.json';
 
@@ -248,133 +259,103 @@ function compareRecordsChronologically(a, b) {
 function parseComparisonHistoryNdjson(text) {
   if (typeof text !== 'string') throw new Error('parseComparisonHistoryNdjson requires string');
   const lines = arrayFilter(stringSplit(text, '\n'), (l) => stringTrim(l).length > 0);
-  return Object.freeze(
-    arrayMap(lines, (l) => validateComparisonHistoryRecord(JSON.parse(stringTrim(l)))),
-  );
+  const records = arrayMap(lines,
+    (l) => validateComparisonHistoryRecord(JSON.parse(stringTrim(l))));
+  const seen = new Set();
+  for (const record of records) {
+    if (seen.has(record.recordSha256)) {
+      throw new Error(`History holds a duplicate record ${record.recordSha256}`);
+    }
+    seen.add(record.recordSha256);
+  }
+  return Object.freeze(records);
 }
 
-function serializeComparisonHistoryNdjson(records) {
-  if (!Array.isArray(records)) throw new Error('serializeComparisonHistoryNdjson requires array');
-  if (records.length === 0) return '';
-  const sorted = arraySort(
-    arraySlice(arrayMap(records, validateComparisonHistoryRecord)),
-    compareRecordsChronologically,
-  );
-  return arrayJoin(arrayMap(sorted, (r) => JSON.stringify(r)), '\n') + '\n';
-}
-
-function upsertComparisonHistoryRecord(existingRecords, newRecord) {
+// History is append-only (R21): a new record is appended; a record whose
+// recordSha256 is already present is refused, never replaced.
+function appendComparisonHistoryRecord(existingRecords, newRecord) {
   if (!Array.isArray(existingRecords)) throw new Error('existingRecords must be an array');
   const validNew = validateComparisonHistoryRecord(newRecord);
-  let replaced = false;
-  const list = arrayMap(existingRecords, (r) => {
-    const existing = validateComparisonHistoryRecord(r);
-    if (existing.combinationSha256 !== validNew.combinationSha256) return existing;
-    replaced = true;
-    return validNew;
-  });
-  if (!replaced) list.push(validNew);
-  return Object.freeze(arraySort(list, compareRecordsChronologically));
-}
-
-function calculateDelta(current, baseline) {
-  return (typeof current === 'number' && typeof baseline === 'number') ?
-    Number(numberToFixed(current - baseline, 6)) : null;
-}
-
-function getLagrangeOps(record) {
-  return record?.metrics?.lagrange?.opsPerSec;
-}
-
-function getTiDbOps(record) {
-  return record?.metrics?.tidbTikv?.opsPerSec;
-}
-
-function getLagrangePassedProofs(record) {
-  return record?.metrics?.lagrange?.semanticProofs?.passedCount;
-}
-
-function getTiDbPassedProofs(record) {
-  return record?.metrics?.tidbTikv?.semanticProofs?.passedCount;
-}
-
-function findScenarioBaselines(sorted, upToIndex, scenarioId, currentRecord) {
-  let prev = null;
-  let first = null;
-  for (let j = 0; j < upToIndex; j += 1) {
-    if (sorted[j].framework.scenarioId === scenarioId) {
-      first = first || sorted[j];
-      prev = sorted[j];
-    }
+  if (arraySome(existingRecords, (r) => r.recordSha256 === validNew.recordSha256)) {
+    throw new Error(`Refusing duplicate history record ${validNew.recordSha256}`);
   }
-  return {first: first || currentRecord, prev};
+  return Object.freeze([...existingRecords, validNew]);
 }
 
-function calculateOpsDeltas(record, prev, first) {
-  const lagrangeOps = getLagrangeOps(record);
-  const tidbOps = getTiDbOps(record);
-  return {
-    lagrangeOpsPerSecDeltaFromPrev: calculateDelta(lagrangeOps, getLagrangeOps(prev)),
-    lagrangeOpsPerSecDeltaFromFirst: calculateDelta(lagrangeOps, getLagrangeOps(first)),
-    tidbOpsPerSecDeltaFromPrev: calculateDelta(tidbOps, getTiDbOps(prev)),
-    tidbOpsPerSecDeltaFromFirst: calculateDelta(tidbOps, getTiDbOps(first)),
-  };
+function historyInvalidationsFor(record, invalidations) {
+  return arrayFilter(invalidations, (inv) =>
+    inv.scope.file === DEFAULT_COMPARISON_HISTORY_NDJSON_PATH &&
+    (inv.scope.receiptIds === ALL_RECORDS ||
+      arrayIncludes(inv.scope.receiptIds, record.recordSha256)));
 }
 
-function calculateRatioDeltas(record, prev) {
-  const cmp = record?.comparison;
-  const prevC = prev?.comparison;
-  return {
-    throughputRatioDeltaFromPrev:
-      calculateDelta(cmp?.throughputRatioLagrangeToTiDb, prevC?.throughputRatioLagrangeToTiDb),
-    throughputLagFactorDeltaFromPrev: calculateDelta(
-      cmp?.throughputLagFactorTiDbOverLagrange, prevC?.throughputLagFactorTiDbOverLagrange,
-    ),
-  };
-}
-
-function calculateProofDeltas(record, prev) {
-  return {
-    tidbSemanticProofsDeltaFromPrev: calculateDelta(
-      getTiDbPassedProofs(record),
-      getTiDbPassedProofs(prev),
-    ),
-    lagrangeSemanticProofsDeltaFromPrev: calculateDelta(
-      getLagrangePassedProofs(record),
-      getLagrangePassedProofs(prev),
-    ),
-  };
-}
-
-function calculateRecordDeltas(record, prev, first) {
+// History records are forensic: none is admissible as a current claim. The entry
+// names the record and its invalidations; it republishes no metric.
+function buildHistoryAdmission(record, invalidations) {
+  const covering = historyInvalidationsFor(record, invalidations);
+  const reasons = [ADMISSION_REASON.FORENSIC_RECORD];
+  const defectIds = [];
+  for (const inv of covering) {
+    reasons.push(`${REASON_PREFIX.INVALIDATED}${inv.id}`, ...inv.reasons);
+    defectIds.push(...inv.defectIds);
+  }
   return Object.freeze({
-    ...calculateOpsDeltas(record, prev, first),
-    ...calculateRatioDeltas(record, prev),
-    ...calculateProofDeltas(record, prev),
+    status: CLAIM_CELL_STATUS.INVALID_MEASUREMENT,
+    reasons: Object.freeze([...new Set(reasons)].sort()),
+    defectIds: Object.freeze([...new Set(defectIds)].sort()),
   });
 }
 
-function buildProgressEntry(record, index, sorted) {
-  const scenarioId = record.framework.scenarioId;
-  const {first, prev} = findScenarioBaselines(sorted, index, scenarioId, record);
-  const deltas = calculateRecordDeltas(record, prev, first);
-  return Object.freeze({...record, deltas, ...deltas});
+// What the withdrawal of the published figures rests on, counted from the data:
+// ledger entries that name defect ids, entries that enumerate their records by id
+// (the rest name them by file and campaign commit), and history records no entry
+// covers, withdrawn only by the forensic admission rule.
+function summarizeBenchmarkWithdrawal(records, invalidations) {
+  const count = (items, predicate) => arrayFilter(items, predicate).length;
+  return Object.freeze({
+    ledgerEntries: invalidations.length,
+    entriesWithDefectIds: count(invalidations, (inv) => inv.defectIds.length > 0),
+    entriesWithRecordIds: count(invalidations, (inv) => inv.scope.receiptIds !== ALL_RECORDS),
+    historyRecords: records.length,
+    historyRecordsWithoutEntry: count(records, (record) =>
+      historyInvalidationsFor(record, invalidations).length === 0),
+    admissionRule: ADMISSION_REASON.FORENSIC_RECORD,
+  });
 }
 
-function buildComparisonProgressSummary(records) {
+// The progress summary is the mutable index over the history: the latest record
+// per combination key, with its admission status. Every record stays in history.
+function buildComparisonProgressSummary(records, options = {}) {
   if (!Array.isArray(records)) {
     throw new Error('buildComparisonProgressSummary requires an array argument');
   }
+  const invalidations = Array.isArray(options.invalidations) ? options.invalidations : [];
   const validated = arrayMap(records, validateComparisonHistoryRecord);
-  const sorted = arraySort(arraySlice(validated), compareRecordsChronologically);
-
-  const entries = arrayMap(sorted, (record, index) =>
-    buildProgressEntry(record, index, sorted));
-
+  const latest = new Map();
+  const counts = new Map();
+  for (const record of arraySort(arraySlice(validated), compareRecordsChronologically)) {
+    latest.set(record.combinationSha256, record);
+    counts.set(record.combinationSha256, (counts.get(record.combinationSha256) || 0) + 1);
+  }
+  const entries = arrayMap(
+    arraySort([...latest.values()], compareRecordsChronologically),
+    (record) => Object.freeze({
+      recordSha256: record.recordSha256,
+      combinationSha256: record.combinationSha256,
+      recordedAt: record.recordedAt,
+      framework: record.framework,
+      systems: record.systems,
+      evidenceSource: record.evidenceSource,
+      recordsForCombination: counts.get(record.combinationSha256),
+      admission: buildHistoryAdmission(record, invalidations),
+    }),
+  );
   const summaryPayload = {
-    schemaVersion: OLTP_COMPARISON_HISTORY_SCHEMA_VERSION,
-    totalCombinations: sorted.length,
+    schemaVersion: OLTP_COMPARISON_HISTORY_SUMMARY_SCHEMA_VERSION,
+    totalRecords: validated.length,
+    totalCombinations: entries.length,
     entries: Object.freeze(entries),
+    withdrawal: summarizeBenchmarkWithdrawal(validated, invalidations),
   };
   const summarySha256 =
     createHash('sha256').update(JSON.stringify(summaryPayload)).digest('hex');
@@ -416,42 +397,61 @@ function shouldSkipUnchangedRun(options, existingRecords) {
   return matched.length > 0;
 }
 
+async function readExistingText(ndjsonPath) {
+  try {
+    return await fs.readFile(ndjsonPath, 'utf8');
+  } catch (err) {
+    if (err?.code === 'ENOENT') return '';
+    throw err;
+  }
+}
+
+// The ledger lives beside the history file.
+async function readLedgerBeside(ndjsonPath) {
+  const ledgerPath = path.join(path.dirname(path.resolve(ndjsonPath)), INVALIDATIONS_FILE_NAME);
+  const text = await readExistingText(ledgerPath);
+  return parseInvalidationLedger(text);
+}
+
+async function writeSummary(summaryPath, summary) {
+  await fs.mkdir(path.dirname(path.resolve(summaryPath)), {recursive: true});
+  await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2) + '\n', 'utf8');
+}
+
 async function recordComparisonResultToDisk(options = {}) {
   if (!options?.record) throw new Error('recordComparisonResultToDisk requires record');
   const ndjsonPath = options.ndjsonPath || DEFAULT_COMPARISON_HISTORY_NDJSON_PATH;
   const summaryPath = options.summaryPath || DEFAULT_COMPARISON_PROGRESS_SUMMARY_PATH;
-  let existingRecords = [];
-  try {
-    existingRecords = parseComparisonHistoryNdjson(await fs.readFile(ndjsonPath, 'utf8'));
-  } catch (err) {
-    if (!err || err.code !== 'ENOENT') throw err;
-  }
+  const existingText = await readExistingText(ndjsonPath);
+  const existingRecords = parseComparisonHistoryNdjson(existingText);
+  const invalidations = await readLedgerBeside(ndjsonPath);
   if (shouldSkipUnchangedRun(options, existingRecords)) {
     return Object.freeze({
       skipped: true,
       records: existingRecords,
-      summary: buildComparisonProgressSummary(existingRecords),
+      summary: buildComparisonProgressSummary(existingRecords, {invalidations}),
     });
   }
-  const records = upsertComparisonHistoryRecord(existingRecords, options.record);
-  const summary = buildComparisonProgressSummary(records);
+  const records = appendComparisonHistoryRecord(existingRecords, options.record);
+  if (existingText !== '' && !stringEndsWith(existingText, '\n')) {
+    throw new Error(`${ndjsonPath} lacks a final newline; refusing to append`);
+  }
   await fs.mkdir(path.dirname(path.resolve(ndjsonPath)), {recursive: true});
-  await fs.mkdir(path.dirname(path.resolve(summaryPath)), {recursive: true});
-  await fs.writeFile(ndjsonPath, serializeComparisonHistoryNdjson(records), 'utf8');
-  await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2) + '\n', 'utf8');
+  await fs.appendFile(ndjsonPath, `${JSON.stringify(records[records.length - 1])}\n`, 'utf8');
+  const summary = buildComparisonProgressSummary(records, {invalidations});
+  await writeSummary(summaryPath, summary);
   return Object.freeze({records, summary, skipped: false});
 }
 
 export {
-  OLTP_COMPARISON_HISTORY_SCHEMA_VERSION,
   DEFAULT_COMPARISON_HISTORY_NDJSON_PATH,
   DEFAULT_COMPARISON_PROGRESS_SUMMARY_PATH,
+  appendComparisonHistoryRecord,
   buildComparisonCombinationKey,
   createComparisonHistoryRecord,
   validateComparisonHistoryRecord,
   parseComparisonHistoryNdjson,
-  serializeComparisonHistoryNdjson,
-  upsertComparisonHistoryRecord,
+  summarizeBenchmarkWithdrawal,
   buildComparisonProgressSummary,
   recordComparisonResultToDisk,
 };

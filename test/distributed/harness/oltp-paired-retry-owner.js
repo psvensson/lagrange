@@ -1,9 +1,15 @@
+import {PG_ERROR_CODE} from '../../../src/runtime/pgwire-protocol-constants.js';
+import {
+  isOltpOutcomeUnknownError as isOutcomeUnknownError,
+  isOltpSqlState,
+  resolveOltpErrorSqlState as resolveSqlState,
+} from './oltp-error-classification.js';
+
 const ZERO = 0;
 const ONE = 1;
 const TWO = 2;
 
-const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/u;
-const SERIALIZATION_FAILURE_SQLSTATE = '40001';
+const SERIALIZATION_FAILURE_SQLSTATE = PG_ERROR_CODE.SERIALIZATION_FAILURE;
 const RETRY_OUTCOME = Object.freeze({
   SERIALIZATION_CONFLICT: 'serialization_conflict',
   TERMINAL_FAILURE: 'terminal_failure',
@@ -13,45 +19,52 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
-const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
 
-const OLTP_PAIRED_RETRY_POLICY = Object.freeze({
+// SQLSTATE class 40 (transaction rollback) codes beside 40001.
+const DEADLOCK_DETECTED_SQLSTATE = '40P01';
+const STATEMENT_COMPLETION_UNKNOWN_SQLSTATE = '40003';
+
+// The policy every run up to campaign attempt r8 executed: kept as it was, so
+// a record made under it is still read under it.
+const RETRY_POLICY_V1 = Object.freeze({
   id: 'scenario-a-retry-v1',
   maxRetries: 3,
   baseDelayMs: 5,
   maxDelayMs: 20,
   retryableSqlStates: Object.freeze([SERIALIZATION_FAILURE_SQLSTATE]),
+  outcomeUnknownSqlStates: Object.freeze([]),
   ambiguousCommitIsFailure: true,
   adapterRetriesAllowed: false,
 });
 
-function normalizeSqlState(value) {
-  if (typeof value !== 'string') return null;
-  const normalized = stringToUpperCase(value);
-  return SQLSTATE_PATTERN.test(normalized) ? normalized : null;
-}
+// scenario-a-retry-v2 supersedes v1 (coordinator decision R09, 2026-11-02):
+// the class 40 rollbacks 40001 and 40P01 are retryable through this owner
+// (the database told the client to retry; TPC-C practice); 40003 (statement
+// completion unknown) is an ambiguous commit, never retried. TiDB's 1213
+// deadlock already answers 40001.
+const RETRY_POLICY_V2 = Object.freeze({
+  id: 'scenario-a-retry-v2',
+  maxRetries: 3,
+  baseDelayMs: 5,
+  maxDelayMs: 20,
+  retryableSqlStates: Object.freeze([SERIALIZATION_FAILURE_SQLSTATE,
+    DEADLOCK_DETECTED_SQLSTATE]),
+  outcomeUnknownSqlStates: Object.freeze([STATEMENT_COMPLETION_UNKNOWN_SQLSTATE]),
+  ambiguousCommitIsFailure: true,
+  adapterRetriesAllowed: false,
+  supersedes: RETRY_POLICY_V1.id,
+});
 
-function resolveSqlState(error) {
-  for (const value of [error?.sqlState, error?.sqlstate, error?.code]) {
-    const sqlState = normalizeSqlState(value);
-    if (sqlState) return sqlState;
-  }
-  return null;
-}
-
-function isOutcomeUnknownError(error) {
-  return error?.commitOutcomeUnknown === true ||
-    error?.outcome === 'OUTCOME_UNKNOWN' ||
-    error?.code === 'OUTCOME_UNKNOWN' ||
-    error?.errorCode === 'OUTCOME_UNKNOWN';
-}
+const OLTP_PAIRED_RETRY_POLICY = RETRY_POLICY_V2;
+const OLTP_PAIRED_RETRY_POLICIES = Object.freeze([RETRY_POLICY_V1, RETRY_POLICY_V2]);
 
 function classifyOltpAttemptError(
   error,
   policy = OLTP_PAIRED_RETRY_POLICY,
 ) {
   const sqlState = resolveSqlState(error);
-  if (isOutcomeUnknownError(error)) {
+  if (isOutcomeUnknownError(error) ||
+      arrayIncludes(policy.outcomeUnknownSqlStates, sqlState)) {
     return Object.freeze({
       retryable: false,
       outcome: RETRY_OUTCOME.TERMINAL_FAILURE,
@@ -97,8 +110,12 @@ function validatePolicy(policy) {
   }
   validatePolicyDelays(policy);
   if (!Array.isArray(policy?.retryableSqlStates) ||
-      arraySome(policy.retryableSqlStates, (value) => !normalizeSqlState(value))) {
+      arraySome(policy.retryableSqlStates, (value) => !isOltpSqlState(value))) {
     throw new Error('OLTP paired retry owner requires valid retryable SQLSTATEs');
+  }
+  if (!Array.isArray(policy?.outcomeUnknownSqlStates) ||
+      arraySome(policy.outcomeUnknownSqlStates, (value) => !isOltpSqlState(value))) {
+    throw new Error('OLTP paired retry owner requires valid outcome-unknown SQLSTATEs');
   }
 }
 
@@ -318,6 +335,7 @@ function createPairedRetryingOltpAdapter(adapter, options = {}) {
 }
 
 export {
+  OLTP_PAIRED_RETRY_POLICIES,
   OLTP_PAIRED_RETRY_POLICY,
   RETRY_OUTCOME as OLTP_PAIRED_RETRY_OUTCOME,
   SERIALIZATION_FAILURE_SQLSTATE as OLTP_SERIALIZATION_FAILURE_SQLSTATE,

@@ -260,6 +260,7 @@ async function buildTiDbSemanticGateArtifact(options = {}) {
   const outputPath = options.outputPath || DEFAULT_OUTPUT_PATH;
   const artifacts = await loadProofArtifacts(inputDir, outputPath);
   const gate = buildScenarioASemanticGateEvidence({
+    systems: [OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV, OLTP_SCENARIO_A_SYSTEM.LAGRANGE],
     proofs: arrayMap(artifacts, ({proofRecord}) => proofRecord),
   });
   assertTiDbCoverage(gate);
@@ -331,7 +332,10 @@ async function buildPairedScenarioASemanticGateArtifact(options = {}) {
     ...arrayMap(allVerified, ({proofRecord}) => proofRecord),
   ];
 
-  const gate = buildScenarioASemanticGateEvidence({proofs});
+  const gate = buildScenarioASemanticGateEvidence({
+    systems: [OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV, OLTP_SCENARIO_A_SYSTEM.LAGRANGE],
+    proofs,
+  });
   const comparable = Boolean(
     gate.semanticEquivalent === true && gate.status === STATUS_PASSED,
   );

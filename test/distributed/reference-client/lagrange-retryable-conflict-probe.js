@@ -1,6 +1,6 @@
-import pg from 'pg';
+import {createPgWireClient} from './pg-wire-client.js';
+import {runRetryableConflictProbe} from './retryable-conflict-probe.js';
 
-const {Client} = pg;
 const ONE = 1;
 const DEFAULT_WAREHOUSE_ID = 1;
 const DEFAULT_WRITE_DELTA_CENTS = 100;
@@ -55,87 +55,40 @@ function normalizeError(error, side) {
   });
 }
 
-async function safeRollback(client) {
-  if (!client) return;
-  try {
-    await client.query('ROLLBACK');
-  } catch {
-    // Transaction may already be aborted
-  }
+// A pg-wire session for the shared probe.
+function pgWireSession(client) {
+  return {
+    query: async (sql, parameters) => (await client.query(sql, parameters)).rows,
+    begin: () => client.query('BEGIN'),
+    commit: () => client.query('COMMIT'),
+    rollback: () => client.query('ROLLBACK'),
+    end: () => client.end(),
+  };
 }
 
-async function safeEnd(client) {
-  if (!client) return;
-  try {
-    await client.end();
-  } catch {
-    // Preserving semantic result
-  }
-}
-
+/**
+ * The shared retryable-conflict probe (retryable-conflict-probe.js) over the
+ * public PostgreSQL wire (Lagrange, PostgreSQL).
+ */
 async function induceLagrangeRetryableConflict(options = {}) {
   const endpoint = normalizeEndpoint(options.endpoint);
   const connection = normalizeConnection(options.connection);
-  const warehouseId = Number.isInteger(options.warehouseId) ?
-    options.warehouseId : DEFAULT_WAREHOUSE_ID;
-  const writeDeltaCents = Number.isInteger(options.writeDeltaCents) ?
-    options.writeDeltaCents : DEFAULT_WRITE_DELTA_CENTS;
-  const createClient = options.createClient || ((config) => new Client(config));
-
-  let left = null;
-  let right = null;
-
-  try {
-    left = createClient(clientOptions(endpoint, connection));
-    right = createClient(clientOptions(endpoint, connection));
-    await left.connect();
-    await right.connect();
-
-    await left.query('BEGIN');
-    await right.query('BEGIN');
-
-    await left.query(
-      'SELECT ytd_cents FROM warehouse WHERE id = $1',
-      [warehouseId],
-    );
-    await right.query(
-      'SELECT ytd_cents FROM warehouse WHERE id = $1',
-      [warehouseId],
-    );
-
-    await left.query(
-      'UPDATE warehouse SET ytd_cents = ytd_cents + $1 WHERE id = $2',
-      [writeDeltaCents, warehouseId],
-    );
-    await left.query('COMMIT');
-
-    let rightError = null;
-    try {
-      await right.query(
-        'UPDATE warehouse SET ytd_cents = ytd_cents + $1 WHERE id = $2',
-        [writeDeltaCents, warehouseId],
-      );
-      await right.query('COMMIT');
-    } catch (error) {
-      rightError = error;
-    }
-
-    if (!rightError) {
-      throw new Error(
-        'Lagrange conflict probe expected conflict error, but both transactions succeeded',
-      );
-    }
-
-    const victim = normalizeError(rightError, 'right');
-    const results = Object.freeze([
-      Object.freeze({side: 'left', succeeded: true, error: null}),
-      Object.freeze({side: 'right', succeeded: false, error: victim}),
-    ]);
-    return Object.freeze({victim, results});
-  } finally {
-    await Promise.all([safeRollback(left), safeRollback(right)]);
-    await Promise.all([safeEnd(left), safeEnd(right)]);
-  }
+  const createClient = options.createClient || createPgWireClient;
+  return runRetryableConflictProbe({
+    openSession: async () => {
+      const client = createClient(clientOptions(endpoint, connection));
+      await client.connect();
+      return pgWireSession(client);
+    },
+    statements: {read: 'SELECT ytd_cents FROM warehouse WHERE id = $1',
+      update: 'UPDATE warehouse SET ytd_cents = ytd_cents + $1 WHERE id = $2'},
+    describeError: normalizeError,
+    warehouseId: Number.isInteger(options.warehouseId) ? options.warehouseId :
+      DEFAULT_WAREHOUSE_ID,
+    delta: Number.isInteger(options.writeDeltaCents) ? options.writeDeltaCents :
+      DEFAULT_WRITE_DELTA_CENTS,
+    retrySleep: options.retrySleep,
+  });
 }
 
 export {

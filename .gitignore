@@ -30,6 +30,9 @@ data
 /data/tidb-comparison/*
 !/data/tidb-comparison/*.ndjson
 !/data/tidb-comparison/*.json
+!/data/tidb-comparison/forensic/
+/data/tidb-comparison/forensic/*
+!/data/tidb-comparison/forensic/*.ndjson
 data2/
 .tap/
 .tmp/

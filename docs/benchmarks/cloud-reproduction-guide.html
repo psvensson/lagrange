@@ -58,7 +58,8 @@ node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts "$HOSTS" --ssh
       <h2>3. Amazon Web Services (AWS)</h2>
       <pre>export REGION="us-east-1"
 export KEY_NAME="your-ec2-keypair-name"
-./docs/benchmarks/cloud/provision-aws.sh
+# SSH (22) is opened only to the network you name; there is no default:
+./docs/benchmarks/cloud/provision-aws.sh --ssh-cidr "203.0.113.7/32"
 
 # Run the 5-node comparative benchmark suite and regenerate docs/benchmarks/*:
 node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts "$HOSTS" --ssh-user ubuntu --ssh-key ~/.ssh/your-ec2-keypair.pem --regenerate-docs
@@ -71,7 +72,8 @@ node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts "$HOSTS" --ssh
       <h2>4. Microsoft Azure</h2>
       <pre>export RESOURCE_GROUP="lagrange-bench-rg"
 export LOCATION="eastus"
-./docs/benchmarks/cloud/provision-azure.sh
+# SSH (22) is opened only to the network you name; there is no default:
+./docs/benchmarks/cloud/provision-azure.sh --ssh-cidr "203.0.113.7/32"
 
 # Run the 5-node comparative benchmark suite and regenerate docs/benchmarks/*:
 node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --hosts "$HOSTS" --ssh-user azureuser --regenerate-docs

@@ -39,6 +39,7 @@ const FULL = [
   'tool_psql=no', 'tool_g++=yes', 'tool_java=yes', 'tool_rg=no', 'tool_jq=yes',
   'docker_reachable=yes',
   'repo_present=yes',
+  'repo_free_bytes=409600000',
   'repo_head=' + 'c'.repeat(40),
   `lock_graph_sha256=${LOCK}`,
   'node_modules=yes',
@@ -70,6 +71,7 @@ test('a probe transcript becomes a capability record', () => {
   assert.equal(capability.repo.lockGraphSha256, LOCK);
   assert.equal(capability.repo.dependenciesCurrent, true);
   assert.equal(capability.cpuSampleMs, 208);
+  assert.equal(capability.repoFreeBytes, 409600000, 'room on the checkout filesystem');
   assert.deepEqual(parseCapability(FULL.replace(/\n/gu, '\r\n'), 7), capability,
     'CRLF transcripts read the same');
 });
@@ -92,6 +94,8 @@ test('an unreported fact is unknown, never a capability the machine was not show
   assert.equal(noRepo.repo.lockGraphSha256, null,
     'a dependency-graph digest is not believed when the repository is absent');
   assert.equal(noRepo.repo.dependenciesCurrent, null);
+  assert.equal(parseCapability('repo_present=no\nrepo_free_bytes=5').repoFreeBytes, null,
+    'free space of an absent checkout is not believed');
 });
 
 test('readiness names every reason a machine cannot run the corpus', () => {

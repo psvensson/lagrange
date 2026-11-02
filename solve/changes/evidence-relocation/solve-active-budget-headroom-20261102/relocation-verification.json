@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "solve-active-budget-headroom-20261102--overflow-budget-decision-matrix-62d537313-2026-11-02.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/solve-active-budget-headroom-20261102--overflow-budget-decision-matrix-62d537313-2026-11-02.tar.gz",
+      "bundleSha256": "2872b589aea7125bed54651ee24c5891d208c78df93109f465989f236d38eb0b",
+      "sourceCommit": "62d537313969b4adc556a38d99c6c9eee02f0cf5",
+      "shard": "relocation-inventory/solve-active-budget-headroom-20261102--overflow-budget-decision-matrix-62d537313-2026-11-02.json",
+      "shardSha256": "50e3fdfd6f57094faa9dc2725213a550f5dca461513b897889d0f711195b475c",
+      "verifiedAt": "2026-11-02T01:32:05.500Z",
+      "downloadedSha256": "2872b589aea7125bed54651ee24c5891d208c78df93109f465989f236d38eb0b",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 2,
+      "results": "11",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

@@ -1,6 +1,5 @@
-import pg from 'pg';
+import {createPgWireClient} from './pg-wire-client.js';
 
-const {Client} = pg;
 const ONE = 1;
 const MAX_PORT = 65535;
 
@@ -55,7 +54,7 @@ async function observeLagrangePaymentState(options = {}) {
   if (!operation || typeof operation !== 'object') {
     throw new Error('Lagrange payment observer requires operation');
   }
-  const createClient = options.createClient || ((config) => new Client(config));
+  const createClient = options.createClient || createPgWireClient;
   const client = createClient(clientOptions(endpoint, connection));
   await client.connect();
   try {

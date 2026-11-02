@@ -1,6 +1,5 @@
-import pg from 'pg';
+import {createPgWireClient} from './pg-wire-client.js';
 
-const {Client} = pg;
 const ONE = 1;
 const MAX_PORT = 65535;
 const CONNECT_TIMEOUT_MS = 10000;
@@ -150,7 +149,7 @@ async function runLagrangeVisibilityProbe(options = {}) {
   const connection = normalizeConnection(options.connection);
   const warehouseId = positiveInteger(options.warehouseId, 'warehouseId');
   const writeDeltaCents = positiveInteger(options.writeDeltaCents, 'writeDeltaCents');
-  const createClient = options.createClient || ((config) => new Client(config));
+  const createClient = options.createClient || createPgWireClient;
   const config = clientOptions(endpoint, connection);
   const clients = [];
   let primaryError = null;

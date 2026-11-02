@@ -10,7 +10,7 @@
  * provisioning is the documented operator scale path of sys-postgres-wire.
  */
 
-import {Client} from 'pg';
+import {createPgWireClient} from '../reference-client/pg-wire-client.js';
 import {COLUMN} from '../../../src/constants/columns.js';
 import {META_SERVICE_ID} from '../../../src/constants/wasm-meta.js';
 import {TABLES} from '../../../src/constants/tables.js';
@@ -252,7 +252,7 @@ async function provisionPublicListener(adminNode, replicaCount) {
  * @return {Promise<Object>} {query, close}
  */
 async function openPgPublicClient(node, port) {
-  const client = new Client({
+  const client = createPgWireClient({
     connectionTimeoutMillis: PUBLIC_SEAM_LISTENER.CONNECT_TIMEOUT_MS,
     database: REQUEST_CELL_AUTH.DATABASE,
     host: node.ip,

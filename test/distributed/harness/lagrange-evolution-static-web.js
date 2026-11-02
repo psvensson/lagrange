@@ -1,301 +1,32 @@
-import {mkdir, writeFile} from 'node:fs/promises';
-import path from 'node:path';
-import process from 'node:process';
-import {escapeXml, formatNum} from './comparative-landing-svg-renderer.js';
-import {buildMultiSystemComparativeMatrix} from './comparative-matrix-runner.js';
-import {buildLagrangeEvolutionTimeline} from './scaleout-series-experiments.js';
+// Lagrange milestone page: the admission cells behind each advertised milestone.
+import {TARGET_ID} from './comparative-coverage-manifest.js';
+import {
+  buildExperimentSection,
+  buildTargetSection,
+  writeClaimPageArtifacts,
+} from './comparative-landing-tables.js';
+import {OVERVIEW_COLUMNS, SCENARIO_LINKS} from './comparative-page-columns.js';
 
-const arrayJoin = Function.call.bind(Array.prototype.join);
-const arrayMap = Function.call.bind(Array.prototype.map);
-const stringSlice = Function.call.bind(String.prototype.slice);
-
-export const DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH = 'docs/benchmarks/lagrange-metrics-evolution.svg';
-export const DEFAULT_LAGRANGE_EVOLUTION_MD_PATH = 'docs/benchmarks/lagrange-metrics-evolution.md';
-export const DEFAULT_LAGRANGE_EVOLUTION_HTML_PATH = 'docs/benchmarks/lagrange-metrics-evolution.html';
-
-const HTML_PAGE_STYLE = `<style>:root{--bg:#0f172a;--card-bg:#1e293b;--text:#f8fafc;--muted:#94a3b8;--border:#334155;--accent:#38bdf8}body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px}.container{max-width:1100px;margin:0 auto}h1{font-size:24px;color:#fff}.nav-bar{margin:12px 0 20px 0}.nav-bar a{color:var(--accent);margin-right:12px}.card{background:var(--card-bg);border-radius:8px;border:1px solid var(--border);padding:18px;margin-bottom:24px}
-.card h2{font-size:16px;color:var(--accent)}.card p,.card li{font-size:13px;line-height:1.6;color:#cbd5e1}th{color:var(--muted);font-weight:600}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}.chart-box{margin-bottom:24px;display:flex}</style>`;
-
-const DEFAULT_TIMELINE = buildLagrangeEvolutionTimeline();
-
-const MILESTONE_LABELS = Object.freeze({
-  'v0.4.0-3node-rf3-multi-host': ['v0.4.0 @ 3-Node RF=3 (100% cov)', '3 Physical Hosts + Wire Client'],
-  'v0.4.0-4node-rf3-multi-host': ['v0.4.0 @ 4-Node RF=3 (75% cov)', '4 Physical Hosts + Wire Client'],
-  'v0.4.0-5node-rf3-multi-host': ['v0.4.0 @ 5-Node RF=3 (60% cov)', '5 Physical Hosts + Wire Client'],
-  'v0.4.0-5node-rf3-p30-sweet-spot': ['v0.4.0 @ 5-Node RF=3 (P=30)', '5 Physical Hosts Partition Sweep'],
-  'v0.4.0-5node-rf3-live-movement': ['v0.4.0 @ 5-Node RF=3 (Rebalance)', 'Live Partition Move Over Wire'],
-  'v0.4.0-5node-rf3-scenario-c-5x': ['v0.4.0 @ 5-Node RF=3 (5x Scale)', 'Scenario C 5x Joint Wire Scale'],
-});
-
-const COMMIT_DELTAS = Object.freeze([
-  [
-    'v0.4.0-3node-rf3-multi-host',
-    '0.4.0',
-    '3-node RF=3 cluster across 3 dedicated GCP e2-standard-4 VMs ' +
-      '(`lagrange-bench-1`..`lagrange-bench-3`) with external client on ' +
-      '`lagrange-bench-6` over GCP VPC internal wire.',
-  ],
-  [
-    'v0.4.0-4node-rf3-multi-host',
-    '0.4.0',
-    '4-node RF=3 scale-out across 4 dedicated GCP e2-standard-4 VMs ' +
-      '(`lagrange-bench-1`..`lagrange-bench-4`) with external client on ' +
-      '`lagrange-bench-6` over GCP VPC internal wire.',
-  ],
-  [
-    'v0.4.0-5node-rf3-multi-host',
-    '0.4.0',
-    '5-node RF=3 scale-out (60% replica coverage) across 5 dedicated GCP ' +
-      'e2-standard-4 VMs (`lagrange-bench-1`..`lagrange-bench-5`) with ' +
-      'external client on `lagrange-bench-6` over GCP VPC internal wire.',
-  ],
-  [
-    'v0.4.0-5node-rf3-p30-sweet-spot',
-    '0.4.0',
-    '5-node RF=3 partition granularity sweep (P=6, 15, 30, 60) measured ' +
-      'across 5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..' +
-      '`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC ' +
-      'internal wire.',
-  ],
-  [
-    'v0.4.0-5node-rf3-live-movement',
-    '0.4.0',
-    '5-node RF=3 live partition movement under steady load measured across ' +
-      '5 dedicated GCP e2-standard-4 VMs (`lagrange-bench-1`..' +
-      '`lagrange-bench-5`) with client on `lagrange-bench-6` over GCP VPC ' +
-      'internal wire.',
-  ],
-  [
-    'v0.4.0-5node-rf3-scenario-c-5x',
-    '0.4.0',
-    '5-node RF=3 Scenario C streaming feature evaluation under ' +
-      '0ms/100ms/1000ms SLAs and 5x joint load across 5 GCP e2-standard-4 ' +
-      'VMs (`lagrange-bench-1`..`lagrange-bench-5`) with client on ' +
-      '`lagrange-bench-6` over GCP VPC internal wire.',
-  ],
-]);
-
-function getMilestoneLabels(m) {
-  return MILESTONE_LABELS[m.id] || [
-    `v${m.version} @ ${stringSlice(String(m.commit || ''), 0, 7)} (${stringSlice(String(m.date || ''), 0, 10)})`,
-    stringSlice(String(m.description || m.id || ''), 0, 28),
-  ];
-}
-
-function getTimeline(matrix) {
-  const raw = Array.isArray(matrix?.lagrangeEvolutionTimeline) &&
-    matrix.lagrangeEvolutionTimeline.length > 0 ?
-    matrix.lagrangeEvolutionTimeline : DEFAULT_TIMELINE;
-  return arrayMap(raw, (m) => ({
-    ...m, id: m.id || m.milestoneId, commit: m.commit || m.commitSha || '',
-    date: m.date || m.recordedAt || '', description: m.description || m.label || '',
-    executionMode: m.executionMode || m.executionPath || 'live-cluster-wire',
-  }));
-}
-
-function renderMilestoneRow(x, y, [l1, l2], met, sub, barW, col, isDashed) {
-  const dash = isDashed ? ' stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,2"' : '';
-  const fillBar = barW > 0 ?
-    `\n    <rect x="${x}" y="${y + 26}" width="${barW}" height="6" fill="${col}" rx="2"${dash}/>` : '';
-  return `    <text x="${x}" y="${y}" fill="#cbd5e1" font-size="10" font-family="monospace">${escapeXml(l1)}</text>
-    <text x="${x}" y="${y + 11}" fill="#94a3b8" font-size="9" font-family="monospace">${escapeXml(l2)}</text>
-    <text x="${x}" y="${y + 22}" fill="#e2e8f0" font-size="9">${escapeXml(met)}</text>
-    <rect x="${x}" y="${y + 26}" width="250" height="6" fill="#334155" rx="2"/>${fillBar}
-    <text x="${x}" y="${y + 42}" fill="#64748b" font-size="9">${escapeXml(sub)}</text>`;
-}
-
-function getPanel1Info(m) {
-  const tx = m.scenarioATxPerSec !== null ? `${formatNum(m.scenarioATxPerSec, 2)} tx/s` : '[not measured]';
-  const p95 = m.scenarioAP95Ms !== null ? `p95: ${formatNum(m.scenarioAP95Ms, 1)}ms` : '[not measured]';
-  const proofs = m.semanticProofPassed !== null ?
-    `${m.semanticProofPassed}/${m.semanticProofRequired || 33}` : '[not measured]';
+function buildLagrangeEvolutionPage(matrix) {
   return {
-    met: `${tx} | ${p95}`,
-    sub: `Proofs: ${proofs} (${m.executionMode})`,
-    val: m.semanticProofPassed !== null ? m.semanticProofPassed / 33 : 0,
-    col: '#38bdf8', isDashed: m.executionMode !== 'live-cluster-wire',
+    title: 'Lagrange milestones',
+    intro: ['Each milestone lists the claims it advertised. Lagrange Scenario B is blocked ' +
+      'until the compiled risk service journey exists.'],
+    sections: [
+      buildExperimentSection(matrix, 'lagrange-evolution', ''),
+      buildTargetSection(matrix, {heading: 'Lagrange configurations', description: '',
+        columns: OVERVIEW_COLUMNS, targetIds: [TARGET_ID.LAGRANGE, TARGET_ID.LAGRANGE_5]}),
+    ],
+    links: SCENARIO_LINKS, sources: matrix.sources, withdrawal: matrix.withdrawal, svgHref: 'lagrange-metrics-evolution.svg',
   };
 }
 
-function getPanel2Info(m) {
-  const dec = m.scenarioBDecisionsPerSec !== null ?
-    `${formatNum(m.scenarioBDecisionsPerSec, 1)} dec/s` : '[not measured]';
-  const p99 = m.scenarioBP99Ms !== null ? `p99: ${formatNum(m.scenarioBP99Ms, 1)}ms` : '[not measured]';
-  const wan = m.scenarioBWanBytes !== null ? `${m.scenarioBWanBytes} B/req` : '[not measured]';
-  return {
-    met: `${dec} | ${p99}`,
-    sub: `WAN: ${wan} | Mode: ${m.executionMode}`,
-    val: (typeof m.scenarioBDecisionsPerSec === 'number') ? m.scenarioBDecisionsPerSec / 800 : 0,
-    col: '#10b981', isDashed: m.executionMode !== 'live-cluster-wire',
-  };
+async function writeLagrangeEvolutionStaticWebArtifacts({matrix, svgPath, markdownPath,
+  htmlPath}) {
+  return writeClaimPageArtifacts(buildLagrangeEvolutionPage(matrix),
+    {svgPath, markdownPath, htmlPath});
 }
 
-function getPanel3Info(m) {
-  const fresh = m.scenarioCFresh0msDecPerSec !== null ?
-    `${formatNum(m.scenarioCFresh0msDecPerSec, 1)} dec/s @ 0ms` : '[not measured]';
-  const moveP99 = m.scenarioBMoveP99Ms !== null ?
-    `Move p99: ${formatNum(m.scenarioBMoveP99Ms, 1)}ms` : '[not measured]';
-  const conv = m.scenarioBConvergenceMs !== null ?
-    `Conv: ${formatNum(m.scenarioBConvergenceMs, 1)}ms` : '[not measured]';
-  return {
-    met: fresh,
-    sub: `${moveP99} | ${conv}`,
-    val: (typeof m.scenarioCFresh0msDecPerSec === 'number') ? m.scenarioCFresh0msDecPerSec / 500 : 0,
-    col: '#a855f7', isDashed: m.executionMode !== 'live-cluster-wire',
-  };
-}
-
-function getPanelInfo(m, panelType) {
-  if (panelType === 1) return getPanel1Info(m);
-  if (panelType === 2) return getPanel2Info(m);
-  return getPanel3Info(m);
-}
-
-function renderPanel(px, href, title, subTitle, timeline, panelType) {
-  const innerX = px + 15;
-  const panelH = 64 + timeline.length * 56;
-  const pHeader = `  <rect x="${px}" y="80" width="280" height="${panelH}" fill="#1e293b" rx="6" stroke="#334155"/>
-  <a href="${href}"><text x="${innerX}" y="104" fill="#38bdf8" font-size="12" font-weight="bold">${title}</text></a>
-  <text x="${innerX}" y="120" fill="#94a3b8" font-size="10">${subTitle}</text>`;
-  const rows = arrayMap(timeline, (m, idx) => {
-    const y = 136 + idx * 56;
-    const labels = getMilestoneLabels(m);
-    const {met, sub, val, col, isDashed} = getPanelInfo(m, panelType);
-    const w = Math.max(val > 0 ? 4 : 0, Math.min(250, Math.round(val * 250)));
-    return renderMilestoneRow(innerX, y, labels, met, sub, w, col, isDashed);
-  });
-  return `${pHeader}\n${arrayJoin(rows, '\n')}`;
-}
-
-export function renderLagrangeEvolutionSvg(matrix) {
-  const tl = getTimeline(matrix);
-  const svgH = 160 + tl.length * 56;
-  const p1 = renderPanel(30, 'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline',
-    'Scenario A OLTP &amp; Proofs Over Time', 'tx/s, p95 ms, and proofs (33 max)', tl, 1);
-  const p2 = renderPanel(340, 'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision',
-    'Scenario B Risk Decision Over Time', 'Decisions/s, p99 ms latency, WAN bytes', tl, 2);
-  const p3 = renderPanel(650, 'tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision',
-    'Scenario C 0ms Freshness &amp; Movement', '0ms freshness SLA, live movement, routing convergence', tl, 3);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 ${svgH}" width="960" height="${svgH}">
-  <rect width="960" height="${svgH}" fill="#0f172a" rx="8"/>
-  <text x="30" y="28" fill="#f8fafc" font-size="16" font-weight="bold">Lagrange Longitudinal Metrics Evolution</text>
-  <text x="30" y="46" fill="#94a3b8" font-size="11">Version and commit progression across Scenario A OLTP, Scenario B Risk, and Scenario C Features</text>
-  <text x="30" y="62" fill="#64748b" font-size="10">Legend: solid bar = observed-docker-cluster (multi-machine live wire; one replica per physical host)</text>
-  <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline"><text x="630" y="28" fill="#94a3b8" font-size="11">Scenario A</text></a>
-  <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision"><text x="720" y="28" fill="#94a3b8" font-size="11">Scenario B</text></a>
-  <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision"><text x="810" y="28" fill="#38bdf8" font-size="11" font-weight="bold">Scenario C</text></a>
-${p1}\n${p2}\n${p3}
-</svg>\n`;
-}
-
-function renderTables(timeline) {
-  const f = formatNum;
-  const trM = arrayJoin(arrayMap(timeline, (m) => {
-    const proofs = m.semanticProofPassed !== null ? `${m.semanticProofPassed}/${m.semanticProofRequired || 33}` : '[not measured]';
-    return `| ${m.id} | ${m.version} | ${m.commit} | ${stringSlice(String(m.date || ''), 0, 10)} | ` +
-      `${m.evidenceTier} | ${m.executionMode} | ${f(m.scenarioATxPerSec, 2)} | ${f(m.scenarioAP95Ms, 1)} | ` +
-      `${proofs} | ${f(m.scenarioBDecisionsPerSec, 1)} | ${f(m.scenarioCFresh0msDecPerSec, 1)} |`;
-  }), '\n');
-  const htM = arrayJoin(arrayMap(timeline, (m) => {
-    const proofs = m.semanticProofPassed !== null ? `${m.semanticProofPassed}/${m.semanticProofRequired || 33}` : '<span class="badge">not measured</span>';
-    const aTx = m.scenarioATxPerSec !== null ? f(m.scenarioATxPerSec, 2) : '<span class="badge">not measured</span>';
-    const aP95 = m.scenarioAP95Ms !== null ? f(m.scenarioAP95Ms, 1) : '<span class="badge">not measured</span>';
-    const bDec = m.scenarioBDecisionsPerSec !== null ? f(m.scenarioBDecisionsPerSec, 1) : '<span class="badge">not measured</span>';
-    const cFresh = m.scenarioCFresh0msDecPerSec !== null ? f(m.scenarioCFresh0msDecPerSec, 1) : '<span class="badge">not measured</span>';
-    return `<tr><td><strong>${escapeXml(m.id)}</strong></td><td>${escapeXml(m.version)}</td>` +
-      `<td><code>${escapeXml(m.commit)}</code></td><td>${stringSlice(String(m.date || ''), 0, 10)}</td>` +
-      `<td>${escapeXml(m.evidenceTier)}</td><td>${escapeXml(m.executionMode)}</td><td>${aTx}</td>` +
-      `<td>${aP95}</td><td>${proofs}</td><td>${bDec}</td><td>${cFresh}</td></tr>`;
-  }), '\n');
-  return {trM, htM};
-}
-
-export function renderLagrangeEvolutionMarkdown(matrix) {
-  const {trM} = renderTables(getTimeline(matrix));
-  const mdD = arrayJoin(arrayMap(COMMIT_DELTAS, ([id, c, d]) => `- **${id} (commit ${c})**: ${d}`), '\n');
-  return `# Lagrange Longitudinal Metrics Evolution
-
-Progressive evolution of Lagrange across chronological milestones, tracking Scenario A OLTP throughput,
-semantic proof closure, Scenario B distributed risk decision latency, and Scenario C streaming feature evaluation.
-
-- Navigation: [Benchmark Index](README.md) | [Dashboard](index.html) | [TiDB Comparison](tidb-comparison-progress.md)
-- Reference Scenarios: [Scenario A OLTP Baseline](tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline) | [Scenario B Distributed Risk Decision](tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision) | [Scenario C Streaming Feature Risk Decision](tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision)
-
-![Lagrange metrics evolution over time](lagrange-metrics-evolution.svg)
-
-## How Lagrange metrics develop over time (version and commit progression)
-
-| Milestone | Version | Commit | Date | Evidence Tier | Execution Mode | Scenario A (tx/s) | p95 (ms) | Proofs | Scenario B (dec/s) | Scenario C (dec/s) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-${trM}
-
-## Commit-over-commit delta progression
-
-${mdD}
-
-## Provenance qualification across historical milestones
-
-All published milestones require strict multi-machine over-the-wire execution:
-
-- **observed-docker-cluster (live-cluster-wire)**: Every cluster node, replica, and client driver runs on a separate physical host (\`boot_id\` verified) and all inter-node and client-to-cluster traffic traverses the physical network interface.
-- **No estimated or single-host data**: Legacy single-host loopback runs and modeled topological projections (\`local-oracle-plus-network-model\` / \`modeled-topology-oracle\`) have been purged.
-`;
-}
-
-export function renderLagrangeEvolutionHtml(matrix) {
-  const {htM} = renderTables(getTimeline(matrix));
-  const htD = arrayJoin(arrayMap(COMMIT_DELTAS, ([id, c, d]) =>
-    `        <li><strong>${id} (${c})</strong>: ${escapeXml(d)}</li>`), '\n');
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Lagrange Longitudinal Metrics Evolution</title>
-  ${HTML_PAGE_STYLE}
-</head>
-<body>
-  <div class="container">
-    <h1>Lagrange Longitudinal Metrics Evolution</h1>
-    <div class="nav-bar">
-      <a href="index.html">Dashboard</a><a href="README.md">Benchmark Index</a>
-      <a href="tidb-comparison-progress.md">TiDB Comparison</a>
-      <a href="tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline">Scenario A</a>
-      <a href="tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision">Scenario B</a>
-      <a href="tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision">Scenario C</a>
-    </div>
-    <div class="chart-box">\n${renderLagrangeEvolutionSvg(matrix)}    </div>
-    <div class="card">
-      <h2>How Lagrange Metrics Develop Over Time (Version and Commit Progression)</h2>
-      <table>
-        <thead><tr><th>Milestone</th><th>Version</th><th>Commit</th><th>Date</th><th>Evidence Tier</th><th>Execution Mode</th><th>Scenario A (tx/s)</th><th>p95 (ms)</th><th>Proofs</th><th>Scenario B (dec/s)</th><th>Scenario C (dec/s)</th></tr></thead>
-        <tbody>\n${htM}\n        </tbody>
-      </table>
-    </div>
-    <div class="card"><h2>Commit-Over-Commit Delta Progression</h2><ul>\n${htD}\n      </ul></div>
-    <div class="card">
-      <h2>Provenance Qualification Across Historical Milestones</h2>
-      <p>All published milestones require strict multi-machine over-the-wire execution:</p>
-      <ul><li><strong>observed-docker-cluster (live-cluster-wire)</strong>: Every cluster node, replica, and client driver runs on a separate physical host and all inter-node and client-to-cluster traffic traverses the physical network interface.</li><li><strong>No estimated or single-host data</strong>: Legacy single-host loopback runs and modeled topological projections (<code>local-oracle-plus-network-model</code> / <code>modeled-topology-oracle</code>) have been purged.</li></ul>
-    </div>
-  </div>
-</body>
-</html>\n`;
-}
-
-export async function writeLagrangeEvolutionStaticWebArtifacts(options = {}) {
-  const r = options.rootDir || process.cwd();
-  const svgPath = options.svgPath || path.resolve(r, DEFAULT_LAGRANGE_EVOLUTION_SVG_PATH);
-  const markdownPath = options.markdownPath || path.resolve(r, DEFAULT_LAGRANGE_EVOLUTION_MD_PATH);
-  const htmlPath = options.htmlPath || path.resolve(r, DEFAULT_LAGRANGE_EVOLUTION_HTML_PATH);
-  const matrix = options.matrix || buildMultiSystemComparativeMatrix(options);
-  const write = async (f, c) => {
-    await mkdir(path.dirname(f), {recursive: true});
-    await writeFile(f, c, 'utf8');
-  };
-  await Promise.all([
-    write(svgPath, renderLagrangeEvolutionSvg(matrix)),
-    write(markdownPath, renderLagrangeEvolutionMarkdown(matrix)),
-    write(htmlPath, renderLagrangeEvolutionHtml(matrix)),
-  ]);
-  return Object.freeze({matrix, svgPath, markdownPath, htmlPath});
-}
+export {
+  writeLagrangeEvolutionStaticWebArtifacts,
+};

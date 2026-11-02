@@ -1,0 +1,24 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "reproducer-red-on-current-product",
+      "passed": false
+    },
+    {
+      "id": "first-divergence-repaired-at-cause",
+      "passed": false
+    },
+    {
+      "id": "scenario-green-three-consecutive",
+      "passed": false
+    },
+    {
+      "id": "independent-verification",
+      "passed": false
+    }
+  ],
+  "evidence": [],
+  "applicability": "proposed child quest of comparative-benchmark-evidence-repair, not started (no solve start); red until each receipt's evidence exists. The formation-repro run (multi-host-lab-run1-20261101T2118Z, incl. run-summary.json) and product-blocker-first-divergence-2026-11-01.md are in the relocated bundles comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.tar.gz (sha256 3718164dc7b632abbecd39049600efe02c4e9d7ab0566a0ea19b62b7e4b4e6c9) and comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.tar.gz (sha256 eaf4c6658612a812504507dffa26a594ff820217898f8df0ba28cf5f7f83b95f); summaries in tree under solve/quests/comparative-benchmark-evidence-repair/evidence/."
+}
