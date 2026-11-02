@@ -39,6 +39,10 @@ const RETIRED_RELEASE_PATHS = [
   'ci/forgejo-runner/job-log.sh',
   'ci/forgejo-runner/setup.sh',
 ];
+// A GitHub-hosted job stops at 360 minutes whatever its timeout-minutes says.
+// A self-hosted job could run longer, but the gate keeps one budget so that
+// which runner proves a change never changes how long it may prove it.
+const GITHUB_JOB_TIMEOUT_MAXIMUM = 360;
 const ACTIVE_RELEASE_SURFACES = [
   '.github/workflows/ci.yml',
   '.github/workflows/full-gate.yml',
@@ -323,6 +327,13 @@ describe('project hardening contracts', () => {
       'there is no opt-in marker: hosted is the default, not a choice');
     assert.match(runsOn, /github\.event_name == 'push'/u,
       'pull requests can carry fork code and must never reach self-hosted');
+    // The gate's job limit is GitHub's maximum for every event. PR #184's
+    // proof (1892 files) was killed at the former 120-minute limit on
+    // 2026-11-02 (run 41431327759) with its serial exclusive lane at 73 of
+    // 103 files, and a push to main is the exact-sha proof the publisher
+    // reads: neither may be cut short of what the change obliges.
+    assert.equal(ci.jobs.gate['timeout-minutes'], GITHUB_JOB_TIMEOUT_MAXIMUM,
+      'the gate may run as long as GitHub allows a job to run');
 
     // The proof range is supplied by the workflow and consumed by repository
     // code through one variable, so the static layer and the change proof
@@ -378,7 +389,7 @@ describe('project hardening contracts', () => {
     // Every network-facing install step must fail in minutes. On 2026-08-19 a
     // step that normally takes 115s hung for 62 minutes on a hosted runner:
     // `curl -fsSLO` has no default timeout and the step had none either, so
-    // only the job's 120-minute backstop would have stopped it. This bounds
+    // only the job's backstop (then 120 minutes) would have stopped it. This bounds
     // the failure, not the normal duration.
     for (const workflowText of
       [ciText, fullGateText, releaseText, canaryText]) {
