@@ -80,6 +80,41 @@ This applies to both the fix itself and the test that reproduces it.
 3. **Leverage existing assertion patterns** - Follow the conventions already
    established in nearby tests for asserting ownership, lifecycle, and state.
 
+### Recover Historical Precedent Before A Significant Repair
+
+For a significant, difficult, recurring, or seemingly familiar defect, presume
+the failure class is systemic until evidence establishes a local cause. Before
+selecting a remedy, search the relevant Git history, prior Quest findings and
+verdicts, closure ledgers, design decisions, incident evidence and regression
+tests for earlier appearances of the *causal mechanism*, not only its present
+error message. Use a bounded search of the owner and its consumers; widen it
+when evidence suggests the same contract is violated elsewhere.
+
+Record the applicable precedent in the existing Quest finding or review:
+- **When and where:** earliest relevant reproducer, source revision, owner
+  boundary, and the earlier observed failure (or explicitly "not found").
+- **What was learned:** first proven divergence, remedies attempted, accepted
+  fix, rejected approaches and the evidence that distinguishes them.
+- **What remained:** residual consumers, unproved cases, later regressions and
+  how the current manifestation compares with the earlier one.
+- **What changes now:** reuse the earlier canonical owner and solution where
+  its contract still applies, or explain with a new witness why a different
+  correction is necessary. Test the same failure class at affected consumers,
+  including restart, stale observations and useful progress when applicable.
+
+An earlier passing test, closed Quest or accepted design is evidence of its
+*declared scope*, not proof that all related paths are corrected. Recheck its
+assumptions against current source and the original negative controls. Do not
+resurrect approaches an owner rejected (for example synthetic events, cache-
+as-authority, timeout increases or local fallbacks) without new evidence and
+an explicit owner decision. Use the existing findings, tests and owners, not a
+second historical database or new approval gate.
+
+For a clearly small local defect, a targeted owner/history check is enough;
+a broad archaeology exercise is not mandatory. A significant unexplained
+failure must not be called local merely because one patch makes its current
+test pass.
+
 ### Reassess Repeated Causal Failures
 
 When repeated failures refute the same causal assumption, the author,
