@@ -47,5 +47,6 @@
   "verificationTemplates": [
     "owner-interaction",
     "admission-gating"
-  ]
+  ],
+  "sealedAt": "77b5c76fa784418873a1428b42c28581dd2c4b1f"
 }
