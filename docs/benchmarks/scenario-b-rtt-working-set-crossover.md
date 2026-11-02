@@ -52,6 +52,6 @@ Every comparative result published before 2026-11-01 was withdrawn: the records 
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:be8cc03e7abe44b18ff869e2470debe8800724f973fae7bbd9116e401911f56f
+- `data/tidb-comparison/raw-observations.ndjson` sha256:7f6ee93385b3f073e08695cff87bd28a1b2f7adb8d9be03b0a8f810d02ab4a7f
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
 - `data/tidb-comparison/invalidations.ndjson` sha256:20a3bf4fcc44c4116ce0166850c694e1c37946fcae27277fb0bc418fd2822972

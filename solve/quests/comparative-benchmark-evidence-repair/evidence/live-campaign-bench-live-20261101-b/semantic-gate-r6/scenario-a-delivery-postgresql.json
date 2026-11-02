@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "lagrange-delivery-v1",
+  "system": "postgresql",
+  "caseId": "scenario-a-delivery-v1",
+  "caseSha256": "84df82d090bb021fbf013198fc97aa5909ccbf94e3cb94d55dbf920d908cfb42",
+  "datasetSha256": "9295a4a0b67a460e4bc2007b6e63572890eee6c4f1e2a7bece2b373b8b426f6a",
+  "executionPath": "public-sql",
+  "protocol": "postgresql",
+  "lockingReadMode": "native-for-update",
+  "serviceEndpoint": null,
+  "admissionSha256": null,
+  "runtimePreflight": null,
+  "binding": {
+    "campaignId": "bench-live-20261101-b-r6",
+    "containerId": "bd1a299c7327df3a73008f300d9b12201c016c8e19f1d64ce1407ac7ee1cfff4",
+    "imageId": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+    "endpoint": "192.168.86.41:5432"
+  },
+  "setupOperations": [
+    {
+      "kind": "new_order",
+      "phase": "setup",
+      "workerId": 1,
+      "sequence": 1,
+      "warehouseId": 1,
+      "districtId": 1,
+      "customerId": 1,
+      "lines": [
+        {
+          "itemId": 1,
+          "quantity": 1,
+          "supplyWarehouseId": 1
+        },
+        {
+          "itemId": 2,
+          "quantity": 1,
+          "supplyWarehouseId": 1
+        },
+        {
+          "itemId": 3,
+          "quantity": 1,
+          "supplyWarehouseId": 1
+        },
+        {
+          "itemId": 4,
+          "quantity": 1,
+          "supplyWarehouseId": 1
+        },
+        {
+          "itemId": 5,
+          "quantity": 1,
+          "supplyWarehouseId": 1
+        }
+      ]
+    },
+    {
+      "kind": "new_order",
+      "phase": "setup",
+      "workerId": 1,
+      "sequence": 2,
+      "warehouseId": 1,
+      "districtId": 2,
+      "customerId": 2,
+      "lines": [
+        {
+          "itemId": 6,
+          "quantity": 2,
+          "supplyWarehouseId": 1
+        },
+        {
+          "itemId": 7,
+          "quantity": 2,
+          "supplyWarehouseId": 1
+        },
+        {
+          "itemId": 8,
+          "quantity": 2,
+          "supplyWarehouseId": 1
+        },
+        {
+          "itemId": 9,
+          "quantity": 2,
+          "supplyWarehouseId": 1
+        },
+        {
+          "itemId": 10,
+          "quantity": 2,
+          "supplyWarehouseId": 1
+        }
+      ]
+    }
+  ],
+  "operation": {
+    "kind": "delivery",
+    "phase": "measurement",
+    "workerId": 1,
+    "sequence": 8,
+    "warehouseId": 1,
+    "carrierId": 7
+  },
+  "setupRetryEvidence": [
+    {
+      "policyId": "scenario-a-retry-v1",
+      "attempts": 1,
+      "retries": 0,
+      "retryDelayMs": 0,
+      "failures": [],
+      "intendedIssueTimeMs": 1793579648099,
+      "completedAtMs": 1793579648369,
+      "requestClockElapsedMs": 270
+    },
+    {
+      "policyId": "scenario-a-retry-v1",
+      "attempts": 1,
+      "retries": 0,
+      "retryDelayMs": 0,
+      "failures": [],
+      "intendedIssueTimeMs": 1793579648369,
+      "completedAtMs": 1793579648566,
+      "requestClockElapsedMs": 197
+    }
+  ],
+  "retryEvidence": {
+    "policyId": "scenario-a-retry-v1",
+    "attempts": 1,
+    "retries": 0,
+    "retryDelayMs": 0,
+    "failures": [],
+    "intendedIssueTimeMs": 1793579648566,
+    "completedAtMs": 1793579648716,
+    "requestClockElapsedMs": 150
+  },
+  "observation": {
+    "deliveredOrders": 2,
+    "districts": [
+      {
+        "districtId": 1,
+        "orderId": 1,
+        "customerId": 1,
+        "newOrderCount": 0,
+        "carrierId": 7,
+        "deliveredLineCount": 5,
+        "lineCount": 5,
+        "lineTotalCents": 20728,
+        "customerBalanceCents": 20728,
+        "customerDeliveryCount": 1
+      },
+      {
+        "districtId": 2,
+        "orderId": 1,
+        "customerId": 2,
+        "newOrderCount": 0,
+        "carrierId": 7,
+        "deliveredLineCount": 5,
+        "lineCount": 5,
+        "lineTotalCents": 46008,
+        "customerBalanceCents": 46008,
+        "customerDeliveryCount": 1
+      }
+    ]
+  },
+  "evaluation": {
+    "passed": true,
+    "failures": [],
+    "actual": {
+      "deliveredOrders": 2,
+      "districts": [
+        {
+          "districtId": 1,
+          "orderId": 1,
+          "customerId": 1,
+          "newOrderCount": 0,
+          "carrierId": 7,
+          "deliveredLineCount": 5,
+          "lineCount": 5,
+          "lineTotalCents": 20728,
+          "customerBalanceCents": 20728,
+          "customerDeliveryCount": 1
+        },
+        {
+          "districtId": 2,
+          "orderId": 1,
+          "customerId": 2,
+          "newOrderCount": 0,
+          "carrierId": 7,
+          "deliveredLineCount": 5,
+          "lineCount": 5,
+          "lineTotalCents": 46008,
+          "customerBalanceCents": 46008,
+          "customerDeliveryCount": 1
+        }
+      ]
+    },
+    "expected": {
+      "deliveredOrders": 2,
+      "districts": [
+        {
+          "districtId": 1,
+          "orderId": 1,
+          "customerId": 1,
+          "carrierId": 7,
+          "lineCount": 5,
+          "lineTotalCents": 20728,
+          "customerBalanceCents": 20728,
+          "customerDeliveryCount": 1
+        },
+        {
+          "districtId": 2,
+          "orderId": 1,
+          "customerId": 2,
+          "carrierId": 7,
+          "lineCount": 5,
+          "lineTotalCents": 46008,
+          "customerBalanceCents": 46008,
+          "customerDeliveryCount": 1
+        }
+      ]
+    },
+    "proofIds": [
+      "transaction:delivery:customer_balance_increases_by_selected_line_total",
+      "transaction:delivery:customer_delivery_count_advances_once_per_delivered_order",
+      "transaction:delivery:selected_new_order_is_removed_once_per_serviced_district",
+      "transaction:delivery:selected_order_carrier_is_set_once",
+      "transaction:delivery:selected_order_lines_are_marked_delivered"
+    ]
+  },
+  "comparable": false,
+  "nonComparableReason": "Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.",
+  "proofRecord": {
+    "evidenceId": "lagrange-delivery-v1",
+    "system": "postgresql",
+    "status": "passed",
+    "artifactSha256": "a7e3476342cdd0d07f89d71ddd2743f4b231b0d67d142cf68b764a1db41980a3",
+    "proofIds": [
+      "transaction:delivery:customer_balance_increases_by_selected_line_total",
+      "transaction:delivery:customer_delivery_count_advances_once_per_delivered_order",
+      "transaction:delivery:selected_new_order_is_removed_once_per_serviced_district",
+      "transaction:delivery:selected_order_carrier_is_set_once",
+      "transaction:delivery:selected_order_lines_are_marked_delivered"
+    ]
+  },
+  "artifactSha256": "a7e3476342cdd0d07f89d71ddd2743f4b231b0d67d142cf68b764a1db41980a3"
+}

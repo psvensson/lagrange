@@ -1,0 +1,8 @@
+psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb ["TRANSPORT_WS_HOST=0.0.0.0","ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true","PGWIRE_AUTH_USER=lagrange-harness-user","DATA_DIR=/var/lib/lagrange-data","ADMIN_WS_HOST=0.0.0.0","PGWIRE_AUTH_PASSWORD=lagrange-harness-password","PGWIRE_AUTH_DATABASE=lagrange_harness","NODE_ID=00000000-0000-4000-8000-000000000001","NODE_ADDRESS=192.168.86.41:8080","REST_API_PORT=8080","ADMIN_WS_PORT=8081","TRANSPORT_WS_PORT=8082","PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"] null
+{"level":"info","message":"Event loop gap watchdog started","thresholdMs":1000,"intervalMs":250,"profileEnabled":false}
+Fatal error: Error: Failed to create data directory '/var/lib/lagrange-data': EACCES: permission denied, mkdir '/var/lib/lagrange-data'
+    at DataDirectoryManager.ensureDirectoryExists (file:///app/src/storage/data-directory-manager.js:103:13)
+    at DataDirectoryManager.initialize (file:///app/src/storage/data-directory-manager.js:76:10)
+    at acquireLagrangeRuntime (file:///app/src/lagrange-runtime-startup.js:717:24)
+    at async runStartupWithCleanup (file:///app/src/entrypoint-startup-acquisition-ledger.js:59:21)
+    at async main (file:///app/src/index.js:37:19)

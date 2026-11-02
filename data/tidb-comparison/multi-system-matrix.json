@@ -13,7 +13,7 @@
   "sources": [
     {
       "path": "data/tidb-comparison/raw-observations.ndjson",
-      "sha256": "sha256:be8cc03e7abe44b18ff869e2470debe8800724f973fae7bbd9116e401911f56f"
+      "sha256": "sha256:7f6ee93385b3f073e08695cff87bd28a1b2f7adb8d9be03b0a8f810d02ab4a7f"
     },
     {
       "path": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
@@ -110,14 +110,19 @@
         "scenarioA/smoke": {
           "claimKey": "lagrange/scenarioA/smoke",
           "claimKind": "throughput",
-          "status": "not-measured",
+          "status": "invalid-measurement",
           "reasons": [
-            "no-observation"
+            "record-rejected:invalid-text"
           ],
           "defectIds": [],
           "evidence": {
-            "runIds": [],
-            "rawObservationsDigests": [],
+            "runIds": [
+              "bench-live-20261101-b-r6-r001"
+            ],
+            "rawObservationsDigests": [
+              "sha256:6e86ed34b58842506020d2bd686d2689d8074277955b0f48d12188bd0ed1646f"
+            ],
+            "invalidatedRunIds": [],
             "forensic": []
           },
           "metrics": null
@@ -1123,14 +1128,19 @@
         "scenarioA/smoke": {
           "claimKey": "tidb-tikv/scenarioA/smoke",
           "claimKind": "throughput",
-          "status": "not-measured",
+          "status": "invalid-measurement",
           "reasons": [
-            "no-observation"
+            "record-rejected:missing-field"
           ],
           "defectIds": [],
           "evidence": {
-            "runIds": [],
-            "rawObservationsDigests": [],
+            "runIds": [
+              "bench-live-20261101-b-r6-r002"
+            ],
+            "rawObservationsDigests": [
+              "sha256:b8e567430398fd4981bea558d1d2231720103e99b80191e42e66ec530a803474"
+            ],
+            "invalidatedRunIds": [],
             "forensic": []
           },
           "metrics": null
@@ -1637,17 +1647,71 @@
         "scenarioA/smoke": {
           "claimKey": "pg-single-primary/scenarioA/smoke",
           "claimKind": "throughput",
-          "status": "not-measured",
+          "status": "product-failure",
           "reasons": [
-            "no-observation"
+            "semantic-gate-failed"
           ],
           "defectIds": [],
           "evidence": {
-            "runIds": [],
-            "rawObservationsDigests": [],
+            "runIds": [
+              "bench-live-20261101-b-r6-r003"
+            ],
+            "rawObservationsDigests": [
+              "sha256:6b4c7a829c5890aa452ad005745e5563c4006e93992a2cac1772c4c79d53779f"
+            ],
+            "invalidatedRunIds": [],
             "forensic": []
           },
-          "metrics": null
+          "metrics": {
+            "profileClass": "smoke",
+            "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
+            "accounting": {
+              "offered": 100,
+              "issued": 100,
+              "unissued": 0,
+              "attempts": 100,
+              "committed": 100,
+              "conflicts": 0,
+              "conflictExhausted": 0,
+              "terminalFailures": {
+                "product_error": 0,
+                "correctness_failure": 0,
+                "transport_failure": 0,
+                "harness_fault": 0
+              },
+              "unresolved": 0,
+              "ambiguousCommits": 0
+            },
+            "runs": [
+              {
+                "runId": "bench-live-20261101-b-r6-r003",
+                "runStatus": "completed",
+                "offeredRatePerSec": 5,
+                "repetition": 1,
+                "accounting": {
+                  "offered": 100,
+                  "issued": 100,
+                  "unissued": 0,
+                  "attempts": 100,
+                  "committed": 100,
+                  "conflicts": 0,
+                  "conflictExhausted": 0,
+                  "terminalFailures": {
+                    "product_error": 0,
+                    "correctness_failure": 0,
+                    "transport_failure": 0,
+                    "harness_fault": 0
+                  },
+                  "unresolved": 0,
+                  "ambiguousCommits": 0
+                },
+                "drainOverrunMs": 5600.436,
+                "maxLatencyMs": 6393.231
+              }
+            ],
+            "setupFailures": [],
+            "capacity": null
+          }
         },
         "scenarioB/local-only": {
           "claimKey": "pg-single-primary/scenarioB/local-only",
