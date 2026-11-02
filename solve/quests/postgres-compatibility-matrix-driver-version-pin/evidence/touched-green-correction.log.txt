@@ -1,6 +1,0 @@
-# test-files planned=1
-classified lane ordinary: 1 file(s), jobs=4
-thermal: hold cpu 78C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2) - CPU package 78C >= 75C, waiting 30s (poll 1/20)
-thermal: ok cpu 68C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
-ok test/query/q10-postgres-compatibility-certification-matrix.test.js (11 assertions, 1582ms)
-# test-files total=1 pass=1 fail=0 assertions=11

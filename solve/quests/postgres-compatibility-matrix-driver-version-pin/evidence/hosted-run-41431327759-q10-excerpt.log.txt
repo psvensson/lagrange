@@ -1,7 +1,0 @@
-gate	Ordinary proof	2026-11-02T10:59:02.2178643Z not ok test/query/q10-postgres-compatibility-certification-matrix.test.js (9 assertions, 5176ms)
-gate	Ordinary proof	2026-11-02T10:59:02.3960633Z           psql: '16.15'
-gate	Ordinary proof	2026-11-02T10:59:02.4779046Z         TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/query/q10-postgres-compatibility-certification-matrix.test.js:1254:12)
-gate	Ordinary proof	2026-11-02T11:03:40.8706165Z not ok test/query/q10-postgres-compatibility-certification-matrix.test.js (9 assertions, 2491ms)
-gate	Ordinary proof	2026-11-02T11:03:40.9423057Z           psql: '16.15'
-gate	Ordinary proof	2026-11-02T11:03:40.9688504Z         TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/query/q10-postgres-compatibility-certification-matrix.test.js:1254:12)
-gate	Ordinary proof	2026-11-02T11:03:40.9704178Z # retried-once fail test/query/q10-postgres-compatibility-certification-matrix.test.js
