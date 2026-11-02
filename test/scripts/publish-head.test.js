@@ -16,6 +16,10 @@ import {
 } from '../../scripts/publish-head.js';
 import {recordProof} from '../../scripts/proof-authority.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
+import {
+  SECTION_KIND, appendExecutionSection, fileResultRecord,
+} from '../../scripts/test-execution-report.js';
+import {validExecutionReport} from './execution-report-fixture.js';
 
 function git(cwd, args) {
   return execGit(args, {cwd, encoding: 'utf8'}).trim();
@@ -169,8 +173,9 @@ tap.test('the gate reads the remote sha this publish observed as its base', (t) 
   t.equal(lines.length, 4,
     'the gate ran the hook, so did the push, then the receipt, then retention');
   const [gateLine, pushLine, recordLine, pruneLine] = lines;
-  t.equal(recordLine, `RECORD record corpus-full-v1 ${head}`,
-    'the publisher records the corpus the gate proved, for the published sha');
+  t.match(recordLine, new RegExp(`^RECORD record corpus-full-v1 ${head} --report ` +
+    '\\S+/test-output/reports/execution-report\\.json$', 'u'),
+  'the publisher records the corpus the gate proved, for the published sha, from its report');
   t.equal(pruneLine,
     'PRUNE --apply --keep-days 7 --keep-reports 24 --keep-report-playbacks 24',
     'and applies the history-safe retention policy last, after the publish stood');
@@ -490,14 +495,37 @@ tap.test('a GitHub-merged head with no receipt gets one from the post-merge arm'
     'a.test.js\nb.test.js\n',
     'no local gate proved a cone for it, so the whole corpus is owed');
   t.equal(merged.receiptRef(merged.merged), '', 'no receipt before the corpus ran');
-  // The detached half, with the corpus run stubbed green and the REAL proof
-  // authority recording into the fake origin.
+  // The detached half, with the corpus run stubbed and the REAL proof
+  // authority recording into the fake origin. A stub that exits green and
+  // reports nothing is no evidence: no receipt.
+  const authority = (command, args, options) =>
+    spawnSync(command, [PROOF_AUTHORITY, ...args.slice(1)], options);
+  const silent = runLocalCorpus(merged.root, merged.merged, {
+    stateDir: merged.stateDir,
+    run: (command, args, options) => (args[0] === 'scripts/proof-authority.js' ?
+      authority(command, args, options) : {status: 0}),
+  });
+  t.equal(silent, 0);
+  t.equal(merged.receiptRef(merged.merged), '',
+    'a green exit without an execution report mints no receipt');
+  t.match(JSON.parse(fs.readFileSync(path.join(merged.stateDir, `${merged.merged}.json`),
+    'utf8')).receipt, /execution-report-planned-file-not-executed/u,
+  'and the refusal is named in the local corpus record');
+  // A run that writes the sections the real runner writes - this commit's
+  // clean checkout, every planned file green with assertions - is evidence.
+  const tree = git(merged.root, ['rev-parse', `${merged.merged}^{tree}`]);
+  fs.writeFileSync(path.join(merged.stateDir, `${merged.merged}.json`), JSON.stringify(
+    {sha: merged.merged, state: 'running', pid: 1, files: 2, startedAt: 1}));
   const status = runLocalCorpus(merged.root, merged.merged, {
     stateDir: merged.stateDir,
     run: (command, args, options) => {
-      if (args[0] === 'scripts/proof-authority.js') {
-        return spawnSync(command, [PROOF_AUTHORITY, ...args.slice(1)], options);
-      }
+      if (args[0] === 'scripts/proof-authority.js') return authority(command, args, options);
+      const sections = options.env.LAGRANGE_EXECUTION_REPORT;
+      const files = ['a.test.js', 'b.test.js'];
+      appendExecutionSection(sections, {kind: SECTION_KIND.START, runId: 'stub',
+        argv: files, planned: files, checkout: {head: merged.merged, tree, clean: true}});
+      appendExecutionSection(sections, {kind: SECTION_KIND.END, runId: 'stub', exitStatus: 0,
+        results: files.map((file) => fileResultRecord({file, ok: true, assertions: 2}))});
       return {status: 0};
     },
   });
@@ -542,7 +570,9 @@ tap.test('the post-merge arm refuses a sha that is not a main head', (t) => {
 
 tap.test('the post-merge arm never re-mints an existing receipt', (t) => {
   const merged = mergedFixture();
-  recordProof({proofId: 'corpus-full-v1', sha: merged.merged, cwd: merged.root});
+  recordProof({proofId: 'corpus-full-v1', sha: merged.merged, cwd: merged.root,
+    report: validExecutionReport({sha: merged.merged,
+      tree: git(merged.root, ['rev-parse', `${merged.merged}^{tree}`])})});
   const receipt = merged.receiptRef(merged.merged);
   t.match(receipt, /^[0-9a-f]{40}$/u, 'the head already carries a receipt');
   t.equal(refusalOf(() => merged.prove(merged.merged)), POST_MERGE_REFUSAL.ALREADY_PROVEN,

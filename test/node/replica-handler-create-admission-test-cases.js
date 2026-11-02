@@ -124,6 +124,11 @@ export async function registerReplicaHandlerCreateAdmissionTests({
           initialized: true,
           role: 'follower',
           async shutdown() {},
+          // A CREATE target asks its leader to admit it after its SYNCING commit
+          // (replica-admission-from-committed-operation); this double admits.
+          async requestReplicaAdmission(operationId) {
+            return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+          },
           async syncFromLeader() {},
         }, options);
       };
@@ -223,6 +228,11 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             initialized: true,
             role: 'follower',
             async shutdown() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
             async syncFromLeader() {},
           }, options);
         },
@@ -318,6 +328,11 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
             async syncFromLeader() {},
           }, options);
         },
@@ -470,6 +485,11 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
             async syncFromLeader() {},
           }, options);
         },
@@ -564,6 +584,11 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         createCalls += 1;
         return {
           async shutdown() {},
+          // A CREATE target asks its leader to admit it after its SYNCING commit
+          // (replica-admission-from-committed-operation); this double admits.
+          async requestReplicaAdmission(operationId) {
+            return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+          },
           async syncFromLeader() {},
         };
       },
@@ -607,6 +632,11 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
             async syncFromLeader() {},
           }, options);
         },
@@ -647,6 +677,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       seedReplicaOperation(cache, 'op-1');
       const mockCDC = createMockCDCService(cache);
       let capturedOptions = null;
+      const admissionRequests = [];
 
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
@@ -660,6 +691,12 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              admissionRequests.push(operationId);
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
             async syncFromLeader() {},
           }, options);
         },
@@ -686,6 +723,9 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         false,
         'first replica should bootstrap leadership instead of learner join mode',
       );
+      t.same(admissionRequests, [],
+        'a founder (not joining an existing group) requests no admission ' +
+        '(replica-admission-from-committed-operation target guard)');
 
       handler.shutdown();
     },
@@ -757,6 +797,11 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
             async syncFromLeader() {},
           }, options);
         },

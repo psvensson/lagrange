@@ -1,8 +1,10 @@
 // A multi-replica partition group of real PartitionService replicas formed
 // the way production forms one: a lone replica leads its single-voter group,
-// then each further replica is admitted by the leader's services-cache
-// reconcile when its ACTIVE services row becomes visible (the admission owner
-// proposes the configuration change), and starts its deferred election.
+// then each further replica, named by a committed replica operation, asks
+// the leader to admit it (ADMIT_REPLICA over the shared transport, answered
+// from the committed operation; quest replica-admission-from-committed-
+// operation), and starts its deferred election. Services rows are discovery
+// only: they let a joiner find its leader, they never admit it.
 //
 // Each replica has its own database file and its own services cache; the
 // replicas share one loopback transport. Nothing here chooses a leader or a
@@ -27,6 +29,8 @@ import {
 } from '../../src/partition/partition-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {answerCommittedOperations, committedAddOperation} from
+  './committed-operation-gateway-fixture.js';
 
 const POLL_MS = 10;
 
@@ -54,6 +58,8 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
   const ownsTransport = transport === null;
   const services = [];
   const caches = [];
+  const operations = members.slice(1).map((member) =>
+    committedAddOperation(partitionId, member));
   const waitFor = async (predicate) => {
     const deadline = Date.now() + budgetMs;
     while (Date.now() < deadline) {
@@ -101,6 +107,7 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       systemTableCache: cache,
       ...extra,
     }));
+    answerCommittedOperations(service, operations);
     services.push(service);
     caches.push(cache);
     return service;
@@ -119,6 +126,14 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
         cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT,
           serviceRow(members[joined]));
       }
+      // The joiner knows its leader the way a CREATE target does (the
+      // create context's leader), then asks it to admit it.
+      replica.leaderId = members[0][0];
+      const request = await replica.requestReplicaAdmission(
+        operations[joined - 1].operation_id);
+      assert.equal(request.state, 'admitted',
+        `setup: the leader admits ${members[joined][0]} from its committed ` +
+        `operation (${request.lastOutcome})`);
       replica.startElection();
       assert.equal(await waitFor(() => {
         const status = leader.raft.readStatus();

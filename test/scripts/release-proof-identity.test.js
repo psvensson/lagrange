@@ -17,6 +17,7 @@ import {
   VERSION_AUTHORITIES, computeReleaseProofIdentity,
 } from '../../scripts/release-proof-identity.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
+import {checkoutExecutionReport} from './execution-report-fixture.js';
 
 const RC_VERSION = '0.9.0-rc.2';
 const RELEASE_VERSION = '0.9.0';
@@ -94,7 +95,7 @@ test('the identity masks the version authorities and ignores changelog, solve/ a
 test('a receipt proves every commit with the same release content identity', () => {
   const {root, source, remote, rcSha} = fixture();
   const recorded = recordProof({
-    proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source,
+    proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source, report: checkoutExecutionReport(source),
     completedAt: '2026-09-12T18:00:00.000Z', now: Date.parse('2026-09-12T18:00:00.000Z'),
     producer: {kind: 'test-fixture', id: 'rc-run'},
   });
@@ -134,7 +135,7 @@ test('a receipt proves every commit with the same release content identity', () 
 test('index backfills the identity ref of a receipt recorded without one', () => {
   const {source, rcSha} = fixture();
   const recorded = recordProof({
-    proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source,
+    proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source, report: checkoutExecutionReport(source),
     completedAt: '2026-09-12T18:00:00.000Z', now: Date.parse('2026-09-12T18:00:00.000Z'),
   });
   const ref = identityRef(PROOF.RELEASE_FULL, recorded.receipt.identity.digest);
@@ -197,7 +198,7 @@ test('index binds a legacy receipt (no identity field) by the ref it publishes',
 test('a dirty checkout answers nothing: the identity is of the commit, not the tree', () => {
   const {source, rcSha} = fixture();
   recordProof({
-    proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source,
+    proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source, report: checkoutExecutionReport(source),
     completedAt: '2026-09-12T18:00:00.000Z', now: Date.parse('2026-09-12T18:00:00.000Z'),
   });
   writeCandidate(source, RELEASE_VERSION);

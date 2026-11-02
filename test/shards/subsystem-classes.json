@@ -5,7 +5,7 @@
     "admin-diagnostics": 118,
     "architecture-governance": 21,
     "bootstrap-membership": 330,
-    "cdc-metadata": 67,
+    "cdc-metadata": 69,
     "cli-tooling": 99,
     "control-plane": 225,
     "convergence-topology": 78,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 158,
     "solver-tooling": 7,
-    "storage-partition": 211,
+    "storage-partition": 212,
     "storage-raft": 146,
-    "test-infrastructure": 154,
+    "test-infrastructure": 155,
     "transactions": 17,
     "transport-messaging": 114,
     "wasm-toolchain": 74
   },
-  "censusSize": 2555,
-  "digest": "fnv1a32-83803f5e",
+  "censusSize": 2559,
+  "digest": "fnv1a32-bf2edf31",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-84882ac4",
+  "observationDigest": "fnv1a32-104ff9c8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -386,10 +386,12 @@
     "test/cdc/node-endpoints-cdc.test.js": "cdc-metadata",
     "test/cdc/node-state-tracking.property.test.js": "cdc-metadata",
     "test/cdc/retry-delay-backoff.property.test.js": "cdc-metadata",
+    "test/cdc/routed-system-table-write-answers-at-commit.test.js": "cdc-metadata",
     "test/cdc/runtime-cdc-wiring.test.js": "cdc-metadata",
     "test/cdc/schema-default-application.property.test.js": "cdc-metadata",
     "test/cdc/unique-constraint-handling.property.test.js": "cdc-metadata",
     "test/cdc/websocket-address-derivation.property.test.js": "cdc-metadata",
+    "test/cdc/write-then-read-projection-census.test.js": "cdc-metadata",
     "test/cli/admin-cli-owner-operations.test.js": "cli-tooling",
     "test/cli/core/back-navigation-consistency.property.test.js": "cli-tooling",
     "test/cli/core/base-view-model.test.js": "cli-tooling",
@@ -1399,7 +1401,6 @@
     "test/partition/partition-participant-transaction-apply.test.js": "storage-partition",
     "test/partition/partition-participant-transaction-staging.test.js": "storage-partition",
     "test/partition/partition-participant-transaction-topology.test.js": "storage-partition",
-    "test/partition/partition-peer-cache-identity-record.test.js": "storage-partition",
     "test/partition/partition-port-refusal-outcomes.test.js": "storage-partition",
     "test/partition/partition-raft-storage.test.js": "storage-partition",
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
@@ -1458,6 +1459,8 @@
     "test/partition/raft-leadership-stability.property.test.js": "storage-partition",
     "test/partition/raft-rs-transport-demux.test.js": "storage-partition",
     "test/partition/range-integrity-validation.property.test.js": "storage-partition",
+    "test/partition/replica-admission-committed-operation-production.integration.test.js": "storage-partition",
+    "test/partition/replica-admission-from-committed-operation.test.js": "storage-partition",
     "test/partition/replica-operations-schema-migration.test.js": "storage-partition",
     "test/partition/replicated-sql-determinism-three-replica.test.js": "storage-partition",
     "test/partition/retiring-source-resume-refusal.test.js": "storage-partition",
@@ -2284,6 +2287,7 @@
     "test/scripts/proof-authority-falsifiers.test.js": "test-infrastructure",
     "test/scripts/proof-authority.test.js": "test-infrastructure",
     "test/scripts/proof-cone-cli-output-completeness.test.js": "test-infrastructure",
+    "test/scripts/proof-receipt-execution-report.test.js": "test-infrastructure",
     "test/scripts/prune-test-output.test.js": "test-infrastructure",
     "test/scripts/publish-head-workspace-links.test.js": "test-infrastructure",
     "test/scripts/publish-head.test.js": "test-infrastructure",
@@ -3021,6 +3025,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/topology/cdc-group-propagation-service.js",
         "test/message-group/message-group-native-provisional-route-fixture.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -3940,6 +3945,19 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/cdc/routed-system-table-write-answers-at-commit.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ],
+      "directories": [
+        "src"
+      ]
+    },
+    "test/cdc/write-then-read-projection-census.test.js": {
+      "directories": [
+        "src"
       ]
     },
     "test/cli/admin-cli-owner-operations.test.js": {
@@ -5266,6 +5284,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -8930,7 +8949,6 @@
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9519,6 +9537,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -9612,6 +9631,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/message-group/message-group-native-provisional-route-fixture.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -9700,6 +9720,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/topology/cdc-group-propagation-constants.js",
         "test/message-group/message-group-native-custody-fixture.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ],
@@ -9734,6 +9755,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/message-group/message-group-native-provisional-route-fixture.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -9761,6 +9783,7 @@
         "src/topology/cdc-group-propagation-service.js",
         "src/transport/transport-semantic-outcome.js",
         "test/message-group/message-group-native-provisional-route-fixture.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -10398,6 +10421,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-tuning.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -10459,6 +10483,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -10804,6 +10829,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -11011,6 +11037,7 @@
         "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -11069,6 +11096,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -11117,6 +11145,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -11143,6 +11172,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/partition/participant-release-native-exit-diagnostic.js",
         "test/test-helpers/boot-incarnation-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -11169,6 +11199,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -11199,6 +11230,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/partition/participant-release-tx1-decision-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -11253,6 +11285,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/partition/participant-release-tx1-decision-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -11262,7 +11295,6 @@
     "test/partition/partition-admission-redrive-wakes.test.js": {
       "files": [
         "src/config/configuration-manager.js",
-        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11404,6 +11436,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -11643,6 +11676,7 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -11738,6 +11772,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/raft/raft-rs-backend/core-trap-envelope.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -11925,6 +11960,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -12004,6 +12040,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -12133,6 +12170,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/partition/partition-service-test-support.js",
         "test/raft/raft-rs-backend/core-trap-envelope.js",
         "test/raft/raft-rs-backend/process-escape-counter.js",
@@ -12165,6 +12203,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/raft-rs-runtime-tuning.js",
         "src/raft/replica-election-timeouts.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -12183,6 +12222,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-tuning.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -12208,6 +12248,7 @@
         "src/raft/raft-rs-proposal-codec.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/replica-operation-repository.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -12236,6 +12277,29 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/replica-admission-committed-operation-production.integration.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/replica-admission-from-committed-operation.test.js": {
+      "files": [
+        "src/partition/partition-replica-admission.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js"
+      ],
+      "directories": [
+        "src"
+      ]
+    },
     "test/partition/replica-operations-schema-migration.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -12262,6 +12326,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -12295,6 +12360,7 @@
         "src/raft/raft-rs-proposal-codec.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -12625,6 +12691,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/partition/partition-admitted-group-fixture.js",
         "test/partition/partition-service-test-support.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -13164,6 +13231,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -13195,6 +13263,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -13222,6 +13291,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -13250,6 +13320,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -13280,6 +13351,7 @@
         "src/rebalancer/rebalance-coordinator.js",
         "src/runtime/runtime-endpoint-publication-wiring.js",
         "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -13343,11 +13415,14 @@
     "test/raft/raft-rs-backend/admission-redrive-chain.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -13359,6 +13434,7 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -13368,6 +13444,7 @@
         "src/raft/raft-committed-membership-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -13457,6 +13534,7 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -13470,6 +13548,7 @@
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -13569,6 +13648,7 @@
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -13648,6 +13728,7 @@
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
         "src/transport/transport-semantic-outcome.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -13662,6 +13743,7 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -13861,6 +13943,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/raft/raft-rs-backend/runtime-completion-consumers-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -14112,6 +14195,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/partition/partition-service-test-support.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -14263,6 +14347,7 @@
         "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/partition/participant-release-tx1-native-fixture.js",
         "test/raft/raft-rs-backend/runtime-completion-consumers-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -14299,6 +14384,7 @@
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/user-table-leader-placement-cure.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/raft/raft-rs-backend/runtime-completion-consumers-fixture.js",
         "test/raft/raft-rs-backend/runtime-completion-consumers-transfer-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -14481,6 +14567,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js",
         "test/test-helpers/transaction-persistence-gateway.js"
@@ -18198,6 +18285,22 @@
         "wit"
       ]
     },
+    "test/scripts/proof-receipt-execution-report.test.js": {
+      "files": [
+        "CHANGELOG.md",
+        "package-lock.json",
+        "package.json",
+        "scripts/proof-authority.js",
+        "scripts/run-test-files.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js"
+      ],
+      "directories": [
+        "data/releases",
+        "solve",
+        "test"
+      ]
+    },
     "test/scripts/prune-test-output.test.js": {
       "directories": [
         "data",
@@ -18946,6 +19049,7 @@
     "test/scripts/test-resource-classification.test.js": {
       "files": [
         "package.json",
+        "scripts/run-classified-test-files.js",
         "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js",
         "test/shards/convergence-probes.txt",
         "test/shards/primary-classes.json"

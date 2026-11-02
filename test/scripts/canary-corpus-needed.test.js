@@ -18,6 +18,7 @@ import {
   CORPUS_FULL_PROOF, PROOF, recordProof, resolveCorpusProof, resolveProof,
 } from '../../scripts/proof-authority.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
+import {checkoutExecutionReport} from './execution-report-fixture.js';
 
 const SHA = 'a'.repeat(40);
 const OTHER_SHA = 'b'.repeat(40);
@@ -124,6 +125,7 @@ test('a recorded whole-corpus receipt is what the canary reads back', () => {
       proofId: CORPUS_FULL_PROOF,
       sha,
       cwd: source,
+      report: checkoutExecutionReport(source),
       producer: {kind: 'test-fixture', id: 'canary-corpus-needed'},
     });
     assert.equal(recorded.reused, false);
@@ -155,6 +157,7 @@ test('a whole-corpus receipt never answers for a sibling commit', () => {
       proofId: CORPUS_FULL_PROOF,
       sha,
       cwd: source,
+      report: checkoutExecutionReport(source),
       producer: {kind: 'test-fixture', id: 'sibling-identity'},
     });
     assert.equal(resolveCorpusProof({sha, cwd: source}), true);

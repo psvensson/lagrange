@@ -238,7 +238,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     });
     this.systemTableCacheChangeListener =
       this.handleSystemTableCacheChange.bind(this);
-    this.peerReconciliationScheduled = false;
     this.rebalancer = null;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.ownsRebalanceCoordinator = false;
@@ -334,7 +333,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     ) {
       systemTableCache.onCacheChange(this.systemTableCacheChangeListener);
     }
-    this.scheduleRaftPeerReconciliation();
   }
   get cdcIntegrationService() {
     return this._cdcIntegrationService || null;
@@ -617,8 +615,10 @@ class PartitionServiceCoreBase extends EventEmitter {
     return address;
   }
   /**
-   * React to authoritative services cache changes for this partition.
-   * Existing voters need this to discover newly added or moved peers.
+   * React to authoritative services cache changes for this partition: a
+   * retiring row may retire the configured peer it names. Rows never admit
+   * a peer (admission is answered from the committed replica operation,
+   * partition-replica-admission.js).
    * @param {string} tableName
    * @param {string} operation
    * @param {Object} record
@@ -640,30 +640,6 @@ class PartitionServiceCoreBase extends EventEmitter {
       return;
     }
     retireRaftPeerFromAuthoritativeServiceChange(this, operation, record);
-    this.scheduleRaftPeerReconciliation();
-  }
-  /**
-   * Coalesce peer reconciliation work triggered by cache updates.
-   * @private
-   */
-  scheduleRaftPeerReconciliation() {
-    if (this.peerReconciliationScheduled) {
-      return;
-    }
-    this.peerReconciliationScheduled = true;
-    // The coalescing hop is this replica's next turn. A node that owns a
-    // clock takes it from there; otherwise setImmediate stays, because a
-    // zero-delay timer is a DIFFERENT event-loop phase and swapping one for
-    // the other would change production's ordering, not just its substrate.
-    const hop = () => {
-      this.peerReconciliationScheduled = false;
-      this.reconcileRaftPeersFromCache();
-    };
-    if (this.providedTimeSource) {
-      this.providedTimeSource.setTimeout(hop, 0);
-      return;
-    }
-    setImmediate(hop);
   }
 }
 export {PartitionServiceCoreBase};

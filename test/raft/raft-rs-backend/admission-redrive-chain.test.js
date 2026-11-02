@@ -1,11 +1,11 @@
 // V2 (verification O1 round 1, verify-o1-noop-redrive-chain rebuilt), the
 // production admission path end to end: PartitionService replicas on real
-// rs-raft ports; the target's services row reaches the leader's cache in the
-// same turn as a pending configuration change; the row-driven reconcile
-// admits it. At ab7669fd0 the AddNode was dropped by the crate behind the
+// rs-raft ports; the target's admission request, answered from its committed
+// replica operation (quest replica-admission-from-committed-operation),
+// lands in the same turn as a pending configuration change. At ab7669fd0 the AddNode was dropped by the crate behind the
 // pending change, recorded PROPOSED and latched in flight; a change that
 // applied without changing the configuration key raised no
-// MEMBERSHIP_CHANGED, so nothing re-drove it, and every later cache change
+// MEMBERSHIP_CHANGED, so nothing re-drove it, and every later admission
 // answered IN_FLIGHT: the target was never admitted.
 //
 // Ranged over the pending kinds the admission path meets in production:
@@ -18,7 +18,6 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {
-  addressOf,
   configure,
   createCommittedMembershipHarness,
   formGroup,
@@ -28,15 +27,12 @@ import {
 import {durableAppliedState} from './committed-membership-oracles.js';
 import {TABLES} from '../../../src/constants/index.js';
 import {CDCOperation} from '../../../src/partition/partition-service.js';
-import {
-  admitPartitionRaftPeer,
-  reservePartitionRaftPeerIdentity,
-  retirePartitionRaftPeer,
-} from '../../../src/partition/partition-service-raft-membership-administration.js';
-import {
-  RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
-  RAFT_MEMBERSHIP_OPERATION,
-} from '../../../src/raft/raft-operation-port-constants.js';
+import {retirePartitionRaftPeer} from
+  '../../../src/partition/partition-service-raft-membership-administration.js';
+import {RAFT_MEMBERSHIP_OPERATION} from
+  '../../../src/raft/raft-operation-port-constants.js';
+import {committedAddOperation} from
+  '../../partition/committed-operation-gateway-fixture.js';
 import {deriveRaftRsPeerId} from '../../../src/raft/raft-rs-peer-identity.js';
 import {ReplicaStatus} from '../../../src/rebalancer/replica-status.js';
 
@@ -75,8 +71,8 @@ const PENDING_KINDS = Object.freeze({
 });
 
 for (const [kind, pend] of Object.entries(PENDING_KINDS)) {
-  test(`V2 chain: a row-driven AddNode landing behind a pending ${kind} is ` +
-    'admitted within the bound; later cache changes are never latched',
+  test(`V2 chain: a requested AddNode landing behind a pending ${kind} is ` +
+    'admitted within the bound; later requests are never latched',
   async () => {
     configure();
     const partitionId = `admission-redrive-${
@@ -89,14 +85,15 @@ for (const [kind, pend] of Object.entries(PENDING_KINDS)) {
       const dbFile = harness.dbPathOf(leaderMember);
       const cache = harness.caches.get(leaderMember[0]);
       const removed = await pend({leader, harness, cache});
-      // The target's row lands and the leader's reconcile admits it, in the
-      // same turn as the pending change (the reservation and admission calls
-      // the reconcile makes, made here so the turn is exact).
+      // The target's row lands (discovery only) and its admission request
+      // reaches the leader, in the same turn as the pending change.
       cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT,
         serviceRow(partitionId, TARGET));
-      reservePartitionRaftPeerIdentity(leader, TARGET[0]);
-      admitPartitionRaftPeer(leader, {replicaIdentity: TARGET[0],
-        peerAddress: addressOf(TARGET)});
+      const operation = committedAddOperation(partitionId, TARGET);
+      harness.operations.push(operation);
+      const request = {partitionId, replicaIdentity: TARGET[0],
+        operationId: operation.operation_id};
+      await leader.handleReplicaAdmissionRequest(request);
       const voters = () => durableAppliedState(dbFile, partitionId).voters;
       const targetPeerId = deriveRaftRsPeerId(TARGET[0]);
       const admitted = await waitFor(() => voters().includes(targetPeerId),
@@ -104,10 +101,8 @@ for (const [kind, pend] of Object.entries(PENDING_KINDS)) {
       assert.equal(admitted, true,
         `the target is admitted within ${ADMISSION_BOUND_MS} ms (voters ${
           JSON.stringify(voters())})`);
-      const again = admitPartitionRaftPeer(leader, {
-        replicaIdentity: TARGET[0], peerAddress: addressOf(TARGET)});
-      assert.equal(again.outcome,
-        RAFT_MEMBERSHIP_ADMISSION_OUTCOME.ALREADY_MEMBER,
+      const again = await leader.handleReplicaAdmissionRequest(request);
+      assert.equal(again.admission.outcome, 'already_member',
         'a later admission reads it a member, never IN_FLIGHT');
       if (removed !== null) {
         const removedPeerId = deriveRaftRsPeerId(removed[0]);

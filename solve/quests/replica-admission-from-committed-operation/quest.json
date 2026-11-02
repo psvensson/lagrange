@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-admission-from-committed-operation",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The partition leader admits a replica (raft ADD of a CREATE_REPLICA/REPLACE target) from an explicit admission request answered from the committed replica operation (operation id, partition, replica identity, target node), never from the target's services row arriving in the leader's CDC-fed SystemTableCache; the committed admission node comes from the operation, not from a row. A routed system-table write answers at commit with its log position; a consumer that needs its own projection waits on that position, ended only by shutdown. Deleted for these decisions: the cache-row admission producer (handleSystemTableCacheChange -> reconcileRaftPeersFromCacheForService -> admitPartitionRaftPeer, its init call and its cache re-read on re-drive) and the cache-visibility wait (waitForCacheUpdate, its 750/250 budget split, the bootstrap bypass, the authoritative repair fallback, allowPendingVisibility). The CDC obligation hold (cdc_committed_acceptance_unknown) and leader-local apply are handed to the CDC D1-D4 owner as a named obligation. On fresh-formation-user-table-routability every replica named by a committed operation is admitted within one request round of its SYNCING commit, with no dependence on cache visibility.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replica-admission-from-committed-operation/evidence/receipt.json",
+      "requiredReceipts": [
+        "first-divergence-witness-on-candidate",
+        "admission-from-committed-operation",
+        "write-answers-at-commit-position",
+        "reproducer-admission-without-cache-visibility",
+        "cdc-hold-handoff-recorded",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "class-not-instance",
+      "statement": "Instances C1 (answer to a routed system-table write) and C10 (CDC obligation cursor / local cache as one subscriber), plus the admission trigger they starve, of the class 'serve-gating decision consumes a projection' (docs/evidence/comparative-benchmark-evidence-repair-2026-11/systemic-analysis-serve-lane-2026-11-01.md). The repair moves each decision onto the committed fact; it adds no timer, retry widening, carve-out, cache wait, synthetic event, alternate resolution path or '|| default', and deletes the existing ones for these decisions."
+    },
+    {
+      "id": "committed-read-direction",
+      "statement": "Continues owner decision O1/A8 (committed-membership bootstrap read 2026-09-25/26) and learner-host-from-committed-admission: rows are discovery, never authority. The admitted node identity committed with the ADD comes from the committed replica operation, not from a services row."
+    },
+    {
+      "id": "explicit-supersession",
+      "statement": "supersedes (pending owner decision, R09): committed-read amendment-1 A2 (:25) and Q1 (:57) 'row-driven admission on the leader is the intended split and stays', and architecture/runtime-contracts.md:192-193 'CDC-propagated metadata decisions read from the cache' for admission and write-answer decisions; the O1 deferral of the R2 request owner is lifted for ADD only. No src change before the lead records this decision."
+    },
+    {
+      "id": "trace-first-divergence",
+      "statement": "Before any src change: the reproducer fresh-formation-user-table-routability (local-three-node.json, bounds unchanged) is run on the candidate through scripts/lab.js, its first divergence recorded against the owner chain in evidence/transition.md, and the H1 settling observation (authoritative services read versus the deciding node's cache at a refusal instant) taken or marked unknown."
+    },
+    {
+      "id": "no-symptom-patches",
+      "statement": "Forbidden: widened timeouts, bounds, budgets or retry counts; harness repair of product state; a cache refresh, poll or table-specific workaround (CL-014); legacy, alias or fallback paths that keep the old decision alive; reinterpreting a late commit as an on-time success."
+    },
+    {
+      "id": "lab-execution",
+      "statement": "Live runs execute on lab hosts through scripts/lab.js under the machine lock with thermal headroom, never on the controller; retain full node logs and the harness report per run."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Any source change is verified on the exact candidate by a fresh independent verifier before audit and landing, recorded as note --verification ... --verifier subagent:<id> --verdict approve."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating",
+    "formation-circularity"
+  ],
+  "sealedAt": "edaff0e867172f8032e27db9257ae01e0606e66c"
+}

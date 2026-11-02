@@ -423,6 +423,15 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             service: partitionService,
           });
         }
+        // The SYNCING fact is committed: ask the partition leader to admit
+        // this replica from its committed operation (quest
+        // replica-admission-from-committed-operation). A pending answer is
+        // re-sent on the learner-promotion cadence; it never fails the
+        // create.
+        if (isJoiningExistingGroup && !skipLifecycleStatusPersistence &&
+            typeof operationId === 'string' && operationId.length > 0) {
+          await partitionService.requestReplicaAdmission(operationId);
+        }
         // Sync from leader if address provided
         const service = this.localServices.get(replicaId);
         if (service && leaderAddress) {

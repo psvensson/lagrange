@@ -250,6 +250,11 @@ async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
         role: 'follower',
         async shutdown() {},
         async syncFromLeader() {},
+        // A CREATE target asks its leader to admit it after its SYNCING commit
+        // (replica-admission-from-committed-operation); this double admits.
+        async requestReplicaAdmission(operationId) {
+          return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+        },
       }, factoryOptions);
     },
   });

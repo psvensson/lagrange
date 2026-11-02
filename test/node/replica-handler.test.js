@@ -220,6 +220,11 @@ function createMockPartitionServiceFactory() {
     initialized: true,
     async shutdown() {},
     async syncFromLeader() {},
+    // A CREATE target asks its leader to admit it after its SYNCING commit
+    // (replica-admission-from-committed-operation); this double admits.
+    async requestReplicaAdmission(operationId) {
+      return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+    },
   }, options);
 }
 
@@ -769,6 +774,11 @@ test('ReplicaHandler', async (t) => {
         partitionId: TEST_ALREADY_ACTIVE_PARTITION_ID,
         async shutdown() {},
         async syncFromLeader() {},
+        // A CREATE target asks its leader to admit it after its SYNCING commit
+        // (replica-admission-from-committed-operation); this double admits.
+        async requestReplicaAdmission(operationId) {
+          return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+        },
       });
 
       const request = {
@@ -830,6 +840,11 @@ test('ReplicaHandler', async (t) => {
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });

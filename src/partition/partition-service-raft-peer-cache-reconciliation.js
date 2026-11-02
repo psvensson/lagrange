@@ -1,25 +1,20 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
-  RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
-  RAFT_MEMBERSHIP_OPERATION,
-  RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
-} from '../raft/raft-operation-port-constants.js';
-import {
-  admitPartitionRaftPeer,
-  reservePartitionRaftPeerIdentity,
   proposePeerRetirement,
   takeAdmissionsInFlight,
   takeDeferredRetirements,
 } from './partition-service-raft-membership-administration.js';
-import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {RAFT_EVENT, RAFT_MEMBERSHIP_OPERATION} from
+  '../raft/raft-operation-port-constants.js';
 import {GROUP_RETIREMENT_REASON} from './group-retirement-evidence.js';
-import {isPeerRowStatusAdmissible} from '../rebalancer/replica-status.js';
+import {redriveAcceptedAdmissionRequests} from
+  './partition-replica-admission.js';
 
-// The admission outcomes that leave a peer outside the configuration.
-const UNADMITTED_PEER_OUTCOMES = Object.freeze(new Set([
-  RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED,
-  RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED,
-]));
+// Services rows are discovery (A8): a retiring row may trigger a REMOVE of
+// the configured peer it names, but no row ever admits a peer. Admission is
+// the request owner's (partition-replica-admission.js), answered from the
+// committed replica operation (committed-read amendment-1 A2/Q1 superseded
+// 2026-11-02).
 
 const {
   AddressManager,
@@ -28,8 +23,6 @@ const {
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_TYPE,
   ReplicaStatus,
-  SERVICE_TYPE,
-  TABLES,
 } = PARTITION_SERVICE_SHARED;
 
 function resolveLiveRaftLeaderAddressForPeer(partitionService, peerId) {
@@ -93,21 +86,6 @@ function resolvePeerAddressFromService(addressManager, serviceRow, replicaId) {
     );
   }
   return null;
-}
-
-// A row whose replica has not durably recorded that its port opened (a
-// CREATE_REPLICA target writes PENDING and CREATING before its open and
-// SYNCING, its prior-existence fact, after it): that replica steps nothing
-// until the fact is durable (verifier N3), so admitting it as a voter now
-// would count a voter that cannot answer - and, for the group that stores
-// the fact itself (the services partition), make the fact's own write wait
-// on that voter. It is admitted on the row change that records the fact.
-// Retiring rows never are. The rule is the one isPeerRowStatusAdmissible.
-function shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) {
-  if (!replicaId || replicaId === partitionService.replicaId) {
-    return true;
-  }
-  return !isPeerRowStatusAdmissible(serviceRow.status);
 }
 
 function addressMatchesReplica(addressManager, address, replicaId) {
@@ -252,137 +230,31 @@ function retireRaftPeerFromAuthoritativeServiceChange(
   return true;
 }
 
-function reconcileExpectedRaftPeer({
-  partitionService,
-  configuredIdentities,
-  replicaId,
-  expectedAddress,
-}) {
-  if (configuredIdentities.has(replicaId)) {
-    return;
-  }
-  const reservation = reservePartitionRaftPeerIdentity(
-    partitionService, replicaId);
-  if (reservation.outcome !==
-      RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED &&
-      reservation.outcome !==
-      RAFT_MEMBERSHIP_RESERVATION_OUTCOME.NOT_MANAGED) {
-    return;
-  }
-  const admission = admitPartitionRaftPeer(partitionService, {
-    replicaIdentity: replicaId,
-    peerAddress: expectedAddress,
-  });
-  // A refused or deferred admission left the peer outside the
-  // configuration: this pass does not count it as configured.
-  if (!UNADMITTED_PEER_OUTCOMES.has(admission.outcome)) {
-    configuredIdentities.add(replicaId);
-  }
-}
-
-// The address each services row expects for a peer replica (all of them, or
-// only those named), each named replica kept in the partition's hint list.
-function expectedPeerAddressesOf(partitionService, services, addressManager,
-  onlyReplicaIds) {
-  const expected = new Map();
-  for (const serviceRow of services) {
-    const replicaId = serviceRow.service_id || serviceRow.replica_id;
-    if (shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) ||
-        (onlyReplicaIds !== null && !onlyReplicaIds.has(replicaId))) {
-      continue;
-    }
-    const peerAddress = resolvePeerAddressFromService(
-      addressManager,
-      serviceRow,
-      replicaId,
-    );
-    if (!peerAddress) {
-      continue;
-    }
-    expected.set(replicaId, peerAddress);
-    if (!partitionService.replicaIds.includes(replicaId)) {
-      partitionService.replicaIds.push(replicaId);
-    }
-  }
-  return expected;
-}
-
-function reconcileRaftPeersFromCacheForService(partitionService,
-  options = {}) {
-  const onlyReplicaIds = options.onlyReplicaIds ?? null;
-  if (
-    !partitionService.raft ||
-    !partitionService.systemTableCache ||
-    typeof partitionService.systemTableCache.filter !==
-      PARTITION_SERVICE_TYPE.FUNCTION
-  ) {
-    return;
-  }
-  const services = partitionService.systemTableCache.filter(
-    TABLES.SERVICES,
-    (serviceRow) => {
-      return (
-        serviceRow.partition_id === partitionService.partitionId &&
-        serviceRow.service_type === SERVICE_TYPE.PARTITION
-      );
-    },
-  );
-  if (services.length === 0) {
-    return;
-  }
-  const addressManager = AddressManager.getInstance();
-  const expectedAddressesByReplicaId = expectedPeerAddressesOf(
-    partitionService, services, addressManager, onlyReplicaIds);
-  const configuredIdentities = new Set(
-    (partitionService.raft?.readStatus?.().peers || [])
-      .map((peer) => peer?.replicaIdentity)
-      .filter((identity) => typeof identity === 'string'));
-  for (const [
-    replicaId,
-    expectedAddress,
-  ] of expectedAddressesByReplicaId.entries()) {
-    reconcileExpectedRaftPeer({
-      partitionService,
-      configuredIdentities,
-      replicaId,
-      expectedAddress,
-    });
-  }
-}
-
 /**
- * Re-drive the admissions this replica proposed or deferred (committed-read
- * amendment 1, section 3.5; verification V2) whenever a configuration change
- * settles - a conf-change entry applied, effective or not, or the core's
- * pending index reached (CONF_CHANGE_APPLIED) - and whenever it gains
- * leadership (a latch of an earlier term never outlives it). Each is
- * re-evaluated once from its services row, and nothing else is: a voter the
- * group removed (its row retiring or gone) is not re-admitted by this
- * wake-up.
+ * Re-drive, whenever a configuration change settles (CONF_CHANGE_APPLIED)
+ * or this replica gains leadership (LEADER): the deferred retirements, and
+ * the admission requests this leader accepted from targets and has not seen
+ * settle (the admission owner's in-flight set is handed over first, so a
+ * settled proposal is evaluated again from its committed operation). Rows
+ * re-drive nothing.
  * @param {Object} partitionService - The partition service (current port).
  */
 function redriveAdmissionsOnMembershipChange(partitionService) {
   const redrive = () => {
-    const taken = takeAdmissionsInFlight(partitionService);
+    takeAdmissionsInFlight(partitionService);
     const retirements = takeDeferredRetirements(partitionService);
-    if (taken.size > 0 || retirements.length > 0) {
-      queueMicrotask(() => {
-        for (const change of retirements) {
-          proposePeerRetirement(partitionService, change);
-        }
-        if (taken.size > 0) {
-          reconcileRaftPeersFromCacheForService(
-            partitionService, {onlyReplicaIds: taken});
-        }
-      });
-    }
+    queueMicrotask(() => {
+      for (const change of retirements) {
+        proposePeerRetirement(partitionService, change);
+      }
+      redriveAcceptedAdmissionRequests(partitionService);
+    });
   };
   partitionService.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, redrive);
   partitionService.raft.subscribe(RAFT_EVENT.LEADER, redrive);
 }
 
 export {
-  reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
   retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,

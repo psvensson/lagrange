@@ -114,10 +114,11 @@ test('a reopened leader addresses the peer it admitted from the committed ' +
   await first.raft.campaign();
   assert.equal(first.raft.readStatus().role, RAFT_ROLE.LEADER,
     'setup: the lone founder leads');
-  // The production admission pair the row-driven reconcile makes.
+  // The production admission pair the request owner makes (its node is
+  // the committed operation's target node).
   reservePartitionRaftPeerIdentity(first, LEARNER);
   const admission = admitPartitionRaftPeer(first, {
-    replicaIdentity: LEARNER, peerAddress: LEARNER_ADDRESS});
+    replicaIdentity: LEARNER, nodeId: LEARNER_NODE});
   // The port queues the proposal behind its turn; its settled answer is
   // the admission's outcome.
   const settled = admission.settled ? await admission.settled : admission;

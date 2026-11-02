@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
@@ -38,6 +39,7 @@ import {spawnGit} from '../../scripts/checks/git-invocation.js';
 import {loadSealedImporters} from '../../scripts/checks/helper-import-closure.js';
 import {CORPUS_FULL_PROOF} from '../../scripts/proof-authority.js';
 import {buildExecutionPlan} from '../../scripts/select-change-tests.js';
+import {executionReportProblems} from '../../scripts/test-execution-report.js';
 
 const UTF8 = 'utf8';
 const CORPUS_SIZE = 2000;
@@ -688,8 +690,9 @@ test('a green whole-corpus run records a receipt through the authority CLI', () 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].command, process.execPath);
   assert.deepEqual(calls[0].args, ['scripts/proof-authority.js', 'record',
-    CORPUS_FULL_PROOF, PROVED_SHA],
-  'the gate records the contract the authority owns, for this sha');
+    CORPUS_FULL_PROOF, PROVED_SHA, '--report',
+    path.join(process.cwd(), 'test-output/reports/execution-report.json')],
+  'the gate records the contract the authority owns, for this sha, from its report');
   assert.match(lines.join(''), /whole-corpus receipt for c{40}/u);
   // Untracked files are counted: a committed test whose fixture exists only in
   // the tree must not be able to mint a receipt for HEAD. And the commit must
@@ -762,12 +765,14 @@ test('only a green whole-corpus run records, never a cone and never a red run', 
   const realScopeFile = path.join(process.cwd(), 'test-output/proof-scope.json');
   const scopeBefore = fs.existsSync(realScopeFile) ?
     fs.readFileSync(realScopeFile, UTF8) : null;
+  const reportRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-report-'));
   const runners = (mode, status) => ({
     head: () => PROVED_SHA,
     record: (sha) => recordedFor.push([mode, sha]),
     runCone: () => status,
     runFull: () => status,
     writeScope: (scope) => scopes.push(scope),
+    reportRoot,
   });
 
   assert.equal(runDecision(plan, {mode: PROOF_MODE.CHANGE_PROOF},
@@ -793,6 +798,19 @@ test('only a green whole-corpus run records, never a cone and never a red run', 
     fs.readFileSync(realScopeFile, UTF8) : null;
   assert.equal(scopeAfter, scopeBefore,
     'the witness must never write the proof scope ci uploads');
+  // Every run wrote the execution report a receipt is recorded from; the
+  // last one is the green whole corpus, planned against what test:all runs.
+  const report = JSON.parse(fs.readFileSync(
+    path.join(reportRoot, 'test-output/reports/execution-report.json'), UTF8));
+  assert.deepEqual(report.commands.map((command) => [command.label, command.exitStatus]),
+    [['full-corpus', 0]]);
+  assert.ok(report.planned.length > 1000, 'the whole corpus is the planned manifest');
+  // A green exit that ran nothing here - as a solve-land proof reuse does -
+  // leaves the planned corpus unexecuted: no whole-corpus evidence.
+  const codes = executionReportProblems(report, {sha: report.candidate.sha,
+    tree: report.candidate.tree}).problems.map((entry) => entry.code);
+  assert.ok(codes.includes('execution-report-planned-file-not-executed'), String(codes));
+  fs.rmSync(reportRoot, {recursive: true, force: true});
 });
 
 test('recording is best effort: the gate never fails on bookkeeping', () => {

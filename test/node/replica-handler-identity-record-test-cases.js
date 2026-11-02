@@ -100,6 +100,11 @@ function realPortFactory(directory, opened, overridesFor = () => ({})) {
         }
       },
       async syncFromLeader() {},
+      // A CREATE target asks its leader to admit it after its SYNCING commit
+      // (replica-admission-from-committed-operation); this double admits.
+      async requestReplicaAdmission(operationId) {
+        return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+      },
     }, options);
   };
 }
