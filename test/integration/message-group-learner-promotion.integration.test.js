@@ -558,6 +558,8 @@ test('the voter stamp is only the exact committed outcome: a stamp still naming 
   const narrowed = {...committed.membership,
     voters: committed.membership.voters.filter((peer) => peer !== extra),
     identities: Object.fromEntries(Object.entries(committed.membership.identities)
+      .filter(([peer]) => peer !== extra)),
+    nodeIds: Object.fromEntries(Object.entries(committed.membership.nodeIds)
       .filter(([peer]) => peer !== extra))};
   narrowed.configurationKey = raftRsConfStateKey({voters: narrowed.voters, votersOutgoing: [],
     learners: narrowed.learners, learnersNext: [], autoLeave: false});

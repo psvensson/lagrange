@@ -20,6 +20,7 @@
 // re-drive's wiring; the chain witness proves the property by the
 // cache-reconcile path as well.
 
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {
   CDC_OPERATIONS,
@@ -106,6 +107,9 @@ async function openLeader(t, answer, members = [LOCAL]) {
     tableName: 'users',
     replicaId: LOCAL,
     replicaIds: members,
+    // The founders' placed nodes: the port addresses each from it.
+    bootstrapMembership: genesisStamp(members, Object.fromEntries(
+      members.map((member) => [member, NODE_OF[member]]))),
     nodeId: NODE_OF[LOCAL],
     dbPath: ':memory:',
     deferElection: true,

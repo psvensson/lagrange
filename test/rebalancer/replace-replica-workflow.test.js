@@ -310,17 +310,11 @@ test('REPLACE replica workflow', async (t) => {
           'committed membership, including the still-voting source replica ' +
           '(owner decision D1)',
         );
-        t.same(
-          [...(deliveries[0]?.payload?.[
-            ReplicaOperationField.PEER_ADDRESSES] || [])].sort(),
-          [
-            'seed-node/partition/nodes-p1-r1',
-            'seed-node/partition/nodes-p1-r2',
-            'seed-node/partition/nodes-p1-r3',
-            'node-2/partition/' + replacementReplicaId,
-          ].sort(),
-          'REPLACE create phase should carry the still-voting source replica ' +
-          'in the bootstrap peer addresses (owner decision D1)',
+        t.equal(
+          deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],
+          undefined,
+          'the REPLACE create phase carries no peer-address hint list: the ' +
+          'target addresses its peers from their committed nodes',
         );
         t.equal(
           deliveries[0]?.options?.deliveryPriority,

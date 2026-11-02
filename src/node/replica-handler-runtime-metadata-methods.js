@@ -54,7 +54,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     SYSTEM_TABLE_HYDRATION_SQL,
     SYSTEM_TABLE_NAME,
     TABLE_METADATA_MISSING_PREFIX,
-    classifySystemPartition,
     createControlPlaneRuntimeBundle,
     createSystemMetadataGatewayRequiredError,
     isReplicaJoinNodeViable,
@@ -205,11 +204,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         cachedServices,
         hydratedMetadata?.serviceRows || [],
       );
-      const shouldFilterUnavailablePeerTopology =
-        classifySystemPartition({
-          partitionId,
-          partitionRow: partition,
-        }).priorityControlPlane;
       const now = Date.now();
       const addressManager = AddressManager.getInstance();
       // The new replica's membership is its validated committed-membership
@@ -222,17 +216,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         bootstrapMembership: options.bootstrapMembership,
         observedServices,
       });
-      const requestedPeerAddresses = Array.isArray(
-        options.bootstrapPeerAddresses,
-      ) ?
-        options.bootstrapPeerAddresses.filter(
-          (value) =>
-            typeof value === REPLICA_HANDLER_TYPEOF.STRING &&
-              value.length > 0,
-        ) :
-        [];
       const services = observedServices;
-      const peerAddresses = [];
       const isViableJoinService = (service) => {
         if (
           !service?.node_id ||
@@ -250,37 +234,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
           },
         );
       };
-      for (const service of services) {
-        const serviceReplicaId = service.service_id || service.replica_id;
-        if (!serviceReplicaId) {
-          continue;
-        }
-        if (
-          shouldFilterUnavailablePeerTopology &&
-          serviceReplicaId !== replicaId &&
-          !isViableJoinService(service)
-        ) {
-          continue;
-        }
-        const peerAddress =
-          service.address ||
-          addressManager.format(
-            service.node_id,
-            REPLICA_HANDLER_SERVICE.TYPE,
-            serviceReplicaId,
-          );
-        if (!peerAddresses.includes(peerAddress)) {
-          peerAddresses.push(peerAddress);
-        }
-      }
-      const selfAddress = addressManager.format(
-        this.nodeId,
-        REPLICA_HANDLER_SERVICE.TYPE,
-        replicaId,
-      );
-      if (!peerAddresses.includes(selfAddress)) {
-        peerAddresses.push(selfAddress);
-      }
       let leaderAddress = null;
       const canonicalLeaderNodeId =
         typeof partition.leader_node_id === 'string' &&
@@ -295,14 +248,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
               isViableJoinService(service),
         ) :
         null;
-      // The dispatched addresses come from the placement owner's address
-      // book and are kept over this node's cache view, which under churn can
-      // be viability-filtered down to self-only.
-      for (const requestedPeerAddress of requestedPeerAddresses) {
-        if (!peerAddresses.includes(requestedPeerAddress)) {
-          peerAddresses.push(requestedPeerAddress);
-        }
-      }
       if (leaderService) {
         leaderAddress =
           leaderService.address ||
@@ -319,7 +264,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         keyRange,
         leaderAddress,
         replicaIds: stamped.replicaIds,
-        peerAddresses,
         existingReplicaCount: stamped.existingReplicaCount,
         bootstrapMembership: stamped.bootstrapMembership,
       };

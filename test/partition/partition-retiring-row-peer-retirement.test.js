@@ -2,8 +2,8 @@
 // ruling F2, 2026-09-26): the replica being removed marks itself REMOVING and
 // keeps participating until its RemoveNode commits, retiring its port and
 // deleting its row only after that. The group therefore proposes the removal
-// on the REMOVING row, while the row still gives the leader the replica's
-// address; waiting for the delete would wait for a row the replica deletes
+// on the REMOVING row, by the replica identity its committed configuration
+// names; waiting for the delete would wait for a row the replica deletes
 // only after the removal it waits for.
 //
 // The partition's contribution is the membership proposal its services-cache
@@ -24,6 +24,7 @@ import {
 } from '../../src/raft/raft-operation-port-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {
   ControllableConsensusPort,
   createControllablePartitionService,
@@ -86,6 +87,7 @@ test('a REMOVING row retires its peer by one REMOVE_PEER while the row still ' +
     tableName: 'users',
     replicaId: LEADER,
     replicaIds: [LEADER, RETIRING],
+    bootstrapMembership: genesisStamp([LEADER, RETIRING], NODE_OF),
     nodeId: NODE_OF[LEADER],
     dbPath: ':memory:',
     deferElection: true,
@@ -106,10 +108,6 @@ test('a REMOVING row retires its peer by one REMOVE_PEER while the row still ' +
   await settleCacheChange();
   t.same(removals(provider, mark), [RETIRING],
     'the retiring row proposed exactly one REMOVE_PEER of its replica');
-  t.equal(partition.resolveKnownPeerAddress(RETIRING),
-    serviceRow(RETIRING, ReplicaStatus.REMOVING, 2).address,
-    'the retiring replica stays addressable while its row exists, so the ' +
-      'removal can still reach it for its ack');
   t.notOk(partition.raft.readStatus().peers.some((peer) =>
     peer.replicaIdentity === RETIRING),
   'and the reconcile does not re-admit it');

@@ -5,6 +5,7 @@
  * join-phase scheduling suppression / convergence release.
  * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 7.3, 7.4
  */
+import {AddressManager} from '../address/address-manager.js';
 import {
   COLUMN,
   ENTITY_TYPE,
@@ -149,7 +150,8 @@ function assignRaftLifecycle(serviceClass) {
           groupId: this.groupId,
           localReplicaIdentity: this.replicaId,
           logger: this.logger,
-        }, {replicaIdentity, peerAddress});
+        }, {replicaIdentity, peerAddress,
+          nodeId: AddressManager.getInstance().getNodeId(peerAddress)});
       }
     },
     /**

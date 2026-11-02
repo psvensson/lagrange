@@ -110,25 +110,6 @@ function shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) {
   return !isPeerRowStatusAdmissible(serviceRow.status);
 }
 
-/**
- * Whether the init loop may admit a bootstrap peer (F2): the same filter as
- * the row-driven reconciliation, over the peer's services row when this
- * node's cache holds one. A bootstrap peer with no row yet is admitted as
- * before (the bootstrap membership names it); a PENDING/CREATING or retiring
- * row is not, here or anywhere: it is admitted on the row change that records
- * its fact.
- * @param {Object} partitionService - The opening partition replica.
- * @param {string} peerId - The bootstrap peer.
- * @return {boolean}
- */
-function isBootstrapPeerAdmissible(partitionService, peerId) {
-  const serviceRow = typeof partitionService.systemTableCache?.get ===
-    PARTITION_SERVICE_TYPE.FUNCTION ?
-    partitionService.systemTableCache.get(TABLES.SERVICES, peerId) : null;
-  return !serviceRow ||
-    !shouldSkipPeerServiceRow(partitionService, serviceRow, peerId);
-}
-
 function addressMatchesReplica(addressManager, address, replicaId) {
   if (typeof address !== 'string' || address.length === 0) {
     return false;
@@ -144,20 +125,34 @@ function addressMatchesReplica(addressManager, address, replicaId) {
   }
 }
 
-function findStaleAddressesForReplica(
+// The configured peer a retiring row names, matched on the address the
+// peer's COMMITTED node gives it (the port's status address): a row naming
+// another address is no evidence about this member. The removal names the
+// replica identity, the one REMOVE_PEER shape the port takes.
+function retireMatchingRaftAddresses(
+  partitionService,
   addressManager,
-  currentNodes,
   replicaId,
-  expectedAddress,
+  serviceAddress,
 ) {
-  return currentNodes
-    .map((node) => node?.address)
-    .filter((address) => {
-      return (
-        address !== expectedAddress &&
-        addressMatchesReplica(addressManager, address, replicaId)
-      );
+  if (!addressMatchesReplica(addressManager, serviceAddress, replicaId)) {
+    return null;
+  }
+  const raftNodes = partitionService.raft?.readStatus?.().peers || [];
+  const retiredAddresses = new Set(
+    raftNodes
+      .map((node) => node?.address)
+      .filter((address) => address === serviceAddress),
+  );
+  if (retiredAddresses.size > 0 &&
+      typeof partitionService.raft?.proposeConfChange ===
+      PARTITION_SERVICE_TYPE.FUNCTION) {
+    proposePeerRetirement(partitionService, {
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+      replicaIdentity: replicaId,
     });
+  }
+  return retiredAddresses;
 }
 
 function removeExactReplicaId(replicaIds, replicaId) {
@@ -201,48 +196,6 @@ function resolveServiceReplicaId(serviceRow) {
   return serviceRow?.service_id || serviceRow?.replica_id || null;
 }
 
-function retireMatchingRaftAddresses(
-  partitionService,
-  addressManager,
-  replicaId,
-  serviceAddress,
-) {
-  if (!addressMatchesReplica(addressManager, serviceAddress, replicaId)) {
-    return null;
-  }
-  const raftNodes = partitionService.raft?.readStatus?.().peers || [];
-  const retiredAddresses = new Set(
-    raftNodes
-      .map((node) => node?.address)
-      .filter((address) => address === serviceAddress),
-  );
-  if (typeof partitionService.raft?.proposeConfChange ===
-      PARTITION_SERVICE_TYPE.FUNCTION) {
-    for (const address of retiredAddresses) {
-      proposePeerRetirement(partitionService, {
-        type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
-        peerAddress: address,
-        replicaIdentity: replicaId,
-      });
-    }
-  }
-  return retiredAddresses;
-}
-
-function removeMatchingPeerAddresses(
-  peerAddresses,
-  serviceAddress,
-) {
-  if (!Array.isArray(peerAddresses)) {
-    return;
-  }
-  for (let index = peerAddresses.length - 1; index >= 0; index -= 1) {
-    if (peerAddresses[index] === serviceAddress) {
-      peerAddresses.splice(index, 1);
-    }
-  }
-}
-
 function retireRaftPeerFromAuthoritativeServiceChange(
   partitionService,
   operation,
@@ -268,6 +221,9 @@ function retireRaftPeerFromAuthoritativeServiceChange(
     return true;
   }
 
+  // The row is evidence about the configured peer only where it names the
+  // address the peer's committed node gives it (the port's status address);
+  // the removal names the replica identity.
   const addressManager = AddressManager.getInstance();
   const serviceAddress = resolvePeerAddressFromService(
     addressManager,
@@ -284,10 +240,6 @@ function retireRaftPeerFromAuthoritativeServiceChange(
     return false;
   }
   removeExactReplicaId(partitionService.replicaIds, replicaId);
-  removeMatchingPeerAddresses(
-    partitionService.peerAddresses,
-    serviceAddress,
-  );
   partitionService.logger.debug(
     PARTITION_SERVICE_LOG_MSG.PEER_RETIRED_FROM_AUTHORITATIVE_SERVICE_CHANGE,
     {
@@ -302,29 +254,11 @@ function retireRaftPeerFromAuthoritativeServiceChange(
 
 function reconcileExpectedRaftPeer({
   partitionService,
-  addressManager,
-  currentNodes,
-  currentAddresses,
+  configuredIdentities,
   replicaId,
   expectedAddress,
 }) {
-  const staleAddresses = findStaleAddressesForReplica(
-    addressManager,
-    currentNodes,
-    replicaId,
-    expectedAddress,
-  );
-  if (typeof partitionService.raft?.proposeConfChange ===
-      PARTITION_SERVICE_TYPE.FUNCTION) {
-    for (const staleAddress of staleAddresses) {
-      proposePeerRetirement(partitionService, {
-        type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
-        peerAddress: staleAddress,
-      });
-      currentAddresses.delete(staleAddress);
-    }
-  }
-  if (currentAddresses.has(expectedAddress)) {
+  if (configuredIdentities.has(replicaId)) {
     return;
   }
   const reservation = reservePartitionRaftPeerIdentity(
@@ -340,9 +274,9 @@ function reconcileExpectedRaftPeer({
     peerAddress: expectedAddress,
   });
   // A refused or deferred admission left the peer outside the
-  // configuration: this pass does not count its address as current.
+  // configuration: this pass does not count it as configured.
   if (!UNADMITTED_PEER_OUTCOMES.has(admission.outcome)) {
-    currentAddresses.add(expectedAddress);
+    configuredIdentities.add(replicaId);
   }
 }
 
@@ -399,23 +333,17 @@ function reconcileRaftPeersFromCacheForService(partitionService,
   const addressManager = AddressManager.getInstance();
   const expectedAddressesByReplicaId = expectedPeerAddressesOf(
     partitionService, services, addressManager, onlyReplicaIds);
-  const currentNodes = partitionService.raft?.readStatus?.().peers || [];
-  const currentAddresses = new Set(
-    currentNodes
-      .map((node) => node?.address)
-      .filter(
-        (address) => typeof address === 'string' && address.length > 0,
-      ),
-  );
+  const configuredIdentities = new Set(
+    (partitionService.raft?.readStatus?.().peers || [])
+      .map((peer) => peer?.replicaIdentity)
+      .filter((identity) => typeof identity === 'string'));
   for (const [
     replicaId,
     expectedAddress,
   ] of expectedAddressesByReplicaId.entries()) {
     reconcileExpectedRaftPeer({
       partitionService,
-      addressManager,
-      currentNodes,
-      currentAddresses,
+      configuredIdentities,
       replicaId,
       expectedAddress,
     });
@@ -454,7 +382,6 @@ function redriveAdmissionsOnMembershipChange(partitionService) {
 }
 
 export {
-  isBootstrapPeerAdmissible,
   reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
   retireRaftPeerFromAuthoritativeServiceChange,
