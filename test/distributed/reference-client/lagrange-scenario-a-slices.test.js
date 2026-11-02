@@ -526,7 +526,12 @@ async function testScenarioRunContracts() {
         lockingReadMode: 'snapshot-write-conflict',
         close: async () => {},
       }),
+      // The probe's contract (coordinator decision 5): the observed mechanism,
+      // the loser's SQLSTATE, whether its retry committed and both effects.
       induceConflict: async () => ({
+        observation: {mechanism: 'serialization-conflict', victimSqlState: '40001',
+          retryCommitted: true, retry: {attempts: 2, retries: 1},
+          effects: {baseline: 100, final: 300, delta: 100}},
         victim: {side: 'right', code: '40001', sqlState: '40001', message: 'conflict'},
         results: [],
       }),
