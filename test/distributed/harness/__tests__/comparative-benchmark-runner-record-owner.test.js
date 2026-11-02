@@ -48,3 +48,18 @@ test('the campaign outcome admits only the claims this campaign ran', async () =
   assert.deepEqual(result.cells, [{claimKey: 'lagrange/scenarioA/main',
     status: 'invalid-measurement', reasons: ['r']}]);
 });
+
+// Live campaign bench-live-20261101-b-r6 appended its records and then crashed
+// in its own outcome: campaignOutcome passed `forensicRecords`, the real
+// admission owner reads `retainedReferences` (undefined -> TypeError). Driven
+// through the real owners, a campaign's outcome is a cell, never a crash.
+test('the campaign outcome runs through the real admission owner', async () => {
+  const owner = await loadRawObservationRecordOwner();
+  const result = owner.campaignOutcome({header: {campaignId: 'bench-real-1'}, runs: [],
+    file: 'raw.ndjson', rootDir: '/nonexistent-ledger-root',
+    manifest: {targets: ['pg-single-primary'],
+      runs: [{targetId: 'pg-single-primary', scenario: 'scenarioA', subkind: 'smoke'}]}});
+  assert.equal(result.cells.length, 1);
+  assert.equal(result.cells[0].claimKey, 'pg-single-primary/scenarioA/smoke');
+  assert.notEqual(result.outcome, 'passed');
+});

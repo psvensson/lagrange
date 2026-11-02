@@ -60,7 +60,7 @@ const LEDGER_FILE = 'data/tidb-comparison/invalidations.ndjson';
 const MATRIX_FILE = 'data/tidb-comparison/multi-system-matrix.json';
 const DOCS_DIR = 'docs/benchmarks';
 const CAMPAIGN = 'chain-campaign';
-const ENDPOINT = Object.freeze({host: 'lab-host-1', port: 5432});
+const ENDPOINT = Object.freeze({host: '10.0.0.1', port: 5432});
 const CREDENTIALS = Object.freeze({user: 'bench', password: 'bench', database: 'bench'});
 const SWEEP_PLAN_SHA256 = createHash('sha256').update('chain-sweep-plan').digest('hex');
 // The run watchdog for arms whose product answers; a silent product gets a

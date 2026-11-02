@@ -278,6 +278,15 @@ describe('claim admission through the publication path', () => {
     assert.equal(stringIncludes(readme, 'committed/s'), false);
   });
 
+  // Live campaign bench-live-20261101-b-r6: every lab run read as
+  // topology-mismatch - admission joined roles (named by address, as every
+  // deployer records them) to hosts by hostId (the lab inventory name).
+  it('roles named by address join their lab hosts; no false topology mismatch', async () => {
+    const {cell} = await publishedLagrangeCell(() => {}, SMOKE);
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.TOPOLOGY_MISMATCH), false,
+      JSON.stringify(cell.reasons));
+  });
+
   it('a smoke profile never publishes a capacity figure', async () => {
     const {cell} = await publishedLagrangeCell(() => {},
       SMOKE);
@@ -501,7 +510,7 @@ describe('driver output through admission', () => {
   it('the Lagrange smoke record that ends setup-failed (55P03) is a product failure',
     async () => {
       const product = createFakeOltpProduct(FAKE_PRODUCT_FAULT.LOAD_LOCK_NOT_AVAILABLE);
-      const endpoint = {host: 'lab-host-1', port: 5432};
+      const endpoint = {host: '10.0.0.1', port: 5432};
       const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-evidence-'));
       const dataBefore = directoryState(REPO_DATA_DIR);
       let output;

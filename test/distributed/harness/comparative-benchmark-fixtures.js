@@ -122,7 +122,7 @@ function buildFixtureHeader({campaignId, targetIds, harness = fixtureHarness(),
   };
 }
 
-const FIXTURE_ENDPOINT = 'lab-host-1:5432';
+const FIXTURE_ENDPOINT = '10.0.0.1:5432';
 
 // The canonical workload a fixture run executes: two workers, no warm-up, the
 // smallest dataset the workload owner accepts.
@@ -219,9 +219,12 @@ function sealFixtureRun(run, options = {}) {
   return run;
 }
 
+// Real records name a role's host, the endpoint and the load generator by
+// address (the deployers and the runner work by ip); hostId is the lab
+// inventory name.
 function buildProducts(hosts, targetId) {
   return arrayMap(hosts, (h, i) => ({
-    role: fixtureProductRole(targetId), host: h.hostId, containerId: `ctr-${i + 1}`,
+    role: fixtureProductRole(targetId), host: h.ip, containerId: `ctr-${i + 1}`,
     ...fixtureProductIdentity(targetId), entrypoint: 'serve', cmd: '', startedAt: FIXTURE_TIME,
   }));
 }
@@ -258,7 +261,7 @@ function buildFixtureRun(options = {}) {
   const products = buildProducts(productHosts, targetId);
   const requests = buildRequests(workload, latencyMs);
   const requestCount = requests.length;
-  const endpoint = {host: productHosts[0].hostId, port: 5432, containerId: 'ctr-1',
+  const endpoint = {host: productHosts[0].ip, port: 5432, containerId: 'ctr-1',
     protocol: 'pg-wire'};
   const run = {
     recordType: RAW_RECORD_TYPE.RUN, schemaVersion: RAW_OBSERVATION_SCHEMA.V2, campaignId,
@@ -295,7 +298,7 @@ function buildFixtureRun(options = {}) {
         expectedTableRows: {warehouse: 1, orders: 0}, observedTableRows: {warehouse: 1, orders: 0},
       }},
       placement: null, endpoint,
-      loadGenerator: {host: hosts[hostCount].hostId, nodeVersion: 'v22.0.0',
+      loadGenerator: {host: hosts[hostCount].ip, nodeVersion: 'v22.0.0',
         driverVersions: {pg: '8.0.0'}},
       events: [], closure: {status: CLOSURE_STATUS.COMPLETE, unclosed: []},
     },

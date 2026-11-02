@@ -601,8 +601,10 @@ function checkDeployment(run, claim) {
       jsonStringify(v.observedTableRows) !== jsonStringify(v.expectedTableRows))) {
     reasons.push(ADMISSION_REASON.DATASET_UNVERIFIED);
   }
-  const hostsById = new Map(arrayMap(deployment.hosts, (h) => [h.hostId, h]));
-  const roleHosts = arrayMap(deployment.roles, (r) => hostsById.get(r.host));
+  // A role names its host by address (as every deployer records it); hostId
+  // is the lab inventory name.
+  const hostsByIp = new Map(arrayMap(deployment.hosts, (h) => [h.ip, h]));
+  const roleHosts = arrayMap(deployment.roles, (r) => hostsByIp.get(r.host));
   const distinctMachines = new Set(arrayMap(arrayFilter(roleHosts, Boolean), (h) => h.bootId));
   if (arraySome(roleHosts, (h) => !h) || distinctMachines.size < claim.minDistinctHosts) {
     reasons.push(ADMISSION_REASON.TOPOLOGY_MISMATCH);

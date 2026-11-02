@@ -56,7 +56,7 @@ async function loadRawObservationRecordOwner(importModule = (specifier) => impor
           hasRunForClaim(manifest.runs, claim));
       const cells = arrayMap(claims, (claim) => admission.admitClaim({claim,
         runs: arrayMap(runs, (run) => ({file, run})),
-        campaignHeaders: new Map([[header.campaignId, header]]), forensicRecords: [],
+        campaignHeaders: new Map([[header.campaignId, header]]), retainedReferences: [],
         invalidations: ledger.readInvalidationLedger(rootDir)}));
       return {outcome: admission.campaignOutcomeOfCells(cells),
         cells: arrayMap(cells, (cell) => ({claimKey: cell.claimKey, status: cell.status,
