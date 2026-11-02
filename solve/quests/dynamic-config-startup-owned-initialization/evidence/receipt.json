@@ -1,0 +1,12 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "dynamic-config-startup-owned-initialization",
+  "status": "fail",
+  "receipts": [
+    {"id": "history-and-supersession-recorded", "passed": false},
+    {"id": "late-read-value-applied-by-the-owner", "passed": false},
+    {"id": "spent-controller-init-never-orphaned", "passed": false},
+    {"id": "prior-witness-re-derived", "passed": false},
+    {"id": "independent-verification", "passed": false}
+  ]
+}

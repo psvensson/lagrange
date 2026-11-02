@@ -1,0 +1,234 @@
+not ok test/config/dynamic-config-startup-owned-initialization.test.js (6 assertions, 4739ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: setup owned dynamic config startup witnesses
+    ok 1 - configuration initialized
+    1..1
+ok 1 - setup owned dynamic config startup witnesses # time=40.538ms
+
+Dynamic configuration service initialized { nodeId: 'owned-startup-node', definedKeys: 72 }
+Configuration watcher registered { key: 'logging.persistMetricsLogs' }
+Configuration watcher registered { key: 'logging.metricsDefaultResolutionMs' }
+Configuration watcher registered { key: 'logging.metricsDetailedWindowTtlMs' }
+Configuration watcher registered { key: 'logging.metricsDetailedWindowEnabled' }
+Configuration watcher registered { key: 'raft.heartbeatIntervalMs' }
+Configuration watcher registered { key: 'raft.electionTimeoutMinMs' }
+Configuration watcher registered { key: 'raft.electionTimeoutMaxMs' }
+Configuration watcher registered { key: 'raft.tickIntervalMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingEnabled' }
+Configuration watcher registered { key: 'raft.adaptiveTimingSampleIntervalMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingPromoteSamples' }
+Configuration watcher registered { key: 'raft.adaptiveTimingDemoteSamples' }
+Configuration watcher registered { key: 'raft.adaptiveTimingHighCpuPercent' }
+Configuration watcher registered { key: 'raft.adaptiveTimingLowCpuPercent' }
+Configuration watcher registered { key: 'raft.adaptiveTimingHighWriteBytesPerSec' }
+Configuration watcher registered { key: 'raft.adaptiveTimingLowWriteBytesPerSec' }
+Configuration watcher registered { key: 'raft.adaptiveTimingHighRssGrowthBytesPerMin' }
+Configuration watcher registered { key: 'raft.adaptiveTimingLowRssGrowthBytesPerMin' }
+Configuration watcher registered { key: 'raft.adaptiveTimingActiveHeartbeatIntervalMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingActiveElectionTimeoutMinMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingActiveElectionTimeoutMaxMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingIdleHeartbeatIntervalMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingIdleElectionTimeoutMinMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingIdleElectionTimeoutMaxMs' }
+# Subtest: row 4: a stored raft timing whose read completes after the bound is applied without any CDC apply
+    not ok 1 - the late stored values reach the raft replicas, not the defaults
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,6 +1,6 @@
+         Object {
+        -  "heartbeatIntervalMs": 120,
+        -  "electionTimeoutMinMs": 1800,
+        -  "electionTimeoutMaxMs": 5400,
+        -  "tickIntervalMs": 25,
+        +  "heartbeatIntervalMs": 50,
+        +  "electionTimeoutMinMs": 1000,
+        +  "electionTimeoutMaxMs": 3000,
+        +  "tickIntervalMs": 20,
+         }
+      at:
+        fileName: test/config/dynamic-config-startup-owned-initialization.test.js
+        lineNumber: 108
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/config/dynamic-config-startup-owned-initialization.test.js:108:5)
+      source: |2
+          });
+          await settle();
+          t.same(partition.calls.at(-1), {
+        ----^
+            heartbeatIntervalMs: 120,
+            electionTimeoutMinMs: 1800,
+      ...
+    
+    1..1
+not ok 2 - row 4: a stored raft timing whose read completes after the bound is applied without any CDC apply # time=2014.977ms
+  ---
+  at:
+    fileName: test/config/dynamic-config-startup-owned-initialization.test.js
+    lineNumber: 94
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('row 4: a stored raft timing whose read completes after the bound is
+    applied ' +
+  
+    ^
+      'without any CDC apply', async (t) => {
+      const partition = raftService();
+  ...
+
+Dynamic configuration service initialized { nodeId: 'owned-startup-node', definedKeys: 72 }
+Configuration watcher registered { key: 'logging.persistMetricsLogs' }
+Configuration watcher registered { key: 'logging.metricsDefaultResolutionMs' }
+Configuration watcher registered { key: 'logging.metricsDetailedWindowTtlMs' }
+Configuration watcher registered { key: 'logging.metricsDetailedWindowEnabled' }
+Configuration watcher registered { key: 'raft.heartbeatIntervalMs' }
+Configuration watcher registered { key: 'raft.electionTimeoutMinMs' }
+Configuration watcher registered { key: 'raft.electionTimeoutMaxMs' }
+Configuration watcher registered { key: 'raft.tickIntervalMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingEnabled' }
+Configuration watcher registered { key: 'raft.adaptiveTimingSampleIntervalMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingPromoteSamples' }
+Configuration watcher registered { key: 'raft.adaptiveTimingDemoteSamples' }
+Configuration watcher registered { key: 'raft.adaptiveTimingHighCpuPercent' }
+Configuration watcher registered { key: 'raft.adaptiveTimingLowCpuPercent' }
+Configuration watcher registered { key: 'raft.adaptiveTimingHighWriteBytesPerSec' }
+Configuration watcher registered { key: 'raft.adaptiveTimingLowWriteBytesPerSec' }
+Configuration watcher registered { key: 'raft.adaptiveTimingHighRssGrowthBytesPerMin' }
+Configuration watcher registered { key: 'raft.adaptiveTimingLowRssGrowthBytesPerMin' }
+Configuration watcher registered { key: 'raft.adaptiveTimingActiveHeartbeatIntervalMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingActiveElectionTimeoutMinMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingActiveElectionTimeoutMaxMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingIdleHeartbeatIntervalMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingIdleElectionTimeoutMinMs' }
+Configuration watcher registered { key: 'raft.adaptiveTimingIdleElectionTimeoutMaxMs' }
+Started raft adaptive timing controller { nodeId: 'owned-startup-node', intervalMs: 5000 }
+# Subtest: row 5: a controller whose initialize completes after the bound leaves nothing running after shutdown
+    not ok 1 - no adaptive timing loop outlives the wiring that started it
+      ---
+      compare: ===
+      at:
+        fileName: test/config/dynamic-config-startup-owned-initialization.test.js
+        lineNumber: 131
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/config/dynamic-config-startup-owned-initialization.test.js:131:5)
+      source: |2
+          await settle();
+          wiring.shutdown();
+          t.equal(intervals.live.size, 0,
+        ----^
+            'no adaptive timing loop outlives the wiring that started it');
+        });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    1..1
+not ok 3 - row 5: a controller whose initialize completes after the bound leaves nothing running after shutdown # time=2005.248ms
+  ---
+  at:
+    fileName: test/config/dynamic-config-startup-owned-initialization.test.js
+    lineNumber: 117
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('row 5: a controller whose initialize completes after the bound leaves
+    nothing ' +
+  
+    ^
+      'running after shutdown', async (t) => {
+      const intervals = trackIntervals();
+  ...
+
+1..3
+# { total: 3, pass: 1, fail: 2 }
+# time=4068.953ms
+Failed to apply initial dynamic config setting {
+  key: 'logging.persistMetricsLogs',
+  error: 'Timed out reading startup dynamic config key logging.persistMetricsLogs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'logging.metricsDefaultResolutionMs',
+  error: 'Timed out reading startup dynamic config key logging.metricsDefaultResolutionMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'logging.metricsDetailedWindowTtlMs',
+  error: 'Timed out reading startup dynamic config key logging.metricsDetailedWindowTtlMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'logging.metricsDetailedWindowEnabled',
+  error: 'Timed out reading startup dynamic config key logging.metricsDetailedWindowEnabled after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'raft.heartbeatIntervalMs',
+  error: 'Timed out reading startup dynamic config key raft.heartbeatIntervalMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'raft.electionTimeoutMinMs',
+  error: 'Timed out reading startup dynamic config key raft.electionTimeoutMinMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'raft.electionTimeoutMaxMs',
+  error: 'Timed out reading startup dynamic config key raft.electionTimeoutMaxMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'raft.tickIntervalMs',
+  error: 'Timed out reading startup dynamic config key raft.tickIntervalMs after 300ms'
+}
+Failed to initialize raft adaptive timing controller {
+  error: 'Timed out initializing adaptive timing controller after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'logging.persistMetricsLogs',
+  error: 'Timed out reading startup dynamic config key logging.persistMetricsLogs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'logging.metricsDefaultResolutionMs',
+  error: 'Timed out reading startup dynamic config key logging.metricsDefaultResolutionMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'logging.metricsDetailedWindowTtlMs',
+  error: 'Timed out reading startup dynamic config key logging.metricsDetailedWindowTtlMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'logging.metricsDetailedWindowEnabled',
+  error: 'Timed out reading startup dynamic config key logging.metricsDetailedWindowEnabled after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'raft.heartbeatIntervalMs',
+  error: 'Timed out reading startup dynamic config key raft.heartbeatIntervalMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'raft.electionTimeoutMinMs',
+  error: 'Timed out reading startup dynamic config key raft.electionTimeoutMinMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'raft.electionTimeoutMaxMs',
+  error: 'Timed out reading startup dynamic config key raft.electionTimeoutMaxMs after 300ms'
+}
+Failed to apply initial dynamic config setting {
+  key: 'raft.tickIntervalMs',
+  error: 'Timed out reading startup dynamic config key raft.tickIntervalMs after 300ms'
+}
+Failed to initialize raft adaptive timing controller {
+  error: 'Timed out initializing adaptive timing controller after 300ms'
+}
+# test-files total=1 pass=0 fail=1 assertions=6

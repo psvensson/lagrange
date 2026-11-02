@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2212,
+    "unit": 2213,
     "integration": 119,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-d72beb45",
+  "censusSize": 2557,
+  "digest": "fnv1a32-03c6f66d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -483,6 +483,7 @@
     "test/config/control-plane-gateway-mutation-guardrails.test.js": "unit",
     "test/config/control-plane-gateway-registry-guardrails.test.js": "unit",
     "test/config/dynamic-config-service.test.js": "unit",
+    "test/config/dynamic-config-startup-owned-initialization.test.js": "unit",
     "test/config/dynamic-config-startup-wait-bound-spent.test.js": "unit",
     "test/config/dynamic-config-startup-wiring.test.js": "unit",
     "test/config/full-corpus-canary-workflow.test.js": "unit",

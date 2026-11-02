@@ -7,7 +7,7 @@
     "bootstrap-membership": 330,
     "cdc-metadata": 67,
     "cli-tooling": 99,
-    "control-plane": 225,
+    "control-plane": 226,
     "convergence-topology": 78,
     "distributed-harness": 210,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-713ef5b6",
+  "censusSize": 2557,
+  "digest": "fnv1a32-e78652f2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b9d19216",
+  "observationDigest": "fnv1a32-2081ef6f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -502,6 +502,7 @@
     "test/config/control-plane-gateway-mutation-guardrails.test.js": "architecture-governance",
     "test/config/control-plane-gateway-registry-guardrails.test.js": "architecture-governance",
     "test/config/dynamic-config-service.test.js": "control-plane",
+    "test/config/dynamic-config-startup-owned-initialization.test.js": "control-plane",
     "test/config/dynamic-config-startup-wait-bound-spent.test.js": "control-plane",
     "test/config/dynamic-config-startup-wiring.test.js": "control-plane",
     "test/config/full-corpus-canary-workflow.test.js": "control-plane",
@@ -4199,6 +4200,11 @@
       ],
       "env": [
         "NODE_HEARTBEAT_INTERVAL_MS"
+      ]
+    },
+    "test/config/dynamic-config-startup-owned-initialization.test.js": {
+      "files": [
+        "src/config/dynamic-config-startup-wiring.js"
       ]
     },
     "test/config/dynamic-config-startup-wait-bound-spent.test.js": {
