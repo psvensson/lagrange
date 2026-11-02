@@ -16,9 +16,11 @@
  * so as an event.
  */
 import {
+  arrayEvery,
   arrayFind,
   arrayMap,
 } from './real-product-captured-intrinsics.js';
+import {STORAGE_KIND} from './real-product-deployment-contract.js';
 import {inspectProducts} from './real-product-identity.js';
 import {shellWord} from './real-product-remote-shell.js';
 
@@ -53,6 +55,14 @@ function bindingOf(manifest, deployment) {
  *   and run
  * @return {Function} ({run, manifest, deployment}) => {gate, deployment, events}
  */
+// Durability is provable only where every data directory survives its
+// container: explicit host volumes (a smoke arm's container layer does not).
+function hasPersistentStorage(deployment) {
+  const storage = Array.isArray(deployment.storage) ? deployment.storage : [];
+  return storage.length > 0 &&
+    arrayEvery(storage, (entry) => entry.kind === STORAGE_KIND.HOST_VOLUME);
+}
+
 function createSemanticGateStage({journey, redeploy, sshRun, opts, evidenceDirOf,
   now = Date.now}) {
   return async ({run, manifest, deployment}) => {
@@ -103,7 +113,8 @@ function createSemanticGateStage({journey, redeploy, sshRun, opts, evidenceDirOf
         startedAtAfter: after, readiness};
     };
     const gate = await journey({system: run.system, connection: connectionOf(current),
-      binding: bindingOf(manifest, current), evidenceDir, beforeCase, restartProduct});
+      binding: bindingOf(manifest, current), evidenceDir, beforeCase, restartProduct,
+      persistentStorage: hasPersistentStorage(current)});
     if (run.system === SYSTEM.LAGRANGE) await reform(BEFORE_MEASUREMENT);
     return {gate, deployment: current, events};
   };

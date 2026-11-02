@@ -54,6 +54,7 @@ const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const jsonStringify = JSON.stringify;
 
 const CLAIM_CELL_STATUS = Object.freeze({
@@ -159,6 +160,9 @@ const ADMISSION_REASON = Object.freeze({
   LOCAL_ORACLE_NOT_COMPARISON_TARGET: 'local-oracle-not-comparison-target',
   FABRICATED_HISTORY_METRICS: 'fabricated-history-metrics',
 });
+
+// The proof journey's failure kinds (scenario-a-semantic-proof-journey.js).
+const PROOF_FAILURE_KIND = Object.freeze({PRODUCT_ANOMALY: 'product_anomaly'});
 
 // Reasons that explain a valid or product-failure cell without blocking admission.
 const NON_BLOCKING_REASONS = Object.freeze([
@@ -499,16 +503,38 @@ function gateBindingHolds(run, binding) {
 // Capacity runs need a passed gate; a smoke run may carry an incomplete gate,
 // which the cell then states. A gate whose proofs are not bound to this run's
 // deployment is refused.
+// The gate's per-case failure kinds as detail reasons (coordinator decision 4,
+// 2026-11-02): `semantic-gate-failed:<case>` for a product anomaly,
+// `semantic-gate-incomplete:<case>:<kind>` for evidence not obtained or a
+// probe that does not apply. They explain the gate status; they never decide it.
+function gateCaseReasons(gate) {
+  const kinds = Array.isArray(gate.failureKinds) ? gate.failureKinds : [];
+  return arrayMap(kinds, (entry) => (entry.kind === PROOF_FAILURE_KIND.PRODUCT_ANOMALY ?
+    `${ADMISSION_REASON.SEMANTIC_GATE_FAILED}:${entry.caseId}` :
+    `${ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE}:${entry.caseId}:${entry.kind}`));
+}
+
 function checkSemanticGate(run) {
   const gate = run.correctness.semanticGate;
   if (!gate) return [ADMISSION_REASON.SEMANTIC_GATE_MISSING];
   if (!gateBindingHolds(run, gate.binding)) return [ADMISSION_REASON.SEMANTIC_GATE_UNBOUND];
   if (gate.status === GATE_STATUS.PASSED) return [];
-  if (gate.status === GATE_STATUS.FAILED) return [ADMISSION_REASON.SEMANTIC_GATE_FAILED];
+  const details = gateCaseReasons(gate);
+  if (gate.status === GATE_STATUS.FAILED) {
+    return [ADMISSION_REASON.SEMANTIC_GATE_FAILED, ...details];
+  }
   return [gate.status === GATE_STATUS.INCOMPLETE &&
     run.plan.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ?
     ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE :
-    ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED];
+    ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED, ...details];
+}
+
+// A detail reason explains its base reason and blocks exactly when it does.
+function isNonBlockingReason(reason) {
+  if (arrayIncludes(NON_BLOCKING_REASONS, reason)) return true;
+  return arraySome([ADMISSION_REASON.SEMANTIC_GATE_FAILED,
+    ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE], (base) =>
+    stringStartsWith(String(reason), `${base}:`));
 }
 
 // The executed warm-up (observations.warmup) must be the preregistered one
@@ -871,7 +897,7 @@ function admitClaim({claim, runs, campaignHeaders, retainedReferences, invalidat
   }
   const reasons = [...checkRunSet(live)];
   for (const entry of live) reasons.push(...checkRun(entry, claim, {campaignHeaders}));
-  if (arraySome(reasons, (r) => !arrayIncludes(NON_BLOCKING_REASONS, r))) {
+  if (arraySome(reasons, (r) => !isNonBlockingReason(r))) {
     return buildCell(claim, CLAIM_CELL_STATUS.INVALID_MEASUREMENT,
       {reasons, defectIds, evidence});
   }

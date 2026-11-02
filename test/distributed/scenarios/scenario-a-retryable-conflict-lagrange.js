@@ -50,7 +50,7 @@ async function executeProof({context, options = {}}) {
     endpoint: context.endpoint,
     connection: context.connection,
   });
-  const observation = Object.freeze({sqlState: probe.victim.sqlState});
+  const observation = probe.observation;
   const evaluation = evaluateScenarioARetryableConflictObservation(observation);
   const payload = buildBasePayload({
     evidenceId: EVIDENCE_ID,

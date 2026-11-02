@@ -93,3 +93,24 @@ test('PostgreSQL resets through its adapter; TiDB keeps its own proof harness', 
   assert.equal(tidb.gate, null);
   assert.equal(tidb.events[0].kind, 'semantic-gate-not-run');
 });
+
+// Coordinator decision 4 (2026-11-02): the journey learns whether the arm's
+// data lives on persistent storage (every data directory a host volume);
+// durability on container-layer storage is probe_inapplicable.
+test('the journey is told whether the arm\'s storage is persistent', async () => {
+  const ledger = createContainerLedger();
+  const {sshRun} = createScriptedSsh([...dockerRules(ledger)]);
+  const seen = [];
+  const stage = createSemanticGateStage({journey: async ({persistentStorage}) => {
+    seen.push(persistentStorage);
+    return {status: 'incomplete'};
+  }, sshRun, opts: {}, evidenceDirOf: () => '/tmp/ev', now: () => 0,
+  redeploy: async () => {}});
+  for (const kinds of [['container-layer'], ['host-volume', 'container-layer'],
+    ['host-volume', 'host-volume'], []]) {
+    const deployment = {...armOf(ledger, 0), storage: arrayMap(kinds, (kind) => ({kind}))};
+    await stage({run: {runId: 'r', system: 'postgresql'}, manifest: {campaignId: 'c'},
+      deployment});
+  }
+  assert.deepEqual(seen, [false, false, true, false]);
+});

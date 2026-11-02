@@ -29,6 +29,9 @@ import {
 import {
   createPostgreSqlOltpAdapter,
 } from '../reference-client/postgresql-oltp-adapter.js';
+import {
+  OLTP_SCENARIO_A_DURABILITY_FAULT_EVIDENCE_CODES,
+} from '../harness/oltp-scenario-a-durability-case.js';
 import {executeProof as executeDeliveryProof} from './scenario-a-delivery-lagrange.js';
 import {executeProof as executeDurabilityProof} from './scenario-a-durability-lagrange.js';
 import {
@@ -49,7 +52,9 @@ import {
 import {executeProof as executeStockLevelProof} from './scenario-a-stock-level-lagrange.js';
 import {executeProof as executeVisibilityProof} from './scenario-a-visibility-lagrange.js';
 
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
 
@@ -72,6 +77,38 @@ const CASE_STATUS = Object.freeze({
   // proof record is withheld from the gate.
   REFUSED: 'refused',
 });
+
+// What a failed or unobtained case says (coordinator decision 4, 2026-11-02):
+// the product violated the contract, the evidence the proof needs could not
+// be obtained, or the probe does not apply to this deployment. Only a product
+// anomaly fails the gate; the other two leave its proofs missing.
+const FAILURE_KIND = Object.freeze({
+  PRODUCT_ANOMALY: 'product_anomaly',
+  EVIDENCE_INSUFFICIENT: 'evidence_insufficient',
+  PROBE_INAPPLICABLE: 'probe_inapplicable',
+});
+const FAILURE_REASON = Object.freeze({
+  CASE_ERRORED: 'case_errored',
+  DURABILITY_REQUIRES_PERSISTENT_STORAGE: 'durability_requires_persistent_storage',
+});
+// Per case, the evaluator codes that speak about evidence, not the product.
+const EVIDENCE_FAILURE_CODES = Object.freeze({
+  [DURABILITY_CASE_ID]: OLTP_SCENARIO_A_DURABILITY_FAULT_EVIDENCE_CODES,
+});
+
+/**
+ * Classify a case's evaluator failure codes: evidence-only codes say the
+ * proof was not obtained; any other code is a product anomaly.
+ * @param {string} caseId
+ * @param {Array<string>} failures the evaluator's reason codes
+ * @return {string} a FAILURE_KIND
+ */
+function classifyProofCaseFailure(caseId, failures) {
+  const evidenceCodes = EVIDENCE_FAILURE_CODES[caseId] || [];
+  const codes = Array.isArray(failures) ? failures : [];
+  return codes.length > 0 && arrayEvery(codes, (code) => arrayIncludes(evidenceCodes, code)) ?
+    FAILURE_KIND.EVIDENCE_INSUFFICIENT : FAILURE_KIND.PRODUCT_ANOMALY;
+}
 
 const REFUSAL_REASON = Object.freeze({
   BINDING_CHANGED_WITHOUT_REBIND: 'binding_changed_without_rebind',
@@ -202,6 +239,13 @@ function refusal(result, extra) {
 async function runCase(proofCase, context, options, journey) {
   const result = {caseId: proofCase.id, proofIds: proofCase.proofIds,
     binding: context.binding};
+  if (proofCase.id === DURABILITY_CASE_ID && options.persistentStorage === false) {
+    // By the contract: a restart of container-layer storage proves nothing
+    // about durability. Recorded as such, never run and never passed.
+    return {...result, status: CASE_STATUS.FAILED,
+      failureKind: FAILURE_KIND.PROBE_INAPPLICABLE,
+      failureReasons: [FAILURE_REASON.DURABILITY_REQUIRES_PERSISTENT_STORAGE]};
+  }
   if (proofCase.id === DURABILITY_CASE_ID && !options.restartCluster) {
     return {...result, status: CASE_STATUS.NOT_EXECUTED,
       reason: NOT_EXECUTED_REASON.NO_RESTART_CAPABILITY};
@@ -222,12 +266,18 @@ async function runCase(proofCase, context, options, journey) {
       return refusal(result, {});
     }
     result.status = outcome.evaluation.passed ? CASE_STATUS.PASSED : CASE_STATUS.FAILED;
+    if (!outcome.evaluation.passed) {
+      result.failureReasons = [...(outcome.evaluation.failures || [])];
+      result.failureKind = classifyProofCaseFailure(proofCase.id, result.failureReasons);
+    }
     result.proofRecord = evidence.proofRecord;
     result.evidencePath = await persistEvidence(journey.evidenceDir, context.system,
       proofCase.id, evidence);
   } catch (error) {
     result.status = CASE_STATUS.ERRORED;
     result.error = String(error?.message || error);
+    result.failureKind = FAILURE_KIND.EVIDENCE_INSUFFICIENT;
+    result.failureReasons = [FAILURE_REASON.CASE_ERRORED];
   }
   await closeQuietly(adapter, result);
   return Object.freeze(result);
@@ -293,13 +343,16 @@ async function runScenarioASemanticProofJourney(request = {}) {
     } catch (error) {
       cases.push(Object.freeze({caseId: proofCase.id, proofIds: proofCase.proofIds,
         binding: context.binding, status: CASE_STATUS.ERRORED,
-        error: String(error?.message || error)}));
+        error: String(error?.message || error),
+        failureKind: FAILURE_KIND.EVIDENCE_INSUFFICIENT,
+        failureReasons: [FAILURE_REASON.CASE_ERRORED]}));
       continue;
     }
     const current = context;
     const options = Object.freeze({
       createAdapter,
       prepareContext: async () => current,
+      persistentStorage: request.persistentStorage,
       ...(request.restartProduct ?
         {restartCluster: ({context: active}) => request.restartProduct({context: active})} :
         {}),
@@ -312,8 +365,14 @@ async function runScenarioASemanticProofJourney(request = {}) {
       bindings.push(entry.binding);
     }
   }
-  const proofs = arrayMap(arrayFilter(cases, (entry) => entry.proofRecord),
-    (entry) => entry.proofRecord);
+  // Only a passed case or a product anomaly reaches the gate; a proof that was
+  // not obtained (or does not apply) leaves its ids missing.
+  const proofs = arrayMap(arrayFilter(cases, (entry) => entry.proofRecord &&
+    (entry.status === CASE_STATUS.PASSED ||
+      entry.failureKind === FAILURE_KIND.PRODUCT_ANOMALY)), (entry) => entry.proofRecord);
+  const failureKinds = arrayMap(arrayFilter(cases, (entry) => entry.failureKind),
+    (entry) => ({caseId: entry.caseId, kind: entry.failureKind,
+      reasons: [...entry.failureReasons]}));
   const gate = buildScenarioASemanticGateEvidence({systems: [request.system], proofs});
   const summary = gate.systems[request.system];
   return Object.freeze({
@@ -328,12 +387,15 @@ async function runScenarioASemanticProofJourney(request = {}) {
     semanticProfileId: gate.semanticProfileId,
     semanticProfileSha256: gate.semanticProfileSha256,
     semanticGateEvidenceSha256: gate.semanticGateEvidenceSha256,
+    failureKinds: Object.freeze(failureKinds),
     cases: Object.freeze(cases),
   });
 }
 
 export {
   CASE_STATUS as SCENARIO_A_PROOF_CASE_STATUS,
+  FAILURE_KIND as SCENARIO_A_PROOF_FAILURE_KIND,
+  classifyProofCaseFailure,
   REFUSAL_REASON as SCENARIO_A_PROOF_REFUSAL_REASON,
   GATE_STATUS as SCENARIO_A_SEMANTIC_GATE_STATUS,
   runScenarioASemanticProofJourney,

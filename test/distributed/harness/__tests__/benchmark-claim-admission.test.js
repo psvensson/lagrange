@@ -394,6 +394,37 @@ describe('semantic gate by profile class and stopped runs', () => {
     assert.equal(stringIncludes(readme, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
   });
 
+  // Coordinator decision 4 (2026-11-02): the gate's per-case failure kinds are
+  // visible in the cell; only a product anomaly fails it.
+  it('the cell names each case and failure kind behind its gate status', async () => {
+    const smoke = await publishedLagrangeCell((run) => {
+      incomplete(run);
+      run.correctness.semanticGate.failureKinds = [{caseId: 'durability',
+        kind: 'probe_inapplicable', reasons: ['durability_requires_persistent_storage']}];
+    }, SMOKE);
+    assert.equal(smoke.cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED);
+    assert.equal(arrayIncludes(smoke.cell.reasons,
+      'semantic-gate-incomplete:durability:probe_inapplicable'), true,
+    smoke.cell.reasons.join(', '));
+    const capacity = await publishedLagrangeCell((run) => {
+      incomplete(run);
+      run.correctness.semanticGate.failureKinds = [{caseId: 'durability',
+        kind: 'evidence_insufficient', reasons: ['fault_incarnation_unchanged']}];
+    });
+    assert.equal(capacity.cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+    assert.equal(arrayIncludes(capacity.cell.reasons,
+      'semantic-gate-incomplete:durability:evidence_insufficient'), true);
+    const anomaly = await publishedLagrangeCell((run) => {
+      run.correctness.semanticGate.status = 'failed';
+      run.correctness.semanticGate.failed = ['forbidden:lost_successful_write'];
+      run.correctness.semanticGate.failureKinds = [{caseId: 'retryable-conflict',
+        kind: 'product_anomaly', reasons: ['lost_update']}];
+    }, SMOKE);
+    assert.equal(anomaly.cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE);
+    assert.equal(arrayIncludes(anomaly.cell.reasons, 'semantic-gate-failed:retryable-conflict'),
+      true, anomaly.cell.reasons.join(', '));
+  });
+
   it('a capacity run with an incomplete gate is not admitted', async () => {
     const {cell} = await publishedLagrangeCell(incomplete);
     assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);

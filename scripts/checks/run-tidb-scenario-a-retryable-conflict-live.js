@@ -78,7 +78,10 @@ async function runTiDbRetryableConflictProof(options = {}) {
       endpoint,
       databaseName: state.adapter.databaseName,
     });
-    const observation = Object.freeze({sqlState: probe.victim.sqlState});
+    // The TiDB probe observes the loser's SQLSTATE only, not the row's effects
+    // or a retry: the contract (both effects present) stays unobserved here.
+    const observation = Object.freeze({mechanism: 'serialization-conflict',
+      victimSqlState: probe.victim.sqlState, retryCommitted: null, effects: null});
     const evaluation =
       evaluateScenarioARetryableConflictObservation(observation);
     const payload = Object.freeze({
@@ -127,7 +130,7 @@ async function main() {
     PASS_PREFIX +
     JSON.stringify({
       artifactSha256: evidence.artifactSha256,
-      sqlState: evidence.observation.sqlState,
+      sqlState: evidence.observation.victimSqlState,
       victimSide: evidence.victim.side,
     }) + NEWLINE,
   );

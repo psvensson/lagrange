@@ -14,13 +14,22 @@ import {
 } from '../oltp-scenario-a-semantic-gate.js';
 import {
   SCENARIO_A_PROOF_CASE_STATUS,
+  SCENARIO_A_PROOF_FAILURE_KIND,
   SCENARIO_A_SEMANTIC_GATE_STATUS,
+  classifyProofCaseFailure,
   runScenarioASemanticProofJourney,
 } from '../../scenarios/scenario-a-semantic-proof-journey.js';
+import {
+  evaluateScenarioARetryableConflictObservation,
+} from '../oltp-scenario-a-retryable-conflict-case.js';
+import {
+  induceLagrangeRetryableConflict,
+} from '../../reference-client/lagrange-retryable-conflict-probe.js';
 
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const REFUSING_ENDPOINT = Object.freeze({host: '127.0.0.1', port: 1});
 const ECONNREFUSED = 'ECONNREFUSED';
@@ -153,4 +162,143 @@ test('beforeCase must answer a rebind or an explicit null', async () => {
   });
   assert.equal(gate.cases[0].status, 'errored');
   assert.match(gate.cases[0].error, /beforeCase must answer/u);
+});
+
+// Coordinator decision 4 (2026-11-02), from live campaign
+// bench-live-20261101-b-r6: each failed or unobtained case says what kind of
+// failure it is. Only a product_anomaly fails the gate; evidence that could
+// not be obtained or a probe that does not apply leaves the gate incomplete.
+// Durability on container-layer (smoke) storage is probe_inapplicable by the
+// contract: it is recorded as such, the product is never restarted for it,
+// and it never passes.
+test('durability on non-persistent storage is probe_inapplicable; errored cases are ' +
+  'evidence_insufficient; the gate carries the kinds and stays incomplete', async () => {
+  let restarts = 0;
+  const gate = await runScenarioASemanticProofJourney({
+    system: 'postgresql',
+    connection: {endpoint: REFUSING_ENDPOINT, credentials: CREDENTIALS},
+    binding: BINDING,
+    createClient: createRefusingClientFactory().createClient,
+    persistentStorage: false,
+    restartProduct: async () => {
+      restarts += 1;
+      return {};
+    },
+  });
+  assert.equal(restarts, 0, 'the product is never restarted for an inapplicable probe');
+  const durability = arrayFind(gate.cases, (entry) => entry.caseId === 'durability');
+  assert.equal(durability.status, SCENARIO_A_PROOF_CASE_STATUS.FAILED);
+  assert.equal(durability.failureKind, SCENARIO_A_PROOF_FAILURE_KIND.PROBE_INAPPLICABLE);
+  assert.deepEqual(durability.failureReasons, ['durability_requires_persistent_storage']);
+  const errored = arrayFind(gate.cases, (entry) => entry.caseId === 'payment');
+  assert.equal(errored.failureKind, SCENARIO_A_PROOF_FAILURE_KIND.EVIDENCE_INSUFFICIENT);
+  assert.deepEqual(errored.failureReasons, ['case_errored']);
+  assert.equal(gate.status, SCENARIO_A_SEMANTIC_GATE_STATUS.INCOMPLETE);
+  assert.deepEqual(gate.failed, []);
+  assert.deepEqual(arrayFind(gate.failureKinds, (one) => one.caseId === 'durability'),
+    {caseId: 'durability', kind: 'probe_inapplicable',
+      reasons: ['durability_requires_persistent_storage']});
+});
+
+test('a case failure is classified by its evaluator reason codes', async () => {
+  assert.equal(classifyProofCaseFailure('durability',
+    ['fault_incarnation_unchanged', 'storage_continuity_invalid']), 'evidence_insufficient');
+  assert.equal(classifyProofCaseFailure('durability',
+    ['fault_incarnation_unchanged', 'durability_state']), 'product_anomaly');
+  assert.equal(classifyProofCaseFailure('payment', ['history_row']), 'product_anomaly');
+  assert.equal(classifyProofCaseFailure('retryable-conflict', ['lost_update']),
+    'product_anomaly');
+});
+
+// Coordinator decision 5: the retryable-conflict proof asserts the externally
+// observable contract of the semantic profile, not a mechanism. Two
+// concurrent conflicting logical requests end either both committed with both
+// effects present (a blocking engine: PostgreSQL READ COMMITTED), or with
+// exactly one 40001 on the loser that then commits on retry through the retry
+// owner (first-committer-wins: Lagrange). A lost update or any other SQLSTATE
+// is a product anomaly. The mechanism observed is recorded as a fact.
+test('the retryable-conflict contract: both effects survive, by either mechanism', async () => {
+  const effects = (final) => ({baseline: 100, final, delta: 100});
+  const pass = (observation) => evaluateScenarioARetryableConflictObservation(observation);
+  assert.deepEqual(pass({mechanism: 'blocking-then-commit', victimSqlState: null,
+    retryCommitted: null, effects: effects(300)}).failures, []);
+  assert.deepEqual(pass({mechanism: 'serialization-conflict', victimSqlState: '40001',
+    retryCommitted: true, effects: effects(300)}).failures, []);
+  assert.equal(pass({mechanism: 'serialization-conflict', victimSqlState: '40001',
+    retryCommitted: true, effects: effects(300)}).passed, true);
+  assert.deepEqual(pass({mechanism: 'blocking-then-commit', victimSqlState: null,
+    retryCommitted: null, effects: effects(200)}).failures, ['lost_update']);
+  assert.deepEqual(pass({mechanism: 'serialization-conflict', victimSqlState: '40001',
+    retryCommitted: false, effects: effects(200)}).failures,
+  ['retry_not_committed', 'lost_update']);
+  assert.deepEqual(pass({mechanism: 'other-error', victimSqlState: 'HY000',
+    retryCommitted: null, effects: effects(200)}).failures,
+  ['unexpected_sql_state', 'lost_update']);
+  assert.deepEqual(pass({}).failures, ['effects_unobserved']);
+});
+
+// A fake engine behind the probe: one warehouse row; `mode` decides how it
+// treats the second, conflicting update.
+function createConflictEngine(mode) {
+  const state = {value: 100, version: 0};
+  const createClient = () => {
+    let snapshot = null;
+    let pending = 0;
+    return {
+      connect: async () => {},
+      end: async () => {},
+      query: async (sql, parameters = []) => {
+        if (sql === 'BEGIN') {
+          snapshot = state.version;
+          pending = 0;
+          return {rows: []};
+        }
+        if (sql === 'ROLLBACK') {
+          snapshot = null;
+          pending = 0;
+          return {rows: []};
+        }
+        if (sql === 'COMMIT') {
+          state.value += pending;
+          if (pending !== 0) state.version += 1;
+          snapshot = null;
+          pending = 0;
+          return {rows: []};
+        }
+        if (stringStartsWith(sql, 'SELECT')) return {rows: [{ytd_cents: state.value}]};
+        if (stringStartsWith(sql, 'UPDATE')) {
+          if (mode === 'serialization' && snapshot !== null && state.version !== snapshot) {
+            throw Object.assign(new Error('could not serialize access'), {code: '40001'});
+          }
+          if (mode === 'lost' && snapshot !== null && state.version !== snapshot) {
+            return {rowCount: 1, rows: []};
+          }
+          pending += parameters[0];
+          return {rowCount: 1, rows: []};
+        }
+        throw new Error(`unexpected statement ${sql}`);
+      },
+    };
+  };
+  return {createClient, state};
+}
+
+test('the conflict probe observes the mechanism and both effects', async () => {
+  const run = (mode) => induceLagrangeRetryableConflict({endpoint: {host: '127.0.0.1', port: 1},
+    connection: {user: 'u', database: 'd'}, createClient: createConflictEngine(mode).createClient,
+    retrySleep: async () => {}});
+  const blocking = await run('blocking');
+  assert.equal(blocking.observation.mechanism, 'blocking-then-commit');
+  assert.equal(blocking.observation.victimSqlState, null);
+  assert.deepEqual(blocking.observation.effects, {baseline: 100, final: 300, delta: 100});
+  const conflict = await run('serialization');
+  assert.equal(conflict.observation.mechanism, 'serialization-conflict');
+  assert.equal(conflict.observation.victimSqlState, '40001');
+  assert.equal(conflict.observation.retryCommitted, true);
+  assert.equal(conflict.observation.effects.final, 300);
+  assert.ok(conflict.observation.retry.attempts >= 2);
+  const lost = await run('lost');
+  assert.equal(lost.observation.effects.final, 200);
+  assert.deepEqual(evaluateScenarioARetryableConflictObservation(lost.observation).failures,
+    ['lost_update']);
 });
