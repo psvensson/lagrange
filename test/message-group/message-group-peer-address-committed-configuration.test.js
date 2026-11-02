@@ -389,7 +389,8 @@ function bodyOf(source, name) {
 const MESSAGE_GROUP_ROOT = path.join(ROOT, 'src', 'message-group');
 const DELETED_RESOLUTION = /\bbuildPeerAddress\b|\bresolvePeerAddressFromCache\b|\bresolvePeerAddressFromHints\b|\blogBootstrapHintFallback\b|\bbootstrapHintFallbackLogged\b|\ballowBootstrapHints\b|\bconsensusResolution\b|\bpeerAddresses\b|\bresolveCanonicalLeaderIdentityFromCache\b|\bresolveCanonicalLeaderNodeIdFromCache\b|USING_BOOTSTRAP_PEER_HINT|\bBOOTSTRAP_HINT\b|\bresolveLivePeerAddressFromConsensus\b/;
 const ADDRESS_DECISIONS = Object.freeze({
-  'message-group-consensus-port.js': ['messageGroupConsensusRequest'],
+  'message-group-consensus-port.js': [
+    'messageGroupConsensusRequest', 'resolveConsensusPeerAddress'],
   'message-group-service-peer-resolution.js': ['resolveCommittedPeerAddress'],
   'message-group-forwarding-owner-target-methods.js': [
     'resolveCanonicalLeaderIdentity', 'resolveForwardTargetNodeId'],
@@ -414,6 +415,16 @@ test('(g) static: no message-group address decision reads the cache, a ' +
         `${file} ${name} reads no system-table cache`);
     }
   }
+  const committedAddress = fs.readFileSync(path.join(ROOT, 'src', 'raft',
+    'raft-rs-committed-peer-address.js'), 'utf8');
+  for (const name of ['committedPeerAddress', 'founderNodeIdsOfPlacement']) {
+    const body = bodyOf(committedAddress, name);
+    t.ok(body !== null, `raft-rs-committed-peer-address.js declares ${name}`);
+    t.notOk(/systemTableCache|peerAddresses|readStatus/.test(body || ''),
+      `${name} reads no cache, hint list or status`);
+  }
+  t.notOk(/systemTableCache/.test(committedAddress),
+    'the committed peer address module never names the cache');
   const replicaDispatch = fs.readFileSync(path.join(ROOT, 'src',
     'control-plane', 'replica-dispatch-readiness-capture.js'), 'utf8');
   t.notOk(/buildPeerAddress/.test(replicaDispatch),

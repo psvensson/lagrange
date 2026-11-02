@@ -10,8 +10,6 @@ import {
   DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
 } from '../replication-target-authority.js';
 import {NodeService} from '../../node/node-service.js';
-import {founderNodeIdsOfPlacement} from
-  '../../raft/raft-rs-committed-peer-address.js';
 import {
   IDENTITY_WAIT,
   IDENTITY_WAIT_AWAITED,
@@ -289,14 +287,13 @@ class CreateMessageGroupPhase {
       assignment.existingPeerIds :
       replicaIds;
 
-    // The founding placement the GENESIS stamp commits: the assignment's
-    // placement of each founder, else every founder on this node (the
-    // self-hosted group).
-    const founderNodeIds = Array.isArray(assignment.peerAddresses) &&
-      assignment.peerAddresses.length > 0 ?
-      founderNodeIdsOfPlacement(allReplicaIds, assignment.peerAddresses) :
-      Object.fromEntries(allReplicaIds.map((replicaId) =>
-        [replicaId, this.nodeId]));
+    // The founding placement a GENESIS opening commits: only the replicas
+    // this node creates, on this node. The assignment's peer addresses are
+    // built from bootstrap-admission SERVICES rows (a projection), so they
+    // never become a committed node; a founder placed elsewhere is
+    // addressed only once a committed fact names its node.
+    const founderNodeIds = Object.fromEntries(replicaIds.map((replicaId) =>
+      [replicaId, this.nodeId]));
 
     this.delegates.resetJoinMessageGroupReplicas();
     for (

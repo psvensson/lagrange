@@ -633,14 +633,11 @@ class MessageGroupForwardingOwner {
   resolveJoinConvergenceBootstrapForwardTarget() {
     const service = this.service;
     const leader = this.resolveCanonicalLeaderIdentity();
-    if (leader.state !== MESSAGE_GROUP_LEADER_IDENTITY_STATE.LIVE_LEADER) {
+    if (leader.state !== MESSAGE_GROUP_LEADER_IDENTITY_STATE.LIVE_LEADER ||
+        service.isLocalForwardTarget(leader.leaderId, leader.leaderAddress)) {
       return null;
     }
-    const status = service.raft.readStatus();
-    if (service.isLocalForwardTarget(status.leaderId, status.leaderAddress)) {
-      return null;
-    }
-    return {serviceId: status.leaderId, address: status.leaderAddress};
+    return {serviceId: leader.leaderId, address: leader.leaderAddress};
   }
 }
 

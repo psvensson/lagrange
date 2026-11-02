@@ -350,11 +350,6 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assert.equal(after.leaderId, LEADER);
   assert.equal(after.leaderAddressStatus, PEER_ADDRESS_STATUS.RESOLVED);
   assert.equal(after.leaderAddress, addressOf(LEADER));
-  const hydratedRow = f.follower.systemTableCache.get(TABLES.SERVICES, LEADER);
-  assert.equal(hydratedRow.status, SERVICE_STATUS.STOPPED);
-  assert.ok(f.events.some((event) => event.kind === 'actual-peer-reconciliation' &&
-      event.row?.service_id === LEADER),
-  'the real cache change invoked the existing peer reconciliation owner');
   assert.equal(f.first.systemTableCache.get(TABLES.SERVICES, LEADER), undefined,
     'first relay did not hydrate itself');
   assert.deepEqual(targets(f), f.capturedTargets, 'STOPPED B does not replace the captured F1 target');

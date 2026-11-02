@@ -102,8 +102,10 @@ the partition or rejoin hint lists, which are not this quest's).
    `forwardToLeader`).
 3. **Founders.** `MessageGroupService` takes `founderNodeIds` (the founding placement) and its GENESIS commits it;
    the seed allocation declares every message-group founder on the seed node (`seedFounderNodeIds`, the same
-   placement partitions had); the self-hosted join create derives it from the assignment's placement, else this
-   node. The original-allocation admission no longer carries `peerAddresses`; the message-group GENESIS is still
+   placement partitions had); the self-hosted join create places only the replicas this node creates, on this
+   node. (Attempt 1 first derived it from `assignment.peerAddresses`, which for a reused group is built from
+   bootstrap-admission SERVICES rows in `bootstrap-join-admission-owner.js` `augmentAssignmentWithPeerAddresses`:
+   a projection. The corrective attempt drops that; `create-message-group-phase.test.js` witnesses it.) The original-allocation admission no longer carries `peerAddresses`; the message-group GENESIS is still
    compared byte-for-byte with the declaration at native entry.
 4. **D-C3.** The managed context is `{operationId, transitionIdentity, permitSequence, stage, replicaIdentity,
    peerId, nodeId}` for every stage; the managed transition request names `nodeId` instead of `peerAddress`; the
@@ -128,3 +130,19 @@ the partition or rejoin hint lists, which are not this quest's).
    (move convergence now targets the live leader), address-manager peer-location authority (stale row ignored,
    committed node decides), FreshMG fixtures (`nodeId` in transitions and action contexts; the cluster harness
    commits founder nodes), seed allocation/admission fixtures (`founderNodeIds`), real-port message-group harnesses.
+
+## 9. Corrective attempt after the verifier's rejection (2026-11-02)
+
+- Three cdc-source-native-delivery witnesses (defer-repair, provisional-route, W7 multi-target route) are
+  re-derived from a follower with no live leader (`no_leader`, a real election-time state): the fixture holds
+  native traffic to the reopened follower, the defer -> single-flight repair -> provisional custody path runs,
+  and the release is the follower hearing its leader, after which the owner forwards to the native leader at
+  its committed address. The cache-hydration release assertions are gone; the paths stay in src.
+- The quest test is registered under the contracts and coupled pairs cdc-source-native-delivery,
+  message-group-committed-learner-origin and fresh-seed-original-publication-and-admission.
+- Hardening: static guard (g) covers `resolveConsensusPeerAddress`, `committedPeerAddress` and
+  `founderNodeIdsOfPlacement`; the join-convergence target uses one status read (the leader snapshot carries
+  the leader's identity and committed address); the dead `context.nodeId !== undefined` guard is gone (every
+  committed context carries the node); two stale comments corrected.
+- Owned follow-up (attempt 3, after C4): forward targets selected from cache rows are delivered at the row's
+  address on the non-durable path while the durable path cross-checks the committed address (R11 dual rule).

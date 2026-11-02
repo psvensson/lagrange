@@ -98,15 +98,20 @@ const MESSAGE_GROUP_LEADER_IDENTITY_STATE = Object.freeze({
   STATUS_UNAVAILABLE: 'status_unavailable',
 });
 
+// One status read's leader: its state, source, node, and (when live) the
+// leader's identity and committed address from that same read.
 function buildMessageGroupLeaderIdentitySnapshot(
   state,
   source,
   leaderNodeId,
+  leader = {leaderId: null, leaderAddress: null},
 ) {
   return Object.freeze({
     state,
     source,
     leaderNodeId,
+    leaderId: leader.leaderId,
+    leaderAddress: leader.leaderAddress,
   });
 }
 

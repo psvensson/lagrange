@@ -15,7 +15,8 @@ import {MessageGroupServiceRowOwner} from
 import {MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE} from '../../src/message-group/constants.js';
 import {MESSAGE_GROUP_CDC_INGRESS_ACTION, MESSAGE_GROUP_CDC_INGRESS_STATE} from
   '../../src/message-group/message-group-forwarding-owner-constants.js';
-import {NODE_ID, TARGET_GROUP, provisionalRouteFixture, pump} from
+import {LEADER, NODE_ID, TARGET_GROUP, addressOf, provisionalRouteFixture, pump,
+  releaseFollower} from
   './message-group-native-provisional-route-fixture.js';
 
 const RECEIVED_MS = 5000;
@@ -90,6 +91,15 @@ test('public durable DEFER_STRICT_TARGET_UNKNOWN repairs once and re-decides in 
       assert.equal(follower.cdcCommitWaiters.size, 0, 'both admitted waits released');
       assert.equal(follower.raft.readStatus().leaderAddressStatus,
         PEER_ADDRESS_STATUS.NO_LEADER, 'the probe rows did not change the native route');
+      // The release: the follower hears its leader; the same owner now
+      // forwards to the native leader at its committed address.
+      await releaseFollower(f);
+      const released = follower.resolveCdcIngressDecision({...occurrence(3),
+        targetGroupId: TARGET_GROUP, relayDepth: 0, events: [occurrence(3)]});
+      assert.equal(released.state, MESSAGE_GROUP_CDC_INGRESS_STATE.FORWARD_NATIVE_LEADER);
+      assert.deepEqual(released.targets.map(({serviceId, address}) => ({serviceId, address})),
+        [{serviceId: LEADER, address: addressOf(LEADER)}],
+        'the released route is the leader\'s committed address');
     } finally {
       follower.maybeRepairAuthoritativeForwardTopology = maybeRepair;
       follower.repairAuthoritativeForwardTopology = read;

@@ -53,7 +53,8 @@ function createMessageGroupForwardingOwnerTargetMethods(options = {}) {
       return buildMessageGroupLeaderIdentitySnapshot(
         messageGroupLeaderIdentityState.LIVE_LEADER,
         messageGroupLeaderIdentitySource.RAFT_STATUS,
-        service.addressManager.parse(status.leaderAddress).nodeId);
+        service.addressManager.parse(status.leaderAddress).nodeId,
+        {leaderId: status.leaderId, leaderAddress: status.leaderAddress});
     },
 
     isLocalForwardTarget(serviceId, address = null) {

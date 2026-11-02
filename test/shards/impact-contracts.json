@@ -1015,7 +1015,8 @@
         "src/raft/snapshot-install.js"
       ],
       "tests": [
-        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/message-group/message-group-peer-address-committed-configuration.test.js"
       ]
     },
     "message-group-learner-outcome-recording": {
@@ -1465,7 +1466,8 @@
         "test/partition/partition-cdc-owed-admission.test.js",
         "test/partition/partition-cdc-prepared-capacity.test.js",
         "test/partition/partition-cdc-drain-admission.test.js",
-        "test/partition/partition-cdc-owed-admission-native.test.js"
+        "test/partition/partition-cdc-owed-admission-native.test.js",
+        "test/message-group/message-group-peer-address-committed-configuration.test.js"
       ]
     },
     "router-delivery-envelope": {
@@ -1648,7 +1650,8 @@
         "test/entrypoint-runtime-helpers-join-decision.test.js",
         "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
         "test/raft/raft-rs-original-opening-authority.test.js",
-        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/message-group/message-group-peer-address-committed-configuration.test.js"
       ]
     },
     "seed-public-listener-acquisition": {
@@ -2857,7 +2860,8 @@
       ],
       "contract": "message-group-committed-learner-origin",
       "witnessTests": [
-        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/message-group/message-group-peer-address-committed-configuration.test.js"
       ]
     },
     "message-group-learner-outcome-recording": {
@@ -3465,7 +3469,8 @@
         "test/partition/partition-cdc-owed-admission.test.js",
         "test/partition/partition-cdc-prepared-capacity.test.js",
         "test/partition/partition-cdc-drain-admission.test.js",
-        "test/partition/partition-cdc-owed-admission-native.test.js"
+        "test/partition/partition-cdc-owed-admission-native.test.js",
+        "test/message-group/message-group-peer-address-committed-configuration.test.js"
       ]
     },
     "router-envelope-query": {
@@ -3737,7 +3742,8 @@
         "test/bootstrap/seed-original-attempt-lifetime.test.js",
         "test/bootstrap/seed-registration-phase.test.js",
         "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
-        "test/entrypoint-runtime-helpers-join-decision.test.js"
+        "test/entrypoint-runtime-helpers-join-decision.test.js",
+        "test/message-group/message-group-peer-address-committed-configuration.test.js"
       ]
     },
     "seed-public-listener-acquisition": {

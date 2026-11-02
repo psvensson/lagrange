@@ -234,6 +234,14 @@ test(
       true,
       'non-leader durable rejoin replicas should keep elections suppressed',
     );
+    t.same(
+      {...queuedReplicas[0].options.founderNodeIds},
+      {'mg-1-r2': 'join-node-r2'},
+      'only the replica this node creates is placed, on this node: the ' +
+      'row-derived peer addresses never become committed founder nodes',
+    );
+    t.equal(queuedReplicas[0].options.peerAddresses, undefined,
+      'no hint list reaches the replica');
   },
 );
 

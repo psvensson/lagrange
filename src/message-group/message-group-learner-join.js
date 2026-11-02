@@ -265,8 +265,9 @@ async function releaseLearner(host, service) {
 }
 
 // The learner as the installed image alone defines it: joining, its port
-// unscheduled, no metadata publication, its hint list the stamp's
-// identities plus itself (never a lone list, so never the lone-founder path).
+// unscheduled, no metadata publication, its replica list the stamp's
+// identities plus itself (never a lone list, so never the lone-founder path);
+// its peers are addressed from the committed nodes the image carries.
 function learnerService(host, input, descriptor, dbPath) {
   const {identity} = input;
   return new MessageGroupService({...host.serviceOptions,
