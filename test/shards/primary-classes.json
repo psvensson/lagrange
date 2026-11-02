@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2212,
+    "unit": 2211,
     "integration": 120,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2557,
-  "digest": "fnv1a32-0d6dc566",
+  "censusSize": 2556,
+  "digest": "fnv1a32-e761c692",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1567,7 +1567,6 @@
     "test/query/query-executor-serve-eligibility-routing.test.js": "unit",
     "test/query/query-executor-session-binding-and-build-sql.test.js": "unit",
     "test/query/query-executor-session-pin-state.test.js": "unit",
-    "test/query/query-executor-system-table-leader-fail-open.test.js": "unit",
     "test/query/query-executor-warn-throttle.test.js": "unit",
     "test/query/query-executor.test.js": "unit",
     "test/query/queryable-core-j2-sql-key-read-journey.test.js": "unit",

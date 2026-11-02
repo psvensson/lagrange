@@ -40,6 +40,7 @@ import {registerQueryExecutorDeferredControlPlaneWriteTests} from './query-execu
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {serveAnswerFromMock} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -83,6 +84,9 @@ test('QueryExecutor - executeOnPartition fails closed when the canonical ' +
     },
   };
   const readinessService = {
+    answerServeEligibility(id) {
+      return serveAnswerFromMock(this, id);
+    },
     getNodeReadinessSync() {
       return {
         dimensions: {serveEligible: true},
@@ -223,6 +227,9 @@ test('QueryExecutor - executeOnPartition repairs stale no-handler leader ' +
     },
   };
   const readinessService = {
+    answerServeEligibility(id) {
+      return serveAnswerFromMock(this, id);
+    },
     getNodeReadinessSync() {
       return {
         dimensions: {serveEligible: true},
@@ -335,6 +342,9 @@ test('QueryExecutor - executeOnPartition repairs stale no-handler read ' +
     },
   };
   const readinessService = {
+    answerServeEligibility(id) {
+      return serveAnswerFromMock(this, id);
+    },
     getNodeReadinessSync() {
       return {
         dimensions: {serveEligible: true},

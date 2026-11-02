@@ -40,6 +40,7 @@ import {
   createFormationShapedCache,
 } from './readiness-planning-formation-rig.js';
 
+import {serveAnswerFromMock} from './serve-eligibility-test-support.js';
 const VICTIM_NODE_ID = 'node-1';
 const SEED_NODE_ID = 'node-0';
 const USER_TABLE_NAME = 'ratings';
@@ -253,6 +254,9 @@ function createAdmissionDrive(options = {}) {
   });
   subscribeOwnerToCache(cache, owner, state, deferredChanges);
   const readinessService = {
+    answerServeEligibility(id) {
+      return serveAnswerFromMock(this, id);
+    },
     getNodeReadinessSync: (nodeId, readOptions = {}) => owner.readSync(
       nodeId,
       readOptions,

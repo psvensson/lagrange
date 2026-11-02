@@ -46,6 +46,7 @@ import {createSqlRequest} from '../../src/query/sql-request.js';
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {serveAnswerFromMock} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -635,6 +636,9 @@ async (t) => {
     nodeId: 'node-a',
     messageRouter: createMockMessageRouter(),
     controlPlaneReadinessService: {
+      answerServeEligibility(id) {
+        return serveAnswerFromMock(this, id);
+      },
       getNodeReadinessSync() {
         return {
           dimensions: {

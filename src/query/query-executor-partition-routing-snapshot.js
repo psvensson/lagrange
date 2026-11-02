@@ -18,6 +18,14 @@ const {
   resolveReadinessObservedAgeMs,
 } = QUERY_EXECUTOR_SHARED;
 
+// The typed denial reason and the committed serve answer a denial rests on.
+function readRoutingDenialAnswer(routing) {
+  return {
+    reasonCode: routing.reasonCode ?? null,
+    serveEligibility: routing.serveEligibility ?? null,
+  };
+}
+
 const queryExecutorPartitionRoutingSnapshotMethods = {
   /**
    * Build one owner-style snapshot for partition routing diagnostics.
@@ -246,8 +254,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         lifecycleState: routing.readinessSummary.lifecycleState || null,
         reasonCodes: [],
         failedDimensions: [],
-        reasonCode: routing.reasonCode || null,
-        serveEligibility: routing.serveEligibility || null,
+        ...readRoutingDenialAnswer(routing),
       };
       const runtimeAuthority =
         routing.readinessSummary[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] ||
@@ -389,9 +396,6 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     }
     const allowReadinessAuthoritativeRefresh =
       this.shouldAllowRoutingAuthoritativeRefresh(options);
-    const canRefreshReadiness =
-      this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService.getNodeReadiness === 'function';
     const deniedNodeIds =
       this.collectAllFilteredRoutingRepairNodeIds(routingSnapshot);
     const shouldRepairServiceGap =
@@ -402,44 +406,18 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     if (shouldRepairServiceGap) {
       repairNodeIds.add(routingSnapshot.canonicalLeaderNodeId);
     }
-    let attemptedRepair = false;
-    // Serve denials wait on the readiness owner's committed refresh (the
-    // owner's completion, bounded by the read's own deadline), then the
-    // caller re-decides once on the new answer; no per-node projection repair.
-    const serveDenial =
+    const attemptedRepair =
       routingSnapshot.routingReadinessDimension ===
-        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
-    if (
-      serveDenial &&
-      deniedNodeIds.length > 0 &&
-      typeof this.controlPlaneReadinessService?.readServeEligibility ===
-        'function'
-    ) {
-      await this.controlPlaneReadinessService.readServeEligibility();
-      return true;
-    }
-    if (
-      !serveDenial &&
-      allowReadinessAuthoritativeRefresh &&
-      canRefreshReadiness &&
-      repairNodeIds.size > 0
-    ) {
-      attemptedRepair = true;
-      await Promise.all(
-        [...repairNodeIds].map(async (nodeId) => {
-          try {
-            await this.controlPlaneReadinessService.getNodeReadiness(nodeId, {
-              allowAuthoritativeRefresh: true,
-              requireFreshOnIneligible: true,
-              decisionDimension: routingSnapshot.routingReadinessDimension,
-            });
-          } catch (_error) {
-            return null;
-          }
-          return null;
-        }),
-      );
-    }
+        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE ?
+        await this.awaitServeEligibilityRefreshForDenial(
+          deniedNodeIds,
+          allowReadinessAuthoritativeRefresh,
+        ) :
+        await this.awaitProjectionRoutingRepair(
+          routingSnapshot,
+          repairNodeIds,
+          allowReadinessAuthoritativeRefresh,
+        );
     if (!shouldRepairServiceGap && !shouldRepairFilteredRecoveryRouting) {
       return attemptedRepair;
     }
@@ -454,6 +432,64 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       },
     );
     return attemptedRepair || overlayRepaired;
+  },
+
+  /**
+   * Non-serve denials refresh the projected readiness of the denied nodes
+   * through the readiness owner's authoritative evidence repair.
+   * @param {Object} routingSnapshot
+   * @param {Set<string>} repairNodeIds
+   * @param {boolean} allowRefresh
+   * @return {Promise<boolean>} whether a repair was attempted.
+   * @private
+   */
+  async awaitProjectionRoutingRepair(routingSnapshot, repairNodeIds,
+    allowRefresh) {
+    if (
+      !allowRefresh ||
+      typeof this.controlPlaneReadinessService?.getNodeReadiness !==
+        'function' ||
+      repairNodeIds.size === 0
+    ) {
+      return false;
+    }
+    await Promise.all(
+      [...repairNodeIds].map(async (nodeId) => {
+        try {
+          await this.controlPlaneReadinessService.getNodeReadiness(nodeId, {
+            allowAuthoritativeRefresh: true,
+            requireFreshOnIneligible: true,
+            decisionDimension: routingSnapshot.routingReadinessDimension,
+          });
+        } catch (_error) {
+          return null;
+        }
+        return null;
+      }),
+    );
+    return true;
+  },
+
+  /**
+   * Serve denials wait on the readiness owner's committed refresh (the
+   * owner's completion, bounded by the read's own deadline), then the caller
+   * re-decides once on the new answer; no per-node projection repair.
+   * @param {Array<string>} deniedNodeIds
+   * @param {boolean} allowRefresh
+   * @return {Promise<boolean>} whether a refresh was awaited.
+   * @private
+   */
+  async awaitServeEligibilityRefreshForDenial(deniedNodeIds, allowRefresh) {
+    if (
+      !allowRefresh ||
+      deniedNodeIds.length === 0 ||
+      typeof this.controlPlaneReadinessService?.readServeEligibility !==
+        'function'
+    ) {
+      return false;
+    }
+    await this.controlPlaneReadinessService.readServeEligibility();
+    return true;
   },
 
   /**

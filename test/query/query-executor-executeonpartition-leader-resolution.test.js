@@ -39,6 +39,7 @@ import {
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {serveAnswerFromMock} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -123,6 +124,9 @@ test('QueryExecutor - retained runtime routing admits non-system services ' +
     },
   };
   const readinessService = {
+    answerServeEligibility(id) {
+      return serveAnswerFromMock(this, id);
+    },
     getNodeReadinessSync() {
       return {
         observedAt: '2026-03-12T00:00:00.000Z',
@@ -245,6 +249,9 @@ test('QueryExecutor - retained runtime routing still fails closed for ' +
     },
   };
   const readinessService = {
+    answerServeEligibility(id) {
+      return serveAnswerFromMock(this, id);
+    },
     getNodeReadinessSync() {
       return {
         observedAt: '2026-03-12T00:00:00.000Z',
@@ -1057,6 +1064,9 @@ test('QueryExecutor - executeOnPartition repairs the canonical leader service ' 
     },
   };
   const readinessService = {
+    answerServeEligibility(id) {
+      return serveAnswerFromMock(this, id);
+    },
     getNodeReadinessSync() {
       return {
         dimensions: {serveEligible: true},
@@ -1145,6 +1155,9 @@ test('QueryExecutor - executeOnPartition repairs a zero-row canonical leader ' +
     },
   };
   const readinessService = {
+    answerServeEligibility(id) {
+      return serveAnswerFromMock(this, id);
+    },
     getNodeReadinessSync() {
       return {
         dimensions: {serveEligible: true},

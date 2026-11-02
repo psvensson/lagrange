@@ -33,7 +33,11 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {
+  createCommittedServeEligibilityOwner,
+  serveEligibilityAnswer,
+  serveEligibilityFromFixture,
+} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -44,14 +48,12 @@ config.initialize();
 
 test('QueryExecutor - getRoutablePartitionServices excludes services on ' +
   'non-serve-eligible nodes', (t) => {
-  const readinessService = {
-    getNodeReadinessSync: (nodeId) => {
-      if (nodeId === 'node-down') {
-        return {dimensions: {serveEligible: false}};
-      }
-      return {dimensions: {serveEligible: true}};
-    },
-  };
+  // The committed-epoch serve answer is the routing input (quest
+  // serve-eligibility-committed-epoch-read).
+  const readinessService = createCommittedServeEligibilityOwner({
+    answers: {'node-down': serveEligibilityAnswer(false,
+      {reasons: ['ready_lease_expired']})},
+  });
 
   const systemCache = {
     services: [
@@ -140,29 +142,23 @@ async (t) => {
     },
   };
 
-  let nodeEligible = false;
+  // The owner's committed record is stale until its refresh lands: the
+  // routing denial awaits that refresh once (no per-node projection repair).
   const authoritativeRefreshes = [];
-  const readinessService = {
-    getNodeReadinessSync() {
-      return {
-        observedAt: '2026-03-11T00:00:00.000Z',
-        lifecycleState: SERVICE_STATUS.ACTIVE,
-        dimensions: {
-          serveEligible: nodeEligible,
-          repairEligible: nodeEligible,
-        },
-        reasons: nodeEligible ? [] : [
-          {code: 'cluster_member_unhealthy'},
-        ],
-      };
-    },
+  const readinessService = createCommittedServeEligibilityOwner({
+    defaultAnswer: serveEligibilityAnswer('unavailable_stale'),
+  });
+  readinessService.readServeEligibility = async () => {
+    authoritativeRefreshes.push(nodeId);
+    readinessService.setDefault(serveEligibilityAnswer(true));
+  };
+  const unusedProjection = {
     async getNodeReadiness(targetNodeId) {
       authoritativeRefreshes.push(targetNodeId);
-      // Simulate authoritative repair succeeding.
-      nodeEligible = true;
-      return this.getNodeReadinessSync();
+      return targetNodeId;
     },
   };
+  t.ok(unusedProjection, 'the projection repair is not a serve input');
 
   const executor = new QueryExecutor({
     messageRouter: createMockMessageRouter(),
@@ -183,8 +179,8 @@ async (t) => {
   t.equal(staleSnapshot.routableServiceCount, 0);
   t.ok(
     staleSnapshot.deniedByNodeId[nodeId].reasonCodes
-      .includes('cluster_member_unhealthy'),
-    'routing snapshot should surface cluster_member_unhealthy',
+      .includes('unavailable_stale'),
+    'routing snapshot should surface the typed stale serve answer',
   );
 
   // Trigger the repair path.
@@ -195,7 +191,7 @@ async (t) => {
   t.same(
     authoritativeRefreshes,
     [nodeId],
-    'routing repair should trigger one authoritative refresh',
+    'routing repair should await one committed serve refresh',
   );
 
   const refreshedSnapshot =
@@ -260,28 +256,23 @@ async (t) => {
     },
   };
 
-  let nodeEligible = false;
+  // The owner's committed record is stale until its refresh lands: the
+  // routing denial awaits that refresh once (no per-node projection repair).
   const authoritativeRefreshes = [];
-  const readinessService = {
-    getNodeReadinessSync() {
-      return {
-        observedAt: '2026-03-11T00:00:00.000Z',
-        lifecycleState: SERVICE_STATUS.ACTIVE,
-        dimensions: {
-          serveEligible: nodeEligible,
-          repairEligible: nodeEligible,
-        },
-        reasons: nodeEligible ? [] : [
-          {code: 'cluster_member_unhealthy'},
-        ],
-      };
-    },
+  const readinessService = createCommittedServeEligibilityOwner({
+    defaultAnswer: serveEligibilityAnswer('unavailable_stale'),
+  });
+  readinessService.readServeEligibility = async () => {
+    authoritativeRefreshes.push(nodeId);
+    readinessService.setDefault(serveEligibilityAnswer(true));
+  };
+  const unusedProjection = {
     async getNodeReadiness(targetNodeId) {
       authoritativeRefreshes.push(targetNodeId);
-      nodeEligible = true;
-      return this.getNodeReadinessSync();
+      return targetNodeId;
     },
   };
+  t.ok(unusedProjection, 'the projection repair is not a serve input');
 
   let deliveryCount = 0;
   let deliveredAddress = null;
@@ -392,6 +383,10 @@ test('QueryExecutor - executeOnPartition can suppress routing-triggered ' +
       authoritativeRefreshes.push(targetNodeId);
       return this.getNodeReadinessSync();
     },
+    answerServeEligibility: () => serveEligibilityAnswer('unavailable_stale'),
+    async readServeEligibility() {
+      authoritativeRefreshes.push(nodeId);
+    },
   };
 
   let deliveryCount = 0;
@@ -443,6 +438,10 @@ test('QueryExecutor - executeOnPartition can suppress routing-triggered ' +
 test('QueryExecutor - getPartitionServiceCandidates logs typed routing ' +
   'denials when services exist but readiness filters them all', (t) => {
   const readinessService = {
+    answerServeEligibility(targetNodeId) {
+      return serveEligibilityFromFixture(
+        (id) => this.getNodeReadinessSync(id))(targetNodeId);
+    },
     getNodeReadinessSync() {
       return {
         observedAt: '2026-03-11T00:00:00.000Z',

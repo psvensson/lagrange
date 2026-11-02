@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "44c2ddf501e1babc219f116ec6188608b0b7c89969d91785c76737e24a92a881"
+    "sourceSha256": "38d013f8e4e85db134ec2a2c82e00d6d4097846196a463fc2705ee1b9aba8f95"
   },
   "layerDirection": [
     "raw_observation",
@@ -17,9 +17,9 @@
     "disposition": "proposal requiring independent architecture and proof approval"
   },
   "metrics": {
-    "moduleCount": 68,
-    "publicExportCount": 749,
-    "importEdgeCount": 314,
+    "moduleCount": 67,
+    "publicExportCount": 747,
+    "importEdgeCount": 312,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -28,7 +28,7 @@
     "migrationCandidateCount": 0
   },
   "closure": {
-    "uniquelyClassifiedModules": 68,
+    "uniquelyClassifiedModules": 67,
     "uniqueClassificationRate": 1,
     "unparsedImportEdgeCount": 0,
     "proposedDirectionAcyclic": true,
@@ -1859,20 +1859,6 @@
         "selectPriorityRecoveryClassSelection",
         "selectPriorityRecoveryEvidencePath",
         "selectTopologyOperatorWitness"
-      ]
-    },
-    {
-      "path": "src/query/query-executor-priority-recovery-bootstrap-routing.js",
-      "owner": "query",
-      "layer": "consumer_presentation",
-      "rationale": "consumer owner query",
-      "exports": [
-        "isPriorityRecoveryWriteRouting",
-        "shouldAllowPriorityRecoveryBootstrapRoutingGrace"
-      ],
-      "localExports": [
-        "isPriorityRecoveryWriteRouting",
-        "shouldAllowPriorityRecoveryBootstrapRoutingGrace"
       ]
     },
     {
@@ -4776,26 +4762,6 @@
       "conformsToLayerDirection": null
     },
     {
-      "from": "src/query/query-executor-priority-recovery-bootstrap-routing.js",
-      "specifier": "../bootstrap/system-partition-classification.js",
-      "to": "src/bootstrap/system-partition-classification.js",
-      "targetModule": false,
-      "sourceLayer": "consumer_presentation",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
-      "from": "src/query/query-executor-priority-recovery-bootstrap-routing.js",
-      "specifier": "./query-executor-shared.js",
-      "to": "src/query/query-executor-shared.js",
-      "targetModule": false,
-      "sourceLayer": "consumer_presentation",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
       "from": "src/rebalancer/operation-workflow-owner-priority-recovery-reentry.js",
       "specifier": "../control-plane/priority-recovery-diagnostics-constants.js",
       "to": "src/control-plane/priority-recovery-diagnostics-constants.js",
@@ -5344,9 +5310,6 @@
     ],
     [
       "src/diagnostics/topology-convergence-priority-recovery-normalizers.js"
-    ],
-    [
-      "src/query/query-executor-priority-recovery-bootstrap-routing.js"
     ],
     [
       "src/rebalancer/operation-workflow-owner-priority-recovery-reentry.js"

@@ -158,3 +158,15 @@ export function createCommittedServeEligibilityOwner(options = {}) {
     },
   };
 }
+
+/**
+ * The committed answer a mock readiness service states through its own
+ * getNodeReadinessSync serve verdict (one-line adapter for mocks).
+ * @param {Object} readinessService
+ * @param {string} nodeId
+ * @return {Object}
+ */
+export function serveAnswerFromMock(readinessService, nodeId) {
+  return serveEligibilityFromFixture(
+    (id) => readinessService.getNodeReadinessSync(id))(nodeId);
+}
