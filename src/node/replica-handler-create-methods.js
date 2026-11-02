@@ -1,6 +1,6 @@
 import {WORKFLOW_STEP} from '../constants/index.js';
-import {REPLICA_CREATE_PHASE, failedReplicaCreateClaimsCleanup} from
-  './replica-create-admission-input.js';
+import {REPLICA_CREATE_PHASE, failedReplicaCreateClaimsCleanup,
+  replicaCreatePhaseAfterResume} from './replica-create-admission-input.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {
   ReplicaOperationMessageType,
@@ -282,7 +282,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         peerTotal: 0,
       });
       let partitionService = null;
-      let createPhase = REPLICA_CREATE_PHASE.BEFORE_RUNTIME;
+      // A restart of this identity's own admissible durable row (B1) already
+      // carries published admission input before any step of this attempt.
+      let createPhase = replicaCreatePhaseAfterResume(
+        REPLICA_CREATE_PHASE.BEFORE_RUNTIME, request.resumedLifecycleStatus);
       try {
         this.throwIfShuttingDown();
         await this.settlePendingReplicaRuntimeCleanup(replicaId, partitionId);
@@ -312,6 +315,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           createAdmissionEvidence =
             initialStatusOptions.createAdmissionEvidence;
           createAttemptToken = initialStatusOptions.createAttemptToken;
+          createPhase = replicaCreatePhaseAfterResume(
+            createPhase, initialStatusOptions.resumedLifecycleStatus);
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,

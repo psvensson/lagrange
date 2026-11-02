@@ -11,6 +11,13 @@ const AUTHORIZATION = new WeakMap();
 // unavailable when it was issued. It grants nothing: every release attempt
 // that carries it re-reads the authority (confirmFreshCreate) until the
 // committed operation row confirms the admission or refuses it.
+// Token-identity seam: a token is an object identity of this process. The
+// confirmation runs on the issuing node, on the attempt's first (local) ask,
+// before its NOT_LEADER answer; the client's forwarded re-ask to a leader on
+// another node carries the token serialized, which that leader cannot
+// recognize (for a no-origin partition it answers OPERATOR_REQUIRED). Moving
+// the authority to a committed fact any leader reads is quest
+// fresh-create-release-authority-from-committed-operation.
 const PENDING_FRESH_CREATE = new WeakMap();
 const PARTICIPANT_RELEASE_AUTHORIZATION_KIND = Object.freeze({
   FRESH_CREATE: 'fresh_create',

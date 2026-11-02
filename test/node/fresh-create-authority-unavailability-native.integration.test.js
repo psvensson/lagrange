@@ -36,6 +36,8 @@ import {
 } from '../../src/rebalancer/replica-create-admission-token.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
+import {admitCreateTerminalFailure, decideFailedCreateTargetCleanup} from
+  '../../src/rebalancer/operation-workflow-replace-terminal-admission.js';
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
 import {createLoopbackTransport} from '../partition/partition-service-test-support.js';
@@ -225,6 +227,24 @@ test('an authority read unavailable forever fails the fresh create at the ' +
   assert.equal(row?.status, ReplicaStatus.FAILED, 'the replica is FAILED');
   assert.equal(row?.cleanup_token, buildFailedCreateCleanupToken(run.operationId),
     'no FAILED row with cleanup_token null after admission input existed');
+  // The operation owner's admission of that FAILED and its cleanup decision
+  // (real admitCreateTerminalFailure / decideFailedCreateTargetCleanup) over
+  // the observation of the resulting durable row: ELIGIBLE with the recorded
+  // lifecycle precondition (verifier N2).
+  const observation = {state: 'observed', lifecycleStatus: row.status,
+    lifecyclePrecondition: Object.fromEntries(Object.entries(row))};
+  const owner = {repository: {getActualReplicaObservation: async () => observation}};
+  const operation = {operationId: run.operationId, type: OperationType.ADD,
+    entityType: 'partition', partitionId: PARTITION_ID, replicaId: run.replicaId,
+    targetNodeId: NODE_ID, workflowStep: 'SYNCING',
+    createAdmissionAttemptToken: row.create_attempt_token};
+  const admission = await admitCreateTerminalFailure(owner, operation);
+  assert.equal(admission.admitted, true, 'the operation owner admits the FAILED');
+  const decision = await decideFailedCreateTargetCleanup(owner, {...operation,
+    workflowStep: 'FAILED', status: ReplicaStatus.FAILED, completedAt: Date.now(),
+    stepsHistory: [{...admission.stepMetadata}]});
+  assert.equal(decision.cleanupEligible, true,
+    'the cleanup decision is ELIGIBLE with the recorded lifecycle precondition');
   const request = {operationId: `cleanup-${run.operationId}`,
     partitionId: PARTITION_ID, replicaId: run.replicaId,
     [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: row};
