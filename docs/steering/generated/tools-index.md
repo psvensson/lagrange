@@ -54,9 +54,11 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `audit:architecture-slices` — `node scripts/check-architecture-slices.js`
 - `audit:attempt-preflight` — `npm run audit:file-size && npm run audit:style-terminal-vocabulary && npm run audit:step-coverage-owner && npm run test:duplication`
+- `audit:benchmark-history-append-only` — `node scripts/checks/check-benchmark-history-append-only.js`
 - `audit:cli-docs` — `node scripts/check-cli-docs.js`
 - `audit:closed-quest-shape` — `node scripts/checks/check-closed-quest-shape.js`
 - `audit:closure-ledger` — Validate closure-ledger state.
+- `audit:comparative-recompute` — `node scripts/checks/comparative-benchmark-recompute.js`
 - `audit:cure-typing-owner` — `node scripts/check-cure-typing-owner.js`
 - `audit:current-capabilities` — `node scripts/check-current-capabilities.js`
 - `audit:doc-ascii` — `node scripts/checks/check-doc-ascii-hyphens.js`
@@ -266,7 +268,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:roadmap-authority` — `node scripts/run-documentation-current-state-scenario.js roadmap-audience-authority-cutover`
 - `test:safety-pregate` — `node scripts/run-classified-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:smoke` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke`
-- `test:static` — `node scripts/checks/run-static-audits.js --chain "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:no-legacy-consensus-references && npm run audit:quest-log-append-only && npm run audit:closed-quest-shape && npm run audit:steering-diet && npm run audit:rule-set && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint"`
+- `test:static` — `node scripts/checks/run-static-audits.js --chain "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:no-legacy-consensus-references && npm run audit:quest-log-append-only && npm run audit:comparative-recompute && npm run audit:benchmark-history-append-only && npm run audit:closed-quest-shape && npm run audit:steering-diet && npm run audit:rule-set && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint"`
 - `test:static:postpush` — `node scripts/checks/run-static-audits.js`
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
 - `test:topology-failure-gates` — Run the topology failure gates.
@@ -288,4 +290,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-192 scripts indexed; 36 have a curated description, 156 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+194 scripts indexed; 36 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.

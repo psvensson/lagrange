@@ -292,22 +292,25 @@ function hashMeasurementPlan(plan) {
     .digest('hex');
 }
 
+// The one quantile method of every OLTP latency summary.
+const LATENCY_QUANTILE_METHOD = 'nearest-rank';
+
 function nearestRank(sortedValues, percentile) {
-  if (sortedValues.length === ZERO) return ZERO;
   const rank = Math.ceil((percentile / HUNDRED) * sortedValues.length);
   return sortedValues[Math.max(ZERO, rank - ONE)];
 }
 
 function summarizeLatencies(values) {
+  // No sample is no latency: every statistic is null, never zero.
   if (values.length === ZERO) {
     return {
       count: ZERO,
-      avg: ZERO,
-      p50: ZERO,
-      p95: ZERO,
-      p99: ZERO,
-      min: ZERO,
-      max: ZERO,
+      avg: null,
+      p50: null,
+      p95: null,
+      p99: null,
+      min: null,
+      max: null,
     };
   }
   const sorted = [...values].sort((left, right) => left - right);
@@ -520,6 +523,8 @@ async function runOltpBaselineWorkload(adapter, rawOptions = {}) {
 }
 
 export {
+  LATENCY_QUANTILE_METHOD as OLTP_LATENCY_QUANTILE_METHOD,
+  MAX_NEW_ORDER_LINES as OLTP_MAX_NEW_ORDER_LINES,
   OPERATION_KIND as OLTP_OPERATION_KIND,
   OPERATION_MIX as OLTP_OPERATION_MIX,
   buildOltpBaselinePlan,

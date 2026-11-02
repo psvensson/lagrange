@@ -1,3 +1,4 @@
+import {dropsDataset} from './oltp-adapter-contract.js';
 import {
   buildOltpBaselineDataset,
   hashOltpBaselineDataset,
@@ -10,6 +11,10 @@ import {
   OLTP_SQL_STATEMENT,
   executeOltpBaselineTransaction,
 } from '../harness/oltp-baseline-transaction-executor.js';
+import {
+  OLTP_COMMIT_FAILURE_OUTCOME,
+  resolveOltpCommitFailureOutcome,
+} from '../harness/oltp-error-classification.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -172,18 +177,21 @@ function normalizeResult(result) {
   return {
     rows: [],
     rowCount: Number.isFinite(result?.affectedRows) ?
-      Number(result.affectedRows) : ZERO,
+      Number(result.affectedRows) : null,
   };
 }
 
-function isExplicitCommitSerializationAbort(error) {
-  const code = String(
-    error?.sqlState || error?.sqlstate || error?.code || '',
-  ).toUpperCase();
-  return code === '40001' &&
-    error?.commitOutcomeUnknown !== true &&
-    error?.outcome !== 'OUTCOME_UNKNOWN' &&
-    error?.code !== 'OUTCOME_UNKNOWN';
+// An aborted COMMIT is already rolled back by the product; the explicit
+// ROLLBACK only clears a driver-side transaction state. Its failure is kept
+// on the commit error as evidence, never swallowed.
+async function rollbackAfterAbortedCommit(rollback, commitError) {
+  try {
+    await rollback();
+  } catch (rollbackError) {
+    if (commitError && typeof commitError === 'object') {
+      commitError.rollbackAfterAbortError = String(rollbackError?.message || rollbackError);
+    }
+  }
 }
 
 function createTiDbSession(connection) {
@@ -209,12 +217,12 @@ function createTiDbSession(connection) {
         await connection.commit();
         return result;
       } catch (commitError) {
-        if (isExplicitCommitSerializationAbort(commitError)) {
-          try {
-            await connection.rollback();
-          } catch {
-            // best-effort rollback, ignore if already aborted
-          }
+        // The retry owner maps the COMMIT failure: a product-answered
+        // SQLSTATE (40001, 25P04, ...) is a definite rollback; a lost answer
+        // or a typed unknown outcome leaves the commit unresolved.
+        if (resolveOltpCommitFailureOutcome(commitError) ===
+            OLTP_COMMIT_FAILURE_OUTCOME.ABORTED) {
+          await rollbackAfterAbortedCommit(() => connection.rollback(), commitError);
           if (commitError && typeof commitError === 'object') {
             commitError.commitAborted = true;
           }
@@ -513,17 +521,19 @@ async function createTiDbOltpAdapter(options = {}) {
       };
     },
     async close(closeOptions = {}) {
-      if (closed) return;
+      if (closed) return Object.freeze({databaseDropped: false});
       closed = true;
       const failures = [];
+      let databaseDropped = false;
       try {
         await closeConnections(workerConnections);
       } catch (error) {
         failures.push(error);
       }
-      if (closeOptions.dropDatabase !== false) {
+      if (dropsDataset(closeOptions)) {
         try {
           await dropDatabase(connect, endpoint, databaseName);
+          databaseDropped = true;
         } catch (error) {
           failures.push(error);
         }
@@ -531,6 +541,7 @@ async function createTiDbOltpAdapter(options = {}) {
       if (failures.length > ZERO) {
         throw new AggregateError(failures, 'TiDB OLTP adapter cleanup failed');
       }
+      return Object.freeze({databaseDropped});
     },
   };
 }

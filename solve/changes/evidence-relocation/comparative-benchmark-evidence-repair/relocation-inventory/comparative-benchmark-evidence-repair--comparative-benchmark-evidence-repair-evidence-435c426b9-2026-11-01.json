@@ -1,0 +1,26 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.tar.gz",
+  "bundleSha256": "3718164dc7b632abbecd39049600efe02c4e9d7ab0566a0ea19b62b7e4b4e6c9",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.tar.gz",
+  "sourceCommit": "435c426b936ad5183020732edc246616015039ac",
+  "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/formation-repro/multi-host-lab-run1-20261101T2118Z/",
+  "files": [
+    ["harness-config.json","58dce98b93eb034e49d1899ab67b8ec5ba39f86ffb439370fa0165d636319bfa",1811],
+    ["harness-report.json","b3b8191db8bd78a0ccbc8bd9b4b1b77c5ca8a23b311ec5872c463a32773e84b7",968860],
+    ["lab-harness-console.log.txt","c0021915665f81c966ade697027ce116dea9d876b0442d9ece7dfb41b282f3d9",283302],
+    ["playback/0dd0a97a-78d5-47a4-8a71-f5a57a61b614.log.txt","903f56db17744aabd632d6aff0922dce4ccc996aa5432238899e86aab3ec4efb",28831],
+    ["playback/28fca726-b632-4403-859a-4aacee3b274a.log.txt","dc9db768c35e88a1b961151de7d8714aeda240a80923eb49bbdd877c3a8a68e9",31729],
+    ["playback/_timeline.log.txt","6a6ba80f95e475752a29010d4ff3f848b1d88c3b71a34bbf99c581a0112973af",89936],
+    ["playback/ef108c21-01a5-4b49-a18b-efc036bfce07.log.txt","86adf929101f31ff84f0e238c25dbb37bfe036d8770fe82d1e1e505be688e372",29376],
+    ["playback/events.ndjson","0311e74cde1edf40ad6cd6e1db645e68c0a5917ff8361028d10c923b47a1c0eb",292135],
+    ["playback/failure-bundle.md","338e244064028db75a7dcc09f42e2d1cc0edbb9724416f0401910cab66973ac8",46139],
+    ["playback/playback-manifest.json","c8ceb383c9d3ffae34af902ab51e12e213efce50d98cfaac3fa993628addc1b8",5607],
+    ["playback/run-failure-bundle.json","baee184aca10616c7d916f5b2c368d5f16d58f9178df10cab062101de6bc30eb",83460],
+    ["playback/run-failure-bundle.md","179ae5a85fd4af1ca1410917b17a583cb895ee85476853ebdb9c0c84ae878d48",265],
+    ["playback/samples.ndjson","b4789c6fa192bdc7165423d1f9ae9cdab7239787242df9b6c62250c881c37431",242847],
+    ["playback/triage-summary.json","fba4a07a03a216d226d3ea76eeb988aa3d21f2199ad8b40262b192513a940789",76654],
+    ["playback/triage-summary.md","e03402a28d05b7a7d79132eb084a2960982debe9d45c7dcd707abcd1e98d8a75",3207],
+    ["run-status.json","311c89f8eb1eea6b6120f3b540ba79300d672327195b783a463aa1bd67f03925",3693]
+  ]
+}

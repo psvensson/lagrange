@@ -10,6 +10,7 @@ doneWhen:
     file: solve/quests/developer-journey-and-measured-comparisons-acceptance/evidence/receipt.json
 quests:
   - developer-journey-and-measured-comparisons-acceptance
+  - comparative-benchmark-evidence-repair
 authorizes:
   - Dockerfile
   - README.md
@@ -31,6 +32,7 @@ authorizes:
   - src/wasm-service
   - data/tidb-comparison
   - scripts/checks
+  - scripts/lab
   - scripts/check-complexity.js
   - scripts/check-current-capabilities.js
   - scripts/check-unused-exports.js
@@ -41,6 +43,10 @@ authorizes:
   - solve/specs
   - solve/quests
   - .github/workflows
+  - .gitignore
+  - knip.json
+  - package.json
+  - solve/changes/evidence-relocation
 ---
 
 # One deployment path, a complete developer journey, and measured comparisons
@@ -95,6 +101,26 @@ records remain intact; successor work records the correction explicitly.
   this amendment neither rewrites its seal nor certifies stronger acceptance.
 
 ## Decision log
+
+- 2026-11-02: Measured state after the quest comparative-benchmark-evidence-repair (owner report in its
+  evidence directory): every comparative claim published before 2026-11-01 is withdrawn; the repaired
+  chain publishes one smoke observation (PostgreSQL 17, lab), a product failure for Lagrange 0.4.0
+  (readiness never reached on a fresh three-node formation) and TiDB as unsupported until the one
+  semantic-gate journey takes a native client. No capacity claim exists for any system. The Lagrange
+  blocker is a product class (projection-gated serving decisions), owned by product quests, not by this epic.
+- 2026-11-02: Scope widened (R16, recorded): `package.json` (the two benchmark audit commands
+  `audit:comparative-recompute` and `audit:benchmark-history-append-only` join the static chain),
+  `knip.json` (the two documented command-line entry points of the chain are declared, so their
+  consumed exports are not reported unused), `.gitignore` (the forensic raw-observation copies under
+  `data/tidb-comparison/forensic/` are kept), and `solve/changes/evidence-relocation` (the relocation
+  owner writes a quest's bundle inventory and verification records there by design) join
+  `authorizes`. Decided by the quest comparative-benchmark-evidence-repair at landing; no other path
+  outside the quest directory and the existing list is touched.
+- 2026-11-01: Scope widened (R16, recorded): `scripts/lab` joins `authorizes` so the
+  comparative benchmark runner can default to the registered lab machines through the
+  existing lab owners (fleet probe gains a thermal-sensor fact; host selection consumes it).
+  Decided by the quest comparative-benchmark-evidence-repair under the owner's 2026-11-01
+  instruction to default to the lab machines.
 
 - 2026-10-31: Peter accepted the developer-facing audit with two stronger
   requirements: every comparison must be an actual GCP/lab run; deployment must

@@ -1,354 +1,95 @@
-import {mkdir, readFile, writeFile} from 'node:fs/promises';
+// The multi-system comparative matrix: the frozen coverage manifest's structure
+// (14 advertised configurations and the advertised experiments) filled with the
+// admission cells derived from the raw observation store. It carries no metric of
+// its own, no winner and no completion count; every renderer consumes it.
+import fs from 'node:fs';
+import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import {
-  readAdmittedLabMeasurements,
-  buildLagrangeEvolutionTimeline,
-  buildScaleout3To5Rf3Experiment,
-  buildPartitionGranularitySweepExperiment,
-  buildScenarioBRttWorkingSetExperiment,
-  buildLiveMovementAndScenarioCScalingExperiment,
-  buildScenarioSetupAndTimeBreakdown,
-} from './scaleout-series-experiments.js';
-import {verifyReceiptAgainstRawObservation} from './raw-observation-store.js';
 
-const arrayIncludes = Function.call.bind(Array.prototype.includes);
+import {CLAIM_CELL_STATUS} from './benchmark-claim-admission.js';
+import {readInvalidationLedger} from './benchmark-invalidation-ledger.js';
+import {buildCoverageManifest} from './comparative-coverage-manifest.js';
+import {
+  DEFAULT_COMPARISON_HISTORY_NDJSON_PATH,
+  parseComparisonHistoryNdjson,
+  summarizeBenchmarkWithdrawal,
+} from './oltp-comparison-history-store.js';
+import {deriveAdmittedMeasurementsFromRawObservations} from './raw-observation-store.js';
+
 const arrayMap = Function.call.bind(Array.prototype.map);
-const stringTrim = Function.call.bind(String.prototype.trim);
-const stringStartsWith = Function.call.bind(String.prototype.startsWith);
-const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
-const jsonStringify = JSON.stringify;
 
 const DEFAULT_MULTI_SYSTEM_MATRIX_PATH = 'data/tidb-comparison/multi-system-matrix.json';
-const MULTI_SYSTEM_MATRIX_SCHEMA = 'lagrange-multi-system-comparative-matrix/v1';
-const EPIC_ID = 'multi-system-comparative-benchmark-matrix';
-const TOTAL_EPIC_SLICES = 5;
-const SCALEOUT_SERIES_EPIC_ID = 'distributed-scaleout-and-provenance-benchmark-series';
-const TOTAL_SCALEOUT_SERIES_SLICES = 5;
+const MULTI_SYSTEM_MATRIX_SCHEMA = 'lagrange-multi-system-comparative-matrix/v2';
 
-const ADMITTED_TARGETS = Object.freeze(['gcp', 'lab']);
-const REQUIRED_DIGEST_FIELDS = Object.freeze([
-  'gitCommit',
-  'packageDigest',
-  'datasetDigest',
-  'planDigest',
-  'rawObservationsDigest',
-]);
-const FORMULA_PATTERNS = Object.freeze([
-  /stages\s*\*\s*oneWayMs/iu,
-  /stages\s*\*\s*2\s*\*\s*oneWayMs/iu,
-  /execMs\s*\+\s*stages/iu,
-  /stages\s*\*\s*96/iu,
-  /stages\s*\*\s*4096/iu,
-  /4096\s*\*\s*stages/iu,
-]);
+const SCENARIOS = Object.freeze(arrayMap([
+  ['tidb-oltp-baseline', 'Scenario A: Contended OLTP Baseline',
+    'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline',
+    'tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate'],
+  ['tidb-distributed-risk-decision', 'Scenario B: Distributed Risk Decision',
+    'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision',
+    'tidb-reference-paired-owner.md'],
+  ['streaming-feature-risk-decision', 'Scenario C: Streaming Feature Store',
+    'tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision', null],
+], ([scenarioId, label, definitionHref, contractHref]) =>
+  Object.freeze({scenarioId, label, definitionHref, contractHref})));
 
-function checkProcessArm(arm) {
-  if (!arm || typeof arm !== 'object') return false;
-  return Boolean(arm.processId && arm.publicInterface);
-}
-
-function checkTargetAndEvidence(receipt) {
-  if (!arrayIncludes(ADMITTED_TARGETS, receipt.executionTarget)) {
-    return {
-      admitted: false,
-      reason:
-        `executionTarget '${receipt.executionTarget}' is not admitted; must be 'gcp' or 'lab'`,
-    };
-  }
-  if (!receipt.productProcessEvidence || typeof receipt.productProcessEvidence !== 'object') {
-    return {
-      admitted: false,
-      reason:
-        'Missing productProcessEvidence proving real product processes over public interfaces',
-    };
-  }
-  return null;
-}
-
-function checkComparatorImageDigest(receipt, candidate, comparator) {
-  if (!receipt.targetId || stringStartsWith(String(receipt.targetId), 'lagrange')) return null;
-  const cImg = typeof candidate.imageDigest === 'string' ?
-    stringTrim(candidate.imageDigest) : '';
-  const compImg = typeof comparator.imageDigest === 'string' ?
-    stringTrim(comparator.imageDigest) : '';
-  if (cImg.length > 0 && compImg.length > 0 && cImg === compImg) {
-    return {
-      admitted: false,
-      reason: 'Comparator target cannot share the candidate Lagrange container image digest',
-    };
-  }
-  return null;
-}
-
-function checkTimingSource(receipt) {
-  const p = receipt.productProcessEvidence;
-  if (p.sharedOracleTiming === true || p.sharedRequestOracle === true) {
-    return {
-      admitted: false,
-      reason: 'Shared request-oracle timing rejected; independent product processes required',
-    };
-  }
-  if (receipt.timingSource === 'local-js-oracle' || receipt.timingSource === 'request-oracle') {
-    return {
-      admitted: false,
-      reason: 'Shared request-oracle timing rejected; independent product processes required',
-    };
-  }
-  const {candidate, comparator} = p;
-  if (!checkProcessArm(candidate) || !checkProcessArm(comparator)) {
-    return {
-      admitted: false,
-      reason:
-        'Real product processes on public interfaces required for ' +
-        'both candidate and comparator arms',
-    };
-  }
-  return checkComparatorImageDigest(receipt, candidate, comparator);
-}
-
-function checkTargetAndProcesses(receipt) {
-  const targetCheck = checkTargetAndEvidence(receipt);
-  if (targetCheck) return targetCheck;
-  return checkTimingSource(receipt);
-}
-
-function checkDigests(receipt) {
-  for (const field of REQUIRED_DIGEST_FIELDS) {
-    if (typeof receipt[field] !== 'string' || stringTrim(receipt[field]).length === 0) {
-      return {
-        admitted: false,
-        reason: `Missing or empty required digest/commit field: '${field}'`,
-      };
-    }
-  }
-  if (receipt.gitCommit === 'mismatched') {
-    return {
-      admitted: false,
-      reason: 'gitCommit does not match registered package version',
-    };
-  }
-  return null;
-}
-
-function checkHostPlacement(receipt) {
-  if (!receipt.hostPlacement || typeof receipt.hostPlacement !== 'object') {
-    return {
-      admitted: false,
-      reason: 'hostPlacement mapping processes/replicas to physical hosts or VMs is required',
-    };
-  }
-  const hosts = Array.isArray(receipt.hostPlacement.hosts) ?
-    receipt.hostPlacement.hosts :
-    Object.values(receipt.hostPlacement.mapping || {});
-  const uniqueHosts = new Set(
-    arrayMap(hosts, (h) => stringToLowerCase(stringTrim(String(h)))),
-  );
-  const claimedNodes = Number(receipt.nodeCount || receipt.hostPlacement.nodeCount || 1);
-  if (claimedNodes > 1 && (uniqueHosts.has('localhost') ||
-      uniqueHosts.has('127.0.0.1') || uniqueHosts.size < claimedNodes)) {
-    return {
-      admitted: false,
-      reason:
-        `Single-host or collapsed placement rejected for claimed ${claimedNodes}-node cluster` +
-        ` (found ${uniqueHosts.size} distinct hosts)`,
-    };
-  }
-  return null;
-}
-
-function checkAttemptAccounting(receipt) {
-  const a = receipt.attemptAccounting;
-  if (!a || typeof a !== 'object') {
-    return {admitted: false, reason: 'attemptAccounting record is required'};
-  }
-  if (typeof a.totalAttempts !== 'number' || a.totalAttempts <= 0) {
-    return {admitted: false, reason: 'totalAttempts must be a positive integer'};
-  }
-  const completed = typeof a.completed === 'number' ? a.completed : 0;
-  const failures = typeof a.failures === 'number' ? a.failures : 0;
-  const timeouts = typeof a.timeouts === 'number' ? a.timeouts : 0;
-  if (a.totalAttempts !== completed + failures + timeouts) {
-    return {
-      admitted: false,
-      reason:
-        `Unrecorded attempts: totalAttempts (${a.totalAttempts}) does not match ` +
-        `sum of completed (${completed}), failures (${failures}), timeouts (${timeouts})`,
-    };
-  }
-  return null;
-}
-
-function checkDelayFormulas(receipt) {
-  const serialized = jsonStringify(receipt);
-  for (const pat of FORMULA_PATTERNS) {
-    if (pat.test(serialized)) {
-      return {
-        admitted: false,
-        reason: 'Arithmetic RTT delay formulas or constant byte multipliers rejected',
-      };
-    }
-  }
-  if (receipt.hasDelayFormula === true ||
-      Boolean(receipt.delayFormula) ||
-      Boolean(receipt.bytesFormula)) {
-    return {
-      admitted: false,
-      reason: 'Arithmetic RTT delay formulas or constant byte multipliers rejected',
-    };
-  }
-  return null;
-}
-
-function checkAccountingAndFormulas(receipt, options = {}) {
-  const accountingCheck = checkAttemptAccounting(receipt);
-  if (accountingCheck) return accountingCheck;
-  const delayCheck = checkDelayFormulas(receipt);
-  if (delayCheck) return delayCheck;
-  const rawCheck = verifyReceiptAgainstRawObservation(receipt, options);
-  if (!rawCheck.admitted) return rawCheck;
-  return null;
-}
-
-export function validateOriginalReceiptAdmission(receipt, options = {}) {
-  if (!receipt || typeof receipt !== 'object') {
-    return {admitted: false, reason: 'Original receipt must be a non-null object'};
-  }
-  const targetCheck = checkTargetAndProcesses(receipt);
-  if (targetCheck) return targetCheck;
-  const digestCheck = checkDigests(receipt);
-  if (digestCheck) return digestCheck;
-  const hostCheck = checkHostPlacement(receipt);
-  if (hostCheck) return hostCheck;
-  const formulaCheck = checkAccountingAndFormulas(receipt, options);
-  if (formulaCheck) return formulaCheck;
-  return {admitted: true, receipt};
-}
-
-function verifyShapeMetricsMatchReceipt(targetId, shapeId, shape, rootDir) {
-  const check = validateOriginalReceiptAdmission(shape.receipt, {rootDir});
-  if (!check.admitted) {
-    throw new Error(
-      `Admitted receipt validation failed for ${targetId} (${shapeId}): ${check.reason}`,
-    );
-  }
-  const m = shape.receipt.metrics || {};
-  if (shape.decisionsPerSec !== m.decisionsPerSec ||
-      shape.p99Ms !== m.p99Ms ||
-      shape.wanBytes !== m.wanBytes) {
-    throw new Error(
-      `Published shape metrics for ${targetId} (${shapeId}) do not match ` +
-      'raw-observation-verified receipt metrics',
-    );
-  }
-}
-
-function loadAdmittedTargets(rootDir) {
-  const admitted = readAdmittedLabMeasurements(rootDir);
-  const targets = admitted.targets || [];
-  for (const target of targets) {
-    if (target.scenarioA?.receipt) {
-      const checkA = validateOriginalReceiptAdmission(target.scenarioA.receipt, {rootDir});
-      if (!checkA.admitted) {
-        throw new Error(
-          `Admitted Scenario A receipt validation failed for ${target.targetId}: ${checkA.reason}`,
-        );
-      }
-    }
-    const shapes = target.scenarioB?.shapes || {};
-    for (const [shapeId, shape] of Object.entries(shapes)) {
-      if (shape.receipt) {
-        verifyShapeMetricsMatchReceipt(target.targetId, shapeId, shape, rootDir);
-      }
-    }
-  }
-  return targets;
+function mapCells(claims, cellsByKey) {
+  return Object.fromEntries(arrayMap(Object.entries(claims),
+    ([column, claim]) => [column, cellsByKey.get(claim.claimKey)]));
 }
 
 function buildMultiSystemComparativeMatrix(options = {}) {
-  const admitted = readAdmittedLabMeasurements(options.rootDir);
-  const updatedAt = typeof options.updatedAt === 'string' ?
-    options.updatedAt :
-    admitted.recordedAt;
-  const sc = (scenarioId, label, definitionHref, semanticGateHref) => ({
-    scenarioId, label, definitionHref, semanticGateHref,
-  });
+  const rootDir = options.rootDir || process.cwd();
+  const admitted = deriveAdmittedMeasurementsFromRawObservations(rootDir);
+  const cellsByKey = new Map(arrayMap(admitted.cells, (cell) => [cell.claimKey, cell]));
+  const manifest = buildCoverageManifest();
+  const history = parseComparisonHistoryNdjson(fs.readFileSync(
+    path.resolve(rootDir, DEFAULT_COMPARISON_HISTORY_NDJSON_PATH), 'utf8'));
   return {
-    schema: MULTI_SYSTEM_MATRIX_SCHEMA, epicId: EPIC_ID, totalSlices: TOTAL_EPIC_SLICES,
-    completedSlices: [
-      'epic-and-postgresql-app-service-baseline', 'postgresql-plpgsql-server-functions-control',
-      'citus-colocated-tables-and-distributed-functions',
-      'yugabytedb-distributed-sql-and-apache-ignite3-colocated-compute',
-      'scenario-c-postgresql-valkey-freshness-bounded-risk',
-    ],
-    remainingSlicesCount: 0, updatedAt,
-    scaleoutSeries: {
-      epicId: SCALEOUT_SERIES_EPIC_ID, totalSlices: TOTAL_SCALEOUT_SERIES_SLICES,
-      completedSlices: [
-        'provenance-audit-and-evidence-tier-separation',
-        'real-3to5-node-rf3-scaleout-and-scenario-a-modes',
-        'partition-granularity-sweep-5node-rf3',
-        'scenario-b-rtt-crossover-and-working-set-growth',
-        'live-movement-under-load-and-scenario-c-joint-scaling',
-      ],
-      remainingSlicesCount: 0,
-    },
-    scaleout3To5Rf3Experiment: buildScaleout3To5Rf3Experiment(options.rootDir),
-    partitionGranularitySweepExperiment: buildPartitionGranularitySweepExperiment(options.rootDir),
-    scenarioBRttWorkingSetExperiment: buildScenarioBRttWorkingSetExperiment(options.rootDir),
-    liveMovementAndScenarioCScalingExperiment:
-      buildLiveMovementAndScenarioCScalingExperiment(options.rootDir),
-    lagrangeEvolutionTimeline: buildLagrangeEvolutionTimeline(options.rootDir),
-    scenarioSetupBreakdown: buildScenarioSetupAndTimeBreakdown(options.rootDir),
-    scenarios: [
-      sc('tidb-oltp-baseline', 'Scenario A: Contended OLTP Baseline',
-        'tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline',
-        'tidb-reference-semantic-gate.md#scenario-a-semantic-evidence-gate'),
-      sc(
-        'tidb-distributed-risk-decision',
-        'Scenario B: Distributed Risk Decision & Partition Movement',
-        'tidb-reference-scenarios.md#scenario-b-tidb-distributed-risk-decision',
-        'tidb-reference-paired-owner.md',
-      ),
-      sc(
-        'streaming-feature-risk-decision',
-        'Scenario C: Streaming Feature Store & Freshness-Bounded Risk Decision',
-        'tidb-reference-scenarios.md#scenario-c-streaming-feature-risk-decision',
-        'scenario-c-feature-store-progress.md',
-      ),
-    ],
-    targets: loadAdmittedTargets(options.rootDir),
+    schema: MULTI_SYSTEM_MATRIX_SCHEMA,
+    coverageManifestId: manifest.manifestId,
+    sufficiencyRuleId: admitted.sufficiencyRuleId,
+    statusVocabulary: Object.values(CLAIM_CELL_STATUS),
+    sources: admitted.sources,
+    withdrawal: summarizeBenchmarkWithdrawal(history, readInvalidationLedger(rootDir)),
+    scenarios: SCENARIOS,
+    targets: arrayMap(manifest.targets, (t) => ({
+      targetId: t.targetId,
+      label: t.label,
+      advertisedLabel: t.advertisedLabel,
+      category: t.category,
+      detailPageMd: `${t.detailPagePrefix}.md`,
+      detailPageHtml: `${t.detailPagePrefix}.html`,
+      claims: mapCells(manifest.targetClaims.get(t.targetId), cellsByKey),
+    })),
+    experiments: arrayMap(manifest.experiments, (exp) => ({
+      experimentId: exp.experimentId,
+      title: exp.title,
+      columns: exp.columns,
+      rows: arrayMap(exp.rows, (r) => ({
+        rowId: r.rowId, label: r.label, cells: mapCells(r.cells, cellsByKey),
+      })),
+    })),
   };
 }
 
-async function readMultiSystemComparativeMatrix(options = {}) {
-  const rootDir = options.rootDir || process.cwd();
-  const filePath = options.matrixPath || path.resolve(rootDir, DEFAULT_MULTI_SYSTEM_MATRIX_PATH);
-  return JSON.parse(await readFile(filePath, 'utf8'));
+function serializeMultiSystemComparativeMatrix(matrix) {
+  return `${JSON.stringify(matrix, null, 2)}\n`;
 }
 
 async function writeMultiSystemComparativeMatrix(options = {}) {
   const rootDir = options.rootDir || process.cwd();
   const matrixPath = options.matrixPath || path.resolve(rootDir, DEFAULT_MULTI_SYSTEM_MATRIX_PATH);
-  const matrix = options.matrix || buildMultiSystemComparativeMatrix(options);
+  const matrix = options.matrix || buildMultiSystemComparativeMatrix({rootDir});
   await mkdir(path.dirname(matrixPath), {recursive: true});
-  await writeFile(matrixPath, JSON.stringify(matrix, null, 2) + '\n', 'utf8');
+  await writeFile(matrixPath, serializeMultiSystemComparativeMatrix(matrix), 'utf8');
   return {matrix, matrixPath};
 }
 
 export {
   DEFAULT_MULTI_SYSTEM_MATRIX_PATH,
-  MULTI_SYSTEM_MATRIX_SCHEMA,
-  EPIC_ID,
-  TOTAL_EPIC_SLICES,
-  SCALEOUT_SERIES_EPIC_ID,
-  TOTAL_SCALEOUT_SERIES_SLICES,
-  buildLagrangeEvolutionTimeline,
   buildMultiSystemComparativeMatrix,
-  buildScaleout3To5Rf3Experiment,
-  buildPartitionGranularitySweepExperiment,
-  buildScenarioBRttWorkingSetExperiment,
-  buildLiveMovementAndScenarioCScalingExperiment,
-  readMultiSystemComparativeMatrix,
+  MULTI_SYSTEM_MATRIX_SCHEMA,
   writeMultiSystemComparativeMatrix,
 };

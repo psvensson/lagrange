@@ -1,6 +1,5 @@
-import pg from 'pg';
+import {createPgWireClient} from './pg-wire-client.js';
 
-const {Client} = pg;
 const ONE = 1;
 const MAX_PORT = 65535;
 
@@ -66,7 +65,7 @@ async function observeLagrangeNewOrderContentionState(options = {}) {
   const connection = normalizeConnection(options.connection);
   const itemIds = normalizeItemIds(options.itemIds);
   const createClient = options.createClient || ((clientConfig) =>
-    new Client(clientConfig));
+    createPgWireClient(clientConfig));
   const client = createClient(clientOptions(endpoint, connection));
   await client.connect();
   try {

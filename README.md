@@ -55,7 +55,7 @@ Lagrange is **not** a good fit for:
 Lagrange is experimental alpha software under active development:
 
 - **Version Status:** Version `0.3.3` is the latest tagged GitHub release. Version `0.4.0` is the active development source on the `main` branch.
-- **Comparison Integrity:** Comparative claims (against PostgreSQL, TiDB/TiKV, or Citus) are based on real physical execution on lab or GCP environments. Modeled comparisons and synthetic latency estimates are excluded.
+- **Comparison Integrity:** No comparative performance result is currently published. Every comparative result published before 2026-11-01 was withdrawn after an evidence audit (timeouts counted as successes, non-canonical workloads, constant phase/byte values, synthesised quantiles); the records are retained as forensic evidence behind an append-only invalidation ledger. The [comparative benchmark overview](docs/benchmarks/README.md) shows the admission status of every advertised claim.
 - **Integrated Storage:** Lagrange provides its own partitioned SQLite and Raft consensus storage layer; it is not a compute proxy installed on top of existing external databases.
 
 ---
@@ -153,7 +153,7 @@ For detailed authoring rules, see [JavaScript Service Reference](docs/reference/
 - [First Hour With Lagrange](docs/tutorials/first-hour.md) - Complete step-by-step developer walkthrough
 - [Kubernetes and Cloud Benchmarks](docs/kubernetes-and-cloud-benchmarks.md) - Helm chart guide, credential config, and cloud benchmark matrix
 - [JavaScript Service Reference](docs/reference/javascript-service-reference.md) - Authoring API, typings, and limits
-- [TiDB/TiKV and Lagrange comparison progress](docs/benchmarks/tidb-comparison-progress.md) - versioned OLTP throughput, latency, and semantic proof history ([interactive HTML dashboard](docs/benchmarks/tidb-comparison-progress.html))
+- [Comparative benchmark overview](docs/benchmarks/README.md) - admission status of every advertised comparative claim; earlier results are withdrawn and kept as forensic history
 - [Rewrite A Hot Path For Lagrange](docs/tutorials/rewrite-a-hot-path.md) - MovieLens top-N three-baseline tutorial
 - [The Lagrange Native Programming Model](docs/native-programming-model.md) - Handlers, `run()`, and `reduce()`
 - [Execution Semantics](docs/execution-semantics.md) - Placement, retries, and visibility guarantees

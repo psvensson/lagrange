@@ -463,6 +463,12 @@ const CAPABILITY_SCRIPT = [
     '{ hostname; sysctl -n kern.boottime; } 2>/dev/null | tr -d \'\\n\')"',
   'say cores "$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null)"',
   'say mem_kib "$(awk \'/^MemTotal:/{print $2}\' /proc/meminfo 2>/dev/null)"',
+  // Whether the thermal gate (scripts/checks/wait-for-thermal-headroom.js) has
+  // a source here: lm-sensors, a sysfs thermal zone or an hwmon input. A host
+  // with none (a WSL2 VM) is `unmeasurable`, a fact placement can decide on.
+  'if { command -v sensors >/dev/null 2>&1 && sensors -j >/dev/null 2>&1; } || ' +
+    'ls /sys/class/thermal/thermal_zone*/temp /sys/class/hwmon/hwmon*/temp*_input ' +
+    '>/dev/null 2>&1; then say thermal measured; else say thermal unmeasurable; fi',
   'NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
   '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 && ' +
     '[ -n "$node_major" ] && nvm use "$node_major" >/dev/null 2>&1',
@@ -476,10 +482,18 @@ const CAPABILITY_SCRIPT = [
   // Bounded: a wedged docker daemon must not hang discovery.
   'if command -v timeout >/dev/null 2>&1; then dockercheck="timeout 10 docker"; ' +
     'else dockercheck="docker"; fi',
+  // Free bytes on the docker daemon's data root: whether the host has room
+  // for the images a deployment must hold.
+  'docker_root="$($dockercheck info --format \'{{.DockerRootDir}}\' 2>/dev/null)"',
+  'if [ -n "$docker_root" ]; then say docker_root_free_bytes ' +
+    '"$(df -PB1 "$docker_root" 2>/dev/null | awk \'NR==2{print $4}\')"; fi',
   'if $dockercheck info >/dev/null 2>&1; then say docker_reachable yes; ' +
     'else say docker_reachable no; fi',
   'if [ -e "$repo/.git" ]; then',
   '  say repo_present yes',
+  // Free bytes on the checkout's filesystem: room for a worktree a run is
+  // placed in (the benchmark load generator's harness worktree).
+  '  say repo_free_bytes "$(df -PB1 "$repo" 2>/dev/null | awk \'NR==2{print $4}\')"',
   '  say repo_head "$(git -C "$repo" rev-parse HEAD 2>/dev/null)"',
   // The dependency graph its lockfile describes, not the lockfile's bytes: a
   // version-only release bump changes the bytes and no package.
@@ -561,6 +575,9 @@ export function parseCapability(text, probedAt = Date.now()) {
     },
     movielensSha256: repoPresent ? capabilityText(values.movielens_sha256) : null,
     cpuSampleMs: capabilityNumber(values.cpu_sample_ms),
+    thermal: capabilityText(values.thermal),
+    dockerRootFreeBytes: capabilityNumber(values.docker_root_free_bytes),
+    repoFreeBytes: repoPresent ? capabilityNumber(values.repo_free_bytes) : null,
     machineLock: parseMachineLock(values),
   };
 }

@@ -20,11 +20,11 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
 
 const PASS_LINE = 'oltp-paired-sweep-plan-guard: PASS\n';
-const PROFILE_ID = 'scenario-a-paired-sweep-v1';
-const COUNTERBALANCE_MODE = 'alternate-rate-direction-and-system-first';
-const SEMANTIC_PROFILE_ID = 'scenario-a-semantic-v1';
-const OPEN_LOOP_PROFILE_ID = 'scenario-a-open-loop-v1';
-const RETRY_POLICY_ID = 'scenario-a-retry-v1';
+const PROFILE_ID = 'scenario-a-paired-sweep-v2';
+const COUNTERBALANCE_MODE = 'alternate-rate-direction-and-rotate-system-order';
+const SEMANTIC_PROFILE_ID = 'scenario-a-semantic-v2';
+const OPEN_LOOP_PROFILE_ID = 'scenario-a-open-loop-v2';
+const RETRY_POLICY_ID = 'scenario-a-retry-v2';
 const SHA256_LENGTH = 64;
 const COMPARISON_VIEW_MATCHED_TOTAL_BUDGET = 'matched-total-budget';
 const RATES_ASCENDING = Object.freeze([100, 150, 200]);
@@ -34,6 +34,7 @@ const EXPECTED_SLO = Object.freeze({p99Ms: 100, maxErrorRate: 0.01});
 const EXPECTED_PAIRS_COUNT = 12;
 const SLICE_THREE = 3;
 const SLICE_SIX = 6;
+const THREE_SYSTEM_REPETITIONS = 6;
 const PAIRS_PER_RATE_COUNT = 4;
 const EXPECTED_SYSTEMS = Object.freeze([
   OLTP_PAIRED_SWEEP_SYSTEM.TIDB_TIKV,
@@ -41,7 +42,9 @@ const EXPECTED_SYSTEMS = Object.freeze([
 ]);
 const EXPECTED_PROFILE = Object.freeze({
   id: PROFILE_ID,
-  systems: EXPECTED_SYSTEMS,
+  supersedes: 'scenario-a-paired-sweep-v1',
+  supersededBecause:
+    'v1 hard-coded two systems; v2 compares N named systems with rotated, recorded order',
   counterbalance: COUNTERBALANCE_MODE,
   freshDatasetPerSystemRateRun: true,
   warmupBeforeMeasurement: true,
@@ -68,6 +71,7 @@ const BASE_WORKLOAD = Object.freeze({
 });
 
 const BASE_OPTIONS = Object.freeze({
+  systems: EXPECTED_SYSTEMS,
   comparisonView: COMPARISON_VIEW.MATCHED_TOTAL_BUDGET,
   offeredRatesPerSec: RATES_ASCENDING,
   repetitions: EXPECTED_REPETITIONS,
@@ -195,7 +199,7 @@ function assertInvalidPlansFailClosed() {
       ...BASE_OPTIONS,
       repetitions: INVALID_ODD_REPETITIONS,
     }),
-    /even repetitions value >= 2/u,
+    /repetitions as a positive multiple of 2/u,
   );
   assert.throws(
     () => buildScenarioAPairedSweepPlan({
@@ -234,8 +238,36 @@ function assertInvalidPlansFailClosed() {
   );
 }
 
+function assertThreeSystemRotation() {
+  const systems = [...EXPECTED_SYSTEMS, OLTP_PAIRED_SWEEP_SYSTEM.POSTGRESQL];
+  assert.throws(
+    () => buildScenarioAPairedSweepPlan({
+      ...BASE_OPTIONS, systems, repetitions: EXPECTED_REPETITIONS,
+    }),
+    /repetitions as a positive multiple of 6/u,
+  );
+  assert.throws(
+    () => buildScenarioAPairedSweepPlan({...BASE_OPTIONS, systems: [systems[0]]}),
+    /at least two compared systems/u,
+  );
+  const plan = buildScenarioAPairedSweepPlan({
+    ...BASE_OPTIONS, systems, repetitions: THREE_SYSTEM_REPETITIONS,
+  });
+  assert.deepEqual(plan.identity.systems, systems);
+  for (const rate of RATES_ASCENDING) {
+    const pairs = arrayFilter(plan.pairs, ({offeredRatePerSec}) => offeredRatePerSec === rate);
+    for (const system of systems) {
+      assert.equal(
+        arrayFilter(pairs, ({systemOrder}) => systemOrder[0] === system).length,
+        2,
+      );
+    }
+  }
+}
+
 function main() {
   assertProfile();
+  assertThreeSystemRotation();
   assertCounterbalancedPlan();
   assertIdentityIsImmutable();
   assertInvalidPlansFailClosed();

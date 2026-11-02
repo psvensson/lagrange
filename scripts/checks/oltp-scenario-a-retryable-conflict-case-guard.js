@@ -35,14 +35,16 @@ const runCaseGuard = async () => {
   assert.deepEqual(OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS, [
     'outcome:retryableConflictSqlState:40001',
   ]);
+  assert.equal(definition.identity.expected.effectsPresent, 2);
   assert.equal(
-    definition.identity.expected.sqlState,
+    definition.identity.expected.loserSqlStateWhenConflicting,
     OLTP_SERIALIZATION_FAILURE_SQLSTATE,
   );
   assert.equal(
-    definition.identity.expected.outcome,
+    definition.identity.expected.loserOutcomeWhenConflicting,
     OLTP_PAIRED_RETRY_OUTCOME.SERIALIZATION_CONFLICT,
   );
+  assert.equal(definition.identity.expected.loserCommitsOnRetry, true);
 
   const classification = classifyOltpAttemptError({sqlState: '40001'});
   assert.deepEqual(classification, {
@@ -301,22 +303,33 @@ const runCaseGuard = async () => {
   await assertLagrangeSessionCommitBoundaries();
   await assertTiDbSessionCommitBoundaries();
 
-  const passing = evaluateScenarioARetryableConflictObservation({sqlState: '40001'});
+  // The observable contract (coordinator decision 5, 2026-11-02): both
+  // effects present, by blocking or by one retried 40001.
+  const effects = (final) => ({baseline: 100, final, delta: 100});
+  const passing = evaluateScenarioARetryableConflictObservation({
+    mechanism: 'serialization-conflict', victimSqlState: '40001', retryCommitted: true,
+    effects: effects(300)});
   assert.equal(passing.passed, true);
   assert.deepEqual(passing.failures, []);
   assert.deepEqual(
     passing.proofIds,
     OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS,
   );
+  const blocking = evaluateScenarioARetryableConflictObservation({
+    mechanism: 'blocking-then-commit', victimSqlState: null, retryCommitted: null,
+    effects: effects(300)});
+  assert.equal(blocking.passed, true);
 
-  const terminal = evaluateScenarioARetryableConflictObservation({sqlState: 'HY000'});
+  const terminal = evaluateScenarioARetryableConflictObservation({
+    mechanism: 'other-error', victimSqlState: 'HY000', retryCommitted: false,
+    effects: effects(200)});
   assert.equal(terminal.passed, false);
-  assert.deepEqual(terminal.failures, ['sql_state', 'retryable', 'outcome']);
+  assert.deepEqual(terminal.failures, ['unexpected_sql_state', 'lost_update']);
   assert.deepEqual(terminal.proofIds, []);
 
   const absent = evaluateScenarioARetryableConflictObservation({});
   assert.equal(absent.passed, false);
-  assert.deepEqual(absent.failures, ['sql_state', 'retryable', 'outcome']);
+  assert.deepEqual(absent.failures, ['effects_unobserved']);
   assert.deepEqual(absent.proofIds, []);
 };
 

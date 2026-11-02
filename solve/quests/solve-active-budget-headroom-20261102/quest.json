@@ -1,0 +1,27 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solve-active-budget-headroom-20261102",
+  "class": "fix",
+  "statement": "Restore solve active-state headroom before the comparative-benchmark-evidence-repair and learner-host-from-committed-admission landings by relocating the two committed historical overflow-budget decision-matrix dumps (formation-seed-decoupling packet 2026-09-20, historical/) to the existing verified evidence store, exactly as solve-active-budget-evidence-relocation did for the sibling membership-epoch inventory on 2026-10-30. Preserve exact source bytes, the packet's current records and every proof reference; no budget or policy change.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/solve-active-budget-headroom-20261102/evidence/receipt.json",
+      "requiredReceipts": [
+        "verified-relocation",
+        "active-footprint-headroom"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "preservation",
+      "statement": "Relocate only the two historical raw decision-matrix dumps (overflow-budget-decision-matrix.json and .md under the packet's historical/ directory) from the exact reviewed base 62d537313; nothing a quest's doneWhen requires, no quest record or log, no history rewrite, no archive in git, no budget raise, no new storage owner."
+    },
+    {
+      "id": "verification",
+      "statement": "The existing relocation owner must verify the re-downloaded bundle, its manifest and each member against the source-commit blob before exact-path removal; retain the indexed url/hash/size/source/add-commit records; measure at least 250000 bytes of active headroom below the unchanged 20 MiB budget with the owner's accounting."
+    }
+  ],
+  "sealedAt": "62d537313969b4adc556a38d99c6c9eee02f0cf5"
+}

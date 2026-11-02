@@ -27,6 +27,9 @@ function freezeRecord(value) {
   return Object.freeze(value);
 }
 
+// The roles a proof plan may name for the restarted fault target.
+const FAULT_ROLE = Object.freeze({DATA_REPLICA: 'data-replica', PG_HOST_ONLY: 'pg-host-only'});
+
 function buildScenarioADurabilityCase() {
   const payment = buildScenarioAPaymentCase();
   const identity = freezeRecord({
@@ -190,8 +193,17 @@ function assertClaimedProofIdsAreCanonical() {
 
 assertClaimedProofIdsAreCanonical();
 
+// The evaluator's codes about the injected fault and its evidence (was the
+// right component restarted, did its incarnation change, did its storage
+// persist): a failure made only of these says the proof was not obtained,
+// never that the product lost a commit.
+const FAULT_EVIDENCE_FAILURE_CODES = Object.freeze(['pg_host_only_fault_insufficient',
+  'fault_incarnation_unchanged', 'storage_continuity_invalid', 'fault_evidence_missing']);
+
 export {
   CLAIMED_PROOF_IDS as OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
+  FAULT_EVIDENCE_FAILURE_CODES as OLTP_SCENARIO_A_DURABILITY_FAULT_EVIDENCE_CODES,
+  FAULT_ROLE as OLTP_SCENARIO_A_FAULT_ROLE,
   buildScenarioADurabilityCase,
   evaluateScenarioADurabilityObservation,
 };

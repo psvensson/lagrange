@@ -1,0 +1,48 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "defects-reproduced-by-red-tests",
+      "passed": true,
+      "evidence": "evidence/defect-ledger.md D01-D41, each row naming its proving test; decisive defects D01 (timeouts counted completed), D11 (scaleout dispatch to Scenario C SELECT), D14 (history overwritten at 86e795c44) reproduced red before the fix in test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js and the real-product-workload-driver-*.test.js files; live-run defects D33-D41 reproduced red-first from attempts r6-r8 (verified apply-parent/run/revert by subagent:a22b73ff1d36cd783)"
+    },
+    {
+      "id": "invalid-claims-withdrawn-forensics-retained",
+      "passed": true,
+      "evidence": "data/tidb-comparison/invalidations.ndjson inv-0001..inv-0012 (append-only, admission reason codes, record ids or scope, defect ids where a defect applies); all 262 previously published cells withdrawn (242 invalid-measurement, 17 blocked, 2 unsupported, 1 not-measured); history.ndjson restored to 20 records and byte-prefix stable since; forensic copy data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson; audit:benchmark-history-append-only clean"
+    },
+    {
+      "id": "canonical-chain-one-path",
+      "passed": true,
+      "evidence": "evidence/chain-design.md (+ amendments): one raw record (raw-observation-record.js), one outcome vocabulary (benchmark-operation-outcome.js), one final-state owner (benchmark-oltp-state-reconciliation.js), one admission (benchmark-claim-admission.js), one publication path regenerated from admitted records; Node emulator, modeled comparisons and legacy readers deleted; duplicate owners found by verification (N4, F4) unified; the TiDB live semantic-gate scripts remain a separate proof harness recorded as the follow-up quest semantic-gate-one-journey-all-wires"
+    },
+    {
+      "id": "adversarial-acceptance-chain-rejects",
+      "passed": true,
+      "evidence": "test/distributed/harness/__tests__/comparative-benchmark-chain-acceptance*.test.js: J1-J15 adversarial inputs run through the real chain into a temporary root and are refused with the typed reason (timeouts as completed, shortened runs, missing warm-up, unpinned products, cross-store image ids, mismatched topology, a page naming development paths, a ledger entry without defect ids, forensic-only history); live negative controls in r6-r9 (record-rejected, setup-harness-fault, duplicate-claim) withdrew every non-valid attempt"
+    },
+    {
+      "id": "lab-default-execution-target",
+      "passed": true,
+      "evidence": "docs/benchmarks/cloud/run-comparative-benchmarks.mjs defaults to the registered lab machines through scripts/lab owners (fleet probe thermal and disk facts, host selection by measured requirement, machine-wide lock recipe, carinas-windows excluded as thermal-unmeasurable); r9 campaign header executionTarget lab with data hosts .41/.27/.32 and load generator .34; --dry-run plan recorded"
+    },
+    {
+      "id": "real-product-smoke-three-arms",
+      "passed": true,
+      "evidence": "attempt bench-live-20261101-b-r9 (harness 3859e7a11, manifest sha256:aacd06f2\u2026) through the canonical chain: Lagrange 0.4.0 (Hub content sha256:3c263af6\u2026) product-failure (no-committed-operations, readiness-exhausted; last answer DEGRADED PRIORITY_CONTROL_PLANE_RECOVERY_PENDING after 120 attempts); TiDB v8.5.8 unsupported (semantic-gate-client-missing:tidb-tikv) with 100/100/100 committed; PostgreSQL 17 valid-observed smoke 100/100/100, gate 31 passed, durability probe_inapplicable, no capacity claim; evidence/live-campaign-bench-live-20261101-b/summary-r9.json, console-r9.log.txt, semantic-gate-r9/, cleanup-verification.txt; raw mirrors in relocated bundles"
+    },
+    {
+      "id": "offline-recomputation-matches-publication",
+      "passed": true,
+      "evidence": "scripts/checks/comparative-benchmark-recompute.js (audit:comparative-recompute, in test:static) regenerates every page from data/tidb-comparison raw records + invalidations and compares byte-for-byte: PASS on the landing tree; comparative-benchmark-matrix-guard PASS"
+    },
+    {
+      "id": "independent-review",
+      "passed": true,
+      "evidence": "log.ndjson verification entries: df36a6d81 approve (subagent:a03d0886877d3ad57, F1-F8 fixed at 6c7960dda); 6c7960dda..b53d58036 approve (subagent:a286407cfbe625ac2); b53d58036..14713e286 reject (subagent:a8f81b9062fce9f0a) lifted by the corrective attempt; 14713e286..8dd50914a approve (subagent:a22b73ff1d36cd783); 8dd50914a..54bfea6e2 approve (subagent:ab40136865a02ef36); every src-free chain delta of the landing head is covered"
+    }
+  ],
+  "evidence": [],
+  "applicability": "set by the acceptance owner on the landing worktree land/comparative-benchmark-evidence-repair-20261102 (base 2cc80d7b2, delta of work branch a9de1e316 staged); the review receipt flips only on the recorded approving verification of the final delta"
+}

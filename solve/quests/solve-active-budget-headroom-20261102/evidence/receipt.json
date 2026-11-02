@@ -1,0 +1,64 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "questId": "solve-active-budget-headroom-20261102",
+  "receipts": [
+    {
+      "id": "verified-relocation",
+      "passed": true,
+      "sourceCommit": "62d537313969b4adc556a38d99c6c9eee02f0cf5",
+      "members": [
+        {
+          "raw": [
+            "overflow-budget-decision-matrix.json",
+            "fdf058af660806bd27488edd915bc4179d1184e4e90b1b4badd550f09e5ed551",
+            353150
+          ]
+        },
+        {
+          "raw": [
+            "overflow-budget-decision-matrix.md",
+            "330f6e8165f3a7fa33b39d7a2960343328b59d5d2e41105b6b863932309ca8fd",
+            270741
+          ]
+        }
+      ],
+      "bundle": {
+        "asset": "solve-active-budget-headroom-20261102--overflow-budget-decision-matrix-62d537313-2026-11-02.tar.gz",
+        "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/solve-active-budget-headroom-20261102--overflow-budget-decision-matrix-62d537313-2026-11-02.tar.gz",
+        "sha256": "2872b589aea7125bed54651ee24c5891d208c78df93109f465989f236d38eb0b",
+        "bytes": 91166
+      },
+      "inventory": "solve/changes/evidence-relocation/solve-active-budget-headroom-20261102/relocation-inventory.json",
+      "verification": "solve/changes/evidence-relocation/solve-active-budget-headroom-20261102/relocation-verification.json",
+      "freshRecovery": {
+        "downloadedSha256": "2872b589aea7125bed54651ee24c5891d208c78df93109f465989f236d38eb0b",
+        "extracted": true,
+        "manifestMatches": true,
+        "unexpectedMembers": [],
+        "verifiedAt": "2026-11-02T01:32:05.500Z"
+      },
+      "ownerProof": {
+        "command": "node scripts/run-classified-test-files.js test/solve/evidence-store.test.js test/scripts/evidence-relocation.test.js test/scripts/evidence-relocation-acceptance.test.js",
+        "files": 3,
+        "assertions": 25,
+        "passed": 3,
+        "failed": 0
+      }
+    },
+    {
+      "id": "active-footprint-headroom",
+      "passed": true,
+      "accounting": "scripts/checks/solve-v2-budget.js measureSolveV2Budget (tracked solve/ files minus quest logs)",
+      "budgetBytes": 20971520,
+      "activeBytesBefore": 20864360,
+      "activeBytesAfter": 20240469,
+      "headroomBefore": 107160,
+      "headroomAfter": 731051,
+      "removedBytes": 623891,
+      "minimumHeadroom": 250000,
+      "context": "the comparative-benchmark-evidence-repair work branch at aba1bd8c4 measured 20970178 active bytes (1342 under budget) and the learner-host landing tree 21085784 (114264 over); both land on top of this fix"
+    }
+  ],
+  "applicability": "measured in the landing worktree at base 62d537313 after the relocation owner removed the two verified paths; before = after + the removed members' tracked bytes"
+}

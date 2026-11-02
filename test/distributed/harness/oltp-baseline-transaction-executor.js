@@ -50,25 +50,90 @@ function rowsOf(result) {
 
 function singleRow(result, description) {
   const rows = rowsOf(result);
-  if (rows.length !== ONE) {
-    throw new Error(`OLTP transaction expected one ${description} row`);
-  }
+  if (rows.length !== ONE) throw singleRowViolation(description, rows);
   return rows[ZERO];
 }
 
-function rowCountOf(result) {
-  const rowCount = Number(result?.rowCount);
-  return Number.isFinite(rowCount) ? rowCount : rowsOf(result).length;
+// A success invariant the product's answer violated: a valid response with
+// a wrong effect (affected rows, missing row). It is a correctness failure,
+// never a product error and never retried.
+const CORRECTNESS_VIOLATION_ERROR_NAME = 'OltpCorrectnessViolationError';
+
+function correctnessViolation(message, evidence) {
+  const error = new Error(message);
+  error.name = CORRECTNESS_VIOLATION_ERROR_NAME;
+  error.oltpCorrectnessViolation = Object.freeze({...evidence});
+  return error;
+}
+
+function singleRowViolation(description, rows) {
+  return correctnessViolation(`OLTP transaction expected one ${description} row`, {
+    invariant: 'single-row',
+    description,
+    observedRows: rows.length,
+  });
+}
+
+// Every write reports its affected rows; a missing count is refused, not
+// read as zero or as the returned-row count.
+function requireAffectedRows(result, statementId, expected) {
+  const reported = result?.rowCount;
+  const rowCount = typeof reported === 'number' ? reported : Number.NaN;
+  if (!Number.isInteger(rowCount) || rowCount !== expected) {
+    throw correctnessViolation(
+      `OLTP ${statementId} affected ${Number.isInteger(rowCount) ? rowCount : 'unreported'} ` +
+      `row(s), expected ${expected}`,
+      {
+        invariant: 'affected-rows',
+        statementId,
+        expectedAffectedRows: expected,
+        reportedAffectedRows: Number.isInteger(rowCount) ? rowCount : null,
+      },
+    );
+  }
+  return rowCount;
+}
+
+// A returned value the contract reads as an integer must be one; a wrong
+// value is a correctness violation, never coerced through Number().
+// An integer column arrives as a number, or (Lagrange's PG wire, a
+// recorded dialect fact) as canonical decimal text whose numeric value
+// round-trips exactly. Anything else ('5.0', ' 5', '05', '') is a wrong
+// value, never coerced.
+const CANONICAL_DECIMAL_TEXT = /^-?(0|[1-9][0-9]*)$/u;
+
+function integerColumn(row, column, statementId) {
+  const value = row?.[column];
+  let number = Number.NaN;
+  if (typeof value === 'number') number = value;
+  if (typeof value === 'string' && CANONICAL_DECIMAL_TEXT.test(value)) {
+    const parsed = Number(value);
+    if (String(parsed) === value) number = parsed;
+  }
+  if (!Number.isSafeInteger(number)) {
+    throw correctnessViolation(
+      `OLTP ${statementId} returned a non-integer ${column}`,
+      {invariant: 'integer-column', statementId, column, observedValue: String(value)},
+    );
+  }
+  return number;
+}
+
+async function executeWrite(tx, statementId, parameters, expected = ONE) {
+  const result = await tx.execute(statementId, parameters);
+  requireAffectedRows(result, statementId, expected);
+  return result;
 }
 
 function normalizeOrderStatusLine(row) {
+  const column = (name) => integerColumn(row, name, STATEMENT.ORDER_STATUS_LINES);
   return {
-    lineNumber: Number(row.line_number),
-    itemId: Number(row.item_id),
-    supplyWarehouseId: Number(row.supply_warehouse_id),
-    quantity: Number(row.quantity),
-    amountCents: Number(row.amount_cents),
-    delivered: Number(row.delivered),
+    lineNumber: column('line_number'),
+    itemId: column('item_id'),
+    supplyWarehouseId: column('supply_warehouse_id'),
+    quantity: column('quantity'),
+    amountCents: column('amount_cents'),
+    delivered: column('delivered'),
   };
 }
 
@@ -81,8 +146,9 @@ async function executeNewOrder(session, operation) {
       ]),
       'district',
     );
-    const orderId = Number(district.next_order_id);
-    await tx.execute(STATEMENT.DISTRICT_SET_NEXT_ORDER, [
+    const orderId = integerColumn(
+      district, 'next_order_id', STATEMENT.DISTRICT_NEXT_ORDER_FOR_UPDATE);
+    await executeWrite(tx, STATEMENT.DISTRICT_SET_NEXT_ORDER, [
       orderId + ONE,
       operation.warehouseId,
       operation.districtId,
@@ -91,7 +157,7 @@ async function executeNewOrder(session, operation) {
       operation.lines,
       (line) => line.supplyWarehouseId === operation.warehouseId,
     ) ? ONE : ZERO;
-    await tx.execute(STATEMENT.ORDER_INSERT, [
+    await executeWrite(tx, STATEMENT.ORDER_INSERT, [
       operation.warehouseId,
       operation.districtId,
       orderId,
@@ -99,7 +165,7 @@ async function executeNewOrder(session, operation) {
       operation.lines.length,
       allLocal,
     ]);
-    await tx.execute(STATEMENT.NEW_ORDER_INSERT, [
+    await executeWrite(tx, STATEMENT.NEW_ORDER_INSERT, [
       operation.warehouseId,
       operation.districtId,
       orderId,
@@ -119,22 +185,24 @@ async function executeNewOrder(session, operation) {
         ]),
         'stock',
       );
-      const currentQuantity = Number(stock.quantity);
+      const currentQuantity = integerColumn(
+        stock, 'quantity', STATEMENT.STOCK_QUANTITY_FOR_UPDATE);
       const nextQuantity = currentQuantity >= line.quantity + 10 ?
         currentQuantity - line.quantity :
         currentQuantity + 91 - line.quantity;
       const remote = line.supplyWarehouseId === operation.warehouseId ?
         ZERO : ONE;
-      await tx.execute(STATEMENT.STOCK_UPDATE, [
+      await executeWrite(tx, STATEMENT.STOCK_UPDATE, [
         nextQuantity,
         line.quantity,
         remote,
         line.supplyWarehouseId,
         line.itemId,
       ]);
-      const amountCents = Number(item.price_cents) * line.quantity;
+      const amountCents =
+        integerColumn(item, 'price_cents', STATEMENT.ITEM_PRICE) * line.quantity;
       totalCents += amountCents;
-      await tx.execute(STATEMENT.ORDER_LINE_INSERT, [
+      await executeWrite(tx, STATEMENT.ORDER_LINE_INSERT, [
         operation.warehouseId,
         operation.districtId,
         orderId,
@@ -145,32 +213,29 @@ async function executeNewOrder(session, operation) {
         amountCents,
       ]);
     }
-    return {orderId, totalCents};
+    return {orderId, totalCents, lineCount: operation.lines.length};
   });
 }
 
 async function executePayment(session, operation) {
   return session.transaction(async (tx) => {
-    await tx.execute(STATEMENT.WAREHOUSE_PAYMENT, [
+    await executeWrite(tx, STATEMENT.WAREHOUSE_PAYMENT, [
       operation.amountCents,
       operation.warehouseId,
     ]);
-    await tx.execute(STATEMENT.DISTRICT_PAYMENT, [
+    await executeWrite(tx, STATEMENT.DISTRICT_PAYMENT, [
       operation.amountCents,
       operation.warehouseId,
       operation.districtId,
     ]);
-    const customerUpdate = await tx.execute(STATEMENT.CUSTOMER_PAYMENT, [
+    await executeWrite(tx, STATEMENT.CUSTOMER_PAYMENT, [
       operation.amountCents,
       operation.amountCents,
       operation.customerWarehouseId,
       operation.customerDistrictId,
       operation.customerId,
     ]);
-    if (rowCountOf(customerUpdate) !== ONE) {
-      throw new Error('OLTP payment did not update exactly one customer');
-    }
-    await tx.execute(STATEMENT.HISTORY_INSERT, [
+    await executeWrite(tx, STATEMENT.HISTORY_INSERT, [
       operation.phase,
       operation.workerId,
       operation.sequence,
@@ -195,14 +260,14 @@ async function executeOrderStatus(session, operation) {
     if (orderRows.length === ZERO) {
       return {orderId: null, lineCount: ZERO, lines: []};
     }
-    const order = orderRows[ZERO];
+    const orderId = integerColumn(orderRows[ZERO], 'order_id', STATEMENT.ORDER_STATUS_LATEST);
     const lineRows = rowsOf(await tx.execute(STATEMENT.ORDER_STATUS_LINES, [
       operation.warehouseId,
       operation.districtId,
-      order.order_id,
+      orderId,
     ]));
     const lines = arrayMap(lineRows, normalizeOrderStatusLine);
-    return {orderId: Number(order.order_id), lineCount: lines.length, lines};
+    return {orderId, lineCount: lines.length, lines};
   });
 }
 
@@ -217,8 +282,9 @@ async function executeDelivery(session, operation, scale) {
         [operation.warehouseId, districtId],
       ));
       if (newOrderRows.length === ZERO) continue;
-      const orderId = Number(newOrderRows[ZERO].order_id);
-      await tx.execute(STATEMENT.DELIVERY_DELETE_NEW_ORDER, [
+      const orderId = integerColumn(
+        newOrderRows[ZERO], 'order_id', STATEMENT.DELIVERY_OLDEST_NEW_ORDER_FOR_UPDATE);
+      await executeWrite(tx, STATEMENT.DELIVERY_DELETE_NEW_ORDER, [
         operation.warehouseId,
         districtId,
         orderId,
@@ -231,7 +297,7 @@ async function executeDelivery(session, operation, scale) {
         ]),
         'delivery order',
       );
-      await tx.execute(STATEMENT.DELIVERY_SET_CARRIER, [
+      await executeWrite(tx, STATEMENT.DELIVERY_SET_CARRIER, [
         operation.carrierId,
         operation.warehouseId,
         districtId,
@@ -242,22 +308,26 @@ async function executeDelivery(session, operation, scale) {
         [operation.warehouseId, districtId, orderId],
       ));
       if (lineRows.length === ZERO) {
-        throw new Error('OLTP transaction expected delivery order lines');
+        throw correctnessViolation('OLTP transaction expected delivery order lines', {
+          invariant: 'delivery-order-lines-present',
+          orderId,
+        });
       }
       const amountCents = lineRows.reduce(
-        (sum, row) => sum + Number(row.amount_cents),
+        (sum, row) => sum +
+          integerColumn(row, 'amount_cents', STATEMENT.DELIVERY_LINES_FOR_UPDATE),
         ZERO,
       );
-      await tx.execute(STATEMENT.DELIVERY_MARK_LINES, [
+      await executeWrite(tx, STATEMENT.DELIVERY_MARK_LINES, [
         operation.warehouseId,
         districtId,
         orderId,
-      ]);
-      await tx.execute(STATEMENT.DELIVERY_CUSTOMER_UPDATE, [
+      ], lineRows.length);
+      await executeWrite(tx, STATEMENT.DELIVERY_CUSTOMER_UPDATE, [
         amountCents,
         operation.warehouseId,
         districtId,
-        order.customer_id,
+        integerColumn(order, 'customer_id', STATEMENT.DELIVERY_ORDER_FOR_UPDATE),
       ]);
       deliveredOrders += ONE;
     }
@@ -274,7 +344,8 @@ async function executeStockLevel(session, operation) {
       ]),
       'stock-level district',
     );
-    const nextOrderId = Number(district.next_order_id);
+    const nextOrderId = integerColumn(
+      district, 'next_order_id', STATEMENT.STOCK_LEVEL_DISTRICT);
     const firstOrderId = Math.max(ONE, nextOrderId - 20);
     const count = singleRow(
       await tx.execute(STATEMENT.STOCK_LEVEL_COUNT, [
@@ -287,7 +358,7 @@ async function executeStockLevel(session, operation) {
       ]),
       'stock-level count',
     );
-    return {lowStock: Number(count.low_stock)};
+    return {lowStock: integerColumn(count, 'low_stock', STATEMENT.STOCK_LEVEL_COUNT)};
   });
 }
 
@@ -317,6 +388,7 @@ async function executeOltpBaselineTransaction(session, operation, scale) {
 }
 
 export {
+  CORRECTNESS_VIOLATION_ERROR_NAME as OLTP_CORRECTNESS_VIOLATION_ERROR_NAME,
   STATEMENT as OLTP_SQL_STATEMENT,
   executeOltpBaselineTransaction,
 };

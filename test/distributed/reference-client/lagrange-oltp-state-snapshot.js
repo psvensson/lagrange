@@ -1,4 +1,4 @@
-import pg from 'pg';
+import {createPgWireClient} from './pg-wire-client.js';
 
 import {
   TABLES,
@@ -8,7 +8,6 @@ import {
   normalizeEndpoint,
 } from './oltp-state-snapshot-shared.js';
 
-const {Client} = pg;
 
 function normalizeConnection(value = {}) {
   const user = String(value.user || '').trim();
@@ -40,7 +39,7 @@ function clientOptions(endpoint, connection) {
 async function observeLagrangeOltpStateSnapshot(options = {}) {
   const endpoint = normalizeEndpoint(options.endpoint, 'Lagrange OLTP');
   const connection = normalizeConnection(options.connection);
-  const createClient = options.createClient || ((config) => new Client(config));
+  const createClient = options.createClient || createPgWireClient;
   const client = createClient(clientOptions(endpoint, connection));
   await client.connect();
   try {

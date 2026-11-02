@@ -16,7 +16,9 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 
 const RUN_ID = '20260924T151500Z';
 const REPORT_ROOT = 'test-output/reports/distributed-matrix';
-const EXPECTED_CANONICAL_COUNT = 24;
+// 25 since the fresh-formation-user-table-routability red witness joined the
+// canonical matrix (quest comparative-benchmark-evidence-repair, 8068c7650).
+const EXPECTED_CANONICAL_COUNT = 25;
 const EXPECTED_TOPOLOGY_ENTRIES = [
   'local-three-node.json|rolling-restart',
   'local.json|partition-kill-heal-under-load',
@@ -41,6 +43,10 @@ test('distributed matrix canonical profile reuses all canonical entries', (t) =>
   assert.equal(
     entryKey(entries[0]),
     'local-three-node.json|admin-query-smoke',
+  );
+  assert.equal(
+    entryKey(entries[1]),
+    'local-three-node.json|fresh-formation-user-table-routability',
   );
   assert.equal(
     entryKey(entries[entries.length - 1]),

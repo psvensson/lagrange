@@ -1272,7 +1272,7 @@ describe('pg-smoke.js: PostgreSQL wire smoke activation and validation', () => {
     assert.equal(visibilityRan, true);
     assert.equal(retryableConflictRan, true);
     assert.equal(adapterClosed, true);
-    assert.deepEqual(adapterCloseOptions, {dropTables: false});
+    assert.deepEqual(adapterCloseOptions, {dropDataset: false});
     assert.equal(result.datasetSha256, 'mock-dataset-sha');
     assert.deepEqual(result.datasetSummary, {warehouses: 2});
     assert.deepEqual(result.workloadResult, {tps: 120});
