@@ -24,7 +24,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3316891,
-        "sha256": "3d94a234f1b07dd0964b2a40dda28c3a46ff31530da42f488a3f41acc0d84cdc"
+        "sha256": "7726e13271be3252d61f5d035d24a844887e3b4b864e6d66d4e7febe4c29362f"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "b167642f6da0fae30973c96e8dde4814c42b3caf873371cf57064f13a43d96ed"
+        "sha256": "b09226fd78190bfc7932b3508762220f66a315ccebc8d7b372881be23b91cef5"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "aea1cf2c6454211bd854689d062416a233a5180eca16051941cc1a7cce1f4439"
+    "inputDigest": "03ff670695cd1801ad7eec62c68e1411a853df3322e0c826c8cfca77fd2e3f0c"
   },
   "reconciliation": {
     "complexity": {
@@ -135,13 +135,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "b167642f6da0fae30973c96e8dde4814c42b3caf873371cf57064f13a43d96ed"
+          "sha256": "b09226fd78190bfc7932b3508762220f66a315ccebc8d7b372881be23b91cef5"
         },
-        "cloneGroups": 651,
-        "duplicatedLines": 24386,
-        "sourceCloneTouches": 1302,
-        "sourceDuplicatedLineTouches": 48772,
-        "nonzeroSourceCount": 420,
+        "cloneGroups": 649,
+        "duplicatedLines": 24346,
+        "sourceCloneTouches": 1298,
+        "sourceDuplicatedLineTouches": 48692,
+        "nonzeroSourceCount": 419,
         "touchMultiplicity": 2
       }
     ],
@@ -174,34 +174,34 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3316891,
-        "sha256": "3d94a234f1b07dd0964b2a40dda28c3a46ff31530da42f488a3f41acc0d84cdc"
+        "sha256": "7726e13271be3252d61f5d035d24a844887e3b4b864e6d66d4e7febe4c29362f"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "5d263e6670002247bb1f23d9cfa67fbc4fa5265e047f27f35f427ba24d054067",
+      "sourceDigest": "59e6a0ada93af0439aa60a7167c7bbd50012cd5febe696efa9ebeb3725a94324",
       "moduleCount": 5928,
       "edgeCount": 32213,
       "unresolvedCount": 44
     }
   },
   "assignment": {
-    "sourceSignalCount": 2437,
-    "assignedSignalCount": 2437,
-    "uniqueAssignmentCount": 2437,
-    "digest": "94e44c09835ab156ebe338c7d0a1b0436ff81a5e2cf4d25c5cc5964c07635b04"
+    "sourceSignalCount": 2436,
+    "assignedSignalCount": 2436,
+    "uniqueAssignmentCount": 2436,
+    "digest": "e784be7f9db9c8b764753b98d2ff0120606f2f975928100c738fad1a6711c334"
   },
   "signalCounts": {
     "cognitive": 147,
     "complexity": 1731,
-    "duplication": 473,
+    "duplication": 472,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1253,
+    "filesWithDebt": 1252,
     "rankedBoundaryCount": 112,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 92,
@@ -1708,34 +1708,6 @@
       ]
     },
     {
-      "key": "area:test/distributed/reference-client",
-      "owner": null,
-      "boundary": "test/distributed/reference-client",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/distributed/reference-client"
-      ],
-      "fileCount": 6,
-      "signalCount": 6,
-      "complexity": 1,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 212,
-      "cloneTouches": 10,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 15,
-      "importOut": 33,
-      "score": 25.2,
-      "topPaths": [
-        "test/distributed/reference-client/lagrange-scenario-a-slices.test.js",
-        "test/distributed/reference-client/lagrange-retryable-conflict-probe.js",
-        "test/distributed/reference-client/tidb-visibility-probe.js",
-        "test/distributed/reference-client/lagrange-delivery-observer.js",
-        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js"
-      ]
-    },
-    {
       "key": "area:test/function",
       "owner": null,
       "boundary": "test/function",
@@ -1863,6 +1835,34 @@
         "test/service/call-binding-route-resolver.test.js",
         "test/service/minimal-deployment-request-cell-routing-fixture.js",
         "test/service/handler-aware-runtime-invocation.test.js"
+      ]
+    },
+    {
+      "key": "area:test/distributed/reference-client",
+      "owner": null,
+      "boundary": "test/distributed/reference-client",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/distributed/reference-client"
+      ],
+      "fileCount": 5,
+      "signalCount": 5,
+      "complexity": 1,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 132,
+      "cloneTouches": 6,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 15,
+      "importOut": 6,
+      "score": 17.2,
+      "topPaths": [
+        "test/distributed/reference-client/lagrange-retryable-conflict-probe.js",
+        "test/distributed/reference-client/tidb-visibility-probe.js",
+        "test/distributed/reference-client/lagrange-delivery-observer.js",
+        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
+        "test/distributed/reference-client/lagrange-payment-observer.js"
       ]
     },
     {
