@@ -7,6 +7,8 @@ import {bindRegisteredReplicaHandler} from
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationField} from
   '../../src/rebalancer/replica-operation-constants.js';
+import {buildFailedCreateCleanupToken} from
+  '../../src/rebalancer/failed-create-cleanup-token.js';
 import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,
@@ -815,4 +817,79 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       await handler.shutdown();
     },
   );
+  // Quest fresh-create-failure-after-committed-admission, link L3 (run
+  // b26d2c090, 10:29:57.228): a DEFERRED failure after the replica's runtime
+  // opened was written FAILED without a cleanup claim, so no owner ever
+  // removed the configured member. Once the runtime is open the leader may
+  // commit the admission at any time, so the failed create always claims
+  // cleanup; only a failure before any admission input exists may stay
+  // unclaimed for the coordinator's dispatch re-arm.
+  for (const failurePoint of ['after-runtime-open', 'before-runtime-open']) {
+    t.test(
+      `L3: a deferred create failure ${failurePoint} claims cleanup only ` +
+      'when the admission may be committed',
+      async (t) => {
+        const operationId = `op-l3-${failurePoint}`;
+        const replicaId = `replica-l3-${failurePoint}`;
+        const cache = createSeededCache();
+        seedReplicaOperation(cache, operationId, {replicaId});
+        const mockCDC = createMockCDCService(cache);
+        const replicaStateMachine = new ReplicaStateMachine({
+          nodeId: 'test-node',
+          systemTableCache: cache,
+          controlPlaneSystemTableGateway:
+            createLifecycleControlPlaneGatewayForCache(cache),
+        });
+        const deferred = () => Object.assign(
+          new Error(`CREATE admission read deferred for ${operationId}`), {
+            code: 'REPLICA_CREATE_ADMISSION_DEFERRED',
+            errorCode: 'REPLICA_CREATE_ADMISSION_DEFERRED',
+            deferRetry: true,
+          });
+        const handler = new ReplicaHandler({
+          nodeId: 'test-node',
+          cdcIntegrationService: mockCDC,
+          systemTableCache: cache,
+          replicaStateMachine,
+          createPartitionService: async (options) => {
+            if (failurePoint === 'before-runtime-open') throw deferred();
+            return bindRegisteredReplicaHandler({
+              partitionId: options.partitionId,
+              replicaId: options.replicaId,
+              initialized: true,
+              async shutdown() {},
+              async syncFromLeader() {},
+            }, options);
+          },
+          dataDir: getTempDir(),
+        });
+        // Fixture seam at the post-open activation step the run failed in.
+        handler.shouldGateActivationOnVoterReadiness = () => true;
+        handler.waitForVoterReadyActivation = async () => {
+          throw deferred();
+        };
+        handler.initialize();
+        const failed = new Promise((resolve) => {
+          handler.once('replicaCreationFailed', resolve);
+        });
+        await handler.handleCreateReplica({
+          operationId,
+          partitionId: 'partition-1',
+          replicaId,
+        });
+        await failed;
+        const row = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
+        t.equal(row?.status, ReplicaStatus.FAILED, 'the create failed durably');
+        if (failurePoint === 'after-runtime-open') {
+          t.equal(row?.cleanup_token, buildFailedCreateCleanupToken(operationId),
+            'a failure after the runtime opened carries the failed-create ' +
+              'cleanup claim');
+        } else {
+          t.equal(row?.cleanup_token ?? null, null,
+            'a failure before any admission input stays unclaimed for re-arm');
+        }
+        await handler.shutdown();
+      },
+    );
+  }
 }

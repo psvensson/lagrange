@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "deferred-authority-read-consumed-within-create-deadline",
+      "passed": false,
+      "evidence": "red: not yet implemented"
+    },
+    {
+      "id": "post-admission-failure-always-claims-cleanup",
+      "passed": false,
+      "evidence": "red: not yet implemented"
+    },
+    {
+      "id": "failed-create-without-owner-not-protected",
+      "passed": false,
+      "evidence": "red: not yet implemented"
+    },
+    {
+      "id": "reproducer-no-unclaimed-failed-configured-member",
+      "passed": false,
+      "evidence": "red: not yet implemented"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "evidence": "red: not yet implemented"
+    }
+  ],
+  "evidence": [],
+  "applicability": "Red baseline on df28ef54a: test/node/fresh-create-admission-authority-deferral.test.js 3/3 fail (deferral thrown as terminal 'CREATE admission read deferred'; readOperation drops the authority outcome); test/node/replica-handler.test.js L3 after-runtime-open fails (cleanup_token null)."
+}

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2209,
+    "unit": 2210,
     "integration": 120,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2554,
-  "digest": "fnv1a32-bf7a7284",
+  "censusSize": 2555,
+  "digest": "fnv1a32-c39d8684",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1218,6 +1218,7 @@
     "test/node/failure-detector.test.js": "unit",
     "test/node/failure-repair-intent-contract.test.js": "unit",
     "test/node/fault-recovery-behavior.property.test.js": "unit",
+    "test/node/fresh-create-admission-authority-deferral.test.js": "unit",
     "test/node/group-retired-tombstone-incarnation.test.js": "unit",
     "test/node/group-retired-tombstone.test.js": "unit",
     "test/node/group-retirement-as-a-unit.test.js": "unit",
