@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {committedServeEligibilityView} from './serve-eligibility-test-support.js';
 import {
   createAccountingService,
   createActiveNode,
@@ -629,6 +630,9 @@ test('ControlPlaneReadinessService reuses one owner-key evaluation for ' +
 test('ControlPlaneReadinessService records serve and repair eligibility flips',
   async (t) => {
     let now = 1500;
+    // The committed record the serve answer is read from: node-1 leased
+    // until 5000; the test later commits the degraded lease.
+    const committedNodeRows = {'node-1': {[COLUMN.READY_LEASE_EXPIRES_AT]: 5000}};
     const cache = createCache({
       nodes: [{
         ...createActiveNode('node-1'),
@@ -654,13 +658,20 @@ test('ControlPlaneReadinessService records serve and repair eligibility flips',
         enteredAt: '2026-03-04T00:00:00.000Z',
         recentTransitions: [],
       }),
+      authoritativeControlPlaneView: committedServeEligibilityView({
+        servingNodeIds: ['node-1'],
+        nowMs: now,
+        nodeRowOverrides: committedNodeRows,
+      }),
       now: () => now,
     });
+    await readinessService.readServeEligibility();
 
     const initial = await readinessService.getNodeReadiness('node-1');
     t.same(initial.recentTransitions, [],
       'first readiness evaluation should not fabricate a transition');
 
+    committedNodeRows['node-1'] = {[COLUMN.READY_LEASE_EXPIRES_AT]: 1200};
     cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
       [COLUMN.NODE_ID]: 'node-1',
       [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,

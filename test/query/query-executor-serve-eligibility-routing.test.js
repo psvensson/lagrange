@@ -19,6 +19,7 @@ import {
 } from '../../src/query/query-constants.js';
 import {createMockMessageRouter} from './query-executor-mock-message-router.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const LEADER_NODE_ID = 'node-serve-route-leader';
 const FOLLOWER_NODE_ID = 'node-serve-route-follower';
 const LOCAL_NODE_ID = 'node-serve-route-local';
@@ -291,3 +292,33 @@ test('a stale cached system-table leader that knows no leader answers ' +
   }
   t.end();
 });
+
+// Construction contract (lead decision 2026-11-02): an executor without a
+// readiness owner routes no user table and answers the typed serve
+// unavailability; there is no constructor fallback and no second path. System
+// tables still route on leadership and live transport.
+test('an executor without a readiness owner routes no user table, typed',
+  async (t) => {
+    const userPartitionId = 'p-user-no-owner';
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      nodeId: LOCAL_NODE_ID,
+      messageRouter: connectedRouter([LEADER_NODE_ID, FOLLOWER_NODE_ID]),
+      systemCache: createCache(userPartitionId),
+    });
+    const snapshot = executor.getPartitionRoutingSnapshot(userPartitionId);
+    t.equal(snapshot.routableServiceCount, 0, 'no user-table candidate');
+    t.equal(snapshot.deniedByNodeId?.[LEADER_NODE_ID]?.reasonCode ?? null,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.SERVE_ELIGIBILITY_UNAVAILABLE,
+      'the denial is the typed serve unavailability');
+    const systemExecutor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      nodeId: LOCAL_NODE_ID,
+      messageRouter: connectedRouter([LEADER_NODE_ID, FOLLOWER_NODE_ID]),
+      systemCache: createCache('nodes-p1'),
+    });
+    t.equal(
+      systemExecutor.getPartitionRoutingSnapshot('nodes-p1').routableServiceCount,
+      2, 'system tables still route on leadership and live transport');
+    t.end();
+  });

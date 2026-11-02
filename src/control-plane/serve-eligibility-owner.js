@@ -370,13 +370,28 @@ class ServeEligibilityOwner {
       }
       return;
     }
-    if (tableName === TABLES.NODES && this.record) {
+    if (tableName === TABLES.NODES && !this.record) {
+      // No committed record yet (never read, none published, or the last
+      // read failed): a node change is the trigger for the first or next read.
+      this.markSuperseded();
+      return;
+    }
+    if (tableName === TABLES.NODES) {
       const nodeId = readNodeId(row);
+      if (!nodeId) {
+        return;
+      }
       if (
-        nodeId &&
         isRevokingNodeChange(this.record.nodeRowsById.get(nodeId) || null, row)
       ) {
         this.markSuperseded();
+        return;
+      }
+      // A lease extension leaves the committed answer valid until its own
+      // expiry; it only triggers a background refresh (coalesced to one in
+      // flight) so the record's leases advance before they elapse.
+      if (!this.inFlight && !this.stopped) {
+        this.scheduleRefresh();
       }
     }
   }
@@ -392,7 +407,6 @@ class ServeEligibilityOwner {
         null, null);
     }
     if (this.outcome === OUTCOME.PENDING) {
-      this.scheduleRefresh();
       return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_PENDING,
         null, this.readTimeoutMs);
     }

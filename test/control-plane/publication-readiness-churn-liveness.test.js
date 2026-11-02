@@ -79,6 +79,9 @@ test('readiness planning dependency registry is complete and explicit',
         'cdcGroupPropagationServiceGeneration',
         'heartbeatServiceGeneration',
         'controlPlaneSystemTableGatewayGeneration',
+        // The committed-epoch serve record (quest
+        // serve-eligibility-committed-epoch-read).
+        'serveEligibilityOwnerGeneration',
         'authoritativeControlPlaneViewGeneration',
         'localClusterIncarnationFenceProviderGeneration',
         TABLES.NODES,

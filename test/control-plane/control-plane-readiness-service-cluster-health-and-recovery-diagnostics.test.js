@@ -79,8 +79,8 @@ test('isClusterMemberHealthy returns true for transport-connected ready ' +
     'transport-connected node should stay cluster-member-healthy while heartbeat evidence is still fresh');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'transport-connected node with fresh heartbeat grace should keep control-plane writes admitted');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'transport-connected node with fresh heartbeat grace should stay serve-eligible');
+  t.equal(readiness.dimensions.repairEligible, true,
+    'transport-connected node with fresh heartbeat grace should stay repair-eligible');
   t.end();
 });
 
@@ -283,8 +283,8 @@ async (t) => {
     'node-cache-lag',
     {maxCachedAgeMs: 5000},
   );
-  t.equal(first.dimensions.serveEligible, true,
-    'initial snapshot must be serve-eligible');
+  t.equal(first.dimensions.repairEligible, true,
+    'initial snapshot must be repair-eligible');
 
   readinessService.handleCacheChange(TABLES.SERVICES, {
     [COLUMN.NODE_ID]: 'node-cache-lag',
@@ -298,7 +298,7 @@ async (t) => {
       allowStaleOnCacheChange: false,
       requireFreshOnIneligible: true,
       decisionDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -366,8 +366,8 @@ async (t) => {
     'self-node must remain cluster-member-healthy despite expired ' +
     'lease and no transport evidence — the node is alive and ' +
     'running the check (§1.4.12)');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'self-node must remain serve-eligible when only the cache ' +
+  t.equal(readiness.dimensions.repairEligible, true,
+    'self-node must remain repair-eligible when only the cache ' +
     'lease is stale');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'self-node must remain control-plane-writable when only the ' +

@@ -122,3 +122,39 @@ export function committedServeEligibilityView({
     canRead: () => true,
   };
 }
+
+/**
+ * A readiness owner as the query layer consumes it: per-node committed
+ * answers at a stated epoch with a lease. Every node is eligible unless the
+ * test states otherwise; setAnswer flips one node to not_eligible or a typed
+ * unavailability (e.g. 'unavailable_stale'), setDefault flips every node.
+ * The owner's refresh resolves immediately (the fixture's record is current).
+ * @param {Object} [options]
+ * @param {Object<string, Object>} [options.answers] nodeId -> answer.
+ * @param {Object} [options.defaultAnswer]
+ * @return {Object}
+ */
+export function createCommittedServeEligibilityOwner(options = {}) {
+  const answers = new Map(Object.entries(options.answers || {}));
+  let defaultAnswer = options.defaultAnswer || serveEligibilityAnswer(true);
+  const calls = {answers: [], refreshes: 0};
+  return {
+    calls,
+    answerServeEligibility(nodeId) {
+      calls.answers.push(nodeId);
+      return answers.get(nodeId) || defaultAnswer;
+    },
+    async readServeEligibility() {
+      calls.refreshes += 1;
+    },
+    subscribeServeEligibility() {
+      return () => {};
+    },
+    setAnswer(nodeId, answer) {
+      answers.set(nodeId, answer);
+    },
+    setDefault(answer) {
+      defaultAnswer = answer;
+    },
+  };
+}
