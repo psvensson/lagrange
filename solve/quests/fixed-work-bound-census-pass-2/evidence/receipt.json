@@ -1,7 +1,7 @@
 {
   "schema": "test-receipt/1",
   "quest": "fixed-work-bound-census-pass-2",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
     {
       "id": "carried-items-classified",
@@ -21,8 +21,11 @@
     },
     {
       "id": "independent-verification",
-      "passed": false,
-      "reason": "verification of 40ba42c04 rejected (narrow); awaiting re-verification of the corrective attempt"
+      "passed": true,
+      "detail": "log.ndjson verification entries 2026-11-02 (subagent:adc0b674ea26e3f81): reject at 0fe9ab168, reject at 40ba42c04, approve at e9c99ab5d",
+      "evidence": [
+        "solve/quests/fixed-work-bound-census-pass-2/log.ndjson"
+      ]
     }
   ]
 }
