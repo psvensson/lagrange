@@ -1,110 +1,64 @@
 import assert from 'node:assert/strict';
-
 import {
   induceTiDbRetryableConflict,
 } from '../../test/distributed/reference-client/tidb-retryable-conflict-probe.js';
+import {
+  evaluateScenarioARetryableConflictObservation,
+} from '../../test/distributed/harness/oltp-scenario-a-retryable-conflict-case.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
-const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const PASS_MESSAGE = 'tidb-retryable-conflict-probe-guard: PASS';
 
-const runProbeGuard = async () => {
-  const deferred = () => {
-    let resolvePromise;
-    let rejectPromise;
-    const promise = new Promise((resolve, reject) => {
-      resolvePromise = resolve;
-      rejectPromise = reject;
-    });
-    return {promise, resolve: resolvePromise, reject: rejectPromise};
-  };
-
-  const buildMockHarness = (options = {}) => {
-    const {
-      leftFail = false,
-      rightFail = true,
-      queryFail = false,
-      rollbackThrows = false,
-      endThrows = false,
-      hangExecution = false,
-    } = options;
-
-    const leftBlocked = deferred();
-    const trace = [];
-    const connectionConfigs = [];
-    let connectionIndex = 0;
-
-    const connection = (side) => {
-      let executeCount = 0;
-      return {
-        async query(sql) {
-          trace.push({side, op: 'query', sql});
-          if (queryFail) {
-            throw new Error(`query failed on ${side}`);
-          }
-        },
-        async beginTransaction() {
-          trace.push({side, op: 'begin'});
-        },
-        execute(sql, parameters) {
-          executeCount += 1;
-          trace.push({side, op: 'execute', sql, parameters});
-          if (executeCount === 1) return Promise.resolve([{}]);
-          if (hangExecution) return deferred().promise;
-
-          if (side === 'left') {
-            if (leftFail) {
-              return Promise.reject(Object.assign(new Error('left victim'), {
-                code: 'ER_LOCK_DEADLOCK',
-                errno: 1213,
-                sqlState: '40001',
-                sqlMessage: 'Deadlock found when trying to get lock',
-              }));
-            }
-            return leftBlocked.promise;
-          }
-
-          // side === 'right'
-          if (rightFail) {
-            const error = Object.assign(new Error('deadlock victim'), {
-              code: 'ER_LOCK_DEADLOCK',
-              errno: 1213,
-              sqlState: '40001',
-              sqlMessage: 'Deadlock found when trying to get lock',
-            });
-            leftBlocked.resolve([{}]);
-            return Promise.reject(error);
-          }
-          leftBlocked.resolve([{}]);
-          return Promise.resolve([{}]);
-        },
-        async rollback() {
-          trace.push({side, op: 'rollback'});
-          if (rollbackThrows) {
-            throw new Error(`rollback error on ${side}`);
-          }
-        },
-        async end() {
-          trace.push({side, op: 'end'});
-          if (endThrows) {
-            throw new Error(`end error on ${side}`);
-          }
-        },
-      };
+// A fake TiDB behind the shared probe's mysql sessions: one warehouse row;
+// `mode` decides how the engine treats the second, conflicting update
+// (blocking: both apply; serialization: 40001 on the loser; lost: the second
+// update is silently dropped).
+function createConflictEngine(mode) {
+  const state = {value: 100, version: 0, configs: [], statements: [], ended: 0};
+  const createConnection = async (config) => {
+    state.configs.push(config);
+    const session = {snapshot: null, pending: 0};
+    const conflicted = () => session.snapshot !== null && state.version !== session.snapshot;
+    const reset = () => {
+      session.snapshot = null;
+      session.pending = 0;
     };
-
-    const connections = [connection('left'), connection('right')];
     return {
-      trace,
-      connectionConfigs,
-      createConnection: async (config) => {
-        connectionConfigs.push(config);
-        return connections[connectionIndex++];
+      query: async (sql) => {
+        state.statements.push(sql);
+        return [[]];
+      },
+      beginTransaction: async () => {
+        session.snapshot = state.version;
+        session.pending = 0;
+      },
+      commit: async () => {
+        state.value += session.pending;
+        if (session.pending !== 0) state.version += 1;
+        reset();
+      },
+      rollback: async () => reset(),
+      end: async () => {
+        state.ended += 1;
+      },
+      execute: async (sql, parameters) => {
+        state.statements.push(sql);
+        if (stringStartsWith(sql, 'SELECT')) return [[{ytd_cents: state.value}]];
+        if (mode === 'serialization' && conflicted()) {
+          throw Object.assign(new Error('Write conflict'), {code: 'ER_LOCK_DEADLOCK',
+            errno: 9007, sqlState: '40001', sqlMessage: 'Write conflict'});
+        }
+        if (!(mode === 'lost' && conflicted())) session.pending += parameters[0];
+        return [{affectedRows: 1}];
       },
     };
   };
+  return {createConnection, state};
+}
 
+const runProbeGuard = async () => {
   // 1. Endpoint and databaseName validation before opening connections
   await assert.rejects(
     induceTiDbRetryableConflict({
@@ -161,196 +115,45 @@ const runProbeGuard = async () => {
     /TiDB conflict probe requires databaseName/u,
   );
 
-  // 2. Pessimistic mode setup, beginTransaction, lock cycle,
-  // and single deadlock victim normalization
-  {
-    const fake = buildMockHarness();
-    const result = await induceTiDbRetryableConflict({
-      endpoint: {host: '127.0.0.1', port: 4000},
-      databaseName: 'conflict_guard',
-      createConnection: fake.createConnection,
-      cycleArmDelayMs: 0,
-      timeoutMs: 1000,
+  // 2. The shared probe over the mysql wire: the same two conflicting logical
+  // requests and observable contract as every arm (coordinator decision 5).
+  const run = async (mode) => {
+    const engine = createConflictEngine(mode);
+    const probe = await induceTiDbRetryableConflict({
+      endpoint: {host: '127.0.0.1', port: 4000}, databaseName: 'conflict_guard',
+      createConnection: engine.createConnection, retrySleep: async () => {},
     });
+    return {probe, engine};
+  };
 
-    assert.equal(fake.connectionConfigs.length, 2);
-    assert.equal(fake.connectionConfigs[0].host, '127.0.0.1');
-    assert.equal(fake.connectionConfigs[0].port, 4000);
-    assert.equal(fake.connectionConfigs[0].database, 'conflict_guard');
+  const blocking = await run('blocking');
+  assert.equal(blocking.probe.observation.mechanism, 'blocking-then-commit');
+  assert.deepEqual(blocking.probe.observation.effects, {baseline: 100, final: 300, delta: 100});
+  assert.equal(evaluateScenarioARetryableConflictObservation(blocking.probe.observation).passed,
+    true);
+  assert.equal(blocking.engine.state.configs.length, 3);
+  assert.equal(blocking.engine.state.configs[0].host, '127.0.0.1');
+  assert.equal(blocking.engine.state.configs[0].port, 4000);
+  assert.equal(blocking.engine.state.configs[0].database, 'conflict_guard');
+  assert.equal(arrayFilter(blocking.engine.state.statements,
+    (sql) => sql === 'SET SESSION tidb_txn_mode = \'pessimistic\'').length, 3);
+  assert.equal(blocking.engine.state.ended, 3, 'every session is closed');
 
-    assert.deepEqual(result.victim, {
-      side: 'right',
-      code: 'ER_LOCK_DEADLOCK',
-      errno: 1213,
-      sqlState: '40001',
-      sqlMessage: 'Deadlock found when trying to get lock',
-    });
-    assert.equal(result.results.length, 2);
-    assert.equal(result.results[0].side, 'left');
-    assert.equal(result.results[0].succeeded, true);
-    assert.equal(result.results[0].error, null);
-    assert.equal(result.results[1].side, 'right');
-    assert.equal(result.results[1].succeeded, false);
-    assert.deepEqual(result.results[1].error, result.victim);
+  const conflict = await run('serialization');
+  assert.equal(conflict.probe.observation.mechanism, 'serialization-conflict');
+  assert.equal(conflict.probe.observation.victimSqlState, '40001');
+  assert.equal(conflict.probe.observation.retryCommitted, true);
+  assert.equal(conflict.probe.observation.effects.final, 300);
+  assert.equal(conflict.probe.victim.errno, 9007);
+  assert.equal(evaluateScenarioARetryableConflictObservation(conflict.probe.observation).passed,
+    true);
 
-    assert.equal(
-      arrayFilter(
-        fake.trace,
-        ({op, sql}) =>
-          op === 'query' &&
-          stringIncludes(sql, 'tidb_txn_mode = \'pessimistic\''),
-      ).length,
-      2,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'begin').length,
-      2,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'execute').length,
-      4,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'rollback').length,
-      2,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'end').length,
-      2,
-    );
-  }
-
-  // 3. Rejection when neither connection fails (0 victims) and cleanup
-  {
-    const fake = buildMockHarness({leftFail: false, rightFail: false});
-    await assert.rejects(
-      induceTiDbRetryableConflict({
-        endpoint: {host: '127.0.0.1', port: 4000},
-        databaseName: 'conflict_guard',
-        createConnection: fake.createConnection,
-        cycleArmDelayMs: 0,
-        timeoutMs: 1000,
-      }),
-      /TiDB conflict probe expected exactly one deadlock victim, got 0/u,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'rollback').length,
-      2,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'end').length,
-      2,
-    );
-  }
-
-  // 4. Rejection when both connections fail (2 victims) and cleanup
-  {
-    const fake = buildMockHarness({leftFail: true, rightFail: true});
-    await assert.rejects(
-      induceTiDbRetryableConflict({
-        endpoint: {host: '127.0.0.1', port: 4000},
-        databaseName: 'conflict_guard',
-        createConnection: fake.createConnection,
-        cycleArmDelayMs: 0,
-        timeoutMs: 1000,
-      }),
-      /TiDB conflict probe expected exactly one deadlock victim, got 2/u,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'rollback').length,
-      2,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'end').length,
-      2,
-    );
-  }
-
-  // 5. Timeout enforcement and cleanup verification
-  {
-    const fake = buildMockHarness({hangExecution: true});
-    await assert.rejects(
-      induceTiDbRetryableConflict({
-        endpoint: {host: '127.0.0.1', port: 4000},
-        databaseName: 'conflict_guard',
-        createConnection: fake.createConnection,
-        cycleArmDelayMs: 0,
-        timeoutMs: 30,
-      }),
-      /TiDB conflict probe timed out after 30ms/u,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'rollback').length,
-      2,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'end').length,
-      2,
-    );
-  }
-
-  // 6. Guaranteed rollback() and end() cleanup even when queries fail early
-  {
-    const fake = buildMockHarness({queryFail: true});
-    await assert.rejects(
-      induceTiDbRetryableConflict({
-        endpoint: {host: '127.0.0.1', port: 4000},
-        databaseName: 'conflict_guard',
-        createConnection: fake.createConnection,
-        cycleArmDelayMs: 0,
-        timeoutMs: 1000,
-      }),
-      /query failed on left/u,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'rollback').length,
-      2,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'end').length,
-      2,
-    );
-  }
-
-  // 7. Guaranteed rollback() and end() cleanup even when rollback throws
-  {
-    const fake = buildMockHarness({rollbackThrows: true});
-    const result = await induceTiDbRetryableConflict({
-      endpoint: {host: '127.0.0.1', port: 4000},
-      databaseName: 'conflict_guard',
-      createConnection: fake.createConnection,
-      cycleArmDelayMs: 0,
-      timeoutMs: 1000,
-    });
-
-    assert.equal(result.victim.side, 'right');
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'rollback').length,
-      2,
-    );
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'end').length,
-      2,
-    );
-  }
-
-  // 8. Guaranteed end() cleanup even when end throws
-  {
-    const fake = buildMockHarness({endThrows: true});
-    const result = await induceTiDbRetryableConflict({
-      endpoint: {host: '127.0.0.1', port: 4000},
-      databaseName: 'conflict_guard',
-      createConnection: fake.createConnection,
-      cycleArmDelayMs: 0,
-      timeoutMs: 1000,
-    });
-
-    assert.equal(result.victim.side, 'right');
-    assert.equal(
-      arrayFilter(fake.trace, ({op}) => op === 'end').length,
-      2,
-    );
-  }
+  const lost = await run('lost');
+  assert.equal(lost.probe.observation.effects.final, 200);
+  assert.deepEqual(
+    evaluateScenarioARetryableConflictObservation(lost.probe.observation).failures,
+    ['lost_update'],
+  );
 };
 
 await runProbeGuard();

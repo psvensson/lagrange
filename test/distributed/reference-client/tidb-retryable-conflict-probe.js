@@ -1,8 +1,9 @@
+import {runRetryableConflictProbe} from './retryable-conflict-probe.js';
+
 const ZERO = 0;
 const ONE = 1;
 const MAX_PORT = 65535;
-const DEADLOCK_TIMEOUT_MS = 15000;
-const CYCLE_ARM_DELAY_MS = 100;
+const DEFAULT_WRITE_DELTA_CENTS = 100;
 
 async function defaultCreateConnection(options) {
   const mysql = await import('mysql2/promise');
@@ -31,52 +32,6 @@ function connectionOptions(endpoint, databaseName) {
   };
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function settleQuery(promise, side) {
-  return promise.then(
-    () => Object.freeze({side, succeeded: true, error: null}),
-    (error) => Object.freeze({side, succeeded: false, error}),
-  );
-}
-
-async function withTimeout(promise, timeoutMs) {
-  let timer = null;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise((_resolve, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`TiDB conflict probe timed out after ${timeoutMs}ms`)),
-          timeoutMs,
-        );
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
-async function safeRollback(connection) {
-  if (!connection) return;
-  try {
-    await connection.rollback();
-  } catch {
-    // A deadlock victim may already have been rolled back by TiDB.
-  }
-}
-
-async function safeEnd(connection) {
-  if (!connection) return;
-  try {
-    await connection.end();
-  } catch {
-    // Preserve the semantic result; cleanup failure is not the conflict signal.
-  }
-}
-
 function normalizeError(error, side) {
   return Object.freeze({
     side,
@@ -87,72 +42,39 @@ function normalizeError(error, side) {
   });
 }
 
+// A mysql session for the shared probe, in TiDB's pessimistic mode.
+async function tidbSession(connect, endpoint, databaseName) {
+  const connection = await connect(connectionOptions(endpoint, databaseName));
+  await connection.query('SET SESSION tidb_txn_mode = \'pessimistic\'');
+  return {
+    query: async (sql, parameters) => (await connection.execute(sql, parameters))[ZERO],
+    begin: () => connection.beginTransaction(),
+    commit: () => connection.commit(),
+    rollback: () => connection.rollback(),
+    end: () => connection.end(),
+  };
+}
+
+/**
+ * The shared retryable-conflict probe (retryable-conflict-probe.js) over the
+ * TiDB mysql wire: the same two conflicting logical requests and the same
+ * observable contract as every other arm.
+ */
 async function induceTiDbRetryableConflict(options = {}) {
   const endpoint = normalizeEndpoint(options.endpoint);
   const databaseName = String(options.databaseName || '').trim();
   if (!databaseName) throw new Error('TiDB conflict probe requires databaseName');
   const connect = options.createConnection || defaultCreateConnection;
-  const cycleArmDelayMs = Number.isFinite(options.cycleArmDelayMs) ?
-    Math.max(ZERO, Number(options.cycleArmDelayMs)) : CYCLE_ARM_DELAY_MS;
-  const timeoutMs = Number.isFinite(options.timeoutMs) ?
-    Math.max(ONE, Number(options.timeoutMs)) : DEADLOCK_TIMEOUT_MS;
-  let left = null;
-  let right = null;
-
-  try {
-    left = await connect(connectionOptions(endpoint, databaseName));
-    right = await connect(connectionOptions(endpoint, databaseName));
-    await left.query('SET SESSION tidb_txn_mode = \'pessimistic\'');
-    await right.query('SET SESSION tidb_txn_mode = \'pessimistic\'');
-    await left.beginTransaction();
-    await right.beginTransaction();
-
-    await left.execute(
-      'UPDATE stock SET quantity = quantity + 1 ' +
-        'WHERE warehouse_id = ? AND item_id = ?',
-      [ONE, ONE],
-    );
-    await right.execute(
-      'UPDATE stock SET quantity = quantity + 1 ' +
-        'WHERE warehouse_id = ? AND item_id = ?',
-      [ONE, 2],
-    );
-
-    const leftWait = settleQuery(left.execute(
-      'UPDATE stock SET quantity = quantity + 1 ' +
-        'WHERE warehouse_id = ? AND item_id = ?',
-      [ONE, 2],
-    ), 'left');
-    await sleep(cycleArmDelayMs);
-    const rightWait = settleQuery(right.execute(
-      'UPDATE stock SET quantity = quantity + 1 ' +
-        'WHERE warehouse_id = ? AND item_id = ?',
-      [ONE, ONE],
-    ), 'right');
-
-    const results = await withTimeout(
-      Promise.all([leftWait, rightWait]),
-      timeoutMs,
-    );
-    const failures = results.filter(({succeeded}) => !succeeded);
-    if (failures.length !== ONE) {
-      throw new Error(
-        `TiDB conflict probe expected exactly one deadlock victim, got ${failures.length}`,
-      );
-    }
-    return Object.freeze({
-      victim: normalizeError(failures[ZERO].error, failures[ZERO].side),
-      results: Object.freeze(results.map(({side, succeeded, error}) =>
-        Object.freeze({
-          side,
-          succeeded,
-          error: error ? normalizeError(error, side) : null,
-        }))),
-    });
-  } finally {
-    await Promise.all([safeRollback(left), safeRollback(right)]);
-    await Promise.all([safeEnd(left), safeEnd(right)]);
-  }
+  return runRetryableConflictProbe({
+    openSession: () => tidbSession(connect, endpoint, databaseName),
+    statements: {read: 'SELECT ytd_cents FROM warehouse WHERE id = ?',
+      update: 'UPDATE warehouse SET ytd_cents = ytd_cents + ? WHERE id = ?'},
+    describeError: normalizeError,
+    warehouseId: Number.isInteger(options.warehouseId) ? options.warehouseId : ONE,
+    delta: Number.isInteger(options.writeDeltaCents) ? options.writeDeltaCents :
+      DEFAULT_WRITE_DELTA_CENTS,
+    retrySleep: options.retrySleep,
+  });
 }
 
 export {
