@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 158,
     "solver-tooling": 7,
-    "storage-partition": 210,
+    "storage-partition": 211,
     "storage-raft": 146,
     "test-infrastructure": 154,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2553,
-  "digest": "fnv1a32-d607a1f6",
+  "censusSize": 2554,
+  "digest": "fnv1a32-708216e7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a3677b35",
+  "observationDigest": "fnv1a32-80332f4b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1343,6 +1343,7 @@
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
     "test/partition/learner-promotion-proof-committed-admission.test.js": "storage-partition",
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": "storage-partition",
+    "test/partition/learner-promotion-proof-epoch-guard.test.js": "storage-partition",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "storage-partition",
     "test/partition/managed-merge-workflow.test.js": "storage-partition",
     "test/partition/managed-split-epoch-persistence-effects.test.js": "storage-partition",
@@ -10870,6 +10871,14 @@
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": {
       "files": [
         "src/partition/partition-service-learner-promotion-proof-methods.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/partition/learner-promotion-proof-epoch-guard.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
         "src/transport/transport-semantic-outcome.js"
       ]
     },
