@@ -1,6 +1,6 @@
 {
   "schema": "test-receipt/1",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
     {
       "id": "deferred-authority-read-consumed-within-create-deadline",
@@ -24,10 +24,10 @@
     },
     {
       "id": "independent-verification",
-      "passed": false,
-      "evidence": "red: not yet implemented"
+      "passed": true,
+      "evidence": "log.ndjson verification entries 2026-11-02 (subagent:a4ecae6f36897031a): reject at 5d7469476 (fingerprint b4b0d036...), approve at a6bf74754 (fingerprint af25e435...)"
     }
   ],
   "evidence": [],
-  "applicability": "Attempt 2 on branch work/fresh-create-failure-after-committed-admission-20261102 (verifier rejection of attempt 1 corrected: B1); focused lanes green; independent verification outstanding."
+  "applicability": "All six receipts on branch work/fresh-create-failure-after-committed-admission-20261102: attempt 1 (5d7469476) and attempt 2 (a6bf74754, verifier B1 corrected), merged with origin/main b3b366573 with no src change after a6bf74754; scope = the bounded repair L2 + L3 of the fresh-create chain; the reproducer receipt is superseded under R09 by the induced-unavailability production witness; the live run fresh-create-b-5d7469476-20261102T113540Z opened the serve lane and did not exercise the repaired path (relocated evidence, docs/evidence/fresh-create-failure-after-committed-admission-2026-11/); not measured: no live run of the restart (resumed SYNCING) path; scenario d-user-table-routable remains red for the next link (fresh-create-release-authority-from-committed-operation)."
 }
