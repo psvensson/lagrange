@@ -167,7 +167,7 @@ fails with a cleanup claim that the failed-create cleanup owner consumes.
 | C | `releaseMemberIds` | 2 | 2 |
 | C | `HOSTED_REPLICA` / `hosted_replica` | 2 / 1 | 0 / 0 |
 | C | `runParticipantCutover`, `cohortOf`, `releaseControlOwnerFirst` | 3, 1, 1 | 0, 0, 0 |
-| C (census) | `CUTOVER_PAUSED` / `readParticipantReleaseFacts` / `participantCutoverPause` | — | 15 / 4 / 4 |
+| C (census) | `CUTOVER_PAUSED` / `readParticipantReleaseFacts` / `participantCutoverPause` | - | 15 / 4 / 4 |
 | L5 (C8) | `seedLocalReplicaVoterRaftRole` / `markServiceRowLocalOnly` / `reconcileLocalOnlyServiceRows` | 2 / 2 / 3 | 4 / 5 / 3 |
 
 The near-zero test counts on `hosted_replica`, `cohortOf`, `claimCleanup` and the planner protection mean these
@@ -183,10 +183,10 @@ decision edges are unguarded today. Both quests start with red tests, so the cou
 | Seed release passes | `seed-release-once-per-partition-cohort` (open, 0 attempts), `seed-participant-release-applied-position-barrier` (open, 4 attempts) | Seed-pass semantics (one ask per distinct cohort, applied-position barrier) | Not the fresh-create or existing-origin recovery path | No overlap with B. C must preserve their seals (seed trigger unchanged). |
 | Failed-create host custody | `replica-cleanup-host-custody` (open, 2 attempts): host retains unfinished shutdowns and never reports a successful release | Fence semantics | It does not decide whether a FAILED row gets a cleanup claim | B consumes the fence unchanged. Relation recorded. |
 | `replica-opening-history`, `startup-refusal-cleanup-custody`, `retained-seed-original-handoff` | Open, raft-rs-full-cutover | Opening history and startup refusal custody | Not on this chain (no opening or startup refusal in the window) | No relation beyond the shared epic |
-| TX1 pause/release | `replicated-transaction-decision-and-apply` (open, 49 attempts), `tx1-single-path-alpha` | The pause is the TX1 drain fence | — | C's reordering of the pause is gated on not weakening TX1 drain. The verifier runs that template. |
+| TX1 pause/release | `replicated-transaction-decision-and-apply` (open, 49 attempts), `tx1-single-path-alpha` | The pause is the TX1 drain fence | - | C's reordering of the pause is gated on not weakening TX1 drain. The verifier runs that template. |
 | Local-only row re-drive (L5) | CL-016 (2026-06-11, local seed), CL-021 (2026-06-12, accepted fix: "SAME idempotent UPSERT path"), CL-035 (2026-06-14, voter-role seed e76f0ac09; guarded) | UPSERT re-drive accepted | `1aea11baf` (2026-09-30) changed it to insert-only admission. The CL-035 seed's local-only mark became a guaranteed UNIQUE plus a false `converged` | Routed to C8 (`voter-ready-from-committed-role-and-node`), which the census says must re-prove CL-035 from the committed configuration |
 | Routing by readiness projection (L1) | `readiness-observation-currency.md` (2026-10-03, 21 prior fixes "moved not closed"); C5 | Rejected: carve-outs, fail-open, `!== false` defaults, timers, cache-as-authority | Planning record, not sealed | Routed to C5. B must not add a routing exception. |
-| Exhausted | `rolling-restart-core-stability` (EXHAUSTED, "must not be reopened") | — | — | Not touched |
+| Exhausted | `rolling-restart-core-stability` (EXHAUSTED, "must not be reopened") | - | - | Not touched |
 
 ## Evidence and closure
 

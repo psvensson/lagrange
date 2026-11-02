@@ -35,7 +35,7 @@
     },
     {
       "id": "trace-first-divergence",
-      "statement": "The first divergence is recorded in quest fresh-create-failure-after-committed-admission evidence reproducer-run-2026-11-02-5d7469476.md (Next link) and in evidence/research-2026-11-02.md here; a new witness that moves it is recorded before further src changes."
+      "statement": "The first divergence is recorded in docs/evidence/fresh-create-failure-after-committed-admission-2026-11/reproducer-run-2026-11-02-5d7469476.md (Next link) and in evidence/research-2026-11-02.md here; a new witness that moves it is recorded before further src changes."
     },
     {
       "id": "no-symptom-patches",
