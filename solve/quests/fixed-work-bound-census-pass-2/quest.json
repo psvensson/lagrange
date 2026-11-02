@@ -16,7 +16,14 @@
     }
   },
   "constraints": [
-    {"id": "scope", "statement": "Evidence and design only, as the first pass: no src change, no test-bound change; repairs are separate fix quests."},
-    {"id": "proof", "statement": "Static analysis at the sealed base; outcomes not traced are said to be not traced; independent review before landing. Not sealed until the lead starts the pass."}
-  ]
+    {
+      "id": "scope",
+      "statement": "Evidence and design only, as the first pass: no src change, no test-bound change; repairs are separate fix quests."
+    },
+    {
+      "id": "proof",
+      "statement": "Static analysis at the sealed base; outcomes not traced are said to be not traced; independent review before landing. Not sealed until the lead starts the pass."
+    }
+  ],
+  "sealedAt": "c88a06ab069bc372260788ec004452e2511ab5fc"
 }
