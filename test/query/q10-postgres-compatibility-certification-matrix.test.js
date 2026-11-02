@@ -1261,7 +1261,7 @@ describe('Q10 PostgreSQL compatibility certification matrix', () => {
     assert.equal(generatedMatrix.summary.negativeControlCount, 9);
   });
 
-  it('matches committed docs/postgres-compatibility-matrix.json byte-for-byte in structure and digest', () => {
+  it('matches committed docs/postgres-compatibility-matrix.json exactly in certified content (all fields but environment) and digest', () => {
     const committedMatrix = JSON.parse(
       fs.readFileSync(MATRIX_JSON_PATH, 'utf8'),
     );
@@ -1292,8 +1292,11 @@ describe('Q10 PostgreSQL compatibility certification matrix', () => {
   });
 
   it('a client build outside the declared supported range is refused', () => {
-    for (const [clientId, version] of [[PG_COMPAT_CLIENT_ID.PSQL, '9.6'],
-      [PG_COMPAT_CLIENT_ID.NODE_PG, '7.18.2'], [PG_COMPAT_CLIENT_ID.PSQL, 'unknown']]) {
+    // The certified majors are pinned here, not read back from the module.
+    for (const [clientId, version, supportedMajors] of [
+      [PG_COMPAT_CLIENT_ID.PSQL, '9.6', [14, 16]],
+      [PG_COMPAT_CLIENT_ID.NODE_PG, '7.18.2', [8]],
+      [PG_COMPAT_CLIENT_ID.PSQL, 'unknown', [14, 16]]]) {
       const outside = {...driverVersions, [clientId]: version};
       assert.throws(
         () => generatePostgresCompatibilityMatrix({
@@ -1303,7 +1306,9 @@ describe('Q10 PostgreSQL compatibility certification matrix', () => {
         }),
         (err) => err instanceof PostgresCompatibilityMatrixError &&
           err.code === PG_COMPAT_MATRIX_ERROR_CODE.DRIVER_VERSION_UNSUPPORTED &&
-          err.details?.clientId === clientId,
+          err.details?.clientId === clientId &&
+          err.details?.version === version &&
+          JSON.stringify(err.details?.supportedMajors) === JSON.stringify(supportedMajors),
         `${clientId} ${version} is not a certified client build`,
       );
     }
