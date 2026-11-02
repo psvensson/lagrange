@@ -15,6 +15,7 @@ import {
   resolveProof,
 } from '../../scripts/proof-authority.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
+import {checkoutExecutionReport} from './execution-report-fixture.js';
 
 function git(cwd, ...args) {
   return execGit(args, {cwd, encoding: 'utf8'}).trim();
@@ -58,7 +59,7 @@ test('one recorded proof is reusable from another checkout and is not a release 
   const first = recordProof({
     proofId: PROOF.RELEASE_FULL,
     sha,
-    cwd: source,
+    cwd: source, report: checkoutExecutionReport(source),
     completedAt: '2026-09-11T18:00:00.000Z',
     now: Date.parse('2026-09-11T18:00:00.000Z'),
     producer: {kind: 'test-fixture', id: 'first-run'},
@@ -83,14 +84,14 @@ test('one recorded proof is reusable from another checkout and is not a release 
 test('recording the same proof twice is idempotent and never rewrites the receipt', () => {
   const {source, sha} = fixture();
   const first = recordProof({
-    proofId: PROOF.RELEASE_FULL, sha, cwd: source,
+    proofId: PROOF.RELEASE_FULL, sha, cwd: source, report: checkoutExecutionReport(source),
     completedAt: '2026-09-11T18:00:00.000Z', now: 1_789_150_400_000,
     producer: {kind: 'fixture', id: 'first'},
   });
   const ref = proofRef(PROOF.RELEASE_FULL, sha);
   const before = git(source, 'ls-remote', '--refs', 'origin', ref).split(/\s/u)[0];
   const second = recordProof({
-    proofId: PROOF.RELEASE_FULL, sha, cwd: source,
+    proofId: PROOF.RELEASE_FULL, sha, cwd: source, report: checkoutExecutionReport(source),
     completedAt: '2026-09-12T18:00:00.000Z', now: 1_789_236_800_000,
     producer: {kind: 'fixture', id: 'second'},
   });
@@ -113,7 +114,8 @@ test('a malformed existing proof ref fails closed instead of being blessed or re
   assert.equal(result.outcome, OUTCOME.UNAVAILABLE);
   assert.match(result.because, /annotated tag/u);
   assert.throws(
-    () => recordProof({proofId: PROOF.RELEASE_FULL, sha, cwd: source}),
+    () => recordProof({proofId: PROOF.RELEASE_FULL, sha, cwd: source,
+      report: checkoutExecutionReport(source)}),
     /proof store unavailable/u,
   );
 });
@@ -162,7 +164,7 @@ test('buildReceipt and recordProof populate non-empty producer attribution by de
   const recorded = recordProof({
     proofId: PROOF.RELEASE_FULL,
     sha: commitSha,
-    cwd: source,
+    cwd: source, report: checkoutExecutionReport(source),
   });
   assert.equal(recorded.outcome, OUTCOME.PROVEN);
   assert.ok(recorded.receipt.producer.kind && recorded.receipt.producer.kind.length > 0);

@@ -22,6 +22,10 @@ import {Parser} from 'tap-parser';
 import {
   extractTimeoutDeclarations,
 } from './checks/test-timeout-declarations.js';
+import {
+  EXECUTION_SECTIONS_ENV, SECTION_KIND, appendExecutionSection, describeCheckout,
+  fileResultRecord,
+} from './test-execution-report.js';
 
 const DEFAULT_JOBS = 4;
 const DEFAULT_TIMEOUT_MS = 600000;
@@ -317,6 +321,11 @@ function prepareTestRun(file, options) {
   // selected. Each file belongs to this runner's TAP capture, not its caller's
   // internal test stream; establish that boundary for both launch methods.
   delete env.NODE_TEST_CONTEXT;
+  // A test file is never part of the run that reports it: a runner it spawns
+  // drives the test's own fixtures (deliberately failing files, throwaway
+  // repositories), and its sections would be read as this proof's
+  // (proof-receipt-bound-to-validated-execution).
+  delete env[EXECUTION_SECTIONS_ENV];
   // Honor per-test {timeout: N} options written in the file: this tap
   // version silently CAPS every test at the 30s default - neither the
   // test option nor t.setTimeout() can extend past it (verified
@@ -804,13 +813,43 @@ async function main() {
     ...options,
     ledgerFile: path.resolve(process.cwd(), TEST_RESULTS_LEDGER_FILE),
   };
+  const report = executionSections(files);
   const summary = await runTestFiles(files, runOptions);
   if (summary.reasons.length > 0) {
     process.stderr.write(`${summary.reasons.join(REASON_SEPARATOR)}\n`);
   }
   process.stdout.write(`${formatTestFilesSummary(summary)}\n`);
-  if (summary.ok) return SUCCESS_EXIT_CODE;
-  return retryFailedOnce(summary, runOptions);
+  const retried = new Map();
+  const status = summary.ok ? SUCCESS_EXIT_CODE : await retryFailedOnce(summary, runOptions,
+    {runFile: async (file, fileOptions) => {
+      const result = await runTestFile(file, fileOptions);
+      retried.set(file, result);
+      return result;
+    }});
+  report.end(summary, retried, status);
+  return status;
+}
+
+// The execution report's runner sections (scripts/test-execution-report.js):
+// when the environment names a sections file, this run appends where it ran
+// and what it was given before running anything, and every file's result -
+// each attempt of a retried file, the first failure kept - with its exit
+// status after the last attempt. A run killed in between leaves its start
+// alone: a truncated run the proof authority refuses.
+function executionSections(files, env = process.env) {
+  const file = env[EXECUTION_SECTIONS_ENV];
+  if (!file) return {end: () => {}};
+  const runId = `${process.pid}-${Date.now()}`;
+  appendExecutionSection(file, {kind: SECTION_KIND.START, runId,
+    argv: process.argv.slice(2), checkout: describeCheckout(process.cwd()),
+    planned: [...files]});
+  return {
+    end(summary, retried, exitStatus) {
+      appendExecutionSection(file, {kind: SECTION_KIND.END, runId, exitStatus,
+        results: summary.results.map((result) =>
+          fileResultRecord(result, retried.get(result.file) || null))});
+    },
+  };
 }
 
 // The first attempt's output moves aside before the retry reopens its path,

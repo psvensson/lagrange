@@ -72,7 +72,13 @@ jobs:
     # checkout would buy nothing. `github.event.head_commit` exists for push
     # events only, which is exactly the restriction we want.
     runs-on: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[ci:self-hosted]')) && 'self-hosted' || 'ubuntu-24.04' }}
-    timeout-minutes: 120
+    # GitHub's maximum for a hosted job, for every event. A product change's
+    # proof is far larger than a scripts-only one: PR #184's 1892-file proof
+    # was killed at the former 120-minute limit (run 41431327759, 2026-11-02)
+    # with its serial exclusive lane at 73 of 103 files, and a push to main is
+    # the exact-sha proof the publisher reads, which must not be cut short
+    # either. Hangs are bounded per file (600s) and per install step below.
+    timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -129,7 +135,7 @@ jobs:
         # Bounds a HANG, not the normal duration. Measured on hosted runners:
         # 115s, and 1252s on a run that succeeded, and once 62 minutes hung
         # until cancelled by hand. The spread is wide, so this sits well above
-        # the slowest success and well below the 120-minute job backstop; the
+        # the slowest success and far below the 360-minute job backstop; the
         # per-download --max-time values are the tighter bound.
         timeout-minutes: 30
         run: |

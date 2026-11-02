@@ -53,6 +53,12 @@ import {spawnGit} from './git-invocation.js';
 import {
   SUBSYSTEM_MANIFEST_PATH,
 } from './test-subsystem-classification-constants.js';
+import {wholeCorpusFiles} from '../plan-test-lane.js';
+import {
+  EXECUTION_REPORT_PATH, EXECUTION_SECTIONS_ENV, EXECUTION_SECTIONS_PATH,
+  buildExecutionReport, describeCheckout, openExecutionSections, readExecutionRuns,
+  writeExecutionReport,
+} from '../test-execution-report.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -104,6 +110,11 @@ const LABEL_CORPUS_RECEIPT_SKIPPED = 'whole-corpus receipt not recorded:';
 const CORPUS_PROOF_ID = 'corpus-full-v1';
 const PROOF_AUTHORITY_SCRIPT = 'scripts/proof-authority.js';
 const PROOF_RECORD_COMMAND = 'record';
+const PROOF_REPORT_FLAG = '--report';
+const REPORT_PRODUCER_KIND = 'push-gate';
+const REPORT_PRODUCER_ID_PREFIX = 'pid-';
+const REPORT_LABEL = Object.freeze({FULL: 'full-corpus', CONE: 'cone'});
+const LABEL_REPORT_UNWRITTEN = 'execution report not written (no receipt can rest on it):';
 const EMPTY_REASON = 'the authority gave no reason';
 const RECORD_TIMEOUT_MS = 60000;
 const EMPTY_TEXT = '';
@@ -280,6 +291,7 @@ function executeClassifiedRunner(testList, options = {}) {
   const {spawn = spawnSync} = options;
   const result = spawn(process.execPath, [CLASSIFIED_RUNNER, STDIN_FLAG], {
     cwd: root,
+    env: options.env,
     input: arrayJoin(testList, NEWLINE) + NEWLINE,
     stdio: [...STDIO_INPUT_THEN_INHERIT],
   });
@@ -351,7 +363,7 @@ function readAllClassifiedCorpusTests(planRoot = root, options = {}) {
 function executeFullCorpus(options = {}) {
   const {spawn = spawnSync} = options;
   const result = spawn(NPM, [...NPM_RUN_SILENT, FULL_CORPUS_SCRIPT],
-    {cwd: root, stdio: STDIO_INHERIT});
+    {cwd: root, env: options.env, stdio: STDIO_INHERIT});
   return result?.status ?? EXIT_FAILURE;
 }
 
@@ -410,7 +422,8 @@ export function recordCorpusProof(sha, options = {}) {
     return null;
   }
   const result = spawn(process.execPath,
-    [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, sha],
+    [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, sha,
+      PROOF_REPORT_FLAG, gateReportFile(options)],
     {cwd: root, encoding: TEXT_ENCODING, timeout: RECORD_TIMEOUT_MS});
   const recorded = result?.status === EXIT_SUCCESS;
   write(`${LOG_PREFIX} ${recorded ?
@@ -418,6 +431,11 @@ export function recordCorpusProof(sha, options = {}) {
     `${LABEL_CORPUS_RECEIPT_SKIPPED} ${stringTrim(
       String(result?.stderr || result?.stdout || EMPTY_REASON))}`}${NEWLINE}`);
   return recorded;
+}
+
+// The execution report the gate's run wrote, which the receipt rests on.
+function gateReportFile(options) {
+  return path.join(options.reportRoot || root, EXECUTION_REPORT_PATH);
 }
 
 // Already an ancestor of origin/main: the receipt's own push is then exempt
@@ -465,19 +483,48 @@ export function runDecision(plan, decision, runners = {}) {
     record = recordCorpusProof,
     head = headRevision,
     writeScope = writeProofScope,
+    reportRoot = root,
   } = runners;
+  const sha = head();
+  const fullCorpus = decision.mode === PROOF_MODE.FULL_CORPUS;
   // The run that made the decision records what it proves, so a consumer
   // (the behavioural canary) never has to infer the scope from log text.
-  writeScope({
-    head: head(),
-    fullCorpus: decision.mode === PROOF_MODE.FULL_CORPUS,
-    plan,
-  });
-  if (decision.mode !== PROOF_MODE.FULL_CORPUS) {
-    return runCone(planTestPaths(plan));
+  writeScope({head: sha, fullCorpus, plan});
+  const status = reportedGateRun({reportRoot, fullCorpus, plan}, (env) =>
+    (fullCorpus ? runFull({env}) : runCone(planTestPaths(plan), {env})));
+  if (fullCorpus && status === EXIT_SUCCESS) record(sha, {reportRoot});
+  return status;
+}
+
+/**
+ * Run the gate's tests with the runner's execution sections on, and write the
+ * execution report a receipt is recorded from: the checkout taken before
+ * anything runs, the command's status, the files the run owes (the whole
+ * corpus, or the cone) and every runner section (proof-receipt-bound-to-
+ * validated-execution). A cone's report is what the local corpus completes.
+ * @param {{reportRoot: string, fullCorpus: boolean, plan: Object}} input
+ * @param {Function} run called with the environment the runner must see
+ * @return {number} the run's status
+ */
+export function reportedGateRun({reportRoot, fullCorpus, plan}, run) {
+  const checkout = describeCheckout(root);
+  const sections = openExecutionSections(path.join(reportRoot, EXECUTION_SECTIONS_PATH));
+  const status = run({...process.env, [EXECUTION_SECTIONS_ENV]: sections});
+  // Bookkeeping never changes the gate's verdict: a report that cannot be
+  // written is absent, and an absent report mints no receipt.
+  try {
+    writeExecutionReport(path.join(reportRoot, EXECUTION_REPORT_PATH), buildExecutionReport({
+      candidate: {sha: checkout.head, tree: checkout.tree, clean: checkout.clean,
+        identity: null},
+      producer: {kind: REPORT_PRODUCER_KIND, id: `${REPORT_PRODUCER_ID_PREFIX}${process.pid}`},
+      commands: [{label: fullCorpus ? REPORT_LABEL.FULL : REPORT_LABEL.CONE,
+        argv: process.argv, exitStatus: status}],
+      planned: fullCorpus ? wholeCorpusFiles(root) : planTestPaths(plan),
+      runs: readExecutionRuns(sections),
+    }));
+  } catch (error) {
+    process.stdout.write(`${LOG_PREFIX} ${LABEL_REPORT_UNWRITTEN} ${error.message}${NEWLINE}`);
   }
-  const status = runFull();
-  if (status === EXIT_SUCCESS) record(head());
   return status;
 }
 

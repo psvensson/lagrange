@@ -23,10 +23,15 @@
  * receipts merely because they once passed.
  */
 
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 import {spawnGit} from './checks/git-invocation.js';
 import {computeReleaseProofIdentity} from './release-proof-identity.js';
+import {
+  EXECUTION_PROBLEM, RETRY_POLICY, describeCheckout, executionReportProblems,
+  readExecutionReport,
+} from './test-execution-report.js';
 
 import {
   ACTION, authorizeAction, isAuthorized,
@@ -52,6 +57,15 @@ const OBJECT_TYPE_TAG = 'tag';
 const OBJECT_TYPE_COMMIT = 'commit';
 const TAG_HEADER_TYPE_LINE = 'type commit';
 const RECEIPT_OUTCOME_PASSED = 'passed';
+// A pass a contract's sealed retry policy admitted with a qualification: the
+// receipt names it and is never a clean pass (proof-receipt-bound-to-
+// validated-execution).
+const RECEIPT_OUTCOME_QUALIFIED = 'passed-qualified';
+const RECORD_REFUSED = 'proof-record-refused';
+const RECORD_REFUSED_NAME = 'ProofRecordRefused';
+const REPORT_DIGEST = Object.freeze({ALGORITHM: 'sha256', ENCODING: 'hex'});
+const IDENTITY_UNVERIFIABLE =
+  'the recorder is not in a clean checkout of the subject: its identity is unverifiable';
 const RECEIPT_PROBLEM_SEPARATOR = '; ';
 const RECEIPT_MESSAGE_NEWLINE = '\n';
 
@@ -79,12 +93,14 @@ const FLAG_REMOTE = '--remote';
 const FLAG_PRODUCER_KIND = '--producer-kind';
 const FLAG_PRODUCER_ID = '--producer-id';
 const FLAG_PRODUCER_URL = '--producer-url';
+const FLAG_REPORT = '--report';
+const EXIT_REFUSED = 3;
 const COMMAND_CHECK = 'check';
 const COMMAND_RECORD = 'record';
 const COMMAND_REF = 'ref';
 const USAGE_TEXT =
   'usage: proof-authority.js <check|record|index|ref> <proof-id> <full-sha> ' +
-  '[--remote name] [--json]\n';
+  '[--remote name] [--json] [--report execution-report.json]\n';
 
 const REUSE = Object.freeze({
   IMMUTABLE_SHA: 'immutable-sha',
@@ -114,6 +130,11 @@ const CONTRACTS = Object.freeze({
     // only in the version authorities and the records the identity masks is
     // proven by its sibling's receipt.
     identityReuse: true,
+    // Sealed: a file green only on its retry is not a release proof.
+    retryPolicy: RETRY_POLICY.REFUSE,
+    // Sealed: the only proof a release report may cite instead of running is
+    // the exact commit's own whole-corpus receipt.
+    citableProofs: Object.freeze([PROOF.CORPUS_FULL]),
     description: 'complete release proof for one immutable repository commit',
   }),
   // The whole behavioural corpus, green for one immutable commit. The local
@@ -129,6 +150,10 @@ const CONTRACTS = Object.freeze({
   [PROOF.CORPUS_FULL]: Object.freeze({
     reuse: REUSE.IMMUTABLE_SHA,
     identityReuse: false,
+    // Sealed: the corpus proves green files, not files green on a retry.
+    retryPolicy: RETRY_POLICY.REFUSE,
+    // Sealed: the whole corpus is run, never cited.
+    citableProofs: Object.freeze([]),
     description: 'whole behavioural corpus green for one immutable commit',
   }),
 });
@@ -183,6 +208,21 @@ function checkedOutIdentity({sha, cwd, git}) {
     {cwd: text(top.stdout)});
   if (status.status !== 0 || text(status.stdout) !== EMPTY_TEXT) return null;
   return computeReleaseProofIdentity(text(top.stdout));
+}
+
+/**
+ * The candidate a producer sets out to prove: the checkout at cwd, its tree,
+ * whether it is that commit's bytes, and its release proof identity. Taken
+ * before anything runs, and carried by the execution report.
+ * @param {{cwd?: string, git?: Function}} [options]
+ * @return {{sha: string|null, tree: string|null, clean: boolean,
+ *   identity: Object|null}}
+ */
+function describeCandidate({cwd = process.cwd(), git = runGit} = {}) {
+  const checkout = describeCheckout(cwd);
+  const identity = checkout.clean ? checkedOutIdentity({sha: checkout.head, cwd, git}) : null;
+  return {sha: checkout.head, tree: checkout.tree, clean: identity !== null,
+    identity: identity ? {algorithm: identity.algorithm, digest: identity.digest} : null};
 }
 
 function receiptTagName(proofId, sha) {
@@ -254,6 +294,14 @@ function parseAnnotatedTag(body) {
   return {ok: true, headers, receipt};
 }
 
+// A clean pass always; a qualified pass only under a contract whose sealed
+// retry policy admits qualified results.
+function passOutcome(proofId, outcome) {
+  if (outcome === RECEIPT_OUTCOME_PASSED) return true;
+  return outcome === RECEIPT_OUTCOME_QUALIFIED &&
+    contractFor(proofId)?.retryPolicy === RETRY_POLICY.ADMIT_QUALIFIED;
+}
+
 function receiptProblems({proofId, sha, objectType, parsed, identity = null}) {
   if (objectType !== OBJECT_TYPE_TAG) return [PROOF_REF_NOT_TAG];
   if (!parsed.ok) return [parsed.because];
@@ -270,7 +318,7 @@ function receiptProblems({proofId, sha, objectType, parsed, identity = null}) {
   if (receipt?.schema !== RECEIPT_SCHEMA) problems.push(RECEIPT_SCHEMA_MISMATCH);
   if (receipt?.proofId !== proofId) problems.push(RECEIPT_PROOF_ID_MISMATCH);
   if (receipt?.subjectSha !== subject) problems.push(RECEIPT_SUBJECT_SHA_MISMATCH);
-  if (receipt?.outcome !== RECEIPT_OUTCOME_PASSED) problems.push(RECEIPT_NOT_A_PASS);
+  if (!passOutcome(proofId, receipt?.outcome)) problems.push(RECEIPT_NOT_A_PASS);
   if (receipt?.reuse !== REUSE.IMMUTABLE_SHA) problems.push(RECEIPT_NOT_IMMUTABLE);
   if (!receipt?.completedAt || Number.isNaN(Date.parse(receipt.completedAt))) {
     problems.push(RECEIPT_TIME_INVALID);
@@ -490,21 +538,95 @@ function buildReceipt({
   completedAt = new Date().toISOString(),
   producer = {},
   identity = null,
+  execution = null,
   env = process.env,
 }) {
   const attributableProducer = defaultProducer(producer, env);
+  const qualified = execution?.qualification?.length > 0;
   return Object.freeze({
     schema: RECEIPT_SCHEMA,
     proofId,
     subjectSha: sha,
-    outcome: RECEIPT_OUTCOME_PASSED,
+    outcome: qualified ? RECEIPT_OUTCOME_QUALIFIED : RECEIPT_OUTCOME_PASSED,
     reuse: REUSE.IMMUTABLE_SHA,
     completedAt,
     producer: Object.freeze({...attributableProducer}),
     ...(identity ? {identity: Object.freeze({
       algorithm: identity.algorithm, digest: identity.digest,
     })} : {}),
+    ...(execution ? {execution: Object.freeze({...execution})} : {}),
   });
+}
+
+/**
+ * A recording the authority refused: the typed problems of its execution
+ * report. Nothing was written.
+ */
+class ProofRecordRefused extends Error {
+  constructor(proofId, sha, problems) {
+    super(`${RECORD_REFUSED}: ${proofId} ${sha}: ${problems.map((entry) =>
+      `${entry.code} (${entry.detail})`).join(RECEIPT_PROBLEM_SEPARATOR)}`);
+    this.name = RECORD_REFUSED_NAME;
+    this.code = RECORD_REFUSED;
+    this.problems = problems;
+  }
+}
+
+function subjectTree({sha, cwd, git}) {
+  const tree = git(['rev-parse', '--verify', '--quiet', `${sha}^{tree}`], {cwd});
+  return tree.status === 0 ? text(tree.stdout) : null;
+}
+
+// A proof the report says it reused must be one the contract's seal lets it
+// cite, and must resolve now, for this very commit (never through a sibling's
+// release identity), to the very receipt object it cited.
+function reusedProofProblems({report, sha, contract, remote, cwd, git}) {
+  const problems = [];
+  for (const cited of report.reusedProofs) {
+    if (!contract.citableProofs.includes(cited?.proofId)) {
+      problems.push({code: EXECUTION_PROBLEM.REUSED_PROOF_NOT_CITABLE,
+        detail: String(cited?.proofId)});
+      continue;
+    }
+    const resolved = resolveProof({proofId: cited.proofId, sha, remote, cwd, git});
+    if (resolved?.outcome !== OUTCOME.PROVEN || resolved.resolution !== RESOLUTION.EXACT_SHA ||
+      resolved.objectSha !== cited?.objectSha) {
+      problems.push({code: EXECUTION_PROBLEM.REUSED_PROOF_UNPROVEN,
+        detail: `${cited?.proofId} ${cited?.objectSha}: ${resolved.outcome}`});
+    }
+  }
+  return problems;
+}
+
+/**
+ * Validate the execution report a passing receipt would rest on, and answer
+ * the receipt's execution record. Refuses (throws ProofRecordRefused) on any
+ * problem: absent, partial, another candidate, a failed command, a failed,
+ * skipped or zero-assertion file, a truncated run, a retry the contract's
+ * sealed policy does not admit, or a cited proof that does not resolve.
+ * @return {Object} the receipt's execution record
+ */
+function validatedExecution({proofId, sha, contract, report, remote, cwd, git}) {
+  const identity = contract.identityReuse === true ? checkedOutIdentity({sha, cwd, git}) : null;
+  // An identity-reusable proof is recorded only where the subject's identity
+  // can be computed: a clean checkout of it. Elsewhere the report's identity
+  // cannot be checked, and an unchecked identity is never admitted.
+  const unverifiable = contract.identityReuse === true && identity === null ?
+    [{code: EXECUTION_PROBLEM.IDENTITY_MISMATCH, detail: IDENTITY_UNVERIFIABLE}] : [];
+  const checked = executionReportProblems(report, {sha, tree: subjectTree({sha, cwd, git}),
+    identity, retryPolicy: contract.retryPolicy});
+  const problems = checked.summary ?
+    [...unverifiable, ...checked.problems,
+      ...reusedProofProblems({report, sha, contract, remote, cwd, git})] :
+    checked.problems;
+  if (problems.length > 0) throw new ProofRecordRefused(proofId, sha, problems);
+  return {
+    reportDigest: createHash(REPORT_DIGEST.ALGORITHM).update(JSON.stringify(report))
+      .digest(REPORT_DIGEST.ENCODING),
+    producer: {...report.producer},
+    summary: checked.summary,
+    ...(checked.qualification.length > 0 ? {qualification: checked.qualification} : {}),
+  };
 }
 
 // Publish the identity ref for a receipt object. First receipt for an
@@ -549,12 +671,15 @@ function recordProof({
   now = Date.now(),
   git = runGit,
   env = process.env,
+  report,
 }) {
   const contract = contractFor(proofId);
   if (!contract || contract.reuse !== REUSE.IMMUTABLE_SHA) {
     throw new Error(`proof contract is not permanently recordable: ${proofId}`);
   }
   if (!validSha(sha)) throw new Error(SUBJECT_NOT_FULL_SHA);
+  // The pass is the report's to prove, never the caller's control flow.
+  const execution = validatedExecution({proofId, sha, contract, report, remote, cwd, git});
 
   const authorization = authorizeAction({action: ACTION.RECORD_PROOF, signal: null});
   if (!isAuthorized(authorization)) {
@@ -575,7 +700,7 @@ function recordProof({
 
   const identity = contract.identityReuse === true ?
     checkedOutIdentity({sha, cwd, git}) : null;
-  const receipt = buildReceipt({proofId, sha, completedAt, producer, identity, env});
+  const receipt = buildReceipt({proofId, sha, completedAt, producer, identity, execution, env});
   const tagBody = buildTagBody({proofId, sha, receipt, now});
   const made = git(['mktag'], {cwd, input: tagBody});
   if (made.status !== 0 || !validSha(text(made.stdout))) {
@@ -655,16 +780,32 @@ function registeredProofs() {
   return Object.keys(CONTRACTS);
 }
 
+// Valued flags: where each value lands, and what an absent value becomes.
+const VALUED_FLAGS = Object.freeze({
+  [FLAG_REMOTE]: (options, value) => {
+    options.remote = value || DEFAULT_REMOTE;
+  },
+  [FLAG_PRODUCER_KIND]: (options, value) => {
+    options.producer.kind = value || EMPTY_TEXT;
+  },
+  [FLAG_PRODUCER_ID]: (options, value) => {
+    options.producer.id = value || EMPTY_TEXT;
+  },
+  [FLAG_PRODUCER_URL]: (options, value) => {
+    options.producer.url = value || EMPTY_TEXT;
+  },
+  [FLAG_REPORT]: (options, value) => {
+    options.reportFile = value || EMPTY_TEXT;
+  },
+});
+
 function parseCli(argv) {
   const [command, proofId, sha, ...rest] = argv;
   const options = {command, proofId, sha, remote: DEFAULT_REMOTE, json: false, producer: {}};
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index];
     if (arg === FLAG_JSON) options.json = true;
-    else if (arg === FLAG_REMOTE) options.remote = rest[++index] || DEFAULT_REMOTE;
-    else if (arg === FLAG_PRODUCER_KIND) options.producer.kind = rest[++index] || EMPTY_TEXT;
-    else if (arg === FLAG_PRODUCER_ID) options.producer.id = rest[++index] || EMPTY_TEXT;
-    else if (arg === FLAG_PRODUCER_URL) options.producer.url = rest[++index] || EMPTY_TEXT;
+    else if (Object.hasOwn(VALUED_FLAGS, arg)) VALUED_FLAGS[arg](options, rest[++index]);
   }
   return options;
 }
@@ -679,6 +820,19 @@ function render(result, json) {
   return `${result.outcome.toUpperCase()} ${result.because || ''}\n`;
 }
 
+// A refused record is a typed answer, not a crash: its problems on stderr.
+function runRecord(options, write) {
+  const report = options.reportFile ? readExecutionReport(options.reportFile) : null;
+  try {
+    write(render(recordProof({...options, report}), options.json));
+    return 0;
+  } catch (error) {
+    if (error?.code !== RECORD_REFUSED) throw error;
+    process.stderr.write(`${error.message}\n`);
+    return EXIT_REFUSED;
+  }
+}
+
 function runCli(argv = process.argv.slice(2), write = (value) => process.stdout.write(value)) {
   const options = parseCli(argv);
   if (options.command === COMMAND_CHECK) {
@@ -689,9 +843,7 @@ function runCli(argv = process.argv.slice(2), write = (value) => process.stdout.
     return 2;
   }
   if (options.command === COMMAND_RECORD) {
-    const result = recordProof(options);
-    write(render(result, options.json));
-    return 0;
+    return runRecord(options, write);
   }
   if (options.command === COMMAND_INDEX) {
     const result = indexProof(options);
@@ -727,6 +879,7 @@ export {
   CORPUS_FULL_PROOF,
   OUTCOME,
   PROOF,
+  ProofRecordRefused,
   RECEIPT_REF_ROOT,
   RECEIPT_SCHEMA,
   RESOLUTION,
@@ -736,6 +889,7 @@ export {
   buildReceipt,
   buildTagBody,
   defaultProducer,
+  describeCandidate,
   evaluateReceipt,
   proofRef,
   recordProof,

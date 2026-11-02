@@ -83,10 +83,13 @@ instead of frozen. A patch release for one fix follows the same steps.
    two heavy runs never share the machine:
    ```sh
    node scripts/checks/wait-for-thermal-headroom.js \
-     && node scripts/checks/push-gate-corpus-worktree.js --gate <sha> --run npm run check:release \
-     && node scripts/proof-authority.js record release-full-v1 <sha>
+     && node scripts/checks/push-gate-corpus-worktree.js --gate <sha> --run sh -c \
+       'npm run check:release && node scripts/proof-authority.js record release-full-v1 <sha> --report test-output/reports/execution-report.json'
    ```
-   The `&&` is the point: a red proof must never be recorded.
+   The `&&` is the point: a red proof must never be recorded. The receipt is
+   recorded inside the exact checkout, from the execution report the proof
+   run wrote there; the authority refuses a missing, partial or failing
+   report, and a file green only on its retry.
    `full-gate` then finds `release-full-v1` recorded and exits without waking
    GCP. Only when no local machine can run the proof, run `full-gate` for that
    exact SHA (manual dispatch or a `release-proof/**` ref): GCP runs the proof

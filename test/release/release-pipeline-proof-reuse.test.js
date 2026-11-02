@@ -44,6 +44,10 @@ test('full gate reuses durable proof and only wakes GCP for an unproven SHA', (t
     'proof lookup uses the single proof authority');
   t.match(fullGate, /proof-authority\.js record release-full-v1/u,
     'a successful missing proof is recorded durably');
+  t.match(fullGate, /name: release-execution-report/u,
+    'the gate hands its execution report to the recorder');
+  t.match(fullGate, /record release-full-v1 "\$GITHUB_SHA" \\\n\s+--report /u,
+    'the receipt is recorded only from the validated execution report');
   t.match(fullGate, /release-publishability\//u,
     'fresh external publishability still gates the expensive proof');
   t.match(fullGate, /node scripts\/run-release-proof\.js/u,

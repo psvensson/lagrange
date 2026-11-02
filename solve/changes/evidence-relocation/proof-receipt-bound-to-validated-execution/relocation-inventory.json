@@ -1,0 +1,14 @@
+{
+  "schema": "solve-relocation-inventory/1",
+  "bundles": [
+    {
+      "bundle": "proof-receipt-bound-to-validated-execution--proof-receipt-bound-to-validated-execution-evidence-9f4166666-2026-11-02.tar.gz",
+      "bundleSha256": "145f7dc62b256b9e13bf3a85d47d57591d292be37328dbd7b5e659b69b82d5b7",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/proof-receipt-bound-to-validated-execution--proof-receipt-bound-to-validated-execution-evidence-9f4166666-2026-11-02.tar.gz",
+      "sourceCommit": "9f4166666ae2b224d0ece3db510e914982d29cdf",
+      "root": "solve/quests/proof-receipt-bound-to-validated-execution/evidence/",
+      "files": 12,
+      "shard": "relocation-inventory/proof-receipt-bound-to-validated-execution--proof-receipt-bound-to-validated-execution-evidence-9f4166666-2026-11-02.json"
+    }
+  ]
+}

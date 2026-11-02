@@ -11,6 +11,13 @@ releases without a compatibility guarantee.
 ## [Unreleased]
 
 ### Fixed
+- **CI gate proof time (`.github/workflows/ci.yml`, `test/manifests/ci-resource-plan.json`):**
+  the required `gate` job's `timeout-minutes` is raised from 120 to GitHub's 360-minute
+  maximum for every event. Measured cause: PR #184's gate run 41431327759 (a 1892-file
+  widened proof on the hosted runner) was killed by the 120-minute job limit at
+  2026-11-02T12:47Z, reported as `cancelled`, with its serial exclusive lane at 73 of
+  103 files, so pull-request gates could not reach a verdict on product changes. Quest
+  `ci-gate-proof-time-and-lab-runner-routing`, attempt 1.
 - **0.4.1 bounded correctness & claim repairs (`call-cell-reduce-coordinator.js`, `runtime-service-call-cell-handler.js`, `management-v1-owner.js`, `bootstrap-api-server-methods.js`):**
   Fails closed with `REDUCE_INCOMPLETE` (`partial_unbounded`) instead of silently truncating merged partial sets at `limit` across slots or exceeding `maxPartialBytes`, enforces `resultMaxBytes` (`batchByteBound`) during local shard SQL reads before full batch materialization, reports unconfigured `management-v1` capabilities (`rollingUpgrade`, `backupRestore`, `decommissionNode`) as `UNSUPPORTED` by default while enforcing `verifyControlPlaneAuth` on `/management/v1/*` routes, and reconciles comparative benchmark documentation and CI guards against withdrawn modeled claims.
 - **Comparative benchmark results withdrawn (correction to 0.4.0 and earlier entries):**
@@ -35,6 +42,9 @@ releases without a compatibility guarantee.
   `invalid-measurement`, `blocked`, `unsupported`, `not-measured`), and
   `npm run audit:comparative-recompute` recomputes every published artifact from the
   raw records.
+
+- **Proof receipts bound to a validated execution report (`proof-authority.js`, `test-execution-report.js`, `run-test-files.js`, `run-release-proof.js`, `publish-head.js`, `push-gate-change-proof.js`, `full-gate.yml`):**
+  `recordProof` no longer takes a caller's word for a pass. Every durable receipt is minted only from the runner's execution report of the exact candidate (sha, tree, release proof identity, commands with exit statuses, planned versus executed files, per-file assertion counts and every retry attempt), and is refused with a typed problem for an absent, malformed (`execution-report-malformed`), partial or mismatched report, a failed command or run, a failed, unexecuted or zero-assertion file, a truncated run, an unresolvable reused proof or one its contract's seal does not let it cite (`execution-report-reused-proof-not-citable`), and a file green only on its retry (no contract admits qualified results). A file run in more than one run keeps its worst verdict whatever the run order. A test file never inherits the report its run writes, and a local corpus that lost its gate's cone report is no whole-corpus evidence. Receipts recorded before reports existed resolve unchanged. Lab-placed shard reporting and solve-land proof reuse mint no receipt yet.
 
 ## [0.4.0] — 2026-10-31
 
