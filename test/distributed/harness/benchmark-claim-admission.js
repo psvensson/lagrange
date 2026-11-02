@@ -684,15 +684,21 @@ function textOrNull(value) {
   return typeof value === 'string' ? value : null;
 }
 
+function fieldOrNull(record, key) {
+  return record?.[key] ?? null;
+}
+
 function readinessDenialOf(run) {
-  const diagnostic = run.deployment.readiness.evidence?.diagnostic || {};
-  // The deployer's last answer is the product's own readiness body, or the
-  // HTTP answer that carries it as json.
-  const answer = diagnostic.last || {};
-  const last = answer.json && typeof answer.json === 'object' ? answer.json : answer;
-  return {component: diagnostic.component ?? null, attempts: diagnostic.attempts ?? null,
-    elapsedMs: diagnostic.elapsedMs ?? null, phase: textOrNull(last.phase),
-    state: textOrNull(last.state), reasons: Array.isArray(last.reasons) ? [...last.reasons] : []};
+  const diagnostic = fieldOrNull(run.deployment.readiness.evidence, 'diagnostic');
+  // The deployer's last answer is the HTTP answer {status, body, json, error};
+  // the product's own readiness body is its json (null when it sent none).
+  const last = fieldOrNull(fieldOrNull(diagnostic, 'last'), 'json');
+  const reasons = fieldOrNull(last, 'reasons');
+  return {component: fieldOrNull(diagnostic, 'component'),
+    attempts: fieldOrNull(diagnostic, 'attempts'),
+    elapsedMs: fieldOrNull(diagnostic, 'elapsedMs'),
+    phase: textOrNull(fieldOrNull(last, 'phase')), state: textOrNull(fieldOrNull(last, 'state')),
+    reasons: Array.isArray(reasons) ? [...reasons] : []};
 }
 
 function isReadinessExhaustedRun(run) {

@@ -683,7 +683,10 @@ describe('content identity and the exhausted arm', () => {
     run.deployment.readiness = {state: 'exhausted', observedAt: run.deployment.readiness.observedAt,
       evidence: {failure: 'lagrange-node@10.0.0.2 did not report ready after 120 attempts',
         diagnostic: {component: 'lagrange-node@10.0.0.2', attempts: 120, elapsedMs: 166915,
-          last: EXHAUSTED_LAST}}};
+          // The deployer's last readiness answer: the HTTP answer around the
+          // product's own readiness body.
+          last: {status: 503, body: JSON.stringify(EXHAUSTED_LAST), json: EXHAUSTED_LAST,
+            error: null}}}};
     for (const key of ['products', 'productsAfterWindow']) {
       run.identity[key] = arrayMap(run.identity[key], (p) => ({...p, reportedVersion: null,
         reportedVersionError: 'management facts answered status 503 without release.version'}));
