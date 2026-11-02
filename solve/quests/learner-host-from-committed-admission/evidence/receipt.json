@@ -1,0 +1,28 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "committed-node-identity-recorded-at-apply",
+      "passed": false
+    },
+    {
+      "id": "proof-and-transport-from-committed-configuration",
+      "passed": false
+    },
+    {
+      "id": "address-refusals-eliminated-on-reproducer",
+      "passed": false
+    },
+    {
+      "id": "production-bound-restart-witness",
+      "passed": false
+    },
+    {
+      "id": "independent-verification",
+      "passed": false
+    }
+  ],
+  "evidence": [],
+  "applicability": "written red 2026-11-02 at the doneWhen supersession; no receipt passes until its evidence exists"
+}

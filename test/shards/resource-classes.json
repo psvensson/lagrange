@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2492,
+    "ordinary": 2493,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2509,
-  "digest": "fnv1a32-7055d1de",
+  "censusSize": 2510,
+  "digest": "fnv1a32-8aaae8fe",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1288,6 +1288,7 @@
     "test/partition/group-retirement-resume-claim.test.js": "ordinary",
     "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js": "ordinary",
     "test/partition/key-range-manager.test.js": "ordinary",
+    "test/partition/learner-host-committed-admission-production.integration.test.js": "ordinary",
     "test/partition/learner-promotion-count-check-budget-walk.test.js": "ordinary",
     "test/partition/learner-promotion-count-check-inputs.test.js": "ordinary",
     "test/partition/learner-promotion-proof-committed-admission.test.js": "ordinary",

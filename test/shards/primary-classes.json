@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2166,
-    "integration": 119,
+    "integration": 120,
     "bootstrap": 217,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2509,
-  "digest": "fnv1a32-e3dcbfb4",
+  "censusSize": 2510,
+  "digest": "fnv1a32-ea8bd4bc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1289,6 +1289,7 @@
     "test/partition/group-retirement-resume-claim.test.js": "unit",
     "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js": "unit",
     "test/partition/key-range-manager.test.js": "unit",
+    "test/partition/learner-host-committed-admission-production.integration.test.js": "integration",
     "test/partition/learner-promotion-count-check-budget-walk.test.js": "unit",
     "test/partition/learner-promotion-count-check-inputs.test.js": "unit",
     "test/partition/learner-promotion-proof-committed-admission.test.js": "unit",

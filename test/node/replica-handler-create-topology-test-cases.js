@@ -533,18 +533,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
         null,
         'disconnected priority leader should not be used as a join target',
       );
-      t.notOk(
-        capturedOptions.peerAddresses.includes(
-          'dead-node/partition/replica_operations-p1-r3',
-        ),
-        'disconnected stale peer should be excluded from priority recovery topology',
-      );
-      t.ok(
-        capturedOptions.peerAddresses.includes(
-          'live-node/partition/replica_operations-p1-r5',
-        ),
-        'connected peer should remain available for priority recovery topology',
-      );
+      t.equal(capturedOptions.peerAddresses, undefined,
+        'the partition takes no address hint list: its peers are addressed ' +
+          'from their committed nodes');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         true,
@@ -694,11 +685,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
         bootstrapReplicaIds.slice().sort(),
         'fresh bootstrap uses the GENESIS founding cohort',
       );
-      t.same(
-        capturedOptions.peerAddresses.slice().sort(),
-        bootstrapPeerAddresses.slice().sort(),
-        'fresh bootstrap should use the explicit peer addresses for the cohort',
-      );
+      t.equal(capturedOptions.peerAddresses, undefined,
+        'fresh bootstrap hands no address hint list; the GENESIS stamp ' +
+          'commits the founders\' nodes');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         false,
@@ -797,11 +786,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
         bootstrapReplicaIds.slice().sort(),
         'the stamped committed members plus the target, whatever the cache',
       );
-      t.same(
-        capturedOptions.peerAddresses.slice().sort(),
-        bootstrapPeerAddresses.slice().sort(),
-        'dispatched peer addresses consumed',
-      );
+      t.equal(capturedOptions.peerAddresses, undefined,
+        'no address hint list: the COMMITTED stamp carries the members\' ' +
+          'committed nodes');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         true,

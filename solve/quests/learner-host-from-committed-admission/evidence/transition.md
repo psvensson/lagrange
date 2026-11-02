@@ -186,3 +186,26 @@ The lead chose Option A (quest log). Shape as built, against the brief's nine st
    red on the base as recorded in section 7; (e) restarted leader and (g) transport from the committed fact
    import `partition-committed-peer-address.js`, which does not exist on the base (red at load); all green on
    the change.
+
+## 10. Lab-cone failures of the last run (2026-11-02, `2efddc37d`) and their dispositions
+
+Receipts: `test-output/reports/test-results-<host>.ndjson` of that lab run (copied to the controller worktree),
+the lab console kept with the run; each disposition was re-checked locally on the base (`f70f43a29`) and the change.
+
+| Test file | Host | Disposition |
+| --- | --- | --- |
+| `test/partition/partition-admission-redrive-wakes.test.js` | tv-dator | fixed (`e532dacba`: founders carry their committed nodes) |
+| `test/scripts/solve-footprint-accounting.test.js` | lenovo-laptop | base-red (fails identically on the base) |
+| `test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js` | adams-gamla | flaky (8/8 locally on the change and the base) |
+| `test/bootstrap/retained-seed-original-handoff.integration.test.js` | lenovo-laptop | slow-host (R1 hit its 180 s budget; R1 takes 55-61 s locally on both base and change) |
+| `test/bootstrap/node-bootstrap-consistency.property.test.js` | lenovo-laptop | flaky (green on local re-run of the change; green on the base) |
+| `test/integration/membership-consistency.integration.test.js` | adams-gamla | base-red/flaky (timeouts in a different subtest per run on the base too) |
+| `test/integration/public-binding-cell-invocation-seam.integration.test.js` | carinas-windows | base-red (0/3 on the base) |
+| `test/integration/critical-replica-placement-causal-trace.integration.test.js` | tv-dator | base-red (same timeout on the base) |
+| `test/integration/three-node-seed-rebalance.integration.test.js` | controller | flaky (after-end `timeout!` subtest; 1 of 3 base runs and 1 of 3 change runs) |
+
+## 11. Refusal set (verifier F3 wording)
+
+The refusals that REPLACE address resolution in the proof handler are `NOT_LEADER`, `NOT_IN_CONFIGURATION` and
+`CONFIGURATION_UNAVAILABLE`. `REQUEST_INVALID` (request shape, response binding), `TERM_UNAVAILABLE`, `EPOCH_*` and
+`PROGRESS_BEHIND` remain as before.

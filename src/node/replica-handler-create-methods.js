@@ -345,7 +345,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           keyRange,
           leaderAddress,
           replicaIds,
-          peerAddresses,
           existingReplicaCount,
         } = context;
         // Generate database path
@@ -376,8 +375,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           partitionId, tableId, tableName, schema, keyRange,
           replicaId,
           replicaIds,
-          peerAddresses: peerAddresses || [],
-          // Pass unified peer addresses for routing
           nodeId: this.nodeId,
           dbPath,
           leaderAddress,
