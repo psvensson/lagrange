@@ -110,3 +110,17 @@ files in tree; no defect text changed.
 | D33 | repaired | `test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js` | after the window a product keeps its version and the reason it was unanswered |
 | D34 | repaired | `test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js` | D21: only an explicit host bind mount is persistent storage |
 | D35 | repaired (ordering); TiDB semantic gate open | `test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js` | a run closes its adapter without dropping the dataset the deployment observes after the window |
+
+## Independent verification notes (delta b53d58036..14713e286, 2026-11-02)
+
+Accepted as is, no change:
+
+- N6: the retryable-conflict evaluator accepts more than one retryable conflict on the loser as long
+  as the retry owner's policy commits it. The retry owner owns the attempt count; the probe records
+  the mechanism and the attempts (`observation.retry`).
+- N8: the campaign `bench-live-20261101-b-r6` records (harness `feb17629f`) are honestly rejected
+  under the content-identity and version validator; they are additionally withdrawn by the
+  invalidation ledger entry `inv-0009` (superseded by later attempts at the repaired harness).
+
+Repaired on `wip/bench-live-campaign-2-20261101`: B1 `1363fc08b`, N4 `8f92d119b`, N3 `a97cbfb78`,
+N5 `a7a031593`, N2 `40d638bd1`, N7 `546bde338`.

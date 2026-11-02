@@ -13,7 +13,7 @@
     },
     {
       "path": "data/tidb-comparison/invalidations.ndjson",
-      "sha256": "sha256:20a3bf4fcc44c4116ce0166850c694e1c37946fcae27277fb0bc418fd2822972"
+      "sha256": "sha256:31e6da6bd3518b60af16b9c15a62f27b59cb0121843101d4ac8a9bdaba32b17c"
     }
   ],
   "cells": [
@@ -4307,21 +4307,19 @@
       "claimKind": "throughput",
       "status": "invalid-measurement",
       "reasons": [
-        "duplicate-claim",
-        "mixed-campaign",
         "record-rejected:invalid-text"
       ],
       "defectIds": [],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r6-r001",
           "bench-live-20261101-b-r7-r001"
         ],
         "rawObservationsDigests": [
-          "sha256:6e86ed34b58842506020d2bd686d2689d8074277955b0f48d12188bd0ed1646f",
           "sha256:f7b70ba6897286760fbe364930af65caa14a312072c86de4cf939e9af46398dd"
         ],
-        "invalidatedRunIds": [],
+        "invalidatedRunIds": [
+          "bench-live-20261101-b-r6-r001"
+        ],
         "forensic": []
       },
       "metrics": null
@@ -7094,29 +7092,75 @@
     {
       "claimKey": "pg-single-primary/scenarioA/smoke",
       "claimKind": "throughput",
-      "status": "invalid-measurement",
+      "status": "valid-observed",
       "reasons": [
-        "duplicate-claim",
-        "mixed-campaign",
-        "record-rejected:missing-field",
-        "semantic-gate-failed",
         "semantic-gate-incomplete",
-        "semantic-gate-incomplete:durability:evidence_insufficient"
+        "semantic-gate-incomplete:durability:evidence_insufficient",
+        "smoke-profile-no-capacity-claim"
       ],
       "defectIds": [],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r6-r003",
           "bench-live-20261101-b-r7-r003"
         ],
         "rawObservationsDigests": [
-          "sha256:6b4c7a829c5890aa452ad005745e5563c4006e93992a2cac1772c4c79d53779f",
           "sha256:33e46fa709e6bb794444a5b1b48e7a783a85753ae79f397547fa836c54138af8"
         ],
-        "invalidatedRunIds": [],
+        "invalidatedRunIds": [
+          "bench-live-20261101-b-r6-r003"
+        ],
         "forensic": []
       },
-      "metrics": null
+      "metrics": {
+        "profileClass": "smoke",
+        "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
+        "accounting": {
+          "offered": 100,
+          "issued": 100,
+          "unissued": 0,
+          "attempts": 100,
+          "committed": 100,
+          "conflicts": 0,
+          "conflictExhausted": 0,
+          "terminalFailures": {
+            "product_error": 0,
+            "correctness_failure": 0,
+            "transport_failure": 0,
+            "harness_fault": 0
+          },
+          "unresolved": 0,
+          "ambiguousCommits": 0
+        },
+        "runs": [
+          {
+            "runId": "bench-live-20261101-b-r7-r003",
+            "runStatus": "completed",
+            "offeredRatePerSec": 5,
+            "repetition": 1,
+            "accounting": {
+              "offered": 100,
+              "issued": 100,
+              "unissued": 0,
+              "attempts": 100,
+              "committed": 100,
+              "conflicts": 0,
+              "conflictExhausted": 0,
+              "terminalFailures": {
+                "product_error": 0,
+                "correctness_failure": 0,
+                "transport_failure": 0,
+                "harness_fault": 0
+              },
+              "unresolved": 0,
+              "ambiguousCommits": 0
+            },
+            "drainOverrunMs": 5599.717,
+            "maxLatencyMs": 6401.785
+          }
+        ],
+        "setupFailures": [],
+        "capacity": null
+      }
     },
     {
       "claimKey": "pg-single-primary/scenarioB/fan-out",
@@ -9076,23 +9120,19 @@
       "claimKind": "throughput",
       "status": "invalid-measurement",
       "reasons": [
-        "duplicate-claim",
-        "mixed-campaign",
-        "mixed-profile",
-        "record-rejected:missing-field",
         "semantic-gate-missing"
       ],
       "defectIds": [],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r6-r002",
           "bench-live-20261101-b-r7-r002"
         ],
         "rawObservationsDigests": [
-          "sha256:b8e567430398fd4981bea558d1d2231720103e99b80191e42e66ec530a803474",
           "sha256:29dd23435a46ccf113abd1eeac26826d068e57c3f8e7a20eb0bf268fb9c254d6"
         ],
-        "invalidatedRunIds": [],
+        "invalidatedRunIds": [
+          "bench-live-20261101-b-r6-r002"
+        ],
         "forensic": []
       },
       "metrics": null
