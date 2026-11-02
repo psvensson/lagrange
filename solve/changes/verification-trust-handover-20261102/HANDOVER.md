@@ -103,10 +103,10 @@ The immediate goal is to make 0.4.1 incapable of publishing invented success and
 - [Distributed operational ground truth](../../../test/distributed/operational-ground-truth.md)
 - [Authority and recovery contract](../../../architecture/contracts/authority-and-recovery.md)
 - [Solver runbook](../../../docs/development/solver-runbook.md)
-- [Comparison epic](../developer-journey-and-measured-comparisons.md)
-- [Apparatus/proof epic](../apparatus-release-consolidation.md)
-- [Raft-rs epic](../raft-rs-full-cutover.md)
-- [Topology convergence epic](../topology-convergence-hardening.md)
+- [Comparison epic](../../epics/developer-journey-and-measured-comparisons.md)
+- [Apparatus/proof epic](../../epics/apparatus-release-consolidation.md)
+- [Raft-rs epic](../../epics/raft-rs-full-cutover.md)
+- [Topology convergence epic](../../epics/topology-convergence-hardening.md)
 - [0.4.1 and 0.5 roadmap](../../../roadmap.md)
 
 This snapshot can be superseded by a new dated handover with verified source refs. Do not edit sealed historical Quest logs or turn this index into a competing active-work ledger.
