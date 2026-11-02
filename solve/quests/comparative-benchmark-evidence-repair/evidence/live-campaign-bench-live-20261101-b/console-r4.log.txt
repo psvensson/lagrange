@@ -1,0 +1,6 @@
+2026-11-01T23:59:38Z
+732a2c30ec95b749d2058b60e5f2bcc7a2eda854
+campaign_products_unpinned: no target of the campaign could pin its product identity
+diagnostic: {"unpinned":{"lagrange":{"code":"identity_unverified","message":"product identity of lagrange cannot be pinned: lagrange-node: containers differ in imageId","diagnostic":{"targetId":"lagrange","problems":["lagrange-node: containers differ in imageId","lagrange-node: containers differ in repoDigest","lagrange-node: no reportedVersion"]}}},"runs":[{"runId":"bench-live-20261101-b-r4-r001","targetId":"lagrange","state":"failed","failure":{"code":"record_rejected","message":"invalid-text: identity.products[0].reportedVersion must be a non-empty string","diagnostic":{"rejection":"invalid-text"}}},{"runId":"bench-live-20261101-b-r4-r002","targetId":"tidb-tikv","state":"failed","failure":{"code":"workload_failed","message":"load generator exited 1","diagnostic":{"stdout":""}}},{"runId":"bench-live-20261101-b-r4-r003","targetId":"pg-single-primary","state":"failed","failure":{"code":"identity_unverified","message":"image sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b of a running container on 192.168.86.41: docker inspect answered without Config.Labels","diagnostic":{"path":["Config","Labels"]}}}]}
+exit=1
+2026-11-02T00:04:10Z
