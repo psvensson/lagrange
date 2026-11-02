@@ -1,7 +1,7 @@
 {
   "schema": "test-receipt/1",
   "quest": "fixed-work-bound-census",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
     {
       "id": "census-table",
@@ -29,8 +29,10 @@
     },
     {
       "id": "independent-verification",
-      "passed": false,
-      "reason": "verification of ddfe38745 rejected (narrow); awaiting re-verification of the corrective attempt"
+      "passed": true,
+      "evidence": [
+        "log.ndjson verification entries 2026-11-02 (subagent:adc0b674ea26e3f81): reject at ddfe38745, approve at c8984f915"
+      ]
     }
   ]
 }
