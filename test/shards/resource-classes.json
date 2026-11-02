@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2537,
+    "ordinary": 2538,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2554,
-  "digest": "fnv1a32-0e60af76",
+  "censusSize": 2555,
+  "digest": "fnv1a32-bf30a433",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2153,6 +2153,7 @@
     "test/runtime/service-runtime-lifecycle.test.js": "ordinary",
     "test/runtime/sql-query-loop-parallel-reduce-sql.test.js": "ordinary",
     "test/runtime/state-projection.test.js": "ordinary",
+    "test/runtime/wasi-component-startup-budget.test.js": "ordinary",
     "test/runtime/wasm-api-compat.test.js": "ordinary",
     "test/runtime/wasm-component-driver.test.js": "ordinary",
     "test/runtime/wasm-driver-contract-conformance.test.js": "ordinary",

@@ -1,0 +1,15 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "slow-startup-liveness-witness-typed-and-terminated", "passed": false, "evidence": "red at d30f17f17+red tests: test/runtime/wasi-component-startup-liveness-child.js on unchanged src rejects request_cell_start_failed 'Component startup timed out' at 10006 ms with no phase, budgetMs or elapsedMs"},
+    {"id": "derivation-single-flight-reuse", "passed": false, "evidence": "red: src/runtime/wasi-component-derivation.js does not exist; every start transpiles (evidence/startup-phase-timings.json)"},
+    {"id": "derivation-typed-failure-at-prepare", "passed": false, "evidence": "red: corrupt bytes fail only inside the Cell worker as request_cell_start_failed / invocation_failed; no derivation outcome exists"},
+    {"id": "derivation-ceiling-and-cancellation", "passed": false, "evidence": "red: no derivation owner, ceiling or cancellation"},
+    {"id": "service-0-5-tests-green-native", "passed": false, "evidence": "not yet measured on the candidate"},
+    {"id": "service-0-5-tests-green-two-core-jobs4", "passed": false, "evidence": "red 2026-11-02 on 6d58fdba1: taskset -c 0,1 node scripts/run-classified-test-files.js test/service/h1-pinned-hono-component-proof.test.js test/service/h2-hono-source-ir-deployment-cutover.test.js test/service/h3-fetch-ingress-and-scoped-client.test.js test/service/q4-call-bounded-structured-partials.test.js -> h2, h3, q4 not ok with wait_bound_spent STARTUP_TIMEOUT_MS"},
+    {"id": "independent-verification", "passed": false, "evidence": "pending"}
+  ],
+  "evidence": [],
+  "applicability": "Red-first receipt written before any src change."
+}
