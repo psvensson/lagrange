@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
-    "test-infrastructure": 155,
+    "test-infrastructure": 156,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2554,
-  "digest": "fnv1a32-0a1238d5",
+  "censusSize": 2555,
+  "digest": "fnv1a32-4fa960fb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-85ead122",
+  "observationDigest": "fnv1a32-31cd293b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2281,6 +2281,7 @@
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "test-infrastructure",
     "test/scripts/proof-authority-falsifiers.test.js": "test-infrastructure",
     "test/scripts/proof-authority.test.js": "test-infrastructure",
+    "test/scripts/proof-checkout-preparation.test.js": "test-infrastructure",
     "test/scripts/proof-cone-cli-output-completeness.test.js": "test-infrastructure",
     "test/scripts/proof-receipt-execution-report.test.js": "test-infrastructure",
     "test/scripts/prune-test-output.test.js": "test-infrastructure",
@@ -18085,6 +18086,17 @@
       "directories": [
         "data/releases",
         "solve"
+      ]
+    },
+    "test/scripts/proof-checkout-preparation.test.js": {
+      "files": [
+        ".gitignore",
+        "scripts/checks/impact-proof-cone-constants.js",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/generate-global-owner-debt-inventory.js"
+      ],
+      "directories": [
+        "test"
       ]
     },
     "test/scripts/proof-cone-cli-output-completeness.test.js": {

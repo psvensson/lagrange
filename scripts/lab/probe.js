@@ -10,6 +10,7 @@ import {resolvedCheckBaseCommit} from '../checks/changed-paths.js';
 import {GIT_OUTPUT_BOUND, isGitOutputTooLarge, spawnGit} from '../checks/git-invocation.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH} from '../checks/impact-proof-cone-constants.js';
+import {PROOF_CHECKOUT_GENERATORS} from '../checks/proof-checkout-preparation.js';
 import {LANE_JOBS_CAP_ENV} from '../checks/test-resource-classification-constants.js';
 import {defaultLoadThreshold} from '../checks/wait-for-load-headroom.js';
 import {HEADROOM, THERMAL_REFUSAL_LINE, waitForThermalHeadroom}
@@ -1842,9 +1843,13 @@ async function settleRemoteShards(settled, {deps, fleet, statuses, write, runHer
 // next ready host, or runs it itself. The runner leads its own process group,
 // so the controller's deadline can stop everything it started.
 const PLACEMENT_RESULTS_PREFIX = 'placement-results=';
-const PLACEMENT_IMPORT_GRAPH = Object.freeze({NAME: 'import-graph',
-  PRODUCER: 'scripts/generate-global-owner-debt-inventory.js',
-  FLAG: '--refresh-import-graph-only'});
+// The generated material every proof checkout needs, from its one owner
+// (scripts/checks/proof-checkout-preparation.js), which the push-gate
+// materializer prepares locally from the same list.
+const PLACEMENT_SHELL_WORD = ' ';
+const [PLACEMENT_IMPORT_GRAPH] = PROOF_CHECKOUT_GENERATORS.map((generator) =>
+  Object.freeze({NAME: generator.name, PRODUCER: generator.producer,
+    FLAG: generator.args.join(PLACEMENT_SHELL_WORD)}));
 const PLACEMENT_SCRIPT_HEAD = [
   'set -u',
   'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"',

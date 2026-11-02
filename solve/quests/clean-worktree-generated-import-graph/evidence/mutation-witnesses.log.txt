@@ -1,0 +1,14 @@
+=== mutation: committed bytes not kept
+not ok 3 - a producer that rewrites tracked bytes leaves the commit's bytes
+# pass 3
+# fail 1
+=== mutation: producer failure ignored
+not ok 2 - a producer that fails refuses the gate before the command runs
+# pass 3
+# fail 1
+=== mutation: producer never run
+not ok 1 - the gated command starts in a checkout that already has the import graph
+not ok 2 - a producer that fails refuses the gate before the command runs
+not ok 3 - a producer that rewrites tracked bytes leaves the commit's bytes
+# pass 1
+# fail 3
