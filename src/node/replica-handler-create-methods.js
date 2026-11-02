@@ -1,4 +1,6 @@
 import {WORKFLOW_STEP} from '../constants/index.js';
+import {REPLICA_CREATE_PHASE, failedReplicaCreateClaimsCleanup} from
+  './replica-create-admission-input.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {
   ReplicaOperationMessageType,
@@ -280,6 +282,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         peerTotal: 0,
       });
       let partitionService = null;
+      let createPhase = REPLICA_CREATE_PHASE.BEFORE_RUNTIME;
       try {
         this.throwIfShuttingDown();
         await this.settlePendingReplicaRuntimeCleanup(replicaId, partitionId);
@@ -387,6 +390,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             this.updateReplicaCreationProgress(progress, stageEvent),
           resolveHandlerRetirementLane: () => this.replicaStateMachine,
         });
+        createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
         if (
           this.shuttingDown &&
           typeof partitionService.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION
@@ -589,6 +593,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           error: error.message,
           stack: error.stack,
         });
+        const claimCleanup = failedReplicaCreateClaimsCleanup(createPhase, error);
         const failedOutcomeOptions = {
           replicaId,
           partitionId,
@@ -609,7 +614,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         ) {
           failedOutcomeOptions.retryAfterMs = Math.floor(error.retryAfterMs);
         }
-        if (error?.deferRetry === true) {
+        // A claimed failure is terminal for its identity: the failed-create
+        // cleanup owner removes it, so the coordinator must not re-dispatch it.
+        if (error?.deferRetry === true && !claimCleanup) {
           failedOutcomeOptions.deferRetry = true;
         }
         try {
@@ -620,7 +627,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               replicaId,
               partitionId,
               errorMessage: error.message,
-              claimCleanup: error?.deferRetry !== true,
+              claimCleanup,
               createAdmissionEvidence,
               createAttemptToken,
             });

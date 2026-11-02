@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 118,
     "architecture-governance": 21,
-    "bootstrap-membership": 331,
+    "bootstrap-membership": 332,
     "cdc-metadata": 67,
     "cli-tooling": 99,
     "control-plane": 225,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2555,
-  "digest": "fnv1a32-6d41f6e2",
+  "censusSize": 2556,
+  "digest": "fnv1a32-30fda8b6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-72000c1f",
+  "observationDigest": "fnv1a32-5f51a1dd",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1238,6 +1238,7 @@
     "test/node/failure-repair-intent-contract.test.js": "bootstrap-membership",
     "test/node/fault-recovery-behavior.property.test.js": "bootstrap-membership",
     "test/node/fresh-create-admission-authority-deferral.test.js": "bootstrap-membership",
+    "test/node/fresh-create-claimed-cleanup-never-admitted.test.js": "bootstrap-membership",
     "test/node/group-retired-tombstone-incarnation.test.js": "bootstrap-membership",
     "test/node/group-retired-tombstone.test.js": "bootstrap-membership",
     "test/node/group-retirement-as-a-unit.test.js": "bootstrap-membership",
@@ -9986,6 +9987,11 @@
         "src/partition/partition-participant-transaction-cutover-constants.js"
       ]
     },
+    "test/node/fresh-create-claimed-cleanup-never-admitted.test.js": {
+      "files": [
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
     "test/node/group-retired-tombstone-incarnation.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -10442,6 +10448,7 @@
         "src/raft/raft-rs-operation-port.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
         "test/node/replica-handler-identity-entry-test-cases.js",

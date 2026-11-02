@@ -10,10 +10,10 @@ quest: fresh-create-failure-after-committed-admission
 
 | Field | Value |
 | --- | --- |
-| Run | Stream B Phase 0, `fresh-formation-user-table-routability` on `local-three-node.json`, candidate `b26d2c090`, harness 10:26:07Z to 10:38:51Z, RED 0/1. Identity, hosts and digests are in `work/replica-admission-committed-operation-20261102` @ `4c52a8268`, `solve/quests/replica-admission-from-committed-operation/evidence/phase0-reproducer-run-2026-11-02.md`. |
+| Run | Stream B Phase 0, `fresh-formation-user-table-routability` on `local-three-node.json`, candidate `b26d2c090`, harness 10:26:07Z to 10:38:51Z, RED 0/1. Identity, hosts and digests are in `work/replica-admission-committed-operation-20261102` @ `4c52a8268`, quest `replica-admission-from-committed-operation`, evidence file `phase0-reproducer-run-2026-11-02.md` (on that branch, not on this one). |
 | Raw logs | `/mnt/data/peter/projects/lagrange-evidence-store/replica-admission-phase0-20261102T102607Z/.playback/report/.full-logs/fresh-formation-user-table-routability/{f596f072,b53aae47,ff632e49}-*.log.gz`. They were read in place and not copied into the repository. |
 | Source | This branch HEAD `df28ef54a` (base `origin/work/learner-committed-admission-rebase-20261102`). `git diff b26d2c090 df28ef54a -- src` is empty, so every file:line below is also the file:line of the run's code. The run's stacks agree: `replica-create-admission-owner.js:374`, `:384`; `participant-release-authorization-owner.js:29`; `replica-handler-release-recovery.js:259`; `replica-handler-create-methods.js:460`. |
-| Census input | Stream C census `origin/work/projection-authority-census-20261102` @ `0f6522a82`, `solve/epics/raft-rs-full-cutover/evidence/projection-authority-census-2026-11-02/CENSUS.md`: C5 (lines 268-354), C8, C13 (645-719), H3 (720-749), section 6 (U3, U10). |
+| Census input | Stream C census `origin/work/projection-authority-census-20261102` @ `0f6522a82`, epic `raft-rs-full-cutover` evidence `projection-authority-census-2026-11-02`, file `CENSUS.md` (on that branch): C5 (lines 268-354), C8, C13 (645-719), H3 (720-749), section 6 (U3, U10). |
 | Lab | No new lab run. The logs plus source settle H3' (section 6), so no run was needed. |
 
 Node abbreviations: `f596` is the seed (tv-dator), `b53a` is lenovo-laptop, `ff63` is adams-gamla. Times are UTC on 2026-11-02.

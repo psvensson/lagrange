@@ -105,7 +105,9 @@ async function failureOf(host, deadlineAtMs) {
 
 test('L2: a deferred create-admission authority read is a typed, retried answer within the create deadline',
   async () => {
-    const host = createHost([deferredRead(),
+    // The create's authorization read and the first attempt's confirmation
+    // are both refused; the second attempt's confirmation succeeds.
+    const host = createHost([deferredRead(), deferredRead(),
       {admissionState: CREATE_ADMISSION_STATE.MATERIALIZED}]);
     const deadline = 1_000 + BOUND.PAUSE_RETRY_AFTER_MS * 2 + 5;
     try {
@@ -126,7 +128,8 @@ test('L2: a deferred create-admission authority read is a typed, retried answer 
         'the re-read authority confirmed the admission');
       assert.equal(second.missingFact, 'hosted_partition',
         'a confirmed attempt reaches the cutover owner');
-      assert.equal(host.admissionCalls.length, 2, 'the authority is re-read, never cached');
+      assert.equal(host.admissionCalls.length, 3,
+        'the authority is re-read until it confirms, then never again');
       assert.equal(host.delivered[0].request.authorization,
         host.delivered[1].request.authorization, 'one authorization identity across attempts');
     } finally {
@@ -136,7 +139,7 @@ test('L2: a deferred create-admission authority read is a typed, retried answer 
 
 test('L2: an unconfirmed authorization grants nothing until the authority confirms it',
   async () => {
-    const host = createHost([deferredRead(), null]);
+    const host = createHost([deferredRead(), deferredRead(), null]);
     try {
       const failure = await failureOf(host, 1_000 + BOUND.PAUSE_RETRY_AFTER_MS * 2 + 5);
       assert.ok(failure.message.startsWith(FAILURE_PREFIX), failure.message);

@@ -9,6 +9,10 @@ import {ReplicaOperationField} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
+import {EXECUTOR_OUTCOME_TYPE} from
+  '../../src/rebalancer/executor-outcome-constants.js';
+import {applyOperationWorkflowExecutorOutcomeReconcileMethods} from
+  '../../src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js';
 import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,
@@ -824,6 +828,12 @@ export async function registerReplicaHandlerCreateAdmissionTests({
   // commit the admission at any time, so the failed create always claims
   // cleanup; only a failure before any admission input exists may stay
   // unclaimed for the coordinator's dispatch re-arm.
+  class ExecutorFailureClassifier {
+    isDispatchRetryableWorkflowStep() {
+      return true;
+    }
+  }
+  applyOperationWorkflowExecutorOutcomeReconcileMethods(ExecutorFailureClassifier);
   for (const failurePoint of ['after-runtime-open', 'before-runtime-open']) {
     t.test(
       `L3: a deferred create failure ${failurePoint} claims cleanup only ` +
@@ -868,6 +878,14 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         handler.waitForVoterReadyActivation = async () => {
           throw deferred();
         };
+        const failedOutcomes = [];
+        const emitExecutorOutcome = handler.emitExecutorOutcome.bind(handler);
+        handler.emitExecutorOutcome = (outcomeType, outcomeOperationId, step, options) => {
+          if (outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED) {
+            failedOutcomes.push(options);
+          }
+          return emitExecutorOutcome(outcomeType, outcomeOperationId, step, options);
+        };
         handler.initialize();
         const failed = new Promise((resolve) => {
           handler.once('replicaCreationFailed', resolve);
@@ -880,13 +898,32 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         await failed;
         const row = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
         t.equal(row?.status, ReplicaStatus.FAILED, 'the create failed durably');
+        t.equal(failedOutcomes.length, 1, 'one failed executor outcome');
+        // The coordinator's executor-failure classification of that outcome,
+        // for a critical system partition at a re-armable dispatch step.
+        const coordinator = new ExecutorFailureClassifier();
+        const reconcileState = coordinator.resolveExecutorFailureReconcileState(
+          coordinator.buildExecutorFailureReconcileEvidence(
+            {partitionId: 'replica_operations-p1', workflowStep: 'CREATING'},
+            coordinator.buildExecutorFailureOutcomeErrorLike(failedOutcomes[0],
+              'failed'),
+          ),
+        );
         if (failurePoint === 'after-runtime-open') {
           t.equal(row?.cleanup_token, buildFailedCreateCleanupToken(operationId),
             'a failure after the runtime opened carries the failed-create ' +
               'cleanup claim');
+          t.equal(failedOutcomes[0].deferRetry, undefined,
+            'a claimed failure emits no deferRetry');
+          t.equal(reconcileState, 'fail_operation',
+            'the coordinator fails, never re-dispatches, a claimed create');
         } else {
           t.equal(row?.cleanup_token ?? null, null,
             'a failure before any admission input stays unclaimed for re-arm');
+          t.equal(failedOutcomes[0].deferRetry, true,
+            'the unclaimed pre-admission failure stays re-dispatchable');
+          t.equal(reconcileState, 'defer_retry',
+            'the coordinator re-dispatches the unclaimed pre-admission create');
         }
         await handler.shutdown();
       },

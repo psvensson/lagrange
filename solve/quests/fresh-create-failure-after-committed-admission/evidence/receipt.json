@@ -4,18 +4,18 @@
   "receipts": [
     {
       "id": "deferred-authority-read-consumed-within-create-deadline",
-      "passed": false,
-      "evidence": "red: not yet implemented"
+      "passed": true,
+      "evidence": "test/node/fresh-create-admission-authority-deferral.test.js 3/3 (red on df28ef54a, green on attempt 1): deferral -> typed UNAVAILABLE{create_admission_authority} with authorityOutcome/authorityError, re-read until confirmed under the unchanged completion loop and deadline; pending token never validates; not-MATERIALIZED -> terminal INVALID; test/node/participant-release-fresh-create-completion.test.js and test/scripts/participant-release-completion-owner.test.js unchanged and green"
     },
     {
       "id": "post-admission-failure-always-claims-cleanup",
-      "passed": false,
-      "evidence": "red: not yet implemented"
+      "passed": true,
+      "evidence": "test/node/replica-handler.test.js L3 cases (red on df28ef54a for after-runtime-open): failure after the runtime opened -> FAILED row carries failed-create:<op>, outcome without deferRetry, coordinator classification fail_operation; failure before the runtime opened -> unclaimed, deferRetry, coordinator defer_retry; test/node/fresh-create-claimed-cleanup-never-admitted.test.js: the claimed REMOVE of a never-admitted replica completes (no RemoveNode wait), redelivery COMPLETED"
     },
     {
       "id": "failed-create-without-owner-not-protected",
-      "passed": false,
-      "evidence": "red: not yet implemented"
+      "passed": true,
+      "evidence": "Measures exactly: a failed create after its admission input may exist carries a cleanup claim and is removed through decideFailedCreateTargetCleanup with checks 2 (previous_state) and 3 (terminal create target) no longer protecting it - r4's case; an unclaimed pre-admission failed row stays protected and re-dispatchable. test/rebalancer/terminal-failed-add-target-cleanup.test.js 'L3: the claimed FAILED target ...' (claimed -> REMOVE with lifecycle precondition; unclaimed -> no REMOVE). Check 2 kept by R09 supersession (log 2026-11-02T11:24:38Z)."
     },
     {
       "id": "reproducer-no-unclaimed-failed-configured-member",
@@ -29,5 +29,5 @@
     }
   ],
   "evidence": [],
-  "applicability": "Red baseline on df28ef54a: test/node/fresh-create-admission-authority-deferral.test.js 3/3 fail (deferral thrown as terminal 'CREATE admission read deferred'; readOperation drops the authority outcome); test/node/replica-handler.test.js L3 after-runtime-open fails (cleanup_token null)."
+  "applicability": "Attempt 1 on branch work/fresh-create-failure-after-committed-admission-20261102; focused lanes green (41 files); reproducer and independent verification outstanding."
 }
