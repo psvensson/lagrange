@@ -292,7 +292,7 @@ snapshot image); services rows and caches are discovery only. The binding holds
 for partition groups; message groups still resolve peers from cache and hints, and
 FreshMG learners commit no node (named follow-up, transition record section 8,
 item 6). Transition record:
-`solve/quests/learner-host-from-committed-admission/evidence/transition.md`.
+`docs/evidence/learner-host-from-committed-admission-2026-11/transition.md`.
 
 ## Model Bindings
 

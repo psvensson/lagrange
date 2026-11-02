@@ -31,6 +31,7 @@ authorizes:
   - test
   - .github
   - solve/oracle
+  - solve/changes/evidence-relocation
 ---
 
 # Raft-rs full cutover
@@ -77,6 +78,7 @@ consumer and remove superseded logic, aliases and compatibility fallbacks.
 | Owned retention follow-ups | Message-group acknowledged IDs and completed workflow records remain retained; representative service endurance measurement pending | Preserve stale-row resurrection protection. No arbitrary TTL or new release blocker without measured endurance evidence; these are separate retention-owner follow-ups. |
 | CDC D4 window deletion | Composed at `d38b9ec4549ac1eb830f7e8acf6a98e9a20cbb79`, independently APPROVED by `subagent:9d93e269-3bc8-4f32-894e-4f35e0134168` | Deleted the legacy D4 sliding window and handshake catch-up in `src/partition/partition-cdc-delivery.js`, added the distributed `W-D4b` group-boundary handoff witness (`test/integration/cdc-group-boundary-handoff.integration.test.js`), and verified the 4-file handoff cone (4/4 files, 20 assertions). |
 | CDC / MG occurrence delivery & Rebalancer transition row | `retained-seed-original-handoff` W1/W2/W7/W9 witnesses and rebalancer transition authorization row repairs, independently APPROVED by `subagent:7db7d236-8515-401f-8c01-a55efff9003e` and `subagent:0cb61f9d-e4e2-4ceb-b53d-1a08f5c16ead` | Restored circular uncovered-leaf pass scan in `src/cdc/cdc-propagation-progress.js`, eliminated cyclic object-graph TAP serialization in `W7` (`4.0s`), verified `W1`/`W2`/`W9` (`6.3s`, including 65-event vector, 2-MiB payload, and 65 remote target groups with paired negative controls), and aligned the 8 rebalancer transition-authorization row suites (8/8 pass). |
+| Learner promotion proof epoch (PR #184 review finding 2, after terminal quest `learner-host-from-committed-admission`) | Traced 2026-11-02 on PR #184; witness `test/partition/learner-promotion-proof-epoch-guard.test.js` | Finding: the cache-projected membership epoch (`resolveLearnerPromotionMembershipEpoch`, `src/partition/partition-service-learner-promotion-proof-methods.js:73-79`, latest PUBLISHED row, 0 when none) is a refusal-only guard and cannot grant. A grant needs live leadership (`:115-118`), the committed configuration naming the learner (`:119-132`) and leader-observed match >= commit (`src/raft/learner-promotion-progress.js:182-202`); the epoch only adds `EPOCH_UNAVAILABLE`/`EPOCH_MISMATCH` (`:170-181`) on the leader and `EPOCH_CHANGED` (`:271-279`) on the learner before `becomeFollower` (`src/partition/partition-service-learner-promotion-methods.js:525-559`). Its other consumers are the wake trigger and one log field. The witness covers absent, stale, fresh and late projections against every committed refusal (74 assertions), and it catches three mutations that let equal epochs grant: 12, 12 and 2 failures. Limit: when both caches are unhydrated, both sides read 0 and the guard detects nothing; the committed facts still decide. Recorded on PR #184; no repair quest is needed. |
 
 ### Convergence snapshot (observed 2026-10-28)
 
@@ -1067,3 +1069,11 @@ and any host-side lease.
 > Relocated evidence (2026-10-24): bulk evidence this document cites under `solve/` was moved to the `solve-evidence` release at source commit 31ee37359; look up any old path in `solve/quests/lineage-evidence-relocation/evidence/relocation-inventory.json` (bundle, sha256, URL per path).
 
 > Relocation records moved (2026-10-24, correction to the line above): the inventory now lives at `solve/changes/evidence-relocation/lineage-evidence-relocation/relocation-inventory.json` (shards in `relocation-inventory/`, verification in `relocation-verification.json` beside it), moved byte-identical out of the closed quest so it keeps its closed shape.
+
+## Scope decisions (recorded)
+
+- 2026-11-02: Scope widened (R16, recorded): `solve/changes/evidence-relocation` joins `authorizes`
+  because the relocation owner writes a quest's bundle inventory and verification records there by
+  design (quest learner-host-from-committed-admission relocated 1.17 MB of raw reproducer lab logs to the
+  solve-evidence store so the active solve footprint stays under its budget). Decided by that quest at
+  landing; no other path outside the existing list is touched.

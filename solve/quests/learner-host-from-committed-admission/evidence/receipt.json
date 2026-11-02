@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "committed-node-identity-recorded-at-apply",
+      "passed": true,
+      "evidence": "test/partition/learner-promotion-proof-committed-admission.test.js (21), test/raft/snapshot-checkpoint-format-contract.test.js (nodeId reservation), test/raft/replica-image-checkpoint-transfer.test.js; verifier mutations (a),(c) red"
+    },
+    {
+      "id": "proof-and-transport-from-committed-configuration",
+      "passed": true,
+      "evidence": "test/partition/learner-promotion-proof-committed-admission.test.js (a)-(g), test/convergence/dt6-learner-promotion-proof-channel-wake.test.js 11/11 incl. live-defect drive; verifier mutations (b),(e),(f) red"
+    },
+    {
+      "id": "address-refusals-eliminated-on-reproducer",
+      "passed": true,
+      "evidence": "before/after reproducer runs (fresh-formation-user-table-routability, 3 nodes on 2 machines): before at base 18x learner_address_unresolvable, after 0; predicates f and g met; comparison in docs/evidence/learner-host-from-committed-admission-2026-11/transition.md section 9; raw harness logs and routability summaries in the verified bundle learner-host-from-committed-admission-evidence-198f2a324-2026-11-02.tar.gz (inventory under solve/changes/evidence-relocation/learner-host-from-committed-admission/); serve lane still red for C1/C10 (successor quest)"
+    },
+    {
+      "id": "production-bound-restart-witness",
+      "passed": true,
+      "evidence": "test/partition/learner-host-committed-admission-production.integration.test.js: real PartitionService + real raft-rs port, restart from the durable record with an empty cache, red under mutations (a),(b)"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "evidence": "log.ndjson verification entry 2026-11-02 (subagent:a37f6c96084f2066a, approve): e532dacba, 25b453246 and 198f2a324"
+    }
+  ],
+  "evidence": [],
+  "applicability": "All five receipts set by the acceptance owner; witnesses run in the landing worktree (learner-promotion-proof-committed-admission 21, production integration 1, snapshot-checkpoint-format-contract) on the delta of wip/learner-host-admission-20261101 at 2baedb0fe (raw lab logs relocated), landed on top of the comparative-benchmark-evidence-repair landing commit 006a65d0b; scope = the bounded instance C2/C3 only; the serve-lane scenario stays red for C1/C10 (successor quest replica-admission-from-committed-operation)."
+}
