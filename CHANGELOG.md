@@ -11,6 +11,16 @@ releases without a compatibility guarantee.
 ## [Unreleased]
 
 ### Fixed
+- **0.5 WASI service tests run in the serial toolchain lane (`test/shards/resource-external-toolchain.txt`):**
+  `test/service/h1`-`h5` and `q2`-`q5` compile real Hono/service components and start real
+  component Cells, so they now have resource class `external-toolchain` (jobs=1), like
+  `service-cell-worker-modes` and `service-cell-bridge-roundtrip`. Measured at jobs=1 on the
+  20-core controller: 14.9-40.2 s real and 2.2-2.8x cores each. At jobs=4 pinned to two cores,
+  3 of 4 failed with `STARTUP_TIMEOUT_MS`. The hosted runner (run 41431327759) failed h1-h5 and
+  q2-q4, and q5 passed at 113 s. This corrects the classification under the existing rule. It
+  does not change any bound or assertion, and it does **not** close the underlying product
+  defect (every Cell start re-transpiles, and under load the start is killed and redone),
+  which quest `wasi-component-startup-budget` owns. Quest `service-test-toolchain-classification`.
 - **CI gate proof time (`.github/workflows/ci.yml`, `test/manifests/ci-resource-plan.json`):**
   the required `gate` job's `timeout-minutes` is raised from 120 to GitHub's 360-minute
   maximum for every event. Measured cause: PR #184's gate run 41431327759 (a 1892-file
