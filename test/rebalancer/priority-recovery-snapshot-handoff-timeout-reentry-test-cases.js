@@ -266,7 +266,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getNodeReadinessSync(nodeId) {
@@ -415,7 +414,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getPriorityRecoveryPlanningSnapshotBestEffort() {
@@ -593,7 +591,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getPriorityRecoveryPlanningSnapshotBestEffort() {
@@ -779,7 +776,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getPriorityRecoveryPlanningSnapshotBestEffort() {
@@ -946,7 +942,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver(target, payload, options) {
@@ -1069,7 +1064,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver(target, payload, options) {
@@ -1179,7 +1173,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver(target, payload, options) {
@@ -1310,7 +1303,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver(target, payload, options) {
@@ -1485,7 +1477,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         }, filter() {
           return [];
         }},
-        cdcIntegrationService: {async waitForCacheUpdate() {}},
+        cdcIntegrationService: {},
         controlPlaneReadinessService: {
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return planningSnapshot;

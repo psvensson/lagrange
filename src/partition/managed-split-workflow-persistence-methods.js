@@ -142,7 +142,7 @@ class ManagedSplitWorkflowPersistenceMethods {
    * serialized metadata, the pending epoch, and the status-dependent epoch
    * effects (cutover promotes the target epoch; FAILED withdraws it).
    * @param {Object} workflow - Workflow state.
-   * @return {Object} {updatePayload, serializedMetadata, isEpochTransition}.
+   * @return {Object} {updatePayload, serializedMetadata}.
    * @private
    */
   buildSplitTransitionUpdatePayload(workflow) {
@@ -197,10 +197,7 @@ class ManagedSplitWorkflowPersistenceMethods {
       updatePayload.pending_partition_version = null;
     }
 
-    const isEpochTransition =
-      workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE ||
-      workflow.status === PARTITION_TRANSITION_STATE.FAILED;
-    return {updatePayload, serializedMetadata, isEpochTransition};
+    return {updatePayload, serializedMetadata};
   }
 
   /**

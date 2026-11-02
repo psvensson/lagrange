@@ -216,3 +216,25 @@ test('every owner that writes a table and reads it back from its cache ' +
     !sites.some((site) => site.id === id)), [],
   'every reasoned exemption names a live site');
 });
+
+// A4: no second projection wait grows over the cache's change events. A
+// module that both awaits a Promise it builds and subscribes to the cache
+// is the one wait, or is named here with what it waits for.
+const OWN_CACHE_CHANGE_WAITS = Object.freeze({
+  'cdc/cdc-integration-service-projection-wait.js': 'the one projection wait',
+  'cdc/cdc-confirmation-tracker.js': 'a caller confirmation wait with a ' +
+    'timer; no production code constructs the tracker',
+  'bootstrap/shared/startup-convergence-gate.js': 'startup convergence ' +
+    'wake source; waits on readiness conditions, not a write position',
+});
+
+test('no wait over onCacheChange exists outside the named modules',
+  async (t) => {
+    const found = sourceFiles(SRC_ROOT).filter((file) => {
+      const source = fs.readFileSync(file, 'utf8');
+      return source.includes('.onCacheChange(') &&
+        source.includes('new Promise');
+    }).map((file) => file.slice(SRC_ROOT.length)).sort();
+    t.same(found, Object.keys(OWN_CACHE_CHANGE_WAITS).sort(),
+      'each cache-change wait is the projection wait or named with a reason');
+  });

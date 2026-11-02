@@ -154,6 +154,7 @@ class SQLQueryEngineServiceLifecycleExecution extends
           parsed.command,
           parsed.payload,
           options.securityContext,
+          options.abortSignal ? {abortSignal: options.abortSignal} : {},
         ),
         parsed.command,
       ));

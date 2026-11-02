@@ -68,7 +68,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
 
     const cdcIntegrationService = {
       refreshAuthoritativeCacheRow: async () => true,
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -319,7 +318,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
 
     const cdcIntegrationService = {
       refreshAuthoritativeCacheRow: async () => true,
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -557,7 +555,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
 
     const cdcIntegrationService = {
       refreshAuthoritativeCacheRow: async () => true,
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -805,7 +802,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
 
     const cdcIntegrationService = {
       refreshAuthoritativeCacheRow: async () => true,
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -1054,7 +1050,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     const dispatchedMessages = [];
     const cdcIntegrationService = {
       refreshAuthoritativeCacheRow: async () => true,
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -1254,7 +1249,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -1379,7 +1373,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {

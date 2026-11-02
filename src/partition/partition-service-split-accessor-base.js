@@ -118,8 +118,10 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * the leader dedupes against the size its last committed write answered,
    * never against the projection (census site 7, three-class rule, own row;
    * quest replica-admission-from-committed-operation attempt 2). Only an
-   * applied write is kept: a failed write, or one that found no row, keeps
-   * nothing, so the next measurement writes again.
+   * applied write is kept, for its leader term (another leader may have
+   * written since): a failed write, or one that found no row, keeps nothing,
+   * so the next measurement writes again. Absent-row repeats (mainly a
+   * retired partition still measuring) are an R17 to the partition owner.
    * @param {number} sizeBytes - Latest measured size.
    * @return {Promise<void>}
    * @private
@@ -133,13 +135,15 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     ) {
       return;
     }
-    if (this.committedPartitionSizeBytes === sizeBytes) {
+    const {term} = this.raft.readStatus();
+    const kept = this.committedPartitionSize;
+    if (kept?.term === term && kept.sizeBytes === sizeBytes) {
       return;
     }
     try {
       const answer = await this.submitPartitionSizeMutation(sizeBytes);
       if (classifyControlPlaneMutationResult(answer).applied) {
-        this.committedPartitionSizeBytes = sizeBytes;
+        this.committedPartitionSize = {term, sizeBytes};
       }
     } catch (error) {
       this.logger.warn(

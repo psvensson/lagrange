@@ -231,9 +231,6 @@ test('CL-021: deferred durable services rows converge', async (t) => {
     async (t) => {
       const cases = [
         ['applied', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED}, true],
-        ['pending visibility', {
-          outcome: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-        }, true],
         ['no-op', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.NO_OP}, false],
         ['deferred', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED}, false],
         ['rejected', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.REJECTED}, false],

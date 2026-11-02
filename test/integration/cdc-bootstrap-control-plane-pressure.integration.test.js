@@ -203,7 +203,6 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
           SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
           {group_id: 'mg-pressure', status: 'active'},
           {
-            skipCacheWait: true,
             causeId: 'integration-control-plane-pressure',
             workClass: 'background',
           },
@@ -441,7 +440,6 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
           },
         },
         {
-          skipCacheWait: true,
         },
       );
       t.equal(mutationResult.success, true,

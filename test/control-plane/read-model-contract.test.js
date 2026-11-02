@@ -168,7 +168,6 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds fails closed when its ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -233,7 +232,6 @@ test('emitReplicaStatusDivergence emits FIELD_MISMATCH when cache ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -300,7 +298,6 @@ test('emitReplicaStatusDivergence emits CACHE_MISSING when cache ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -363,7 +360,6 @@ test('emitReplicaStatusDivergence emits AUTHORITATIVE_MISSING when ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -426,7 +422,6 @@ test('emitReplicaStatusDivergence does not emit when cache and ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -484,7 +479,6 @@ test('emitReplicaStatusDivergence does not emit when replicaId ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {

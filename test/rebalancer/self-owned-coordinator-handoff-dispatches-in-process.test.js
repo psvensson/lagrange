@@ -31,7 +31,6 @@ function buildCoordinatorWithDeliverySpy(nodeId) {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: [], affectedRows: 0};
       },

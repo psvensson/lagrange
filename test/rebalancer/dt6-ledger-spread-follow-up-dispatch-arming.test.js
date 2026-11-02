@@ -48,7 +48,6 @@ function createCoordinatorFixture(t, {deliveries}) {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {

@@ -97,7 +97,6 @@ function buildCoordinator(nodeId) {
       return [];
     }},
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: [], affectedRows: 0};
       },

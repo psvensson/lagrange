@@ -141,7 +141,6 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getPriorityRecoveryPlanningSnapshotBestEffort() {
@@ -294,7 +293,6 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
@@ -439,7 +437,6 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {

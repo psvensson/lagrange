@@ -61,8 +61,6 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR =
   'explicit handoff target should not require authoritative node repair';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR =
   'active-gate owner reconcile should not read broad membership tables';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY = true;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SKIP_CACHE_WAIT = true;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE =
   'diagnostics';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE =
@@ -391,8 +389,6 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
       ],
       readProfile:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE,
-      allowPendingVisibility:
-        PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
     });
 
     t.same(
@@ -440,11 +436,6 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         ],
       },
       'explicit handoff target should be persisted as the durable publication target',
-    );
-    t.equal(
-      persistOptions[0]?.allowPendingVisibility,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
-      'explicit handoff target should preserve pending visibility on the publication write',
     );
     t.match(
       publicationReadOptions[publicationReadOptions.length - 1],
@@ -562,11 +553,8 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
       false,
       'active-gate owner reconcile should keep write readback enabled',
     );
-    t.equal(
-      persistOptions[0]?.skipCacheWait,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SKIP_CACHE_WAIT,
-      'active-gate owner reconcile should not wait on cache visibility before authoritative readback',
-    );
+    t.equal('skipCacheWait' in (persistOptions[0] ?? {}), false,
+      'active-gate owner reconcile carries no cache-wait opt-out');
     t.match(
       publicationReadOptions[publicationReadOptions.length - 1],
       {

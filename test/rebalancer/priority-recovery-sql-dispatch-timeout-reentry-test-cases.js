@@ -180,7 +180,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
@@ -369,7 +368,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -512,7 +510,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver(target, payload, options) {
@@ -688,7 +685,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
@@ -861,7 +857,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getPriorityRecoveryPlanningSnapshotBestEffort() {
@@ -1069,7 +1064,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
@@ -1228,7 +1222,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getNodeReadinessSync(nodeId) {
@@ -1392,7 +1385,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getPriorityRecoveryPlanningSnapshotBestEffort() {

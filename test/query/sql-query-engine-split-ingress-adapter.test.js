@@ -106,7 +106,6 @@ test('executeManagedSplit delegates to ManagedSplitWorkflow.execute ' +
       systemTableWrites.push({tableName, row});
       return {success: true};
     },
-    async waitForCacheUpdate() {},
   };
 
   const workflowCalls = [];

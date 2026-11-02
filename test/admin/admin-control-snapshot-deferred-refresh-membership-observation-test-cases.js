@@ -1026,7 +1026,6 @@ test('AdminControlSnapshot no-attempt path still triggers publication owner comm
         publishedActiveNodeIds: ['node-1', 'node-2'],
         requiredAckNodeIds: ['node-1', 'node-2'],
         acknowledgedNodeIds: ['node-1', 'node-2'],
-        allowPendingVisibility: true,
         readProfile:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
         skipPublicationWriteReadback:
@@ -1151,7 +1150,6 @@ test(ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_OPEN_PROGRESS_TEST_NAME
       acknowledgedNodeIds: [
         ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
       ],
-      allowPendingVisibility: true,
       readProfile:
         ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
       skipPublicationWriteReadback:
@@ -1276,7 +1274,6 @@ test('AdminControlSnapshot no-attempt path queues flattened ACK_PENDING count-on
         acknowledgedNodeIds: [
           ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
         ],
-        allowPendingVisibility: true,
         readProfile:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
       },

@@ -796,7 +796,7 @@ async (t) => {
   t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
   t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
   t.equal(counts.readsAfterFirstWrite, 0,
-    'the answer reads no projection after the metadata writes');
+    'the answer itself reads no projection after the metadata writes');
 });
 
 test('TableCreationService - CREATE TABLE with a converged cohort answers ' +
@@ -814,9 +814,13 @@ test('TableCreationService - CREATE TABLE with a converged cohort answers ' +
   t.equal(result.success, true);
   t.equal(result.completionState, TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE);
   t.equal(result.completionReason, null);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.READY,
+    'a provisioned table answers ready, not merely not-pending');
+  t.equal(result.provisioningSummary.fullReplicaCountConverged, true,
+    'on the converged cohort');
   t.equal('visibilityState' in result, false, 'no visibility state remnant');
   t.equal(counts.readsAfterFirstWrite, 0,
-    'the answer reads no projection after the metadata writes');
+    'the answer itself reads no projection after the metadata writes');
 });
 
 // The reachable remnant of the deleted visibility states: an answer that

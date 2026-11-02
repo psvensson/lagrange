@@ -48,7 +48,6 @@ test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -252,7 +251,6 @@ async (t) => {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -480,7 +478,6 @@ test('createOperation defers retryable participant-pressure failures and ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -704,7 +701,6 @@ test('dispatchOperation defers priority claim misses when durable ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -849,7 +845,6 @@ test('dispatchOperationInternal executes the claimed operation snapshot ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {
           success: true,
@@ -995,7 +990,6 @@ test('dispatchOperationInternal rehydrates REPLACE source replica metadata ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {
           success: true,
@@ -1187,7 +1181,6 @@ async (t) => {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,

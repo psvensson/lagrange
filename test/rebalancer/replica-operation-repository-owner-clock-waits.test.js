@@ -66,7 +66,7 @@ function createRepository({timeSource, readAuthoritativeRows, executeQuery,
       getAll: () => [],
       filter: () => [],
     },
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
       readAuthoritativeRows,
       executeQuery: executeQuery || (async () => ({success: true, changes: 1})),

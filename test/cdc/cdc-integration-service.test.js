@@ -251,7 +251,6 @@ test('CDCIntegrationService - coalesces identical in-flight upserts into ' +
     SYSTEM_TABLE_NAME.NODES,
     row,
     {
-      skipCacheWait: true,
       workClass: 'background',
       allowPressureDefer: true,
       deliveryPriority: 'background',
@@ -261,7 +260,6 @@ test('CDCIntegrationService - coalesces identical in-flight upserts into ' +
     SYSTEM_TABLE_NAME.NODES,
     {...row},
     {
-      skipCacheWait: true,
       workClass: 'background',
       allowPressureDefer: true,
       deliveryPriority: 'background',
@@ -319,7 +317,6 @@ test('CDCIntegrationService - forwards pressure admission metadata to routed ' +
       updated_at: 2,
     },
     {
-      skipCacheWait: true,
       workClass: 'critical',
       allowPressureDefer: true,
       pressureRetryAfterMs: 777,
@@ -382,7 +379,6 @@ test('CDCIntegrationService - derives routed SQL admission defaults from one ' +
       updated_at: 2,
     },
     {
-      skipCacheWait: true,
       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
     },
   );
@@ -458,7 +454,6 @@ test('CDCIntegrationService - derives publication mutation pressure admission ' 
       status: 'OPEN',
     },
     {
-      skipCacheWait: true,
       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
     },
   );
@@ -513,7 +508,6 @@ test('CDCIntegrationService canonicalizes control_plane_publications upserts ' +
       reasonCode: 'authoritative_membership_changed',
     },
     {
-      skipCacheWait: true,
     },
   );
 
@@ -568,7 +562,6 @@ test('CDCIntegrationService - defers routed writes under pressure when allowed',
         {service_id: 'svc-1'},
         {status: 'active', updated_at: 1234},
         {
-          skipCacheWait: true,
           workClass: 'background',
           deliveryPriority: 'background',
         },
@@ -638,7 +631,6 @@ test('CDCIntegrationService logs retryable table-write failures as warnings',
         {service_id: 'svc-1'},
         {status: 'active'},
         {
-          skipCacheWait: true,
           causeId: 'cdc-write-failure:test',
         },
       ),
@@ -705,7 +697,6 @@ test('CDCIntegrationService preserves explicit deferRetry on routed SQL errors',
         {service_id: 'svc-1'},
         {status: 'active'},
         {
-          skipCacheWait: true,
         },
       ),
       'explicit routed deferrals should be preserved when CDC wraps failures',
@@ -862,7 +853,7 @@ test('CDCIntegrationService - steady-state system table writes prefer local part
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {status: 'ready'},
-      {skipCacheWait: true},
+      {},
     );
 
     t.equal(localWrites.length, 1, 'should execute through a local partition service');
@@ -902,7 +893,7 @@ test('CDCIntegrationService - local system table writes do not require SQL engin
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {status: 'ready'},
-      {skipCacheWait: true},
+      {},
     );
 
     t.equal(

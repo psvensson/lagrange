@@ -98,6 +98,8 @@ const CDC_LOG_MSG = Object.freeze({
   DELETED_ROW: 'System table row deleted',
   ZERO_ROW_DELETE_RECONCILE_FAILED:
     'Zero-row deletion projection reconcile failed',
+  PROJECTION_WAIT_STARTED: 'Projection wait started',
+  PROJECTION_WAIT_ENDED: 'Projection wait ended',
   DELETE_FAILED: 'Failed to delete system table row',
   UPSERTING_ROW: 'Upserting system table row via SQL',
   UPSERTED_ROW: 'System table row upserted',

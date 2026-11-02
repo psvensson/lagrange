@@ -55,7 +55,6 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -163,7 +162,6 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -299,7 +297,6 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -410,7 +407,6 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -558,7 +554,6 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getPriorityRecoveryPlanningSnapshotBestEffort() {
@@ -707,7 +702,6 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -845,7 +839,6 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -926,7 +919,6 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {

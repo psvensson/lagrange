@@ -188,7 +188,7 @@ class ManagedMergeWorkflowPersistenceMethods {
    * and the status-dependent epoch effects applied in place.
    * @param {Object} workflow - Workflow state.
    * @return {Object} {updatePayload, serializedMetadata,
-   *   pendingPartitionVersion, isEpochTransition}.
+   *   pendingPartitionVersion}.
    * @private
    */
   buildMergeTransitionUpdatePayload(workflow) {
@@ -213,14 +213,10 @@ class ManagedMergeWorkflowPersistenceMethods {
       workflow,
       pendingPartitionVersion,
     );
-    const isEpochTransition = workflow.status ===
-        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE ||
-      workflow.status === PARTITION_TRANSITION_STATE.FAILED;
     return {
       updatePayload,
       serializedMetadata,
       pendingPartitionVersion,
-      isEpochTransition,
     };
   }
 

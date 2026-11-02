@@ -640,11 +640,7 @@ test('AuthoritativeRowMutationHelper - queued owner update is not stranded behin
     t.equal(helper.pendingValue, null, 'latest queued owner update should clear pending state');
   });
 
-test('AuthoritativeRowMutationHelper - classifies cache visibility failures', async (t) => {
-  t.equal(
-    classifyMutationFailure(new Error('Cache update not observed for services:replica-1')),
-    'cache-visibility-gap-unrecovered',
-  );
+test('AuthoritativeRowMutationHelper - classifies a failed write', async (t) => {
   t.equal(
     classifyMutationFailure(new Error('database unavailable')),
     'authoritative-write-failed',

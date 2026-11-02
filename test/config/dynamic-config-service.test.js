@@ -32,7 +32,6 @@ test('DynamicConfigService config seed apply uses canonical mutation outcomes',
     const service = new DynamicConfigService();
     const cases = [
       [CONTROL_PLANE_MUTATION_OUTCOME.APPLIED, true],
-      [CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY, true],
       [CONTROL_PLANE_MUTATION_OUTCOME.NO_OP, false],
       [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED, false],
       [CONTROL_PLANE_MUTATION_OUTCOME.REJECTED, false],

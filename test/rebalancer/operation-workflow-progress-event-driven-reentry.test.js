@@ -477,7 +477,6 @@ function createEventDrivenCoordinator(
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: createMockCache(),
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {
           success: true,

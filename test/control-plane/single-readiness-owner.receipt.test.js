@@ -102,7 +102,6 @@ function buildRuntimeStubs() {
   };
   const cdcIntegrationService = {
     sqlQueryEngine,
-    async waitForCacheUpdate() {},
     async executeAuthoritativeSystemTableRead() {
       return {success: true, rows: EMPTY_ROWS, affectedRows: 0};
     },

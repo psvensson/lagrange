@@ -189,6 +189,21 @@ test('(b2) a later HLC satisfies the position; a deletion position is ' +
   other.service.markShuttingDown();
 });
 
+// P4: a write that changed no row emits no change event, so a position
+// would never be reached. It answers none, and the wait refuses it.
+test('(b3) a zero-row update answers no position; the wait refuses null ' +
+  'typed', async (t) => {
+  const {service} = createService(committingEngine({affectedRows: 0}));
+  const answer = await service.updateSystemTableRow(
+    SYSTEM_TABLE_NAME.SERVICES, {service_id: SERVICE_ID}, {status: 'active'});
+  t.equal(answer.committed, true);
+  t.equal(answer.position, null, 'no position for a zero-row write');
+  const refused = await service.awaitProjectionAt(answer.position)
+    .then(() => null, (error) => error);
+  t.equal(refused?.code, 'position_invalid', 'refused typed, no hang');
+  service.markShuttingDown();
+});
+
 test('(c) a failed commit is a failure; no visibility or repair read ' +
   'turns it into success', async (t) => {
   const {service, cache, engine} = createService(committingEngine(

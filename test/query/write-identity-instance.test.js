@@ -114,8 +114,7 @@ async () => {
     const birth = (bytes) => gateway.executeQuery(RESERVATION_INSERT,
       ['res-op-v3', 'op-v3', 'partition', 'p-1', 'p-1', 'n-1', bytes, 1,
         'active', now, now, now + 1000],
-      {writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`,
-        skipCacheWait: true});
+      {writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`});
     const {first} = await spendFirstAttempt({engine, surface,
       attempt: () => birth(111)});
     assert.equal(first.success, false, 'setup: the first birth is unknown');
@@ -123,7 +122,7 @@ async () => {
     engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
     const removed = await gateway.executeQuery(
       `DELETE FROM ${TABLES.STORAGE_RESERVATIONS} WHERE reservation_id = ?`,
-      ['res-op-v3'], {skipCacheWait: true});
+      ['res-op-v3'], {});
     assert.equal(removed.success, true, 'setup: the row is deleted');
     const firstEntry = deliveries[0].entryId;
     const again = await birth(222);
@@ -143,8 +142,7 @@ function reservationBirth(gateway, bytes, now) {
   return gateway.executeQuery(RESERVATION_INSERT,
     ['res-op-v3', 'op-v3', 'partition', 'p-1', 'p-1', 'n-1', bytes, 1,
       'active', now, now, now + 1000],
-    {writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`,
-      skipCacheWait: true});
+    {writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`});
 }
 
 test('a re-drive refused before it was proposed does not end an instance ' +
@@ -546,7 +544,7 @@ test('a counter UPDATE behind the generic retry helper across a runtime ' +
     const {result, trap} = await spendOneBudget({engine, surface,
       attempt: () => runRetryableControlPlaneWrite((identity) =>
         gateway.executeQuery(COUNTER_INCREMENT, [1, 'c', 0],
-          {...identity, skipCacheWait: true}),
+          {...identity}),
       {timeoutMs: SETTLE_BUDGET_MS, baseDelayMs: 20})});
     assert.ok(trap.count >= 1, 'setup: the core trapped the UPDATE');
     assert.equal(result?.success, true,

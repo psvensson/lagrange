@@ -26,7 +26,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         get: () => null,
       },
       cdcIntegrationService: {
-        waitForCacheUpdate: async () => {},
       },
       tablePolicyService: {
         getPolicyForPartition: async () => ({minReplicaCount: 1}),
@@ -93,7 +92,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -162,7 +160,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -235,7 +232,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -311,7 +307,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -385,7 +380,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -486,7 +480,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -559,7 +552,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -626,7 +618,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -708,7 +699,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -773,7 +763,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -892,7 +881,6 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {

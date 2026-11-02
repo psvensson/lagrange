@@ -235,7 +235,6 @@ function createTestCoordinator(options = {}) {
       return null;
     }},
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async refreshAuthoritativeCacheRow() {
         return true;
       },

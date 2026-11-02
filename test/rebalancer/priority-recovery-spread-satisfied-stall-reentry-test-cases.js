@@ -177,7 +177,6 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getPriorityRecoveryPlanningSnapshotBestEffort() {

@@ -104,7 +104,7 @@ test('the routed-mutation retry loop delays and budgets on the injected clock', 
   service.initialize();
   const mutation = service.updateSystemTableRow(
     SYSTEM_TABLE_NAME.NODES, {node_id: 'n1'}, {status: 'active'},
-    {queryTimeoutMs: QUERY_BUDGET_MS, skipCacheWait: true})
+    {queryTimeoutMs: QUERY_BUDGET_MS})
     .then((result) => ({result}), (error) => ({error}));
   const {outcome} = await pumpOnVirtualClock(timeSource, mutation, RETRY_AFTER_MS);
   assert.ok(outcome, 'the loop must settle by virtual time alone');

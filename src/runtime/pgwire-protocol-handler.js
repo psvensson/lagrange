@@ -134,6 +134,9 @@ class PgWireProtocolHandler {
     this._pendingAuth = null;
     this._buffer = Buffer.alloc(0);
     this._processing = Promise.resolve();
+    // Aborted when the connection is destroyed: ends a lifecycle command's
+    // projection wait; the session's write stays committed.
+    this._disconnected = new AbortController();
     this._pid = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
     this._secretKey = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
 
@@ -164,6 +167,7 @@ class PgWireProtocolHandler {
    */
   destroy() {
     this._phase = HANDLER_PHASE.CLOSED;
+    this._disconnected.abort();
     this._socket.removeListener(LOCAL_STR_DATA, this._onData);
     this._socket.removeListener(LOCAL_STR_ERROR, this._onError);
     this._socket.removeListener(LOCAL_STR_CLOSE, this._onClose);
@@ -683,7 +687,10 @@ class PgWireProtocolHandler {
    */
   _executionOptions() {
     const transactionId = this._session.transactionId;
-    return transactionId ? {expectedTransactionId: transactionId} : {};
+    return {
+      abortSignal: this._disconnected.signal,
+      ...(transactionId ? {expectedTransactionId: transactionId} : {}),
+    };
   }
 
   /**

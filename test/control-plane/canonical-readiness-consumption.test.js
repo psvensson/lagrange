@@ -412,7 +412,6 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
       cdcIntegrationService: {
         insertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async () => ({success: true}),
-        waitForCacheUpdate: async () => true,
       },
       messageRouter: {
         getConnectionState: () => 'connected',
@@ -458,7 +457,6 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
           cdcIntegrationService: {
             insertSystemTableRow: async () => ({success: true}),
             updateSystemTableRow: async () => ({success: true}),
-            waitForCacheUpdate: async () => true,
           },
           messageRouter: {
             getConnectionState: () => 'connected',
@@ -1275,7 +1273,6 @@ test('regression: RebalanceCoordinator cannot bypass canonical readiness',
       cdcIntegrationService: {
         insertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async () => ({success: true}),
-        waitForCacheUpdate: async () => true,
       },
       messageRouter: {
         getConnectionState: () => 'connected',

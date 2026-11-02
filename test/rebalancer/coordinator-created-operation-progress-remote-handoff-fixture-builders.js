@@ -501,7 +501,6 @@ export function createRemotePriorityVisibilityCoordinator() {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: [], affectedRows: 0};
       },
@@ -547,7 +546,6 @@ export function createRemoteHandoffCoordinator({
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -665,7 +663,6 @@ export function createRecentIntentPolicyCoordinator() {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: [], affectedRows: 0};
       },

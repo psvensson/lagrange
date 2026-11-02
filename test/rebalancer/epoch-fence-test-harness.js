@@ -109,7 +109,7 @@ function createEpochCoordinator({
     nodeId: TEST_NODE_ID,
     transactionCoordinator: createMockTransactionCoordinator(),
     systemTableCache,
-    cdcIntegrationService: {async waitForCacheUpdate() {}},
+    cdcIntegrationService: {},
     controlPlaneReadinessService: {
       getCurrentPublishedMembershipEpochSync(nodeId, observedAt) {
         return readCurrentPublishedEpoch ?

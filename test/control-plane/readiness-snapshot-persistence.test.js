@@ -406,7 +406,6 @@ test('coordinator createOperation persists readiness snapshot in initial step',
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -510,7 +509,6 @@ test('dispatch service emits readiness snapshot with dispatch event',
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       systemTableCache: {
         get() {
@@ -606,7 +604,6 @@ test('dispatch service passes row metadata through direct dispatch',
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       systemTableCache: {
         get() {
@@ -709,7 +706,6 @@ test('dispatch service emits failure event when target is not ready',
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       systemTableCache: {
         get() {
@@ -792,7 +788,6 @@ test('coordinator updateStep persists readiness snapshot in step entry',
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {

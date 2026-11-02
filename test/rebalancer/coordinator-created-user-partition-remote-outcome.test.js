@@ -139,7 +139,7 @@ function createTargetOutcomeHarness(operation, options = {}) {
     systemTableCache: {get() {
       return null;
     }},
-    cdcIntegrationService: {async waitForCacheUpdate() {}},
+    cdcIntegrationService: {},
     tablePolicyService: {async getPolicyForPartition() {
       return {minReplicaCount: 1};
     }},

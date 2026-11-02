@@ -6,15 +6,21 @@
  * SystemTableCache to reflect that write waits for that position here. There
  * is no timer: the wait ends when the cache row for the key carries the
  * write's origin HLC or a later one (for a deletion: the row is absent or
- * carries a later origin), or when the owner shuts down (typed). A write is
- * never answered from this projection.
+ * carries a later origin), when the owner shuts down, or when the waiting
+ * client disconnects (typed). A write is never answered from this
+ * projection. Each wait logs its start and end, and getProjectionWaitDiagnostics
+ * counts the waits in progress: with no timer, those are what makes a wait
+ * that does not end visible (a row whose stamp a skewed clock keeps below
+ * the position is one such wait).
  */
 
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+import {CDC_LOG_MSG} from './cdc-constants.js';
 
 const PROJECTION_WAIT_OUTCOME = Object.freeze({
   REACHED: 'reached',
   SHUTDOWN: 'shutdown',
+  CLIENT_DISCONNECTED: 'client_disconnected',
   POSITION_UNKNOWN: 'position_unknown',
   POSITION_INVALID: 'position_invalid',
   PROJECTION_UNAVAILABLE: 'projection_unavailable',
@@ -22,6 +28,8 @@ const PROJECTION_WAIT_OUTCOME = Object.freeze({
 const PROJECTION_WAIT_MESSAGE = Object.freeze({
   [PROJECTION_WAIT_OUTCOME.SHUTDOWN]:
     'Projection wait ended: the CDC integration owner shut down',
+  [PROJECTION_WAIT_OUTCOME.CLIENT_DISCONNECTED]:
+    'Projection wait ended: the client that asked disconnected',
   [PROJECTION_WAIT_OUTCOME.POSITION_UNKNOWN]:
     'Projection wait refused: the write position carries no origin HLC',
   [PROJECTION_WAIT_OUTCOME.POSITION_INVALID]:
@@ -29,6 +37,7 @@ const PROJECTION_WAIT_MESSAGE = Object.freeze({
   [PROJECTION_WAIT_OUTCOME.PROJECTION_UNAVAILABLE]:
     'Projection wait refused: this owner has no observable SystemTableCache',
 });
+const ABORT_EVENT = 'abort';
 const ORIGIN_HLC_FIELDS = Object.freeze(['updated_at_hlc', 'updatedAtHlc']);
 const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
 const ORDER_SAME = 0;
@@ -77,17 +86,50 @@ function positionRefusal(position) {
     PROJECTION_WAIT_OUTCOME.POSITION_UNKNOWN;
 }
 
+function waitObservation(service, waiter) {
+  return {
+    tableName: waiter.position.tableName,
+    key: waiter.position.key,
+    originHlc: waiter.position.originHlc,
+    statement: waiter.statement,
+    nodeId: service.nodeId,
+  };
+}
+
+function openProjectionWaiter(service, position, statement = null) {
+  const waiter = {position, statement, startedAtMs: service.timeSource.now()};
+  service.projectionWaiters ??= new Set();
+  service.projectionWaiters.add(waiter);
+  service.logger.info(CDC_LOG_MSG.PROJECTION_WAIT_STARTED,
+    waitObservation(service, waiter));
+  return waiter;
+}
+
+function closeProjectionWaiter(service, waiter, outcome) {
+  service.projectionWaiters.delete(waiter);
+  service.logger.info(CDC_LOG_MSG.PROJECTION_WAIT_ENDED, {
+    ...waitObservation(service, waiter),
+    outcome,
+    waitedMs: service.timeSource.now() - waiter.startedAtMs,
+  });
+}
+
 class CDCIntegrationServiceProjectionWait {
   /**
    * Wait until this node's SystemTableCache reflects the write at
    * `position`. Ends only when it does or at shutdown.
    * @param {Object} position - {tableName, key, originHlc, deleted?}, as a
    *   routed write answers it.
+   * @param {Object} [options]
+   * @param {AbortSignal} [options.abortSignal] - The client's session: its
+   *   abort ends the wait typed (client_disconnected); the write stays
+   *   committed.
+   * @param {string} [options.statement] - What waits, for the observable.
    * @return {Promise<Object>} {outcome: 'reached', position}; rejects with
-   *   a typed error (code shutdown | position_unknown | position_invalid |
-   *   projection_unavailable).
+   *   a typed error (code shutdown | client_disconnected | position_unknown |
+   *   position_invalid | projection_unavailable).
    */
-  async awaitProjectionAt(position) {
+  async awaitProjectionAt(position, options = {}) {
     const refusal = positionRefusal(position);
     if (refusal !== null) throw projectionWaitError(refusal);
     const cache = this.systemTableCache;
@@ -98,26 +140,54 @@ class CDCIntegrationServiceProjectionWait {
     const reached = Object.freeze({outcome: PROJECTION_WAIT_OUTCOME.REACHED,
       position});
     if (projectionReached(cache, position)) return reached;
+    if (options.abortSignal?.aborted === true) {
+      throw projectionWaitError(PROJECTION_WAIT_OUTCOME.CLIENT_DISCONNECTED);
+    }
+    const waiter = openProjectionWaiter(this, position, options.statement);
     return new Promise((resolve, reject) => {
-      let stopHolding = null;
       let settled = false;
+      let stopHolding = null;
       let listener = null;
-      const finish = (settle) => {
+      let onAbort = null;
+      const finish = (outcome, settle) => {
         if (settled) return;
         settled = true;
         cache.offCacheChange?.(listener);
+        options.abortSignal?.removeEventListener(ABORT_EVENT, onAbort);
         stopHolding?.();
+        closeProjectionWaiter(this, waiter, outcome);
         settle();
       };
+      const end = (outcome) => finish(outcome,
+        () => reject(projectionWaitError(outcome)));
       listener = (changedTable) => {
         if (changedTable !== position.tableName ||
             !projectionReached(cache, position)) return;
-        finish(() => resolve(reached));
+        finish(PROJECTION_WAIT_OUTCOME.REACHED, () => resolve(reached));
       };
+      onAbort = () => end(PROJECTION_WAIT_OUTCOME.CLIENT_DISCONNECTED);
       cache.onCacheChange(listener);
-      stopHolding = this.holdUntilShutdown(() => finish(() =>
-        reject(projectionWaitError(PROJECTION_WAIT_OUTCOME.SHUTDOWN))));
+      options.abortSignal?.addEventListener(ABORT_EVENT, onAbort);
+      stopHolding = this.holdUntilShutdown(
+        () => end(PROJECTION_WAIT_OUTCOME.SHUTDOWN));
     });
+  }
+
+  /**
+   * The projection waits in progress, for diagnostics: no timer bounds a
+   * wait, so a wait that does not end is seen here and by its start line.
+   * @return {Object} {activeWaiters, oldestWaitStartedAtMs}.
+   */
+  getProjectionWaitDiagnostics() {
+    const waiters = this.projectionWaiters ?? new Set();
+    let oldestWaitStartedAtMs = null;
+    for (const waiter of waiters) {
+      if (oldestWaitStartedAtMs === null ||
+          waiter.startedAtMs < oldestWaitStartedAtMs) {
+        oldestWaitStartedAtMs = waiter.startedAtMs;
+      }
+    }
+    return {activeWaiters: waiters.size, oldestWaitStartedAtMs};
   }
 }
 

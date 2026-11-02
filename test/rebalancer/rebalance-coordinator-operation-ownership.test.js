@@ -259,7 +259,6 @@ test('RebalanceCoordinator executeOperation skips operations owned by another no
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -337,7 +336,6 @@ async (t) => {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -402,7 +400,6 @@ async (t) => {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -480,7 +477,6 @@ async (t) => {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -564,7 +560,6 @@ async (t) => {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
@@ -660,7 +655,6 @@ test('RebalanceCoordinator createOperation uses injected workflow coordinator si
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -721,7 +715,6 @@ test('RebalanceCoordinator createOperation defers background mutation when local
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync() {
@@ -817,7 +810,6 @@ test('RebalanceCoordinator createOperation enforces concurrent add budget when r
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -875,7 +867,6 @@ test('RebalanceCoordinator createOperation rejects stale membership publication 
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getCurrentPublishedMembershipEpochSync() {
@@ -953,7 +944,6 @@ test('RebalanceCoordinator createOperation rejects stale membership plans using 
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getCurrentPublishedMembershipEpochSync() {
@@ -1025,7 +1015,6 @@ test('RebalanceCoordinator createOperation persists membership publication epoch
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getCurrentPublishedMembershipEpochSync() {

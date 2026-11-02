@@ -251,7 +251,6 @@ function createConvergenceCoordinator(options = {}) {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       refreshAuthoritativeCacheRow: async () => true,
     },
     tablePolicyService: {
@@ -867,7 +866,6 @@ test('Owner-path convergence: all progression entry points ' +
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
           refreshAuthoritativeCacheRow: async () => true,
         },
         tablePolicyService: {

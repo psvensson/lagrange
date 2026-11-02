@@ -381,6 +381,8 @@ class SQLQueryEngineRequestDispatch extends
           sessionId: sqlRequest.sessionId,
           ...(sqlRequest.securityContext ?
             {securityContext: sqlRequest.securityContext} : {}),
+          ...(sqlRequest.abortSignal ?
+            {abortSignal: sqlRequest.abortSignal} : {}),
         },
       );
       if (lifecycleExecution.disposition ===

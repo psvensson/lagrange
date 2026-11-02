@@ -24,7 +24,7 @@ function createAdmissionCoordinator() {
         return [];
       },
     },
-    cdcIntegrationService: {async waitForCacheUpdate() {}},
+    cdcIntegrationService: {},
     messageRouter: {async deliver() {}},
     tablePolicyService: {
       async getPolicyForPartition() {

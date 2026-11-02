@@ -244,6 +244,7 @@ class PostgresWireAdapter {
       }),
       securityContext: session.securityContext,
       expectedTransactionId: options.expectedTransactionId ?? null,
+      abortSignal: options.abortSignal,
     });
 
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTING_VIA_SQLCORE, {

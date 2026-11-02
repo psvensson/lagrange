@@ -5,13 +5,13 @@
     "admin-diagnostics": 118,
     "architecture-governance": 21,
     "bootstrap-membership": 330,
-    "cdc-metadata": 69,
+    "cdc-metadata": 70,
     "cli-tooling": 99,
-    "control-plane": 227,
+    "control-plane": 228,
     "convergence-topology": 78,
     "distributed-harness": 209,
     "examples-e2e": 8,
-    "pgwire-compat": 21,
+    "pgwire-compat": 22,
     "placement-rebalance": 270,
     "query-sql": 191,
     "release-packaging": 15,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2561,
-  "digest": "fnv1a32-fba3ac1d",
+  "censusSize": 2564,
+  "digest": "fnv1a32-c260c14d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-141ee68d",
+  "observationDigest": "fnv1a32-f45c9c39",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -373,6 +373,7 @@
     "test/cdc/cdc-pipeline-readiness-gate.property.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-readiness-gate.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-readiness-wait-bound-spent.test.js": "cdc-metadata",
+    "test/cdc/cdc-projection-wait-observable.test.js": "cdc-metadata",
     "test/cdc/cdc-propagation-metrics.test.js": "cdc-metadata",
     "test/cdc/cdc-refresh-authoritative-cache-row.test.js": "cdc-metadata",
     "test/cdc/cdc-routed-mutation-wait-bound-spent.test.js": "cdc-metadata",
@@ -721,6 +722,7 @@
     "test/control-plane/replica-dispatch-startup-operation-replay.test.js": "control-plane",
     "test/control-plane/request-binding-service-definition-owner.test.js": "control-plane",
     "test/control-plane/runtime-access-policy-owner.test.js": "control-plane",
+    "test/control-plane/runtime-access-settled-replay-projection.test.js": "control-plane",
     "test/control-plane/service-install-catalog-owner.test.js": "control-plane",
     "test/control-plane/service-instance-creation-cas.test.js": "control-plane",
     "test/control-plane/service-instance-selection-admission.test.js": "control-plane",
@@ -2129,6 +2131,7 @@
     "test/runtime/pgwire-commit-outcome-coordinator.test.js": "pgwire-compat",
     "test/runtime/pgwire-cutover-guard.test.js": "pgwire-compat",
     "test/runtime/pgwire-descriptor.test.js": "pgwire-compat",
+    "test/runtime/pgwire-disconnect-ends-lifecycle-wait.test.js": "pgwire-compat",
     "test/runtime/pgwire-metrics.test.js": "pgwire-compat",
     "test/runtime/pgwire-password-authentication-cutover.test.js": "pgwire-compat",
     "test/runtime/pgwire-port-allocator.test.js": "pgwire-compat",
@@ -3906,6 +3909,11 @@
         "src/logging/wait-bound-spent.js"
       ]
     },
+    "test/cdc/cdc-projection-wait-observable.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
     "test/cdc/cdc-propagation-metrics.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -5232,6 +5240,12 @@
     "test/control-plane/runtime-access-policy-owner.test.js": {
       "files": [
         "src/control-plane/owners/request-binding-service-definition-contract.js"
+      ]
+    },
+    "test/control-plane/runtime-access-settled-replay-projection.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js"
       ]
     },
     "test/control-plane/service-instance-creation-cas.test.js": {
@@ -16316,6 +16330,11 @@
         "src/runtime/pgwire-transaction-outcome.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-coordinator-unit-fixture.js"
+      ]
+    },
+    "test/runtime/pgwire-disconnect-ends-lifecycle-wait.test.js": {
+      "files": [
+        "src/query/sql-query-engine-service-lifecycle-execution.js"
       ]
     },
     "test/runtime/pgwire-password-authentication-cutover.test.js": {

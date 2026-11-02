@@ -217,7 +217,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
         async executeAuthoritativeSystemTableRead(
           tableName,
           sql,
@@ -405,7 +404,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
         async executeAuthoritativeSystemTableRead(
           tableName,
           sql,
@@ -592,7 +590,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
         async executeAuthoritativeSystemTableRead(
           tableName,
           sql,

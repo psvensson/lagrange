@@ -113,7 +113,7 @@ function openOperations(file, clock, nodeId) {
   const repository = new ReplicaOperationRepository({nodeId, membershipOwnerBootIncarnation: 1,
     timeSource: clock, controlPlaneSystemTableGateway: gateway, logger: noLog,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     authoritativeVisibilityTimeoutMs: 0, authoritativeVisibilityRetryDelayMs: 0});
   return {db, repository, mutations: () => mutations,
     row: () => db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?').get(O)};

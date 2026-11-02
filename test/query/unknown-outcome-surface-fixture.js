@@ -66,7 +66,6 @@ const GROUP_BUDGET_MS = 10000;
 const JOIN_WRITE_OPTIONS = Object.freeze({
   deliveryPriority: 'critical',
   phaseScope: CONTROL_PLANE_PHASE_SCOPE.JOIN,
-  skipCacheWait: true,
 });
 
 function quietEnvironment(raft = {}) {

@@ -183,7 +183,7 @@ async function setup(t, {initial = false} = {}) {
     nodeId, timeSource: clock,
     membershipOwnerBootIncarnation: boot, controlPlaneSystemTableGateway: gateway,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     authoritativeVisibilityTimeoutMs: 0, authoritativeVisibilityRetryDelayMs: 0,
     logger: {debug() {}, error() {}, info() {}, warn() {}}});
   let repository = repo();

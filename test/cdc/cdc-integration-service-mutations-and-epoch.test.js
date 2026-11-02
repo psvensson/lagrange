@@ -73,7 +73,6 @@ test('CDCIntegrationService - updateSystemTableRow forwards query timeout to SQL
       },
       {
         queryTimeoutMs: 4321,
-        skipCacheWait: true,
       },
     );
 
@@ -131,7 +130,7 @@ test('CDCIntegrationService - updateSystemTableRow rejects a primary-key re-home
         SYSTEM_TABLE_NAME.NODES,
         {node_id: 'node-1'},
         {node_id: 'node-2', status: 'active'},
-        {skipCacheWait: true},
+        {},
       ),
       /must not re-home primary key/,
       'differing primary-key value in data fails closed',
@@ -175,7 +174,6 @@ test('CDCIntegrationService - routed system-table write timeout budget bounds tr
         },
         {
           queryTimeoutMs: 200,
-          skipCacheWait: true,
         },
       ),
       'routed system-table writes should fail once the per-call timeout budget is exhausted',
@@ -235,7 +233,6 @@ test('CDCIntegrationService - attempt-1 timeout budget is immune to pre-attempt 
           },
           {
             queryTimeoutMs: 200,
-            skipCacheWait: true,
           },
         ),
         'routed system-table writes should fail once the per-call timeout budget is exhausted',
@@ -265,7 +262,6 @@ test('CDCIntegrationService - routed system-table writes default to shared backg
         status: 'active',
       },
       {
-        skipCacheWait: true,
       },
     );
 
@@ -308,7 +304,6 @@ test('CDCIntegrationService - critical transport system-table writes still defau
         updated_at: 1,
       },
       {
-        skipCacheWait: true,
       },
     );
 
@@ -343,7 +338,6 @@ test('CDCIntegrationService - transaction-control system-table writes default to
       SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
       TEST_TRANSACTION_ROW,
       {
-        skipCacheWait: true,
       },
     );
 

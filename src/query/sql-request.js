@@ -141,6 +141,9 @@ function createSqlRequest(fields) {
     ...(fields.timeoutBudget ? {timeoutBudget: fields.timeoutBudget} : {}),
     ...(fields.cancellationToken ?
       {cancellationToken: fields.cancellationToken} : {}),
+    // The client session's disconnect: read only by a lifecycle command's
+    // projection wait, never a cancellation of the statement's work.
+    ...(fields.abortSignal ? {abortSignal: fields.abortSignal} : {}),
     ...securityFields.requestFields,
   };
 

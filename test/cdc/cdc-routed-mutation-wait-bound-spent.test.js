@@ -63,7 +63,7 @@ function updateNode(service, options) {
     SYSTEM_TABLE_NAME.NODES,
     {node_id: 'node-1'},
     {status: 'active'},
-    {skipCacheWait: true, ...options},
+    {...options},
   );
 }
 

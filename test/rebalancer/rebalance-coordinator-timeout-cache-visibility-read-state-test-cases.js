@@ -82,7 +82,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         cdcIntegrationService: {
           refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -173,7 +172,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
       },
       cdcIntegrationService: {
         refreshAuthoritativeCacheRow: async () => true,
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver() {
@@ -225,7 +223,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         cdcIntegrationService: {
           refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -326,7 +323,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         cdcIntegrationService: {
           refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneSystemTableGateway: {
           async readRows(tableName, sql, params, options) {
@@ -427,7 +423,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         cdcIntegrationService: {
           refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneSystemTableGateway: {
           async readRows() {
@@ -536,7 +531,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         cdcIntegrationService: {
           refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         sqlQueryEngine: {
           async executeQuery(sql) {

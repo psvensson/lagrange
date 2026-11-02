@@ -325,7 +325,6 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getNodeReadinessSync(nodeId) {
@@ -470,7 +469,6 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
@@ -664,7 +662,6 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
@@ -925,7 +922,6 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getNodeReadinessSync(nodeId) {
@@ -1121,7 +1117,6 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {

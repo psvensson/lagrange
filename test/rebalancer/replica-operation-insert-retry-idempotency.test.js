@@ -82,7 +82,7 @@ function createRepository({insertResults, authoritativeRows, insertCalls}) {
       getAll: () => [],
       filter: (_table, predicate) => [].filter(predicate),
     },
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     controlPlaneSystemTableGateway: gateway,
     authoritativeVisibilityTimeoutMs: VISIBILITY_TIMEOUT_MS,
     authoritativeVisibilityRetryDelayMs: VISIBILITY_RETRY_DELAY_MS,

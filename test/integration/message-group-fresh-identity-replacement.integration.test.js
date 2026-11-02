@@ -354,7 +354,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         controlPlaneSystemTableGateway: cpStore.gateway,
         logger: noLog,
         systemTableCache: cache,
-        cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+        cdcIntegrationService: {},
         authoritativeVisibilityTimeoutMs: 0,
         authoritativeVisibilityRetryDelayMs: 0,
       });

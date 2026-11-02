@@ -98,7 +98,7 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
   const repositoryFor = (nodeId) => new ReplicaOperationRepository({nodeId,
     membershipOwnerBootIncarnation: 1, timeSource: clock,
     controlPlaneSystemTableGateway: gateway, logger: noLog, systemTableCache,
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     authoritativeVisibilityTimeoutMs: 0, authoritativeVisibilityRetryDelayMs: 0});
   const repository = repositoryFor(NODE);
   const identity = JSON.stringify({operationId: O, groupId: GROUP,

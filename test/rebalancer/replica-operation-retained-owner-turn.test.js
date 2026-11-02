@@ -84,7 +84,7 @@ function createCoordinator(operation, deliveries) {
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     systemTableCache: {get: () => null},
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     tablePolicyService: {
       getPolicyForPartition: async () => ({minReplicaCount: 1}),
     },

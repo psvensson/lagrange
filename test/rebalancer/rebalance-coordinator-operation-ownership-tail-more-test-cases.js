@@ -41,7 +41,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -107,7 +106,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneSystemTableGateway: {
         async readRows(tableName, sql, params) {
@@ -166,7 +164,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -298,7 +295,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -388,7 +384,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -488,7 +483,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -614,7 +608,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -766,7 +759,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -906,7 +898,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -983,7 +974,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
@@ -1067,7 +1057,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -1143,7 +1132,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
@@ -1229,7 +1217,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {

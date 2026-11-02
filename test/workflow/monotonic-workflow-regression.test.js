@@ -133,7 +133,7 @@ function createMinimalCoordinator(overrides = {}) {
         return null;
       },
     },
-    cdcIntegrationService: {async waitForCacheUpdate() {}},
+    cdcIntegrationService: {},
     tablePolicyService: {
       async getPolicyForPartition() {
         return {minReplicaCount: 1};

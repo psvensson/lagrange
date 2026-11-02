@@ -106,7 +106,6 @@ function createMockCDCService(cache) {
       cache.applySystemTableChange(tableName, 'UPDATE', merged);
       return {success: true};
     },
-    async waitForCacheUpdate() {},
   };
 }
 

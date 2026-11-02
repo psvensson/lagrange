@@ -554,6 +554,7 @@ class CDCIntegrationServiceMutationOperations {
     return {
       ...this.stats,
       total: this.stats.inserts + this.stats.updates + this.stats.deletes,
+      projectionWaiters: this.getProjectionWaitDiagnostics().activeWaiters,
     };
   }
 

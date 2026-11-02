@@ -28,6 +28,8 @@ function leaderPartition() {
     cdcIntegrationService: {},
     logger: {warn() {}, debug() {}, info() {}, error() {}},
     failNextWrite: false,
+    raftTerm: 7,
+    raft: {readStatus: () => ({term: partition.raftTerm})},
     isPartitionsLeaderAvailable: () => true,
     async submitPartitionSizeMutation(sizeBytes) {
       writes.push(sizeBytes);
@@ -79,4 +81,13 @@ test('site 7: a size write that found no row keeps nothing', async (t) => {
   await partition.persistPartitionSize(4096);
 
   t.same(writes, [4096, 4096], 'a zero-row write is not taken as committed');
+});
+
+test('site 7: a leadership change clears the kept size', async (t) => {
+  const {partition, writes} = leaderPartition();
+  await partition.persistPartitionSize(4096);
+  partition.raftTerm = 8;
+  await partition.persistPartitionSize(4096);
+  t.same(writes, [4096, 4096],
+    'the next term dedupes against nothing it did not write');
 });

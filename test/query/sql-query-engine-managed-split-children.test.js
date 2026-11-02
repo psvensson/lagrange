@@ -681,7 +681,6 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
     node_id: localNodeId,
     address: `${localNodeId}/partition/${replicaId}`,
   }];
-  const cacheWaitCalls = [];
   let sleepCalls = 0;
 
   const cache = {
@@ -759,16 +758,7 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
     },
   };
 
-  const cdcIntegrationService = {
-    async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-      cacheWaitCalls.push({
-        tableName,
-        key,
-        expectPresent,
-        options,
-      });
-    },
-  };
+  const cdcIntegrationService = {};
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -796,11 +786,6 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
     replicaCount: 1,
   });
 
-  t.equal(
-    cacheWaitCalls.length,
-    0,
-    'visible service rows should skip authoritative metadata repair and defer active enforcement to the routable wait',
-  );
   t.equal(
     services[0]?.status,
     'active',

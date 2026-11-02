@@ -590,7 +590,6 @@ function createTopologyOperatorWitnessCoordinator() {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     messageRouter: {
       async deliver() {
@@ -894,7 +893,6 @@ registerCase(TEST_BOUNDED_OWNER_REENTRY_CONTRACT_TEST_NAME, async (t) => {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     messageRouter: {
       async deliver() {
@@ -1004,7 +1002,6 @@ registerCase(
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver(target, payload, options) {
@@ -1093,7 +1090,6 @@ registerCase(
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver() {

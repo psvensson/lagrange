@@ -592,7 +592,7 @@ test('non-hosting-joiner-reads-authority-publication-during-recovery: a ' +
     storageOwner, RECOVERY_PENDING_HOST_REPORT,
   );
   assert.equal(
-    await ordinary.getPublication(AUTHORITY_PUBLICATION_ID, {skipCacheWait: true}),
+    await ordinary.getPublication(AUTHORITY_PUBLICATION_ID, {}),
     null,
   );
   assert.deepEqual(ordinary.reads, [{

@@ -20,13 +20,11 @@ const numberIsFinite = Number.isFinite;
 const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
 const RETRY_AFTER_MS_PROPERTY = 'retryAfterMs';
 
-const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
 const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
   APPLIED: 'applied',
   AUTHORITATIVE_CONFIRM_UNAVAILABLE: 'authoritative-confirm-unavailable',
   AUTHORITATIVE_WRITE_FAILED: 'authoritative-write-failed',
   CACHE_VISIBILITY_GAP_RECOVERED: 'cache-visibility-gap-recovered',
-  CACHE_VISIBILITY_GAP_UNRECOVERED: 'cache-visibility-gap-unrecovered',
   DEFERRED: 'deferred',
   IN_FLIGHT: 'in-flight',
   NOOP: 'noop',
@@ -56,11 +54,7 @@ const AUTHORITATIVE_PROBE_DEFER_CAUSE = Object.freeze({
   ROW_UNAVAILABLE: 'row-unavailable',
 });
 
-function classifyMutationFailure(error) {
-  const message = error?.message || '';
-  if (message.includes(CACHE_VISIBILITY_ERROR_FRAGMENT)) {
-    return AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_UNRECOVERED;
-  }
+function classifyMutationFailure() {
   return AUTHORITATIVE_ROW_MUTATION_REASON.AUTHORITATIVE_WRITE_FAILED;
 }
 

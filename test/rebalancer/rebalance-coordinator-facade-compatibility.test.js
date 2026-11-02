@@ -148,7 +148,6 @@ function createFacadeCoordinator(overrides = {}) {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async upsertSystemTableRow() {
         return {success: true};
       },

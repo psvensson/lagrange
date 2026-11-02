@@ -138,15 +138,16 @@ const controlPlaneSystemTableGatewayDependencyResolutionMethods = {
    * projection wait owner (CDCIntegrationService.awaitProjectionAt), and
    * without that owner refuses typed (projection_unavailable).
    * @param {Object} position - The write answer's position.
+   * @param {Object} [options] - {abortSignal, statement}.
    * @return {Promise<Object>}
    */
-  awaitProjectionAt(position) {
+  awaitProjectionAt(position, options = {}) {
     const cdcIntegrationService = this.resolveCdcIntegrationService();
     if (typeof cdcIntegrationService?.awaitProjectionAt !== 'function') {
       return Promise.reject(projectionWaitError(
         PROJECTION_WAIT_OUTCOME.PROJECTION_UNAVAILABLE));
     }
-    return cdcIntegrationService.awaitProjectionAt(position);
+    return cdcIntegrationService.awaitProjectionAt(position, options);
   },
 
   resolveSystemTableCache() {

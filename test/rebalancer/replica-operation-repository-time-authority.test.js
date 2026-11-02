@@ -40,7 +40,7 @@ function createRepository(timeSource, reads) {
     nodeId: TEST_NODE_ID,
     timeSource,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
       readAuthoritativeRows: async () => {
         reads.push('authoritative');

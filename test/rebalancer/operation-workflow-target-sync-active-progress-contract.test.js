@@ -231,7 +231,6 @@ function createCoordinator(deliveries, deferredTimers, operationRow) {
     },
     systemTableCache: createMockCache(),
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: 0};
       },

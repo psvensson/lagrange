@@ -210,7 +210,6 @@ function createObservedProgressCoordinator({
 } = {}) {
   let nextTimerId = TEST_INITIAL_TIMER_ID;
   const cdcIntegrationService = {
-    async waitForCacheUpdate() {},
     async executeAuthoritativeSystemTableRead(
       tableName,
       sql,

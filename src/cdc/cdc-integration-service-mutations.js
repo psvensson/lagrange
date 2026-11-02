@@ -30,10 +30,14 @@ const {
 // (an authoritative read through the repair owner); the write's answer never
 // waits for it and never reads it (quest
 // replica-admission-from-committed-operation, attempt 2: a projection may
-// trigger reconciliation, it never answers a write).
+// trigger reconciliation, it never answers a write). A conditional delete
+// that removed nothing is a failed comparison: the row stands, nothing
+// should disappear, and nothing is repaired.
 function reconcileZeroRowDeletion(context, tableName, id, whereClause, result) {
   const effect = classifyControlPlaneMutationResult(result);
+  const idField = context.getPrimaryKeyField(tableName);
   if (!effect.affectedRowsPresent || effect.affectedRows !== 0 ||
+      Object.keys(whereClause).some((field) => field !== idField) ||
       typeof context.repairCacheVisibilityHole !== 'function') {
     return;
   }

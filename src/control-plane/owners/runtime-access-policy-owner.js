@@ -76,7 +76,9 @@ const RUNTIME_ACCESS_POLICY_MESSAGE = Object.freeze({
 // The projection wait's typed endings (the one projection wait owner,
 // CDCIntegrationService.awaitProjectionAt).
 const PROJECTION_WAIT_ENDINGS = Object.freeze(new Set(['shutdown',
-  'position_unknown', 'position_invalid', 'projection_unavailable']));
+  'client_disconnected', 'position_unknown', 'position_invalid',
+  'projection_unavailable']));
+const CONFIGURE_ACCESS_STATEMENT = 'CONFIGURE SERVICE ACCESS';
 const RUNTIME_ACCESS_POLICY_ERROR_NAME = 'RuntimeAccessPolicyError';
 const POLICY_INPUT_FIELDS = Object.freeze([
   'binding_name',
@@ -587,6 +589,7 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
     }
     const now = this.timestamp();
     const configValue = JSON.stringify(stored);
+    const {abortSignal, ...writeOptions} = options;
     const written = await this.upsertRow({
       config_key: this.configKey(serviceId),
       config_value: configValue,
@@ -597,8 +600,8 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
       updated_by: securityContext.principal,
       updated_at: now,
       created_at: now,
-    }, options);
-    await this.awaitOwnPolicyProjection(written?.position);
+    }, writeOptions);
+    await this.awaitOwnPolicyProjection(written?.position, abortSignal);
     return normalizeStoredPolicy(stored, serviceId);
   }
 
@@ -607,17 +610,22 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
    * this node's projection holds that commit, so a CONFIGURE followed by an
    * invoke on this node is authorized (lead decision a1, quest
    * replica-admission-from-committed-operation attempt 2). The wait has no
-   * timer: it ends when the projection reaches the position or at shutdown.
-   * The DDL path has no request deadline and no cancel path, so the wait is
-   * unbounded by design on a live node; a typed ending answers the DDL typed
-   * unavailable and the committed write stays committed. Other nodes stay
+   * timer: it ends when the projection reaches the position, at shutdown, or
+   * when the client's session disconnects. A live connected client's wait is
+   * unbounded by design (the lifecycle path does not consume the request's
+   * wall-time budget, and pgwire has no CancelRequest); the wait's log lines
+   * and CDC diagnostics make it visible. A typed ending answers the DDL typed
+   * unavailable and the committed write stays committed; a settled replay
+   * proves no position, so it ends position_unknown. Other nodes stay
    * eventually consistent, as before.
-   * @param {Object|undefined} position - The write answer's position.
+   * @param {Object|null|undefined} position - The write answer's position.
+   * @param {AbortSignal} [abortSignal] - The client's session.
    * @return {Promise<void>}
    */
-  async awaitOwnPolicyProjection(position) {
+  async awaitOwnPolicyProjection(position, abortSignal) {
     try {
-      await this.requireGateway().awaitProjectionAt(position);
+      await this.requireGateway().awaitProjectionAt(position,
+        {abortSignal, statement: CONFIGURE_ACCESS_STATEMENT});
     } catch (error) {
       if (!PROJECTION_WAIT_ENDINGS.has(error?.code)) throw error;
       throw new RuntimeAccessPolicyError(

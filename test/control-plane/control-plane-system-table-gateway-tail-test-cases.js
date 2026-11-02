@@ -142,7 +142,6 @@ export function registerControlPlaneSystemTableGatewayTailTests({
         data: {status: 'active'},
       };
       const options = {
-        allowPendingVisibility: true,
         workClass: 'background',
         allowPressureDefer: true,
         coalescingKey: 'services:svc-1',
@@ -161,11 +160,8 @@ export function registerControlPlaneSystemTableGatewayTailTests({
         'services:svc-1',
         'central mutation ingress should preserve gateway write options',
       );
-      t.equal(
-        updateCalls[0].options.allowPendingVisibility,
-        true,
-        'central mutation ingress should preserve pending-visibility semantics',
-      );
+      t.equal('allowPendingVisibility' in updateCalls[0].options, false,
+        'central mutation ingress carries no visibility opt-out');
       t.type(
         updateCalls[0].options.recoveryCandidateSelectionKey,
         'string',
@@ -198,7 +194,6 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       data: {status: 'ACTIVE'},
     }, {
       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
-      skipCacheWait: true,
     });
 
     t.equal(updateCalls.length, 1, 'gateway should delegate one workload-owned mutation');
@@ -241,18 +236,10 @@ export function registerControlPlaneSystemTableGatewayTailTests({
         data: {status: 'active'},
       });
 
-      t.equal(
-        result.outcome,
-        CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-        'gateway should surface committed-but-not-yet-visible mutation outcomes explicitly',
-      );
-      t.equal(
-        result.authoritativeVisibilityConfirmed,
-        true,
-        'gateway should preserve authoritative visibility confirmation details',
-      );
-      t.equal(result.contractState, 'pending');
-      t.equal(result.nextAction, 'wait');
+      // A legacy visibility field on a committed answer does not make the
+      // mutation pending: every write answers at its commit.
+      t.equal(result.outcome, CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
+        'gateway answers a committed mutation applied');
     });
 
   test('ControlPlaneSystemTableGateway submitMutation canonicalizes ' +
@@ -349,7 +336,6 @@ export function registerControlPlaneSystemTableGatewayTailTests({
     };
     await t.rejects(
       gateway.submitMutation(forbiddenMutation, {
-        skipCacheWait: true,
         phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
         deliveryPriority: 'critical',
@@ -391,7 +377,6 @@ export function registerControlPlaneSystemTableGatewayTailTests({
           status: 'OPEN',
         },
       }, {
-        skipCacheWait: true,
         phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
         deliveryPriority: 'critical',
