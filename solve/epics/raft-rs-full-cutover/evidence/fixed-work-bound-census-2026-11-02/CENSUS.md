@@ -39,8 +39,10 @@ Three measurements on 2026-11-02 point at this pattern:
 
 ### Spent bounds in the b3b366573 post-merge corpus
 
-The corpus log holds 253 `wait_bound_spent` events. They are grouped below
-by `wait`. A bound that is the remainder of a parent budget reports its
+The corpus log holds 253 `wait_bound_spent` events. The table covers 251
+of them: the 2 `MESSAGE_GROUP_RETRY_MAX_ATTEMPTS (direct delivery)` events
+bound an attempt count, not milliseconds, and are excluded. The rest are
+grouped below by `wait`. A bound that is the remainder of a parent budget reports its
 remaining `boundMs`, so one `wait` appears under many values; those
 remaining-budget variants (about 19 distinct values) are folded into their
 group with their range. The log interleaves every test, and several tests
@@ -122,7 +124,7 @@ pass.
 | 2 | HEALTH_TIMEOUT_MS | 1000 | runtime/wasi-component-cell-runtime.js | the cell worker answers PING | **mixed** (own worker thread; starved under CPU load) | health false and `_stop(serviceId)`: a slow pong kills a healthy cell | yes: the restart repeats startup, transpile included, adding load | `wait_bound_spent` under the generic name `cell_worker_message_timeout`, not its own | 9b430a9a3 2026-07-23; never changed |
 | 3 | HOST_CALL_DEFAULT_WAIT_BUDGET_MS | 5000 | runtime/cell-host-call-protocol.js | the host answers a cell's nested binding call | mixed (the host executes the call) | host-call deadline; not traced | not traced | none typed in the owner module (host-call deadline not traced to a reporter) | 417b119a6 2026-08-03; never changed |
 | 4 | DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS | 300 | config/dynamic-config-startup-wiring.js | startup read of one dynamic-config key (logging appliers and raft timing keys) | **mixed**, mostly local work at startup | warn `INITIAL_APPLY_FAILED`; the key's value is skipped and `applyRaftTimingConfig` runs with the configManager value; the read is not cancelled (`withTimeout` never cancels the wrapped promise) | no re-drive without a later config change: **load changes configuration** (a dynamic raft timing override is silently not applied) | `logger.warn` only (INITIAL_APPLY_FAILED); no typed spend | 9939b3ff6 2026-02-24; never changed |
-| 5 | DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS | 300 | config/dynamic-config-startup-wiring.js | `RaftAdaptiveTimingController.initialize()` | **work** | warn `ADAPTIVE_CONTROLLER_INIT_FAILED`; the wiring drops its reference (dynamic-config-startup-wiring.js 438-449) but `withTimeout` (76-107) never cancels the wrapped promise, so the in-flight `initialize()` (raft-adaptive-timing-controller.js 220-232) keeps running un-owned: loadConfig, registerWatchers (331-349), startLoop (355-366) when enabled, and a later `adaptiveTimingEnabled=true` starts the orphan's loop through its own watcher (606-613); shutdown (492-501) only shuts the controller it holds, so the orphan's interval and watchers are never shut down. `adaptiveTimingEnabled` defaults to false (config-definitions.js 41), so the default config sees no timing change | no re-drive; a re-drive would create a second controller beside the orphan | `logger.warn` only (ADAPTIVE_CONTROLLER_INIT_FAILED); no typed spend | 9939b3ff6 2026-02-24; never changed |
+| 5 | DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS | 300 | config/dynamic-config-startup-wiring.js | `RaftAdaptiveTimingController.initialize()` (loads config, registers watchers) | **mixed**, like row 4 | warn `ADAPTIVE_CONTROLLER_INIT_FAILED`; the wiring drops its reference (dynamic-config-startup-wiring.js 438-449) but `withTimeout` (76-107) never cancels the wrapped promise, so the in-flight `initialize()` (raft-adaptive-timing-controller.js 220-232) keeps running un-owned: loadConfig, registerWatchers (331-349), startLoop (355-366) when enabled, and a later `adaptiveTimingEnabled=true` starts the orphan's loop through its own watcher (606-613); shutdown (492-501) only shuts the controller it holds, so the orphan's interval and watchers are never shut down. `adaptiveTimingEnabled` defaults to false (config-definitions.js 41), so the default config sees no timing change | no re-drive; a re-drive would create a second controller beside the orphan | `logger.warn` only (ADAPTIVE_CONTROLLER_INIT_FAILED); no typed spend | 9939b3ff6 2026-02-24; never changed |
 | 6 | READINESS_PROBE_ASYNC_TIMEOUT_MS | 250 | bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js | async readiness snapshot evaluation | **mixed** (local evaluation with its async diagnostics) | falls back to the synchronous snapshot (degrades, does not fail); the async evaluation is not cancelled | yes: the evaluation is redone synchronously beside the still-running async one | `logger.debug` only; no typed spend | 8f284ad8a 2026-04-13; never changed. A slow-not-break example |
 | 7 | OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS | 15000 | control-plane/membership-publication-coordinator-reconcile.js | one `reconcileActiveGateMembershipPublication()` drive | mixed | `wait_bound_spent`; the raced drive is not cancelled and keeps running | the next interval starts a new drive, possibly beside the old one | `wait_bound_spent` (wait OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS) | a617fb59c 2026-06-08; never changed |
 | 8 | OPERATION_SHUTDOWN_JOIN_DEFAULT_TIMEOUT_MS | 5000 | rebalancer/operation-owner-shutdown-join.js | in-flight owner-lane executions settle at shutdown | mixed | typed `timed_out` join + `wait_bound_spent` | no (shutdown) | `wait_bound_spent` (wait OPERATION_SHUTDOWN_JOIN_DEFAULT_TIMEOUT_MS) | c0c73cb06 2026-08-07; never changed |
@@ -133,7 +135,7 @@ pass.
 | 13 | PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS | 15000 | query/sql-query-engine.js | delivery of a priority control-plane transaction to its partition | liveness (remote apply includes the remote node's CPU) | the executor's partition deadline path (`partition_execution_deadline`) | caller-dependent | `wait_bound_spent` through the executor as `partition_execution_deadline`, not by name | 86b7b178c 2026-04-23; never changed |
 | 14 | AUTHORITATIVE_CONTROL_PLANE_DEFAULT_QUERY_TIMEOUT_MS | 1500 | control-plane/authoritative-control-plane-view.js | the authoritative control-plane query answers | liveness | query timeout; caller retries | the read, not local work | none typed in the owner module (a routed query's delivery bound may report as `partition_execution_deadline`; not traced) | d378c9083 2026-03-08; never changed |
 | 15 | AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS | 1500 | admin/admin-service-discovery.js | the authoritative repair query answers | liveness | query timeout | the read | none typed in the owner module (as row 14) | dc9927ec7 2026-03-03; never changed |
-| 16 | AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS | 1500 | bootstrap/owners/service-leader-readiness-owner.js | the authoritative partitions/services read answers | liveness | query timeout | the read | `wait_bound_spent` reporter in the owner module | eeffda99f 2026-07-15; never changed |
+| 16 | AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS | 1500 | bootstrap/owners/service-leader-readiness-owner.js | the authoritative partitions/services read answers | liveness | query timeout | the read | none typed for this bound (the owner module's reporter covers another wait; as row 14) | eeffda99f 2026-07-15; never changed |
 | 17 | DEFAULT_REPAIR_QUERY_TIMEOUT_MS | 1500 | control-plane/authoritative-node-evidence-reconciler.js | the node snapshot repair read answers | liveness | query timeout | the read | none typed in the owner module (as row 14) | 8f284ad8a 2026-04-13; never changed |
 | 18 | REPORTER_VISIBILITY_QUERY_TIMEOUT_MS | 1000 | control-plane/heartbeat-service-runtime-state.js | the heartbeat reporter's visibility readback answers | liveness | query timeout; visibility decision state | the read | none typed in the owner module (as row 14) | d378c9083 2026-03-08; never changed |
 | 19 | PRIORITY_RECOVERY_REPLACE_REMOVE_DISPATCH_SPREAD_STALL_BUDGET_MS | 60000 | control-plane/priority-recovery-snapshot-ingress.js | a REPLACE remove-dispatch step's age before it counts as stalled | liveness (stall detector) | unmasks the spread so the step re-drives | yes, by design (the stalled dispatch) | none: a stall threshold, not a wait; the re-drive is its visibility | 3aad76314 2026-06-29; never changed |
@@ -153,15 +155,15 @@ pass.
 
 | Class | Count |
 | --- | --- |
-| work | 2 (#1, #5) |
-| mixed | 10 (#2, #3, #4, #6, #7 to #12) |
+| work | 1 (#1) |
+| mixed | 11 (#2 to #12) |
 | liveness | 9 (#13 to #20, #30) |
 | not a wait | 7 (#21 to #27) |
 | test-only | 2 (#28, #29) |
 
 **Rows without typed spend visibility.** A spent bound at these rows produces
 no `wait_bound_spent` event of its own: #3, #4, #5, #6, #9, #10, #11, #12,
-#14, #15, #17, #18 (and #30, browser side). #2 and #13 report, but under a
+#14, #15, #16, #17, #18 (and #30, browser side). #2 and #13 report, but under a
 generic or another bound's name.
 
 **Cross-row pattern: the bound expires and the work keeps running.** Rows

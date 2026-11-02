@@ -6,7 +6,7 @@
     {
       "id": "census-table",
       "passed": true,
-      "detail": "30 fixed bound constants in src/ at 6d58fdba1 (29 in JavaScript, 1 in the admin dashboard HTML), each with owner module, awaited event, class (work 2, mixed 10, liveness 9, not a wait 7, test-only 2), spent outcome (or 'not traced'), re-drive behaviour, typed spend visibility (rows without a wait_bound_spent of their own named) and history; the cross-row pattern of bounds that expire while their work keeps running un-cancelled (#4, #5, #6, #7); the grouped spent-bound table of the b3b366573 post-merge corpus (253 events, remaining-budget variants folded with their ranges); the 52 object-member bounds outside the regex listed by owner, unclassified",
+      "detail": "30 fixed bound constants in src/ at 6d58fdba1 (29 in JavaScript, 1 in the admin dashboard HTML), each with owner module, awaited event, class (work 1, mixed 11, liveness 9, not a wait 7, test-only 2), spent outcome (or 'not traced'), re-drive behaviour, typed spend visibility (rows without a wait_bound_spent of their own named) and history; the cross-row pattern of bounds that expire while their work keeps running un-cancelled (#4, #5, #6, #7); the grouped spent-bound table of the b3b366573 post-merge corpus (251 of 253 events, the 2 attempt-count events excluded, remaining-budget variants folded with their ranges); the 52 object-member bounds outside the regex listed by owner, unclassified",
       "evidence": [
         "solve/epics/raft-rs-full-cutover/evidence/fixed-work-bound-census-2026-11-02/CENSUS.md"
       ]
