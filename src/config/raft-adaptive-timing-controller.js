@@ -203,6 +203,8 @@ class RaftAdaptiveTimingController {
     this.lastSignals = null;
     this.intervalHandle = null;
     this.watchUnsubscribers = [];
+    // Set by shutdown(); an initialize still in flight then starts nothing.
+    this.stopped = false;
     this.evaluationInFlight = false;
     this.suspendLoopControl = false;
     this.initialized = false;
@@ -218,13 +220,23 @@ class RaftAdaptiveTimingController {
    * @return {Promise<void>}
    */
   async initialize() {
-    if (this.initialized) {
+    if (this.initialized || this.stopped) {
       return;
     }
 
     await this.loadConfig();
+    // A shutdown that arrived while the config loaded cancels the rest: no
+    // watcher, profile or loop is started after it
+    // (dynamic-config-startup-owned-initialization).
+    if (this.stopped) {
+      return;
+    }
     this.registerWatchers();
     this.currentProfile = await this.detectCurrentProfile();
+    if (this.stopped) {
+      this.unregisterWatchers();
+      return;
+    }
     this.initialized = true;
 
     if (this.settings[ADAPTIVE_TIMING_KEY_FIELDS.ENABLED]) {
@@ -236,12 +248,21 @@ class RaftAdaptiveTimingController {
    * Shutdown controller and cleanup watchers/timers.
    */
   shutdown() {
+    this.stopped = true;
     this.stopLoop();
+    this.unregisterWatchers();
+    this.initialized = false;
+  }
+
+  /**
+   * Remove every config watcher this controller registered.
+   * @private
+   */
+  unregisterWatchers() {
     for (const unsubscribe of this.watchUnsubscribers) {
       unsubscribe();
     }
     this.watchUnsubscribers = [];
-    this.initialized = false;
   }
 
   /**
@@ -353,6 +374,9 @@ class RaftAdaptiveTimingController {
    * @private
    */
   startLoop() {
+    if (this.stopped) {
+      return;
+    }
     this.stopLoop();
     this.intervalHandle = this.intervalFactory(() => {
       void this.evaluateOnce();

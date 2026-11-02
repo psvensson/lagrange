@@ -11,6 +11,8 @@ releases without a compatibility guarantee.
 ## [Unreleased]
 
 ### Fixed
+- **Startup dynamic configuration owns its late work (`dynamic-config-startup-wiring.js`, `raft-adaptive-timing-controller.js`):**
+  when a 300 ms startup bound is spent under load the node still starts on the defaults, but the work is no longer abandoned: a late config read is applied by the wiring when it arrives (dropped as stale if a CDC apply for its key came first), so a restarting node no longer stays on default raft timing; the adaptive timing controller is adopted when its late initialize completes, or cancelled by shutdown, and never left running un-owned. Each spent bound is reported as `wait_bound_spent` under its constant's name. Supersedes the 2026-10-04 designed-fallback classification of these bounds.
 - **0.5 WASI service tests run in the serial toolchain lane (`test/shards/resource-external-toolchain.txt`):**
   `test/service/h1`-`h5` and `q2`-`q5` compile real Hono/service components and start real
   component Cells, so they now have resource class `external-toolchain` (jobs=1), like

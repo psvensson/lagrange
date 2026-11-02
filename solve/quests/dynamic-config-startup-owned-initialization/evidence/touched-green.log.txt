@@ -1,0 +1,13 @@
+# test-files planned=8
+classified lane ordinary: 8 file(s), jobs=4
+thermal: hold cpu 76C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 73C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/admin/admin-owner-mutation-outcomes.test.js (199 assertions, 730ms)
+ok test/sql-engine-read-migration.test.js (45 assertions, 803ms)
+ok test/config/dynamic-config-startup-wait-bound-spent.test.js (29 assertions, 582ms)
+ok test/config/dynamic-config-startup-wiring.test.js (38 assertions, 1628ms)
+ok test/admin/admin-owner-operations.test.js (77 assertions, 926ms)
+ok test/config/dynamic-config-service.test.js (439 assertions, 494ms)
+ok test/config/raft-adaptive-timing-controller.test.js (23 assertions, 352ms)
+ok test/config/dynamic-config-startup-owned-initialization.test.js (20 assertions, 8639ms)
+# test-files total=8 pass=8 fail=0 assertions=870

@@ -28,7 +28,7 @@
   "censusSize": 2557,
   "digest": "fnv1a32-e78652f2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2081ef6f",
+  "observationDigest": "fnv1a32-b9d19216",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4200,11 +4200,6 @@
       ],
       "env": [
         "NODE_HEARTBEAT_INTERVAL_MS"
-      ]
-    },
-    "test/config/dynamic-config-startup-owned-initialization.test.js": {
-      "files": [
-        "src/config/dynamic-config-startup-wiring.js"
       ]
     },
     "test/config/dynamic-config-startup-wait-bound-spent.test.js": {

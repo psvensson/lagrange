@@ -1,0 +1,12 @@
+=== mutation: CDC-wins check removed
+not ok 4 - row 4 ordering: a CDC apply for the key during a late read wins; the late read is dropped as stale, never applied
+=== mutation: late raft value not swept
+not ok 2 - row 4: a stored raft timing whose read completes after the bound is applied without any CDC apply
+not ok 4 - row 4 ordering: a CDC apply for the key during a late read wins; the late read is dropped as stale, never applied
+=== mutation: spend not reported
+not ok 2 - stalled startup config reads: startup proceeds on defaults and each spent bound is reported under its own name, the read still owned
+=== mutation: controller not shut down at wiring shutdown
+not ok 3 - row 5: a controller whose initialize completes after the bound leaves nothing running after shutdown
+not ok 5 - row 5 cancellation: a shutdown while initialize is in flight leaves nothing running when it completes
+=== mutation: initialize ignores a shutdown in flight
+not ok 5 - row 5 cancellation: a shutdown while initialize is in flight leaves nothing running when it completes

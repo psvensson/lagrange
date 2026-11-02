@@ -11,6 +11,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {
   CONFIG_KEY,
   CONFIG_SUBSYSTEM,
+  CONFIG_TABLE_COLUMN,
 } from './config-constants.js';
 import {DynamicConfigService} from './dynamic-config-service.js';
 import {
@@ -18,11 +19,7 @@ import {
 } from '../diagnostics/raft-churn-sync-sections.js';
 import {RaftAdaptiveTimingController} from
   './raft-adaptive-timing-controller.js';
-
-const LOCAL_STR_TIMED_OUT_READING_STARTUP_DYNAMIC_CONFIG = 'Timed out reading startup dynamic config key ';
-const LOCAL_STR_AFTER = ' after ';
-const LOCAL_STR_MS = 'ms';
-const LOCAL_STR_TIMED_OUT_INITIALIZING_ADAPTIVE_TIMING_C = 'Timed out initializing adaptive timing controller after ';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const DYNAMIC_CONFIG_STARTUP_EVENT = Object.freeze({
   CDC_APPLIED: 'cdcApplied',
@@ -36,9 +33,36 @@ const DYNAMIC_CONFIG_STARTUP_LOG_MSG = Object.freeze({
     'Failed to initialize raft adaptive timing controller',
   ADAPTIVE_CONTROLLER_SHUTDOWN_FAILED:
     'Failed to shutdown raft adaptive timing controller',
+  LATE_READ_DROPPED_STALE:
+    'Late startup dynamic config read dropped: a CDC apply for its key won',
+  ADAPTIVE_CONTROLLER_ADOPTED_LATE:
+    'Raft adaptive timing controller initialized after its startup bound and adopted',
+});
+
+// What became of each piece of startup work the wiring owns
+// (dynamic-config-startup-owned-initialization). A spent bound is a reported
+// late state, never an abandonment: the work stays owned and its result is
+// applied through the one apply path when it arrives.
+const DYNAMIC_CONFIG_STARTUP_OUTCOME = Object.freeze({
+  PENDING: 'pending',
+  APPLIED: 'applied',
+  APPLIED_LATE: 'applied_late',
+  DROPPED_STALE: 'dropped_stale',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+  ADOPTED_LATE: 'adopted_late',
+  UNAVAILABLE: 'unavailable',
 });
 const DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS = 300; // ends-on: the dynamicConfigService.get(key) read resolves
 const DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS = 300; // ends-on: the adaptiveTimingController.initialize() call resolves
+const STARTUP_INITIAL_READ_WAIT = Object.freeze({
+  wait: 'DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS',
+  awaited: 'startup dynamic-config key read (still owned; applied when it arrives)',
+});
+const STARTUP_CONTROLLER_INIT_WAIT = Object.freeze({
+  wait: 'DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS',
+  awaited: 'adaptive timing controller initialize (still owned; adopted when it completes)',
+});
 
 /**
  * Resolve startup read timeout for initial dynamic-config hydration.
@@ -67,59 +91,35 @@ function resolveControllerInitTimeoutMs(options = {}) {
 }
 
 /**
- * Apply timeout to a promise.
- * @param {Promise<*>} promise
- * @param {number} timeoutMs
- * @param {string} errorMessage
- * @return {Promise<*>}
+ * Wait for owned startup work up to a bound, without abandoning it. Resolves
+ * when the work settles or when the bound is spent, whichever is first; a
+ * spent bound calls onSpent once and leaves the work running, still owned by
+ * the caller, whose own handlers receive its result. The timer is unref'd
+ * and held in `timers` so the owner's shutdown clears it.
+ * @param {Promise<*>} work
+ * @param {number} boundMs
+ * @param {Function} onSpent
+ * @param {Set<*>} timers
+ * @return {Promise<void>}
  */
-function withTimeout(promise, timeoutMs, errorMessage) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
+function waitWithinBound(work, boundMs, onSpent, timers) {
+  return new Promise((resolve) => {
     const timer = setTimeout(() => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      reject(new Error(errorMessage));
-    }, timeoutMs);
+      timers.delete(timer);
+      onSpent();
+      resolve();
+    }, boundMs);
     if (typeof timer.unref === 'function') {
       timer.unref();
     }
-    Promise.resolve(promise)
-      .then((result) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timer);
-        resolve(result);
-      })
-      .catch((error) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timer);
-        reject(error);
-      });
+    timers.add(timer);
+    const settle = () => {
+      clearTimeout(timer);
+      timers.delete(timer);
+      resolve();
+    };
+    work.then(settle, settle);
   });
-}
-
-/**
- * Read one dynamic-config key with bounded startup latency.
- * @param {Object} dynamicConfigService
- * @param {string} key
- * @param {number} timeoutMs
- * @return {Promise<*>}
- */
-async function readStartupConfigValue(dynamicConfigService, key, timeoutMs) {
-  return withTimeout(
-    dynamicConfigService.get(key),
-    timeoutMs,
-    LOCAL_STR_TIMED_OUT_READING_STARTUP_DYNAMIC_CONFIG + key +
-      LOCAL_STR_AFTER + timeoutMs + LOCAL_STR_MS,
-  );
 }
 
 /**
@@ -357,6 +357,28 @@ async function createDynamicConfigStartupWiring(options = {}) {
     },
   ];
 
+  // One apply path for every startup key, on time or late: a logging key
+  // applies at once; a raft timing key joins the startup sweep while it has
+  // not run, and applies its own sweep after it.
+  const loggingApplierByKey = new Map(
+    loggingDynamicAppliers.map((entry) => [entry.key, entry.apply]));
+  let startupSweepDone = false;
+  const applyStartupValue = (key, value) => {
+    const applyLogging = loggingApplierByKey.get(key);
+    if (applyLogging) {
+      applyLogging(value);
+      return;
+    }
+    const field = DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[key];
+    if (!field || !Number.isFinite(value)) {
+      return;
+    }
+    raftTimingConfig[field] = value;
+    if (startupSweepDone) {
+      applyRaftTimingConfig(raftTimingConfig);
+    }
+  };
+
   for (const entry of loggingDynamicAppliers) {
     watcherUnsubscribers.push(dynamicConfigService.watch(
       entry.key,
@@ -383,75 +405,19 @@ async function createDynamicConfigStartupWiring(options = {}) {
     ));
   }
 
-  const initialReadTasks = [];
-  for (const entry of loggingDynamicAppliers) {
-    initialReadTasks.push((async () => {
-      try {
-        const value = await readStartupConfigValue(
-          dynamicConfigService,
-          entry.key,
-          initialReadTimeoutMs,
-        );
-        entry.apply(value);
-      } catch (error) {
-        logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
-          key: entry.key,
-          error: error.message,
-        });
-      }
-    })());
-  }
-  for (const key of DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS) {
-    initialReadTasks.push((async () => {
-      try {
-        const value = await readStartupConfigValue(
-          dynamicConfigService,
-          key,
-          initialReadTimeoutMs,
-        );
-        if (!Number.isFinite(value)) {
-          return;
-        }
-        const field = DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEY_FIELD[key];
-        if (!field) {
-          return;
-        }
-        raftTimingConfig[field] = value;
-      } catch (error) {
-        logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
-          key,
-          error: error.message,
-        });
-      }
-    })());
-  }
-  await Promise.all(initialReadTasks);
-  applyRaftTimingConfig(raftTimingConfig);
-
-  let adaptiveTimingController = null;
-  try {
-    adaptiveTimingController = new RaftAdaptiveTimingController({
-      dynamicConfigService,
-      nodeId: options.nodeId || null,
-      owner: options.runtimeOwner || null,
-    });
-    await withTimeout(
-      adaptiveTimingController.initialize(),
-      controllerInitTimeoutMs,
-      LOCAL_STR_TIMED_OUT_INITIALIZING_ADAPTIVE_TIMING_C +
-        controllerInitTimeoutMs + LOCAL_STR_MS,
-    );
-  } catch (error) {
-    adaptiveTimingController = null;
-    logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.ADAPTIVE_CONTROLLER_INIT_FAILED, {
-      error: error.message,
-    });
-  }
-
+  // CDC applies of the config table, counted per key. Subscribed before any
+  // startup read starts, so a CDC apply during a read is always seen: a late
+  // read whose key was CDC-applied since it started is stale and dropped,
+  // and the CDC value wins.
+  const cdcApplySeqByKey = new Map();
   const subscribedServices = [];
   const handleCdcApplied = (cdcEvent) => {
     if (!cdcEvent || cdcEvent.tableName !== TABLES.CONFIG) {
       return;
+    }
+    const key = cdcEvent.data?.[CONFIG_TABLE_COLUMN.KEY];
+    if (typeof key === 'string') {
+      cdcApplySeqByKey.set(key, (cdcApplySeqByKey.get(key) ?? 0) + 1);
     }
 
     void dynamicConfigService.handleCDCEvent(cdcEvent).catch((error) => {
@@ -477,9 +443,129 @@ async function createDynamicConfigStartupWiring(options = {}) {
     subscribedServices.push(messageGroupService);
   }
 
+  // Everything the wiring starts it owns until shutdown: the bound timers,
+  // each startup read and the controller's initialize.
+  const timers = new Set();
+  let closed = false;
+  const readOutcomes = new Map();
+  const ownStartupRead = (key) => {
+    const startedAtMs = Date.now();
+    const cdcSeqAtStart = cdcApplySeqByKey.get(key) ?? 0;
+    const state = {late: false};
+    readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.PENDING);
+    const read = Promise.resolve().then(() => dynamicConfigService.get(key));
+    read.then((value) => {
+      if (closed) {
+        readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.CANCELLED);
+        return;
+      }
+      if ((cdcApplySeqByKey.get(key) ?? 0) !== cdcSeqAtStart) {
+        readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.DROPPED_STALE);
+        logger.info?.(DYNAMIC_CONFIG_STARTUP_LOG_MSG.LATE_READ_DROPPED_STALE, {key});
+        return;
+      }
+      readOutcomes.set(key, state.late ?
+        DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED_LATE :
+        DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED);
+      applyStartupValue(key, value);
+    }, (error) => {
+      readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.FAILED);
+      logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.INITIAL_APPLY_FAILED, {
+        key,
+        error: error.message,
+      });
+    });
+    return waitWithinBound(read, initialReadTimeoutMs, () => {
+      state.late = true;
+      reportWaitBoundSpent(logger, {
+        ...STARTUP_INITIAL_READ_WAIT,
+        boundMs: initialReadTimeoutMs,
+        startedAtMs,
+        lastObserved: {readSettled: false},
+        scope: {nodeId: options.nodeId || null, key},
+      });
+    }, timers);
+  };
+
+  await Promise.all([
+    ...loggingDynamicAppliers.map((entry) => ownStartupRead(entry.key)),
+    ...DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_KEYS.map((key) => ownStartupRead(key)),
+  ]);
+  startupSweepDone = true;
+  applyRaftTimingConfig(raftTimingConfig);
+
+  // The controller is held from construction until shutdown: one reference,
+  // never dropped. A spent bound adopts it when its initialize completes
+  // (the controller starts its own loop then, if enabled, as on time); a
+  // shutdown stops it, and an initialize still in flight starts nothing
+  // after that (RaftAdaptiveTimingController#initialize checks `stopped`).
+  let adaptiveTimingController = null;
+  let controllerOutcome = DYNAMIC_CONFIG_STARTUP_OUTCOME.UNAVAILABLE;
+  try {
+    adaptiveTimingController = new RaftAdaptiveTimingController({
+      dynamicConfigService,
+      nodeId: options.nodeId || null,
+      owner: options.runtimeOwner || null,
+    });
+  } catch (error) {
+    logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.ADAPTIVE_CONTROLLER_INIT_FAILED, {
+      error: error.message,
+    });
+  }
+  if (adaptiveTimingController) {
+    const controller = adaptiveTimingController;
+    const startedAtMs = Date.now();
+    let late = false;
+    controllerOutcome = DYNAMIC_CONFIG_STARTUP_OUTCOME.PENDING;
+    const initialization = Promise.resolve().then(() => controller.initialize());
+    initialization.then(() => {
+      if (closed) {
+        controllerOutcome = DYNAMIC_CONFIG_STARTUP_OUTCOME.CANCELLED;
+        return;
+      }
+      controllerOutcome = late ?
+        DYNAMIC_CONFIG_STARTUP_OUTCOME.ADOPTED_LATE :
+        DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED;
+      if (late) {
+        logger.info?.(DYNAMIC_CONFIG_STARTUP_LOG_MSG.ADAPTIVE_CONTROLLER_ADOPTED_LATE, {
+          nodeId: options.nodeId || null,
+        });
+      }
+    }, (error) => {
+      controllerOutcome = DYNAMIC_CONFIG_STARTUP_OUTCOME.FAILED;
+      controller.shutdown();
+      logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.ADAPTIVE_CONTROLLER_INIT_FAILED, {
+        error: error.message,
+      });
+    });
+    await waitWithinBound(initialization, controllerInitTimeoutMs, () => {
+      late = true;
+      reportWaitBoundSpent(logger, {
+        ...STARTUP_CONTROLLER_INIT_WAIT,
+        boundMs: controllerInitTimeoutMs,
+        startedAtMs,
+        lastObserved: {initializeSettled: false},
+        scope: {nodeId: options.nodeId || null},
+      });
+    }, timers);
+  }
+
   return {
     dynamicConfigService,
+    /**
+     * What became of the startup work (DYNAMIC_CONFIG_STARTUP_OUTCOME).
+     * @return {{reads: Object<string, string>, controller: string}}
+     */
+    startupOutcome: () => ({
+      reads: Object.fromEntries(readOutcomes),
+      controller: controllerOutcome,
+    }),
     shutdown: () => {
+      closed = true;
+      for (const timer of timers) {
+        clearTimeout(timer);
+      }
+      timers.clear();
       for (const messageGroupService of subscribedServices) {
         messageGroupService.removeListener(
           DYNAMIC_CONFIG_STARTUP_EVENT.CDC_APPLIED,
@@ -504,5 +590,6 @@ async function createDynamicConfigStartupWiring(options = {}) {
 }
 
 export {
+  DYNAMIC_CONFIG_STARTUP_OUTCOME,
   createDynamicConfigStartupWiring,
 };
