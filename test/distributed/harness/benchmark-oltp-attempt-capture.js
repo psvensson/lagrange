@@ -385,7 +385,6 @@ function createBenchmarkOutcomeAdapter(adapter, registry) {
 }
 
 export {
-  STATEMENT_STATUS as BENCHMARK_STATEMENT_STATUS,
   createBenchmarkOutcomeAdapter,
   createConnectionRegistry as createBenchmarkConnectionRegistry,
   createTrackedMysqlConnectionFactory,

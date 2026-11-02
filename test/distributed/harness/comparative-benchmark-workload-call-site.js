@@ -312,9 +312,7 @@ function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHo
 }
 
 export {
-  LOAD_GENERATOR_CLI,
   createRemoteWorkloadRunner,
   createWorkloadRunExecutor,
   prepareLoadGeneratorCheckout,
-  workloadRequestOf,
 };

@@ -463,7 +463,5 @@ async function runComparativeCampaign({manifest, header, deps}) {
 }
 
 export {
-  RECORD_SCHEMA as RAW_OBSERVATION_RECORD_SCHEMA,
-  RUN_STATE as CAMPAIGN_RUN_STATE,
   runComparativeCampaign,
 };

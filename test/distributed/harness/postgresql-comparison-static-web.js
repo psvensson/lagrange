@@ -6,10 +6,6 @@ import {
   SCENARIO_A_COLUMNS, SCENARIO_B_COLUMNS, SCENARIO_C_COLUMNS, SCENARIO_LINKS,
 } from './comparative-page-columns.js';
 
-const DEFAULT_POSTGRESQL_PROGRESS_SVG_PATH = 'docs/benchmarks/postgresql-comparison-progress.svg';
-const DEFAULT_POSTGRESQL_PROGRESS_MD_PATH = 'docs/benchmarks/postgresql-comparison-progress.md';
-const DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH =
-  'docs/benchmarks/postgresql-comparison-progress.html';
 const TARGETS = Object.freeze([TARGET_ID.LAGRANGE, TARGET_ID.TIDB, TARGET_ID.PG_SINGLE,
   TARGET_ID.PG_SYNC_STANDBYS, TARGET_ID.PG_PLPGSQL_SINGLE, TARGET_ID.PG_PLPGSQL_SYNC_STANDBYS]);
 
@@ -37,8 +33,5 @@ async function writePostgresqlComparisonStaticWebArtifacts({matrix, svgPath, mar
 }
 
 export {
-  DEFAULT_POSTGRESQL_PROGRESS_HTML_PATH,
-  DEFAULT_POSTGRESQL_PROGRESS_MD_PATH,
-  DEFAULT_POSTGRESQL_PROGRESS_SVG_PATH,
   writePostgresqlComparisonStaticWebArtifacts,
 };

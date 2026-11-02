@@ -214,7 +214,6 @@ export {
   buildExperimentSection,
   buildTargetSection,
   column,
-  formatCell,
   renderClaimPage,
   writeClaimPageArtifacts,
 };

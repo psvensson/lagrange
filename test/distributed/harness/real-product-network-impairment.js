@@ -105,4 +105,4 @@ async function applyNetworkImpairment({hosts, rttMs, hostMetaByIp, sshRun, opts,
   }
 }
 
-export {applyNetworkImpairment, removeNetworkImpairment};
+export {applyNetworkImpairment};

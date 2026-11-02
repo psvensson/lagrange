@@ -209,18 +209,6 @@ const OBSERVATIONS_FIELD = Object.freeze({
   SETUP: 'setup',
 });
 
-const ACCOUNTING_FIELD = Object.freeze({
-  OFFERED: 'offered',
-  ISSUED: 'issued',
-  UNISSUED: 'unissued',
-  ATTEMPTS: 'attempts',
-  COMMITTED: 'committed',
-  CONFLICTS: 'conflicts',
-  CONFLICT_EXHAUSTED: 'conflictExhausted',
-  TERMINAL_FAILURES: 'terminalFailures',
-  UNRESOLVED: 'unresolved',
-});
-
 const WINDOW_FIELD = Object.freeze({
   SCHEDULED_MS: 'scheduledMs',
   DRAIN_MS: 'drainMs',
@@ -761,28 +749,15 @@ function parseRawObservationText(text, file) {
 }
 
 export {
-  ACCOUNTING_FIELD,
-  ATTEMPT_FIELD,
   BENCHMARK_SCENARIO,
   CLOSURE_STATUS,
-  CORRECTNESS_FIELD,
   DEPLOYMENT_EVENT_KIND,
-  DEPLOYMENT_FIELD,
   EXECUTION_TARGET,
-  HEADER_FIELD,
-  IDENTITY_FIELD,
-  NETWORK_SCOPE,
   OBSERVATIONS_FIELD,
-  PINNED_PRODUCT_FIELD,
-  PLAN_FIELD,
-  PRODUCT_FIELD,
   RAW_OBSERVATION_SCHEMA,
   RAW_RECORD_TYPE,
   READINESS_STATE,
   RECORD_REJECTION,
-  REQUEST_FIELD,
-  RUN_FIELD,
-  RawObservationRecordError,
   STORAGE_KIND,
   WINDOW_FIELD,
   buildClaimKey,

@@ -147,7 +147,6 @@ async function executeBenchmarkWorkload(request = {}) {
 }
 
 export {
-  RECORD_KIND as BENCHMARK_WORKLOAD_RECORD_KIND,
   driverSourceIdentity as benchmarkDriverSourceIdentity,
   executeBenchmarkWorkload,
 };

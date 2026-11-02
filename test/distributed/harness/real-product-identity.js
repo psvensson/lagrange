@@ -333,13 +333,11 @@ function compareProductIdentity(before, after, observedAt) {
 
 export {
   EVENT_KIND as IDENTITY_EVENT_KIND,
-  IMAGE_STORE,
   classifyStorage,
   compareProductIdentity,
   contentIdentityOf,
   imageStoreOf,
   inspectProducts,
-  inspectRunningContainer,
   observeProductsAfterWindow,
   pinnedVersionPattern,
   runClassOf,

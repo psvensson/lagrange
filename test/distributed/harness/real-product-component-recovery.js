@@ -87,4 +87,4 @@ async function measureComponentRecovery({component, sshRun, opts, sleep, now = D
     userOperation: {ok: true, evidence: operation.evidence}};
 }
 
-export {NOT_MEASURED_REASON as RECOVERY_NOT_MEASURED_REASON, measureComponentRecovery};
+export {measureComponentRecovery};

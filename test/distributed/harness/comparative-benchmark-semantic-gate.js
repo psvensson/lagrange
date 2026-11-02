@@ -109,4 +109,4 @@ function createSemanticGateStage({journey, redeploy, sshRun, opts, evidenceDirOf
   };
 }
 
-export {EVENT as SEMANTIC_GATE_EVENT, createSemanticGateStage};
+export {createSemanticGateStage};

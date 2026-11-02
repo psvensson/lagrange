@@ -112,9 +112,7 @@ function serializeAdmittedMeasurements(admitted) {
 }
 
 export {
-  ADMITTED_CLAIM_CELLS_SCHEMA,
   DEFAULT_ADMITTED_LAB_MEASUREMENTS_PATH,
-  DEFAULT_FORENSIC_RAW_OBSERVATIONS_DIR,
   DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH,
   deriveAdmittedMeasurementsFromRawObservations,
   readRawObservationSources,

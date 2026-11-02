@@ -338,10 +338,8 @@ function assertNoNumbersRendered(text, label) {
 }
 
 export {
-  CAMPAIGN,
   CAPACITY_WORKLOAD,
   ChainPublication,
-  DOCS_DIR,
   ENDPOINT,
   MATRIX_FILE,
   RAW_FILE,

@@ -3,10 +3,6 @@
 import {buildExperimentSection, writeClaimPageArtifacts} from './comparative-landing-tables.js';
 import {SCENARIO_LINKS} from './comparative-page-columns.js';
 
-const DEFAULT_MOVEMENT_SCALING_SVG_PATH = 'docs/benchmarks/movement-and-scenario-c-scaling-progress.svg';
-const DEFAULT_MOVEMENT_SCALING_MD_PATH = 'docs/benchmarks/movement-and-scenario-c-scaling-progress.md';
-const DEFAULT_MOVEMENT_SCALING_HTML_PATH = 'docs/benchmarks/movement-and-scenario-c-scaling-progress.html';
-
 function buildPage(matrix) {
   return {
     title: 'Partition movement under load and Scenario C at scale',
@@ -26,8 +22,5 @@ async function writeMovementScenarioCScalingStaticWebArtifacts({matrix, svgPath,
 }
 
 export {
-  DEFAULT_MOVEMENT_SCALING_HTML_PATH,
-  DEFAULT_MOVEMENT_SCALING_MD_PATH,
-  DEFAULT_MOVEMENT_SCALING_SVG_PATH,
   writeMovementScenarioCScalingStaticWebArtifacts,
 };

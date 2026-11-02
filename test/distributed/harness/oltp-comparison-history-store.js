@@ -426,7 +426,6 @@ async function recordComparisonResultToDisk(options = {}) {
 }
 
 export {
-  OLTP_COMPARISON_HISTORY_SCHEMA_VERSION,
   DEFAULT_COMPARISON_HISTORY_NDJSON_PATH,
   DEFAULT_COMPARISON_PROGRESS_SUMMARY_PATH,
   appendComparisonHistoryRecord,

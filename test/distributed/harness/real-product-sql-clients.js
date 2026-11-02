@@ -130,5 +130,4 @@ export {
   bindEndpointToContainer,
   createPsqlQueryReader,
   createPsqlStatementRunner,
-  rowsFromDelimitedText,
 };

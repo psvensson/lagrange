@@ -203,8 +203,6 @@ function nodeServeDenials(nodeId, snapshot) {
 }
 
 export {
-  DENIAL as LAGRANGE_READINESS_DENIAL,
-  PRIORITY_PARTITION_IDS as LAGRANGE_PRIORITY_PARTITION_IDS,
   evaluateLagrangeClusterReadiness,
   evaluateLagrangeServeLane,
 };

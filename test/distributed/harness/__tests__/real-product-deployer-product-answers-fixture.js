@@ -247,12 +247,8 @@ function tidbHealthyRules(ledger) {
 export {
   LAGRANGE_IMAGE,
   LAGRANGE_IMAGE_ID,
-  PG_VERSION,
-  TIDB_RELEASE,
   postgresHealthyRules,
   tidbHealthyRules,
-  CANONICAL_TABLE_NAMES,
-  LAGRANGE_NODE_IDS,
   createContainerLedger,
   dockerRules,
   http,

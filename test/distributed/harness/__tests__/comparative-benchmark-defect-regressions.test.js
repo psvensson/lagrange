@@ -34,6 +34,10 @@ const DROPPED_HISTORY_RECORD_PREFIXES = Object.freeze([
   '4ae39281b8b5',
 ]);
 
+// Modules are loaded at test time so a red run at the base commit fails in the
+// test, not at import. A literal import() path keeps the consumer visible to the
+// unused-export census (knip); harness(file) is for modules whose exports other
+// importers already consume.
 function harness(file) {
   return import(path.join(HARNESS, file));
 }
@@ -67,7 +71,7 @@ function readNdjson(file) {
 
 describe('comparative benchmark defect regressions', () => {
   it('D04: no published Scenario A claim carries semantic proof counts it never observed', async () => {
-    const {buildMultiSystemComparativeMatrix} = await harness('comparative-matrix-runner.js');
+    const {buildMultiSystemComparativeMatrix} = await import('../comparative-matrix-runner.js');
     const matrix = buildMultiSystemComparativeMatrix();
     const proofCounts = collectKeyed(matrix, (key, child) =>
       /^semanticProof(Passed|Total|Required)$|^passedCount$/u.test(key) &&
@@ -174,7 +178,7 @@ describe('comparative benchmark defect regressions', () => {
     });
 
   it('D23: the publication carries no winner prose or forced completion counts', async () => {
-    const {buildMultiSystemComparativeMatrix} = await harness('comparative-matrix-runner.js');
+    const {buildMultiSystemComparativeMatrix} = await import('../comparative-matrix-runner.js');
     const matrix = buildMultiSystemComparativeMatrix();
     const forced = collectKeyed(matrix, (key) => arrayIncludes([
       'winningSystem', 'whyItWins', 'runnerUp', 'operatingBoundaryMap', 'completedSlices',

@@ -277,16 +277,9 @@ async function checkLabThermalHeadroom({hosts, sshRun, opts}) {
   return results;
 }
 
-function dataHostsOf(hosts) {
-  return arrayFilter(hosts, (host) => host.role === HOST_ROLE.DATA);
-}
-
 export {
-  HOST_ROLE as LAB_BENCHMARK_HOST_ROLE,
   THERMAL_GATE,
-  benchPurpose,
   checkLabThermalHeadroom,
-  dataHostsOf,
   holdLabBenchmarkHosts,
   plannedLabLocks,
   readLabHolderRecords,

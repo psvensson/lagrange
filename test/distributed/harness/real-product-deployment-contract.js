@@ -55,8 +55,6 @@ const CLAIM_STATUS = Object.freeze({
 
 const READINESS_STATE = Object.freeze({READY: 'ready', EXHAUSTED: 'exhausted'});
 
-const DATASET_RESET_METHOD = Object.freeze({FRESH_FORMATION: 'fresh-formation'});
-
 const LAGRANGE_IMAGE_DEFAULT = 'psvensson/lagrange:0.4.0';
 const PD_IMAGE_DEFAULT = TIDB_REFERENCE_DEFAULTS.pdImage;
 const TIKV_IMAGE_DEFAULT = TIDB_REFERENCE_DEFAULTS.tikvImage;
@@ -103,11 +101,8 @@ function resolveReadinessBudget(opts = {}) {
 
 export {
   BENCH_LABEL,
-  CAMPAIGN_ID_PATTERN,
   CLAIM_STATUS,
-  DATASET_RESET_METHOD,
   DEPLOYMENT_FAILURE,
-  DeploymentFailure,
   LAGRANGE_IMAGE_DEFAULT,
   PD_IMAGE_DEFAULT,
   POSTGRES_IMAGE_DEFAULT,

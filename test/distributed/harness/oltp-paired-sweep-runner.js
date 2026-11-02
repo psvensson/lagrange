@@ -187,10 +187,7 @@ async function runScenarioAPairedSweep(options = {}) {
 }
 
 export {
-  NOT_MEASURED_REASON as OLTP_PAIRED_SWEEP_NOT_MEASURED_REASON,
-  OLTP_PAIRED_SWEEP_RUNNER_VERSION,
   SWEEP_STATUS as OLTP_PAIRED_SWEEP_STATUS,
   evaluateOltpSweepStepSlo,
   runScenarioAPairedSweep,
-  summarizePairedSweepSystemCurve,
 };

@@ -53,4 +53,4 @@ function verifyRetainedRawObservationText(text, file) {
   return counts;
 }
 
-export {FORENSIC_SCHEMA, computeV1PayloadDigest, verifyRetainedRawObservationText};
+export {computeV1PayloadDigest, verifyRetainedRawObservationText};

@@ -241,7 +241,6 @@ function buildComparativeCampaignManifest({campaignId, profile, targets}) {
 export {
   COMPARATIVE_CAPACITY_PROFILE,
   COMPARATIVE_SMOKE_PROFILE,
-  MANIFEST_SCHEMA as COMPARATIVE_MANIFEST_SCHEMA,
   buildComparativeCampaignManifest,
   canonicalJson,
   digestCampaignManifest,

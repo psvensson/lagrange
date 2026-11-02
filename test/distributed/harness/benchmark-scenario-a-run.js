@@ -548,9 +548,7 @@ async function executeScenarioARun(options) {
 
 export {
   ADAPTER_ID as BENCHMARK_SCENARIO_A_ADAPTER_ID,
-  DATASET_RESET_METHOD as BENCHMARK_DATASET_RESET_METHOD,
   RUN_STATUS as BENCHMARK_RUN_STATUS,
-  deriveRunWatchdog as deriveBenchmarkRunWatchdog,
   describeWorkloadIdentity as describeBenchmarkWorkloadIdentity,
   executeScenarioARun,
 };

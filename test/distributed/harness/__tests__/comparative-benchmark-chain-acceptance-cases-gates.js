@@ -11,7 +11,6 @@ import {
   CLAIM_CELL_STATUS,
 } from '../benchmark-claim-admission.js';
 import {FAILURE_CLASS} from '../benchmark-operation-outcome.js';
-import {BENCHMARK_RUN_STATUS} from '../benchmark-scenario-a-run.js';
 import {
   BENCHMARK_DISPATCH_REFUSED_CODE,
   BENCHMARK_DISPATCH_STATUS,
@@ -369,4 +368,4 @@ const GATE_CASES = Object.freeze([
     caseJ14DispatchFamilies],
 ]);
 
-export {BENCHMARK_RUN_STATUS, GATE_CASES, readinessExhaustedPair};
+export {GATE_CASES};

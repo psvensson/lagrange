@@ -344,4 +344,4 @@ const OUTCOME_CASES = Object.freeze([
     caseMalformedRecordsRejected],
 ]);
 
-export {LABEL, OUTCOME_CASES, accountingText, publishArms, summed};
+export {LABEL, OUTCOME_CASES};
