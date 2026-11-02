@@ -102,6 +102,12 @@ records remain intact; successor work records the correction explicitly.
 
 ## Decision log
 
+- 2026-11-02: Measured state after the quest comparative-benchmark-evidence-repair (owner report in its
+  evidence directory): every comparative claim published before 2026-11-01 is withdrawn; the repaired
+  chain publishes one smoke observation (PostgreSQL 17, lab), a product failure for Lagrange 0.4.0
+  (readiness never reached on a fresh three-node formation) and TiDB as unsupported until the one
+  semantic-gate journey takes a native client. No capacity claim exists for any system. The Lagrange
+  blocker is a product class (projection-gated serving decisions), owned by product quests, not by this epic.
 - 2026-11-02: Scope widened (R16, recorded): `package.json` (the two benchmark audit commands
   `audit:comparative-recompute` and `audit:benchmark-history-append-only` join the static chain),
   `knip.json` (the two documented command-line entry points of the chain are declared, so their
