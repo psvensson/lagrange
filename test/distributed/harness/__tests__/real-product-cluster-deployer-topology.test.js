@@ -16,8 +16,10 @@ import {
   stringIncludes,
 } from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
+import {contentIdentityOf} from '../real-product-identity.js';
 import {
   LAGRANGE_IMAGE,
+  LAGRANGE_IMAGE_ID,
   createContainerLedger,
   http,
   lagrangeHealthyRules,
@@ -145,14 +147,19 @@ test('Lagrange: DATA_DIR is the data directory the image gives its runtime user'
   for (const call of runs) {
     assert.match(call.command, new RegExp(` -e DATA_DIR=${owned} `, 'u'), call.command);
   }
+  // With --storage-root the data directory is that explicit host volume. A
+  // publishable run pins the image by content (the fixture image's diff_ids).
   const volume = createScriptedSsh(lagrangeHealthyRules(createContainerLedger(),
     {hosts: HOSTS}));
+  const content = contentIdentityOf([`sha256:${LAGRANGE_IMAGE_ID.slice(-64)}`]);
   await deployers.deployComparativeTarget('lagrange', {...input(volume.sshRun),
-    opts: {...OPTS, storageRoot: '/srv/bench', lagrangeImageContent: undefined}})
-    .catch(() => null);
-  for (const call of arrayFilter(volume.calls, (one) => /^docker run -d .*lagrange-node/u
-    .test(one.command))) {
-    assert.match(call.command, new RegExp(`:${owned} `, 'u'), call.command);
+    opts: {...OPTS, storageRoot: '/srv/bench', lagrangeImageContent: content}});
+  const mounted = arrayFilter(volume.calls, (one) => /^docker run -d .*lagrange-node/u
+    .test(one.command));
+  assert.equal(mounted.length, 3);
+  for (const call of mounted) {
+    assert.match(call.command, new RegExp(` -v /srv/bench/camp-topo/lagrange-\\d:${owned} `,
+      'u'), call.command);
   }
 });
 
