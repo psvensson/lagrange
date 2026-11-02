@@ -746,7 +746,9 @@ test('SQLQueryEngine - exposes initialized local priority control-plane ' +
     }],
   ]);
   const engine = new SQLQueryEngine({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'local',
     systemCache: createMockSystemCache([], [
       {
@@ -811,7 +813,9 @@ test('SQLQueryEngine - keeps disconnected priority recovery-read endpoints ' +
   const disconnectedAddress = 'dead/partition/replica_operations-p1-r3';
   const connectedAddress = 'live/partition/replica_operations-p1-r4';
   const engine = new SQLQueryEngine({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'local',
     systemCache: createMockSystemCache([], [
       {
@@ -852,11 +856,14 @@ test('SQLQueryEngine - keeps disconnected priority recovery-read endpoints ' +
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
   );
 
-  t.notOk(
+  // System-table routing is not filtered by transport (lead decision D2,
+  // quest serve-eligibility-committed-epoch-read): the closed endpoint stays
+  // a candidate and the delivery layer applies the live transport state.
+  t.ok(
     routingSnapshot.routableServices.some(
       (service) => service.address === disconnectedAddress,
     ),
-    'closed priority endpoint should not remain routable',
+    'closed priority endpoint stays a candidate; delivery applies transport',
   );
   t.ok(
     routingSnapshot.routableServices.some(

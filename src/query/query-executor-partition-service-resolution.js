@@ -5,8 +5,6 @@ import {
 import {QueryExecutorCancellationRouting} from './query-executor-cancellation-routing-install.js';
 import {installQueryExecutorSelectAggregationHelpers} from './query-executor-select-aggregation.js';
 import {installQueryExecutorSqlCommandHelpers} from './query-executor-sql-command-rendering.js';
-import {isSystemTableRouteStructurallyReady} from
-  './query-executor-bootstrap-deferred-routing.js';
 import {
   SERVE_ELIGIBILITY_STATE,
   isServeEligibilityAnswerEligible,
@@ -142,7 +140,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       ]?.purpose ===
         CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL
     ) {
-      routabilityResult = this.evaluateSystemTableRoutability(service);
+      routabilityResult = this.evaluateSystemTableRoutability();
     }
     if (routabilityResult) {
       return routabilityResult;
@@ -155,15 +153,19 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       partitionId.length > 0 ?
         this.getPartitionRecord(partitionId) :
         null;
-    // System-table routing decides on raft leadership: the cached leader
-    // orders candidates and the target proves leadership (read-authority
-    // witness, or the typed redirect for a write). Live transport is the
-    // only other input; no readiness lane filters a system partition.
+    // System-table routing decides on raft leadership: every active,
+    // addressed replica is a candidate, the cached leader orders them, the
+    // target proves leadership (read-authority witness, or the typed redirect
+    // for a write) and the delivery layer applies live transport (reconnect
+    // deferral, fall-through). No readiness lane filters a system partition.
     if (classifySystemPartition({partitionId, partitionRow}).systemTable) {
-      return this.evaluateSystemTableRoutability(service);
+      return this.evaluateSystemTableRoutability();
     }
     // User-table serving consumes the readiness owner's committed-epoch
-    // answer and nothing else.
+    // answer and nothing else. A non-serve dimension on a user partition
+    // (managed split/merge source-quorum admission, Q6 rows R24/R25) still
+    // reads the readiness projection: a recorded attempt-3 item of quest
+    // serve-eligibility-committed-epoch-read, not a serve path.
     if (
       routingReadinessDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
@@ -295,26 +297,18 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
   }
 
   /**
-   * The structural route: the service is active and addressed (checked by the
-   * caller) and its node is the local node or reachable over live transport.
-   * Used for readiness-owned authoritative reads and for every system-table
-   * partition; full readiness here would recreate the formation dependency
-   * cycle, and correctness comes from the target's leadership proof.
-   * @param {Object} service
+   * The structural system-table route: the service is active and addressed
+   * (checked by the caller). Leadership is proven by the target and live
+   * transport is applied by delivery; a readiness verdict here would recreate
+   * the formation dependency cycle (recovery must not depend on the condition
+   * it restores).
    * @return {Object}
    * @private
    */
-  evaluateSystemTableRoutability(service) {
-    const structurallyReady = isSystemTableRouteStructurallyReady({
-      service,
-      localNodeId: this.nodeId,
-      messageRouter: this.messageRouter,
-    });
+  evaluateSystemTableRoutability() {
     return {
-      routable: structurallyReady,
-      reasonCode: structurallyReady ?
-        QUERY_ROUTING_DIAGNOSTIC_REASON.OK :
-        QUERY_ROUTING_DIAGNOSTIC_REASON.NODE_NOT_REACHABLE,
+      routable: true,
+      reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.OK,
       readinessSummary: null,
     };
   }

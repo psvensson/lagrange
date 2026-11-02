@@ -16,7 +16,10 @@ import {COLUMN, SERVICE_STATUS, TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_REASON} from './control-plane-readiness-constants.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {MEMBERSHIP_PUBLICATION_KIND} from './membership-publication-row-contract.js';
-import {CONTROL_PLANE_PUBLICATION_STATUS} from './publication-owner-constants.js';
+import {
+  resolveLatestPublishedPublicationRow,
+  resolvePublishedActiveNodeIds,
+} from './active-node-publication-snapshots.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
 
 const SERVE_ELIGIBILITY_STATE = Object.freeze({
@@ -46,6 +49,7 @@ const SERVE_ELIGIBILITY_REASON = Object.freeze({
   NODE_ROW_MISSING: 'node_row_missing',
   NODE_NOT_ACTIVE: 'node_not_active',
   READY_LEASE_EXPIRED: 'ready_lease_expired',
+  LOAD_NOT_READY: 'load_not_ready',
   NODE_NOT_PUBLISHED: 'node_not_published',
   PUBLICATION_NOT_ACKNOWLEDGED: 'publication_not_acknowledged',
   PRIORITY_SPREAD_PENDING:
@@ -54,6 +58,9 @@ const SERVE_ELIGIBILITY_REASON = Object.freeze({
 });
 
 const SELECT_ALL_PREFIX = 'SELECT * FROM ';
+const STALE_SIGNATURE = 'stale';
+const REASON_SEPARATOR = ',';
+const SIGNATURE_SEPARATOR = '|';
 const NO_REASONS = Object.freeze([]);
 const OUTCOME = Object.freeze({
   PENDING: 'pending',
@@ -87,22 +94,23 @@ function isMembershipPublication(publication) {
   return publication.publicationKind === MEMBERSHIP_PUBLICATION_KIND;
 }
 
+// The published membership as the publication snapshot owner defines it
+// (active-node-publication-snapshots.js): the latest PUBLISHED
+// cluster_membership row and its member list, read from committed rows.
 function selectLatestPublishedMembership(rows) {
-  let latest = null;
-  for (const row of rows) {
-    const publication = normalizeControlPlanePublicationRow(row);
-    if (
-      !isMembershipPublication(publication) ||
-      publication.status !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
-      !Number.isFinite(publication.publicationEpoch)
-    ) {
-      continue;
-    }
-    if (!latest || publication.publicationEpoch > latest.publicationEpoch) {
-      latest = publication;
-    }
+  const publication = resolveLatestPublishedPublicationRow({
+    publicationRows: rows,
+  });
+  if (!publication || !Number.isFinite(publication.publicationEpoch)) {
+    return null;
   }
-  return latest;
+  return Object.freeze({
+    ...publication,
+    publishedActiveNodeIds: resolvePublishedActiveNodeIds({
+      publicationRows: rows,
+      requirePublishedMembership: true,
+    }),
+  });
 }
 
 function isPublicationAcknowledged(publication) {
@@ -123,39 +131,75 @@ function resolvePrioritySpreadReason(publication) {
 
 /**
  * The serve decision for one node from committed facts at one read instant.
- * Pure: the committed node row, the committed published membership and the
- * read time.
- * @param {{nodeRow: Object|null, publication: Object, readAtMs: number}} input
+ * Pure: the committed node row (status, load columns, ready lease), the
+ * committed published membership, the read time and the readiness owner's
+ * load threshold predicate.
+ * @param {Object} input
  * @return {{decision: string, reasons: Array<string>}}
  */
-function decideServeEligibility({nodeId, nodeRow, publication, readAtMs}) {
-  const reasons = [];
-  if (!nodeRow) {
-    reasons.push(SERVE_ELIGIBILITY_REASON.NODE_ROW_MISSING);
-  } else {
-    if (readStatus(nodeRow) !== SERVICE_STATUS.ACTIVE) {
-      reasons.push(SERVE_ELIGIBILITY_REASON.NODE_NOT_ACTIVE);
-    }
-    const leaseExpiresAtMs = readLeaseExpiresAtMs(nodeRow);
-    if (leaseExpiresAtMs === null || leaseExpiresAtMs <= readAtMs) {
-      reasons.push(SERVE_ELIGIBILITY_REASON.READY_LEASE_EXPIRED);
-    }
-  }
-  if (!publication.publishedActiveNodeIds.includes(nodeId)) {
-    reasons.push(SERVE_ELIGIBILITY_REASON.NODE_NOT_PUBLISHED);
-  }
-  if (!isPublicationAcknowledged(publication)) {
-    reasons.push(SERVE_ELIGIBILITY_REASON.PUBLICATION_NOT_ACKNOWLEDGED);
-  }
-  const spreadReason = resolvePrioritySpreadReason(publication);
-  if (spreadReason !== null) {
-    reasons.push(spreadReason);
-  }
+// The committed facts a serve decision checks, each a named reason; a node
+// is eligible when none fails.
+const SERVE_ELIGIBILITY_CHECKS = Object.freeze([
+  Object.freeze({
+    reason: SERVE_ELIGIBILITY_REASON.NODE_ROW_MISSING,
+    fails: ({nodeRow}) => !nodeRow,
+  }),
+  Object.freeze({
+    reason: SERVE_ELIGIBILITY_REASON.NODE_NOT_ACTIVE,
+    fails: ({nodeRow}) =>
+      Boolean(nodeRow) && readStatus(nodeRow) !== SERVICE_STATUS.ACTIVE,
+  }),
+  Object.freeze({
+    reason: SERVE_ELIGIBILITY_REASON.LOAD_NOT_READY,
+    fails: ({nodeRow, isNodeLoadReady}) =>
+      Boolean(nodeRow) && isNodeLoadReady(nodeRow) !== true,
+  }),
+  Object.freeze({
+    reason: SERVE_ELIGIBILITY_REASON.READY_LEASE_EXPIRED,
+    fails: ({nodeRow, readAtMs}) => {
+      const leaseExpiresAtMs = readLeaseExpiresAtMs(nodeRow);
+      return Boolean(nodeRow) &&
+        (leaseExpiresAtMs === null || leaseExpiresAtMs <= readAtMs);
+    },
+  }),
+  Object.freeze({
+    reason: SERVE_ELIGIBILITY_REASON.NODE_NOT_PUBLISHED,
+    fails: ({nodeId, publication}) =>
+      !publication.publishedActiveNodeIds.includes(nodeId),
+  }),
+  Object.freeze({
+    reason: SERVE_ELIGIBILITY_REASON.PUBLICATION_NOT_ACKNOWLEDGED,
+    fails: ({publication}) => !isPublicationAcknowledged(publication),
+  }),
+  Object.freeze({
+    reason: SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED,
+    fails: ({publication}) => resolvePrioritySpreadReason(publication) ===
+      SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED,
+  }),
+  Object.freeze({
+    reason: SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING,
+    fails: ({publication}) => resolvePrioritySpreadReason(publication) ===
+      SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING,
+  }),
+]);
+
+/**
+ * The serve decision for one node from committed facts at one read instant.
+ * Pure: the committed node row (status, load columns, ready lease), the
+ * committed published membership, the read time and the readiness owner's
+ * load threshold predicate.
+ * @param {Object} input
+ * @return {{decision: string, reasons: Array<string>}}
+ */
+function decideServeEligibility(input) {
+  const failedReasons = Object.freeze(SERVE_ELIGIBILITY_CHECKS
+    .filter((check) => check.fails(input))
+    .map((check) => check.reason));
   return Object.freeze({
-    decision: reasons.length === 0 ?
+    decision: failedReasons.length === 0 ?
       SERVE_ELIGIBILITY_DECISION.ELIGIBLE :
       SERVE_ELIGIBILITY_DECISION.NOT_ELIGIBLE,
-    reasons: Object.freeze(reasons),
+    reasons: failedReasons,
   });
 }
 
@@ -168,11 +212,14 @@ function unavailable(reason, epoch, retryAfterMs) {
   });
 }
 
-function isRevokingNodeChange(committedRow, changedRow) {
+function isRevokingNodeChange(committedRow, changedRow, isNodeLoadReady) {
   if (!committedRow) {
     return true;
   }
   if (readStatus(committedRow) !== readStatus(changedRow)) {
+    return true;
+  }
+  if (isNodeLoadReady(committedRow) !== isNodeLoadReady(changedRow)) {
     return true;
   }
   if (readBootIncarnation(committedRow) !== readBootIncarnation(changedRow)) {
@@ -188,6 +235,44 @@ function isRevokingNodeChange(committedRow, changedRow) {
   return changedLease === null || changedLease < committedLease;
 }
 
+function rowsOf(result) {
+  return Array.isArray(result?.rows) ? result.rows : [];
+}
+
+function indexNodeRows(rows) {
+  const nodeRowsById = new Map();
+  for (const row of rows) {
+    const nodeId = readNodeId(row);
+    if (nodeId) {
+      nodeRowsById.set(nodeId, row);
+    }
+  }
+  return nodeRowsById;
+}
+
+// The typed outcome of one committed read: failed, no published membership,
+// or a record keyed by the publication epoch.
+function buildCommittedReadResult(reads, readAtMs) {
+  const publication = reads === null ? null :
+    selectLatestPublishedMembership(rowsOf(reads.publicationsResult));
+  const outcome = reads === null ? OUTCOME.READ_FAILED :
+    publication === null ? OUTCOME.NO_RECORD :
+      OUTCOME.RECORD;
+  return outcome !== OUTCOME.RECORD ? {outcome} : {
+    outcome,
+    record: Object.freeze({
+      epoch: Object.freeze({
+        publicationEpoch: publication.publicationEpoch,
+        publicationId: publication.publicationId,
+        readAtMs,
+      }),
+      publication,
+      nodeRowsById: indexNodeRows(rowsOf(reads.nodesResult)),
+      decisionsByNodeId: new Map(),
+    }),
+  };
+}
+
 class ServeEligibilityOwner {
   /**
    * @param {Object} options
@@ -198,9 +283,12 @@ class ServeEligibilityOwner {
    *   retryAfterMs of an unavailability is the in-flight read's deadline.
    * @param {function(Function, number): *} options.setTimeout
    * @param {function(*): void} options.clearTimeout
+   * @param {function(Object): boolean} options.isNodeLoadReady the readiness
+   *   owner's load threshold over the committed node row.
    */
   constructor(options) {
     this.readCommittedRows = options.readCommittedRows;
+    this.isNodeLoadReady = options.isNodeLoadReady;
     this.now = options.now;
     this.readTimeoutMs = options.readTimeoutMs;
     this.setTimeoutFn = options.setTimeout;
@@ -212,6 +300,7 @@ class ServeEligibilityOwner {
     this.inFlight = null;
     this.leaseRefreshHandle = null;
     this.listeners = new Set();
+    this.decisionSignature = null;
     this.stopped = false;
   }
 
@@ -231,7 +320,16 @@ class ServeEligibilityOwner {
       .then((result) => this.adoptReadResult(result, startedGeneration))
       .finally(() => {
         this.inFlight = null;
-        if (this.superseded && !this.stopped) {
+        // A trigger that arrived during a successful read is served by one
+        // more read. A failed read is not retried here: the next trigger
+        // (a cache change, the lease timer or a routing denial) asks again,
+        // and the answer stays the typed unavailability meanwhile.
+        if (
+          this.superseded &&
+          this.outcome !== OUTCOME.READ_FAILED &&
+          this.triggerGeneration !== startedGeneration &&
+          !this.stopped
+        ) {
           this.scheduleRefresh();
         }
       });
@@ -240,52 +338,33 @@ class ServeEligibilityOwner {
 
   async readCommittedRecord() {
     const readAtMs = this.now();
-    let nodesResult;
-    let publicationsResult;
+    const reads = await this.readCommittedTables();
+    return buildCommittedReadResult(reads, readAtMs);
+  }
+
+  // Both leader-required reads, or null when either did not answer.
+  async readCommittedTables() {
     try {
-      [nodesResult, publicationsResult] = await Promise.all([
+      const [nodesResult, publicationsResult] = await Promise.all([
         this.readCommittedRows(TABLES.NODES,
           SELECT_ALL_PREFIX + TABLES.NODES, []),
         this.readCommittedRows(TABLES.CONTROL_PLANE_PUBLICATIONS,
           SELECT_ALL_PREFIX + TABLES.CONTROL_PLANE_PUBLICATIONS, []),
       ]);
+      return nodesResult?.success === true &&
+        publicationsResult?.success === true ?
+        {nodesResult, publicationsResult} :
+        null;
     } catch {
-      return {outcome: OUTCOME.READ_FAILED};
+      return null;
     }
-    if (nodesResult?.success !== true || publicationsResult?.success !== true) {
-      return {outcome: OUTCOME.READ_FAILED};
-    }
-    const publication = selectLatestPublishedMembership(
-      Array.isArray(publicationsResult.rows) ? publicationsResult.rows : []);
-    if (!publication) {
-      return {outcome: OUTCOME.NO_RECORD};
-    }
-    const nodeRowsById = new Map();
-    for (const row of Array.isArray(nodesResult.rows) ? nodesResult.rows : []) {
-      const nodeId = readNodeId(row);
-      if (nodeId) {
-        nodeRowsById.set(nodeId, row);
-      }
-    }
-    return {
-      outcome: OUTCOME.RECORD,
-      record: Object.freeze({
-        epoch: Object.freeze({
-          publicationEpoch: publication.publicationEpoch,
-          publicationId: publication.publicationId,
-          readAtMs,
-        }),
-        publication,
-        nodeRowsById,
-        decisionsByNodeId: new Map(),
-      }),
-    };
   }
 
   adoptReadResult(result, startedGeneration) {
     if (this.stopped) {
       return;
     }
+    const previousSignature = this.answeredSignature();
     this.outcome = result.outcome;
     if (result.outcome === OUTCOME.RECORD) {
       this.record = result.record;
@@ -297,9 +376,49 @@ class ServeEligibilityOwner {
       this.record !== null :
       this.triggerGeneration !== startedGeneration;
     this.armLeaseRefresh();
+    // Derived memos re-key only when the committed answer changes (a new
+    // epoch, outcome or per-node decision); a refresh that only advanced
+    // leases changes no answer.
+    this.decisionSignature = this.buildDecisionSignature();
+    if (this.answeredSignature() === previousSignature) {
+      return;
+    }
+    this.notifyListeners();
+  }
+
+  // What consumers can observe: the decisions, or that the record is stale.
+  answeredSignature() {
+    return this.superseded ? STALE_SIGNATURE : this.decisionSignature;
+  }
+
+  notifyListeners() {
     for (const listener of this.listeners) {
       listener(this.record?.epoch ?? null);
     }
+  }
+
+  buildDecisionSignature() {
+    if (!this.record) {
+      return this.outcome;
+    }
+    const nodeIds = new Set([
+      ...this.record.nodeRowsById.keys(),
+      ...this.record.publication.publishedActiveNodeIds,
+    ]);
+    const parts = [this.outcome, this.record.epoch.publicationEpoch,
+      this.record.epoch.publicationId];
+    for (const nodeId of [...nodeIds].sort()) {
+      const decided = decideServeEligibility({
+        nodeId,
+        nodeRow: this.record.nodeRowsById.get(nodeId) || null,
+        publication: this.record.publication,
+        readAtMs: this.record.epoch.readAtMs,
+        isNodeLoadReady: this.isNodeLoadReady,
+      });
+      this.record.decisionsByNodeId.set(nodeId, decided);
+      parts.push(`${nodeId}=${decided.decision}:${decided.reasons.join(REASON_SEPARATOR)}`);
+    }
+    return parts.join(SIGNATURE_SEPARATOR);
   }
 
   armLeaseRefresh() {
@@ -334,13 +453,29 @@ class ServeEligibilityOwner {
     this.leaseRefreshHandle = handle;
   }
 
+  // A refresh never starts inside the triggering turn (a cache apply or a
+  // reader); it starts on the next microtask and joins one in flight.
   scheduleRefresh() {
-    this.readServeEligibility().catch(() => {});
+    queueMicrotask(() => {
+      if (!this.stopped) {
+        this.readServeEligibility().catch(() => {});
+      }
+    });
   }
 
   markSuperseded() {
     this.triggerGeneration += 1;
+    const wasCurrent = !this.superseded;
     this.superseded = true;
+    if (wasCurrent && this.record) {
+      // Derived memos re-key after the triggering turn, never inside a cache
+      // apply.
+      queueMicrotask(() => {
+        if (!this.stopped) {
+          this.notifyListeners();
+        }
+      });
+    }
     if (!this.inFlight && !this.stopped) {
       this.scheduleRefresh();
     }
@@ -382,7 +517,8 @@ class ServeEligibilityOwner {
         return;
       }
       if (
-        isRevokingNodeChange(this.record.nodeRowsById.get(nodeId) || null, row)
+        isRevokingNodeChange(this.record.nodeRowsById.get(nodeId) || null, row,
+          this.isNodeLoadReady)
       ) {
         this.markSuperseded();
         return;
@@ -430,6 +566,7 @@ class ServeEligibilityOwner {
         nodeRow: this.record.nodeRowsById.get(nodeId) || null,
         publication: this.record.publication,
         readAtMs: epoch.readAtMs,
+        isNodeLoadReady: this.isNodeLoadReady,
       });
       this.record.decisionsByNodeId.set(nodeId, decided);
     }
@@ -439,7 +576,13 @@ class ServeEligibilityOwner {
       decided.decision === SERVE_ELIGIBILITY_DECISION.ELIGIBLE &&
       leaseExpiresAtMs <= this.now()
     ) {
-      this.markSuperseded();
+      // Quiet inside a read: the armed lease timer is the trigger that
+      // re-keys derived memos; a reader only schedules the refresh.
+      this.triggerGeneration += 1;
+      this.superseded = true;
+      if (!this.inFlight) {
+        this.scheduleRefresh();
+      }
       return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE, epoch,
         this.readTimeoutMs);
     }

@@ -28,7 +28,7 @@
   "censusSize": 2556,
   "digest": "fnv1a32-1a8d542d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-03da6ade",
+  "observationDigest": "fnv1a32-157a5a09",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4343,6 +4343,16 @@
         "src/control-plane/membership-publication-row-contract.js"
       ]
     },
+    "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js"
+      ]
+    },
+    "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js"
+      ]
+    },
     "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js"
@@ -4671,6 +4681,7 @@
         "src/control-plane/recovery-protocol-snapshot.js",
         "src/control-plane/replica-dispatch-replay-health-readiness.js",
         "src/control-plane/replica-dispatch-service.js",
+        "src/control-plane/serve-eligibility-owner.js",
         "src/control-plane/system-row-normalizers.js",
         "src/diagnostics/topology-convergence-publication-normalizers.js",
         "src/diagnostics/topology-convergence-replay.js",
@@ -8808,7 +8819,6 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/control-plane/control-plane-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -8826,7 +8836,6 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/replication-target-authority.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/control-plane/control-plane-readiness-constants.js",
         "src/node/replica-handler-create-methods.js",
         "src/partition/partition-service-learner-promotion-methods.js",
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
@@ -8986,7 +8995,6 @@
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/control-plane/control-plane-readiness-constants.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/storage/data-directory-process-owner.js"
       ]
@@ -9603,7 +9611,6 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/control-plane/control-plane-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -12608,6 +12615,7 @@
     "test/query/durable-provisioning-job-owner-directed.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/owner-contract-outcome.js",
         "src/control-plane/timeout-budget.js",
         "src/partition/partition-participant-transaction-constants.js",
@@ -12826,11 +12834,6 @@
         "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
-    "test/query/query-executor-serve-eligibility-routing.test.js": {
-      "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
-      ]
-    },
     "test/query/query-executor-session-binding-and-build-sql.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js"
@@ -13043,6 +13046,7 @@
         "scripts/test-machine-factor.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
+        "test/control-plane/serve-eligibility-test-support.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
@@ -13069,6 +13073,7 @@
     },
     "test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js": {
       "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
         "src/rebalancer/rebalance-coordinator-operation-creation-admission.js",
@@ -13078,6 +13083,7 @@
     },
     "test/query/sql-query-engine-provision-partition-quorum.test.js": {
       "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-write-kernel.js",
         "test/test-helpers/participant-protocol-double.js"
@@ -13088,11 +13094,13 @@
         "scripts/test-machine-factor.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
+        "test/control-plane/serve-eligibility-test-support.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/sql-query-engine-provision-progress-gated-rewait.test.js": {
       "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
       ]

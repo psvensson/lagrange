@@ -48,9 +48,6 @@ import {
 import {
   ControlPlanePublicationsOwner,
 } from '../../src/control-plane/owners/control-plane-publications-owner.js';
-import {
-  isSystemTableRouteStructurallyReady,
-} from '../../src/query/query-executor-bootstrap-deferred-routing.js';
 import {QUERY_EXECUTOR_SHARED} from '../../src/query/query-executor-shared.js';
 import {
   buildClusterIncarnationFence,
@@ -106,10 +103,7 @@ const FENCE_ABSENT = Symbol('fence-absent');
 // Consumer read path: the priority control-plane partition every joiner reads
 // the contract from, the typed recovery-routing lanes of the read-authority
 // token, and the typed contract-source outcomes of the publication module.
-const CPP_PARTITION_ID = 'control_plane_publications-p1';
 const RECOVERY_ROUTING_FIELD = 'recoveryRouting';
-const CPP_HOST_NODE_ID = 'cpp-replica-host';
-const CPP_READER_NODE_ID = 'cpp-non-hosting-reader';
 const TRANSPORT_CONNECTED = 'connected';
 const TRANSPORT_DISCONNECTED = 'disconnected';
 const BOOTSTRAP_GRACE_REASON_CODES = Object.freeze([
@@ -308,8 +302,9 @@ const UNHEALTHY_HOST_REPORT = buildRecoveryPendingHostReport({
 
 // A joiner hosting no control_plane_publications replica: its durable reads
 // route through the real owner read options -> the real frozen read-authority
-// token -> the real system-table structural route against the replica host.
-// A refused read (host unreachable) unwraps to no row.
+// token; system-table routing admits the replica host without a readiness
+// lane and delivery reaches it only over live transport. An undeliverable
+// read (host unreachable) unwraps to no row.
 function buildNonHostingStorageOwner(storageOwner, hostReport) {
   const readOptionsOwner = Object.create(ControlPlanePublicationsOwner.prototype);
   const reads = [];
@@ -322,11 +317,7 @@ function buildNonHostingStorageOwner(storageOwner, hostReport) {
       const readAuthority = buildControlPlaneReadAuthority(
         readOptionsOwner.buildPublicationReadOptions(options),
       );
-      const routable = isSystemTableRouteStructurallyReady({
-        service: {node_id: CPP_HOST_NODE_ID, partition_id: CPP_PARTITION_ID},
-        localNodeId: CPP_READER_NODE_ID,
-        messageRouter: {getConnectionState: () => hostReport.connectionState},
-      });
+      const routable = hostReport.connectionState === TRANSPORT_CONNECTED;
       reads.push({
         recoveryRoutingDeclared:
           Object.hasOwn(readAuthority, RECOVERY_ROUTING_FIELD),

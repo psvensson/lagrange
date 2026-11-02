@@ -19,6 +19,7 @@ const controlPlaneReadinessServeEligibilityMethods = {
         readTimeoutMs: this.authoritativeReadinessRepairQueryTimeoutMs,
         setTimeout: (fn, ms) => this.setTimeoutFn(fn, ms),
         clearTimeout: (handle) => this.clearTimeoutFn(handle),
+        isNodeLoadReady: (nodeRow) => this.isLoadReady(nodeRow),
       });
       // A new committed record re-keys every derived readiness memo: the
       // planning snapshots through their owner-dependency generation, the

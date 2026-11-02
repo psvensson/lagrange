@@ -36,7 +36,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   createCommittedServeEligibilityOwner,
   serveEligibilityAnswer,
-  serveEligibilityFromFixture,
 } from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
@@ -437,20 +436,10 @@ test('QueryExecutor - executeOnPartition can suppress routing-triggered ' +
 
 test('QueryExecutor - getPartitionServiceCandidates logs typed routing ' +
   'denials when services exist but readiness filters them all', (t) => {
-  const readinessService = {
-    answerServeEligibility(targetNodeId) {
-      return serveEligibilityFromFixture(
-        (id) => this.getNodeReadinessSync(id))(targetNodeId);
-    },
-    getNodeReadinessSync() {
-      return {
-        observedAt: '2026-03-11T00:00:00.000Z',
-        lifecycleState: SERVICE_STATUS.ACTIVE,
-        dimensions: {serveEligible: false, repairEligible: true},
-        reasons: [{code: 'cluster_member_unhealthy'}],
-      };
-    },
-  };
+  const readinessService = createCommittedServeEligibilityOwner({
+    defaultAnswer: serveEligibilityAnswer(false,
+      {reasons: ['ready_lease_expired']}),
+  });
   const executor = new QueryExecutor({
     messageRouter: createMockMessageRouter(),
     systemCache: {
@@ -504,7 +493,7 @@ test('QueryExecutor - getPartitionServiceCandidates logs typed routing ' +
   );
   t.same(
     warnings[0].context.routingSnapshot.deniedByNodeId['node-filtered'].reasonCodes,
-    ['cluster_member_unhealthy'],
+    ['ready_lease_expired'],
   );
   t.end();
 });
@@ -897,7 +886,9 @@ test('QueryExecutor - read delivery defers cold reconnect for a disconnected ' +
     },
   };
   const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter,
     systemCache,
   });
@@ -988,7 +979,9 @@ test('QueryExecutor - read delivery defers cold reconnect for an unobserved ' +
     },
   };
   const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter,
     systemCache,
   });
@@ -1080,7 +1073,9 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
     },
   };
   const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter,
     systemCache,
   });

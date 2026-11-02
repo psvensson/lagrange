@@ -594,7 +594,9 @@ test('SQLQueryEngine - provisionInitialTablePartition honors explicit ' +
   };
 
   const engine = new SQLQueryEngine({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -931,7 +933,9 @@ test('SQLQueryEngine - executeManagedSplit dispatches both child metadata writes
   });
   const childInsertCalls = [];
   const engine = new SQLQueryEngine({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'node-a',
     systemCache: cache,
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),

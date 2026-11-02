@@ -15,18 +15,8 @@ import {
   parseSQL,
 } from './query-executor-test-support.js';
 import {
-  COLUMN,
-  STATE,
-  SERVICE_STATUS,
-  TABLES,
-} from '../../src/constants/index.js';
-import {
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
 } from '../../src/query/query-constants.js';
 import {
@@ -122,7 +112,9 @@ test('QueryExecutor - sends bounded SELECT result limits and deadline to ' +
 test('QueryExecutor - executeSelect forwards explicit routing readiness to ' +
   'partition fanout', async (t) => {
   const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['nodes-p1']),
   });
@@ -177,7 +169,9 @@ test('QueryExecutor - executeSelect forwards explicit routing readiness to ' +
 test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
   'readiness to each table fanout', async (t) => {
   const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['users-p1', 'profiles-p1']),
   });
@@ -761,7 +755,9 @@ test('QueryExecutor - findPartitionLeaderAddress returns null when no leader', (
 test('QueryExecutor - findPartitionLeaderAddress forwards one explicit routing ' +
   'readiness dimension', (t) => {
   const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter: createMockMessageRouter(),
     systemCache: null,
   });
@@ -1143,139 +1139,7 @@ test('QueryExecutor - fresh bootstrap fallback still fails closed when leader ' 
   t.end();
 });
 
-test('QueryExecutor - fresh bootstrap routing admits transport-connected ' +
-  'services while node heartbeat publication lags', async (t) => {
-  const now = 140000;
-  const nodeIds = ['node1', 'node2', 'node3'];
-  const partitionId = 'p-bootstrap-lag';
-  const systemCache = {
-    partitions: [{
-      partition_id: partitionId,
-      leader_node_id: null,
-      created_at: now - 1000,
-      updated_at: now - 1000,
-    }],
-    services: nodeIds.map((nodeId, index) => ({
-      service_id: `${partitionId}-r${index + 1}`,
-      service_type: 'partition',
-      partition_id: partitionId,
-      node_id: nodeId,
-      raft_role: index === 0 ? 'leader' : 'follower',
-      address: `${nodeId}/partition/${partitionId}-r${index + 1}`,
-      status: 'active',
-    })),
-    nodes: nodeIds.map((nodeId) => ({
-      [COLUMN.NODE_ID]: nodeId,
-      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      [COLUMN.CONNECTION_STATE]: STATE.READY,
-      [COLUMN.LAST_HEARTBEAT]: now - 34000,
-      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 19000,
-      [COLUMN.CPU_USAGE_PERCENT]: 10,
-      [COLUMN.MEMORY_USAGE_PERCENT]: 20,
-      [COLUMN.DISK_USAGE_PERCENT]: 30,
-    })),
-    get(type, key) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      if (type === TABLES.NODES) {
-        return this.nodes.find((node) => node[COLUMN.NODE_ID] === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return this.services.filter(predicate);
-      }
-      if (type === TABLES.NODES) {
-        return this.nodes.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return this.services;
-      }
-      if (type === TABLES.NODES) {
-        return this.nodes;
-      }
-      return [];
-    },
-  };
-
-  const readinessService = new ControlPlaneReadinessService({
-    nodeId: 'node1',
-    systemTableCache: systemCache,
-    messageRouter: {
-      getConnectionState(nodeId) {
-        return nodeIds.includes(nodeId) ? STATE.CONNECTED : STATE.DISCONNECTED;
-      },
-    },
-    storageAccountingService: {
-      async getCapacitySnapshotForNode(nodeId) {
-        return {
-          nodeId,
-          budgetBytes: 1000,
-          pressureState: 'normal',
-        };
-      },
-    },
-    cdcGroupPropagationService: {
-      getPublicationModeDiagnostics() {
-        return {
-          currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
-          reasonCode: null,
-          enteredAt: '2026-03-12T00:00:00.000Z',
-          recentTransitions: [],
-        };
-      },
-    },
-    now: () => now,
-  });
-
-  const executor = new QueryExecutor({
-    messageRouter: createMockMessageRouter(),
-    systemCache,
-    controlPlaneReadinessService: readinessService,
-  });
-
-  // Production warms the versioned planning owner's completed snapshots
-  // through its bounded background reconcile before sync routing reads; a
-  // cold sync read otherwise receives the owner's DEFERRED snapshot by
-  // design ('routing never rebuilds'). Drive the same reconcile directly
-  // for each node so the sync routing assertions read completed snapshots.
-  const planningOwner = readinessService.readinessPlanningSnapshotOwner;
-  for (const nodeId of nodeIds) {
-    planningOwner.reconcile(nodeId, {
-      options: {
-        allowAuthoritativeRefresh: true,
-        requireFreshOnIneligible: true,
-        participationKind: 'routed_read',
-        decisionDimension: 'serveEligible',
-        partitionId,
-        tableName: null,
-      },
-    });
-  }
-
-  const services = executor.getRoutablePartitionServices(partitionId);
-  const address = executor.findPartitionLeaderAddress(partitionId);
-
-  t.equal(
-    services.length,
-    3,
-    'fresh bootstrap routing should accept active addressed services when transport is still connected',
-  );
-  t.equal(
-    address,
-    `node1/partition/${partitionId}-r1`,
-    'fresh bootstrap routing should still expose the leader address while heartbeat publication lags',
-  );
-  t.end();
-});
+// Removed with quest serve-eligibility-committed-epoch-read (attempt 1,
+// R17 finding UA-1): the fresh-bootstrap routing grace that admitted a user
+// partition service whose serve eligibility failed. Witness:
+// query-executor-serve-eligibility-routing.test.js (bootstrap window).

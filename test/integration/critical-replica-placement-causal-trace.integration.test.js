@@ -59,7 +59,6 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
-import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEST_TIMEOUT_MS = 300000;
 const READY_TIMEOUT_MS = 12000;
 // Join budget measured for this three-full-nodes-one-event-loop harness by
@@ -329,7 +328,6 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
       const systemTableCache =
         NodeService.getInstance().getSystemTableCache();
       const queryEngine = new SQLQueryEngine({
-        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         cdcIntegrationService: bootstrapService.cdcIntegrationService,

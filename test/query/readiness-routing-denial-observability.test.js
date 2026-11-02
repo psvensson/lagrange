@@ -20,6 +20,7 @@ import {
 import {resolveReadinessObservedAgeMs} from
   '../../src/control-plane/eligibility-snapshot.js';
 import {
+  DENIAL_ROUTING_DIMENSION,
   STALE_HEARTBEAT_MAX_AGE_MS,
   captureDenialEntry,
   createAdmissionDrive,
@@ -35,8 +36,17 @@ import {
 // - a value, a key, an order - fails it. The same digest holds for the entry
 // the routing snapshot lists and for the entry the denial LINE carries,
 // because on main they are the same object.
+//
+// SUPERSEDED 2026-11-02 (R09, quest serve-eligibility-committed-epoch-read,
+// attempt 1): the b869139a6 digest was 42fe86ce...; it described a
+// serveEligible denial on a deferred planning record, which user-table
+// serving no longer makes (it consumes the committed serve answer). The
+// denial-age contract is now witnessed on the remaining projected denial, a
+// non-serve dimension on the user partition (DENIAL_ROUTING_DIMENSION); the
+// digest below is that entry's on the attempt-1 tree, with the same seven
+// pre-existing keys in main's order.
 const MAIN_DENIAL_ENTRY_DIGEST =
-  '42fe86ce6fdbe70b03c7fa501c9f457e16af5c03e1da539426e438df6d891e44';
+  'ed83521a469736b2e09f3a1c852faa515f86e940f5cf4beb236b4202c4da8ba9';
 const MAIN_DENIAL_ENTRY_KEYS = Object.freeze([
   'decisionDimension',
   'observedAt',
@@ -48,7 +58,11 @@ const MAIN_DENIAL_ENTRY_KEYS = Object.freeze([
 ]);
 const DIGEST_ALGORITHM = 'sha256';
 const DIGEST_ENCODING = 'hex';
-const ADDED_DENIAL_KEYS = Object.freeze(['observedAgeMs', 'deferred']);
+// reasonCode and serveEligibility: added by quest
+// serve-eligibility-committed-epoch-read (the typed denial and the committed
+// serve answer it rests on; null on a projected denial).
+const ADDED_DENIAL_KEYS = Object.freeze(['observedAgeMs', 'deferred',
+  'reasonCode', 'serveEligibility']);
 const DEFERRED_RECORD_AGE_MS = STALE_HEARTBEAT_MAX_AGE_MS + 1;
 const FUTURE_STAMP_MS = 60_000;
 
@@ -117,12 +131,13 @@ test('the routing denial states each denied candidate\'s record age and ' +
       clockReads += 1;
       return nowFn();
     };
-    drive.routingSnapshot();
+    drive.routingSnapshot(DENIAL_ROUTING_DIMENSION);
     assert.equal(clockReads, 0,
       'building a routing snapshot reads no clock for the denial ages');
     const sink = createLogSink();
     drive.executor.logger = sink.logger;
-    drive.executor.logPartitionRoutingDenial(drive.routingSnapshot());
+    drive.executor.logPartitionRoutingDenial(
+      drive.routingSnapshot(DENIAL_ROUTING_DIMENSION));
     assert.equal(clockReads, 1,
       'one emitted line reads the clock exactly once');
   } finally {

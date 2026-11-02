@@ -262,7 +262,9 @@ test('split source routability helper uses control-plane recovery eligibility ' 
   'dimension for owner-path convergence', (t) => {
   const cache = createSingleUsersSplitCache();
   const engine = new SQLQueryEngine({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},

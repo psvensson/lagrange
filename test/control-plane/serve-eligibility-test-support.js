@@ -138,7 +138,23 @@ export function createCommittedServeEligibilityOwner(options = {}) {
   const answers = new Map(Object.entries(options.answers || {}));
   let defaultAnswer = options.defaultAnswer || serveEligibilityAnswer(true);
   const calls = {answers: [], refreshes: 0};
+  // Projected dimensions for non-serve routing dimensions on user partitions
+  // (gateway writes, managed split/merge admission), which still read the
+  // readiness projection until attempt 3: recovery- and repair-eligible
+  // unless the test states otherwise (projectedDimensions: null removes the
+  // projection read entirely).
+  const projectedDimensions = Object.hasOwn(options, 'projectedDimensions') ?
+    options.projectedDimensions :
+    {controlPlaneRecoveryEligible: true, repairEligible: true};
+  const projected = projectedDimensions ?
+    {
+      getNodeReadinessSync: (nodeId) => ({
+        nodeId, dimensions: {...projectedDimensions},
+      }),
+    } :
+    {};
   return {
+    ...projected,
     calls,
     answerServeEligibility(nodeId) {
       calls.answers.push(nodeId);
@@ -169,4 +185,30 @@ export function createCommittedServeEligibilityOwner(options = {}) {
 export function serveAnswerFromMock(readinessService, nodeId) {
   return serveEligibilityFromFixture(
     (id) => readinessService.getNodeReadinessSync(id))(nodeId);
+}
+
+/**
+ * A committed PUBLISHED cluster_membership row naming the given nodes, all
+ * acknowledged, with the priority spread stated satisfied.
+ * @param {Array<string>} nodeIds
+ * @param {number} [nowMs]
+ * @return {Object}
+ */
+export function committedMembershipPublicationRow(nodeIds, nowMs = 0) {
+  return {
+    publication_id: FIXTURE_EPOCH.publicationId,
+    publication_kind: 'cluster_membership',
+    publication_epoch: FIXTURE_EPOCH.publicationEpoch,
+    publisher_node_id: nodeIds[0] || 'publisher',
+    published_active_node_ids: JSON.stringify(nodeIds),
+    required_ack_node_ids: JSON.stringify(nodeIds),
+    acknowledged_node_ids: JSON.stringify(nodeIds),
+    priority_partition_summary: JSON.stringify({
+      satisfied: true, blockedPartitions: [],
+    }),
+    status: 'PUBLISHED',
+    created_at: nowMs,
+    updated_at: nowMs,
+    transition_history: '[]',
+  };
 }

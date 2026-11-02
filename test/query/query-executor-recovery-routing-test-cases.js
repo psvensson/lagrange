@@ -108,7 +108,9 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       },
     };
     const executor = new QueryExecutor({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       messageRouter,
       systemCache,
     });
@@ -513,7 +515,9 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     };
 
     const executor = new QueryExecutor({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -608,7 +612,9 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     };
 
     const executor = new QueryExecutor({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -696,7 +702,9 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       },
     };
     const executor = new QueryExecutor({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       messageRouter,
       systemCache,
     });

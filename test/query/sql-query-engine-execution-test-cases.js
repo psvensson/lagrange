@@ -141,7 +141,9 @@ function registerSqlQueryEngineExecutionTestCases({
   test('SQLQueryEngine - routes priority control-plane transaction delivery ' +
     'through recovery eligibility', async (t) => {
     const engine = new SQLQueryEngine({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       systemCache: createMockSystemCache([], [], [], []),
       messageRouter: {
         deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
@@ -284,7 +286,9 @@ function registerSqlQueryEngineExecutionTestCases({
       ],
     );
     const engine = new SQLQueryEngine({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       nodeId: 'select-node',
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
@@ -364,7 +368,9 @@ function registerSqlQueryEngineExecutionTestCases({
         ],
       );
       const engine = new SQLQueryEngine({
-        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+          projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+        }),
         nodeId: 'select-node',
         systemCache: cache,
         messageRouter: createMockMessageRouter(),
@@ -447,7 +453,9 @@ function registerSqlQueryEngineExecutionTestCases({
       );
       let capturedExecutionOptions = null;
       const engine = new SQLQueryEngine({
-        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+          projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+        }),
         nodeId: 'write-node',
         systemCache: cache,
         messageRouter: createMockMessageRouter(),

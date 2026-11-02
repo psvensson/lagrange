@@ -112,17 +112,15 @@ test('ProjectionReadiness keeps publication lag out of repair lane',
       true,
       'repair lane should stay ready while publication awaits ACK',
     );
+    // The serve lane carries the readiness owner's committed-epoch answer
+    // (quest serve-eligibility-committed-epoch-read): an unacknowledged
+    // publication is a committed negative stated by that owner
+    // (publication_not_acknowledged, serve-eligibility-committed-epoch-read
+    // .test.js), not a projected serve-lane blocker.
     t.equal(
       readiness.lanes.serve.ready,
-      false,
-      'serve lane should stay closed on publication lag',
-    );
-    t.equal(
-      readiness.lanes.serve.reasonCodes.includes(
-        PROJECTION_READINESS_REASON.PUBLICATION_STREAM_NOT_READY,
-      ),
       true,
-      'publication lag should use the canonical serve-lane reason',
+      'the serve lane follows the committed serve input, not projected lag',
     );
     assertTopLevelProjectionReadinessReasonsAreCanonical(t, readiness);
     t.end();

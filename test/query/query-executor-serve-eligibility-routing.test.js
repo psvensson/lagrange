@@ -18,8 +18,17 @@ import {
   QUERY_ROUTING_DIAGNOSTIC_REASON,
 } from '../../src/query/query-constants.js';
 import {createMockMessageRouter} from './query-executor-mock-message-router.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  buildControlPlaneReadAuthority,
+} from '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
-import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const LEADER_NODE_ID = 'node-serve-route-leader';
 const FOLLOWER_NODE_ID = 'node-serve-route-follower';
 const LOCAL_NODE_ID = 'node-serve-route-local';
@@ -194,20 +203,22 @@ test('system-table routing decides on leadership and live transport, with ' +
   t.end();
 });
 
-test('system-table routing drops a replica whose live transport is down',
-  async (t) => {
-    const partitionId = 'control_plane_publications-p1';
-    const executor = new QueryExecutor({
-      nodeId: LOCAL_NODE_ID,
-      messageRouter: connectedRouter([LEADER_NODE_ID]),
-      systemCache: createCache(partitionId),
-      controlPlaneReadinessService: readinessService({}),
-    });
-    const snapshot = executor.getPartitionRoutingSnapshot(partitionId);
-    t.same(snapshot.routableServices.map((service) => service.node_id),
-      [LEADER_NODE_ID], 'only the reachable replica routes');
-    t.end();
+test('system-table candidates are not filtered by transport or readiness; ' +
+  'delivery applies live transport', async (t) => {
+  const partitionId = 'control_plane_publications-p1';
+  const executor = new QueryExecutor({
+    nodeId: LOCAL_NODE_ID,
+    messageRouter: connectedRouter([LEADER_NODE_ID]),
+    systemCache: createCache(partitionId),
+    controlPlaneReadinessService: readinessService({}),
   });
+  const snapshot = executor.getPartitionRoutingSnapshot(partitionId);
+  t.same(snapshot.routableServices.map((service) => service.node_id),
+    [LEADER_NODE_ID, FOLLOWER_NODE_ID],
+    'both replicas are candidates; the disconnected one gets the delivery ' +
+    'layer reconnect deferral, not a routing exclusion');
+  t.end();
+});
 
 test('the priority-recovery bootstrap routing bypass is deleted', async (t) => {
   t.notOk(fs.existsSync(new URL(
@@ -301,7 +312,6 @@ test('an executor without a readiness owner routes no user table, typed',
   async (t) => {
     const userPartitionId = 'p-user-no-owner';
     const executor = new QueryExecutor({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       nodeId: LOCAL_NODE_ID,
       messageRouter: connectedRouter([LEADER_NODE_ID, FOLLOWER_NODE_ID]),
       systemCache: createCache(userPartitionId),
@@ -312,7 +322,6 @@ test('an executor without a readiness owner routes no user table, typed',
       QUERY_ROUTING_DIAGNOSTIC_REASON.SERVE_ELIGIBILITY_UNAVAILABLE,
       'the denial is the typed serve unavailability');
     const systemExecutor = new QueryExecutor({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       nodeId: LOCAL_NODE_ID,
       messageRouter: connectedRouter([LEADER_NODE_ID, FOLLOWER_NODE_ID]),
       systemCache: createCache('nodes-p1'),
@@ -322,3 +331,49 @@ test('an executor without a readiness owner routes no user table, typed',
       2, 'system tables still route on leadership and live transport');
     t.end();
   });
+
+// Stream B reproducer evidence (5946c4d2f, 2026-11-02): authoritative
+// replica_operations reads were refused as all_services_filtered_by_readiness
+// (controlPlaneRecoveryEligible, planning_snapshot_refresh_pending) and the
+// ledger REPLACE stuck ACTIVE. A leader-required authoritative read of a
+// system table reaches the live leader whatever the readiness projection says.
+test('a leader-required authoritative replica_operations read reaches the ' +
+  'live leader while the projection says planning_snapshot_refresh_pending',
+async (t) => {
+  const partitionId = 'replica_operations-p1';
+  const readiness = readinessService({});
+  const deliveries = [];
+  const router = connectedRouter([LEADER_NODE_ID, FOLLOWER_NODE_ID]);
+  router.deliver = async (address) => {
+    deliveries.push(address);
+    return buildDeliveryEnvelope({acknowledged: true}, {
+      success: true, rows: [{operation_id: 'op-1'}],
+    });
+  };
+  const executor = new QueryExecutor({
+    nodeId: LOCAL_NODE_ID,
+    messageRouter: router,
+    systemCache: createCache(partitionId),
+    controlPlaneReadinessService: readiness,
+  });
+  executor.queryTimeoutMs = 2000;
+  const readAuthority = buildControlPlaneReadAuthority({
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+    routingReadinessDimension:
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  });
+  const result = await executor.executeOnPartition(partitionId,
+    'SELECT * FROM replica_operations', [], true, true, false, {
+      readAuthority,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    });
+  t.equal(result.success, true, 'the authoritative read is answered');
+  t.equal(deliveries[0], `${LEADER_NODE_ID}/partition/${partitionId}`,
+    'the read is delivered to the live leader');
+  t.equal(readiness.calls.readinessReads + readiness.calls.answers, 0,
+    'no readiness projection filtered the system-table read');
+  t.end();
+});

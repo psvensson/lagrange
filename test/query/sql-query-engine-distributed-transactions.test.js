@@ -815,7 +815,9 @@ async (t) => {
   const ROUTING_READINESS_DIMENSION =
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
   const engine = new SQLQueryEngine({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'routing-gap-node',
     systemCache: createMockSystemCache([], [], []),
     messageRouter: createMockMessageRouter(),

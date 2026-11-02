@@ -146,14 +146,13 @@ test('ordinary CL-012 reuse may bridge a regressed row while planning reads ' +
     [COLUMN.READY_LEASE_EXPIRES_AT]: now - 30000,
   });
 
+  // The lease regression is a revoking change for the committed serve
+  // record, which re-keys every derived readiness memo (quest
+  // serve-eligibility-committed-epoch-read): the stored snapshot that carried
+  // the old serve answer is no longer reused.
   const reused = readinessService.getReusableNodeReadinessSnapshotSync(nodeId);
-  t.equal(reused.dimensions.serveEligible, true,
-    'ordinary non-planning reuse should retain the fresher stored snapshot');
-  t.equal(
-    reused.nodeEvidence?.lastHeartbeat,
-    freshHeartbeat,
-    'reused sync snapshot should preserve the fresher heartbeat evidence',
-  );
+  t.equal(reused, null,
+    'a stale committed serve record retires the stored snapshot');
 
   const planningCurrent = readinessService.buildNodeReadinessSyncCurrent(
     nodeId,
@@ -211,7 +210,8 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
       async executeAuthoritativeSystemTableRead(
         tableName, _sql, _params, _options,
       ) {
-        authoritativeReads.push(tableName);
+        // Node-keyed repair reads only; the committed serve read is whole-table.
+        if (_params?.length > 0) authoritativeReads.push(tableName);
         if (tableName === TABLES.NODES) {
           return {
             success: true,

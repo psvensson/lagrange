@@ -137,10 +137,13 @@ test('QueryExecutor - executeOnPartition fails closed when the canonical ' +
 
   t.equal(result.success, false);
   t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+  // A missing canonical-leader service row is repaired by the routing
+  // overlay; serve routing runs no per-node projection repair (quest
+  // serve-eligibility-committed-epoch-read).
   t.same(
     readinessCalls.map((call) => call.nodeId),
-    ['leader-node'],
-    'write routing should still attempt one authoritative refresh before failing closed',
+    [],
+    'serve routing does not repair projected readiness for a service gap',
   );
   t.same(
     deliveries,
@@ -652,7 +655,9 @@ async (t) => {
   };
 
   const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter,
     systemCache,
     nodeId: 'local-node',
@@ -770,7 +775,9 @@ test('QueryExecutor - executeOnPartition widens owner-missing priority ' +
   };
 
   const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter,
     systemCache,
     nodeId: 'local-node',

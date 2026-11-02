@@ -43,7 +43,6 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -53,6 +52,8 @@ import {
 } from './sql-query-engine-test-support.js';
 
 
+import {createCommittedServeEligibilityOwner} from
+  '../control-plane/serve-eligibility-test-support.js';
 // Mock system cache with services for routing
 
 
@@ -1084,7 +1085,9 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
   };
 
   const engine = new SQLQueryEngine({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),

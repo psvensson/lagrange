@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {committedServeEligibilityView} from './serve-eligibility-test-support.js';
 import {
   createAccountingService,
   createActiveNode,
@@ -294,9 +295,18 @@ test('ControlPlaneReadinessService getAllNodeReadiness includes authoritative-on
         enteredAt: '2026-03-04T00:00:00.000Z',
         recentTransitions: [],
       }),
+      // Both nodes hold a committed lease at the published epoch.
+      authoritativeControlPlaneView: committedServeEligibilityView({
+        servingNodeIds: ['node-cache-visible', 'node-authoritative-only'],
+        nowMs: now,
+      }),
       now: () => now,
     });
 
+    // This composition's cache has no mutation versions, so the planning
+    // owner's identity stays saturated and its rebuilds never publish; the
+    // service is stopped with the test like every production composition.
+    t.teardown(() => readinessService.shutdown());
     const readinessEntries = await readinessService.getAllNodeReadiness({
       allowAuthoritativeRefresh: true,
     });
@@ -1200,8 +1210,10 @@ test('ControlPlaneReadinessService refreshes invalidated ineligible snapshots ' 
 
   t.equal(initial.dimensions.repairEligible, false);
   t.equal(refreshed.dimensions.repairEligible, true);
+  // The committed serve read (whole-table, no params) is the serve owner's,
+  // triggered by the node change; the repair reads are keyed by node.
   t.equal(
-    authoritativeReads.length,
+    authoritativeReads.filter((read) => read.params?.length > 0).length,
     2,
     'repair-gating callers should bypass stale ineligible snapshots and refresh immediately',
   );

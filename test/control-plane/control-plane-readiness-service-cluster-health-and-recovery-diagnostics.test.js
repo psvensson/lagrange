@@ -34,6 +34,7 @@ import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
 
+import {committedMembershipPublicationRow} from './serve-eligibility-test-support.js';
 test('isClusterMemberHealthy returns true for transport-connected ready ' +
   'node with expired lease but recent heartbeat ' +
   '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
@@ -657,6 +658,14 @@ test('ControlPlaneReadinessService records authoritative repair attempts ' +
             source: 'sql_query_engine',
           };
         }
+        if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+          // The committed published membership the serve answer reads.
+          return {
+            success: true,
+            rows: [committedMembershipPublicationRow([nodeId], now)],
+            source: 'sql_query_engine',
+          };
+        }
         return {success: false, rows: []};
       },
     },
@@ -673,6 +682,9 @@ test('ControlPlaneReadinessService records authoritative repair attempts ' +
     allowAuthoritativeRefresh: false,
   });
   now += 1000;
+  // Serving (and so the recovery epoch's close) is the committed-epoch answer
+  // (quest serve-eligibility-committed-epoch-read): one committed read.
+  await readinessService.readServeEligibility();
   const repairedReadiness = await readinessService.getNodeReadiness(
     nodeId,
     {allowAuthoritativeRefresh: true},

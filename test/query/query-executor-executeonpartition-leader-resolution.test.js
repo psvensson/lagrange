@@ -9,20 +9,12 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
-  createMockMessageRouter,
   createMockSystemCache,
 } from './query-executor-test-support.js';
 import {ERRORS} from '../../src/constants/index.js';
-import {
-  COLUMN,
-  STATE,
-  SERVICE_STATUS,
-  TABLES,
-} from '../../src/constants/index.js';
 import {MIGRATION_PARTITION_OPERATION} from '../../src/migration/migration-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/control-plane-readiness-service.js';
@@ -55,248 +47,11 @@ const QUERY_EXECUTOR_FANOUT_REPLACE_PENDING_KEY =
   'control-plane:write:replica_operations:replica-operation:op-1:replace';
 
 
-test('QueryExecutor - retained runtime routing admits non-system services ' +
-  'while strict membership evidence lags behind transport-connected recovery',
-(t) => {
-  const now = 240000;
-  const nodeId = 'node-runtime-grace';
-  const partitionId = 'p-runtime-grace';
-  const tableName = 'benchmark_events';
-  const systemCache = {
-    partitions: [{
-      partition_id: partitionId,
-      table_name: tableName,
-      leader_node_id: nodeId,
-      created_at: now - 120000,
-      updated_at: now - 120000,
-    }],
-    services: [{
-      service_id: `${partitionId}-r1`,
-      service_type: 'partition',
-      partition_id: partitionId,
-      node_id: nodeId,
-      raft_role: 'leader',
-      address: `${nodeId}/partition/${partitionId}-r1`,
-      status: 'active',
-    }],
-    nodes: [{
-      [COLUMN.NODE_ID]: nodeId,
-      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-      [COLUMN.LAST_HEARTBEAT]: now - 5000,
-      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 4000,
-      [COLUMN.CPU_USAGE_PERCENT]: 10,
-      [COLUMN.MEMORY_USAGE_PERCENT]: 20,
-      [COLUMN.DISK_USAGE_PERCENT]: 30,
-    }],
-    get(type, key) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      if (type === TABLES.NODES) {
-        return this.nodes.find((node) => node[COLUMN.NODE_ID] === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return this.services.filter(predicate);
-      }
-      if (type === TABLES.NODES) {
-        return this.nodes.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return this.services;
-      }
-      if (type === TABLES.NODES) {
-        return this.nodes;
-      }
-      return [];
-    },
-  };
-  const readinessService = {
-    answerServeEligibility(id) {
-      return serveAnswerFromMock(this, id);
-    },
-    getNodeReadinessSync() {
-      return {
-        observedAt: '2026-03-12T00:00:00.000Z',
-        lifecycleState: SERVICE_STATUS.ACTIVE,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-        },
-        nodeEvidence: {
-          transportConnected: true,
-          readyWhenWritten: true,
-        },
-        runtimeAuthority: {
-          failure: {
-            reason: CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY,
-          },
-        },
-      };
-    },
-  };
-  const initialReadiness = readinessService.getNodeReadinessSync(nodeId);
-  const executor = new QueryExecutor({
-    messageRouter: createMockMessageRouter(),
-    systemCache,
-    controlPlaneReadinessService: readinessService,
-  });
-
-  t.equal(initialReadiness.dimensions.clusterMemberHealthy, false,
-    'test fixture must keep strict cluster membership closed');
-  t.equal(initialReadiness.dimensions.serveEligible, false,
-    'test fixture must require retained runtime grace to route');
-  t.equal(initialReadiness.dimensions.controlPlaneRecoveryEligible, true,
-    'test fixture must stay open on recovery eligibility');
-  t.same(
-    executor.getRoutablePartitionServices(partitionId).map((service) => service.node_id),
-    [nodeId],
-    'retained runtime grace should keep non-system serving routable while recovery stays transport-backed',
-  );
-  t.equal(
-    executor.findPartitionLeaderAddress(partitionId),
-    `${nodeId}/partition/${partitionId}-r1`,
-    'retained runtime grace should preserve leader routing for the user partition',
-  );
-  t.end();
-});
-
-test('QueryExecutor - retained runtime routing still fails closed for ' +
-  'system-table partitions under the same stale-membership evidence',
-(t) => {
-  const now = 250000;
-  const partitionCreatedAt = now - 120000;
-  const partitionUpdatedAt = now - 119000;
-  const nodeId = 'node-system-fail-closed';
-  const partitionId = 'replica_operations-p1';
-  const systemCache = {
-    partitions: [{
-      partition_id: partitionId,
-      table_name: TABLES.REPLICA_OPERATIONS,
-      leader_node_id: nodeId,
-      created_at: partitionCreatedAt,
-      updated_at: partitionUpdatedAt,
-    }],
-    services: [{
-      service_id: `${partitionId}-r1`,
-      service_type: 'partition',
-      partition_id: partitionId,
-      node_id: nodeId,
-      raft_role: 'leader',
-      address: `${nodeId}/partition/${partitionId}-r1`,
-      status: 'active',
-    }],
-    nodes: [{
-      [COLUMN.NODE_ID]: nodeId,
-      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-      [COLUMN.LAST_HEARTBEAT]: now - 5000,
-      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 4000,
-      [COLUMN.CPU_USAGE_PERCENT]: 10,
-      [COLUMN.MEMORY_USAGE_PERCENT]: 20,
-      [COLUMN.DISK_USAGE_PERCENT]: 30,
-    }],
-    get(type, key) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      if (type === TABLES.NODES) {
-        return this.nodes.find((node) => node[COLUMN.NODE_ID] === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return this.services.filter(predicate);
-      }
-      if (type === TABLES.NODES) {
-        return this.nodes.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return this.services;
-      }
-      if (type === TABLES.NODES) {
-        return this.nodes;
-      }
-      return [];
-    },
-  };
-  const readinessService = {
-    answerServeEligibility(id) {
-      return serveAnswerFromMock(this, id);
-    },
-    getNodeReadinessSync() {
-      return {
-        observedAt: '2026-03-12T00:00:00.000Z',
-        lifecycleState: SERVICE_STATUS.ACTIVE,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-        },
-        nodeEvidence: {
-          transportConnected: true,
-          readyWhenWritten: true,
-        },
-        runtimeAuthority: {
-          failure: {
-            reason: CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY,
-          },
-        },
-      };
-    },
-  };
-  const executor = new QueryExecutor({
-    messageRouter: createMockMessageRouter(),
-    systemCache,
-    controlPlaneReadinessService: readinessService,
-  });
-
-  t.same(
-    executor.getRoutablePartitionServices(partitionId).map((service) => service.node_id),
-    [],
-    'system-table routing must stay closed under stale membership even when recovery transport is connected',
-  );
-  t.equal(
-    executor.findPartitionLeaderAddress(partitionId),
-    null,
-    'system-table leader routing must not reuse retained runtime grace',
-  );
-  t.end();
-});
-
+// Removed with quest serve-eligibility-committed-epoch-read (attempt 1): the
+// retained runtime grace for user-table serving and its system-table
+// counterpart. User tables route on the committed-epoch serve answer; system
+// tables route on leadership (witness:
+// query-executor-serve-eligibility-routing.test.js).
 test('QueryExecutor - executeOnPartition fails closed when the owner row ' +
   'exists but leader_node_id is blank',
 async (t) => {
@@ -580,7 +335,9 @@ test('QueryExecutor - executeOnPartition widens recovery-owned system-table ' +
   };
 
   const executor = new QueryExecutor({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter,
     systemCache,
   });
