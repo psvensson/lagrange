@@ -380,7 +380,8 @@ correctness regression or reopen completed optimization work.
   every Cell start re-runs the jco transpile (97% of start time) under the
   fixed 10 s bound. Owner: quest `wasi-component-startup-budget` (derive once
   per component per node; start becomes instantiate-only). Design and
-  measurements are in its `evidence/`.
+  measurements are in its relocated evidence bundle
+  (`solve/changes/evidence-relocation/wasi-component-startup-budget`).
 - Immediate CI trigger: the nine files are resource class `ordinary` (four
   jobs), unlike their toolchain siblings. Owner: `class: fix` quest
   `solve/quests/service-test-toolchain-classification` (branch
