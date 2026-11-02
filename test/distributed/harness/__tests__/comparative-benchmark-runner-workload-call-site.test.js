@@ -235,3 +235,36 @@ test('a load generator that exits non-zero reports its stderr', async () => {
   const cli = arrayFind(ssh.calls, (call) => stringIncludes(call.command, 'run-benchmark'));
   assert.match(cli.command, / 2> 'test-output\/bench\/bench-x\/[^']+\/stderr\.log'/u);
 });
+
+// Coordinator decision 3: the load generator's worktree installs the
+// reference-client package (mysql2) from its own lockfile with the host's
+// npm; a failed install refuses only the TiDB arm, typed.
+test('the load-generator worktree installs the reference-client drivers; a failed install ' +
+  'refuses only the TiDB arm', async () => {
+  const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange',
+    nodePath: '/opt/node/v22/bin/node'};
+  const installed = createScriptedSsh([[/git worktree add/u, 'abc'],
+    [/npm ci/u, '\n__exit_code=0']]);
+  const ok = await prepareLoadGeneratorCheckout({sshRun: installed.sshRun, opts: {}, host,
+    harnessCommit: 'abc', campaignId: 'bench-x'});
+  const install = arrayFind(installed.calls, (call) => stringIncludes(call.command, 'npm ci'));
+  assert.match(install.command, /cd '\/srv\/lagrange\/test-output\/bench-worktrees\/bench-x'/u);
+  assert.match(install.command, /PATH='\/opt\/node\/v22\/bin':"\$PATH" npm ci --prefix test\/distributed\/reference-client --ignore-scripts/u);
+  assert.equal(ok.host.driverInstall.status, 'installed');
+  const failed = createScriptedSsh([[/git worktree add/u, 'abc'],
+    [/npm ci/u, 'npm ERR! network\n__exit_code=1'],
+    [/git rev-parse HEAD/u, 'abc'],
+    [/run-benchmark-workload\.js/u, '\n__exit_code=0'],
+    [/tail -n 1 /u, JSON.stringify(b1Record())]]);
+  const prepared = await prepareLoadGeneratorCheckout({sshRun: failed.sshRun, opts: {}, host,
+    harnessCommit: 'abc', campaignId: 'bench-x'});
+  assert.equal(prepared.host.driverInstall.status, 'failed');
+  assert.match(prepared.host.driverInstall.output, /npm ERR! network/u);
+  const runner = createRemoteWorkloadRunner({sshRun: failed.sshRun, opts: {},
+    host: prepared.host, harnessCommit: 'abc', campaignId: 'bench-x'});
+  await assert.rejects(runner({system: 'tidb-tikv'}, RUN),
+    (error) => error.code === 'load_generator_driver_missing' &&
+      /npm ERR! network/u.test(error.diagnostic.output));
+  const record = await runner({system: 'postgresql'}, RUN);
+  assert.equal(record.dispatch.status, 'executed');
+});

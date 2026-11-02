@@ -11,7 +11,6 @@
 // appended to --out. Exit 0: executed or a typed non-execution (blocked /
 // unsupported); exit 2: typed dispatch refusal; exit 1: harness error.
 import {appendFile, readFile} from 'node:fs/promises';
-import {createRequire} from 'node:module';
 import {hostname} from 'node:os';
 import {fileURLToPath} from 'node:url';
 
@@ -23,17 +22,15 @@ import {
 import {
   executeBenchmarkWorkload,
 } from './real-product-workload-drivers.js';
+import {nativeClientVersions} from '../reference-client/native-clients.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
-const arrayMap = Function.call.bind(Array.prototype.map);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const EXIT = Object.freeze({OK: 0, HARNESS_ERROR: 1, REFUSED: 2});
 const FLAG = Object.freeze({MANIFEST: '--manifest', OUT: '--out'});
 const REFUSED_RECORD_KIND = 'benchmark-dispatch-refused';
-const NATIVE_CLIENT_PACKAGES = Object.freeze(['pg', 'mysql2']);
-const requireFromHere = createRequire(import.meta.url);
 
 function parseArgs(argv) {
   const args = {};
@@ -78,21 +75,13 @@ function observedCheckout() {
   }
 }
 
-function packageVersion(name) {
-  try {
-    return {version: requireFromHere(`${name}/package.json`).version, error: null};
-  } catch (error) {
-    return {version: null, error: String(error?.message || error)};
-  }
-}
-
 function loadGeneratorIdentity() {
   return Object.freeze({
     hostname: hostname(),
     nodeVersion: process.version,
     checkout: Object.freeze(observedCheckout()),
-    nativeClients: Object.freeze(Object.fromEntries(
-      arrayMap(NATIVE_CLIENT_PACKAGES, (name) => [name, packageVersion(name)]))),
+    // Resolved from the reference-client package, where mysql2 is installed.
+    nativeClients: Object.freeze(nativeClientVersions()),
   });
 }
 

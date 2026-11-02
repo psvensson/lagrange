@@ -4,6 +4,7 @@
 // open-loop step owner (v2) with the paired retry owner, a run watchdog
 // derived from the product timing ladder, and product-content dataset
 // verification and final-state reconciliation on a separate connection.
+import {loadMysql2Promise} from '../reference-client/native-clients.js';
 import {createPgWireClient} from '../reference-client/pg-wire-client.js';
 import {
   QUERY_DEFAULTS,
@@ -218,8 +219,7 @@ function defaultMysqlConnection(options) {
 async function loadDefaultDrivers(drivers, system) {
   if (system === OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV && !drivers.createMysqlConnection &&
       !mysqlModule) {
-    const loaded = await import('mysql2/promise');
-    mysqlModule = loaded.default || loaded;
+    mysqlModule = await loadMysql2Promise();
   }
   return drivers;
 }

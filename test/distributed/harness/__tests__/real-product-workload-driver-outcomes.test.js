@@ -293,3 +293,19 @@ test('a PostgreSQL run never loads the TiDB driver', async () => {
   assert.equal(output.observations.runStatus, 'setup-failed');
   assert.equal(output.observations.setup.failureClass, 'transport_failure');
 });
+
+// Coordinator decision 3 (2026-11-02): mysql2 is a dependency of the
+// reference-client package (its own lockfile), never of the root. Its owner
+// loads it and reads both native drivers' installed versions from that
+// package's own resolution path; the harness cannot resolve it from its own
+// directory (live campaign bench-live-20261101-b-r6: ERR_MODULE_NOT_FOUND).
+test('native drivers resolve and report versions through the reference-client package',
+  async () => {
+    const {createRequire} = await import('node:module');
+    const {nativeClientVersions} = await import('../../reference-client/native-clients.js');
+    const versions = nativeClientVersions();
+    const fromRoot = createRequire(import.meta.url)('pg/package.json').version;
+    assert.deepEqual(versions.pg, {version: fromRoot, error: null});
+    assert.deepEqual(Object.keys(versions.mysql2).sort(), ['error', 'version']);
+    assert.ok(versions.mysql2.version !== null || /mysql2/u.test(versions.mysql2.error));
+  });

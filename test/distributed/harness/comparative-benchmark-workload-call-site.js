@@ -25,6 +25,7 @@ import {BENCHMARK_DISPATCH_STATUS} from './benchmark-workload-dispatch.js';
 import {
   arrayIncludes,
   arrayMap,
+  stringLastIndexOf,
   stringReplace,
   stringTrim,
 } from './real-product-captured-intrinsics.js';
@@ -46,6 +47,13 @@ const LOAD_GENERATOR_WORKTREE_PARENT = 'test-output/bench-worktrees';
 const LOAD_GENERATOR_LINKED_DIR = 'node_modules';
 const CHECKOUT_PREPARATION_TIMEOUT_MS = 10 * 60 * 1000;
 const LOAD_GENERATOR_STDERR_TAIL_LINES = 80;
+// The reference-client package (mysql2, the TiDB arm's driver) is installed in
+// the worktree from its own lockfile with the host's npm.
+const REFERENCE_CLIENT_PREFIX = 'test/distributed/reference-client';
+const DRIVER_INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
+const DRIVER_INSTALL_OUTPUT_CHARS = 4000;
+const DRIVER_INSTALL = Object.freeze({INSTALLED: 'installed', FAILED: 'failed'});
+const TIDB_SYSTEM = 'tidb-tikv';
 const LOAD_GENERATOR_EXIT = Object.freeze({OK: 0, REFUSED: 2});
 const REFUSED_RECORD_KIND = 'benchmark-dispatch-refused';
 const WORKLOAD_TIMEOUT_MS = 60 * 60 * 1000;
@@ -57,6 +65,7 @@ const FAILURE = Object.freeze({
   NOT_EXECUTED: 'workload_not_executed',
   PLAN_MISMATCH: 'plan_mismatch',
   COMMIT_MISMATCH: 'load_generator_commit_mismatch',
+  DRIVER_MISSING: 'load_generator_driver_missing',
 });
 
 function bareDigest(value) {
@@ -100,6 +109,11 @@ function workloadRequestOf({run, manifest, deployment, evidenceDir, setupFailure
 function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaignId}) {
   const cd = `cd ${shellQuote(host.repoPath)}`;
   return async (request, run) => {
+    if (request.system === TIDB_SYSTEM && host.driverInstall?.status === DRIVER_INSTALL.FAILED) {
+      throw deploymentFailure(FAILURE.DRIVER_MISSING, `load generator ${host.ip} could not ` +
+        `install the reference-client drivers (npm ci exit ${host.driverInstall.exitCode})`,
+      {output: host.driverInstall.output});
+    }
     const commit = stringTrim(String(await sshRun(host.ip, opts, `${cd} && git rev-parse HEAD`)));
     if (commit !== harnessCommit) {
       throw deploymentFailure(FAILURE.COMMIT_MISMATCH, `load generator ${host.ip} checkout ` +
@@ -163,7 +177,23 @@ async function prepareLoadGeneratorCheckout({sshRun, opts, host, harnessCommit, 
     throw deploymentFailure(FAILURE.COMMIT_MISMATCH, `load generator ${host.ip} worktree ` +
       `is at ${head}, the campaign records ${harnessCommit}`, {commit: head, harnessCommit});
   }
-  return {host: {...host, repoPath: worktree}, release};
+  const driverInstall = await installReferenceClient({sshRun, opts, host, worktree});
+  return {host: {...host, repoPath: worktree, driverInstall}, release};
+}
+
+// The host's npm sits beside the node the lab recorded for it.
+function npmPathPrefix(nodePath) {
+  const at = stringLastIndexOf(String(nodePath), '/');
+  return at > 0 ? `PATH=${shellQuote(String(nodePath).slice(0, at))}:"$PATH" ` : '';
+}
+
+async function installReferenceClient({sshRun, opts, host, worktree}) {
+  const result = await execWithStatus(sshRun, host.ip, opts, `cd ${shellQuote(worktree)} && ` +
+    `${npmPathPrefix(host.nodePath)}npm ci --prefix ${REFERENCE_CLIENT_PREFIX} ` +
+    '--ignore-scripts 2>&1', DRIVER_INSTALL_TIMEOUT_MS);
+  const output = String(result.stdout ?? '').slice(-DRIVER_INSTALL_OUTPUT_CHARS);
+  return {status: result.exitCode === 0 ? DRIVER_INSTALL.INSTALLED : DRIVER_INSTALL.FAILED,
+    exitCode: result.exitCode, output};
 }
 
 function planFailure(manifest, b1Plan) {
