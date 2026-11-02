@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2214,
+    "unit": 2215,
     "integration": 122,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2561,
-  "digest": "fnv1a32-2ecfc4d9",
+  "censusSize": 2562,
+  "digest": "fnv1a32-41f1a2e4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1222,6 +1222,7 @@
     "test/node/fresh-create-authority-unavailability-native.integration.test.js": "integration",
     "test/node/fresh-create-claimed-cleanup-never-admitted.test.js": "unit",
     "test/node/fresh-create-release-authority-no-token.test.js": "unit",
+    "test/node/fresh-create-release-decision.test.js": "unit",
     "test/node/fresh-create-resumed-syncing-claim.test.js": "unit",
     "test/node/group-retired-tombstone-incarnation.test.js": "unit",
     "test/node/group-retired-tombstone.test.js": "unit",

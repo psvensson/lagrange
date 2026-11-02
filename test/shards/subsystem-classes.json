@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 118,
     "architecture-governance": 21,
-    "bootstrap-membership": 335,
+    "bootstrap-membership": 336,
     "cdc-metadata": 67,
     "cli-tooling": 99,
     "control-plane": 225,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2561,
-  "digest": "fnv1a32-5d2a2adb",
+  "censusSize": 2562,
+  "digest": "fnv1a32-c51724ef",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8aae237c",
+  "observationDigest": "fnv1a32-5dc66d3c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1241,6 +1241,7 @@
     "test/node/fresh-create-authority-unavailability-native.integration.test.js": "bootstrap-membership",
     "test/node/fresh-create-claimed-cleanup-never-admitted.test.js": "bootstrap-membership",
     "test/node/fresh-create-release-authority-no-token.test.js": "bootstrap-membership",
+    "test/node/fresh-create-release-decision.test.js": "bootstrap-membership",
     "test/node/fresh-create-resumed-syncing-claim.test.js": "bootstrap-membership",
     "test/node/group-retired-tombstone-incarnation.test.js": "bootstrap-membership",
     "test/node/group-retired-tombstone.test.js": "bootstrap-membership",
@@ -10014,6 +10015,12 @@
         "src/node/replica-handler-release-recovery.js"
       ]
     },
+    "test/node/fresh-create-release-decision.test.js": {
+      "files": [
+        "src/node/participant-release-authorization-owner.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js"
+      ]
+    },
     "test/node/fresh-create-resumed-syncing-claim.test.js": {
       "files": [
         "src/rebalancer/failed-create-cleanup-token.js",
@@ -10863,6 +10870,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-participant-transaction-store.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-operation-port-constants.js",

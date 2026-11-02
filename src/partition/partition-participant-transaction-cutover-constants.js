@@ -30,6 +30,7 @@ const PARTICIPANT_RELEASE_REASON = Object.freeze({
   CLEANUP_INCOMPLETE: 'participant_release_cleanup_incomplete',
 });
 const PARTICIPANT_RELEASE_MISSING_FACT = Object.freeze({
+  COMMITTED_MEMBERSHIP: 'committed_membership',
   COMMITTED_REPLICA_ROUTES: 'committed_replica_routes',
   CREATE_ADMISSION_AUTHORITY: 'create_admission_authority',
   CURRENT_REPLICA_GENERATION: 'current_replica_generation',

@@ -53,7 +53,8 @@ function createHost({clock = createClock(), reply} = {}) {
   // reads no admission and holds no token.
   const createAdmissionEvidence = Object.freeze({partitionId: PARTITION_ID,
     operationId: 'fresh-completion-op', replicaId: 'fresh-completion-replica',
-    targetNodeId: NODE_ID, admissionToken: 'fresh-completion-admission'});
+    targetNodeId: NODE_ID, admissionToken: 'fresh-completion-admission',
+    attemptToken: 'fresh-completion-attempt', attemptSeq: 1, replicaCreatedAt: 1000});
   const services = new Map();
   let releasedSubscriptions = 0;
   services.subscribeServiceChanges = () => () => {

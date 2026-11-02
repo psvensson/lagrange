@@ -114,6 +114,8 @@ function gatewayOver(rows, nodeId, faults) {
         return {success: true, rows: []};
       }
       const fault = faults[nodeId];
+      faults.reads = {...faults.reads, [nodeId]: (faults.reads?.[nodeId] ?? 0) + 1};
+      await fault?.holdRead?.(params[0]);
       if (fault && fault.refusals > 0) {
         fault.refusals -= 1;
         fault.refused = (fault.refused ?? 0) + 1;

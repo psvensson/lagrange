@@ -1924,6 +1924,7 @@
       "tests": [
         "test/partition/fresh-create-release-authority-cross-node.integration.test.js",
         "test/node/fresh-create-release-authority-no-token.test.js",
+        "test/node/fresh-create-release-decision.test.js",
         "test/node/participant-release-fresh-create-completion.test.js",
         "test/node/fresh-create-authority-unavailability-native.integration.test.js"
       ]
