@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1834,
+    "unit": 1835,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2085,
-  "digest": "fnv1a32-4ffa3635",
+  "censusSize": 2086,
+  "digest": "fnv1a32-5dca7f91",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -476,6 +476,7 @@
     "test/control-plane/failure-class-registry.test.js": "unit",
     "test/control-plane/formation-placement-membership-handoff.test.js": "unit",
     "test/control-plane/formation-release-handoff-closure.test.js": "unit",
+    "test/control-plane/formation-release-handoff-consumer-parity.test.js": "unit",
     "test/control-plane/heartbeat-joining-fence-preservation.test.js": "unit",
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "unit",
     "test/control-plane/heartbeat-memory-trend.test.js": "unit",

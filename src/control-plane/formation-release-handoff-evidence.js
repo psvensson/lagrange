@@ -13,6 +13,7 @@ const numberIsSafeInteger = Number.isSafeInteger;
 const objectFreeze = Object.freeze;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
+const stringPrototypeStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringPrototypeToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 
 const OWN_DATA_VALUE_FIELD = 'value';
@@ -180,6 +181,18 @@ function buildFenceIdentity(startupAuthority) {
     arrayPrototypePush(parts, value === ABSENT ? EMPTY_STRING : value);
   }
   return arrayPrototypeJoin(parts, FENCE_PART_SEPARATOR);
+}
+// A fence identity the authority PUBLISHED in its durable contract is either
+// the explicit no-fence token or an allowed admission fence rendered by
+// buildFenceIdentity above; a consumer validates that published grammar rather
+// than re-deriving a fence from its own admission states.
+function isPublishedFenceIdentity(fenceIdentity) {
+  if (typeof fenceIdentity !== 'string') return false;
+  if (fenceIdentity === NO_FENCE_IDENTITY) return true;
+  return stringPrototypeStartsWith(
+    fenceIdentity,
+    FENCE_PARTS_HEAD + FENCE_PART_SEPARATOR,
+  );
 }
 function authorityScalarEvidenceValid(evidence) {
   if (evidence.authorityAvailable !== true) return false;
@@ -366,6 +379,7 @@ export {
   isAuthorityReadyRetainable,
   isConnectedFormationMember,
   isCurrentReadyMember,
+  isPublishedFenceIdentity,
   listCoversCohort,
   listIsSubset,
   listsAreDisjoint,
