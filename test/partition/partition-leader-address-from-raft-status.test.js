@@ -30,6 +30,13 @@ import {RAFT_OPERATION_OUTCOME} from
 import {PEER_ADDRESS_STATUS} from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  ADMISSION_LEADER_REFUSAL,
+  admissionLeaderHint,
+  admissionLeaderTarget,
+} from '../../src/raft/raft-rs-committed-peer-address.js';
+import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
+import {ENTITY_TYPE} from '../../src/constants/index.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
   '..', '..');
@@ -136,6 +143,52 @@ test('(k) the learner promotion gate takes the leader from the live status',
       'the live raft leader is discovered');
   });
 
+// The committed-membership stamp a target was created from: the leader's
+// committed read at creation (identities and committed nodes by peer id).
+function committedStamp({leaderId = LIVE_LEADER, nodes = {[LIVE_LEADER]: LIVE_NODE,
+  [STALE_LEADER]: 'node-3'}} = {}) {
+  const members = Object.keys(nodes);
+  return {kind: 'committed',
+    voters: members.map(deriveRaftRsPeerId), learners: [],
+    identities: Object.fromEntries(members.map((id) => [deriveRaftRsPeerId(id), id])),
+    nodeIds: Object.fromEntries(Object.entries(nodes).map(([id, node]) =>
+      [deriveRaftRsPeerId(id), node])),
+    leaderId};
+}
+
+test('(l) a target not yet admitted asks the leader its stamp names, at ' +
+  'the stamp\'s committed node; its own live leader wins once it hears one',
+async (t) => {
+  t.same({...admissionLeaderTarget(ENTITY_TYPE.PARTITION, committedStamp(), null)},
+    {replicaIdentity: LIVE_LEADER, address: partitionAddress(LIVE_NODE, LIVE_LEADER)},
+    'the stamp leader at its committed node');
+  t.same({...admissionLeaderTarget(ENTITY_TYPE.PARTITION, committedStamp(), {
+    outcome: RAFT_OPERATION_OUTCOME.CORE_OK, leaderId: STALE_LEADER,
+    leaderAddress: partitionAddress('node-3', STALE_LEADER),
+    leaderAddressStatus: PEER_ADDRESS_STATUS.RESOLVED})},
+  {replicaIdentity: STALE_LEADER, address: partitionAddress('node-3', STALE_LEADER)},
+  'a live leader the target hears is asked');
+  t.equal(admissionLeaderTarget(ENTITY_TYPE.PARTITION,
+    committedStamp({leaderId: null}), null).refusal,
+  ADMISSION_LEADER_REFUSAL.STAMP_NAMES_NO_LEADER, 'a stamp without a leader refuses typed');
+  t.equal(admissionLeaderTarget(ENTITY_TYPE.PARTITION, null, null).refusal,
+    ADMISSION_LEADER_REFUSAL.STAMP_NAMES_NO_LEADER, 'no stamp: refused typed');
+  t.equal(admissionLeaderTarget(ENTITY_TYPE.PARTITION,
+    committedStamp({nodes: {[LIVE_LEADER]: null}}), null).refusal,
+  ADMISSION_LEADER_REFUSAL.LEADER_UNPLACED, 'an unplaced stamp leader refuses typed');
+});
+
+test('(m) a NOT_LEADER hint is followed only when it names a committed member',
+  async (t) => {
+    t.same({...admissionLeaderHint(ENTITY_TYPE.PARTITION, committedStamp(), STALE_LEADER)},
+      {replicaIdentity: STALE_LEADER, address: partitionAddress('node-3', STALE_LEADER)},
+      'a member of the held configuration, at its committed node');
+    t.equal(admissionLeaderHint(ENTITY_TYPE.PARTITION, committedStamp(), 'orders-p1-r9'),
+      null, 'a replica outside the held configuration is ignored');
+    t.equal(admissionLeaderHint(ENTITY_TYPE.PARTITION, committedStamp(), null), null,
+      'no hint');
+  });
+
 function sourceFiles(directory) {
   const files = [];
   for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
@@ -158,4 +211,13 @@ test('(j) static: the cache helper and the hint symbols are gone', async (t) => 
   const end = body.indexOf('\n  }\n');
   t.notOk(/systemTableCache|this\.leaderId/.test(body.slice(0, end)),
     'resolveLeaderAddress reads neither the cache nor the cached leader id');
+  const admission = fs.readFileSync(path.join(ROOT, 'src', 'partition',
+    'partition-replica-admission.js'), 'utf8');
+  t.notOk(/resolveLeaderAddress|service\.leaderId|this\.leaderId\s*=/.test(admission),
+    'the admission request neither resolves a cached leader nor seeds one from a hint');
+  for (const file of ['replica-handler-runtime-metadata-methods.js',
+    'replica-handler-create-methods.js']) {
+    t.notOk(/\bleaderAddress\b/.test(fs.readFileSync(path.join(ROOT, 'src', 'node',
+      file), 'utf8')), `${file} computes and passes no cached leader address`);
+  }
 });

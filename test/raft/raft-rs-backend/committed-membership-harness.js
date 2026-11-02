@@ -416,21 +416,14 @@ async function buildTargetFromOperation(harness, {target, operation, cache}) {
 
 // A target's admission request, as production makes it (quest
 // replica-admission-from-committed-operation): named by a committed ADD
-// operation, knowing its leader the way a CREATE target does (the leader's
-// identity, and its row in the target's node cache - discovery), it asks the
-// leader to admit it; the leader proposes the ConfChange from the committed
-// operation. Resolves with the target's request record.
+// operation, it asks the leader the committed-membership stamp it was created
+// from names (quest peer-and-leader-address-from-committed-configuration,
+// C4: no seeded leader id, no leader services row); the leader proposes the
+// ConfChange from the committed operation. Resolves with the request record.
 async function requestAdmission(harness, target) {
   const operation = committedAddOperation(harness.partitionId, target);
   harness.operations.push(operation);
   const joined = harness.services.get(target[0]);
-  const leading = harness.leader();
-  joined.leaderId = leading?.replicaId ?? null;
-  const joinedCache = harness.caches.get(target[0]);
-  if (leading && !joinedCache.get(TABLES.SERVICES, leading.replicaId)) {
-    joinedCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT,
-      serviceRow(harness.partitionId, harness.members.get(leading.replicaId)));
-  }
   return joined.requestReplicaAdmission(operation.operation_id);
 }
 

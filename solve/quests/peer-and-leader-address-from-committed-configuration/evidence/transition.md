@@ -146,3 +146,33 @@ the partition or rejoin hint lists, which are not this quest's).
   committed context carries the node); two stale comments corrected.
 - Owned follow-up (attempt 3, after C4): forward targets selected from cache rows are delivered at the row's
   address on the non-durable path while the durable path cross-checks the committed address (R11 dual rule).
+
+## 10. Attempt 2 as built (C4, with the pre-admission leader decision)
+
+- **Leader address.** `resolveLeaderAddress()` (`partition-service-core-base.js`) answers only from this replica's
+  own live raft status (`readOwnRaftStatus`: CORE_OK, this group, this identity): the leader's committed address,
+  or a typed `PARTITION_LEADER_ADDRESS_REFUSAL` (NO_LEADER / LEADER_UNADDRESSED / STATUS_UNAVAILABLE). Callers
+  (remote-query redirect, write forwarding, split and merge forwarding, promotion proof) map the refusal to their
+  existing no-leader answers. `readLiveRaftLeaderId()` is the one leader-identity read; the learner-promotion
+  gate seeds `leaderId` from it.
+- **Pre-admission target (lead decision, candidate (a)).** One derivation in the committed-peer-address owner:
+  `admissionLeaderTarget(entityType, stamp, status)` (`raft-rs-committed-peer-address.js`) answers the live
+  leader once the target hears one, else the `leaderId` of the COMMITTED stamp the target was created from, at
+  that stamp's committed node; a NOT_LEADER hint is kept only when it names a member of that stamp
+  (`admissionLeaderHint`). On no usable hint, NOT_LEADER or a failed delivery, the target re-performs the
+  creation owner's committed-membership read (`readCommittedMembershipStamp`, which gains an explicit
+  `firstNodeId`: the stamp leader's committed node, so no cached row routes it) on the next learner-promotion
+  cadence. The admission drive runs before the learner leader gate. The leader-side NOT_LEADER hint is the live
+  status leader (U11 rule).
+- **Deleted.** Partition `resolvePeerAddressFromCache`, `PEER_ADDRESS_FROM_CACHE`,
+  `resolveLiveRaftLeaderAddressForPeer` (with its `this.leaderId` cross-check), `PEER_ADDRESS_FROM_LIVE_RAFT_LEADER`,
+  `leaderAddressHint`, `resolveLeaderIdFromHint`, `resolveLeaderIdFromMetadata`, the dead cached-row helpers
+  `getCachedSystemTableRow(s)`; the target's `this.leaderId = hint` seeding; the replica handler's
+  `leaderAddress` computed from the cached leader row (`src/node/replica-handler-runtime-metadata-methods.js`) and
+  its pass-through and dead `syncFromLeader` branch (`src/node/replica-handler-create-methods.js`).
+- **Witnesses re-derived.** Fixtures that hand-seeded `leaderId` and injected the leader's services row now create
+  the joiner from the leader's COMMITTED stamp (`partition-admitted-group-fixture.js`, committed-membership
+  harness, `partition-peer-admission`, `transactions-query-routing`); tests asserting row/hint-derived leaders now
+  assert the live-status contract; Stream B's (g)/(m)/(i) tests hold a real stamp and the deleted dead call.
+  `dt6-learner-promotion-progress-proof` and `dt6-learner-promotion-proof-channel-wake` are red on the merged base
+  `c35856473` already (their fixture relies on the cache-driven membership reconcile Stream B removed): Stream B's.

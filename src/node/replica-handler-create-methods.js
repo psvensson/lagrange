@@ -341,7 +341,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           tableId,
           schema,
           keyRange,
-          leaderAddress,
           replicaIds,
           existingReplicaCount,
         } = context;
@@ -375,7 +374,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           replicaIds,
           nodeId: this.nodeId,
           dbPath,
-          leaderAddress,
           isJoiningExistingGroup,
           bootstrapMembership: context.bootstrapMembership,
           identityExisted: existed,
@@ -431,13 +429,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         if (isJoiningExistingGroup && !skipLifecycleStatusPersistence &&
             typeof operationId === 'string' && operationId.length > 0) {
           await partitionService.requestReplicaAdmission(operationId);
-        }
-        // Sync from leader if address provided
-        const service = this.localServices.get(replicaId);
-        if (service && leaderAddress) {
-          if (typeof service.syncFromLeader === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-            await service.syncFromLeader(leaderAddress);
-          }
         }
         this.throwIfShuttingDown();
         if (

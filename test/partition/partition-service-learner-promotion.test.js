@@ -1148,7 +1148,7 @@ test(
 );
 
 test(
-  'PartitionService - learner promotion uses startup leader hint for stable joins',
+  'PartitionService - learner promotion takes the leader from its live raft status for stable joins',
   async (t) => {
     const mockCache = {
       // The promotion target is the DECLARED policy on the partitions row.
@@ -1197,11 +1197,16 @@ test(
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
       systemTableCache: mockCache,
-      leaderAddress: 'node-1/partition/replica-1',
     }));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = null;
+    // The learner hears its leader: its own live raft status names it, at
+    // its committed address (C4: never a startup hint or a cached row).
+    partition.raft = {readStatus: () => ({outcome: 'CORE_OK',
+      groupId: 'test-partition', replicaIdentity: 'replica-3',
+      leaderId: 'replica-1', leaderAddress: 'node-1/partition/replica-1',
+      leaderAddressStatus: 'resolved', role: RaftRole.LEARNER, peers: []})};
     let electionStarted = false;
     partition.startElection = () => {
       electionStarted = true;
@@ -1212,7 +1217,7 @@ test(
     t.equal(
       partition.leaderId,
       'replica-1',
-      'startup leader hint should seed leader identity for learner promotion',
+      'the live raft leader seeds the leader identity for learner promotion',
     );
     t.equal(
       partition.role,

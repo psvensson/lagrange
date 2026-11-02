@@ -124,13 +124,19 @@ async function askNode(owner, nodeId, partitionId, options) {
  * @param {string} [options.purpose] - COMMITTED_MEMBERSHIP_READ_PURPOSE
  *   .RETIREMENT for a retiring group's frozen set; a bootstrap read when
  *   omitted.
+ * @param {string} [options.firstNodeId] - The node to ask first when the
+ *   caller holds a committed fact naming it (a replica re-reading the stamp
+ *   it was created from asks that stamp's leader node); else the partitions
+ *   row's hint, else this node. Either way only the answer's leader role
+ *   decides.
  * @return {Promise<Object>} The frozen COMMITTED stamp.
  * @throws {Error} Typed refusal (code = a COMMITTED_MEMBERSHIP_REFUSAL).
  */
 async function readCommittedMembershipStamp(owner, partitionId, options) {
   // Without a hint the coordinator's own node is asked first: a hint only
   // routes the question, and the answering port's leader role is the check.
-  const hintedNodeId = leaderNodeHintOf(owner, partitionId) ?? owner.nodeId;
+  const hintedNodeId = options?.firstNodeId ??
+    leaderNodeHintOf(owner, partitionId) ?? owner.nodeId;
   if (typeof hintedNodeId !== 'string' || hintedNodeId.length === 0) {
     throw committedMembershipReadRefused(partitionId,
       COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE);

@@ -29,6 +29,10 @@ import {
 } from '../../src/partition/partition-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {committedStampOfAnswer} from
+  '../../src/raft/raft-committed-membership-stamp.js';
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
+  '../../src/raft/raft-committed-membership-constants.js';
 import {answerCommittedOperations, committedAddOperation} from
   './committed-operation-gateway-fixture.js';
 
@@ -119,16 +123,20 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       leader.raft.readStatus().role === RAFT_ROLE.LEADER), true,
     'setup: the first replica leads');
     for (let joined = 1; joined < members.length; joined += 1) {
+      // The joiner is created the way a CREATE target is: from the
+      // committed-membership stamp its group leader served (the creation
+      // owner's bootstrap read); the stamp names that leader.
+      const stamp = committedStampOfAnswer(await leader.raft.readCommittedMembership({
+        purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP}));
+      assert.ok(stamp, 'setup: the leader serves a committed-membership stamp');
       const replica = build(members[joined], members.slice(0, joined + 1),
-        {deferElection: true});
+        {deferElection: true, bootstrapMembership: stamp});
       await replica.initialize();
       for (const cache of caches.slice(0, joined)) {
         cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT,
           serviceRow(members[joined]));
       }
-      // The joiner knows its leader the way a CREATE target does (the
-      // create context's leader), then asks it to admit it.
-      replica.leaderId = members[0][0];
+      // It asks the leader its stamp names to admit it.
       const request = await replica.requestReplicaAdmission(
         operations[joined - 1].operation_id);
       assert.equal(request.state, 'admitted',

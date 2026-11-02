@@ -68,8 +68,6 @@ import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constan
 
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_OWNER_NODE_ID = 'node-owner';
-const TEST_STALE_OWNER_NODE_ID = 'node-stale-owner';
-const TEST_LIVE_LEADER_NODE_ID = 'node-live-leader';
 const TEST_OWNER_REPLICA_ID = 'replica-owner-row';
 const TEST_LIVE_LEADER_REPLICA_ID = 'replica-live-leader';
 
@@ -130,50 +128,11 @@ test('PartitionService requests managed split evaluation from the local ' +
   );
 });
 
-test('PartitionService resolves leader replica from canonical owner metadata',
-  async (t) => {
-    const service = Object.create(PartitionService.prototype);
-    service.partitionId = TEST_PARTITION_ID;
-    service.systemTableCache = {
-      filter(tableName, predicate) {
-        if (tableName === TABLES.SERVICES) {
-          return [{
-            [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
-            [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-            [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
-            [COLUMN.NODE_ID]: TEST_OWNER_NODE_ID,
-            [COLUMN.REPLICA_ID]: TEST_OWNER_REPLICA_ID,
-            [COLUMN.RAFT_ROLE]: RaftRole.FOLLOWER,
-          }, {
-            [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
-            [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-            [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
-            [COLUMN.NODE_ID]: 'node-other',
-            [COLUMN.REPLICA_ID]: 'replica-stale-leader-role',
-            [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
-          }].filter(predicate);
-        }
-        if (tableName === TABLES.PARTITIONS) {
-          return [{
-            [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
-            [COLUMN.LEADER_NODE_ID]: TEST_OWNER_NODE_ID,
-          }].filter(predicate);
-        }
-        return [];
-      },
-    };
-
-    t.equal(
-      service.resolveLeaderIdFromMetadata(),
-      TEST_OWNER_REPLICA_ID,
-      'owner-row leader_node_id should outrank stale leader-role witnesses',
-    );
-  });
-
-test('PartitionService fails closed when owner metadata does not map to an ' +
-  'active replica', async (t) => {
+test('PartitionService takes its leader from its live raft status only: ' +
+  'owner metadata and leader-role rows never seed it', async (t) => {
   const service = Object.create(PartitionService.prototype);
   service.partitionId = TEST_PARTITION_ID;
+  service.replicaId = 'replica-local';
   service.systemTableCache = {
     filter(tableName, predicate) {
       if (tableName === TABLES.SERVICES) {
@@ -181,33 +140,28 @@ test('PartitionService fails closed when owner metadata does not map to an ' +
           [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
           [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
           [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
-          [COLUMN.NODE_ID]: 'node-follower',
-          [COLUMN.REPLICA_ID]: 'replica-follower',
-          [COLUMN.RAFT_ROLE]: RaftRole.FOLLOWER,
-        }, {
-          [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
-          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-          [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
-          [COLUMN.NODE_ID]: TEST_LIVE_LEADER_NODE_ID,
-          [COLUMN.REPLICA_ID]: TEST_LIVE_LEADER_REPLICA_ID,
+          [COLUMN.NODE_ID]: TEST_OWNER_NODE_ID,
+          [COLUMN.REPLICA_ID]: TEST_OWNER_REPLICA_ID,
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
         }].filter(predicate);
       }
       if (tableName === TABLES.PARTITIONS) {
         return [{
           [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
-          [COLUMN.LEADER_NODE_ID]: TEST_STALE_OWNER_NODE_ID,
+          [COLUMN.LEADER_NODE_ID]: TEST_OWNER_NODE_ID,
         }].filter(predicate);
       }
       return [];
     },
   };
-
-  t.equal(
-    service.resolveLeaderIdFromMetadata(),
-    null,
-    'leader-role witnesses should not substitute for stale owner-row truth',
-  );
+  const status = {outcome: 'CORE_OK', groupId: TEST_PARTITION_ID,
+    replicaIdentity: 'replica-local', leaderId: null};
+  service.raft = {readStatus: () => status};
+  t.equal(service.readLiveRaftLeaderId(), null,
+    'no live leader: the owner row and leader-role row name none');
+  status.leaderId = TEST_LIVE_LEADER_REPLICA_ID;
+  t.equal(service.readLiveRaftLeaderId(), TEST_LIVE_LEADER_REPLICA_ID,
+    'the live raft leader is the leader');
 });
 
 test('PartitionService does not request managed split evaluation for ' +
@@ -565,7 +519,7 @@ test(
 );
 
 test(
-  'PartitionService - routed writes bridge SERVICES lag through the matching live Raft leader',
+  'PartitionService - routed writes go to the live raft leader whatever SERVICES says',
   async (t) => {
     const partitionId = 'live-leader-routing-partition-1';
     const localReplicaId = `${partitionId}-r1`;
@@ -639,8 +593,9 @@ test(
 
     t.equal(
       partition.resolveLeaderAddress(),
-      canonicalLeaderAddress,
-      'canonical SERVICES relocation should override the live Raft bridge',
+      liveLeaderAddress,
+      'a SERVICES relocation row never moves the leader address: the live ' +
+      'raft leader at its committed address answers',
     );
 
     systemTableCache.applySystemTableChange(
@@ -656,10 +611,16 @@ test(
       `node-5/partition/${partitionId}-r5`,
     );
 
+    t.equal(
+      partition.resolveLeaderAddress(),
+      `node-5/partition/${partitionId}-r5`,
+      'the live status leader is the answer, whatever the cached leader id',
+    );
+    consensusPort.setLeaderObservation(null, null);
     t.throws(
       () => partition.resolveLeaderAddress(),
-      /Unable to resolve unified peer address/,
-      'a live Raft address for a different replica must fail closed',
+      /leader_address_no_leader/,
+      'no live leader refuses typed NO_LEADER',
     );
 
     await partition.shutdown();
