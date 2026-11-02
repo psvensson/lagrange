@@ -4,9 +4,11 @@
  * User-table routing on the serve dimension consumes the readiness owner's
  * committed-epoch serve-eligibility answer, never the readiness projection's
  * dimension and never a bootstrap grace. System-table routing decides on raft
- * leadership: service status, address and live transport only; the cached
- * leader orders candidates, the target proves leadership. No readiness filter,
- * no fail-open, no priority-recovery bootstrap bypass.
+ * leadership: the candidate hint is service status and address only; live
+ * transport is applied by the delivery layer (reconnect deferral,
+ * fall-through); the cached leader orders candidates, the target proves
+ * leadership. No readiness filter, no fail-open, no priority-recovery
+ * bootstrap bypass.
  */
 import fs from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
@@ -181,7 +183,8 @@ test('a user partition in its bootstrap window gets no serve grace (UA-1)',
     t.end();
   });
 
-test('system-table routing decides on leadership and live transport, with ' +
+test('system-table routing decides on leadership (live transport applies at ' +
+  'delivery), with ' +
   'no readiness filter and no fail-open', async (t) => {
   const partitionId = 'nodes-p1';
   const readiness = readinessService({});
@@ -217,6 +220,66 @@ test('system-table candidates are not filtered by transport or readiness; ' +
     [LEADER_NODE_ID, FOLLOWER_NODE_ID],
     'both replicas are candidates; the disconnected one gets the delivery ' +
     'layer reconnect deferral, not a routing exclusion');
+  t.end();
+});
+
+// Re-derived witness (R09 supersession of the sealed "routable = [LEADER]"
+// transport witness, quest serve-eligibility-committed-epoch-read D2): a
+// system-table candidate whose transport is down stays in the candidate set
+// and receives the delivery layer's reconnect deferral (a cut delivery
+// budget), and the read falls through to the connected replica.
+test('a system-table candidate with transport down receives the delivery ' +
+  'layer reconnect deferral and the read falls through', async (t) => {
+  const partitionId = 'control_plane_publications-p1';
+  const leaderAddress = `${LEADER_NODE_ID}/partition/${partitionId}`;
+  const followerAddress = `${FOLLOWER_NODE_ID}/partition/${partitionId}`;
+  const deliveries = [];
+  const messageRouter = {
+    getConnectionState: (nodeId) =>
+      nodeId === FOLLOWER_NODE_ID ? 'connected' : 'disconnected',
+    deliver: async (address, _message, options) => {
+      deliveries.push({address, timeoutMs: options?.timeoutMs});
+      if (address === leaderAddress) {
+        return buildDeliveryEnvelope({
+          acknowledged: false,
+          error: `Connection to node ${LEADER_NODE_ID} closed`,
+          errorCode: 'ROUTER_CONNECTION_CLOSED',
+          retryAfterMs: 50,
+          deferRetry: true,
+        });
+      }
+      return buildDeliveryEnvelope({acknowledged: true},
+        {success: true, rows: [{publication_id: 'p'}]});
+    },
+  };
+  const executor = new QueryExecutor({
+    nodeId: LOCAL_NODE_ID,
+    messageRouter,
+    systemCache: createCache(partitionId),
+    controlPlaneReadinessService: readinessService({}),
+  });
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'SELECT * FROM control_plane_publications',
+    [],
+    true,
+    false,
+    false,
+    {
+      timeoutMs: 6000,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+  );
+
+  t.equal(result.success, true, 'the read is answered by the live replica');
+  t.same(deliveries.filter((d) => d.address === leaderAddress),
+    [{address: leaderAddress, timeoutMs: 1}],
+    'the disconnected candidate gets the reconnect-defer delivery budget');
+  t.ok(deliveries.some((d) => d.address === followerAddress),
+    'delivery falls through to the connected replica');
   t.end();
 });
 

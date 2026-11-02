@@ -96,8 +96,10 @@ const RATCHET_TARGETS = [
     // hint after deleting the legacy partition_callback axis.
     // Publisher and corpus-ratchet speedups: tightened 43/1358 -> 42/1331
     // on the checker's hint.
-    baselineCloneGroupCount: 42,
-    baselineDuplicatedLineCount: 1331,
+    // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 42/1331 -> 41/1302 on the
+    // checker's hint.
+    baselineCloneGroupCount: 41,
+    baselineDuplicatedLineCount: 1302,
     strictEligible: true,
   },
   {
@@ -259,8 +261,10 @@ const RATCHET_TARGETS = [
     // on the checker's hint.
     // learner-host-from-committed-admission (peer-address-resolver tests
     // deleted): tightened 649/24346 -> 648/24311 on the checker's hint.
-    baselineCloneGroupCount: 648,
-    baselineDuplicatedLineCount: 24311,
+    // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 648/24311 -> 647/24308 on the
+    // checker's hint (shared fixture helpers in the routing tests).
+    baselineCloneGroupCount: 647,
+    baselineDuplicatedLineCount: 24308,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

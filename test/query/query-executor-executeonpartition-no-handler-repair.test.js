@@ -137,10 +137,13 @@ test('QueryExecutor - executeOnPartition fails closed when the canonical ' +
 
   t.equal(result.success, false);
   t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+  // Superseded (quest serve-eligibility-committed-epoch-read): serve routing
+  // never runs the projection-readiness evaluator; a missing canonical-leader
+  // service row is row maintenance through the routing-metadata overlay.
   t.same(
     readinessCalls.map((call) => call.nodeId),
-    ['leader-node'],
-    'write routing should still attempt one authoritative refresh before failing closed',
+    [],
+    'serve routing does not repair projected readiness for a service gap',
   );
   t.same(
     deliveries,

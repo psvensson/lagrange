@@ -301,6 +301,7 @@ class ServeEligibilityOwner {
     this.leaseRefreshHandle = null;
     this.listeners = new Set();
     this.decisionSignature = null;
+    this.lastReadFailure = null;
     this.stopped = false;
   }
 
@@ -371,10 +372,21 @@ class ServeEligibilityOwner {
     } else if (result.outcome === OUTCOME.NO_RECORD) {
       this.record = null;
     }
-    // A trigger observed while the read was in flight may postdate it.
-    this.superseded = result.outcome === OUTCOME.READ_FAILED ?
-      this.record !== null :
-      this.triggerGeneration !== startedGeneration;
+    if (result.outcome === OUTCOME.READ_FAILED) {
+      // A failed read revokes nothing: the committed record keeps answering
+      // until its own lease expires (answer() bounds it) or a revoking
+      // trigger marks it stale. The failure is a typed observation; the next
+      // demand-, trigger- or timer-driven read retries. With no committed
+      // record the answer is the typed committed_read_failed (fail closed).
+      this.lastReadFailure = Object.freeze({
+        reason: SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED,
+        observedAtMs: this.now(),
+      });
+    } else {
+      this.lastReadFailure = null;
+      // A trigger observed while the read was in flight may postdate it.
+      this.superseded = this.triggerGeneration !== startedGeneration;
+    }
     this.armLeaseRefresh();
     // Derived memos re-key only when the committed answer changes (a new
     // epoch, outcome or per-node decision); a refresh that only advanced

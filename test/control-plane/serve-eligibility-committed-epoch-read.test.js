@@ -249,3 +249,90 @@ test('a positive answer does not outlive its committed lease', async (t) => {
   readiness.shutdown();
   t.end();
 });
+
+// The readiness owner's cache listener, as the test cache stub carries
+// NODES and SERVICES only: a publications change is delivered on the same
+// change channel the owner listens to.
+function applyPublicationChange(cache, row) {
+  for (const listener of cache.capturedListeners) {
+    listener(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', row, null);
+  }
+}
+
+function createPublicationAwareReadiness({state, clock = {now: NOW_MS}}) {
+  const cache = createCache({nodes: state.nodes});
+  cache.capturedListeners = [];
+  const onCacheChange = cache.onCacheChange.bind(cache);
+  cache.onCacheChange = (listener) => {
+    cache.capturedListeners.push(listener);
+    return onCacheChange(listener);
+  };
+  const readiness = new ControlPlaneReadinessService({
+    nodeId: NODE_A,
+    systemTableCache: cache,
+    authoritativeControlPlaneView: committedView(state),
+    now: () => clock.now,
+  });
+  return {readiness, cache, clock};
+}
+
+test('a newer publication epoch in the cache makes the memo stale at its ' +
+  'own epoch until the committed read answers the new epoch', async (t) => {
+  const state = {nodes: [nodeRow(NODE_A), nodeRow(NODE_B)],
+    publications: [publicationRow()]};
+  const {readiness, cache} = createPublicationAwareReadiness({state});
+  t.same(summarize(await answerAfterRead(readiness, NODE_B)), {
+    state: 'ready', decision: 'eligible', reason: null,
+    publicationEpoch: EPOCH,
+  }, 'memo at epoch E');
+
+  const nextEpochRow = publicationRow({
+    publication_id: `cluster_membership-${EPOCH + 1}`,
+    publication_epoch: EPOCH + 1,
+  });
+  applyPublicationChange(cache, nextEpochRow);
+  t.same(summarize(readiness.answerServeEligibility(NODE_B)), {
+    state: 'unavailable', decision: null, reason: 'unavailable_stale',
+    publicationEpoch: EPOCH,
+  }, 'a cached publication at E+1 answers unavailable_stale{E}: it neither ' +
+    'grants nor denies on the projection');
+
+  state.publications = [publicationRow(), nextEpochRow];
+  t.same(summarize(await answerAfterRead(readiness, NODE_B)), {
+    state: 'ready', decision: 'eligible', reason: null,
+    publicationEpoch: EPOCH + 1,
+  }, 'the committed read answers at E+1');
+  readiness.shutdown();
+  t.end();
+});
+
+test('a failed background refresh does not revoke a committed lease that is ' +
+  'still valid; lease expiry with no successful read answers stale',
+async (t) => {
+  const clock = {now: NOW_MS};
+  const state = {nodes: [nodeRow(NODE_A), nodeRow(NODE_B)],
+    publications: [publicationRow()]};
+  const {readiness, cache} = createPublicationAwareReadiness({state, clock});
+  t.equal((await answerAfterRead(readiness, NODE_B))?.decision ?? null,
+    'eligible', 'committed eligible with 15 s of lease');
+
+  state.fail = TABLES.NODES;
+  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', nodeRow(NODE_B, {
+    [COLUMN.READY_LEASE_EXPIRES_AT]: NOW_MS + 2 * LEASE_MS}));
+  await readiness.readServeEligibility();
+  const owner = readiness.getServeEligibilityOwner();
+  t.equal(owner.lastReadFailure?.reason ?? null, 'committed_read_failed',
+    'the failed refresh is a typed observation');
+  t.same(summarize(readiness.answerServeEligibility(NODE_B)), {
+    state: 'ready', decision: 'eligible', reason: null,
+    publicationEpoch: EPOCH,
+  }, 'the committed answer stands while its lease is valid');
+
+  clock.now = NOW_MS + LEASE_MS + 1;
+  t.same(summarize(readiness.answerServeEligibility(NODE_B)), {
+    state: 'unavailable', decision: null, reason: 'unavailable_stale',
+    publicationEpoch: EPOCH,
+  }, 'past the committed lease with no successful read the answer is stale');
+  readiness.shutdown();
+  t.end();
+});

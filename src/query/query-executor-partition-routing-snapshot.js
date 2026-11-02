@@ -1,7 +1,4 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
-import {
-  classifySystemPartition,
-} from '../bootstrap/system-partition-classification.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -24,14 +21,6 @@ function readRoutingDenialAnswer(routing) {
     reasonCode: routing.reasonCode ?? null,
     serveEligibility: routing.serveEligibility ?? null,
   };
-}
-
-// The nodes whose rows a serve-routing repair refreshes: only the canonical
-// leader whose service row is missing (row evidence, never a serve verdict).
-function resolveServiceGapRepairNodeIds(routingSnapshot, shouldRepairServiceGap) {
-  return shouldRepairServiceGap ?
-    new Set([routingSnapshot.canonicalLeaderNodeId]) :
-    new Set();
 }
 
 const queryExecutorPartitionRoutingSnapshotMethods = {
@@ -408,31 +397,27 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       this.collectAllFilteredRoutingRepairNodeIds(routingSnapshot);
     const shouldRepairServiceGap =
       this.shouldRepairCanonicalLeaderServiceGap(routingSnapshot);
-    const shouldRepairFilteredRecoveryRouting =
-      this.shouldRepairAllFilteredRecoveryRouting(routingSnapshot);
     const repairNodeIds = new Set(deniedNodeIds);
     if (shouldRepairServiceGap) {
       repairNodeIds.add(routingSnapshot.canonicalLeaderNodeId);
     }
-    const serveRouting = routingSnapshot.routingReadinessDimension ===
-      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
-    // A serve denial waits on the committed answer; a missing canonical
-    // leader service row is row evidence, not a serve decision, so it is
-    // repaired through the authoritative row refresh on every dimension.
-    const serveRefreshed = serveRouting &&
-      await this.awaitServeEligibilityRefreshForDenial(
-        deniedNodeIds,
-        allowReadinessAuthoritativeRefresh,
-      );
-    const rowRepaired = await this.awaitProjectionRoutingRepair(
-      routingSnapshot,
-      serveRouting ?
-        resolveServiceGapRepairNodeIds(routingSnapshot, shouldRepairServiceGap) :
-        repairNodeIds,
-      allowReadinessAuthoritativeRefresh,
-    );
-    const attemptedRepair = serveRefreshed || rowRepaired;
-    if (!shouldRepairServiceGap && !shouldRepairFilteredRecoveryRouting) {
+    // A serve denial waits on the committed answer and never runs the
+    // projection-readiness evaluator. A missing canonical-leader service row
+    // is row maintenance: the routing-metadata overlay below re-fetches the
+    // partition's rows; it never grants serving.
+    const attemptedRepair =
+      routingSnapshot.routingReadinessDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE ?
+        await this.awaitServeEligibilityRefreshForDenial(
+          deniedNodeIds,
+          allowReadinessAuthoritativeRefresh,
+        ) :
+        await this.awaitProjectionRoutingRepair(
+          routingSnapshot,
+          repairNodeIds,
+          allowReadinessAuthoritativeRefresh,
+        );
+    if (!shouldRepairServiceGap) {
       return attemptedRepair;
     }
     const overlayRepaired = await this.refreshRoutingMetadataOverlay(
@@ -551,33 +536,6 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       nodeIds.push(nodeId);
     }
     return nodeIds;
-  },
-
-  /**
-   * Refresh authoritative routing metadata when priority recovery has active
-   * service rows but local readiness filtered all candidates.
-   * @param {Object|null} routingSnapshot
-   * @return {boolean}
-   * @private
-   */
-  shouldRepairAllFilteredRecoveryRouting(routingSnapshot) {
-    if (
-      routingSnapshot?.reasonCode !==
-        QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS ||
-      routingSnapshot.routingReadinessDimension !==
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE ||
-      Number(routingSnapshot.activeAddressedServiceCount) <= 0 ||
-      typeof routingSnapshot.partitionId !==
-        QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      routingSnapshot.partitionId.length === 0
-    ) {
-      return false;
-    }
-    const partitionRow = this.getPartitionRecord(routingSnapshot.partitionId);
-    return classifySystemPartition({
-      partitionId: routingSnapshot.partitionId,
-      partitionRow,
-    }).priorityControlPlane;
   },
 
   /**

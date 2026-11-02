@@ -670,11 +670,13 @@ test('QueryExecutor - executeOnPartition forwards sessionId through leader redir
   });
 
 // A canonical leader whose service row is missing from the cache: the write
-// path refreshes that leader's rows once (the refresh makes the row visible)
-// and delivers to the repaired leader.
+// path re-fetches the partition's rows once through the routing-metadata
+// overlay (row maintenance, which makes the row visible), never through the
+// projection-readiness evaluator, and delivers to the repaired leader.
 async function runCanonicalLeaderGapRepair(t, cachedServices, messages) {
   const deliveries = [];
   const readinessCalls = [];
+  const overlayRefreshes = [];
   const systemCache = {
     partitions: [{partition_id: 'p1', leader_node_id: 'leader-node'}],
     services: cachedServices,
@@ -689,6 +691,12 @@ async function runCanonicalLeaderGapRepair(t, cachedServices, messages) {
     },
     async getNodeReadiness(nodeId, options) {
       readinessCalls.push({nodeId, options});
+      return {dimensions: {serveEligible: true}};
+    },
+  };
+  const routingMetadataOverlay = {
+    async refreshPartitionRouting(partitionId) {
+      overlayRefreshes.push(partitionId);
       systemCache.services.push({
         service_id: 'p1-leader',
         service_type: 'partition',
@@ -698,7 +706,7 @@ async function runCanonicalLeaderGapRepair(t, cachedServices, messages) {
         address: 'leader-node/partition/p1',
         status: 'active',
       });
-      return {dimensions: {serveEligible: true}};
+      return true;
     },
   };
   const messageRouter = {
@@ -715,6 +723,7 @@ async function runCanonicalLeaderGapRepair(t, cachedServices, messages) {
     messageRouter,
     systemCache,
     controlPlaneReadinessService: readinessService,
+    routingMetadataOverlay,
     nodeId: 'local-node',
   });
 
@@ -726,8 +735,9 @@ async function runCanonicalLeaderGapRepair(t, cachedServices, messages) {
   );
 
   t.equal(result.success, true);
-  t.same(readinessCalls.map((call) => call.nodeId), ['leader-node'],
-    messages.refresh);
+  t.same(overlayRefreshes, ['p1'], messages.refresh);
+  t.same(readinessCalls, [],
+    'the serve path never runs the projection-readiness evaluator');
   t.same(deliveries, ['leader-node/partition/p1'], messages.delivery);
 }
 
@@ -742,7 +752,7 @@ test('QueryExecutor - executeOnPartition repairs the canonical leader service ' 
     address: 'follower-node/partition/p1',
     status: 'active',
   }], {
-    refresh: 'write routing should attempt one authoritative refresh for the missing canonical leader row',
+    refresh: 'write routing should re-fetch the partition rows once for the missing canonical leader row',
     delivery: 'the repaired canonical leader should be used once the service row becomes visible',
   });
 });
@@ -750,7 +760,7 @@ test('QueryExecutor - executeOnPartition repairs the canonical leader service ' 
 test('QueryExecutor - executeOnPartition repairs a zero-row canonical leader ' +
   'gap before failing the write closed', async (t) => {
   await runCanonicalLeaderGapRepair(t, [], {
-    refresh: 'write routing should attempt one authoritative refresh when the canonical leader is known but no service rows are cached',
+    refresh: 'write routing should re-fetch the partition rows once when the canonical leader is known but no service rows are cached',
     delivery: 'the repaired canonical leader should be used once the zero-row gap is repaired',
   });
 });
