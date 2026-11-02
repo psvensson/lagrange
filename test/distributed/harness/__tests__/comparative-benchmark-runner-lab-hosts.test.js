@@ -13,13 +13,18 @@ import {
 } from '../comparative-benchmark-host-preparation.js';
 import {contentIdentityOf} from '../real-product-identity.js';
 import {
-  LOAD_GENERATOR_MIN_REPO_FREE_BYTES,
+  measureLoadGeneratorRequirement,
   checkLabThermalHeadroom,
   holdLabBenchmarkHosts,
   selectLabBenchmarkHosts,
 } from '../comparative-benchmark-lab-hosts.js';
 import {arrayMap, arraySome} from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
+
+// A load-generator requirement as the runner measures it (see the measurement
+// test below); selection compares a host's free checkout space with it.
+const REQUIREMENT = Object.freeze({checkoutBytes: 150 * 2 ** 20,
+  evidenceMarginBytes: 64 * 2 ** 20, requiredBytes: 214 * 2 ** 20});
 
 const HOSTS = arrayMap(['delta', 'alpha', 'charlie'], (name, index) => ({name,
   ip: `10.0.0.${index + 1}`, sshTarget: `bench@${name}`, repoPath: '/srv/lagrange',
@@ -92,7 +97,7 @@ test('selection prefers free hosts, then held ones the hold will wait for; unrea
     ['e', 'stale-record'], ['f', 'busy'], ['g', 'free',
       {testCapability: {bootId: 'boot-b', dockerReachable: true,
         machineLock: {state: 'free'}}}]]);
-  const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0'});
+  const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role, host.lock.state]),
     [['b', 'data', 'free'], ['c', 'data', 'free'], ['e', 'data', 'stale-record'],
       ['f', 'client', 'busy']]);
@@ -108,11 +113,11 @@ test('a host whose checkout runs an old Node is never the load generator', () =>
     bootId: 'boot-c'}}], ['d', 'free', {testCapability: {...old.testCapability,
     bootId: 'boot-d'}}]]);
   assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
-    nodeMinimum: '22.12.0'}), (error) => error.code === 'refused_insufficient_host_topology' &&
+    nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT}), (error) => error.code === 'refused_insufficient_host_topology' &&
     /node v14\.21\.3 is below the engines floor/u.test(error.message));
   const mixed = inventory([['a', 'free', old], ['b', 'free'], ['c', 'free'], ['d', 'free']]);
   const hosts = selectLabBenchmarkHosts({state: mixed, dataHostCount: 3,
-    nodeMinimum: '22.12.0'});
+    nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.equal(hosts[3].name, 'd');
   assert.equal(hosts[0].name, 'a', 'an old-Node host can still be a data host');
 });
@@ -131,7 +136,7 @@ test('a host whose thermal sources are unmeasurable (WSL2) is never selected; an
   state.nodes.b.testCapability.thermal = 'unmeasurable';
   delete state.nodes.c.testCapability.thermal;
   assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
-    nodeMinimum: '22.12.0'}), (error) => {
+    nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT}), (error) => {
     const reasons = Object.fromEntries(arrayMap(error.diagnostic.excluded,
       (entry) => [entry.name, entry.reason]));
     assert.equal(reasons.b, 'host-ineligible: thermal_unmeasurable');
@@ -175,13 +180,13 @@ test('docker disk is a fleet fact: a host below the data-host requirement is not
     ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
   state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 433 * 1024 * 1024;
   state.nodes['carinas-windows'].testCapability.thermal = 'unmeasurable';
-  const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0'});
+  const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role]), [
     ['adams-gamla', 'data'], ['lenovo-laptop', 'data'], ['tv-dator', 'data'],
     ['adam-laptop', 'client']]);
   state.nodes['tv-dator'].testCapability.dockerRootFreeBytes = 1024;
   assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
-    nodeMinimum: '22.12.0'}), (error) => error.code === 'refused_insufficient_host_topology' &&
+    nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT}), (error) => error.code === 'refused_insufficient_host_topology' &&
     /host-ineligible: docker_disk_low/u.test(error.message));
 });
 
@@ -208,28 +213,56 @@ test('product and readiness-client images go to the data hosts; the load generat
 // The load generator holds no image; it needs only the checkout worktree at
 // the harness commit (prepareLoadGeneratorCheckout), Node at the engines
 // floor, and room on its checkout's filesystem for that worktree. A host
-// short of it is refused as `host-ineligible: disk_low`; with no other
-// candidate the campaign is refused for its topology, honestly.
+// short of the measured requirement is refused as `host-ineligible:
+// disk_low`; with no other candidate the campaign is refused for its
+// topology, honestly.
 test('the load generator needs room for the harness worktree on its checkout filesystem',
   () => {
     const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
       ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
     state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 390 * 1024 * 1024;
     state.nodes['carinas-windows'].testCapability.thermal = 'unmeasurable';
-    state.nodes['adam-laptop'].testCapability.repoFreeBytes =
-      LOAD_GENERATOR_MIN_REPO_FREE_BYTES;
-    const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0'});
+    state.nodes['adam-laptop'].testCapability.repoFreeBytes = REQUIREMENT.requiredBytes;
+    const select = () => selectLabBenchmarkHosts({state, dataHostCount: 3,
+      nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
+    const hosts = select();
     assert.equal(hosts[3].name, 'adam-laptop');
     assert.equal(hosts[3].role, 'client');
-    state.nodes['adam-laptop'].testCapability.repoFreeBytes =
-      LOAD_GENERATOR_MIN_REPO_FREE_BYTES - 1;
-    assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
-      nodeMinimum: '22.12.0'}), (error) => error.code === 'refused_insufficient_host_topology' &&
+    state.nodes['adam-laptop'].testCapability.repoFreeBytes = REQUIREMENT.requiredBytes - 1;
+    assert.throws(select, (error) => error.code === 'refused_insufficient_host_topology' &&
       /adam-laptop \(not a load generator: host-ineligible: disk_low/u.test(error.message));
     delete state.nodes['adam-laptop'].testCapability.repoFreeBytes;
+    assert.throws(select, (error) => /host-ineligible: disk_low/u.test(error.message));
     assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
-      nodeMinimum: '22.12.0'}), (error) => /host-ineligible: disk_low/u.test(error.message));
+      nodeMinimum: '22.12.0'}), /load-generator requirement/u, 'never selected unmeasured');
   });
+
+// Independent verification N3: the requirement is measured at preparation
+// time from the tree the load generator will check out (du of the checkout,
+// without node_modules, data, test-output and .git), plus the evidence margin;
+// never a constant.
+test('the load-generator requirement is measured from the checkout tree', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lg-requirement-'));
+  try {
+    fs.mkdirSync(path.join(root, 'src'));
+    fs.writeFileSync(path.join(root, 'src', 'a.js'), Buffer.alloc(300 * 1024, 1));
+    for (const excluded of ['node_modules', 'data', 'test-output', '.git']) {
+      fs.mkdirSync(path.join(root, excluded));
+      fs.writeFileSync(path.join(root, excluded, 'big'), Buffer.alloc(4 * 1024 * 1024, 1));
+    }
+    const requirement = measureLoadGeneratorRequirement(root);
+    assert.ok(requirement.checkoutBytes >= 300 * 1024, String(requirement.checkoutBytes));
+    assert.ok(requirement.checkoutBytes < 4 * 1024 * 1024, 'excluded trees are not counted');
+    assert.equal(requirement.requiredBytes,
+      requirement.checkoutBytes + requirement.evidenceMarginBytes);
+    assert.match(requirement.method, /^du -s -B1 /u);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
 
 // Live campaign bench-live-20261101-b-r3 crashed with an untyped `canonical
 // JSON data required`: adam-laptop and adams-gamla run LC_NUMERIC=sv_SE, their

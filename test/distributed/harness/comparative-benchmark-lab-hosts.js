@@ -9,6 +9,8 @@
  * gate (scripts/checks/wait-for-thermal-headroom.js) runs on every held host
  * before deployment. Never hand-typed hosts, never a raw lock.
  */
+import {execFileSync} from 'node:child_process';
+
 import {LAB_HOLD, holdLabMachine, labHolderText} from '../../../scripts/lab/probe.js';
 import {selectNodesByRole} from '../../../scripts/lab/state.js';
 import {SCENARIO_REFUSAL} from './scenario-host-topology.js';
@@ -20,6 +22,7 @@ import {
   stringIncludes,
   stringReplace,
   stringSplit,
+  stringTrim,
 } from './real-product-captured-intrinsics.js';
 import {
   DEPLOYMENT_FAILURE,
@@ -47,16 +50,34 @@ const DATA_HOST_MIN_DOCKER_FREE_BYTES = Math.ceil(6.5 * 2 ** 30);
 
 // Free bytes the load generator's checkout filesystem needs: the detached
 // worktree at the harness commit it runs the workload from
-// (prepareLoadGeneratorCheckout) plus that run's evidence. The load generator
-// holds no image. Measured 2026-11-01 on the controller at 435c426b9 with
-// `du -s -B1 --exclude=./node_modules --exclude=./data --exclude=./test-output
-// --exclude=./.git .`: 177,004,544 B allocated (`du -sb`: 156,666,071 B
-// apparent; tracked tree 152,127,883 B in 9,725 files). The run's evidence
-// under the worktree's test-output is reserved 64 MiB, unmeasured.
-const LOAD_GENERATOR_WORKTREE_BYTES = 177004544;
+// (prepareLoadGeneratorCheckout), MEASURED at preparation time from the tree
+// that will be checked out, plus the run's evidence under the worktree's
+// test-output (reserved, unmeasured). The load generator holds no image.
 const LOAD_GENERATOR_RUN_EVIDENCE_BYTES = 64 * 2 ** 20;
-const LOAD_GENERATOR_MIN_REPO_FREE_BYTES = LOAD_GENERATOR_WORKTREE_BYTES +
-  LOAD_GENERATOR_RUN_EVIDENCE_BYTES;
+const CHECKOUT_EXCLUDED_DIRS = Object.freeze(['node_modules', 'data', 'test-output', '.git']);
+const DU_ARGS = Object.freeze(['-s', '-B1',
+  ...arrayMap(CHECKOUT_EXCLUDED_DIRS, (dir) => `--exclude=./${dir}`), '.']);
+
+/**
+ * The load generator's disk requirement, measured: the allocated size of the
+ * checkout tree at `root` (du, without the dependency, data, output and git
+ * directories a worktree links or does not hold) plus the evidence margin.
+ * @param {string} root the harness checkout
+ * @return {{checkoutBytes: number, evidenceMarginBytes: number,
+ *   requiredBytes: number, method: string, measuredAt: string}}
+ */
+function measureLoadGeneratorRequirement(root, {exec = execFileSync} = {}) {
+  const answer = String(exec('du', [...DU_ARGS], {cwd: root, encoding: 'utf8'}));
+  const checkoutBytes = Number(stringSplit(stringTrim(answer), /\s+/u)[0]);
+  if (!Number.isSafeInteger(checkoutBytes) || checkoutBytes <= 0) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.LAB_HOST_UNAVAILABLE,
+      `the harness checkout could not be measured: du answered ${JSON.stringify(answer)}`,
+      {root});
+  }
+  return {checkoutBytes, evidenceMarginBytes: LOAD_GENERATOR_RUN_EVIDENCE_BYTES,
+    requiredBytes: checkoutBytes + LOAD_GENERATOR_RUN_EVIDENCE_BYTES,
+    method: `du ${DU_ARGS.join(' ')}`, measuredAt: new Date().toISOString()};
+}
 
 function dockerDiskLow(facts) {
   const free = Number(facts.capability.dockerRootFreeBytes);
@@ -111,16 +132,16 @@ function versionAtLeast(version, minimum) {
 
 // Why a host cannot be the load generator (it runs the canonical adapters
 // from its own checkout): no checkout, or a Node older than the engines floor.
-function loadGeneratorGap(facts, nodeMinimum) {
+function loadGeneratorGap(facts, nodeMinimum, requirement) {
   const capability = facts.capability;
   if (!capability.repoPath || !capability.nodePath) return 'no checkout to run the workload from';
   if (nodeMinimum && !versionAtLeast(capability.nodeVersion, nodeMinimum)) {
     return `node ${capability.nodeVersion || 'unknown'} is below the engines floor ${nodeMinimum}`;
   }
   const free = Number(capability.repoFreeBytes);
-  if (!Number.isFinite(free) || free < LOAD_GENERATOR_MIN_REPO_FREE_BYTES) {
+  if (!Number.isFinite(free) || free < requirement.requiredBytes) {
     return `host-ineligible: disk_low (${capability.repoFreeBytes ?? 'unknown'} bytes free on ` +
-      `the checkout filesystem, the harness worktree needs ${LOAD_GENERATOR_MIN_REPO_FREE_BYTES})`;
+      `the checkout filesystem, the harness worktree needs ${requirement.requiredBytes})`;
   }
   return null;
 }
@@ -136,14 +157,19 @@ function loadGeneratorGap(facts, nodeMinimum) {
  *   nodeMinimum?: string|null}} input
  * @return {Array<Object>}
  */
-function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimum = null}) {
+function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimum = null,
+  loadGeneratorRequirement = null}) {
+  if (!Number.isSafeInteger(loadGeneratorRequirement?.requiredBytes)) {
+    throw new Error('lab host selection needs the measured load-generator requirement');
+  }
   const required = dataHostCount + 1;
   const {eligible, excluded} = partitionEligibleHosts(state, fleet);
   const free = (entry) => arrayIncludes(USABLE_LOCK_STATES, entry.lock.state);
   const preferred = [...arrayFilter(eligible, free),
     ...arrayFilter(eligible, (entry) => !free(entry))];
   const data = chooseDataHosts(preferred, dataHostCount, excluded);
-  const client = chooseLoadGenerator(preferred, data, free, nodeMinimum, excluded);
+  const client = chooseLoadGenerator(preferred, data, free, {nodeMinimum,
+    requirement: loadGeneratorRequirement}, excluded);
   const ordered = client && data.length === dataHostCount ? [...data, client] : [];
   if (ordered.length < required) {
     throw deploymentFailure(SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY,
@@ -200,11 +226,11 @@ function chooseDataHosts(preferred, dataHostCount, excluded) {
 // The load generator from the hosts that are not data hosts (it needs only
 // the checkout and a Node at the floor): the LAST capable free one, else the
 // last capable one. Every host that cannot be one is recorded in `excluded`.
-function chooseLoadGenerator(preferred, data, free, nodeMinimum, excluded) {
+function chooseLoadGenerator(preferred, data, free, {nodeMinimum, requirement}, excluded) {
   const capable = arrayFilter(preferred, (entry) => !arrayIncludes(data, entry) &&
-    !loadGeneratorGap(entry.facts, nodeMinimum));
+    !loadGeneratorGap(entry.facts, nodeMinimum, requirement));
   for (const entry of preferred) {
-    const gap = loadGeneratorGap(entry.facts, nodeMinimum);
+    const gap = loadGeneratorGap(entry.facts, nodeMinimum, requirement);
     if (gap) excluded.push({name: entry.node.name, reason: `not a load generator: ${gap}`});
   }
   const capableFree = arrayFilter(capable, free);
@@ -296,10 +322,10 @@ async function checkLabThermalHeadroom({hosts, sshRun, opts}) {
 }
 
 export {
-  LOAD_GENERATOR_MIN_REPO_FREE_BYTES,
   THERMAL_GATE,
   checkLabThermalHeadroom,
   holdLabBenchmarkHosts,
+  measureLoadGeneratorRequirement,
   plannedLabLocks,
   readLabHolderRecords,
   releaseLabBenchmarkHosts,

@@ -47,6 +47,7 @@ import {
   THERMAL_GATE,
   checkLabThermalHeadroom,
   holdLabBenchmarkHosts,
+  measureLoadGeneratorRequirement,
   plannedLabLocks,
   readLabHolderRecords,
   releaseLabBenchmarkHosts,
@@ -358,8 +359,11 @@ function campaignExitCode(runExitCode, outcome) {
 async function runLabCampaign({opts, manifest, dataHostCount}) {
   const state = await loadState({allowMissing: false});
   const {requirement, fleet} = await discoverLabFleet(state);
+  // Measured now, from the tree the load generator will check out; recorded
+  // with the load generator in the campaign header.
+  const loadGeneratorRequirement = measureLoadGeneratorRequirement(REPO_ROOT);
   const hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
-    nodeMinimum: requirement.nodeMinimum});
+    nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement});
   const budgetMs = manifest.campaignBudgetMinutes * MS_PER_MINUTE;
   const sessions = await holdLabBenchmarkHosts({hosts, campaignId: manifest.campaignId,
     waitMs: Number(opts.lockWaitMinutes) * MS_PER_MINUTE, expectedMs: budgetMs});
@@ -368,7 +372,9 @@ async function runLabCampaign({opts, manifest, dataHostCount}) {
     const thermal = await checkLabThermalHeadroom({hosts, sshRun, opts});
     const holders = await readLabHolderRecords({hosts, sshRun, opts});
     const extras = Object.fromEntries(hosts.map((host) => [host.name,
-      {lab: {holder: holders[host.name], thermal: thermal[host.name]}}]));
+      {lab: {holder: holders[host.name], thermal: thermal[host.name],
+        ...(host.role === 'client' ? {loadGeneratorDiskRequirement: loadGeneratorRequirement} :
+          {})}}]));
     return await runCampaign({opts, manifest, hosts, physicalExtras: extras});
   } finally {
     await releaseLabBenchmarkHosts(sessions);
@@ -386,12 +392,14 @@ async function discoverLabFleet(state) {
 async function dryRunPlan({opts, manifest, dataHostCount}) {
   const lab = opts.executionTarget === TARGET.LAB;
   let hosts;
+  let loadGeneratorRequirement = null;
   if (lab) {
     const state = await loadState({allowMissing: false});
     const {requirement, fleet} = opts.fromRecordedFacts ?
       {requirement: fleetRequirement(REPO_ROOT), fleet: null} : await discoverLabFleet(state);
+    loadGeneratorRequirement = measureLoadGeneratorRequirement(REPO_ROOT);
     hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
-      nodeMinimum: requirement.nodeMinimum});
+      nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement});
   } else {
     hosts = gcpHosts(opts, dataHostCount);
   }
@@ -405,6 +413,7 @@ async function dryRunPlan({opts, manifest, dataHostCount}) {
       {hosts: hosts.map(({ip, sshTarget, role}) => ({ip, sshTarget, role}))}),
     wouldLock: lab ? plannedLabLocks(hosts, manifest.campaignId) : [],
     thermalGate: lab ? THERMAL_GATE : null,
+    loadGeneratorRequirement,
     manifest};
 }
 
