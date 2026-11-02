@@ -15,7 +15,12 @@
  * sections with the candidate it set out to prove, the commands it ran with
  * their exit statuses, the planned corpus manifest and any durable proof it
  * lawfully reused. The authority recomputes every verdict from the per-file
- * results; nothing a producer summarises is trusted.
+ * results and the runs, never from a producer's summary. The ceiling: the
+ * sections and the report are written by the producer's own processes and are
+ * not signed, so the report is evidence the producer's run recorded, not an
+ * attestation; the receipt's reportDigest is an audit pointer to it. The
+ * planned manifest is the producer's (scripts/plan-test-lane.js
+ * wholeCorpusFiles); the authority does not recompute it.
  *
  * This module is the one owner of the schema, the writer and the validator.
  * It imports only node built-ins and the git invocation helper, so the
@@ -44,6 +49,7 @@ const REPORT_FIELD = Object.freeze({
 });
 const DETAIL = Object.freeze({
   NO_REPORT: 'no execution report',
+  NOT_AN_OBJECT: 'the report is not a JSON object',
   EMPTY_PLAN: 'empty planned manifest',
   FIELD_SEPARATOR: ',',
   NO_IDENTITY: 'none',
@@ -62,6 +68,7 @@ const RETRY_POLICY = Object.freeze({
 // Typed refusals. Each is a reason a passing receipt may not be minted.
 const EXECUTION_PROBLEM = Object.freeze({
   REPORT_ABSENT: 'execution-report-absent',
+  REPORT_MALFORMED: 'execution-report-malformed',
   REPORT_SCHEMA: 'execution-report-schema-mismatch',
   REPORT_PARTIAL: 'execution-report-partial',
   CANDIDATE_SHA_MISMATCH: 'execution-report-candidate-sha-mismatch',
@@ -77,6 +84,7 @@ const EXECUTION_PROBLEM = Object.freeze({
   ZERO_ASSERTION_PASS: 'execution-report-zero-assertion-pass',
   PASSED_ON_RETRY: 'execution-report-passed-on-retry',
   REUSED_PROOF_UNPROVEN: 'execution-report-reused-proof-unproven',
+  REUSED_PROOF_NOT_CITABLE: 'execution-report-reused-proof-not-citable',
 });
 
 // --- writing (runner and producers) ----------------------------------------
@@ -215,15 +223,27 @@ function writeExecutionReport(file, report) {
 }
 
 /**
- * Read a report file; an unreadable or non-JSON file is no report.
+ * A report file that exists but cannot be read as JSON: named apart from an
+ * absent one, so a corrupted report is never mistaken for a missing one.
+ */
+class MalformedExecutionReport {
+  constructor(detail) {
+    this.detail = detail;
+  }
+}
+
+/**
+ * Read a report file: null when there is no file, a MalformedExecutionReport
+ * when it cannot be read or parsed.
  * @param {string} file
- * @return {Object|null}
+ * @return {Object|MalformedExecutionReport|null}
  */
 function readExecutionReport(file) {
+  if (!fs.existsSync(file)) return null;
   try {
     return JSON.parse(fs.readFileSync(file, UTF8));
-  } catch {
-    return null;
+  } catch (error) {
+    return new MalformedExecutionReport(error.message);
   }
 }
 
@@ -249,8 +269,14 @@ function partialFields(report) {
 }
 
 function shapeProblems(report) {
-  if (!report || typeof report !== 'object') {
+  if (report === null || report === undefined) {
     return [problem(EXECUTION_PROBLEM.REPORT_ABSENT, DETAIL.NO_REPORT)];
+  }
+  if (report instanceof MalformedExecutionReport) {
+    return [problem(EXECUTION_PROBLEM.REPORT_MALFORMED, report.detail)];
+  }
+  if (typeof report !== 'object' || Array.isArray(report)) {
+    return [problem(EXECUTION_PROBLEM.REPORT_MALFORMED, DETAIL.NOT_AN_OBJECT)];
   }
   if (report.schema !== EXECUTION_REPORT_SCHEMA) {
     return [problem(EXECUTION_PROBLEM.REPORT_SCHEMA, String(report.schema))];
@@ -320,17 +346,32 @@ function runProblems(runs, sha) {
   return problems;
 }
 
-// The decisive result per file across every complete run; a later run of the
-// same file does not erase an earlier failure, so the worst one is kept.
+// One file's verdict across every complete run that ran it, independent of
+// the order the runs appear in: ok only when every run's result is ok, the
+// fewest assertions any run counted, and every attempt of every run. A clean
+// run never erases another run's failure, retry or empty pass.
+function mergedResult(file, results) {
+  const counts = results.map((result) => Number(result?.assertions) || 0);
+  return {
+    file,
+    ok: results.every((result) => result?.ok === true),
+    assertions: Math.min(...counts),
+    attempts: results.flatMap((result) => (isList(result?.attempts) ?
+      result.attempts : [{ok: result?.ok === true, assertions: Number(result?.assertions) || 0}])),
+  };
+}
+
 function resultsByFile(runs) {
-  const byFile = new Map();
+  const collected = new Map();
   for (const run of runs) {
     if (run?.complete !== true || !isList(run.results)) continue;
     for (const result of run.results) {
-      const held = byFile.get(result?.file);
-      if (!held || held.ok === true) byFile.set(result?.file, result);
+      const held = collected.get(result?.file) || [];
+      collected.set(result?.file, [...held, result]);
     }
   }
+  const byFile = new Map();
+  for (const [file, results] of collected) byFile.set(file, mergedResult(file, results));
   return byFile;
 }
 
@@ -342,9 +383,9 @@ function startedFiles(runs) {
   return files;
 }
 
+// Green, yet some attempt in some run was not: a pass that needed a retry.
 function retriedPass(result) {
-  return result.ok === true && isList(result.attempts) && result.attempts.length > 1 &&
-    result.attempts.some((attempt) => attempt?.ok !== true);
+  return result.ok === true && result.attempts.some((attempt) => attempt?.ok !== true);
 }
 
 function qualificationOf(result) {

@@ -289,6 +289,107 @@ test('cli: record without --report is refused with its typed problem', () => {
   assert.equal(remoteRef(context.source, PROOF.CORPUS_FULL, context.sha), '');
 });
 
+test('cli: an unparsable report file is malformed, not absent', () => {
+  const context = fixture();
+  const reportFile = path.join(context.root, 'broken-report.json');
+  fs.writeFileSync(reportFile, '{"schema": "lagrange-test-execution-report/v1", "cand');
+  const result = spawnSync(process.execPath,
+    [AUTHORITY, 'record', PROOF.CORPUS_FULL, context.sha, '--report', reportFile],
+    {cwd: context.source, encoding: 'utf8', env: gitProcessEnvironment()});
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}${result.stdout}`, /execution-report-malformed/u);
+  assert.equal(remoteRef(context.source, PROOF.CORPUS_FULL, context.sha), '');
+});
+
+test('malformed: a report that is no object mints no receipt', () => {
+  const context = fixture();
+  assertRefused(context, ['not', 'a', 'report'], 'execution-report-malformed');
+});
+
+test('empty-plan: a report planning nothing and citing nothing mints no receipt', () => {
+  const context = fixture();
+  assertRefused(context, mutated(context, (report) => {
+    report.planned = [];
+    report.runs = [];
+  }), 'execution-report-partial');
+});
+
+test('started-not-planned: a file a run started is owed a result too', () => {
+  const context = fixture();
+  assertRefused(context, mutated(context, (report) => {
+    report.runs[0].planned = [...report.runs[0].planned, 'test/c.test.js'];
+  }), 'execution-report-planned-file-not-executed');
+});
+
+test('not-citable: a contract cites only the proofs its seal names', () => {
+  const context = fixture();
+  assertRefused(context, mutated(context, (report) => {
+    report.planned = [];
+    report.runs = [];
+    report.reusedProofs = [{proofId: PROOF.RELEASE_FULL, objectSha: 'a'.repeat(40)}];
+  }), 'execution-report-reused-proof-not-citable', PROOF.RELEASE_FULL);
+  assertRefused(context, mutated(context, (report) => {
+    report.reusedProofs = [{proofId: PROOF.CORPUS_FULL, objectSha: 'a'.repeat(40)}];
+  }), 'execution-report-reused-proof-not-citable');
+});
+
+test('cited: a release report citing this commit\'s own corpus receipt mints', () => {
+  const context = fixture();
+  const corpus = record(context, validExecutionReport(context));
+  const identity = computeReleaseProofIdentity(context.source);
+  const recorded = record(context, mutated(context, (report) => {
+    report.candidate.identity = {algorithm: identity.algorithm, digest: identity.digest};
+    report.planned = [];
+    report.runs = [];
+    report.reusedProofs = [{proofId: PROOF.CORPUS_FULL, objectSha: corpus.objectSha}];
+  }), PROOF.RELEASE_FULL);
+  assert.equal(recorded.outcome, OUTCOME.PROVEN, recorded.because);
+  assert.deepEqual(recorded.receipt.execution.summary.reusedProofs,
+    [{proofId: PROOF.CORPUS_FULL, objectSha: corpus.objectSha}]);
+});
+
+// One file in two complete runs of the same report (the release proof's
+// corpus, then its hardening tail): the verdict is the worst of every run, in
+// whichever order the runs appear. A last-wins or first-wins merge lets the
+// clean run erase the other's evidence.
+const RETRIED_PASS = {file: REPORT_FILE_A, ok: true, assertions: 3, attempts: [
+  {attempt: 1, ok: false, assertions: 3, reasons: ['TAP assertions failed']},
+  {attempt: 2, ok: true, assertions: 3, reasons: []}]};
+const FAILED = {file: REPORT_FILE_A, ok: false, assertions: 3,
+  attempts: [{attempt: 1, ok: false, assertions: 3, reasons: ['TAP assertions failed']}]};
+
+function twoRuns(context, first, second) {
+  return mutated(context, (report) => {
+    const run = report.runs[0];
+    report.runs = [
+      {...run, runId: 'run-1', results: [first, passingResult(REPORT_FILE_B)]},
+      {...run, runId: 'run-2', argv: [REPORT_FILE_A], planned: [REPORT_FILE_A],
+        results: [second]},
+    ];
+  });
+}
+
+for (const [label, odd, code] of [
+  ['a retry pass', RETRIED_PASS, 'execution-report-passed-on-retry'],
+  ['a failure', FAILED, 'execution-report-planned-file-failed'],
+  ['a zero-assertion pass', passingResult(REPORT_FILE_A, 0),
+    'execution-report-zero-assertion-pass'],
+]) {
+  test(`two-runs: ${label} in either run is never erased by a clean one`, () => {
+    const context = fixture();
+    assertRefused(context, twoRuns(context, odd, passingResult(REPORT_FILE_A)), code);
+    assertRefused(context, twoRuns(context, passingResult(REPORT_FILE_A), odd), code);
+  });
+}
+
+test('two-runs: a file clean in both runs still mints its receipt', () => {
+  const context = fixture();
+  const recorded = record(context,
+    twoRuns(context, passingResult(REPORT_FILE_A), passingResult(REPORT_FILE_A)));
+  assert.equal(recorded.outcome, OUTCOME.PROVEN, recorded.because);
+  assert.equal(recorded.receipt.outcome, 'passed');
+});
+
 // The runner side: a run whose environment names a sections file writes the
 // start and end sections the report is assembled from, the retry included.
 test('runner: sections carry the checkout, assertion counts and the retry record', () => {

@@ -1,0 +1,22 @@
+# test-files planned=18
+classified lane ordinary: 18 file(s), jobs=4
+thermal: ok cpu 57C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/scripts/run-test-files.test.js (41 assertions, 7761ms)
+ok test/scripts/check-fast-static.test.js (5 assertions, 13961ms)
+ok test/scripts/change-proof-subsystem-participant-safety.test.js (1 assertions, 6460ms)
+ok test/scripts/proof-authority-falsifiers.test.js (10 assertions, 3492ms)
+ok test/scripts/selection-golden-corpus.test.js (4 assertions, 18788ms)
+ok test/scripts/change-selection-taxonomy.test.js (8 assertions, 5039ms)
+ok test/scripts/canary-corpus-needed.test.js (9 assertions, 1896ms)
+ok test/scripts/closed-quest-shape.test.js (10 assertions, 1233ms)
+ok test/scripts/run-classified-test-files.test.js (30 assertions, 1630ms)
+ok test/scripts/change-proof-boundary.test.js (8 assertions, 1140ms)
+ok test/scripts/pre-push-hook-control-flow.test.js (20 assertions, 934ms)
+ok test/scripts/publish-head-workspace-links.test.js (3 assertions, 130ms)
+ok test/scripts/change-proof-own-authority.test.js (4 assertions, 887ms)
+ok test/scripts/apparatus-release-consolidation-budget.test.js (7 assertions, 625ms)
+ok test/scripts/observation-census.test.js (7 assertions, 132ms)
+ok test/scripts/helper-import-closure.test.js (6 assertions, 140ms)
+ok test/scripts/release-preflight.test.js (41 assertions, 212ms)
+ok test/scripts/select-change-tests.test.js (31 assertions, 35440ms)
+# test-files total=18 pass=18 fail=0 assertions=245

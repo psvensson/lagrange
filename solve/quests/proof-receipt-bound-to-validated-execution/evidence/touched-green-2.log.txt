@@ -1,0 +1,15 @@
+# test-files planned=11
+classified lane ordinary: 11 file(s), jobs=4
+thermal: ok cpu 72C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/scripts/proof-receipt-execution-report.test.js (23 assertions, 1789ms)
+ok test/scripts/canary-corpus-needed.test.js (9 assertions, 1929ms)
+ok test/scripts/local-corpus.test.js (12 assertions, 1240ms)
+ok test/scripts/publish-head.test.js (107 assertions, 2066ms)
+ok test/scripts/release-proof-identity.test.js (5 assertions, 796ms)
+ok test/scripts/proof-authority.test.js (9 assertions, 622ms)
+ok test/scripts/publish-head-workspace-links.test.js (3 assertions, 194ms)
+ok test/release/project-hardening-contracts.test.js (14 assertions, 1031ms)
+ok test/release/release-pipeline-proof-reuse.test.js (25 assertions, 279ms)
+ok test/scripts/run-test-files.test.js (41 assertions, 8749ms)
+ok test/scripts/push-gate-change-proof.test.js (21 assertions, 16090ms)
+# test-files total=11 pass=11 fail=0 assertions=269

@@ -63,7 +63,6 @@ const RECEIPT_OUTCOME_PASSED = 'passed';
 const RECEIPT_OUTCOME_QUALIFIED = 'passed-qualified';
 const RECORD_REFUSED = 'proof-record-refused';
 const RECORD_REFUSED_NAME = 'ProofRecordRefused';
-const REUSED_UNREGISTERED = 'unregistered';
 const REPORT_DIGEST = Object.freeze({ALGORITHM: 'sha256', ENCODING: 'hex'});
 const IDENTITY_UNVERIFIABLE =
   'the recorder is not in a clean checkout of the subject: its identity is unverifiable';
@@ -133,6 +132,9 @@ const CONTRACTS = Object.freeze({
     identityReuse: true,
     // Sealed: a file green only on its retry is not a release proof.
     retryPolicy: RETRY_POLICY.REFUSE,
+    // Sealed: the only proof a release report may cite instead of running is
+    // the exact commit's own whole-corpus receipt.
+    citableProofs: Object.freeze([PROOF.CORPUS_FULL]),
     description: 'complete release proof for one immutable repository commit',
   }),
   // The whole behavioural corpus, green for one immutable commit. The local
@@ -150,6 +152,8 @@ const CONTRACTS = Object.freeze({
     identityReuse: false,
     // Sealed: the corpus proves green files, not files green on a retry.
     retryPolicy: RETRY_POLICY.REFUSE,
+    // Sealed: the whole corpus is run, never cited.
+    citableProofs: Object.freeze([]),
     description: 'whole behavioural corpus green for one immutable commit',
   }),
 });
@@ -573,16 +577,22 @@ function subjectTree({sha, cwd, git}) {
   return tree.status === 0 ? text(tree.stdout) : null;
 }
 
-// A proof the report says it reused must resolve now, for this subject, to
-// the very receipt object it cited.
-function reusedProofProblems({report, sha, remote, cwd, git}) {
+// A proof the report says it reused must be one the contract's seal lets it
+// cite, and must resolve now, for this very commit (never through a sibling's
+// release identity), to the very receipt object it cited.
+function reusedProofProblems({report, sha, contract, remote, cwd, git}) {
   const problems = [];
   for (const cited of report.reusedProofs) {
-    const resolved = registrationProblem(cited?.proofId, sha) ? null :
-      resolveProof({proofId: cited.proofId, sha, remote, cwd, git});
-    if (resolved?.outcome !== OUTCOME.PROVEN || resolved.objectSha !== cited?.objectSha) {
+    if (!contract.citableProofs.includes(cited?.proofId)) {
+      problems.push({code: EXECUTION_PROBLEM.REUSED_PROOF_NOT_CITABLE,
+        detail: String(cited?.proofId)});
+      continue;
+    }
+    const resolved = resolveProof({proofId: cited.proofId, sha, remote, cwd, git});
+    if (resolved?.outcome !== OUTCOME.PROVEN || resolved.resolution !== RESOLUTION.EXACT_SHA ||
+      resolved.objectSha !== cited?.objectSha) {
       problems.push({code: EXECUTION_PROBLEM.REUSED_PROOF_UNPROVEN,
-        detail: `${cited?.proofId} ${cited?.objectSha}: ${resolved?.outcome ?? REUSED_UNREGISTERED}`});
+        detail: `${cited?.proofId} ${cited?.objectSha}: ${resolved.outcome}`});
     }
   }
   return problems;
@@ -607,7 +617,7 @@ function validatedExecution({proofId, sha, contract, report, remote, cwd, git}) 
     identity, retryPolicy: contract.retryPolicy});
   const problems = checked.summary ?
     [...unverifiable, ...checked.problems,
-      ...reusedProofProblems({report, sha, remote, cwd, git})] :
+      ...reusedProofProblems({report, sha, contract, remote, cwd, git})] :
     checked.problems;
   if (problems.length > 0) throw new ProofRecordRefused(proofId, sha, problems);
   return {

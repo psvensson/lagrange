@@ -1,0 +1,290 @@
+TAP version 13
+# Subtest: absent: no execution report mints no receipt
+ok 1 - absent: no execution report mints no receipt
+  ---
+  duration_ms: 30.873511
+  type: 'test'
+  ...
+# Subtest: partial: a report without its commands mints no receipt
+ok 2 - partial: a report without its commands mints no receipt
+  ---
+  duration_ms: 44.92267
+  type: 'test'
+  ...
+# Subtest: schema: a report of another schema mints no receipt
+ok 3 - schema: a report of another schema mints no receipt
+  ---
+  duration_ms: 83.189965
+  type: 'test'
+  ...
+# Subtest: not-clean: a report of a dirty candidate mints no receipt
+ok 4 - not-clean: a report of a dirty candidate mints no receipt
+  ---
+  duration_ms: 84.13599
+  type: 'test'
+  ...
+# Subtest: run-failed: a runner that exited non-zero mints no receipt
+ok 5 - run-failed: a runner that exited non-zero mints no receipt
+  ---
+  duration_ms: 77.376141
+  type: 'test'
+  ...
+# Subtest: sha-mismatch: a report of another commit mints no receipt
+ok 6 - sha-mismatch: a report of another commit mints no receipt
+  ---
+  duration_ms: 82.929892
+  type: 'test'
+  ...
+# Subtest: tree-mismatch: a report of another tree mints no receipt
+ok 7 - tree-mismatch: a report of another tree mints no receipt
+  ---
+  duration_ms: 84.53649
+  type: 'test'
+  ...
+# Subtest: identity-mismatch: a release report of another identity mints no receipt
+ok 8 - identity-mismatch: a release report of another identity mints no receipt
+  ---
+  duration_ms: 81.786134
+  type: 'test'
+  ...
+# Subtest: identity-unverifiable: a release proof recorded from a dirty checkout mints no receipt
+ok 9 - identity-unverifiable: a release proof recorded from a dirty checkout mints no receipt
+  ---
+  duration_ms: 104.823189
+  type: 'test'
+  ...
+# Subtest: run-other-checkout: a run in another checkout mints no receipt
+ok 10 - run-other-checkout: a run in another checkout mints no receipt
+  ---
+  duration_ms: 39.536496
+  type: 'test'
+  ...
+# Subtest: failed-command: a failed command mints no receipt
+ok 11 - failed-command: a failed command mints no receipt
+  ---
+  duration_ms: 17.34549
+  type: 'test'
+  ...
+# Subtest: failed-file: a failed planned file mints no receipt
+ok 12 - failed-file: a failed planned file mints no receipt
+  ---
+  duration_ms: 17.113792
+  type: 'test'
+  ...
+# Subtest: skipped-file: a planned file without a result mints no receipt
+ok 13 - skipped-file: a planned file without a result mints no receipt
+  ---
+  duration_ms: 18.044262
+  type: 'test'
+  ...
+# Subtest: zero-assertion: a pass with no assertions mints no receipt
+ok 14 - zero-assertion: a pass with no assertions mints no receipt
+  ---
+  duration_ms: 21.200242
+  type: 'test'
+  ...
+# Subtest: truncated: a run that started and never ended mints no receipt
+ok 15 - truncated: a run that started and never ended mints no receipt
+  ---
+  duration_ms: 19.744569
+  type: 'test'
+  ...
+# Subtest: passed-on-retry: a file green only on its retry mints no clean receipt
+ok 16 - passed-on-retry: a file green only on its retry mints no clean receipt
+  ---
+  duration_ms: 17.345616
+  type: 'test'
+  ...
+# Subtest: reused-proof: a cited proof the store does not hold mints no receipt
+ok 17 - reused-proof: a cited proof the store does not hold mints no receipt
+  ---
+  duration_ms: 23.050762
+  type: 'test'
+  ...
+# Subtest: qualified: an admitted retry is carried as a qualification, never a clean pass
+ok 18 - qualified: an admitted retry is carried as a qualification, never a clean pass
+  ---
+  duration_ms: 28.903378
+  type: 'test'
+  ...
+# Subtest: positive: a complete report of the exact candidate mints a receipt bound to it
+ok 19 - positive: a complete report of the exact candidate mints a receipt bound to it
+  ---
+  duration_ms: 57.151023
+  type: 'test'
+  ...
+# Subtest: reuse: a receipt minted before reports existed still resolves
+ok 20 - reuse: a receipt minted before reports existed still resolves
+  ---
+  duration_ms: 42.795677
+  type: 'test'
+  ...
+# Subtest: cli: record without --report is refused with its typed problem
+ok 21 - cli: record without --report is refused with its typed problem
+  ---
+  duration_ms: 42.117219
+  type: 'test'
+  ...
+# Subtest: cli: an unparsable report file is malformed, not absent
+not ok 22 - cli: an unparsable report file is malformed, not absent
+  ---
+  duration_ms: 37.034028
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:292:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /execution-report-malformed/u. Input:
+    
+    'proof-record-refused: corpus-full-v1 295bb0362896559face6f067612e10b7b5109d2e: execution-report-absent (no execution report)\n'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    proof-record-refused: corpus-full-v1 295bb0362896559face6f067612e10b7b5109d2e: execution-report-absent (no execution report)
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:300:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: malformed: a report that is no object mints no receipt
+not ok 23 - malformed: a report that is no object mints no receipt
+  ---
+  duration_ms: 16.786352
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:304:1'
+  failureType: 'testCodeFailure'
+  error: 'expected execution-report-malformed among ["execution-report-schema-mismatch"]'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    Object.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:72:12)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.throws (node:assert:757:3)
+    assertRefused (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:70:10)
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:306:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: empty-plan: a report planning nothing and citing nothing mints no receipt
+ok 24 - empty-plan: a report planning nothing and citing nothing mints no receipt
+  ---
+  duration_ms: 18.020794
+  type: 'test'
+  ...
+# Subtest: started-not-planned: a file a run started is owed a result too
+ok 25 - started-not-planned: a file a run started is owed a result too
+  ---
+  duration_ms: 18.563272
+  type: 'test'
+  ...
+# Subtest: not-citable: a contract cites only the proofs its seal names
+not ok 26 - not-citable: a contract cites only the proofs its seal names
+  ---
+  duration_ms: 29.615732
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:324:1'
+  failureType: 'testCodeFailure'
+  error: 'expected execution-report-reused-proof-not-citable among ["execution-report-identity-mismatch","execution-report-reused-proof-unproven"]'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    Object.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:72:12)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.throws (node:assert:757:3)
+    assertRefused (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:70:10)
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:326:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: two-runs: a retry pass in either run is never erased by a clean one
+not ok 27 - two-runs: a retry pass in either run is never erased by a clean one
+  ---
+  duration_ms: 35.283143
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:363:3'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception: a execution-report-passed-on-retry report must be refused'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    assertRefused (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:70:10)
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:365:5)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: two-runs: a failure in either run is never erased by a clean one
+ok 28 - two-runs: a failure in either run is never erased by a clean one
+  ---
+  duration_ms: 50.132594
+  type: 'test'
+  ...
+# Subtest: two-runs: a zero-assertion pass in either run is never erased by a clean one
+not ok 29 - two-runs: a zero-assertion pass in either run is never erased by a clean one
+  ---
+  duration_ms: 38.568135
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:363:3'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception: a execution-report-zero-assertion-pass report must be refused'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    assertRefused (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:70:10)
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-proof-receipt-20261102/test/scripts/proof-receipt-execution-report.test.js:365:5)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: two-runs: a file clean in both runs still mints its receipt
+ok 30 - two-runs: a file clean in both runs still mints its receipt
+  ---
+  duration_ms: 35.24094
+  type: 'test'
+  ...
+# Subtest: runner: sections carry the checkout, assertion counts and the retry record
+ok 31 - runner: sections carry the checkout, assertion counts and the retry record
+  ---
+  duration_ms: 308.874366
+  type: 'test'
+  ...
+# Subtest: runner: a test file never inherits the sections file its run reports to
+ok 32 - runner: a test file never inherits the sections file its run reports to
+  ---
+  duration_ms: 360.378545
+  type: 'test'
+  ...
+1..32
+# tests 32
+# suites 0
+# pass 27
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2014.481312
