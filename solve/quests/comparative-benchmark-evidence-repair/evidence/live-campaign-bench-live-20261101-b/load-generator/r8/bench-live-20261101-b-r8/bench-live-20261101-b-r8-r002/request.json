@@ -1,1 +1,0 @@
-{"targetId":"tidb-tikv","system":"tidb-tikv","scenario":"scenarioA","subkind":"smoke","connection":{"endpoint":{"host":"192.168.86.41","port":4000},"databaseName":"lagrange_tidb_oltp"},"plan":{"offeredRatePerSec":5,"repetition":1,"orderIndex":1,"sweepPlanSha256":null},"evidenceDir":"test-output/bench/bench-live-20261101-b-r8/bench-live-20261101-b-r8-r002/evidence"}
