@@ -104,6 +104,17 @@ async function readImageStore({sshRun, opts, host}) {
     'docker info --format \'{{.Driver}}|{{json .DriverStatus}}\''));
 }
 
+// Labels are optional image metadata: an image that declares none (a
+// containerd store then omits Config.Labels) is recorded as null, never
+// given substitute labels.
+function declaredLabels(config, subject) {
+  if (config === null || typeof config !== 'object') {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `${subject}: docker inspect answered without Config`, {path: ['Config']});
+  }
+  return 'Labels' in config ? config.Labels : null;
+}
+
 // Image facts of the running container's image id: its repo digests (empty
 // for an image that was `docker load`ed, which is recorded as such, never
 // filled in), its build labels and creation time.
@@ -121,7 +132,7 @@ async function readImageFacts({sshRun, opts, host, imageId, imageRef}) {
   return {repoDigest, repoDigestStatus: repoDigest ? 'recorded' : REPO_DIGEST_NONE,
     contentIdentity: contentIdentityOf(field(['RootFS', 'Layers'])),
     provenance: repoDigest ? `registry:${repoDigest}` : `loaded:${imageId}`,
-    imageLabels: field(['Config', 'Labels']), imageCreated: field(['Created'])};
+    imageLabels: declaredLabels(field(['Config']), subject), imageCreated: field(['Created'])};
 }
 
 function mountsOf(mounts, subject) {

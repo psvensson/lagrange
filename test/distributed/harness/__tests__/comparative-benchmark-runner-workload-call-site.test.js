@@ -218,3 +218,20 @@ test('a worktree that is not at the harness commit refuses the campaign', async 
   (error) => error.code === 'load_generator_commit_mismatch');
   assert.match(ssh.calls[ssh.calls.length - 1].command, /git worktree remove --force/u);
 });
+
+// Live campaign bench-live-20261101-b-r4: the TiDB arm's load generator exited
+// 1 and the failure carried only its (empty) stdout - the CLI writes its error
+// to stderr, which the ssh seam does not return. The CLI's stderr is kept in
+// the run directory and its tail is part of the typed failure.
+test('a load generator that exits non-zero reports its stderr', async () => {
+  const host = {ip: '10.0.0.9', repoPath: '/srv/wt', nodePath: '/usr/bin/node'};
+  const ssh = createScriptedSsh([[/git rev-parse HEAD/u, 'abc'],
+    [/run-benchmark-workload\.js/u, '\n__exit_code=1'],
+    [/tail -n \d+ '[^']*stderr\.log'/u, 'run-benchmark-workload: Error: boom at x.js:1']]);
+  await assert.rejects(createRemoteWorkloadRunner({sshRun: ssh.sshRun, opts: {}, host,
+    harnessCommit: 'abc', campaignId: 'bench-x'})({system: 'tidb-tikv'}, RUN),
+  (error) => error.code === 'workload_failed' &&
+    /boom at x\.js:1/u.test(error.diagnostic.stderr) && /exited 1/u.test(error.message));
+  const cli = arrayFind(ssh.calls, (call) => stringIncludes(call.command, 'run-benchmark'));
+  assert.match(cli.command, / 2> 'test-output\/bench\/bench-x\/[^']+\/stderr\.log'/u);
+});

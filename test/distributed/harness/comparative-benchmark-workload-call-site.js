@@ -45,6 +45,7 @@ const LOAD_GENERATOR_CLI = 'test/distributed/harness/run-benchmark-workload.js';
 const LOAD_GENERATOR_WORKTREE_PARENT = 'test-output/bench-worktrees';
 const LOAD_GENERATOR_LINKED_DIR = 'node_modules';
 const CHECKOUT_PREPARATION_TIMEOUT_MS = 10 * 60 * 1000;
+const LOAD_GENERATOR_STDERR_TAIL_LINES = 80;
 const LOAD_GENERATOR_EXIT = Object.freeze({OK: 0, REFUSED: 2});
 const REFUSED_RECORD_KIND = 'benchmark-dispatch-refused';
 const WORKLOAD_TIMEOUT_MS = 60 * 60 * 1000;
@@ -108,13 +109,19 @@ function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaign
     const encoded = Buffer.from(JSON.stringify(request), 'utf8').toString('base64');
     await sshRun(host.ip, opts, `${cd} && mkdir -p ${shellQuote(dir)} && printf %s ` +
       `${shellQuote(encoded)} | base64 -d > ${shellQuote(`${dir}/request.json`)}`);
+    // The CLI reports a harness error on stderr, which the ssh seam does not
+    // return: it is kept in the run directory and read back on failure.
+    const stderrLog = `${dir}/stderr.log`;
     const result = await execWithStatus(sshRun, host.ip, opts, `${cd} && ` +
       `${shellQuote(host.nodePath)} ${LOAD_GENERATOR_CLI} --manifest ` +
-      `${shellQuote(`${dir}/request.json`)} --out ${shellQuote(`${dir}/records.ndjson`)}`,
+      `${shellQuote(`${dir}/request.json`)} --out ${shellQuote(`${dir}/records.ndjson`)}` +
+      ` 2> ${shellQuote(stderrLog)}`,
     WORKLOAD_TIMEOUT_MS);
     if (!arrayIncludes(Object.values(LOAD_GENERATOR_EXIT), result.exitCode)) {
+      const stderr = String(await sshRun(host.ip, opts,
+        `${cd} && tail -n ${LOAD_GENERATOR_STDERR_TAIL_LINES} ${shellQuote(stderrLog)}`));
       throw deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
-        `load generator exited ${result.exitCode}`, {stdout: result.stdout});
+        `load generator exited ${result.exitCode}`, {stdout: result.stdout, stderr});
     }
     return JSON.parse(String(await sshRun(host.ip, opts,
       `${cd} && tail -n 1 ${shellQuote(`${dir}/records.ndjson`)}`)));

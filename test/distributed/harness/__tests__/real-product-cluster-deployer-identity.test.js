@@ -185,3 +185,26 @@ test('D18: image content identity is the digest of the ordered RootFS diff_ids, 
   await assert.rejects(run((host) => (host === '10.0.0.3' ? [layers[0]] : null)),
     (error) => error.code === 'identity_unverified');
 });
+
+// Live campaign bench-live-20261101-b-r4: postgres:17-alpine declares no
+// labels, and on a containerd image store `docker image inspect` then omits
+// Config.Labels; identity refused the arm (`answered without Config.Labels`).
+// Labels are optional image metadata: an image without them is recorded as
+// declaring none (null), never refused and never given substitute labels.
+test('D18: an image that declares no labels is recorded as such, not refused',
+  {timeout: 300000}, async () => {
+    const ledger = createContainerLedger();
+    const unlabelled = (command) => {
+      const image = JSON.parse(ledger.repoDigests(command));
+      delete image.Config.Labels;
+      return JSON.stringify(image);
+    };
+    const {sshRun} = createScriptedSsh([[/docker image inspect/u, unlabelled],
+      ...postgresHealthyRules(ledger, {standbys: []})]);
+    const deployment = await deployers.deployComparativeTarget('pg-single-primary',
+      input(sshRun));
+    for (const product of deployment.identity.products) {
+      assert.equal(product.imageLabels, null);
+      assert.match(product.imageId, /^sha256:[0-9a-f]{64}$/u);
+    }
+  });
