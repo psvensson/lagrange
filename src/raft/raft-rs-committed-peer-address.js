@@ -123,6 +123,7 @@ function admissionLeaderHint(entityType, stamp, hintedLeaderId) {
 
 // The read's own routing when the held stamp places no leader.
 const STAMP_READ_SELF_ROUTED = Object.freeze({});
+const admissionStampReads = (stamp) => [admissionStampReadOptions(stamp)];
 
 /**
  * How a replica reads the committed membership it was created from again:
@@ -142,6 +143,7 @@ function admissionStampReadOptions(stamp) {
 
 export {
   ADMISSION_LEADER_REFUSAL,
+  admissionStampReads,
   admissionStampReadOptions,
   admissionLeaderHint,
   admissionLeaderTarget,

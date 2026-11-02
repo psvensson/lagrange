@@ -37,6 +37,8 @@ import {
 } from '../../src/raft/raft-rs-committed-peer-address.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {ENTITY_TYPE} from '../../src/constants/index.js';
+import {buildDeliveryEnvelope} from
+  '../../src/transport/transport-semantic-outcome.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
   '..', '..');
@@ -188,6 +190,36 @@ test('(m) a NOT_LEADER hint is followed only when it names a committed member',
     t.equal(admissionLeaderHint(ENTITY_TYPE.PARTITION, committedStamp(), null), null,
       'no hint');
   });
+
+test('(n) a deferred answer keeps the accepted hint: the leader that deferred ' +
+  'is asked again, no re-read', async (t) => {
+  const hint = Object.freeze({replicaIdentity: STALE_LEADER,
+    address: partitionAddress('node-3', STALE_LEADER)});
+  const request = {operationId: 'op-1', state: 'pending', lastOutcome: null,
+    stamp: committedStamp(), leaderHint: hint, rereadStamp: false};
+  const delivered = [];
+  const target = {
+    partitionId: PARTITION_ID, replicaId: SELF, replicaAdmissionRequest: request,
+    isShutdown: false, logger: {info() {}},
+    readOwnRaftStatus: () => null,
+    resolveLearnerPromotionProofDeliveryTimeoutMs: () => 1000,
+    sendReplicaAdmissionRequest:
+      PartitionService.prototype.sendReplicaAdmissionRequest,
+    transport: {deliver: async (address) => {
+      delivered.push(address);
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        partitionId: PARTITION_ID, replicaIdentity: SELF, operationId: 'op-1',
+        admission: {outcome: 'deferred', reason: 'quorum'}});
+    }},
+  };
+  await PartitionService.prototype.driveReplicaAdmission.call(target);
+  await PartitionService.prototype.driveReplicaAdmission.call(target);
+  t.equal(request.lastOutcome, 'deferred');
+  t.same(delivered, [hint.address, hint.address],
+    'both deliveries ask the hinted leader');
+  t.equal(request.leaderHint, hint, 'the hint is kept');
+  t.equal(request.rereadStamp, false, 'no re-read');
+});
 
 function sourceFiles(directory) {
   const files = [];

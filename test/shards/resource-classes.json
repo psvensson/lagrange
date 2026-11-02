@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2543,
+    "ordinary": 2544,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2560,
-  "digest": "fnv1a32-b9abc416",
+  "censusSize": 2561,
+  "digest": "fnv1a32-83941c2f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1663,6 +1663,7 @@
     "test/raft/raft-opening-cleanup-error.test.js": "ordinary",
     "test/raft/raft-rs-backend/admission-redrive-chain.test.js": "ordinary",
     "test/raft/raft-rs-backend/admission-redrive.test.js": "ordinary",
+    "test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js": "ordinary",
     "test/raft/raft-rs-backend/backend-seam.test.js": "ordinary",
     "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": "ordinary",
     "test/raft/raft-rs-backend/committed-membership-adversarial-boundary.test.js": "ordinary",
