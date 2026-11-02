@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "first-divergence-witness-on-candidate",
+      "passed": true,
+      "evidence": "evidence/phase0-reproducer-run-2026-11-02.md: fresh-formation-user-table-routability on b26d2c090 (tv-dator, lenovo-laptop, adams-gamla, 2026-11-02T10:26:07Z) RED; node logs retained outside the repo (sha256 in the record)"
+    },
+    {
+      "id": "admission-from-committed-operation",
+      "passed": false,
+      "evidence": "red on b26d2c090: test/partition/replica-admission-from-committed-operation.test.js (a)-(h), test/partition/replica-admission-committed-operation-production.integration.test.js"
+    },
+    {
+      "id": "write-answers-at-commit-position",
+      "passed": false,
+      "evidence": "red on b26d2c090: test/cdc/routed-system-table-write-answers-at-commit.test.js (a),(b),(d); (c) a guard, green"
+    },
+    {
+      "id": "reproducer-admission-without-cache-visibility",
+      "passed": false,
+      "evidence": "not yet measured"
+    },
+    {
+      "id": "cdc-hold-handoff-recorded",
+      "passed": false,
+      "evidence": "not yet recorded"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "evidence": "not yet verified"
+    }
+  ],
+  "evidence": [],
+  "applicability": "Red probe at quest start: only the Phase 0 witness exists."
+}
