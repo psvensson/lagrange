@@ -1898,6 +1898,24 @@
         "test/raft/learner-promotion-progress-proof-contract.test.js",
         "test/integration/message-group-learner-join.integration.test.js"
       ]
+    },
+    "partition-replica-admission-from-committed-operation": {
+      "description": "A CREATE_REPLICA/REPLACE target is admitted to its partition only from its committed replica operation (quest replica-admission-from-committed-operation): the node create path sends ADMIT_REPLICA {partitionId, replicaIdentity, operationId} right after its SYNCING commit and re-sends on the learner cadence (consuming a NOT_LEADER leader hint); the partition request owner answers NOT_LEADER first, then from a committed read of replica_operations (AUTHORITY_UNAVAILABLE / OPERATION_NOT_ADMITTING typed), then through the membership administration seam (admitPartitionRaftPeer, the only caller) with the node from the committed row; no services row or cache read admits, except the named refuse-only groupRetiringRefusal fence.",
+      "owners": [
+        "src/node/replica-handler-create-methods.js",
+        "src/partition/partition-replica-admission.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-learner-promotion-methods.js",
+        "src/partition/partition-service-entry-apply-base.js"
+      ],
+      "tests": [
+        "test/partition/replica-admission-from-committed-operation.test.js",
+        "test/partition/replica-admission-committed-operation-production.integration.test.js",
+        "test/partition/partition-admission-redrive-wakes.test.js",
+        "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
+        "test/node/replica-handler.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4011,6 +4029,35 @@
         "test/message-group/message-group-fresh-learner-promotion.test.js",
         "test/raft/learner-promotion-progress-proof-contract.test.js",
         "test/integration/message-group-learner-join.integration.test.js"
+      ]
+    },
+    "partition-replica-admission-from-committed-operation": {
+      "description": "A CREATE_REPLICA/REPLACE target is admitted to its partition only from its committed replica operation (quest replica-admission-from-committed-operation): the node create path sends ADMIT_REPLICA {partitionId, replicaIdentity, operationId} right after its SYNCING commit and re-sends on the learner cadence (consuming a NOT_LEADER leader hint); the partition request owner answers NOT_LEADER first, then from a committed read of replica_operations (AUTHORITY_UNAVAILABLE / OPERATION_NOT_ADMITTING typed), then through the membership administration seam (admitPartitionRaftPeer, the only caller) with the node from the committed row; no services row or cache read admits, except the named refuse-only groupRetiringRefusal fence.",
+      "endpoints": [
+        {
+          "id": "node-create-path-admission-request",
+          "owners": [
+            "src/node/replica-handler-create-methods.js",
+            "src/partition/partition-service-learner-promotion-methods.js"
+          ]
+        },
+        {
+          "id": "partition-request-owner-and-membership-administration",
+          "owners": [
+            "src/partition/partition-replica-admission.js",
+            "src/partition/partition-service-raft-membership-administration.js",
+            "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+            "src/partition/partition-service-entry-apply-base.js"
+          ]
+        }
+      ],
+      "contract": "partition-replica-admission-from-committed-operation",
+      "witnessTests": [
+        "test/partition/replica-admission-from-committed-operation.test.js",
+        "test/partition/replica-admission-committed-operation-production.integration.test.js",
+        "test/partition/partition-admission-redrive-wakes.test.js",
+        "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
+        "test/node/replica-handler.test.js"
       ]
     }
   }

@@ -31,7 +31,10 @@ import {
 import {SYSTEM_TABLE_NAME} from
   '../bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE} from '../constants/index.js';
-import {PARTITION_SERVICE_MESSAGE_TYPE} from './partition-service-constants.js';
+import {
+  PARTITION_SERVICE_DEFAULT,
+  PARTITION_SERVICE_MESSAGE_TYPE,
+} from './partition-service-constants.js';
 import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_MEMBERSHIP_ADMISSION_OUTCOME} from
@@ -80,6 +83,8 @@ const REPLICA_ADMISSION_REASON = Object.freeze({
   OPERATION_STEP: 'operation_step',
   LEADER_NOT_DISCOVERED: 'leader_not_discovered',
   RESPONSE_BINDING_MISMATCH: 'response_binding_mismatch',
+  REQUEST_SHAPE: 'request_shape',
+  PARTITION_MISMATCH: 'partition_mismatch',
 });
 const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
 
@@ -129,10 +134,24 @@ const OPERATION_READ_OPTIONS = Object.freeze({
   deliveryPriority: 'critical',
   workClass: 'critical',
 });
-// The retry hint of an unavailable authority: the learner cadence it is
-// re-sent on (PARTITION_SERVICE_DEFAULT learner check interval).
-const AUTHORITY_UNAVAILABLE_RETRY_AFTER_MS = 1000;
+// The retry hint of an unavailable authority is the cadence the target
+// re-sends on: the learner catch-up check interval (its one cadence).
+const AUTHORITY_UNAVAILABLE_RETRY_AFTER_MS =
+  PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
 const AUTHORITY_UNAVAILABLE_REASON = 'authoritative_read_unavailable';
+// Answers that settle a received request: the leader keeps nothing for it
+// and re-drives nothing (terminal for the operation, refused by the port,
+// or already a member).
+const SETTLING_ANSWERS = Object.freeze(new Set([
+  REPLICA_ADMISSION_OUTCOME.OPERATION_NOT_ADMITTING,
+  REPLICA_ADMISSION_OUTCOME.REFUSED,
+  REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER,
+]));
+const COHORT_ANSWERS = Object.freeze(new Set([
+  REPLICA_ADMISSION_OUTCOME.PROPOSED,
+  REPLICA_ADMISSION_OUTCOME.IN_FLIGHT,
+  REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER,
+]));
 
 const REPLICA_ADMISSION_LOG_MSG = Object.freeze({
   DECIDED: 'Replica admission request decided by leader',
@@ -183,11 +202,14 @@ async function readCommittedOperation(service, operationId) {
       OPERATION_READ_OPTIONS,
     );
   } catch (error) {
+    // A read that threw has no gateway outcome to carry.
     return {unavailable: error?.message || AUTHORITY_UNAVAILABLE_REASON};
   }
   if (!isAuthoritativeControlPlaneRowReadSuccessful(result) ||
       !Array.isArray(result.rows)) {
-    return {unavailable: result?.error || AUTHORITY_UNAVAILABLE_REASON};
+    return {unavailable: result?.error || AUTHORITY_UNAVAILABLE_REASON,
+      ...(typeof result?.outcome === 'string' ?
+        {readOutcome: result.outcome} : {})};
   }
   return {row: result.rows.find((row) =>
     row?.operation_id === operationId) ?? null};
@@ -207,57 +229,66 @@ function operationRefusal(row, service, replicaIdentity) {
   return null;
 }
 
+// The answer the port's admission maps to, with the committed node.
+function admissionAnswer(service, replicaIdentity, row) {
+  // The read yielded: leadership is decided again on the port's answer.
+  reservePartitionRaftPeerIdentity(service, replicaIdentity);
+  const admission = admitPartitionRaftPeer(service, {
+    replicaIdentity, nodeId: row.target_node_id});
+  return answer(PORT_OUTCOME_ANSWER[admission.outcome] ??
+    REPLICA_ADMISSION_OUTCOME.REFUSED, {
+    nodeId: row.target_node_id,
+    ...(admission.reason ? {reason: admission.reason} : {}),
+  });
+}
+
+// The cohort and the kept requests after one answer.
+function settleAnswer(service, replicaIdentity, decided) {
+  if (SETTLING_ANSWERS.has(decided.outcome)) {
+    acceptedRequestsOf(service).delete(replicaIdentity);
+  }
+  if (COHORT_ANSWERS.has(decided.outcome) &&
+      !service.replicaIds.includes(replicaIdentity)) {
+    service.replicaIds.push(replicaIdentity);
+  }
+  return decided;
+}
+
+function notLeaderAnswer(service) {
+  const leaderId = typeof service.normalizeLeaderReplicaId === 'function' ?
+    service.normalizeLeaderReplicaId(service.leaderId) : null;
+  return answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
+    {leaderId: leaderId ?? null});
+}
+
 /**
- * The leader's admission decision for one request, from committed facts.
- * The only caller of admitPartitionRaftPeer.
+ * The leader's admission decision for one well-formed request of this
+ * partition (validated by the caller), from committed facts only. The only
+ * caller of admitPartitionRaftPeer. The request is kept until it settles,
+ * also by a replica that does not lead now: one that gains leadership
+ * re-drives it (LEADER), as the target re-sends it on its own cadence.
  * @param {Object} service - The partition service.
  * @param {Object} request - {replicaIdentity, operationId}.
  * @return {Promise<Object>} Frozen answer {outcome, ...}.
  */
 async function admitFromCommittedOperation(service, request) {
   const {replicaIdentity, operationId} = request;
-  // Kept until it settles, also when this replica does not lead now: a
-  // replica that gains leadership re-drives it (LEADER), as the target
-  // re-sends it on its own cadence.
-  const accepted = acceptedRequestsOf(service);
-  accepted.set(replicaIdentity, {operationId});
+  acceptedRequestsOf(service).set(replicaIdentity, {operationId});
   if (!leads(service)) {
-    return answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
-      {leaderId: service.leaderId ?? null});
+    return notLeaderAnswer(service);
   }
   const read = await readCommittedOperation(service, operationId);
   if (read.unavailable !== undefined) {
     return answer(REPLICA_ADMISSION_OUTCOME.AUTHORITY_UNAVAILABLE, {
       reason: read.unavailable,
+      ...(read.readOutcome ? {readOutcome: read.readOutcome} : {}),
       retryAfterMs: AUTHORITY_UNAVAILABLE_RETRY_AFTER_MS});
   }
   const refusal = operationRefusal(read.row, service, replicaIdentity);
-  if (refusal !== null) {
-    accepted.delete(replicaIdentity);
-    return answer(REPLICA_ADMISSION_OUTCOME.OPERATION_NOT_ADMITTING, {
-      reason: refusal,
-      workflowStep: read.row?.workflow_step ?? null});
-  }
-  // The read yielded: leadership is decided again on the port's answer.
-  reservePartitionRaftPeerIdentity(service, replicaIdentity);
-  const admission = admitPartitionRaftPeer(service, {
-    replicaIdentity, nodeId: read.row.target_node_id});
-  const outcome = PORT_OUTCOME_ANSWER[admission.outcome] ??
-    REPLICA_ADMISSION_OUTCOME.REFUSED;
-  if (outcome === REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER) {
-    accepted.delete(replicaIdentity);
-  }
-  if (outcome === REPLICA_ADMISSION_OUTCOME.PROPOSED ||
-      outcome === REPLICA_ADMISSION_OUTCOME.IN_FLIGHT ||
-      outcome === REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER) {
-    if (!service.replicaIds.includes(replicaIdentity)) {
-      service.replicaIds.push(replicaIdentity);
-    }
-  }
-  return answer(outcome, {
-    nodeId: read.row.target_node_id,
-    ...(admission.reason ? {reason: admission.reason} : {}),
-  });
+  return settleAnswer(service, replicaIdentity, refusal !== null ?
+    answer(REPLICA_ADMISSION_OUTCOME.OPERATION_NOT_ADMITTING, {
+      reason: refusal, workflowStep: read.row?.workflow_step ?? null}) :
+    admissionAnswer(service, replicaIdentity, read.row));
 }
 
 /**
@@ -310,10 +341,58 @@ function requestStateAfter(outcome) {
     REPLICA_ADMISSION_REQUEST_STATE.PENDING;
 }
 
-function invalidRequest(payload, service) {
-  return payload?.partitionId !== service.partitionId ||
-    !nonEmptyString(payload?.replicaIdentity) ||
-    !nonEmptyString(payload?.operationId);
+// Why a request is not one this replica may keep or decide, or null. It is
+// checked before anything is kept (a misrouted or malformed request leaves
+// no trace and costs no read).
+function requestRefusal(payload, service) {
+  if (payload?.partitionId !== service.partitionId) {
+    return REPLICA_ADMISSION_REASON.PARTITION_MISMATCH;
+  }
+  return nonEmptyString(payload?.replicaIdentity) &&
+    nonEmptyString(payload?.operationId) ? null :
+    REPLICA_ADMISSION_REASON.REQUEST_SHAPE;
+}
+
+// The leader a NOT_LEADER answer names, or null so discovery runs again.
+// A stale hint is never kept: an unadmitted learner hears no raft leader
+// change, so this answer is how it follows a new leader.
+function leaderHintOf(admission) {
+  return admission.outcome === REPLICA_ADMISSION_OUTCOME.NOT_LEADER &&
+    nonEmptyString(admission.leaderId) ? admission.leaderId : null;
+}
+
+// The answer a delivery carries, or a typed refusal of the delivery. A
+// response bound to another partition means the target's leader address
+// named another partition's replica: it re-discovers (B4).
+function deliveredAdmission(service, request, delivery) {
+  const response = deliveryAnswerOf(delivery);
+  if (!isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) ||
+      typeof response?.admission?.outcome !== 'string') {
+    return answer(REPLICA_ADMISSION_OUTCOME.TRANSPORT_FAILED,
+      {reason: REPLICA_ADMISSION_REASON.RESPONSE_BINDING_MISMATCH});
+  }
+  if (response.partitionId !== service.partitionId) {
+    return answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
+      {reason: REPLICA_ADMISSION_REASON.PARTITION_MISMATCH, leaderId: null});
+  }
+  return response.replicaIdentity === service.replicaId &&
+    response.operationId === request.operationId ? response.admission :
+    answer(REPLICA_ADMISSION_OUTCOME.TRANSPORT_FAILED,
+      {reason: REPLICA_ADMISSION_REASON.RESPONSE_BINDING_MISMATCH});
+}
+
+// The leader's address, or the typed NOT_LEADER that sends the target back
+// to discovery.
+function leaderAddressOf(service) {
+  try {
+    const address = service.resolveLeaderAddress();
+    return nonEmptyString(address) ? {address} : {refusal: answer(
+      REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
+      {reason: REPLICA_ADMISSION_REASON.LEADER_NOT_DISCOVERED})};
+  } catch (error) {
+    return {refusal: answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
+      {reason: error?.message ?? REPLICA_ADMISSION_REASON.LEADER_NOT_DISCOVERED})};
+  }
 }
 
 class PartitionServiceReplicaAdmissionMethods {
@@ -327,8 +406,9 @@ class PartitionServiceReplicaAdmissionMethods {
     const envelope = {partitionId: this.partitionId,
       replicaIdentity: payload?.replicaIdentity ?? null,
       operationId: payload?.operationId ?? null};
-    const admission = invalidRequest(payload, this) ?
-      answer(REPLICA_ADMISSION_OUTCOME.REQUEST_INVALID) :
+    const refusal = requestRefusal(payload, this);
+    const admission = refusal !== null ?
+      answer(REPLICA_ADMISSION_OUTCOME.REQUEST_INVALID, {reason: refusal}) :
       await admitFromCommittedOperation(this, {
         replicaIdentity: payload.replicaIdentity,
         operationId: payload.operationId});
@@ -366,6 +446,9 @@ class PartitionServiceReplicaAdmissionMethods {
     const admission = await this.sendReplicaAdmissionRequest(request);
     request.lastOutcome = admission.outcome;
     request.state = requestStateAfter(admission.outcome);
+    if (admission.outcome === REPLICA_ADMISSION_OUTCOME.NOT_LEADER) {
+      this.leaderId = leaderHintOf(admission);
+    }
     this.logger.info(REPLICA_ADMISSION_LOG_MSG.ANSWERED, {
       partitionId: this.partitionId, replicaId: this.replicaId,
       operationId: request.operationId, outcome: admission.outcome,
@@ -380,39 +463,27 @@ class PartitionServiceReplicaAdmissionMethods {
    * @private
    */
   async sendReplicaAdmissionRequest(request) {
-    let leaderAddress = null;
-    try {
-      leaderAddress = this.resolveLeaderAddress();
-    } catch (error) {
-      return answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
-        {reason: error?.message ?? null});
-    }
-    if (!leaderAddress || !this.transport) {
-      return answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
+    const leader = leaderAddressOf(this);
+    if (leader.refusal) return leader.refusal;
+    if (!this.transport) {
+      return answer(REPLICA_ADMISSION_OUTCOME.TRANSPORT_FAILED,
         {reason: REPLICA_ADMISSION_REASON.LEADER_NOT_DISCOVERED});
     }
     let delivery;
     try {
-      delivery = await this.transport.deliver(leaderAddress, {
+      delivery = await this.transport.deliver(leader.address, {
         type: ADMIT_REPLICA_MESSAGE_TYPE,
         partitionId: this.partitionId,
         replicaIdentity: this.replicaId,
         operationId: request.operationId,
-      });
+      // The bound the promotion-proof delivery names on the same channel:
+      // the router's message timeout (MESSAGE_TIMEOUT_MS), stated here.
+      }, {timeoutMs: this.resolveLearnerPromotionProofDeliveryTimeoutMs()});
     } catch (error) {
       return answer(REPLICA_ADMISSION_OUTCOME.TRANSPORT_FAILED,
         {reason: error?.message ?? String(error)});
     }
-    const response = deliveryAnswerOf(delivery);
-    if (!isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) ||
-        response?.partitionId !== this.partitionId ||
-        response?.replicaIdentity !== this.replicaId ||
-        response?.operationId !== request.operationId ||
-        typeof response?.admission?.outcome !== 'string') {
-      return answer(REPLICA_ADMISSION_OUTCOME.TRANSPORT_FAILED,
-        {reason: REPLICA_ADMISSION_REASON.RESPONSE_BINDING_MISMATCH});
-    }
-    return response.admission;
+    return deliveredAdmission(this, request, delivery);
   }
 }
 

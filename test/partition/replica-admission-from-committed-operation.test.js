@@ -53,6 +53,8 @@ import {
 import {buildDeliveryEnvelope} from
   '../../src/transport/transport-semantic-outcome.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {redriveAcceptedAdmissionRequests} from
+  '../../src/partition/partition-replica-admission.js';
 
 const PARTITION_ID = 'sql_transactions-p1';
 const LEADER_REPLICA = 'sql_transactions-p1-r1';
@@ -253,7 +255,6 @@ test('(b) a services row alone proposes nothing; a terminal operation is ' +
     gateway: createGateway({success: true,
       rows: [operationRow({status: 'failed', workflow_step: 'FAILED'})]})});
   partition.handleSystemTableCacheChange(TABLES.SERVICES, 'insert', row);
-  partition.reconcileRaftPeersFromCache?.();
   await settle();
   t.same(port.proposals, [],
     'a services row is discovery: it never proposes a vote');
@@ -276,7 +277,8 @@ test('(c) a replica that does not lead answers NOT_LEADER before any read',
 test('(d) an unavailable authority answers AUTHORITY_UNAVAILABLE, typed, ' +
   'and proposes nothing', async (t) => {
   const {partition, port} = createLeader({gateway: createGateway(
-    {success: false, error: 'authoritative_row_source_unavailable'})});
+    {success: false, error: 'authoritative_row_source_unavailable',
+      outcome: 'owner_not_ready'})});
   const answer = await ask(partition);
   t.equal(answer?.admission?.outcome, OUTCOME.AUTHORITY_UNAVAILABLE,
     'a failed read is typed unavailability, never a refusal of the operation');
@@ -284,6 +286,8 @@ test('(d) an unavailable authority answers AUTHORITY_UNAVAILABLE, typed, ' +
     answer.admission.retryAfterMs > 0, 'it carries a retry hint');
   t.equal(answer?.admission?.reason, 'authoritative_row_source_unavailable',
     'it names the read\'s own reason');
+  t.equal(answer?.admission?.readOutcome, 'owner_not_ready',
+    'it carries the gateway\'s typed read outcome');
   t.same(port.proposals, [], 'nothing is proposed');
 });
 
@@ -397,16 +401,26 @@ async (t) => {
     });
   }
   t.same(callers, ['partition/partition-replica-admission.js#' +
-    'admitFromCommittedOperation'],
+    'admissionAnswer'],
   'exactly one call site admits a partition peer: the request owner');
+  const answerCallers = [];
+  walk(asts.get('partition/partition-replica-admission.js'),
+    (node, ancestors) => {
+      if (calleeName(node) === 'admissionAnswer') {
+        answerCallers.push(enclosingFunctionName(ancestors));
+      }
+    });
+  t.same(answerCallers, ['admitFromCommittedOperation'],
+    'and only the committed-operation decision reaches it');
 
   const ownerAst = asts.get('partition/partition-replica-admission.js');
   t.ok(ownerAst, 'the request owner module exists');
   if (ownerAst) {
     const owner = functionNodesNamed(ownerAst, 'admitFromCommittedOperation');
     t.equal(owner.length, 1, 'the owner function is declared once');
-    t.notOk(owner.some(referencesCache),
-      'the admission decision never reads the services cache');
+    t.notOk(referencesCache(ownerAst),
+      'no function of the request owner module touches a services cache ' +
+      '(no cache fallback on an unavailable authority)');
   }
 
   // The one exemption, explicit and reasoned (lead decision 2026-11-02,
@@ -542,4 +556,101 @@ test('(i) static: the target requests admission right after its SYNCING ' +
     ['recordReplicaIdentity', 'requestReplicaAdmission', 'syncFromLeader',
       'waitForVoterReadyActivation'],
     'SYNCING commit, then the admission request, then sync and voter wait');
+});
+
+// A request answered NOT_ADMITTING must not be admitted on a row that names
+// another replica, another partition, or by a node the request supplies.
+test('(j) forged requests: another replica, another partition, or a ' +
+  'request-supplied node never admit', async (t) => {
+  const foreignTarget = createLeader({gateway: createGateway({success: true,
+    rows: [operationRow({replica_id: STRANGER_REPLICA})]})});
+  const asTarget = await ask(foreignTarget.partition);
+  t.equal(asTarget?.admission?.outcome, OUTCOME.OPERATION_NOT_ADMITTING,
+    'an operation naming another replica admits nothing');
+  t.equal(asTarget?.admission?.reason, 'operation_target', 'named target');
+  const foreignPartition = createLeader({gateway: createGateway({success: true,
+    rows: [operationRow({partition_id: 'sql_transactions-p9'})]})});
+  const asPartition = await ask(foreignPartition.partition);
+  t.equal(asPartition?.admission?.outcome, OUTCOME.OPERATION_NOT_ADMITTING,
+    'an operation of another partition admits nothing');
+  t.equal(asPartition?.admission?.reason, 'operation_partition',
+    'named partition');
+  t.same([...foreignTarget.port.proposals, ...foreignPartition.port.proposals],
+    [], 'no forged request reached the port');
+  const supplied = createLeader();
+  const answer = await ask(supplied.partition, {nodeId: STALE_NODE});
+  t.equal(answer?.admission?.outcome, OUTCOME.PROPOSED, 'admitted');
+  t.equal(supplied.port.registry.committedNodeIdOf(TARGET_REPLICA),
+    TARGET_NODE, 'the committed node is the row\'s, never the request\'s');
+});
+
+test('(k) a terminal operation settles the request: no read on re-drive',
+  async (t) => {
+    const gateway = createGateway({success: true,
+      rows: [operationRow({workflow_step: 'FAILED', status: 'failed'})]});
+    const {partition} = createLeader({gateway});
+    const answer = await ask(partition);
+    t.equal(answer?.admission?.outcome, OUTCOME.OPERATION_NOT_ADMITTING,
+      'the terminal operation refuses');
+    const readsBefore = gateway.reads.length;
+    redriveAcceptedAdmissionRequests(partition);
+    await settle();
+    t.equal(gateway.reads.length, readsBefore,
+      'the settled request is not re-read on the next re-drive');
+  });
+
+test('(l) a replica keeps only well-formed requests of its own partition; ' +
+  'misrouted or malformed ones cost no read when it gains leadership',
+async (t) => {
+  const gateway = createGateway({success: true, rows: [operationRow()]});
+  const {partition, port} = createLeader({role: RAFT_ROLE.FOLLOWER, gateway});
+  for (let index = 0; index < 50; index += 1) {
+    const misrouted = await ask(partition, {partitionId: `other-p${index}`,
+      replicaIdentity: `forged-${index}`});
+    t.equal(misrouted?.admission?.outcome, 'request_invalid',
+      'a request of another partition is refused');
+  }
+  const malformed = await ask(partition, {operationId: ''});
+  t.equal(malformed?.admission?.reason, 'request_shape',
+    'a malformed request is refused by shape');
+  const kept = await ask(partition);
+  t.equal(kept?.admission?.outcome, OUTCOME.NOT_LEADER,
+    'a well-formed request of this partition is answered NOT_LEADER');
+  port.role = RAFT_ROLE.LEADER;
+  partition.isLeader = true;
+  redriveAcceptedAdmissionRequests(partition);
+  await settle();
+  t.equal(gateway.reads.length, 1,
+    'on leadership only the one kept request is read');
+  t.same(port.proposals.map((change) => change.replicaIdentity),
+    [TARGET_REPLICA], 'and only it is admitted');
+});
+
+test('(m) a NOT_LEADER answer moves the target to the leader it names; a ' +
+  'misrouted answer sends it back to discovery', async (t) => {
+  const NEW_LEADER = 'sql_transactions-p1-r2';
+  const {partition, sent} = createTarget({answers: [
+    {outcome: OUTCOME.NOT_LEADER, leaderId: NEW_LEADER},
+    {outcome: OUTCOME.PROPOSED}]});
+  partition.leaderId = LEADER_REPLICA;
+  partition.resolveLeaderAddress = () =>
+    partitionAddress(LEADER_NODE, partition.leaderId);
+  await partition.requestReplicaAdmission(OPERATION_ID);
+  t.equal(partition.leaderId, NEW_LEADER, 'the hint replaces the old leader');
+  await partition.driveReplicaAdmission();
+  t.equal(sent[1]?.address, partitionAddress(LEADER_NODE, NEW_LEADER),
+    'the next send reaches the new leader within one cadence step');
+  t.equal(partition.replicaAdmissionRequest?.state, 'admitted', 'admitted');
+
+  const misrouted = createTarget({answers: []});
+  misrouted.partition.transport.deliver = async () => buildDeliveryEnvelope(
+    {acknowledged: true}, {partitionId: 'other-p1',
+      replicaIdentity: TARGET_REPLICA, operationId: OPERATION_ID,
+      admission: {outcome: 'request_invalid', reason: 'partition_mismatch'}});
+  misrouted.partition.leaderId = LEADER_REPLICA;
+  await misrouted.partition.requestReplicaAdmission(OPERATION_ID);
+  t.equal(misrouted.partition.leaderId, null,
+    'a response bound to another partition sends the target to discovery');
+  t.equal(misrouted.partition.replicaAdmissionRequest?.state, 'pending',
+    'and the request stays pending');
 });

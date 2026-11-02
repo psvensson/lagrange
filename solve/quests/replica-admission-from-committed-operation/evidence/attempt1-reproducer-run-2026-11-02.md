@@ -34,7 +34,7 @@ Two joiner replicas reached SYNCING in this run. Both were admitted from their c
 | `replace-replica-804a...` (replica_operations-p1, adams-gamla) | 11:54:57.443: `not_leader / leader_not_discovered`. The learner had not yet discovered its leader; the request was re-sent on the cadence. | 11:54:57.678 `in_flight`. The ADD was proposed 235 ms after the first send. | 11:55:00.155 |
 | `control_plane_publications-p1-r4` (lenovo-laptop) | first send `not_leader / leader_not_discovered`, then `in_flight` | `in_flight` | 11:55:03.166 |
 
-Phase 0 measured 0 to 30 s from learner start to grant, with up to 24 `not_in_configuration` refusals per learner. Here the ADD proposal followed the SYNCING commit by a single re-send.
+Phase 0 measured 0 to 30 s from learner start to grant, with up to 24 `not_in_configuration` refusals per learner. Here the ADD proposal followed the SYNCING commit within one cadence re-send. The first send found no discovered leader; discovery re-sends count toward that one cadence step.
 
 ## First divergence on this run (not in this quest's owner set)
 

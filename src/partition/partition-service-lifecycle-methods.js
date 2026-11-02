@@ -26,7 +26,6 @@ async function closePartitionConsensusResources(service) {
     clearTimeout(service.learnerPromotionTimer);
     service.learnerPromotionTimer = null;
   }
-  service.peerReconciliationScheduled = false;
   if (service.systemTableCache &&
       typeof service.systemTableCache.offCacheChange ===
         PARTITION_SERVICE_TYPE.FUNCTION &&

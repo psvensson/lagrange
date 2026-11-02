@@ -20,7 +20,7 @@
     {
       "id": "reproducer-admission-without-cache-visibility",
       "passed": false,
-      "evidence": "not yet measured"
+      "evidence": "measured at 5946c4d2f (lab run 2026-11-02T11:53:43Z, evidence/attempt1-reproducer-run-2026-11-02.md): every joiner replica that reached SYNCING was admitted from its committed operation within one cadence re-send (first send NOT_LEADER/leader_not_discovered, re-send, leader IN_FLIGHT 235 ms after the first send, grant 2.7 s later), 0 not_in_configuration refusals (Phase 0: 205); time-to-serve-lane never (first divergence C5, Group A). Pending verification of the corrected attempt."
     },
     {
       "id": "cdc-hold-handoff-recorded",

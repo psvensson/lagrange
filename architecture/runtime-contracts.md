@@ -191,13 +191,12 @@ Required patterns:
 
 1. CDC-propagated metadata decisions read from the cache unless the boundary
    explicitly declares another owner-fed read model.
-   *Superseded for gating decisions, 2026-11-02 (R09, quest
-   `replica-admission-from-committed-operation`, lead decision Option 1):* a
-   decision that admits, promotes or answers a write reads the committed fact
-   (replica admission reads the committed replica operation; a routed write
-   answers at its commit position). The cache serves presentation,
-   diagnostics and discovery, and may trigger reconciliation; it never grants
-   (`solve/epics/raft-rs-full-cutover/quest-records/replace-source-removal-owner/committed-read-amendment-1-supersession-2026-11-02.md`).
+   Superseded for gating decisions (owner decision, 2026-11-02): a
+   decision that admits, promotes or answers a write reads the committed
+   fact. Replica admission reads the committed replica operation; a routed
+   write answers at its commit position. The cache serves presentation,
+   diagnostics and discovery, and may trigger reconciliation; it never
+   grants.
 2. SQL reads for equivalent semantics are limited to authoritative writes,
    explicit recovery sweeps, and diagnostics reconciliation.
 3. Cache divergence recovery re-enters the owner reconcile path.
