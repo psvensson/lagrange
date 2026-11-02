@@ -1,0 +1,7 @@
+=== mutation: supported-range refusal removed
+  ✖ a client build outside the declared supported range is refused (0.919887ms)
+=== mutation: driver version back in the cell receipt digest
+  ✖ matches committed docs/postgres-compatibility-matrix.json byte-for-byte in structure and digest (3.966718ms)
+  ✖ another host's psql build certifies the same content and digest (2.737238ms)
+=== mutation: driver versions back in the matrix digest
+  ✖ matches committed docs/postgres-compatibility-matrix.json byte-for-byte in structure and digest (1.124891ms)

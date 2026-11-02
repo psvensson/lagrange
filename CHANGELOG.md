@@ -11,6 +11,8 @@ releases without a compatibility guarantee.
 ## [Unreleased]
 
 ### Fixed
+- **PostgreSQL compatibility matrix certifies the SQL surface, not the host's client build (`postgres-compatibility-matrix.js`, `postgres-compatibility-catalog.js`, `docs/postgres-compatibility-matrix.json`):**
+  the generating host's driver versions are now environment recorded beside the matrix, outside its digest and its cell receipt digests, so a host with psql 16.15 and one with psql 14.24 certify the same committed matrix (schema `lagrange-postgres-compatibility-matrix/2`). The matrix declares the client majors it certifies (psql 14 and 16, node-pg 8, pg-pool 3) and refuses any other build with `DRIVER_VERSION_UNSUPPORTED`; the generated content must still equal the committed matrix exactly.
 - **CI gate proof time (`.github/workflows/ci.yml`, `test/manifests/ci-resource-plan.json`):**
   the required `gate` job's `timeout-minutes` is raised from 120 to GitHub's 360-minute
   maximum for every event. Measured cause: PR #184's gate run 41431327759 (a 1892-file

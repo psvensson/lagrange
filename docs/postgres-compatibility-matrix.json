@@ -1,5 +1,5 @@
 {
-  "schema": "lagrange-postgres-compatibility-matrix/1",
+  "schema": "lagrange-postgres-compatibility-matrix/2",
   "questId": "postgres-compatibility-certification-matrix",
   "editionScope": "community-agpl",
   "ormCompatibilityClaimed": false,
@@ -9,10 +9,17 @@
     "psql",
     "pg-pool"
   ],
-  "driverVersions": {
-    "node-pg": "8.18.0",
-    "psql": "14.24",
-    "pg-pool": "3.11.0"
+  "supportedClientMajors": {
+    "node-pg": [
+      8
+    ],
+    "psql": [
+      14,
+      16
+    ],
+    "pg-pool": [
+      3
+    ]
   },
   "dimensions": [
     "startup_tls_authentication",
@@ -38,7 +45,6 @@
     {
       "cellId": "node-pg:startup_tls_authentication:tls_require_password_auth",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "startup_tls_authentication",
       "featureId": "tls_require_password_auth",
       "status": "supported",
@@ -48,12 +54,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SELECT 1",
       "description": "Verified TLS require-mode handshake and cleartext password authentication",
-      "receiptDigest": "64341138582f38e43698e2bf260fff69c8310d9e1766efaf3db87052e5767505"
+      "receiptDigest": "f541ba5b3a6fa3067b9e365dc6ac76ba626922ef22dc0079f3a0884062204f2b"
     },
     {
       "cellId": "psql:startup_tls_authentication:tls_require_password_auth",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "startup_tls_authentication",
       "featureId": "tls_require_password_auth",
       "status": "supported",
@@ -63,12 +68,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SELECT 1",
       "description": "Verified TLS require-mode handshake and cleartext password authentication",
-      "receiptDigest": "5f91109b28263eadadcf418da2eca280d6497864dc8785ae2db01dfe0b2f50c7"
+      "receiptDigest": "557b9e765df3e55b01f6bef6de4d195c31bdcb077c0dcdbe2749d8fa65957c43"
     },
     {
       "cellId": "pg-pool:startup_tls_authentication:tls_require_password_auth",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "startup_tls_authentication",
       "featureId": "tls_require_password_auth",
       "status": "supported",
@@ -78,12 +82,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SELECT 1",
       "description": "Verified TLS require-mode handshake and cleartext password authentication",
-      "receiptDigest": "29421e990ab569296a5f4a8d40a1443dd4432e11fa7946d5b770ef65e2283415"
+      "receiptDigest": "341da23723965365dd6c305e030932ff5d7170d95ecf8b368deb16fa26ce0f0d"
     },
     {
       "cellId": "node-pg:startup_tls_authentication:plaintext_downgrade_when_tls_required",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "startup_tls_authentication",
       "featureId": "plaintext_downgrade_when_tls_required",
       "status": "unsupported",
@@ -93,12 +96,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:08006:TLSRequiredBeforeStartup",
       "description": "Plaintext startup against a TLS-require listener is rejected before SQL",
-      "receiptDigest": "cdafff788726b196e09d1e79844f2c38d05983cbc985cc4f18c5f8aa6b8b2276"
+      "receiptDigest": "a5a0b4a50491f3d4199cfaae15c808b32fefd929a0b84b9cdcc861b5fbf5c640"
     },
     {
       "cellId": "psql:startup_tls_authentication:plaintext_downgrade_when_tls_required",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "startup_tls_authentication",
       "featureId": "plaintext_downgrade_when_tls_required",
       "status": "unsupported",
@@ -108,12 +110,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:08006:TLSRequiredBeforeStartup",
       "description": "Plaintext startup against a TLS-require listener is rejected before SQL",
-      "receiptDigest": "c38786257a70384dae3140efda11a2e8702cfa3eaf068899948a6994e13ef390"
+      "receiptDigest": "e2bd0c7b71b8d79e321e68b57cdc35dc5f123318a9c06e8f1f9d05a19afa5843"
     },
     {
       "cellId": "pg-pool:startup_tls_authentication:plaintext_downgrade_when_tls_required",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "startup_tls_authentication",
       "featureId": "plaintext_downgrade_when_tls_required",
       "status": "unsupported",
@@ -123,12 +124,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:08006:TLSRequiredBeforeStartup",
       "description": "Plaintext startup against a TLS-require listener is rejected before SQL",
-      "receiptDigest": "f62790962bec5a32993e085b7e61199757d1937d3fea1af20c8a54da16344bce"
+      "receiptDigest": "7c76d68d5d7f67d44e2186eb41f605043cddbf115a0ece6638968c46ee27cc2d"
     },
     {
       "cellId": "node-pg:simple_and_extended_query:simple_and_extended_query_execution",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "simple_and_extended_query",
       "featureId": "simple_and_extended_query_execution",
       "status": "supported",
@@ -138,12 +138,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SELECT 2",
       "description": "Single-statement simple and extended protocol query execution",
-      "receiptDigest": "43dc60a93736177b598601e3c68f7e39f1c2b8d7322701fafaf2a34939251f33"
+      "receiptDigest": "071a76705b6b83aaedbfcef1a45ca9ed69e2860adc45073989a0afa113ad2fa8"
     },
     {
       "cellId": "psql:simple_and_extended_query:simple_and_extended_query_execution",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "simple_and_extended_query",
       "featureId": "simple_and_extended_query_execution",
       "status": "supported",
@@ -153,12 +152,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SELECT 2",
       "description": "Single-statement simple and extended protocol query execution",
-      "receiptDigest": "187c4517be0c7e7eb26397ad58a384e327498cbc8ca6f8a0371ac736570e9ca5"
+      "receiptDigest": "7ad4907306769a70a9fe8d374df05e2f9270da9e360bfddec1250e066b1115f5"
     },
     {
       "cellId": "pg-pool:simple_and_extended_query:simple_and_extended_query_execution",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "simple_and_extended_query",
       "featureId": "simple_and_extended_query_execution",
       "status": "supported",
@@ -168,12 +166,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SELECT 2",
       "description": "Single-statement simple and extended protocol query execution",
-      "receiptDigest": "43b97bb9b220b4741630237def439eac9ef38c3c5cc7f4b303536828fade0c35"
+      "receiptDigest": "05f74703392c7f9cc1ce143d7b2a094a2bb8e812382b71a89dfce2cf8cc45b7d"
     },
     {
       "cellId": "node-pg:simple_and_extended_query:multi_statement_batch_query",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "simple_and_extended_query",
       "featureId": "multi_statement_batch_query",
       "status": "unsupported",
@@ -183,12 +180,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:MultiStatementBatchRefused",
       "description": "Semicolon-chained multi-statement batches are refused whole without mutation",
-      "receiptDigest": "cf07b1794b438da8fc4abb389d546226b8479d638f61d5c01c5c1a7e910322f4"
+      "receiptDigest": "afceb8c8e1f26de07140648af085448204933bbd81e2e8a72dd2f6a6f027a685"
     },
     {
       "cellId": "psql:simple_and_extended_query:multi_statement_batch_query",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "simple_and_extended_query",
       "featureId": "multi_statement_batch_query",
       "status": "unsupported",
@@ -198,12 +194,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:MultiStatementBatchRefused",
       "description": "Semicolon-chained multi-statement batches are refused whole without mutation",
-      "receiptDigest": "081dba88a18c3a05b224dcfeac922846ca9fdcc991f57f4f69d8e1b8dc42fe0e"
+      "receiptDigest": "91babffb4412ebd4ea1d2624e2238cfb6734ae25b3d6b0ac94e361f74b39b7f7"
     },
     {
       "cellId": "pg-pool:simple_and_extended_query:multi_statement_batch_query",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "simple_and_extended_query",
       "featureId": "multi_statement_batch_query",
       "status": "unsupported",
@@ -213,12 +208,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:MultiStatementBatchRefused",
       "description": "Semicolon-chained multi-statement batches are refused whole without mutation",
-      "receiptDigest": "d784cff822bafe026990024d19fd7d11994078557e8d7ae56675b63d4f045b9c"
+      "receiptDigest": "c1b5bc9d2411b48edf24f7acb0a6ac9bf1c60d6dae8459915f8c6da64a09d91c"
     },
     {
       "cellId": "node-pg:parameter_types:positional_typed_parameters_and_casts",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "parameter_types",
       "featureId": "positional_typed_parameters_and_casts",
       "status": "supported",
@@ -228,12 +222,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SELECT 1",
       "description": "Positional $N parameters, integer/text type casts, booleans, and NULL",
-      "receiptDigest": "f690dfd9bccc5b7823673db8ce24dd01320b01236c317297335b502fe5b81602"
+      "receiptDigest": "ee915bf9570954f47f6e922c24a914cd93f900dddc347962d9b5d71283200bd3"
     },
     {
       "cellId": "psql:parameter_types:positional_typed_parameters_and_casts",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "parameter_types",
       "featureId": "positional_typed_parameters_and_casts",
       "status": "supported",
@@ -243,12 +236,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SELECT 1",
       "description": "Positional $N parameters, integer/text type casts, booleans, and NULL",
-      "receiptDigest": "6befa7ca63d02da6973feeab54784ac4210008f984be26e67c7f26dbaa561a33"
+      "receiptDigest": "31bf25758f9ead708f6b7fffc3aa27f98dd7e056a38ca5e17ff0c0e5105bb42f"
     },
     {
       "cellId": "pg-pool:parameter_types:positional_typed_parameters_and_casts",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "parameter_types",
       "featureId": "positional_typed_parameters_and_casts",
       "status": "supported",
@@ -258,12 +250,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SELECT 1",
       "description": "Positional $N parameters, integer/text type casts, booleans, and NULL",
-      "receiptDigest": "119e6c83dfef3bc9714e201ae7a3fd20a912de3fdd4f6cabda41ebdf7be8ca0d"
+      "receiptDigest": "e760d9070cfd791c76f6895526b17c5cc927e95c802b0e29e9b6ec7ebb44da91"
     },
     {
       "cellId": "node-pg:parameter_types:unbounded_offset_or_parameterized_limit",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "parameter_types",
       "featureId": "unbounded_offset_or_parameterized_limit",
       "status": "unsupported",
@@ -273,12 +264,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:OffsetRequiresLimit",
       "description": "Parameterized LIMIT $1 or OFFSET without LIMIT is refused at parse time",
-      "receiptDigest": "e46ab84446563adcf31394f24e73f661211b3b49f13ff89b698e0fb00fb27355"
+      "receiptDigest": "864ecad59a52ee2e790c8d80d3092b2ce13e64ea318034592c1e2a9b979c987a"
     },
     {
       "cellId": "psql:parameter_types:unbounded_offset_or_parameterized_limit",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "parameter_types",
       "featureId": "unbounded_offset_or_parameterized_limit",
       "status": "unsupported",
@@ -288,12 +278,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:OffsetRequiresLimit",
       "description": "Parameterized LIMIT $1 or OFFSET without LIMIT is refused at parse time",
-      "receiptDigest": "354afde17e29c1290991a78bab510cee1bcb23705b738feee079798dcd39a179"
+      "receiptDigest": "a665c089f92b909f3fbd9088469a7e2b5d5dfc436cc946c838440af5505c7cbd"
     },
     {
       "cellId": "pg-pool:parameter_types:unbounded_offset_or_parameterized_limit",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "parameter_types",
       "featureId": "unbounded_offset_or_parameterized_limit",
       "status": "unsupported",
@@ -303,12 +292,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:OffsetRequiresLimit",
       "description": "Parameterized LIMIT $1 or OFFSET without LIMIT is refused at parse time",
-      "receiptDigest": "5b4efb2576a6b2cef8715d40d937b415396ef8b9fcdf3ee4d863d0263e65b718"
+      "receiptDigest": "bde363de8cd017aba854d3929f04c267b6fdd4703bb9c07b97b77a5291a8fded"
     },
     {
       "cellId": "node-pg:transactions:explicit_begin_commit_rollback",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "transactions",
       "featureId": "explicit_begin_commit_rollback",
       "status": "supported",
@@ -318,12 +306,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:BEGIN_COMMIT_ROLLBACK",
       "description": "Explicit BEGIN, COMMIT, and ROLLBACK blocks across partitioned tables",
-      "receiptDigest": "62974e574682d0c9bcaaa540156fc0be1d823d21c6b5ba00c3479c7f088501f8"
+      "receiptDigest": "c95cef30907a7a76775ab9b31d3b50592783854c4b199f4fec4a5d053bc38cf4"
     },
     {
       "cellId": "psql:transactions:explicit_begin_commit_rollback",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "transactions",
       "featureId": "explicit_begin_commit_rollback",
       "status": "supported",
@@ -333,12 +320,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:BEGIN_COMMIT_ROLLBACK",
       "description": "Explicit BEGIN, COMMIT, and ROLLBACK blocks across partitioned tables",
-      "receiptDigest": "45b43c97f95a48b43b165247db83e1e6b119ead1da11d99e27fda9352476199f"
+      "receiptDigest": "1ed257e503a4548577ad6b7ad6a3231c04ba7661a0ca5a98f83aa9e1400e46d4"
     },
     {
       "cellId": "pg-pool:transactions:explicit_begin_commit_rollback",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "transactions",
       "featureId": "explicit_begin_commit_rollback",
       "status": "supported",
@@ -348,12 +334,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:BEGIN_COMMIT_ROLLBACK",
       "description": "Explicit BEGIN, COMMIT, and ROLLBACK blocks across partitioned tables",
-      "receiptDigest": "2c9095292af91178dcfddef69e8016fa8eb11acee9398e7c33a8a176e4808f24"
+      "receiptDigest": "398c7c6e4ae4bf66856b61a5225d5a11fbdfbaa8f21b306869993a1c2c17d473"
     },
     {
       "cellId": "node-pg:transactions:serializable_isolation_mode",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "transactions",
       "featureId": "serializable_isolation_mode",
       "status": "unsupported",
@@ -363,12 +348,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:UnsupportedTransactionMode",
       "description": "Unenforced transaction isolation modes (SERIALIZABLE, READ ONLY) are refused",
-      "receiptDigest": "a17171795d6726e60371503b26a49a71341eccc6941971429be96edd30692fe9"
+      "receiptDigest": "2784b5f862725f8f6703c6ed84c999515492ce2380b4a8638afdd74cf61127c1"
     },
     {
       "cellId": "psql:transactions:serializable_isolation_mode",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "transactions",
       "featureId": "serializable_isolation_mode",
       "status": "unsupported",
@@ -378,12 +362,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:UnsupportedTransactionMode",
       "description": "Unenforced transaction isolation modes (SERIALIZABLE, READ ONLY) are refused",
-      "receiptDigest": "ad9b7be26baaf2f555ea1cd8c5a3a7dd667f02c5ec443c04e3c40c59a5d8e16c"
+      "receiptDigest": "dead4717068c611f6d1443009ab937fe0763748d5ef111678aded3a549ba7fa8"
     },
     {
       "cellId": "pg-pool:transactions:serializable_isolation_mode",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "transactions",
       "featureId": "serializable_isolation_mode",
       "status": "unsupported",
@@ -393,12 +376,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:UnsupportedTransactionMode",
       "description": "Unenforced transaction isolation modes (SERIALIZABLE, READ ONLY) are refused",
-      "receiptDigest": "cde0b7395d8cea1dfa36925af0f7dde0b8f4c5b1bd0d85d577952e64bc7f4194"
+      "receiptDigest": "2b28a31ae9ad509c6d9d6e250580e723f5ed85a779906cd913fd0a8b542b7285"
     },
     {
       "cellId": "node-pg:ddl:create_table_primary_key",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "ddl",
       "featureId": "create_table_primary_key",
       "status": "supported",
@@ -408,12 +390,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:CREATE TABLE",
       "description": "CREATE TABLE with explicit PRIMARY KEY returns CREATE TABLE command tag",
-      "receiptDigest": "ba00bb04a23b5e30e446538bb09964a7824d1166a48dd07d9cbbb2d0bf452dde"
+      "receiptDigest": "2687032e43d32a1c92d47b0712a2d5e19e36383c28c82824ceeafdcb692942c0"
     },
     {
       "cellId": "psql:ddl:create_table_primary_key",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "ddl",
       "featureId": "create_table_primary_key",
       "status": "supported",
@@ -423,12 +404,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:CREATE TABLE",
       "description": "CREATE TABLE with explicit PRIMARY KEY returns CREATE TABLE command tag",
-      "receiptDigest": "1fa0112cd7ea05f258786836cf00cee81aa259303427ee0ae5929a670516f5de"
+      "receiptDigest": "8dfa4e58b3ed6a1f83d6b38d52e90381bb0229880d3b8733afd2ac87de13b724"
     },
     {
       "cellId": "pg-pool:ddl:create_table_primary_key",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "ddl",
       "featureId": "create_table_primary_key",
       "status": "supported",
@@ -438,12 +418,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:CREATE TABLE",
       "description": "CREATE TABLE with explicit PRIMARY KEY returns CREATE TABLE command tag",
-      "receiptDigest": "bee247077b81f46df15ff531349a9f3b6cfd25537a44f16516c1c7e8eaa89b66"
+      "receiptDigest": "6f780dce5247da1469da79d79dcf88630fb85aedf1d7de94c4b4039bdac37a8a"
     },
     {
       "cellId": "node-pg:ddl:foreign_key_and_drop_table_ddl",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "ddl",
       "featureId": "foreign_key_and_drop_table_ddl",
       "status": "unsupported",
@@ -453,12 +432,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:ForeignKeyDdlRefused",
       "description": "Cross-partition FOREIGN KEY / REFERENCES DDL is refused before execution",
-      "receiptDigest": "bfcc97088752f833c84fb837e593ee98a576810499887ccaf56cd4c51a62cdfa"
+      "receiptDigest": "bd9fa45590709b85925ea33285e391dc65fc68b32e7e291b14e6c239d0199f1a"
     },
     {
       "cellId": "psql:ddl:foreign_key_and_drop_table_ddl",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "ddl",
       "featureId": "foreign_key_and_drop_table_ddl",
       "status": "unsupported",
@@ -468,12 +446,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:ForeignKeyDdlRefused",
       "description": "Cross-partition FOREIGN KEY / REFERENCES DDL is refused before execution",
-      "receiptDigest": "d4071dddd4773b095f882d5b12cec816e0340ad29429f35b24f082ec847e7dfc"
+      "receiptDigest": "da33bafeb88ca83456c5c367fc42f347a57c17ba102cc28b87b0a1c5c07a6f1b"
     },
     {
       "cellId": "pg-pool:ddl:foreign_key_and_drop_table_ddl",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "ddl",
       "featureId": "foreign_key_and_drop_table_ddl",
       "status": "unsupported",
@@ -483,12 +460,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:ForeignKeyDdlRefused",
       "description": "Cross-partition FOREIGN KEY / REFERENCES DDL is refused before execution",
-      "receiptDigest": "e2e8d894291def370b98d3a1e5418077a4a1ce303ce0d33fbf228e3e13bdc007"
+      "receiptDigest": "0e3a16ff4cc56c9ebdcffe28bd6b3889ce7f02258b4e38bd30d56de9df1086ae"
     },
     {
       "cellId": "node-pg:inserts_updates_deletes:partition_spanning_dml_command_tags",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "inserts_updates_deletes",
       "featureId": "partition_spanning_dml_command_tags",
       "status": "supported",
@@ -498,12 +474,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:INSERT 0 2|UPDATE 2|DELETE 2",
       "description": "INSERT, UPDATE, and DELETE aggregate affected row counts across partitions",
-      "receiptDigest": "906c5cc4a30b4e8356e2abd9fab6e84948c67a7fc1bda66c809534bc1f8ab734"
+      "receiptDigest": "eb78720ef41b1072a6910f0648a7829d413705ac2f82df2a24a8b3105120a537"
     },
     {
       "cellId": "psql:inserts_updates_deletes:partition_spanning_dml_command_tags",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "inserts_updates_deletes",
       "featureId": "partition_spanning_dml_command_tags",
       "status": "supported",
@@ -513,12 +488,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:INSERT 0 2|UPDATE 2|DELETE 2",
       "description": "INSERT, UPDATE, and DELETE aggregate affected row counts across partitions",
-      "receiptDigest": "a6faa5430322ad9904f8f5635ec9f2473ff494e6c0943db7554dff706e7bd82a"
+      "receiptDigest": "136ee05dff718977d7cec40b7959d20375d0d824755de64c388cf925b5ad497c"
     },
     {
       "cellId": "pg-pool:inserts_updates_deletes:partition_spanning_dml_command_tags",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "inserts_updates_deletes",
       "featureId": "partition_spanning_dml_command_tags",
       "status": "supported",
@@ -528,12 +502,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:INSERT 0 2|UPDATE 2|DELETE 2",
       "description": "INSERT, UPDATE, and DELETE aggregate affected row counts across partitions",
-      "receiptDigest": "4e2fbc11201896616aa8d1c96a4fbc8ca4b6c26e4a54eba76f3da7d67bf8940d"
+      "receiptDigest": "5d7ad2f74fa9b69c111e60092e2c5bd19cb9b832c6d0abd8c321a80d4a2f2818"
     },
     {
       "cellId": "node-pg:inserts_updates_deletes:dml_returning_and_conflict_update",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "inserts_updates_deletes",
       "featureId": "dml_returning_and_conflict_update",
       "status": "unsupported",
@@ -543,12 +516,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:DmlReturningRefused",
       "description": "DML RETURNING and ON CONFLICT DO UPDATE clauses are refused without mutation",
-      "receiptDigest": "732f7af39a3e372feb5dea95cf1780732999a5a8ac430aa491559283db95b0a7"
+      "receiptDigest": "344121219ada943e33a7c7918d97b2dd0fe7961fa4dd4d1ee2ac80d688262acb"
     },
     {
       "cellId": "psql:inserts_updates_deletes:dml_returning_and_conflict_update",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "inserts_updates_deletes",
       "featureId": "dml_returning_and_conflict_update",
       "status": "unsupported",
@@ -558,12 +530,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:DmlReturningRefused",
       "description": "DML RETURNING and ON CONFLICT DO UPDATE clauses are refused without mutation",
-      "receiptDigest": "db3f181eb15016488e3630afe742d4ca516c06a07b7e1666cb30a1f10bb03422"
+      "receiptDigest": "c883bbdc20e3247868204558166a302a7f57d8db3dd64cf74332be101f6c50a8"
     },
     {
       "cellId": "pg-pool:inserts_updates_deletes:dml_returning_and_conflict_update",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "inserts_updates_deletes",
       "featureId": "dml_returning_and_conflict_update",
       "status": "unsupported",
@@ -573,12 +544,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:0A000:DmlReturningRefused",
       "description": "DML RETURNING and ON CONFLICT DO UPDATE clauses are refused without mutation",
-      "receiptDigest": "a283796af333d1406d5295aef3f1f0a91907c7e8ed54d3131018a4b90765d27d"
+      "receiptDigest": "28c5c4715c071d23fdf470cb42b31915565274deb3d59dd17feaa11d39131746"
     },
     {
       "cellId": "node-pg:result_types:text_row_description_and_expressions",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "result_types",
       "featureId": "text_row_description_and_expressions",
       "status": "supported",
@@ -588,12 +558,11 @@
       "mutationPrevented": false,
       "observedOutcome": "RowDescription:text:SELECT 2",
       "description": "Text-format RowDescription and DataRow frames for expressions, CASE, and casts",
-      "receiptDigest": "b7db764579778ad1830224de53797ebe658c583c9ae5f8c4774cfb4bd83d1ff6"
+      "receiptDigest": "a18ec2e11289bb9f361135552aa556b980a9a369210eb7696f95a5ae1f4ef832"
     },
     {
       "cellId": "psql:result_types:text_row_description_and_expressions",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "result_types",
       "featureId": "text_row_description_and_expressions",
       "status": "supported",
@@ -603,12 +572,11 @@
       "mutationPrevented": false,
       "observedOutcome": "RowDescription:text:SELECT 2",
       "description": "Text-format RowDescription and DataRow frames for expressions, CASE, and casts",
-      "receiptDigest": "d462c0caed3ad604321a282be56b1f3a282828b7317e7cc46d643438382e2221"
+      "receiptDigest": "2dd3cbbe4b30f9385037e7630837c7e1e17596e84802c3b39d6fd8d55975291a"
     },
     {
       "cellId": "pg-pool:result_types:text_row_description_and_expressions",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "result_types",
       "featureId": "text_row_description_and_expressions",
       "status": "supported",
@@ -618,12 +586,11 @@
       "mutationPrevented": false,
       "observedOutcome": "RowDescription:text:SELECT 2",
       "description": "Text-format RowDescription and DataRow frames for expressions, CASE, and casts",
-      "receiptDigest": "8610398cca38dc8b14517587c0a29f8431da32da1e64949c101aab3dccd1b745"
+      "receiptDigest": "b129c26170b05fd65e4ed5ce4ccf1e638566cb2d2796df12319180fd987aa1f3"
     },
     {
       "cellId": "node-pg:result_types:copy_streaming_protocol",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "result_types",
       "featureId": "copy_streaming_protocol",
       "status": "unsupported",
@@ -633,12 +600,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:CopyStreamingRefused",
       "description": "PostgreSQL COPY streaming statements are refused before execution",
-      "receiptDigest": "07f67f0f0cbb2968419c8dbb08b55917ecd264b1e869cf06c47add5f302d6b40"
+      "receiptDigest": "abe1ed5a6745e7e50e263495044d86e4ec29b519ee58ae4e7a744b3975479c97"
     },
     {
       "cellId": "psql:result_types:copy_streaming_protocol",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "result_types",
       "featureId": "copy_streaming_protocol",
       "status": "unsupported",
@@ -648,12 +614,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:CopyStreamingRefused",
       "description": "PostgreSQL COPY streaming statements are refused before execution",
-      "receiptDigest": "972086bdeb7dc174b3f91a242c8df0a2ad7b902651b71b4b02cfcb8a72cb81d8"
+      "receiptDigest": "dcd97f70a85af4d7f2dd62c0339de7a95f2accee2786a3ad6dcae2b9c356cb7e"
     },
     {
       "cellId": "pg-pool:result_types:copy_streaming_protocol",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "result_types",
       "featureId": "copy_streaming_protocol",
       "status": "unsupported",
@@ -663,12 +628,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:CopyStreamingRefused",
       "description": "PostgreSQL COPY streaming statements are refused before execution",
-      "receiptDigest": "f2b4c50325f67e05a1406967d0149ae82e76a54aa3222939f3c4332692918445"
+      "receiptDigest": "09f02f34715abc6072d8804287d345690d3e2c39b9763e60c5d5471e31ba70cc"
     },
     {
       "cellId": "node-pg:errors:sqlstate_failed_transaction_fencing",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "errors",
       "featureId": "sqlstate_failed_transaction_fencing",
       "status": "supported",
@@ -678,12 +642,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:25P02:AbortedTransactionFenced",
       "description": "Aborted transaction block fences follow-up queries with 25P02 until ROLLBACK",
-      "receiptDigest": "9a932096e8640636444474498ab5b1ea0f8f9165e4f9daff983f9b91fca2b43d"
+      "receiptDigest": "8b146bcdd777f03ebf051c8721c55d5fd5649f196bab55579793112a83eef54b"
     },
     {
       "cellId": "psql:errors:sqlstate_failed_transaction_fencing",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "errors",
       "featureId": "sqlstate_failed_transaction_fencing",
       "status": "supported",
@@ -693,12 +656,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:25P02:AbortedTransactionFenced",
       "description": "Aborted transaction block fences follow-up queries with 25P02 until ROLLBACK",
-      "receiptDigest": "ab9ff49fcb9d67dfb590499546132e9e14a19121ecc5057c19050d65f8b9bbae"
+      "receiptDigest": "c01c7603da8035913d69917c9b6d707731db900972e08ba10fd469648e580a63"
     },
     {
       "cellId": "pg-pool:errors:sqlstate_failed_transaction_fencing",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "errors",
       "featureId": "sqlstate_failed_transaction_fencing",
       "status": "supported",
@@ -708,12 +670,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:25P02:AbortedTransactionFenced",
       "description": "Aborted transaction block fences follow-up queries with 25P02 until ROLLBACK",
-      "receiptDigest": "5dce3060f6d5802bb1335486fb2e7896d4b23b0531844749dac420ff24bc5798"
+      "receiptDigest": "0921680bf4159cd747b6b6436bcb245ed1422cf274efcbd592b647b2653a5857"
     },
     {
       "cellId": "node-pg:errors:system_table_direct_client_mutation",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "errors",
       "featureId": "system_table_direct_client_mutation",
       "status": "unsupported",
@@ -723,12 +684,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:42501:SystemTableWriteRefused",
       "description": "Direct client DML against system tables is refused with SQLSTATE 42501",
-      "receiptDigest": "8243fc3e4d4028722f16f68ddd151f9ab8f4bf6b547fd6b7554c0a86166ab574"
+      "receiptDigest": "552c71c5467db98c49e69d2cab92adada03322f6381b9ee6e7d3b053021ca567"
     },
     {
       "cellId": "psql:errors:system_table_direct_client_mutation",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "errors",
       "featureId": "system_table_direct_client_mutation",
       "status": "unsupported",
@@ -738,12 +698,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:42501:SystemTableWriteRefused",
       "description": "Direct client DML against system tables is refused with SQLSTATE 42501",
-      "receiptDigest": "385d7a86eee0cce1112f32e3c0ed87a96cf4b560a2f623b42a135e3d162d7727"
+      "receiptDigest": "dcf729469d976469a8d0fd9a91b0c28c80e2cd8a4fa67650ffa1bacbe695c4a9"
     },
     {
       "cellId": "pg-pool:errors:system_table_direct_client_mutation",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "errors",
       "featureId": "system_table_direct_client_mutation",
       "status": "unsupported",
@@ -753,12 +712,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:42501:SystemTableWriteRefused",
       "description": "Direct client DML against system tables is refused with SQLSTATE 42501",
-      "receiptDigest": "b316e35449ffc40c75a2397839bef59d3f863d3f460a2632d65aa8e656d91fab"
+      "receiptDigest": "345fdb8e2c92ffcaf029c8f1e4e20d24d8a477f63b174f914f324d5985112943"
     },
     {
       "cellId": "node-pg:connection_pooling:concurrent_session_and_pool_reuse",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "connection_pooling",
       "featureId": "concurrent_session_and_pool_reuse",
       "status": "supported",
@@ -768,12 +726,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:ConcurrentSessionsVerified",
       "description": "Concurrent client sessions and pooled checkout/release execute isolated queries",
-      "receiptDigest": "264a1dd3d3461245de378ec8b0518c3f68d575aa7e8813096e678afc21f89a30"
+      "receiptDigest": "f67d9fdbb228e0bd65e51a5eb72cef4a48acc75760d21d7c7c5af4af9b58fe9f"
     },
     {
       "cellId": "psql:connection_pooling:concurrent_session_and_pool_reuse",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "connection_pooling",
       "featureId": "concurrent_session_and_pool_reuse",
       "status": "supported",
@@ -783,12 +740,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:ConcurrentSessionsVerified",
       "description": "Concurrent client sessions and pooled checkout/release execute isolated queries",
-      "receiptDigest": "dc1762793d9a59c9788b4acfe4ed61775b1e5b766e7378579a39200496203321"
+      "receiptDigest": "d6fbeedae3ab99c6f2a8a070de24b31814c2aaaa414f623aaa05e6e532ff42c3"
     },
     {
       "cellId": "pg-pool:connection_pooling:concurrent_session_and_pool_reuse",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "connection_pooling",
       "featureId": "concurrent_session_and_pool_reuse",
       "status": "supported",
@@ -798,12 +754,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:ConcurrentSessionsVerified",
       "description": "Concurrent client sessions and pooled checkout/release execute isolated queries",
-      "receiptDigest": "b8228614793f0a12e226dd18efd6d650fcf382f60569e4fafb059740fa5eac78"
+      "receiptDigest": "c1574b59d8814cff71de130ff41c5f25b9e61b0bbeeda3bcf01eb236f672b7c2"
     },
     {
       "cellId": "node-pg:connection_pooling:max_sessions_overflow_admission",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "connection_pooling",
       "featureId": "max_sessions_overflow_admission",
       "status": "unsupported",
@@ -813,12 +768,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ConnectionClosed:08006:MaxSessionsExceeded",
       "description": "Connections exceeding maxSessions ceiling are closed before SQL execution",
-      "receiptDigest": "05e588cb3421eb88a76ab8c1034756e20c5cb9f13a7a81a86c67888d4e21b771"
+      "receiptDigest": "8b13acf08af72a4778f6f39039c4002db3bc3c0ca998a2232f9d17d67dabe7f2"
     },
     {
       "cellId": "psql:connection_pooling:max_sessions_overflow_admission",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "connection_pooling",
       "featureId": "max_sessions_overflow_admission",
       "status": "unsupported",
@@ -828,12 +782,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ConnectionClosed:08006:MaxSessionsExceeded",
       "description": "Connections exceeding maxSessions ceiling are closed before SQL execution",
-      "receiptDigest": "590ff28d1b45c3988fbe2600cf154d2fca1baf705d5add20713ded81c3b3308f"
+      "receiptDigest": "5845fea71539a3c7f26d9460b9649dd7c746d16cc94e101eac6ced33872e4270"
     },
     {
       "cellId": "pg-pool:connection_pooling:max_sessions_overflow_admission",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "connection_pooling",
       "featureId": "max_sessions_overflow_admission",
       "status": "unsupported",
@@ -843,12 +796,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ConnectionClosed:08006:MaxSessionsExceeded",
       "description": "Connections exceeding maxSessions ceiling are closed before SQL execution",
-      "receiptDigest": "34fb7dff8aebd21a06c3bde167d8817a2c3733531f72f98bd5d4d40c5355ed72"
+      "receiptDigest": "3180d1613312d91f257ad672a3012579e58f41a83592fe8278658b3726c330fe"
     },
     {
       "cellId": "node-pg:prepared_statements:named_extended_prepared_statement",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "prepared_statements",
       "featureId": "named_extended_prepared_statement",
       "status": "supported",
@@ -858,12 +810,11 @@
       "mutationPrevented": false,
       "observedOutcome": "ParseComplete:BindComplete:SELECT 1",
       "description": "Extended-protocol named prepared statement Parse/Bind/Execute reuse",
-      "receiptDigest": "67712b3652211a9c159003956f8f55cfa5bf91b275ffad4c47908c0e0b6800bb"
+      "receiptDigest": "76a30eab39f0a2f9c4cab7a1576e7aa56fb6fdb525a7e52e6f3e4994fc9a3264"
     },
     {
       "cellId": "pg-pool:prepared_statements:named_extended_prepared_statement",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "prepared_statements",
       "featureId": "named_extended_prepared_statement",
       "status": "supported",
@@ -873,12 +824,11 @@
       "mutationPrevented": false,
       "observedOutcome": "ParseComplete:BindComplete:SELECT 1",
       "description": "Extended-protocol named prepared statement Parse/Bind/Execute reuse",
-      "receiptDigest": "9ad81da6817923cbc15d30189aed349ea9bbcd15de7c5d3b90ba064555bbc483"
+      "receiptDigest": "53c0ff92bb6d8462b4c6cff1d73e41a1880c8c46cb693b6fbfc0f54f1b268e78"
     },
     {
       "cellId": "node-pg:prepared_statements:sql_prepare_execute_syntax",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "prepared_statements",
       "featureId": "sql_prepare_execute_syntax",
       "status": "unsupported",
@@ -888,12 +838,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:SqlPrepareSyntaxRefused",
       "description": "SQL-text PREPARE/EXECUTE statement syntax is refused in favor of wire Parse/Bind",
-      "receiptDigest": "890c03f7f2f53ea166476bbed738703307b5613a5818ab099cd4b6cf2ba8745f"
+      "receiptDigest": "f2f6b290408449cbb276f70991558340f4901ee63fd49b37509ab8ee94bc729a"
     },
     {
       "cellId": "psql:prepared_statements:sql_prepare_execute_syntax",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "prepared_statements",
       "featureId": "sql_prepare_execute_syntax",
       "status": "unsupported",
@@ -903,12 +852,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:SqlPrepareSyntaxRefused",
       "description": "SQL-text PREPARE/EXECUTE statement syntax is refused in favor of wire Parse/Bind",
-      "receiptDigest": "94e9e0c91137d06b317130b2e2bd3ad217180785b283e7d12c9c676c9eb91a5a"
+      "receiptDigest": "37a06890d5df5549e19ef262cc98bea7e4b803bad5f0099f0144b320746b78a5"
     },
     {
       "cellId": "pg-pool:prepared_statements:sql_prepare_execute_syntax",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "prepared_statements",
       "featureId": "sql_prepare_execute_syntax",
       "status": "unsupported",
@@ -918,12 +866,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:SqlPrepareSyntaxRefused",
       "description": "SQL-text PREPARE/EXECUTE statement syntax is refused in favor of wire Parse/Bind",
-      "receiptDigest": "c3fe3d5af121486f9c67dd29e3238405c46d9ccbcdc6b181865130309a41c35b"
+      "receiptDigest": "e04eb7c499cd7558415b8a2b932d51fe81b9d808761d179d9f2e978426a4a617"
     },
     {
       "cellId": "node-pg:cancellation_behavior:disconnect_aborts_open_transaction",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "cancellation_behavior",
       "featureId": "disconnect_aborts_open_transaction",
       "status": "supported",
@@ -933,12 +880,11 @@
       "mutationPrevented": true,
       "observedOutcome": "DisconnectRollbackVerified:SELECT 0",
       "description": "Client disconnect inside an open transaction block rolls back uncommitted writes",
-      "receiptDigest": "aea4fe105a3fa4d0543201aa38d712c3eef9d38f6f3ec0c95f6fcaa3a6b12694"
+      "receiptDigest": "3e01b11054cc3199ac39e7afa50213035c2ab8b605c38137c921675435b7eccf"
     },
     {
       "cellId": "psql:cancellation_behavior:disconnect_aborts_open_transaction",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "cancellation_behavior",
       "featureId": "disconnect_aborts_open_transaction",
       "status": "supported",
@@ -948,12 +894,11 @@
       "mutationPrevented": true,
       "observedOutcome": "DisconnectRollbackVerified:SELECT 0",
       "description": "Client disconnect inside an open transaction block rolls back uncommitted writes",
-      "receiptDigest": "712b65c7b2e51c99ceb3b12dd90b460ca482880b01f5cbe2500f1450895cf94f"
+      "receiptDigest": "7340f44275f6c7a9fce45a5d40585bde5d640edffd6cdb32d26b553f48dd0c9e"
     },
     {
       "cellId": "pg-pool:cancellation_behavior:disconnect_aborts_open_transaction",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "cancellation_behavior",
       "featureId": "disconnect_aborts_open_transaction",
       "status": "supported",
@@ -963,12 +908,11 @@
       "mutationPrevented": true,
       "observedOutcome": "DisconnectRollbackVerified:SELECT 0",
       "description": "Client disconnect inside an open transaction block rolls back uncommitted writes",
-      "receiptDigest": "0c54a9c9559b950a0bdf01de4dbcc3f6916f5545383223e545662cf70688acad"
+      "receiptDigest": "7bea60147c697b68c993d903a7633634f485a9142cb8784a9f99ce08b27fc5ac"
     },
     {
       "cellId": "node-pg:cancellation_behavior:out_of_band_cancel_request_packet",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "cancellation_behavior",
       "featureId": "out_of_band_cancel_request_packet",
       "status": "unsupported",
@@ -978,12 +922,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:08P01:CancelRequestRefused",
       "description": "Out-of-band PostgreSQL CancelRequest startup packets are refused with 08P01",
-      "receiptDigest": "a0370474d7e7583c94d320c119715d89cf221c5b5cdaec22e593cd7b628dfd9f"
+      "receiptDigest": "d46d05ebadbff4df4ff219bbbb8bc45a292dead2506be1dc59e8e5750dcb17d1"
     },
     {
       "cellId": "psql:cancellation_behavior:out_of_band_cancel_request_packet",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "cancellation_behavior",
       "featureId": "out_of_band_cancel_request_packet",
       "status": "unsupported",
@@ -993,12 +936,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:08P01:CancelRequestRefused",
       "description": "Out-of-band PostgreSQL CancelRequest startup packets are refused with 08P01",
-      "receiptDigest": "884bea194e2ccef2032fb00fdafa64383bd3ba92f141598115e4bd9224b1dc78"
+      "receiptDigest": "73a1c459e0bdfad9c254bda33c0ac63cca9dd33b13792c8aab0af2d965c26bf9"
     },
     {
       "cellId": "pg-pool:cancellation_behavior:out_of_band_cancel_request_packet",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "cancellation_behavior",
       "featureId": "out_of_band_cancel_request_packet",
       "status": "unsupported",
@@ -1008,12 +950,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:08P01:CancelRequestRefused",
       "description": "Out-of-band PostgreSQL CancelRequest startup packets are refused with 08P01",
-      "receiptDigest": "7981f82602798ec01638740d387b70c58af5bb6554c1dfe9d9e7709e6065f00b"
+      "receiptDigest": "6a01de15a793ee434086794cb05d6f798722abb617c2f6de0c82ffc9d667e901"
     },
     {
       "cellId": "node-pg:lifecycle_sql_permissions:password_auth_lifecycle_show_services",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "lifecycle_sql_permissions",
       "featureId": "password_auth_lifecycle_show_services",
       "status": "supported",
@@ -1023,12 +964,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SHOW 1",
       "description": "Password-authenticated session is authorized to execute SHOW SERVICES",
-      "receiptDigest": "1dd55b367385d5560bfe2210cba355b89812e9fc202345bc3c76ebb678edfaed"
+      "receiptDigest": "e750424706bbc4e7b31d912d400bcac28de555a3726924983c5f1082d7449919"
     },
     {
       "cellId": "psql:lifecycle_sql_permissions:password_auth_lifecycle_show_services",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "lifecycle_sql_permissions",
       "featureId": "password_auth_lifecycle_show_services",
       "status": "supported",
@@ -1038,12 +978,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SHOW 1",
       "description": "Password-authenticated session is authorized to execute SHOW SERVICES",
-      "receiptDigest": "40f6b23208290be9e576575928c5a8520a4358641d0227bdabe4fe97fd6c801e"
+      "receiptDigest": "93d78c815a281f1599efb8ff42bb9f9559eae849f8104528823b71b26b52ba6a"
     },
     {
       "cellId": "pg-pool:lifecycle_sql_permissions:password_auth_lifecycle_show_services",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "lifecycle_sql_permissions",
       "featureId": "password_auth_lifecycle_show_services",
       "status": "supported",
@@ -1053,12 +992,11 @@
       "mutationPrevented": false,
       "observedOutcome": "CommandComplete:SHOW 1",
       "description": "Password-authenticated session is authorized to execute SHOW SERVICES",
-      "receiptDigest": "8abe77740c98acd33b0dfd6ffd5c893af8884b52fd9290c28a5e2645c7db60df"
+      "receiptDigest": "d75dfc32fd1b135600b6791d7d85bc7c4ef606b7175af34b65d00514fd1450de"
     },
     {
       "cellId": "node-pg:lifecycle_sql_permissions:trust_auth_lifecycle_sql_denied",
       "clientId": "node-pg",
-      "driverVersion": "8.18.0",
       "dimension": "lifecycle_sql_permissions",
       "featureId": "trust_auth_lifecycle_sql_denied",
       "status": "unsupported",
@@ -1068,12 +1006,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:LifecycleSqlUnauthorized",
       "description": "Loopback trust session is denied service lifecycle SQL before SqlCore execution",
-      "receiptDigest": "5f4d50aef24f460322e3fcbdf4df047ed0615313ff00e05bc146233a2cfc53a5"
+      "receiptDigest": "c9667cbe205c8075dde60ca5e17ccf2e0ae33e80ea6b851ddb13449214cfceb7"
     },
     {
       "cellId": "psql:lifecycle_sql_permissions:trust_auth_lifecycle_sql_denied",
       "clientId": "psql",
-      "driverVersion": "14.24",
       "dimension": "lifecycle_sql_permissions",
       "featureId": "trust_auth_lifecycle_sql_denied",
       "status": "unsupported",
@@ -1083,12 +1020,11 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:LifecycleSqlUnauthorized",
       "description": "Loopback trust session is denied service lifecycle SQL before SqlCore execution",
-      "receiptDigest": "397c8c705c65be73f9c4c80779dfb0681ed05f68dc0f7110be4d83507e7ac607"
+      "receiptDigest": "d5c1737ee4ea2f8e60f918b5dc6a44ff5428814bde984ef6a912e16b4d654d5a"
     },
     {
       "cellId": "pg-pool:lifecycle_sql_permissions:trust_auth_lifecycle_sql_denied",
       "clientId": "pg-pool",
-      "driverVersion": "3.11.0",
       "dimension": "lifecycle_sql_permissions",
       "featureId": "trust_auth_lifecycle_sql_denied",
       "status": "unsupported",
@@ -1098,7 +1034,7 @@
       "mutationPrevented": true,
       "observedOutcome": "ErrorResponse:XX000:LifecycleSqlUnauthorized",
       "description": "Loopback trust session is denied service lifecycle SQL before SqlCore execution",
-      "receiptDigest": "a1fb5f3184c9c3047ce2146e3dd70731a2cf0829fd0c44bba6a672801b6ded71"
+      "receiptDigest": "9d90820ae749ddd869236f00e96e42d75213d0b3f302bc421fe608463895137b"
     }
   ],
   "negativeControls": [
@@ -1184,5 +1120,12 @@
       "controlDigest": "9279515b3bb3f4c8ae0df4e5fe92357d98f6e370f2122f0b7ff9f889b858ddb8"
     }
   ],
-  "matrixDigest": "1c542bde10d4db43a8803f554802f060c5537aff661ca013e9df91fe99a3e85e"
+  "matrixDigest": "06f7828a51eb46b4cd2d9b2a5e55846d6463b24a9ec93104a8ea3f729c02f22d",
+  "environment": {
+    "driverVersions": {
+      "node-pg": "8.18.0",
+      "psql": "14.24",
+      "pg-pool": "3.11.0"
+    }
+  }
 }

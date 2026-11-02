@@ -1120,6 +1120,20 @@ async function certifyNegativeControls(ctx) {
   }
 }
 
+// What the matrix certifies: the product's SQL surface. The client builds the
+// generating host happened to have are environment, recorded beside it and
+// never part of the claim (postgres-compatibility-matrix-driver-version-pin).
+function certifiedContent(matrix) {
+  const {environment: _environment, ...content} = matrix;
+  return content;
+}
+
+// The same live observations as another host's client build would report them.
+function receiptsAs(receipts, versions) {
+  return receipts.map((receipt) => createCompatibilityCellReceipt({
+    ...receipt, receiptDigest: undefined, driverVersion: versions[receipt.clientId]}));
+}
+
 describe('Q10 PostgreSQL compatibility certification matrix', () => {
   let partitionFixture = null;
   let tlsPasswordListener = null;
@@ -1251,7 +1265,7 @@ describe('Q10 PostgreSQL compatibility certification matrix', () => {
     const committedMatrix = JSON.parse(
       fs.readFileSync(MATRIX_JSON_PATH, 'utf8'),
     );
-    assert.deepEqual(generatedMatrix, committedMatrix);
+    assert.deepEqual(certifiedContent(generatedMatrix), certifiedContent(committedMatrix));
     const verification = verifyCompatibilityMatrixRegression({
       baselineMatrix: committedMatrix,
       candidateMatrix: generatedMatrix,
@@ -1259,6 +1273,40 @@ describe('Q10 PostgreSQL compatibility certification matrix', () => {
     });
     assert.equal(verification.verified, true);
     assert.equal(verification.matrixDigest, committedMatrix.matrixDigest);
+  });
+
+  it('another host\'s psql build certifies the same content and digest', () => {
+    // Measured: the hosted runner's psql 16.15 (run 41431327759) observed all
+    // 71 cells and 9 controls as this controller's psql 14.24 did.
+    const otherHost = {...driverVersions, [PG_COMPAT_CLIENT_ID.PSQL]: '16.15'};
+    const matrix = generatePostgresCompatibilityMatrix({
+      receipts: receiptsAs(liveReceipts, otherHost),
+      driverVersions: otherHost,
+      negativeControls: liveNegativeControls,
+    });
+    const committedMatrix = JSON.parse(fs.readFileSync(MATRIX_JSON_PATH, 'utf8'));
+    assert.deepEqual(certifiedContent(matrix), certifiedContent(committedMatrix));
+    assert.equal(matrix.matrixDigest, committedMatrix.matrixDigest);
+    assert.deepEqual(matrix.environment.driverVersions, otherHost,
+      'the generating host\'s client builds are recorded beside the claim');
+  });
+
+  it('a client build outside the declared supported range is refused', () => {
+    for (const [clientId, version] of [[PG_COMPAT_CLIENT_ID.PSQL, '9.6'],
+      [PG_COMPAT_CLIENT_ID.NODE_PG, '7.18.2'], [PG_COMPAT_CLIENT_ID.PSQL, 'unknown']]) {
+      const outside = {...driverVersions, [clientId]: version};
+      assert.throws(
+        () => generatePostgresCompatibilityMatrix({
+          receipts: receiptsAs(liveReceipts, outside),
+          driverVersions: outside,
+          negativeControls: liveNegativeControls,
+        }),
+        (err) => err instanceof PostgresCompatibilityMatrixError &&
+          err.code === PG_COMPAT_MATRIX_ERROR_CODE.DRIVER_VERSION_UNSUPPORTED &&
+          err.details?.clientId === clientId,
+        `${clientId} ${version} is not a certified client build`,
+      );
+    }
   });
 
   it('D12 guard: hand-editing matrix without a live receipt fails MATRIX_RECEIPT_DIGEST_MISMATCH', () => {
