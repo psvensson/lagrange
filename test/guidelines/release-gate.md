@@ -11,6 +11,25 @@ last_reviewed: 2026-10-30
 
 # Testing - Scenario And Release-Gate Quests
 
+## Verification Trust And Claim Admission
+
+A release-facing verifier must prove it rejects deliberately broken inputs at the
+same boundary that can produce a green claim. Calibrate timeout-then-error,
+failed DDL, unavailable public client, health-only success, missing final
+response, inconsistent host artifact identity and absent independent state
+witnesses. Preserve the observed failure and any later reconciliation separately:
+a timed-out write is not a successful client request, even if its eventual
+commit status is unknown. Neither an indeterminate result nor a retry may be
+silently counted as success or erase an earlier attempt.
+
+Retain exact source, deployed artifact identities per host, workload semantics,
+client outcome and independent effect evidence. Only directly measured values
+may be published as measured metrics. In-memory models and source tests have
+narrower evidence ceilings than installed public-path and physical multi-host
+runs. A safe refusal is not proof of availability: after a fault clears, the
+claimed journey must resume useful service. Use existing proof owners and
+append-only evidence records; do not introduce a parallel certification path.
+
 ## Documentation-Only Changes
 
 Documentation-only planning, roadmap and policy changes require the relevant
