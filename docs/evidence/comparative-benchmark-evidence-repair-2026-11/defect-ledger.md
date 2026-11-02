@@ -1,3 +1,9 @@
+---
+audience: evidence
+recorded: 2026-11-02
+quest: comparative-benchmark-evidence-repair
+---
+
 # Comparative benchmark defect ledger
 
 > The live diagnosis report `live-diagnosis-2026-11-01.md` is in the relocated bundle `comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-2247fccd2-2026-11-01.tar.gz` (sha256 `5c535ce6bb2cd0232e276af9f895405cc264ecc7c25acfaf06d974ffd0f25b69`); its summary is in tree: `live-diagnosis-2026-11-01-summary.md`.

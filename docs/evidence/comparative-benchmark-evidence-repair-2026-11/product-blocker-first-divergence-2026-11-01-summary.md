@@ -1,3 +1,9 @@
+---
+audience: evidence
+recorded: 2026-11-02
+quest: comparative-benchmark-evidence-repair
+---
+
 # Product blocker, first causal divergence 2026-11-01: summary (derived index)
 
 Full report: relocated bundle `comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.tar.gz`, sha256 `eaf4c6658612a812504507dffa26a594ff820217898f8df0ba28cf5f7f83b95f`, file `product-blocker-first-divergence-2026-11-01.md`.

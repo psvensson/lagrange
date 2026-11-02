@@ -1,3 +1,9 @@
+---
+audience: evidence
+recorded: 2026-11-02
+quest: comparative-benchmark-evidence-repair
+---
+
 # Owner report 2026-11-02: comparative benchmark evidence repair
 
 Scope: the task brief of 2026-11-01 (repair the comparative benchmark system end to end and verify
@@ -17,7 +23,7 @@ semantic-gate client for it yet. There is no throughput or latency claim for any
 
 ## Defect ledger
 
-`evidence/defect-ledger.md`, D01-D41, each row with the proving test and the first-divergence field.
+`defect-ledger.md`, D01-D41, each row with the proving test and the first-divergence field.
 Decisive: D01 (the driver's 5 s timer counted every request as completed; the product answered after
 ~29.8 s with a participant failure), D11 (scale-out dispatch ran a Scenario C SELECT), D14 (history
 overwritten at 86e795c44), D33-D36 and D37-D41 (defects only live runs reached: after-window identity
@@ -53,11 +59,13 @@ admitted records; offline recompute `scripts/checks/comparative-benchmark-recomp
 
 ## Evidence locations
 
-`evidence/chain-design.md`, `evidence/live-diagnosis-2026-11-01-summary.md`,
-`evidence/product-blocker-first-divergence-2026-11-01-summary.md`,
-`evidence/systemic-analysis-serve-lane-2026-11-01.md`, `evidence/live-campaign-bench-live-20261101-b/`
-(summaries, console logs, gate evidence, readiness samples, cleanup verification); bulk in verified
-bundles listed under `solve/changes/evidence-relocation/comparative-benchmark-evidence-repair/`.
+`chain-design.md`, `live-diagnosis-2026-11-01-summary.md`,
+`product-blocker-first-divergence-2026-11-01-summary.md`,
+`systemic-analysis-serve-lane-2026-11-01.md` (this directory); the live-campaign evidence (summaries,
+console logs, gate evidence, readiness samples, cleanup verification) and the raw mirrors are verified
+bundles on the solve-evidence pre-release, inventoried under
+`solve/changes/evidence-relocation/comparative-benchmark-evidence-repair/` and
+`solve/changes/evidence-relocation/learner-host-from-committed-admission/` (the closed-quest bundle).
 
 ## Results with uncertainty
 
@@ -69,7 +77,8 @@ A smoke run supports no capacity statement. Earlier attempts r6-r8 are withdrawn
 
 ## Reviewer findings
 
-Five independent fresh-context verifications are recorded in `log.ndjson`: df36a6d81 approve (F1-F8
+Five independent fresh-context verifications are recorded in the quest log
+`solve/quests/comparative-benchmark-evidence-repair/log.ndjson`: df36a6d81 approve (F1-F8
 fixed), 6c7960dda..b53d58036 approve, b53d58036..14713e286 reject (corpus red + duplicate owners;
 lifted by the corrective attempt), 14713e286..8dd50914a approve, 8dd50914a..54bfea6e2 approve. Named
 debts carried: TiDB through the one journey (follow-up quest `semantic-gate-one-journey-all-wires`),
