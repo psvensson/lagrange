@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "call-shard-paged-execution",
+  "epic": "pilot-readiness-and-public-proof",
+  "statement": "Implement Q3 call-shard paged execution across a dedicated paged-execution and retained-read-view owner, distributed-operation authoring and service source/entry/typings contracts, Call Cell batch executor, local partition call-cell handler, Call Cell invoker, and Call Cell reduce coordinator so every admitted paged operation executes an explicit bounded init/step/finish accumulator lifecycle with canonical finite-JSON state validation, reads from a retained per-shard read view navigated by a deterministic keyset cursor, commits page transitions atomically under the attempt fence, discards and fences the entire attempt when read-view or state custody is lost, enforces per-page and per-shard row/byte/state/page budgets, and passes multi-shard WASI verification well above 4096 rows per shard.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q3-call-shard-paged-execution-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "a1edf693acb14e890b23e4382c5681ec81b24857"
+}

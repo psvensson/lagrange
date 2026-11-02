@@ -11,7 +11,13 @@ doneWhen:
     consecutive: 3
     metric: priority
     certification: true
-quests: []
+quests:
+  - h1-pinned-hono-component-proof
+  - h2-hono-source-ir-deployment-cutover
+  - h3-fetch-ingress-and-scoped-client
+  - h4-http-invocation-recovery-and-cancellation
+  - h5-compiled-public-hono-journey
+  - h6-successor-contract-and-evidence-cutover
 authorizes:
   - src/authoring
   - src/service

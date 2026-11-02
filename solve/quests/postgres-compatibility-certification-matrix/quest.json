@@ -1,0 +1,15 @@
+{
+  "schema": "solve-quest/2",
+  "id": "postgres-compatibility-certification-matrix",
+  "statement": "Implement Q10 under epic pilot-readiness-and-public-proof: a generated, regression-checked PostgreSQL compatibility certification matrix (src/query/pg/postgres-compatibility-catalog.js, src/query/pg/postgres-compatibility-matrix.js, docs/postgres-compatibility-matrix.json) covering psql, pg/node-postgres, psycopg3, and JDBC/PgJDBC across simple/extended wire, prepared statements, OIDs/types, transactions/READ COMMITTED/locking reads, DDL/system catalogs/SHOW/SET, and SQLSTATE/error mapping, backed by live pgwire receipts and negative controls without ORM overclaim.",
+  "epic": "pilot-readiness-and-public-proof",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q10-postgres-compatibility-certification-matrix-guard.js --metric",
+      "direction": "low",
+      "target": 0
+    }
+  },
+  "sealedAt": "8f25ba4f34738b7c02ba7af7eea02841cff29c96"
+}

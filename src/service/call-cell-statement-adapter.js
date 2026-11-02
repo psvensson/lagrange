@@ -20,6 +20,10 @@ import {
   CellIngressAdapterBase,
   createActiveRequest,
 } from './cell-ingress-transport.js';
+import {
+  assertDispatchedSelectorParameters,
+  normalizeCallSelectorInvocationParameters,
+} from './call-selector-parameter-contract.js';
 import {ServicePolicyViolationError} from
   './service-lifecycle-errors.js';
 
@@ -67,6 +71,18 @@ function freezeCallSecurityContext(context) {
   return context;
 }
 
+function extractUserCallArguments(callArguments) {
+  try {
+    const parsed = JSON.parse(callArguments);
+    if (parsed && typeof parsed === 'object' && parsed.__lagrangePagedStep) {
+      return JSON.stringify(parsed.arguments ?? {});
+    }
+  } catch {
+    return callArguments;
+  }
+  return callArguments;
+}
+
 function buildEnvelope(fields) {
   return Object.freeze({
     [SERVICE_MESSAGE_FIELD.MESSAGE_ID]:
@@ -81,6 +97,13 @@ function buildEnvelope(fields) {
       call: Object.freeze({
         arguments: fields.callArguments,
         name: fields.name,
+        ...(fields.parameters !== undefined ?
+          {parameters: fields.parameters} :
+          {}),
+        ...(fields.parametersDigest !== undefined &&
+            fields.parametersDigest !== null ?
+          {parametersDigest: fields.parametersDigest} :
+          {}),
       }),
       invocation: Object.freeze({
         callCell: fields.callCell,
@@ -89,6 +112,9 @@ function buildEnvelope(fields) {
         id: fields.invocationId,
         intentDigest: fields.intentDigest,
       }),
+      ...(fields.pageRequest !== undefined ?
+        {pageRequest: fields.pageRequest} :
+        {}),
       partitionFence: fields.partitionFence,
       partitionId: fields.partitionId,
       partials: fields.partials,
@@ -172,6 +198,7 @@ const CALL_CELL_INGRESS_KIT = Object.freeze({
     componentResult: normalizeCallComponentResult(
       delivery.componentResult,
     ),
+    ...(delivery.pageMeta !== undefined ? {pageMeta: delivery.pageMeta} : {}),
     partials: Array.isArray(delivery.partials) ?
       delivery.partials :
       [],
@@ -179,6 +206,39 @@ const CALL_CELL_INGRESS_KIT = Object.freeze({
   }),
   normalizeDispatchError,
 });
+
+function resolveAdapterRouteParameters(
+  route,
+  callArguments,
+  parameters,
+  parametersDigest,
+) {
+  if (parameters !== undefined || parametersDigest !== undefined) {
+    const verified = assertDispatchedSelectorParameters({
+      argumentsJson: callArguments,
+      dispatchedParameters: parameters,
+      dispatchedParametersDigest: parametersDigest,
+      parameterSchema: route.parameters,
+      statement: route.statement,
+    });
+    return {
+      parameters: verified.boundParameters,
+      parametersDigest: verified.parametersDigest,
+    };
+  }
+  if (Array.isArray(route.parameters)) {
+    const normalized = normalizeCallSelectorInvocationParameters({
+      argumentsJson: callArguments,
+      parameterSchema: route.parameters,
+      statement: route.statement,
+    });
+    return {
+      parameters: normalized.boundParameters,
+      parametersDigest: normalized.parametersDigest,
+    };
+  }
+  return {parameters: undefined, parametersDigest: null};
+}
 
 class CallCellStatementAdapter extends CellIngressAdapterBase {
   constructor(options = {}) {
@@ -207,6 +267,9 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
     batch,
     partials,
     callCell,
+    parameters,
+    parametersDigest,
+    pageRequest,
     partitionId,
     partitionFence,
     hostNodeId,
@@ -222,7 +285,8 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
       this._assertOpen(activeRequest);
       const frozenContext = freezeCallSecurityContext(securityContext);
       const callArguments = normalizeCallArguments(argumentsJson);
-      const argumentsDigest = sha256Hex(callArguments);
+      const userCallArguments = extractUserCallArguments(callArguments);
+      const argumentsDigest = sha256Hex(userCallArguments);
       const invocationId = typeof providedInvocationId === 'string' &&
         providedInvocationId.length > 0 ?
         providedInvocationId :
@@ -248,10 +312,19 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
           name,
           securityContext: frozenContext,
         });
+        const resolvedParams = resolveAdapterRouteParameters(
+          route,
+          userCallArguments,
+          parameters,
+          parametersDigest,
+        );
         const intentDigest = createCallInvocationIntentDigest({
           argumentsDigest,
           bindingVersionId: route.bindingVersionId,
           name,
+          ...(resolvedParams.parametersDigest ?
+            {parametersDigest: resolvedParams.parametersDigest} :
+            {}),
           tenantId: frozenContext.tenantId,
         });
         return this._dispatchAttempt({
@@ -267,6 +340,9 @@ class CallCellStatementAdapter extends CellIngressAdapterBase {
           intentDigest,
           invocationId,
           name,
+          pageRequest,
+          parameters: resolvedParams.parameters,
+          parametersDigest: resolvedParams.parametersDigest,
           partials,
           partitionFence,
           partitionId,

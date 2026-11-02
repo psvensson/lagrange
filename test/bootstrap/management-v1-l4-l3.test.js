@@ -48,7 +48,7 @@ test('Constants, reason codes, contracts, and validator helpers', async (t) => {
     C.SOURCE_CONTRACT && MANAGEMENT_V1_ROUTE.FACTS);
 
   for (const [obj, len] of [
-    [L4_ROLLING_UPGRADE_REASON_CODE, 10],
+    [L4_ROLLING_UPGRADE_REASON_CODE, 12],
     [L3_BACKUP_RESTORE_REASON_CODE, 10],
     [L6_DECOMMISSION_REASON_CODE, 9],
   ]) {
@@ -277,8 +277,17 @@ test('L3 Backup and Restore: 10 reason codes, cut, Rule 6 proof, restore', async
 });
 
 test('ManagementV1Owner: facts, idempotency, conflicts, and decommission', async (t) => {
+  const defaultOwner = new ManagementV1Owner({
+    clusterId: 'lagrange-cluster-primary',
+  });
+  const defaultFacts = defaultOwner.getClusterFacts().facts.capabilities;
+  t.equal(defaultFacts.rollingUpgrade, CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED);
+  t.equal(defaultFacts.backupRestore, CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED);
+  t.equal(defaultFacts.decommissionNode, CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED);
+
   const mOwner = new ManagementV1Owner({
     clusterId: 'lagrange-cluster-primary',
+    decommissionSupported: true,
     nodeCount: 3,
     nodes: ['node-1', 'node-2', 'node-3'],
   });
@@ -329,7 +338,9 @@ test('ManagementV1Owner: facts, idempotency, conflicts, and decommission', async
       L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],
   ]) {
     const o = new ManagementV1Owner({
-      clusterId: 'lagrange-cluster-primary', nodeCount: 3,
+      clusterId: 'lagrange-cluster-primary',
+      decommissionSupported: true,
+      nodeCount: 3,
       nodes: ['node-1', 'node-2', 'node-3'], ...opts,
     });
     const decRes = await o.submitOperation(makeEnv('DECOMMISSION_NODE', {lagrangeNodeId: param}));

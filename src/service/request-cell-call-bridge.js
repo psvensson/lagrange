@@ -19,6 +19,7 @@
  */
 
 import {
+  DEFAULT_REQUEST_HOST_CALL_BUDGET,
   HOST_CALL_ERROR_CODE,
 } from '../runtime/cell-host-call-protocol.js';
 import {
@@ -32,12 +33,15 @@ import {
   publicCallOutcomeOf,
 } from './call-cell-routing-contract.js';
 
-// One bridged binding call per request invocation (brief "Recursion And
-// Cycles"): the fixed chain depth spends the entire nested-call budget,
-// and the child ordinal is fixed with it.
-const REQUEST_CALL_BRIDGE_MAX_NESTED_CALLS_DEFAULT = 1;
-const REQUEST_CALL_BRIDGE_CHILD_ORDINAL = 1;
+// Sequential multi-call fan-out per request invocation (H3): one
+// outstanding child call at a time, incrementing child ordinals (#call-1,
+// #call-2, ...) up to the per-request call budget, and depth-1 only (a
+// child invocation id carrying #call- cannot spawn a grandchild).
+const REQUEST_CALL_BRIDGE_MAX_NESTED_CALLS_DEFAULT =
+  DEFAULT_REQUEST_HOST_CALL_BUDGET;
+const REQUEST_CALL_BRIDGE_INITIAL_ORDINAL = 1;
 const REQUEST_CALL_BRIDGE_CHILD_DEPTH = 1;
+const REQUEST_CALL_BRIDGE_MAX_TRACKED_INVOCATIONS = 1024;
 const REQUEST_CALL_BRIDGE_DEADLINE_DEFAULT_MS = 30000; // ends-on: the host-call response arrives
 const LOCAL_STR_CALLER_SERVICE_ID = 'callerServiceId';
 
@@ -63,6 +67,8 @@ const REQUEST_CALL_BRIDGE_MESSAGE = Object.freeze({
     'Binding call name or arguments are invalid',
   [HOST_CALL_ERROR_CODE.RECURSION_REFUSED]:
     'Binding call refused: nested binding-call depth exhausted',
+  [HOST_CALL_ERROR_CODE.REQUEST_CLIENT_CLOSED]:
+    'Binding call refused: the request-scoped client is closed',
   [HOST_CALL_ERROR_CODE.TARGET_FAILED]:
     'Binding call target failed',
   [HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED]:
@@ -72,6 +78,10 @@ const REQUEST_CALL_BRIDGE_MESSAGE = Object.freeze({
     'Binding call target is not an invocable call Binding',
   [HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE]:
     'Binding call target is currently unavailable',
+  [HOST_CALL_ERROR_CODE.UNFINISHED_CHILD_WORK]:
+    'Binding call refused: request returned with unfinished child work',
+  [HOST_CALL_ERROR_CODE.UNSUPPORTED_CONCURRENCY]:
+    'Binding call refused: concurrent host calls are not supported',
 });
 
 // The code translation table: CallCellRoutingError codes from the
@@ -174,10 +184,29 @@ function createRequestCellCallBridge(options = {}) {
   const maxNestedCalls = positiveIntegerOr(
     options.maxNestedCalls, REQUEST_CALL_BRIDGE_MAX_NESTED_CALLS_DEFAULT);
   const logger = options.logger || null;
+  const invocationStates = new Map();
+
+  function getOrCreateInvocationState(outerInvocationId) {
+    let state = invocationStates.get(outerInvocationId);
+    if (!state) {
+      if (invocationStates.size >= REQUEST_CALL_BRIDGE_MAX_TRACKED_INVOCATIONS) {
+        const oldestKey = invocationStates.keys().next().value;
+        invocationStates.delete(oldestKey);
+      }
+      state = {
+        closed: false,
+        concurrencyViolated: false,
+        inFlight: 0,
+        nextOrdinal: REQUEST_CALL_BRIDGE_INITIAL_ORDINAL,
+      };
+      invocationStates.set(outerInvocationId, state);
+    }
+    return state;
+  }
 
   // Step owners keep each function inside the complexity threshold while
   // preserving the exact refusal order: arguments, identity, policy,
-  // recursion, then delegation.
+  // recursion/concurrency, then delegation.
   function requireValidatedCallShape(bridgeCall) {
     const name = bridgeCall?.name;
     if (typeof name !== 'string' ||
@@ -207,52 +236,70 @@ function createRequestCellCallBridge(options = {}) {
     return invocation;
   }
 
-  function requireChildInvocationId(outerInvocationId) {
-    if (REQUEST_CALL_BRIDGE_CHILD_DEPTH > maxNestedCalls) {
-      throw bridgeFailure(HOST_CALL_ERROR_CODE.RECURSION_REFUSED);
-    }
+  function assertNotChainedChildId(outerInvocationId) {
     try {
-      return createCallChildInvocationId(
-        outerInvocationId, REQUEST_CALL_BRIDGE_CHILD_ORDINAL);
+      createCallChildInvocationId(
+        outerInvocationId,
+        REQUEST_CALL_BRIDGE_INITIAL_ORDINAL,
+      );
     } catch (_error) {
-      // The identity grammar refuses deriving a child of a child: an
-      // outer id already carrying the child separator means this call
-      // chain is past the depth budget.
       throw bridgeFailure(HOST_CALL_ERROR_CODE.RECURSION_REFUSED);
     }
   }
 
-  async function invoke(bridgeCall) {
-    const {argumentsJson, name} = requireValidatedCallShape(bridgeCall);
-    const invocation = requireCanonicalInvocation(bridgeCall);
-    const securityContext = invocation.securityContext;
-    // Declared-target authorization for the SOURCE service (the request
-    // Cell's own derived service id) happens before anything is
-    // dispatched; target existence/invocability surfaces afterwards
-    // from the invoker's own typed refusals through the decision table.
-    const sourceServiceId = invocation.invocationServiceId;
-    const policy = await runtimeAccessPolicyOwner.getOutboundCallPolicy(
-      sourceServiceId);
-    if (!isOutboundCallAllowed(policy, name)) {
-      throw bridgeFailure(HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED);
+  function allocateChildInvocation(outerInvocationId) {
+    assertNotChainedChildId(outerInvocationId);
+    const state = getOrCreateInvocationState(outerInvocationId);
+    if (state.closed) {
+      throw bridgeFailure(HOST_CALL_ERROR_CODE.REQUEST_CLIENT_CLOSED);
     }
-    const childInvocationId = requireChildInvocationId(
-      invocation.invocationId);
-    // Logging-only chain record — system-derived, never guest-supplied
-    // and never sent back to the guest.
-    const callChain = Object.freeze({
-      depth: REQUEST_CALL_BRIDGE_CHILD_DEPTH,
-      sourceServiceId,
-      targetBindingName: name,
-    });
+    if (state.inFlight > 0 || state.concurrencyViolated) {
+      state.concurrencyViolated = true;
+      throw bridgeFailure(HOST_CALL_ERROR_CODE.UNSUPPORTED_CONCURRENCY);
+    }
+    if (state.nextOrdinal > maxNestedCalls) {
+      throw bridgeFailure(HOST_CALL_ERROR_CODE.RECURSION_REFUSED);
+    }
+    const ordinal = state.nextOrdinal;
+    state.nextOrdinal += 1;
+    state.inFlight += 1;
+    return {
+      childInvocationId: createCallChildInvocationId(
+        outerInvocationId,
+        ordinal,
+      ),
+      ordinal,
+      state,
+    };
+  }
+
+  function completeInvocation(outerInvocationId) {
+    const state = invocationStates.get(outerInvocationId);
+    if (!state) return;
+    state.closed = true;
+    if (state.inFlight > 0) {
+      throw bridgeFailure(HOST_CALL_ERROR_CODE.UNFINISHED_CHILD_WORK);
+    }
+    invocationStates.delete(outerInvocationId);
+  }
+
+  function buildDelegatedInvokeRequest({
+    argumentsJson,
+    childInvocationId,
+    invocation,
+    name,
+    sourceServiceId,
+  }) {
     const deadlineMs = resolveBridgeDeadline(
-      invocation.deadlineMs, deadlineDefaultMs);
+      invocation.deadlineMs,
+      deadlineDefaultMs,
+    );
     const invokeRequest = {
       argumentsJson,
       deadlineMs,
       invocationId: childInvocationId,
       name,
-      securityContext,
+      securityContext: invocation.securityContext,
     };
     if (sourceServiceId) {
       Object.defineProperty(invokeRequest, LOCAL_STR_CALLER_SERVICE_ID, {
@@ -262,22 +309,71 @@ function createRequestCellCallBridge(options = {}) {
         writable: true,
       });
     }
-    try {
-      return await callCellInvoker.invoke(invokeRequest);
-    } catch (error) {
-      logger?.debug?.(REQUEST_CALL_BRIDGE_DELEGATED_FAILURE_LOG, {
-        callChain,
-        code: error?.code,
-        message: error?.message,
-      });
-      throw bridgeFailure(
-        CALL_CELL_TO_HOST_CALL_CODE[error?.code] ??
-          HOST_CALL_ERROR_CODE.TARGET_FAILED,
-        publicCallOutcomeOf(error).retrySafe);
+    return invokeRequest;
+  }
+
+  function assertPostCallState(state) {
+    if (state.concurrencyViolated) {
+      throw bridgeFailure(HOST_CALL_ERROR_CODE.UNSUPPORTED_CONCURRENCY);
+    }
+    if (state.closed) {
+      throw bridgeFailure(HOST_CALL_ERROR_CODE.UNFINISHED_CHILD_WORK);
     }
   }
 
-  return Object.freeze({invoke});
+  function rethrowDelegatedFailure(error, callChain) {
+    if (error?.code === HOST_CALL_ERROR_CODE.UNSUPPORTED_CONCURRENCY ||
+        error?.code === HOST_CALL_ERROR_CODE.UNFINISHED_CHILD_WORK) {
+      throw error;
+    }
+    logger?.debug?.(REQUEST_CALL_BRIDGE_DELEGATED_FAILURE_LOG, {
+      callChain,
+      code: error?.code,
+      message: error?.message,
+    });
+    throw bridgeFailure(
+      CALL_CELL_TO_HOST_CALL_CODE[error?.code] ??
+        HOST_CALL_ERROR_CODE.TARGET_FAILED,
+      publicCallOutcomeOf(error).retrySafe,
+    );
+  }
+
+  async function invoke(bridgeCall) {
+    const {argumentsJson, name} = requireValidatedCallShape(bridgeCall);
+    const invocation = requireCanonicalInvocation(bridgeCall);
+    const sourceServiceId = invocation.invocationServiceId;
+    const policy = await runtimeAccessPolicyOwner.getOutboundCallPolicy(
+      sourceServiceId);
+    if (!isOutboundCallAllowed(policy, name)) {
+      throw bridgeFailure(HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED);
+    }
+    const {childInvocationId, ordinal, state} = allocateChildInvocation(
+      invocation.invocationId);
+    const callChain = Object.freeze({
+      depth: REQUEST_CALL_BRIDGE_CHILD_DEPTH,
+      ordinal,
+      sourceServiceId,
+      targetBindingName: name,
+    });
+    const invokeRequest = buildDelegatedInvokeRequest({
+      argumentsJson,
+      childInvocationId,
+      invocation,
+      name,
+      sourceServiceId,
+    });
+    try {
+      const value = await callCellInvoker.invoke(invokeRequest);
+      assertPostCallState(state);
+      return value;
+    } catch (error) {
+      rethrowDelegatedFailure(error, callChain);
+    } finally {
+      state.inFlight -= 1;
+    }
+  }
+
+  return Object.freeze({completeInvocation, invoke});
 }
 
 export {createRequestCellCallBridge};

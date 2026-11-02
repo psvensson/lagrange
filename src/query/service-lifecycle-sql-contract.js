@@ -54,7 +54,13 @@ const SERVICE_LIFECYCLE_SQL_LITERAL = Object.freeze({
 
 const MUTATION_PAYLOAD_FIELDS = Object.freeze({
   [SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING]: Object.freeze([
-    'schema_version', 'name', 'arguments',
+    'schema_version',
+    'name',
+    'arguments',
+    'invocation_key',
+    'idempotency_key',
+    'binding_version_id',
+    'generation',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS]: Object.freeze([
     'schema_version', 'binding_name', 'tables', 'calls',

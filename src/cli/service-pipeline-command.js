@@ -45,6 +45,7 @@ import {
   emitServiceTypings,
 } from '../service/service-typings-generator.js';
 import {
+  assertSuccessorServiceArtifact,
   buildDeploymentRecords,
   restampDeploymentBindings,
   writeDeploymentTree,
@@ -60,6 +61,7 @@ import {
 const SERVICE_PIPELINE_ERROR_NAME = 'ServicePipelineError';
 const SERVICE_PIPELINE_STAGE = Object.freeze({
   BUILD: 'build',
+  CALL: 'call',
   COMPONENTIZE: 'componentize',
   DEPLOY: 'deploy',
   GENERATE: 'generate',
@@ -68,6 +70,9 @@ const SERVICE_PIPELINE_STAGE = Object.freeze({
   RECORDS: 'records',
 });
 const ACTIVE_STATE = 'active';
+const SINGLE_OPERATION_RESTRICTION_CODE = 'single_operation_restriction';
+const CALL_BINDING_SCHEMA_VERSION = 2;
+const CALL_SQL = 'CALL BINDING $1';
 
 const SERVICE_PIPELINE_COMMAND_ERROR_CODE = Object.freeze({
   BUILD_FAILED: 'BUILD_FAILED',
@@ -123,6 +128,7 @@ const PLACEHOLDER_DIGEST = `sha256:${'0'.repeat(64)}`;
 const PLACEHOLDER_REF = 'placeholder.invalid/pending-build:0';
 const SQL_PARAMETER_SUFFIX = ' $';
 const SERVICE_PIPELINE_MESSAGE = Object.freeze({
+  CALL_NAME_REQUIRED: 'binding name is required for call',
   COMPONENTIZE_FAILED:
     'componentize failed (run `lagrange service generate` first): ',
   DEPLOY_BUILD_REQUIRED:
@@ -175,7 +181,15 @@ async function readJsonFile(filePath, stage) {
 
 async function loadNormalizedService(projectDirectory) {
   const modulePath = path.join(projectDirectory, SERVICE_MODULE_FILE);
-  const normalized = await normalizeServiceSource(modulePath);
+  let normalized = await normalizeServiceSource(modulePath);
+  if (normalized.status !== ACCEPTED_STATUS &&
+      normalized.errors?.some((err) =>
+        err.code === SINGLE_OPERATION_RESTRICTION_CODE)) {
+    normalized = await normalizeServiceSource(
+      modulePath,
+      {multiOperationTarget: true},
+    );
+  }
   if (normalized.status !== ACCEPTED_STATUS) {
     const first = normalized.errors[0];
     throw pipelineFailure(
@@ -202,6 +216,7 @@ async function runGenerate({projectDirectory, writeOutput}) {
   const entry = await emitServiceEntry({
     moduleSpecifier: GENERATED_ENTRY_MODULE_SPECIFIER,
     outputPath: path.join(projectDirectory, GENERATED_ENTRY_FILE),
+    world: ir.target,
   }).catch((error) => {
     throw pipelineFailure(
       SERVICE_PIPELINE_STAGE.GENERATE,
@@ -240,15 +255,8 @@ async function runGenerate({projectDirectory, writeOutput}) {
   return {ir, records: result.records};
 }
 
-// Stamping the build's real artifact descriptor back into manifest.json
-// binds the deployed records to the exact bytes that were validated;
-// the manifest validator re-admits the stamped record before it is
-// written. The generated bindings pin the digest of that manifest
-// (the binding contract's package_id + manifest_digest identity), and
-// generate computed them over the pre-build placeholder artifact, so
-// the stamp must also restamp every binding target's manifest_digest —
-// otherwise CREATE BINDING deterministically rejects the deploy with
-// PACKAGE_STATE_CORRUPT for every genuinely built component.
+// Stamp the built artifact descriptor into manifest.json and restamp binding
+// manifest_digest targets so CREATE BINDING matches the validated manifest.
 async function stampArtifactDescriptor(projectDirectory, descriptor) {
   const manifestPath = deploymentFile(projectDirectory, MANIFEST_FILE);
   const manifest = await readJsonFile(
@@ -598,6 +606,12 @@ async function runDeploy(options = {}) {
 
   const effective = resolveEffectiveRegistration(deployRegistration, options);
   assertDeployRegistration(effective.manifest, effective.bindings, stage);
+  if (options.requireSuccessorArtifact) {
+    assertSuccessorServiceArtifact({
+      bindings: effective.bindings,
+      manifest: effective.manifest,
+    });
+  }
 
   const sqlClient = options.createSqlClient();
   const execute = (statement, parameters) =>
@@ -747,11 +761,36 @@ async function runInspect(options = {}) {
   return inspection;
 }
 
+function buildCallBindingPayload(options) {
+  const payload = {name: options.name, schema_version: CALL_BINDING_SCHEMA_VERSION};
+  if (options.arguments !== undefined) payload.arguments = options.arguments;
+  if (options.invocationKey !== undefined) payload.invocation_key = options.invocationKey;
+  if (options.idempotencyKey !== undefined) payload.idempotency_key = options.idempotencyKey;
+  if (options.bindingVersionId !== undefined) payload.binding_version_id = options.bindingVersionId;
+  if (options.generation !== undefined) payload.generation = options.generation;
+  return payload;
+}
+
+async function runCall(options = {}) {
+  const stage = SERVICE_PIPELINE_STAGE.CALL;
+  if (typeof options.name !== 'string' || options.name.length === 0) {
+    throw pipelineFailure(stage, SERVICE_PIPELINE_MESSAGE.CALL_NAME_REQUIRED);
+  }
+  const sqlClient = options.createSqlClient();
+  const payload = buildCallBindingPayload(options);
+  const response = await executeDeployStatement(
+    (statement, parameters) => sqlClient.execute(statement, parameters),
+    CALL_SQL, payload, stage,
+  );
+  const rows = response?.rows || [];
+  const output = {name: options.name, result: rows[0]?.result ?? null, rows};
+  if (typeof options.writeOutput === 'function') {
+    await options.writeOutput(JSON.stringify(output));
+  }
+  return output;
+}
+
 export {
-  SERVICE_PIPELINE_COMMAND_ERROR_CODE,
-  runBuild,
-  runDeploy,
-  runGenerate,
-  runInspect,
-  runPublish,
+  SERVICE_PIPELINE_COMMAND_ERROR_CODE, runBuild, runCall, runDeploy,
+  runGenerate, runInspect, runPublish,
 };

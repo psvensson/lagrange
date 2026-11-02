@@ -36,6 +36,8 @@
   ],
   "ignoreDependencies": [
     "@bytecodealliance/componentize-js",
+    "esbuild",
+    "hono",
     "lagrange",
     "postject",
     "@pulumi/pulumi",

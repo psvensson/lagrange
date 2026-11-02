@@ -1,0 +1,105 @@
+{
+  "boundaries": {
+    "artifactAbi": "service-cell-v2",
+    "protocolBoundary": "node-transport-mtls-v1",
+    "schemaBoundary": "raft-sqlite-schema-v1"
+  },
+  "dependencyReceipts": {
+    "learner-promotion-progress-proof": {
+      "questId": "learner-promotion-progress-proof",
+      "receiptDigest": "sha256:learner-promotion-progress-proof-certified",
+      "verified": true
+    },
+    "node-transport-authenticated-encryption": {
+      "questId": "node-transport-authenticated-encryption",
+      "receiptDigest": "sha256:node-transport-authenticated-encryption-certified",
+      "verified": true
+    },
+    "resumable-bulk-data-load": {
+      "questId": "resumable-bulk-data-load",
+      "receiptDigest": "sha256:resumable-bulk-data-load-certified",
+      "verified": true
+    },
+    "pilot-cutover-and-rollback-receipts": {
+      "questId": "pilot-cutover-and-rollback-receipts",
+      "receiptDigest": "sha256:pilot-cutover-and-rollback-receipts-certified",
+      "verified": true
+    },
+    "public-path-scale-and-failure-certification": {
+      "questId": "public-path-scale-and-failure-certification",
+      "receiptDigest": "sha256:public-path-scale-and-failure-certification-certified",
+      "verified": true
+    }
+  },
+  "drills": {
+    "downgrade_rollback_boundary": {
+      "availabilityOutcome": "BOUNDED_DEGRADATION",
+      "drillId": "downgrade_rollback_boundary",
+      "executed": true,
+      "lostAcknowledgedWrites": 0,
+      "postCutoffRefusedWithCode": "ROLLBACK_CUTOFF_EXCEEDED",
+      "preCutoffSucceeded": true,
+      "recoveryDurationMs": 420
+    },
+    "one_node_failure_recovery": {
+      "availabilityOutcome": "BOUNDED_DEGRADATION",
+      "drillId": "one_node_failure_recovery",
+      "executed": true,
+      "lostAcknowledgedWrites": 0,
+      "recoveryDurationMs": 650,
+      "targetVersion": "0.5.0"
+    },
+    "rolling_upgrade": {
+      "availabilityOutcome": "CONTINUOUS",
+      "drillId": "rolling_upgrade",
+      "executed": true,
+      "lostAcknowledgedWrites": 0,
+      "recoveryDurationMs": 510,
+      "sourceVersion": "0.4.1",
+      "targetVersion": "0.5.0"
+    },
+    "service_artifact_upgrade": {
+      "artifactAbi": "service-cell-v2",
+      "availabilityOutcome": "CONTINUOUS",
+      "drillId": "service_artifact_upgrade",
+      "executed": true,
+      "lostAcknowledgedWrites": 0,
+      "previousGenerationRetired": true,
+      "recoveryDurationMs": 310
+    },
+    "wiped_replica_rebuild": {
+      "availabilityOutcome": "BOUNDED_DEGRADATION",
+      "drillId": "wiped_replica_rebuild",
+      "executed": true,
+      "learnerCatchUpVerified": true,
+      "lostAcknowledgedWrites": 0,
+      "recoveryDurationMs": 890,
+      "replicaBytesRebuilt": 4194304
+    }
+  },
+  "rebuildEnvelope": {
+    "maxRebuildDurationMs": 120000,
+    "maxReplicaBytes": 1073741824
+  },
+  "rollback": {
+    "eligiblePhases": [
+      "PREFLIGHT",
+      "ROLLING_CANARY",
+      "ROLLING_FOLLOWERS",
+      "ROLLING_LEADER",
+      "BEFORE_TARGET_SCHEMA_FINALIZE"
+    ],
+    "rollbackCutoff": "BEFORE_TARGET_SCHEMA_FINALIZE"
+  },
+  "schemaVersion": 1,
+  "topologyEnvelope": {
+    "maxNodes": 7,
+    "minNodes": 3,
+    "replicationFactor": 3
+  },
+  "versionPair": {
+    "sourceVersion": "0.4.1",
+    "targetVersion": "0.5.0"
+  },
+  "envelopeDigest": "6369736d8d074672e32d134807f56fea08561e1691421c862b272cdd03f6a1ff"
+}

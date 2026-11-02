@@ -5,6 +5,8 @@ import {SYSTEM_TABLE_NAME} from
 import {
   DEPLOYMENT_BINDING_SCHEMA_VERSION_V3,
   DEPLOYMENT_BINDING_SOURCE_KIND,
+  canonicalizeAdmittedRequestUrl,
+  matchesMountPathPrefix,
   projectBinding,
 } from '../control-plane/owners/deployment-binding-contract.js';
 import {
@@ -19,11 +21,15 @@ import {
 
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
+const DEFAULT_MOUNT_HOST = '*';
+const ANY_REQUEST_METHOD = 'ANY';
 const ROUTE_RESOLVER_ERROR = Object.freeze({
   CACHE_REQUIRED:
     'RequestBindingRouteResolver requires a system table cache',
   CORRUPT_BINDING:
     'Matching request Binding is outside its immutable contract',
+  INVALID_URL:
+    'Request URL contains invalid or ambiguous path encoding',
   ROUTE_AMBIGUOUS:
     'More than one immutable request Binding matches this tenant route',
   ROUTE_NOT_FOUND:
@@ -33,6 +39,45 @@ const ROUTE_RESOLVER_ERROR = Object.freeze({
   TARGET_STALE:
     'The selected request Cell actual is stale, moved, or superseded',
 });
+
+function canonicalizeRequestTarget(request) {
+  try {
+    return canonicalizeAdmittedRequestUrl(request);
+  } catch (cause) {
+    throw createRoutingFailure(
+      REQUEST_CELL_ROUTE_ERROR_CODE.INVALID_REQUEST,
+      ROUTE_RESOLVER_ERROR.INVALID_URL,
+      {cause},
+    );
+  }
+}
+
+function matchesMountHost(sourceHost, requestHost) {
+  const normalizedHost = (sourceHost ?? DEFAULT_MOUNT_HOST).toLowerCase();
+  return normalizedHost === DEFAULT_MOUNT_HOST || normalizedHost === requestHost;
+}
+
+function matchesMountMethod(sourceMethod, requestMethod) {
+  return (
+    sourceMethod === undefined ||
+    sourceMethod === ANY_REQUEST_METHOD ||
+    sourceMethod === requestMethod
+  );
+}
+
+function matchesRequestBindingSource(source, request, canonicalUrl) {
+  if (source.path_prefix !== undefined) {
+    return (
+      matchesMountHost(source.host, canonicalUrl.host) &&
+      matchesMountMethod(source.method, request.method) &&
+      matchesMountPathPrefix(canonicalUrl.path, source.path_prefix)
+    );
+  }
+  return (
+    source.method === request.method &&
+    source.path === canonicalUrl.path
+  );
+}
 
 function selectActual(actuals, invocationId) {
   const ordered = actuals.slice().sort(
@@ -73,7 +118,7 @@ class RequestBindingRouteResolver {
     return cache;
   }
 
-  _findMatchingBindings(cache, request) {
+  _findMatchingBindings(cache, request, canonicalUrl) {
     const rows =
       cache.getAll(SYSTEM_TABLE_NAME.SERVICE_BINDINGS) || [];
     const matches = [];
@@ -88,8 +133,11 @@ class RequestBindingRouteResolver {
       try {
         const binding = projectBinding(row);
         if (
-          binding.declaration.source.method === request.method &&
-          binding.declaration.source.path === request.path
+          matchesRequestBindingSource(
+            binding.declaration.source,
+            request,
+            canonicalUrl,
+          )
         ) {
           matches.push(binding);
         }
@@ -109,7 +157,8 @@ class RequestBindingRouteResolver {
 
   resolve(request) {
     const cache = this._getCache();
-    const bindings = this._findMatchingBindings(cache, request);
+    const canonicalUrl = canonicalizeRequestTarget(request);
+    const bindings = this._findMatchingBindings(cache, request, canonicalUrl);
     if (bindings.length === 0) {
       throw createRoutingFailure(
         REQUEST_CELL_ROUTE_ERROR_CODE.ROUTE_NOT_FOUND,
@@ -148,6 +197,7 @@ class RequestBindingRouteResolver {
         null;
 
     return Object.freeze({
+      admittedUrl: canonicalUrl.url,
       bindingDigest: chosenDefinition.binding_digest,
       bindingId: chosenBinding.bindingId,
       bindingVersionId: chosenBinding.bindingVersionId,
@@ -155,7 +205,7 @@ class RequestBindingRouteResolver {
       handlerId,
       method: request.method,
       nodeId: chosenActual.node_id,
-      path: request.path,
+      path: canonicalUrl.path,
       replicaId: chosenActual.service_id,
       serviceId,
       targetAddress:

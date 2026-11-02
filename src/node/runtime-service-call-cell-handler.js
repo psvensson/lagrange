@@ -19,7 +19,17 @@ import {
   CALL_CELL_ROUTE_ERROR_CODE,
   CallCellRoutingError,
   normalizeCallComponentResult,
+  parseCallInvocationIdentity,
 } from '../service/call-cell-routing-contract.js';
+import {
+  assertDispatchedSelectorParameters,
+  parseSelectorStatementAst,
+} from '../service/call-selector-parameter-contract.js';
+import {
+  executeLocalShardPageRead,
+  extractUserArgumentsJson,
+  stampPagedCallArguments,
+} from '../service/call-shard-paged-execution.js';
 
 const CALL_CELL_RUNTIME_MESSAGE = Object.freeze({
   ACTUAL_NOT_ACTIVE:
@@ -30,6 +40,8 @@ const CALL_CELL_RUNTIME_MESSAGE = Object.freeze({
   INVOCATION_FAILED: 'Call Cell invocation failed',
   LOCAL_BATCH_BOUND_INVALID:
     'Call Cell data-local dispatch carries no positive batch row bound',
+  LOCAL_BATCH_BYTE_BOUND_INVALID:
+    'Call Cell data-local dispatch carries no positive batch byte bound',
   LOCAL_ENGINE_UNAVAILABLE:
     'Call Cell data-local dispatch found no local SQL engine to render ' +
     'the declared statement',
@@ -44,6 +56,8 @@ const CALL_CELL_RUNTIME_MESSAGE = Object.freeze({
     'dispatch',
   OWNER_UNAVAILABLE:
     'Call Cell runtime invocation owner is unavailable',
+  PARAMETER_RETRY_CONFLICT:
+    'Call Cell retry or slot dispatch changed selector parameters under an existing invocation identity',
   PAYLOAD_INVALID: 'Call Cell Service_Message payload is invalid',
   ROUTE_TENANT_MISMATCH:
     'Call Cell route tenant does not match authenticated tenant',
@@ -51,8 +65,8 @@ const CALL_CELL_RUNTIME_MESSAGE = Object.freeze({
     'Call Cell Service_Message security context is invalid',
   TARGET_MOVED: 'Call Cell actual moved to another node',
 });
-const AST_TYPE_SELECT = 'SELECT';
 const PARTITION_STATE_NORMAL = 'NORMAL';
+const DEFAULT_BATCH_BYTE_BOUND = 8388608;
 const CALL_CELL_INVOCATION_EXPORT_NAME = Object.freeze({
   RUN: 'run',
   REDUCE: 'reduce',
@@ -293,20 +307,14 @@ function resolveLocalRenderEngine(handler) {
 }
 
 function parseLocalShardStatement(engine, statement) {
-  let ast = null;
   try {
-    ast = engine.parse(statement);
+    return parseSelectorStatementAst(engine, statement).ast;
   } catch {
-    ast = null;
-  }
-  if (String(ast?.type || '').toUpperCase() !== AST_TYPE_SELECT ||
-      !ast?.from?.name) {
     throw new CallCellRoutingError(
       CALL_CELL_ROUTE_ERROR_CODE.STATEMENT_INVALID,
       CALL_CELL_RUNTIME_MESSAGE.LOCAL_STATEMENT_INVALID,
     );
   }
-  return ast;
 }
 
 function localShardReadFailure(error) {
@@ -337,13 +345,14 @@ function localShardReadFailure(error) {
 }
 
 async function executeBoundedShardRead(
-  partitionService, sql, invocation, batchRowBound, partitionId,
+  partitionService, sql, boundParameters, invocation, bounds, partitionId,
 ) {
   let result = null;
   try {
-    result = await partitionService.executeQuery(sql, [], {
+    result = await partitionService.executeQuery(sql, boundParameters, {
       resultDeadlineMs: invocation.deadlineMs,
-      resultMaxRows: batchRowBound,
+      resultMaxRows: bounds.batchRowBound,
+      resultMaxBytes: bounds.batchByteBound,
     });
   } catch (error) {
     throw localShardReadFailure(error);
@@ -359,13 +368,7 @@ async function executeBoundedShardRead(
   return result?.rows || [];
 }
 
-async function buildLocalShardBatch(handler, payload, route, invocation) {
-  const partitionService =
-    resolveUsableLocalPartitionService(handler, payload.partitionId);
-  const engine = resolveLocalRenderEngine(handler);
-  const sql = engine.queryExecutor.buildSelectSQL(
-    parseLocalShardStatement(engine, route.statement),
-  );
+function resolveLocalShardBounds(invocation) {
   const batchRowBound = invocation?.callCell?.batchRowBound;
   if (!Number.isSafeInteger(batchRowBound) || batchRowBound <= 0) {
     throw new CallCellRoutingError(
@@ -373,8 +376,41 @@ async function buildLocalShardBatch(handler, payload, route, invocation) {
       CALL_CELL_RUNTIME_MESSAGE.LOCAL_BATCH_BOUND_INVALID,
     );
   }
+  const rawByteBound = invocation?.callCell?.batchByteBound;
+  const batchByteBound = rawByteBound === undefined ?
+    DEFAULT_BATCH_BYTE_BOUND :
+    rawByteBound;
+  if (!Number.isSafeInteger(batchByteBound) || batchByteBound <= 0) {
+    throw new CallCellRoutingError(
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      CALL_CELL_RUNTIME_MESSAGE.LOCAL_BATCH_BYTE_BOUND_INVALID,
+    );
+  }
+  return {batchRowBound, batchByteBound};
+}
+
+async function buildLocalShardBatch(
+  handler,
+  payload,
+  route,
+  invocation,
+  boundParameters,
+) {
+  const partitionService =
+    resolveUsableLocalPartitionService(handler, payload.partitionId);
+  const engine = resolveLocalRenderEngine(handler);
+  const sql = engine.queryExecutor.buildSelectSQL(
+    parseLocalShardStatement(engine, route.statement),
+  );
+  const bounds = resolveLocalShardBounds(invocation);
   const rows = await executeBoundedShardRead(
-    partitionService, sql, invocation, batchRowBound, payload.partitionId);
+    partitionService,
+    sql,
+    boundParameters,
+    invocation,
+    bounds,
+    payload.partitionId,
+  );
   if (typeof engine.recordServicePartitionAccess === 'function') {
     engine.recordServicePartitionAccess(
       {issuingServiceId: route.serviceId},
@@ -383,7 +419,7 @@ async function buildLocalShardBatch(handler, payload, route, invocation) {
     );
   }
   try {
-    return toCellBatch(rows, batchRowBound);
+    return toCellBatch(rows, bounds.batchRowBound);
   } catch (error) {
     if (error instanceof CallCellValueError) {
       throw new CallCellRoutingError(
@@ -499,7 +535,9 @@ function buildCallCellInvocation(
   };
 }
 
-function buildSuccessfulInvocationResponse(result, route) {
+const EMPTY_JSON_OBJECT = '{}';
+
+function buildSuccessfulInvocationResponse(result, route, pageMeta = null) {
   const value = result?.journaled === true ? result.value : result;
   const componentResult =
     value && typeof value === 'object' && 'result' in value ?
@@ -514,6 +552,7 @@ function buildSuccessfulInvocationResponse(result, route) {
       invoked: result?.replayed !== true,
       replayed: result?.replayed === true,
     },
+    ...(pageMeta ? {pageMeta} : {}),
     partials: componentResult.partials,
     processed: true,
     // Receiver truth for lease bookkeeping: the replica that actually
@@ -545,18 +584,100 @@ function resolveEnvelopeSecurityContext(envelope) {
   });
 }
 
-// Data-local branch: a run dispatch without a pre-built batch names its
-// shard partition; this node builds the typed batch from its own
-// partition replica AFTER route/target admission and BEFORE the
-// component is touched (every refusal inside stays invoked=false).
-async function resolveRunInputBatch(handler, payload, route, invocation) {
+const HANDLER_PARAMETER_FENCES = new WeakMap();
+
+function getHandlerParameterFenceMap(handler) {
+  let map = HANDLER_PARAMETER_FENCES.get(handler);
+  if (!map) {
+    map = new Map();
+    HANDLER_PARAMETER_FENCES.set(handler, map);
+  }
+  return map;
+}
+
+function assertHandlerInvocationParameterFence(
+  handler,
+  securityContext,
+  invocation,
+  route,
+  userArgumentsJson,
+  verifiedParameters,
+) {
+  const fenceMap = getHandlerParameterFenceMap(handler);
+  const {baseInvocationId} = parseCallInvocationIdentity(invocation.id);
+  const key = `${securityContext.tenantId}:${baseInvocationId}`;
+  const current = {
+    arguments: userArgumentsJson,
+    bindingVersionId: route.bindingVersionId ?? null,
+    intentDigest: invocation.intentDigest,
+    parametersDigest: verifiedParameters.parametersDigest,
+  };
+  const existing = fenceMap.get(key);
+  if (!existing) {
+    fenceMap.set(key, Object.freeze(current));
+    return;
+  }
+  if (existing.arguments !== current.arguments ||
+      existing.bindingVersionId !== current.bindingVersionId ||
+      existing.intentDigest !== current.intentDigest ||
+      existing.parametersDigest !== current.parametersDigest) {
+    throw new CallCellRoutingError(
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      CALL_CELL_RUNTIME_MESSAGE.PARAMETER_RETRY_CONFLICT,
+    );
+  }
+}
+
+function hasPagedBatchRequest(pageRequest) {
+  if (!pageRequest) return false;
+  return (
+    pageRequest.readViewId !== undefined ||
+    pageRequest.pageCursor !== undefined ||
+    pageRequest.pageIndex !== undefined
+  );
+}
+
+function recordLocalShardReadAccess(handler, route, partitionId) {
+  const engine = handler.cdcIntegrationService?.sqlQueryEngine || null;
+  if (typeof engine?.recordServicePartitionAccess === 'function') {
+    engine.recordServicePartitionAccess(
+      {issuingServiceId: route.serviceId},
+      [partitionId],
+      SERVICE_PARTITION_ACCESS_KIND.READ,
+    );
+  }
+}
+
+async function resolveRunInputBatch(
+  handler,
+  payload,
+  route,
+  invocation,
+  boundParameters,
+) {
   const dataLocal = payload?.batch === undefined &&
     typeof payload?.partitionId === 'string' &&
     resolveCallCellExportName(invocation) ===
       CALL_CELL_INVOCATION_EXPORT_NAME.RUN;
-  return dataLocal ?
-    buildLocalShardBatch(handler, payload, route, invocation) :
-    payload?.batch;
+  if (!dataLocal) {
+    return {batch: payload?.batch, pageMeta: null};
+  }
+  if (hasPagedBatchRequest(payload.pageRequest)) {
+    const partitionService =
+      resolveUsableLocalPartitionService(handler, payload.partitionId);
+    recordLocalShardReadAccess(handler, route, payload.partitionId);
+    return executeLocalShardPageRead({
+      boundParameters,
+      handler,
+      invocation,
+      partitionService,
+      payload,
+      route,
+    });
+  }
+  const batch = await buildLocalShardBatch(
+    handler, payload, route, invocation, boundParameters);
+  return {batch, pageMeta: null};
 }
 
 async function handleCallCellInvocation(handler, envelope) {
@@ -595,14 +716,38 @@ async function handleCallCellInvocation(handler, envelope) {
       invocation,
     );
     assertPartitionFenceCurrent(handler, payload);
-    const batch = await resolveRunInputBatch(
-      handler, payload, route, invocation);
+    const userArgumentsJson = extractUserArgumentsJson(
+      call.arguments ?? EMPTY_JSON_OBJECT,
+    );
+    const verifiedParameters = assertDispatchedSelectorParameters({
+      argumentsJson: userArgumentsJson,
+      dispatchedParameters: call.parameters,
+      dispatchedParametersDigest: call.parametersDigest,
+      parameterSchema: route.parameters,
+      statement: route.statement,
+    });
+    assertHandlerInvocationParameterFence(
+      handler,
+      securityContext,
+      invocation,
+      route,
+      userArgumentsJson,
+      verifiedParameters,
+    );
+    const {batch, pageMeta} = await resolveRunInputBatch(
+      handler,
+      payload,
+      route,
+      invocation,
+      verifiedParameters.boundParameters,
+    );
+    const invokeCall = stampPagedCallArguments(admittedCall, pageMeta);
     invocationStarted = true;
     const result = await handler.serviceRuntimeLifecycle.invoke(
       localReplica.replicaHandle,
       buildCallCellInvocation(
         handler,
-        admittedCall,
+        invokeCall,
         batch,
         partials,
         route,
@@ -610,7 +755,7 @@ async function handleCallCellInvocation(handler, envelope) {
         securityContext,
       ),
     );
-    return buildSuccessfulInvocationResponse(result, route);
+    return buildSuccessfulInvocationResponse(result, route, pageMeta);
   } catch (error) {
     return buildInvocationFailure(error, {
       invoked: resolveInvocationFailureStarted(

@@ -12,11 +12,22 @@ import {
   requestCellTableIndexRowBound,
 } from './request-cell-table-read-index.js';
 import {
+  DEFAULT_REQUEST_HOST_CALL_BUDGET,
   HOST_CALL_MESSAGE,
   HOST_CALL_RESPONDER_STATUS,
   createHostCallDescriptor,
   createParentHostCallResponder,
 } from './cell-host-call-protocol.js';
+import {
+  CELL_EMIT_BUFFER_META_SLOTS,
+  DEFAULT_CELL_EMIT_BUFFER_BYTES as CELL_EMIT_BUFFER_BYTES,
+  WasiComponentCellPressureTracker,
+  clearCellBusy,
+  isCellBusyWithinDeadline,
+  markCellBusy,
+  normalizeCallInvokeOptions,
+  prepareCallEmitPayload,
+} from './wasi-component-cell-pressure-tracker.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const BYTE_ENCODING = 'utf8';
@@ -37,8 +48,6 @@ const CELL_WORLD = Object.freeze({
   CALL: 'call-cell',
   REQUEST: 'request-cell',
 });
-const CELL_EMIT_BUFFER_BYTES = 16 * 1024 * 1024;
-const CELL_EMIT_BUFFER_META_SLOTS = 2;
 const CELL_EMIT_LENGTH_INDEX = 0;
 const CELL_EMIT_ERROR_INDEX = 1;
 const CELL_EMIT_OVERFLOW_MARKER = '__call_cell_emit_overflow__';
@@ -75,6 +84,10 @@ const WASI_COMPONENT_CELL_ERROR_CODE = Object.freeze({
   COMPONENT_FAILED: 'request_cell_component_failed',
   COMPONENT_UNAVAILABLE: 'request_cell_component_unavailable',
   CONCURRENT_INVOCATION: 'request_cell_concurrent_invocation',
+  CONTEXT_BUDGET_EXCEEDED: 'request_cell_context_budget_exceeded',
+  EMIT_BUFFER_OVERFLOW: 'request_cell_emit_buffer_overflow',
+  RUNTIME_MEMORY_PRESSURE_EXCEEDED:
+    'request_cell_runtime_memory_pressure_exceeded',
   START_FAILED: 'request_cell_start_failed',
 });
 
@@ -92,6 +105,9 @@ class WasiComponentCellError extends Error {
     super(message, {cause: options.cause});
     this.name = WASI_COMPONENT_CELL_ERROR_NAME;
     this.code = code;
+    if (options.preserveReplicaState === true) {
+      this.preserveReplicaState = true;
+    }
   }
 }
 
@@ -136,7 +152,11 @@ function attachInvocationHostCall(state, payload, options) {
     return null;
   }
   const descriptor = createHostCallDescriptor();
-  payload.hostCall = {descriptor};
+  const maxCalls =
+    Number.isSafeInteger(options.maxHostCalls) && options.maxHostCalls > 0 ?
+      options.maxHostCalls :
+      DEFAULT_REQUEST_HOST_CALL_BUDGET;
+  payload.hostCall = {descriptor, maxCalls};
   return createParentHostCallResponder({
     delegate: options.bindingCallDelegate,
     descriptor,
@@ -173,10 +193,17 @@ class WasiComponentCellRuntime {
     this.nextGeneration = 1;
     this.nextMessageId = 1;
     this.workerPath = options.workerPath || resolveCellWorkerPath();
+    this.pressureTracker = new WasiComponentCellPressureTracker(options);
+    this.maxAggregateEmitBufferBytes =
+      this.pressureTracker.maxAggregateEmitBufferBytes;
   }
 
   get instanceCount() {
     return this.cells.size;
+  }
+
+  getRuntimePressureTelemetry() {
+    return this.pressureTracker.getTelemetry(this.cells);
   }
 
   start(cell) {
@@ -225,7 +252,9 @@ class WasiComponentCellRuntime {
       workerData: this.workerDataForCell(cell),
     });
     const state = {
+      activeDeadlineMs: null,
       busy: false,
+      busySinceMs: null,
       cell,
       componentInvocationCount: 0,
       generation: `request-cell-generation-${this.nextGeneration}`,
@@ -384,6 +413,13 @@ class WasiComponentCellRuntime {
   async health(serviceId) {
     const state = this.cells.get(serviceId);
     if (!state?.ready) return false;
+    if (state.busy === true) {
+      if (isCellBusyWithinDeadline(state)) {
+        return true;
+      }
+      await this._stop(serviceId);
+      return false;
+    }
     try {
       const result = await this.send(
         state,
@@ -475,15 +511,6 @@ class WasiComponentCellRuntime {
   }
 
   async invokeComponent(state, args, tableReads, wallBudget, options) {
-    const initialCpu = await state.worker.cpuUsage();
-    if (typeof options.beforeComponentInvoke === 'function') {
-      options.beforeComponentInvoke();
-    }
-    const cpuMonitor = this.monitorCpuBudget(
-      state,
-      initialCpu,
-      state.cell.budgets.cpu_time_ms,
-    );
     const payload = {
       args,
       deadlineMs: wallBudget.deadlineMs,
@@ -493,54 +520,62 @@ class WasiComponentCellRuntime {
     if (options.exportName !== undefined) {
       payload.exportName = options.exportName;
     }
-    state.hostCallResponder =
-      attachInvocationHostCall(state, payload, options);
-    let emitBuffer;
-    if (options.callContext !== undefined) {
-      emitBuffer = new SharedArrayBuffer(CELL_EMIT_BUFFER_BYTES);
-      payload.callContext = {
-        emitBudget: Number.isSafeInteger(options.callContext.emitBudget) ?
-          options.callContext.emitBudget :
-          0,
-        emitBuffer,
-        nestedCallBudget:
-          Number.isSafeInteger(options.callContext.nestedCallBudget) ?
-            options.callContext.nestedCallBudget :
-            0,
-        onCallBounded: options.callContext.onCallBounded === true,
-      };
+    const {emitBuffer, releaseEmitBuffer} = prepareCallEmitPayload(
+      this.pressureTracker,
+      payload,
+      options,
+      (actual, limit) => new WasiComponentCellError(
+        WASI_COMPONENT_CELL_ERROR_CODE.RUNTIME_MEMORY_PRESSURE_EXCEEDED,
+        `Runtime aggregate emit buffer bytes exceeded (${actual} > ${limit})`,
+        {preserveReplicaState: true},
+      ),
+    );
+    const initialCpu = await state.worker.cpuUsage();
+    if (typeof options.beforeComponentInvoke === 'function') {
+      options.beforeComponentInvoke();
     }
-    let result;
-    try {
-      result = await Promise.race([
-        this.send(
-          state,
-          CELL_MESSAGE.INVOKE,
-          payload,
-          this.remainingWallBudgetMs(
-            wallBudget.deadlineMs,
-            wallBudget.configuredBudgetMs,
-          ),
-          wallBudget.configuredBudgetMs,
-        ),
-        cpuMonitor.promise,
-      ]);
-    } finally {
-      cpuMonitor.cancel();
-      // Late host-call responses after the invocation settles are
-      // dropped: retiring the responder closes the shared channel.
-      releaseInvocationHostCall(state);
-    }
-    state.componentInvocationCount += 1;
-    await this.assertCpuBudget(
+    const cpuMonitor = this.monitorCpuBudget(
       state,
       initialCpu,
       state.cell.budgets.cpu_time_ms,
     );
-    if (emitBuffer !== undefined) {
-      result = this.attachCallEmitPartials(result, emitBuffer);
+    state.hostCallResponder =
+      attachInvocationHostCall(state, payload, options);
+    let result;
+    try {
+      try {
+        result = await Promise.race([
+          this.send(
+            state,
+            CELL_MESSAGE.INVOKE,
+            payload,
+            this.remainingWallBudgetMs(
+              wallBudget.deadlineMs,
+              wallBudget.configuredBudgetMs,
+            ),
+            wallBudget.configuredBudgetMs,
+          ),
+          cpuMonitor.promise,
+        ]);
+      } finally {
+        cpuMonitor.cancel();
+        // Late host-call responses after the invocation settles are
+        // dropped: retiring the responder closes the shared channel.
+        releaseInvocationHostCall(state);
+      }
+      state.componentInvocationCount += 1;
+      await this.assertCpuBudget(
+        state,
+        initialCpu,
+        state.cell.budgets.cpu_time_ms,
+      );
+      if (emitBuffer !== undefined) {
+        result = this.attachCallEmitPartials(result, emitBuffer);
+      }
+      return result;
+    } finally {
+      releaseEmitBuffer();
     }
-    return result;
   }
 
   attachCallEmitPartials(result, emitBuffer) {
@@ -592,34 +627,24 @@ class WasiComponentCellRuntime {
     options = {},
   ) {
     const state = this.requireInvocationState(serviceId);
-    state.busy = true;
+    const wallBudget = invocationWallBudget(state, options);
+    markCellBusy(state, wallBudget.deadlineMs);
     try {
-      const wallBudget = invocationWallBudget(state, options);
       await this.requireInputBudget(serviceId, state, args);
       const tableReads = await this.readInvocationContexts(
-        state,
-        readContexts,
-        wallBudget,
-        cancelOperation,
+        state, readContexts, wallBudget, cancelOperation,
       );
       const result = await this.invokeComponent(
-        state,
-        args,
-        tableReads,
-        wallBudget,
-        options,
+        state, args, tableReads, wallBudget, options,
       );
       this.requireResultBudgets(state, result, tableReads);
       await this.runWithinWallBudget(
         () => writeEffects(result.effects, wallBudget),
-        wallBudget.deadlineMs,
-        wallBudget.configuredBudgetMs,
-        cancelOperation,
+        wallBudget.deadlineMs, wallBudget.configuredBudgetMs, cancelOperation,
       );
-      if (result.partials !== undefined) {
-        return {partials: result.partials, value: result.value};
-      }
-      return result.value;
+      return result.partials !== undefined ?
+        {partials: result.partials, value: result.value} :
+        result.value;
     } catch (error) {
       if (error?.preserveReplicaState !== true) {
         cancelOperation(error.message);
@@ -627,8 +652,16 @@ class WasiComponentCellRuntime {
       }
       throw error;
     } finally {
-      state.busy = false;
+      clearCellBusy(state);
     }
+  }
+
+  async invokeCall(serviceId, args, options = {}) {
+    return this.invoke(
+      serviceId, args, () => [], () => {},
+      options.cancelOperation || (() => {}),
+      normalizeCallInvokeOptions(options),
+    );
   }
 
   remainingWallBudgetMs(deadlineMs, limitMs) {
@@ -674,22 +707,16 @@ class WasiComponentCellRuntime {
 
   async assertCpuBudget(state, initialCpu, limitMs) {
     const usage = await state.worker.cpuUsage(initialCpu);
-    const actualMs = Math.ceil(
-      (usage.system + usage.user) / 1_000,
-    );
+    const actualMs = Math.ceil((usage.system + usage.user) / 1_000);
     if (actualMs > limitMs) {
-      throw budgetFailure(
-        CELL_BUDGET_FIELD.CPU_TIME_MS,
-        actualMs,
-        limitMs,
-      );
+      throw budgetFailure(CELL_BUDGET_FIELD.CPU_TIME_MS, actualMs, limitMs);
     }
   }
 
   monitorCpuBudget(state, initialCpu, limitMs) {
     let active = true;
     let timer = null;
-    const promise = new Promise((resolve, reject) => {
+    const promise = new Promise((_resolve, reject) => {
       const sample = async () => {
         if (!active) return;
         try {
@@ -714,21 +741,10 @@ class WasiComponentCellRuntime {
 
   stop(serviceId) {
     return this.scheduleOperation(
-      serviceId,
-      CELL_OPERATION_TYPE.STOP,
-      () => this._stop(serviceId),
+      serviceId, CELL_OPERATION_TYPE.STOP, () => this._stop(serviceId),
     );
   }
 
-  /**
-   * Stop every live cell worker. Node teardown owns this call: no
-   * per-replica stop path runs at shutdown, so without a stop-all the
-   * per-cell Workers (and their message ports) keep the event loop
-   * alive after the rest of the node is down. Per-service stop is
-   * already idempotent and serialized through scheduleOperation, so a
-   * stop racing teardown simply resolves as a no-op.
-   * @return {Promise<void>}
-   */
   async shutdown() {
     const serviceIds = [...this.cells.keys()];
     await Promise.all(serviceIds.map((serviceId) => this.stop(serviceId)));

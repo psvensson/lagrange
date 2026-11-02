@@ -62,6 +62,22 @@ const DISPLAY_LABEL = Object.freeze({
   raft_promises_synced_before_send:
     'Synced to disk before any dependent message is sent (survives power loss)',
   unsupported_on_0x: 'Unsupported on 0.x',
+  hono_fetch_entry_with_scoped_client:
+    'Standard Fetch entry (Hono) with request-scoped Lagrange client',
+  service_cell_v2_zero_one_or_many_operations:
+    'Canonical service-cell-v2 target (zero, one, or many distributed operations)',
+  single_table_select_with_typed_positional_parameters:
+    'Single-table SELECT with typed positional parameters ($1..$N)',
+  bounded_recoverable_page_accumulator:
+    'Bounded recoverable page accumulator (initialState / step / finish) over pinned shard read view',
+  bounded_canonical_finite_json_v1:
+    'Bounded canonical finite JSON (lagrange.partial.v1)',
+  semantic_group_keys_with_distinct_delivery_identity:
+    'Semantic group keys preserved in deterministic order; distinct delivery identity',
+  bounded_sequential_calls:
+    'Bounded sequential awaited calls (one outstanding child call at a time)',
+  invocation_owned_with_waiter_detach:
+    'Invocation-owned cancellation with multi-waiter detach',
 });
 
 function readJson(relativePath, root = REPO_ROOT) {
@@ -161,16 +177,19 @@ programming model.
 
 | Call property | Current state |
 | --- | --- |
+| HTTP application boundary | ${displayCapability(capabilities.deployment.httpApplicationBoundary)} |
+| Canonical component target | ${displayCapability(capabilities.deployment.canonicalComponentTarget)} |
 | Selector | ${displayCapability(call.selector)} |
 | Selector interpolation | ${displayCapability(call.selectorInterpolation)} |
 | Default rows per shard | ${call.defaultShardRowBound} |
+| Shard paging | ${displayCapability(call.shardPaging)} |
 | Default emits per shard run | ${call.defaultEmitBound} |
 | Default coordinated partial entries | ${call.defaultPartialEntryBound} |
 | Default concurrent shard runs | ${call.defaultConcurrentShardRuns} |
 | Same-host shard runs | ${displayCapability(call.sameHostShardConcurrency)} |
 | Partial values | ${displayCapability(call.partialValues)} |
 | Partial keys | ${displayCapability(call.partialKeys)} |
-| Nested calls per HTTP request | ${call.nestedCallsPerRequest} |
+| Nested calls per HTTP request | ${displayCapability(call.nestedCallsPerRequest)} |
 | Global cross-partition snapshot | ${displayCapability(call.globalCrossPartitionSnapshot)} |
 | Caller cancellation | ${displayCapability(call.callerCancellation)} |
 | Direct-call caller idempotency key | ${displayCapability(call.directCallCallerIdempotencyKey)} |

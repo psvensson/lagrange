@@ -5,17 +5,56 @@ proof: deterministic
 roadmapRow: null
 graduatesTo: null
 quests:
+  - call-bounded-structured-partials
+  - call-selector-typed-parameter-narrowing
+  - call-shard-paged-execution
   - learner-promotion-progress-proof
+  - node-transport-authenticated-encryption
   - partition-leader-row-publication-integrity-v2
   - partition-leader-row-publication-integrity-v3
   - partition-leader-row-publication-integrity
+  - pilot-cutover-and-rollback-receipts
+  - postgres-compatibility-certification-matrix
   - public-path-multinode-baseline
+  - public-path-scale-and-failure-certification
+  - resumable-bulk-data-load
+  - service-cell-v2-default-multi-operation
+  - supported-upgrade-and-recovery-envelope
   - user-table-leader-handoff-demotion-pairing-v2
   - user-table-leader-handoff-demotion-pairing
   - user-table-leader-placement-spread-v2
   - user-table-leader-placement-spread
   - wasi-cell-busy-health-admission
-authorizes: []
+authorizes:
+  - src/authoring
+  - src/service
+  - src/runtime
+  - src/node
+  - src/bootstrap
+  - src/control-plane/owners
+  - src/cli
+  - src/query
+  - src/partition
+  - src/raft
+  - src/rebalancer
+  - src/transport
+  - src/public-api.js
+  - wit
+  - package.json
+  - package-lock.json
+  - examples
+  - test
+  - architecture
+  - docs
+  - README.md
+  - CHANGELOG.md
+  - scripts/checks
+  - scripts/check-current-capabilities.js
+  - scripts/check-service-portability-claims.js
+  - scripts/generate-current-capabilities-doc.js
+  - solve/epics
+  - solve/specs
+  - solve/quests
 legacyStatus: null
 doneWhen:
   probe: scenario-harness

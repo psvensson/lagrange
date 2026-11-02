@@ -38,7 +38,7 @@ import {
   EXTERNAL_SERVICE_MEDIA_TYPE,
   validateExternalServiceManifest,
 } from './external-service-manifest.js';
-import {IR_TARGET} from './service-source-contract.js';
+import {IR_ENTRY_KIND, IR_TARGET} from './service-source-contract.js';
 
 const DEPLOYMENT_RECORD_STATUS = Object.freeze({
   ACCEPTED: 'accepted',
@@ -144,10 +144,18 @@ const MISSING_RECORD_MESSAGE =
 // deferred to the deployment owner.
 const DEPLOYMENT_RECORD_ERROR_CODE = Object.freeze({
   GENERATED_NAME_COLLISION: 'generated_name_collision',
+  LEGACY_ARTIFACT_ABI_UNSUPPORTED: 'legacy_artifact_abi_unsupported',
 });
 const GENERATED_NAME_COLLISION_PATH_PREFIX = '/bindings/';
 const GENERATED_NAME_COLLISION_MESSAGE =
   'distinct logical ids collide onto one generated binding name';
+const LEGACY_ARTIFACT_ABI_MESSAGE =
+  'legacy service-cell v1 artifact or schema v2 binding is unsupported; regenerate and rebuild against service-cell-v2';
+const DEFAULT_MOUNT_HOST = '*';
+const LEGACY_EXPORT_INTERFACES = new Set([
+  EXTERNAL_SERVICE_EXPORT_INTERFACE.CALL,
+  EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
+]);
 
 function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
@@ -249,6 +257,21 @@ function bindingTarget(sourceKind, manifestDigest, logicalId, isV2Target) {
   };
 }
 
+function buildRequestBindingSource(handler, ir) {
+  if (ir.entryKind === IR_ENTRY_KIND.FETCH || handler.pathPrefix !== undefined) {
+    return {
+      host: handler.host ?? DEFAULT_MOUNT_HOST,
+      kind: DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
+      path_prefix: handler.pathPrefix ?? handler.path,
+    };
+  }
+  return {
+    kind: DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
+    method: handler.method,
+    path: handler.path,
+  };
+}
+
 function buildBindingDeclarations(ir, manifestDigest) {
   const isV2Target = ir.target === IR_TARGET.SERVICE_CELL_V2;
   const schemaVersion = isV2Target ?
@@ -261,11 +284,7 @@ function buildBindingDeclarations(ir, manifestDigest) {
       name: generatedBindingName(
         ir.name, DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST, handler.id),
       schema_version: schemaVersion,
-      source: {
-        kind: DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
-        method: handler.method,
-        path: handler.path,
-      },
+      source: buildRequestBindingSource(handler, ir),
       target: bindingTarget(
         DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST, manifestDigest,
         handler.id, isV2Target),
@@ -281,6 +300,9 @@ function buildBindingDeclarations(ir, manifestDigest) {
       source: {
         kind: DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
         name: callBindingName,
+        ...(operation.parameters !== undefined ?
+          {parameters: operation.parameters} :
+          {}),
         statement: operation.statement.text,
       },
       target: bindingTarget(
@@ -304,20 +326,37 @@ function admitBinding(declaration, manifest, manifestDigest) {
   return normalized;
 }
 
+function buildHandlerCallTargets(handler, serviceName) {
+  const targetNames = new Set();
+  for (const operationId of handler.allowedOperations || []) {
+    targetNames.add(
+      generatedBindingName(
+        serviceName,
+        DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
+        operationId,
+      ),
+    );
+  }
+  for (const dependency of handler.allowedDependencies || []) {
+    targetNames.add(dependency);
+  }
+  return [...targetNames]
+    .sort((left, right) => left.localeCompare(right))
+    .map((binding) => ({binding}));
+}
+
 // Exactly one policy record per handler with a non-empty calls entry;
 // handlers without calls get no policy record. The raw payload shape is
 // emitted, but only after the policy normalizer accepts it.
 function buildAccessPolicyPayloads(ir) {
   const payloads = [];
   for (const handler of ir.handlers) {
-    if (handler.allowedOperations.length === 0) continue;
+    const calls = buildHandlerCallTargets(handler, ir.name);
+    if (calls.length === 0) continue;
     const payload = {
       binding_name: generatedBindingName(
         ir.name, DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST, handler.id),
-      calls: handler.allowedOperations.map((operationId) => ({
-        binding: generatedBindingName(
-          ir.name, DEPLOYMENT_BINDING_SOURCE_KIND.CALL, operationId),
-      })),
+      calls,
       schema_version: GENERATED_ACCESS_POLICY_SCHEMA_VERSION,
       tables: [...GENERATED_POLICY_TABLES],
     };
@@ -444,9 +483,38 @@ async function writeDeploymentTree(records, outputRoot) {
   return Object.freeze(written);
 }
 
+function hasLegacyManifestExport(manifest) {
+  const exportsList = Array.isArray(manifest?.exports) ? manifest.exports : [];
+  return exportsList.some((entry) =>
+    LEGACY_EXPORT_INTERFACES.has(entry?.interface));
+}
+
+function hasLegacyBindingDeclaration(bindings) {
+  if (!Array.isArray(bindings)) {
+    return false;
+  }
+  return bindings.some(
+    (binding) =>
+      binding?.schema_version !== GENERATED_BINDING_SCHEMA_VERSION_V3 ||
+      typeof binding?.target?.interface !== 'string',
+  );
+}
+
+function assertSuccessorServiceArtifact(recordsOrManifest) {
+  const manifest = recordsOrManifest?.manifest ?? recordsOrManifest;
+  const bindings = recordsOrManifest?.bindings;
+  if (hasLegacyManifestExport(manifest) || hasLegacyBindingDeclaration(bindings)) {
+    const error = new Error(LEGACY_ARTIFACT_ABI_MESSAGE);
+    error.code = DEPLOYMENT_RECORD_ERROR_CODE.LEGACY_ARTIFACT_ABI_UNSUPPORTED;
+    throw error;
+  }
+  return true;
+}
+
 export {
   DEPLOYMENT_RECORD_ERROR_CODE,
   DEPLOYMENT_RECORD_STATUS,
+  assertSuccessorServiceArtifact,
   buildDeploymentRecords,
   restampDeploymentBindings,
   writeDeploymentTree,

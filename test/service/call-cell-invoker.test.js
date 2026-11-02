@@ -408,7 +408,7 @@ test('an incoherent emitted partial fails closed before any publish',
         replicaId: 'replica-1',
         partials: [{
           key: `${CALL_CELL_PARTIAL_KEY_PREFIX}u1`,
-          partial: '{"id":"u1","score":7}',
+          partial: '{"score":7,"id":"u1"}',
         }],
       }),
     });
@@ -420,7 +420,7 @@ test('an incoherent emitted partial fails closed before any publish',
       (error) => t.equal(
         error.code,
         CALL_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESULT,
-        'a non-numeric emitted partial value is refused typed',
+        'a non-canonical emitted partial value is refused typed',
       ),
     );
     t.equal(collaborators.calls.published.length, 0,

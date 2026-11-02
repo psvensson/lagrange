@@ -221,6 +221,8 @@ class BackupRestoreOwner {
     Object.assign(this, OWNER_DEFAULTS, opts);
     this.getClusterIdOption = opts.getClusterId;
     this.getReleaseVersionOption = opts.getReleaseVersion;
+    this.getPartitions = opts.getPartitions || opts.exportPartitionSnapshots || UNSET;
+    this.onHydratePartitions = opts.onHydratePartitions || opts.hydratePartitionSnapshots || UNSET;
     this.operations = new Map();
     this.completedBackups = new Map();
     this.storageAdapter = opts.storageAdapter || new DefaultStorageAdapter(opts);
@@ -239,9 +241,15 @@ class BackupRestoreOwner {
   getBackupStatus = (id) => this.getOperation(id);
   getOperationStatus = (id) => this.getOperation(id);
 
+  resolveSnapshotPartitions(snap) {
+    if (Array.isArray(snap?.partitions)) return snap.partitions;
+    if (typeof this.getPartitions === 'function') return this.getPartitions();
+    return DEFAULT_PARTITIONS;
+  }
+
   mergeSnapshot = (snap) => ({
     ready: true, hasPartitionQuorum: true, hasActiveOperation: false,
-    epoch: 1, logicalTimestamp: Date.now(), partitions: DEFAULT_PARTITIONS,
+    epoch: 1, logicalTimestamp: Date.now(), partitions: this.resolveSnapshotPartitions(snap),
     ...(this.getClusterSnapshot?.() || {}), ...snap,
   });
   isBackupIdConflicting(id, dest) {

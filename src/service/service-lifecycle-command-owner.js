@@ -22,6 +22,7 @@ import {
   ARTIFACT_SIGNATURE_POLICY_MODE,
 } from './installable-service-artifact-resolver.js';
 import {normalizeExternalServiceManifest} from './external-service-manifest.js';
+import {assertSuccessorServiceArtifact} from './service-deployment-record-generator.js';
 import {internalizeInstallPayload} from
   './artifact-payload-internalization.js';
 import {loadComponentPayloadThroughStore} from './artifact-payload-loader.js';
@@ -469,6 +470,7 @@ class ServiceLifecycleCommandOwner {
     this.callCellInvoker = options.callCellInvoker || null;
     this.artifactResolver = options.artifactResolver;
     this.artifactPayloadStore = options.artifactPayloadStore || null;
+    this.requireSuccessorArtifact = Boolean(options.requireSuccessorArtifact);
     this.signaturePolicy = validateSignaturePolicy(options.signaturePolicy);
   }
 
@@ -516,6 +518,18 @@ class ServiceLifecycleCommandOwner {
   }
 
   normalizeManifest(payload) {
+    if (this.requireSuccessorArtifact) {
+      try {
+        assertSuccessorServiceArtifact({manifest: payload.manifest});
+      } catch (error) {
+        commandFailure(
+          SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.LEGACY_ARTIFACT_ABI_UNSUPPORTED,
+          SERVICE_LIFECYCLE_COMMAND_STAGE.MANIFEST,
+          SERVICE_LIFECYCLE_COMMAND_PATH.MANIFEST,
+          error.message,
+        );
+      }
+    }
     const result = normalizeExternalServiceManifest(payload.manifest);
     if (result.status === SERVICE_LIFECYCLE_OWNER_RESULT_STATUS.REJECTED) {
       commandFailure(
@@ -560,10 +574,19 @@ class ServiceLifecycleCommandOwner {
         SERVICE_LIFECYCLE_COMMAND_MESSAGE.DEPENDENCIES_REQUIRED,
       );
     }
+    const rawKey = payload.invocation_key !== undefined ?
+      payload.invocation_key :
+      payload.idempotency_key;
+    const invocationKey = rawKey !== undefined ?
+      validateIdempotencyKey(rawKey) :
+      undefined;
     const resultJson = await this.callCellInvoker.invoke({
-      name: payload.name,
       argumentsJson: payload.arguments === undefined ?
         undefined : JSON.stringify(payload.arguments),
+      explicitBindingVersionId: payload.binding_version_id,
+      explicitGeneration: payload.generation,
+      invocationKey,
+      name: payload.name,
       securityContext,
     });
     return successResult(
@@ -581,6 +604,18 @@ class ServiceLifecycleCommandOwner {
         SERVICE_LIFECYCLE_COMMAND_PATH.BINDING,
         SERVICE_LIFECYCLE_COMMAND_MESSAGE.DEPENDENCIES_REQUIRED,
       );
+    }
+    if (this.requireSuccessorArtifact) {
+      try {
+        assertSuccessorServiceArtifact({bindings: [payload]});
+      } catch (error) {
+        commandFailure(
+          SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.LEGACY_ARTIFACT_ABI_UNSUPPORTED,
+          SERVICE_LIFECYCLE_COMMAND_STAGE.BINDING,
+          SERVICE_LIFECYCLE_COMMAND_PATH.BINDING,
+          error.message,
+        );
+      }
     }
     const binding = await this.bindingOwner.createBinding(
       payload, securityContext);

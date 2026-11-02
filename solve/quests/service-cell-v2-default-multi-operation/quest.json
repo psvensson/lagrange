@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-cell-v2-default-multi-operation",
+  "epic": "pilot-readiness-and-public-proof",
+  "statement": "Implement Q5 service-cell-v2 default multi-operation cutover and direct public call identity and replay across the CLI service pipeline, service component builder, service lifecycle SQL contract and command owner, Call Cell routing contract, Call Cell reduce coordinator, and Call Cell invoker so Hono/Fetch and multi-operation services default to service-cell-v2 through generate/build/publish/deploy without fabricated no-op operations, legacy v1 artifacts are refused with LEGACY_ARTIFACT_ABI_UNSUPPORTED when successor ABI enforcement is active, and direct public CALL BINDING invocations support scoped invocation_key/idempotency_key admission, generation pinning, same-intent replay, conflict refusal, expiry refusal, and uncertain-outcome surfacing.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q5-service-cell-v2-default-multi-operation-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "05e80678f1da02fd6e4a3401529cca143b1e0d74"
+}

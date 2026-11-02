@@ -180,6 +180,12 @@ application-owned reconciliation and idempotency contract.
 Do not rely on a caller disconnect to cancel work. A distributed call continues
 until its deadline or completion.
 
+When operating within the certified pilot support envelope
+([`support-envelope.json`](support-envelope.json)), in-place rollback from
+`0.5.0` to `0.4.1` is permitted only before `BEFORE_TARGET_SCHEMA_FINALIZE`;
+after that cutoff, rollback is refused with `ROLLBACK_CUTOFF_EXCEEDED` and
+operators must restore from an independent export or certified snapshot.
+
 ## Exit planning
 
 An early infrastructure product should be evaluated with an exit path.

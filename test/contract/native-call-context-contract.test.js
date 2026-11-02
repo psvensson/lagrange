@@ -55,7 +55,9 @@ const SEALED_DECISION_TOKENS = Object.freeze([
   'pushdown', 'reduce', 'capability', 'batch',
 ]);
 
-const EXPECTED_CALL_PUSHDOWN_OPTIONAL_FIELDS = Object.freeze(['statement']);
+const EXPECTED_CALL_PUSHDOWN_OPTIONAL_FIELDS = Object.freeze([
+  'parameters', 'statement',
+]);
 
 // Half-width of the context window checked around a distinctive substring:
 // large enough to cover one sentence pair, small enough to stay local.

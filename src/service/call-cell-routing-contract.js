@@ -1,4 +1,8 @@
 import {createHash, randomUUID} from 'node:crypto';
+import {
+  decodeCanonicalGroupKey,
+  decodeCanonicalPartialWire,
+} from './call-canonical-partial-codec.js';
 
 const CALL_CELL_ROUTE_OPERATION = 'call_cell.invoke';
 const CALL_CELL_ROUTE_MESSAGE_TYPE = 'INVOKE_CALL_CELL';
@@ -18,6 +22,9 @@ const CALL_CELL_ROUTE_ERROR_CODE = Object.freeze({
   HOST_CELL_UNAVAILABLE: 'call_cell_host_cell_unavailable',
   INVALID_ARGUMENTS: 'call_cell_invalid_arguments',
   INVALID_COMPONENT_RESULT: 'call_cell_invalid_component_result',
+  INVOCATION_AMBIGUOUS: 'call_cell_invocation_ambiguous',
+  INVOCATION_CONFLICT: 'call_cell_invocation_conflict',
+  INVOCATION_EXPIRED: 'call_cell_invocation_expired',
   NOT_INVOCABLE: 'call_cell_not_invocable',
   REDUCE_INCOMPLETE: 'call_cell_reduce_incomplete',
   ROUTE_AMBIGUOUS: 'call_cell_route_ambiguous',
@@ -104,6 +111,18 @@ const CALL_CELL_ROUTE_ERROR_PUBLIC = Object.freeze({
     message: 'Call Cell component returned an invalid result',
     origin: CALL_CELL_FAILURE_ORIGIN.APPLICATION,
   }),
+  [CALL_CELL_ROUTE_ERROR_CODE.INVOCATION_AMBIGUOUS]: Object.freeze({
+    message: 'Call invocation outcome is uncertain',
+    origin: CALL_CELL_FAILURE_ORIGIN.DELIVERY,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.INVOCATION_CONFLICT]: Object.freeze({
+    message: 'Call invocation key is already bound to different invocation intent',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.INVOCATION_EXPIRED]: Object.freeze({
+    message: 'Call invocation key has expired',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
   [CALL_CELL_ROUTE_ERROR_CODE.NOT_INVOCABLE]: Object.freeze({
     message: 'Call Binding is not invocable',
     origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
@@ -143,6 +162,7 @@ const CALL_CELL_ROUTE_ERROR_PUBLIC = Object.freeze({
 });
 const CALL_CELL_ROUTE_ERROR_NAME = 'CallCellRoutingError';
 const CALL_CELL_INVOCATION_ID_PREFIX = 'call-invocation-';
+const DIRECT_CALL_INVOCATION_PREFIX = 'call-direct-';
 // Wire prefix the runtime invocation owner stamps onto every emitted
 // partial key (call-cell-driver-invoke.js); consumers strip it to recover
 // the guest's group key.
@@ -397,6 +417,26 @@ function createCallInvocationIntentDigest(fields) {
     .digest(HASH_ENCODING);
 }
 
+function createScopedDirectCallInvocationId({
+  invocationKey,
+  principal,
+  tenantId,
+} = {}) {
+  createCallInvocationIdentity(invocationKey);
+  if (typeof invocationKey !== 'string' || invocationKey.length === 0) {
+    throw createCallRoutingFailure(
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      CALL_CELL_CONTRACT_MESSAGE.IDEMPOTENCY_KEY_RESERVED_SUFFIX,
+    );
+  }
+  const scopeDigest = createCallInvocationIntentDigest({
+    invocationKey,
+    principal: String(principal ?? ''),
+    tenantId: String(tenantId ?? ''),
+  });
+  return `${DIRECT_CALL_INVOCATION_PREFIX}${scopeDigest}`;
+}
+
 function normalizeCallComponentResult(value) {
   if (typeof value !== 'string') {
     throw createCallRoutingFailure(
@@ -417,13 +457,17 @@ function normalizeCallComponentResult(value) {
 }
 
 // The emitted-partial wire contract for reduce coordination: every emit
-// carries a finite numeric aggregation value as its partial JSON, keyed by
-// the guest's group key. The coordinator's completeness gate re-validates
-// the same shape fail-closed; this normalization exists so the invocation
-// owner refuses an incoherent component before anything is published.
-function normalizeEmittedPartialEntries(partials) {
+// carries a canonical finite-JSON partial value (or versioned envelope),
+// keyed by the guest's group key, under a runtime-owned delivery identity.
+function normalizeEmittedPartialEntries(partials, options = {}) {
   const entries = Array.isArray(partials) ? partials : [];
-  return entries.map((entry) => {
+  const slotId = options.slotId ?? null;
+  const shardId = options.shardId !== undefined && options.shardId !== null ?
+    String(options.shardId) :
+    (slotId !== null ? String(slotId) : '');
+  const invocationId = options.invocationId ?? '';
+  const attempt = options.attempt ?? 1;
+  return entries.map((entry, emissionOrdinal) => {
     const key = entry?.key;
     const partial = entry?.partial;
     if (typeof key !== 'string' ||
@@ -434,9 +478,12 @@ function normalizeEmittedPartialEntries(partials) {
         CALL_CELL_CONTRACT_MESSAGE.EMITTED_PARTIAL_INVALID,
       );
     }
-    let aggValue;
+    const rawGroupKey = key.slice(CALL_CELL_PARTIAL_KEY_PREFIX.length);
+    let groupKey;
+    let decodedWire;
     try {
-      aggValue = JSON.parse(partial);
+      groupKey = decodeCanonicalGroupKey(rawGroupKey, options);
+      decodedWire = decodeCanonicalPartialWire(partial, options);
     } catch (error) {
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESULT,
@@ -444,16 +491,26 @@ function normalizeEmittedPartialEntries(partials) {
         {cause: error},
       );
     }
-    if (typeof aggValue !== 'number' || !Number.isFinite(aggValue)) {
-      throw createCallRoutingFailure(
-        CALL_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESULT,
-        CALL_CELL_CONTRACT_MESSAGE.EMITTED_PARTIAL_INVALID,
-      );
-    }
-    return Object.freeze({
-      aggValue,
-      groupKey: key.slice(CALL_CELL_PARTIAL_KEY_PREFIX.length),
-    });
+    const deliveryId =
+      `${invocationId}:attempt=${attempt}:slot=${slotId ?? 0}:` +
+      `shard=${shardId}:ord=${emissionOrdinal}`;
+    const normalized = {
+      aggValue: decodedWire.value,
+      groupKey,
+      ...(options.includeDeliveryMetadata === true ?
+        {
+          aggValueJson: decodedWire.canonicalValueJson,
+          attempt,
+          deliveryId,
+          emissionOrdinal,
+          schema: decodedWire.schema,
+          shardId,
+          slotId,
+          v: decodedWire.v,
+        } :
+        {}),
+    };
+    return Object.freeze(normalized);
   });
 }
 
@@ -504,6 +561,7 @@ export {
   createCallReduceInvocationId,
   createCallRoutingFailure,
   createCallSlotInvocationId,
+  createScopedDirectCallInvocationId,
   normalizeCallArguments,
   normalizeCallComponentResult,
   normalizeEmittedPartialEntries,

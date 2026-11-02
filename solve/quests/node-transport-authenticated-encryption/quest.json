@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "node-transport-authenticated-encryption",
+  "epic": "pilot-readiness-and-public-proof",
+  "statement": "Implement authenticated and encrypted inter-node transport (mTLS 1.3 + Ed25519 signed IDENTIFY handshake bound to URI:lagrange://<clusterId>/node/<nodeId> SAN), pluggable ClusterTrustProvider (builtin-ca, external-pki, loopback-only insecure-local-dev), CA-pinned lgr_join_v1_ single-use/TTL join tokens with CSR enrollment, symmetric lagrange cert/cluster CLI commands, and PostgreSQL SCRAM-SHA-256, SCRAM-SHA-256-PLUS (tls-server-end-point), and cert authentication.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q7-node-transport-authenticated-encryption-guard.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "0e05f54fddcfe00ff4c20596b864cda687456cfb"
+}
