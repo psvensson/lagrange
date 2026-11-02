@@ -10,10 +10,10 @@ released at the end; afterwards there was no holder record and `flock -n` was fr
 
 - Free disk before staging (Docker root on `/`): tv-dator 375G, adams-gamla 64G, lenovo-laptop
   160G. All three are far above the 6.5 GiB data-host minimum, so nothing was refused.
-- Pulls (`pull-tv-dator.log`, `pull-adams-gamla.log`): on both daemons, `pingcap/pd:v8.5.8`,
+- Pulls (`pull-tv-dator.log.txt`, `pull-adams-gamla.log.txt`): on both daemons, `pingcap/pd:v8.5.8`,
   `pingcap/tidb:v8.5.8` and `postgres:17-alpine` were pulled. `pingcap/tikv:v8.5.8` and
   `psvensson/lagrange@sha256:c0fcc0d3…` were already present.
-- lenovo-laptop transfers (`transfer-lenovo.log`): `docker save` on tv-dator piped through the
+- lenovo-laptop transfers (`transfer-lenovo.log.txt`): `docker save` on tv-dator piped through the
   controller into `docker load` on lenovo-laptop. Nothing was deleted on lenovo-laptop.
 
 | image | sourceHost | contentIdentity | lenovo image id (overlay2) | duration |
@@ -55,7 +55,7 @@ Store-specific image ids still differ (containerd store on .32/.41: manifest dig
 
 Free disk: tv-dator 373G, adams-gamla 61G, lenovo-laptop 158G.
 
-`mysql:8.4.11` was staged on 2026-11-01 under each host's lab lock (`mysql-staging.log`): it was
+`mysql:8.4.11` was staged on 2026-11-01 under each host's lab lock (`mysql-staging.log.txt`): it was
 pulled on adams-gamla (22:59Z) and on tv-dator (after its lock came free at 23:07Z, following a
 formation run), and transferred to lenovo-laptop with `docker save` on the controller piped into
 `docker load` (334 s).

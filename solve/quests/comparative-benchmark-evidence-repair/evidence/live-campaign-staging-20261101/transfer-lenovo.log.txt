@@ -1,0 +1,12 @@
+== pingcap/pd:v8.5.8 2026-11-01T22:44:11Z
+Loaded image: pingcap/pd:v8.5.8
+rc=0 0 secs=225
+== pingcap/tidb:v8.5.8 2026-11-01T22:47:56Z
+Loaded image: pingcap/tidb:v8.5.8
+rc=0 0 secs=166
+== postgres:17-alpine 2026-11-01T22:50:42Z
+Loaded image: postgres:17-alpine
+rc=0 0 secs=146
+== psvensson/lagrange@sha256:c0fcc0d3df37e3b1c4760edea289ac5fb9ad9fd745e489b0f1b44b4e31da46fb 2026-11-01T22:53:08Z
+Loaded image ID: sha256:18aeffc977a27fc3b365d29364c4c8a34c1f366ff94ede07d61c432fa8dc4a0c
+rc=0 0 secs=148
