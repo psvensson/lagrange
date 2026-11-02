@@ -211,6 +211,18 @@ Seal `fresh-create-release-authority-from-committed-operation` with the design a
 
 FRESH_SEED and OPERATOR are left as recorded residuals. Quest C (`participant-release-permanent-refusal`) follows.
 
+## Stream B dependency and quest B coverage gaps (lead decisions, 2026-11-02)
+
+**Stream B dependency.** Quest B landed with the admission-input anchors RUNTIME_OPENED and ADMISSIBLE_ROW_RESUMED (`src/node/replica-create-admission-input.js`). Stream B's `replica-admission-from-committed-operation` deletes the SYNCING-row admission producer and admits from the committed operation through `requestReplicaAdmission`. That quest lands on its own.
+
+Once both quests are on main, this quest moves the admission-input boundary to the first `requestReplicaAdmission` send, the only admission input that will remain. The move is a change to `ADMISSION_INPUT_BY_PHASE` in that one owner. It happens in this quest because this quest also replaces the pending-token mechanism.
+
+**Coverage gaps from quest B's verification.** These are R17 findings in this quest's log, to be closed here:
+
+- **C1.** Add a witness with a local CREATING replica over a durable SYNCING row. Today, dropping the resume report survives every witness.
+- **C2.** Add a PENDING-restart control. Today, ignoring admissibility in `replicaCreatePhaseAfterResume` survives every witness.
+- **C3.** The two rules treat a row without a status differently: `isPeerRowStatusAdmissible` treats it as live, while the phase rule leaves the phase unchanged. Unify them when the boundary moves.
+
 ## Decisions recorded (lead, 2026-11-02)
 
 1. **Completion audit: approved.** `FRESH_CONTRACT` in `scripts/participant-release-completion-audit.js` is updated at implementation. The fresh-CREATE prerequisite clause of `participant-release-completion-owner` is superseded explicitly under R09, by an appended statement in that quest's log; recorded text is never edited. `OWNER_CONTRACT` and `REQUEST_CONTRACT` stay identical, and the audit proves it.
