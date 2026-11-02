@@ -4,7 +4,7 @@
 
 The history holds 20 records over 20 combinations. History records are forensic: none is admitted as a current result.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 10 entries; 8 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 11 entries; 9 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Lagrange and TiDB comparison history](tidb-comparison-progress.svg)
 
@@ -60,4 +60,4 @@ Latest record per combination.
 
 ## Sources
 
-- `data/tidb-comparison/progress-summary.json` sha256:2aa460f55fd9b1c4b359825652ff0b5c6bbd0187fd78e567355d9dcfcf7cf930
+- `data/tidb-comparison/progress-summary.json` sha256:e8e59f240c3693d101ccc30de11d41528bd1cb817b6b3895c77e08f733048e52

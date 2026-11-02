@@ -13,7 +13,7 @@
     },
     {
       "path": "data/tidb-comparison/invalidations.ndjson",
-      "sha256": "sha256:8acfd06a63ea8ab1e9f8a7f75fe3a69100a9703c8ff48e02d5ec77307c9dc49e"
+      "sha256": "sha256:609f9bc220557054e7308ca3c87487806571d6362b4d30e6cea389cdecf2f0b5"
     }
   ],
   "cells": [
@@ -4313,7 +4313,12 @@
       "defectIds": [
         "D33",
         "D34",
-        "D35"
+        "D35",
+        "D37",
+        "D38",
+        "D39",
+        "D40",
+        "D41"
       ],
       "evidence": {
         "runIds": [
@@ -7174,7 +7179,12 @@
       "defectIds": [
         "D33",
         "D34",
-        "D35"
+        "D35",
+        "D37",
+        "D38",
+        "D39",
+        "D40",
+        "D41"
       ],
       "evidence": {
         "runIds": [
@@ -9203,7 +9213,12 @@
       "defectIds": [
         "D33",
         "D34",
-        "D35"
+        "D35",
+        "D37",
+        "D38",
+        "D39",
+        "D40",
+        "D41"
       ],
       "evidence": {
         "runIds": [
