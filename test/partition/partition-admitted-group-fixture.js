@@ -122,7 +122,7 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       replica.startElection();
       assert.equal(await waitFor(() => {
         const status = leader.raft.readStatus();
-        return status.followerProgress[addressOf(members[joined])] ===
+        return status.followerProgress[members[joined][0]] ===
           status.commitIndex;
       }), true, `setup: replica ${members[joined][0]} is admitted`);
     }

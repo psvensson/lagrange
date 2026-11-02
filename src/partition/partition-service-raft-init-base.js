@@ -9,12 +9,11 @@ import {
 const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
-  isBootstrapPeerAdmissible,
   reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
 } from './partition-service-raft-peer-cache-reconciliation.js';
-import {admitPartitionRaftPeer} from
-  './partition-service-raft-membership-administration.js';
+import {committedPartitionPeerAddress} from
+  './partition-committed-peer-address.js';
 import {
   relayPartitionConsensusObservations,
   wirePartitionRaftLifecycleEvents,
@@ -63,7 +62,6 @@ const {
   ConfigurationManager,
   Database,
   ENTITY_TYPE,
-  PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
@@ -463,8 +461,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
             targetAddress: peerAddress,
           }),
         ),
-      [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (address) =>
-        this.buildPeerAddress(address),
+      // Every peer is addressed from its committed node (C3): never a row.
+      [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]:
+        committedPartitionPeerAddress,
       // One committed record per applied entry, inside the transaction
       // that also advances the rs-raft applied state.
       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
@@ -533,49 +532,37 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       );
     }
     wirePartitionRaftLifecycleEvents(this, shouldIgnoreDemotionEvent);
-    const totalPeerCount = Math.max(0, this.replicaIds.length - 1);
+    // The peers this replica joins are the ones its opened configuration
+    // names (owner decision O1), each addressed from its committed node by
+    // the port (C3); nothing here reads a row or proposes an admission:
+    // a configured peer is a member already.
+    const configuredPeers = this.raft.readStatus()?.peers || [];
+    const totalPeerCount = configuredPeers.length;
     let joinedPeerCount = 0;
     this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.JOINING_PEERS, {
       peerTotal: totalPeerCount,
       peerJoined: joinedPeerCount,
     });
-    for (const peerId of this.replicaIds) {
-      // A committed member the address book cannot place yet resolves once
-      // discovery catches up; the bootstrap membership, not the address
-      // book, names the members (owner decision O1). A peer whose row has
-      // not recorded its fact is admitted only on that row change (F2).
-      const peerAddress = peerId === this.replicaId ||
-        !isBootstrapPeerAdmissible(this, peerId) ? null :
-        this.resolveKnownPeerAddress(peerId);
-      if (peerAddress !== null) {
-        if (!this.suppressLifecycleLogs) {
-          this.logger.info(PARTITION_SERVICE_LOG_MSG.JOINING_PEER_ADDRESS, {
-            peerId,
-            peerAddress,
-            replicaId: this.replicaId,
-            partitionId: this.partitionId,
-            addressFormat: peerAddress.includes(
-              PARTITION_SERVICE_ADDRESS.SEPARATOR,
-            ) ?
-              PARTITION_SERVICE_ADDRESS.FORMAT_UNIFIED :
-              PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
-          });
-        }
-        // The bootstrap peers are voters of the core's initial
-        // configuration already; the admission owner proposes only on a
-        // leader and only a peer the configuration does not name.
-        admitPartitionRaftPeer(this, {replicaIdentity: peerId, peerAddress});
-        joinedPeerCount += 1;
-        this.reportInitializationStage(
-          PARTITION_SERVICE_INIT_STAGE.JOINED_PEER,
-          {
-            peerId,
-            peerAddress,
-            peerTotal: totalPeerCount,
-            peerJoined: joinedPeerCount,
-          },
-        );
+    for (const peer of configuredPeers) {
+      if (!this.suppressLifecycleLogs) {
+        this.logger.info(PARTITION_SERVICE_LOG_MSG.JOINING_PEER_ADDRESS, {
+          peerId: peer.replicaIdentity,
+          peerAddress: peer.address,
+          addressStatus: peer.addressStatus,
+          replicaId: this.replicaId,
+          partitionId: this.partitionId,
+        });
       }
+      joinedPeerCount += 1;
+      this.reportInitializationStage(
+        PARTITION_SERVICE_INIT_STAGE.JOINED_PEER,
+        {
+          peerId: peer.replicaIdentity,
+          peerAddress: peer.address,
+          peerTotal: totalPeerCount,
+          peerJoined: joinedPeerCount,
+        },
+      );
     }
     this.reconcileRaftPeersFromCache();
     this.maybeInitializeRebalancer();

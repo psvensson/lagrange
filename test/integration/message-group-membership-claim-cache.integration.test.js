@@ -129,7 +129,8 @@ async function exerciseSettlement(t, settlement,
     learnersNext: [], appliedIndex: 6, commitIndex: 6,
     membershipGenerationIndex: 5, term: 3,
     configurationKey: raftRsConfStateKey(withLearner), leaderId: source,
-    gateOpen: true, identities: {[peerOf(source)]: source, [peerOf(target)]: target}};
+    gateOpen: true, identities: {[peerOf(source)]: source, [peerOf(target)]: target},
+    nodeIds: {[peerOf(source)]: null, [peerOf(target)]: null}};
   assert.ok(committedStampOfAnswer(learnerStamp), 'typed supplied learner basis must validate');
   const prior = {version: 2, transitionIdentity: `${id}-transition`,
     permitSequence: 1, permitStage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,

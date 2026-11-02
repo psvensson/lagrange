@@ -30,6 +30,7 @@ import {
 } from '../../src/raft/raft-operation-port-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {
   ControllableConsensusPort,
   createControllablePartitionService,
@@ -77,23 +78,28 @@ function peerAddresses(partition) {
 function proposalsSince(provider, mark) {
   return provider.confChanges.slice(mark).map((change) => ({
     type: change.type,
-    peerAddress: change.peerAddress,
     replicaIdentity: change.replicaIdentity,
+    ...(change.nodeId === undefined ? {} : {nodeId: change.nodeId}),
   }));
 }
 
+function nodeOf(replicaId) {
+  return ADDRESS_BY_REPLICA[replicaId].split('/')[0];
+}
+
+// An admission commits the node the row's address names.
 function addPeer(replicaId) {
   return {
     type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
-    peerAddress: ADDRESS_BY_REPLICA[replicaId],
     replicaIdentity: replicaId,
+    nodeId: nodeOf(replicaId),
   };
 }
 
+// A removal names the replica identity only.
 function removePeer(replicaId) {
   return {
     type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
-    peerAddress: ADDRESS_BY_REPLICA[replicaId],
     replicaIdentity: replicaId,
   };
 }
@@ -142,6 +148,8 @@ async (t) => {
     tableName: 'sql_transaction_participants',
     replicaId: R1,
     replicaIds: [R1, R2, R3],
+    bootstrapMembership: genesisStamp([R1, R2, R3],
+      Object.fromEntries([R1, R2, R3].map((id) => [id, nodeOf(id)]))),
     nodeId: 'node-a',
     dbPath: ':memory:',
     deferElection: true,

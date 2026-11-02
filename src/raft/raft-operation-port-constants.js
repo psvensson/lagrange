@@ -127,6 +127,9 @@ const RAFT_MEMBERSHIP_RESERVATION_OUTCOME = Object.freeze({
 const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   UNKNOWN_OPERATION: 'unknown-membership-change',
   WITHOUT_REPLICA_IDENTITY: 'membership-change-without-replica-identity',
+  // An ADD commits the node the peer is admitted on (the admission context):
+  // an ADD that names no node is refused, never committed without one.
+  WITHOUT_NODE_ID: 'membership-change-without-node-id',
   PEER_UNRESERVED: 'membership-change-peer-unreserved',
   // Conf changes are taken only at the leader's port (round 2 F-1): a
   // replica that does not lead refuses one typed and retryable, naming the
@@ -144,9 +147,9 @@ const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   GROUP_RETIRING: 'membership-change-group-retiring',
 });
 
-// What probePeerProgress(peerAddress) answers: the peer's matched index
+// What probePeerProgress(replicaIdentity) answers: the peer's matched index
 // already reaches the commit index (CORE_OK); one heartbeat round was driven
-// through the core because it did not (CORE_OK); the address names no peer of
+// through the core because it did not (CORE_OK); the replica is no peer of
 // the configuration (CORE_REFUSED); the replica is not the leader, which
 // never ticks for a probe (CORE_REFUSED).
 const RAFT_PEER_PROGRESS_PROBE_REASON = Object.freeze({

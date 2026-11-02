@@ -4,31 +4,31 @@
   "counts": {
     "admin-diagnostics": 118,
     "architecture-governance": 21,
-    "bootstrap-membership": 330,
+    "bootstrap-membership": 329,
     "cdc-metadata": 67,
-    "cli-tooling": 99,
-    "control-plane": 225,
+    "cli-tooling": 98,
+    "control-plane": 224,
     "convergence-topology": 78,
-    "distributed-harness": 209,
+    "distributed-harness": 182,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
-    "query-sql": 191,
+    "query-sql": 190,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 158,
+    "services-runtime": 148,
     "solver-tooling": 7,
-    "storage-partition": 208,
-    "storage-raft": 148,
-    "test-infrastructure": 154,
+    "storage-partition": 210,
+    "storage-raft": 146,
+    "test-infrastructure": 153,
     "transactions": 17,
-    "transport-messaging": 113,
+    "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2553,
-  "digest": "fnv1a32-ff8ebbf7",
+  "censusSize": 2510,
+  "digest": "fnv1a32-27f8483e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a5d61e8a",
+  "observationDigest": "fnv1a32-f8831a36",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -310,7 +310,6 @@
     "test/bootstrap/startup-runtime-handoff-owner.test.js": "bootstrap-membership",
     "test/bootstrap/startup-runtime-surface-owner.test.js": "bootstrap-membership",
     "test/bootstrap/storage-budget-bootstrap.test.js": "bootstrap-membership",
-    "test/bootstrap/support-envelope-owner.test.js": "bootstrap-membership",
     "test/bootstrap/system-leader-readiness-address-gate.test.js": "bootstrap-membership",
     "test/bootstrap/system-partition-classification-owner.test.js": "bootstrap-membership",
     "test/bootstrap/traffic-readiness-utils.test.js": "bootstrap-membership",
@@ -440,7 +439,6 @@
     "test/cli/core/viewmodel-computed-caching.property.test.js": "cli-tooling",
     "test/cli/core/visual-indicators.test.js": "cli-tooling",
     "test/cli/index.test.js": "cli-tooling",
-    "test/cli/q8-resumable-bulk-data-load.test.js": "cli-tooling",
     "test/cli/service-init-scaffold.test.js": "cli-tooling",
     "test/cli/service-init-wasm-scaffold.test.js": "cli-tooling",
     "test/cli/service-install-lifecycle-cli.test.js": "cli-tooling",
@@ -663,7 +661,6 @@
     "test/control-plane/publication-recovery-state-machine.test.js": "control-plane",
     "test/control-plane/publication-snapshot-build-sync-section-attribution.test.js": "control-plane",
     "test/control-plane/publications-catchup-leader-pinned-read.test.js": "control-plane",
-    "test/control-plane/q9-pilot-cutover-and-rollback-receipts.test.js": "control-plane",
     "test/control-plane/read-model-contract.test.js": "control-plane",
     "test/control-plane/readiness-admission-transitions-observed.test.js": "control-plane",
     "test/control-plane/readiness-authoritative-row-read-contract.test.js": "control-plane",
@@ -832,10 +829,7 @@
     "test/distributed/harness/__tests__/assertions.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-observation.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/benchmark-claim-admission.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/benchmark-oltp-state-reconciliation.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/benchmark-operation-outcome.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-partition-convergence.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-resource-live-observation-authority.test.js": "distributed-harness",
@@ -879,16 +873,6 @@
     "test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/cluster.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-chain-acceptance.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-manifest.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-record-owner.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-semantic-gate.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-evidence-contract.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-efficiency-measured-cell-admission.test.js": "distributed-harness",
@@ -913,7 +897,6 @@
     "test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-sql-query-engine-availability.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/fresh-formation-routability-predicate.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/full-node-log-capture.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/gate-engine.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/gcp-provisioner.test.js": "distributed-harness",
@@ -962,22 +945,10 @@
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/progress-wait.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/public-path-scale-and-failure-certification.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-convergence-claim.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-cleanup.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-dataset.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-network.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-recovery.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer.property.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer.test.js": "distributed-harness",
@@ -989,7 +960,6 @@
     "test/distributed/harness/__tests__/scale-certification-receipt-freshness.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js": "distributed-harness",
-    "test/distributed/harness/__tests__/scenario-a-semantic-proof-journey.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-certification.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-config.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "distributed-harness",
@@ -1338,8 +1308,10 @@
     "test/partition/group-retirement-resume-claim.test.js": "storage-partition",
     "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js": "storage-partition",
     "test/partition/key-range-manager.test.js": "storage-partition",
+    "test/partition/learner-host-committed-admission-production.integration.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-budget-walk.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
+    "test/partition/learner-promotion-proof-committed-admission.test.js": "storage-partition",
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": "storage-partition",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "storage-partition",
     "test/partition/managed-merge-workflow.test.js": "storage-partition",
@@ -1568,7 +1540,6 @@
     "test/query/primitive-telemetry.test.js": "query-sql",
     "test/query/provision-target-live-transport-rescue.test.js": "query-sql",
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": "query-sql",
-    "test/query/q10-postgres-compatibility-certification-matrix.test.js": "query-sql",
     "test/query/query-constants-vocabulary.test.js": "query-sql",
     "test/query/query-executor-build-sql-and-routability.test.js": "query-sql",
     "test/query/query-executor-delay.test.js": "query-sql",
@@ -1669,8 +1640,6 @@
     "test/raft/leadership-transfer-single-path.test.js": "storage-raft",
     "test/raft/learner-promotion-progress-proof-contract.test.js": "storage-raft",
     "test/raft/message-group-readiness-delivery-priority.test.js": "storage-raft",
-    "test/raft/peer-address-resolver.property.test.js": "storage-raft",
-    "test/raft/peer-address-resolver.test.js": "storage-raft",
     "test/raft/raft-cleanup-verification.test.js": "storage-raft",
     "test/raft/raft-id-mapper.test.js": "storage-raft",
     "test/raft/raft-log-write-owner.test.js": "storage-raft",
@@ -2205,7 +2174,6 @@
     "test/scripts/changed-paths.test.js": "test-infrastructure",
     "test/scripts/check-architecture-slices.test.js": "test-infrastructure",
     "test/scripts/check-base-range.test.js": "test-infrastructure",
-    "test/scripts/check-benchmark-history-append-only.test.js": "test-infrastructure",
     "test/scripts/check-cli-docs.test.js": "test-infrastructure",
     "test/scripts/check-current-capabilities.test.js": "test-infrastructure",
     "test/scripts/check-doc-audience.test.js": "test-infrastructure",
@@ -2342,12 +2310,6 @@
     "test/service/call-shard-dispatch-pool.test.js": "services-runtime",
     "test/service/data-local-owner-boundaries.test.js": "services-runtime",
     "test/service/external-service-manifest.test.js": "services-runtime",
-    "test/service/h1-pinned-hono-component-proof.test.js": "services-runtime",
-    "test/service/h2-hono-source-ir-deployment-cutover.test.js": "services-runtime",
-    "test/service/h3-fetch-ingress-and-scoped-client.test.js": "services-runtime",
-    "test/service/h4-http-invocation-recovery-and-cancellation.test.js": "services-runtime",
-    "test/service/h5-compiled-public-hono-journey.test.js": "services-runtime",
-    "test/service/h6-successor-contract-and-evidence-cutover.test.js": "services-runtime",
     "test/service/handler-aware-runtime-invocation.test.js": "services-runtime",
     "test/service/installable-service-artifact-resolver.test.js": "services-runtime",
     "test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js": "services-runtime",
@@ -2356,10 +2318,6 @@
     "test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js": "services-runtime",
     "test/service/minimal-deployment-request-cell-routing.test.js": "services-runtime",
     "test/service/minimal-deployment-single-contract-owner-guard.test.js": "services-runtime",
-    "test/service/q2-call-selector-typed-parameter-narrowing.test.js": "services-runtime",
-    "test/service/q3-call-shard-paged-execution.test.js": "services-runtime",
-    "test/service/q4-call-bounded-structured-partials.test.js": "services-runtime",
-    "test/service/q5-service-cell-v2-default-multi-operation.test.js": "services-runtime",
     "test/service/replicated-service-topology.test.js": "services-runtime",
     "test/service/request-binding-route-resolver.test.js": "services-runtime",
     "test/service/request-cell-call-bridge.test.js": "services-runtime",
@@ -2468,7 +2426,6 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": "transport-messaging",
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "transport-messaging",
     "test/transport/owner-retry-budget.test.js": "transport-messaging",
-    "test/transport/q7-node-transport-authenticated-encryption.test.js": "transport-messaging",
     "test/transport/router-envelope-pre-send-failure.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "transport-messaging",
@@ -2609,11 +2566,13 @@
     "test/address/address-manager-peer-location-authority.test.js": {
       "files": [
         "src/address/address-manager.js",
+        "src/partition/partition-committed-peer-address.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -3746,15 +3705,6 @@
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
-    "test/bootstrap/support-envelope-owner.test.js": {
-      "files": [
-        "docs/support-envelope.json",
-        "test/distributed/run.js"
-      ],
-      "directories": [
-        "test/distributed/config"
-      ]
-    },
     "test/bootstrap/system-partition-classification-owner.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
@@ -3967,16 +3917,6 @@
         "src/config/listener-port-model.js"
       ]
     },
-    "test/cli/q8-resumable-bulk-data-load.test.js": {
-      "files": [
-        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
-        "src/partition/partition-participant-transaction-constants.js",
-        "src/runtime/pgwire-runtime-module.js",
-        "src/transport/transport-semantic-outcome.js",
-        "test/test-helpers/participant-protocol-double.js",
-        "test/test-helpers/transaction-persistence-gateway.js"
-      ]
-    },
     "test/cli/service-init-scaffold.test.js": {
       "files": [
         "Dockerfile",
@@ -4015,7 +3955,6 @@
       "files": [
         "package.json",
         "src/authoring/define-service.js",
-        "src/authoring/index.js",
         "src/cli/service-pipeline-router.js",
         "src/control-plane/owners/deployment-binding-contract.js",
         "src/index.js",
@@ -4862,16 +4801,6 @@
         "src/control-plane/membership-publication-coordinator-reconcile.js"
       ]
     },
-    "test/control-plane/q9-pilot-cutover-and-rollback-receipts.test.js": {
-      "files": [
-        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
-        "src/partition/partition-participant-transaction-constants.js",
-        "src/runtime/pgwire-runtime-module.js",
-        "src/transport/transport-semantic-outcome.js",
-        "test/test-helpers/participant-protocol-double.js",
-        "test/test-helpers/transaction-persistence-gateway.js"
-      ]
-    },
     "test/control-plane/read-model-contract.test.js": {
       "files": [
         "src/rebalancer/rebalance-coordinator.js",
@@ -5712,60 +5641,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
       ]
     },
-    "test/distributed/harness/__tests__/benchmark-claim-admission.test.js": {
-      "files": [
-        "Dockerfile",
-        "README.md",
-        "data/tidb-comparison/admitted-lab-measurements.json",
-        "data/tidb-comparison/history.ndjson",
-        "data/tidb-comparison/invalidations.ndjson",
-        "data/tidb-comparison/multi-system-matrix.json",
-        "data/tidb-comparison/progress-summary.json",
-        "data/tidb-comparison/raw-observations.ndjson",
-        "docs/benchmarks/README.md",
-        "docs/benchmarks/tidb-comparison-progress.html",
-        "docs/benchmarks/tidb-comparison-progress.md",
-        "docs/benchmarks/tidb-comparison-progress.svg",
-        "docs/benchmarks/tidb-scenario-b-comparison.svg",
-        "scripts/checks/comparative-benchmark-recompute.js",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
-        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
-        "test/distributed/harness/benchmark-operation-outcome.js",
-        "test/distributed/harness/benchmark-scenario-a-run.js",
-        "test/distributed/harness/benchmark-workload-dispatch.js",
-        "test/distributed/harness/comparative-benchmark-adversarial-cases.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-baseline-dataset.js",
-        "test/distributed/harness/oltp-baseline-transaction-executor.js",
-        "test/distributed/harness/oltp-baseline-workload.js",
-        "test/distributed/harness/oltp-error-classification.js",
-        "test/distributed/harness/oltp-open-loop-step-owner.js",
-        "test/distributed/harness/oltp-paired-retry-owner.js",
-        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
-        "test/distributed/harness/raw-observation-campaign-specs.js",
-        "test/distributed/harness/run-benchmark-workload.js",
-        "test/distributed/harness/scaleout-series-experiments.js",
-        "test/distributed/reference-client/lagrange-oltp-adapter.js",
-        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
-        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
-        "test/distributed/reference-client/postgresql-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
-      ],
-      "directories": [
-        "data",
-        "data/tidb-comparison",
-        "data/tidb-comparison/forensic",
-        "docs/benchmarks",
-        "src",
-        "test/distributed/harness"
-      ]
-    },
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": {
       "files": [
         "Dockerfile",
@@ -5797,36 +5672,6 @@
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS",
         "TAP"
-      ]
-    },
-    "test/distributed/harness/__tests__/benchmark-oltp-state-reconciliation.test.js": {
-      "files": [
-        "Dockerfile",
-        "README.md",
-        "data/tidb-comparison/admitted-lab-measurements.json",
-        "data/tidb-comparison/history.ndjson",
-        "data/tidb-comparison/invalidations.ndjson",
-        "data/tidb-comparison/multi-system-matrix.json",
-        "data/tidb-comparison/progress-summary.json",
-        "data/tidb-comparison/raw-observations.ndjson",
-        "docs/benchmarks/README.md",
-        "docs/benchmarks/tidb-comparison-progress.html",
-        "docs/benchmarks/tidb-comparison-progress.md",
-        "docs/benchmarks/tidb-comparison-progress.svg",
-        "docs/benchmarks/tidb-scenario-b-comparison.svg",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/raw-observation-campaign-specs.js",
-        "test/distributed/harness/scaleout-series-experiments.js"
-      ],
-      "directories": [
-        "data/tidb-comparison",
-        "data/tidb-comparison/forensic",
-        "docs/benchmarks",
-        "src"
       ]
     },
     "test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js": {
@@ -6575,229 +6420,6 @@
         "LAGRANGE_DEBUG_LOGS"
       ]
     },
-    "test/distributed/harness/__tests__/comparative-benchmark-chain-acceptance.test.js": {
-      "files": [
-        "Dockerfile",
-        "README.md",
-        "data/tidb-comparison/admitted-lab-measurements.json",
-        "data/tidb-comparison/history.ndjson",
-        "data/tidb-comparison/invalidations.ndjson",
-        "data/tidb-comparison/multi-system-matrix.json",
-        "data/tidb-comparison/progress-summary.json",
-        "data/tidb-comparison/raw-observations.ndjson",
-        "docs/benchmarks/README.md",
-        "docs/benchmarks/index.html",
-        "docs/benchmarks/tidb-comparison-progress.html",
-        "docs/benchmarks/tidb-comparison-progress.md",
-        "docs/benchmarks/tidb-comparison-progress.svg",
-        "docs/benchmarks/tidb-scenario-b-comparison.svg",
-        "scripts/checks/comparative-benchmark-recompute.js",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
-        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
-        "test/distributed/harness/benchmark-operation-outcome.js",
-        "test/distributed/harness/benchmark-scenario-a-run.js",
-        "test/distributed/harness/benchmark-workload-dispatch.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-baseline-dataset.js",
-        "test/distributed/harness/oltp-baseline-transaction-executor.js",
-        "test/distributed/harness/oltp-baseline-workload.js",
-        "test/distributed/harness/oltp-error-classification.js",
-        "test/distributed/harness/oltp-open-loop-step-owner.js",
-        "test/distributed/harness/oltp-paired-retry-owner.js",
-        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
-        "test/distributed/harness/raw-observation-campaign-specs.js",
-        "test/distributed/harness/run-benchmark-workload.js",
-        "test/distributed/harness/scaleout-series-experiments.js",
-        "test/distributed/reference-client/lagrange-oltp-adapter.js",
-        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
-        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
-        "test/distributed/reference-client/postgresql-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-state-snapshot.js",
-        "test/distributed/scenarios/scenario-a-semantic-proof-journey.js"
-      ],
-      "directories": [
-        "data",
-        "data/tidb-comparison",
-        "data/tidb-comparison/forensic",
-        "docs/benchmarks",
-        "scripts/checks",
-        "solve",
-        "src",
-        "test/distributed/harness"
-      ],
-      "env": [
-        "LAGRANGE_SCENARIO_A_CONFLICT_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_CONTENTION_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_DELIVERY_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_DURABILITY_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_FAILURE_ATOMICITY_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_ORDER_STATUS_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_PAYMENT_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_STOCK_LEVEL_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_VISIBILITY_EVIDENCE_PATH"
-      ]
-    },
-    "test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js": {
-      "files": [
-        "Dockerfile",
-        "data/tidb-comparison/admitted-lab-measurements.json",
-        "data/tidb-comparison/history.ndjson",
-        "data/tidb-comparison/invalidations.ndjson",
-        "data/tidb-comparison/multi-system-matrix.json",
-        "data/tidb-comparison/progress-summary.json",
-        "data/tidb-comparison/raw-observations.ndjson",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/container-memory-working-set.js"
-      ],
-      "directories": [
-        "data/tidb-comparison",
-        "data/tidb-comparison/forensic",
-        "docs/benchmarks",
-        "src",
-        "test/distributed/harness"
-      ]
-    },
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
-        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
-        "test/distributed/harness/benchmark-operation-outcome.js",
-        "test/distributed/harness/benchmark-scenario-a-run.js",
-        "test/distributed/harness/benchmark-workload-dispatch.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-baseline-dataset.js",
-        "test/distributed/harness/oltp-baseline-transaction-executor.js",
-        "test/distributed/harness/oltp-baseline-workload.js",
-        "test/distributed/harness/oltp-error-classification.js",
-        "test/distributed/harness/oltp-open-loop-step-owner.js",
-        "test/distributed/harness/oltp-paired-retry-owner.js",
-        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
-        "test/distributed/harness/run-benchmark-workload.js",
-        "test/distributed/reference-client/lagrange-oltp-adapter.js",
-        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
-        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
-        "test/distributed/reference-client/postgresql-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
-      ],
-      "directories": [
-        "src"
-      ]
-    },
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
-        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
-        "test/distributed/harness/benchmark-operation-outcome.js",
-        "test/distributed/harness/benchmark-scenario-a-run.js",
-        "test/distributed/harness/benchmark-workload-dispatch.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-baseline-dataset.js",
-        "test/distributed/harness/oltp-baseline-transaction-executor.js",
-        "test/distributed/harness/oltp-baseline-workload.js",
-        "test/distributed/harness/oltp-error-classification.js",
-        "test/distributed/harness/oltp-open-loop-step-owner.js",
-        "test/distributed/harness/oltp-paired-retry-owner.js",
-        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
-        "test/distributed/harness/run-benchmark-workload.js",
-        "test/distributed/reference-client/lagrange-oltp-adapter.js",
-        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
-        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
-        "test/distributed/reference-client/postgresql-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
-      ],
-      "directories": [
-        "src"
-      ]
-    },
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": {
-      "files": [
-        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
-      ],
-      "directories": [
-        "data"
-      ]
-    },
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": {
-      "files": [
-        "Dockerfile",
-        "package-lock.json",
-        "package.json",
-        "scripts/checks/wait-for-thermal-headroom.js",
-        "scripts/generate-global-owner-debt-inventory.js",
-        "scripts/run-classified-test-files.js",
-        "scripts/select-change-tests.js",
-        "scripts/test-machine-factor.js",
-        "src/admin/admin-authoritative-repair-policy.js",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "src/utils/canonical-json-data.js",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/container-memory-working-set.js"
-      ],
-      "directories": [
-        "src"
-      ],
-      "env": [
-        "APPDATA",
-        "LAGRANGE_LAB_HOME",
-        "XDG_CONFIG_HOME"
-      ]
-    },
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-manifest.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
-      ]
-    },
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-record-owner.test.js": {
-      "files": [
-        "test/distributed/harness/benchmark-claim-admission.js",
-        "test/distributed/harness/benchmark-invalidation-ledger.js",
-        "test/distributed/harness/comparative-coverage-manifest.js",
-        "test/distributed/harness/raw-observation-record.js"
-      ]
-    },
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/run-benchmark-workload.js"
-      ],
-      "directories": [
-        "src",
-        "test/distributed/reference-client"
-      ]
-    },
     "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js": {
       "files": [
         "test/distributed/harness/benchmark-capacity-heterogeneous-observation.js",
@@ -6962,24 +6584,6 @@
       ],
       "directories": [
         "solve/epics/raft-rs-full-cutover"
-      ]
-    },
-    "test/distributed/harness/__tests__/fresh-formation-routability-predicate.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/admin-authoritative-repair-policy.js",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "src/utils/canonical-json-data.js",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/container-memory-working-set.js"
-      ],
-      "directories": [
-        "solve/epics/raft-rs-full-cutover",
-        "src",
-        "test/distributed/fixtures/fresh-formation-live-diagnosis-2026-11-01"
       ]
     },
     "test/distributed/harness/__tests__/full-node-log-capture.test.js": {
@@ -7385,26 +6989,6 @@
         "test/fixtures/scenario-ground-truth"
       ]
     },
-    "test/distributed/harness/__tests__/public-path-scale-and-failure-certification.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/admin-authoritative-repair-policy.js",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "src/utils/canonical-json-data.js",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/run.js",
-        "test/wasm-service/fixtures/call-cell-world/guest.js",
-        "test/wasm-service/fixtures/service-cell-world/guest.js"
-      ],
-      "directories": [
-        "test/distributed/config",
-        "wit"
-      ]
-    },
     "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": {
       "files": [
         "Dockerfile",
@@ -7431,171 +7015,6 @@
         "src/control-plane/control-plane-publication-merge.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/priority-recovery-snapshot.js"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-cleanup.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-dataset.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js": {
-      "files": [
-        "Dockerfile",
-        "docs/benchmarks/cloud-reproduction-guide.md",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
-      ],
-      "env": [
-        "PATH"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-network.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-recovery.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": {
-      "files": [
-        "docs/benchmarks/cloud/provision-gcp.sh",
-        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
-      ],
-      "directories": [
-        "docs/benchmarks/cloud",
-        "test/distributed/harness"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
-        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
-        "test/distributed/harness/benchmark-operation-outcome.js",
-        "test/distributed/harness/benchmark-scenario-a-run.js",
-        "test/distributed/harness/benchmark-workload-dispatch.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-baseline-dataset.js",
-        "test/distributed/harness/oltp-baseline-transaction-executor.js",
-        "test/distributed/harness/oltp-baseline-workload.js",
-        "test/distributed/harness/oltp-error-classification.js",
-        "test/distributed/harness/oltp-open-loop-step-owner.js",
-        "test/distributed/harness/oltp-paired-retry-owner.js",
-        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
-        "test/distributed/harness/run-benchmark-workload.js",
-        "test/distributed/reference-client/lagrange-oltp-adapter.js",
-        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
-        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
-        "test/distributed/reference-client/postgresql-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
-      ],
-      "directories": [
-        "src"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
-        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
-        "test/distributed/harness/benchmark-operation-outcome.js",
-        "test/distributed/harness/benchmark-scenario-a-run.js",
-        "test/distributed/harness/benchmark-workload-dispatch.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-baseline-dataset.js",
-        "test/distributed/harness/oltp-baseline-transaction-executor.js",
-        "test/distributed/harness/oltp-baseline-workload.js",
-        "test/distributed/harness/oltp-error-classification.js",
-        "test/distributed/harness/oltp-open-loop-step-owner.js",
-        "test/distributed/harness/oltp-paired-retry-owner.js",
-        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
-        "test/distributed/harness/run-benchmark-workload.js",
-        "test/distributed/reference-client/lagrange-oltp-adapter.js",
-        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
-        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
-        "test/distributed/reference-client/postgresql-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
-      ],
-      "directories": [
-        "src"
-      ]
-    },
-    "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
-        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
-        "test/distributed/harness/benchmark-operation-outcome.js",
-        "test/distributed/harness/benchmark-scenario-a-run.js",
-        "test/distributed/harness/benchmark-workload-dispatch.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/oltp-baseline-dataset.js",
-        "test/distributed/harness/oltp-baseline-transaction-executor.js",
-        "test/distributed/harness/oltp-baseline-workload.js",
-        "test/distributed/harness/oltp-error-classification.js",
-        "test/distributed/harness/oltp-open-loop-step-owner.js",
-        "test/distributed/harness/oltp-paired-retry-owner.js",
-        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
-        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
-        "test/distributed/harness/run-benchmark-workload.js",
-        "test/distributed/reference-client/lagrange-oltp-adapter.js",
-        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
-        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
-        "test/distributed/reference-client/postgresql-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-adapter.js",
-        "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
-      ],
-      "directories": [
-        "src",
-        "test/distributed/harness",
-        "test/distributed/reference-client",
-        "test/distributed/scenarios"
       ]
     },
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": {
@@ -7784,30 +7203,6 @@
         "LAGRANGE_SCENARIO_A_ADMISSION_PATH",
         "LAGRANGE_SCENARIO_A_VISIBILITY_EVIDENCE_PATH",
         "TAP"
-      ]
-    },
-    "test/distributed/harness/__tests__/scenario-a-semantic-proof-journey.test.js": {
-      "files": [
-        "Dockerfile",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/container-memory-working-set.js"
-      ],
-      "directories": [
-        "src"
-      ],
-      "env": [
-        "LAGRANGE_SCENARIO_A_CONFLICT_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_CONTENTION_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_DELIVERY_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_DURABILITY_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_FAILURE_ATOMICITY_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_ORDER_STATUS_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_PAYMENT_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_STOCK_LEVEL_EVIDENCE_PATH",
-        "LAGRANGE_SCENARIO_A_VISIBILITY_EVIDENCE_PATH"
       ]
     },
     "test/distributed/harness/__tests__/scenario-certification.test.js": {
@@ -10835,9 +10230,34 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/learner-host-committed-admission-production.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/learner-promotion-count-check-inputs.test.js": {
       "files": [
         "test/partition/fixtures/critical-spread-transition-authority/recorded-guard-shapes.json"
+      ]
+    },
+    "test/partition/learner-promotion-proof-committed-admission.test.js": {
+      "files": [
+        "src/partition/partition-committed-peer-address.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": {
@@ -11679,6 +11099,11 @@
         "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
+    "test/partition/partition-service-learner-promotion-wake.test.js": {
+      "files": [
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
     "test/partition/partition-service-learner-promotion.test.js": {
       "files": [
         "src/raft/raft-operation-port-constants.js",
@@ -11767,6 +11192,7 @@
     },
     "test/partition/partition-service-size-split-transport.test.js": {
       "files": [
+        "src/partition/partition-committed-peer-address.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -11780,6 +11206,7 @@
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/acknowledging-cdc-subscriber.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -12571,18 +11998,6 @@
         "src/query/table-creation-service-create-table.js",
         "src/query/table-creation-service-existing-table-reconciliation.js",
         "src/query/table-creation-service-partition-provisioning.js"
-      ]
-    },
-    "test/query/q10-postgres-compatibility-certification-matrix.test.js": {
-      "files": [
-        "docs/postgres-compatibility-matrix.json",
-        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
-        "src/partition/partition-participant-transaction-constants.js",
-        "test/test-helpers/participant-protocol-double.js",
-        "test/test-helpers/transaction-persistence-gateway.js"
-      ],
-      "directories": [
-        "test/fixtures/pgwire-tls"
       ]
     },
     "test/query/query-constants-vocabulary.test.js": {
@@ -13836,6 +13251,7 @@
         "src/raft/raft-rs-group-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
       ]
@@ -16738,26 +16154,6 @@
         "src"
       ]
     },
-    "test/scripts/check-benchmark-history-append-only.test.js": {
-      "files": [
-        "Dockerfile",
-        "README.md",
-        "data/tidb-comparison/history.ndjson",
-        "data/tidb-comparison/invalidations.ndjson",
-        "data/tidb-comparison/progress-summary.json",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/container-memory-working-set.js"
-      ],
-      "directories": [
-        "scripts/checks",
-        "solve/epics",
-        "solve/quests",
-        "src"
-      ]
-    },
     "test/scripts/check-cli-docs.test.js": {
       "files": [
         "src/cli/COMMAND_REFERENCE.md",
@@ -16772,7 +16168,6 @@
         "docs/current-capabilities-and-limitations.md",
         "docs/current-capabilities.json",
         "docs/service-portability-capabilities.json",
-        "docs/support-envelope.json",
         "scripts/check-current-capabilities.js",
         "scripts/generate-current-capabilities-doc.js",
         "src/bootstrap/bootstrap-api-constants.js",
@@ -16780,7 +16175,6 @@
         "src/partition/partition-snapshot-cadence.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/service/request-cell-http-authenticator.js",
-        "src/service/service-source-contract.js",
         "src/transport/router-server-manager.js"
       ]
     },
@@ -18968,55 +18362,6 @@
         "src/service/call-partition-topology.js"
       ]
     },
-    "test/service/h2-hono-source-ir-deployment-cutover.test.js": {
-      "directories": [
-        "test/service"
-      ]
-    },
-    "test/service/h4-http-invocation-recovery-and-cancellation.test.js": {
-      "files": [
-        "src/control-plane/owners/request-binding-service-definition-contract.js",
-        "src/runtime/runtime-driver-registry.js",
-        "src/runtime/service-runtime-lifecycle.js",
-        "src/runtime/wasi-component-cell-runtime.js",
-        "src/runtime/wasm-component-driver.js"
-      ]
-    },
-    "test/service/h5-compiled-public-hono-journey.test.js": {
-      "files": [
-        "src/authoring/index.js",
-        "src/control-plane/owners/request-binding-service-definition-contract.js",
-        "src/runtime/runtime-driver-registry.js",
-        "src/runtime/service-runtime-lifecycle.js",
-        "src/runtime/wasi-component-cell-runtime.js",
-        "src/runtime/wasm-component-driver.js"
-      ]
-    },
-    "test/service/h6-successor-contract-and-evidence-cutover.test.js": {
-      "files": [
-        "README.md",
-        "architecture/process-partitioning.md",
-        "architecture/process-replication.md",
-        "docs/current-capabilities-and-limitations.md",
-        "docs/current-capabilities.json",
-        "docs/native-programming-model.md",
-        "docs/reference/javascript-service-reference.md",
-        "docs/service-deployment-guide.md",
-        "docs/service-portability-capabilities.json",
-        "docs/support-envelope.json",
-        "examples/README.md",
-        "scripts/check-current-capabilities.js",
-        "scripts/checks/service-portability-claims-contract.js",
-        "src/bootstrap/bootstrap-api-constants.js",
-        "src/partition/partition-service-core-base.js",
-        "src/partition/partition-snapshot-cadence.js",
-        "src/raft/raft-rs-durable-store-constants.js",
-        "src/runtime/oci-container-driver.js",
-        "src/service/request-cell-http-authenticator.js",
-        "src/service/service-source-contract.js",
-        "src/transport/router-server-manager.js"
-      ]
-    },
     "test/service/handler-aware-runtime-invocation.test.js": {
       "files": [
         "package.json"
@@ -19083,50 +18428,6 @@
         "src/control-plane/owners/service-install-catalog-contract.js",
         "src/runtime/request-cell-runtime-contract.js",
         "src/service/external-service-manifest.js"
-      ]
-    },
-    "test/service/q2-call-selector-typed-parameter-narrowing.test.js": {
-      "files": [
-        "src/bootstrap/system-table-schemas-constants.js",
-        "src/constants/unified-service-lifecycle.js",
-        "src/node/runtime-service-call-cell-handler.js",
-        "src/runtime/wasi-component-cell-runtime.js",
-        "src/service/call-binding-route-resolver.js",
-        "src/service/call-cell-batch-executor.js",
-        "src/service/call-cell-statement-adapter.js",
-        "src/service/service-component-build.js",
-        "src/service/service-deployment-record-generator.js"
-      ]
-    },
-    "test/service/q3-call-shard-paged-execution.test.js": {
-      "files": [
-        "src/bootstrap/system-table-schemas-constants.js",
-        "src/constants/unified-service-lifecycle.js",
-        "src/node/runtime-service-call-cell-handler.js",
-        "src/runtime/call-cell-reduce-coordinator.js",
-        "src/runtime/wasi-component-cell-runtime.js",
-        "src/service/call-binding-route-resolver.js",
-        "src/service/call-cell-batch-executor.js",
-        "src/service/call-cell-routing-contract.js",
-        "src/service/call-cell-statement-adapter.js",
-        "src/service/service-component-build.js"
-      ]
-    },
-    "test/service/q4-call-bounded-structured-partials.test.js": {
-      "files": [
-        "src/bootstrap/system-table-schemas-constants.js",
-        "src/constants/unified-service-lifecycle.js",
-        "src/node/runtime-service-call-cell-handler.js",
-        "src/runtime/wasi-component-cell-runtime.js",
-        "src/service/call-binding-route-resolver.js",
-        "src/service/call-cell-batch-executor.js",
-        "src/service/call-cell-statement-adapter.js",
-        "src/service/service-component-build.js"
-      ]
-    },
-    "test/service/q5-service-cell-v2-default-multi-operation.test.js": {
-      "files": [
-        "src/authoring/index.js"
       ]
     },
     "test/service/request-binding-route-resolver.test.js": {

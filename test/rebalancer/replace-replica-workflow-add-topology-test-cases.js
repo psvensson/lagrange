@@ -169,10 +169,10 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
           bootstrapReplicaIds,
           'bootstrap replica ids should be preserved on the CREATE_REPLICA payload',
         );
-        t.same(
+        t.equal(
           deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],
-          bootstrapPeerAddresses,
-          'bootstrap peer addresses should be preserved on the CREATE_REPLICA payload',
+          undefined,
+          'the CREATE_REPLICA payload carries no peer-address hint list',
         );
       } finally {
         await coordinator.shutdown();
@@ -246,15 +246,10 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
           ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
           'message-group create payload should include canonical replica ids',
         );
-        t.same(
+        t.equal(
           deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],
-          [
-            'seed-node/message-group/mg-1-r1',
-            'node-2/message-group/mg-1-r2',
-            'node-3/message-group/mg-1-r3',
-            'node-4/message-group/mg-1-r4',
-          ],
-          'message-group create payload should include canonical peer addresses',
+          undefined,
+          'the message-group create payload carries no peer-address hint list',
         );
       } finally {
         await coordinator.shutdown();

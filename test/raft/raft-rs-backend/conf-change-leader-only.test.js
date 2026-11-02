@@ -65,7 +65,7 @@ test('F-1: a follower\'s conf-change proposal behind the leader\'s pending ' +
   const peerC = String(cluster.raftPeerIdOf(C));
   // The leader holds a pending (effective) AddNode.
   assert.equal(cluster.node(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: EXTRA})
+    type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: EXTRA, nodeId: 'node-test'})
     .outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
   const logBefore = durableLog(cluster.replica(A).dbFile,
     cluster.partitionId).at(-1).index;
