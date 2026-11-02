@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 212,
     "storage-raft": 146,
-    "test-infrastructure": 154,
+    "test-infrastructure": 155,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2557,
-  "digest": "fnv1a32-014c04f2",
+  "censusSize": 2558,
+  "digest": "fnv1a32-c46b24d4",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-da618325",
+  "observationDigest": "fnv1a32-9912e555",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2286,6 +2286,7 @@
     "test/scripts/proof-authority-falsifiers.test.js": "test-infrastructure",
     "test/scripts/proof-authority.test.js": "test-infrastructure",
     "test/scripts/proof-cone-cli-output-completeness.test.js": "test-infrastructure",
+    "test/scripts/proof-receipt-execution-report.test.js": "test-infrastructure",
     "test/scripts/prune-test-output.test.js": "test-infrastructure",
     "test/scripts/publish-head-workspace-links.test.js": "test-infrastructure",
     "test/scripts/publish-head.test.js": "test-infrastructure",
@@ -18239,6 +18240,22 @@
         "wit"
       ]
     },
+    "test/scripts/proof-receipt-execution-report.test.js": {
+      "files": [
+        "CHANGELOG.md",
+        "package-lock.json",
+        "package.json",
+        "scripts/proof-authority.js",
+        "scripts/run-test-files.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js"
+      ],
+      "directories": [
+        "data/releases",
+        "solve",
+        "test"
+      ]
+    },
     "test/scripts/prune-test-output.test.js": {
       "directories": [
         "data",
@@ -18987,6 +19004,7 @@
     "test/scripts/test-resource-classification.test.js": {
       "files": [
         "package.json",
+        "scripts/run-classified-test-files.js",
         "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js",
         "test/shards/convergence-probes.txt",
         "test/shards/primary-classes.json"
