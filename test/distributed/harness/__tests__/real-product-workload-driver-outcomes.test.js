@@ -16,6 +16,7 @@ import {
 import {executeBenchmarkWorkload} from '../real-product-workload-drivers.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arraySome = Function.call.bind(Array.prototype.some);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 
@@ -326,4 +327,20 @@ test('the plan names its repetition, order and sweep plan (null: no sweep); a mi
     delete plan[missing];
     await assert.rejects(executeBenchmarkWorkload({...base, plan}), new RegExp(missing, 'u'));
   }
+});
+
+// Live campaign bench-live-20261101-b-r7: the TiDB arm committed 100 of 100,
+// then the run closed its adapter, which dropped the benchmark database, and
+// the deployment's after-window placement observation found no regions of the
+// canonical table for 120 s - a harness ordering fault recorded as the
+// product's readiness exhaustion. Each run's arm is a fresh deployment the
+// campaign tears down: the run leaves its dataset in place for the
+// deployment's after-window observations.
+test('a run closes its adapter without dropping the dataset the deployment observes after ' +
+  'the window', async () => {
+  const observed = await runDriverCase({...LAGRANGE_SCENARIO_A, targetId: 'tidb-tikv'});
+  assert.equal(observed.output.observations.runStatus, 'completed');
+  assert.equal(arraySome(observed.statements, (sql) => /DROP DATABASE/iu.test(sql)), false,
+    'no DROP DATABASE after the window');
+  assert.equal(observed.output.cleanup.databaseDropped, false);
 });

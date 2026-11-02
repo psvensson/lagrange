@@ -343,10 +343,17 @@ function setupFailure(error) {
   });
 }
 
+// Each run's arm is a fresh deployment the campaign tears down, and the
+// deployment observes placement after the window (TiDB regions, Lagrange
+// partitions of the canonical tables): the run keeps its dataset in place.
+// The pg-wire adapter names the option dropTables, the TiDB adapter
+// dropDatabase; each reads its own.
+const KEEP_DATASET_ON_CLOSE = Object.freeze({dropTables: false, dropDatabase: false});
+
 async function closeAdapter(adapter) {
   if (!adapter) return Object.freeze({status: 'not-opened'});
   try {
-    const closed = await adapter.close();
+    const closed = await adapter.close(KEEP_DATASET_ON_CLOSE);
     return Object.freeze({status: 'closed', ...closed});
   } catch (error) {
     return Object.freeze({status: 'close-failed', error: String(error?.message || error)});

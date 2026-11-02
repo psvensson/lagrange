@@ -35,7 +35,11 @@ import {
   shellWord,
 } from './real-product-remote-shell.js';
 
-const PERSISTENT_MOUNT_TYPES = Object.freeze(['bind', 'volume']);
+// Persistent storage is an explicit host directory the deployer mounted (a
+// bind mount under --storage-root). An anonymous volume an image declares
+// (postgres: VOLUME /var/lib/postgresql/data) lives and dies with its
+// container: it is not the explicit storage a publishable run needs (D21, D34).
+const PERSISTENT_MOUNT_TYPES = Object.freeze(['bind']);
 const IMAGE_ID_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const IMAGE_STORE = Object.freeze({CONTAINERD: 'containerd', OVERLAY2: 'overlay2',
   UNKNOWN: 'unknown'});
@@ -227,7 +231,11 @@ async function observeProductsAfterWindow({sshRun, opts, products}) {
     try {
       const now = await inspectRunningContainer({sshRun, opts, host: product.host,
         containerId: product.containerId, role: product.role});
-      observed.push({...now, reportedVersion: product.reportedVersion});
+      // The window does not change what the product answered: its version and,
+      // where it answered none, the reason travel together (D33).
+      observed.push({...now, reportedVersion: product.reportedVersion,
+        ...(product.reportedVersion === null ?
+          {reportedVersionError: product.reportedVersionError ?? null} : {})});
     } catch (error) {
       if (error?.code !== DEPLOYMENT_FAILURE.CONTAINER_ABSENT) throw error;
     }

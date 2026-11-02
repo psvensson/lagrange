@@ -692,6 +692,28 @@ describe('content identity and the exhausted arm', () => {
       assert.throws(() => validateCampaignHeader(header), (err) => err.code === 'invalid-text');
     });
 
+  // D35 (live campaign bench-live-20261101-b-r7): an arm that never became
+  // ready never reached the proof journey, so it has no gate record; admission
+  // read that as semantic-gate-missing before it read the readiness
+  // exhaustion. A setup-failed or exhausted run is classified first.
+  it('an exhausted arm without a gate record is product-failure (readiness-exhausted)',
+    async () => {
+      const {run} = await exhaustedLagrangeRun();
+      run.correctness = {...run.correctness, semanticGate: null};
+      run.rawObservationsDigest = computeRunObservationsDigest(run);
+      const {driverSourceSha256} = await benchmarkDriverSourceIdentity();
+      const header = buildFixtureHeader({campaignId: 'fixture-campaign', targetIds: [LAGRANGE]});
+      header.harness = {...header.harness, driverSourceSha256,
+        adapterIds: [...Object.values(BENCHMARK_SCENARIO_A_ADAPTER_ID)]};
+      header.products[0] = {...header.products[0], reportedVersion: null,
+        reportedVersionError: 'management facts answered status 503 without release.version'};
+      const {matrix} = await publish([header, run]);
+      const cell = fixtureTargetCell(matrix, LAGRANGE, 'scenarioA/smoke');
+      assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE, cell.reasons.join(', '));
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.READINESS_EXHAUSTED), true);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_MISSING), false);
+    });
+
   it('an exhausted arm publishes product-failure (readiness-exhausted) with its denial',
     async () => {
       const {run} = await exhaustedLagrangeRun();

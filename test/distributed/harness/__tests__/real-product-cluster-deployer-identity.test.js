@@ -11,14 +11,17 @@ import {test} from 'node:test';
 
 import * as deployers from '../real-product-cluster-deployers.js';
 import {
+  classifyStorage,
   contentIdentityOf,
   observeProductsAfterWindow,
+  runClassOf,
 } from '../real-product-identity.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   LAGRANGE_IMAGE,
   LAGRANGE_IMAGE_ID,
   createContainerLedger,
+  dockerRules,
   lagrangeHealthyRules,
   postgresHealthyRules,
 } from './real-product-deployer-product-answers-fixture.js';
@@ -289,3 +292,43 @@ test('the reproduction guide\'s content-identity recipe equals contentIdentityOf
     fs.rmSync(bin, {recursive: true, force: true});
   }
 });
+
+// D34 (live campaign bench-live-20261101-b-r7): postgres:17-alpine declares
+// VOLUME /var/lib/postgresql/data, so docker gave the smoke arm an anonymous
+// volume the harness never asked for; it was classified host-volume and the
+// run recorded as publishable, and the durability proof ran on it. Only an
+// explicit host directory the deployer mounted (a bind mount under
+// --storage-root) is persistent storage; an anonymous volume lives and dies
+// with its container.
+test('D21: only an explicit host bind mount is persistent storage', async () => {
+  const product = (mounts) => ({role: 'postgres-primary', host: '10.0.0.1',
+    containerId: 'c1', mounts});
+  const anonymous = classifyStorage(product([{type: 'volume',
+    source: '/var/lib/docker/volumes/c9ed/_data', destination: '/var/lib/postgresql/data'}]),
+  '/var/lib/postgresql/data');
+  assert.equal(anonymous.kind, 'container-layer');
+  assert.equal(runClassOf([anonymous]), 'smoke');
+  const bound = classifyStorage(product([{type: 'bind', source: '/srv/bench/c/pg',
+    destination: '/var/lib/postgresql/data'}]), '/var/lib/postgresql/data');
+  assert.equal(bound.kind, 'host-volume');
+  assert.equal(runClassOf([bound]), 'publishable');
+});
+
+// D33 (live campaign bench-live-20261101-b-r7): the products inspected after
+// the window carried the version from before it but dropped the reason it was
+// unanswered, so the readiness-exhausted Lagrange record failed validation
+// (identity.productsAfterWindow[0].reportedVersionError). The window does not
+// change what the product answered: version and reason travel together.
+test('after the window a product keeps its version and the reason it was unanswered',
+  async () => {
+    const ledger = createContainerLedger();
+    const {sshRun} = createScriptedSsh([...dockerRules(ledger)]);
+    const id = stringTrim(ledger.run('docker run -d --name bench-c-lagrange-node-1 ' +
+      '--network host psvensson/lagrange:0.4.0', '10.0.0.1'));
+    const [after] = await observeProductsAfterWindow({sshRun, opts: {}, products: [{
+      role: 'lagrange-node', host: '10.0.0.1', containerId: id, reportedVersion: null,
+      reportedVersionError: 'facts answered {"status":200,"error":null,"version":"absent"}'}]});
+    assert.equal(after.reportedVersion, null);
+    assert.equal(after.reportedVersionError,
+      'facts answered {"status":200,"error":null,"version":"absent"}');
+  });
