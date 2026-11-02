@@ -330,9 +330,9 @@ class DockerProvider {
     });
     // The build the tag names now: once the rebuild moves the tag it is
     // retired, never left behind untagged (harness-image-build-leftovers).
-    const previousId = await imageIdOf(this._docker, tag);
-    this._emitOperation(DOCKER_OP_RETIRE_PREVIOUS_IMAGE,
-      {stage: RETIREMENT.RECORDED, tag, previousId});
+    const previous = await imageIdOf(this._docker, tag);
+    this._emitOperation(DOCKER_OP_RETIRE_PREVIOUS_IMAGE, {stage: RETIREMENT.RECORDED, tag,
+      previousId: previous.id, unreadable: previous.unreadable});
     let stream;
     try {
       stream = await this._docker.buildImage(
@@ -376,7 +376,8 @@ class DockerProvider {
       dockerfile,
       labels,
     });
-    const retirement = await retirePreviousImage(this._docker, {tag, previousId});
+    const retirement = await retirePreviousImage(this._docker,
+      {tag, previousId: previous.id, unreadable: previous.unreadable});
     this._emitOperation(DOCKER_OP_RETIRE_PREVIOUS_IMAGE, {
       stage: retirement.outcome,
       tag,

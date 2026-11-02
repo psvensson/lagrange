@@ -1,0 +1,207 @@
+not ok test/distributed/harness/__tests__/docker-image-retirement.test.js (17 assertions, 441ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: the build its tag replaced is removed when untagged and unused
+    1..0
+ok 1 - the build its tag replaced is removed when untagged and unused # time=10.774ms
+
+# Subtest: a previous image another tag still names is kept
+    1..0
+ok 2 - a previous image another tag still names is kept # time=1.36ms
+
+# Subtest: a previous image a container uses is kept
+    1..0
+ok 3 - a previous image a container uses is kept # time=0.958ms
+
+# Subtest: no previous image, or a build that reused it, removes nothing
+    1..0
+ok 4 - no previous image, or a build that reused it, removes nothing # time=1.479ms
+
+# Subtest: a removal the daemon refuses is recorded and never fails the build
+    1..0
+ok 5 - a removal the daemon refuses is recorded and never fails the build # time=1.154ms
+
+# Subtest: nothing but the replaced build is ever touched
+    1..0
+ok 6 - nothing but the replaced build is ever touched # time=1.059ms
+
+# Subtest: a failed build retires nothing
+    1..0
+ok 7 - a failed build retires nothing # time=1.551ms
+
+# Subtest: a pre-build read that fails is unverified, never a fresh host
+    not ok 1 - the recorded event names the failed read
+      ---
+      stack: >
+        Test.<anonymous>
+        (test/distributed/harness/__tests__/docker-image-retirement.test.js:182:12)
+      at:
+        fileName: test/distributed/harness/__tests__/docker-image-retirement.test.js
+        lineNumber: 182
+        columnNumber: 12
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: AssertionError
+      generatedMessage: false
+      code: ERR_ASSERTION
+      actual:
+        - recorded
+        - null
+        - null
+      expected:
+        - recorded
+        - null
+        - (HTTP code 500) server error
+      operator: deepEqual
+      diff: simple
+      tapCaught: returnedPromiseRejection
+      source: >2
+            const {retire} = await build(t, fake);
+            assert.deepEqual(fake.removed, []);
+            assert.deepEqual([retire[0].stage, retire[0].previousId, retire[0].unreadable],
+        -----------^
+              ['recorded', null, error.message], 'the recorded event names the failed read');
+            assert.equal(retire.at(-1).stage, 'kept-unverified');
+      ...
+    
+    1..1
+not ok 8 - a pre-build read that fails is unverified, never a fresh host # time=18.351ms
+  ---
+  at:
+    fileName: test/distributed/harness/__tests__/docker-image-retirement.test.js
+    lineNumber: 177
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      {code: 'ECONNREFUSED'});
+  
+    test('a pre-build read that fails is unverified, never a fresh host', async
+    (t) => {
+  
+    ^
+      for (const error of [SERVER_ERROR, REFUSED]) {
+        const fake = daemon({preBuildInspectError: error});
+  ...
+
+# Subtest: a post-build read that fails keeps the image unverified
+    1..0
+ok 9 - a post-build read that fails keeps the image unverified # time=2.174ms
+
+# Subtest: a container matching the previous image by ImageID or by Image alone keeps it
+    1..0
+ok 10 - a container matching the previous image by ImageID or by Image alone keeps it # time=1.761ms
+
+# Subtest: stopped containers count: the listing asks for all of them
+    1..0
+ok 11 - stopped containers count: the listing asks for all of them # time=1.201ms
+
+# Subtest: an untagged image reported with null or empty RepoTags is removed
+    1..0
+ok 12 - an untagged image reported with null or empty RepoTags is removed # time=1.403ms
+
+# Subtest: a tag list or container listing that is not a list is unverified
+    not ok 1 - 'removed' == 'kept-unverified'
+      ---
+      stack: >
+        Test.<anonymous>
+        (test/distributed/harness/__tests__/docker-image-retirement.test.js:233:10)
+      at:
+        fileName: test/distributed/harness/__tests__/docker-image-retirement.test.js
+        lineNumber: 233
+        columnNumber: 10
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: AssertionError
+      generatedMessage: true
+      code: ERR_ASSERTION
+      actual: removed
+      expected: kept-unverified
+      operator: ==
+      diff: simple
+      tapCaught: returnedPromiseRejection
+      source: >
+        test('a tag list or container listing that is not a list is unverified', async
+        (t) => {
+          const odd = daemon({untaggedAs: 'distributed-db:test'});
+          assert.equal((await build(t, odd)).retire.at(-1).stage, 'kept-unverified');
+        ---------^
+          assert.deepEqual(odd.removed, []);
+          const fake = daemon();
+      ...
+    
+    1..1
+not ok 13 - a tag list or container listing that is not a list is unverified # time=4.66ms
+  ---
+  at:
+    fileName: test/distributed/harness/__tests__/docker-image-retirement.test.js
+    lineNumber: 231
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('a tag list or container listing that is not a list is unverified', async
+    (t) => {
+  
+    ^
+      const odd = daemon({untaggedAs: 'distributed-db:test'});
+      assert.equal((await build(t, odd)).retire.at(-1).stage, 'kept-unverified');
+  ...
+
+# Subtest: a previous image removed by someone else meanwhile is gone, not a failure
+    not ok 1 - 'kept-remove-failed' == 'none'
+      ---
+      stack: >
+        Test.<anonymous>
+        (test/distributed/harness/__tests__/docker-image-retirement.test.js:245:12)
+      at:
+        fileName: test/distributed/harness/__tests__/docker-image-retirement.test.js
+        lineNumber: 245
+        columnNumber: 12
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: AssertionError
+      generatedMessage: true
+      code: ERR_ASSERTION
+      actual: kept-remove-failed
+      expected: none
+      operator: ==
+      diff: simple
+      tapCaught: returnedPromiseRejection
+      source: |2
+            const fake = daemon({removeError: 'no such image', removeStatus: 404});
+            const {retire} = await build(t, fake);
+            assert.equal(retire.at(-1).stage, 'none');
+        -----------^
+            assert.match(retire.at(-1).detail, /already gone/u);
+          });
+      ...
+    
+    1..1
+not ok 14 - a previous image removed by someone else meanwhile is gone, not a failure # time=3.097ms
+  ---
+  at:
+    fileName: test/distributed/harness/__tests__/docker-image-retirement.test.js
+    lineNumber: 241
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('a previous image removed by someone else meanwhile is gone, not a
+    failure',
+  
+    ^
+      async (t) => {
+        const fake = daemon({removeError: 'no such image', removeStatus: 404});
+  ...
+
+1..14
+# { total: 14, pass: 11, fail: 3 }
+# time=79.029ms
+# test-files total=1 pass=0 fail=1 assertions=17

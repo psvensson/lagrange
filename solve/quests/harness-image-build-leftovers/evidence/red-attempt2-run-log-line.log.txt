@@ -1,0 +1,642 @@
+not ok test/distributed/harness/__tests__/run.test.js (92 assertions, 2275ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: cluster source identity
+    # Subtest: authenticates the exact boot source without mutating launch config
+    ok 1 - authenticates the exact boot source without mutating launch config
+      ---
+      duration_ms: 303.555123
+      type: 'test'
+      ...
+    1..1
+ok 1 - cluster source identity
+  ---
+  duration_ms: 304.075519
+  type: 'suite'
+  ...
+# Subtest: parseArgs
+    # Subtest: returns defaults when no args provided
+    ok 1 - returns defaults when no args provided
+      ---
+      duration_ms: 0.16029
+      type: 'test'
+      ...
+    # Subtest: parses --config flag
+    ok 2 - parses --config flag
+      ---
+      duration_ms: 0.050531
+      type: 'test'
+      ...
+    # Subtest: parses --scenario flag
+    ok 3 - parses --scenario flag
+      ---
+      duration_ms: 0.040458
+      type: 'test'
+      ...
+    # Subtest: parses --output flag
+    ok 4 - parses --output flag
+      ---
+      duration_ms: 0.043058
+      type: 'test'
+      ...
+    # Subtest: parses --verbose flag
+    ok 5 - parses --verbose flag
+      ---
+      duration_ms: 0.057969
+      type: 'test'
+      ...
+    # Subtest: parses --fast-local flag
+    ok 6 - parses --fast-local flag
+      ---
+      duration_ms: 0.061912
+      type: 'test'
+      ...
+    # Subtest: parses --no-fast-local flag
+    ok 7 - parses --no-fast-local flag
+      ---
+      duration_ms: 0.103551
+      type: 'test'
+      ...
+    # Subtest: parses deterministic debug mode flags
+    ok 8 - parses deterministic debug mode flags
+      ---
+      duration_ms: 0.070995
+      type: 'test'
+      ...
+    # Subtest: parses all flags together
+    ok 9 - parses all flags together
+      ---
+      duration_ms: 0.128388
+      type: 'test'
+      ...
+    # Subtest: ignores unknown flags
+    ok 10 - ignores unknown flags
+      ---
+      duration_ms: 0.044866
+      type: 'test'
+      ...
+    # Subtest: handles --config without value at end of argv
+    ok 11 - handles --config without value at end of argv
+      ---
+      duration_ms: 0.030006
+      type: 'test'
+      ...
+    1..11
+ok 2 - parseArgs
+  ---
+  duration_ms: 1.081812
+  type: 'suite'
+  ...
+# Subtest: deterministic debug mode helpers
+    # Subtest: pins seed and sampling intervals and records settings in report metadata
+    ok 1 - pins seed and sampling intervals and records settings in report metadata
+      ---
+      duration_ms: 0.866847
+      type: 'test'
+      ...
+    1..1
+ok 3 - deterministic debug mode helpers
+  ---
+  duration_ms: 0.91538
+  type: 'suite'
+  ...
+# Subtest: runScenarios
+    # Subtest: catches unhandled scenario error and marks failed
+    ok 1 - catches unhandled scenario error and marks failed
+      ---
+      duration_ms: 282.443865
+      type: 'test'
+      ...
+    # Subtest: continues to next scenario after failure
+    ok 2 - continues to next scenario after failure
+      ---
+      duration_ms: 502.785385
+      type: 'test'
+      ...
+    # Subtest: preserves partialResult load metrics for failed scenarios
+    ok 3 - preserves partialResult load metrics for failed scenarios
+      ---
+      duration_ms: 1.622863
+      type: 'test'
+      ...
+    # Subtest: records startedAt and duration for each scenario
+    ok 4 - records startedAt and duration for each scenario
+      ---
+      duration_ms: 270.233871
+      type: 'test'
+      ...
+    # Subtest: returns hasFailures false when all pass
+    ok 5 - returns hasFailures false when all pass
+      ---
+      duration_ms: 0.196077
+      type: 'test'
+      ...
+    1..5
+ok 4 - runScenarios
+  ---
+  duration_ms: 1057.526077
+  type: 'suite'
+  ...
+# Subtest: normalizeScenarioPayload
+    # Subtest: returns null for non-object payloads
+    ok 1 - returns null for non-object payloads
+      ---
+      duration_ms: 0.110745
+      type: 'test'
+      ...
+    # Subtest: returns object payload for merge into scenario result
+    ok 2 - returns object payload for merge into scenario result
+      ---
+      duration_ms: 0.0901
+      type: 'test'
+      ...
+    1..2
+ok 5 - normalizeScenarioPayload
+  ---
+  duration_ms: 0.287084
+  type: 'suite'
+  ...
+# Subtest: formatScenarioPhaseEventLine
+    # Subtest: formats phase progress lines with scenario, phase, message, and details
+    ok 1 - formats phase progress lines with scenario, phase, message, and details
+      ---
+      duration_ms: 0.251601
+      type: 'test'
+      ...
+    # Subtest: formats phase end lines with status and duration
+    ok 2 - formats phase end lines with status and duration
+      ---
+      duration_ms: 0.078071
+      type: 'test'
+      ...
+    1..2
+ok 6 - formatScenarioPhaseEventLine
+  ---
+  duration_ms: 0.407198
+  type: 'suite'
+  ...
+# Subtest: evaluateTraceAssertions
+    # Subtest: returns null when trace assertions are not required
+    ok 1 - returns null when trace assertions are not required
+      ---
+      duration_ms: 0.108801
+      type: 'test'
+      ...
+    # Subtest: fails when required trace artifact is missing
+    ok 2 - fails when required trace artifact is missing
+      ---
+      duration_ms: 0.07959
+      type: 'test'
+      ...
+    # Subtest: fails when required trace has no captured events
+    ok 3 - fails when required trace has no captured events
+      ---
+      duration_ms: 0.070462
+      type: 'test'
+      ...
+    # Subtest: enforces required lineage prefix when configured
+    ok 4 - enforces required lineage prefix when configured
+      ---
+      duration_ms: 0.090512
+      type: 'test'
+      ...
+    # Subtest: passes when required lineage prefix is present
+    ok 5 - passes when required lineage prefix is present
+      ---
+      duration_ms: 0.070725
+      type: 'test'
+      ...
+    1..5
+ok 7 - evaluateTraceAssertions
+  ---
+  duration_ms: 0.556889
+  type: 'suite'
+  ...
+# Subtest: evaluateMemoryLeakAssertions
+    # Subtest: returns null when memory leak checks are disabled
+    ok 1 - returns null when memory leak checks are disabled
+      ---
+      duration_ms: 0.102522
+      type: 'test'
+      ...
+    # Subtest: fails when samples are required but analysis is unavailable
+    ok 2 - fails when samples are required but analysis is unavailable
+      ---
+      duration_ms: 0.079191
+      type: 'test'
+      ...
+    # Subtest: fails closed when samples exist but memory analysis is insufficient
+    ok 3 - fails closed when samples exist but memory analysis is insufficient
+      ---
+      duration_ms: 0.082113
+      type: 'test'
+      ...
+    # Subtest: fails when leak detection is enabled and leak is found
+    ok 4 - fails when leak detection is enabled and leak is found
+      ---
+      duration_ms: 0.077751
+      type: 'test'
+      ...
+    # Subtest: passes when analysis is present and no leak is detected
+    ok 5 - passes when analysis is present and no leak is detected
+      ---
+      duration_ms: 0.070218
+      type: 'test'
+      ...
+    1..5
+ok 8 - evaluateMemoryLeakAssertions
+  ---
+  duration_ms: 0.543925
+  type: 'suite'
+  ...
+# Subtest: scenario cleanliness helpers
+    # Subtest: upgrades node-join-under-load memory leak requirements to required samples without overriding local leak-failure policy
+    ok 1 - upgrades node-join-under-load memory leak requirements to required samples without overriding local leak-failure policy
+      ---
+      duration_ms: 0.100176
+      type: 'test'
+      ...
+    # Subtest: fails node-join-under-load cleanliness assertions on playback warnings
+    ok 2 - fails node-join-under-load cleanliness assertions on playback warnings
+      ---
+      duration_ms: 0.271717
+      type: 'test'
+      ...
+    # Subtest: passes when no scenario-specific cleanliness policy applies
+    ok 3 - passes when no scenario-specific cleanliness policy applies
+      ---
+      duration_ms: 0.06823
+      type: 'test'
+      ...
+    1..3
+ok 9 - scenario cleanliness helpers
+  ---
+  duration_ms: 0.533417
+  type: 'suite'
+  ...
+# Subtest: benchmark regression gate helpers
+    # Subtest: resolveBenchmarkGateConfig applies defaults when unset
+    ok 1 - resolveBenchmarkGateConfig applies defaults when unset
+      ---
+      duration_ms: 0.225644
+      type: 'test'
+      ...
+    # Subtest: resolveFastLocalMode defaults to true for local docker configs
+    ok 2 - resolveFastLocalMode defaults to true for local docker configs
+      ---
+      duration_ms: 0.100811
+      type: 'test'
+      ...
+    # Subtest: resolveFastLocalMode defaults to false for remote docker configs
+    ok 3 - resolveFastLocalMode defaults to false for remote docker configs
+      ---
+      duration_ms: 0.064726
+      type: 'test'
+      ...
+    # Subtest: resolveFastLocalMode honors explicit opt-out on local configs
+    ok 4 - resolveFastLocalMode honors explicit opt-out on local configs
+      ---
+      duration_ms: 0.058215
+      type: 'test'
+      ...
+    # Subtest: evaluateBenchmarkRegressionGate skips when gate is disabled
+    ok 5 - evaluateBenchmarkRegressionGate skips when gate is disabled
+      ---
+      duration_ms: 0.302204
+      type: 'test'
+      ...
+    # Subtest: evaluateBenchmarkRegressionGate fails when throughput regression exceeds threshold
+    ok 6 - evaluateBenchmarkRegressionGate fails when throughput regression exceeds threshold
+      ---
+      duration_ms: 0.294744
+      type: 'test'
+      ...
+    # Subtest: evaluateBenchmarkRegressionGate fails when throughput ratio to postgres baseline is below minimum threshold
+    ok 7 - evaluateBenchmarkRegressionGate fails when throughput ratio to postgres baseline is below minimum threshold
+      ---
+      duration_ms: 0.127004
+      type: 'test'
+      ...
+    # Subtest: evaluateBenchmarkRegressionGate ignores failed-run throughput snapshots that are invalid for comparison
+    ok 8 - evaluateBenchmarkRegressionGate ignores failed-run throughput snapshots that are invalid for comparison
+      ---
+      duration_ms: 0.100658
+      type: 'test'
+      ...
+    # Subtest: evaluateBenchmarkRegressionGate fails on parity mismatch when parity policy is fail
+    ok 9 - evaluateBenchmarkRegressionGate fails on parity mismatch when parity policy is fail
+      ---
+      duration_ms: 0.157423
+      type: 'test'
+      ...
+    # Subtest: evaluateBenchmarkRegressionGate warns on parity mismatch when parity policy is warn
+    ok 10 - evaluateBenchmarkRegressionGate warns on parity mismatch when parity policy is warn
+      ---
+      duration_ms: 0.148805
+      type: 'test'
+      ...
+    1..10
+ok 10 - benchmark regression gate helpers
+  ---
+  duration_ms: 1.836278
+  type: 'suite'
+  ...
+# Subtest: buildImage
+    # Subtest: keeps the Docker build context on an explicit allowlist
+    ok 1 - keeps the Docker build context on an explicit allowlist
+      ---
+      duration_ms: 7.776156
+      type: 'test'
+      ...
+    # Subtest: passes positional DockerProvider arguments and commit label
+    ok 2 - passes positional DockerProvider arguments and commit label
+      ---
+      duration_ms: 0.600116
+      type: 'test'
+      ...
+    # Subtest: reuses existing image when git hash label matches
+    ok 3 - reuses existing image when git hash label matches
+      ---
+      duration_ms: 0.146091
+      type: 'test'
+      ...
+    # Subtest: does not reuse git-hash image when workspace is dirty
+    ok 4 - does not reuse git-hash image when workspace is dirty
+      ---
+      duration_ms: 0.158258
+      type: 'test'
+      ...
+    # Subtest: reuses existing image when workspace is dirty and skipBuildOnDirty is enabled
+    ok 5 - reuses existing image when workspace is dirty and skipBuildOnDirty is enabled
+      ---
+      duration_ms: 0.15251
+      type: 'test'
+      ...
+    1..5
+ok 11 - buildImage
+  ---
+  duration_ms: 9.004309
+  type: 'suite'
+  ...
+# Subtest: deriveRunOutputDir
+    # Subtest: derives run-scoped playback directory from report path
+    ok 1 - derives run-scoped playback directory from report path
+      ---
+      duration_ms: 0.124688
+      type: 'test'
+      ...
+    # Subtest: falls back to output basename when report extension differs
+    ok 2 - falls back to output basename when report extension differs
+      ---
+      duration_ms: 0.110822
+      type: 'test'
+      ...
+    1..2
+ok 12 - deriveRunOutputDir
+  ---
+  duration_ms: 0.3046
+  type: 'suite'
+  ...
+# Subtest: run status artifact helpers
+    # Subtest: derives run-scoped status path from playback directory
+    ok 1 - derives run-scoped status path from playback directory
+      ---
+      duration_ms: 0.092194
+      type: 'test'
+      ...
+    # Subtest: builds artifact with canonical type and timestamp
+    ok 2 - builds artifact with canonical type and timestamp
+      ---
+      duration_ms: 0.137639
+      type: 'test'
+      ...
+    # Subtest: writes and overwrites the runner status artifact
+    ok 3 - writes and overwrites the runner status artifact
+      ---
+      duration_ms: 3.138403
+      type: 'test'
+      ...
+    1..3
+ok 13 - run status artifact helpers
+  ---
+  duration_ms: 3.514501
+  type: 'suite'
+  ...
+# Subtest: loadHistoricalReports
+    # Subtest: loads existing output report and sibling .report.json files
+    ok 1 - loads existing output report and sibling .report.json files
+      ---
+      duration_ms: 1.074292
+      type: 'test'
+      ...
+    1..1
+ok 14 - loadHistoricalReports
+  ---
+  duration_ms: 1.139216
+  type: 'suite'
+  ...
+# Subtest: loadScenarioModule
+    # Subtest: loads workspace-relative scenario path
+    ok 1 - loads workspace-relative scenario path
+      ---
+      duration_ms: 0.475929
+      type: 'test'
+      ...
+    1..1
+ok 15 - loadScenarioModule
+  ---
+  duration_ms: 0.521633
+  type: 'suite'
+  ...
+# Subtest: shouldPrintLiveLogEntry
+    # Subtest: returns false for load-generator entries
+    ok 1 - returns false for load-generator entries
+      ---
+      duration_ms: 0.094941
+      type: 'test'
+      ...
+    # Subtest: returns true for warn/error levels
+    ok 2 - returns true for warn/error levels
+      ---
+      duration_ms: 0.050288
+      type: 'test'
+      ...
+    # Subtest: returns true for error-like messages at info level
+    ok 3 - returns true for error-like messages at info level
+      ---
+      duration_ms: 0.057009
+      type: 'test'
+      ...
+    1..3
+ok 16 - shouldPrintLiveLogEntry
+  ---
+  duration_ms: 0.250953
+  type: 'suite'
+  ...
+# Subtest: formatRunSummary
+    # Subtest: includes pass result and load metrics
+    ok 1 - includes pass result and load metrics
+      ---
+      duration_ms: 0.314213
+      type: 'test'
+      ...
+    # Subtest: includes fail result
+    ok 2 - includes fail result
+      ---
+      duration_ms: 0.075433
+      type: 'test'
+      ...
+    # Subtest: shows delta vs previous run
+    ok 3 - shows delta vs previous run
+      ---
+      duration_ms: 0.074728
+      type: 'test'
+      ...
+    # Subtest: shows status changed for delta
+    ok 4 - shows status changed for delta
+      ---
+      duration_ms: 0.047526
+      type: 'test'
+      ...
+    # Subtest: shows no previous run when absent
+    ok 5 - shows no previous run when absent
+      ---
+      duration_ms: 0.109846
+      type: 'test'
+      ...
+    # Subtest: shows postgres baseline comparison
+    ok 6 - shows postgres baseline comparison
+      ---
+      duration_ms: 0.081098
+      type: 'test'
+      ...
+    # Subtest: shows no baseline when absent
+    ok 7 - shows no baseline when absent
+      ---
+      duration_ms: 0.044898
+      type: 'test'
+      ...
+    # Subtest: handles missing load metrics gracefully
+    ok 8 - handles missing load metrics gracefully
+      ---
+      duration_ms: 0.055888
+      type: 'test'
+      ...
+    1..8
+ok 17 - formatRunSummary
+  ---
+  duration_ms: 0.907802
+  type: 'suite'
+  ...
+# Subtest: runScenarios: a scenario the config cannot carry is REFUSED (R1)
+    # Subtest: refuses before any cluster exists, names required vs available, and never reads as passed or failed
+    ok 1 - refuses before any cluster exists, names required vs available, and never reads as passed or failed
+      ---
+      duration_ms: 87.921874
+      type: 'test'
+      ...
+    # Subtest: a scenario module that fails to import fails that scenario only, named; the next scenario still runs
+    ok 2 - a scenario module that fails to import fails that scenario only, named; the next scenario still runs
+      ---
+      duration_ms: 3.71715
+      type: 'test'
+      ...
+    # Subtest: a config declaring two machines runs it (no refusal)
+    ok 3 - a config declaring two machines runs it (no refusal)
+      ---
+      duration_ms: 1.079533
+      type: 'test'
+      ...
+    1..3
+ok 18 - runScenarios: a scenario the config cannot carry is REFUSED (R1)
+  ---
+  duration_ms: 92.87991
+  type: 'suite'
+  ...
+# Subtest: docker operation log: image.retire-previous
+    # Subtest: prints the stage, the previous and current image and the detail
+    not ok 1 - prints the stage, the previous and current image and the detail
+      ---
+      duration_ms: 0.666137
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/lagrange-harness-image-20261102/test/distributed/harness/__tests__/run.test.js:1517:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        Expected values to be strictly equal:
+        + actual - expected
+        
+        + 'image.retire-previous[kept-in-use]'
+        - 'image.retire-previous[kept-in-use] tag=distributed-db:test previous=sha256:old current=sha256:new detail=c1'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'image.retire-previous[kept-in-use] tag=distributed-db:test previous=sha256:old current=sha256:new detail=c1'
+      actual: 'image.retire-previous[kept-in-use]'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-harness-image-20261102/test/distributed/harness/__tests__/run.test.js:1521:12)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        node:internal/test_runner/test:1440:71
+        node:internal/per_context/primordials:466:82
+        new Promise (<anonymous>)
+        new SafePromise (node:internal/per_context/primordials:435:3)
+        node:internal/per_context/primordials:466:9
+        Array.map (<anonymous>)
+      ...
+    # Subtest: prints an unreadable pre-build read on the recorded line
+    not ok 2 - prints an unreadable pre-build read on the recorded line
+      ---
+      duration_ms: 0.118174
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/lagrange-harness-image-20261102/test/distributed/harness/__tests__/run.test.js:1525:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        Expected values to be strictly equal:
+        + actual - expected
+        
+        + 'image.retire-previous[recorded]'
+        - 'image.retire-previous[recorded] tag=distributed-db:test previous=- current=- detail=connect ECONNREFUSED'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'image.retire-previous[recorded] tag=distributed-db:test previous=- current=- detail=connect ECONNREFUSED'
+      actual: 'image.retire-previous[recorded]'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-harness-image-20261102/test/distributed/harness/__tests__/run.test.js:1529:12)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Suite.processPendingSubtests (node:internal/test_runner/test:744:18)
+        Test.postRun (node:internal/test_runner/test:1173:19)
+        Test.run (node:internal/test_runner/test:1101:12)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..2
+not ok 19 - docker operation log: image.retire-previous
+  ---
+  duration_ms: 0.856045
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-harness-image-20261102/test/distributed/harness/__tests__/run.test.js:1516:1'
+  failureType: 'subtestsFailed'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..19
+# tests 73
+# suites 19
+# pass 71
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1482.632051
+# time=2275ms
+[harness] archive: earlier fail-test run moved into .previous-2026-11-02T12-54-39.792Z (bound: 3 kept)
+[harness] archive: earlier first-fail run moved into .previous-2026-11-02T12-54-40.088Z (bound: 3 kept)
+[harness] archive: earlier second-fail run moved into .previous-2026-11-02T12-54-40.422Z (bound: 3 kept)
+[harness] archive: earlier timed run moved into .previous-2026-11-02T12-54-40.741Z (bound: 3 kept)
+# test-files total=1 pass=0 fail=1 assertions=92
