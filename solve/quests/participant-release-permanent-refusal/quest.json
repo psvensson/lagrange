@@ -1,0 +1,64 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-release-permanent-refusal",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A participant release whose cohort, read from the committed configuration at the release epoch, contains a member that no node hosts ends in a permanent typed refusal RELEASE_BLOCKED{blockedReplicaId, membershipGenerationIndex, configurationKey, missingFact: hosted_replica} once the owner's existing deadline is spent with the same membership generation; the refusal is reported once, dependents of a blocked control partition carry it as their typed cause, and the existing release recovery owner stops re-driving it every RECOVERY_RETRY_MS and is woken only by a committed configuration change (existing consensus-event subscription) or an explicit operator release. The pause is raised only after the cohort resolves, or is lowered on a refusal, so writes are not refused for a release that cannot proceed, subject to the TX1 drain decision recorded before implementation. The unconditional re-enqueue on every non-CUT_OVER answer and the report-signature throttle are deleted for the blocked state.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-release-permanent-refusal/evidence/receipt.json",
+      "requiredReceipts": [
+        "configured-unhosted-member-permanent-typed-refusal",
+        "no-redrive-wake-on-configuration-change",
+        "dependent-control-release-carries-typed-cause",
+        "pause-ordering-preserves-tx1-drain",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "class-not-instance",
+      "statement": "Instance C13 of the projection-authority census (origin/work/projection-authority-census-20261102 @ 0f6522a82, CENSUS.md sections 2 C13 and 3 H3) and of the contract rule 'Permanent refusal is explicit and cannot disguise an endlessly retrying operation' (authority-and-recovery.md :138-145). Applies to every partition's existing-origin and fresh-create release, not to sql_transactions-p1 only."
+    },
+    {
+      "id": "one-recovery-and-release-owner",
+      "statement": "Continues participant-release-held-recovery-continuation's constraints: no second release algorithm, timer, election driver, ledger or status interpretation; a wake is not authority. The cohort remains releaseMemberIds of readCommittedMembership re-read per attempt; hosted_replica is never interpreted as 'member removed'."
+    },
+    {
+      "id": "depends-on-removal-owner",
+      "statement": "Reconsideration requires a committed configuration change, which is owned by the failed-create cleanup owner (quest fresh-create-failure-after-committed-admission) or the planner's FAILED cure; this quest does not REMOVE members and lands after or with that quest."
+    },
+    {
+      "id": "preserve-sealed-release-quests",
+      "statement": "Seed release semantics of seed-release-once-per-partition-cohort and seed-participant-release-applied-position-barrier, the completion operation of participant-release-completion-owner, and the TX1 pause/drain contract of replicated-transaction-decision-and-apply are unchanged; any change to PAUSE ordering is decided by the lead against TX1 before implementation."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first on the production recovery entry (reconcile -> runParticipantCutover) with a committed member absent from its host: today re-driven every 1 s forever; after: one RELEASE_BLOCKED, no re-drive, re-run on generation change. Live witness on fresh-formation-user-table-routability (local-three-node.json) records no hosted_replica re-drive past the deadline."
+    },
+    {
+      "id": "trace-first-divergence",
+      "statement": "The first divergence is recorded in evidence/first-divergence-2026-11-02.md (run b26d2c090, 10:29:57.228). A new witness that moves the first divergence elsewhere is recorded before any further src/ change; a repair is not called complete because a different later step fails."
+    },
+    {
+      "id": "no-symptom-patches",
+      "statement": "No timeout, deadline or budget increase; no new timer, retry loop, alias, fallback, carve-out, cache wait, synthetic event, '|| default' that turns a missing input into success, or cache/SQL dual path. Rejected remedies listed in evidence/design-note.md (section Deletions) are not reintroduced without new evidence and an explicit owner decision."
+    },
+    {
+      "id": "lab-execution",
+      "statement": "Live runs only through node scripts/lab.js (fleet first, dry-run first, one scenario run at a time, thermal admission, no cluster node on the controller, no pruning on lab hosts). Raw logs are kept outside the repository in lagrange-evidence-store/<run-id>/; quest evidence holds summaries and sha256 digests."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "recovery-replay",
+    "retry-loops",
+    "sweep-timer"
+  ]
+}
