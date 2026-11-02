@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "nine-files-classified-external-toolchain", "passed": false, "evidence": "red on 6d58fdba1: test/scripts/test-resource-classification.test.js 'the 0.5 WASI service tests run in the serial toolchain lane' fails; all nine are ordinary in test/shards/resource-classes.json"},
+    {"id": "membership-measured", "passed": false, "evidence": "pending measurement"}
+  ],
+  "evidence": [],
+  "applicability": "Red-first receipt before any classification change."
+}
