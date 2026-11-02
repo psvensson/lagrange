@@ -1,0 +1,31 @@
+{
+  "schema": "solve-quest/2",
+  "id": "ci-gate-proof-time-and-lab-runner-routing",
+  "class": "fix",
+  "statement": "The required ci.yml gate job must be able to finish the proof a product change obliges: attempt 1 lifts the job's timeout-minutes from 120 to the GitHub maximum of 360 for every event (PR #184's gate run 41431327759 was killed by the 120-minute limit with its exclusive lane at 73 of 103 files); attempt 2 routes same-repository pull-request gates to the lab's self-hosted Linux runners, designed first and changed only after the lead's decision.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/ci-gate-proof-time-and-lab-runner-routing/evidence/receipt.json",
+      "requiredReceipts": [
+        "gate-timeout-maximum",
+        "lab-routing-design-decided",
+        "lab-pr-gate-routed"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Only .github/workflows/ci.yml, test/manifests/ci-resource-plan.json, the hardening contract that asserts ci.yml, CHANGELOG.md and this quest's records; never formation-health.yml, never a dispatched workflow, never a runner registration by the implementer."
+    },
+    {
+      "id": "one-path",
+      "statement": "No dual routing path: the gate has one runs-on expression owned by the resource plan; an absent lab runner is a visible queued job with a named operator answer, not a silent fallback."
+    },
+    {
+      "id": "stop-for-decision",
+      "statement": "Attempt 2 changes no workflow until the lead decides the design note."
+    }
+  ]
+}
