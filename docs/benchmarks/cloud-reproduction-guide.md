@@ -138,7 +138,10 @@ A live GCP run also needs `--client-checkout <path>` (a checkout of this commit 
 ```
 
 AWS and Azure provisioning scripts exist in [`cloud/`](cloud/) but are not execution targets of
-this runner.
+this runner. Both open SSH (port 22) only to the network you name: `--ssh-cidr <cidr>` is required,
+has no default and refuses a `/0` network, so pass your own address, for example
+`./docs/benchmarks/cloud/provision-aws.sh --ssh-cidr 203.0.113.7/32`. Neither ever opens SSH to
+`0.0.0.0/0`.
 
 ---
 

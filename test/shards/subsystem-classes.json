@@ -28,7 +28,7 @@
   "censusSize": 2537,
   "digest": "fnv1a32-966751ec",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0e10cf58",
+  "observationDigest": "fnv1a32-6886da5d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7493,6 +7493,7 @@
         "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
       ],
       "directories": [
+        "docs/benchmarks/cloud",
         "test/distributed/harness"
       ]
     },
