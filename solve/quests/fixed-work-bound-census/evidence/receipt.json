@@ -6,7 +6,7 @@
     {
       "id": "census-table",
       "passed": true,
-      "detail": "29 fixed bound constants in src/ at 6d58fdba1, each with owner module, awaited event, class (work 3, mixed 9, liveness 8, not a wait 7, test-only 2), spent outcome (or 'not traced'), re-drive behaviour and history (introducing commit; no value ever changed); the spent-bound table of the b3b366573 post-merge corpus; the 52 object-member bounds outside the regex listed by owner, unclassified",
+      "detail": "30 fixed bound constants in src/ at 6d58fdba1 (29 in JavaScript, 1 in the admin dashboard HTML), each with owner module, awaited event, class (work 2, mixed 10, liveness 9, not a wait 7, test-only 2), spent outcome (or 'not traced'), re-drive behaviour, typed spend visibility (rows without a wait_bound_spent of their own named) and history; the cross-row pattern of bounds that expire while their work keeps running un-cancelled (#4, #5, #6, #7); the grouped spent-bound table of the b3b366573 post-merge corpus (253 events, remaining-budget variants folded with their ranges); the 52 object-member bounds outside the regex listed by owner, unclassified",
       "evidence": [
         "solve/epics/raft-rs-full-cutover/evidence/fixed-work-bound-census-2026-11-02/CENSUS.md"
       ]
@@ -14,7 +14,7 @@
     {
       "id": "systemic-analysis",
       "passed": true,
-      "detail": "three repair shapes, by what the bound waits for: take the work out of the bound (#1 WASI quest, #2, #6), re-drive and apply rather than silently default at startup (#4, #5: load changes raft timing configuration and disables adaptive timing for the process life), and one node-level measured machine factor for work and mixed bounds that must stay wall-clock (#3, #7 to #12), never for liveness bounds; liveness bounds stay wall-clock",
+      "detail": "four repair shapes by what each bound waits for and what happens to its work: take the work out of the bound (#1 WASI quest in progress and unlanded, #2, #6); re-drive and apply rather than silently default (#4 alone: a spent startup read skips the dynamic override); one node-level machine factor with one input source, the scripts/calibrate-machine.js measurement (the harness's measured clamped mechanism, LAGRANGE_MACHINE_FACTOR, convergence-budget-calibration.js) for #3 and #7 to #12; own or cancel the in-flight work (R13) for #5, whose spent initialize orphans a live adaptive timing controller, and for the un-cancelled races at #4, #6, #7; the verifier's deterministic witness recorded as the first red test of the #5 fix quest; liveness bounds stay wall-clock",
       "evidence": [
         "solve/epics/raft-rs-full-cutover/evidence/fixed-work-bound-census-2026-11-02/CENSUS.md"
       ]
@@ -30,7 +30,7 @@
     {
       "id": "independent-verification",
       "passed": false,
-      "reason": "awaiting independent review"
+      "reason": "verification of ddfe38745 rejected (narrow); awaiting re-verification of the corrective attempt"
     }
   ]
 }
