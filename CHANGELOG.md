@@ -43,6 +43,8 @@ releases without a compatibility guarantee.
   `npm run audit:comparative-recompute` recomputes every published artifact from the
   raw records.
 
+- **Local proof checkouts get the generated material CI has (`proof-checkout-preparation.js`, `push-gate-corpus-worktree.js`, `lab/probe.js`):**
+  every exact checkout the push-gate materializer proves a command in (the pre-push gate, the publisher's local and post-merge corpus, the local release proof) now generates the sealed import graph for that commit before the command starts, from the one list the lab placement shares; a producer that fails, or that rewrites tracked metadata (a commit whose committed seal is stale), refuses the checkout before the command, locally and on lab machines alike. The post-merge corpus for b3b366573 had run `push-gate-change-proof.test.js` red in an unprepared checkout.
 - **Harness image rebuilds no longer leave the previous build behind (`docker-image-retirement.js`, `docker-provider.js`):**
   after a successful build of the harness test image the provider removes the image its tag named before, only when that image is now untagged and no container uses it, never forced and never anything else (no prune; tagged product and base images are kept), and records the previous id and the outcome as typed `image.retire-previous` events. Untagged leftovers of every lab scenario and cone run had filled a lab host's root partition.
 - **Proof receipts bound to a validated execution report (`proof-authority.js`, `test-execution-report.js`, `run-test-files.js`, `run-release-proof.js`, `publish-head.js`, `push-gate-change-proof.js`, `full-gate.yml`):**

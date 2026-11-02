@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
-    "test-infrastructure": 155,
+    "test-infrastructure": 156,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2555,
-  "digest": "fnv1a32-c9dae034",
+  "censusSize": 2556,
+  "digest": "fnv1a32-713ef5b6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-06e8e2cd",
+  "observationDigest": "fnv1a32-fa624d97",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2282,6 +2282,7 @@
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "test-infrastructure",
     "test/scripts/proof-authority-falsifiers.test.js": "test-infrastructure",
     "test/scripts/proof-authority.test.js": "test-infrastructure",
+    "test/scripts/proof-checkout-preparation.test.js": "test-infrastructure",
     "test/scripts/proof-cone-cli-output-completeness.test.js": "test-infrastructure",
     "test/scripts/proof-receipt-execution-report.test.js": "test-infrastructure",
     "test/scripts/prune-test-output.test.js": "test-infrastructure",
@@ -18070,6 +18071,7 @@
         "package.json",
         "scripts/checks/git-process-environment.js",
         "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "test/shards/primary-classes.json"
@@ -18094,6 +18096,17 @@
       "directories": [
         "data/releases",
         "solve"
+      ]
+    },
+    "test/scripts/proof-checkout-preparation.test.js": {
+      "files": [
+        ".gitignore",
+        "scripts/checks/impact-proof-cone-constants.js",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/generate-global-owner-debt-inventory.js"
+      ],
+      "directories": [
+        "test"
       ]
     },
     "test/scripts/proof-cone-cli-output-completeness.test.js": {
@@ -18838,6 +18851,8 @@
       "env": [
         "APPDATA",
         "LAGRANGE_LAB_HOME",
+        "PRODUCER_FAILS",
+        "PRODUCER_REWRITES",
         "XDG_CONFIG_HOME"
       ]
     },
@@ -18867,6 +18882,7 @@
         "GIT_DIR",
         "LAGRANGE_LAB_HOME",
         "PRODUCER_FAILS",
+        "PRODUCER_REWRITES",
         "XDG_CONFIG_HOME"
       ]
     },

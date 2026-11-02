@@ -1,0 +1,62 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "clean-worktree-generated-import-graph",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "cause-and-history-established",
+      "passed": true,
+      "detail": "The graph dependency is from 5f6a779e7 (2026-09-12) and cccf0218e (2026-10-03), not #187. The materializer's --gate --run path generated nothing while CI (test:metadata:refresh), the lab placement and the pre-push hook's own test stage did. The test is a spine test, always run in a pushing gate's cone, never in a cone-rest local corpus (0 of 19 recorded .files lists contain it); b3b366573's post-merge run (2551 files) was the first unprepared whole-corpus local run. Recorded in log.ndjson findings.",
+      "evidence": [
+        "log.ndjson findings 2026-11-02 (cause and history; live-producer observation)"
+      ]
+    },
+    {
+      "id": "red-in-clean-materialized-checkout",
+      "passed": true,
+      "detail": "push-gate-corpus-worktree.js --gate b3b366573 --run node scripts/run-test-files.js test/scripts/push-gate-change-proof.test.js before the repair: not ok 9, 10, 12, 13 (import graph is not generated); the new owner test was red at its behavioural assertions with the owner present but unwired (3 of 4 red)",
+      "evidence": [
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:red-clean-materialized-b3b366573.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)",
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:red-preparation-owner-unwired.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)"
+      ]
+    },
+    {
+      "id": "one-preparation-owner-green",
+      "passed": true,
+      "detail": "scripts/checks/proof-checkout-preparation.js owns PROOF_CHECKOUT_GENERATORS and prepareProofCheckout; the materializer's gateExactSha prepares every exact checkout before its command and refuses, before the command, a producer that fails, is killed (named), or rewrites tracked metadata (a stale seal: 'regenerate and commit <file>'); an absent producer is announced. The lab placement shell takes its producer from the same list and refuses a stale seal with its SETUP exit. The owner is a full-corpus trigger (selection-machinery), as every module in the gate's own import closure must be: red at 841cc2b9b once the graph is generated (subtest 9 names it), green at 88663e2e3. The owner test (5) and the lab witness were red before the attempt-2 change; touched lane on the committed tree 15 files pass=15 assertions=193; the falsifier and placement fixtures commit their regenerated seal; the falsifier receipt regenerated (6/6). Owner mutations (stale refusal removed, producer failure ignored, signal not named, absent producer silent) each turn a test red.",
+      "testFile": "test/scripts/proof-checkout-preparation.test.js",
+      "evidence": [
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:green-clean-materialized-b3b366573.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)",
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:red-attempt2-refusal-before-fix.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)",
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:red-attempt2-lab-stale.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)",
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:red-attempt2-closure-at-841cc2b9b.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)",
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:green-attempt2-closure-at-head.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)",
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:touched-green-3-committed.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)",
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:mutation-witnesses-attempt2.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)"
+      ]
+    },
+    {
+      "id": "generated-material-census",
+      "passed": true,
+      "detail": "36 tests that import or spawn a reader or producer of the generated graph (helper-import-closure, change-selection, select-change-tests, impact-proof-cone inputs and coverage, solve guards, the producer, the lab probe) run in an unprepared clean checkout at b3b366573: 4 red; only push-gate-change-proof reads the missing graph; impact-proof-cone-producer and metric-report-inputs/provenance are red there for a checkout-location reason (stat of /<fixture>/src from a checkout under the sandbox's /tmp) and the same run is red after generating the graph by hand, while the live post-merge corpus at b3b366573 passed all three. The same 36 through the repaired materializer: pass=36 assertions=646. CI and the lab already prepare only this graph, so it is the one gitignored generated input of the corpus.",
+      "evidence": [
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:census-unprepared-b3b366573.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)",
+        "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz:census-prepared-b3b366573.log.txt (inventory solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json)"
+      ]
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "evidence": [
+        "log.ndjson verification entries 2026-11-02 (subagent:a71ae7dbf7bd3d990): reject at 841cc2b9b, approve at 8a8873928"
+      ]
+    }
+  ],
+  "evidenceBundle": {
+    "asset": "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz",
+    "sourceCommit": "3cbf886b0",
+    "inventory": "solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-inventory.json",
+    "verification": "solve/changes/evidence-relocation/clean-worktree-generated-import-graph/relocation-verification.json"
+  }
+}
