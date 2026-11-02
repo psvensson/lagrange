@@ -334,7 +334,8 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
       [GATE_RED_MAIN_CHECKED_ENV]: ENABLED_ENV_VALUE,
     };
     // The generated state a CI or lab-placed proof checkout has, made here
-    // for this commit before anything runs: a fresh checkout has none of it
+    // for this commit before anything runs: a fresh checkout has none of it,
+    // and a commit whose generated metadata is stale is refused
     // (clean-worktree-generated-import-graph).
     const preparation = prepareProofCheckout(worktreePath, {env});
     if (!preparation.ok) {

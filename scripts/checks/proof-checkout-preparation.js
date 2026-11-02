@@ -8,11 +8,12 @@
  * gate, the publisher's local and post-merge corpus, the local release proof -
  * and the lab placement prepares its remote checkout from the same list.
  *
- * Preparation generates; it never changes what is proven. A tracked file a
- * producer rewrites (the import graph seal of a commit whose seal is stale) is
- * put back to the commit's bytes, so the tests that read the sealed graph
- * refuse a graph the commit does not seal, in their own words. A producer that
- * fails refuses the checkout: no command runs without its generated material.
+ * Preparation generates; it never changes what is proven. A producer that
+ * rewrites a tracked file (the import graph seal of a commit whose committed
+ * metadata is stale) refuses the checkout, as CI refuses stale generated test
+ * metadata: the commit must carry its regenerated metadata. A producer that
+ * fails, or is killed, refuses it too: no command runs without its generated
+ * material or on bytes that are not the commit's.
  */
 
 import {spawnSync} from 'node:child_process';
@@ -22,18 +23,21 @@ import path from 'node:path';
 import {execGit} from './git-invocation.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringSplit = Function.call.bind(String.prototype.split);
-const stringTrim = Function.call.bind(String.prototype.trim);
 const stringSlice = Function.call.bind(String.prototype.slice);
 
 const UTF8 = 'utf8';
 const NEWLINE = '\n';
+const NUL = '\0';
 const EMPTY = '';
+const LIST_SEPARATOR = ', ';
 const STATUS_PATH_COLUMN = 3;
-const GIT_TRACKED_CHANGES = Object.freeze(['status', '--porcelain', '--untracked-files=no']);
-const GIT_SHOW = 'show';
-const HEAD_PREFIX = 'HEAD:';
+// NUL-separated and unquoted: a path with spaces or non-ASCII bytes is named
+// as it is.
+const GIT_TRACKED_CHANGES = Object.freeze(
+  ['status', '--porcelain', '-z', '--untracked-files=no']);
 
 // The generated material, one producer each, in the order they run. The
 // producer's own path and flag: a commit older than its producer has nothing
@@ -49,27 +53,30 @@ const PROOF_CHECKOUT_GENERATORS = Object.freeze([
 const TEXT = Object.freeze({
   PREFIX: '[proof-checkout] ',
   PREPARED: 'prepared ',
-  FAILED: ' could not be generated: exit ',
-  KEPT: 'kept the commit\'s ',
-  REWRITTEN_BY: ' (rewritten by ',
-  CLOSE: ')',
+  ABSENT: ' not generated: this commit has no ',
+  FAILED: ' could not be generated: ',
+  EXIT: 'exit ',
+  SIGNAL: 'killed by ',
+  STALE: ': the commit\'s generated metadata is stale; regenerate and commit ',
+  REFRESH: ' (npm run -s test:metadata:refresh)',
 });
 
+// The tracked paths whose bytes are no longer the commit's.
 function trackedChanges(checkout) {
-  const lines = stringSplit(String(execGit([...GIT_TRACKED_CHANGES],
-    {cwd: checkout, encoding: UTF8})), NEWLINE);
-  return arrayMap(arrayFilter(lines, (line) => stringTrim(line) !== EMPTY),
-    (line) => stringSlice(line, STATUS_PATH_COLUMN));
+  const entries = stringSplit(String(execGit([...GIT_TRACKED_CHANGES],
+    {cwd: checkout, encoding: UTF8})), NUL);
+  return arrayMap(arrayFilter(entries, (entry) => entry !== EMPTY),
+    (entry) => stringSlice(entry, STATUS_PATH_COLUMN));
 }
 
-// Put back the commit's bytes of every tracked file the producer rewrote.
-function keepCommittedBytes(checkout, generator, write) {
-  for (const file of trackedChanges(checkout)) {
-    const committed = execGit([GIT_SHOW, `${HEAD_PREFIX}${file}`],
-      {cwd: checkout, encoding: 'buffer'});
-    fs.writeFileSync(path.join(checkout, file), committed);
-    write(`${TEXT.PREFIX}${TEXT.KEPT}${file}${TEXT.REWRITTEN_BY}${generator.name}${TEXT.CLOSE}`);
-  }
+function failureOf(result) {
+  if (result.error) return result.error.message;
+  if (result.signal) return `${TEXT.SIGNAL}${result.signal}`;
+  return `${TEXT.EXIT}${result.status}`;
+}
+
+function refusal(generator, detail) {
+  return {ok: false, problem: `${TEXT.PREFIX}${generator.name}${detail}`};
 }
 
 /**
@@ -83,14 +90,20 @@ function prepareProofCheckout(checkout, {run = spawnSync, env = process.env,
   write = (line) => process.stdout.write(`${line}${NEWLINE}`)} = {}) {
   const prepared = [];
   for (const generator of PROOF_CHECKOUT_GENERATORS) {
-    if (!fs.existsSync(path.join(checkout, generator.producer))) continue;
+    if (!fs.existsSync(path.join(checkout, generator.producer))) {
+      write(`${TEXT.PREFIX}${generator.name}${TEXT.ABSENT}${generator.producer}`);
+      continue;
+    }
     const result = run(process.execPath, [generator.producer, ...generator.args],
       {cwd: checkout, env, encoding: UTF8, stdio: ['ignore', 'ignore', 'inherit']});
     if (result.status !== 0) {
-      return {ok: false, prepared, problem: `${TEXT.PREFIX}${generator.name}${TEXT.FAILED}` +
-        `${result.status ?? result.error?.message}`};
+      return {...refusal(generator, `${TEXT.FAILED}${failureOf(result)}`), prepared};
     }
-    keepCommittedBytes(checkout, generator, write);
+    const stale = trackedChanges(checkout);
+    if (stale.length > 0) {
+      return {...refusal(generator,
+        `${TEXT.STALE}${arrayJoin(stale, LIST_SEPARATOR)}${TEXT.REFRESH}`), prepared};
+    }
     write(`${TEXT.PREFIX}${TEXT.PREPARED}${generator.name}`);
     prepared.push(generator.name);
   }

@@ -28,7 +28,7 @@
   "censusSize": 2555,
   "digest": "fnv1a32-4fa960fb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-31cd293b",
+  "observationDigest": "fnv1a32-c51884de",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18062,6 +18062,7 @@
         "package.json",
         "scripts/checks/git-process-environment.js",
         "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "test/shards/primary-classes.json"
@@ -18841,6 +18842,8 @@
       "env": [
         "APPDATA",
         "LAGRANGE_LAB_HOME",
+        "PRODUCER_FAILS",
+        "PRODUCER_REWRITES",
         "XDG_CONFIG_HOME"
       ]
     },
@@ -18870,6 +18873,7 @@
         "GIT_DIR",
         "LAGRANGE_LAB_HOME",
         "PRODUCER_FAILS",
+        "PRODUCER_REWRITES",
         "XDG_CONFIG_HOME"
       ]
     },

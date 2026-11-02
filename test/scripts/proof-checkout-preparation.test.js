@@ -87,19 +87,30 @@ test('a producer that fails refuses the gate before the command runs', (t) => {
   assert.match(output, /import-graph could not be generated/u);
 });
 
-test('a producer that rewrites tracked bytes leaves the commit\'s bytes', (t) => {
-  const root = fixture(t, WRITES_GRAPH +
-    `fs.writeFileSync(${JSON.stringify(IMPORT_GRAPH_SEAL_PATH)}, '{"sealed": "rewritten"}\\n');\n`);
+test('a producer that rewrites tracked metadata refuses the gate before the command runs',
+  (t) => {
+    const root = fixture(t, WRITES_GRAPH +
+      `fs.writeFileSync(${JSON.stringify(IMPORT_GRAPH_SEAL_PATH)}, '{"sealed": "rewritten"}\\n');\n`);
+    const {status, output, saw} = gate(root);
+    assert.notEqual(status, 0, 'a commit whose generated metadata is stale is refused');
+    assert.equal(saw, null, 'the command never ran on bytes that are not the commit\'s');
+    assert.match(output, new RegExp('import-graph: the commit\'s generated metadata is stale; ' +
+      `regenerate and commit ${IMPORT_GRAPH_SEAL_PATH}`, 'u'));
+  });
+
+test('a producer killed by a signal is named as killed', (t) => {
+  const root = fixture(t, 'process.kill(process.pid, \'SIGTERM\');\n');
   const {status, output, saw} = gate(root);
-  assert.equal(status, 0, output);
-  assert.deepEqual(saw, {graph: true, seal: SEAL_COMMITTED},
-    'the proof reads the commit\'s seal: a graph it does not bind is refused by its readers');
-  assert.match(output, new RegExp(`kept the commit's ${IMPORT_GRAPH_SEAL_PATH}`, 'u'));
+  assert.notEqual(status, 0);
+  assert.equal(saw, null);
+  assert.match(output, /import-graph could not be generated: killed by SIGTERM/u);
 });
 
-test('a commit without the producer has nothing to generate', (t) => {
+test('a commit without the producer has nothing to generate, and says so', (t) => {
   const root = fixture(t, null);
   const {status, output, saw} = gate(root);
   assert.equal(status, 0, output);
   assert.deepEqual(saw, {graph: false, seal: SEAL_COMMITTED});
+  assert.match(output, new RegExp(`import-graph not generated: this commit has no ${PRODUCER}`,
+    'u'));
 });

@@ -1,0 +1,33 @@
+TAP version 13
+# Subtest: a lab machine generates the placed commit's import graph before its files run
+not ok 1 - a lab machine generates the placed commit's import graph before its files run
+  ---
+  duration_ms: 95881.291683
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-clean-import-graph-20261102/test/scripts/test-placement.test.js:1328:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a producer that rewrites tracked metadata is a setup failure, as in the gate
+    
+    0 !== 97
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 97
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-clean-import-graph-20261102/test/scripts/test-placement.test.js:1345:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 95963.691353

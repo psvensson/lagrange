@@ -1,0 +1,106 @@
+not ok test/scripts/proof-checkout-preparation.test.js (5 assertions, 461ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: the gated command starts in a checkout that already has the import graph
+ok 1 - the gated command starts in a checkout that already has the import graph
+  ---
+  duration_ms: 83.154118
+  type: 'test'
+  ...
+# Subtest: a producer that fails refuses the gate before the command runs
+ok 2 - a producer that fails refuses the gate before the command runs
+  ---
+  duration_ms: 56.303225
+  type: 'test'
+  ...
+# Subtest: a producer that rewrites tracked metadata refuses the gate before the command runs
+not ok 3 - a producer that rewrites tracked metadata refuses the gate before the command runs
+  ---
+  duration_ms: 77.058433
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-clean-import-graph-20261102/test/scripts/proof-checkout-preparation.test.js:90:1'
+  failureType: 'testCodeFailure'
+  error: 'a commit whose generated metadata is stale is refused'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-clean-import-graph-20261102/test/scripts/proof-checkout-preparation.test.js:95:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a producer killed by a signal is named as killed
+not ok 4 - a producer killed by a signal is named as killed
+  ---
+  duration_ms: 55.486547
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-clean-import-graph-20261102/test/scripts/proof-checkout-preparation.test.js:101:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /import-graph could not be generated: killed by SIGTERM/u. Input:
+    
+    '[proof-checkout] import-graph could not be generated: exit undefined\n' +
+      '[push-gate] no acceptance receipt to retain from the gate checkout\n'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    [proof-checkout] import-graph could not be generated: exit undefined
+    [push-gate] no acceptance receipt to retain from the gate checkout
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-clean-import-graph-20261102/test/scripts/proof-checkout-preparation.test.js:106:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a commit without the producer has nothing to generate, and says so
+not ok 5 - a commit without the producer has nothing to generate, and says so
+  ---
+  duration_ms: 58.596262
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/lagrange-clean-import-graph-20261102/test/scripts/proof-checkout-preparation.test.js:109:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /import-graph not generated: this commit has no scripts\/generate-global-owner-debt-inventory.js/u. Input:
+    
+    '[push-gate] proving ca89dfb75687eb3a3ca1a17e08315e089e223f20 in /tmp/proof-checkout-MKuHQO/test-output/push-gate-worktrees/session-worktree-9n8O8w/tree: /home/peter/.nvm/versions/node/v22.23.2/bin/node -e const fs = require("node:fs");fs.writeFileSync("/tmp/proof-checkout-MKuHQO-seen.json", JSON.stringify({graph: fs.existsSync("test-output/analysis/global-owner-debt-import-graph.json"),seal: fs.readFileSync("test/shards/impact-graph-seal.json", "utf8")}));\n'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    [push-gate] proving ca89dfb75687eb3a3ca1a17e08315e089e223f20 in /tmp/proof-checkout-MKuHQO/test-output/push-gate-worktrees/session-worktree-9n8O8w/tree: /home/peter/.nvm/versions/node/v22.23.2/bin/node -e const fs = require("node:fs");fs.writeFileSync("/tmp/proof-checkout-MKuHQO-seen.json", JSON.stringify({graph: fs.existsSync("test-output/analysis/global-owner-debt-import-graph.json"),seal: fs.readFileSync("test/shards/impact-graph-seal.json", "utf8")}));
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/lagrange-clean-import-graph-20261102/test/scripts/proof-checkout-preparation.test.js:114:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 2
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 336.503121
+# time=461ms
+# test-files total=1 pass=0 fail=1 assertions=5

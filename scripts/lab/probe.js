@@ -1955,6 +1955,13 @@ const PLACEMENT_SCRIPT_TAIL = [
   `if [ -f ${PLACEMENT_IMPORT_GRAPH.PRODUCER} ]; then`,
   `  node ${PLACEMENT_IMPORT_GRAPH.PRODUCER} ${PLACEMENT_IMPORT_GRAPH.FLAG} >/dev/null || ` +
     `{ echo "placement: the import graph could not be generated" >&2; exit ${PLACEMENT_EXIT.SETUP}; }`,
+  // A producer that rewrote tracked metadata means the commit's generated
+  // metadata is stale: refused, as the local materializer refuses it.
+  '  stale="$(git status --porcelain --untracked-files=no | cut -c4- | tr \'\\n\' \' \')"',
+  '  if [ -n "$stale" ]; then',
+  '    echo "placement: the commit\'s generated metadata is stale; regenerate and commit $stale" >&2; ' +
+    `exit ${PLACEMENT_EXIT.SETUP}`,
+  '  fi',
   `  echo "placement-prepared=${PLACEMENT_IMPORT_GRAPH.NAME}"`,
   'fi',
   // Its own budgets scaled by its measured speed, the controller's retry and
