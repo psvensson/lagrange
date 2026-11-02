@@ -6,8 +6,9 @@ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCO
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from '../raft/raft-committed-membership-constants.js';
-import {OPERATION_METADATA_KEY, OperationType, getOperationMetadataObject} from
-  '../rebalancer/replica-status.js';
+import {WORKFLOW_STEP} from '../constants/workflow.js';
+import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus,
+  getOperationMetadataObject} from '../rebalancer/replica-status.js';
 
 // Node-local tokens: the startup owner's FRESH_SEED outcome and an explicit
 // operator request, both decided on the node that releases. A fresh CREATE
@@ -24,19 +25,27 @@ const FRESH_CREATE_REFUSAL = Object.freeze({
   IDENTITY: 'create_operation_identity_mismatch',
   NOT_FOUNDING_ADD: 'create_operation_not_partition_add',
   NOT_OPEN: 'create_operation_not_open',
-  NOT_GENESIS_FOUNDER: 'create_operation_not_genesis_founding_of_leader',
+  NOT_GENESIS: 'create_operation_not_genesis_founding',
   UNREADABLE: 'create_operation_unreadable',
 });
+const LEADER_NOT_MEMBER = 'create_operation_leader_not_member';
 const OPEN_CREATE_ADMISSION_STATES = new Set([CREATE_ADMISSION_STATE.MATERIALIZED,
   CREATE_ADMISSION_STATE.ACTIVE]);
 const PARTITION_ENTITY = 'partition';
-const IDENTITY_FIELDS = Object.freeze([
+const TEXT_IDENTITY_FIELDS = Object.freeze([
   ['operationId', 'operation_id'],
   ['replicaId', 'replica_id'],
   ['partitionId', 'partition_id'],
   ['targetNodeId', 'target_node_id'],
   ['admissionToken', 'create_admission_token'],
+  ['attemptToken', 'create_admission_attempt_token'],
 ]);
+const ORDINAL_IDENTITY_FIELDS = Object.freeze([
+  ['attemptSeq', 'create_admission_attempt_seq'],
+  ['replicaCreatedAt', 'create_admission_replica_created_at'],
+]);
+const IDENTITY_FIELDS = Object.freeze([...TEXT_IDENTITY_FIELDS,
+  ...ORDINAL_IDENTITY_FIELDS]);
 
 function nonempty(value) {
   return typeof value === 'string' && value.length > 0;
@@ -54,43 +63,51 @@ function firstStepOf(row) {
   return Array.isArray(history) && history.length > 0 ? history[0] : null;
 }
 
-// (b), (c), (d) of the design: an open ADD of the leader's partition whose
-// first step carries a GENESIS founding stamp naming the leader's replica.
-function foundingRefusalOf(row, partitionId, leaderReplicaId) {
-  if (row.type !== OperationType.ADD || row.entity_type !== PARTITION_ENTITY ||
-      row.partition_id !== partitionId) return FRESH_CREATE_REFUSAL.NOT_FOUNDING_ADD;
-  if (!OPEN_CREATE_ADMISSION_STATES.has(row.create_admission_state) ||
-      (row.completed_at !== null && row.completed_at !== undefined)) {
-    return FRESH_CREATE_REFUSAL.NOT_OPEN;
+// (c): a completed, failed or closed create authorizes nothing.
+function createIsOpen(row) {
+  return OPEN_CREATE_ADMISSION_STATES.has(row.create_admission_state) &&
+    (row.completed_at === null || row.completed_at === undefined) &&
+    row.status !== ReplicaStatus.FAILED && row.workflow_step !== WORKFLOW_STEP.FAILED;
+}
+
+// (b), (d): a partition ADD whose first step carries a GENESIS stamp. The
+// configuration may have changed since, so the stamp names no required leader.
+function foundingRefusalOf(row) {
+  if (row.type !== OperationType.ADD || row.entity_type !== PARTITION_ENTITY) {
+    return FRESH_CREATE_REFUSAL.NOT_FOUNDING_ADD;
   }
   const step = firstStepOf(row);
   const stamp = step === null ? null :
     getOperationMetadataObject([step], OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP);
-  return stamp?.kind === COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS &&
-    Array.isArray(stamp.founders) && stamp.founders.includes(leaderReplicaId) ?
-    null : FRESH_CREATE_REFUSAL.NOT_GENESIS_FOUNDER;
+  return stamp?.kind === COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS ?
+    null : FRESH_CREATE_REFUSAL.NOT_GENESIS;
 }
 
 function isCreateIdentity(identity) {
   return identity !== null && typeof identity === 'object' &&
-    IDENTITY_FIELDS.every(([field]) => nonempty(identity[field]));
+    TEXT_IDENTITY_FIELDS.every(([field]) => nonempty(identity[field])) &&
+    ORDINAL_IDENTITY_FIELDS.every(([field]) => Number.isSafeInteger(identity[field]));
 }
 
-// (a) the row is the request's create identity, then (b)-(d).
+function rowIsIdentity(row, identity) {
+  return TEXT_IDENTITY_FIELDS.every(([field, column]) => row[column] === identity[field]) &&
+    ORDINAL_IDENTITY_FIELDS.every(([field, column]) =>
+      Number(row[column]) === identity[field]);
+}
+
+// (a) the row is the request's whole create identity, then (b)-(d).
 function rowRefusalOf(row, identity, leader) {
   if (row === null || row === undefined) return FRESH_CREATE_REFUSAL.ABSENT;
-  if (!IDENTITY_FIELDS.every(([field, column]) => row[column] === identity[field])) {
-    return FRESH_CREATE_REFUSAL.IDENTITY;
-  }
-  return foundingRefusalOf(row, leader.partitionId, leader.replicaId);
+  if (!rowIsIdentity(row, identity)) return FRESH_CREATE_REFUSAL.IDENTITY;
+  if (row.partition_id !== leader.partitionId) return FRESH_CREATE_REFUSAL.NOT_FOUNDING_ADD;
+  if (!createIsOpen(row)) return FRESH_CREATE_REFUSAL.NOT_OPEN;
+  return foundingRefusalOf(row);
 }
 
-function authorityUnavailable(request, error) {
+function authorityUnavailable(request, fields) {
   return releaseAnswer(OUTCOME.UNAVAILABLE, request,
     {missingFact: MISSING_FACT.CREATE_ADMISSION_AUTHORITY,
-      retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS,
-      authorityOutcome: error.authorityOutcome ?? null,
-      authorityError: error.authorityError ?? null});
+      retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS, ...fields});
 }
 
 function createParticipantReleaseAuthorizationOwner(handler) {
@@ -135,19 +152,21 @@ function createParticipantReleaseAuthorizationOwner(handler) {
           createAdmissionEvidence?.partitionId !== partitionId) return null;
       const identity = Object.fromEntries(IDENTITY_FIELDS.map(([field]) =>
         [field, createAdmissionEvidence[field]]));
-      return IDENTITY_FIELDS.every(([field]) => nonempty(identity[field])) ?
-        Object.freeze(identity) : null;
+      return isCreateIdentity(identity) ? Object.freeze(identity) : null;
     },
     /**
-     * The leader's decision on a fresh CREATE's release of a partition that
-     * has no write origin, from the committed founding create operation read
-     * through this node's create-admission owner (the control-plane gateway).
+     * The leader's per-request decision on a fresh CREATE's release of a
+     * partition that has no write origin, from the committed founding create
+     * operation read through this node's create-admission owner (the
+     * control-plane gateway).
      * @param {Object} request - The release request carrying
      *   createAdmissionIdentity.
-     * @param {Object} leader - {partitionId, replicaId} of the answering leader.
+     * @param {Object} leader - {partitionId, replicaId, memberIds} of the
+     *   answering leader; memberIds is its committed configuration.
      * @return {Promise<Object|null>} null when the committed operation
      *   authorizes; otherwise the attempt's typed answer: UNAVAILABLE with
-     *   retryAfterMs while the read is refused, OPERATOR_REQUIRED (with the
+     *   retryAfterMs while the read is refused or the leader is not a
+     *   committed member (ended by the release deadline), OPERATOR_REQUIRED (with the
      *   failing condition as reason) when the row does not authorize.
      */
     async decideFreshCreateRelease(request, leader) {
@@ -156,12 +175,19 @@ function createParticipantReleaseAuthorizationOwner(handler) {
         return freshCreateRefusal(request, FRESH_CREATE_REFUSAL.IDENTITY);
       }
       const read = await readFoundingOperation(identity.operationId);
-      if (read.deferred) return authorityUnavailable(request, read.deferred);
+      if (read.deferred) {
+        return authorityUnavailable(request,
+          {authorityOutcome: read.deferred.authorityOutcome ?? null,
+            authorityError: read.deferred.authorityError ?? null});
+      }
       if (read.unreadable) {
         return freshCreateRefusal(request, FRESH_CREATE_REFUSAL.UNREADABLE);
       }
       const refusal = rowRefusalOf(read.row, identity, leader);
-      return refusal === null ? null : freshCreateRefusal(request, refusal);
+      if (refusal !== null) return freshCreateRefusal(request, refusal);
+      // A leader committing its own removal steps down: transient, not terminal.
+      return leader.memberIds.includes(leader.replicaId) ? null :
+        authorityUnavailable(request, {reason: LEADER_NOT_MEMBER});
     },
     authorizeOperator({partitionId, targetBuildDigest}) {
       return issue(PARTICIPANT_RELEASE_AUTHORIZATION_KIND.OPERATOR,

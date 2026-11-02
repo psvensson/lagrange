@@ -34,6 +34,10 @@ import {
   PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_TYPE,
 } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
+import {readPartitionWriteOrigin} from
+  '../../src/partition/partition-participant-transaction-store.js';
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
+import {OPERATION_METADATA_KEY} from '../../src/rebalancer/replica-status.js';
 import {deliveryAnswerOf} from '../../src/transport/transport-semantic-outcome.js';
 import {waitForCondition} from './partition-service-test-support.js';
 import {BUDGET_MS, PARTITION_ID, formFoundingGroup, founderOperationRow} from
@@ -164,6 +168,129 @@ test('7: a forged request naming a foreign create identity is refused (the ident
     `a foreign identity never authorizes (${JSON.stringify(answer)})`);
   assert.equal(answer?.missingFact, OPERATOR_REQUIRED_FACT);
 });
+
+async function askLeader(group, fromIndex, toIndex, createAdmissionIdentity) {
+  const build = await runtimeBuildProvenance();
+  const delivery = await group.routers[group.nodes[fromIndex]].deliver(
+    `${group.nodes[toIndex]}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`, {
+      type: PARTICIPANT_RELEASE_TYPE, action: ACTION.RELEASE, partitionId: PARTITION_ID,
+      targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
+      deadlineAtMs: Date.now() + 4000, createAdmissionIdentity},
+    {targetNodeId: group.nodes[toIndex]});
+  return deliveryAnswerOf(delivery)?.[PARTICIPANT_RELEASE_RESULT_FIELD];
+}
+
+function identityOf(evidence, overrides = {}) {
+  return {operationId: evidence.operationId, replicaId: evidence.replicaId,
+    partitionId: evidence.partitionId, targetNodeId: evidence.targetNodeId,
+    admissionToken: evidence.admissionToken, attemptToken: evidence.attemptToken,
+    attemptSeq: evidence.attemptSeq, replicaCreatedAt: evidence.replicaCreatedAt,
+    ...overrides};
+}
+
+test('7b: a tampered identity of the partition\'s own open founding row is refused ' +
+  'by the identity condition alone', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const group = await formFoundingGroup(t);
+  const evidence = await group.evidenceFor(1);
+  const answer = await askLeader(group, 1, 0,
+    identityOf(evidence, {admissionToken: 'forged-admission-token'}));
+  assert.equal(answer?.outcome, OUTCOME.OPERATOR_REQUIRED, JSON.stringify(answer));
+  assert.equal(answer?.reason, 'create_operation_identity_mismatch');
+});
+
+test('9: a refused sibling never decides a valid founder: each request gets its ' +
+  'own answer from the committed row', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const faults = {};
+  const group = await formFoundingGroup(t, {founderCount: 3, faults});
+  const evidenceB = await group.evidenceFor(1);
+  const evidenceC = await group.evidenceFor(2);
+  group.rows[2].completed_at = group.rows[2].created_at + 20;
+  group.rows[2].create_admission_state = 'CLOSED';
+  // The sibling's read is slow, so a request arriving meanwhile would join it.
+  faults[group.nodes[0]] = {holdRead: (operationId) =>
+    (operationId === group.rows[2].operation_id ?
+      new Promise((resolve) => setTimeout(resolve, 400)) : undefined)};
+  const sibling = releaseOutcome(group, 2, evidenceC, 4000);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const founder = await releaseOutcome(group, 1, evidenceB);
+  const refused = await sibling;
+  assert.equal(founder.error, null, `B inherited a sibling's answer: ${founder.error?.message}`);
+  assert.equal(founder.answer.outcome, OUTCOME.CUT_OVER);
+  assert.match(String(refused.error?.message), /create_operation_not_open/u,
+    'the sibling alone receives its refusal');
+});
+
+test('10: a forged request during a valid run is refused before the run settles ' +
+  '(no join, no origin yet)', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const group = await formFoundingGroup(t);
+  const evidence = await group.evidenceFor(1);
+  // Hold the valid run in its cohort census: the leader's first remote ask
+  // waits until the forged request has been answered.
+  let releaseCensus;
+  const censusHeld = new Promise((resolve) => {
+    releaseCensus = resolve;
+  });
+  let censusReached;
+  const reached = new Promise((resolve) => {
+    censusReached = resolve;
+  });
+  const leaderRouter = group.routers[group.nodes[0]];
+  const deliver = leaderRouter.deliver;
+  leaderRouter.deliver = async (address, payload, options) => {
+    if (payload?.action === ACTION.INSPECT && !address.startsWith(group.nodes[0])) {
+      censusReached();
+      await censusHeld;
+    }
+    return deliver(address, payload, options);
+  };
+  const valid = releaseOutcome(group, 1, evidence);
+  await reached;
+  const forged = await Promise.race([
+    askLeader(group, 1, 0, identityOf(evidence, {admissionToken: 'forged'})),
+    new Promise((resolve) => setTimeout(() => resolve({joined: true}), 2000)),
+  ]);
+  const originAtAnswer = readPartitionWriteOrigin(group.services[0].db);
+  releaseCensus();
+  assert.notEqual(forged.joined, true, 'the forged request joined the valid run');
+  assert.equal(forged.outcome, OUTCOME.OPERATOR_REQUIRED, JSON.stringify(forged));
+  assert.equal(originAtAnswer, null,
+    'refused before any origin exists: the origin path did not answer it');
+  const {answer, error} = await valid;
+  assert.equal(error, null, `the valid run failed: ${error?.message}`);
+  assert.equal(answer.outcome, OUTCOME.CUT_OVER);
+});
+
+test('8b: a replaced founder leading the group still releases: the GENESIS stamp ' +
+  'need not name the leader', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const group = await formFoundingGroup(t);
+  const evidence = await group.evidenceFor(1);
+  for (const row of group.rows) {
+    row.steps_history = JSON.stringify([{[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]:
+      genesisStamp(['replaced-founder', 'other-founder'],
+        {'replaced-founder': 'gone-1', 'other-founder': 'gone-2'})}]);
+  }
+  const {answer, error} = await releaseOutcome(group, 1, evidence);
+  assert.equal(error, null, `the release failed: ${error?.message}`);
+  assert.equal(answer.outcome, OUTCOME.CUT_OVER);
+});
+
+test('12: NOT_LEADER is answered before any authority read',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    environment(t);
+    const faults = {};
+    const group = await formFoundingGroup(t, {faults});
+    const evidence = await group.evidenceFor(1);
+    const readsBefore = faults.reads?.[group.nodes[1]] ?? 0;
+    const answer = await askLeader(group, 0, 1,
+      identityOf(evidence, {admissionToken: 'forged'}));
+    assert.equal(answer?.outcome, OUTCOME.NOT_LEADER, JSON.stringify(answer));
+    assert.equal(faults.reads?.[group.nodes[1]] ?? 0, readsBefore,
+      'a non-leader reads no authority and decides nothing');
+  });
 
 test('8: a fresh group whose committed configuration gained a non-founder ' +
   'member still releases (the rejected condition (e))',

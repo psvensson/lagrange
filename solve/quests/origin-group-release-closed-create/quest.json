@@ -1,0 +1,32 @@
+{
+  "schema": "solve-quest/2",
+  "id": "origin-group-release-closed-create",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A fresh CREATE release on a partition that already has a write origin is answered by the origin shortcut before any operation-row read, so a create no longer open (CLOSED, completed) still reaches cut_over. Close that gap without making the release depend on the group it releases. UNSEALED: declared with no work planned; recorded for later scheduling by the coordinator's ruling on fresh-create-release-authority attempt 1b.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/origin-group-release-closed-create/evidence/receipt.json",
+      "requiredReceipts": [
+        "closed-create-refused-on-origin-group",
+        "replica-operations-release-has-no-read-cycle",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-release-read-cycle",
+      "statement": "Reading replica_operations through the required-leader owner RPC is forbidden for a release of replica_operations itself: a voter target leading before ACTIVE has no routable service, so the read could not succeed until the release completes (source-derived; electability and the canonicalLeaderNodeId source unconfirmed)."
+    },
+    {
+      "id": "unavailable-never-grants",
+      "statement": "An unavailable read may never grant (option C refused)."
+    },
+    {
+      "id": "one-read-path",
+      "statement": "No second read path for one table (option A refused). A local committed answer is an option only once replica_operations has an owner for it."
+    }
+  ]
+}
