@@ -27,6 +27,15 @@
       "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/",
       "files": 2,
       "shard": "relocation-inventory/comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.json"
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.tar.gz",
+      "bundleSha256": "6c31e60492515cae595d7691d81df7c934f1e589aea969c01a40f05bec27c312",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.tar.gz",
+      "sourceCommit": "4d0fae96c393dddf64e0895e0330b0201a67358f",
+      "root": "solve/quests/comparative-benchmark-evidence-repair/evidence/live-campaign-bench-live-20261101-b/",
+      "files": 17,
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.json"
     }
   ]
 }

@@ -51,6 +51,23 @@
       "results": "11",
       "mismatches": [],
       "verified": true
+    },
+    {
+      "bundle": "comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.tar.gz",
+      "bundleSha256": "6c31e60492515cae595d7691d81df7c934f1e589aea969c01a40f05bec27c312",
+      "sourceCommit": "4d0fae96c393dddf64e0895e0330b0201a67358f",
+      "shard": "relocation-inventory/comparative-benchmark-evidence-repair--live-campaign-b-raw-attempts-4d0fae96c-2026-11-02.json",
+      "shardSha256": "b8d8a71514cac63d83e7227a58ab586f632ba5083cb6b962f987f4e4c33f8353",
+      "verifiedAt": "2026-11-02T01:47:01.179Z",
+      "downloadedSha256": "6c31e60492515cae595d7691d81df7c934f1e589aea969c01a40f05bec27c312",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 17,
+      "results": "11111111111111111",
+      "mismatches": [],
+      "verified": true
     }
   ]
 }

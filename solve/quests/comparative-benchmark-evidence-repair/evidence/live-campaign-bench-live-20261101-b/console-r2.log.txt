@@ -1,6 +1,0 @@
-2026-11-01T23:41:30Z
-08bb50458223766ea0e7ab1569b12206a4d059f2
-campaign_products_unpinned: no target of the campaign could pin its product identity
-diagnostic: {"unpinned":{}}
-exit=1
-2026-11-01T23:46:28Z
