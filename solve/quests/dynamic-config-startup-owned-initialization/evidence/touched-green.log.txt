@@ -1,11 +1,11 @@
 # test-files planned=7
 classified lane ordinary: 7 file(s), jobs=4
-thermal: ok cpu 50C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
-ok test/config/dynamic-config-startup-wait-bound-spent.test.js (36 assertions, 679ms)
-ok test/config/dynamic-config-service.test.js (439 assertions, 385ms)
-ok test/config/raft-adaptive-timing-controller.test.js (23 assertions, 274ms)
-ok test/config/dynamic-config-startup-wiring.test.js (38 assertions, 1580ms)
-ok test/config/dynamic-config-cdc-update-shape.test.js (11 assertions, 334ms)
-ok test/distributed/harness/__tests__/scenario-certification.test.js (35 assertions, 1917ms)
-ok test/config/dynamic-config-startup-owned-initialization.test.js (129 assertions, 13720ms)
-# test-files total=7 pass=7 fail=0 assertions=711
+thermal: ok cpu 63C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/config/dynamic-config-startup-wait-bound-spent.test.js (36 assertions, 685ms)
+ok test/config/dynamic-config-service.test.js (439 assertions, 366ms)
+ok test/config/raft-adaptive-timing-controller.test.js (23 assertions, 300ms)
+ok test/config/dynamic-config-startup-wiring.test.js (38 assertions, 1540ms)
+ok test/config/dynamic-config-cdc-update-shape.test.js (20 assertions, 308ms)
+ok test/distributed/harness/__tests__/scenario-certification.test.js (35 assertions, 1798ms)
+ok test/config/dynamic-config-startup-owned-initialization.test.js (141 assertions, 14075ms)
+# test-files total=7 pass=7 fail=0 assertions=732

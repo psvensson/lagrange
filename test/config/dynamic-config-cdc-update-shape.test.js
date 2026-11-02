@@ -57,3 +57,23 @@ test('the key survives when the row cannot be fetched back', async (t) => {
   t.equal(cdcEvent.data.config_key, KEY, 'taken from the WHERE parameters');
   t.equal(cdcEvent.data.config_value, '210', 'with the SET parameters');
 });
+
+test('raw SQL against the config table reaches the service with its key', async (t) => {
+  const {db, generator} = committedUpdate();
+  t.teardown(() => db.close());
+  const service = new DynamicConfigService({});
+  const raw = [
+    {sql: 'DELETE FROM config WHERE config_key = ?', params: [KEY]},
+    {sql: `DELETE FROM config WHERE config_key = '${KEY}'`, params: []},
+    {sql: 'UPDATE config SET config_value = ? WHERE config_key = ?', params: ['77', KEY]},
+    {sql: `UPDATE config SET config_value = '77' WHERE config_key = '${KEY}'`, params: []},
+  ];
+  for (const statement of raw) {
+    const before = service.cdcApplySequence(KEY);
+    const {cdcEvent} = generator.buildEvent({type: 'QUERY', ...statement,
+      timestamp: '9', changes: 1});
+    t.equal(cdcEvent?.data?.config_key, KEY, `key carried: ${statement.sql}`);
+    await service.handleCDCEvent(cdcEvent);
+    t.equal(service.cdcApplySequence(KEY), before + 1, 'counted for that key');
+  }
+});

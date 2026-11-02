@@ -748,6 +748,53 @@ test('heal: an equal-value CDC adopts a failed logging key', async (t) => {
   run.wiring.shutdown();
 });
 
+function cdcDelete(key) {
+  return {tableName: TABLES.CONFIG, operation: 'DELETE', data: {config_key: key}};
+}
+
+test('D1: a DELETE CDC drops the held value of its key, which never applies later',
+  async (t) => {
+    const run = await blockedStart(t, {rows: {[ELECTION_MIN]: storedRow(ELECTION_MIN, '3500')},
+      lateKeys: [ELECTION_MIN]});
+    t.equal(run.reads()[ELECTION_MIN], OUTCOME.REFUSED, 'held, refused');
+    run.group.emit('cdcApplied', cdcDelete(ELECTION_MIN));
+    await tick(5);
+    t.equal(run.reads()[ELECTION_MIN], OUTCOME.DROPPED_STALE, 'the outcome names the drop');
+    run.group.emit('cdcApplied', cdcUpdate(ELECTION_MAX, '5000'));
+    await tick(5);
+    t.equal(run.partition.calls.at(-1).electionTimeoutMaxMs, 5000, 'max applies');
+    t.notOk(run.partition.calls.some((call) => call.electionTimeoutMinMs === 3500),
+      'the deleted row\'s value never reaches a replica');
+    run.wiring.shutdown();
+  });
+
+test('W1: a DELETE CDC does not heal a failed key', async (t) => {
+  const run = await blockedStart(t, {rows: {}, failFirst: [TICK]});
+  t.equal(run.reads()[TICK], OUTCOME.FAILED, 'failed');
+  const calls = run.partition.calls.length;
+  run.group.emit('cdcApplied', cdcDelete(TICK));
+  await tick(5);
+  t.equal(run.reads()[TICK], OUTCOME.FAILED, 'still failed');
+  t.equal(run.partition.calls.length, calls, 'no sweep');
+  run.wiring.shutdown();
+});
+
+test('W1: a heal overtaken by shutdown applies nothing', async (t) => {
+  const run = await blockedStart(t, {rows: {}, failFirst: [TICK]});
+  const service = run.wiring.dynamicConfigService;
+  const get = service.get.bind(service);
+  service.get = async (key) => {
+    run.wiring.shutdown();
+    return get(key);
+  };
+  service.configCache.set(TICK, 30);
+  const calls = run.partition.calls.length;
+  run.group.emit('cdcApplied', cdcUpdate(TICK, '30'));
+  await tick(5);
+  t.equal(run.partition.calls.length, calls, 'no sweep after shutdown');
+  t.equal(run.reads()[TICK], OUTCOME.FAILED, 'and no heal recorded');
+});
+
 test('teardown', async (t) => {
   clearInterval(keepAlive);
   t.pass('keep-alive released');

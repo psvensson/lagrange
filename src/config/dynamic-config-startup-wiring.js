@@ -459,6 +459,13 @@ async function createDynamicConfigStartupWiring(options = {}) {
     heldRaftValues.set(key, {value, late});
     return STARTUP_APPLY_RESULT.HELD_FOR_SWEEP;
   };
+  const dropHeldValue = (key) => {
+    const held = heldRaftValues.get(key);
+    if (held && !held.fromCdc) {
+      readOutcomes.set(key, DYNAMIC_CONFIG_STARTUP_OUTCOME.DROPPED_STALE);
+    }
+    heldRaftValues.delete(key);
+  };
   // A CDC value for a key, through the watcher or the heal below.
   const adoptCdcValue = (key, value) => {
     const applyLogging = loggingApplierByKey.get(key);
@@ -494,17 +501,25 @@ async function createDynamicConfigStartupWiring(options = {}) {
       return;
     }
 
+    // CDC wins over a held value too: a deleted row's value never applies.
+    const key = cdcEvent.data?.[CONFIG_TABLE_COLUMN.KEY];
+    const deleted = cdcEvent.operation === CDC_OPERATION.DELETE;
+    if (deleted) {
+      dropHeldValue(key);
+    }
     // A CDC value equal to the cached one fires no watcher, so a key still
     // failed or refused here adopts it directly.
     void dynamicConfigService.handleCDCEvent(cdcEvent).then(async () => {
-      const key = cdcEvent.data[CONFIG_TABLE_COLUMN.KEY];
       const outcome = readOutcomes.get(key);
-      if (closed || cdcEvent.operation === CDC_OPERATION.DELETE ||
+      if (deleted ||
         (outcome !== DYNAMIC_CONFIG_STARTUP_OUTCOME.FAILED &&
           outcome !== DYNAMIC_CONFIG_STARTUP_OUTCOME.REFUSED)) {
         return;
       }
-      adoptCdcValue(key, await dynamicConfigService.get(key));
+      const value = await dynamicConfigService.get(key);
+      if (!closed) {
+        adoptCdcValue(key, value);
+      }
     }).catch((error) => {
       logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.CDC_APPLY_FAILED, {
         error: error.message,

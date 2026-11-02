@@ -21,3 +21,9 @@ f3-get-overwrites (1, ['not ok 6 - F3 P1: durable 130, CDC 210, the stale read, 
 f3-wiring-no-check (1, ['not ok 4 - a spent bound starts on the defaults, a CDC apply reaches the replicas, and the', 'not ok 4 - row 4 ordering: a CDC apply for the key during a late read wins; the late read ', 'not ok 6 - F3 P1: durable 1
 f3-no-count (1, ['not ok 4 - a spent bound starts on the defaults, a CDC apply reaches the replicas, and the', 'not ok 4 - row 4 ordering: a CDC apply for the key during a late read wins; the late read ', 'not ok 6 - F3 P1: durable 130, CDC
 w5 (1, ['not ok 9 - F5 w5: a CDC apply while the startup reads are still inside their bound is seen'])
+
+Added for the small attempt after 0e597e055, over the owned-initialization and CDC shape test files:
+base (0, [])
+d1-held-not-dropped (1, ['not ok 28 - D1: a DELETE CDC drops the held value of its key, which never applies later # time=146.4'])
+w1-delete-heals (1, ['not ok 29 - W1: a DELETE CDC does not heal a failed key # time=97.574ms'])
+w1-closed-not-checked (1, ['not ok 30 - W1: a heal overtaken by shutdown applies nothing # time=96.191ms'])
