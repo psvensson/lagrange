@@ -5,7 +5,7 @@
     "admin-diagnostics": 118,
     "architecture-governance": 21,
     "bootstrap-membership": 330,
-    "cdc-metadata": 68,
+    "cdc-metadata": 69,
     "cli-tooling": 99,
     "control-plane": 225,
     "convergence-topology": 78,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-057fea31",
+  "censusSize": 2557,
+  "digest": "fnv1a32-014c04f2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-782ffe77",
+  "observationDigest": "fnv1a32-3a26c227",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -391,6 +391,7 @@
     "test/cdc/schema-default-application.property.test.js": "cdc-metadata",
     "test/cdc/unique-constraint-handling.property.test.js": "cdc-metadata",
     "test/cdc/websocket-address-derivation.property.test.js": "cdc-metadata",
+    "test/cdc/write-then-read-projection-census.test.js": "cdc-metadata",
     "test/cli/admin-cli-owner-operations.test.js": "cli-tooling",
     "test/cli/core/back-navigation-consistency.property.test.js": "cli-tooling",
     "test/cli/core/base-view-model.test.js": "cli-tooling",
@@ -3946,6 +3947,11 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
       ],
+      "directories": [
+        "src"
+      ]
+    },
+    "test/cdc/write-then-read-projection-census.test.js": {
       "directories": [
         "src"
       ]
