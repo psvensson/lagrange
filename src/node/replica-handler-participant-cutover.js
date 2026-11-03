@@ -403,6 +403,14 @@ async function joinParticipantCutover(handler, current) {
 }
 
 async function runParticipantCutover(handler, request) {
+  // A pending fresh CREATE authorization is confirmed by its create-admission
+  // authority before this attempt joins or starts any release work; while
+  // that authority is unavailable the attempt answers its typed UNAVAILABLE.
+  if (request.authorization !== undefined && request.authorization !== null) {
+    const unconfirmed = await handler.participantReleaseAuthorizationOwner
+      .confirmFreshCreate(request);
+    if (unconfirmed !== null) return unconfirmed;
+  }
   let runs = RUNS.get(handler);
   if (runs === undefined) {
     runs = new Map();

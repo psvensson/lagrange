@@ -81,6 +81,31 @@ function admissionError(code, operationId, message) {
   return error;
 }
 
+function readDeferredError(operationId, authorityOutcome, authorityError) {
+  const error = admissionError(
+    CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+    operationId,
+    `CREATE admission read deferred for ${operationId}`,
+  );
+  error.authorityOutcome = authorityOutcome;
+  error.authorityError = authorityError;
+  return error;
+}
+
+// The deferral names what the authority read answered, so a refusing
+// projection (routing readiness, pressure, no leader) is observable.
+function readRefusedDeferredError(operationId, observation) {
+  return readDeferredError(operationId, observation?.outcome ?? null,
+    observation?.error ?? null);
+}
+
+function readThrewDeferredError(operationId, cause) {
+  const error = readDeferredError(operationId, null,
+    String(cause?.message ?? cause));
+  error.cause = cause;
+  return error;
+}
+
 function isCreateOperationType(value) {
   return value === OperationType.ADD || value === OperationType.REPLACE;
 }
@@ -362,20 +387,10 @@ class ReplicaCreateAdmissionOwner {
         CRITICAL_OPTIONS,
       );
     } catch (cause) {
-      const error = admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        operationId,
-        `CREATE admission read deferred for ${operationId}`,
-      );
-      error.cause = cause;
-      throw error;
+      throw readThrewDeferredError(operationId, cause);
     }
     if (observation?.success !== true) {
-      throw admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        operationId,
-        `CREATE admission read deferred for ${operationId}`,
-      );
+      throw readRefusedDeferredError(operationId, observation);
     }
     return observation.rows?.length === 1 ? observation.rows[0] : null;
   }

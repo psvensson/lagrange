@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "fresh-create-failure-after-committed-admission--fresh-create-failure-after-committed-admission-evidence-6f287f51c-2026-11-02.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-create-failure-after-committed-admission--fresh-create-failure-after-committed-admission-evidence-6f287f51c-2026-11-02.tar.gz",
+      "bundleSha256": "5f5b4b61d0e2a1dc28b6de75c1454705930e36181da4b6036eca6afee731ff51",
+      "sourceCommit": "6f287f51c36d137ef65777018a205952d6a5e45a",
+      "shard": "relocation-inventory/fresh-create-failure-after-committed-admission--fresh-create-failure-after-committed-admission-evidence-6f287f51c-2026-11-02.json",
+      "shardSha256": "a0914f7fc7e120ea51aabc1c1c3532b34afe99679171b36c7b2155fac9e05d63",
+      "verifiedAt": "2026-11-02T13:36:01.343Z",
+      "downloadedSha256": "5f5b4b61d0e2a1dc28b6de75c1454705930e36181da4b6036eca6afee731ff51",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 6,
+      "results": "111111",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

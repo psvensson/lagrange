@@ -31,6 +31,7 @@ const PARTICIPANT_RELEASE_REASON = Object.freeze({
 });
 const PARTICIPANT_RELEASE_MISSING_FACT = Object.freeze({
   COMMITTED_REPLICA_ROUTES: 'committed_replica_routes',
+  CREATE_ADMISSION_AUTHORITY: 'create_admission_authority',
   CURRENT_REPLICA_GENERATION: 'current_replica_generation',
   CURRENT_CONTROL_OWNER: 'current_control_owner_fact',
   FRESH_STORAGE_OR_OPERATOR_AUTHORITY: 'fresh_storage_or_operator_authority',

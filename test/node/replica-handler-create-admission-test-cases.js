@@ -7,6 +7,12 @@ import {bindRegisteredReplicaHandler} from
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationField} from
   '../../src/rebalancer/replica-operation-constants.js';
+import {buildFailedCreateCleanupToken} from
+  '../../src/rebalancer/failed-create-cleanup-token.js';
+import {EXECUTOR_OUTCOME_TYPE} from
+  '../../src/rebalancer/executor-outcome-constants.js';
+import {applyOperationWorkflowExecutorOutcomeReconcileMethods} from
+  '../../src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js';
 import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,
@@ -860,4 +866,112 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       await handler.shutdown();
     },
   );
+  // Quest fresh-create-failure-after-committed-admission, link L3 (run
+  // b26d2c090, 10:29:57.228): a DEFERRED failure after the replica's runtime
+  // opened was written FAILED without a cleanup claim, so no owner ever
+  // removed the configured member. Once the runtime is open the leader may
+  // commit the admission at any time, so the failed create always claims
+  // cleanup; only a failure before any admission input exists may stay
+  // unclaimed for the coordinator's dispatch re-arm.
+  class ExecutorFailureClassifier {
+    isDispatchRetryableWorkflowStep() {
+      return true;
+    }
+  }
+  applyOperationWorkflowExecutorOutcomeReconcileMethods(ExecutorFailureClassifier);
+  for (const failurePoint of ['after-runtime-open', 'before-runtime-open']) {
+    t.test(
+      `L3: a deferred create failure ${failurePoint} claims cleanup only ` +
+      'when the admission may be committed',
+      async (t) => {
+        const operationId = `op-l3-${failurePoint}`;
+        const replicaId = `replica-l3-${failurePoint}`;
+        const cache = createSeededCache();
+        seedReplicaOperation(cache, operationId, {replicaId});
+        const mockCDC = createMockCDCService(cache);
+        const replicaStateMachine = new ReplicaStateMachine({
+          nodeId: 'test-node',
+          systemTableCache: cache,
+          controlPlaneSystemTableGateway:
+            createLifecycleControlPlaneGatewayForCache(cache),
+        });
+        const deferred = () => Object.assign(
+          new Error(`CREATE admission read deferred for ${operationId}`), {
+            code: 'REPLICA_CREATE_ADMISSION_DEFERRED',
+            errorCode: 'REPLICA_CREATE_ADMISSION_DEFERRED',
+            deferRetry: true,
+          });
+        const handler = new ReplicaHandler({
+          nodeId: 'test-node',
+          cdcIntegrationService: mockCDC,
+          systemTableCache: cache,
+          replicaStateMachine,
+          createPartitionService: async (options) => {
+            if (failurePoint === 'before-runtime-open') throw deferred();
+            return bindRegisteredReplicaHandler({
+              partitionId: options.partitionId,
+              replicaId: options.replicaId,
+              initialized: true,
+              async shutdown() {},
+              async syncFromLeader() {},
+            }, options);
+          },
+          dataDir: getTempDir(),
+        });
+        // Fixture seam at the post-open activation step the run failed in.
+        handler.shouldGateActivationOnVoterReadiness = () => true;
+        handler.waitForVoterReadyActivation = async () => {
+          throw deferred();
+        };
+        const failedOutcomes = [];
+        const emitExecutorOutcome = handler.emitExecutorOutcome.bind(handler);
+        handler.emitExecutorOutcome = (outcomeType, outcomeOperationId, step, options) => {
+          if (outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED) {
+            failedOutcomes.push(options);
+          }
+          return emitExecutorOutcome(outcomeType, outcomeOperationId, step, options);
+        };
+        handler.initialize();
+        const failed = new Promise((resolve) => {
+          handler.once('replicaCreationFailed', resolve);
+        });
+        await handler.handleCreateReplica({
+          operationId,
+          partitionId: 'partition-1',
+          replicaId,
+        });
+        await failed;
+        const row = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
+        t.equal(row?.status, ReplicaStatus.FAILED, 'the create failed durably');
+        t.equal(failedOutcomes.length, 1, 'one failed executor outcome');
+        // The coordinator's executor-failure classification of that outcome,
+        // for a critical system partition at a re-armable dispatch step.
+        const coordinator = new ExecutorFailureClassifier();
+        const reconcileState = coordinator.resolveExecutorFailureReconcileState(
+          coordinator.buildExecutorFailureReconcileEvidence(
+            {partitionId: 'replica_operations-p1', workflowStep: 'CREATING'},
+            coordinator.buildExecutorFailureOutcomeErrorLike(failedOutcomes[0],
+              'failed'),
+          ),
+        );
+        if (failurePoint === 'after-runtime-open') {
+          t.equal(row?.cleanup_token, buildFailedCreateCleanupToken(operationId),
+            'a failure after the runtime opened carries the failed-create ' +
+              'cleanup claim');
+          t.equal(failedOutcomes[0].deferRetry, undefined,
+            'a claimed failure emits no deferRetry');
+          t.equal(reconcileState, 'fail_operation',
+            'the coordinator fails, never re-dispatches, a claimed create');
+        } else {
+          t.equal(row?.cleanup_token ?? null, null,
+            'a failure before any admission input stays unclaimed for re-arm');
+          t.equal(failedOutcomes[0].deferRetry, true,
+            'the unclaimed pre-admission failure stays re-dispatchable');
+          t.equal(reconcileState, 'defer_retry',
+            'the coordinator re-dispatches the unclaimed pre-admission create');
+        }
+        await handler.shutdown();
+      },
+    );
+  }
 }

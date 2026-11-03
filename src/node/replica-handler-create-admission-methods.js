@@ -557,6 +557,9 @@ async function restartPendingCreate(handler, existingReplica, createRequest,
   );
   createRequest.pendingStatusPersisted =
     existingReplica.status === ReplicaStatus.PENDING;
+  // The restarted row's status reaches the create's admission-input owner
+  // before any step of the attempt (verifier finding B1).
+  createRequest.resumedLifecycleStatus = existingReplica.status;
   handler.startCreateReplicaAsync(createRequest);
   return handler.buildReplicaOperationResponse(
     ReplicaOperationResponseStatus.INITIATED,

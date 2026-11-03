@@ -1,0 +1,23 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "owner-path-bypass-new-contract-asserted",
+      "passed": true,
+      "evidence": "test/node/replica-handler-owner-path-bypass.test.js subtest 'CREATE failure fences a started learner before publishing failure': for the terminal and the retryable case, 'failure after the runtime opened carries no deferRetry' and '... carries the failed-create cleanup claim' (assertions 5/6 and 11/12), with publication after the fence, absence from routing and no promotion still asserted; red at bba206ddd (old assertion 10), green after the R09 rewrite."
+    },
+    {
+      "id": "terminal-fence-family-green",
+      "passed": true,
+      "evidence": "8 files, 0 failures: owner-path-bypass, replica-runtime-cleanup-custody.integration, raft-rs-backend/initialization-shutdown-serialization.integration, replica-failed-create-cleanup-generation, replica-handler, fresh-create-resumed-syncing-claim, fresh-create-claimed-cleanup-never-admitted, fresh-create-authority-unavailability-native.integration (ordinary 5/590, exclusive 3/16)."
+    },
+    {
+      "id": "coupled-pair-declared",
+      "passed": true,
+      "evidence": "test/shards/impact-contracts.json contract replica-create-failure-claim-and-retry-type (audit:impact-contracts PASS)."
+    }
+  ],
+  "evidence": [],
+  "applicability": "Records and test only on land/fresh-create-failure-after-committed-admission-v2-20261103 at bba206ddd; no src change."
+}

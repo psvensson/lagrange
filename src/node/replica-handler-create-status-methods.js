@@ -456,6 +456,9 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         status: ReplicaStatus.SYNCING,
         service: null,
       });
+      // Reported to the create's admission-input owner: the resumed row is
+      // the leader's admission input (replica-create-admission-input.js).
+      options.resumedLifecycleStatus = ReplicaStatus.SYNCING;
       return true;
     }
 

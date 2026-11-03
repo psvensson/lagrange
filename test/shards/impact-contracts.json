@@ -1916,6 +1916,21 @@
         "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
         "test/node/replica-handler.test.js"
       ]
+    },
+    "replica-create-failure-claim-and-retry-type": {
+      "description": "A failed replica CREATE whose admission input may exist (runtime opened, or its own admissible durable row resumed) is published as a terminal create failure carrying the failed-create cleanup claim and no deferRetry; only a create whose admission input is absent may stay unclaimed and re-dispatchable. The owner-path guard and the fresh-create witnesses exercise that rule.",
+      "owners": [
+        "src/node/replica-create-admission-input.js",
+        "src/node/replica-handler-create-methods.js",
+        "src/node/replica-handler-create-status-methods.js",
+        "src/node/replica-handler-create-admission-methods.js"
+      ],
+      "tests": [
+        "test/node/replica-handler-owner-path-bypass.test.js",
+        "test/node/fresh-create-resumed-syncing-claim.test.js",
+        "test/node/replica-handler.test.js",
+        "test/node/fresh-create-authority-unavailability-native.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
