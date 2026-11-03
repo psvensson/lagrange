@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "management-v1-fail-closed-authority",
+  "class": "fix",
+  "statement": "The lagrange.management.v1 HTTP surface fails closed on authority and never reports fabricated state. /management/v1/* routes refuse before any management owner exists or acts when control-plane credentials are unconfigured (typed CONTROL_PLANE_AUTH_UNCONFIGURED) or the presented credentials are wrong; the cluster identity comes only from the established cluster record, reads as unknown when unestablished and refuses identity-bound operations with a typed code, and the genuine identity survives restart and restore; absent runtime health, capacity and topology snapshots read as unknown with a typed reason and never grant operation admission; backup, restore, rolling upgrade and node decommission without their installed physical adapters are refused as capability-unsupported before any effect and can never report SUCCEEDED, with no in-memory or synthetic substitute in production composition. Node-to-node bootstrap/registration route authentication is out of scope (0.5 cluster trust) and is recorded as a finding.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/management-v1-fail-closed-authority/evidence/receipt.json",
+      "requiredReceipts": [
+        "unauthorized-refused-before-owner-effects",
+        "absent-credentials-refused",
+        "cluster-identity-never-fabricated",
+        "capability-absent-unsupported-no-effect",
+        "identity-survives-restart-and-restore",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-bypass",
+      "statement": "No development bypass, alias, compatibility path or default that turns a missing credential, identity, snapshot or adapter into success. Every deployment or test path that uses management routes configures credentials explicitly."
+    },
+    {
+      "id": "real-route-proof",
+      "statement": "Authorization and capability receipts are proven through the BootstrapAPI Fastify server as production composes it, with real HTTP requests, asserting absence of effect through the owner's declared ports."
+    },
+    {
+      "id": "scope",
+      "statement": "No full backup/PITR, rolling-upgrade or decommission execution is implemented; node-to-node bootstrap/registration authentication behaviour is unchanged."
+    }
+  ],
+  "sealedAt": "2fca51dc9a2f0344e23f0535dfa50fe0e000b674"
+}

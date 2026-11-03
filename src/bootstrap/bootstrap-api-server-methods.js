@@ -11,6 +11,8 @@ import {
   BOOTSTRAP_API_HEALTH_STATUS_INITIALIZING,
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_ROUTE,
+  CONTROL_PLANE_AUTH_REFUSAL,
+  CONTROL_PLANE_AUTHORITY,
 } from './bootstrap-api-constants.js';
 import {installBootstrapApiMethods} from './bootstrap-api-method-installer.js';
 import {ManagementV1Owner} from './owners/management-v1-owner.js';
@@ -49,7 +51,6 @@ async function ensureInProcessSeedTransportReady(adapter) {
 
 const ENCODING_BASE64 = 'base64';
 const ENCODING_UTF8 = 'utf8';
-const ERR_AUTHENTICATION_REQUIRED = 'Authentication required';
 
 function parseBasicCredentialsHeader(authHeader) {
   if (typeof authHeader !== 'string') return null;
@@ -70,23 +71,54 @@ function parseBasicCredentialsHeader(authHeader) {
 }
 
 function sendControlPlaneUnauthorized(reply) {
-  reply.code(HTTP_STATUS.UNAUTHORIZED).send({error: ERR_AUTHENTICATION_REQUIRED});
+  reply.code(HTTP_STATUS.UNAUTHORIZED)
+    .send({error: CONTROL_PLANE_AUTH_REFUSAL.UNAUTHORIZED_MESSAGE});
   return false;
 }
 
+const MANAGEMENT_AUTH_REFUSALS = Object.freeze({
+  [CONTROL_PLANE_AUTHORITY.UNAUTHORIZED]: Object.freeze({
+    status: HTTP_STATUS.UNAUTHORIZED,
+    body: Object.freeze({
+      error: CONTROL_PLANE_AUTH_REFUSAL.UNAUTHORIZED_MESSAGE,
+      code: CONTROL_PLANE_AUTH_REFUSAL.UNAUTHORIZED_CODE,
+    }),
+  }),
+  [CONTROL_PLANE_AUTHORITY.UNCONFIGURED]: Object.freeze({
+    status: HTTP_STATUS.FORBIDDEN,
+    body: Object.freeze({
+      error: CONTROL_PLANE_AUTH_REFUSAL.UNCONFIGURED_MESSAGE,
+      code: CONTROL_PLANE_AUTH_REFUSAL.UNCONFIGURED_CODE,
+    }),
+  }),
+});
+
+/**
+ * Management routes fail closed: only an AUTHORIZED decision reaches the
+ * management owner; it is not even constructed for a refused request.
+ */
+async function handleManagementRoute(server, request, reply, handle) {
+  const authority = await server.resolveControlPlaneAuthority(request);
+  if (authority !== CONTROL_PLANE_AUTHORITY.AUTHORIZED) {
+    const refusal = MANAGEMENT_AUTH_REFUSALS[authority];
+    return reply.code(refusal.status).send(refusal.body);
+  }
+  return handle(server.getManagementV1Owner());
+}
+
 async function handleManagementFactsRoute(server, request, reply) {
-  if (!(await server.verifyControlPlaneAuth(request, reply))) return undefined;
-  return server.getManagementV1Owner().handleGetFactsRequest(request, reply);
+  return handleManagementRoute(server, request, reply,
+    (owner) => owner.handleGetFactsRequest(request, reply));
 }
 
 async function handleManagementOperationsRoute(server, request, reply) {
-  if (!(await server.verifyControlPlaneAuth(request, reply))) return undefined;
-  return server.getManagementV1Owner().handlePostOperationRequest(request, reply);
+  return handleManagementRoute(server, request, reply,
+    (owner) => owner.handlePostOperationRequest(request, reply));
 }
 
 async function handleManagementOperationByIdRoute(server, request, reply) {
-  if (!(await server.verifyControlPlaneAuth(request, reply))) return undefined;
-  return server.getManagementV1Owner().handleGetOperationStatusRequest(request, reply);
+  return handleManagementRoute(server, request, reply,
+    (owner) => owner.handleGetOperationStatusRequest(request, reply));
 }
 
 const bootstrapApiServerMethods = {
@@ -224,33 +256,47 @@ const bootstrapApiServerMethods = {
   },
 
   /**
-   * Verify HTTP authentication for internal control plane endpoints.
+   * Decide the control-plane authority of one HTTP request.
+   * @param {Object} request - Fastify request.
+   * @return {Promise<string>} One of CONTROL_PLANE_AUTHORITY.
+   */
+  async resolveControlPlaneAuthority(request) {
+    if (typeof this.authenticateControlRequest === FUNCTION_TYPE) {
+      try {
+        return (await this.authenticateControlRequest(request)) ?
+          CONTROL_PLANE_AUTHORITY.AUTHORIZED :
+          CONTROL_PLANE_AUTHORITY.UNAUTHORIZED;
+      } catch (_err) {
+        return CONTROL_PLANE_AUTHORITY.UNAUTHORIZED;
+      }
+    }
+    const expectedUser = this.controlAuthEnv?.PGWIRE_AUTH_USER;
+    const expectedPassword = this.controlAuthEnv?.PGWIRE_AUTH_PASSWORD;
+    if (!expectedUser || !expectedPassword) {
+      return CONTROL_PLANE_AUTHORITY.UNCONFIGURED;
+    }
+    const creds = parseBasicCredentialsHeader(request.headers?.authorization);
+    const matches = Boolean(creds) &&
+      safeStringEqual(creds.user, expectedUser) &&
+      safeStringEqual(creds.password, expectedPassword);
+    return matches ?
+      CONTROL_PLANE_AUTHORITY.AUTHORIZED :
+      CONTROL_PLANE_AUTHORITY.UNAUTHORIZED;
+  },
+
+  /**
+   * Node-to-node control routes (bootstrap, register-service, cluster state).
+   * They still admit UNCONFIGURED; that policy belongs to the 0.5 cluster
+   * trust owner and is recorded as a finding of management-v1-fail-closed-authority.
    * @param {Object} request - Fastify request.
    * @param {Object} reply - Fastify reply.
    * @return {Promise<boolean>} Whether the request is authorized.
    */
   async verifyControlPlaneAuth(request, reply) {
-    if (typeof this.authenticateControlRequest === FUNCTION_TYPE) {
-      try {
-        const authorized = await this.authenticateControlRequest(request);
-        return authorized ? true : sendControlPlaneUnauthorized(reply);
-      } catch (_err) {
-        return sendControlPlaneUnauthorized(reply);
-      }
-    }
-
-    const expectedUser = this.controlAuthEnv?.PGWIRE_AUTH_USER;
-    const expectedPassword = this.controlAuthEnv?.PGWIRE_AUTH_PASSWORD;
-    if (!expectedUser || !expectedPassword) {
-      return true;
-    }
-    const creds = parseBasicCredentialsHeader(request.headers?.authorization);
-    if (!creds ||
-        !safeStringEqual(creds.user, expectedUser) ||
-        !safeStringEqual(creds.password, expectedPassword)) {
-      return sendControlPlaneUnauthorized(reply);
-    }
-    return true;
+    const authority = await this.resolveControlPlaneAuthority(request);
+    return authority === CONTROL_PLANE_AUTHORITY.UNAUTHORIZED ?
+      sendControlPlaneUnauthorized(reply) :
+      true;
   },
 
   /**
@@ -268,21 +314,17 @@ const bootstrapApiServerMethods = {
     throw new Error(BOOTSTRAP_API_ERROR.REGISTER_NODE_UNSUPPORTED);
   },
 
+  /**
+   * Build the management owner from the cluster record and the declared
+   * adapter ports only. Production composition installs no adapters, so every
+   * physical capability reports unsupported.
+   * @return {ManagementV1Owner}
+   */
   getManagementV1Owner() {
     if (!this.managementV1Owner) {
-      const configured = this.managementOptions || {};
       this.managementV1Owner = new ManagementV1Owner({
-        ...configured,
-        exportPartitionSnapshots:
-          configured.exportPartitionSnapshots || this.exportPartitionSnapshots,
-        getClusterId: () => this.getClusterId?.() || this.seedNodeId,
-        getPartitions: configured.getPartitions || this.getPartitions,
-        hydratePartitionSnapshots:
-          configured.hydratePartitionSnapshots || this.hydratePartitionSnapshots,
-        onHydratePartitions:
-          configured.onHydratePartitions || this.onHydratePartitions,
-        storageAdapter: configured.storageAdapter || this.backupStorageAdapter,
-        supportEnvelope: configured.supportEnvelope || this.supportEnvelope,
+        ...this.managementAdapters,
+        getClusterId: () => this.getClusterId(),
       });
     }
     return this.managementV1Owner;

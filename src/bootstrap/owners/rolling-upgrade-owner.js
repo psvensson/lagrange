@@ -15,7 +15,7 @@ import {
 const UNSET = null;
 const ARTIFACT_SHA256_PREFIX = 'sha256:';
 const SEMVER_SEPARATOR_DOT = '.';
-const DEFAULT_SINGLE_NODE_ID = 'node-1';
+const FUNCTION_TYPE = 'function';
 const SEMVER_PARTS_COUNT = 3;
 const ARTIFACT_DIGEST_MIN_LENGTH = 10;
 const D_VER = MANAGEMENT_V1_CONTRACT.DEFAULT_RELEASE_VERSION;
@@ -23,9 +23,9 @@ const D_DIG = MANAGEMENT_V1_CONTRACT.DEFAULT_ARTIFACT_DIGEST;
 const D_TIMEOUT = MANAGEMENT_V1_CONTRACT.DEFAULT_NODE_UPGRADE_TIMEOUT_MS;
 const PREFLIGHT_SUCCESS = Object.freeze({ok: true, valid: true, reasonCode: UNSET});
 const OWNER_DEFAULTS = Object.freeze({
-  capabilitySupported: true, currentVersion: D_VER, currentArtifactDigest: D_DIG,
+  currentVersion: D_VER, currentArtifactDigest: D_DIG,
   isVersionCompatible: defaultIsVersionCompatible, nodeUpgradeTimeoutMs: D_TIMEOUT,
-  getClusterSnapshot: UNSET, onDrainNodeLeadership: UNSET, onSetNodeReadyz: UNSET,
+  onDrainNodeLeadership: UNSET, onSetNodeReadyz: UNSET,
   onTriggerNodeRestart: UNSET, onPersistState: UNSET, activeOperation: UNSET,
   nodePlan: UNSET, currentNodeIndex: -1, versionSkew: false,
   initialOperationState: OP_STATE.ACCEPTED, supportEnvelope: UNSET, exactVersionPair: UNSET,
@@ -60,10 +60,20 @@ function checkSafetyFailure(quorumHealthy, mixedVersionViolated) {
     (mixedVersionViolated === true ? L4_CODE.MIXED_VERSION_INVARIANT_VIOLATED : UNSET);
 }
 
+function isCount(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+function resolveReadyCount(snap) {
+  if (Array.isArray(snap.readyNodeIds)) return snap.readyNodeIds.length;
+  return isCount(snap.readyNodeCount) ? snap.readyNodeCount : 0;
+}
+/** An absent or incomplete snapshot is never read as a ready cluster. */
+function isSnapshotIncomplete(snap) {
+  return !snap || !Array.isArray(snap.nodeIds) || snap.nodeIds.length === 0 ||
+    !isCount(snap.underReplicatedPartitionCount);
+}
 function isClusterNotReady(snap) {
-  const tot = snap.nodeIds ? snap.nodeIds.length : (snap.nodeCount || 0);
-  const rdy = snap.readyNodeIds ? snap.readyNodeIds.length : (snap.readyNodeCount ?? tot);
-  return snap.ready === false || (tot > 0 && rdy < tot);
+  return snap.ready === false || resolveReadyCount(snap) < snap.nodeIds.length;
 }
 function isOutsideSupportEnvelope(owner, targetVersion) {
   const configuredEnvelope = owner.supportEnvelope || owner.exactVersionPair;
@@ -76,24 +86,19 @@ function isOutsideSupportEnvelope(owner, targetVersion) {
 }
 function findPreflightFailure(owner, params, snap) {
   const [tVer, tDig] = [params?.targetVersion, params?.targetArtifactDigest];
-  const lag = snap.underReplicatedPartitionCount || 0;
+  if (!owner.capabilitySupported) return L4_CODE.UPGRADE_CAPABILITY_UNSUPPORTED;
+  if (isSnapshotIncomplete(snap)) return L4_CODE.CLUSTER_NOT_READY;
   const hit = [
-    [!owner.capabilitySupported, L4_CODE.UPGRADE_CAPABILITY_UNSUPPORTED],
     [snap.hasActiveOperation === true || owner.hasActiveUpgrade(),
       L4_CODE.CONCURRENT_OPERATION_ACTIVE],
     [isOutsideSupportEnvelope(owner, tVer), L4_CODE.OUTSIDE_SUPPORT_ENVELOPE],
     [!owner.checkVersionCompatible(tVer), L4_CODE.RELEASE_VERSION_INCOMPATIBLE],
     [Boolean(tDig && !owner.checkArtifactDigest(tVer, tDig)), L4_CODE.ARTIFACT_DIGEST_MISMATCH],
     [isClusterNotReady(snap), L4_CODE.CLUSTER_NOT_READY],
-    [lag > 0, L4_CODE.UNDER_REPLICATED_PARTITIONS],
+    [snap.underReplicatedPartitionCount > 0, L4_CODE.UNDER_REPLICATED_PARTITIONS],
     [snap.capacityState === FACTS.CAPACITY_PRESSURED, L4_CODE.STORAGE_CAPACITY_PRESSURED],
   ].find(([failed]) => failed);
   return hit ? hit[1] : UNSET;
-}
-function resolveClusterNodeIds(snap, currentVersions) {
-  const ids = snap.nodeIds?.length ? snap.nodeIds : Object.keys(snap.nodeVersions || {});
-  const cur = Object.keys(currentVersions);
-  return ids.length ? ids : (cur.length ? cur : [DEFAULT_SINGLE_NODE_ID]);
 }
 function isClusterAlreadyUpgraded(owner, nodeIds, tVer, tDig, snapSkew) {
   return nodeIds.every((id) => owner.nodeVersions[id] === tVer) &&
@@ -153,8 +158,15 @@ function restorePersistedCollections(owner, s) {
 }
 
 class RollingUpgradeOwner {
+  /**
+   * @param {Object} [options] - Rolling upgrade is supported only when both
+   *   physical ports, onDrainNodeLeadership and onTriggerNodeRestart, are
+   *   installed; no option can claim the capability without them.
+   */
   constructor(options = {}) {
     Object.assign(this, OWNER_DEFAULTS, options);
+    this.capabilitySupported = typeof this.onDrainNodeLeadership === FUNCTION_TYPE &&
+      typeof this.onTriggerNodeRestart === FUNCTION_TYPE;
     this.operations = new Map();
     this.drainingNodeIds = new Set();
     this.nodeVersions = {...(options.nodeVersions || {})};
@@ -173,14 +185,14 @@ class RollingUpgradeOwner {
   hasActiveUpgrade() {
     return Boolean(this.activeOperation && !TERM_STATES.includes(this.activeOperation.state));
   }
-  evaluatePreflight(parameters, clusterSnapshot = {}) {
+  evaluatePreflight(parameters, clusterSnapshot) {
     const code = findPreflightFailure(this, parameters, clusterSnapshot);
     return code ? {ok: false, valid: false, reasonCode: code} : PREFLIGHT_SUCCESS;
   }
   startUpgrade({operationId, lagrangeOperationId, parameters, clusterSnapshot, nowMs}) {
     const timeMs = Number.isFinite(nowMs) ? nowMs : Date.now();
     if (this.operations.has(operationId)) return this.getOperationStatus(operationId);
-    const snap = clusterSnapshot || (this.getClusterSnapshot?.() || {});
+    const snap = clusterSnapshot ?? UNSET;
     const code = findPreflightFailure(this, parameters, snap);
     if (code) {
       return commitActiveOp(this, operationId, buildOperationRecord(
@@ -190,7 +202,7 @@ class RollingUpgradeOwner {
   }
   initiatePlan(opId, lagrangeOpId, params, snap, timeMs) {
     const [tVer, tDig] = [params?.targetVersion, params?.targetArtifactDigest];
-    const nodeIds = resolveClusterNodeIds(snap, this.nodeVersions);
+    const nodeIds = snap.nodeIds;
     for (const id of nodeIds) this.nodeVersions[id] = this.nodeVersions[id] || this.currentVersion;
     if (isClusterAlreadyUpgraded(this, nodeIds, tVer, tDig, snap.versionSkew)) {
       return commitActiveOp(this, opId, buildOperationRecord(
