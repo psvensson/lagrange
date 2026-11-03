@@ -189,6 +189,7 @@ function propagationIsProvisional(answer, cdcEvent, groupId) {
   throw Object.assign(new Error(CDC_COMPLETION.UNKNOWN), {
     code: CDC_COMPLETION.UNKNOWN, cause: answer, deferRetry: true,
     ...(retryAfterMs !== undefined ? {retryAfterMs} : {}),
+    ...(typeof answer?.reason === 'string' ? {reason: answer.reason} : {}),
   });
 }
 

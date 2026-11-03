@@ -4,6 +4,10 @@ import {TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  clearRegisteredControlPlaneSystemTableGateway,
+  registerControlPlaneSystemTableGateway,
+} from '../../src/control-plane/control-plane-gateway-registry.js';
 import './admin-control-snapshot-publication-convergence-test-cases.js';
 import './admin-control-snapshot-repair-handoff-outcome-test-cases.js';
 import './admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js';
@@ -80,3 +84,37 @@ test('AdminControlSnapshot falls back to cached services and replica operations 
   const res = await snapshot.buildLocalControlSnapshot({});
   t.ok(res, 'should fall back to cached services and operations');
 });
+
+test('AdminControlSnapshot late-resolves gateway from global registry when constructed without one', async (t) => {
+  clearRegisteredControlPlaneSystemTableGateway();
+  const authServices = [{service_id: 'late-auth', state: 'active'}];
+  const applied = [];
+  const lateGateway = {
+    async querySystemTable(tbl) {
+      return tbl === TABLES.SERVICES ? {rows: authServices} : {rows: []};
+    },
+    applySystemTableRowsToCache(target, tbl, rows) {
+      applied.push({tbl, rows});
+    },
+  };
+
+  const cache = {
+    getAll: () => [],
+  };
+
+  const snapshot = new AdminControlSnapshot({
+    systemTableCache: cache,
+    nowFn: () => 2000,
+  });
+
+  registerControlPlaneSystemTableGateway(lateGateway);
+  try {
+    const res = await snapshot.buildLocalControlSnapshot({});
+    t.ok(res, 'snapshot built successfully');
+    t.equal(applied.length, 2, 'authoritative tables applied via late-resolved gateway');
+    t.equal(applied[0].tbl, TABLES.SERVICES);
+  } finally {
+    clearRegisteredControlPlaneSystemTableGateway();
+  }
+});
+

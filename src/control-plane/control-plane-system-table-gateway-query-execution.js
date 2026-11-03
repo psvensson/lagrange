@@ -484,11 +484,11 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       const row = rows[i];
       if (row && typeof row === 'object') {
         try {
-          writableCache.applySystemTableChange({
-            operation: CDC_OPERATION.UPDATE,
+          writableCache.applySystemTableChange(
             tableName,
-            after: row,
-          });
+            CDC_OPERATION.UPDATE,
+            row,
+          );
         } catch (e) {
           this.logger?.debug?.('control_plane_gateway_apply_cache_failed', {
             tableName,
@@ -500,6 +500,31 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   },
 };
 
+function applyCommittedPartitionCdcEventToCache(
+  systemTableCache,
+  cdcEvent,
+  observedAtMs = Date.now(),
+) {
+  if (
+    !systemTableCache ||
+    typeof systemTableCache.applySystemTableChange !== 'function' ||
+    !cdcEvent?.tableName ||
+    !cdcEvent?.operation ||
+    !cdcEvent?.data
+  ) {
+    return;
+  }
+  systemTableCache.applySystemTableChange(
+    cdcEvent.tableName,
+    cdcEvent.operation,
+    cdcEvent.data,
+    {
+      causeId: cdcEvent.causeId,
+      cdcObservedAtMs: observedAtMs,
+    },
+  );
+}
+
 function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
   Object.assign(
     targetClass.prototype,
@@ -507,4 +532,7 @@ function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
   );
 }
 
-export {assignControlPlaneSystemTableGatewayQueryExecution};
+export {
+  applyCommittedPartitionCdcEventToCache,
+  assignControlPlaneSystemTableGatewayQueryExecution,
+};

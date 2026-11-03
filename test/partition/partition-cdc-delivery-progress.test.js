@@ -450,4 +450,9 @@ test('handleDeliveryFailure logs at debug level on backpressure and warn on othe
   const transientError = {message: 'connection reset', reason: 'connection_reset'};
   handleDeliveryFailure(mockDelivery, mockLane, obligation, 'error', false, transientError);
   assert.equal(warnCalls.length, 1, 'logged at warn level for transient error');
+
+  const causedBackpressureError = {message: 'busy', cause: {reason: CDC_COMPLETION.BACKPRESSURE}, retryAfterMs: 50};
+  handleDeliveryFailure(mockDelivery, mockLane, obligation, 'error', false, causedBackpressureError);
+  assert.equal(debugCalls.length, 2, 'logged at debug level for caused backpressure');
+  assert.equal(warnCalls.length, 1, 'did not log at warn level for caused backpressure');
 });

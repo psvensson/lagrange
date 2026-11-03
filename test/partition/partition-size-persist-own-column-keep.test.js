@@ -91,3 +91,10 @@ test('site 7: a leadership change clears the kept size', async (t) => {
   t.same(writes, [4096, 4096],
     'the next term dedupes against nothing it did not write');
 });
+
+test('site 7: partitions system table skips size persistence', async (t) => {
+  const {partition, writes} = leaderPartition();
+  partition.tableName = 'partitions';
+  await partition.persistPartitionSize(4096);
+  t.same(writes, [], 'partitions system table never writes size_bytes into itself');
+});

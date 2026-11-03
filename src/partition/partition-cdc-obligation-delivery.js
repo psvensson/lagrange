@@ -637,7 +637,7 @@ function handleDeliveryFailure(delivery, lane, obligation, reason, delivered, er
     retryDelayMs,
     delivered,
   };
-  if (error?.reason === CDC_COMPLETION.BACKPRESSURE) {
+  if (isBackpressureError(error)) {
     owner.logger.debug?.(LOG_MSG.DELIVERY_HELD, logDetails);
   } else {
     owner.logger.warn(LOG_MSG.DELIVERY_HELD, logDetails);

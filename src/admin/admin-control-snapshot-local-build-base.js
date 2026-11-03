@@ -32,6 +32,7 @@ import {
   buildCurrentPriorityPlacementObservation,
 } from './admin-control-snapshot-current-priority-placement.js';
 import {AdminCacheOwnerState} from './admin-cache-owner-state.js';
+import {getRegisteredControlPlaneSystemTableGateway} from '../control-plane/control-plane-gateway-registry.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -399,18 +400,35 @@ function resolveInjectedControlSnapshotLogger(logger) {
   return logger || null;
 }
 
+function resolveBlockedPartitionCount(summary) {
+  return Array.isArray(summary?.blockedPartitions) ?
+    summary.blockedPartitions.length :
+    Infinity;
+}
+
+function hasPriorityMetricMismatch(targetSummary, liveSummary) {
+  return (
+    Number(liveSummary?.distinctNodesWithPriorityPartitionCount) !==
+      Number(targetSummary?.distinctNodesWithPriorityPartitionCount) ||
+    Number(liveSummary?.priorityPartitionsBelowRequiredReplicationCount) !==
+      Number(targetSummary?.priorityPartitionsBelowRequiredReplicationCount)
+  );
+}
+
 function shouldOverlayPrioritySummary(targetSummary, liveSummary) {
-  if (targetSummary?.satisfied === true) {
-    return liveSummary?.satisfied === true;
+  if (!liveSummary || typeof liveSummary !== 'object') {
+    return false;
   }
-  if (liveSummary?.satisfied === true) {
+  if (liveSummary.satisfied === true || targetSummary?.satisfied !== true) {
     return true;
   }
-  const liveBlocked = Array.isArray(liveSummary?.blockedPartitions) ?
-    liveSummary.blockedPartitions.length : Infinity;
-  const targetBlocked = Array.isArray(targetSummary?.blockedPartitions) ?
-    targetSummary.blockedPartitions.length : Infinity;
-  return liveBlocked <= targetBlocked;
+  if (hasPriorityMetricMismatch(targetSummary, liveSummary)) {
+    return true;
+  }
+  return (
+    resolveBlockedPartitionCount(liveSummary) <=
+    resolveBlockedPartitionCount(targetSummary)
+  );
 }
 
 function overlayLivePriorityPartitionSummary(
@@ -488,6 +506,16 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
     this.logger = resolveInjectedControlSnapshotLogger(deps.logger);
   }
 
+  resolveSnapshotSystemTableGateway() {
+    this.controlPlaneSystemTableGateway =
+      this.controlPlaneSystemTableGateway ||
+      getRegisteredControlPlaneSystemTableGateway() ||
+      this.sqlQueryEngine?.controlPlaneSystemTableGateway ||
+      this.sqlQueryEngine?.rebalanceCoordinator?.controlPlaneSystemTableGateway ||
+      null;
+    return this.controlPlaneSystemTableGateway;
+  }
+
   async resolveAuthoritativeSnapshotRows(gateway, tableName) {
     if (!gateway || typeof gateway.querySystemTable !== 'function') {
       return null;
@@ -538,11 +566,48 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
     ) {
       throw new Error(ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_UNAVAILABLE);
     }
-    const tableRows = systemTableCache.getAll(TABLES.TABLES);
-    const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
+    const gateway = this.resolveSnapshotSystemTableGateway();
     let replicaOperationRows = systemTableCache.getAll(
       TABLES.REPLICA_OPERATIONS,
     );
+    let serviceRows = systemTableCache.getAll(TABLES.SERVICES);
+
+    if (
+      options.boundedObservationProbe !== true &&
+      gateway
+    ) {
+      const authoritativeServices =
+        await this.resolveAuthoritativeSnapshotRows(
+          gateway,
+          TABLES.SERVICES,
+        );
+      if (
+        Array.isArray(authoritativeServices) &&
+        authoritativeServices.length > 0
+      ) {
+        serviceRows = authoritativeServices;
+        gateway.applySystemTableRowsToCache?.(
+          cacheOwner.cacheMutationTarget || systemTableCache,
+          TABLES.SERVICES,
+          authoritativeServices,
+        );
+      }
+      const authoritativeOperations =
+        await this.resolveAuthoritativeSnapshotRows(
+          gateway,
+          TABLES.REPLICA_OPERATIONS,
+        );
+      if (Array.isArray(authoritativeOperations)) {
+        replicaOperationRows = authoritativeOperations;
+        gateway.applySystemTableRowsToCache?.(
+          cacheOwner.cacheMutationTarget || systemTableCache,
+          TABLES.REPLICA_OPERATIONS,
+          authoritativeOperations,
+        );
+      }
+    }
+    const tableRows = systemTableCache.getAll(TABLES.TABLES);
+    const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
     const capturedAt = this.nowFn();
     const preferAuthoritativePublicationRead =
       options.preferAuthoritativePublicationRead === true ||
@@ -569,41 +634,6 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       return null;
     }
     const nodeRows = systemTableCache.getAll(TABLES.NODES);
-    let serviceRows = systemTableCache.getAll(TABLES.SERVICES);
-    if (
-      options.boundedObservationProbe !== true &&
-      this.controlPlaneSystemTableGateway
-    ) {
-      const authoritativeServices =
-        await this.resolveAuthoritativeSnapshotRows(
-          this.controlPlaneSystemTableGateway,
-          TABLES.SERVICES,
-        );
-      if (
-        Array.isArray(authoritativeServices) &&
-        authoritativeServices.length > 0
-      ) {
-        serviceRows = authoritativeServices;
-        this.controlPlaneSystemTableGateway.applySystemTableRowsToCache?.(
-          cacheOwner.cacheMutationTarget || systemTableCache,
-          TABLES.SERVICES,
-          authoritativeServices,
-        );
-      }
-      const authoritativeOperations =
-        await this.resolveAuthoritativeSnapshotRows(
-          this.controlPlaneSystemTableGateway,
-          TABLES.REPLICA_OPERATIONS,
-        );
-      if (Array.isArray(authoritativeOperations)) {
-        replicaOperationRows = authoritativeOperations;
-        this.controlPlaneSystemTableGateway.applySystemTableRowsToCache?.(
-          cacheOwner.cacheMutationTarget || systemTableCache,
-          TABLES.REPLICA_OPERATIONS,
-          authoritativeOperations,
-        );
-      }
-    }
     const nodeEndpointRows = systemTableCache.getAll(
       TABLES.NODE_ENDPOINTS,
     );
