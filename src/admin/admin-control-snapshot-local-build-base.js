@@ -573,14 +573,20 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
     let serviceRows = systemTableCache.getAll(TABLES.SERVICES);
 
     if (
-      options.boundedObservationProbe !== true &&
+      options.skipAuthoritativeSnapshotRowRefresh !== true &&
       gateway
     ) {
-      const authoritativeServices =
-        await this.resolveAuthoritativeSnapshotRows(
-          gateway,
-          TABLES.SERVICES,
-        );
+      const [authoritativeServices, authoritativeOperations] =
+        await Promise.all([
+          this.resolveAuthoritativeSnapshotRows(
+            gateway,
+            TABLES.SERVICES,
+          ),
+          this.resolveAuthoritativeSnapshotRows(
+            gateway,
+            TABLES.REPLICA_OPERATIONS,
+          ),
+        ]);
       if (
         Array.isArray(authoritativeServices) &&
         authoritativeServices.length > 0
@@ -592,11 +598,6 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
           authoritativeServices,
         );
       }
-      const authoritativeOperations =
-        await this.resolveAuthoritativeSnapshotRows(
-          gateway,
-          TABLES.REPLICA_OPERATIONS,
-        );
       if (Array.isArray(authoritativeOperations)) {
         replicaOperationRows = authoritativeOperations;
         gateway.applySystemTableRowsToCache?.(

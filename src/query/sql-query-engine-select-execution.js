@@ -49,7 +49,63 @@ const {
   isRetryableControlPlaneError,
 } = SQL_QUERY_ENGINE_SHARED;
 
+// ends-on: authoritative table and partition routing metadata query answers
+const METADATA_LOOKUP_TIMEOUT_MS = 2500;
+const LOOKUP_TABLE_SQL = 'SELECT * FROM tables WHERE table_name = ?';
+const LOOKUP_PARTITIONS_SQL = 'SELECT * FROM partitions WHERE table_name = ?';
+
+async function fetchAuthoritativeTableRows(gateway, targetName) {
+  let timer = null;
+  try {
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(null), METADATA_LOOKUP_TIMEOUT_MS);
+    });
+    const fetch = Promise.all([
+      gateway.readAuthoritativeRows(TABLES.TABLES, LOOKUP_TABLE_SQL, [targetName]),
+      gateway.readAuthoritativeRows(TABLES.PARTITIONS, LOOKUP_PARTITIONS_SQL, [targetName]),
+    ]);
+    const outcome = await Promise.race([fetch, timeout]);
+    if (timer !== null) clearTimeout(timer);
+    return Array.isArray(outcome) ? outcome : null;
+  } catch {
+    if (timer !== null) clearTimeout(timer);
+    return null;
+  }
+}
+
+function applyAuthoritativeRowsToStore(store, gateway, outcome) {
+  if (!Array.isArray(outcome)) return false;
+  const [tableResult, partitionResult] = outcome;
+  let applied = false;
+  if (Array.isArray(tableResult?.rows) && tableResult.rows.length > 0) {
+    gateway.applySystemTableRowsToCache?.(store, TABLES.TABLES, tableResult.rows);
+    applied = true;
+  }
+  if (Array.isArray(partitionResult?.rows) && partitionResult.rows.length > 0) {
+    gateway.applySystemTableRowsToCache?.(store, TABLES.PARTITIONS, partitionResult.rows);
+    applied = true;
+  }
+  return applied;
+}
+
 class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
+  async refreshTableRoutingMetadataFromAuthority(tableName) {
+    const gateway =
+      this.getControlPlaneSystemTableGateway?.() ||
+      this.controlPlaneSystemTableGateway ||
+      null;
+    if (
+      !gateway ||
+      typeof gateway.readAuthoritativeRows !== 'function' ||
+      !this.systemCache ||
+      typeof tableName !== 'string' ||
+      tableName.length === 0
+    ) {
+      return false;
+    }
+    const outcome = await fetchAuthoritativeTableRows(gateway, tableName);
+    return applyAuthoritativeRowsToStore(this.systemCache, gateway, outcome);
+  }
   /**
    * Create one control-plane timeout budget.
    * @param {number} configuredBudgetMs
@@ -283,10 +339,24 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     );
     const planningDurationMs = Date.now() - planningStartTimeMs;
     const rootAlias = ast.from.alias || tableName;
-    const rootPlan =
+    let rootPlan =
       distributedPlan.tablePlans.get(rootAlias) ||
       distributedPlan.tablePlans.get(tableName) ||
       null;
+
+    if (!rootPlan || rootPlan.partitions.length === 0) {
+      if (await this.refreshTableRoutingMetadataFromAuthority(tableName)) {
+        const rePlan = this.distributedQueryPlanner.planSelect(
+          ast,
+          params,
+          {sessionId},
+        );
+        rootPlan =
+          rePlan.tablePlans.get(rootAlias) ||
+          rePlan.tablePlans.get(tableName) ||
+          null;
+      }
+    }
 
     if (!rootPlan || rootPlan.partitions.length === 0) {
       return {

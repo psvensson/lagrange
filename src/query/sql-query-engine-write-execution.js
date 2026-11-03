@@ -276,7 +276,17 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       {sessionId},
     );
     const planningDurationMs = Date.now() - planningStartTimeMs;
-    const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
+    let tablePlan = distributedPlan.tablePlans.get(tableName) || null;
+    if (!tablePlan || tablePlan.partitions.length === 0) {
+      if (await this.refreshTableRoutingMetadataFromAuthority?.(tableName)) {
+        const rePlan = this.distributedQueryPlanner.planInsert(
+          ast,
+          params,
+          {sessionId},
+        );
+        tablePlan = rePlan.tablePlans.get(tableName) || null;
+      }
+    }
     if (!tablePlan || tablePlan.partitions.length === 0) {
       return {
         success: false,
@@ -377,7 +387,18 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     );
     const planningDurationMs = Date.now() - planningStartTimeMs;
 
-    const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
+    let tablePlan = distributedPlan.tablePlans.get(tableName) || null;
+    if (!tablePlan || tablePlan.partitions.length === 0) {
+      if (await this.refreshTableRoutingMetadataFromAuthority?.(tableName)) {
+        const rePlan = statement.plan(
+          this.distributedQueryPlanner,
+          ast,
+          params,
+          {sessionId},
+        );
+        tablePlan = rePlan.tablePlans.get(tableName) || null;
+      }
+    }
     if (!tablePlan || tablePlan.partitions.length === 0) {
       return {
         success: false,

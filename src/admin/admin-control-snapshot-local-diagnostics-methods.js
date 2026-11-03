@@ -615,6 +615,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
         const boundedSnapshot = await this.buildLocalControlSnapshot({
           ...resolveOptions,
           boundedObservationProbe: true,
+          skipAuthoritativeSnapshotRowRefresh: true,
         });
         return await this.scheduleBoundedMembershipPublicationReconcile(
           boundedSnapshot,

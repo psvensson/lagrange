@@ -28,6 +28,7 @@ import {
 import {PARTITION_CDC_OBLIGATION_REASON} from
   './partition-cdc-obligation-constants.js';
 import {
+  acknowledgeHydratedObligationsThrough,
   cdcObligationDiagnosticsOf,
   createCdcObligationLane,
   driveCdcObligations,
@@ -166,6 +167,9 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       this.owner.trackPendingCDCEvent(drive);
     }
     return drive;
+  }
+  acknowledgeHydratedObligationsThrough(appliedIndex) {
+    return acknowledgeHydratedObligationsThrough(this, appliedIndex);
   }
   /**
    * Propose the pending acknowledgements now, as one CDC_DELIVERED.

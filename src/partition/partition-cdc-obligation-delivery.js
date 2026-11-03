@@ -229,6 +229,9 @@ function addToBatch(lane, obligation) {
 // bound is proposed at once, otherwise by the deadline.
 function acknowledgeDelivered(delivery, obligation) {
   const lane = laneOf(delivery);
+  if (lane.pending.has(obligation.eventKey)) {
+    return;
+  }
   const {owner} = delivery;
   const addedBytes = acknowledgedEventBytesOf(obligation.eventKey,
     obligation.logIndex, obligation.ordinal, !lane.batch.groups.has(obligation.logIndex));
@@ -244,6 +247,24 @@ function acknowledgeDelivered(delivery, obligation) {
     return;
   }
   armFlushDeadline(delivery);
+}
+
+async function acknowledgeHydratedObligationsThrough(delivery, appliedIndex) {
+  const throughLogIndex = Number(appliedIndex);
+  if (!Number.isSafeInteger(throughLogIndex) || throughLogIndex <= 0) return;
+  const lane = laneOf(delivery);
+  const {owner} = delivery;
+  if (!laneIsCurrent(delivery, lane) || !owner.db) return;
+  const owed = readOwedCdcObligations(owner.db, {
+    through: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER},
+    limit: Number.MAX_SAFE_INTEGER,
+  });
+  for (const obligation of owed) {
+    acknowledgeDelivered(delivery, obligation);
+  }
+  if (lane.batch.events > 0) {
+    await flushCdcAcknowledgements(delivery, REASON.SUBSCRIPTION_HANDSHAKE);
+  }
 }
 
 function flushOutcome(lane, state, fields) {
@@ -858,7 +879,8 @@ function cdcObligationDiagnosticsOf(delivery) {
   });
 }
 
-export {OBLIGATION_RETRY_DISPOSITION, cdcObligationDiagnosticsOf, createCdcObligationLane,
+export {OBLIGATION_RETRY_DISPOSITION, acknowledgeHydratedObligationsThrough,
+  cdcObligationDiagnosticsOf, createCdcObligationLane,
   driveCdcObligations, flushCdcAcknowledgements, handleDeliveryFailure,
   registerCdcAcknowledgementProposer,
   resetCdcObligationLane, scheduleDeliveryRetry, settleAcknowledgedObligations};

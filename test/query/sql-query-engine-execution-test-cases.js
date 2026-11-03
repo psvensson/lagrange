@@ -609,6 +609,104 @@ function registerSqlQueryEngineExecutionTestCases({
     mockPartitionData.clear();
   });
 
+  const createMockProbeCache = () => createMockSystemCache(
+    [],
+    [],
+    [
+      {
+        service_id: 'ffr_probe_p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: 'ffr_probe_p1',
+        node_id: 'test-node',
+        raft_role: 'leader',
+        address: 'test-node/partition/ffr_probe_p1',
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+  );
+
+  const createMockProbeMetadataGateway = (authoritativeQueries) => ({
+    async readAuthoritativeRows(tableName, sql, params) {
+      authoritativeQueries.push({tableName, sql, params});
+      if (tableName === TABLES.TABLES) {
+        return {
+          success: true,
+          rows: [{table_id: 'tbl-probe', table_name: 'ffr_probe', primaryKey: 'id', partition_key_type: 'TEXT'}],
+        };
+      }
+      if (tableName === TABLES.PARTITIONS) {
+        return {
+          success: true,
+          rows: [{
+            partition_id: 'ffr_probe_p1',
+            table_name: 'ffr_probe',
+            partition_key_start: null,
+            partition_key_end: null,
+            partition_key_type: 'TEXT',
+            leader_node_id: 'test-node',
+          }],
+        };
+      }
+      return {success: false, rows: []};
+    },
+    applySystemTableRowsToCache(targetCache, tableName, rows) {
+      if (tableName === TABLES.TABLES) {
+        targetCache.tables.push(...rows);
+      } else if (tableName === TABLES.PARTITIONS) {
+        targetCache.partitions.push(...rows);
+      }
+    },
+  });
+
+  test('SQLQueryEngine - fetches table and partition routing metadata from authority on cache miss for SELECT', async (t) => {
+    mockPartitionData.set('ffr_probe_p1', [{id: 1, val: 'ok'}]);
+    const cache = createMockProbeCache();
+    const authoritativeQueries = [];
+    const gateway = createMockProbeMetadataGateway(authoritativeQueries);
+
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+    });
+
+    const result = await engine.executeQuery('SELECT * FROM ffr_probe');
+
+    t.equal(result.success, true, 'SELECT should succeed after authoritative metadata refresh');
+    t.equal(authoritativeQueries.length, 2, 'should query tables and partitions from authority');
+    t.equal(result.rows.length, 1, 'should return rows from partition');
+
+    mockPartitionData.clear();
+  });
+
+  test('SQLQueryEngine - fetches table and partition routing metadata from authority on cache miss for INSERT', async (t) => {
+    const cache = createMockProbeCache();
+    let inserted = false;
+    const messageRouter = {
+      deliver: async () => {
+        inserted = true;
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true, rowCount: 1});
+      },
+    };
+
+    const authoritativeQueries = [];
+    const gateway = createMockProbeMetadataGateway(authoritativeQueries);
+
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      systemCache: cache,
+      messageRouter,
+    });
+
+    const result = await engine.executeQuery('INSERT INTO ffr_probe (id, val) VALUES ("k1", "ok")');
+
+    t.equal(result.success, true, 'INSERT should succeed after authoritative metadata refresh');
+    t.equal(authoritativeQueries.length, 2, 'should query tables and partitions from authority');
+    t.equal(inserted, true, 'message router should deliver insert');
+  });
+
   test('SQLQueryEngine - reserves critical routing for topology tables and ' +
     'demotes high-volume transaction metadata',
   async (t) => {

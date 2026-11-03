@@ -440,6 +440,11 @@ class SeedCacheHydrationPhase {
         CDC_APPLY_OPTIONS);
     }
 
+    if (typeof options.registerSubscribers === LOCAL_STR_FUNCTION &&
+        typeof leaderPartition.acknowledgeHydratedCdcObligations === LOCAL_STR_FUNCTION) {
+      await leaderPartition.acknowledgeHydratedCdcObligations(image.appliedIndex);
+    }
+
     d.getLogger().debug(BOOTSTRAP_LOG_MSG.TABLE_HYDRATED, {
       tableName,
       rowCount: image.rows.length,

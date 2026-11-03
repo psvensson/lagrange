@@ -97,33 +97,91 @@ async function deliverTarget(owner, source, events, leaf, context) {
   return {delivery, answer: deliveryAnswerOf(delivery)};
 }
 
-async function deliverUncoveredLeaves(owner, wave, progress, events) {
-  const {context, source} = wave;
-  const count = progress.leafCount();
-  let lastFailure = {state: DURABLE_PROPAGATION_CAUSE.NONE};
-  // A serial dispatch window is bounded by every positive router concurrency.
-  // The total captured population is not capped by that window.
-  for (let visited = 0; visited < count; visited += 1) {
+async function deliverSourceLeaf(source, events, context, sourceLeaf, progress) {
+  try {
+    const answer = await context.run(() => source.applyCDCBatch(events, {
+      deliveryContext: context, remainingMs: context.remainingMs,
+    }));
     context.assertCurrent();
-    const leaf = progress.next();
-    if (leaf === null) break;
+    progress.observe(sourceLeaf, answer);
+    if (answer?.success !== true) {
+      return {state: DURABLE_PROPAGATION_CAUSE.RESPONSE, cause: answer};
+    }
+  } catch (error) {
+    context.assertCurrent();
+    return {state: DURABLE_PROPAGATION_CAUSE.ERROR, cause: error};
+  }
+  return {state: DURABLE_PROPAGATION_CAUSE.NONE};
+}
+
+function classifyDeliveryItemOutcome(item) {
+  if (item.error) {
+    return {state: DURABLE_PROPAGATION_CAUSE.ERROR, cause: item.error};
+  } else if (item.answer?.success !== true) {
+    return {
+      state: DURABLE_PROPAGATION_CAUSE.RESPONSE,
+      cause: item.delivery ?? item.answer,
+    };
+  } else {
+    return {state: DURABLE_PROPAGATION_CAUSE.NONE};
+  }
+}
+
+async function deliverTargetLeaves(owner, source, events, context, targetLeaves, progress) {
+  const deliveries = await Promise.all(targetLeaves.map(async (leaf) => {
     try {
-      // The source applies locally (its answer); a target is a delivery.
-      const {delivery, answer} = progress.isSource(leaf) ?
-        {delivery: null, answer: await context.run(() => source.applyCDCBatch(events, {
-          deliveryContext: context, remainingMs: context.remainingMs,
-        }))} : await deliverTarget(owner, source, events, leaf, context);
-      context.assertCurrent();
-      progress.observe(leaf, progress.isSource(leaf) ? answer : delivery);
-      if (answer?.success !== true) {
-        lastFailure = {state: DURABLE_PROPAGATION_CAUSE.RESPONSE, cause: delivery ?? answer};
-      }
+      const outcome = await deliverTarget(owner, source, events, leaf, context);
+      return {leaf, ...outcome, error: null};
     } catch (error) {
-      context.assertCurrent();
-      lastFailure = {state: DURABLE_PROPAGATION_CAUSE.ERROR, cause: error};
+      return {leaf, delivery: null, answer: null, error};
+    }
+  }));
+  context.assertCurrent();
+  let firstFailure = {state: DURABLE_PROPAGATION_CAUSE.NONE};
+  for (const item of deliveries) {
+    if (!item.error) {
+      progress.observe(item.leaf, item.delivery);
+    }
+    const outcome = classifyDeliveryItemOutcome(item);
+    if (
+      outcome.state !== DURABLE_PROPAGATION_CAUSE.NONE &&
+      firstFailure.state === DURABLE_PROPAGATION_CAUSE.NONE
+    ) {
+      firstFailure = outcome;
     }
   }
-  return lastFailure;
+  return firstFailure;
+}
+
+async function deliverLeavesInWave(owner, wave, progress, sourceLeaf, targetLeaves, events) {
+  const {context, source} = wave;
+  const sourceOutcome = sourceLeaf ?
+    await deliverSourceLeaf(source, events, context, sourceLeaf, progress) :
+    {state: DURABLE_PROPAGATION_CAUSE.NONE};
+  const targetOutcome = targetLeaves.length > 0 ?
+    await deliverTargetLeaves(owner, source, events, context, targetLeaves, progress) :
+    {state: DURABLE_PROPAGATION_CAUSE.NONE};
+  return sourceOutcome.state !== DURABLE_PROPAGATION_CAUSE.NONE ?
+    sourceOutcome :
+    targetOutcome;
+}
+
+async function deliverUncoveredLeaves(owner, wave, progress, events) {
+  const {context} = wave;
+  const count = progress.leafCount();
+  const leaves = [];
+  for (let visited = 0; visited < count; visited += 1) {
+    const leaf = progress.next();
+    if (leaf === null) break;
+    leaves.push(leaf);
+  }
+  if (leaves.length === 0) {
+    return {state: DURABLE_PROPAGATION_CAUSE.NONE};
+  }
+  context.assertCurrent();
+  const sourceLeaf = leaves.find((leaf) => progress.isSource(leaf));
+  const targetLeaves = leaves.filter((leaf) => !progress.isSource(leaf));
+  return deliverLeavesInWave(owner, wave, progress, sourceLeaf, targetLeaves, events);
 }
 
 function prepareDurableForegroundWave(owner, wave, events, plan) {

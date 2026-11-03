@@ -128,6 +128,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   async persistPartitionSize(sizeBytes) {
     if (
+      this.isSystemTable === true ||
       this.tableName === TABLES.PARTITIONS ||
       !this.isLeader ||
       !this.systemTableCache ||

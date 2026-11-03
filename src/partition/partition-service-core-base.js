@@ -17,6 +17,7 @@ import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 import {isLivePartitionServiceRow} from '../constants/service.js';
 import {PartitionWriteTraffic} from './partition-write-traffic.js';
+import {isSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
 const {
   AddressManager,
   CDCEventBuffer,
@@ -82,6 +83,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.partitionId = options.partitionId;
     this.tableId = options.tableId;
     this.tableName = options.tableName || options.tableId;
+    this.isSystemTable =
+      options.isSystemTable === true || isSystemTableName(this.tableName);
     this.schema = options.schema || null;
     this.keyRange = options.keyRange || {
       start: PARTITION_SERVICE_DEFAULT.KEY_RANGE_START,

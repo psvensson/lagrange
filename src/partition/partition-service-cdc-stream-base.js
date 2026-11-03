@@ -705,7 +705,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @private
    */
   scheduleSizeUpdate() {
-    if (this.tableName === TABLES.PARTITIONS) {
+    if (this.isSystemTable === true || this.tableName === TABLES.PARTITIONS) {
       return;
     }
     if (this.sizeUpdatePending) {
