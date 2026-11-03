@@ -780,7 +780,6 @@ export {
   buildBackendKeyData,
   buildReadyForQuery,
   buildErrorResponse,
-  buildNoticeResponse,
   buildRowDescription,
   buildDataRow,
   buildCommandComplete,
