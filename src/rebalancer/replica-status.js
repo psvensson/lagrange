@@ -251,7 +251,29 @@ function isLiveCreateTargetStatus(status) {
   return status === ReplicaStatus.ACTIVE;
 }
 
+function isBootstrapTopologyDispatchDeferred(operationOrRow) {
+  if (!operationOrRow || typeof operationOrRow !== 'object') {
+    return false;
+  }
+  let stepsHistory = operationOrRow.stepsHistory;
+  if (!Array.isArray(stepsHistory)) {
+    stepsHistory = operationOrRow.steps_history;
+  }
+  if (typeof stepsHistory === 'string') {
+    try {
+      stepsHistory = JSON.parse(stepsHistory);
+    } catch {
+      return false;
+    }
+  }
+  return getOperationMetadataValue(
+    stepsHistory,
+    OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED,
+  ) === true;
+}
+
 export {
+  isBootstrapTopologyDispatchDeferred,
   isLiveCreateTargetStatus,
   isPeerRowStatusAdmissible,
   createOperation,

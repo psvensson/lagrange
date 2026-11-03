@@ -79,6 +79,7 @@ import {
   OperationType,
   getOperationMetadataObject,
   getWorkflowSteps,
+  isBootstrapTopologyDispatchDeferred,
   isCoordinatorOwnedOperationType,
 } from './replica-status.js';
 import {
@@ -635,6 +636,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   getControlPlaneRetryAfterMs,
   getWorkflowSteps,
   hasPriorityRecoverySpreadGap,
+  isBootstrapTopologyDispatchDeferred,
   isCompletedReplicaOperationAnswer,
   isCoordinatorOwnedOperationType,
   isDeliveredTransportDeliveryOutcome,

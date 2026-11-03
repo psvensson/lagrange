@@ -33,6 +33,7 @@ const {
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
   ReplicaOperationResponseStatus,
   WORKFLOW_STEP,
+  isBootstrapTopologyDispatchDeferred,
   isCoordinatorOwnedOperationType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -123,7 +124,8 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       !operation ||
       operation.workflowStep !== WORKFLOW_STEP.PENDING ||
       !isCoordinatorOwnedOperationType(operation.type) ||
-      !this.repository.isOperationLocallyOwned(operation)
+      !this.repository.isOperationLocallyOwned(operation) ||
+      isBootstrapTopologyDispatchDeferred(operation)
     ) {
       return null;
     }
@@ -397,6 +399,12 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
    * @private
    */
   async advanceDispatchCandidateStep(operationInput, operation, options = {}) {
+    if (isBootstrapTopologyDispatchDeferred(operation)) {
+      return this.buildSkippedOperationResult(
+        OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+        operation?.operationId,
+      );
+    }
     // The durable waiter is registered at creation, but physical dispatch is
     // forbidden until this last responsible moment proves the ledger idle
     // cluster-wide. This runs on EVERY dispatch entry of a PENDING ledger

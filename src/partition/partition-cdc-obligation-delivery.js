@@ -629,10 +629,19 @@ function handleDeliveryFailure(delivery, lane, obligation, reason, delivered, er
   const {owner} = delivery;
   owner.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.DELIVERY_FAILURES);
   const retryDelayMs = scheduleDeliveryRetry(delivery, error);
-  owner.logger.warn(LOG_MSG.DELIVERY_HELD, {
-    partitionId: owner.partitionId, eventKey: obligation.eventKey,
-    logIndex: obligation.logIndex, error: error?.message ?? String(error),
-    retryDelayMs, delivered});
+  const logDetails = {
+    partitionId: owner.partitionId,
+    eventKey: obligation.eventKey,
+    logIndex: obligation.logIndex,
+    error: error?.message ?? String(error),
+    retryDelayMs,
+    delivered,
+  };
+  if (error?.reason === CDC_COMPLETION.BACKPRESSURE) {
+    owner.logger.debug?.(LOG_MSG.DELIVERY_HELD, logDetails);
+  } else {
+    owner.logger.warn(LOG_MSG.DELIVERY_HELD, logDetails);
+  }
   return driveOutcome(lane, DRIVE.HELD_BY_SUBSCRIBER,
     {reason, delivered, eventKey: obligation.eventKey, retryDelayMs});
 }
@@ -850,5 +859,6 @@ function cdcObligationDiagnosticsOf(delivery) {
 }
 
 export {OBLIGATION_RETRY_DISPOSITION, cdcObligationDiagnosticsOf, createCdcObligationLane,
-  driveCdcObligations, flushCdcAcknowledgements, registerCdcAcknowledgementProposer,
+  driveCdcObligations, flushCdcAcknowledgements, handleDeliveryFailure,
+  registerCdcAcknowledgementProposer,
   resetCdcObligationLane, scheduleDeliveryRetry, settleAcknowledgedObligations};

@@ -46,6 +46,7 @@ const {
   buildHandoffDeferralTransportDiagnostics,
   classifySystemPartition,
   getControlPlaneRetryAfterMs,
+  isBootstrapTopologyDispatchDeferred,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 const SAFETY_DEFERRED_RETRY_BOUNDARY = 'safety_retry';
@@ -247,6 +248,7 @@ function buildDispatchRearmFromProgressReconcileEvidence(
         normalizedActualStatus,
       ),
     dispatchRetryableWorkflowStep:
+      !isBootstrapTopologyDispatchDeferred(operation) &&
       owner.isDispatchRetryableWorkflowStep(operation),
     priorityRecoveryPartition:
       partitionClassification.systemTable ||

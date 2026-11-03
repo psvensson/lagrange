@@ -8,7 +8,7 @@ import {isDispatchReservationGateEngaged} from
 import {OPERATION_WORKFLOW_OWNER_SHARED} from
   './operation-workflow-owner-shared.js';
 
-const {WORKFLOW_STEP} = OPERATION_WORKFLOW_OWNER_SHARED;
+const {WORKFLOW_STEP, isBootstrapTopologyDispatchDeferred} = OPERATION_WORKFLOW_OWNER_SHARED;
 const STORAGE_RESERVATION_AUTHORITY_UNAVAILABLE_RECOVERY_MESSAGE =
   'storage reservation authority unavailable during recovery';
 
@@ -18,7 +18,8 @@ async function reconcileReservationBackedPendingOperation(
 ) {
   if (
     operation?.workflowStep !== WORKFLOW_STEP.PENDING ||
-    !isDispatchReservationGateEngaged(owner)
+    !isDispatchReservationGateEngaged(owner) ||
+    isBootstrapTopologyDispatchDeferred(operation)
   ) {
     return OPERATION_RESERVATION_RECOVERY_OUTCOME.NOT_APPLICABLE;
   }

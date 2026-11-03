@@ -1,4 +1,5 @@
 import {
+  CDC_OPERATION,
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -459,6 +460,43 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       buildProjectionControlPlaneReadIntent(tableName, options),
       options,
     );
+  },
+
+  async querySystemTable(firstArg, secondArg, thirdArg, fourthArg) {
+    if (typeof firstArg === 'string' && typeof secondArg === 'string') {
+      return this.executeQuery(secondArg, thirdArg || [], {
+        ...fourthArg,
+        tableName: firstArg,
+      });
+    }
+    return this.executeQuery(firstArg, secondArg || [], thirdArg || {});
+  },
+
+  applySystemTableRowsToCache(writableCache, tableName, rows) {
+    if (
+      !writableCache ||
+      typeof writableCache.applySystemTableChange !== 'function' ||
+      !Array.isArray(rows)
+    ) {
+      return;
+    }
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i];
+      if (row && typeof row === 'object') {
+        try {
+          writableCache.applySystemTableChange({
+            operation: CDC_OPERATION.UPDATE,
+            tableName,
+            after: row,
+          });
+        } catch (e) {
+          this.logger?.debug?.('control_plane_gateway_apply_cache_failed', {
+            tableName,
+            error: e?.message ?? String(e),
+          });
+        }
+      }
+    }
   },
 };
 

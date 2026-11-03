@@ -429,6 +429,7 @@ test('ReplicaStateMachine clears canonical partition leader when a partition rep
     });
 
     t.equal(mutations.length, 3, 'should persist service create, service failure, and leader clear');
+    t.equal(mutations[0].options.ignoreExisting, true, 'service create must pass ignoreExisting: true');
     t.equal(mutations[0].mutation.tableName, 'services');
     t.equal(mutations[1].mutation.tableName, 'services');
     t.equal(mutations[2].mutation.tableName, 'partitions');

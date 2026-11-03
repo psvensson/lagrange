@@ -103,6 +103,20 @@ const CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED =
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.FAILED;
 const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
   'membership_publication_owner';
+// ends-on: the authoritative system table query answers
+const AUTHORITATIVE_CONTROL_SNAPSHOT_TIMEOUT_MS = 1500;
+const SELECT_ALL_SERVICES_SQL = 'SELECT * FROM services';
+const SELECT_ALL_REPLICA_OPERATIONS_SQL = 'SELECT * FROM replica_operations';
+const CONTROL_SNAPSHOT_AUTHORITATIVE_FETCH_FAILED =
+  'control_snapshot_authoritative_fetch_failed';
+
+function resolveSnapshotTableSql(tableName) {
+  return tableName === TABLES.SERVICES ?
+    SELECT_ALL_SERVICES_SQL :
+    tableName === TABLES.REPLICA_OPERATIONS ?
+      SELECT_ALL_REPLICA_OPERATIONS_SQL :
+      `SELECT * FROM ${tableName}`;
+}
 function toControlSnapshotNonNegativeInteger(value) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) && numericValue > 0 ?
@@ -385,21 +399,38 @@ function resolveInjectedControlSnapshotLogger(logger) {
   return logger || null;
 }
 
+function shouldOverlayPrioritySummary(targetSummary, liveSummary) {
+  if (targetSummary?.satisfied === true) {
+    return liveSummary?.satisfied === true;
+  }
+  if (liveSummary?.satisfied === true) {
+    return true;
+  }
+  const liveBlocked = Array.isArray(liveSummary?.blockedPartitions) ?
+    liveSummary.blockedPartitions.length : Infinity;
+  const targetBlocked = Array.isArray(targetSummary?.blockedPartitions) ?
+    targetSummary.blockedPartitions.length : Infinity;
+  return liveBlocked <= targetBlocked;
+}
+
 function overlayLivePriorityPartitionSummary(
   targetConvergence,
   currentPriorityPlacementObservation,
 ) {
   if (
-    currentPriorityPlacementObservation?.state ===
-      CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE &&
-    currentPriorityPlacementObservation.priorityPartitionSummary &&
-    typeof currentPriorityPlacementObservation.priorityPartitionSummary ===
-      'object' &&
-    targetConvergence?.publicationObservation?.state ===
+    currentPriorityPlacementObservation?.state !==
+      CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE ||
+    !currentPriorityPlacementObservation.priorityPartitionSummary ||
+    typeof currentPriorityPlacementObservation.priorityPartitionSummary !==
+      'object' ||
+    targetConvergence?.publicationObservation?.state !==
       CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE
   ) {
-    targetConvergence.priorityPartitionSummary =
-      currentPriorityPlacementObservation.priorityPartitionSummary;
+    return;
+  }
+  const liveSummary = currentPriorityPlacementObservation.priorityPartitionSummary;
+  if (shouldOverlayPrioritySummary(targetConvergence.priorityPartitionSummary, liveSummary)) {
+    targetConvergence.priorityPartitionSummary = liveSummary;
   }
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
@@ -457,6 +488,37 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
     this.logger = resolveInjectedControlSnapshotLogger(deps.logger);
   }
 
+  async resolveAuthoritativeSnapshotRows(gateway, tableName) {
+    if (!gateway || typeof gateway.querySystemTable !== 'function') {
+      return null;
+    }
+    const sql = resolveSnapshotTableSql(tableName);
+    let timerHandle = null;
+    try {
+      const timeoutPromise = new Promise((resolve) => {
+        timerHandle = setTimeout(
+          () => resolve(null),
+          AUTHORITATIVE_CONTROL_SNAPSHOT_TIMEOUT_MS,
+        );
+      });
+      const queryPromise = gateway.querySystemTable(tableName, sql);
+      const outcome = await Promise.race([queryPromise, timeoutPromise]);
+      if (timerHandle !== null) {
+        clearTimeout(timerHandle);
+      }
+      return Array.isArray(outcome?.rows) ? outcome.rows : null;
+    } catch (error) {
+      if (timerHandle !== null) {
+        clearTimeout(timerHandle);
+      }
+      this.logger?.debug?.(CONTROL_SNAPSHOT_AUTHORITATIVE_FETCH_FAILED, {
+        tableName,
+        error: error?.message ?? String(error),
+      });
+      return null;
+    }
+  }
+
   /**
    * Build local control snapshot payload from system cache only.
    * @return {Object}
@@ -478,7 +540,7 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
     }
     const tableRows = systemTableCache.getAll(TABLES.TABLES);
     const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
-    const replicaOperationRows = systemTableCache.getAll(
+    let replicaOperationRows = systemTableCache.getAll(
       TABLES.REPLICA_OPERATIONS,
     );
     const capturedAt = this.nowFn();
@@ -507,7 +569,41 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       return null;
     }
     const nodeRows = systemTableCache.getAll(TABLES.NODES);
-    const serviceRows = systemTableCache.getAll(TABLES.SERVICES);
+    let serviceRows = systemTableCache.getAll(TABLES.SERVICES);
+    if (
+      options.boundedObservationProbe !== true &&
+      this.controlPlaneSystemTableGateway
+    ) {
+      const authoritativeServices =
+        await this.resolveAuthoritativeSnapshotRows(
+          this.controlPlaneSystemTableGateway,
+          TABLES.SERVICES,
+        );
+      if (
+        Array.isArray(authoritativeServices) &&
+        authoritativeServices.length > 0
+      ) {
+        serviceRows = authoritativeServices;
+        this.controlPlaneSystemTableGateway.applySystemTableRowsToCache?.(
+          cacheOwner.cacheMutationTarget || systemTableCache,
+          TABLES.SERVICES,
+          authoritativeServices,
+        );
+      }
+      const authoritativeOperations =
+        await this.resolveAuthoritativeSnapshotRows(
+          this.controlPlaneSystemTableGateway,
+          TABLES.REPLICA_OPERATIONS,
+        );
+      if (Array.isArray(authoritativeOperations)) {
+        replicaOperationRows = authoritativeOperations;
+        this.controlPlaneSystemTableGateway.applySystemTableRowsToCache?.(
+          cacheOwner.cacheMutationTarget || systemTableCache,
+          TABLES.REPLICA_OPERATIONS,
+          authoritativeOperations,
+        );
+      }
+    }
     const nodeEndpointRows = systemTableCache.getAll(
       TABLES.NODE_ENDPOINTS,
     );

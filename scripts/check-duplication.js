@@ -98,8 +98,10 @@ const RATCHET_TARGETS = [
     // on the checker's hint.
     // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 42/1331 -> 41/1302 on the
     // checker's hint.
-    baselineCloneGroupCount: 41,
-    baselineDuplicatedLineCount: 1302,
+    // 2026-11-03 (composed-05-comparison-readiness): tightened 41/1302 -> 39/1236 on the
+    // checker's hint.
+    baselineCloneGroupCount: 39,
+    baselineDuplicatedLineCount: 1236,
     strictEligible: true,
   },
   {

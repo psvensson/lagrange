@@ -488,23 +488,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       }),
     });
 
-    const metadataWaitReplicaIds = [];
     for (const operation of plannedOperations) {
       throwIfCancellationRequested(cancellationToken);
-      // A deterministic-intent retry can hand back the prior attempt's
-      // durably terminal-successful operation (collision terminal arm).
-      // The replica already exists: re-stamping and re-executing it is the
-      // round-10 livelock. Keep it in the plan for counting, wait on its
-      // routability like any other create, but never re-dispatch it.
       if (isTerminalSuccessfulCreateOperation(operation)) {
-        const terminalReplicaId =
-          operation?.replicaId || operation?.replica_id || null;
-        if (
-          typeof terminalReplicaId === LOCAL_STR_STRING &&
-          terminalReplicaId.length > 0
-        ) {
-          metadataWaitReplicaIds.push(terminalReplicaId);
-        }
         continue;
       }
       operation[ReplicaOperationField.REPLICA_IDS] =
@@ -548,11 +534,33 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
           bootstrapPartitionMetadata;
       }
+      operation.updatedAt = this.nowFn();
       if (
         typeof this.rebalanceCoordinator.dispatchOperation === LOCAL_STR_FUNCTION &&
         typeof this.rebalanceCoordinator.persistOperationUpdate === LOCAL_STR_FUNCTION
       ) {
         await this.rebalanceCoordinator.persistOperationUpdate(operation);
+      }
+    }
+
+    const metadataWaitReplicaIds = [];
+    for (const operation of plannedOperations) {
+      throwIfCancellationRequested(cancellationToken);
+      // A deterministic-intent retry can hand back the prior attempt's
+      // durably terminal-successful operation (collision terminal arm).
+      // The replica already exists: re-stamping and re-executing it is the
+      // round-10 livelock. Keep it in the plan for counting, wait on its
+      // routability like any other create, but never re-dispatch it.
+      if (isTerminalSuccessfulCreateOperation(operation)) {
+        const terminalReplicaId =
+          operation?.replicaId || operation?.replica_id || null;
+        if (
+          typeof terminalReplicaId === LOCAL_STR_STRING &&
+          terminalReplicaId.length > 0
+        ) {
+          metadataWaitReplicaIds.push(terminalReplicaId);
+        }
+        continue;
       }
       const executionResult =
         typeof this.rebalanceCoordinator.executeOperation === 'function' ?

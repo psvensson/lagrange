@@ -5,6 +5,11 @@ import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
+import {OPERATION_METADATA_KEY} from '../../src/rebalancer/replica-operation-progress.js';
+import {
+  OPERATION_WORKFLOW_OWNER_SHARED,
+} from '../../src/rebalancer/operation-workflow-owner-shared.js';
+const {OPERATION_WORKFLOW_OWNER_REASON} = OPERATION_WORKFLOW_OWNER_SHARED;
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
@@ -377,6 +382,39 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
       'admission winning the terminal CAS race is retained');
     t.equal(retained.length, 1,
       'the race winner converges on the same retained-progress owner');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('operations with bootstrapTopologyDispatchDeferred are not claimed or executed', async (t) => {
+  const coordinator = createAdmissionCoordinator();
+  const owner = coordinator.workflowOwner;
+  try {
+    const deferredOp = {
+      operationId: 'op-deferred-1',
+      nodeId: 'node-local',
+      targetNodeId: 'node-local',
+      partitionId: 'user-p1',
+      type: OperationType.ADD,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      stepsHistory: [
+        {
+          [OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED]: true,
+        },
+      ],
+    };
+
+    const claimed = await owner.claimPendingDispatchOperation(deferredOp);
+    t.equal(claimed, null, 'claimPendingDispatchOperation returns null for deferred bootstrap operation');
+
+    const advanceResult = await owner.advanceDispatchCandidateStep(deferredOp, deferredOp);
+    t.equal(advanceResult.skipped, true, 'advanceDispatchCandidateStep skips deferred bootstrap operation');
+    t.equal(advanceResult.reason, OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE);
+
+    const execResult = await owner.executeOperationInternal(deferredOp, {});
+    t.equal(execResult.skipped, true, 'executeOperationInternal skips deferred bootstrap operation');
+    t.equal(execResult.reason, OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE);
   } finally {
     await coordinator.shutdown();
   }

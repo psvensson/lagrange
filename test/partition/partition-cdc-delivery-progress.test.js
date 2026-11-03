@@ -9,7 +9,7 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CDC_PIPELINE_METRIC} from '../../src/constants/cdc-lifecycle-constants.js';
 import {buildPartitionCdcPropagationSubscriber} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
-import {buildCommittedCdcOutcome, buildProvisionalCdcOutcome, unknownCdcAcceptance} from
+import {CDC_COMPLETION, buildCommittedCdcOutcome, buildProvisionalCdcOutcome, unknownCdcAcceptance} from
   '../../src/cdc/cdc-delivery-outcome.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND,
   PARTITION_CDC_OBLIGATION_DRIVE_STATE, PARTITION_CDC_OBLIGATION_REASON,
@@ -17,6 +17,7 @@ import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND,
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {
   OBLIGATION_RETRY_DISPOSITION,
+  handleDeliveryFailure,
   scheduleDeliveryRetry,
 } from '../../src/partition/partition-cdc-obligation-delivery.js';
 import {PARTITION_SERVICE_DEFAULT} from '../../src/partition/partition-service-constants.js';
@@ -401,4 +402,52 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
   assert.equal(thirdDrive.delivered, 435 - 10 - 256);
   assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   assert.equal(f.calls.length, 435);
+});
+
+test('handleDeliveryFailure logs at debug level on backpressure and warn on other errors', () => {
+  const debugCalls = [];
+  const warnCalls = [];
+  const tenure = {term: 1, generation: 1};
+  const mockLane = {
+    tenure,
+    retryTimer: {state: 'idle', handle: null},
+    retryDelayMs: 50,
+    consecutiveBackpressure: 0,
+  };
+  const mockDelivery = {
+    term: 1,
+    generation: 1,
+    obligationLane: mockLane,
+    owner: {
+      partitionId: 'p1',
+      isLeader: true,
+      isShutdown: false,
+      leadershipTenure: tenure,
+      timeSource: {
+        setTimeout: () => 1,
+        clearTimeout: () => {},
+      },
+      logger: {
+        debug: (...args) => debugCalls.push(args),
+        warn: (...args) => warnCalls.push(args),
+      },
+      cdcPipelineMetrics: {
+        increment: () => {},
+      },
+    },
+  };
+  const obligation = {
+    eventKey: 'event-1',
+    logIndex: 10,
+    ordinal: 1,
+  };
+
+  const backpressureError = {message: 'busy', reason: CDC_COMPLETION.BACKPRESSURE};
+  handleDeliveryFailure(mockDelivery, mockLane, obligation, 'error', false, backpressureError);
+  assert.equal(debugCalls.length, 1, 'logged at debug level for backpressure');
+  assert.equal(warnCalls.length, 0, 'did not log at warn level for backpressure');
+
+  const transientError = {message: 'connection reset', reason: 'connection_reset'};
+  handleDeliveryFailure(mockDelivery, mockLane, obligation, 'error', false, transientError);
+  assert.equal(warnCalls.length, 1, 'logged at warn level for transient error');
 });

@@ -110,7 +110,7 @@ async function createReplicaRowInCdc(stateMachine, replicaState) {
           operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
           tableName: TABLES.SERVICES,
           row: insertData,
-        }, persistenceOptions);
+        }, {...persistenceOptions, ignoreExisting: true});
     } catch (error) {
       return resolveInitialInsertOutcome(
         stateMachine,

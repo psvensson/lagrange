@@ -55,6 +55,7 @@ const {
   WORKFLOW_STEP,
   buildHandoffDeferralTransportDiagnostics,
   classifySystemPartition,
+  isBootstrapTopologyDispatchDeferred,
   isDeliveredTransportDeliveryOutcome,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -423,6 +424,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (!this.repository.isOperationLocallyOwned(operation)) {
       return this.buildSkippedOperationResult(
         REBALANCER_SKIP_REASON.OPERATION_OWNED_BY_ANOTHER_NODE,
+        operation?.operationId,
+      );
+    }
+    if (isBootstrapTopologyDispatchDeferred(operation)) {
+      return this.buildSkippedOperationResult(
+        OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
         operation?.operationId,
       );
     }
