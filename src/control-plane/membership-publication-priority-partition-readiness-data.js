@@ -3,6 +3,7 @@ import {
 } from './control-plane-readiness-constants.js';
 import {
   appendOwnArrayValue,
+  arrayIsArray,
   buildStringSet,
   copyDenseOwnDataArray,
   copyStrictOwnDataRecord,
@@ -12,6 +13,9 @@ import {
   inspectOwnDataProperty,
   normalizePrimitiveStringList,
   readOwnDataProperty,
+  SetConstructor,
+  setAdd,
+  setHas,
 } from './membership-publication-priority-partition-canonical-data.js';
 
 const DIMENSIONS_FIELD = 'dimensions';
@@ -154,7 +158,7 @@ function resolvePreferredNodeIds(
   publishedActiveNodeIds,
 ) {
   const merged = [];
-  const seen = new Set();
+  const seen = new SetConstructor();
   const sources = [
     locallyEligibleNodeIds?.value,
     projectedServingNodeIds?.value,
@@ -162,12 +166,12 @@ function resolvePreferredNodeIds(
   ];
   for (let i = 0; i < sources.length; i += 1) {
     const list = sources[i];
-    if (Array.isArray(list)) {
+    if (arrayIsArray(list)) {
       for (let j = 0; j < list.length; j += 1) {
         const id = list[j];
-        if (typeof id === 'string' && id.length > 0 && !seen.has(id)) {
-          seen.add(id);
-          merged.push(id);
+        if (typeof id === 'string' && id.length > 0 && !setHas(seen, id)) {
+          setAdd(seen, id);
+          appendOwnArrayValue(merged, id);
         }
       }
     }

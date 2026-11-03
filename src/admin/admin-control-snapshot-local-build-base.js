@@ -384,6 +384,24 @@ function attachControlSnapshotObservationMode(snapshot, options = {}) {
 function resolveInjectedControlSnapshotLogger(logger) {
   return logger || null;
 }
+
+function overlayLivePriorityPartitionSummary(
+  targetConvergence,
+  currentPriorityPlacementObservation,
+) {
+  if (
+    currentPriorityPlacementObservation?.state ===
+      CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE &&
+    currentPriorityPlacementObservation.priorityPartitionSummary &&
+    typeof currentPriorityPlacementObservation.priorityPartitionSummary ===
+      'object' &&
+    targetConvergence?.publicationObservation?.state ===
+      CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE
+  ) {
+    targetConvergence.priorityPartitionSummary =
+      currentPriorityPlacementObservation.priorityPartitionSummary;
+  }
+}
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
  * Control snapshot builder.
@@ -521,6 +539,21 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       controlPlaneDiagnostics &&
       typeof controlPlaneDiagnostics === 'object'
     ) {
+      const currentPriorityPlacementObservation =
+        buildCurrentPriorityPlacementObservation({
+          capturedAt,
+          partitionRows,
+          serviceRows,
+          readinessByNodeId: controlPlaneDiagnostics.readinessByNodeId,
+          activeNodeViews,
+        });
+      controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_CURRENT_PRIORITY_PLACEMENT_OBSERVATION_FIELD
+      ] = currentPriorityPlacementObservation;
+      overlayLivePriorityPartitionSummary(
+        controlPlaneDiagnostics.publicationConvergence,
+        currentPriorityPlacementObservation,
+      );
       const publicationActiveGateHandoff =
         this.resolvePublicationActiveGateHandoffContract({
           nodeRows,
@@ -552,6 +585,10 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       const resolvedConvergence =
         reevaluatedEvidence.publicationConvergence ||
         controlPlaneDiagnostics.publicationConvergence;
+      overlayLivePriorityPartitionSummary(
+        resolvedConvergence,
+        currentPriorityPlacementObservation,
+      );
       const resolvedConvergenceGate =
         reevaluatedEvidence.publicationConvergenceGate ||
         controlPlaneDiagnostics.publicationConvergenceGate;
@@ -715,20 +752,7 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       activePartitionServiceRows,
       leaderSummaryOptions,
     );
-    if (
-      controlPlaneDiagnostics &&
-      typeof controlPlaneDiagnostics === 'object'
-    ) {
-      controlPlaneDiagnostics[
-        CONTROL_SNAPSHOT_CURRENT_PRIORITY_PLACEMENT_OBSERVATION_FIELD
-      ] = buildCurrentPriorityPlacementObservation({
-        capturedAt,
-        partitionRows,
-        serviceRows,
-        readinessByNodeId: controlPlaneDiagnostics.readinessByNodeId,
-        activeNodeViews,
-      });
-    }
+
     const voterCounts = this.buildControlSnapshotVoterCounts(
       activePartitionServiceRows,
     );

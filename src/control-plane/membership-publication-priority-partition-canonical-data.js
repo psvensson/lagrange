@@ -42,6 +42,7 @@ const mapIteratorNext = Function.call.bind(
 const setIteratorNext = Function.call.bind(
   objectGetPrototypeOf(setValues(new SetConstructor())).next,
 );
+const arrayIsArray = Array.isArray;
 const sortArray = Function.call.bind(Array.prototype.sort);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const stringTrim = Function.call.bind(String.prototype.trim);
@@ -335,6 +336,7 @@ function buildStringSet(values) {
 
 export {
   appendOwnArrayValue,
+  arrayIsArray,
   buildStringSet,
   copyCanonicalDenseOwnDataRecordArray,
   copyDenseOwnDataArray,

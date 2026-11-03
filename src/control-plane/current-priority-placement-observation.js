@@ -8,6 +8,7 @@ import {
 } from './membership-publication-priority-partition-summary.js';
 import {
   appendOwnArrayValue,
+  arrayIsArray,
   copyCanonicalDenseOwnDataRecordArray,
   copyDenseOwnDataArray,
   copyStrictOwnDataRecord,
@@ -113,13 +114,27 @@ function copyActiveNodeViews(value) {
 }
 
 function resolveCurrentPlacementEligibleNodeIds(activeNodeViews = {}) {
-  return (
-    activeNodeViews.locallyEligibleNodeIds?.length > 0 ?
-      activeNodeViews.locallyEligibleNodeIds :
-      activeNodeViews.effectiveActiveNodeIds?.length > 0 ?
-        activeNodeViews.effectiveActiveNodeIds :
-        activeNodeViews.projectedServingNodeIds || []
-  );
+  const merged = [];
+  const seen = new SetConstructor();
+  const sources = [
+    activeNodeViews.locallyEligibleNodeIds,
+    activeNodeViews.effectiveActiveNodeIds,
+    activeNodeViews.projectedServingNodeIds,
+    activeNodeViews.publishedActiveNodeIds,
+  ];
+  for (let i = 0; i < sources.length; i += 1) {
+    const list = sources[i];
+    if (arrayIsArray(list)) {
+      for (let j = 0; j < list.length; j += 1) {
+        const id = list[j];
+        if (typeof id === 'string' && id.length > 0 && !setHas(seen, id)) {
+          setAdd(seen, id);
+          appendOwnArrayValue(merged, id);
+        }
+      }
+    }
+  }
+  return merged;
 }
 
 function buildStringSet(values) {

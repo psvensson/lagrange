@@ -41,6 +41,7 @@ const OBLIGATION_RETRY_DISPOSITION = Object.freeze({
   BACKPRESSURE: 'backpressure', NO_PENDING_WORK: 'no_pending_work',
   STALE_LIFETIME: 'stale_lifetime',
 });
+const HINTED_BACKPRESSURE_MAX_DELAY_MS = 250;
 
 /**
  * Register the proposer a flush hands its CDC_DELIVERED command to.
@@ -457,17 +458,27 @@ function computeRetryDelayMs(lane, error, disposition) {
   let advanceBackoff = false;
   let delayMs;
 
-  if (hasHint) {
+  if (isBackpressure && hasHint) {
+    lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;
+    const isInitial = lane.consecutiveBackpressure <= 1;
+    delayMs = Math.min(
+      HINTED_BACKPRESSURE_MAX_DELAY_MS,
+      Math.max(1, isInitial ? Math.floor(rawHint) : lane.retryDelayMs),
+    );
+    lane.retryDelayMs = isInitial ?
+      Math.max(
+        delayMs,
+        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
+      ) :
+      Math.min(HINTED_BACKPRESSURE_MAX_DELAY_MS, lane.retryDelayMs);
+    advanceBackoff = true;
+  } else if (hasHint) {
+    lane.consecutiveBackpressure = 0;
     delayMs = Math.min(
       PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
       Math.max(1, Math.floor(rawHint)),
     );
     lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-    if (isBackpressure) {
-      lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;
-    } else {
-      lane.consecutiveBackpressure = 0;
-    }
     advanceBackoff = false;
   } else if (isBackpressure) {
     lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;

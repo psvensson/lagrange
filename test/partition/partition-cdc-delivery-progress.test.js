@@ -274,7 +274,7 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
   assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   assert.equal(lane.retryTimer.state, 'idle');
   assert.equal(lane.retryDelayMs, initialDelay);
-  // 3. Subscriber/acknowledgement backpressure -> respect retry hint without doubling
+  // 3. Subscriber/acknowledgement backpressure -> respect retry hint on initial attempt, then back off capped at 250ms
   const backpressureDelay = scheduleDeliveryRetry(
     delivery,
     {reason: 'backpressure', retryAfterMs: 12},
@@ -282,22 +282,33 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
   );
   assert.equal(backpressureDelay, 12);
   assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
-  assert.equal(lane.retryDelayMs, initialDelay,
-    'backpressure respects hint without doubling retryDelayMs');
+  assert.equal(lane.retryDelayMs, initialDelay * 2,
+    'backpressure respects hint on initial attempt and advances backoff for repeated backpressure');
   // Simulate timer firing before next retry attempt
   clearTimeout(lane.retryTimer.handle);
   lane.retryTimer = {state: 'idle', handle: null};
-  // Repeated backpressure WITH hint honors the hint without accumulating exponential backoff
+  // Repeated backpressure WITH hint backs off capped at 250ms
   const repeatedHintedBackpressureDelay = scheduleDeliveryRetry(
     delivery,
     {reason: 'backpressure', retryAfterMs: 12},
     OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE,
   );
-  assert.equal(repeatedHintedBackpressureDelay, 12, 'hint is honored even on repeated backpressure');
-  assert.equal(lane.retryDelayMs, initialDelay,
-    'hinted repeated backpressure resets and does not double retryDelayMs');
+  assert.equal(repeatedHintedBackpressureDelay, 100, 'repeated hinted backpressure backs off');
+  assert.equal(lane.retryDelayMs, 200);
 
-  // Simulate timer firing before next retry attempt
+  // Advance to verify capping at 250ms
+  clearTimeout(lane.retryTimer.handle);
+  lane.retryTimer = {state: 'idle', handle: null};
+  const delay3 = scheduleDeliveryRetry(delivery, {reason: 'backpressure', retryAfterMs: 12}, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
+  assert.equal(delay3, 200);
+  clearTimeout(lane.retryTimer.handle);
+  lane.retryTimer = {state: 'idle', handle: null};
+  const cappedDelay = scheduleDeliveryRetry(delivery, {reason: 'backpressure', retryAfterMs: 12}, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
+  assert.equal(cappedDelay, 250, 'hinted backpressure caps at 250ms to prevent exceeding projection bound');
+
+  // Reset lane backpressure delay for unhinted test
+  lane.consecutiveBackpressure = 0;
+  lane.retryDelayMs = initialDelay;
   clearTimeout(lane.retryTimer.handle);
   lane.retryTimer = {state: 'idle', handle: null};
 
