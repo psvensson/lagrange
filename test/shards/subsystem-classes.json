@@ -9,7 +9,7 @@
     "cli-tooling": 99,
     "control-plane": 228,
     "convergence-topology": 78,
-    "distributed-harness": 209,
+    "distributed-harness": 210,
     "examples-e2e": 8,
     "pgwire-compat": 22,
     "placement-rebalance": 270,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 158,
     "solver-tooling": 7,
-    "storage-partition": 213,
+    "storage-partition": 214,
     "storage-raft": 146,
-    "test-infrastructure": 155,
+    "test-infrastructure": 156,
     "transactions": 17,
-    "transport-messaging": 113,
+    "transport-messaging": 114,
     "wasm-toolchain": 74
   },
-  "censusSize": 2564,
-  "digest": "fnv1a32-c260c14d",
+  "censusSize": 2568,
+  "digest": "fnv1a32-beba62df",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f45c9c39",
+  "observationDigest": "fnv1a32-3f701ea3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -913,6 +913,7 @@
     "test/distributed/harness/__tests__/distributed-failure-analyzer-load-metrics-fallback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/distributed-matrix-plan.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/docker-build-context.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/docker-image-retirement.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/docker-provider.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-dominant-reason-denoise.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-fallback.test.js": "distributed-harness",
@@ -1211,6 +1212,7 @@
     "test/message-group/message-group-service-strict-cdc-join-convergence.test.js": "transport-messaging",
     "test/message-group/message-group-service.test.js": "transport-messaging",
     "test/message-group/message-group-target-resolver.test.js": "transport-messaging",
+    "test/message-group/message-group-unparsable-peer-address.test.js": "transport-messaging",
     "test/message-group/message-retry-handler-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/metadata-cache-removal.test.js": "transport-messaging",
     "test/message-group/no-silent-delivery-failures.property.test.js": "transport-messaging",
@@ -1454,6 +1456,7 @@
     "test/partition/partition-write-leadership-transfer-committed.test.js": "storage-partition",
     "test/partition/partition-write-leadership-transfer.test.js": "storage-partition",
     "test/partition/partition-write-typed-releases.test.js": "storage-partition",
+    "test/partition/peer-admission-unparsable-address.test.js": "storage-partition",
     "test/partition/pending-request-round-trip.property.test.js": "storage-partition",
     "test/partition/pending-request-tracker-wait-bound-spent.test.js": "storage-partition",
     "test/partition/pending-request-tracker.test.js": "storage-partition",
@@ -2291,6 +2294,7 @@
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "test-infrastructure",
     "test/scripts/proof-authority-falsifiers.test.js": "test-infrastructure",
     "test/scripts/proof-authority.test.js": "test-infrastructure",
+    "test/scripts/proof-checkout-preparation.test.js": "test-infrastructure",
     "test/scripts/proof-cone-cli-output-completeness.test.js": "test-infrastructure",
     "test/scripts/proof-receipt-execution-report.test.js": "test-infrastructure",
     "test/scripts/prune-test-output.test.js": "test-infrastructure",
@@ -6945,6 +6949,14 @@
         "test/distributed/harness/__tests__"
       ]
     },
+    "test/distributed/harness/__tests__/docker-image-retirement.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/container-memory-working-set.js"
+      ]
+    },
     "test/distributed/harness/__tests__/docker-provider.test.js": {
       "files": [
         "Dockerfile",
@@ -9936,6 +9948,17 @@
         "test/test-helpers/controllable-consensus-port.js"
       ]
     },
+    "test/message-group/message-group-unparsable-peer-address.test.js": {
+      "files": [
+        "src/message-group/message-group-service.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js"
+      ]
+    },
     "test/message-group/message-retry-handler-wait-bound-spent.test.js": {
       "files": [
         "src/logging/wait-bound-spent.js"
@@ -12243,6 +12266,19 @@
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/peer-admission-unparsable-address.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/query/sql-query-engine-provision-target-methods.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -18233,6 +18269,7 @@
         "package.json",
         "scripts/checks/git-process-environment.js",
         "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "test/shards/primary-classes.json"
@@ -18257,6 +18294,17 @@
       "directories": [
         "data/releases",
         "solve"
+      ]
+    },
+    "test/scripts/proof-checkout-preparation.test.js": {
+      "files": [
+        ".gitignore",
+        "scripts/checks/impact-proof-cone-constants.js",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/generate-global-owner-debt-inventory.js"
+      ],
+      "directories": [
+        "test"
       ]
     },
     "test/scripts/proof-cone-cli-output-completeness.test.js": {
@@ -19001,6 +19049,8 @@
       "env": [
         "APPDATA",
         "LAGRANGE_LAB_HOME",
+        "PRODUCER_FAILS",
+        "PRODUCER_REWRITES",
         "XDG_CONFIG_HOME"
       ]
     },
@@ -19030,6 +19080,7 @@
         "GIT_DIR",
         "LAGRANGE_LAB_HOME",
         "PRODUCER_FAILS",
+        "PRODUCER_REWRITES",
         "XDG_CONFIG_HOME"
       ]
     },
@@ -19048,6 +19099,15 @@
         "package.json",
         "scripts/run-classified-test-files.js",
         "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js",
+        "test/service/h1-pinned-hono-component-proof.test.js",
+        "test/service/h2-hono-source-ir-deployment-cutover.test.js",
+        "test/service/h3-fetch-ingress-and-scoped-client.test.js",
+        "test/service/h4-http-invocation-recovery-and-cancellation.test.js",
+        "test/service/h5-compiled-public-hono-journey.test.js",
+        "test/service/q2-call-selector-typed-parameter-narrowing.test.js",
+        "test/service/q3-call-shard-paged-execution.test.js",
+        "test/service/q4-call-bounded-structured-partials.test.js",
+        "test/service/q5-service-cell-v2-default-multi-operation.test.js",
         "test/shards/convergence-probes.txt",
         "test/shards/primary-classes.json"
       ],

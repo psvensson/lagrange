@@ -86,11 +86,16 @@ function admitPartitionRaftPeer(service, peer) {
       change: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, ...refused});
     return refused;
   }
+  const nodeId = peer.nodeId ?? (peer.peerAddress ?
+    AddressManager.getInstance().nodeIdOfProjectedAddress(peer.peerAddress) :
+    null);
+  const peerAddress = peer.peerAddress ?? (nodeId ?
+    AddressManager.getInstance().format(nodeId,
+      ENTITY_TYPE.PARTITION, peer.replicaIdentity) : null);
   return admitGroupPeer(service.raft, admissionGroupOf(service), {
     replicaIdentity: peer.replicaIdentity,
-    nodeId: peer.nodeId,
-    peerAddress: AddressManager.getInstance().format(peer.nodeId,
-      ENTITY_TYPE.PARTITION, peer.replicaIdentity),
+    nodeId,
+    peerAddress,
   });
 }
 

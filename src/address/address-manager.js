@@ -431,6 +431,17 @@ class AddressManager {
   }
 
   /**
+   * The node a projected address names, or null when it is not a unified
+   * address. For an address read from a row: the absent node is a fact the
+   * caller's owner refuses typed, never an exception on a reconcile path.
+   * @param {*} address - The address to read.
+   * @return {string|null} The nodeId component, or null.
+   */
+  nodeIdOfProjectedAddress(address) {
+    return this.validate(address).valid ? this.parse(address).nodeId : null;
+  }
+
+  /**
    * Extract serviceType from a unified address.
    * @param {string} address - The unified address.
    * @return {string} The serviceType component.
