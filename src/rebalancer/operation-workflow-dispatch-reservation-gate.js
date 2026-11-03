@@ -13,6 +13,9 @@ import {
 import {
   repairOperationRowForGateRepairedReservation,
 } from './operation-workflow-gate-operation-row-repair.js';
+import {
+  STORAGE_RESERVATION_AUTHORITY_ERROR,
+} from './storage-reservation-authority.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
@@ -83,6 +86,28 @@ async function repairGateRepairedOperationRow(owner, operation, attempt) {
   await repairOperationRowForGateRepairedReservation(owner, operation);
 }
 
+function handleTerminalReservationAttempt(owner, operation, attempt) {
+  if (attempt?.authoritativeOperation) {
+    Object.assign(operation, attempt.authoritativeOperation);
+    if (
+      typeof owner.repository?.applyLocalPriorityOperationProgressRow ===
+      'function'
+    ) {
+      owner.repository.applyLocalPriorityOperationProgressRow(
+        attempt.authoritativeOperation,
+      );
+    }
+  }
+  if (typeof owner.clearTerminalOperationRetryState === 'function') {
+    owner.clearTerminalOperationRetryState(operation);
+  }
+  return owner.buildFailedOperationResult(
+    operation.operationId,
+    DISPATCH_RESERVATION_UNAVAILABLE_PREFIX + attempt.error,
+    {terminal: true},
+  );
+}
+
 /**
  * Verify an ACTIVE storage reservation exists for one dispatch candidate,
  * repairing a missing one through the deterministic reservation identity.
@@ -107,6 +132,11 @@ async function ensureDispatchReservationOrSkip(owner, operation) {
   ) {
     await repairGateRepairedOperationRow(owner, operation, attempt);
     return null;
+  }
+  if (
+    attempt?.error === STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL
+  ) {
+    return handleTerminalReservationAttempt(owner, operation, attempt);
   }
   assertReservationAuthorityAvailable(attempt);
   return owner.buildSkippedOperationResult(

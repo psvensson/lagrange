@@ -72,6 +72,7 @@ function createCdcObligationLane(tenure = null) {
     pending: new Map(), commands: new Map(), batch: emptyBatch(),
     flushTimer: null, retryTimer: IDLE_OBLIGATION_RETRY,
     retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
+    consecutiveBackpressure: 0,
     // The code the last flush was refused with before it was proposed; no
     // deadline is armed again until a new acknowledgement arrives.
     held: null, lastDrive: null, lastFlush: null,
@@ -435,19 +436,47 @@ function resolveDeliveryRetryDisposition(delivery, lane, error = null, explicit 
 function disarmDeliveryRetry(owner, lane, resetDelay = true) {
   clearTimer(owner, lane.retryTimer.handle);
   lane.retryTimer = IDLE_OBLIGATION_RETRY;
+  lane.consecutiveBackpressure = 0;
   if (resetDelay) lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
 }
 
 function computeRetryDelayMs(lane, error, disposition) {
   if (disposition === OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED) {
     lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+    lane.consecutiveBackpressure = 0;
   }
   const rawHint = error?.retryAfterMs;
   const hasHint = Number.isFinite(rawHint) && rawHint > 0;
-  const delayMs = Math.min(PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
-    Math.max(1, hasHint ? Math.floor(rawHint) : lane.retryDelayMs));
-  return {delayMs, advanceBackoff: !hasHint &&
-    disposition === OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE};
+  const isBackpressure = disposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE;
+  const isTransient = disposition === OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
+
+  let advanceBackoff = false;
+  let delayMs;
+
+  if (isBackpressure) {
+    lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;
+    if (lane.consecutiveBackpressure > 1) {
+      advanceBackoff = true;
+      delayMs = Math.min(
+        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+        Math.max(1, hasHint ? Math.max(Math.floor(rawHint), lane.retryDelayMs) : lane.retryDelayMs),
+      );
+    } else {
+      delayMs = Math.min(
+        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+        Math.max(1, hasHint ? Math.floor(rawHint) : lane.retryDelayMs),
+      );
+    }
+  } else {
+    lane.consecutiveBackpressure = 0;
+    delayMs = Math.min(
+      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+      Math.max(1, hasHint ? Math.floor(rawHint) : lane.retryDelayMs),
+    );
+    advanceBackoff = !hasHint && isTransient;
+  }
+
+  return {delayMs, advanceBackoff};
 }
 
 function scheduleDeliveryRetry(delivery, error = null, explicitDisposition = null) {
@@ -605,7 +634,10 @@ async function driveOneObligation(delivery, lane, obligation, subscribers,
   try {
     const result = await deliverObligation(delivery, lane, obligation, subscribers, context);
     if (result === CDC_COVERAGE_STATE.PROVISIONAL) lane.scan.provisional = true;
-    else lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+    else {
+      lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+      lane.consecutiveBackpressure = 0;
+    }
     lane.scan.cursor = obligationCursor(obligation);
     return {delivered: result === CDC_COVERAGE_STATE.PROVISIONAL ? 0 : 1};
   } catch (error) {
@@ -666,6 +698,7 @@ function drivePageFinished(
     return driveOutcome(lane, DRIVE.PROVISIONAL, {reason, delivered, retryDelayMs});
   }
   lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+  lane.consecutiveBackpressure = 0;
   finalizeDrainedScan(delivery, lane, scan);
   return driveOutcome(lane, DRIVE.DRAINED, {reason, delivered});
 }

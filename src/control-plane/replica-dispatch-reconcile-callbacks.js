@@ -165,6 +165,31 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
    * @return {Promise<Object|null>}
    * @private
    */
+  async resolveNonRefreshReconcileRow(operationId, contextRow) {
+    if (
+      contextRow &&
+      !isTerminalReplicaOperationRecord(contextRow) &&
+      typeof this.getReplicaOperationRow === 'function'
+    ) {
+      const refreshedRow = await this.getReplicaOperationRow(operationId);
+      if (isTerminalReplicaOperationRecord(refreshedRow)) {
+        return refreshedRow;
+      }
+    }
+    return contextRow || await this.getReplicaOperationRow(operationId);
+  },
+
+  /**
+   * Resolve the operation row for a dispatch attempt.
+   * Prefer refreshed authoritative rows when available, so that newly visible
+   * durable progress is visible, while still retaining the original wake-up
+   * row if control-plane visibility is temporarily unavailable.
+   *
+   * @param {string} operationId
+   * @param {Object} [context]
+   * @return {Promise<Object|null>}
+   * @private
+   */
   async resolveOperationDispatchReconcileRow(operationId, context = {}) {
     const contextRow = context?.row || null;
     if (
@@ -172,7 +197,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
         REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
       ] !== true
     ) {
-      return contextRow || await this.getReplicaOperationRow(operationId);
+      return this.resolveNonRefreshReconcileRow(operationId, contextRow);
     }
     const refreshedRow = await this.getReplicaOperationRow(operationId);
     if (shouldPreferRuntimeTargetProgressRow(

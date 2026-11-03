@@ -5,6 +5,12 @@ import {
   REPLICATION_TARGET_SOURCE,
   resolveDesiredReplicationFactor,
 } from '../bootstrap/replication-target-authority.js';
+import {
+  shouldAllowPriorityRecoveryDispatchBootstrap,
+} from '../control-plane/replica-dispatch-priority-recovery-bootstrap.js';
+import {
+  isDeferredReadinessPlanningSnapshot,
+} from '../control-plane/readiness-planning-version-contract.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -52,6 +58,69 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
     }
     return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+  }
+
+  /**
+   * Whether a node admitted by startup-authority priority placement is also
+   * ready for dispatch execution.
+   *
+   * @param {string} nodeId
+   * @param {Object|null} readiness
+   * @param {string|null} [readinessDecisionDimension=null]
+   * @return {boolean}
+   * @private
+   */
+  isStartupAuthorityPlacementDispatchReady(
+    nodeId,
+    readiness,
+    readinessDecisionDimension = null,
+  ) {
+    const dimension =
+      readinessDecisionDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    return (
+      this.isReadinessDimensionSatisfied(readiness, dimension) ||
+      shouldAllowPriorityRecoveryDispatchBootstrap({
+        operation: {
+          partitionId: this.entityId,
+          targetNodeId: nodeId,
+        },
+        readiness,
+        decisionDimension: dimension,
+        selfNodeId: this.nodeId,
+      })
+    );
+  }
+
+  /**
+   * Resolve node readiness sync snapshot, falling back to base snapshot when
+   * a dimension-specialized snapshot build is deferred/stale.
+   *
+   * @param {string} nodeId
+   * @param {Object} [readinessOptions={}]
+   * @return {Object|null}
+   * @private
+   */
+  resolveNodeReadinessSyncSnapshot(nodeId, readinessOptions = {}) {
+    let readiness = this.controlPlaneReadinessService?.getNodeReadinessSync(
+      nodeId,
+      readinessOptions,
+    );
+    if (
+      isDeferredReadinessPlanningSnapshot(readiness) &&
+      typeof this.controlPlaneReadinessService?.getNodeReadinessSync ===
+        UNIFIED_REBALANCER_LITERAL.FUNCTION
+    ) {
+      const fallbackReadiness =
+        this.controlPlaneReadinessService.getNodeReadinessSync(nodeId);
+      if (
+        fallbackReadiness &&
+        !isDeferredReadinessPlanningSnapshot(fallbackReadiness)
+      ) {
+        readiness = fallbackReadiness;
+      }
+    }
+    return readiness;
   }
 
   /**

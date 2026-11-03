@@ -136,10 +136,23 @@ async function ensureDispatchMembershipEpochOrSkip(owner, operation) {
     Object.assign(operation, terminalOutcome.operation);
     return null;
   }
+  if (
+    typeof owner.repository?.applyLocalPriorityOperationProgressRow ===
+    'function'
+  ) {
+    owner.repository.applyLocalPriorityOperationProgressRow(operation);
+  }
+  if (typeof owner.clearTerminalOperationRetryState === 'function') {
+    owner.clearTerminalOperationRetryState(operation);
+  }
   return owner.buildFailedOperationResult(
     operation.operationId,
     staleDispatchError,
+    {terminal: true},
   );
 }
 
-export {ensureDispatchMembershipEpochOrSkip};
+export {
+  STALE_DISPATCH_EPOCH_PREFIX,
+  ensureDispatchMembershipEpochOrSkip,
+};

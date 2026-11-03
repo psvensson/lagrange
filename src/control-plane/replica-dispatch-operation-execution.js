@@ -13,6 +13,12 @@ import {
 import {
   REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS,
 } from './replica-dispatch-reconcile-callbacks.js';
+import {
+  STORAGE_RESERVATION_AUTHORITY_ERROR,
+} from '../rebalancer/storage-reservation-authority.js';
+import {
+  STALE_DISPATCH_EPOCH_PREFIX,
+} from '../rebalancer/operation-workflow-dispatch-epoch-gate.js';
 
 const {
   ControlPlaneField,
@@ -311,6 +317,22 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       }
 
       if (!dispatchResult || dispatchResult.success !== true) {
+        if (this.isTerminalDispatchResult(dispatchResult)) {
+          this.clearDeferredOperationDispatchRetry(operationId);
+          this.dispatchFailureSignaturesByOperationId.delete(operationId);
+          this.recordDispatchFailure({
+            operationId,
+            targetNodeId,
+            workflowStep: row.workflow_step || null,
+            skipped: dispatchResult?.skipped === true,
+            reason:
+              dispatchResult?.reason ||
+              REPLICA_DISPATCH_SERVICE_LITERAL.DISPATCH_UNSUCCESSFUL,
+            error: dispatchResult?.error || null,
+            readinessSnapshot: dispatchReadiness.snapshot,
+          });
+          return;
+        }
         if (
           dispatchResult?.reason ===
           REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PENDING
@@ -397,6 +419,31 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       this.dispatchInFlight.delete(operationId);
       this.priorityDispatchInFlight.delete(operationId);
     }
+  }
+
+  /**
+   * Whether one unsuccessful dispatch outcome is an authoritative terminal state
+   * that must not be retried.
+   *
+   * @param {Object|null} dispatchResult
+   * @return {boolean}
+   * @private
+   */
+  isTerminalDispatchResult(dispatchResult) {
+    if (dispatchResult?.terminal === true) {
+      return true;
+    }
+    const error = typeof dispatchResult?.error === 'string' ?
+      dispatchResult.error :
+      null;
+    if (!error) {
+      return false;
+    }
+    return (
+      error.includes(
+        STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL,
+      ) || error.startsWith(STALE_DISPATCH_EPOCH_PREFIX)
+    );
   }
 
   /**

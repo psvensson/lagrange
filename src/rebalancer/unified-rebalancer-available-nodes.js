@@ -214,10 +214,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     const now = ownerNowMs(this);
     return candidateRows.filter((node) => {
       const nodeId = node?.node_id || null;
-      if (!nodeId) {
-        return false;
-      }
-      if (effectiveNodeIds instanceof Set && !effectiveNodeIds.has(nodeId)) {
+      if (!nodeId || (effectiveNodeIds instanceof Set && !effectiveNodeIds.has(nodeId))) {
         return false;
       }
       const readinessOptions = {
@@ -226,7 +223,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       if (this.isFormationLivenessDependencyPartition()) {
         readinessOptions.allowStaleOnCacheChange = false;
       }
-      const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+      const readiness = this.resolveNodeReadinessSyncSnapshot(
         nodeId,
         readinessOptions,
       );
@@ -236,32 +233,64 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
           readinessDecisionDimension,
         )
       ) {
-        return true;
-      }
-      const isActive = node.status === NodeStatus.ACTIVE;
-      if (!isActive) {
-        return false;
-      }
-      const leaseExpiresAtMs = Number(
-        node.ready_lease_expires_at ??
-        node.readyLeaseExpiresAt ??
-        node.readyLeaseExpiresAtMs,
-      );
-      if (!Number.isFinite(leaseExpiresAtMs) || leaseExpiresAtMs <= now) {
-        return false;
-      }
-      if (
-        !this.isReadinessDimensionSatisfied(
+        return this.isStartupAuthorityPlacementDispatchReady(
+          nodeId,
           readiness,
           readinessDecisionDimension,
-        )
-      ) {
-        return false;
+        );
       }
-      return readinessDecisionDimension !==
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ||
-        readiness?.dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true;
+      return this.isCandidateActiveLeasedNode(
+        node,
+        readiness,
+        readinessDecisionDimension,
+        now,
+      );
     });
+  }
+
+  /**
+   * Decide whether one active node with a non-expired ready lease satisfies
+   * the requested readiness decision dimension.
+   *
+   * @param {Object} node
+   * @param {Object|null} readiness
+   * @param {string} readinessDecisionDimension
+   * @param {number} now
+   * @return {boolean}
+   * @private
+   */
+  isCandidateActiveLeasedNode(
+    node,
+    readiness,
+    readinessDecisionDimension,
+    now,
+  ) {
+    if (node?.status !== NodeStatus.ACTIVE) {
+      return false;
+    }
+    const leaseExpiresAtMs = Number(
+      node.ready_lease_expires_at ??
+      node.readyLeaseExpiresAt ??
+      node.readyLeaseExpiresAtMs,
+    );
+    if (!Number.isFinite(leaseExpiresAtMs) || leaseExpiresAtMs <= now) {
+      return false;
+    }
+    if (
+      !this.isReadinessDimensionSatisfied(
+        readiness,
+        readinessDecisionDimension,
+      )
+    ) {
+      return false;
+    }
+    return (
+      readinessDecisionDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ||
+      readiness?.dimensions?.[
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
+      ] === true
+    );
   }
 
   resolveAvailableNodeCandidateRows() {

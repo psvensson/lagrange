@@ -12,7 +12,7 @@
     "distributed-harness": 210,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 271,
+    "placement-rebalance": 272,
     "query-sql": 191,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2584,
-  "digest": "fnv1a32-97e5c392",
+  "censusSize": 2585,
+  "digest": "fnv1a32-2b340d1e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9b256b10",
+  "observationDigest": "fnv1a32-42994af4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1863,6 +1863,7 @@
     "test/rebalancer/critical-spread-terminal-stall-repro.test.js": "placement-rebalance",
     "test/rebalancer/critical-topology-committed-lease.test.js": "placement-rebalance",
     "test/rebalancer/dispatch-pending-drain-single-partition-authority.test.js": "placement-rebalance",
+    "test/rebalancer/dispatch-terminal-operation-eviction.test.js": "placement-rebalance",
     "test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js": "placement-rebalance",
     "test/rebalancer/duplicate-move-prevention.property.test.js": "placement-rebalance",
     "test/rebalancer/duplicate-operation-prevention.property.test.js": "placement-rebalance",
@@ -15660,6 +15661,14 @@
     "test/rebalancer/critical-topology-committed-lease.test.js": {
       "files": [
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/rebalancer/dispatch-terminal-operation-eviction.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-constants.js"
       ]
     },
     "test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js": {

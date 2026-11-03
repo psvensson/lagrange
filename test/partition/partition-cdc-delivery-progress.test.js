@@ -284,6 +284,18 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
   assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
   assert.equal(lane.retryDelayMs, initialDelay,
     'backpressure respects hint without doubling retryDelayMs');
+  // Simulate timer firing before next retry attempt
+  clearTimeout(lane.retryTimer.handle);
+  lane.retryTimer = {state: 'idle', handle: null};
+  // Repeated backpressure advances exponential backoff to avoid unbacked-off storm
+  const repeatedBackpressureDelay = scheduleDeliveryRetry(
+    delivery,
+    {reason: 'backpressure', retryAfterMs: 12},
+    OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE,
+  );
+  assert.equal(repeatedBackpressureDelay, initialDelay);
+  assert.equal(lane.retryDelayMs, initialDelay * 2,
+    'repeated backpressure doubles retryDelayMs to avoid unbacked-off storm');
   scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   // 4. Stale propagation lifetime -> refuse and disarm; never resume retired work
   assert.equal(

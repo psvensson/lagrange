@@ -35,6 +35,7 @@ function buildFailedReservationAdoption(
     outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
     reservationId,
     error,
+    authoritativeOperation: options.authoritativeOperation || null,
     authorityUnavailable:
       options.authorityUnavailable === true ||
       error ===
@@ -64,7 +65,28 @@ function classifyOperationAdoptionError(owner, operation, observation) {
   return null;
 }
 
-async function observeAuthoritativeOperationForReservation(
+function reconcileAuthoritativeTerminalOperation(
+  owner,
+  operation,
+  authoritativeOperation,
+) {
+  if (authoritativeOperation && typeof authoritativeOperation === 'object') {
+    Object.assign(operation, authoritativeOperation);
+    if (
+      typeof owner?.repository?.applyLocalPriorityOperationProgressRow ===
+      'function'
+    ) {
+      owner.repository.applyLocalPriorityOperationProgressRow(
+        authoritativeOperation,
+      );
+    }
+  }
+  if (typeof owner?.clearTerminalOperationRetryState === 'function') {
+    owner.clearTerminalOperationRetryState(operation);
+  }
+}
+
+async function observeAuthoritativeOperationObservationForReservation(
   owner,
   operation,
   options = {},
@@ -81,11 +103,29 @@ async function observeAuthoritativeOperationForReservation(
         timeoutBudget: options.timeoutBudget,
       },
     );
-  return classifyOperationAdoptionError(
+  const error = classifyOperationAdoptionError(
     owner,
     operation,
     operationObservation,
   );
+  return {
+    error,
+    authoritativeOperation: operationObservation?.operation || null,
+  };
+}
+
+async function observeAuthoritativeOperationForReservation(
+  owner,
+  operation,
+  options = {},
+) {
+  const {error} =
+    await observeAuthoritativeOperationObservationForReservation(
+      owner,
+      operation,
+      options,
+    );
+  return error;
 }
 
 function buildReservationRowAdoption(owner, operation, rows, options) {
@@ -155,16 +195,27 @@ async function adoptAuthoritativeReservationForOperation(
   const rows = Array.isArray(activeResult.rows) ? activeResult.rows : [];
   // Observe the operation after the awaited reservation read so a stale live
   // observation cannot authorize adoption after the operation has completed.
-  const operationError = await observeAuthoritativeOperationForReservation(
-    owner,
-    operation,
-    options,
-  );
+  const {error: operationError, authoritativeOperation} =
+    await observeAuthoritativeOperationObservationForReservation(
+      owner,
+      operation,
+      options,
+    );
   if (operationError) {
+    if (
+      operationError === STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL
+    ) {
+      reconcileAuthoritativeTerminalOperation(
+        owner,
+        operation,
+        authoritativeOperation,
+      );
+    }
     return buildFailedReservationAdoption(
       owner,
       operation,
       operationError,
+      {authoritativeOperation},
     );
   }
   return buildReservationRowAdoption(owner, operation, rows, options);

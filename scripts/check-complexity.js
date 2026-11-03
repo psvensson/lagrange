@@ -139,8 +139,8 @@ const TARGET_THRESHOLD = 12;
 // runner, workload call site, identity inspection, readiness, durability proof).
 // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 1731 -> 1728 on the checker's hint.
 // 2026-11-03 (quest serve-eligibility-committed-epoch-read attempt 2): tightened 1728 -> 1727 on the checker's hint.
-// 2026-11-03 (composed-05-comparison-readiness): tightened 1727 -> 1725 on the checker's hint.
-const BASELINE_COUNT = 1725;
+// 2026-11-03 (composed-05-comparison-readiness): tightened 1727 -> 1723 on the checker's hint.
+const BASELINE_COUNT = 1723;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

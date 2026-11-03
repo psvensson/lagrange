@@ -82,7 +82,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     if (this.isFormationLivenessDependencyPartition()) {
       readinessOptions.allowStaleOnCacheChange = false;
     }
-    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+    const readiness = this.resolveNodeReadinessSyncSnapshot(
       nodeId,
       readinessOptions,
     );
@@ -116,13 +116,11 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
         readinessDecisionDimension,
       )
     ) {
-      if (!this.isTransportReady(nodeId)) {
-        return false;
-      }
-      if (this.enableReadinessPing) {
-        return this.checkReadinessPing(nodeId);
-      }
-      return true;
+      return this.isStartupAuthorityPlacementNodeReady(
+        nodeId,
+        readiness,
+        readinessDecisionDimension,
+      );
     }
     if (
       !this.isReadinessDimensionSatisfied(readiness, readinessDecisionDimension)
@@ -140,6 +138,36 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
       enableReadinessPing: this.enableReadinessPing,
       readinessPingTimeoutMs: this.readinessPingTimeoutMs,
     });
+  }
+
+  /**
+   * Evaluate node readiness under startup-authority control-plane placement.
+   *
+   * @param {string} nodeId
+   * @param {Object|null} readiness
+   * @param {string} readinessDecisionDimension
+   * @return {boolean}
+   * @private
+   */
+  isStartupAuthorityPlacementNodeReady(
+    nodeId,
+    readiness,
+    readinessDecisionDimension,
+  ) {
+    if (
+      !this.isStartupAuthorityPlacementDispatchReady(
+        nodeId,
+        readiness,
+        readinessDecisionDimension,
+      ) ||
+      !this.isTransportReady(nodeId)
+    ) {
+      return false;
+    }
+    if (this.enableReadinessPing) {
+      return this.checkReadinessPing(nodeId);
+    }
+    return true;
   }
 
   /**
