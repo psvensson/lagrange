@@ -1,0 +1,14 @@
+{
+  "schema": "solve-relocation-inventory/1",
+  "bundles": [
+    {
+      "bundle": "wasi-component-startup-budget--wasi-startup-design-evidence-2fad21f7f-2026-11-02.tar.gz",
+      "bundleSha256": "f8e02f27d45b6b7a06f93fe6a557ada9e6718ac8075aba882c398d415b37bf9e",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/wasi-component-startup-budget--wasi-startup-design-evidence-2fad21f7f-2026-11-02.tar.gz",
+      "sourceCommit": "2fad21f7fbf8aa79e3ef55382419bb0ff4871d5a",
+      "root": "solve/quests/wasi-component-startup-budget/evidence/",
+      "files": 9,
+      "shard": "relocation-inventory/wasi-component-startup-budget--wasi-startup-design-evidence-2fad21f7f-2026-11-02.json"
+    }
+  ]
+}

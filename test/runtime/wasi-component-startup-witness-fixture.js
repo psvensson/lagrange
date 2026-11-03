@@ -1,0 +1,41 @@
+/**
+ * Shared inputs for the wasi-component-startup-budget witnesses: a minimal
+ * genuine WASI Component (one memory, export `run`, no imports; the same
+ * bytes as MEMORY_COMPONENT_BYTES in
+ * minimal-deployment-request-cell-runtime-readiness.test.js) and a second,
+ * distinct genuine component used where two digests are needed.
+ */
+export const STARTUP_WITNESS_COMPONENT_BYTES = Buffer.from(
+  'AGFzbQ0AAQABPwBhc20BAAAAAQYBYAF/AX8DAgEABQQBAQIEBxACBm1lbW9yeQIAA3J1' +
+  'bgAACgYBBAAgAAsACQRuYW1lAAIBbQIEAQAAAAcOAUABB3JlcXVlc3R5AHkGCQEAAAEA' +
+  'A3J1bggGAQAAAAAACwkBAANydW4BAAAAKA5jb21wb25lbnQtbmFtZQEGABEBAAFtAQYA' +
+  'EgEAAWkBBwEBAANydW4=',
+  'base64',
+);
+
+export const STARTUP_WITNESS_CELL_BUDGETS = Object.freeze({
+  context_bytes: 1024 * 1024,
+  cpu_time_ms: 5000,
+  input_bytes: 1024 * 1024,
+  memory_bytes: 64 * 1024 * 1024,
+  output_bytes: 1024 * 1024,
+  wall_time_ms: 10000,
+});
+
+export const STARTUP_WITNESS_SECOND_COMPONENT_BYTES = Buffer.from(
+
+  'AGFzbQ0AAQAHGwFCAgFAAAB3BAAOZ2V0LXJhbmRvbS11NjQBAAodAQAYd2FzaTpyYW5k' +
+  'b20vcmFuZG9tQDAuMi4wBQAHXwFCBgFAAgV0YWJsZXkDa2V5eQB6BAAEcmVhZAEAAUAD' +
+  'BXRhYmxleQNrZXl5BXZhbHVlegEABAAFd3JpdGUBAQFAAQpjYXBhYmlsaXR5eQB6BAAK' +
+  'Y2FwYWJpbGl0eQECChoBABVsYWdyYW5nZTpjZWxsL2NvbnRleHQFAQYJAQEAAQRyZWFk' +
+  'CAUBAQAAAAYKAQEAAQV3cml0ZQgFAQEAAQAGDwEBAAEKY2FwYWJpbGl0eQgFAQEAAgAC' +
+  'HwEBAwRyZWFkAAAFd3JpdGUAAQpjYXBhYmlsaXR5AAIB1gEAYXNtAQAAAAESA2ACf38B' +
+  'f2ADf39/AGABfwF/AikDA2N0eARyZWFkAAADY3R4BXdyaXRlAAEDY3R4CmNhcGFiaWxp' +
+  'dHkAAgMCAQIHBwEDcnVuAAMKTQFLACAARQR/QQBBBxAAQQBBB0EqEAFBABACagUgAEEB' +
+  'RgR/QeMAQQcQAAUgAEECRgR/QeMAEAIFIABBA0YEfwNADAALAAUgAAsLCwsLADEEbmFt' +
+  'ZQACAW0BGgMABHJlYWQBBXdyaXRlAgpjYXBhYmlsaXR5AwoBAwEEBWFnYWluAgoBAAAB' +
+  'A2N0eBIABw4BQAEHcmVxdWVzdHoAegYJAQAAAQEDcnVuCAYBAAADAAILCQEAA3J1bgED' +
+  'AABdDmNvbXBvbmVudC1uYW1lARwAAAMABHJlYWQBBXdyaXRlAgpjYXBhYmlsaXR5AQYA' +
+  'EQEAAW0BDAASAgAEY3R4aQEBaQEHAQEDA3J1bgEPBQIABnJhbmRvbQEDY3R4',
+  'base64',
+);

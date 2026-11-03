@@ -25,6 +25,7 @@ quests:
   - user-table-leader-placement-spread-v2
   - user-table-leader-placement-spread
   - wasi-cell-busy-health-admission
+  - wasi-component-startup-budget
 authorizes:
   - src/authoring
   - src/service
@@ -371,3 +372,25 @@ correctness regression or reopen completed optimization work.
    logs, sealed Quest receipts and the epic's existing front-matter probe are
    preserved. This update is not acceptance of a major feature, performance
    result, operating envelope or release.
+
+## 0.5 service tests off the controller — 2026-11-02
+
+- h1–h5 and q2–q4 fail on the 2-core hosted runner and the lab hosts with
+  `request_cell_start_failed 'Component startup timed out'`. The cause is that
+  every Cell start re-runs the jco transpile (97% of start time) under the
+  fixed 10 s bound. Owner: quest `wasi-component-startup-budget` (derive once
+  per component per node; start becomes instantiate-only). Design and
+  measurements are in its relocated evidence bundle
+  (`solve/changes/evidence-relocation/wasi-component-startup-budget`).
+- Immediate CI trigger: the nine files are resource class `ordinary` (four
+  jobs), unlike their toolchain siblings. Owner: `class: fix` quest
+  `solve/quests/service-test-toolchain-classification` (branch
+  `fix/service-test-toolchain-classification-20261102`, PR #193). That quest
+  does not close the R12 defect.
+- R17 finding for `postgres-compatibility-certification-matrix`: the
+  committed `docs/postgres-compatibility-matrix.json` pins
+  `driverVersions.psql` 14.24, which is the controller's psql. The hosted
+  runner's psql 16.15 changes `driverVersions` and `matrixDigest`, so the
+  deep-equal at test line 1254 fails. The logged refusals ("multiple
+  statements…", "OFFSET without LIMIT…") are expected negative controls. Next
+  action owner: that quest's owner.

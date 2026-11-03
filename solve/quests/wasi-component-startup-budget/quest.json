@@ -1,0 +1,51 @@
+{
+  "schema": "solve-quest/2",
+  "id": "wasi-component-startup-budget",
+  "class": "product",
+  "epic": "pilot-readiness-and-public-proof",
+  "statement": "A WASI component Cell start is instantiate-and-ready only, under the existing fixed STARTUP_TIMEOUT_MS liveness bound: the jco transpile of the component (measured 97% of start time, 3.4-3.6 s of 3.5-3.7 s for the 12.9 MB h1 Hono component on the 20-core controller, and the sole cause of the hosted and lab 'Component startup timed out' failures) is derived once per (component sha256, jco-transpile version, world, instantiation mode) by a single node-side, single-flight derivation owned by WasiComponentCellRuntime, triggered at WasmComponentDriver prepare and awaited by start, reused across starts, restarts and replicas, bounded by artifact size, one derivation lane per node, a byte-proportional CPU-time ceiling and owner cancellation, and refused with typed request_cell_component_derivation_failed / request_cell_component_derivation_exhausted. A start that exceeds the liveness bound terminates its worker and fails typed request_cell_start_failed {phase, budgetMs, elapsedMs}; no orphaned worker remains. The 0.5 service tests h1-h5 and q2-q5 pass unchanged on this machine and at jobs=4 pinned to two cores.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/wasi-component-startup-budget/evidence/receipt.json",
+      "requiredReceipts": [
+        "slow-startup-liveness-witness-typed-and-terminated",
+        "derivation-single-flight-reuse",
+        "derivation-typed-failure-at-prepare",
+        "derivation-ceiling-and-cancellation",
+        "service-0-5-tests-green-native",
+        "service-0-5-tests-green-two-core-jobs4",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-machine-factor-in-src",
+      "statement": "LAGRANGE_TEST_MACHINE_FACTOR / scaleByMachineFactor is never read by src: the hardware-relative-convergence-budget doctrine scales work-bound test budgets only and leaves src timers untouched; a test-only route into production is forbidden."
+    },
+    {
+      "id": "liveness-bound-stays-fixed",
+      "statement": "STARTUP_TIMEOUT_MS is not raised; after the repair it bounds only worker spawn, memory cap, glue import, core compile, instantiate and the ready handshake (measured 0.1 s alone, 1.9 s at 8-way contention on one core)."
+    },
+    {
+      "id": "node-side-derivation-only",
+      "statement": "Transpiled glue JS runs beside the host imports, so it is produced only on the node by the pinned toolchain from admitted component bytes; a deployer-supplied precompiled artifact is never accepted."
+    },
+    {
+      "id": "one-derivation-path",
+      "statement": "One derivation implementation serves both triggers (driver prepare, runtime start); no fallback to in-worker transpile; derivation outcomes are named typed states (R07, R11)."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first: the deterministic slow-startup witness (fixture worker via the existing workerPath option, in a child process that must exit by itself) and the single-flight derivation count are red on 6d58fdba1 before any src change; the two-core jobs=4 run of h1/h2/h3/q4 is red on 6d58fdba1 (3/4 STARTUP_TIMEOUT_MS, reproduced 2026-11-02). Independent verification before landing with the concurrency-serialization, sweep-timer, owner-interaction and harness-fidelity templates."
+    }
+  ],
+  "verificationTemplates": [
+    "concurrency-serialization",
+    "sweep-timer",
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "d41525574bd4f39a0e01af0c0c1c8d5954d79b99"
+}
