@@ -81,6 +81,10 @@ const controlPlaneReadinessServeEligibilityMethods = {
     return this.getServeEligibilityOwner().answerCohort(nodeIds);
   },
 
+  answerCommittedNodes() {
+    return this.getServeEligibilityOwner().answerCommittedNodes();
+  },
+
   subscribeServeEligibility(listener) {
     return this.getServeEligibilityOwner().subscribe(listener);
   },

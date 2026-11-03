@@ -1,9 +1,6 @@
 import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-execution.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
-import {
-  isEvidenceAbsentReadinessDenialSnapshot,
-} from '../control-plane/readiness-denial-classification.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
@@ -25,6 +22,21 @@ const {
   WORKFLOW_STEP,
   normalizePriorityRecoveryOperationPartitionId,
 } = SHARED;
+
+import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+const {NodeStatus} = UNIFIED_REBALANCER_SHARED;
+
+function isNodeActiveWithCurrentLease(nodeRow) {
+  if (!nodeRow || nodeRow.status !== NodeStatus.ACTIVE) {
+    return false;
+  }
+  const leaseExpiresAtMs = Number(
+    nodeRow.ready_lease_expires_at ??
+    nodeRow.readyLeaseExpiresAt ??
+    nodeRow.readyLeaseExpiresAtMs,
+  );
+  return Number.isFinite(leaseExpiresAtMs) && leaseExpiresAtMs > Date.now();
+}
 
 class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecution {
   buildPriorityRecoveryWorkflowStepTimeoutMap(operation = null) {
@@ -138,28 +150,15 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
   // owner_evidence_missing; an empty reason list stays ambiguous and fails
   // closed. Mirrors the approved routing fail-open discipline: any
   // substantive denial keeps every guard closed.
-  isEvidenceAbsentReadinessDenial(nodeId, options = {}) {
-    if (
-      !nodeId ||
-      !this.controlPlaneReadinessService ||
-      typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
-        'function'
-    ) {
+  isEvidenceAbsentReadinessDenial(nodeId, _options = {}) {
+    if (!nodeId) {
       return false;
     }
-    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
-      nodeId,
-      {
-        decisionDimension:
-          typeof options?.decisionDimension === 'string' &&
-          options.decisionDimension.length > 0 ?
-            options.decisionDimension :
-            this.resolveOperationReadinessDecisionDimension(
-              options?.partitionId || null,
-            ),
-      },
-    );
-    return isEvidenceAbsentReadinessDenialSnapshot(readiness);
+    const nodeRow =
+      typeof this.systemTableCache?.get === 'function' ?
+        this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
+        null;
+    return isNodeActiveWithCurrentLease(nodeRow);
   }
 
   // Floor accounting for critical-partition remove safety ONLY: a replica

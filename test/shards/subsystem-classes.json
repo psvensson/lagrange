@@ -12,7 +12,7 @@
     "distributed-harness": 209,
     "examples-e2e": 8,
     "pgwire-compat": 22,
-    "placement-rebalance": 270,
+    "placement-rebalance": 271,
     "query-sql": 191,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2557,
-  "digest": "fnv1a32-4b4b68aa",
+  "censusSize": 2558,
+  "digest": "fnv1a32-19eb4c9c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8a69534a",
+  "observationDigest": "fnv1a32-221d9b10",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1839,6 +1839,7 @@
     "test/rebalancer/coordinator-shared-readiness-policy.test.js": "placement-rebalance",
     "test/rebalancer/coordinator-timeout-check-serialization.test.js": "placement-rebalance",
     "test/rebalancer/critical-spread-terminal-stall-repro.test.js": "placement-rebalance",
+    "test/rebalancer/critical-topology-committed-lease.test.js": "placement-rebalance",
     "test/rebalancer/dispatch-pending-drain-single-partition-authority.test.js": "placement-rebalance",
     "test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js": "placement-rebalance",
     "test/rebalancer/duplicate-move-prevention.property.test.js": "placement-rebalance",
@@ -4960,7 +4961,6 @@
     "test/control-plane/readiness-deferred-denial-evidence-absent.test.js": {
       "files": [
         "src/bootstrap/lifecycle-controller-constants.js",
-        "src/control-plane/readiness-denial-classification.js",
         "src/control-plane/readiness-planning-publication-contract.js",
         "src/control-plane/readiness-planning-snapshot-owner.js",
         "src/rebalancer/priority-publication-safety-shared.js",
@@ -4971,7 +4971,6 @@
       "files": [
         "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/node-liveness-semantic-projection-owner.js",
-        "src/control-plane/readiness-denial-classification.js",
         "src/control-plane/readiness-planning-version-contract.js"
       ]
     },
@@ -15273,6 +15272,11 @@
     "test/rebalancer/critical-spread-terminal-stall-repro.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/critical-topology-committed-lease.test.js": {
+      "files": [
+        "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js": {

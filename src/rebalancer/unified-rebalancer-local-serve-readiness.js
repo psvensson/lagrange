@@ -95,17 +95,15 @@ const UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS = {
 
   buildLocalServeReadinessPlanningSnapshot(readiness) {
     const reasonCodes = this.normalizeLocalServeReadinessReasonCodes(readiness);
-    const startupBypass =
-      this.shouldBypassLocalPriorityControlPlaneStartupReadiness();
     const reasonState = this.resolveLocalServeReadinessReasonState({
       readiness,
       reasonCodes,
-      startupBypass,
+      startupBypass: false,
     });
     return Object.freeze({
       reasonCodes,
       reasonState,
-      startupBypass,
+      startupBypass: false,
       decision:
         LOCAL_SERVE_READINESS_REASON_DECISION_TABLE[reasonState] ||
         LOCAL_SERVE_READINESS_PLANNING_DECISION.DEFER_PLANNING,
@@ -113,47 +111,14 @@ const UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS = {
   },
 
   /**
-   * Return one local readiness snapshot when critical system-partition
-   * planning should wait for this leader to become serve-eligible.
+   * Local-serve defer deleted (serve-eligibility-committed-epoch-read):
+   * non-priority system planning is not gated on the local node's serve lane.
    *
-   * Background redistribution of seed-hosted system partitions fans out many
-   * control-plane reads and writes. During join/restart convergence, a leader
-   * that is not yet serve-eligible should not initiate that background work,
-   * even though repair-eligible topology operations remain valid elsewhere.
-   *
-   * @return {Object|null}
+   * @return {null}
    * @private
    */
   getCriticalSystemLocalServeReadinessBlocker() {
-    if (
-      !this.isSystemPartitionEntity() ||
-      !this.controlPlaneReadinessService ||
-      typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
-        'function'
-    ) {
-      return null;
-    }
-    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
-      this.nodeId,
-      {
-        allowStaleOnCacheChange: false,
-      },
-    );
-    if (!readiness?.dimensions) {
-      return null;
-    }
-    const planningSnapshot =
-      this.buildLocalServeReadinessPlanningSnapshot(readiness);
-    if (
-      planningSnapshot.decision ===
-        LOCAL_SERVE_READINESS_PLANNING_DECISION.ALLOW_PLANNING
-    ) {
-      return null;
-    }
-    return Object.freeze({
-      ...readiness,
-      localServeReadinessPlanning: planningSnapshot,
-    });
+    return null;
   },
 };
 

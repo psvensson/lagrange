@@ -206,10 +206,10 @@ const CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON = Object.freeze({
     'transport_membership_exceeds_nodes_cache',
   ENDPOINT_VISIBILITY_INCOMPLETE: 'endpoint_visibility_incomplete',
   TOPOLOGY_OPERATIONS_IN_FLIGHT: 'topology_operations_in_flight',
+  UNAVAILABLE: 'unavailable',
 });
 
 const TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE = Object.freeze({
-  CACHE: 'cache',
   AUTHORITATIVE: 'authoritative',
 });
 

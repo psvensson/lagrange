@@ -37,16 +37,40 @@ import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {NodeLivenessSemanticProjectionOwner} from
   '../../src/control-plane/node-liveness-semantic-projection-owner.js';
 import {NodesOwner} from '../../src/control-plane/owners/nodes-owner.js';
 import {ControlPlaneReadinessService} from
   '../../src/control-plane/control-plane-readiness-service.js';
-import {isEvidenceAbsentReadinessDenialSnapshot} from
-  '../../src/control-plane/readiness-denial-classification.js';
 import {isDeferredReadinessPlanningSnapshot} from
   '../../src/control-plane/readiness-planning-version-contract.js';
+
+const EVIDENCE_ABSENT_READINESS_REASON_CODES = Object.freeze(new Set([
+  CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
+  'owner_evidence_missing',
+]));
+
+function isEvidenceAbsentReadinessDenialSnapshot(readiness) {
+  const codes = [];
+  const append = (value) => {
+    const code = typeof value === 'string' ?
+      value :
+      typeof value?.code === 'string' ? value.code : '';
+    if (code.length > 0 && !codes.includes(code)) {
+      codes.push(code);
+    }
+  };
+  if (Array.isArray(readiness?.reasonCodes)) {
+    readiness.reasonCodes.forEach(append);
+  }
+  if (Array.isArray(readiness?.reasons)) {
+    readiness.reasons.forEach(append);
+  }
+  return codes.length > 0 && codes.every((code) =>
+    EVIDENCE_ABSENT_READINESS_REASON_CODES.has(code));
+}
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 ConfigurationManager.getInstance().initialize();

@@ -702,6 +702,24 @@ class ServeEligibilityOwner {
     });
   }
 
+  answerCommittedNodes() {
+    const unavail = checkOwnerUnavailability(this);
+    if (unavail) {
+      return Object.freeze({
+        state: SERVE_ELIGIBILITY_STATE.UNAVAILABLE,
+        reason: unavail.reason,
+        epoch: unavail.epoch,
+        retryAfterMs: unavail.retryAfterMs,
+        nodeRows: Object.freeze([]),
+      });
+    }
+    return Object.freeze({
+      state: SERVE_ELIGIBILITY_STATE.READY,
+      epoch: this.record.epoch,
+      nodeRows: Object.freeze(Array.from(this.record.nodeRowsById.values())),
+    });
+  }
+
   subscribe(listener) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);

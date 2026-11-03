@@ -29,13 +29,36 @@ import {buildDeferredSnapshot} from
   '../../src/control-plane/readiness-planning-publication-contract.js';
 import {ReadinessPlanningSnapshotOwner} from
   '../../src/control-plane/readiness-planning-snapshot-owner.js';
-import {isEvidenceAbsentReadinessDenialSnapshot} from
-  '../../src/control-plane/readiness-denial-classification.js';
 import {PriorityPublicationSafetyTopology} from
   '../../src/rebalancer/priority-publication-safety-topology.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED} from
   '../../src/rebalancer/priority-publication-safety-shared.js';
 import {VOTER_RAFT_ROLES} from '../../src/raft/replica-voter-readiness.js';
+
+const EVIDENCE_ABSENT_READINESS_REASON_CODES = Object.freeze(new Set([
+  CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
+  'owner_evidence_missing',
+]));
+
+function isEvidenceAbsentReadinessDenialSnapshot(readiness) {
+  const codes = [];
+  const append = (value) => {
+    const code = typeof value === 'string' ?
+      value :
+      typeof value?.code === 'string' ? value.code : '';
+    if (code.length > 0 && !codes.includes(code)) {
+      codes.push(code);
+    }
+  };
+  if (Array.isArray(readiness?.reasonCodes)) {
+    readiness.reasonCodes.forEach(append);
+  }
+  if (Array.isArray(readiness?.reasons)) {
+    readiness.reasons.forEach(append);
+  }
+  return codes.length > 0 && codes.every((code) =>
+    EVIDENCE_ABSENT_READINESS_REASON_CODES.has(code));
+}
 
 const {VOTER_READY_REPLICA_TOPOLOGY_STATUSES} =
   OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED;

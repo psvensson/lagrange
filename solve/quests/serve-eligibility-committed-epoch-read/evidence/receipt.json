@@ -19,8 +19,8 @@
     },
     {
       "id": "rebalancer-decisions-from-committed-leases-and-one-operation-source",
-      "passed": false,
-      "evidence": "not yet measured"
+      "passed": true,
+      "evidence": "attempt 3: test/rebalancer/critical-topology-committed-lease.test.js 4/4 tests (11/11 assertions) ok: (a) placeholder readiness for N but committed lease current -> settle blocker is null; (b) cache REPLICA_OPERATIONS empty, owner read has one in-flight ADD -> blocker topology_operations_in_flight source authoritative; (c) owner read throws -> unavailable with typed reason; (d) local-serve PRIORITY_..._PENDING on non-priority system partition -> no defer, interval unchanged. Extended test/rebalancer/startup-authority-available-node-contract.test.js 5/5 ok: placement eligibility reads committed ready lease directly without requiring serve eligibility. Deleted: formation carve-out in unified-rebalancer-available-nodes.js, readiness-denial-classification.js, local-serve defer in local-serve-readiness.js and rebalancer-planning-gate-methods.js, startup lease bypass in critical topology settling, C12 readiness loop in partition-service-learner-promotion-count-check-methods.js, CACHE from TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE, collectCriticalSystemInFlightReplicaOperations, !== false in unified-rebalancer-control-plane-readiness-methods.js replaced with strict === true across all 7 dimensions."
     },
     {
       "id": "publication-planning-without-serve-cycle",

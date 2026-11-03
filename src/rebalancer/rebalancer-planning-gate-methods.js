@@ -481,42 +481,8 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     });
   },
 
-  resolveLocalServePlanningGateDecision(evaluationContext = null) {
-    const localServeReadinessBlocker =
-      this.getCriticalSystemLocalServeReadinessBlocker();
-    if (!localServeReadinessBlocker) {
-      return null;
-    }
-    const priorityRecoveryGateBypass =
-      this.buildPriorityRecoveryPlanningGateBypassSnapshot(evaluationContext);
-    if (priorityRecoveryGateBypass.shouldBypass === true) {
-      return null;
-    }
-    const scheduleDelayMs = this.increaseCurrentInterval(
-      REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.WAIT,
-    );
-    const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
-    return this.buildRebalancePlanningGateDecision({
-      gate: REBALANCE_PLANNING_GATE.LOCAL_SERVE_READINESS,
-      blocker: localServeReadinessBlocker,
-      logMessage: REBALANCER_LOG_MSG.WAIT_LOCAL_SERVE_READINESS,
-      logContext: {
-        entityType: this.entityType,
-        nodeId: this.nodeId,
-        delayMs,
-        reasonCodes: Array.isArray(localServeReadinessBlocker.reasons) ?
-          localServeReadinessBlocker.reasons
-            .map((reason) =>
-              String(
-                reason?.code || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-              ),
-            )
-            .filter(Boolean) :
-          [],
-      },
-      scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
-      scheduleDelayMs,
-    });
+  resolveLocalServePlanningGateDecision(_evaluationContext = null) {
+    return null;
   },
 
   /**
