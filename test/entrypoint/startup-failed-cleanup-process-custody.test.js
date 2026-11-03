@@ -7,8 +7,11 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import Database from 'better-sqlite3';
 import {contender} from './data-directory-owner-contender.js';
-import {acquireDataDirectoryProcessOwner} from
-  '../../src/storage/data-directory-process-owner.js';
+import {
+  acquireDataDirectoryProcessOwner,
+  bindDataDirectoryProcessOwner,
+  ownsDataDirectoryProcessOwner,
+} from '../../src/storage/data-directory-process-owner.js';
 import {createStartupAcquisitionLedger} from
   '../../src/entrypoint-startup-acquisition-ledger.js';
 
@@ -65,3 +68,28 @@ for (const failCleanup of [true, false]) {
       'a repeated unwind does not retry a possibly effectful cleanup');
   });
 }
+
+test('bindDataDirectoryProcessOwner forwards shutdown signal and releases custody after shutdown completes', async (t) => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'bound-runtime-custody-'));
+  const owner = acquireDataDirectoryProcessOwner(dataDir);
+  t.after(() => {
+    owner.release();
+    rmSync(dataDir, {recursive: true, force: true});
+  });
+
+  const receivedSignals = [];
+  let ownedDuringShutdown = false;
+  const boundRuntime = bindDataDirectoryProcessOwner({
+    async shutdownRuntime(signal) {
+      receivedSignals.push(signal);
+      ownedDuringShutdown = ownsDataDirectoryProcessOwner(owner, dataDir);
+      return 'clean-drain';
+    },
+  }, owner);
+
+  const result = await boundRuntime.shutdownRuntime('SIGTERM');
+  assert.equal(result, 'clean-drain');
+  assert.deepEqual(receivedSignals, ['SIGTERM']);
+  assert.equal(ownedDuringShutdown, true, 'custody held while shutdownRuntime drains');
+  assert.equal(ownsDataDirectoryProcessOwner(owner, dataDir), false, 'custody released after shutdownRuntime completes');
+});

@@ -1219,3 +1219,116 @@ test('ControlPlaneReadinessService refreshes invalidated ineligible snapshots ' 
   );
   t.end();
 });
+
+test('ControlPlaneReadinessService getAllNodeReadinessSync retains all known nodes ' +
+  'when a peer snapshot ages past maxCachedAgeMs and its node row advances', (t) => {
+  let now = 600000;
+  const cache = createCache({
+    nodes: [
+      {
+        ...createActiveNode('seed-node'),
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 100,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+      },
+      {
+        ...createActiveNode('peer-healthy'),
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 100,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+      },
+      {
+        ...createActiveNode('peer-stopped'),
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 100,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+      },
+    ],
+    services: [
+      createMessageGroupService('seed-node'),
+      createMessageGroupService('peer-healthy'),
+      createMessageGroupService('peer-stopped'),
+    ],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    messageRouter: {
+      getConnectionState(nodeId) {
+        return nodeId === 'peer-stopped' ? STATE.DISCONNECTED : STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      'seed-node': {
+        nodeId: 'seed-node',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+      'peer-healthy': {
+        nodeId: 'peer-healthy',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+      'peer-stopped': {
+        nodeId: 'peer-stopped',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  // Prime stored snapshots for all 3 nodes at t = 600000.
+  readinessService.buildNodeReadinessSyncCurrent('seed-node');
+  readinessService.buildNodeReadinessSyncCurrent('peer-healthy');
+  readinessService.buildNodeReadinessSyncCurrent('peer-stopped');
+
+  // Advance clock past maxCachedAgeMs (1500ms) and apply newer node rows so
+  // both getCachedReadinessSnapshot and getFresherStoredReadinessSnapshot miss.
+  now += 2500;
+  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+    ...createActiveNode('peer-healthy'),
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.LAST_HEARTBEAT]: now - 50,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+  });
+  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+    ...createActiveNode('peer-stopped'),
+    [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+    [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
+    [COLUMN.LAST_HEARTBEAT]: now - 50,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now - 1000,
+  });
+
+  const entries = readinessService.getAllNodeReadinessSync({
+    allowStaleOnCacheChange: true,
+    maxCachedAgeMs: 1500,
+  });
+  const byNodeId = Object.fromEntries(
+    entries.map((entry) => [entry.nodeId, entry]),
+  );
+
+  t.same(
+    Object.keys(byNodeId).sort(),
+    ['peer-healthy', 'peer-stopped', 'seed-node'],
+    'getAllNodeReadinessSync must never drop known nodes when cached/stored snapshots miss',
+  );
+  t.equal(
+    byNodeId['peer-healthy']?.dimensions?.clusterMemberHealthy,
+    true,
+    'positive witness: healthy peer with newer heartbeat remains healthy and present',
+  );
+  t.equal(
+    byNodeId['peer-stopped']?.dimensions?.clusterMemberHealthy,
+    false,
+    'inverse counterexample: stopped peer is evaluated and reported unhealthy, neither dropped nor stale-healthy',
+  );
+  t.end();
+});

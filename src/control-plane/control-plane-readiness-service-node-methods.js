@@ -351,6 +351,14 @@ const controlPlaneReadinessNodeMethods = {
       );
       if (storedSnapshot) {
         readiness.push(storedSnapshot);
+        continue;
+      }
+      const currentSnapshot = this.buildNodeReadinessSyncCurrent(
+        nodeId,
+        options,
+      );
+      if (currentSnapshot) {
+        readiness.push(currentSnapshot);
       }
     }
     return readiness;
