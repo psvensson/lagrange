@@ -10,6 +10,7 @@ import {
 } from '../../src/migration/migration-constants.js';
 import {MigrationPipeline} from '../../src/migration/migration-pipeline.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -103,7 +104,9 @@ test('SqlCore delegates ALTER TABLE to configured migration pipeline', async (t)
     ast: null,
     sessionId: null,
   };
-  const engine = new SQLQueryEngine({});
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+  });
   engine.setMigrationPipeline({
     async handleAlterTable(ast, sessionId) {
       captured.ast = ast;
@@ -129,7 +132,9 @@ test('SqlCore delegates ALTER TABLE to configured migration pipeline', async (t)
 
 test('SqlCore returns migration pipeline unavailable for ALTER TABLE without pipeline',
   async (t) => {
-    const engine = new SQLQueryEngine({});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    });
     engine.setMigrationPipeline(null);
 
     const result = await engine.executeQuery(

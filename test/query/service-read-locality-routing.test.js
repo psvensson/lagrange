@@ -37,6 +37,8 @@ import {
 } from './sql-query-engine-test-support.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {serveAnswerFromMock} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -185,6 +187,7 @@ test('executeSelect threads the issuing service readLocality into ' +
     [definitionRow(SERVICE_READ_LOCALITY.SAME_GROUP)],
   );
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'node-a',
@@ -288,6 +291,9 @@ test('end-to-end: policy-on SELECT delivers to the local-node replica ' +
     messageRouter: recordingRouter,
     nodeId: 'node-a',
     controlPlaneReadinessService: {
+      answerServeEligibility(id) {
+        return serveAnswerFromMock(this, id);
+      },
       getNodeReadinessSync: () => ({dimensions: {serveEligible: true}}),
     },
     runtimeAccessPolicyOwner: {
@@ -386,6 +392,9 @@ test('read candidate ordering: policy-on prefers local node then same ' +
     systemCache,
     nodeId: 'node-a',
     controlPlaneReadinessService: {
+      answerServeEligibility(id) {
+        return serveAnswerFromMock(this, id);
+      },
       getNodeReadinessSync: () => ({dimensions: {serveEligible: true}}),
     },
   });

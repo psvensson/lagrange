@@ -111,8 +111,8 @@ const EVIDENCE_ABSENT_CODES = [
   'owner_evidence_missing',
 ];
 
-test('a formation-liveness ledger partition keeps evidence-absent joiners ' +
-  'placement-eligible while substantive denials stay excluded', async (t) => {
+test('a formation-liveness ledger partition excludes evidence-absent joiners ' +
+  'when formation carve-out is deleted', async (t) => {
   const stack = createPlacementStack(LEDGER_PARTITION_ID, {
     [SEED_NODE_ID]: eligibleReadiness(SEED_NODE_ID),
     [JOINER_NODE_ID]:
@@ -127,9 +127,9 @@ test('a formation-liveness ledger partition keeps evidence-absent joiners ' +
     .map((node) => node.node_id);
   t.ok(availableNodeIds.includes(SEED_NODE_ID),
     'the ready seed is placement-eligible');
-  t.ok(availableNodeIds.includes(JOINER_NODE_ID),
-    'an evidence-absent barrier-held joiner stays placement-eligible for ' +
-      'the formation-liveness ledger partition');
+  t.notOk(availableNodeIds.includes(JOINER_NODE_ID),
+    'with formation carve-out deleted, evidence-absent joiner without ' +
+      'readiness is excluded');
   t.notOk(availableNodeIds.includes(SICK_NODE_ID),
     'a substantively denied node is never placement-eligible');
   t.end();

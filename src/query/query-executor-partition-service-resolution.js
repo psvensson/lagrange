@@ -6,11 +6,9 @@ import {QueryExecutorCancellationRouting} from './query-executor-cancellation-ro
 import {installQueryExecutorSelectAggregationHelpers} from './query-executor-select-aggregation.js';
 import {installQueryExecutorSqlCommandHelpers} from './query-executor-sql-command-rendering.js';
 import {
-  isPriorityRecoveryWriteRouting,
-  shouldAllowPriorityRecoveryBootstrapRoutingGrace,
-} from './query-executor-priority-recovery-bootstrap-routing.js';
-import {isReadinessInternalRouteStructurallyReady} from
-  './query-executor-bootstrap-deferred-routing.js';
+  SERVE_ELIGIBILITY_STATE,
+  isServeEligibilityAnswerEligible,
+} from '../control-plane/serve-eligibility-owner.js';
 const {
   COLUMN,
   CONTROL_PLANE_PARTICIPATION_KIND,
@@ -32,8 +30,6 @@ const {
   resolveBootstrapLeaderSelection,
   resolveCanonicalPartitionLeaderObservation,
 } = QUERY_EXECUTOR_SHARED;
-
-const PRIORITY_CONTROL_PLANE_CONNECTED_STATE = 'connected';
 
 class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationRouting {
   /**
@@ -144,7 +140,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       ]?.purpose ===
         CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL
     ) {
-      routabilityResult = this.evaluateReadinessInternalRoutability(service);
+      routabilityResult = this.evaluateSystemTableRoutability();
     }
     if (routabilityResult) {
       return routabilityResult;
@@ -157,42 +153,24 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       partitionId.length > 0 ?
         this.getPartitionRecord(partitionId) :
         null;
-    const priorityControlPlanePartition = classifySystemPartition({
-      partitionId,
-      partitionRow,
-    }).priorityControlPlane;
-    const priorityRecoveryWriteRouting =
-      isPriorityRecoveryWriteRouting({
-        partitionId,
-        partitionRow,
-        routingReadinessDimension,
-        routingOptions,
-      });
-    const priorityRecoveryReadRouting =
-      priorityControlPlanePartition &&
-      routingReadinessDimension ===
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
-      routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.FOR_READ] === true;
+    // System-table routing decides on raft leadership: every active,
+    // addressed replica is a candidate, the cached leader orders them, the
+    // target proves leadership (read-authority witness, or the typed redirect
+    // for a write) and the delivery layer applies live transport (reconnect
+    // deferral, fall-through). No readiness lane filters a system partition.
+    if (classifySystemPartition({partitionId, partitionRow}).systemTable) {
+      return this.evaluateSystemTableRoutability();
+    }
+    // User-table serving consumes the readiness owner's committed-epoch
+    // answer and nothing else. A non-serve dimension on a user partition
+    // (managed split/merge source-quorum admission, Q6 rows R24/R25) still
+    // reads the readiness projection: a recorded attempt-3 item of quest
+    // serve-eligibility-committed-epoch-read, not a serve path.
     if (
-      nodeId &&
-      nodeId !== this.nodeId &&
-      priorityControlPlanePartition &&
-      !priorityRecoveryWriteRouting &&
-      !priorityRecoveryReadRouting &&
-      typeof this.messageRouter?.getConnectionState ===
-        QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
+      routingReadinessDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
     ) {
-      const connectionState = this.messageRouter.getConnectionState(nodeId);
-      if (
-        connectionState &&
-        connectionState !== PRIORITY_CONTROL_PLANE_CONNECTED_STATE
-      ) {
-        return {
-          routable: false,
-          reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.NODE_NOT_ELIGIBLE,
-          readinessSummary: null,
-        };
-      }
+      return this.evaluateServeEligibilityRoutability(nodeId);
     }
     if (
       !nodeId ||
@@ -203,14 +181,11 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
           QUERY_EXECUTOR_LITERAL.STRING_FUNCTION)
     ) {
-      routabilityResult = {
-        routable: true,
-        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.OK,
+      return {
+        routable: false,
+        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.READINESS_UNAVAILABLE,
         readinessSummary: null,
       };
-    }
-    if (routabilityResult) {
-      return routabilityResult;
     }
     const tableName =
       String(
@@ -291,23 +266,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
     const readiness = evaluation.readiness;
     const decision = evaluation.decision;
     const compactSnapshot = evaluation.compactSnapshot;
-    const bootstrapGraceRoutable =
-      decision?.eligible !== true &&
-      this.shouldAllowFreshBootstrapRoutingGrace(service, readiness, decision);
-    const priorityRecoveryBootstrapRoutable =
-      decision?.eligible !== true &&
-      shouldAllowPriorityRecoveryBootstrapRoutingGrace({
-        partitionId,
-        partitionRow,
-        routingReadinessDimension,
-        routingOptions,
-        readiness,
-        decision,
-      });
-    const routable =
-      decision.eligible === true ||
-      bootstrapGraceRoutable ||
-      priorityRecoveryBootstrapRoutable;
+    const routable = decision.eligible === true;
     return {
       routable,
       reasonCode:
@@ -338,88 +297,66 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
   }
 
   /**
-   * Evaluate the structural route used by readiness-owned authoritative reads.
-   * This deliberately checks addressing and transport only; calling full
-   * readiness here would recreate the formation dependency cycle.
-   * @param {Object} service
+   * The structural system-table route: the service is active and addressed
+   * (checked by the caller). Leadership is proven by the target and live
+   * transport is applied by delivery; a readiness verdict here would recreate
+   * the formation dependency cycle (recovery must not depend on the condition
+   * it restores).
    * @return {Object}
    * @private
    */
-  evaluateReadinessInternalRoutability(service) {
-    const structurallyReady = isReadinessInternalRouteStructurallyReady({
-      service,
-      messageRouter: this.messageRouter,
-    });
+  evaluateSystemTableRoutability() {
     return {
-      routable: structurallyReady,
-      reasonCode: structurallyReady ?
-        QUERY_ROUTING_DIAGNOSTIC_REASON.OK :
-        QUERY_ROUTING_DIAGNOSTIC_REASON.NODE_NOT_ELIGIBLE,
+      routable: true,
+      reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.OK,
       readinessSummary: null,
     };
   }
 
   /**
-   * Admit one fresh bootstrap partition service when cache heartbeat
-   * publication lags but transport and service evidence remain positive.
-   * This grace stays bounded to the initial creation window where
-   * `leader_node_id` has not converged yet.
-   * @param {Object} service
-   * @param {Object|null} readiness
-   * @param {Object|null} decision
-   * @return {boolean}
+   * User-table serve routing on the readiness owner's committed-epoch answer.
+   * A committed negative and a typed unavailability both refuse, each with
+   * its own reason; nothing grants on a projection.
+   * @param {string|null} nodeId
+   * @return {Object}
    * @private
    */
-  shouldAllowFreshBootstrapRoutingGrace(service, readiness, decision) {
-    const partitionId = String(
-      service?.partition_id || service?.partitionId || '',
-    );
-    if (partitionId.length === 0) {
-      return false;
+  evaluateServeEligibilityRoutability(nodeId) {
+    const answer = nodeId &&
+      typeof this.controlPlaneReadinessService?.answerServeEligibility ===
+        QUERY_EXECUTOR_LITERAL.STRING_FUNCTION ?
+      this.controlPlaneReadinessService.answerServeEligibility(nodeId) :
+      null;
+    if (isServeEligibilityAnswerEligible(answer)) {
+      return {
+        routable: true,
+        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.OK,
+        readinessSummary: null,
+        serveEligibility: answer,
+      };
     }
-    const partition = this.getPartitionRecord(partitionId);
-    if (!this.isBootstrapRoutingGraceWindow(partition)) {
-      return false;
-    }
-    const dimensions = readiness?.dimensions;
-    const nodeEvidence = readiness?.nodeEvidence;
-    if (
-      !dimensions ||
-      typeof dimensions !== QUERY_EXECUTOR_LITERAL.STRING_OBJECT ||
-      !nodeEvidence ||
-      typeof nodeEvidence !== QUERY_EXECUTOR_LITERAL.STRING_OBJECT
-    ) {
-      return false;
-    }
-    if (
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !== true ||
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY] !== true ||
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY] !== true ||
-      dimensions[
-        CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY
-      ] !== true ||
-      nodeEvidence.transportConnected !== true ||
-      nodeEvidence.readyWhenWritten !== true
-    ) {
-      return false;
-    }
-    const allowedFailedDimensions = new Set([
-      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
-      CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE,
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-      CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE,
-    ]);
-    const failedDimensions = Array.isArray(decision?.failedDimensions) ?
-      decision.failedDimensions :
-      [];
-    return (
-      failedDimensions.length > 0 &&
-      failedDimensions.every((dimension) =>
-        allowedFailedDimensions.has(dimension),
-      )
-    );
+    const committedNegative =
+      answer?.state === SERVE_ELIGIBILITY_STATE.READY;
+    return {
+      routable: false,
+      reasonCode: committedNegative ?
+        QUERY_ROUTING_DIAGNOSTIC_REASON.NODE_NOT_ELIGIBLE :
+        QUERY_ROUTING_DIAGNOSTIC_REASON.SERVE_ELIGIBILITY_UNAVAILABLE,
+      readinessSummary: {
+        decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+        observedAt: null,
+        deferred: false,
+        lifecycleState: null,
+        reasonCodes: committedNegative ?
+          answer.reasons :
+          Object.freeze([answer?.reason ||
+            QUERY_ROUTING_DIAGNOSTIC_REASON.SERVE_ELIGIBILITY_UNAVAILABLE]),
+        failedDimensions: Object.freeze([
+          CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+        ]),
+      },
+      serveEligibility: answer,
+    };
   }
 
   /**

@@ -244,10 +244,13 @@ async (t) => {
       }),
     },
   );
-  t.equal(ordinaryResult.success, false,
-    'the same route remains closed to an ordinary read during recovery');
-  t.equal(ordinaryReadinessEvaluationCount > 0, true,
-    'ordinary routing still consults the readiness owner');
+  // Lead decision D2 (quest serve-eligibility-committed-epoch-read):
+  // system-table routing decides on raft leadership and live transport for
+  // every read; no readiness lane opens or closes a system partition.
+  t.equal(ordinaryResult.success, true,
+    'an ordinary read routes on the same structural route during recovery');
+  t.equal(ordinaryReadinessEvaluationCount, 0,
+    'ordinary system-table routing does not consult readiness');
 
   const followerServiceRow = {
     ...ownerServiceRow,

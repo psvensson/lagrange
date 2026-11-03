@@ -8,9 +8,7 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   QUERY_ROUTING_DIAGNOSTIC_REASON,
@@ -20,7 +18,73 @@ import {
   CANONICAL_LEADER_ROUTING_GAP_STATE,
 } from '../../src/query/canonical-leader-routing.js';
 import {createMockMessageRouter} from './query-executor-mock-message-router.js';
+import {createCommittedServeEligibilityOwner} from
+  '../control-plane/serve-eligibility-test-support.js';
 
+// Partition rows by id and service/partition rows by predicate, shared by
+// the fixtures that keep their rows on the cache object.
+const PARTITION_CACHE_ACCESSORS = Object.freeze({
+  get(type, key) {
+    if (type === TABLES.PARTITIONS) {
+      return this.partitions.find(
+        (partition) => partition.partition_id === key,
+      ) || null;
+    }
+    return null;
+  },
+  filter(type, predicate) {
+    if (type === TABLES.SERVICES) {
+      return this.services.filter(predicate);
+    }
+    if (type === TABLES.PARTITIONS) {
+      return this.partitions.filter(predicate);
+    }
+    return [];
+  },
+});
+
+// A nodes-table partition with no owner row and two replicas: node-a a
+// follower, node-b in the stated raft role at the stated address.
+function ownerlessNodesPartitionCache(partitionId, nodeBRole, nodeBAddress) {
+  const partitionRow = {partition_id: partitionId, table_name: TABLES.NODES};
+  const replica = (nodeId, serviceId, raftRole, address) => ({
+    service_id: serviceId,
+    service_type: SERVICE_TYPE.PARTITION,
+    partition_id: partitionId,
+    node_id: nodeId,
+    raft_role: raftRole,
+    address,
+    status: SERVICE_STATUS.ACTIVE,
+  });
+  return {
+    get(tableName, key) {
+      return tableName === TABLES.PARTITIONS && key === partitionId ?
+        {...partitionRow} :
+        null;
+    },
+    filter(tableName, predicate) {
+      if (tableName === TABLES.PARTITIONS) {
+        return [{...partitionRow}].filter(predicate);
+      }
+      if (tableName === TABLES.SERVICES) {
+        return [
+          replica('node-a', 'nodes-p1-r1', 'follower',
+            'node-a/partition/nodes-p1-r1'),
+          replica('node-b', 'nodes-p1-r2', nodeBRole, nodeBAddress),
+        ].filter(predicate);
+      }
+      return [];
+    },
+  };
+}
+
+
+// Removed with quest serve-eligibility-committed-epoch-read (lead decision
+// D2): the priority-recovery bootstrap write/read grace, readiness-filtered
+// system-table reads and writes, and the widening and overlay refresh that
+// followed an all-readiness-filtered system partition. System-table routing
+// decides on raft leadership and live transport (witness:
+// query-executor-serve-eligibility-routing.test.js).
 export function registerQueryExecutorRecoveryRoutingTests() {
   test('QueryExecutor - priority recovery write defers cold reconnect and ' +
     'widens to a live peer', async (t) => {
@@ -61,23 +125,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
           status: SERVICE_STATUS.ACTIVE,
         },
       ],
-      get: function(type, key) {
-        if (type === TABLES.PARTITIONS) {
-          return this.partitions.find(
-            (partition) => partition.partition_id === key,
-          ) || null;
-        }
-        return null;
-      },
-      filter: function(type, predicate) {
-        if (type === TABLES.SERVICES) {
-          return this.services.filter(predicate);
-        }
-        if (type === TABLES.PARTITIONS) {
-          return this.partitions.filter(predicate);
-        }
-        return [];
-      },
+      ...PARTITION_CACHE_ACCESSORS,
     };
     const messageRouter = {
       getConnectionState: (nodeId) =>
@@ -102,6 +150,9 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       },
     };
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       messageRouter,
       systemCache,
     });
@@ -138,391 +189,6 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       deliveries[1].timeoutMs > reconnectDeferTimeoutMs &&
         deliveries[1].timeoutMs <= queryTimeoutMs,
       'live peer write should keep the remaining query budget',
-    );
-  });
-
-  test('QueryExecutor - priority recovery write admits circular bootstrap ' +
-    'candidates without widening reads', async (t) => {
-    const partitionId = 'control_plane_publications-p1';
-    const nodeId = 'node-recovering';
-    const address = `${nodeId}/partition/${partitionId}-r1`;
-    const systemCache = {
-      partitions: [
-        {
-          partition_id: partitionId,
-          table_name: TABLES.CONTROL_PLANE_PUBLICATIONS,
-          leader_node_id: nodeId,
-        },
-      ],
-      services: [
-        {
-          service_id: `${partitionId}-r1`,
-          service_type: SERVICE_TYPE.PARTITION,
-          partition_id: partitionId,
-          node_id: nodeId,
-          raft_role: 'leader',
-          address,
-          status: SERVICE_STATUS.ACTIVE,
-        },
-      ],
-      get(type, key) {
-        if (type === TABLES.PARTITIONS) {
-          return this.partitions.find(
-            (partition) => partition.partition_id === key,
-          ) || null;
-        }
-        return null;
-      },
-      filter(type, predicate) {
-        if (type === TABLES.SERVICES) {
-          return this.services.filter(predicate);
-        }
-        if (type === TABLES.PARTITIONS) {
-          return this.partitions.filter(predicate);
-        }
-        return [];
-      },
-    };
-    const readiness = {
-      nodeId,
-      dimensions: {
-        [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
-        [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
-        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION
-          .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
-        [CONTROL_PLANE_READINESS_DIMENSION
-          .METADATA_PUBLICATION_HEALTHY]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-      },
-      reasons: [
-        {
-          code: CONTROL_PLANE_READINESS_REASON
-            .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-        },
-      ],
-      runtimeAuthority: {
-        reasonCodes: [
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON
-            .PRIORITY_PARTITIONS_NOT_SPREAD,
-        ],
-      },
-    };
-    const executor = new QueryExecutor({
-      messageRouter: {
-        getConnectionState: () => 'closed',
-      },
-      systemCache,
-      controlPlaneReadinessService: {
-        getNodeReadinessSync() {
-          return readiness;
-        },
-      },
-    });
-
-    const writeCandidates = executor.getPartitionServiceCandidates(
-      partitionId,
-      false,
-      false,
-      false,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    );
-    const readCandidates = executor.getPartitionServiceCandidates(
-      partitionId,
-      true,
-      false,
-      false,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    );
-
-    t.same(
-      writeCandidates.map((candidate) => candidate.address),
-      [address],
-      'priority recovery writes should keep the circular bootstrap candidate',
-    );
-    t.same(
-      readCandidates,
-      [],
-      'priority recovery reads should not use the bootstrap write grace',
-    );
-  });
-
-  test('QueryExecutor - priority recovery reads use readiness before ' +
-    'connection prefiltering and bounded delivery', async (t) => {
-    const partitionId = 'replica_operations-p1';
-    const seedNodeId = 'node-recovery-read-seed';
-    const peerNodeId = 'node-recovery-read-peer';
-    const blockedNodeId = 'node-recovery-read-blocked';
-    const seedAddress = `${seedNodeId}/partition/${partitionId}-r1`;
-    const peerAddress = `${peerNodeId}/partition/${partitionId}-r2`;
-    const deliveries = [];
-    const partition = {
-      partition_id: partitionId,
-      table_name: TABLES.REPLICA_OPERATIONS,
-      leader_node_id: seedNodeId,
-    };
-    const buildService = (nodeId, replicaSuffix) => ({
-      service_id: `${partitionId}-${replicaSuffix}`,
-      service_type: SERVICE_TYPE.PARTITION,
-      partition_id: partitionId,
-      node_id: nodeId,
-      address: `${nodeId}/partition/${partitionId}-${replicaSuffix}`,
-      status: SERVICE_STATUS.ACTIVE,
-    });
-    const services = [buildService(seedNodeId, 'r1'),
-      buildService(peerNodeId, 'r2'), buildService(blockedNodeId, 'r3')];
-    const systemCache = {
-      get(type, key) {
-        return type === TABLES.PARTITIONS && key === partitionId ?
-          partition :
-          null;
-      },
-      filter(type, predicate) {
-        if (type === TABLES.SERVICES) {
-          return services.filter(predicate);
-        }
-        if (type === TABLES.PARTITIONS) {
-          return [partition].filter(predicate);
-        }
-        return [];
-      },
-    };
-    const readinessService = {
-      getNodeReadinessSync(nodeId) {
-        const recoveryEligible = nodeId !== blockedNodeId;
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: recoveryEligible,
-          },
-          reasons: recoveryEligible ?
-            [] :
-            [{
-              code:
-                CONTROL_PLANE_READINESS_REASON
-                  .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-            }],
-        };
-      },
-    };
-    const executor = new QueryExecutor({
-      messageRouter: {
-        getConnectionState(nodeId) {
-          return nodeId === seedNodeId ? 'disconnected' : 'connected';
-        },
-        async deliver(address, _message, options) {
-          deliveries.push({address, timeoutMs: options?.timeoutMs});
-          if (address === seedAddress) {
-            return buildDeliveryEnvelope(
-              {
-                acknowledged: false,
-                error: `Connection to node ${seedNodeId} closed`,
-                errorCode: 'ROUTER_CONNECTION_CLOSED',
-                retryAfterMs: 50,
-                deferRetry: true,
-              });
-          }
-          return buildDeliveryEnvelope({acknowledged: true}, {
-            success: true,
-            rows: [{operation_id: 'operation-1'}],
-          });
-        },
-      },
-      systemCache,
-      controlPlaneReadinessService: readinessService,
-    });
-    executor.readRetryAttempts = 1;
-    executor.leaderRetryDelayMs = 1;
-
-    const resolution = executor.resolvePartitionServiceCandidates(
-      partitionId,
-      true,
-      false,
-      false,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    );
-
-    t.equal(resolution.routingSnapshot.routableServiceCount, 2,
-      'eligible recovery-read services should survive connection-state lag');
-    t.same(
-      resolution.candidates.map((candidate) => candidate.address),
-      [seedAddress, peerAddress],
-      'recovery reads should leave eligible candidates for bounded delivery',
-    );
-    t.same(Object.keys(resolution.routingSnapshot.deniedByNodeId),
-      [blockedNodeId],
-      'ineligible recovery-read services should retain readiness diagnostics');
-    t.same(
-      resolution.routingSnapshot.deniedByNodeId[blockedNodeId]
-        .failedDimensions,
-      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
-      'the denied summary should name the recovery readiness dimension',
-    );
-
-    const result = await executor.executeOnPartition(
-      partitionId,
-      'SELECT * FROM replica_operations WHERE operation_id = ?',
-      ['operation-1'],
-      true,
-      false,
-      false,
-      {
-        timeoutMs: 6000,
-        routingReadinessDimension:
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      },
-    );
-
-    t.equal(result.success, true,
-      'recovery read should fall through to the live peer');
-    t.same(deliveries.map((delivery) => delivery.address),
-      [seedAddress, peerAddress],
-      'read delivery should attempt the lagged seed before the admitted peer');
-    t.equal(deliveries[0].timeoutMs, 1,
-      'lagged recovery-read candidate should receive a reconnect-defer budget');
-  });
-
-  test('QueryExecutor - priority recovery bootstrap write grace stays ' +
-    'closed outside exact circular evidence', async (t) => {
-    const nodeId = 'node-recovering';
-    const buildReadiness = (overrides = {}) => ({
-      nodeId,
-      dimensions: {
-        [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
-        [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
-        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION
-          .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
-        [CONTROL_PLANE_READINESS_DIMENSION
-          .METADATA_PUBLICATION_HEALTHY]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-        ...(overrides.dimensions || {}),
-      },
-      reasons: overrides.reasons || [
-        {
-          code: CONTROL_PLANE_READINESS_REASON
-            .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-        },
-      ],
-      runtimeAuthority: overrides.runtimeAuthority || {
-        reasonCodes: [
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON
-            .PRIORITY_PARTITIONS_NOT_SPREAD,
-        ],
-      },
-    });
-    const buildExecutor = ({
-      partitionId = 'control_plane_publications-p1',
-      tableName = TABLES.CONTROL_PLANE_PUBLICATIONS,
-      readiness = buildReadiness(),
-    } = {}) => {
-      const address = `${nodeId}/partition/${partitionId}-r1`;
-      return {
-        address,
-        executor: new QueryExecutor({
-          messageRouter: {
-            getConnectionState: () => 'closed',
-          },
-          systemCache: {
-            partitions: [{
-              partition_id: partitionId,
-              table_name: tableName,
-              leader_node_id: nodeId,
-            }],
-            services: [{
-              service_id: `${partitionId}-r1`,
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: nodeId,
-              raft_role: 'leader',
-              address,
-              status: SERVICE_STATUS.ACTIVE,
-            }],
-            get(type, key) {
-              if (type === TABLES.PARTITIONS) {
-                return this.partitions.find(
-                  (partition) => partition.partition_id === key,
-                ) || null;
-              }
-              return null;
-            },
-            filter(type, predicate) {
-              if (type === TABLES.SERVICES) {
-                return this.services.filter(predicate);
-              }
-              if (type === TABLES.PARTITIONS) {
-                return this.partitions.filter(predicate);
-              }
-              return [];
-            },
-          },
-          controlPlaneReadinessService: {
-            getNodeReadinessSync() {
-              return readiness;
-            },
-          },
-        }),
-        partitionId,
-      };
-    };
-    const resolveWriteCandidates = (setup, routingOptions = {}) =>
-      setup.executor.resolvePartitionServiceCandidates(
-        setup.partitionId,
-        false,
-        false,
-        false,
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-        routingOptions,
-      ).candidates;
-
-    t.same(
-      resolveWriteCandidates(buildExecutor({
-        readiness: buildReadiness({runtimeAuthority: {reasonCodes: []}}),
-      })),
-      [],
-      'missing priority spread evidence should not open the write grace',
-    );
-    t.same(
-      resolveWriteCandidates(buildExecutor({
-        readiness: buildReadiness({
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
-          },
-          reasons: [
-            {
-              code: CONTROL_PLANE_READINESS_REASON
-                .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-            },
-            {code: CONTROL_PLANE_READINESS_REASON.STORAGE_PRESSURE_HARD},
-          ],
-        }),
-      })),
-      [],
-      'extra hard blockers should not be hidden by priority recovery evidence',
-    );
-    t.same(
-      resolveWriteCandidates(buildExecutor({
-        partitionId: 'user_table-p1',
-        tableName: 'user_table',
-      })),
-      [],
-      'non-priority partitions should not use the priority bootstrap grace',
-    );
-    t.same(
-      resolveWriteCandidates(buildExecutor(), {
-        allowPriorityRecoveryBootstrap: false,
-      }),
-      [],
-      'callers can opt out of the bootstrap write grace',
     );
   });
 
@@ -574,23 +240,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
           status: SERVICE_STATUS.ACTIVE,
         },
       ],
-      get: function(type, key) {
-        if (type === TABLES.PARTITIONS) {
-          return this.partitions.find(
-            (partition) => partition.partition_id === key,
-          ) || null;
-        }
-        return null;
-      },
-      filter: function(type, predicate) {
-        if (type === TABLES.SERVICES) {
-          return this.services.filter(predicate);
-        }
-        if (type === TABLES.PARTITIONS) {
-          return this.partitions.filter(predicate);
-        }
-        return [];
-      },
+      ...PARTITION_CACHE_ACCESSORS,
     };
     const messageRouter = {
       deliver: async (address, message) => {
@@ -607,6 +257,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       },
     };
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
     });
@@ -700,6 +351,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter,
       systemCache,
     });
@@ -760,6 +412,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
       routingMetadataOverlay: {
@@ -837,303 +490,6 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     t.end();
   });
 
-  test('QueryExecutor - priority recovery writes widen when the canonical ' +
-    'leader is filtered by readiness but peer replicas are routable',
-  (t) => {
-    const partitionId = 'replica_operations-p1';
-    const leaderNodeId = 'node-restarting';
-    const peerNodeId = 'node-peer-ready';
-    const tableName = TABLES.REPLICA_OPERATIONS;
-    const observedAt = '2026-04-25T22:15:00.000Z';
-    const leaderServiceId = `${partitionId}-r1`;
-    const peerServiceId = `${partitionId}-r2`;
-    const leaderAddress = `${leaderNodeId}/partition/${leaderServiceId}`;
-    const peerAddress = `${peerNodeId}/partition/${peerServiceId}`;
-    const systemCache = {
-      get(tableNameArg, key) {
-        if (tableNameArg === TABLES.PARTITIONS && key === partitionId) {
-          return {
-            partition_id: partitionId,
-            table_name: tableName,
-            leader_node_id: leaderNodeId,
-          };
-        }
-        return null;
-      },
-      filter(tableNameArg, predicate) {
-        if (tableNameArg !== TABLES.SERVICES) {
-          return [];
-        }
-        return [
-          {
-            service_id: leaderServiceId,
-            service_type: SERVICE_TYPE.PARTITION,
-            partition_id: partitionId,
-            node_id: leaderNodeId,
-            address: leaderAddress,
-            status: SERVICE_STATUS.ACTIVE,
-          },
-          {
-            service_id: peerServiceId,
-            service_type: SERVICE_TYPE.PARTITION,
-            partition_id: partitionId,
-            node_id: peerNodeId,
-            address: peerAddress,
-            status: SERVICE_STATUS.ACTIVE,
-          },
-        ].filter(predicate);
-      },
-    };
-    const readinessService = {
-      getNodeReadinessSync(nodeId) {
-        const recoveryEligible = nodeId !== leaderNodeId;
-        return {
-          nodeId,
-          observedAt,
-          lifecycleState: SERVICE_STATUS.ACTIVE,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
-              recoveryEligible,
-          },
-          reasons: recoveryEligible ?
-            [] :
-            [
-              {
-                code:
-                  CONTROL_PLANE_READINESS_REASON
-                    .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-              },
-            ],
-        };
-      },
-    };
-    const executor = new QueryExecutor({
-      messageRouter: createMockMessageRouter(),
-      systemCache,
-      controlPlaneReadinessService: readinessService,
-    });
-
-    const routingSnapshot = executor.getPartitionRoutingSnapshot(
-      partitionId,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    );
-    const recoveryContract =
-      executor.resolveCanonicalLeaderGapRecoveryRoutingContract(
-        partitionId,
-        routingSnapshot,
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      );
-    const candidates = executor.getPartitionServiceCandidates(
-      partitionId,
-      false,
-      false,
-      false,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    );
-
-    t.equal(
-      routingSnapshot.canonicalLeaderServiceCount,
-      1,
-      'fixture should keep the stale canonical leader service row visible',
-    );
-    t.equal(
-      routingSnapshot.routableServiceCount,
-      1,
-      'fixture should keep one recovery-eligible peer replica routable',
-    );
-    t.equal(
-      recoveryContract.canonicalLeaderFilteredByReadiness,
-      true,
-      'contract should classify the canonical leader as readiness-filtered',
-    );
-    t.equal(
-      recoveryContract.recoveryCandidateWidening,
-      true,
-      'priority recovery routing should widen to available peer replicas',
-    );
-    t.same(
-      candidates.map((candidate) => candidate.nodeId),
-      [peerNodeId],
-      'write routing should use the recovery-eligible peer replica',
-    );
-    t.end();
-  });
-
-  test('QueryExecutor - all-filtered priority recovery routing refreshes ' +
-    'overlay and widens when denial details are unavailable', async (t) => {
-    const partitionId = 'replica_operations-p1';
-    const leaderNodeId = 'node-seed-stale';
-    const peerNodeId = 'node-peer-ready';
-    const leaderServiceId = `${partitionId}-r1`;
-    const leaderServiceId2 = `${partitionId}-r2`;
-    const leaderServiceId3 = `${partitionId}-r3`;
-    const peerServiceId = `${partitionId}-r4`;
-    const peerAddress = `${peerNodeId}/partition/${peerServiceId}`;
-    const overlayRefreshes = [];
-    const readinessRefreshNodeIds = [];
-    let overlayServices = [];
-    const buildLeaderService = (serviceId) => ({
-      service_id: serviceId,
-      service_type: SERVICE_TYPE.PARTITION,
-      partition_id: partitionId,
-      node_id: leaderNodeId,
-      address: `${leaderNodeId}/partition/${serviceId}`,
-      status: SERVICE_STATUS.ACTIVE,
-    });
-    const systemCache = {
-      get(tableNameArg, key) {
-        if (tableNameArg === TABLES.PARTITIONS && key === partitionId) {
-          return {
-            partition_id: partitionId,
-            table_name: TABLES.REPLICA_OPERATIONS,
-            leader_node_id: leaderNodeId,
-          };
-        }
-        return null;
-      },
-      filter(tableNameArg, predicate) {
-        if (tableNameArg === TABLES.PARTITIONS) {
-          return [
-            {
-              partition_id: partitionId,
-              table_name: TABLES.REPLICA_OPERATIONS,
-              leader_node_id: leaderNodeId,
-            },
-          ].filter(predicate);
-        }
-        if (tableNameArg !== TABLES.SERVICES) {
-          return [];
-        }
-        return [
-          buildLeaderService(leaderServiceId),
-          buildLeaderService(leaderServiceId2),
-          buildLeaderService(leaderServiceId3),
-        ].filter(predicate);
-      },
-    };
-    const readinessService = {
-      getNodeReadinessSync(nodeId) {
-        if (nodeId !== peerNodeId) {
-          return null;
-        }
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-          },
-          reasons: [],
-        };
-      },
-      async getNodeReadiness(nodeId) {
-        readinessRefreshNodeIds.push(nodeId);
-        return this.getNodeReadinessSync(nodeId);
-      },
-    };
-    const executor = new QueryExecutor({
-      messageRouter: createMockMessageRouter(),
-      systemCache,
-      controlPlaneReadinessService: readinessService,
-      routingMetadataOverlay: {
-        getServicesForPartition(requestedPartitionId) {
-          return requestedPartitionId === partitionId ? overlayServices : [];
-        },
-        shouldMaskCacheServicesForPartition() {
-          return false;
-        },
-        async refreshPartitionRouting(requestedPartitionId, options = {}) {
-          overlayRefreshes.push({
-            partitionId: requestedPartitionId,
-            reason: options.refreshReason || null,
-          });
-          overlayServices = [
-            {
-              service_id: peerServiceId,
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: peerNodeId,
-              address: peerAddress,
-              status: SERVICE_STATUS.ACTIVE,
-            },
-          ];
-          return true;
-        },
-      },
-    });
-
-    let resolution = executor.resolvePartitionServiceCandidates(
-      partitionId,
-      false,
-      false,
-      false,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    );
-
-    t.equal(
-      resolution.routingSnapshot.reasonCode,
-      QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
-      'fixture should start with every stale leader row filtered',
-    );
-    t.same(
-      resolution.routingSnapshot.deniedByNodeId,
-      {},
-      'fixture should cover the empty denial-summary repair path',
-    );
-    t.same(
-      resolution.candidates,
-      [],
-      'initial routing should fail closed before authoritative repair',
-    );
-
-    const repaired =
-      await executor.maybeAwaitDeniedPartitionRoutingRepair(
-        resolution.routingSnapshot,
-      );
-
-    t.equal(repaired, true,
-      'all-filtered priority recovery routing should refresh overlay metadata');
-    t.same(
-      readinessRefreshNodeIds,
-      [leaderNodeId],
-      'repair should refresh the active addressed node when denial details are empty',
-    );
-    t.same(
-      overlayRefreshes.map((entry) => entry.partitionId),
-      [partitionId],
-      'repair should refresh authoritative routing for the priority partition',
-    );
-
-    resolution = executor.resolvePartitionServiceCandidates(
-      partitionId,
-      false,
-      false,
-      false,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    );
-    const recoveryContract =
-      executor.resolveCanonicalLeaderGapRecoveryRoutingContract(
-        partitionId,
-        resolution.routingSnapshot,
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      );
-
-    t.equal(
-      recoveryContract.canonicalLeaderFilteredByReadiness,
-      true,
-      'stale leader rows should count as filtered when no leader row is routable',
-    );
-    t.equal(
-      recoveryContract.recoveryCandidateWidening,
-      true,
-      'priority recovery routing should widen after overlay refresh',
-    );
-    t.same(
-      resolution.candidates.map((candidate) => candidate.address),
-      [peerAddress],
-      'write routing should use the refreshed recovery peer',
-    );
-  });
-
   test('QueryExecutor - recovery-owned system-table writes fail closed when ' +
     'only service-role leader witnesses exist',
   async (t) => {
@@ -1141,50 +497,13 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     const leaderAddress = 'node-b/partition/nodes-p1-r2';
     const OWNER_MISSING_REASON = 'owner_row_missing';
     const OBSERVATION_DEFERRED = 'deferred';
-    const systemCache = {
-      get(tableName, key) {
-        if (tableName === TABLES.PARTITIONS && key === partitionId) {
-          return {
-            partition_id: partitionId,
-            table_name: TABLES.NODES,
-          };
-        }
-        return null;
-      },
-      filter(tableName, predicate) {
-        if (tableName === TABLES.PARTITIONS) {
-          return [{
-            partition_id: partitionId,
-            table_name: TABLES.NODES,
-          }].filter(predicate);
-        }
-        if (tableName === TABLES.SERVICES) {
-          return [
-            {
-              service_id: 'nodes-p1-r1',
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: 'node-a',
-              raft_role: 'follower',
-              address: 'node-a/partition/nodes-p1-r1',
-              status: SERVICE_STATUS.ACTIVE,
-            },
-            {
-              service_id: 'nodes-p1-r2',
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: 'node-b',
-              raft_role: 'leader',
-              address: leaderAddress,
-              status: SERVICE_STATUS.ACTIVE,
-            },
-          ].filter(predicate);
-        }
-        return [];
-      },
-    };
+    const systemCache = ownerlessNodesPartitionCache(
+      partitionId, 'leader', leaderAddress);
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -1235,50 +554,13 @@ export function registerQueryExecutorRecoveryRoutingTests() {
   test('QueryExecutor - recovery-owned system-table writes fail closed when ' +
     'canonical leader identity remains completely unresolved', async (t) => {
     const partitionId = 'nodes-p1';
-    const systemCache = {
-      get(tableName, key) {
-        if (tableName === TABLES.PARTITIONS && key === partitionId) {
-          return {
-            partition_id: partitionId,
-            table_name: TABLES.NODES,
-          };
-        }
-        return null;
-      },
-      filter(tableName, predicate) {
-        if (tableName === TABLES.PARTITIONS) {
-          return [{
-            partition_id: partitionId,
-            table_name: TABLES.NODES,
-          }].filter(predicate);
-        }
-        if (tableName === TABLES.SERVICES) {
-          return [
-            {
-              service_id: 'nodes-p1-r1',
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: 'node-a',
-              raft_role: 'follower',
-              address: 'node-a/partition/nodes-p1-r1',
-              status: SERVICE_STATUS.ACTIVE,
-            },
-            {
-              service_id: 'nodes-p1-r2',
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: 'node-b',
-              raft_role: 'follower',
-              address: 'node-b/partition/nodes-p1-r2',
-              status: SERVICE_STATUS.ACTIVE,
-            },
-          ].filter(predicate);
-        }
-        return [];
-      },
-    };
+    const systemCache = ownerlessNodesPartitionCache(
+      partitionId, 'follower', 'node-b/partition/nodes-p1-r2');
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -1313,48 +595,8 @@ export function registerQueryExecutorRecoveryRoutingTests() {
   async (t) => {
     const deliveries = [];
     const partitionId = 'nodes-p1';
-    const systemCache = {
-      get(tableName, key) {
-        if (tableName === TABLES.PARTITIONS && key === partitionId) {
-          return {
-            partition_id: partitionId,
-            table_name: TABLES.NODES,
-          };
-        }
-        return null;
-      },
-      filter(tableName, predicate) {
-        if (tableName === TABLES.PARTITIONS) {
-          return [{
-            partition_id: partitionId,
-            table_name: TABLES.NODES,
-          }].filter(predicate);
-        }
-        if (tableName === TABLES.SERVICES) {
-          return [
-            {
-              service_id: 'nodes-p1-r1',
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: 'node-a',
-              raft_role: 'follower',
-              address: 'node-a/partition/nodes-p1-r1',
-              status: SERVICE_STATUS.ACTIVE,
-            },
-            {
-              service_id: 'nodes-p1-r2',
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: 'node-b',
-              raft_role: 'follower',
-              address: 'node-b/partition/nodes-p1-r2',
-              status: SERVICE_STATUS.ACTIVE,
-            },
-          ].filter(predicate);
-        }
-        return [];
-      },
-    };
+    const systemCache = ownerlessNodesPartitionCache(
+      partitionId, 'follower', 'node-b/partition/nodes-p1-r2');
     const messageRouter = {
       deliver: async (address) => {
         deliveries.push(address);
@@ -1366,6 +608,9 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       },
     };
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+      }),
       messageRouter,
       systemCache,
     });
@@ -1406,49 +651,10 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     'canonical leader identity is only service-role-derived', async (t) => {
     const partitionId = 'nodes-p1';
     const leaderAddress = 'node-b/partition/nodes-p1-r2';
-    const systemCache = {
-      get(tableName, key) {
-        if (tableName === TABLES.PARTITIONS && key === partitionId) {
-          return {
-            partition_id: partitionId,
-            table_name: TABLES.NODES,
-          };
-        }
-        return null;
-      },
-      filter(tableName, predicate) {
-        if (tableName === TABLES.PARTITIONS) {
-          return [{
-            partition_id: partitionId,
-            table_name: TABLES.NODES,
-          }].filter(predicate);
-        }
-        if (tableName === TABLES.SERVICES) {
-          return [
-            {
-              service_id: 'nodes-p1-r1',
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: 'node-a',
-              raft_role: 'follower',
-              address: 'node-a/partition/nodes-p1-r1',
-              status: SERVICE_STATUS.ACTIVE,
-            },
-            {
-              service_id: 'nodes-p1-r2',
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: partitionId,
-              node_id: 'node-b',
-              raft_role: 'leader',
-              address: leaderAddress,
-              status: SERVICE_STATUS.ACTIVE,
-            },
-          ].filter(predicate);
-        }
-        return [];
-      },
-    };
+    const systemCache = ownerlessNodesPartitionCache(
+      partitionId, 'leader', leaderAddress);
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });

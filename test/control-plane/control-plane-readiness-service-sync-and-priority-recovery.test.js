@@ -23,6 +23,7 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {OwnerKeyReconcileQueue} from '../../src/workflow/owner-key-reconcile-queue.js';
+import {committedServeEligibilityView} from './serve-eligibility-test-support.js';
 import {
   READINESS_CHURN_NODE_COUNT,
   READINESS_CHURN_NOW_MS,
@@ -123,9 +124,18 @@ test('ordinary CL-012 reuse may bridge a regressed row while planning reads ' +
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    // Serving is the committed answer (quest
+    // serve-eligibility-committed-epoch-read): the committed record names the
+    // node eligible with its fresh lease.
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: [nodeId],
+      nowMs: now,
+      nodeRowOverrides: {[nodeId]: {[COLUMN.READY_LEASE_EXPIRES_AT]: freshLease}},
+    }),
     now: () => now,
   });
 
+  await readinessService.readServeEligibility();
   const fresh = await readinessService.getNodeReadiness(nodeId);
   t.equal(fresh.dimensions.serveEligible, true,
     'async owner evaluation should capture a serve-eligible snapshot');
@@ -136,14 +146,13 @@ test('ordinary CL-012 reuse may bridge a regressed row while planning reads ' +
     [COLUMN.READY_LEASE_EXPIRES_AT]: now - 30000,
   });
 
+  // The lease regression is a revoking change for the committed serve
+  // record, which re-keys every derived readiness memo (quest
+  // serve-eligibility-committed-epoch-read): the stored snapshot that carried
+  // the old serve answer is no longer reused.
   const reused = readinessService.getReusableNodeReadinessSnapshotSync(nodeId);
-  t.equal(reused.dimensions.serveEligible, true,
-    'ordinary non-planning reuse should retain the fresher stored snapshot');
-  t.equal(
-    reused.nodeEvidence?.lastHeartbeat,
-    freshHeartbeat,
-    'reused sync snapshot should preserve the fresher heartbeat evidence',
-  );
+  t.equal(reused, null,
+    'a stale committed serve record retires the stored snapshot');
 
   const planningCurrent = readinessService.buildNodeReadinessSyncCurrent(
     nodeId,
@@ -201,7 +210,8 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
       async executeAuthoritativeSystemTableRead(
         tableName, _sql, _params, _options,
       ) {
-        authoritativeReads.push(tableName);
+        // Node-keyed repair reads only; the committed serve read is whole-table.
+        if (_params?.length > 0) authoritativeReads.push(tableName);
         if (tableName === TABLES.NODES) {
           return {
             success: true,
@@ -233,7 +243,9 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
   const options = {
     allowAuthoritativeRefresh: true,
     requireFreshOnIneligible: true,
-    decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+    // Serving is the committed answer; the projection's authoritative
+    // evidence repair remains for the repair dimension.
+    decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
   };
   const repairedSnapshotPublished = new Promise((resolve) => {
     const unsubscribe = readinessService.subscribeReadinessPlanningSnapshots(
@@ -249,9 +261,9 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
   const initial = readinessService.getNodeReadinessSync(nodeId, options);
   const repeated = readinessService.getNodeReadinessSync(nodeId, options);
 
-  t.equal(initial.dimensions.serveEligible, false,
+  t.equal(initial.dimensions.repairEligible, false,
     'stale local evidence should remain ineligible on the first sync read');
-  t.equal(repeated.dimensions.serveEligible, false,
+  t.equal(repeated.dimensions.repairEligible, false,
     'repeated sync reads should stay fail-closed until the owner refresh lands');
   await repairedSnapshotPublished;
 
@@ -259,7 +271,7 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
     'sync reads should trigger one deduped authoritative node/service refresh');
 
   const refreshed = readinessService.getNodeReadinessSync(nodeId, options);
-  t.equal(refreshed.dimensions.serveEligible, true,
+  t.equal(refreshed.dimensions.repairEligible, true,
     'later sync reads should observe the repaired owner evidence');
   t.end();
 });
@@ -350,7 +362,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -358,8 +370,11 @@ async (t) => {
     'self-node should stay cluster-member-healthy while the local row catches up');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'live local control-plane service ownership should keep self writes open');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'load-lane admission should remain open for the live self node');
+  // Serving is the committed-epoch answer; there is no self serve grace
+  // (readiness-and-owner-contracts.md supersession, quest
+  // serve-eligibility-committed-epoch-read): no committed record, no serving.
+  t.equal(readiness.dimensions.serveEligible, false,
+    'serving follows the committed answer, not a self runtime grace');
   t.same(readiness.reasons, [],
     'self-node runtime grace should not emit a synthetic missing-row failure');
   t.same(authoritativeReads, [],
@@ -427,7 +442,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
   const reasonCodes = readiness.reasons.map((reason) => reason.code);
@@ -501,7 +516,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
   const reasonCodes = readiness.reasons.map((reason) => reason.code);
@@ -512,8 +527,8 @@ async (t) => {
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'self runtime grace should keep control-plane writes open when local ' +
     'service rows have not propagated yet');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'load-lane admission should stay open when only local cache evidence is missing');
+  t.equal(readiness.dimensions.serveEligible, false,
+    'serving follows the committed answer, not a self runtime grace');
   t.notOk(reasonCodes.includes(CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING),
     'the missing-row grace path should not synthesize node_row_missing ' +
     'when local cache service evidence is also absent');
@@ -621,8 +636,13 @@ async (t) => {
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: ['node-connected-valid'],
+      nowMs: now,
+    }),
     now: () => now,
   });
+  await readinessService.readServeEligibility();
 
   const readiness = await readinessService
     .getNodeReadiness('node-connected-valid');
@@ -672,14 +692,19 @@ async (t) => {
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: ['node-no-router-evidence'],
+      nowMs: now,
+    }),
     now: () => now,
   });
+  await readinessService.readServeEligibility();
 
   const readiness = await readinessService
     .getNodeReadiness('node-no-router-evidence');
 
   t.equal(readiness.dimensions.serveEligible, true,
-    'no router evidence preserves row-evidence grace for serveEligible');
+    'serving follows the committed answer, not router evidence');
   t.equal(readiness.dimensions.repairEligible, true,
     'no router evidence preserves row-evidence grace for repairEligible');
   t.end();

@@ -10,27 +10,6 @@ const LOCAL_STR_WARN = 'warn';
 const LOCAL_STR_ADMISSION_REENTER_CODE = 'OPERATION_CREATION_ADMISSION_REENTER';
 const LOCAL_STR_PLANNING_IDENTITY_CHANGED =
   'readiness_planning_identity_changed';
-const TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
-  'cluster_member_unhealthy',
-  'control_plane_write_unhealthy',
-  'metadata_publication_degraded',
-  'routing_not_ready',
-  // Operation-ledger admission holds are short internal formation windows
-  // (a ledger self-move in flight, or the ledger quorum still spreading).
-  // Classifying them transient lowers the provisioning fallback minimum so a
-  // CREATE TABLE that still has SOME admitted targets proceeds under-planned
-  // (the rebalancer fills in afterwards) instead of failing the client.
-  // OWNED RESIDUAL: when EVERY target is hold-deferred the create still fails
-  // fast with insufficient-targets — full wait-and-retry pacing through a
-  // whole-cluster hold window is the recorded DDL-pacing follow-up
-  // (ARCH-0016/0017), not delivered by this set.
-  'operation_ledger_self_move_in_flight',
-  'operation_ledger_self_move_waiting_for_idle_ledger',
-  'operation_ledger_quorum_concentrated',
-]);
-const AGGREGATE_TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
-  'insufficient_placement_eligible_nodes',
-]);
 
 const {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
@@ -198,85 +177,6 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     return summaryEntries.length > 0 ?
       summaryEntries.join(LOCAL_STR_SEMI_SPACE) :
       PROVISIONING_REJECTION_SUMMARY_NONE;
-  }
-
-  /**
-   * Return true when rejected targets are blocked only by transient control
-   * plane recovery/readiness reasons.
-   * @param {Object[]} rejectedTargetNodePlans
-   * @return {boolean}
-   * @private
-   */
-  hasOnlyTransientProvisioningShortfall(rejectedTargetNodePlans) {
-    if (
-      !Array.isArray(rejectedTargetNodePlans) ||
-      rejectedTargetNodePlans.length === 0
-    ) {
-      return false;
-    }
-    let foundTransientReason = false;
-    for (const rejection of rejectedTargetNodePlans) {
-      const blockingReasons = (Array.isArray(rejection?.blockingReasons) ?
-        rejection.blockingReasons :
-        []).map((reason) => String(reason || ''))
-        .filter(Boolean);
-      const reasonCodes = (Array.isArray(rejection?.reasonCodes) ?
-        rejection.reasonCodes :
-        []).map((reason) => String(reason || ''))
-        .filter(Boolean);
-      const reasons = [...blockingReasons, ...reasonCodes];
-      if (reasons.length === 0) {
-        return false;
-      }
-      const hasTransientReason = reasons.some((reason) =>
-        TRANSIENT_PROVISIONING_SHORTFALL_REASONS.has(reason),
-      );
-      if (!hasTransientReason) {
-        return false;
-      }
-      for (const blockingReason of blockingReasons) {
-        if (
-          !TRANSIENT_PROVISIONING_SHORTFALL_REASONS.has(blockingReason) &&
-          !AGGREGATE_TRANSIENT_PROVISIONING_SHORTFALL_REASONS.has(
-            blockingReason,
-          )
-        ) {
-          return false;
-        }
-      }
-      for (const reasonCode of reasonCodes) {
-        if (!TRANSIENT_PROVISIONING_SHORTFALL_REASONS.has(reasonCode)) {
-          return false;
-        }
-      }
-      foundTransientReason = true;
-    }
-    return foundTransientReason;
-  }
-
-  /**
-   * Resolve the fallback floor for default CREATE TABLE provisioning minimums.
-   * Explicit caller minimums must still be honored exactly.
-   * @param {Object} options
-   * @return {number}
-   * @private
-   */
-  resolveProvisioningShortfallFallbackMinimum(options = {}) {
-    const implicitMinimum =
-      Number.isInteger(options.implicitFallbackMinimumReplicaCount) &&
-      options.implicitFallbackMinimumReplicaCount > 0 ?
-        options.implicitFallbackMinimumReplicaCount :
-        1;
-    if (
-      options.hasExplicitMinimumRoutableReplicaCount === true ||
-      options.maximumProvisionableReplicaCount <= 0 ||
-      !this.hasOnlyTransientProvisioningShortfall(
-        options.rejectedTargetNodePlans,
-      )
-    ) {
-      return implicitMinimum;
-    }
-    return 1;
   }
 
   /**

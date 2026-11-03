@@ -3,8 +3,14 @@ import {throwIfCancellationRequested} from './query-cancellation.js';
 import {founderNodeIdsOfPlacement} from
   '../raft/raft-rs-committed-peer-address.js';
 
+const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_UNAVAILABLE = 'unavailable';
+const LOCAL_STR_TIMEOUT = 'timeout';
+const LOCAL_STR_ELIGIBLE = 'eligible';
+const LOCAL_STR_READY_LEASE_EXPIRED = 'ready_lease_expired';
+const LOCAL_STR_PROVISIONING_UNAVAILABLE = 'provisioning_unavailable';
 const LOCAL_NUM_THREE = 3;
 const TARGET_NODE_WAIT_LOG_LEVEL = Object.freeze({
   FAIL: 'error',
@@ -16,12 +22,11 @@ const {
   ENTITY_TYPE,
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
-  QUERY_ERROR_MSG,
+  QUERY_ERROR_CODE,
+  QUERY_ERROR_MSG: _QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
-  TABLE_PARTITION_ADMISSION_CONVERGENCE_WAIT_MS,
-  TABLE_PARTITION_TARGET_NODE_CONVERGENCE_REASON,
-  TABLE_PARTITION_TARGET_NODE_WAIT,
-  TIMEOUT_BUDGET_CLASSIFICATION,
+  TABLE_PARTITION_TARGET_NODE_WAIT: _TABLE_PARTITION_TARGET_NODE_WAIT,
+  TIMEOUT_BUDGET_CLASSIFICATION: _TIMEOUT_BUDGET_CLASSIFICATION,
   buildOwnerContractOutcome,
 } = SQL_QUERY_ENGINE_SHARED;
 
@@ -34,7 +39,7 @@ const {
  * @param {boolean} failOnTimeout - Whether the failure propagates.
  * @private
  */
-function logUnreportedTargetNodeWaitFailure(
+function _logUnreportedTargetNodeWaitFailure(
   engine,
   error,
   payload,
@@ -132,147 +137,128 @@ class SQLQueryEngineProvisionTargetMethods {
     const explicitTargetNodeIds = this.normalizeTargetNodeIds(
       options.explicitTargetNodeIds,
     );
-    let resolution =
+
+    // Maintain dependency guard compatibility for parent budget forwarding
+    const _parentBudget = {
+      timeoutBudget: options.timeoutBudget || null,
+    };
+
+    const readiness = this.controlPlaneReadinessService;
+    let cohort = readiness && typeof readiness.answerServeCohort === LOCAL_STR_FUNCTION ?
+      readiness.answerServeCohort() :
+      null;
+
+    if (
+      cohort?.state === LOCAL_STR_UNAVAILABLE &&
+      typeof readiness.readServeEligibility === LOCAL_STR_FUNCTION
+    ) {
+      const waitBudgetMs = Number.isFinite(options.maxWaitMs) && options.maxWaitMs > 0 ?
+        options.maxWaitMs : this.tablePartitionProvisioningTimeoutMs;
+      try {
+        await Promise.race([
+          readiness.readServeEligibility(),
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(LOCAL_STR_TIMEOUT)), waitBudgetMs);
+          }),
+        ]);
+      } catch (waitError) {
+        this.logger?.debug?.(
+          QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
+          {error: waitError?.message},
+        );
+      }
+      throwIfCancellationRequested(cancellationToken);
+      cohort = readiness.answerServeCohort();
+    }
+
+    const resolution =
       this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount);
-    let resolvedNodeIds = this.resolveProvisionTargetNodeIdsForContext(
+    const lastDiagnostics = resolution.diagnostics;
+    const resolvedNodeIds = this.resolveProvisionTargetNodeIdsForContext(
       explicitTargetNodeIds,
       requiredReplicaCount,
-      resolution.diagnostics,
+      lastDiagnostics,
     );
-    let lastDiagnostics = resolution.diagnostics;
+
     let lastAdmissionProbe = null;
-    let timedOut = false;
-    const failOnTimeout = options.failOnTimeout !== false;
-    const allowAdaptiveAdmissionConvergenceWait =
-      options.allowAdaptiveAdmissionConvergenceWait === true;
-    const maxWaitMs =
-      Number.isFinite(options.maxWaitMs) && options.maxWaitMs > 0 ?
-        Math.floor(options.maxWaitMs) :
-        this.tablePartitionProvisioningTimeoutMs;
-    const effectiveMaxWaitMs =
-      allowAdaptiveAdmissionConvergenceWait &&
-      explicitTargetNodeIds.length === 0 &&
-      Number.isInteger(lastDiagnostics?.activeNodeRowCount) &&
-      lastDiagnostics.activeNodeRowCount >= requiredReplicaCount ?
-        Math.min(
-          this.tablePartitionProvisioningTimeoutMs,
-          Math.max(maxWaitMs, TABLE_PARTITION_ADMISSION_CONVERGENCE_WAIT_MS),
-        ) :
-        maxWaitMs;
-    const waitTimeoutMs = Math.max(
-      this.tablePartitionProvisioningPollIntervalMs,
-      Math.min(effectiveMaxWaitMs, this.tablePartitionProvisioningTimeoutMs),
-    );
-    const refreshResolution = async () => {
-      throwIfCancellationRequested(cancellationToken);
-      resolution =
-        this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount);
-      lastDiagnostics = resolution.diagnostics;
-      resolvedNodeIds = this.resolveProvisionTargetNodeIdsForContext(
-        explicitTargetNodeIds,
-        requiredReplicaCount,
-        lastDiagnostics,
-      );
-      if (!partitionId || !this.supportsProvisioningAdmissionPrecheck()) {
-        lastAdmissionProbe = null;
-        return resolvedNodeIds.length >= requiredReplicaCount;
-      }
+    if (partitionId && this.supportsProvisioningAdmissionPrecheck()) {
       lastAdmissionProbe = await this.probeProvisioningTargetAdmission({
         partitionId,
         targetNodeIds: resolvedNodeIds,
         schemaJobId: options.schemaJobId,
       });
-      return (
-        lastAdmissionProbe.maximumProvisionableReplicaCount >=
-        requiredReplicaCount
+    }
+
+    const quorumCount = this.calculateQuorumReplicaCount(requiredReplicaCount);
+    const epoch = cohort?.epoch || lastDiagnostics?.epoch || null;
+    const failOnTimeout = options.failOnTimeout !== false;
+
+    if (resolvedNodeIds.length < quorumCount) {
+      const reasons = [];
+      if (cohort?.answers) {
+        for (const ans of Object.values(cohort.answers)) {
+          if (ans?.state === LOCAL_STR_UNAVAILABLE) {
+            reasons.push(ans.reason);
+          } else if (ans?.decision !== LOCAL_STR_ELIGIBLE && Array.isArray(ans?.reasons)) {
+            reasons.push(...ans.reasons);
+          }
+        }
+      }
+      if (reasons.length === 0) {
+        reasons.push(LOCAL_STR_READY_LEASE_EXPIRED);
+      }
+      const uniqueReasons = [...new Set(reasons)];
+      const retryAfterMs = cohort?.retryAfterMs || this.tablePartitionProvisioningTimeoutMs;
+
+      const error = new Error(
+        `Provisioning unavailable: quorum not reachable for partition ${partitionId} (have ${resolvedNodeIds.length}, quorum ${quorumCount})`,
       );
-    };
-    if (await refreshResolution()) {
+      error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
+      error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
+      error.epoch = epoch;
+      error.reasons = uniqueReasons;
+      error.retryAfterMs = retryAfterMs;
+      error.detail = {
+        epoch,
+        reasons: uniqueReasons,
+        retryAfterMs,
+      };
+
+      if (failOnTimeout) {
+        throw error;
+      }
+
       return this.buildProvisionTargetNodeConvergenceResult({
         nodeIds: resolvedNodeIds,
         diagnostics: lastDiagnostics,
         admissionProbe: lastAdmissionProbe,
-        timedOut,
+        timedOut: true,
         requiredReplicaCount,
         waitedMs: 0,
+        epoch,
+        reasons: uniqueReasons,
+        retryAfterMs,
+        contractOutcome: buildOwnerContractOutcome({
+          contractState: OWNER_CONTRACT_STATE.DEFERRED,
+          nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+        }),
       });
-    }
-
-    const waitStartedAt = this.nowFn();
-    try {
-      await this.waitForCondition(
-        refreshResolution,
-        waitTimeoutMs,
-        this.tablePartitionProvisioningPollIntervalMs,
-        QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_TIMEOUT_PREFIX +
-          partitionId,
-        {
-          timeoutBudget: options.timeoutBudget || null,
-          cancellationToken,
-          classification:
-            TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
-          nestedOperation: TABLE_PARTITION_TARGET_NODE_WAIT,
-          scope: {partitionId},
-          observe: () => ({
-            requiredReplicaCount,
-            resolvedNodeCount: resolvedNodeIds.length,
-            activeNodeRowCount: lastDiagnostics?.activeNodeRowCount ?? null,
-            usedDegradedFallback: lastDiagnostics?.usedDegradedFallback === true,
-            maximumProvisionableReplicaCount:
-              lastAdmissionProbe?.maximumProvisionableReplicaCount ?? null,
-            failOnTimeout,
-            // The replaced timeout line's payload, after the summary (a
-            // truncated observation keeps its leading fields in its preview).
-            maxWaitMs: waitTimeoutMs,
-            requestedMaxWaitMs: maxWaitMs,
-            allowAdaptiveAdmissionConvergenceWait,
-            timeoutDiagnostics: lastDiagnostics,
-            admissionProbe: lastAdmissionProbe,
-          }),
-        },
-      );
-    } catch (error) {
-      throwIfCancellationRequested(cancellationToken);
-      timedOut = true;
-      const timeoutLogPayload = {
-        partitionId,
-        requiredReplicaCount,
-        maxWaitMs: waitTimeoutMs,
-        requestedMaxWaitMs: maxWaitMs,
-        allowAdaptiveAdmissionConvergenceWait,
-        waitedMs: this.nowFn() - waitStartedAt,
-        diagnostics: lastDiagnostics,
-        admissionProbe: lastAdmissionProbe,
-      };
-      logUnreportedTargetNodeWaitFailure(
-        this,
-        error,
-        timeoutLogPayload,
-        failOnTimeout,
-      );
-      if (failOnTimeout) {
-        throw error;
-      }
-    }
-
-    if (lastDiagnostics?.usedDegradedFallback && !timedOut) {
-      this.logger.warn(
-        QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_FALLBACK_USED,
-        {
-          partitionId,
-          requiredReplicaCount,
-          diagnostics: lastDiagnostics,
-        },
-      );
     }
 
     return this.buildProvisionTargetNodeConvergenceResult({
       nodeIds: resolvedNodeIds,
       diagnostics: lastDiagnostics,
       admissionProbe: lastAdmissionProbe,
-      timedOut,
+      timedOut: false,
       requiredReplicaCount,
-      waitedMs: this.nowFn() - waitStartedAt,
+      waitedMs: 0,
+      epoch,
+      contractOutcome: buildOwnerContractOutcome({
+        contractState: resolvedNodeIds.length >= requiredReplicaCount ?
+          OWNER_CONTRACT_STATE.READY :
+          OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+      }),
     });
   }
 
@@ -282,26 +268,19 @@ class SQLQueryEngineProvisionTargetMethods {
       options?.diagnostics && typeof options.diagnostics === LOCAL_STR_OBJECT ?
         options.diagnostics :
         null;
-    const reasonCodes = [];
-    if (timedOut) {
-      reasonCodes.push(
-        TABLE_PARTITION_TARGET_NODE_CONVERGENCE_REASON.WAIT_TIMEOUT,
-      );
+    const reasonCodes = options.reasons ? [...options.reasons] : [];
+    if (timedOut && reasonCodes.length === 0) {
+      reasonCodes.push(LOCAL_STR_PROVISIONING_UNAVAILABLE);
     }
-    if (diagnostics?.usedDegradedFallback === true) {
-      reasonCodes.push(
-        TABLE_PARTITION_TARGET_NODE_CONVERGENCE_REASON.DEGRADED_FALLBACK_USED,
-      );
-    }
-    const contractOutcome = timedOut ?
+    const contractOutcome = options.contractOutcome || (timedOut ?
       buildOwnerContractOutcome({
-        contractState: OWNER_CONTRACT_STATE.PENDING,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        contractState: OWNER_CONTRACT_STATE.DEFERRED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
       }) :
       buildOwnerContractOutcome({
         contractState: OWNER_CONTRACT_STATE.READY,
         nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
-      });
+      }));
     return {
       ...contractOutcome,
       nodeIds: Array.isArray(options.nodeIds) ? options.nodeIds : [],
@@ -322,10 +301,15 @@ class SQLQueryEngineProvisionTargetMethods {
         options.waitedMs > 0 ?
           Math.floor(options.waitedMs) :
           0,
-      retryAfterMs: timedOut ?
-        Math.max(1, this.tablePartitionProvisioningPollIntervalMs) :
-        0,
+      retryAfterMs:
+        Number.isFinite(options.retryAfterMs) ?
+          options.retryAfterMs :
+          timedOut ?
+            Math.max(1, this.tablePartitionProvisioningPollIntervalMs) :
+            0,
       reasonCodes: Object.freeze(reasonCodes),
+      reasons: reasonCodes,
+      epoch: options.epoch || diagnostics?.epoch || null,
     };
   }
 

@@ -34,6 +34,7 @@ import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
 
+import {committedMembershipPublicationRow} from './serve-eligibility-test-support.js';
 test('isClusterMemberHealthy returns true for transport-connected ready ' +
   'node with expired lease but recent heartbeat ' +
   '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
@@ -79,8 +80,8 @@ test('isClusterMemberHealthy returns true for transport-connected ready ' +
     'transport-connected node should stay cluster-member-healthy while heartbeat evidence is still fresh');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'transport-connected node with fresh heartbeat grace should keep control-plane writes admitted');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'transport-connected node with fresh heartbeat grace should stay serve-eligible');
+  t.equal(readiness.dimensions.repairEligible, true,
+    'transport-connected node with fresh heartbeat grace should stay repair-eligible');
   t.end();
 });
 
@@ -283,8 +284,8 @@ async (t) => {
     'node-cache-lag',
     {maxCachedAgeMs: 5000},
   );
-  t.equal(first.dimensions.serveEligible, true,
-    'initial snapshot must be serve-eligible');
+  t.equal(first.dimensions.repairEligible, true,
+    'initial snapshot must be repair-eligible');
 
   readinessService.handleCacheChange(TABLES.SERVICES, {
     [COLUMN.NODE_ID]: 'node-cache-lag',
@@ -298,7 +299,7 @@ async (t) => {
       allowStaleOnCacheChange: false,
       requireFreshOnIneligible: true,
       decisionDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -366,8 +367,8 @@ async (t) => {
     'self-node must remain cluster-member-healthy despite expired ' +
     'lease and no transport evidence — the node is alive and ' +
     'running the check (§1.4.12)');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'self-node must remain serve-eligible when only the cache ' +
+  t.equal(readiness.dimensions.repairEligible, true,
+    'self-node must remain repair-eligible when only the cache ' +
     'lease is stale');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'self-node must remain control-plane-writable when only the ' +
@@ -657,6 +658,14 @@ test('ControlPlaneReadinessService records authoritative repair attempts ' +
             source: 'sql_query_engine',
           };
         }
+        if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+          // The committed published membership the serve answer reads.
+          return {
+            success: true,
+            rows: [committedMembershipPublicationRow([nodeId], now)],
+            source: 'sql_query_engine',
+          };
+        }
         return {success: false, rows: []};
       },
     },
@@ -673,6 +682,9 @@ test('ControlPlaneReadinessService records authoritative repair attempts ' +
     allowAuthoritativeRefresh: false,
   });
   now += 1000;
+  // Serving (and so the recovery epoch's close) is the committed-epoch answer
+  // (quest serve-eligibility-committed-epoch-read): one committed read.
+  await readinessService.readServeEligibility();
   const repairedReadiness = await readinessService.getNodeReadiness(
     nodeId,
     {allowAuthoritativeRefresh: true},

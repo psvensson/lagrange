@@ -669,6 +669,9 @@ const ROUTED_READERS = Object.freeze([
   'src/control-plane/node-trust-state.js',
   'src/control-plane/publication-active-gate-handoff-contract-helpers.js',
   'src/control-plane/replica-dispatch-replay-health-readiness.js',
+  // The committed serve-eligibility owner reads the committed rows through
+  // the snapshot owner's definitions.
+  'src/control-plane/serve-eligibility-owner.js',
   'src/rebalancer/unified-rebalancer-available-nodes.js',
 ]);
 const NOT_READERS = Object.freeze({

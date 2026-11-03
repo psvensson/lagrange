@@ -79,6 +79,9 @@ test('readiness planning dependency registry is complete and explicit',
         'cdcGroupPropagationServiceGeneration',
         'heartbeatServiceGeneration',
         'controlPlaneSystemTableGatewayGeneration',
+        // The committed-epoch serve record (quest
+        // serve-eligibility-committed-epoch-read).
+        'serveEligibilityOwnerGeneration',
         'authoritativeControlPlaneViewGeneration',
         'localClusterIncarnationFenceProviderGeneration',
         TABLES.NODES,
@@ -373,8 +376,12 @@ test('bootstrap routing consumes deferred readiness only with owner-service ' +
   t.equal(internalCandidates().length, 1,
     'readiness-internal reads reach the pre-ready canonical owner');
   connected = false;
-  t.equal(internalCandidates().length, 0,
-    'transport loss closes the deferred bootstrap route');
+  // Superseded (R09, quest serve-eligibility-committed-epoch-read, D2):
+  // system-table routing decides on raft leadership; live transport is
+  // applied by the delivery layer (reconnect deferral, fall-through), not by
+  // the candidate set, so a disconnected owner stays a candidate.
+  t.equal(internalCandidates().length, 1,
+    'transport loss is the delivery layer\'s input, not a routing filter');
   connected = true;
   t.equal(internalCandidates().length, 1,
     'an incomplete downstream node projection cannot veto its data owner');

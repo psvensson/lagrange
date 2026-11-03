@@ -26,6 +26,7 @@ import {
   createMockSystemCache,
 } from '../query/sql-query-engine-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 // Ensure IndexService prototype has global methods attached
 Object.assign(IndexService.prototype, indexServiceGlobalMethods);
 
@@ -326,6 +327,7 @@ test('J5 Step 1: Reject CREATE UNIQUE GLOBAL INDEX with UNSUPPORTED_SQL_FEATURE 
     globalIndexCoordinator: cluster.coordinator,
   });
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     indexService,
     messageRouter: createMockMessageRouter(),
@@ -887,6 +889,7 @@ test('J5 Step 10: Public SQL CREATE GLOBAL INDEX & DROP INDEX end-to-end wiring'
     globalIndexCoordinator: cluster.coordinator,
   });
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     indexService,
     messageRouter: createMockMessageRouter(),

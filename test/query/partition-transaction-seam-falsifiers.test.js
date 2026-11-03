@@ -36,6 +36,7 @@ import {
   recoveryRowsOf,
 } from '../test-helpers/transaction-recovery-rows-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const NO_PERSISTENCE = 'TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE';
 const QUIET = Object.freeze({info() {}, warn() {}, error() {}, debug() {}});
 const PRIMARY_KEY_COLLISION = Object.freeze({code: 'SQLITE_CONSTRAINT_PRIMARYKEY',
@@ -112,7 +113,9 @@ test('TX1 seam W10c: BEGIN persists the identity insert-once before any fanout, 
   };
   // The engine's own persistence of the row, through a gateway that records it.
   const submitted = [];
-  const engine = new SQLQueryEngine({autoStartDistributedTransactionRecovery: false,
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    autoStartDistributedTransactionRecovery: false,
     controlPlaneSystemTableGateway: {supportsMutationSubmission: () => true,
       submitMutation: async (mutation, options) => {
         submitted.push({tableName: mutation.tableName, operation: mutation.operation,
@@ -254,7 +257,9 @@ test('TX1 seam S2: a two-phase NO_TRANSACTION commit miss is resolved by an outc
 test('TX1 seam S4b: an engine that cannot persist transaction state refuses an explicit BEGIN ' +
   'and a multi-partition statement, typed, before any fanout, and still runs a single-partition ' +
   'DIRECT_AUTOCOMMIT write', async () => {
-  const engine = new SQLQueryEngine({autoStartDistributedTransactionRecovery: false});
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    autoStartDistributedTransactionRecovery: false});
   const openFor = async (sessionId, partitions) => {
     const transaction = await engine.openWriteTransaction(sessionId, {operationId: sessionId,
       partitionStatements: new Map(partitions.map((partition) => [partition, {}]))});
@@ -309,7 +314,9 @@ async () => {
   const persists = engine.canPersistDistributedTransactionState();
   const gateway = createTransactionPersistenceGateway();
   try {
-    const withGateway = await cutoverThrough(new SQLQueryEngine({...SEED_ENGINE_OPTIONS,
+    const withGateway = await cutoverThrough(new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      ...SEED_ENGINE_OPTIONS,
       controlPlaneSystemTableGateway: gateway}));
     const submitted = gateway.mutations.map((mutation) => mutation.tableName);
     // Option 1 is final (owner decision): the phase hands its SQL engine the CDC service it
@@ -413,7 +420,9 @@ test('TX1 seam FDET: an ordinary committed write with a nondeterministic functio
 
 test('TX1 seam S5: every participant request carries the transaction identity (seam A)',
   async () => {
-    const engine = new SQLQueryEngine({autoStartDistributedTransactionRecovery: false});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      autoStartDistributedTransactionRecovery: false});
     let request = null;
     engine.queryExecutor = {executeOnPartition: async (...args) => {
       request = args[6].buildRequest();

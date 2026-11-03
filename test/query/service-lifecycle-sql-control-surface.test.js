@@ -32,6 +32,7 @@ import {
   ServiceLifecycleCommandOwner,
 } from '../../src/service/service-lifecycle-command-owner.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const DIGEST_A = `sha256:${'a'.repeat(64)}`;
 const DIGEST_B = `sha256:${'b'.repeat(64)}`;
 const CONTAINER_MEDIA_TYPE = 'application/vnd.oci.image.manifest.v1+json';
@@ -299,6 +300,7 @@ function createEngineFixture(options = {}) {
   // A BEGIN persists transaction state first (TX1 seam S4b): the engine
   // holds a persistence gateway.
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createSystemCache(),
     messageRouter: {deliver: async () => ({success: true})},
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -562,6 +564,7 @@ describe('service lifecycle SQL classification and security boundary', () => {
   it('returns a typed failure when the command owner is not composed',
     async () => {
       const engine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: createSystemCache(),
         messageRouter: {deliver: async () => ({success: true})},
         autoStartDistributedTransactionRecovery: false,

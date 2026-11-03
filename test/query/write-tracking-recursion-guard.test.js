@@ -18,6 +18,7 @@ import {
   WRITE_TRACKING_EXCLUDED_TABLES,
 } from '../../src/query/query-constants.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -112,6 +113,7 @@ test('recursion guard - INSERT into sql_write_operations skips ' +
   'write tracking', async (t) => {
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createCacheForTable(TABLES.SQL_WRITE_OPERATIONS),
     messageRouter: createTestRouter(),
     cdcIntegrationService: createTestCdc(),
@@ -136,6 +138,7 @@ test('recursion guard - UPDATE on sql_write_operations skips ' +
   'write tracking', async (t) => {
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createCacheForTable(TABLES.SQL_WRITE_OPERATIONS),
     messageRouter: createTestRouter(),
     cdcIntegrationService: createTestCdc(),
@@ -160,6 +163,7 @@ test('recursion guard - DELETE on sql_write_operations skips ' +
   'write tracking', async (t) => {
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createCacheForTable(TABLES.SQL_WRITE_OPERATIONS),
     messageRouter: createTestRouter(),
     cdcIntegrationService: createTestCdc(),
@@ -183,6 +187,7 @@ test('recursion guard - INSERT into sql_transactions skips ' +
   'write tracking', async (t) => {
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createCacheForTable(TABLES.SQL_TRANSACTIONS),
     messageRouter: createTestRouter(),
     cdcIntegrationService: createTestCdc(),
@@ -207,6 +212,7 @@ test('recursion guard - INSERT into regular table still triggers ' +
   'terminal write tracking', async (t) => {
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createCacheForTable('users'),
     messageRouter: createTestRouter(),
     cdcIntegrationService: createTestCdc(),

@@ -94,21 +94,8 @@ const queryExecutorPartitionRoutingCandidateMethods = {
     routingReadinessDimension = this.defaultRoutingReadinessDimension,
     routingOptions = {},
   ) {
-    const allowPriorityRecoveryBootstrap =
-      Object.prototype.hasOwnProperty.call(
-        routingOptions,
-        QUERY_EXECUTOR_ROUTING_OPTION_FIELD
-          .ALLOW_PRIORITY_RECOVERY_BOOTSTRAP,
-      ) ?
-        routingOptions[
-          QUERY_EXECUTOR_ROUTING_OPTION_FIELD
-            .ALLOW_PRIORITY_RECOVERY_BOOTSTRAP
-        ] === true :
-        forRead === false;
     const resolvedRoutingOptions = {
       ...routingOptions,
-      [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.ALLOW_PRIORITY_RECOVERY_BOOTSTRAP]:
-        allowPriorityRecoveryBootstrap,
       [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.FOR_READ]: forRead,
     };
     const prioritizeLeader = preferLeader || !forRead;

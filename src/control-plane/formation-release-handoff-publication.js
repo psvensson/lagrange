@@ -1,8 +1,5 @@
 import {TABLES} from '../constants/index.js';
 import {
-  CONTROL_PLANE_READ_RECOVERY_ROUTING,
-} from './control-plane-readiness-constants.js';
-import {
   AUTHORIZATION_INTENT_OUTCOME,
   FORMATION_RELEASE_HANDOFF_STATE,
   authorizeFormationReleaseHandoffPublicationIntent,
@@ -49,16 +46,6 @@ const FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE = objectFreeze({
 // the authoritative store (Raft/SQL), never the local cache; the cache is only
 // a hint elsewhere, never the acknowledgement truth (system-guidelines §3).
 const DURABLE_PUBLICATION_READ_OPTIONS = objectFreeze({});
-// The consumer's durable read of the authority publication is the one read
-// exempt from the controlPlaneRecoveryEligible routing gate, exactly as the
-// authority's publication write already is: while every replica host is
-// recovery-pending a joiner hosting no replica would otherwise have no
-// routable candidate (all_services_filtered_by_readiness) for the contract
-// written for it.
-const CONSUMER_DURABLE_PUBLICATION_READ_OPTIONS = objectFreeze({
-  recoveryRouting:
-    CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP,
-});
 const FIELD_STATE = 'state';
 const FIELD_REASON_CODE = 'reasonCode';
 const FIELD_AT = 'at';
@@ -386,7 +373,7 @@ async function readConsumerFormationReleaseHandoffPublicationRow(
     storageOwner,
     authorityNodeId,
     authorityBootIncarnation,
-    CONSUMER_DURABLE_PUBLICATION_READ_OPTIONS,
+    DURABLE_PUBLICATION_READ_OPTIONS,
   );
 }
 

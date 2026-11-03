@@ -36,6 +36,7 @@ import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const QUIET_LOGGER = Object.freeze({
   debug() {},
   info() {},
@@ -228,6 +229,7 @@ test('Scenario A deep-stack: Workstream 2 coordinator participant-set deduplicat
   t.after(() => gateway.db.close());
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     logger: QUIET_LOGGER,
     controlPlaneSystemTableGateway: gateway,
     autoStartDistributedTransactionRecovery: false,

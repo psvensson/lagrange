@@ -1,0 +1,43 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "serve-eligibility-answered-from-committed-epoch",
+      "passed": true,
+      "evidence": "attempt 1b: test/control-plane/serve-eligibility-committed-epoch-read.test.js 8/8 tests ok: (1) committed lease grants where the projection would deny; (2) committed expired lease is a committed negative; (3) membership/ack/priority-spread negatives; (4) no published epoch and failed read are typed unavailability; (5) a revoking node change makes the memo stale, a lease extension does not; (6) a positive answer does not outlive its committed lease; (7) a cached publication at E+1 answers unavailable_stale{E} until the committed read answers E+1 (mutation B3 turns it red); (8) a failed background refresh keeps a still-valid committed lease, lease expiry with no successful read answers stale (mutation 'revoke on READ_FAILED' turns it red). Lanes run with LAGRANGE_PLACEMENT=local."
+    },
+    {
+      "id": "system-table-routing-on-leadership-without-carve-outs",
+      "passed": true,
+      "evidence": "attempt 1b: test/query/query-executor-serve-eligibility-routing.test.js 11/11 tests ok - committed-eligible routes, typed stale denial with epoch, UA-1 grace closed, system tables carry no readiness or transport filter in the candidate set, a disconnected candidate receives the delivery-layer reconnect deferral and the read falls through (re-derived witness for the superseded sealed transport witness, R09 recorded), bypass module deleted, stale cached leader redirects or NOT_LEADER falls through to the live leader, no owner = typed unavailability, replica_operations leader-required read under planning_snapshot_refresh_pending reaches the live leader"
+    },
+    {
+      "id": "provisioning-typed-cohort-outcomes",
+      "passed": true,
+      "evidence": "attempt 2: test/runtime/pgwire-provisioning-unavailable.test.js 2/2 tests ok; test/query/sql-query-engine-provision-partition-waits.test.js 40/40 tests ok; test/query/sql-query-engine-create-table-quorum.test.js 1/1 test ok. CREATE TABLE completes as ACTIVE with contractState 'under_replicated' carrying {epoch, requestedReplicaCount, committedReplicaCount, missingReplicaCount} when quorum minimum reached below full RF, surfaced to client via NoticeResponse; below quorum throws typed QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE with SQLSTATE 57P03; degraded provisioning fallback, provisioning convergence poll/10s constant, and transient-shortfall minimum lowering deleted."
+    },
+    {
+      "id": "rebalancer-decisions-from-committed-leases-and-one-operation-source",
+      "passed": true,
+      "evidence": "attempt 3: test/rebalancer/critical-topology-committed-lease.test.js 4/4 tests (11/11 assertions) ok: (a) placeholder readiness for N but committed lease current -> settle blocker is null; (b) cache REPLICA_OPERATIONS empty, owner read has one in-flight ADD -> blocker topology_operations_in_flight source authoritative; (c) owner read throws -> unavailable with typed reason; (d) local-serve PRIORITY_..._PENDING on non-priority system partition -> no defer, interval unchanged. Extended test/rebalancer/startup-authority-available-node-contract.test.js 5/5 ok: placement eligibility reads committed ready lease directly without requiring serve eligibility. Deleted: formation carve-out in unified-rebalancer-available-nodes.js, readiness-denial-classification.js, local-serve defer in local-serve-readiness.js and rebalancer-planning-gate-methods.js, startup lease bypass in critical topology settling, C12 readiness loop in partition-service-learner-promotion-count-check-methods.js, CACHE from TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE, collectCriticalSystemInFlightReplicaOperations, !== false in unified-rebalancer-control-plane-readiness-methods.js replaced with strict === true across all 7 dimensions."
+    },
+    {
+      "id": "publication-planning-without-serve-cycle",
+      "passed": true,
+      "evidence": "attempt 4: test/control-plane/publication-planning-committed-rows.test.js 3/3 tests ok (planning reads of services answer the committed rows without merge with SystemTableCache projection; unavailable committed planning read surfaces typed unavailability without cache fallback); all 378 tests in test/control-plane/membership-publication-coordinator.test.js ok; !== false and empty defaults dropped from publication planning decision paths (priority-partition-readiness-data, readiness-repair, candidate-derivation, coordinator-reconcile, target-selection, recovery-epoch-summary-methods, node-service-rows); allowStaleOnCacheChange dropped from getAllNodeReadinessSync and coordinator-planning."
+    },
+    {
+      "id": "serve-lane-opens-on-fresh-formation",
+      "passed": false,
+      "evidence": "not yet measured"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "evidence": "not yet measured"
+    }
+  ],
+  "evidence": [],
+  "applicability": "Attempt 1b receipt (2026-11-02): receipts 1-2 green on the corrective head; 3-6 belong to attempts 2-4; independent verification of 1b pending. publication-planning-committed-rows.test.js stays red by design (attempt 4)."
+}

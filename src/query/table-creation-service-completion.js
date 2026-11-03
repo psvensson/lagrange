@@ -41,10 +41,11 @@ const TABLE_CREATION_COMPLETION_REASON = Object.freeze({
 });
 const TABLE_CREATION_CONTRACT_PRIORITY = Object.freeze({
   [OWNER_CONTRACT_STATE.READY]: 0,
-  [OWNER_CONTRACT_STATE.PENDING]: 1,
-  [OWNER_CONTRACT_STATE.DEFERRED]: 2,
-  [OWNER_CONTRACT_STATE.BLOCKED]: NUM.THREE,
-  [OWNER_CONTRACT_STATE.FAILED]: NUM.FOUR,
+  [OWNER_CONTRACT_STATE.UNDER_REPLICATED]: 1,
+  [OWNER_CONTRACT_STATE.PENDING]: 2,
+  [OWNER_CONTRACT_STATE.DEFERRED]: NUM.THREE,
+  [OWNER_CONTRACT_STATE.BLOCKED]: NUM.FOUR,
+  [OWNER_CONTRACT_STATE.FAILED]: 5,
 });
 
 function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
@@ -86,10 +87,8 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
   const defaultProvisioningContractOutcome = buildOwnerContractOutcome({
     contractState: fullReplicaCountConverged ?
       OWNER_CONTRACT_STATE.READY :
-      OWNER_CONTRACT_STATE.PENDING,
-    nextAction: fullReplicaCountConverged ?
-      OWNER_CONTRACT_NEXT_ACTION.PROCEED :
-      OWNER_CONTRACT_NEXT_ACTION.WAIT,
+      OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+    nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
   });
   const requestedProvisioningContractOutcome = buildOwnerContractOutcome({
     contractState:
@@ -106,6 +105,13 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
       OWNER_CONTRACT_NEXT_ACTION.PROCEED ?
       defaultProvisioningContractOutcome :
       requestedProvisioningContractOutcome;
+  const committedReplicaCount = routableReplicaCount;
+  const missingReplicaCount =
+    Number.isInteger(normalized?.missingReplicaCount) ?
+      normalized.missingReplicaCount :
+      Number.isInteger(requestedReplicaCount) ?
+        Math.max(0, requestedReplicaCount - committedReplicaCount) :
+        0;
   return {
     requestedReplicaCount,
     resolvedReplicaCount,
@@ -115,6 +121,9 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
         normalized.minimumRoutableReplicaCount :
         minimumRoutableReplicaCount,
     routableReplicaCount,
+    committedReplicaCount,
+    missingReplicaCount,
+    epoch: normalized?.epoch || null,
     fullReplicaCountConverged,
     contractState: provisioningContractOutcome.contractState,
     nextAction: provisioningContractOutcome.nextAction,
@@ -189,6 +198,16 @@ function resolveTableCreationCompletionDecision(
     provisioningSummary &&
     provisioningSummary.fullReplicaCountConverged === false
   ) {
+    if (
+      provisioningContractOutcome?.contractState ===
+      OWNER_CONTRACT_STATE.UNDER_REPLICATED
+    ) {
+      return buildTableCreationCompletionDecision({
+        completionState: TABLE_CREATION_COMPLETION_STATE.ACTIVE,
+        completionReason: null,
+        contractOutcome: provisioningContractOutcome,
+      });
+    }
     return resolveTableCreationProvisioningCompletionDecision(
       contractOutcome,
       provisioningContractOutcome,

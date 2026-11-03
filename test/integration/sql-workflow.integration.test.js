@@ -18,6 +18,7 @@ import {
   resumeFixtureParticipantGroupAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const PARTICIPANT_RELEASE_BUDGET_MS = 1000;
 
 /**
@@ -149,6 +150,7 @@ test('End-to-end SQL workflow integration tests', async (t) => {
     const cdcService = createMockCDCService();
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       cdcIntegrationService: cdcService,
     });
@@ -185,6 +187,7 @@ test('End-to-end SQL workflow integration tests', async (t) => {
     const cdcService = createMockCDCService();
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       cdcIntegrationService: cdcService,
     });

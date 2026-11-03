@@ -43,6 +43,12 @@ const TRANSIENT_ERROR_FRAGMENT = Object.freeze({
   TIMEOUT_MESSAGE: 'timeout',
   TIMED_OUT_MESSAGE: 'timed out',
 });
+
+function isTerminalProvisioningSuccess(result) {
+  const state = result?.contractState;
+  return state === OWNER_CONTRACT_STATE.READY ||
+    state === OWNER_CONTRACT_STATE.UNDER_REPLICATED;
+}
 const SCHEMA_PROVISIONING_FAILED_MESSAGE = 'Schema provisioning failed';
 const SCHEMA_PROVISIONING_FAILED_CODE = 'SCHEMA_PROVISIONING_FAILED';
 
@@ -324,7 +330,10 @@ class SchemaProvisioningJobOwner {
       return {
         ...(workflow.result || {}),
         ...buildOwnerContractOutcome({
-          contractState: OWNER_CONTRACT_STATE.READY,
+          contractState:
+            workflow.result?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED ?
+              OWNER_CONTRACT_STATE.UNDER_REPLICATED :
+              OWNER_CONTRACT_STATE.READY,
           nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
         }),
         jobId: workflow.workflowId,
@@ -446,7 +455,7 @@ class SchemaProvisioningJobOwner {
         ownerFenceToken: ownedWorkflow.fenceToken,
         assertOwnership: () => this.assertOwnership(ownedWorkflow),
       });
-      if (result?.contractState !== OWNER_CONTRACT_STATE.READY) {
+      if (!isTerminalProvisioningSuccess(result)) {
         return this.transitionPendingForRetry(
           intent,
           executor,

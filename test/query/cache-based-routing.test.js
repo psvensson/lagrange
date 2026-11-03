@@ -16,6 +16,7 @@ import {
   createDeliveryTrackingMessageRouter,
 } from './cache-based-routing-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 /**
  * Create a mock system cache with partition and service data.
  * @param {Array<string>} partitionIds - Partition IDs to create.
@@ -67,6 +68,7 @@ test('SELECT query uses cache to find partition leader', async (_t) => {
   const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     messageRouter,
     nodeId: 'test-node',
@@ -89,6 +91,7 @@ test('INSERT query uses cache to find partition leader', async (_t) => {
   const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     messageRouter,
     nodeId: 'test-node',
@@ -111,6 +114,7 @@ test('UPDATE query uses cache to find partition leader', async (_t) => {
   const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     messageRouter,
     nodeId: 'test-node',
@@ -133,6 +137,7 @@ test('DELETE query uses cache to find partition leader', async (_t) => {
   const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     messageRouter,
     nodeId: 'test-node',
@@ -155,6 +160,7 @@ test('All queries route through message router', async (_t) => {
   const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     messageRouter,
     nodeId: 'test-node',
@@ -214,6 +220,7 @@ test('Query returns empty when cache missing partition info', async (_t) => {
   const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     messageRouter,
     nodeId: 'test-node',
@@ -232,6 +239,7 @@ test('SQLQueryEngine uses cache for partition lookup', async (_t) => {
   const messageRouter = createDeliveryTrackingMessageRouter();
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     messageRouter,
     nodeId: 'test-node',
@@ -254,6 +262,7 @@ test('SQLQueryEngine fails when cache not available', async (_t) => {
   const messageRouter = createDeliveryTrackingMessageRouter();
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: null,
     messageRouter,
     nodeId: 'test-node',

@@ -19,6 +19,7 @@ import {createControllablePartitionService} from
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -225,7 +226,9 @@ test(
         return buildDeliveryEnvelope({acknowledged: true}, await response);
       },
     };
-    const executor = new QueryExecutor({messageRouter, systemCache});
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter, systemCache});
     executor.leaderRetryDelayMs = 1;
     const clientSubmissions = 1;
     const timeoutMs = 250;
@@ -301,6 +304,7 @@ test(
       }],
     });
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache,
       messageRouter: {
         async deliver() {
@@ -358,6 +362,7 @@ test(
       services: [],
     });
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache,
       messageRouter: {
         async deliver() {
@@ -464,7 +469,9 @@ test(
         return buildDeliveryEnvelope({acknowledged: true}, await response);
       },
     };
-    const executor = new QueryExecutor({messageRouter, systemCache});
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter, systemCache});
     executor.leaderRetryDelayMs = 1;
     const coordinator = new DistributedWriteCoordinator({
       partitionResolver: {},
@@ -646,6 +653,7 @@ test(
       },
     };
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(
         [{table_name: 'ratings', primaryKey: 'rating_id'}],
         [{

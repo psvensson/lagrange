@@ -239,7 +239,7 @@ function deriveFormationPlacementNodeIds(
           ] === true &&
           dimensions?.[
             CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE
-          ] !== false
+          ] === true
         );
       })
       .map((nodeRow) => nodeRow.nodeId),

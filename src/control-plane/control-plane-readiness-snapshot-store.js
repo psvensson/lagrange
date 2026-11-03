@@ -7,6 +7,8 @@ import {installControlPlaneReadinessStoredSnapshotReuseMethods} from
   './control-plane-readiness-stored-snapshot-reuse.js';
 import {installControlPlaneReadinessLifecycleMethods} from
   './control-plane-readiness-lifecycle.js';
+import {installControlPlaneReadinessServeEligibilityMethods} from
+  './control-plane-readiness-serve-eligibility-methods.js';
 import {readOwnDataValue} from './readiness-planning-version-contract.js';
 import {installControlPlaneReadinessRecoveryEpochSummaryMethods} from
   './control-plane-readiness-recovery-epoch-summary-methods.js';
@@ -531,6 +533,9 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       // invalidation remain owned by the deferred change notification.
       this.cacheApplyChangeListener =
         (tableName, operation, record, metadata) => {
+          // The committed serve record learns in the applying turn that a
+          // projected change may have outdated it (trigger only).
+          this.noteServeEligibilitySourceChange(tableName, record);
           this.classifyCacheChangeForPlanning(tableName, operation, record,
             metadata);
         };
@@ -572,6 +577,12 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     const capturePlanningSourceError = (error) => {
       firstPlanningSourceError = firstPlanningSourceError || error;
     };
+    // A projected change is a trigger for the committed serve record only:
+    // it can make the record stale, never grant or deny. A cache with an
+    // apply channel delivered it there, in the applying turn.
+    if (!this.cacheApplyChangeListener) {
+      this.noteServeEligibilitySourceChange(tableName, record);
+    }
     this.readinessPlanningSnapshotOwner?.beginCacheChangeTransaction();
     try {
       try {
@@ -762,6 +773,7 @@ function installControlPlaneReadinessSnapshotStoreMethods(prototype) {
   installControlPlaneReadinessStoredSnapshotReuseMethods(prototype);
   installControlPlaneReadinessRecoveryEpochSummaryMethods(prototype);
   installControlPlaneReadinessLifecycleMethods(prototype);
+  installControlPlaneReadinessServeEligibilityMethods(prototype);
 }
 
 export {installControlPlaneReadinessSnapshotStoreMethods};

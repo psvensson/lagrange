@@ -19,6 +19,7 @@ import {
   initializeTestEnvironment,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const SEED_NODE_ID = 'contract-seed';
 
 registerSqlEngineSystemTableContract(test, {
@@ -37,6 +38,7 @@ registerSqlEngineSystemTableContract(test, {
       throw new Error(`seed bootstrap failed: ${JSON.stringify(bootstrapResult.error || null)}`);
     }
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: NodeService.getInstance().getSystemTableCache(),
       messageRouter: bootstrapResult.messageRouter,
       nodeId: SEED_NODE_ID,

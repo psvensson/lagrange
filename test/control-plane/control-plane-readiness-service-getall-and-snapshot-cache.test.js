@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {committedServeEligibilityView} from './serve-eligibility-test-support.js';
 import {
   createAccountingService,
   createActiveNode,
@@ -294,9 +295,18 @@ test('ControlPlaneReadinessService getAllNodeReadiness includes authoritative-on
         enteredAt: '2026-03-04T00:00:00.000Z',
         recentTransitions: [],
       }),
+      // Both nodes hold a committed lease at the published epoch.
+      authoritativeControlPlaneView: committedServeEligibilityView({
+        servingNodeIds: ['node-cache-visible', 'node-authoritative-only'],
+        nowMs: now,
+      }),
       now: () => now,
     });
 
+    // This composition's cache has no mutation versions, so the planning
+    // owner's identity stays saturated and its rebuilds never publish; the
+    // service is stopped with the test like every production composition.
+    t.teardown(() => readinessService.shutdown());
     const readinessEntries = await readinessService.getAllNodeReadiness({
       allowAuthoritativeRefresh: true,
     });
@@ -508,7 +518,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -516,7 +526,7 @@ async (t) => {
     'fresh local reporter success should keep self cluster membership healthy');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'fresh local reporter success should keep self control-plane writes admitted');
-  t.equal(readiness.dimensions.serveEligible, true,
+  t.equal(readiness.dimensions.repairEligible, true,
     'fresh local reporter success should keep self load serving admitted');
   t.same(authoritativeReads, [],
     'fresh local reporter success should avoid blocking authoritative self repairs');
@@ -593,7 +603,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -601,7 +611,7 @@ async (t) => {
     'recent confirmed reporter success should keep self membership healthy');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'self control-plane writes should remain admitted through one timed-out attempt');
-  t.equal(readiness.dimensions.serveEligible, true,
+  t.equal(readiness.dimensions.repairEligible, true,
     'load-lane self admission should not flap during the timeout grace window');
   t.same(authoritativeReads, [],
     'timeout grace should avoid blocking on bounded authoritative self repair');
@@ -760,7 +770,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -768,7 +778,7 @@ async (t) => {
     'self-node local execution must keep membership healthy even with stale cached lease');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'locally hosted active control-plane services should keep self writes admitted');
-  t.equal(readiness.dimensions.serveEligible, true,
+  t.equal(readiness.dimensions.repairEligible, true,
     'self-node should remain serve-eligible while authoritative state catches up');
   t.same(authoritativeReads, [],
     'self-node hot-path readiness should not force synchronous authoritative self repair');
@@ -1106,7 +1116,7 @@ async (t) => {
 });
 
 test('ControlPlaneReadinessService refreshes invalidated ineligible snapshots ' +
-  'synchronously for serve decisions', async (t) => {
+  'synchronously for repair-gating decisions (serving is the committed answer)', async (t) => {
   const now = 530000;
   const cache = createCache({
     nodes: [{
@@ -1194,16 +1204,18 @@ test('ControlPlaneReadinessService refreshes invalidated ineligible snapshots ' 
       allowStaleOnCacheChange: true,
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: 'serveEligible',
+      decisionDimension: 'repairEligible',
     },
   );
 
-  t.equal(initial.dimensions.serveEligible, false);
-  t.equal(refreshed.dimensions.serveEligible, true);
+  t.equal(initial.dimensions.repairEligible, false);
+  t.equal(refreshed.dimensions.repairEligible, true);
+  // The committed serve read (whole-table, no params) is the serve owner's,
+  // triggered by the node change; the repair reads are keyed by node.
   t.equal(
-    authoritativeReads.length,
+    authoritativeReads.filter((read) => read.params?.length > 0).length,
     2,
-    'serve-gating callers should bypass stale ineligible snapshots and refresh immediately',
+    'repair-gating callers should bypass stale ineligible snapshots and refresh immediately',
   );
   t.end();
 });

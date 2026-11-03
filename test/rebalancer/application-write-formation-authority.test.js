@@ -24,6 +24,7 @@ import {TOKEN_STATUS} from
 import {ProvisioningAdmissionPolicy} from
   '../../src/rebalancer/provisioning-admission-policy.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEST_MOVE = Object.freeze({
   type: 'ADD',
   partitionId: 'application-p1',
@@ -162,6 +163,7 @@ function createReplicaOperationRouteHarness(options = {}) {
     },
   };
   const queryExecutor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId,
     systemCache,
     messageRouter: {

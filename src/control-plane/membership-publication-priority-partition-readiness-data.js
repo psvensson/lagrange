@@ -23,7 +23,7 @@ const objectKeys = Object.keys;
 
 function isReadinessPromotable(readinessEntry = null) {
   if (readinessEntry === null || readinessEntry === undefined) {
-    return true;
+    return false;
   }
   const readinessSnapshot = copyStrictOwnDataRecord(readinessEntry);
   if (readinessSnapshot === null) {
@@ -33,9 +33,6 @@ function isReadinessPromotable(readinessEntry = null) {
     readinessSnapshot,
     [DIMENSIONS_FIELD],
   );
-  if (dimensionsEntry.state === DATA_PROPERTY_STATE.ABSENT) {
-    return true;
-  }
   if (dimensionsEntry.state !== DATA_PROPERTY_STATE.VALID) {
     return false;
   }
@@ -60,20 +57,19 @@ function isReadinessPromotable(readinessEntry = null) {
   const repairEligible = readDimension(
     CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
   ).value;
-  const serveEligible = readDimension(
-    CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-  ).value;
+  // Serving is not an input: the serve answer requires the published
+  // membership and the priority spread this promotability feeds (quest
+  // serve-eligibility-committed-epoch-read; an output is never its own
+  // input). The remaining !== false defaults are attempt 4's.
   if (!hasPublicationSignal) {
     return clusterHealthy === true &&
-      controlPlaneWritable !== false &&
-      repairEligible !== false &&
-      serveEligible !== false;
+      controlPlaneWritable === true &&
+      repairEligible === true;
   }
   if (published.value === true) {
     return clusterHealthy === true &&
-      controlPlaneWritable !== false &&
-      repairEligible !== false &&
-      serveEligible !== false;
+      controlPlaneWritable === true &&
+      repairEligible === true;
   }
   return recoveryEligible.value === true;
 }

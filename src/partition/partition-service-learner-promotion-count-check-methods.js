@@ -38,7 +38,6 @@ const {
   COLUMN,
   LIFECYCLE_REASON,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_TYPE,
   STRING,
   buildPriorityRecoveryCompletion,
   buildPriorityRecoveryLearnerPromotion,
@@ -136,21 +135,9 @@ class PartitionServiceLearnerPromotionCountCheckMethods {
       [];
     const activeLearnerNodeIds =
       this.resolveActiveLearnerNodeIdsForPromotion(serviceLearnerNodeIds);
-    const readinessByNodeId = {};
-    for (const nodeId of activeLearnerNodeIds) {
-      const readiness =
-        readinessService &&
-        typeof readinessService.getNodeReadinessSync ===
-          PARTITION_SERVICE_TYPE.FUNCTION ?
-          readinessService.getNodeReadinessSync(nodeId) :
-          null;
-      if (readiness && typeof readiness === PARTITION_SERVICE_TYPE.OBJECT) {
-        readinessByNodeId[nodeId] = readiness;
-      }
-    }
     const learnerPromotion = buildPriorityRecoveryLearnerPromotion({
       activeLearnerNodeIds,
-      readinessByNodeId,
+      readinessByNodeId: Object.freeze({}),
       recoveryActiveNodeIds: effectiveEligibleNodeIds,
     });
     const assessment = buildPriorityRecoveryPartitionAssessment({

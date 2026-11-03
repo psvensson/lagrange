@@ -35,7 +35,7 @@ import {
 
 
 test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
-  'in the background for serve decisions', async (t) => {
+  'in the background for repair-gating decisions (serving is the committed answer)', async (t) => {
   const now = 529000;
   const nodeId = 'node-cached-ineligible-background';
   const cache = createCache({
@@ -120,12 +120,12 @@ test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
       maxCachedAgeMs: 5000,
       allowAuthoritativeRefresh: true,
       preferBackgroundRefreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
-  t.equal(initial.dimensions.serveEligible, false);
-  t.equal(repeated.dimensions.serveEligible, false,
+  t.equal(initial.dimensions.repairEligible, false);
+  t.equal(repeated.dimensions.repairEligible, false,
     'background-refresh mode should return the cached ineligible snapshot immediately');
 
   await backgroundReadStarted;
@@ -139,13 +139,13 @@ test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
     nodeId,
     {maxCachedAgeMs: 5000},
   );
-  t.equal(refreshed.dimensions.serveEligible, true,
+  t.equal(refreshed.dimensions.repairEligible, true,
     'later callers should observe the asynchronously refreshed readiness snapshot');
   t.end();
 });
 
 test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
-  'synchronously for serve decisions', async (t) => {
+  'synchronously for repair-gating decisions (serving is the committed answer)', async (t) => {
   const now = 530000;
   const cache = createCache({
     nodes: [{
@@ -180,6 +180,11 @@ test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
       async executeAuthoritativeSystemTableRead(
         tableName, sql, params, options,
       ) {
+        // The serve owner's committed (leader-required) read is a separate
+        // source; this test counts repair reads only.
+        if (options?.readAuthority?.purpose === 'readiness_internal') {
+          return {success: false, rows: []};
+        }
         authoritativeReads.push({tableName, sql, params, options});
         if (tableName === TABLES.NODES) {
           return {
@@ -223,16 +228,16 @@ test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
       maxCachedAgeMs: 5000,
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: 'serveEligible',
+      decisionDimension: 'repairEligible',
     },
   );
 
-  t.equal(initial.dimensions.serveEligible, false);
-  t.equal(refreshed.dimensions.serveEligible, true);
+  t.equal(initial.dimensions.repairEligible, false);
+  t.equal(refreshed.dimensions.repairEligible, true);
   t.equal(
     authoritativeReads.length,
     2,
-    'serve-gating callers should bypass cached ineligible snapshots and ' +
+    'repair-gating callers should bypass cached ineligible snapshots and ' +
       'refresh immediately',
   );
   t.end();
@@ -275,6 +280,11 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
       async executeAuthoritativeSystemTableRead(
         tableName, sql, params, options,
       ) {
+        // The serve owner's committed (leader-required) read is a separate
+        // source; this test counts repair reads only.
+        if (options?.readAuthority?.purpose === 'readiness_internal') {
+          return {success: false, rows: []};
+        }
         authoritativeReads.push({tableName, sql, params, options});
         if (tableName === TABLES.NODES) {
           repairAttempt += 1;
@@ -351,7 +361,7 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
 });
 
 test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
-  'for fresh ineligible serve decisions', async (t) => {
+  'for fresh ineligible repair-gating reads (serving is the committed answer)', async (t) => {
   let now = 640000;
   const nodeId = 'node-serve-cooldown-bypass';
   const cache = createCache({
@@ -388,6 +398,11 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
       async executeAuthoritativeSystemTableRead(
         tableName, sql, params, options,
       ) {
+        // The serve owner's committed (leader-required) read is a separate
+        // source; this test counts repair reads only.
+        if (options?.readAuthority?.purpose === 'readiness_internal') {
+          return {success: false, rows: []};
+        }
         authoritativeReads.push({tableName, sql, params, options});
         if (tableName === TABLES.NODES) {
           repairAttempt += 1;
@@ -434,7 +449,7 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: 'serveEligible',
+      decisionDimension: 'repairEligible',
     },
   );
 
@@ -445,16 +460,16 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: 'serveEligible',
+      decisionDimension: 'repairEligible',
     },
   );
 
-  t.equal(first.dimensions.serveEligible, false);
-  t.equal(second.dimensions.serveEligible, true);
+  t.equal(first.dimensions.repairEligible, false);
+  t.equal(second.dimensions.repairEligible, true);
   t.equal(
     authoritativeReads.length,
     4,
-    'serve-eligibility fresh decisions should bypass cooldown and re-read',
+    'repair-gating fresh decisions should bypass cooldown and re-read',
   );
   t.end();
 });
@@ -819,7 +834,7 @@ test('ControlPlaneReadinessService repairs self readiness through the ' +
     'authoritative refresh should repair the stale heartbeat evidence');
   t.equal(readiness.dimensions.routingReady, true,
     'authoritative refresh should repair inactive self service evidence');
-  t.equal(readiness.dimensions.serveEligible, true,
+  t.equal(readiness.dimensions.repairEligible, true,
     'load-lane callers should admit once the owner path repairs self evidence');
   t.equal(authoritativeReads.length, 2,
     'repair should read both node and service evidence');

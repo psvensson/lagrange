@@ -19,6 +19,7 @@ import {
   createMockSystemCache,
 } from '../query/sql-query-engine-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 beforeEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -829,6 +830,7 @@ test('SQLQueryEngine - executes CREATE INDEX and DROP INDEX statements end-to-en
     ],
   );
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -881,6 +883,7 @@ test('SQLQueryEngine - rejects unsupported CREATE INDEX features fail-closed', a
     ],
   );
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });

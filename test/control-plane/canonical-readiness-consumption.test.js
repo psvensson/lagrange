@@ -22,6 +22,7 @@ import {SERVICE_STATUS, NUM, TYPEOF} from '../../src/constants/index.js';
 import {
   ADMISSION_MODE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
+import {serveEligibilityFromFixture} from './serve-eligibility-test-support.js';
 
 const FIXTURE_NODE_ID = 'node-readiness-1';
 const FIXTURE_PARTITION_ID = 'partition-readiness-1';
@@ -79,6 +80,13 @@ function createControlledReadinessService(readinessMap, calls = null) {
       }
       return readinessMap.get(nodeId) ||
         buildReadiness(nodeId, false);
+    },
+    answerServeEligibility: (nodeId) => {
+      if (Array.isArray(calls)) {
+        calls.push({kind: 'serve', nodeId});
+      }
+      return serveEligibilityFromFixture(
+        (id) => readinessMap.get(id) || buildReadiness(id, false))(nodeId);
     },
     getNodeReadiness: async (nodeId, options = {}) => {
       if (Array.isArray(calls)) {
@@ -666,10 +674,14 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
       'default serve-eligible routing should still block non-servable nodes',
     );
     t.equal(
-      readinessCalls[0]?.options?.decisionDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-      'default query routing should record serveEligible decisions',
+      readinessCalls[0]?.kind,
+      'serve',
+      'default query routing consumes the committed serve answer',
     );
+    t.notOk(readinessCalls.some((call) =>
+      call.options?.decisionDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE),
+    'default query routing reads no projected serve dimension');
 
     const repairEligible = await executor.executeOnPartition(
       FIXTURE_PARTITION_ID,

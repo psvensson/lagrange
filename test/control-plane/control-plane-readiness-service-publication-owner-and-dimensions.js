@@ -14,6 +14,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {createAccountingService, createActiveNode, createCache, createMessageGroupService, createPublicationService} from './control-plane-readiness-service-planning-snapshot-support.js';
 
+import {committedServeEligibilityView} from './serve-eligibility-test-support.js';
 test('ControlPlaneReadinessService fails closed without publication owner',
   async (t) => {
     let statsCalls = 0;
@@ -185,8 +186,15 @@ async (t) => {
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    // Serving is the committed-epoch answer (quest
+    // serve-eligibility-committed-epoch-read).
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: ['node-strat'],
+      nowMs: 1500,
+    }),
     now: () => 1500,
   });
+  await readinessService.readServeEligibility();
 
   const readiness = await readinessService.getNodeReadiness('node-strat');
 
@@ -224,8 +232,16 @@ async (t) => {
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    // Serving is the committed-epoch answer (quest
+    // serve-eligibility-committed-epoch-read).
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: ['node-warm'],
+      nowMs: 1500,
+      nodeRowOverrides: {'node-warm': {[COLUMN.CPU_USAGE_PERCENT]: 100}},
+    }),
     now: () => 1500,
   });
+  await readinessService.readServeEligibility();
 
   const readiness = await readinessService.getNodeReadiness('node-warm');
 
@@ -255,8 +271,15 @@ async (t) => {
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    // Serving is the committed-epoch answer (quest
+    // serve-eligibility-committed-epoch-read).
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: ['node-nocap'],
+      nowMs: 1500,
+    }),
     now: () => 1500,
   });
+  await readinessService.readServeEligibility();
 
   const readiness = await readinessService.getNodeReadiness('node-nocap');
 
@@ -368,8 +391,15 @@ async (t) => {
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    // Serving is the committed-epoch answer (quest
+    // serve-eligibility-committed-epoch-read).
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: ['node-sync-nocap'],
+      nowMs: 1500,
+    }),
     now: () => 1500,
   });
+  await readinessService.readServeEligibility();
 
   const readiness = readinessService.getNodeReadinessSync('node-sync-nocap');
 

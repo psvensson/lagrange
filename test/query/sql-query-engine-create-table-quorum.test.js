@@ -3,11 +3,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {TABLES} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {
-  createProvisioningReadyService,
-  uniqueNodeIds,
-} from './sql-query-engine-test-support.js';
-
+import {createProvisioningReadyService} from './sql-query-engine-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -17,8 +13,8 @@ function createMockMessageRouter() {
   };
 }
 
-test('SQLQueryEngine - default CREATE TABLE quorum can temporarily fall back ' +
-  'during transient control-plane recovery', async (t) => {
+test('SQLQueryEngine - default CREATE TABLE quorum does not fall back ' +
+  'below sealed quorum minimum', async (t) => {
   const partitionId = 'tbl-default-quorum-recovery-p1';
   const localNodeId = 'node-a';
   const checkedTargetNodeIds = [];
@@ -119,117 +115,14 @@ test('SQLQueryEngine - default CREATE TABLE quorum can temporarily fall back ' +
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
 
-  const summary = await engine.provisionInitialTablePartition({
-    partitionId,
-    replicaCount: 3,
-    minimumRoutableReplicaCount: 2,
-    minimumRoutableReplicaCountWasDefaulted: true,
-  });
-
-  t.same(
-    uniqueNodeIds(checkedTargetNodeIds),
-    [localNodeId, 'node-b', 'node-c'],
-    'admission should probe the full default CREATE TABLE target set',
-  );
-  t.same(
-    createdTargetNodeIds,
-    [localNodeId],
-    'transient recovery fallback should create only the provisionable target',
-  );
-  t.same(
-    executedTargetNodeIds,
-    [localNodeId],
-    'fallback target should still use normal replica creation',
-  );
-  t.equal(
-    summary.resolvedReplicaCount,
-    1,
-    'default CREATE TABLE provisioning can resolve to one replica',
-  );
-  t.equal(
-    summary.minimumRoutableReplicaCount,
-    1,
-    'default quorum floor is lowered only for transient recovery fallback',
-  );
-  t.equal(
-    summary.routableReplicaCount,
-    1,
-    'fallback returns after one replica is routable',
-  );
-});
-
-test('SQLQueryEngine - default CREATE TABLE fallback rejects permanent ' +
-  'provisioning shortfalls', (t) => {
-  const engine = new SQLQueryEngine({
-    nodeId: 'node-a',
-    systemCache: {
-      filter: () => [],
-      getAll: () => [],
-    },
-    messageRouter: createMockMessageRouter(),
-  });
-  const resolveFallbackMinimum = ({
-    rejectedTargetNodePlans,
-    hasExplicitMinimumRoutableReplicaCount = false,
-  }) => engine.resolveProvisioningShortfallFallbackMinimum({
-    hasExplicitMinimumRoutableReplicaCount,
-    maximumProvisionableReplicaCount: 1,
-    implicitFallbackMinimumReplicaCount: 2,
-    rejectedTargetNodePlans,
-  });
-
-  t.equal(
-    resolveFallbackMinimum({
-      rejectedTargetNodePlans: [{
-        blockingReasons: [
-          'insufficient_placement_eligible_nodes',
-          'control_plane_write_unhealthy',
-        ],
-        reasonCodes: [
-          'control_plane_write_unhealthy',
-          'cluster_member_unhealthy',
-        ],
-      }],
+  await t.rejects(
+    engine.provisionInitialTablePartition({
+      partitionId,
+      replicaCount: 3,
+      minimumRoutableReplicaCount: 2,
+      minimumRoutableReplicaCountWasDefaulted: true,
     }),
-    1,
-    'aggregate placement shortfall can fall back with transient node reasons',
+    /insufficient/i,
+    'provisioning below quorum is rejected without lowering the quorum minimum',
   );
-  t.equal(
-    resolveFallbackMinimum({
-      rejectedTargetNodePlans: [{
-        blockingReasons: ['insufficient_placement_eligible_nodes'],
-        reasonCodes: [],
-      }],
-    }),
-    2,
-    'placement-only shortfall keeps the implicit default floor',
-  );
-  t.equal(
-    resolveFallbackMinimum({
-      rejectedTargetNodePlans: [{
-        blockingReasons: [
-          'insufficient_placement_eligible_nodes',
-          'storage_budget_unavailable',
-        ],
-        reasonCodes: [
-          'control_plane_write_unhealthy',
-          'storage_budget_unavailable',
-        ],
-      }],
-    }),
-    2,
-    'mixed permanent and transient shortfalls keep the implicit default floor',
-  );
-  t.equal(
-    resolveFallbackMinimum({
-      hasExplicitMinimumRoutableReplicaCount: true,
-      rejectedTargetNodePlans: [{
-        blockingReasons: ['control_plane_write_unhealthy'],
-        reasonCodes: ['cluster_member_unhealthy'],
-      }],
-    }),
-    2,
-    'explicit caller minimums are never lowered by transient fallback',
-  );
-  t.end();
 });

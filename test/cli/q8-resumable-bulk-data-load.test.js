@@ -37,6 +37,7 @@ import {
   runBulkLoadCommand,
 } from '../../src/cli/bulk-load-router.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const HOST = '127.0.0.1';
 const DB_NAME = 'pilot_bulk_load';
 const DB_USER = 'pilot_loader';
@@ -219,6 +220,7 @@ function createMultiTablePartitionCluster(existingDatabases = null) {
 
   const gateway = createTransactionPersistenceGateway();
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     controlPlaneSystemTableGateway: gateway,
     messageRouter,

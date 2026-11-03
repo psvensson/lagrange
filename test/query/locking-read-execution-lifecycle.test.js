@@ -18,6 +18,7 @@ import {
   sweepParticipantTransactionHolds,
 } from '../../src/partition/partition-participant-transaction-session.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 ConfigurationManager.getInstance().initialize();
 
 function createTestHarness(options = {}) {
@@ -45,6 +46,7 @@ function createTestHarness(options = {}) {
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     controlPlaneSystemTableGateway: gateway,
     messageRouter: {

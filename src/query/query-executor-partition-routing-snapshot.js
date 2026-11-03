@@ -1,7 +1,4 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
-import {
-  classifySystemPartition,
-} from '../bootstrap/system-partition-classification.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -17,6 +14,14 @@ const {
   resolveCanonicalLeaderRoutingGapState,
   resolveReadinessObservedAgeMs,
 } = QUERY_EXECUTOR_SHARED;
+
+// The typed denial reason and the committed serve answer a denial rests on.
+function readRoutingDenialAnswer(routing) {
+  return {
+    reasonCode: routing.reasonCode ?? null,
+    serveEligibility: routing.serveEligibility ?? null,
+  };
+}
 
 const queryExecutorPartitionRoutingSnapshotMethods = {
   /**
@@ -57,62 +62,9 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         );
       })
       .map((entry) => entry.service);
-    const readinessRoutableServices = evaluatedServices
+    const routableServices = evaluatedServices
       .filter((entry) => entry.routing.routable === true)
       .map((entry) => entry.service);
-    // System-table leader fail-open (user-approved liveness carve-out): raft
-    // leadership is the OWNER of system-table routing; the readiness
-    // projection is an observer. When the projection denies EVERY active
-    // addressed candidate — including the known canonical leader — honoring
-    // it would starve the control-plane write lane that renews heartbeats
-    // and ready leases, and readiness can then never converge (the formation
-    // deadlock a lone bootstrap seed hits by construction). For system-table
-    // partitions only, admit the canonical leader's active addressed
-    // services under an explicit typed reason; ordinary tables and
-    // non-leader candidates stay strictly readiness-filtered, and the
-    // fail-open goes dormant the moment any candidate is readiness-routable
-    // again.
-    // The fail-open engages only for EVIDENCE-ABSENT denial (the planning
-    // snapshot has not converged yet, so readiness has no verdict at all):
-    // planning_snapshot_refresh_pending / owner_evidence_missing / an empty
-    // reason list. A leader denied for a substantive reason — priority
-    // recovery pending, unhealthy membership, transport loss — stays denied
-    // for reads and keeps only the pre-existing candidate-layer write grace.
-    const evidenceAbsentReasonCodes = new Set([
-      'planning_snapshot_refresh_pending',
-      'owner_evidence_missing',
-    ]);
-    const canonicalLeaderDenialEvidenceAbsent = evaluatedServices
-      .filter((entry) =>
-        entry?.service?.node_id === canonicalLeaderNodeId &&
-        entry?.routing?.routable !== true)
-      .every((entry) => {
-        const reasonCodes = Array.isArray(
-          entry?.routing?.readinessSummary?.reasonCodes,
-        ) ?
-          entry.routing.readinessSummary.reasonCodes :
-          [];
-        // An empty reason list is ambiguous, so it fails closed: only an
-        // explicit evidence-absent reason engages the fail-open.
-        return reasonCodes.length > 0 && reasonCodes.every(
-          (code) => evidenceAbsentReasonCodes.has(String(code?.code ?? code)),
-        );
-      });
-    const systemTableLeaderFailOpenServices =
-      readinessRoutableServices.length === 0 &&
-      activeAddressedServices.length > 0 &&
-      canonicalLeaderNodeId !== null &&
-      canonicalLeaderDenialEvidenceAbsent &&
-      classifySystemPartition({partitionId}).systemTable ?
-        activeAddressedServices.filter(
-          (service) => service?.node_id === canonicalLeaderNodeId,
-        ) :
-        [];
-    const systemTableLeaderFailOpenEngaged =
-      systemTableLeaderFailOpenServices.length > 0;
-    const routableServices = systemTableLeaderFailOpenEngaged ?
-      systemTableLeaderFailOpenServices :
-      readinessRoutableServices;
     const canonicalLeaderServiceCount = canonicalLeaderNodeId ?
       serviceRows.filter(
         (service) => service?.node_id === canonicalLeaderNodeId,
@@ -128,13 +80,11 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     return Object.freeze({
       partitionId,
       routingReadinessDimension,
-      reasonCode: systemTableLeaderFailOpenEngaged ?
-        QUERY_ROUTING_DIAGNOSTIC_REASON.SYSTEM_TABLE_LEADER_FAIL_OPEN :
-        this.resolvePartitionRoutingReasonCode(
-          serviceRows,
-          activeAddressedServices,
-          routableServices,
-        ),
+      reasonCode: this.resolvePartitionRoutingReasonCode(
+        serviceRows,
+        activeAddressedServices,
+        routableServices,
+      ),
       canonicalLeaderIdentityState:
         canonicalLeaderIdentity?.state || null,
       canonicalLeaderIdentitySource:
@@ -301,6 +251,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         lifecycleState: routing.readinessSummary.lifecycleState || null,
         reasonCodes: [],
         failedDimensions: [],
+        ...readRoutingDenialAnswer(routing),
       };
       const runtimeAuthority =
         routing.readinessSummary[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] ||
@@ -442,42 +393,31 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     }
     const allowReadinessAuthoritativeRefresh =
       this.shouldAllowRoutingAuthoritativeRefresh(options);
-    const canRefreshReadiness =
-      this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService.getNodeReadiness === 'function';
     const deniedNodeIds =
       this.collectAllFilteredRoutingRepairNodeIds(routingSnapshot);
     const shouldRepairServiceGap =
       this.shouldRepairCanonicalLeaderServiceGap(routingSnapshot);
-    const shouldRepairFilteredRecoveryRouting =
-      this.shouldRepairAllFilteredRecoveryRouting(routingSnapshot);
     const repairNodeIds = new Set(deniedNodeIds);
     if (shouldRepairServiceGap) {
       repairNodeIds.add(routingSnapshot.canonicalLeaderNodeId);
     }
-    let attemptedRepair = false;
-    if (
-      allowReadinessAuthoritativeRefresh &&
-      canRefreshReadiness &&
-      repairNodeIds.size > 0
-    ) {
-      attemptedRepair = true;
-      await Promise.all(
-        [...repairNodeIds].map(async (nodeId) => {
-          try {
-            await this.controlPlaneReadinessService.getNodeReadiness(nodeId, {
-              allowAuthoritativeRefresh: true,
-              requireFreshOnIneligible: true,
-              decisionDimension: routingSnapshot.routingReadinessDimension,
-            });
-          } catch (_error) {
-            return null;
-          }
-          return null;
-        }),
-      );
-    }
-    if (!shouldRepairServiceGap && !shouldRepairFilteredRecoveryRouting) {
+    // A serve denial waits on the committed answer and never runs the
+    // projection-readiness evaluator. A missing canonical-leader service row
+    // is row maintenance: the routing-metadata overlay below re-fetches the
+    // partition's rows; it never grants serving.
+    const attemptedRepair =
+      routingSnapshot.routingReadinessDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE ?
+        await this.awaitServeEligibilityRefreshForDenial(
+          deniedNodeIds,
+          allowReadinessAuthoritativeRefresh,
+        ) :
+        await this.awaitProjectionRoutingRepair(
+          routingSnapshot,
+          repairNodeIds,
+          allowReadinessAuthoritativeRefresh,
+        );
+    if (!shouldRepairServiceGap) {
       return attemptedRepair;
     }
     const overlayRepaired = await this.refreshRoutingMetadataOverlay(
@@ -491,6 +431,64 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       },
     );
     return attemptedRepair || overlayRepaired;
+  },
+
+  /**
+   * Non-serve denials refresh the projected readiness of the denied nodes
+   * through the readiness owner's authoritative evidence repair.
+   * @param {Object} routingSnapshot
+   * @param {Set<string>} repairNodeIds
+   * @param {boolean} allowRefresh
+   * @return {Promise<boolean>} whether a repair was attempted.
+   * @private
+   */
+  async awaitProjectionRoutingRepair(routingSnapshot, repairNodeIds,
+    allowRefresh) {
+    if (
+      !allowRefresh ||
+      typeof this.controlPlaneReadinessService?.getNodeReadiness !==
+        'function' ||
+      repairNodeIds.size === 0
+    ) {
+      return false;
+    }
+    await Promise.all(
+      [...repairNodeIds].map(async (nodeId) => {
+        try {
+          await this.controlPlaneReadinessService.getNodeReadiness(nodeId, {
+            allowAuthoritativeRefresh: true,
+            requireFreshOnIneligible: true,
+            decisionDimension: routingSnapshot.routingReadinessDimension,
+          });
+        } catch (_error) {
+          return null;
+        }
+        return null;
+      }),
+    );
+    return true;
+  },
+
+  /**
+   * Serve denials wait on the readiness owner's committed refresh (the
+   * owner's completion, bounded by the read's own deadline), then the caller
+   * re-decides once on the new answer; no per-node projection repair.
+   * @param {Array<string>} deniedNodeIds
+   * @param {boolean} allowRefresh
+   * @return {Promise<boolean>} whether a refresh was awaited.
+   * @private
+   */
+  async awaitServeEligibilityRefreshForDenial(deniedNodeIds, allowRefresh) {
+    if (
+      !allowRefresh ||
+      deniedNodeIds.length === 0 ||
+      typeof this.controlPlaneReadinessService?.readServeEligibility !==
+        'function'
+    ) {
+      return false;
+    }
+    await this.controlPlaneReadinessService.readServeEligibility();
+    return true;
   },
 
   /**
@@ -538,33 +536,6 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       nodeIds.push(nodeId);
     }
     return nodeIds;
-  },
-
-  /**
-   * Refresh authoritative routing metadata when priority recovery has active
-   * service rows but local readiness filtered all candidates.
-   * @param {Object|null} routingSnapshot
-   * @return {boolean}
-   * @private
-   */
-  shouldRepairAllFilteredRecoveryRouting(routingSnapshot) {
-    if (
-      routingSnapshot?.reasonCode !==
-        QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS ||
-      routingSnapshot.routingReadinessDimension !==
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE ||
-      Number(routingSnapshot.activeAddressedServiceCount) <= 0 ||
-      typeof routingSnapshot.partitionId !==
-        QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      routingSnapshot.partitionId.length === 0
-    ) {
-      return false;
-    }
-    const partitionRow = this.getPartitionRecord(routingSnapshot.partitionId);
-    return classifySystemPartition({
-      partitionId: routingSnapshot.partitionId,
-      partitionRow,
-    }).priorityControlPlane;
   },
 
   /**

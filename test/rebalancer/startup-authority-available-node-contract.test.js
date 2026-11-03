@@ -635,3 +635,80 @@ async (t) => {
   );
   t.end();
 });
+
+test(
+  'UnifiedRebalancer placement eligibility reads committed ready lease instead of serve eligibility',
+  async (t) => {
+    initEnv();
+    const cache = createCache({
+      nodes: [
+        {node_id: 'seed-node', status: 'active', ready_lease_expires_at: Date.now() + 60000},
+        {node_id: 'node-2', status: 'active', ready_lease_expires_at: Date.now() + 60000},
+        {node_id: 'node-3', status: 'active', ready_lease_expires_at: Date.now() - 60000},
+      ],
+    });
+    const rebalancer = new UnifiedRebalancer({
+      entityId: 'control_plane_publications-p1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'seed-node',
+      systemTableCache: cache,
+      cdcIntegrationService: {
+        insertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async () => ({success: true}),
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({targetReplicaCount: 3}),
+        getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
+      },
+      messageRouter: {
+        getConnectionState: () => 'connected',
+        isOutboundQueueAvailable: () => true,
+        getConnectedNodes: () => ['seed-node', 'node-2'],
+      },
+      rebalanceCoordinator: {
+        getMoveSafetyError: () => null,
+        createOperation: async () => ({}),
+        executeOperation: async () => ({success: true}),
+        canStartAddOperation: async () => true,
+        canStartRemoveOperation: async () => true,
+        getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
+        storageAccountingService: {estimateReplicaBytes: () => 1},
+        storageAdmissionService: {
+          checkAdd: async () => ({decision: 'allow'}),
+          checkReplace: async () => ({decision: 'allow'}),
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          // Placement eligibility does not require serve eligibility
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            },
+            reasons: [],
+          };
+        },
+        getStartupAuthoritySnapshotSync() {
+          return null;
+        },
+      },
+    });
+
+    const availableNodeIds = rebalancer.getAvailableNodes().map((node) => node.node_id).sort();
+    t.same(
+      availableNodeIds,
+      ['node-2', 'seed-node'],
+      'nodes with active status and current committed lease are placement-eligible',
+    );
+    t.end();
+  },
+);
+

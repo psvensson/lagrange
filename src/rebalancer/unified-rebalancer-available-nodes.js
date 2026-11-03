@@ -11,11 +11,9 @@ import {
   resolveStartupAuthorityNodeIdSet,
 } from '../control-plane/startup-authority-placement-eligibility.js';
 import {
-  isEvidenceAbsentReadinessDenialSnapshot,
-} from '../control-plane/readiness-denial-classification.js';
-import {
   resolvePublishedActiveNodeIds,
 } from '../control-plane/active-node-publication-snapshots.js';
+import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {
   AVAILABLE_PLANNING_SURFACE_ORDER,
   hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
@@ -25,11 +23,13 @@ import {
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
+  NodeStatus,
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryOperationAssessment,
   classifySystemPartition,
   getPartitionRowFromCache,
+  ownerNowMs,
   resolvePriorityRecoveryActiveNodeCohort,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -84,11 +84,6 @@ const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE = Object.freeze([
       evidence.recoveryActive === true,
   }),
 ]);
-
-function isNodeReadyNow(readinessService, nodeId) {
-  if (typeof readinessService?.projectNodeLiveness !== 'function') return false;
-  return readinessService.projectNodeLiveness(nodeId)?.readyNow === true;
-}
 
 class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   getReservedPriorityRecoveryMoveSlots() {
@@ -215,7 +210,9 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     }
     const readinessDecisionDimension =
       this.resolveNodeReadinessDecisionDimension();
-    return this.systemTableCache.filter(SYSTEM_TABLE_NAME.NODES, (node) => {
+    const candidateRows = this.resolveAvailableNodeCandidateRows();
+    const now = ownerNowMs(this);
+    return candidateRows.filter((node) => {
       const nodeId = node?.node_id || null;
       if (!nodeId) {
         return false;
@@ -241,32 +238,49 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       ) {
         return true;
       }
+      const isActive = node.status === NodeStatus.ACTIVE;
+      if (!isActive) {
+        return false;
+      }
+      const leaseExpiresAtMs = Number(
+        node.ready_lease_expires_at ??
+        node.readyLeaseExpiresAt ??
+        node.readyLeaseExpiresAtMs,
+      );
+      if (!Number.isFinite(leaseExpiresAtMs) || leaseExpiresAtMs <= now) {
+        return false;
+      }
       if (
         !this.isReadinessDimensionSatisfied(
           readiness,
           readinessDecisionDimension,
         )
       ) {
-        // Formation placement carve-out: for the control-plane priority
-        // ledger family and the formation-liveness nodes partition — the
-        // partitions whose spread the join barrier waits on — a node whose
-        // readiness denial is exclusively evidence-absent (a barrier-held
-        // joiner whose planning snapshot has not converged) stays
-        // placement-eligible. Cold formation otherwise deadlocks: the
-        // ledger spread needs a target, targets need readiness, and joiner
-        // readiness waits on the barrier the spread releases. Substantive
-        // denials and every other partition class keep the strict filter;
-        // downstream drain and promotion safety gates (peer-ping, quorum
-        // floor, promotion guard) still apply.
-        return (
-          this.isControlPlanePriorityPartition() ||
-          this.isFormationLivenessDependencyPartition()
-        ) && isEvidenceAbsentReadinessDenialSnapshot(readiness);
+        return false;
       }
       return readinessDecisionDimension !==
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ||
-        isNodeReadyNow(this.controlPlaneReadinessService, nodeId);
+        readiness?.dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true;
     });
+  }
+
+  resolveAvailableNodeCandidateRows() {
+    if (
+      typeof this.controlPlaneReadinessService?.answerCommittedNodes ===
+        'function'
+    ) {
+      const answer = this.controlPlaneReadinessService.answerCommittedNodes();
+      if (
+        answer?.state === SERVE_ELIGIBILITY_STATE.READY &&
+        Array.isArray(answer.nodeRows)
+      ) {
+        return answer.nodeRows;
+      }
+    }
+    if (typeof this.systemTableCache?.getAll === 'function') {
+      return this.systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES);
+    }
+    return [];
   }
 
   getStartupAuthorityNodeIdSet() {

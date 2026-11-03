@@ -231,13 +231,13 @@ class ControlPlaneReadinessNodeServiceRows extends
 
   hasServeEligibleControlPlaneService(serviceRows) {
     if (serviceRows.length === 0) {
-      return true;
+      return false;
     }
     const hasMessageGroupRows = serviceRows.some((serviceRow) => {
       return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
     });
     if (!hasMessageGroupRows) {
-      return true;
+      return false;
     }
     return this.hasActiveAddressedMessageGroupService(serviceRows);
   }

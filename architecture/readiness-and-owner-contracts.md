@@ -22,6 +22,19 @@ Self-readiness may preserve `serveEligible` through one timed-out
 is still fresh; this prevents transient self-denial while the bounded
 authoritative repair path is timing out under load.
 
+Superseded 2026-11-02 (R09, quest `serve-eligibility-committed-epoch-read`,
+epic `raft-rs-full-cutover`): `serveEligible` is the readiness owner's
+committed-epoch answer, derived from the committed `nodes` lease, status and
+boot incarnation and the latest published membership (published active nodes,
+acknowledgements, priority-partition spread) at its publication epoch; the
+readiness snapshot carries that answer and a new epoch re-keys every readiness
+memo. Self-readiness does not preserve `serveEligible` across a timed-out
+reporter attempt or any other local grace. raft-rs exports no ReadIndex, so the
+committed read is a leader-local read with a role witness; a positive answer
+never outlives the node's committed ready lease (`CONTROL_PLANE_READY_LEASE`,
+15 s), which is the stated bound on how long a deposed leader's answer can
+grant. System-table routing does not consume `serveEligible`.
+
 ## Cluster Membership Health
 
 `NodeLivenessSemanticProjectionOwner` is the single semantic owner for the

@@ -19,6 +19,7 @@ import {
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {BOOTSTRAP_EVENT} from '../../src/bootstrap/bootstrap-constants.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const HTTP_METHOD = Object.freeze({
   POST: 'POST',
 });
@@ -100,6 +101,7 @@ test('Debug join flow', {timeout: DEBUG_JOIN_TEST_TIMEOUT_MS}, async (t) => {
     await seedApi.initialize(0, {listen: false});
     const systemCache = NodeService.getInstance().getSystemTableCache();
     const sqlQueryEngine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: seedNodeId,

@@ -39,6 +39,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const ports = createPortAllocator(import.meta.url);
 
 /**
@@ -276,6 +277,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       await seedApi.initialize(0, {listen: false});
 
       seedSqlEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -559,6 +561,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       await seedApi.initialize(0, {listen: false});
 
       const seedSqlEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -724,6 +727,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       await seedApi.initialize(0, {listen: false});
 
       const seedSqlEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

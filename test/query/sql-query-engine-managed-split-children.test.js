@@ -54,6 +54,8 @@ import {
 } from './sql-query-engine-test-support.js';
 
 
+import {createCommittedServeEligibilityOwner} from
+  '../control-plane/serve-eligibility-test-support.js';
 test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
   'insertion when child provisioning precheck cannot satisfy quorum', async (t) => {
   const tables = [{
@@ -120,6 +122,9 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
   const childInsertCalls = [];
   const provisionCalls = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -346,6 +351,9 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -471,6 +479,9 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -884,6 +895,9 @@ test('SQLQueryEngine - provisionInitialTablePartition starts replica metadata ' 
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),

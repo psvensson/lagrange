@@ -8,6 +8,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -83,6 +84,7 @@ test('SQLQueryEngine - SELECT 1 does not crash when FROM is null',
     );
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
     });
@@ -110,6 +112,7 @@ test('SQLQueryEngine - SELECT 1+1 returns computed result',
     );
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
     });

@@ -216,7 +216,6 @@ class MembershipPublicationCoordinatorPlanning extends
       this.controlPlaneReadinessService &&
           typeof this.controlPlaneReadinessService.getAllNodeReadinessSync === 'function' ?
         this.controlPlaneReadinessService.getAllNodeReadinessSync({
-          allowStaleOnCacheChange: true,
           membershipPublicationPlanningSource:
               MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW,
         }) :

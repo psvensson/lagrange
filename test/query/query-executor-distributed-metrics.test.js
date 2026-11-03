@@ -11,6 +11,7 @@ import {SQLParser} from '../../src/query/sql-parser.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -77,6 +78,7 @@ test('executeSelect emits metrics.select.distributed on success',
     mockPartitionData.set('p2', [{id: 2, name: 'Bob'}]);
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache(['p1', 'p2']),
     });
@@ -119,6 +121,7 @@ test('executeSelect emits metrics.select.distributed on success',
 test('executeSelect does not emit distributed metric for empty partitions',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -141,6 +144,7 @@ test('executeSelect distributed metric uses info level, not debug',
     mockPartitionData.set('p1', [{id: 1}]);
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache(['p1']),
     });
@@ -172,6 +176,7 @@ test('executeSelect distributed metric has structured object fields',
     ]);
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache(['p1']),
     });

@@ -11,6 +11,7 @@ import {COLUMN} from '../../src/constants/index.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
 
+import {serveEligibilityAnswer} from '../control-plane/serve-eligibility-test-support.js';
 // Mock partition data for routing
 export const mockPartitionData = new Map();
 
@@ -210,6 +211,40 @@ export function createProvisioningReadyService(nodeSource) {
     async getNodeReadiness(nodeId) {
       return buildReadiness(nodeId);
     },
+    // The committed-epoch serve answer: every active node of the source is
+    // eligible at the fixture epoch; any other node is a committed negative.
+    answerServeEligibility(nodeId) {
+      return getNodeIds().includes(nodeId) ?
+        serveEligibilityAnswer(true) :
+        serveEligibilityAnswer(false, {reasons: ['node_row_missing']});
+    },
+    answerServeCohort(nodeIds) {
+      const ids = Array.isArray(nodeIds) && nodeIds.length > 0 ?
+        nodeIds :
+        getNodeIds();
+      const answers = {};
+      const eligibleNodeIds = [];
+      let hasUnavailable = false;
+      let firstUnavailableReason = null;
+      for (const id of ids) {
+        const ans = this.answerServeEligibility(id);
+        answers[id] = ans;
+        if (ans.state === 'unavailable') {
+          hasUnavailable = true;
+          if (!firstUnavailableReason) firstUnavailableReason = ans.reason;
+        } else if (ans.decision === 'eligible') {
+          eligibleNodeIds.push(id);
+        }
+      }
+      return {
+        state: hasUnavailable ? 'unavailable' : 'ready',
+        reason: hasUnavailable ? firstUnavailableReason : null,
+        epoch: {publicationEpoch: 1, publicationId: 'cluster_membership-1'},
+        answers,
+        eligibleNodeIds,
+      };
+    },
+    async readServeEligibility() {},
     // A healthy readiness owner's planning projection is live; report the
     // stable CURRENT identity so admission observation sees live currency.
     readCurrentPlanningProjectionIdentity(nodeId) {

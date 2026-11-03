@@ -204,6 +204,20 @@ Required patterns:
 5. New system tables are classified in exactly one of
    `CDC_PROPAGATED_TABLES` or `CDC_NON_PROPAGATED_TABLES`.
 
+Superseded 2026-11-02 for gating decisions (R09, quest
+`serve-eligibility-committed-epoch-read`, epic `raft-rs-full-cutover`): pattern
+1 no longer applies to a decision that grants serving. Per-node serve
+eligibility is the readiness owner's answer from a committed read of the
+`nodes` rows and the latest published `control_plane_publications` row, taken
+on the system partitions' raft leaders, at a stated publication epoch, or a
+typed unavailability; the cache is a reconciliation trigger for that answer,
+never its source. System-table routing decides on raft leadership (the target
+proves it with its read-authority witness or answers the typed redirect) and
+live transport, not on a readiness lane. The cache remains the read model for
+presentation, diagnostics, discovery and reconciliation triggers. Further
+gating consumers (provisioning, rebalancer planning, publication planning)
+move under the same quest's later attempts.
+
 Forbidden patterns:
 
 - ad-hoc Maps, Sets, or objects that cache system data outside the declared

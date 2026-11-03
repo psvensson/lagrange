@@ -105,6 +105,32 @@ function buildExistingReconciliationOptions(options) {
   };
 }
 
+function extractProvisioningResultFields(summary) {
+  if (!summary) {
+    return {
+      epoch: null,
+      requestedReplicaCount: null,
+      committedReplicaCount: null,
+      missingReplicaCount: 0,
+    };
+  }
+  return {
+    epoch: summary.epoch || null,
+    requestedReplicaCount:
+      summary.requestedReplicaCount !== undefined ?
+        summary.requestedReplicaCount :
+        null,
+    committedReplicaCount:
+      summary.committedReplicaCount !== undefined ?
+        summary.committedReplicaCount :
+        null,
+    missingReplicaCount:
+      Number.isInteger(summary.missingReplicaCount) ?
+        summary.missingReplicaCount :
+        0,
+  };
+}
+
 function buildExistingTableResult(ast, existingTable, reconciliation) {
   const provisioningSummary = reconciliation?.provisioningSummary || null;
   const completion = resolveTableCreationCompletion({provisioningSummary});
@@ -126,6 +152,7 @@ function buildExistingTableResult(ast, existingTable, reconciliation) {
     completionReason: completion.completionReason,
     contractState: completion.contractState,
     nextAction: completion.nextAction,
+    ...extractProvisioningResultFields(provisioningSummary),
     partitionMetadataCreated:
       reconciliation?.partitionMetadataCreated === true,
     provisioningSummary,
@@ -284,6 +311,7 @@ async function buildCreatedTableResult(
     completionReason: completion.completionReason,
     contractState: completion.contractState,
     nextAction: completion.nextAction,
+    ...extractProvisioningResultFields(provisioningSummary),
     provisioningSummary,
   };
 }

@@ -13,6 +13,7 @@ import fc from 'fast-check';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 
 // Initialize configuration
 const config = ConfigurationManager.getInstance();
@@ -27,6 +28,16 @@ import {
   createMockMessageRouter,
   createMockSystemCache,
 } from './query-executor-test-support.js';
+
+// A query executor over mock partitions whose nodes the committed serve
+// answer states eligible.
+function createCommittedExecutor(partitionIds) {
+  return new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(partitionIds),
+  });
+}
 
 /**
  * Reference implementation for COUNT.
@@ -102,10 +113,7 @@ test('Property 53: Aggregate Function Correctness', async (t) => {
             mockPartitionData.set(pid, partitionRows);
           }
 
-          const executor = new QueryExecutor({
-            messageRouter: createMockMessageRouter(),
-            systemCache: createMockSystemCache(partitionIds),
-          });
+          const executor = createCommittedExecutor(partitionIds);
 
           const ast = new SQLParser('SELECT COUNT(*) as cnt FROM test').parse();
           const result = await executor.executeSelect(ast, partitionIds);
@@ -146,10 +154,7 @@ test('Property 53: Aggregate Function Correctness', async (t) => {
             mockPartitionData.set(pid, partitionRows);
           }
 
-          const executor = new QueryExecutor({
-            messageRouter: createMockMessageRouter(),
-            systemCache: createMockSystemCache(partitionIds),
-          });
+          const executor = createCommittedExecutor(partitionIds);
 
           const ast = new SQLParser('SELECT SUM(amount) as total FROM test').parse();
           const result = await executor.executeSelect(ast, partitionIds);
@@ -190,10 +195,7 @@ test('Property 53: Aggregate Function Correctness', async (t) => {
             mockPartitionData.set(pid, partitionRows);
           }
 
-          const executor = new QueryExecutor({
-            messageRouter: createMockMessageRouter(),
-            systemCache: createMockSystemCache(partitionIds),
-          });
+          const executor = createCommittedExecutor(partitionIds);
 
           const ast = new SQLParser('SELECT AVG(score) as avg_score FROM test').parse();
           const result = await executor.executeSelect(ast, partitionIds);
@@ -243,10 +245,7 @@ test('Property 53: Aggregate Function Correctness', async (t) => {
             mockPartitionData.set(pid, partitionRows);
           }
 
-          const executor = new QueryExecutor({
-            messageRouter: createMockMessageRouter(),
-            systemCache: createMockSystemCache(partitionIds),
-          });
+          const executor = createCommittedExecutor(partitionIds);
 
           const ast = new SQLParser('SELECT MIN(value) as min_val FROM test').parse();
           const result = await executor.executeSelect(ast, partitionIds);
@@ -287,10 +286,7 @@ test('Property 53: Aggregate Function Correctness', async (t) => {
             mockPartitionData.set(pid, partitionRows);
           }
 
-          const executor = new QueryExecutor({
-            messageRouter: createMockMessageRouter(),
-            systemCache: createMockSystemCache(partitionIds),
-          });
+          const executor = createCommittedExecutor(partitionIds);
 
           const ast = new SQLParser('SELECT MAX(value) as max_val FROM test').parse();
           const result = await executor.executeSelect(ast, partitionIds);
@@ -331,10 +327,7 @@ test('Property 53: Aggregate Function Correctness', async (t) => {
             mockPartitionData.set(pid, partitionRows);
           }
 
-          const executor = new QueryExecutor({
-            messageRouter: createMockMessageRouter(),
-            systemCache: createMockSystemCache(partitionIds),
-          });
+          const executor = createCommittedExecutor(partitionIds);
 
           const sql = 'SELECT COUNT(*) as cnt, SUM(amount) as total, ' +
                       'AVG(amount) as avg_amt, MIN(amount) as min_amt, ' +

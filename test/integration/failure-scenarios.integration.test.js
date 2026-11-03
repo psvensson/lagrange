@@ -38,6 +38,7 @@ import {
 } from
   '../test-helpers/lifecycle-state-store.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 function createAlwaysReadyControlPlaneReadinessService() {
   const dimensions = {
     [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
@@ -454,6 +455,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
 
       // Create real SQL query engine for RebalanceCoordinator
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

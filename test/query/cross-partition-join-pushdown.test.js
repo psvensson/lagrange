@@ -19,6 +19,7 @@ import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {QUERY_JOIN_PUSHDOWN} from '../../src/query/query-constants.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -120,7 +121,9 @@ function buildJoinCluster(partitionSpec) {
   const tablePlans = new Map();
   tablePlans.set('orders', {partitions: partitionIdsByTable.orders});
 
-  const executor = new QueryExecutor({messageRouter, systemCache});
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter, systemCache});
   return {executor, deliveries, tablePlans, oracle, partitionIdsByTable};
 }
 

@@ -9,6 +9,7 @@
  * admitted and not mis-marked client. A routed statement carries its origin
  * to the partition, which refuses a client system-table write itself.
  */
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import Database from 'better-sqlite3';
 import {openParticipantTransactionStore} from
@@ -114,6 +115,7 @@ function createSystemCache() {
 function createEngine(queryHandler = null) {
   const delivered = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createSystemCache(),
     messageRouter: {
       async deliver(address, message) {

@@ -3,6 +3,7 @@
  * ingress boundary across all 46 system tables, all 6 client entry surfaces,
  * and all parser/lexer evasion vectors.
  */
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import Database from 'better-sqlite3';
@@ -233,6 +234,7 @@ function createAdversarialEngine() {
   });
   const migrationPipeline = new MigrationPipeline({migrationCoordinator});
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     tableCreationService,
     migrationPipeline,

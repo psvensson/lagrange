@@ -79,8 +79,15 @@ function hasPriorityRecoveryPendingPublicationRepairEvidence(
     return false;
   }
   const dimensions = resolveReadinessDimensions(readinessEntry);
-  return dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !==
-    false;
+  if (
+    dimensions &&
+    Object.hasOwn(dimensions, CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE)
+  ) {
+    return (
+      dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true
+    );
+  }
+  return true;
 }
 
 function buildPublicationPlanningReadinessEntry(readinessEntry = null) {

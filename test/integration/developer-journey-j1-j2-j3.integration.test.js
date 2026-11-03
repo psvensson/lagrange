@@ -104,6 +104,7 @@ import {
   RequestCellHttpAdapter,
 } from '../../src/service/request-cell-http-adapter.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TENANT_ID = 'default';
 const USER = 'developer';
 const NODE_ONE = 'node-worker-1';
@@ -374,6 +375,7 @@ describe('developer-journey-j1-j2-j3.integration', () => {
 
     // PG Wire SQL client
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       autoStartDistributedTransactionRecovery: false,
       messageRouter: {deliver: async () => ({success: true})},
       systemCache: systemTableCache,
@@ -1028,6 +1030,7 @@ describe('developer-journey-j1-j2-j3.integration', () => {
       });
 
       const storelessEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         autoStartDistributedTransactionRecovery: false,
         messageRouter: {deliver: async () => ({success: true})},
         systemCache: systemTableCache,

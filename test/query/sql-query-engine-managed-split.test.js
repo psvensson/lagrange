@@ -19,6 +19,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -590,6 +591,9 @@ test('SQLQueryEngine - provisionInitialTablePartition honors explicit ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -650,6 +654,7 @@ test('SQLQueryEngine - only evaluates local leader partitions for managed splits
     );
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       nodeId: 'node-a',
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
@@ -696,6 +701,7 @@ test('SQLQueryEngine - includes retryable failed managed split transitions ' +
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -731,6 +737,7 @@ test('SQLQueryEngine - executeManagedSplit rejects non-leader callers', async (t
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-b',
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -774,6 +781,7 @@ test('SQLQueryEngine - executeManagedSplit delegates to the injected managed spl
   async (t) => {
     const calls = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       managedSplitWorkflow: {
         async execute(partitionId) {
           calls.push(partitionId);
@@ -798,6 +806,7 @@ function metadataPollEngine(nowMs, options = {}) {
   const cdcCalls = [];
   const sleeps = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: {onCacheChange() {}},
     cdcIntegrationService: new Proxy({}, {
       get(_target, name) {
@@ -917,6 +926,9 @@ test('SQLQueryEngine - executeManagedSplit dispatches both child metadata writes
   });
   const childInsertCalls = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'node-a',
     systemCache: cache,
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),

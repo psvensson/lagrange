@@ -1,0 +1,67 @@
+{
+  "schema": "solve-quest/2",
+  "id": "serve-eligibility-committed-epoch-read",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Per-node serve eligibility is one fact with one owner: the control-plane readiness owner answers it from a committed read of the nodes rows (status, boot incarnation, ready lease) and the latest published control_plane_publications row (publication epoch, published active nodes, priority spread) taken on the raft leaders of those system partitions, as {decision, epoch} or a typed UNAVAILABLE{reason, epoch, retryAfterMs}; the readiness snapshot is a memo keyed by that epoch and a stale memo answers UNAVAILABLE_STALE{epoch}. User-table routing, CREATE TABLE provisioning (complete at the sealed quorum minimum with a typed under_replicated outcome naming the epoch and missing count, or PROVISIONING_UNAVAILABLE mapped to SQLSTATE 57P03), the rebalancer's critical-topology settle, available-node and local-serve decisions, the in-flight operations source and the learner count check consume that answer or the committed lease it is built from. System-table routing decides on raft leadership and live transport, never on serve eligibility, so no readiness carve-out is needed. Deleted: the system-table leader fail-open and its inline evidence-absent set, readiness-denial-classification.js, the priority-recovery bootstrap routing bypass and its read lane, the fresh-bootstrap routing grace, every !== false and empty-means-satisfied default on a readiness input, allowStaleOnCacheChange and maxCachedAgeMs on decision paths, the degraded provisioning fallback, the provisioning convergence poll and its 10 s constant, the transient-shortfall minimum lowering, and the CACHE source of in-flight topology operations. On a fresh three-node formation the serve lane opens on every node.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/serve-eligibility-committed-epoch-read/evidence/receipt.json",
+      "requiredReceipts": [
+        "serve-eligibility-answered-from-committed-epoch",
+        "system-table-routing-on-leadership-without-carve-outs",
+        "provisioning-typed-cohort-outcomes",
+        "rebalancer-decisions-from-committed-leases-and-one-operation-source",
+        "publication-planning-without-serve-cycle",
+        "serve-lane-opens-on-fresh-formation",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "class-not-instance",
+      "statement": "Instances C5, C6, C7, C11 and C12's readiness input of the class 'a serve-gating decision consumes a projection of committed state as if it were the authority' (census solve/epics/raft-rs-full-cutover/evidence/projection-authority-census-2026-11-02/CENSUS.md on origin/work/projection-authority-census-20261102; analysis docs/evidence/comparative-benchmark-evidence-repair-2026-11/systemic-analysis-serve-lane-2026-11-01.md sections 3-4). The repair moves each decision onto the committed fact and deletes the alternate paths; it adds no timer constant, poll, retry widening, carve-out, fallback, alias, compatibility path, cache/SQL dual path, or default that turns a missing input into a satisfied one."
+    },
+    {
+      "id": "committed-read-direction",
+      "statement": "Continues owner decisions O1/A8 (committed-membership bootstrap read, 2026-09-25/26) and the learner quest: rows in SystemTableCache are discovery and reconciliation triggers, never the authority for a gating decision. A cache event may mark the epoch memo stale and start a committed refresh; it never grants."
+    },
+    {
+      "id": "f10-client-contract",
+      "statement": "Lead decision F10 (2026-11-02, under the owner brief of 2026-11-02, reported to the owner for confirmation) with D3: CREATE TABLE completes when the committed cohort at the stated epoch reaches the sealed quorum minimum and answers contractState under_replicated (added to the shared OWNER_CONTRACT_STATE vocabulary, an R08 change recorded in the log) with the epoch and missing replica count, surfaced to the client as a NoticeResponse added at the pgwire owner and in the admin envelope; below quorum the admin envelope answers the existing deferred/retry state carrying the typed reason PROVISIONING_UNAVAILABLE{epoch, reasons, retryAfterMs} and the client receives SQLSTATE 57P03 with the same fields through SQLSTATE_BY_ENGINE_ERROR_CODE. No new top-level state. An owner reversal is recorded as an R09 supersession of this constraint."
+    },
+    {
+      "id": "explicit-supersessions",
+      "statement": "R09 supersessions recorded by appending at the owner's location, never by editing recorded text: architecture/runtime-contracts.md 'CDC-propagated metadata decisions read from the cache' for gating decisions; architecture/readiness-and-owner-contracts.md 'Readiness Gating (repairEligible vs serveEligible)' including the self-readiness timed-out-reporter preservation, stating the 15 s ready lease as the bound on a deposed leader's grant (raft-rs exports no ReadIndex); the sealed CL-033 5 s staleness bound for the decision paths that drop allowStaleOnCacheChange/maxCachedAgeMs; and predicate (d) of fresh-formation-user-table-routability (D4, recorded in that quest's log). The core-architecture-convergence activation gate and the Q6 record's gate are NOT superseded (lead decision D1): the quest runs under raft-rs-full-cutover and the Q6 record receives a dated pointer entry only."
+    },
+    {
+      "id": "reproducer-bounds-unchanged",
+      "statement": "The scenario receipt is measured on the registered scenario fresh-formation-user-table-routability (local-three-node.json, predicates in test/distributed/harness/fresh-formation-routability-predicate.js) with its preregistered bounds unchanged, after the parallel quest replica-admission-from-committed-operation (C1/C10) has landed; no bound is widened, no harness write repairs product state, and serve eligibility is not bypassed for user tables."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first at the unit level per attempt with the first failing assertion recorded; the readiness-versioned-planning-liveness impact contract and the Q6 wide net on lab hosts per attempt; the live scenario red before and green after on lab hosts with node logs retained; independent verification before landing."
+    },
+    {
+      "id": "coordination",
+      "statement": "Stream B owns src/cdc/cdc-integration-service-cache-visibility-wait.js, its callers and the CACHE_VISIBILITY_TIMEOUT retry classification in src/query/sql-query-engine-shared.js; Stream B2 owns replica-create admission and the participant release/cutover owners; Group B owns peer and leader address resolution. This quest edits none of their files; a collision is reported to the lead, not resolved here."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Any source change is verified on the exact candidate by a fresh independent verifier before landing, recorded as note --verification ... --verifier subagent:<id> --verdict approve."
+    },
+    {
+      "id": "recorded-residuals",
+      "statement": "R17 residuals not in this quest (lead decision D7): maxCachedAgeMs stays for storage admission (Q6 row R20, src/rebalancer/storage-admission-service.js) and the admin load lane (Q6 row Q23, src/admin/admin-websocket-load-lane-admission.js), owner the Q6 S7b/S7d follow-ups; the carried spread-cure ADD authorization is decoded and only logged by the learner count check (owner: the critical-spread-transition-authority lineage)."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "formation-circularity",
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "ae1158cf0c4af801182693ff3d9fb9950207fe3b"
+}

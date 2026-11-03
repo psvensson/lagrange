@@ -5,6 +5,7 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 function createMockSystemCache(tableName = SYSTEM_TABLE_NAME.SERVICES) {
   const primaryKey = tableName === SYSTEM_TABLE_NAME.LOGS ?
     'log_id' :
@@ -67,6 +68,7 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
     const deliveries = [];
     const cdcReads = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(),
       messageRouter: {
         async deliver(address, message) {
@@ -127,6 +129,7 @@ test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneV
     const deliveries = [];
     const authoritativeReads = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(),
       messageRouter: {
         async deliver(address, message) {
@@ -174,6 +177,7 @@ test('SQLQueryEngine - PG system-table reads execute normalized SQLite SQL local
   async (t) => {
     const authoritativeReads = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(),
       authoritativeControlPlaneView: {
         async readRows(tableName, sql, params) {
@@ -201,6 +205,7 @@ test('SQLQueryEngine - bounded system-table primary-key lookups confirm ' +
   'empty local reads through the owner lane', async (t) => {
   const authoritativeReads = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache(SYSTEM_TABLE_NAME.LOGS),
     authoritativeControlPlaneView: {
       async readRows(tableName, sql, params, options) {
@@ -244,6 +249,7 @@ test('SQLQueryEngine - routed system-table queries default to critical delivery 
   async (t) => {
     const deliveries = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(),
       messageRouter: {
         async deliver(address, message, options) {
@@ -276,6 +282,7 @@ test('SQLQueryEngine - system selects that do not project the primary key ' +
   const deliveries = [];
   const cdcReads = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache(),
     messageRouter: {
       async deliver(address, message) {

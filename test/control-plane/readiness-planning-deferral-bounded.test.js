@@ -49,6 +49,7 @@ import {
   driveFormationShapedChurn,
 } from './readiness-planning-formation-rig.js';
 
+import {serveAnswerFromMock} from './serve-eligibility-test-support.js';
 // The failing user table from the forensic run, verbatim. A user table has no
 // system-table classification, so it never reaches the system-table leader
 // fail-open and is filtered strictly by readiness.
@@ -184,6 +185,9 @@ function createTokenChurnDrive(options = {}) {
     owner.recordTableChange(tableName, record);
   });
   const readinessService = {
+    answerServeEligibility(id) {
+      return serveAnswerFromMock(this, id);
+    },
     getNodeReadinessSync: (nodeId, readOptions = {}) => owner.readSync(
       nodeId,
       readOptions,

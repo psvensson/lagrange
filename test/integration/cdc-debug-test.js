@@ -13,6 +13,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const ports = createPortAllocator(import.meta.url);
 
 test('CDC debug - single UPDATE propagation timing', {timeout: 30000}, async (t) => {
@@ -43,6 +44,7 @@ test('CDC debug - single UPDATE propagation timing', {timeout: 30000}, async (t)
 
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
     const sqlQueryEngine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: seedNodeId,

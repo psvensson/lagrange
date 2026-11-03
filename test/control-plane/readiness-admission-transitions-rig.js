@@ -40,6 +40,7 @@ import {
   createFormationShapedCache,
 } from './readiness-planning-formation-rig.js';
 
+import {serveEligibilityAnswer} from './serve-eligibility-test-support.js';
 const VICTIM_NODE_ID = 'node-1';
 const SEED_NODE_ID = 'node-0';
 const USER_TABLE_NAME = 'ratings';
@@ -253,6 +254,10 @@ function createAdmissionDrive(options = {}) {
   });
   subscribeOwnerToCache(cache, owner, state, deferredChanges);
   const readinessService = {
+    // User-table serve routing consumes the readiness owner's committed
+    // answer (quest serve-eligibility-committed-epoch-read), not this planning
+    // owner: the rig states it once, so routing reads no planning variant.
+    answerServeEligibility: () => serveEligibilityAnswer(true),
     getNodeReadinessSync: (nodeId, readOptions = {}) => owner.readSync(
       nodeId,
       readOptions,
@@ -287,8 +292,9 @@ function createAdmissionDrive(options = {}) {
       readOptions = PLANNING_READ_OPTIONS) {
       return owner.captureBuildOptionsKey(nodeId, readOptions);
     },
-    routingSnapshot() {
-      return this.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
+    routingSnapshot(routingReadinessDimension = undefined) {
+      return this.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID,
+        routingReadinessDimension);
     },
     async drain(rounds = DRAIN_ROUNDS) {
       for (let round = 0; round < rounds; round++) {
@@ -566,6 +572,13 @@ async function runAdmissionScenario(options = {}) {
  * routing snapshot lists plus the entry the denial LINE carries.
  * @return {Promise<Object>}
  */
+// The denial a projected readiness record still produces: a non-serve
+// routing dimension on a user partition (managed split/merge source-quorum
+// admission). User-table serving consumes the committed serve answer and
+// never denies on a planning record (quest
+// serve-eligibility-committed-epoch-read).
+const DENIAL_ROUTING_DIMENSION = 'controlPlaneRecoveryEligible';
+
 async function captureDenialEntry() {
   const drive = createAdmissionDrive();
   const sink = createLogSink();
@@ -575,12 +588,12 @@ async function captureDenialEntry() {
     // record of its own first. Only then is the denial made on an INHERITED
     // verdict with an old observedAt, which is the traced shape.
     drive.read();
-    drive.routingSnapshot();
+    drive.routingSnapshot(DENIAL_ROUTING_DIMENSION);
     await drive.drain();
-    drive.routingSnapshot();
+    drive.routingSnapshot(DENIAL_ROUTING_DIMENSION);
     drive.advance(STALE_HEARTBEAT_MAX_AGE_MS + 1);
     drive.executor.logger = sink.logger;
-    const snapshot = drive.routingSnapshot();
+    const snapshot = drive.routingSnapshot(DENIAL_ROUTING_DIMENSION);
     drive.executor.logPartitionRoutingDenial(snapshot);
     const [line] = sink.lines;
     return {
@@ -603,6 +616,7 @@ export {
   ROUTED_READ_OPTIONS,
   STALE_HEARTBEAT_MAX_AGE_MS,
   VICTIM_NODE_ID,
+  DENIAL_ROUTING_DIMENSION,
   captureDenialEntry,
   createAdmissionDrive,
   createLogSink,

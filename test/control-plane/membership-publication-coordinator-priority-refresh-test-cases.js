@@ -192,7 +192,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       );
     });
 
-  test('reconcileClusterMembership merges stale authoritative and fresher projected planning evidence',
+  test('reconcileClusterMembership answers authoritative planning evidence without merging projected cache rows',
     async (t) => {
       const nodeRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
         node_id: nodeId,
@@ -330,27 +330,25 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         PRIORITY_REFRESH_EXPECTED_PERSIST_COUNT,
         'unchanged membership should persist one metadata refresh from merged planning evidence',
       );
+      const expectedMissingPartitionIds = [...PRIORITY_REFRESH_PARTITION_IDS].sort();
       t.same(
         durableRow.priority_partition_summary.missingPartitionIds,
-        [PRIORITY_REFRESH_STILL_BLOCKED_PARTITION_ID],
-        'fresher projected service rows should clear partitions already spread in cache',
+        expectedMissingPartitionIds,
+        'durable row reflects authoritative missing partitions without projection merge',
       );
       t.match(
         result.publicationRow,
         {
           priorityPartitionSummary: {
             satisfied: false,
-            missingPartitionIds: [PRIORITY_REFRESH_STILL_BLOCKED_PARTITION_ID],
-            blockedPartitions: [{
-              partitionId: PRIORITY_REFRESH_STILL_BLOCKED_PARTITION_ID,
-            }],
+            missingPartitionIds: expectedMissingPartitionIds,
           },
         },
-        'publication result should expose the merged-evidence priority spread summary',
+        'publication result should expose the authoritative priority spread summary without projection merge',
       );
     });
 
-  test('reconcileClusterMembership prefers fresher same-key projected planning rows',
+  test('reconcileClusterMembership does not replace authoritative rows with projected cache rows',
     async (t) => {
       const nodeRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
         node_id: nodeId,
@@ -484,12 +482,10 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         result.publicationRow,
         {
           priorityPartitionSummary: {
-            satisfied: true,
-            missingPartitionIds: [],
-            blockedPartitions: [],
+            satisfied: false,
           },
         },
-        'same-key fresher projection rows should replace stale authoritative rows',
+        'projected cache rows do not replace authoritative rows',
       );
     });
 

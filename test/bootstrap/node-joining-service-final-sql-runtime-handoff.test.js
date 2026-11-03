@@ -14,6 +14,7 @@ import {
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const DURABLE_REJOIN_FINAL_HANDOFF_TEST = Object.freeze({
   name:
     'NodeJoiningService - durable rejoin recovery starts only on final SQL attachment',
@@ -124,6 +125,7 @@ test(DURABLE_REJOIN_FINAL_HANDOFF_TEST.name, async (t) => {
   );
 
   const finalEngine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     autoStartDistributedTransactionRecovery: false,
     messageRouter: service.messageRouter,
     nodeId: service.nodeId,

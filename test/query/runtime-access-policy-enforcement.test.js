@@ -9,6 +9,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {resolveIssuingServiceId} from
   '../../src/query/sql-query-engine-request-dispatch.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const silentLogger = Object.freeze({
   debug() {},
   error() {},
@@ -22,6 +23,7 @@ const AUTHENTICATED_CONTEXT = Object.freeze({
 
 function createEngine(owner) {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     autoStartDistributedTransactionRecovery: false,
     messageRouter: {deliver: async () => ({success: true})},
     runtimeAccessPolicyOwner: owner,

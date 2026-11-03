@@ -1953,6 +1953,21 @@
         "test/node/participant-release-fresh-create-completion.test.js",
         "test/node/fresh-create-authority-unavailability-native.integration.test.js"
       ]
+    },
+    "serve-eligibility-committed-epoch": {
+      "description": "Per-node serve eligibility has one owner: the readiness owner answers it from a committed, leader-required read of the nodes rows and the latest published cluster_membership epoch, as a typed answer at that epoch bounded by the committed lease; cache changes are triggers only, and user-table serve routing consumes that answer and nothing else.",
+      "owners": [
+        "src/control-plane/serve-eligibility-owner.js",
+        "src/control-plane/control-plane-readiness-serve-eligibility-methods.js",
+        "src/control-plane/control-plane-readiness-snapshot-store.js",
+        "src/query/query-executor-partition-service-resolution.js",
+        "src/query/query-executor-partition-routing-snapshot.js"
+      ],
+      "tests": [
+        "test/control-plane/serve-eligibility-committed-epoch-read.test.js",
+        "test/query/query-executor-serve-eligibility-routing.test.js",
+        "test/control-plane/readiness-routing-heartbeat-window.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4098,6 +4113,32 @@
         "test/partition/partition-admission-redrive-wakes.test.js",
         "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
         "test/node/replica-handler.test.js"
+      ]
+    },
+    "serve-eligibility-committed-answer-and-routing": {
+      "description": "The committed serve answer and the user-table serve routing that consumes it change together: a routing decision never reads the projected serve dimension, and the answer's stale/unavailable states are what routing refuses on.",
+      "endpoints": [
+        {
+          "id": "committed-serve-answer",
+          "owners": [
+            "src/control-plane/serve-eligibility-owner.js",
+            "src/control-plane/control-plane-readiness-serve-eligibility-methods.js",
+            "src/control-plane/control-plane-readiness-snapshot-store.js"
+          ]
+        },
+        {
+          "id": "serve-routing-consumer",
+          "owners": [
+            "src/query/query-executor-partition-service-resolution.js",
+            "src/query/query-executor-partition-routing-snapshot.js"
+          ]
+        }
+      ],
+      "contract": "serve-eligibility-committed-epoch",
+      "witnessTests": [
+        "test/control-plane/serve-eligibility-committed-epoch-read.test.js",
+        "test/query/query-executor-serve-eligibility-routing.test.js",
+        "test/control-plane/readiness-routing-heartbeat-window.test.js"
       ]
     }
   }

@@ -23,6 +23,7 @@ import {DistributedQueryPlanner} from
   '../../src/query/distributed/distributed-query-planner.js';
 import {TABLES} from '../../src/constants/index.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 beforeEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -632,6 +633,7 @@ async function verifyDropIndexAndZeroPartitionCheck(engine, partitionsMap, t) {
 
   // Negative witness: zero-partition table provisioning fails closed
   const emptyTableEngine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache(
       [{table_name: 'zero_table', primaryKey: 'id', partition_key: 'id'}],
       [],
@@ -679,6 +681,7 @@ test('Unit J3: End-to-end Local & Compound Index Lifecycle Journey', async (t) =
   const messageRouter = createRealPartitionMessageRouter(partitionsMap);
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter,
     controlPlaneSystemTableGateway: gateway,

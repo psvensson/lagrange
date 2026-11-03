@@ -4,6 +4,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {TABLES} from '../../src/constants/tables.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -117,6 +118,7 @@ function createMessageRouter() {
 
 test('schema_migrations is queryable through SqlCore', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createSystemCache(),
     messageRouter: createMessageRouter(),
     nodeId: 'node-1',
@@ -140,6 +142,7 @@ test('schema_migrations is queryable through SqlCore', async (t) => {
 
 test('schema_migration_partitions is queryable through SqlCore', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createSystemCache(),
     messageRouter: createMessageRouter(),
     nodeId: 'node-1',

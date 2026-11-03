@@ -42,6 +42,7 @@ import {WasmComponentDriver} from
   '../../src/runtime/wasm-component-driver.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const NODE_ID = 'runtime-access-live-node';
 const TENANT_ID = 'tenant-a';
 const PRINCIPAL = 'alice';
@@ -326,6 +327,7 @@ describe('minimal deployment runtime access production path', () => {
         },
       };
       const engine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         autoStartDistributedTransactionRecovery: false,
         messageRouter,
         nodeId: NODE_ID,

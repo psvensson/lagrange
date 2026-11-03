@@ -79,21 +79,20 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
         decisionDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       recoveryEligibilitySatisfied:
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !== false &&
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true &&
         dimensions[
           CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
         ] === true &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY] !== false &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY] !== false &&
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY] === true &&
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY] === true &&
         dimensions[
           CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE
-        ] !== false &&
+        ] === true &&
         dimensions[
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
-        ] !== false &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] !==
-          false &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] !== false,
+        ] === true &&
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] ===
+          true,
     });
     if (readinessEvidence.explicitDecisionDimensionSatisfied) {
       return true;

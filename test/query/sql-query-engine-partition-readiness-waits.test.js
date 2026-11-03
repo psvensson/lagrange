@@ -12,18 +12,11 @@ import {
   QUERY_ROUTING_DIAGNOSTIC_REASON,
 } from '../../src/query/query-constants.js';
 import {
-  COLUMN,
-  SERVICE_STATUS,
-  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
 } from '../../src/partition/partition-constants.js';
 import {
@@ -45,12 +38,13 @@ import {createSqlRequest} from '../../src/query/sql-request.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {serveAnswerFromMock} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
 import {
   createMockMessageRouter,
-  createMockSystemCache,
   createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
 
@@ -373,6 +367,7 @@ test('SQLQueryEngine - waitForPartitionLeaderService accepts a fresh ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -391,146 +386,9 @@ test('SQLQueryEngine - waitForPartitionLeaderService accepts a fresh ' +
   );
 });
 
-test('SQLQueryEngine - waitForPartitionLeaderService accepts one bootstrap ' +
-  'leader hint while service roles lag behind heartbeat publication',
-async (t) => {
-  const now = 510000;
-  const partitionId = 'tbl-bootstrap-hint-p1';
-  const localNodeId = 'node-a';
-  const cache = createMockSystemCache(
-    [],
-    [{
-      partition_id: partitionId,
-      table_id: 'tbl-bootstrap-hint',
-      table_name: 'tbl-bootstrap-hint',
-      leader_node_id: null,
-      created_at: now - 1000,
-      updated_at: now - 1000,
-    }],
-    [
-      {
-        service_id: `${partitionId}-r1`,
-        service_type: 'partition',
-        partition_id: partitionId,
-        node_id: localNodeId,
-        raft_role: null,
-        address: `${localNodeId}/partition/${partitionId}-r1`,
-        status: 'active',
-      },
-      {
-        service_id: `${partitionId}-r2`,
-        service_type: 'partition',
-        partition_id: partitionId,
-        node_id: 'node-b',
-        raft_role: 'follower',
-        address: `node-b/partition/${partitionId}-r2`,
-        status: 'active',
-      },
-      {
-        service_id: `${partitionId}-r3`,
-        service_type: 'partition',
-        partition_id: partitionId,
-        node_id: 'node-c',
-        raft_role: 'follower',
-        address: `node-c/partition/${partitionId}-r3`,
-        status: 'active',
-      },
-    ],
-    [
-      {
-        [COLUMN.NODE_ID]: localNodeId,
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.CONNECTION_STATE]: STATE.READY,
-        [COLUMN.LAST_HEARTBEAT]: now - 34000,
-        [COLUMN.READY_LEASE_EXPIRES_AT]: now - 19000,
-        [COLUMN.CPU_USAGE_PERCENT]: 10,
-        [COLUMN.MEMORY_USAGE_PERCENT]: 20,
-        [COLUMN.DISK_USAGE_PERCENT]: 30,
-      },
-      {
-        [COLUMN.NODE_ID]: 'node-b',
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.CONNECTION_STATE]: STATE.READY,
-        [COLUMN.LAST_HEARTBEAT]: now - 34000,
-        [COLUMN.READY_LEASE_EXPIRES_AT]: now - 19000,
-        [COLUMN.CPU_USAGE_PERCENT]: 10,
-        [COLUMN.MEMORY_USAGE_PERCENT]: 20,
-        [COLUMN.DISK_USAGE_PERCENT]: 30,
-      },
-      {
-        [COLUMN.NODE_ID]: 'node-c',
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.CONNECTION_STATE]: STATE.READY,
-        [COLUMN.LAST_HEARTBEAT]: now - 34000,
-        [COLUMN.READY_LEASE_EXPIRES_AT]: now - 19000,
-        [COLUMN.CPU_USAGE_PERCENT]: 10,
-        [COLUMN.MEMORY_USAGE_PERCENT]: 20,
-        [COLUMN.DISK_USAGE_PERCENT]: 30,
-      },
-    ],
-  );
-  const readinessService = new ControlPlaneReadinessService({
-    nodeId: localNodeId,
-    systemTableCache: cache,
-    messageRouter: {
-      getConnectionState(nodeId) {
-        return [localNodeId, 'node-b', 'node-c'].includes(nodeId) ?
-          STATE.CONNECTED :
-          STATE.DISCONNECTED;
-      },
-    },
-    storageAccountingService: {
-      async getCapacitySnapshotForNode(nodeId) {
-        return {
-          nodeId,
-          budgetBytes: 1000,
-          pressureState: 'normal',
-        };
-      },
-    },
-    cdcGroupPropagationService: {
-      getPublicationModeDiagnostics() {
-        return {
-          currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
-          reasonCode: null,
-          enteredAt: '2026-03-12T00:00:00.000Z',
-          recentTransitions: [],
-        };
-      },
-    },
-    now: () => now,
-  });
-  const engine = new SQLQueryEngine({
-    nodeId: localNodeId,
-    systemCache: cache,
-    messageRouter: createMockMessageRouter(),
-    controlPlaneReadinessService: readinessService,
-    tablePartitionProvisioningTimeoutMs: 80,
-    tablePartitionProvisioningPollIntervalMs: 5,
-    nowFn: () => now,
-  });
-  engine.waitForCondition = async () => {
-    throw new Error('leader wait should not poll once bootstrap leader hint is usable');
-  };
-
-  await t.resolves(
-    engine.waitForPartitionLeaderService(
-      partitionId,
-      null,
-      {
-        partitionMetadata: cache.partitions[0],
-        bootstrapLeaderNodeId: localNodeId,
-      },
-    ),
-    'bootstrap leader hint should satisfy leader wait before raft_role metadata converges',
-  );
-  t.equal(
-    engine.queryExecutor.findPartitionLeaderAddress(partitionId),
-    `${localNodeId}/partition/${partitionId}-r1`,
-    'leader wait should expose the hinted bootstrap leader route',
-  );
-});
-
+// Removed with quest serve-eligibility-committed-epoch-read (R17 UA-1): this
+// case was admitted only by the fresh-bootstrap routing grace on nodes whose
+// leases had expired; user tables now route on the committed serve answer.
 test('SQLQueryEngine - waitForCondition honors a predicate that flips exactly ' +
   'at the timeout boundary', async (t) => {
   const engine = new SQLQueryEngine();
@@ -560,7 +418,9 @@ test('SQLQueryEngine - waitForCondition honors a predicate that flips exactly ' 
 test('SQLQueryEngine - waitForCondition classifies exact deadline exhaustion',
   async (t) => {
     let fakeNow = 1000;
-    const engine = new SQLQueryEngine({nowFn: () => fakeNow});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      nowFn: () => fakeNow});
 
     engine.sleep = async (ms) => {
       fakeNow += ms;
@@ -597,6 +457,7 @@ test('SQLQueryEngine - waitForRoutablePartitionServiceCount succeeds when the ' 
   'cohort is already routable even after budget exhaustion', async (t) => {
   let fakeNow = 2000;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     tablePartitionProvisioningPollIntervalMs: 10,
     nowFn: () => fakeNow,
   });
@@ -630,6 +491,9 @@ async (t) => {
     nodeId: 'node-a',
     messageRouter: createMockMessageRouter(),
     controlPlaneReadinessService: {
+      answerServeEligibility(id) {
+        return serveAnswerFromMock(this, id);
+      },
       getNodeReadinessSync() {
         return {
           dimensions: {
@@ -697,6 +561,7 @@ test('SQLQueryEngine - executeRequest forwards timeout budget to CREATE TABLE ' 
   });
   let receivedOptions = null;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
   });
   engine.tableCreationService = {
@@ -727,109 +592,9 @@ test('SQLQueryEngine - executeRequest forwards timeout budget to CREATE TABLE ' 
   t.equal(receivedOptions.namespace, 'tenant-create-owner');
 });
 
-test('SQLQueryEngine - waitForRoutablePartitionServiceCount accepts fresh ' +
-  'bootstrap services while transport-connected heartbeat publication lags',
-async (t) => {
-  const now = 520000;
-  const partitionId = 'tbl-bootstrap-routable-p1';
-  const nodeIds = ['node-a', 'node-b', 'node-c'];
-  const cache = createMockSystemCache(
-    [],
-    [{
-      partition_id: partitionId,
-      table_id: 'tbl-bootstrap-routable',
-      table_name: 'tbl-bootstrap-routable',
-      leader_node_id: null,
-      created_at: now - 1000,
-      updated_at: now - 1000,
-    }],
-    nodeIds.map((nodeId, index) => ({
-      service_id: `${partitionId}-r${index + 1}`,
-      service_type: 'partition',
-      partition_id: partitionId,
-      node_id: nodeId,
-      raft_role: index === 0 ? 'leader' : 'follower',
-      address: `${nodeId}/partition/${partitionId}-r${index + 1}`,
-      status: 'active',
-    })),
-    nodeIds.map((nodeId) => ({
-      [COLUMN.NODE_ID]: nodeId,
-      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      [COLUMN.CONNECTION_STATE]: STATE.READY,
-      [COLUMN.LAST_HEARTBEAT]: now - 34000,
-      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 19000,
-      [COLUMN.CPU_USAGE_PERCENT]: 10,
-      [COLUMN.MEMORY_USAGE_PERCENT]: 20,
-      [COLUMN.DISK_USAGE_PERCENT]: 30,
-    })),
-  );
-  const readinessService = new ControlPlaneReadinessService({
-    nodeId: 'node-a',
-    systemTableCache: cache,
-    messageRouter: {
-      getConnectionState(nodeId) {
-        return nodeIds.includes(nodeId) ? STATE.CONNECTED : STATE.DISCONNECTED;
-      },
-    },
-    storageAccountingService: {
-      async getCapacitySnapshotForNode(nodeId) {
-        return {
-          nodeId,
-          budgetBytes: 1000,
-          pressureState: 'normal',
-        };
-      },
-    },
-    cdcGroupPropagationService: {
-      getPublicationModeDiagnostics() {
-        return {
-          currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
-          reasonCode: null,
-          enteredAt: '2026-03-12T00:00:00.000Z',
-          recentTransitions: [],
-        };
-      },
-    },
-    now: () => now,
-  });
-  const engine = new SQLQueryEngine({
-    nodeId: 'node-a',
-    systemCache: cache,
-    messageRouter: createMockMessageRouter(),
-    controlPlaneReadinessService: readinessService,
-    tablePartitionProvisioningTimeoutMs: 80,
-    tablePartitionProvisioningPollIntervalMs: 5,
-    nowFn: () => now,
-  });
-  engine.waitForCondition = async () => {
-    throw new Error('bootstrap-routable services should satisfy the count wait without polling');
-  };
-
-  // Production warms the versioned planning owner's completed snapshots
-  // through its bounded background reconcile before sync routing reads; a
-  // cold sync read otherwise receives the owner's DEFERRED snapshot by
-  // design. Drive the same reconcile directly for each node so the count
-  // wait reads completed routing snapshots without polling.
-  const planningOwner = readinessService.readinessPlanningSnapshotOwner;
-  for (const nodeId of nodeIds) {
-    planningOwner.reconcile(nodeId, {
-      options: {
-        allowAuthoritativeRefresh: true,
-        requireFreshOnIneligible: true,
-        participationKind: 'routed_read',
-        decisionDimension: 'serveEligible',
-        partitionId,
-        tableName: 'tbl-bootstrap-routable',
-      },
-    });
-  }
-
-  await t.resolves(
-    engine.waitForRoutablePartitionServiceCount(partitionId, 3),
-    'fresh bootstrap services should count as routable while transport stays connected',
-  );
-});
-
+// Removed with quest serve-eligibility-committed-epoch-read (R17 UA-1): this
+// case was admitted only by the fresh-bootstrap routing grace on nodes whose
+// leases had expired; user tables now route on the committed serve answer.
 test('SQLQueryEngine - waitForRoutablePartitionServiceCount awaits one ' +
   'query-executor readiness repair before polling stale routing snapshots',
 async (t) => {
@@ -852,6 +617,7 @@ async (t) => {
   let repairCalls = 0;
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     tablePartitionProvisioningPollIntervalMs: 5,
     autoStartDistributedTransactionRecovery: false,
   });
@@ -909,6 +675,7 @@ async (t) => {
   let repairCalls = 0;
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     tablePartitionProvisioningPollIntervalMs: 5,
     autoStartDistributedTransactionRecovery: false,
   });
@@ -955,6 +722,7 @@ test('SQLQueryEngine - waitForPartitionLeaderService succeeds when leader route 
   'is already known even after budget exhaustion', async (t) => {
   let fakeNow = 3000;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     tablePartitionProvisioningPollIntervalMs: 10,
     nowFn: () => fakeNow,
   });
