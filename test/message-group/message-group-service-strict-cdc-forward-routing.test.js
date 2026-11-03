@@ -152,7 +152,15 @@ test(
     }));
 
     service.initialized = true;
-    service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+    service.raft = reportingConsensusPort({
+      role: RaftRole.FOLLOWER,
+      groupId: TEST_STRICT_RECOVERY_FORWARD_GROUP_ID,
+      replicaIdentity: TEST_STRICT_RECOVERY_FORWARD_LOCAL_REPLICA_ID,
+      peers: [{
+        replicaIdentity: TEST_STRICT_RECOVERY_FORWARD_REMOTE_REPLICA_ID,
+        address: TEST_STRICT_RECOVERY_FORWARD_REMOTE_ADDRESS,
+      }],
+    });
     service.leaderId = TEST_STRICT_RECOVERY_FORWARD_LEADER_REPLICA_ID;
     service.cdcIntegrationService = {
       canWriteSystemTableLocally() {
@@ -515,6 +523,15 @@ test(
       let repairCalls = 0;
       let deliveredAddress = null;
       let deliveredOptions = null;
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: 'mg-forward-repair',
+        replicaIdentity: 'mg-forward-repair-r3',
+        peers: [{
+          replicaIdentity: 'mg-forward-repair-r1',
+          address: 'peer-node-a/message-group/mg-forward-repair-r1',
+        }],
+      });
       service.resolveCDCForwardSelection = () => {
         selectionCalls += 1;
         if (selectionCalls === 1) {
@@ -661,7 +678,15 @@ test(
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
       service.initialized = true;
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
+        replicaIdentity: TEST_ADDRESSED_STRICT_CONVERGENCE_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID,
+          address: TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId =
         TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID;
       service.transport.getConnectionState = (candidateNodeId) => {
@@ -797,7 +822,15 @@ test(
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
       service.initialized = true;
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
+        replicaIdentity: TEST_ADDRESSED_STRICT_CONVERGENCE_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID,
+          address: TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId =
         TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID;
       service.transport.getConnectionState = (candidateNodeId) => {
@@ -962,6 +995,15 @@ test('MessageGroupService - missing handler logs bounded transport diagnostics',
     service.logger.warn = (msg, fields) => {
       warningLogs.push({msg, fields});
     };
+    service.raft = reportingConsensusPort({
+      role: RaftRole.FOLLOWER,
+      groupId: 'mg-forward-diag',
+      replicaIdentity: 'mg-forward-diag-r1',
+      peers: [{
+        replicaIdentity: 'mg-forward-diag-r2',
+        address: 'remote-node/message-group/mg-forward-diag-r2',
+      }],
+    });
     service.resolveCDCForwardSelection = () => ({
       strictForwarding: true,
       strictForwardRetryAfterMs: 275,

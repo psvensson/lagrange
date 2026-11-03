@@ -324,6 +324,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-1-r2';
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, ['remote-node/message-group/mg-1-r2']);
       mg.resolveCDCForwardSelection = () => ({
         strictForwarding: true,
         strictForwardRetryAfterMs: 250,
@@ -411,6 +412,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-1-r2';
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, ['remote-node/message-group/mg-1-r2']);
       mg.resolveCDCForwardSelection = () => ({
         strictForwarding: true,
         strictForwardRetryAfterMs: 250,
@@ -501,6 +503,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-replay-priority-r2';
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, ['seed-node/message-group/mg-replay-priority-r2']);
       mg.resolveCDCForwardSelection = () => ({
         strictForwarding: true,
         strictForwardRetryAfterMs: 250,
@@ -768,6 +771,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = null;
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, ['remote-node/message-group/mg-cache-leader-r2']);
 
       mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
         service_id: 'mg-cache-leader-r2',
@@ -852,6 +856,10 @@ test(
       mg.role = 'follower';
       mg.leaderId = null;
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, [
+        'stale-node/message-group/mg-stale-canonical-leader-r2',
+        'fresh-node/message-group/mg-stale-canonical-leader-r3',
+      ]);
 
       mg.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
@@ -955,6 +963,10 @@ test(
       mg.role = 'follower';
       mg.leaderId = null;
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, [
+        'remote-node-2/message-group/mg-lagging-leader-metadata-r2',
+        'remote-node-3/message-group/mg-lagging-leader-metadata-r3',
+      ]);
 
       mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
         service_id: 'mg-lagging-leader-metadata-r2',
@@ -1337,6 +1349,10 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-connected-relay-r2';
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, [
+        'node-leader/message-group/mg-connected-relay-r2',
+        'node-relay/message-group/mg-connected-relay-r3',
+      ]);
 
       mg.systemTableCache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
         group_id: 'mg-connected-relay',

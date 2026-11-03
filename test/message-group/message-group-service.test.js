@@ -670,6 +670,15 @@ test(
       }));
 
       service.initialized = true;
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: 'mg-strict-cache-ready-gate',
+        replicaIdentity: 'mg-strict-cache-ready-gate-r3',
+        peers: [{
+          replicaIdentity: 'mg-strict-cache-ready-gate-r1',
+          address: 'peer-node-b/message-group/mg-strict-cache-ready-gate-r1',
+        }],
+      });
       router.getConnectionState = (targetNodeId) => {
         return targetNodeId === 'peer-node-b' ? STATE.CONNECTED : STATE.CONNECTED;
       };
@@ -1022,12 +1031,24 @@ test(
       nodeId: 'node-local',
       transport,
     }));
+    service.raft = reportingConsensusPort({
+      role: RaftRole.FOLLOWER,
+      groupId: 'mg-1',
+      replicaIdentity: 'mg-1-r2',
+      peers: [{
+        replicaIdentity: 'mg-1-r1',
+        address: 'seed-node/message-group/mg-1-r1',
+      }],
+    });
     const forwarded = [];
 
     service.resolveMetadataIngressForwardSelection = async () => ({
       strictForwarding: true,
       strictForwardRetryAfterMs: 250,
-      targets: [{address: 'seed-node/message-group/mg-1-r1'}],
+      targets: [{
+        serviceId: 'mg-1-r1',
+        address: 'seed-node/message-group/mg-1-r1',
+      }],
       suppressedCount: 0,
     });
     service.sendMessage = async (targetAddress, payload) => {

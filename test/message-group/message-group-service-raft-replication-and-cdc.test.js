@@ -213,6 +213,15 @@ test(
       transport,
     }));
 
+    service.raft = reportingConsensusPort({
+      role: RaftRole.FOLLOWER,
+      groupId: TEST_RETRYABLE_FORWARD_GROUP_ID,
+      replicaIdentity: TEST_RETRYABLE_FORWARD_REPLICA_ID,
+      peers: [{
+        replicaIdentity: TEST_RETRYABLE_FORWARD_TARGET_SERVICE_ID,
+        address: TEST_RETRYABLE_FORWARD_TARGET_ADDRESS,
+      }],
+    });
     service.resolveCDCForwardSelection = () => ({
       strictForwarding: true,
       strictForwardRetryAfterMs: TEST_RETRYABLE_FORWARD_RETRY_AFTER_MS,

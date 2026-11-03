@@ -83,6 +83,10 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.role = 'follower';
         mg.leaderId = null;
         consensus.role = RaftRole.FOLLOWER;
+        seedCommittedConsensusPeers(consensus, [
+          'node-leader/message-group/mg-strict-stale-ready-r2',
+          'node-relay/message-group/mg-strict-stale-ready-r3',
+        ]);
 
         const now = Date.now();
         mg.systemTableCache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
@@ -517,6 +521,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.forwardTargetSuppressionMs = 1000;
         mg.computeCdcForwardRetryDelayMs = () => 0;
         consensus.role = RaftRole.FOLLOWER;
+        seedCommittedConsensusPeers(consensus, [staleAddress, freshAddress]);
 
         const cache = NodeService.getInstance().getSystemTableCache();
         cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
