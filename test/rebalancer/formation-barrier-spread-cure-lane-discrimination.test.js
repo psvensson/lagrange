@@ -138,7 +138,7 @@ function buildReadiness(nodeId) {
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: ready,
       [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
       [CONTROL_PLANE_READINESS_DIMENSION
-        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: ready,
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
       [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
     },
     reasons: ready ? [] : [{code: 'ready_lease_missing'}],
@@ -154,6 +154,17 @@ function createReadinessService() {
     },
   };
   return {
+    answerCommittedNodes() {
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: 0,
+        },
+        nodeRows: createNodeRows(),
+      };
+    },
     getNodeReadinessSync: buildReadiness,
     membershipPublicationService: {
       getLatestClusterPublicationSync: () => publicationRow,

@@ -221,8 +221,10 @@ async function releaseControlOwnerFirst(handler, service, request) {
   const authorization = handler.participantReleaseAuthorizationOwner
     .authorizeControlFrom(request.authorization, partitionId,
       request.targetBuildDigest);
+  const trigger = request.trigger === TRIGGER.FRESH_CREATE ?
+    TRIGGER.EXISTING_ORIGIN : request.trigger;
   const answer = await requestParticipantRelease(handler, {partitionId, nodeId,
-    targetBuildDigest: request.targetBuildDigest, trigger: request.trigger,
+    targetBuildDigest: request.targetBuildDigest, trigger,
     deadlineAtMs: request.deadlineAtMs, authorization});
   if (answer?.outcome === OUTCOME.BUILD_MISMATCH) {
     return releaseAnswer(OUTCOME.BUILD_MISMATCH, request,
@@ -268,7 +270,7 @@ async function proveCurrentControlCohort(handler, service, request,
 
 // The founding facts include the committed configuration, read through the
 // release facts owner: a replaced founder leading the group still releases.
-async function freshCreateRefusal(handler, service, request) {
+async function freshCreateRefusal(handler, service, request, hasWriteOrigin) {
   const own = await readParticipantReleaseFacts(handler, service,
     COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS);
   if (own.outcome !== OUTCOME.OBSERVED) return normalizeMemberRefusal(request, own);
@@ -278,23 +280,24 @@ async function freshCreateRefusal(handler, service, request) {
       {missingFact: MISSING_FACT.COMMITTED_MEMBERSHIP});
   }
   return handler.participantReleaseAuthorizationOwner.decideFreshCreateRelease(request,
-    {partitionId: service.partitionId, replicaId: service.replicaId, memberIds});
+    {partitionId: service.partitionId, replicaId: service.replicaId, memberIds,
+      hasWriteOrigin});
 }
 
 // NOT_LEADER first: a non-leader never grants or refuses on authority. A
-// partition with no write origin needs release authority: a node-local
-// FRESH_SEED or OPERATOR token of this handler, or - for a fresh CREATE - the
-// committed founding create operation, read by this (the answering) leader.
+// fresh CREATE is always decided from its committed create operation, even
+// after write origin exists, so a closed or mismatched create never cuts over.
 async function localReleaseRefusal(handler, service, request) {
   const status = service.raft.readStatus();
   if (status.role !== RAFT_ROLE.LEADER) {
     return releaseAnswer(OUTCOME.NOT_LEADER, request,
       {leaderAddress: status.leaderAddress, leaderReplicaId: status.leaderId});
   }
-  if (readPartitionWriteOrigin(service.db) !== null) return null;
+  const hasWriteOrigin = readPartitionWriteOrigin(service.db) !== null;
   if (request.trigger === TRIGGER.FRESH_CREATE) {
-    return freshCreateRefusal(handler, service, request);
+    return freshCreateRefusal(handler, service, request, hasWriteOrigin);
   }
+  if (hasWriteOrigin) return null;
   return handler.participantReleaseAuthorizationOwner.validates(request.authorization,
     {partitionId: service.partitionId, targetBuildDigest: request.targetBuildDigest}) ?
     null : releaseAnswer(OUTCOME.OPERATOR_REQUIRED, request,

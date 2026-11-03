@@ -7,6 +7,10 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {CACHE_CDC_OPERATIONS} from '../../src/cache/cache-constants.js';
+import {
+  getSystemCachePrimaryKeyField,
+} from '../../src/cache/system-cache-key-descriptor.js';
 import {COLUMN} from '../../src/constants/index.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
@@ -133,6 +137,28 @@ export function createMockSystemCache(tables, partitions, services, nodes = []) 
       if (type === 'services') return this.services;
       if (type === 'nodes') return nodes;
       return [];
+    },
+    applySystemTableChange: function(tableName, operation, row) {
+      const collection = tableName === 'nodes' ? nodes : this[tableName];
+      if (!Array.isArray(collection) || !row || typeof row !== 'object') {
+        return;
+      }
+      const keyField = getSystemCachePrimaryKeyField(tableName);
+      const key = row[keyField];
+      const index = key !== undefined ?
+        collection.findIndex((candidate) => candidate?.[keyField] === key) :
+        -1;
+      if (String(operation || '').toUpperCase() === CACHE_CDC_OPERATIONS.DELETE) {
+        if (index >= 0) {
+          collection.splice(index, 1);
+        }
+        return;
+      }
+      if (index >= 0) {
+        collection[index] = {...collection[index], ...row};
+      } else {
+        collection.push({...row});
+      }
     },
   };
 }

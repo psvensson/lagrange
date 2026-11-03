@@ -294,20 +294,13 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   }
 
   resolveAvailableNodeCandidateRows() {
+    const answer =
+      this.controlPlaneReadinessService?.answerCommittedNodes?.() ?? null;
     if (
-      typeof this.controlPlaneReadinessService?.answerCommittedNodes ===
-        'function'
+      answer?.state === SERVE_ELIGIBILITY_STATE.READY &&
+      Array.isArray(answer.nodeRows)
     ) {
-      const answer = this.controlPlaneReadinessService.answerCommittedNodes();
-      if (
-        answer?.state === SERVE_ELIGIBILITY_STATE.READY &&
-        Array.isArray(answer.nodeRows)
-      ) {
-        return answer.nodeRows;
-      }
-    }
-    if (typeof this.systemTableCache?.getAll === 'function') {
-      return this.systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES);
+      return answer.nodeRows;
     }
     return [];
   }

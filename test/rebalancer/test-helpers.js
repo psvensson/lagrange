@@ -297,6 +297,36 @@ function isNodeRepairEligible(node) {
   return readyLeaseExpiresAt > Date.now();
 }
 
+function withFixtureCommittedNodes(readinessService, systemTableCache) {
+  if (!readinessService || typeof readinessService !== 'object') {
+    return readinessService;
+  }
+  if (systemTableCache) {
+    readinessService.fixtureSystemTableCache = systemTableCache;
+  }
+  if (typeof readinessService.answerCommittedNodes !== 'function') {
+    readinessService.answerCommittedNodes = () => {
+      const activeCache =
+        readinessService.fixtureSystemTableCache || systemTableCache;
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: 0,
+        },
+        nodeRows:
+          typeof activeCache?.filter === 'function' ?
+            activeCache.filter(SYSTEM_TABLE_NAME.NODES, () => true) :
+            typeof activeCache?.getAll === 'function' ?
+              activeCache.getAll(SYSTEM_TABLE_NAME.NODES) :
+              [],
+      };
+    };
+  }
+  return readinessService;
+}
+
 function createMockControlPlaneReadinessService(options = {}) {
   const {
     systemTableCache = null,
@@ -306,7 +336,7 @@ function createMockControlPlaneReadinessService(options = {}) {
     membershipPublicationPlanningSnapshot = null,
   } = options;
 
-  return {
+  return withFixtureCommittedNodes({
     ...(livenessProjectionByNodeId &&
       typeof livenessProjectionByNodeId === 'object' ? {
         projectNodeLiveness(nodeId) {
@@ -319,9 +349,10 @@ function createMockControlPlaneReadinessService(options = {}) {
         return explicit;
       }
 
-      const nodeRow = systemTableCache &&
-        typeof systemTableCache.get === 'function' ?
-        systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
+      const activeCache = this.fixtureSystemTableCache || systemTableCache;
+      const nodeRow = activeCache &&
+        typeof activeCache.get === 'function' ?
+        activeCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
         null;
       const repairEligible = nodeRow ?
         isNodeRepairEligible(nodeRow) :
@@ -353,9 +384,10 @@ function createMockControlPlaneReadinessService(options = {}) {
         return membershipPublicationPlanningSnapshot;
       }
 
-      const nodeRows = systemTableCache &&
-        typeof systemTableCache.getAll === 'function' ?
-        systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES) :
+      const activeCache = this.fixtureSystemTableCache || systemTableCache;
+      const nodeRows = activeCache &&
+        typeof activeCache.getAll === 'function' ?
+        activeCache.getAll(SYSTEM_TABLE_NAME.NODES) :
         [];
       const publishedActiveNodeIds = nodeRows
         .filter((nodeRow) => isNodeRepairEligible(nodeRow))
@@ -373,7 +405,7 @@ function createMockControlPlaneReadinessService(options = {}) {
         },
       };
     },
-  };
+  }, systemTableCache);
 }
 
 /**
@@ -1100,12 +1132,14 @@ function createTestCoordinator(options = {}) {
     messageRouter: mockMessageRouter,
     sqlQueryEngine: mockSqlEngine,
     transactionCoordinator,
-    controlPlaneReadinessService:
+    controlPlaneReadinessService: withFixtureCommittedNodes(
       options.controlPlaneReadinessService ||
-      createMockControlPlaneReadinessService({
-        systemTableCache: mockCache,
-        defaultRepairEligible: true,
-      }),
+        createMockControlPlaneReadinessService({
+          systemTableCache: mockCache,
+          defaultRepairEligible: true,
+        }),
+      mockCache,
+    ),
     storageAdmissionService: options.storageAdmissionService || {
       checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
       checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -1185,17 +1219,20 @@ function createTestRebalancer(options = {}) {
     mockCoordinator.storageAccountingService || {
     estimateReplicaBytes: () => 1,
   };
-  const controlPlaneReadinessService = options.controlPlaneReadinessService ||
-    (options.livenessProjectionByNodeId ?
+  const controlPlaneReadinessService = withFixtureCommittedNodes(
+    options.controlPlaneReadinessService ||
+      (options.livenessProjectionByNodeId ?
+        createMockControlPlaneReadinessService({
+          systemTableCache: mockCache,
+          livenessProjectionByNodeId: options.livenessProjectionByNodeId,
+        }) :
+        mockCoordinator.controlPlaneReadinessService) ||
       createMockControlPlaneReadinessService({
         systemTableCache: mockCache,
-        livenessProjectionByNodeId: options.livenessProjectionByNodeId,
-      }) :
-      mockCoordinator.controlPlaneReadinessService) ||
-    createMockControlPlaneReadinessService({
-      systemTableCache: mockCache,
-      defaultRepairEligible: true,
-    });
+        defaultRepairEligible: true,
+      }),
+    mockCache,
+  );
   mockCoordinator.controlPlaneReadinessService =
     controlPlaneReadinessService;
 

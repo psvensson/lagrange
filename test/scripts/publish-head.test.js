@@ -505,12 +505,16 @@ tap.test('a GitHub-merged head with no receipt gets one from the post-merge arm'
     run: (command, args, options) => (args[0] === 'scripts/proof-authority.js' ?
       authority(command, args, options) : {status: 0}),
   });
-  t.equal(silent, 0);
+  t.not(silent, 0, 'a refused proof receipt fails the local corpus run');
   t.equal(merged.receiptRef(merged.merged), '',
     'a green exit without an execution report mints no receipt');
-  t.match(JSON.parse(fs.readFileSync(path.join(merged.stateDir, `${merged.merged}.json`),
-    'utf8')).receipt, /execution-report-planned-file-not-executed/u,
-  'and the refusal is named in the local corpus record');
+  const silentRecord = JSON.parse(fs.readFileSync(
+    path.join(merged.stateDir, `${merged.merged}.json`), 'utf8'));
+  t.equal(silentRecord.state, 'red',
+    'a refused proof receipt is recorded red, never green');
+  t.equal(silentRecord.reason, 'proof-receipt-not-recorded');
+  t.match(silentRecord.receipt, /execution-report-planned-file-not-executed/u,
+    'and the refusal is named in the local corpus record');
   // A run that writes the sections the real runner writes - this commit's
   // clean checkout, every planned file green with assertions - is evidence.
   const tree = git(merged.root, ['rev-parse', `${merged.merged}^{tree}`]);

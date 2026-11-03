@@ -685,14 +685,19 @@ const LOCAL_CORPUS_TEXT = Object.freeze({
   NEWER_HEAD: ', a newer head on main',
   LOST: 'its process ended without a verdict',
   HOT: 'the machine stayed too hot to run it (thermal-headroom-exhausted)',
+  PROOF_NOT_RECORDED: 'proof-receipt-not-recorded',
   UNRECORDED: 'receipt not recorded: ',
   BOOKKEEPING: 'bookkeeping failed: ',
   ALREADY: 'already ',
   FOR_THIS_COMMIT: ' for this commit',
 });
 // A run of the very head being published that still counts: one that is
-// alive, or one that already proved it.
-const LOCAL_CORPUS_COVERING = new Set([LOCAL_CORPUS_STATE.RUNNING, LOCAL_CORPUS_STATE.GREEN]);
+// alive, or one that already proved it and recorded its receipt.
+function isCoveringLocalCorpusRecord(record) {
+  if (!record || typeof record !== 'object') return false;
+  if (record.state === LOCAL_CORPUS_STATE.RUNNING) return true;
+  return record.state === LOCAL_CORPUS_STATE.GREEN && record.receipt === CORPUS_PROOF_ID;
+}
 
 // Where the local corpus keeps its records (the git common dir, shared by
 // every worktree) and where it runs from (the main checkout that holds it).
@@ -848,9 +853,19 @@ export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Dat
     [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, head,
       PROOF_REPORT_FLAG, report],
     {cwd: root, encoding: UTF8, timeout: RECORD_TIMEOUT_MS});
+  if (recorded?.status !== 0) {
+    writeLocalCorpusState(stateDir, {
+      ...state,
+      state: LOCAL_CORPUS_STATE.RED,
+      status: recorded?.status ?? 1,
+      reason: LOCAL_CORPUS_TEXT.PROOF_NOT_RECORDED,
+      receipt: String(recorded?.stderr || recorded?.stdout || RECEIPT_NO_REASON).trim(),
+      finishedAt: now(),
+    });
+    return recorded?.status || 1;
+  }
   writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.GREEN,
-    finishedAt: now(), receipt: recorded?.status === 0 ? CORPUS_PROOF_ID :
-      String(recorded?.stderr || recorded?.stdout || RECEIPT_NO_REASON).trim()});
+    finishedAt: now(), receipt: CORPUS_PROOF_ID});
   return 0;
 }
 
@@ -965,8 +980,7 @@ function localCorpusDetail(state) {
     return `${LOCAL_CORPUS_TEXT.SUPERSEDED_BY}${state.supersededBy}`;
   }
   if (state.state === LOCAL_CORPUS_STATE.LOST) return state.reason || LOCAL_CORPUS_TEXT.LOST;
-  if (state.state === LOCAL_CORPUS_STATE.GREEN && state.receipt &&
-      state.receipt !== CORPUS_PROOF_ID) {
+  if (state.receipt && state.receipt !== CORPUS_PROOF_ID) {
     return `${LOCAL_CORPUS_TEXT.UNRECORDED}${state.receipt}`;
   }
   return `${state.files}${LOCAL_CORPUS_TEXT.FILES}${state.log}`;
@@ -984,11 +998,14 @@ function localCorpusLine(state) {
  */
 export function reportLocalCorpus(stateDir, write) {
   const states = readLocalCorpusRecords(stateDir);
-  const lastGreen = states.findIndex((state) => state.state === LOCAL_CORPUS_STATE.GREEN);
+  const lastGreen = states.findIndex((state) =>
+    state.state === LOCAL_CORPUS_STATE.GREEN && state.receipt === CORPUS_PROOF_ID);
   const unanswered = lastGreen < 0 ? states : states.slice(0, lastGreen);
   for (const state of unanswered) {
     if (state.state === LOCAL_CORPUS_STATE.RED) {
-      write(`${LOCAL_CORPUS_TEXT.RED_BANNER}${state.sha}: ${state.log}`);
+      const detail = state.receipt && state.receipt !== CORPUS_PROOF_ID ?
+        `${LOCAL_CORPUS_TEXT.UNRECORDED}${state.receipt}` : state.log;
+      write(`${LOCAL_CORPUS_TEXT.RED_BANNER}${state.sha}: ${detail}`);
     } else if (state.state === LOCAL_CORPUS_STATE.LOST) {
       write(`${LOCAL_CORPUS_TEXT.LOST_BANNER}${state.sha}: ${localCorpusDetail(state)}`);
     }
@@ -1011,7 +1028,7 @@ function localCorpusAfterPush(worktree, head, localCorpus) {
   // would share the first's record and log, and leave the first running
   // untracked (verifier, round 2). A lost, red or superseded one is run again.
   const covering = readLocalCorpusRecords(stateDir).find((record) =>
-    record.sha === head && LOCAL_CORPUS_COVERING.has(record.state));
+    record.sha === head && isCoveringLocalCorpusRecord(record));
   if (covering) {
     write(`${LOCAL_CORPUS_TEXT.PREFIX}${LOCAL_CORPUS_TEXT.NOT_STARTED}` +
       `${LOCAL_CORPUS_TEXT.ALREADY}${covering.state}${LOCAL_CORPUS_TEXT.FOR_THIS_COMMIT}`);

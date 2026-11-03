@@ -7,16 +7,16 @@
     "bootstrap-membership": 337,
     "cdc-metadata": 70,
     "cli-tooling": 99,
-    "control-plane": 230,
+    "control-plane": 233,
     "convergence-topology": 78,
     "distributed-harness": 210,
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 272,
-    "query-sql": 191,
+    "query-sql": 192,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 159,
+    "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 216,
     "storage-raft": 147,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2585,
-  "digest": "fnv1a32-2b340d1e",
+  "censusSize": 2590,
+  "digest": "fnv1a32-0076fca0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-42994af4",
+  "observationDigest": "fnv1a32-78b4528b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -505,7 +505,9 @@
     "test/config/configuration-manager.test.js": "control-plane",
     "test/config/control-plane-gateway-mutation-guardrails.test.js": "architecture-governance",
     "test/config/control-plane-gateway-registry-guardrails.test.js": "architecture-governance",
+    "test/config/dynamic-config-cdc-update-shape.test.js": "control-plane",
     "test/config/dynamic-config-service.test.js": "control-plane",
+    "test/config/dynamic-config-startup-owned-initialization.test.js": "control-plane",
     "test/config/dynamic-config-startup-wait-bound-spent.test.js": "control-plane",
     "test/config/dynamic-config-startup-wiring.test.js": "control-plane",
     "test/config/full-corpus-canary-workflow.test.js": "control-plane",
@@ -726,6 +728,7 @@
     "test/control-plane/runtime-access-policy-owner.test.js": "control-plane",
     "test/control-plane/runtime-access-settled-replay-projection.test.js": "control-plane",
     "test/control-plane/serve-eligibility-committed-epoch-read.test.js": "control-plane",
+    "test/control-plane/serve-eligibility-owner.test.js": "control-plane",
     "test/control-plane/service-install-catalog-owner.test.js": "control-plane",
     "test/control-plane/service-instance-creation-cas.test.js": "control-plane",
     "test/control-plane/service-instance-selection-admission.test.js": "control-plane",
@@ -1638,6 +1641,7 @@
     "test/query/sql-parser-pg.property.test.js": "query-sql",
     "test/query/sql-parser-pg.test.js": "query-sql",
     "test/query/sql-parser.test.js": "query-sql",
+    "test/query/sql-query-engine-cold-metadata-plan-coherence.test.js": "query-sql",
     "test/query/sql-query-engine-create-table-quorum.test.js": "query-sql",
     "test/query/sql-query-engine-dispatch-metrics.test.js": "query-sql",
     "test/query/sql-query-engine-distributed-transactions.test.js": "query-sql",
@@ -2202,6 +2206,7 @@
     "test/runtime/service-runtime-lifecycle.test.js": "services-runtime",
     "test/runtime/sql-query-loop-parallel-reduce-sql.test.js": "services-runtime",
     "test/runtime/state-projection.test.js": "services-runtime",
+    "test/runtime/wasi-component-derivation.test.js": "services-runtime",
     "test/runtime/wasi-component-startup-budget.test.js": "services-runtime",
     "test/runtime/wasm-api-compat.test.js": "services-runtime",
     "test/runtime/wasm-component-driver.test.js": "services-runtime",
@@ -4270,6 +4275,11 @@
         "src"
       ]
     },
+    "test/config/dynamic-config-cdc-update-shape.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js"
+      ]
+    },
     "test/config/dynamic-config-service.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway.js"
@@ -4279,6 +4289,11 @@
       ],
       "env": [
         "NODE_HEARTBEAT_INTERVAL_MS"
+      ]
+    },
+    "test/config/dynamic-config-startup-owned-initialization.test.js": {
+      "files": [
+        "src/config/raft-adaptive-timing-controller.js"
       ]
     },
     "test/config/dynamic-config-startup-wait-bound-spent.test.js": {
@@ -13442,6 +13457,15 @@
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
+    "test/query/sql-query-engine-cold-metadata-plan-coherence.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
+      ]
+    },
     "test/query/sql-query-engine-create-table-quorum.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
@@ -17253,6 +17277,11 @@
         "src/runtime/service-runtime-lifecycle.js"
       ]
     },
+    "test/runtime/wasi-component-derivation.test.js": {
+      "files": [
+        "src/runtime/wasi-component-cell-runtime.js"
+      ]
+    },
     "test/runtime/wasi-component-startup-budget.test.js": {
       "files": [
         "package.json",
@@ -17412,11 +17441,13 @@
         "package-lock.json",
         "package.json",
         "src/cli/cli-constants.js",
-        "src/constants/entrypoint.js"
+        "src/constants/entrypoint.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         "data/releases",
-        "solve"
+        "solve",
+        "test"
       ]
     },
     "test/scripts/certification-verdict.test.js": {
@@ -18949,11 +18980,13 @@
         "package-lock.json",
         "package.json",
         "src/cli/cli-constants.js",
-        "src/constants/entrypoint.js"
+        "src/constants/entrypoint.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         "data/releases",
-        "solve"
+        "solve",
+        "test"
       ]
     },
     "test/scripts/proof-checkout-preparation.test.js": {
@@ -18998,7 +19031,8 @@
         "scripts/proof-authority.js",
         "scripts/run-test-files.js",
         "src/cli/cli-constants.js",
-        "src/constants/entrypoint.js"
+        "src/constants/entrypoint.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         "data/releases",
@@ -19174,11 +19208,13 @@
         "package-lock.json",
         "package.json",
         "src/cli/cli-constants.js",
-        "src/constants/entrypoint.js"
+        "src/constants/entrypoint.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         "data/releases",
-        "solve"
+        "solve",
+        "test"
       ]
     },
     "test/scripts/release-proof-identity.test.js": {
@@ -19187,11 +19223,13 @@
         "package-lock.json",
         "package.json",
         "src/cli/cli-constants.js",
-        "src/constants/entrypoint.js"
+        "src/constants/entrypoint.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         "data/releases",
-        "solve"
+        "solve",
+        "test"
       ]
     },
     "test/scripts/release-publication-receipt.test.js": {

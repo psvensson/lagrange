@@ -1,0 +1,52 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "dynamic-config-startup-owned-initialization",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "history-and-supersession-recorded",
+      "passed": true,
+      "detail": "both constants from 9939b3ff6, never changed; the 2026-10-04 census's designed-fallback classification and its witness test named; superseded explicitly in the seal under R09 with the new evidence",
+      "evidence": [
+        "log.ndjson finding 2026-11-02 (history before the seal)",
+        "quest.json statement"
+      ]
+    },
+    {
+      "id": "late-read-value-applied-by-the-owner",
+      "passed": true,
+      "detail": "a startup read that completes after its 300 ms bound is applied through the wiring's one apply path (applyStartupValue: a logging key at once; a raft key into the startup sweep, or its own sweep after it): a restarting node's stored raft timing reaches the replicas (row-4 witness, red before: heartbeat stayed at the default 50); ordering rule: CDC applies of the config table are counted per key from before any read starts, and a late read whose key was CDC-applied since it started is dropped as stale, the CDC value winning, exactly once (row-4 ordering witness); typed outcomes applied, applied_late, dropped_stale, failed, cancelled; a raft value is held beside the working set until a sweep accepts it, so a refused value blocks no CDC. Open evidence gap: restart replay is traced, never run, and convergence holds only if a tail entry follows; no distributed run",
+      "evidence": [
+        "evidence/red-before-fix.log.txt",
+        "evidence/touched-green.log.txt",
+        "evidence/mutation-witnesses.log.txt"
+      ],
+      "testFile": "test/config/dynamic-config-startup-owned-initialization.test.js"
+    },
+    {
+      "id": "spent-controller-init-never-orphaned",
+      "passed": true,
+      "detail": "the wiring holds the one controller reference from construction to shutdown; a late initialize is adopted (the controller starts its own loop if enabled, the on-time path, no second controller; row-5 witness: one owned loop, then none and no watcher after shutdown, red before); a shutdown during initialize sets the controller's stopped flag and initialize starts no watcher, profile or loop after it (cancellation witness); typed outcomes applied, adopted_late, failed, cancelled; why nothing can neither complete nor cancel: the reference is never dropped, shutdown always stops it, and initialize checks stopped after each await before any side effect",
+      "evidence": [
+        "evidence/red-before-fix.log.txt",
+        "evidence/touched-green.log.txt",
+        "evidence/mutation-witnesses.log.txt"
+      ],
+      "testFile": "test/config/dynamic-config-startup-owned-initialization.test.js"
+    },
+    {
+      "id": "prior-witness-re-derived",
+      "passed": true,
+      "detail": "test/config/dynamic-config-startup-wait-bound-spent.test.js re-derived to the new contract, not deleted: startup still proceeds on the defaults; each spent bound is one wait_bound_spent under its constant's own name (8 read keys, 1 controller initialize), no INITIAL_APPLY_FAILED for a merely late read; the stalled reads and controller remain owned (pending); completed reads report applied and no spend",
+      "evidence": [
+        "evidence/touched-green.log.txt"
+      ],
+      "testFile": "test/config/dynamic-config-startup-wait-bound-spent.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "reason": "awaiting the verifier spawned by the lead"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "dynamic-config-startup-owned-initialization",
+  "class": "fix",
+  "statement": "src/config/dynamic-config-startup-wiring.js is the one owner of the node's startup dynamic configuration, rows 4 and 5 of the fixed-work-bound census (the same wiring owns both, so they are one quest). When the 300 ms startup bound DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS is spent, the late value of that key is still applied, by the same owner, whether it arrives by the completed read or by a CDC apply of the config table: a stored value already local with no later CDC apply (a restarting node) is applied when its read completes, never silently left at the default. When DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS is spent, the in-flight RaftAdaptiveTimingController.initialize() is never orphaned: the controller either becomes owned when it completes (then shut down by the wiring's shutdown) or is cancelled and shut down, never both, never a second controller beside it, with a typed startup outcome recorded either way. Under R09 this supersedes, explicitly, the designed-fallback classification of both 300 ms boxes recorded by the bounded-wait census of 2026-10-04 (solve/epics/raft-rs-full-cutover/census-bounded-waits-2026-10-04.md lines 114, 442-443: 'Defaults apply now and CDC applies the stored values later') and witnessed by test/config/dynamic-config-startup-wait-bound-spent.test.js: new evidence shows the late value is applied only through handleCdcApplied on CDC_APPLIED events for the config table (dynamic-config-startup-wiring.js 451-477), so a value with no later CDC apply is never applied, and the spent controller bound orphans a live controller (withTimeout 76-107 never cancels; the wiring drops its reference 438-449; initialize, registerWatchers and the loop continue; shutdown 492-501 only shuts the controller it holds). That witness test is re-derived to the new contract, never deleted. Startup still never blocks on the bounds.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/dynamic-config-startup-owned-initialization/evidence/receipt.json",
+      "requiredReceipts": [
+        "history-and-supersession-recorded",
+        "late-read-value-applied-by-the-owner",
+        "spent-controller-init-never-orphaned",
+        "prior-witness-re-derived",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "cause",
+      "statement": "Repair at the owner, dynamic-config-startup-wiring.js (with the controller's own shutdown/cancel surface if it lacks one); repair shape (4) of the census for row 5 (own or cancel, not re-drive) and shape (2) for row 4 (re-drive and apply through the one owner, never silently default). No larger bound, no machine factor."
+    },
+    {
+      "id": "scope",
+      "statement": "Bounded to the two startup bounds and their witnesses; the census's other rows are out of scope. No test bound changes."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first: the row-4 restart witness (a stored config value already local, its startup read resolving after the 300 ms bound, no CDC apply: today never applied) and the row-5 orphan witness (dynamicConfigService.get stubbed to resolve after more than 300 ms, createDynamicConfigStartupWiring called: after the late resolve no un-owned controller is initialized or looping, and shutdown leaves no interval alive). The existing positive cases stay green; independent verification before landing. No src change before the lead's go after the seal."
+    }
+  ],
+  "sealedAt": "5c61f3d1b3b2359326bd06bcf90bfdf8b89ac356"
+}

@@ -75,6 +75,15 @@ function createMockReadinessService(systemTableCache) {
         },
       };
     },
+    answerCommittedNodes: () => ({
+      state: 'ready',
+      epoch: {
+        publicationEpoch: 1,
+        publicationId: 'cluster_membership-1',
+        readAtMs: 0,
+      },
+      nodeRows: systemTableCache.getAll(TABLES.NODES),
+    }),
     getNodeReadinessSync: (nodeId) => {
       const nodeRow = systemTableCache.get(TABLES.NODES, nodeId);
       if (!nodeRow) {

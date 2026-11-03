@@ -1,0 +1,29 @@
+Mutation witnesses for the corrective of 791bd628a, uncommitted tree, each over the two startup test files; tuple is (exit code, first failures). Each mutant was reverted after its run.
+base (0, [])
+c1 (1, ['not ok 17 - F5 c1: initialize after shutdown reads nothing # time=9.398ms'])
+c2 (1, ['not ok 18 - F5 c2: a shutdown during loadConfig registers no watcher, though profile detec'])
+c3 (1, ['not ok 19 - F5 c3: a shutdown during profile detection leaves it uninitialized # time=29.3'])
+c4 (1, ['not ok 20 - F5 c4: startLoop on a stopped controller starts nothing # time=9.527ms', 'not ok 29 - timeout!'])
+w7 (1, ['not ok 10 - F5 w7: a read settling after shutdown is cancelled at read level and applies n'])
+w9 (1, ['not ok 15 - F5 w9: a failed initialize is FAILED and its controller shut down # time=31.89'])
+w11 (1, ['not ok 3 - completed startup config reads log no wait_bound_spent # time=104.61ms'])
+f1-rethrow (1, ['not ok 11 - F1: a throw in the apply path is FAILED with the old warning, never unhandled ', 'not ok 15 - F5 w9: a failed initialize is FAILED and its controller shut down # time=25.10', 'not ok 23 - R1 B3 and the equal-val
+r1-held-in-working (1, ['not ok 21 - R1 B1: an on-time bad tick blocks no CDC, and its own CDC heals it # time=105.', 'not ok 22 - R1 B2: a late bad tick blocks no CDC # time=102.864ms', 'not ok 23 - R1 B3 and the equal-value heal: an on-ti
+r1-no-working-fallback (1, ['not ok 21 - R1 B1: an on-time bad tick blocks no CDC, and its own CDC heals it # time=133.', 'not ok 22 - R1 B2: a late bad tick blocks no CDC # time=113.348ms', 'not ok 23 - R1 B3 and the equal-value heal: an o
+r1-held-not-tried (1, ['not ok 2 - row 4: a stored raft timing whose read completes after the bound is applied wit', 'not ok 4 - row 4 ordering: a CDC apply for the key during a late read wins; the late read ', 'not ok 12 - F2: a late value
+r1-held-cleared-on-refusal (1, ['not ok 14 - F2: two late keys that are only valid together are both applied late # time=20', 'not ok 21 - R1 B1: an on-time bad tick blocks no CDC, and its own CDC heals it # time=93.2', 'not ok 23 - R1 B3 a
+r1-own-key-not-replaced (1, ['not ok 21 - R1 B1: an on-time bad tick blocks no CDC, and its own CDC heals it # time=100.'])
+heal-no-equal-value (1, ['not ok 23 - R1 B3 and the equal-value heal: an on-time failed read of a valid durable max ', 'not ok 24 - R1 B4: a late refused min with a failed max blocks no CDC, and heals # time=12'])
+heal-outcome-not-cleared (1, ['not ok 21 - R1 B1: an on-time bad tick blocks no CDC, and its own CDC heals it # time=100.', 'not ok 23 - R1 B3 and the equal-value heal: an on-time failed read of a valid durable max ', 'not ok 24 - R1 B4: a 
+f2-refused-sweep-outcome (1, ['not ok 12 - F2: a late value the sweep refuses is refused, the replicas keep their timing ', 'not ok 13 - F2: invalid timing on time is refused with no sweep # time=25.195ms', 'not ok 21 - R1 B1: an on-time ba
+f2-refused-applied (1, ['not ok 13 - F2: invalid timing on time is refused with no sweep # time=33.229ms'])
+f3-get-overwrites (1, ['not ok 6 - F3 P1: durable 130, CDC 210, the stale read, then CDC 130 converges to 130 # ti', 'not ok 7 - F3: get answers the CDC value, and a delete during a read leaves nothing cached', 'not ok 8 - F3 P4: a stale ad
+f3-wiring-no-check (1, ['not ok 4 - a spent bound starts on the defaults, a CDC apply reaches the replicas, and the', 'not ok 4 - row 4 ordering: a CDC apply for the key during a late read wins; the late read ', 'not ok 6 - F3 P1: durable 1
+f3-no-count (1, ['not ok 4 - a spent bound starts on the defaults, a CDC apply reaches the replicas, and the', 'not ok 4 - row 4 ordering: a CDC apply for the key during a late read wins; the late read ', 'not ok 6 - F3 P1: durable 130, CDC
+w5 (1, ['not ok 9 - F5 w5: a CDC apply while the startup reads are still inside their bound is seen'])
+
+Added for the small attempt after 0e597e055, over the owned-initialization and CDC shape test files:
+base (0, [])
+d1-held-not-dropped (1, ['not ok 28 - D1: a DELETE CDC drops the held value of its key, which never applies later # time=146.4'])
+w1-delete-heals (1, ['not ok 29 - W1: a DELETE CDC does not heal a failed key # time=97.574ms'])
+w1-closed-not-checked (1, ['not ok 30 - W1: a heal overtaken by shutdown applies nothing # time=96.191ms'])

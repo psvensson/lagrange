@@ -50,6 +50,8 @@ export function initializeTestEnvironment() {
   }
 }
 
+let latestMockCache = null;
+
 // Create a mock system table cache
 export function createMockCache(
   nodes = [],
@@ -88,7 +90,7 @@ export function createMockCache(
       new Map(serviceEndpoints.map((row, index) => [index, row])),
   };
 
-  return {
+  const mockCache = {
     get: (tableName, key) => cache[tableName]?.get(key),
     filter: (tableName, predicate) => {
       const table = cache[tableName];
@@ -101,6 +103,8 @@ export function createMockCache(
       return Array.from(table.values());
     },
   };
+  latestMockCache = mockCache;
+  return mockCache;
 }
 
 // Create mock CDC integration service
@@ -257,6 +261,26 @@ export function createMockReadinessService(mockCache) {
   return {
     getNodeReadinessSync,
     getNodeReadiness: async (nodeId) => getNodeReadinessSync(nodeId),
+    answerCommittedNodes() {
+      const activeCache = this.systemTableCache || mockCache;
+      const explicitRows =
+        typeof activeCache?.getAll === 'function' ?
+          activeCache.getAll('nodes') :
+          [];
+      const nodeRows =
+        explicitRows.length > 0 || typeof latestMockCache?.getAll !== 'function' ?
+          explicitRows :
+          latestMockCache.getAll('nodes');
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: 0,
+        },
+        nodeRows,
+      };
+    },
     projectNodeLiveness(nodeId) {
       const readiness = getNodeReadinessSync(nodeId);
       return Object.freeze({

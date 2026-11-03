@@ -39,10 +39,10 @@
     },
     {
       "id": "independent-verification",
-      "passed": false,
-      "evidence": "not yet"
+      "passed": true,
+      "evidence": "subagent:2e7a109c-a051-49d4-81f7-70ac2ff8de55 approved attempt 1b at fa3c87e582cb54313b347fb66e30fde02876464b (diff sha256 c29b11e0c75e440568283c9ea2235ed01fabe14bd230e425f693ca32670cb999; 40/40 focused suite assertions, participant-release-completion-audit PASS, test:static 33/33 PASS)."
     }
   ],
   "evidence": [],
-  "applicability": "Attempt 1 on work/fresh-create-release-authority-20261103; focused lanes green; the live reproducer receipt and independent verification are outstanding."
+  "applicability": "Attempt 1b approved on work/fresh-create-release-authority-20261103; only the live reproducer receipt (reproducer-user-table-founding-released) remains."
 }

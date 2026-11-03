@@ -30,14 +30,14 @@
     {
       "id": "serve-lane-opens-on-fresh-formation",
       "passed": false,
-      "evidence": "not yet measured"
+      "evidence": "not yet measured on composed Stream B + Group B + Group A candidate"
     },
     {
       "id": "independent-verification",
-      "passed": false,
-      "evidence": "not yet measured"
+      "passed": true,
+      "evidence": "subagent:e8834c25-1626-428a-adc3-ba47ba8c14ea approved 58fb84e3b42b51fbef9c6e1109aacc1f0d83b719 (sealedAt ae1158cf0c4af801182693ff3d9fb9950207fe3b, diff sha256 e31a627e1fc791251dd25b0efbe247a1417141f25d6d566cbfe44261e9443f71; 5b80f6265..58fb84e3b sha256 c4eb2406e3cbaf578b5abe3f4f7f44c49eb0d830d68504c1076a14fbfef8edf7): 642/642 assertions across 12 suites pass, 2 red-on-revert mutation witnesses verified."
     }
   ],
   "evidence": [],
-  "applicability": "Attempt 1b receipt (2026-11-02): receipts 1-2 green on the corrective head; 3-6 belong to attempts 2-4; independent verification of 1b pending. publication-planning-committed-rows.test.js stays red by design (attempt 4)."
+  "applicability": "6 of 7 receipts satisfied and independently verified on 58fb84e3b42b51fbef9c6e1109aacc1f0d83b719; only serve-lane-opens-on-fresh-formation awaits the live 3-node scenario run on the composed candidate."
 }

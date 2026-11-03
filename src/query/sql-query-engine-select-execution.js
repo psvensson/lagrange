@@ -20,6 +20,10 @@ import {
   reportConditionWaitSpent,
   selectRequestOptions,
 } from './sql-select-execution-helpers.js';
+import {
+  refreshTableRoutingMetadataFromAuthority,
+  resolveSelectExecutionPlanWithAuthorityRefresh,
+} from './sql-query-engine-metadata-authority-refresh.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
@@ -49,73 +53,13 @@ const {
   isRetryableControlPlaneError,
 } = SQL_QUERY_ENGINE_SHARED;
 
-// ends-on: authoritative table and partition routing metadata query answers
-const METADATA_LOOKUP_TIMEOUT_MS = 2500;
-const LOOKUP_TABLE_SQL = 'SELECT * FROM tables WHERE table_name = ?';
-const LOOKUP_PARTITIONS_SQL = 'SELECT * FROM partitions WHERE table_name = ?';
-const LOOKUP_SERVICES_SQL = 'SELECT * FROM services WHERE service_type = \'partition\'';
-
-async function fetchAuthoritativeTableRows(gateway, targetName) {
-  let timer = null;
-  try {
-    const timeout = new Promise((resolve) => {
-      timer = setTimeout(() => resolve(null), METADATA_LOOKUP_TIMEOUT_MS);
-    });
-    const fetch = Promise.all([
-      gateway.readAuthoritativeRows(TABLES.TABLES, LOOKUP_TABLE_SQL, [targetName]),
-      gateway.readAuthoritativeRows(TABLES.PARTITIONS, LOOKUP_PARTITIONS_SQL, [targetName]),
-      gateway.readAuthoritativeRows(TABLES.SERVICES, LOOKUP_SERVICES_SQL, []),
-    ]);
-    const outcome = await Promise.race([fetch, timeout]);
-    if (timer !== null) clearTimeout(timer);
-    return Array.isArray(outcome) ? outcome : null;
-  } catch {
-    if (timer !== null) clearTimeout(timer);
-    return null;
-  }
-}
-
-function applyTableResultToStore(store, gateway, tableName, result) {
-  if (Array.isArray(result?.rows) && result.rows.length > 0) {
-    gateway.applySystemTableRowsToCache?.(store, tableName, result.rows);
-    return true;
-  }
-  return false;
-}
-
-function applyAuthoritativeRowsToStore(store, gateway, outcome) {
-  if (!Array.isArray(outcome)) return false;
-  const [tableResult, partitionResult, serviceResult] = outcome;
-  const tableApplied =
-    applyTableResultToStore(store, gateway, TABLES.TABLES, tableResult);
-  const partitionApplied =
-    applyTableResultToStore(store, gateway, TABLES.PARTITIONS, partitionResult);
-  const serviceApplied =
-    applyTableResultToStore(store, gateway, TABLES.SERVICES, serviceResult);
-  return tableApplied || partitionApplied || serviceApplied;
-}
-
 class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
-  async refreshTableRoutingMetadataFromAuthority(tableName) {
-    const gateway =
-      this.getControlPlaneSystemTableGateway?.() ||
-      this.controlPlaneSystemTableGateway ||
-      null;
-    const store =
-      this.cdcIntegrationService?.cacheMutationTarget ||
-      this.systemCache ||
-      null;
-    if (
-      !gateway ||
-      typeof gateway.readAuthoritativeRows !== 'function' ||
-      !store ||
-      typeof tableName !== 'string' ||
-      tableName.length === 0
-    ) {
-      return false;
-    }
-    const outcome = await fetchAuthoritativeTableRows(gateway, tableName);
-    return applyAuthoritativeRowsToStore(store, gateway, outcome);
+  async refreshTableRoutingMetadataFromAuthority(tableName, queryOptions = {}) {
+    return refreshTableRoutingMetadataFromAuthority(
+      this,
+      tableName,
+      queryOptions,
+    );
   }
   /**
    * Create one control-plane timeout budget.
@@ -328,8 +272,6 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     }
 
     const tableName = ast.from.name;
-    const tableInfo = this.getTableInfo(tableName);
-    const dualWriteMode = this.isDualWriteModeActiveForTable(tableInfo);
     const authoritativeLocalResult = transactionRead ? null :
       await this.tryExecuteAuthoritativeSystemTableSelect(
         tableName,
@@ -342,40 +284,22 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       return authoritativeLocalResult;
     }
 
-    const planningStartTimeMs = Date.now();
-    const distributedPlan = this.distributedQueryPlanner.planSelect(
-      ast,
-      params,
-      {sessionId},
-    );
-    const planningDurationMs = Date.now() - planningStartTimeMs;
-    const rootAlias = ast.from.alias || tableName;
-    let rootPlan =
-      distributedPlan.tablePlans.get(rootAlias) ||
-      distributedPlan.tablePlans.get(tableName) ||
-      null;
-
-    if (!rootPlan || rootPlan.partitions.length === 0) {
-      if (await this.refreshTableRoutingMetadataFromAuthority(tableName)) {
-        const rePlan = this.distributedQueryPlanner.planSelect(
-          ast,
-          params,
-          {sessionId},
-        );
-        rootPlan =
-          rePlan.tablePlans.get(rootAlias) ||
-          rePlan.tablePlans.get(tableName) ||
-          null;
-      }
+    const planResolution =
+      await resolveSelectExecutionPlanWithAuthorityRefresh(
+        this,
+        ast,
+        params,
+        {sessionId, queryOptions},
+      );
+    if (planResolution.settled) {
+      return planResolution.response;
     }
-
-    if (!rootPlan || rootPlan.partitions.length === 0) {
-      return {
-        success: false,
-        error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
-        errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
-      };
-    }
+    const {
+      distributedPlan,
+      rootPlan,
+      dualWriteMode,
+      planningDurationMs,
+    } = planResolution;
 
     const partitionIds = rootPlan.partitions;
 
@@ -396,8 +320,6 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       queryOptions,
       transactionRead,
     );
-    const joinPlanFailure = this.validateSelectJoinPlans(ast, distributedPlan);
-    if (joinPlanFailure) return joinPlanFailure;
 
     if (transactionRead) {
       const allParticipants = Array.from(distributedPlan.tablePlans.values())

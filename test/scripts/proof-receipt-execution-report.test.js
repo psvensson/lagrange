@@ -18,6 +18,7 @@ import {test} from 'node:test';
 
 import {
   OUTCOME, PROOF, buildReceipt, buildTagBody, proofRef, recordProof, resolveProof,
+  subjectCorpusFiles,
 } from '../../scripts/proof-authority.js';
 import {computeReleaseProofIdentity} from '../../scripts/release-proof-identity.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
@@ -174,6 +175,79 @@ test('skipped-file: a planned file without a result mints no receipt', () => {
   assertRefused(context, mutated(context, (report) => {
     report.runs[0].results.pop();
   }), 'execution-report-planned-file-not-executed');
+});
+
+test('omitted-required-file: a corpus file omitted from both planned and runs mints no receipt',
+  async () => {
+    const {executionReportProblems} = await import('../../scripts/test-execution-report.js');
+    const context = fixture();
+    const omitted = 'test/c.test.js';
+    const checked = executionReportProblems(validExecutionReport(context), {
+      sha: context.sha,
+      tree: context.tree,
+      requiredFiles: [REPORT_FILE_A, REPORT_FILE_B, omitted],
+    });
+    assert.deepEqual(checked.problems, [
+      {code: 'execution-report-planned-file-not-executed', detail: omitted},
+    ]);
+
+    const unplannedOnly = mutated(context, (report) => {
+      report.runs[0].planned = [...report.runs[0].planned, omitted];
+      report.runs[0].results.push(passingResult(omitted));
+    });
+    assert.deepEqual(executionReportProblems(unplannedOnly, {
+      sha: context.sha,
+      tree: context.tree,
+      requiredFiles: [REPORT_FILE_A, REPORT_FILE_B, omitted],
+    }).problems, [
+      {code: 'execution-report-planned-file-not-executed', detail: omitted},
+    ]);
+
+    for (const file of [REPORT_FILE_A, REPORT_FILE_B, omitted]) {
+      const target = path.join(context.source, file);
+      fs.mkdirSync(path.dirname(target), {recursive: true});
+      fs.writeFileSync(target, '// corpus test\n');
+    }
+    git(context.source, 'add', 'test');
+    git(context.source, 'commit', '--quiet', '-m', 'corpus with three tests');
+    const sha = git(context.source, 'rev-parse', 'HEAD');
+    const tree = git(context.source, 'rev-parse', 'HEAD^{tree}');
+    const subjectContext = {...context, sha, tree};
+    assertRefused(subjectContext, validExecutionReport(subjectContext),
+      'execution-report-planned-file-not-executed');
+  });
+
+test('subject-corpus-unreadable: plumbing failure reading subject tree or shard fails closed', () => {
+  const context = fixture();
+  const brokenLsTree = () => ({status: 128, stdout: '', stderr: 'fatal: not a tree object'});
+  assert.deepEqual(subjectCorpusFiles({sha: context.sha, cwd: context.source, git: brokenLsTree}), {
+    ok: false,
+    reason: 'subject-corpus-unreadable',
+    files: [],
+  });
+  const brokenShardShow = (args) => args[0] === 'ls-tree' ?
+    {status: 0, stdout: 'test/a.test.js\ntest/shards/convergence-probes.txt\n', stderr: ''} :
+    {status: 128, stdout: '', stderr: 'fatal: bad blob'};
+  assert.deepEqual(
+    subjectCorpusFiles({sha: context.sha, cwd: context.source, git: brokenShardShow}),
+    {ok: false, reason: 'subject-corpus-unreadable', files: []},
+  );
+  assert.throws(() => recordProof({
+    proofId: PROOF.CORPUS_FULL,
+    sha: context.sha,
+    report: validExecutionReport(context),
+    cwd: context.source,
+    now: NOW,
+    git: (args) => args[0] === 'ls-tree' ?
+      {status: 128, stdout: '', stderr: 'fatal: unreadable tree'} :
+      {status: 0, stdout: `${context.tree}\n`, stderr: ''},
+  }), (error) => {
+    assert.equal(error?.code, 'proof-record-refused');
+    assert.ok(error.problems.some((problem) =>
+      problem.code === 'execution-report-planned-file-not-executed' &&
+      problem.detail === 'subject-corpus-unreadable'));
+    return true;
+  });
 });
 
 test('zero-assertion: a pass with no assertions mints no receipt', () => {

@@ -8,6 +8,11 @@ import {
   clearRegisteredControlPlaneSystemTableGateway,
   registerControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-gateway-registry.js';
+import {
+  CDC_PROPAGATION_DELIVERY_PRIORITY,
+  CDC_PROPAGATION_DELIVERY_STATE,
+  resolveCdcPropagationDeliveryProfile,
+} from '../../src/cache/cdc-propagation-delivery-profile.js';
 import './admin-control-snapshot-publication-convergence-test-cases.js';
 import './admin-control-snapshot-repair-handoff-outcome-test-cases.js';
 import './admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js';
@@ -20,106 +25,103 @@ registerAdminControlSnapshotTailTests({
   CONTROL_PLANE_READINESS_DIMENSION,
 });
 
-test('AdminControlSnapshot queries authoritative services and replica operations and updates cache', async (t) => {
-  const cachedServices = [{service_id: 's-cached', state: 'active'}];
-  const authoritativeServices = [{service_id: 's-auth', state: 'active'}];
-  const cachedOps = [{operation_id: 'op-cached', state: 'active'}];
-  const authoritativeOps = [{operation_id: 'op-auth', state: 'active'}];
-  const cacheMutations = [];
-
-  const cache = {
-    getAll(table) {
-      if (table === TABLES.NODES) return [{node_id: 'n1', status: 'active'}, {node_id: 'n2', status: 'active'}];
-      if (table === TABLES.SERVICES) return cachedServices;
-      if (table === TABLES.REPLICA_OPERATIONS) return cachedOps;
-      return [];
-    },
-  };
-  const gateway = {
-    async querySystemTable(tableName) {
-      if (tableName === TABLES.SERVICES) return {rows: authoritativeServices};
-      if (tableName === TABLES.REPLICA_OPERATIONS) return {rows: authoritativeOps};
-      return {rows: []};
-    },
-    applySystemTableRowsToCache(target, tableName, rows) {
-      cacheMutations.push({tableName, rows});
-    },
-  };
-
-  const snapshot = new AdminControlSnapshot({
-    systemTableCache: cache,
-    controlPlaneSystemTableGateway: gateway,
-    nowFn: () => 1000,
-  });
-
-  const res = await snapshot.buildLocalControlSnapshot({});
-  t.ok(res, 'should return control snapshot');
-  t.equal(cacheMutations.length, 2, 'should apply services and operations to cache');
-  t.equal(cacheMutations[0].tableName, TABLES.SERVICES);
-  t.equal(cacheMutations[1].tableName, TABLES.REPLICA_OPERATIONS);
-});
-
-test('AdminControlSnapshot falls back to cached services and replica operations when querySystemTable fails', async (t) => {
-  const cachedServices = [{service_id: 's-cached', state: 'active'}];
-  const cachedOps = [{operation_id: 'op-cached', state: 'active'}];
-
-  const cache = {
-    getAll(table) {
-      if (table === TABLES.NODES) return [{node_id: 'n1', status: 'active'}, {node_id: 'n2', status: 'active'}];
-      if (table === TABLES.SERVICES) return cachedServices;
-      if (table === TABLES.REPLICA_OPERATIONS) return cachedOps;
-      return [];
-    },
-  };
-  const gateway = {
-    async querySystemTable() {
-      throw new Error('db unavailable');
-    },
-  };
-
-  const snapshot = new AdminControlSnapshot({
-    systemTableCache: cache,
-    controlPlaneSystemTableGateway: gateway,
-    nowFn: () => 1000,
-  });
-
-  const res = await snapshot.buildLocalControlSnapshot({});
-  t.ok(res, 'should fall back to cached services and operations');
-});
-
-test('AdminControlSnapshot late-resolves gateway from global registry when constructed without one', async (t) => {
-  clearRegisteredControlPlaneSystemTableGateway();
-  const authServices = [{service_id: 'late-auth', state: 'active'}];
-  const applied = [];
-  const lateGateway = {
-    async querySystemTable(tbl) {
-      return tbl === TABLES.SERVICES ? {rows: authServices} : {rows: []};
-    },
-    applySystemTableRowsToCache(target, tbl, rows) {
-      applied.push({tbl, rows});
-    },
-  };
-
-  const cache = {
-    getAll: (table) => {
-      if (table === TABLES.NODES) return [{node_id: 'n1', status: 'active'}, {node_id: 'n2', status: 'active'}];
-      return [];
-    },
-  };
-
-  const snapshot = new AdminControlSnapshot({
-    systemTableCache: cache,
-    nowFn: () => 2000,
-  });
-
-  registerControlPlaneSystemTableGateway(lateGateway);
-  try {
-    const res = await snapshot.buildLocalControlSnapshot({});
-    t.ok(res, 'snapshot built successfully');
-    t.equal(applied.length, 2, 'authoritative tables applied via late-resolved gateway');
-    t.equal(applied[0].tbl, TABLES.SERVICES);
-  } finally {
+test(
+  'AdminControlSnapshot buildLocalControlSnapshot is a non-mutating observation path over systemTableCache',
+  async (t) => {
     clearRegisteredControlPlaneSystemTableGateway();
-  }
-});
+    const cachedServices = [{service_id: 's-cached', state: 'active'}];
+    const cachedOps = [{operation_id: 'op-cached', state: 'active'}];
+    let queryCalls = 0;
+    let cacheMutationCalls = 0;
+
+    const cache = {
+      getAll(table) {
+        if (table === TABLES.NODES) {
+          return [
+            {node_id: 'n1', status: 'active'},
+            {node_id: 'n2', status: 'active'},
+          ];
+        }
+        if (table === TABLES.SERVICES) return cachedServices;
+        if (table === TABLES.REPLICA_OPERATIONS) return cachedOps;
+        return [];
+      },
+      applySystemTableChange() {
+        cacheMutationCalls += 1;
+      },
+    };
+    const gateway = {
+      async querySystemTable() {
+        queryCalls += 1;
+        return {rows: [{service_id: 's-auth', state: 'active'}]};
+      },
+      applySystemTableRowsToCache() {
+        cacheMutationCalls += 1;
+      },
+    };
+
+    registerControlPlaneSystemTableGateway(gateway);
+    try {
+      const snapshot = new AdminControlSnapshot({
+        systemTableCache: cache,
+        controlPlaneSystemTableGateway: gateway,
+        nowFn: () => 1000,
+      });
+
+      const res = await snapshot.buildLocalControlSnapshot({});
+      t.ok(res, 'should return control snapshot');
+      t.equal(
+        queryCalls,
+        0,
+        'buildLocalControlSnapshot must not query authoritative services/operations directly',
+      );
+      t.equal(
+        cacheMutationCalls,
+        0,
+        'buildLocalControlSnapshot must not mutate shared systemTableCache during observation',
+      );
+    } finally {
+      clearRegisteredControlPlaneSystemTableGateway();
+    }
+  },
+);
+
+test(
+  'resolveCdcPropagationDeliveryProfile classifies control_plane_publications, replica_operations, and tables as critical_visibility and non-critical tables as standard_visibility',
+  async (t) => {
+    for (const criticalTable of [
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      TABLES.REPLICA_OPERATIONS,
+      TABLES.TABLES,
+    ]) {
+      const profile = resolveCdcPropagationDeliveryProfile([
+        {tableName: criticalTable, operation: 'UPSERT', data: {}},
+      ]);
+      t.equal(
+        profile.state,
+        CDC_PROPAGATION_DELIVERY_STATE.CRITICAL_VISIBILITY,
+        `${criticalTable} must use CRITICAL_VISIBILITY`,
+      );
+      t.equal(
+        profile.deliveryPriority,
+        CDC_PROPAGATION_DELIVERY_PRIORITY.CRITICAL,
+        `${criticalTable} must use CRITICAL deliveryPriority`,
+      );
+    }
+
+    const standardProfile = resolveCdcPropagationDeliveryProfile([
+      {tableName: TABLES.LOGS, operation: 'UPSERT', data: {}},
+    ]);
+    t.equal(
+      standardProfile.state,
+      CDC_PROPAGATION_DELIVERY_STATE.STANDARD_VISIBILITY,
+      'non-critical system tables must remain STANDARD_VISIBILITY',
+    );
+    t.equal(
+      standardProfile.deliveryPriority,
+      CDC_PROPAGATION_DELIVERY_PRIORITY.BACKGROUND,
+      'non-critical system tables must remain BACKGROUND deliveryPriority',
+    );
+  },
+);
 

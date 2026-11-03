@@ -75,6 +75,24 @@ function readinessService(options = {}) {
   const fallbackDimensionsSatisfied =
     options.fallbackDimensionsSatisfied === true;
   return {
+    answerCommittedNodes() {
+      const committedLeaseMs = Date.now() + 60_000;
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: 0,
+        },
+        nodeRows: nodeRows().map((row) => ({
+          ...row,
+          ready_lease_expires_at:
+            eligibleNodeIds.has(row.node_id) ?
+              committedLeaseMs :
+              EXPIRED_LEASE,
+        })),
+      };
+    },
     getNodeReadinessSync(nodeId) {
       const recoveryEligible = eligibleNodeIds.has(nodeId);
       const sourceNode = nodeId === 'node-1';

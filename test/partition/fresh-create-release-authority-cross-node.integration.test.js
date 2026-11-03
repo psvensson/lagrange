@@ -17,6 +17,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {INITIAL_PARTITION_IDS, REPLICA_OPERATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {TABLES} from '../../src/constants/tables.js';
@@ -327,4 +329,118 @@ test('8: a fresh group whose committed configuration gained a non-founder ' +
   const {answer, error} = await releaseOutcome(group, 1, await group.evidenceFor(1));
   assert.equal(error, null, `release failed: ${error?.message}`);
   assert.equal(answer.outcome, OUTCOME.CUT_OVER);
+});
+
+test('11: a create no longer open is refused on a group that already has an origin',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    environment(t);
+    const group = await formFoundingGroup(t, {founderCount: 3});
+    const evidenceC = await group.evidenceFor(2);
+    const first = await releaseOutcome(group, 1, await group.evidenceFor(1));
+    assert.equal(first.answer?.outcome, OUTCOME.CUT_OVER, 'setup: the group is released');
+    assert.notEqual(readPartitionWriteOrigin(group.services[0].db), null, 'setup: origin');
+    group.rows[2].completed_at = group.rows[2].created_at + 20;
+    group.rows[2].create_admission_state = 'CLOSED';
+    const {answer, error} = await releaseOutcome(group, 2, evidenceC, 4000);
+    assert.equal(answer, null, 'a closed create never releases');
+    assert.match(String(error?.message), /create_operation_not_open/u);
+  });
+
+test('11b: on an origin group, open joining ADD and REPLACE release while ' +
+  'tampered identity and unavailable authority are refused',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const faults = {};
+  const group = await formFoundingGroup(t, {founderCount: 3, faults,
+    rowOverrides: {2: {stampKind: 'committed'}}});
+  const evidenceC = await group.evidenceFor(2);
+  const first = await releaseOutcome(group, 1, await group.evidenceFor(1));
+  assert.equal(first.answer?.outcome, OUTCOME.CUT_OVER);
+  assert.notEqual(readPartitionWriteOrigin(group.services[0].db), null);
+
+  const forged = await askLeader(group, 2, 0,
+    identityOf(evidenceC, {admissionToken: 'forged-on-origin'}));
+  assert.equal(forged?.outcome, OUTCOME.OPERATOR_REQUIRED);
+  assert.equal(forged?.reason, 'create_operation_identity_mismatch');
+
+  faults[group.nodes[0]] = {refusals: 1};
+  const unavailable = await askLeader(group, 2, 0, identityOf(evidenceC));
+  assert.equal(unavailable?.outcome, OUTCOME.UNAVAILABLE);
+  assert.equal(unavailable?.missingFact, CREATE_ADMISSION_AUTHORITY);
+
+  const joined = await releaseOutcome(group, 2, evidenceC);
+  assert.equal(joined.error, null, `joining ADD on origin group failed: ${joined.error?.message}`);
+  assert.equal(joined.answer?.outcome, OUTCOME.CUT_OVER);
+
+  group.rows[2].type = 'REPLACE';
+  group.rows[2].steps_history = '[]';
+  const replaced = await releaseOutcome(group, 2, evidenceC);
+  assert.equal(replaced.error, null, `REPLACE on origin group failed: ${replaced.error?.message}`);
+  assert.equal(replaced.answer?.outcome, OUTCOME.CUT_OVER);
+});
+
+function insertOperationRow(db, row) {
+  const columns = Object.keys(row);
+  const placeholders = columns.map(() => '?').join(', ');
+  db.prepare(`INSERT INTO replica_operations (${columns.join(', ')}) ` +
+    `VALUES (${placeholders})`).run(...columns.map((column) => row[column]));
+}
+
+test('13: a fresh CREATE release of replica_operations-p1 reads its own local ' +
+  'committed leader without a gateway read cycle, and refuses once closed',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const faults = {};
+  const opsPartitionId = INITIAL_PARTITION_IDS[TABLES.REPLICA_OPERATIONS];
+  const opsReplicaId = `${opsPartitionId}-founder-a`;
+  const opsRow = founderOperationRow({replicaId: opsReplicaId,
+    nodeId: 'founder-node-a', founders: [opsReplicaId],
+    founderNodes: {[opsReplicaId]: 'founder-node-a'},
+    partitionId: opsPartitionId});
+  const group = await formFoundingGroup(t, {faults, extraRows: [opsRow]});
+  const first = await releaseOutcome(group, 1, await group.evidenceFor(1));
+  assert.equal(first.answer?.outcome, OUTCOME.CUT_OVER);
+  const opsEvidence = await group.handlers[0].getReplicaCreateAdmissionOwner()
+    .authorizeParticipantRelease({operationId: opsRow.operation_id,
+      operationType: opsRow.type, entityType: opsRow.entity_type,
+      entityId: opsRow.entity_id, partitionId: opsRow.partition_id,
+      replicaId: opsRow.replica_id, targetNodeId: opsRow.target_node_id,
+      admissionToken: opsRow.create_admission_token,
+      replicaCreatedAt: opsRow.create_admission_replica_created_at});
+  assert.ok(opsEvidence, 'setup: replica_operations founder holds admission evidence');
+
+  const opsService = new PartitionService({partitionId: opsPartitionId,
+    replicaId: opsReplicaId, replicaIds: [opsReplicaId],
+    peerAddresses: [`${group.nodes[0]}/partition/${opsReplicaId}`],
+    nodeId: group.nodes[0], tableId: TABLES.REPLICA_OPERATIONS,
+    tableName: TABLES.REPLICA_OPERATIONS, schema: REPLICA_OPERATIONS_SCHEMA,
+    systemTableCache: new SystemTableCache(), transport: group.transport,
+    dbPath: `${group.directory}/${opsReplicaId}.sqlite`, deferElection: false,
+    bootstrapMembership: genesisStamp([opsReplicaId], {[opsReplicaId]: group.nodes[0]})});
+  t.after(() => opsService.shutdown().catch(() => {}));
+  await opsService.initialize();
+  assert.equal(await waitForCondition(() =>
+    opsService.raft.readStatus().role === 'leader', BUDGET_MS), true);
+  insertOperationRow(opsService.db, opsRow);
+  group.handlers[0].replaceLocalReplicaService(opsReplicaId, opsService);
+
+  faults[group.nodes[0]] = {refusals: Infinity};
+  const released = await group.handlers[0].participantReleaseRecovery
+    .releaseFreshCreate(opsPartitionId, {createAdmissionEvidence: opsEvidence,
+      identityExisted: false, deadlineAtMs: Date.now() + BUDGET_MS});
+  assert.equal(released.outcome, OUTCOME.CUT_OVER);
+  assert.notEqual(readPartitionWriteOrigin(opsService.db), null);
+  assert.equal(faults[group.nodes[0]].refused ?? 0, 0,
+    'no gateway RPC read cycle occurred during replica_operations release');
+
+  opsService.db.prepare('UPDATE replica_operations SET completed_at = ?, ' +
+    'create_admission_state = ? WHERE operation_id = ?')
+    .run(opsRow.created_at + 20, 'CLOSED', opsRow.operation_id);
+  await assert.rejects(
+    group.handlers[0].participantReleaseRecovery.releaseFreshCreate(
+      opsPartitionId, {createAdmissionEvidence: opsEvidence,
+        identityExisted: false, deadlineAtMs: Date.now() + 4000}),
+    /create_operation_not_open/u,
+  );
+  assert.equal(faults[group.nodes[0]].refused ?? 0, 0);
 });

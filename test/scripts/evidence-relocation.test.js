@@ -14,7 +14,9 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {execGit} from '../../scripts/checks/git-invocation.js';
-import {evidenceRelocate} from '../../scripts/solve/commands.js';
+import {
+  LAND_LOCK_STALE_MS, acquireLandingLock, evidenceRelocate, isLockStale,
+} from '../../scripts/solve/commands.js';
 import {
   MEMBER_MISMATCH, RELOCATION, RELOCATION_REFUSAL, bundleBasename, parsePathsList,
   relocationRefusals, sha256Of, sourceBlobs, sourceRefusals, verifyRelocationBundle,
@@ -242,4 +244,94 @@ test('a relocation recorded by a quest leaves nothing under that quest\'s eviden
   const evidence = path.join(root, 'solve/quests', QUEST, 'evidence');
   assert.deepEqual(fs.readdirSync(evidence), ['receipt.json'],
     'the uploading quest keeps only its required receipt');
+});
+
+test('landing lock custody never evicts a verified live holder by wall-clock age', (t) => {
+  const {root} = repository(t);
+  const createdAt = 1_000;
+  const pastStale = createdAt + LAND_LOCK_STALE_MS + 60_000;
+  const verifiedHolder = {
+    pid: process.pid,
+    pidStartTime: '424242',
+    pidNamespace: 'pid:[4026531836]',
+    createdAt,
+  };
+  const liveVerified = () => ({
+    alive: true,
+    pidStartTime: '424242',
+    pidNamespace: 'pid:[4026531836]',
+    isKernelThread: false,
+  });
+  assert.equal(isLockStale(verifiedHolder, pastStale, liveVerified), false,
+    'a live lock holder with verified identity is never stale past LAND_LOCK_STALE_MS');
+
+  const deadHolder = () => ({
+    alive: false,
+    pidStartTime: null,
+    pidNamespace: null,
+    isKernelThread: false,
+  });
+  assert.equal(isLockStale(verifiedHolder, createdAt + 10, deadHolder), true,
+    'a dead PID is stale immediately');
+
+  const reusedStartTime = () => ({
+    alive: true,
+    pidStartTime: '999999',
+    pidNamespace: 'pid:[4026531836]',
+    isKernelThread: false,
+  });
+  assert.equal(isLockStale(verifiedHolder, createdAt + 10, reusedStartTime), true,
+    'a reused PID with mismatched pidStartTime is stale');
+
+  const mismatchedNamespace = () => ({
+    alive: true,
+    pidStartTime: '424242',
+    pidNamespace: 'pid:[4026539999]',
+    isKernelThread: false,
+  });
+  assert.equal(isLockStale(verifiedHolder, createdAt + 10, mismatchedNamespace), true,
+    'a PID in another namespace is stale');
+
+  const missingLiveNamespace = () => ({
+    alive: true,
+    pidStartTime: '424242',
+    pidNamespace: null,
+    isKernelThread: false,
+  });
+  assert.equal(isLockStale(verifiedHolder, pastStale, missingLiveNamespace), true,
+    'asymmetric pidNamespace (recorded present, live null) is not verified past LAND_LOCK_STALE_MS');
+
+  const missingRecordedNamespace = {...verifiedHolder, pidNamespace: null};
+  assert.equal(isLockStale(missingRecordedNamespace, pastStale, liveVerified), true,
+    'asymmetric pidNamespace (recorded null, live present) is not verified past LAND_LOCK_STALE_MS');
+
+  let currentClock = createdAt;
+  const held = acquireLandingLock(root, {
+    id: 'q-long-running',
+    now: () => currentClock,
+    inspectPid: liveVerified,
+  });
+  currentClock = pastStale;
+  assert.throws(() => acquireLandingLock(root, {
+    id: 'q-contender',
+    now: () => currentClock,
+    lockTimeoutMs: 20,
+    lockPollMs: 5,
+    sleep: () => {
+      currentClock += 10;
+    },
+    inspectPid: liveVerified,
+  }), /could not acquire landing lock/u,
+  'contender refuses instead of evicting a verified live holder past LAND_LOCK_STALE_MS');
+  const savedLock = fs.readFileSync(held.lockPath, 'utf8');
+  fs.writeFileSync(held.lockPath, JSON.stringify({
+    ...JSON.parse(savedLock),
+    pidNamespace: 'pid:[4026539999]',
+  }));
+  held.release();
+  assert.equal(fs.existsSync(held.lockPath), true,
+    'release refuses to unlink a lock whose pidNamespace no longer matches self');
+  fs.writeFileSync(held.lockPath, savedLock);
+  held.release();
+  assert.equal(fs.existsSync(held.lockPath), false);
 });

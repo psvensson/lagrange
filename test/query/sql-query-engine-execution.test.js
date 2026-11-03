@@ -547,6 +547,7 @@ test('SQLQueryEngine - resolves partitions when table metadata is only available
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const result = await engine.executeQuery('SELECT * FROM users');
@@ -838,6 +839,7 @@ test('SQLQueryEngine - returns error for non-existent table', async (t) => {
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const result = await engine.executeQuery('SELECT * FROM nonexistent');
@@ -992,6 +994,7 @@ test('SQLQueryEngine - returns empty array when no partitions found in cache', a
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const result = await engine.executeQuery('SELECT * FROM users');

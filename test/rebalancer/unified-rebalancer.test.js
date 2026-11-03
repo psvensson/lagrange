@@ -430,6 +430,20 @@ function createTestRebalancer(options = {}) {
   };
   const mockReadinessService = controlPlaneReadinessService ||
     createMockReadinessService(mockCache);
+  if (mockReadinessService && typeof mockReadinessService === 'object') {
+    mockReadinessService.systemTableCache = mockCache;
+    if (typeof mockReadinessService.answerCommittedNodes !== 'function') {
+      mockReadinessService.answerCommittedNodes = () => ({
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: 0,
+        },
+        nodeRows: mockCache.getAll('nodes'),
+      });
+    }
+  }
 
   return new UnifiedRebalancer({
     entityId,

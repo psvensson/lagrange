@@ -20,12 +20,14 @@ import {
 } from './sql-locking-read-execution.js';
 import {releaseTransactionReservations} from
   '../partition/partition-locking-read-reservation.js';
+import {
+  resolveWriteExecutionPlanWithAuthorityRefresh,
+} from './sql-query-engine-metadata-authority-refresh.js';
 
 
 const {
   QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_OPERATION,
   WRITE_TRACKING_EXCLUDED_TABLES,
@@ -267,33 +269,26 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
    */
   async executeInsert(ast, params, sessionId, queryOptions = {}) {
     const tableName = ast.table;
-    const tableInfo = this.getTableInfo(tableName);
-    const dualWriteMigration = this.getActiveDualWriteMigration(tableInfo);
-    const planningStartTimeMs = Date.now();
-    const distributedPlan = this.distributedQueryPlanner.planInsert(
+    const planResolution = await resolveWriteExecutionPlanWithAuthorityRefresh(
+      this,
       ast,
       params,
-      {sessionId},
+      {
+        sessionId,
+        queryOptions,
+        planStatement: (planner, statementAst, statementParams, planOptions) =>
+          planner.planInsert(statementAst, statementParams, planOptions),
+      },
     );
-    const planningDurationMs = Date.now() - planningStartTimeMs;
-    let tablePlan = distributedPlan.tablePlans.get(tableName) || null;
-    if (!tablePlan || tablePlan.partitions.length === 0) {
-      if (await this.refreshTableRoutingMetadataFromAuthority?.(tableName)) {
-        const rePlan = this.distributedQueryPlanner.planInsert(
-          ast,
-          params,
-          {sessionId},
-        );
-        tablePlan = rePlan.tablePlans.get(tableName) || null;
-      }
+    if (planResolution.settled) {
+      return planResolution.response;
     }
-    if (!tablePlan || tablePlan.partitions.length === 0) {
-      return {
-        success: false,
-        error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
-        errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
-      };
-    }
+    const {
+      distributedPlan,
+      tableInfo,
+      dualWriteMigration,
+      planningDurationMs,
+    } = planResolution;
     const writePlan = this.distributedWriteCoordinator.createWritePlan(
       ast,
       params,
@@ -376,36 +371,26 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     statementType) {
     const statement = PARTITION_ROUTED_WRITE[statementType];
     const tableName = ast.table;
-    const tableInfo = this.getTableInfo(tableName);
-    const dualWriteMigration = this.getActiveDualWriteMigration(tableInfo);
-    const planningStartTimeMs = Date.now();
-    const distributedPlan = statement.plan(
-      this.distributedQueryPlanner,
+    const planResolution = await resolveWriteExecutionPlanWithAuthorityRefresh(
+      this,
       ast,
       params,
-      {sessionId},
+      {
+        sessionId,
+        queryOptions,
+        planStatement: statement.plan,
+      },
     );
-    const planningDurationMs = Date.now() - planningStartTimeMs;
-
-    let tablePlan = distributedPlan.tablePlans.get(tableName) || null;
-    if (!tablePlan || tablePlan.partitions.length === 0) {
-      if (await this.refreshTableRoutingMetadataFromAuthority?.(tableName)) {
-        const rePlan = statement.plan(
-          this.distributedQueryPlanner,
-          ast,
-          params,
-          {sessionId},
-        );
-        tablePlan = rePlan.tablePlans.get(tableName) || null;
-      }
+    if (planResolution.settled) {
+      return planResolution.response;
     }
-    if (!tablePlan || tablePlan.partitions.length === 0) {
-      return {
-        success: false,
-        error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
-        errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
-      };
-    }
+    const {
+      distributedPlan,
+      tablePlan,
+      tableInfo,
+      dualWriteMigration,
+      planningDurationMs,
+    } = planResolution;
 
     const partitionIds = tablePlan.partitions;
     const writePlan = this.distributedWriteCoordinator.createWritePlan(

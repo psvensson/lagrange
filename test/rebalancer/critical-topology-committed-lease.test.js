@@ -8,6 +8,10 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  SERVE_ELIGIBILITY_STATE,
+  SERVE_ELIGIBILITY_UNAVAILABLE_REASON,
+} from '../../src/control-plane/serve-eligibility-owner.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 
@@ -327,6 +331,69 @@ test(
       rebalancer.currentInterval,
       initialInterval,
       'interval should be unchanged (no 75s defer)',
+    );
+    t.end();
+  },
+);
+
+test(
+  'Attempt 3 (e): unavailable answerCommittedNodes answers unavailable settle blocker and [] candidate rows without reading cache nodes',
+  async (t) => {
+    initEnv();
+    let nodesCacheReads = 0;
+    const baseCache = createCache();
+    const cache = {
+      ...baseCache,
+      getAll(tableName) {
+        if (tableName === 'nodes') {
+          nodesCacheReads += 1;
+        }
+        return baseCache.getAll(tableName);
+      },
+    };
+    const rebalancer = createRebalancer({
+      cache,
+      controlPlaneReadinessService: {
+        answerCommittedNodes() {
+          return {
+            state: SERVE_ELIGIBILITY_STATE.UNAVAILABLE,
+            reason: SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE,
+            epoch: null,
+            retryAfterMs: 1000,
+            nodeRows: [],
+          };
+        },
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            },
+            reasons: [],
+          };
+        },
+        getStartupAuthoritySnapshotSync() {
+          return null;
+        },
+      },
+    });
+
+    nodesCacheReads = 0;
+    const blocker = rebalancer.getCriticalSystemTopologySettlingBlocker();
+    t.equal(
+      blocker?.reason,
+      'unavailable',
+      'settle blocker is unavailable when answerCommittedNodes is unavailable',
+    );
+    t.same(
+      rebalancer.resolveAvailableNodeCandidateRows(),
+      [],
+      'resolveAvailableNodeCandidateRows returns [] when answerCommittedNodes is unavailable',
+    );
+    t.equal(
+      nodesCacheReads,
+      0,
+      'does not fall back to systemTableCache.getAll("nodes")',
     );
     t.end();
   },

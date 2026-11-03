@@ -1,25 +1,31 @@
 import {isFreshSeedMembershipOutcome} from '../bootstrap/rejoin-hints-constants.js';
+import {INITIAL_PARTITION_IDS} from
+  '../bootstrap/system-table-schemas-constants.js';
 import {CREATE_ADMISSION_ERROR_CODE, CREATE_ADMISSION_STATE} from
   './replica-create-admission-owner.js';
 import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from
   '../partition/partition-participant-transaction-cutover-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from '../raft/raft-committed-membership-constants.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
+import {TABLES} from '../constants/tables.js';
 import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus,
   getOperationMetadataObject} from '../rebalancer/replica-status.js';
 
 // Node-local tokens: the startup owner's FRESH_SEED outcome and an explicit
 // operator request, both decided on the node that releases. A fresh CREATE
-// carries no token: its authority is the committed founding create operation,
-// read by whichever leader answers the release (decideFreshCreateRelease).
+// carries no token: its authority is the committed create operation, read by
+// whichever leader answers the release (decideFreshCreateRelease).
 const AUTHORIZATION = new WeakMap();
 const PARTICIPANT_RELEASE_AUTHORIZATION_KIND = Object.freeze({
   FRESH_SEED: 'fresh_seed',
   OPERATOR: 'operator',
 });
-// Why a committed create operation does not authorize a no-origin release.
+// Why a committed create operation does not authorize a fresh CREATE release.
 const FRESH_CREATE_REFUSAL = Object.freeze({
   ABSENT: 'create_operation_absent',
   IDENTITY: 'create_operation_identity_mismatch',
@@ -29,6 +35,10 @@ const FRESH_CREATE_REFUSAL = Object.freeze({
   UNREADABLE: 'create_operation_unreadable',
 });
 const LEADER_NOT_MEMBER = 'create_operation_leader_not_member';
+const REPLICA_OPERATIONS_PARTITION_ID =
+  INITIAL_PARTITION_IDS[TABLES.REPLICA_OPERATIONS];
+const READ_OPERATION_SQL =
+  'SELECT * FROM replica_operations WHERE operation_id = ?';
 const OPEN_CREATE_ADMISSION_STATES = new Set([CREATE_ADMISSION_STATE.MATERIALIZED,
   CREATE_ADMISSION_STATE.ACTIVE]);
 const PARTITION_ENTITY = 'partition';
@@ -70,12 +80,21 @@ function createIsOpen(row) {
     row.status !== ReplicaStatus.FAILED && row.workflow_step !== WORKFLOW_STEP.FAILED;
 }
 
-// (b), (d): a partition ADD whose first step carries a GENESIS stamp. The
+// (b): a partition ADD (or REPLACE once write origin exists) for this leader's
+// partition.
+function isAllowedCreateOperation(row, leader) {
+  if (row.partition_id !== leader.partitionId ||
+      row.entity_type !== PARTITION_ENTITY) {
+    return false;
+  }
+  return leader.hasWriteOrigin === true ?
+    row.type === OperationType.ADD || row.type === OperationType.REPLACE :
+    row.type === OperationType.ADD;
+}
+
+// (d): on a no-origin group, the first step carries a GENESIS stamp. The
 // configuration may have changed since, so the stamp names no required leader.
 function foundingRefusalOf(row) {
-  if (row.type !== OperationType.ADD || row.entity_type !== PARTITION_ENTITY) {
-    return FRESH_CREATE_REFUSAL.NOT_FOUNDING_ADD;
-  }
   const step = firstStepOf(row);
   const stamp = step === null ? null :
     getOperationMetadataObject([step], OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP);
@@ -99,9 +118,65 @@ function rowIsIdentity(row, identity) {
 function rowRefusalOf(row, identity, leader) {
   if (row === null || row === undefined) return FRESH_CREATE_REFUSAL.ABSENT;
   if (!rowIsIdentity(row, identity)) return FRESH_CREATE_REFUSAL.IDENTITY;
-  if (row.partition_id !== leader.partitionId) return FRESH_CREATE_REFUSAL.NOT_FOUNDING_ADD;
+  if (!isAllowedCreateOperation(row, leader)) {
+    return FRESH_CREATE_REFUSAL.NOT_FOUNDING_ADD;
+  }
   if (!createIsOpen(row)) return FRESH_CREATE_REFUSAL.NOT_OPEN;
-  return foundingRefusalOf(row);
+  return leader.hasWriteOrigin === true ? null : foundingRefusalOf(row);
+}
+
+function isLocalCommittedLeaderStatus(status) {
+  return status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    status.role === RAFT_ROLE.LEADER &&
+    !isHeldByHostFailure(status) &&
+    Number.isSafeInteger(status.commitIndex) && status.commitIndex > 0 &&
+    Number.isSafeInteger(status.appliedIndex) &&
+    status.appliedIndex >= status.commitIndex;
+}
+
+function isQueryableOperationsService(service) {
+  return Boolean(
+    service &&
+    service.initialized === true &&
+    service.isShutdown !== true &&
+    service.partitionId === REPLICA_OPERATIONS_PARTITION_ID &&
+    typeof service.executeQuery === 'function',
+  );
+}
+
+function isServiceCommittedLeader(service) {
+  const readStatus = service?.raft?.readStatus;
+  return typeof readStatus === 'function' &&
+    isLocalCommittedLeaderStatus(readStatus.call(service.raft));
+}
+
+function localCommittedOperationsLeader(handler) {
+  const services = handler?.localServices;
+  if (typeof services?.values !== 'function') return null;
+  for (const service of services.values()) {
+    if (isQueryableOperationsService(service) && isServiceCommittedLeader(service)) {
+      return service;
+    }
+  }
+  return null;
+}
+
+function isValidQueryRowsResult(result) {
+  return result?.success === true && Array.isArray(result.rows);
+}
+
+async function readLocalCommittedOperation(service, operationId) {
+  let result;
+  try {
+    result = await service.executeQuery(READ_OPERATION_SQL, [operationId]);
+  } catch (error) {
+    return {unreadable: error};
+  }
+  if (!isServiceCommittedLeader(service) || !isValidQueryRowsResult(result)) {
+    return {deferred: {authorityOutcome: result?.outcome ?? null,
+      authorityError: result?.error ?? null}};
+  }
+  return {row: result.rows.length === 1 ? result.rows[0] : null};
 }
 
 function authorityUnavailable(request, fields) {
@@ -119,6 +194,10 @@ function createParticipantReleaseAuthorizationOwner(handler) {
   }
 
   async function readFoundingOperation(operationId) {
+    const localService = localCommittedOperationsLeader(handler);
+    if (localService !== null) {
+      return readLocalCommittedOperation(localService, operationId);
+    }
     try {
       return {row: await handler.getReplicaCreateAdmissionOwner()
         .readOperation(operationId)};

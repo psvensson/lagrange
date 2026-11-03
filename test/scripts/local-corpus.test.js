@@ -160,7 +160,8 @@ test('a newer publish supersedes a running local corpus', async (t) => {
   // is not a local corpus: neither is signalled, both are lost.
   writeState(stateDir, {sha: '2'.repeat(40), state: 'running', pid: deadPid(), startedAt: 2});
   writeState(stateDir, {sha: '3'.repeat(40), state: 'running', pid: process.pid, startedAt: 1});
-  writeState(stateDir, {sha: '4'.repeat(40), state: 'green', pid: 1, startedAt: 0});
+  writeState(stateDir, {sha: '4'.repeat(40), state: 'green', pid: 1, startedAt: 0,
+    receipt: 'corpus-full-v1'});
 
   // At the start of a publish nothing is signalled: it may never reach main.
   reconcileLocalCorpus(stateDir);
@@ -215,16 +216,27 @@ test('the next publish reports the last local corpus result first', (t) => {
     `publish: !!! the local corpus was RED for ${'2'.repeat(40)}: /l/2.log`,
     `publish: local corpus ${'6'.repeat(40)}: superseded (superseded by ${HEAD})`,
   ], 'every red or lost run since the last green is said first');
-  writeState(stateDir, {sha: '7'.repeat(40), state: 'green', files: 1, startedAt: 7,
-    log: 'x', receipt: 'push refused'});
-  assert.deepEqual(say(), [`publish: local corpus ${'7'.repeat(40)}: green ` +
-    '(receipt not recorded: push refused)'], 'a green answers what came before, and a ' +
-    'receipt it could not record is named');
+  writeState(stateDir, {sha: '7'.repeat(40), state: 'red', files: 1, startedAt: 7,
+    log: 'x', reason: 'proof-receipt-not-recorded', receipt: 'push refused'});
+  assert.deepEqual(say(), [
+    `publish: !!! the local corpus was RED for ${'7'.repeat(40)}: receipt not recorded: push refused`,
+    `publish: !!! the local corpus was LOST for ${'5'.repeat(40)}: the machine stayed too ` +
+      'hot to start it',
+    `publish: !!! the local corpus was LOST for ${'3'.repeat(40)}: its process ended ` +
+      'without a verdict',
+    `publish: !!! the local corpus was RED for ${'2'.repeat(40)}: /l/2.log`,
+    `publish: local corpus ${'7'.repeat(40)}: red (receipt not recorded: push refused)`,
+  ], 'an unrecorded receipt is red, names why, and never silences prior red or lost runs');
+  writeState(stateDir, {sha: '8'.repeat(40), state: 'green', files: 1, startedAt: 8,
+    log: 'x', receipt: 'corpus-full-v1'});
+  assert.deepEqual(say(), [`publish: local corpus ${'8'.repeat(40)}: green ` +
+    '(1 file(s), log x)'], 'only a recorded green receipt answers what came before');
 
   // Only the newest twenty records are kept.
   for (let index = 0; index < 25; index += 1) {
     const sha = String(index).padStart(40, 'f');
-    writeState(stateDir, {sha, state: 'green', files: 1, startedAt: 100 + index, log: 'x'});
+    writeState(stateDir, {sha, state: 'green', files: 1, startedAt: 100 + index, log: 'x',
+      receipt: 'corpus-full-v1'});
     fs.writeFileSync(path.join(stateDir, `${sha}.log`), 'x');
   }
   say();
@@ -293,8 +305,16 @@ test('the local corpus records the whole-corpus receipt only when green', (t) =>
     'the runner\'s refusal is lost, never red: no verdict was reached');
 
   const unrecorded = run({record: 1});
-  assert.deepEqual({state: unrecorded.state.state, receipt: unrecorded.state.receipt},
-    {state: 'green', receipt: 'refused'}, 'the tests passed; the failed recording is named');
+  assert.equal(unrecorded.status, 1, 'a refused proof receipt returns non-zero');
+  assert.deepEqual({
+    state: unrecorded.state.state,
+    reason: unrecorded.state.reason,
+    receipt: unrecorded.state.receipt,
+  }, {
+    state: 'red',
+    reason: 'proof-receipt-not-recorded',
+    receipt: 'refused',
+  }, 'a refused receipt is red, never green, and names the failed recording');
 
   const superseded = run({change: {state: 'superseded', supersededBy: 'b'.repeat(40)}});
   assert.equal(superseded.calls.length, 1, 'a superseded run records nothing');
@@ -491,13 +511,18 @@ test('publishing the same head again starts no second run beside the first', (t)
     'publish: local corpus not started: already running for this commit'), again.lines.join('\n'));
   assert.equal(stateOf(again.stateDir, again.head).state, 'running');
 
-  // A green one covers it as well; a lost one is owed again.
-  writeState(again.stateDir, {...stateOf(again.stateDir, again.head), state: 'green'});
+  // A green one covers it as well; an unrecorded or lost one is owed again.
+  writeState(again.stateDir, {...stateOf(again.stateDir, again.head), state: 'green',
+    receipt: 'corpus-full-v1'});
   again.publish();
   assert.equal(again.spawned.length, 1, 'a proved commit is not proved twice');
+  writeState(again.stateDir, {...stateOf(again.stateDir, again.head), state: 'red',
+    reason: 'proof-receipt-not-recorded', receipt: 'refused'});
+  again.publish();
+  assert.equal(again.spawned.length, 2, 'an unrecorded run does not cover the commit');
   writeState(again.stateDir, {...stateOf(again.stateDir, again.head), state: 'lost'});
   again.publish();
-  assert.equal(again.spawned.length, 2, 'a lost run is started again');
+  assert.equal(again.spawned.length, 3, 'a lost run is started again');
 });
 
 test('the local corpus runs from the main checkout, not the worktree that published', (t) => {

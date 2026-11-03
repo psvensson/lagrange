@@ -605,10 +605,27 @@ function isPidIdentityStale(record, live) {
   return false;
 }
 
+function hasOptionalIdentityField(value) {
+  return value !== undefined && value !== null;
+}
+
+function isPidIdentityVerified(record, live) {
+  if (!record || !live) return false;
+  if (typeof record.pidStartTime !== 'string' || record.pidStartTime.length === 0) return false;
+  if (record.pidStartTime !== live.pidStartTime) return false;
+  if (hasOptionalIdentityField(record.pidNamespace) ||
+      hasOptionalIdentityField(live.pidNamespace)) {
+    if (typeof record.pidNamespace !== 'string' || record.pidNamespace.length === 0) return false;
+    if (record.pidNamespace !== live.pidNamespace) return false;
+  }
+  return true;
+}
+
 function isLockStale(record, now = Date.now(), inspectFn = inspectPidIdentity) {
   if (!record || typeof record.pid !== 'number') return true;
   const live = inspectFn(record.pid);
   if (isPidIdentityStale(record, live)) return true;
+  if (isPidIdentityVerified(record, live)) return false;
   if (record.createdAt && (now - record.createdAt > LAND_LOCK_STALE_MS)) return true;
   return false;
 }
@@ -642,8 +659,13 @@ function tryCreateLandingLock(lockPath, questId, nowFn, inspectFn = inspectPidId
 function isOwnedLockRecord(current, selfPid, inspectFn) {
   if (current.pid !== selfPid) return false;
   const selfIdentity = inspectFn(selfPid) || {};
-  if (!current.pidStartTime || !selfIdentity.pidStartTime) return true;
-  return current.pidStartTime === selfIdentity.pidStartTime;
+  if (!hasOptionalIdentityField(current.pidStartTime) &&
+      !hasOptionalIdentityField(selfIdentity.pidStartTime) &&
+      !hasOptionalIdentityField(current.pidNamespace) &&
+      !hasOptionalIdentityField(selfIdentity.pidNamespace)) {
+    return true;
+  }
+  return isPidIdentityVerified(current, selfIdentity);
 }
 
 function removeOwnedLock(lockPath, inspectFn = inspectPidIdentity) {
@@ -1005,7 +1027,7 @@ function board(root) {
 }
 
 export {
-  ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_TIMEOUT_REFUSAL,
+  ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_STALE_MS, LAND_LOCK_TIMEOUT_REFUSAL,
   LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
   SolveError, acquireLandingLock, board, evidenceAdd, evidenceDelete, evidenceRelocate,
   inspectPidIdentity, isKernelThreadPid, isLockStale, isPidAlive, land, landChangeProofEnvironment,

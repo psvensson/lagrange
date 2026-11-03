@@ -91,6 +91,8 @@ class DynamicConfigService extends EventEmitter {
 
     // Local cache of configuration values
     this.configCache = new Map();
+    // CDC applies per key, monotonic for the life of the service.
+    this.cdcApplySeqByKey = new Map();
 
     // Watchers for configuration changes
     this.watchers = new Map();
@@ -236,8 +238,16 @@ class DynamicConfigService extends EventEmitter {
       return this.configCache.get(key);
     }
 
-    // Try system table cache
+    // Try system table cache. A CDC apply for the key while this read was in
+    // flight is newer than anything it returns: the cache keeps the CDC value
+    // and this answers from it.
+    const cdcSeqAtStart = this.cdcApplySequence(key);
     const config = await this.getConfigFromTable(key);
+    if (this.cdcApplySequence(key) !== cdcSeqAtStart) {
+      return this.configCache.has(key) ?
+        this.configCache.get(key) :
+        CONFIG_DEFINITIONS[key]?.defaultValue;
+    }
     if (config) {
       const value = this.deserializeValue(config.config_value, config.value_type);
       this.configCache.set(key, value);
@@ -436,6 +446,16 @@ class DynamicConfigService extends EventEmitter {
   }
 
   /**
+   * How many CDC events this service has applied for a key. The one ordering
+   * authority for a read: a read that started before a later apply is stale.
+   * @param {string} key - Configuration key.
+   * @return {number} Applies so far.
+   */
+  cdcApplySequence(key) {
+    return this.cdcApplySeqByKey.get(key) ?? 0;
+  }
+
+  /**
    * Handle CDC event for config table changes.
    * This is called when the cache receives CDC updates.
    * @param {Object} event - CDC event.
@@ -443,6 +463,7 @@ class DynamicConfigService extends EventEmitter {
   async handleCDCEvent(event) {
     const {operation, data} = event;
     const key = data[CONFIG_TABLE_COLUMN.KEY];
+    this.cdcApplySeqByKey.set(key, this.cdcApplySequence(key) + 1);
 
     if (operation === CDC_OPERATION.INSERT || operation === CDC_OPERATION.UPDATE) {
       const valueType = this.resolveValueType(

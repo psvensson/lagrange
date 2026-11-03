@@ -406,13 +406,16 @@ function fileProblems(result, file, policy, qualification) {
   return [problem(EXECUTION_PROBLEM.PASSED_ON_RETRY, file)];
 }
 
-function corpusProblems(report, policy) {
+function corpusProblems(report, policy, requiredFiles = []) {
   const byFile = resultsByFile(report.runs);
-  const files = new Set([...report.planned, ...startedFiles(report.runs)]);
+  const planned = new Set(report.planned);
+  const required = new Set(requiredFiles ?? []);
+  const files = new Set([...planned, ...startedFiles(report.runs), ...required]);
   const problems = [];
   const qualification = [];
   for (const file of [...files].sort()) {
-    problems.push(...fileProblems(byFile.get(file), file, policy, qualification));
+    const result = required.has(file) && !planned.has(file) ? undefined : byFile.get(file);
+    problems.push(...fileProblems(result, file, policy, qualification));
   }
   return {problems, qualification};
 }
@@ -438,15 +441,15 @@ function summaryOf(report, qualification) {
  * Reused proofs are listed, not resolved: the authority resolves them.
  * @param {Object|null} report
  * @param {{sha: string, tree: string|null, identity?: Object|null,
- *   retryPolicy?: string}} expectation
+ *   retryPolicy?: string, requiredFiles?: Iterable<string>}} [expectation]
  * @return {{problems: {code: string, detail: string}[],
  *   qualification: Object[], summary: Object|null}}
  */
 function executionReportProblems(report, {sha, tree, identity = null,
-  retryPolicy = RETRY_POLICY.REFUSE}) {
+  retryPolicy = RETRY_POLICY.REFUSE, requiredFiles = []} = {}) {
   const shape = shapeProblems(report);
   if (shape.length > 0) return {problems: shape, qualification: [], summary: null};
-  const corpus = corpusProblems(report, retryPolicy);
+  const corpus = corpusProblems(report, retryPolicy, requiredFiles);
   return {
     problems: [
       ...candidateProblems(report.candidate, {sha, tree, identity}),

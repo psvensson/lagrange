@@ -231,6 +231,23 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
         },
         controlPlaneReadinessService: {
           projectNodeLiveness: () => Object.freeze({readyNow: true}),
+          answerCommittedNodes: () => ({
+            state: 'ready',
+            epoch: {
+              publicationEpoch: 1,
+              publicationId: 'cluster_membership-1',
+              readAtMs: 0,
+            },
+            nodeRows: [{
+              node_id: 'node-1',
+              status: 'active',
+              ready_lease_expires_at: now + 10000,
+            }, {
+              node_id: 'node-2',
+              status: 'active',
+              ready_lease_expires_at: now + 10000,
+            }],
+          }),
           getNodeReadinessSync: () => ({
             dimensions: {
               [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,

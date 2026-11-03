@@ -61,12 +61,14 @@ const SELECT_ALL_PREFIX = 'SELECT * FROM ';
 const STALE_SIGNATURE = 'stale';
 const REASON_SEPARATOR = ',';
 const SIGNATURE_SEPARATOR = '|';
+const READ_FAILURE_RETRY_MS = 100;
 const NO_REASONS = Object.freeze([]);
 const OUTCOME = Object.freeze({
   PENDING: 'pending',
   RECORD: 'record',
   NO_RECORD: 'no_record',
   READ_FAILED: 'read_failed',
+  STALE: 'stale',
 });
 
 function readNodeId(row) {
@@ -278,7 +280,7 @@ function checkOwnerUnavailability(owner) {
     return unavailable(
       SERVE_ELIGIBILITY_UNAVAILABLE_REASON.OWNER_STOPPED,
       null,
-      owner.readTimeoutMs,
+      null,
     );
   }
   if (owner.outcome === OUTCOME.PENDING) {
@@ -292,6 +294,13 @@ function checkOwnerUnavailability(owner) {
     return unavailable(
       SERVE_ELIGIBILITY_UNAVAILABLE_REASON.NO_RECORD,
       null,
+      owner.readTimeoutMs,
+    );
+  }
+  if (owner.outcome === OUTCOME.STALE) {
+    return unavailable(
+      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE,
+      owner.record?.epoch ?? null,
       owner.readTimeoutMs,
     );
   }
@@ -334,6 +343,7 @@ class ServeEligibilityOwner {
     this.clearTimeoutFn = options.clearTimeout;
     this.outcome = OUTCOME.PENDING;
     this.record = null;
+    this.minPublicationEpoch = null;
     this.superseded = false;
     this.triggerGeneration = 0;
     this.inFlight = null;
@@ -400,18 +410,44 @@ class ServeEligibilityOwner {
     }
   }
 
+  recordObservedPublicationEpoch(publicationEpoch) {
+    if (
+      Number.isSafeInteger(publicationEpoch) &&
+      (this.minPublicationEpoch === null ||
+        publicationEpoch > this.minPublicationEpoch)
+    ) {
+      this.minPublicationEpoch = publicationEpoch;
+    }
+  }
+
+  isRegressedReadResult(result) {
+    if (result.outcome === OUTCOME.NO_RECORD) {
+      return (
+        this.record !== null ||
+        (Number.isSafeInteger(this.minPublicationEpoch) &&
+          this.minPublicationEpoch > 0)
+      );
+    }
+    if (result.outcome !== OUTCOME.RECORD) {
+      return false;
+    }
+    const epoch = result.record.epoch.publicationEpoch;
+    return (
+      (Number.isSafeInteger(this.minPublicationEpoch) &&
+        epoch < this.minPublicationEpoch) ||
+      (Number.isSafeInteger(this.record?.epoch?.publicationEpoch) &&
+        epoch < this.record.epoch.publicationEpoch)
+    );
+  }
+
   adoptReadResult(result, startedGeneration) {
     if (this.stopped) {
       return;
     }
     const previousSignature = this.answeredSignature();
-    this.outcome = result.outcome;
-    if (result.outcome === OUTCOME.RECORD) {
-      this.record = result.record;
-    } else if (result.outcome === OUTCOME.NO_RECORD) {
-      this.record = null;
-    }
+    const regressedRead = this.isRegressedReadResult(result);
     if (result.outcome === OUTCOME.READ_FAILED) {
+      this.outcome = OUTCOME.READ_FAILED;
       // A failed read revokes nothing: the committed record keeps answering
       // until its own lease expires (answer() bounds it) or a revoking
       // trigger marks it stale. The failure is a typed observation; the next
@@ -421,12 +457,23 @@ class ServeEligibilityOwner {
         reason: SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED,
         observedAtMs: this.now(),
       });
+    } else if (regressedRead) {
+      this.outcome = this.record ? OUTCOME.RECORD : OUTCOME.STALE;
+      this.lastReadFailure = null;
+      this.superseded = true;
     } else {
+      this.outcome = result.outcome;
+      this.record = result.outcome === OUTCOME.RECORD ? result.record : null;
+      this.recordObservedPublicationEpoch(
+        this.record?.epoch?.publicationEpoch ?? null,
+      );
       this.lastReadFailure = null;
       // A trigger observed while the read was in flight may postdate it.
       this.superseded = this.triggerGeneration !== startedGeneration;
     }
-    this.armLeaseRefresh();
+    this.armLeaseRefresh(
+      regressedRead && this.triggerGeneration === startedGeneration,
+    );
     // Derived memos re-key only when the committed answer changes (a new
     // epoch, outcome or per-node decision); a refresh that only advanced
     // leases changes no answer.
@@ -472,36 +519,44 @@ class ServeEligibilityOwner {
     return parts.join(SIGNATURE_SEPARATOR);
   }
 
-  armLeaseRefresh() {
+  armLeaseRefreshAt(targetMs, nowMs) {
+    const handle = this.setTimeoutFn(() => {
+      this.leaseRefreshHandle = null;
+      this.markSuperseded();
+    }, Math.max(0, targetMs - nowMs));
+    handle?.unref?.();
+    this.leaseRefreshHandle = handle;
+  }
+
+  armLeaseRefresh(retryRegressedRead = false) {
     if (this.leaseRefreshHandle !== null) {
       this.clearTimeoutFn(this.leaseRefreshHandle);
       this.leaseRefreshHandle = null;
     }
-    if (!this.record) {
-      return;
-    }
-    // The earliest committed lease that currently grants: past it the answer
-    // is stale, so a committed refresh is due exactly then.
-    let earliestMs = null;
-    for (const nodeRow of this.record.nodeRowsById.values()) {
-      const leaseExpiresAtMs = readLeaseExpiresAtMs(nodeRow);
-      if (
-        leaseExpiresAtMs !== null &&
-        leaseExpiresAtMs > this.record.epoch.readAtMs &&
-        (earliestMs === null || leaseExpiresAtMs < earliestMs)
-      ) {
-        earliestMs = leaseExpiresAtMs;
+    const nowMs = this.now();
+    let earliestMs = retryRegressedRead ? nowMs + READ_FAILURE_RETRY_MS : null;
+    if (this.record) {
+      // The earliest committed lease that currently grants: past it the answer
+      // is stale, so a committed refresh is due exactly then.
+      for (const nodeRow of this.record.nodeRowsById.values()) {
+        const leaseExpiresAtMs = readLeaseExpiresAtMs(nodeRow);
+        if (
+          leaseExpiresAtMs === null ||
+          leaseExpiresAtMs <= this.record.epoch.readAtMs
+        ) {
+          continue;
+        }
+        if (leaseExpiresAtMs <= nowMs) {
+          this.superseded = true;
+        } else if (earliestMs === null || leaseExpiresAtMs < earliestMs) {
+          earliestMs = leaseExpiresAtMs;
+        }
       }
     }
     if (earliestMs === null) {
       return;
     }
-    const handle = this.setTimeoutFn(() => {
-      this.leaseRefreshHandle = null;
-      this.markSuperseded();
-    }, Math.max(0, earliestMs - this.now()));
-    handle?.unref?.();
-    this.leaseRefreshHandle = handle;
+    this.armLeaseRefreshAt(earliestMs, nowMs);
   }
 
   // A refresh never starts inside the triggering turn (a cache apply or a
@@ -532,54 +587,64 @@ class ServeEligibilityOwner {
     }
   }
 
-  /**
-   * Cache trigger: a projected change that can make the committed record
-   * older than the facts. Never grants, never denies.
-   * @param {string} tableName
-   * @param {Object|null} row
-   */
-  noteSourceChange(tableName, row) {
-    if (this.stopped || !row) {
+  notePublicationSourceChange(row) {
+    const publication = normalizeControlPlanePublicationRow(row);
+    if (!isMembershipPublication(publication)) {
       return;
     }
-    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
-      const publication = normalizeControlPlanePublicationRow(row);
-      if (!isMembershipPublication(publication)) {
-        return;
-      }
-      if (
-        !this.record ||
-        publication.publicationEpoch > this.record.epoch.publicationEpoch ||
-        publication.publicationId === this.record.epoch.publicationId
-      ) {
-        this.markSuperseded();
-      }
-      return;
+    this.recordObservedPublicationEpoch(publication.publicationEpoch);
+    if (
+      !this.record ||
+      publication.publicationEpoch > this.record.epoch.publicationEpoch ||
+      publication.publicationId === this.record.epoch.publicationId
+    ) {
+      this.markSuperseded();
     }
-    if (tableName === TABLES.NODES && !this.record) {
+  }
+
+  noteNodeSourceChange(row) {
+    if (!this.record) {
       // No committed record yet (never read, none published, or the last
       // read failed): a node change is the trigger for the first or next read.
       this.markSuperseded();
       return;
     }
-    if (tableName === TABLES.NODES) {
-      const nodeId = readNodeId(row);
-      if (!nodeId) {
-        return;
-      }
-      if (
-        isRevokingNodeChange(this.record.nodeRowsById.get(nodeId) || null, row,
-          this.isNodeLoadReady)
-      ) {
-        this.markSuperseded();
-        return;
-      }
-      // A lease extension leaves the committed answer valid until its own
-      // expiry; it only triggers a background refresh (coalesced to one in
-      // flight) so the record's leases advance before they elapse.
-      if (!this.inFlight && !this.stopped) {
-        this.scheduleRefresh();
-      }
+    const nodeId = readNodeId(row);
+    if (!nodeId) {
+      return;
+    }
+    if (
+      isRevokingNodeChange(this.record.nodeRowsById.get(nodeId) || null, row,
+        this.isNodeLoadReady)
+    ) {
+      this.markSuperseded();
+      return;
+    }
+    // A lease extension leaves the committed answer valid until its own
+    // expiry; it only triggers a background refresh (coalesced to one in
+    // flight) so the record's leases advance before they elapse.
+    if (!this.inFlight && !this.stopped) {
+      this.scheduleRefresh();
+    }
+  }
+
+  /**
+   * Cache trigger: a projected change that can make the committed record
+   * older than the facts. Never grants, never denies.
+   * @param {string} tableName
+   * @param {Object|string|null} rowOrOperation
+   * @param {Object|null} [maybeRow=null]
+   */
+  noteSourceChange(tableName, rowOrOperation, maybeRow = null) {
+    const row =
+      typeof rowOrOperation === 'string' ? maybeRow : rowOrOperation;
+    if (this.stopped || !row) {
+      return;
+    }
+    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+      this.notePublicationSourceChange(row);
+    } else if (tableName === TABLES.NODES) {
+      this.noteNodeSourceChange(row);
     }
   }
 
@@ -589,27 +654,11 @@ class ServeEligibilityOwner {
    * @return {Object}
    */
   answer(nodeId) {
-    if (this.stopped) {
-      return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.OWNER_STOPPED,
-        null, null);
-    }
-    if (this.outcome === OUTCOME.PENDING) {
-      return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_PENDING,
-        null, this.readTimeoutMs);
-    }
-    if (this.outcome === OUTCOME.NO_RECORD) {
-      return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.NO_RECORD,
-        null, this.readTimeoutMs);
-    }
-    if (!this.record) {
-      return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED,
-        null, this.readTimeoutMs);
+    const unavail = checkOwnerUnavailability(this);
+    if (unavail) {
+      return unavail;
     }
     const {epoch} = this.record;
-    if (this.superseded) {
-      return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE, epoch,
-        this.readTimeoutMs);
-    }
     let decided = this.record.decisionsByNodeId.get(nodeId);
     if (!decided) {
       decided = decideServeEligibility({

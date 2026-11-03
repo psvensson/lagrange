@@ -392,3 +392,31 @@ test('W-D1f: pending work under budget - an owed row the lane cannot complete (p
     await shutdownAll(leader);
   }
 });
+
+test('W-D1g: applyCommittedEventsToPartitionState updates cdcIntegrationService.cacheMutationTarget ' +
+  'when service.systemTableCache is a read-only proxy', async () => {
+  const appliedChanges = [];
+  const readOnlyCache = {
+    applySystemTableChange() {
+      throw new Error('ReadOnlySystemTableCache cannot mutate system table cache');
+    },
+  };
+  const writableCache = {
+    applySystemTableChange(tableName, operation, data, timestamp) {
+      appliedChanges.push({tableName, operation, data, timestamp});
+    },
+  };
+  const {leader} = await startLeader({...CDC});
+  try {
+    leader.systemTableCache = readOnlyCache;
+    leader.cdcIntegrationService = {cacheMutationTarget: writableCache};
+    applyCommitted(leader, upsertOf(leader, 'g', 1));
+    assert.equal(appliedChanges.length, 1);
+    assert.equal(appliedChanges[0].tableName, CDC_TABLE);
+    assert.equal(appliedChanges[0].data.id, 'r-1');
+    assert.equal(appliedChanges[0].data.value, 'g-1');
+  } finally {
+    await shutdownAll(leader);
+  }
+});
+

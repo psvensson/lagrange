@@ -8,9 +8,6 @@ import {
 import {
   shouldAllowPriorityRecoveryDispatchBootstrap,
 } from '../control-plane/replica-dispatch-priority-recovery-bootstrap.js';
-import {
-  isDeferredReadinessPlanningSnapshot,
-} from '../control-plane/readiness-planning-version-contract.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -93,8 +90,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
   }
 
   /**
-   * Resolve node readiness sync snapshot, falling back to base snapshot when
-   * a dimension-specialized snapshot build is deferred/stale.
+   * Resolve node readiness sync snapshot for the requested readiness options.
    *
    * @param {string} nodeId
    * @param {Object} [readinessOptions={}]
@@ -102,25 +98,10 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
    * @private
    */
   resolveNodeReadinessSyncSnapshot(nodeId, readinessOptions = {}) {
-    let readiness = this.controlPlaneReadinessService?.getNodeReadinessSync(
+    return this.controlPlaneReadinessService?.getNodeReadinessSync(
       nodeId,
       readinessOptions,
     );
-    if (
-      isDeferredReadinessPlanningSnapshot(readiness) &&
-      typeof this.controlPlaneReadinessService?.getNodeReadinessSync ===
-        UNIFIED_REBALANCER_LITERAL.FUNCTION
-    ) {
-      const fallbackReadiness =
-        this.controlPlaneReadinessService.getNodeReadinessSync(nodeId);
-      if (
-        fallbackReadiness &&
-        !isDeferredReadinessPlanningSnapshot(fallbackReadiness)
-      ) {
-        readiness = fallbackReadiness;
-      }
-    }
-    return readiness;
   }
 
   /**
@@ -132,53 +113,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
    * @private
    */
   isReadinessDimensionSatisfied(readiness, decisionDimension) {
-    const dimensions =
-      readiness?.dimensions && typeof readiness.dimensions === 'object' ?
-        readiness.dimensions :
-        null;
-    if (!dimensions) {
-      return false;
-    }
-    const readinessEvidence = Object.freeze({
-      explicitDecisionDimensionPresent:
-        Object.hasOwn(dimensions, decisionDimension),
-      explicitDecisionDimensionSatisfied:
-        dimensions[decisionDimension] === true,
-      recoveryEligibilityRequested:
-        decisionDimension ===
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      recoveryEligibilitySatisfied:
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true &&
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
-        ] === true &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY] === true &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY] === true &&
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE
-        ] === true &&
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
-        ] === true &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] ===
-          true,
-    });
-    if (readinessEvidence.explicitDecisionDimensionSatisfied) {
-      return true;
-    }
-    if (
-      this.isFormationLivenessDependencyPartition() &&
-      readinessEvidence.recoveryEligibilityRequested
-    ) {
-      return false;
-    }
-    if (
-      !readinessEvidence.recoveryEligibilityRequested ||
-      readinessEvidence.explicitDecisionDimensionPresent
-    ) {
-      return false;
-    }
-    return readinessEvidence.recoveryEligibilitySatisfied;
+    return readiness?.dimensions?.[decisionDimension] === true;
   }
 
   /**
