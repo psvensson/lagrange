@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 118,
     "architecture-governance": 21,
-    "bootstrap-membership": 330,
+    "bootstrap-membership": 331,
     "cdc-metadata": 67,
     "cli-tooling": 99,
     "control-plane": 225,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2526,
-  "digest": "fnv1a32-9ff52848",
+  "censusSize": 2527,
+  "digest": "fnv1a32-f3a0c277",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-dc38b2df",
+  "observationDigest": "fnv1a32-3873d16c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -208,6 +208,7 @@
     "test/bootstrap/lifecycle-owner-replica-routing.test.js": "bootstrap-membership",
     "test/bootstrap/lifecycle-unification.test.js": "bootstrap-membership",
     "test/bootstrap/management-v1-l4-l3.test.js": "bootstrap-membership",
+    "test/bootstrap/management-v1-route-authority.test.js": "bootstrap-membership",
     "test/bootstrap/mesh-reconcile-terminal-revive.test.js": "bootstrap-membership",
     "test/bootstrap/message-group-activation-handler-boundary.test.js": "bootstrap-membership",
     "test/bootstrap/message-group-assignment-centralization.test.js": "bootstrap-membership",
@@ -3142,6 +3143,17 @@
         "src"
       ]
     },
+    "test/bootstrap/management-v1-l4-l3.test.js": {
+      "files": [
+        "src/bootstrap/owners/management-v1-constants.js"
+      ]
+    },
+    "test/bootstrap/management-v1-route-authority.test.js": {
+      "files": [
+        "src/bootstrap/owners/management-v1-constants.js",
+        "src/lagrange-runtime-startup.js"
+      ]
+    },
     "test/bootstrap/mesh-reconcile-terminal-revive.test.js": {
       "files": [
         "src/bootstrap/phases/connect-websocket-phase.js"
@@ -3722,6 +3734,7 @@
     "test/bootstrap/support-envelope-owner.test.js": {
       "files": [
         "docs/support-envelope.json",
+        "src/bootstrap/owners/management-v1-constants.js",
         "test/distributed/run.js"
       ],
       "directories": [

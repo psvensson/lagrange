@@ -28,6 +28,7 @@ import {
 import {
   ManagementV1Owner,
 } from '../../../src/bootstrap/owners/management-v1-owner.js';
+import {MemoryBackupStorageAdapter} from '../../helpers/management-v1-memory-storage-adapter.js';
 import {
   BootstrapJoinAdmissionOwner,
 } from '../../../src/bootstrap/owners/bootstrap-join-admission-owner.js';
@@ -66,6 +67,7 @@ function executeRollingUpgradeDrill(envelope) {
     {
       nodeIds: [...DEFAULT_CLUSTER_NODES],
       readyNodeIds: [...DEFAULT_CLUSTER_NODES],
+      underReplicatedPartitionCount: ZERO,
     },
   );
   assert.equal(
@@ -77,6 +79,7 @@ function executeRollingUpgradeDrill(envelope) {
     clusterSnapshot: {
       nodeIds: [...DEFAULT_CLUSTER_NODES],
       readyNodeIds: [...DEFAULT_CLUSTER_NODES],
+      underReplicatedPartitionCount: ZERO,
     },
     nowMs: 1000,
     operationId: 'op-q12-rolling-upgrade',
@@ -210,21 +213,22 @@ async function executeByocPartitionBackupRestoreProof(envelope) {
     },
   ];
   let hydratedSnapshot = null;
+  // Backup storage is injected explicitly through the owner's declared
+  // storageAdapter port: production composition installs none.
   const mgmt = new ManagementV1Owner({
     clusterId: 'lagrange-cluster-q12',
     exportPartitionSnapshots: () => livePartitions,
     hydratePartitionSnapshots: (partitions) => {
       hydratedSnapshot = partitions;
     },
-    nodeCount: 3,
-    nodes: [...DEFAULT_CLUSTER_NODES],
     onDecommissionNode: () => {},
     onDrainNodeLeadership: () => {},
     onTriggerNodeRestart: () => {},
-    storageAdapter: undefined,
+    storageAdapter: new MemoryBackupStorageAdapter(),
     supportEnvelope: envelope,
   });
   const backupStatus = await mgmt.backupRestoreOwner.createBackup({
+    clusterSnapshot: {hasPartitionQuorum: true, ready: true},
     operationId: 'op-q12-backup-0001',
     parameters: {
       backupId: 'bkp-q12-certified',

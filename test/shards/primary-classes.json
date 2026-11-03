@@ -4,12 +4,12 @@
   "counts": {
     "unit": 2182,
     "integration": 119,
-    "bootstrap": 218,
+    "bootstrap": 219,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2526,
-  "digest": "fnv1a32-dbe8ee11",
+  "censusSize": 2527,
+  "digest": "fnv1a32-c1ec9311",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -189,6 +189,7 @@
     "test/bootstrap/lifecycle-owner-replica-routing.test.js": "bootstrap",
     "test/bootstrap/lifecycle-unification.test.js": "bootstrap",
     "test/bootstrap/management-v1-l4-l3.test.js": "bootstrap",
+    "test/bootstrap/management-v1-route-authority.test.js": "bootstrap",
     "test/bootstrap/mesh-reconcile-terminal-revive.test.js": "bootstrap",
     "test/bootstrap/message-group-activation-handler-boundary.test.js": "bootstrap",
     "test/bootstrap/message-group-assignment-centralization.test.js": "bootstrap",

@@ -7,7 +7,6 @@ import {
   MANAGEMENT_OPERATION_KIND,
   MANAGEMENT_OPERATION_STATE,
   MANAGEMENT_V1_CONTRACT,
-  MANAGEMENT_V1_ROUTE,
 } from './management-v1-constants.js';
 import {RollingUpgradeOwner} from './rolling-upgrade-owner.js';
 import {BackupRestoreOwner} from './backup-restore-owner.js';
@@ -28,9 +27,13 @@ const EMPTY_STRING_ARRAY = Object.freeze([]);
 const RESTORE_HYDRATION_REASONS = Object.freeze(['restore_hydration_in_progress']);
 const PREFLIGHT_PASSED = '';
 const HEADER_CONTENT_LENGTH = 'content-length';
-const DEFAULT_PRIMARY_CLUSTER_ID = 'lagrange-cluster-primary';
 const OPERATION_STATE_BLOCKED = 'BLOCKED';
 const MIN_QUORUM_SAFE_NODE_COUNT = 2;
+const STRING_TYPE = 'string';
+const FUNCTION_TYPE = 'function';
+const NULL_CLUSTER_ID = null;
+const NULL_SNAPSHOT = null;
+const NULL_PORT = null;
 
 const RESTORE_FENCED_HEALTH = Object.freeze({
   state: CLUSTER_FACTS_CONSTANTS.HEALTH_UNAVAILABLE,
@@ -38,16 +41,60 @@ const RESTORE_FENCED_HEALTH = Object.freeze({
   reasons: RESTORE_HYDRATION_REASONS,
 });
 
+const HEALTH_SNAPSHOT_UNAVAILABLE = Object.freeze({
+  state: CLUSTER_FACTS_CONSTANTS.HEALTH_UNKNOWN,
+  ready: false,
+  reasons: Object.freeze([CLUSTER_FACTS_CONSTANTS.REASON_HEALTH_SNAPSHOT_UNAVAILABLE]),
+});
+
+const CAPACITY_SNAPSHOT_UNAVAILABLE = Object.freeze({
+  state: CLUSTER_FACTS_CONSTANTS.CAPACITY_UNKNOWN,
+  reasons: Object.freeze([CLUSTER_FACTS_CONSTANTS.REASON_CAPACITY_SNAPSHOT_UNAVAILABLE]),
+});
+
+const TOPOLOGY_COUNT_FIELDS = Object.freeze([
+  'nodeCount', 'readyNodeCount', 'underReplicatedPartitionCount',
+]);
+
+/** The physical rolling-upgrade ports handed to the rolling-upgrade owner. */
+const ROLLING_UPGRADE_PORTS = Object.freeze([
+  'onDrainNodeLeadership', 'onTriggerNodeRestart', 'onSetNodeReadyz', 'onPersistState',
+]);
+
+function isEstablishedClusterId(id) {
+  return typeof id === STRING_TYPE && id.length > 0;
+}
+
+function isCount(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+/**
+ * A runtime snapshot is usable only when the runtime port reports every
+ * admission-relevant fact; a partial snapshot is unavailable, never defaulted.
+ */
+function isRuntimeClusterSnapshot(snap) {
+  return Boolean(snap) && TOPOLOGY_COUNT_FIELDS.every((k) => isCount(snap[k])) &&
+    Array.isArray(snap.nodeIds);
+}
+
+function pickPorts(options, names) {
+  const ports = {};
+  for (const name of names) {
+    if (typeof options[name] === FUNCTION_TYPE) ports[name] = options[name];
+  }
+  return ports;
+}
+
 function checkDecommissionPreflight(owner, snap, id) {
   const c = L6_DECOMMISSION_REASON_CODE;
   if (!owner.decommissionSupported) return c.DECOMMISSION_CAPABILITY_UNSUPPORTED;
+  if (snap === NULL_SNAPSHOT || snap.ready !== true) return c.CLUSTER_NOT_READY;
   if (owner.hasActiveOperation()) return c.CONCURRENT_OPERATION_ACTIVE;
   if (snap.underReplicatedPartitionCount > 0) return c.UNDER_REPLICATED_PARTITIONS;
-  if (Array.isArray(snap.nodes) && snap.nodes.length > 0 && !snap.nodes.includes(id)) {
-    return c.NODE_NOT_FOUND;
-  }
-  const unsafe = (snap.nodeCount ?? 1) <= MIN_QUORUM_SAFE_NODE_COUNT ||
-    (typeof snap.isQuorumSafe === 'function' && !snap.isQuorumSafe(id));
+  if (!snap.nodeIds.includes(id)) return c.NODE_NOT_FOUND;
+  const unsafe = snap.nodeCount <= MIN_QUORUM_SAFE_NODE_COUNT ||
+    (typeof snap.isQuorumSafe === FUNCTION_TYPE && !snap.isQuorumSafe(id));
   return unsafe ? c.QUORUM_SAFETY_VIOLATION : PREFLIGHT_PASSED;
 }
 
@@ -90,21 +137,38 @@ function isBackupFencingReadiness(bkp) {
   return Boolean(bkp?.isRestoreInProgress?.() || bkp?.isRestoreAborted?.());
 }
 
-function buildHealth(bkp, custom) {
-  if (isBackupFencingReadiness(bkp)) return RESTORE_FENCED_HEALTH;
-  const src = custom || {};
-  return {
-    state: src.state || CLUSTER_FACTS_CONSTANTS.HEALTH_HEALTHY,
-    ready: src.ready !== false,
-    reasons: src.reasons || EMPTY_REASONS,
-  };
+function readSnapshotPort(port) {
+  return typeof port === FUNCTION_TYPE ? port() : NULL_SNAPSHOT;
 }
 
-function buildCapacity(cap) {
-  const src = cap || {};
+function snapshotReasons(snap) {
+  return Array.isArray(snap.reasons) ? snap.reasons : EMPTY_REASONS;
+}
+
+function buildHealth(bkp, snap) {
+  if (isBackupFencingReadiness(bkp)) return RESTORE_FENCED_HEALTH;
+  if (typeof snap?.state !== STRING_TYPE) return HEALTH_SNAPSHOT_UNAVAILABLE;
+  return {state: snap.state, ready: snap.ready === true, reasons: snapshotReasons(snap)};
+}
+
+function buildCapacity(snap) {
+  if (typeof snap?.state !== STRING_TYPE) return CAPACITY_SNAPSHOT_UNAVAILABLE;
+  return {state: snap.state, reasons: snapshotReasons(snap)};
+}
+
+function buildTopology(snap, versionSkew) {
+  if (snap === NULL_SNAPSHOT) {
+    return {
+      state: CLUSTER_FACTS_CONSTANTS.TOPOLOGY_UNKNOWN,
+      reasons: [CLUSTER_FACTS_CONSTANTS.REASON_CLUSTER_SNAPSHOT_UNAVAILABLE],
+      versionSkew,
+    };
+  }
   return {
-    state: src.state || CLUSTER_FACTS_CONSTANTS.CAPACITY_NORMAL,
-    reasons: src.reasons || EMPTY_REASONS,
+    state: CLUSTER_FACTS_CONSTANTS.TOPOLOGY_OBSERVED,
+    nodeCount: snap.nodeCount, readyNodeCount: snap.readyNodeCount,
+    underReplicatedPartitionCount: snap.underReplicatedPartitionCount,
+    versionSkew,
   };
 }
 
@@ -125,28 +189,25 @@ function buildReleaseSection(rel, supportEnvelope) {
 
 function buildClusterSection(owner, incLin) {
   const identity = owner.getClusterId();
+  const identityState = identity === NULL_CLUSTER_ID ?
+    CLUSTER_FACTS_CONSTANTS.IDENTITY_UNKNOWN :
+    CLUSTER_FACTS_CONSTANTS.IDENTITY_ESTABLISHED;
   const lin = owner.getRestoreLineage();
-  return lin && incLin ? {identity, restoredFrom: lin} : {identity};
+  return lin && incLin ? {identity, identityState, restoredFrom: lin} : {identity, identityState};
 }
 
 function buildFacts(owner, incLin) {
   const snap = owner.getClusterSnapshot();
-  const cap = owner.options.capacitySnapshot?.() || owner.options.capacity;
-  const h = owner.options.healthSnapshot?.() || owner.options.health;
   const baseFacts = {
     cluster: buildClusterSection(owner, incLin),
     release: buildReleaseSection(
       owner.rollingUpgradeOwner?.getReleaseFacts?.(),
       owner.supportEnvelope,
     ),
-    health: buildHealth(owner.backupRestoreOwner, h),
-    topology: {
-      nodeCount: snap.nodeCount, readyNodeCount: snap.readyNodeCount,
-      underReplicatedPartitionCount: snap.underReplicatedPartitionCount,
-      versionSkew: snap.versionSkew,
-    },
+    health: buildHealth(owner.backupRestoreOwner, readSnapshotPort(owner.options.healthSnapshot)),
+    topology: buildTopology(snap, owner.isVersionSkewActive()),
     operations: owner._buildOperationsSection(),
-    capacity: buildCapacity(cap),
+    capacity: owner.getCapacityFacts(),
     capabilities: {
       backupRestore: resolveCapabilityState(owner.backupRestoreOwner?.capabilitySupported),
       decommissionNode: resolveCapabilityState(owner.decommissionSupported),
@@ -163,79 +224,68 @@ function isExistingConflict(ex, input) {
     ex.kind !== input.kind || ex.clusterId !== input.clusterId;
 }
 
-function resolveNodeList(opts) {
-  return opts.nodeIds || opts.nodes || EMPTY_STRING_ARRAY;
-}
-
 function resolveDrainingCount(upg) {
   const ids = upg?.getDrainingNodeIds?.();
   return Array.isArray(ids) ? ids.length : 0;
 }
 
-function resolveRollingUpgradeSupport(options) {
-  if (options.rollingUpgradeSupported !== undefined) {
-    return Boolean(options.rollingUpgradeSupported);
-  }
-  if (options.capabilitySupported !== undefined) {
-    return Boolean(options.capabilitySupported);
-  }
-  return typeof options.onDrainNodeLeadership === 'function' &&
-    typeof options.onTriggerNodeRestart === 'function';
-}
-
-function resolveBackupRestoreSupport(options) {
-  if (options.backupRestoreSupported !== undefined) {
-    return Boolean(options.backupRestoreSupported);
-  }
-  if (options.capabilitySupported !== undefined) {
-    return Boolean(options.capabilitySupported);
-  }
-  const hasPartitionExporter =
-    typeof options.getPartitions === 'function' ||
-    typeof options.exportPartitionSnapshots === 'function';
-  return Boolean(options.storageAdapter) || hasPartitionExporter;
-}
-
-function resolveDecommissionSupport(options) {
-  if (options.decommissionSupported !== undefined) {
-    return Boolean(options.decommissionSupported);
-  }
-  return typeof options.onDecommissionNode === 'function';
+function createBackupRestoreOwner(owner) {
+  const options = owner.options;
+  return new BackupRestoreOwner({
+    storageAdapter: options.storageAdapter ?? NULL_PORT,
+    exportPartitionSnapshots: options.exportPartitionSnapshots ?? NULL_PORT,
+    hydratePartitionSnapshots: options.hydratePartitionSnapshots ?? NULL_PORT,
+    getClusterId: () => owner.getClusterId(),
+    onSetClusterId: (id) => {
+      owner.clusterId = id;
+      options.onSetClusterId?.(id);
+    },
+  });
 }
 
 class ManagementV1Owner {
+  /**
+   * @param {Object} [options] - Declared ports: getClusterId/onSetClusterId
+   *   (the established cluster record), getClusterSnapshot, healthSnapshot,
+   *   capacitySnapshot, storageAdapter, exportPartitionSnapshots,
+   *   hydratePartitionSnapshots, onDrainNodeLeadership, onTriggerNodeRestart,
+   *   onSetNodeReadyz, onPersistState, onDecommissionNode, supportEnvelope.
+   *   A capability is supported only when its adapters are installed.
+   */
   constructor(options = {}) {
     this.options = options;
-    this.clusterId = options.clusterId ?? null;
+    this.clusterId = options.clusterId ?? NULL_CLUSTER_ID;
     this.includeRestoredFromInFacts = options.includeRestoredFromInFacts ?? false;
     this.supportEnvelope =
       options.supportEnvelopeOwner?.getEnvelope?.() ??
       options.supportEnvelope ??
       null;
-    this.decommissionSupported = resolveDecommissionSupport(options);
+    this.decommissionSupported = typeof options.onDecommissionNode === FUNCTION_TYPE;
     this.rollingUpgradeOwner = options.rollingUpgradeOwner ?? new RollingUpgradeOwner({
-      ...options,
-      capabilitySupported: resolveRollingUpgradeSupport(options),
+      ...pickPorts(options, ROLLING_UPGRADE_PORTS),
       supportEnvelope: this.supportEnvelope,
     });
-    this.backupRestoreOwner = options.backupRestoreOwner ?? new BackupRestoreOwner({
-      ...options,
-      capabilitySupported: resolveBackupRestoreSupport(options),
-      getClusterId: () => this.getClusterId(),
-      getPartitions: options.getPartitions || options.exportPartitionSnapshots,
-      onHydratePartitions:
-        options.onHydratePartitions || options.hydratePartitionSnapshots,
-      onSetClusterId: (id) => {
-        this.clusterId = id;
-        options.onSetClusterId?.(id);
-      },
-    });
+    this.backupRestoreOwner = options.backupRestoreOwner ?? createBackupRestoreOwner(this);
     this.operationsById = new Map();
   }
 
+  /**
+   * The established cluster identity, or null when none is established. It is
+   * read from the cluster-record port when installed, never invented.
+   * @return {string|null}
+   */
   getClusterId() {
-    return typeof this.options.getClusterId === 'function' ?
-      this.options.getClusterId() : (this.clusterId || DEFAULT_PRIMARY_CLUSTER_ID);
+    const id = typeof this.options.getClusterId === FUNCTION_TYPE ?
+      this.options.getClusterId() : this.clusterId;
+    return isEstablishedClusterId(id) ? id : NULL_CLUSTER_ID;
+  }
+
+  getCapacityFacts() {
+    return buildCapacity(readSnapshotPort(this.options.capacitySnapshot));
+  }
+
+  isVersionSkewActive() {
+    return Boolean(this.rollingUpgradeOwner?.isVersionSkewActive?.());
   }
 
   getRestoreLineage() {
@@ -255,29 +305,25 @@ class ManagementV1Owner {
     return false;
   }
 
+  /**
+   * The runtime cluster snapshot for admission, or null when the runtime port
+   * is absent or reports incomplete facts. Owner-held facts are overlaid.
+   * @return {Object|null}
+   */
   getClusterSnapshot() {
-    if (typeof this.options.getClusterSnapshot === 'function') {
-      return this.options.getClusterSnapshot();
-    }
-    const opts = this.options;
-    const n = opts.nodeCount ?? 1;
-    const baseReady = opts.readyNodeCount ?? n;
-    const nodeList = resolveNodeList(opts);
-    const getParts = opts.getPartitions || opts.exportPartitionSnapshots;
-    const snap = {
+    const runtime = readSnapshotPort(this.options.getClusterSnapshot);
+    if (!isRuntimeClusterSnapshot(runtime)) return NULL_SNAPSHOT;
+    return {
+      ...runtime,
       clusterId: this.getClusterId(),
-      ready: opts.ready !== false && !isBackupFencingReadiness(this.backupRestoreOwner),
-      hasPartitionQuorum: opts.hasPartitionQuorum !== false,
-      capacityState: opts.capacity?.state || CLUSTER_FACTS_CONSTANTS.CAPACITY_NORMAL,
-      hasActiveOperation: this.hasActiveOperation(),
-      nodeCount: n,
-      readyNodeCount: Math.max(0, baseReady - resolveDrainingCount(this.rollingUpgradeOwner)),
-      underReplicatedPartitionCount: opts.underReplicatedPartitionCount ?? 0,
-      nodes: nodeList,
-      nodeIds: nodeList,
-      versionSkew: Boolean(this.rollingUpgradeOwner?.isVersionSkewActive?.()),
+      ready: runtime.ready === true && !isBackupFencingReadiness(this.backupRestoreOwner),
+      hasPartitionQuorum: runtime.hasPartitionQuorum === true,
+      capacityState: this.getCapacityFacts().state,
+      hasActiveOperation: runtime.hasActiveOperation === true || this.hasActiveOperation(),
+      readyNodeCount: Math.max(0,
+        runtime.readyNodeCount - resolveDrainingCount(this.rollingUpgradeOwner)),
+      versionSkew: this.isVersionSkewActive(),
     };
-    return typeof getParts === 'function' ? {...snap, partitions: getParts()} : snap;
   }
 
   _refreshActiveOperation(record) {
@@ -344,7 +390,12 @@ class ManagementV1Owner {
 
   async submitOperation(input, {nowMs = Date.now()} = {}) {
     validateManagementV1OperationRequest(input);
-    if (input.clusterId !== this.getClusterId()) {
+    const clusterId = this.getClusterId();
+    if (clusterId === NULL_CLUSTER_ID) {
+      failValidation(
+        MANAGEMENT_ERROR_CODE.CLUSTER_IDENTITY_UNESTABLISHED, HTTP_STATUS.SERVICE_UNAVAILABLE);
+    }
+    if (input.clusterId !== clusterId) {
       failValidation(MANAGEMENT_ERROR_CODE.CLUSTER_ID_MISMATCH, HTTP_STATUS.CONFLICT);
     }
     const ex = this.operationsById.get(input.operationId);
@@ -428,14 +479,6 @@ class ManagementV1Owner {
   async handleGetOperationStatusRequest(q, r) {
     const id = q.params?.operationId;
     return runHandler(r, () => this.getOperationStatus(id), HTTP_STATUS.NOT_FOUND);
-  }
-
-  registerRoutes(fastify) {
-    fastify.get(MANAGEMENT_V1_ROUTE.FACTS, async (q, r) => this.handleGetFactsRequest(q, r));
-    fastify.post(MANAGEMENT_V1_ROUTE.OPERATIONS, async (q, r) =>
-      this.handlePostOperationRequest(q, r));
-    fastify.get(MANAGEMENT_V1_ROUTE.OPERATION_BY_ID, async (q, r) =>
-      this.handleGetOperationStatusRequest(q, r));
   }
 }
 
