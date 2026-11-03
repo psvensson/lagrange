@@ -273,6 +273,45 @@ function buildCommittedReadResult(reads, readAtMs) {
   };
 }
 
+function checkOwnerUnavailability(owner) {
+  if (owner.stopped) {
+    return unavailable(
+      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.OWNER_STOPPED,
+      null,
+      owner.readTimeoutMs,
+    );
+  }
+  if (owner.outcome === OUTCOME.PENDING) {
+    return unavailable(
+      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_PENDING,
+      null,
+      owner.readTimeoutMs,
+    );
+  }
+  if (owner.outcome === OUTCOME.NO_RECORD) {
+    return unavailable(
+      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.NO_RECORD,
+      null,
+      owner.readTimeoutMs,
+    );
+  }
+  if (!owner.record) {
+    return unavailable(
+      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED,
+      null,
+      owner.readTimeoutMs,
+    );
+  }
+  if (owner.superseded) {
+    return unavailable(
+      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE,
+      owner.record.epoch,
+      owner.readTimeoutMs,
+    );
+  }
+  return null;
+}
+
 class ServeEligibilityOwner {
   /**
    * @param {Object} options
@@ -604,6 +643,62 @@ class ServeEligibilityOwner {
       reasons: decided.reasons.length === 0 ? NO_REASONS : decided.reasons,
       epoch,
       leaseExpiresAtMs,
+    });
+  }
+
+  /**
+   * Synchronous answer for a cohort of nodes.
+   * @param {Array<string>} [nodeIds]
+   * @return {Object}
+   */
+  answerCohort(nodeIds) {
+    const unavail = checkOwnerUnavailability(this);
+    if (unavail) {
+      return Object.freeze({
+        state: SERVE_ELIGIBILITY_STATE.UNAVAILABLE,
+        reason: unavail.reason,
+        epoch: unavail.epoch,
+        retryAfterMs: unavail.retryAfterMs,
+        answers: Object.freeze({}),
+        eligibleNodeIds: Object.freeze([]),
+      });
+    }
+    const {epoch} = this.record;
+    const targetNodeIds = Array.isArray(nodeIds) && nodeIds.length > 0 ?
+      nodeIds :
+      [...new Set([
+        ...this.record.nodeRowsById.keys(),
+        ...this.record.publication.publishedActiveNodeIds,
+      ])];
+    const answers = {};
+    const eligibleNodeIds = [];
+    let unavailableMember = null;
+    for (const nodeId of targetNodeIds) {
+      const memberAnswer = this.answer(nodeId);
+      answers[nodeId] = memberAnswer;
+      if (memberAnswer.state === SERVE_ELIGIBILITY_STATE.UNAVAILABLE) {
+        if (!unavailableMember) {
+          unavailableMember = memberAnswer;
+        }
+      } else if (memberAnswer.decision === SERVE_ELIGIBILITY_DECISION.ELIGIBLE) {
+        eligibleNodeIds.push(nodeId);
+      }
+    }
+    if (unavailableMember) {
+      return Object.freeze({
+        state: SERVE_ELIGIBILITY_STATE.UNAVAILABLE,
+        reason: unavailableMember.reason,
+        epoch,
+        retryAfterMs: this.readTimeoutMs,
+        answers: Object.freeze(answers),
+        eligibleNodeIds: Object.freeze(eligibleNodeIds),
+      });
+    }
+    return Object.freeze({
+      state: SERVE_ELIGIBILITY_STATE.READY,
+      epoch,
+      answers: Object.freeze(answers),
+      eligibleNodeIds: Object.freeze(eligibleNodeIds),
     });
   }
 

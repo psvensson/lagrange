@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2211,
+    "unit": 2212,
     "integration": 120,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-e761c692",
+  "censusSize": 2557,
+  "digest": "fnv1a32-9793b296",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2111,6 +2111,7 @@
     "test/runtime/pgwire-port-allocator.test.js": "unit",
     "test/runtime/pgwire-protocol-handler.test.js": "unit",
     "test/runtime/pgwire-protocol-ordering.test.js": "unit",
+    "test/runtime/pgwire-provisioning-unavailable.test.js": "unit",
     "test/runtime/pgwire-result-mapper.test.js": "unit",
     "test/runtime/pgwire-runtime-module.test.js": "unit",
     "test/runtime/pgwire-schema-provisioning-job.test.js": "unit",

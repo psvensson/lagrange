@@ -14,8 +14,8 @@
     },
     {
       "id": "provisioning-typed-cohort-outcomes",
-      "passed": false,
-      "evidence": "not yet measured"
+      "passed": true,
+      "evidence": "attempt 2: test/runtime/pgwire-provisioning-unavailable.test.js 2/2 tests ok; test/query/sql-query-engine-provision-partition-waits.test.js 40/40 tests ok; test/query/sql-query-engine-create-table-quorum.test.js 1/1 test ok. CREATE TABLE completes as ACTIVE with contractState 'under_replicated' carrying {epoch, requestedReplicaCount, committedReplicaCount, missingReplicaCount} when quorum minimum reached below full RF, surfaced to client via NoticeResponse; below quorum throws typed QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE with SQLSTATE 57P03; degraded provisioning fallback, provisioning convergence poll/10s constant, and transient-shortfall minimum lowering deleted."
     },
     {
       "id": "rebalancer-decisions-from-committed-leases-and-one-operation-source",

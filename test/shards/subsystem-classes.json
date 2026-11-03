@@ -11,7 +11,7 @@
     "convergence-topology": 78,
     "distributed-harness": 209,
     "examples-e2e": 8,
-    "pgwire-compat": 21,
+    "pgwire-compat": 22,
     "placement-rebalance": 270,
     "query-sql": 191,
     "release-packaging": 15,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-1a8d542d",
+  "censusSize": 2557,
+  "digest": "fnv1a32-4b4b68aa",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-613be479",
+  "observationDigest": "fnv1a32-8a69534a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2130,6 +2130,7 @@
     "test/runtime/pgwire-port-allocator.test.js": "pgwire-compat",
     "test/runtime/pgwire-protocol-handler.test.js": "pgwire-compat",
     "test/runtime/pgwire-protocol-ordering.test.js": "pgwire-compat",
+    "test/runtime/pgwire-provisioning-unavailable.test.js": "pgwire-compat",
     "test/runtime/pgwire-result-mapper.test.js": "pgwire-compat",
     "test/runtime/pgwire-runtime-module.test.js": "pgwire-compat",
     "test/runtime/pgwire-schema-provisioning-job.test.js": "pgwire-compat",
@@ -13202,7 +13203,6 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
-        "test/control-plane/serve-eligibility-test-support.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },

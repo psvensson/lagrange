@@ -71,6 +71,16 @@ const controlPlaneReadinessServeEligibilityMethods = {
     return this.getServeEligibilityOwner().answer(nodeId);
   },
 
+  /**
+   * The committed-epoch answer for a cohort of nodes: per-member answers,
+   * eligibleNodeIds and epoch.
+   * @param {Array<string>} [nodeIds]
+   * @return {Object}
+   */
+  answerServeCohort(nodeIds) {
+    return this.getServeEligibilityOwner().answerCohort(nodeIds);
+  },
+
   subscribeServeEligibility(listener) {
     return this.getServeEligibilityOwner().subscribe(listener);
   },

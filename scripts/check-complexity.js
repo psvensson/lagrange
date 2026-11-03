@@ -138,7 +138,8 @@ const TARGET_THRESHOLD = 12;
 // the checker's hint after restoring ownership in the benchmark chain (campaign
 // runner, workload call site, identity inspection, readiness, durability proof).
 // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 1731 -> 1728 on the checker's hint.
-const BASELINE_COUNT = 1728;
+// 2026-11-03 (quest serve-eligibility-committed-epoch-read attempt 2): tightened 1728 -> 1727 on the checker's hint.
+const BASELINE_COUNT = 1727;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -1,5 +1,6 @@
 const OWNER_CONTRACT_STATE = Object.freeze({
   READY: 'ready',
+  UNDER_REPLICATED: 'under_replicated',
   PENDING: 'pending',
   DEFERRED: 'deferred',
   BLOCKED: 'blocked',

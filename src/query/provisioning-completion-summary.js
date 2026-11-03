@@ -1,9 +1,9 @@
 // Pure provisioning-completion summary shared by the initial-partition
 // provisioning flow: normalizes the requested/resolved/minimum/routable
-// replica counts and derives the completion contract outcome, forcing
-// PENDING while the full requested replica count has not converged (the
-// quorum-minimum create itself proceeds; full convergence is the
-// rebalancer's post-join obligation - round-14).
+// replica counts and derives the completion contract outcome, answering
+// UNDER_REPLICATED while the full requested replica count has not converged
+// and the quorum minimum is reached (the quorum-minimum create itself proceeds;
+// full convergence is the rebalancer's post-join obligation - round-14/F10).
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
 const {
@@ -40,16 +40,15 @@ function buildProvisioningCompletionSummary(options = {}) {
   const defaultContractOutcome = buildOwnerContractOutcome({
     contractState: fullReplicaCountConverged ?
       OWNER_CONTRACT_STATE.READY :
-      OWNER_CONTRACT_STATE.PENDING,
-    nextAction: fullReplicaCountConverged ?
-      OWNER_CONTRACT_NEXT_ACTION.PROCEED :
-      OWNER_CONTRACT_NEXT_ACTION.WAIT,
+      OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+    nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
   });
-  const requestedContractOutcome = buildOwnerContractOutcome({
-    contractState:
-      options?.contractState || defaultContractOutcome.contractState,
-    nextAction: options?.nextAction || defaultContractOutcome.nextAction,
-  });
+  const requestedContractOutcome = options?.contractState ?
+    buildOwnerContractOutcome({
+      contractState: options.contractState,
+      nextAction: options?.nextAction || defaultContractOutcome.nextAction,
+    }) :
+    defaultContractOutcome;
   const contractOutcome =
     fullReplicaCountConverged === false &&
     requestedContractOutcome.contractState === OWNER_CONTRACT_STATE.READY &&
@@ -57,11 +56,19 @@ function buildProvisioningCompletionSummary(options = {}) {
       defaultContractOutcome :
       requestedContractOutcome;
 
+  const committedReplicaCount = routableReplicaCount;
+  const missingReplicaCount = Number.isInteger(requestedReplicaCount) ?
+    Math.max(0, requestedReplicaCount - committedReplicaCount) :
+    0;
+
   return {
     requestedReplicaCount,
     resolvedReplicaCount,
     minimumRoutableReplicaCount,
     routableReplicaCount,
+    committedReplicaCount,
+    missingReplicaCount,
+    epoch: options?.epoch || null,
     fullReplicaCountConverged,
     contractState: contractOutcome.contractState,
     nextAction: contractOutcome.nextAction,

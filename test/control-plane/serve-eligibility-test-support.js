@@ -189,6 +189,34 @@ export function createCommittedServeEligibilityOwner(options = {}) {
       calls.answers.push(nodeId);
       return answers.get(nodeId) || defaultAnswer;
     },
+    answerServeCohort(nodeIds) {
+      const ids = Array.isArray(nodeIds) && nodeIds.length > 0 ?
+        nodeIds :
+        (answers.size > 0 ? [...answers.keys()] : ['node-a']);
+      const resultAnswers = {};
+      const eligibleNodeIds = [];
+      let hasUnavailable = false;
+      let firstUnavailableReason = null;
+      for (const id of ids) {
+        const ans = this.answerServeEligibility(id);
+        resultAnswers[id] = ans;
+        if (ans.state === SERVE_ELIGIBILITY_STATE.UNAVAILABLE) {
+          hasUnavailable = true;
+          if (!firstUnavailableReason) firstUnavailableReason = ans.reason;
+        } else if (ans.decision === SERVE_ELIGIBILITY_DECISION.ELIGIBLE) {
+          eligibleNodeIds.push(id);
+        }
+      }
+      return {
+        state: hasUnavailable ?
+          SERVE_ELIGIBILITY_STATE.UNAVAILABLE :
+          SERVE_ELIGIBILITY_STATE.READY,
+        reason: hasUnavailable ? firstUnavailableReason : null,
+        epoch: FIXTURE_EPOCH,
+        answers: resultAnswers,
+        eligibleNodeIds,
+      };
+    },
     async readServeEligibility() {
       calls.refreshes += 1;
     },

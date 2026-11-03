@@ -36,6 +36,7 @@ import {
   buildBackendKeyData,
   buildReadyForQuery,
   buildErrorResponse,
+  buildNoticeResponse,
   buildRowDescription,
   buildDataRow,
   buildCommandComplete,
@@ -64,8 +65,8 @@ import {
   extractRowValues,
   isEmptyStatementResult,
 } from './pgwire-result-mapper.js';
-import {readExecutedStatementType} from
-  '../query/application-database-result.js';
+import {readExecutedStatementType} from '../query/application-database-result.js';
+import {OWNER_CONTRACT_STATE} from '../control-plane/owner-contract-outcome.js';
 import {AST_TYPE} from '../query/parser-constants.js';
 import {
   writeCString,
@@ -664,6 +665,15 @@ class PgWireProtocolHandler {
       }
 
       const statementType = readExecutedStatementType(result);
+      if (result?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED) {
+        const ep = result.epoch?.publicationEpoch != null ?
+          ` at epoch ${result.epoch.publicationEpoch}` : '';
+        const msg =
+          `Table created under_replicated: ${result.missingReplicaCount ?? 1} replica(s) missing${ep}`;
+        this._socket.write(buildNoticeResponse(
+          PG_SEVERITY.NOTICE, PG_ERROR_CODE.SUCCESSFUL_COMPLETION, msg,
+        ));
+      }
       const notice = takeTransactionEndNotice(this._session, statementType);
       if (notice) this._socket.write(notice);
       this._socket.write(buildCommandComplete(tag));
@@ -763,6 +773,7 @@ export {
   buildBackendKeyData,
   buildReadyForQuery,
   buildErrorResponse,
+  buildNoticeResponse,
   buildRowDescription,
   buildDataRow,
   buildCommandComplete,
