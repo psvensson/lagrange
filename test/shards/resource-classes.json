@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2531,
+    "ordinary": 2533,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2557,
-  "digest": "fnv1a32-192af2a6",
+  "censusSize": 2559,
+  "digest": "fnv1a32-3250fa97",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1186,6 +1186,7 @@
     "test/message-group/message-group-service-strict-cdc-join-convergence.test.js": "ordinary",
     "test/message-group/message-group-service.test.js": "ordinary",
     "test/message-group/message-group-target-resolver.test.js": "ordinary",
+    "test/message-group/message-group-unparsable-peer-address.test.js": "ordinary",
     "test/message-group/message-retry-handler-wait-bound-spent.test.js": "ordinary",
     "test/message-group/metadata-cache-removal.test.js": "ordinary",
     "test/message-group/no-silent-delivery-failures.property.test.js": "ordinary",
@@ -1429,6 +1430,7 @@
     "test/partition/partition-write-leadership-transfer-committed.test.js": "ordinary",
     "test/partition/partition-write-leadership-transfer.test.js": "ordinary",
     "test/partition/partition-write-typed-releases.test.js": "ordinary",
+    "test/partition/peer-admission-unparsable-address.test.js": "ordinary",
     "test/partition/pending-request-round-trip.property.test.js": "ordinary",
     "test/partition/pending-request-tracker-wait-bound-spent.test.js": "ordinary",
     "test/partition/pending-request-tracker.test.js": "ordinary",

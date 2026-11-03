@@ -83,7 +83,8 @@ function admitPartitionRaftPeer(service, peer) {
     return refused;
   }
   return admitGroupPeer(service.raft, admissionGroupOf(service), {...peer,
-    nodeId: AddressManager.getInstance().getNodeId(peer.peerAddress)});
+    nodeId: AddressManager.getInstance().nodeIdOfProjectedAddress(
+      peer.peerAddress)});
 }
 
 // The row-driven retirements (REMOVE_PEER) the port deferred, by the change

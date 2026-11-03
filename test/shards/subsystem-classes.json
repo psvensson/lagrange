@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 158,
     "solver-tooling": 7,
-    "storage-partition": 211,
+    "storage-partition": 212,
     "storage-raft": 146,
     "test-infrastructure": 156,
     "transactions": 17,
-    "transport-messaging": 113,
+    "transport-messaging": 114,
     "wasm-toolchain": 74
   },
-  "censusSize": 2557,
-  "digest": "fnv1a32-ee201656",
+  "censusSize": 2559,
+  "digest": "fnv1a32-ca049bef",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-390ac6c5",
+  "observationDigest": "fnv1a32-6c3a9eab",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1206,6 +1206,7 @@
     "test/message-group/message-group-service-strict-cdc-join-convergence.test.js": "transport-messaging",
     "test/message-group/message-group-service.test.js": "transport-messaging",
     "test/message-group/message-group-target-resolver.test.js": "transport-messaging",
+    "test/message-group/message-group-unparsable-peer-address.test.js": "transport-messaging",
     "test/message-group/message-retry-handler-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/metadata-cache-removal.test.js": "transport-messaging",
     "test/message-group/no-silent-delivery-failures.property.test.js": "transport-messaging",
@@ -1449,6 +1450,7 @@
     "test/partition/partition-write-leadership-transfer-committed.test.js": "storage-partition",
     "test/partition/partition-write-leadership-transfer.test.js": "storage-partition",
     "test/partition/partition-write-typed-releases.test.js": "storage-partition",
+    "test/partition/peer-admission-unparsable-address.test.js": "storage-partition",
     "test/partition/pending-request-round-trip.property.test.js": "storage-partition",
     "test/partition/pending-request-tracker-wait-bound-spent.test.js": "storage-partition",
     "test/partition/pending-request-tracker.test.js": "storage-partition",
@@ -9892,6 +9894,17 @@
         "test/test-helpers/controllable-consensus-port.js"
       ]
     },
+    "test/message-group/message-group-unparsable-peer-address.test.js": {
+      "files": [
+        "src/message-group/message-group-service.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js"
+      ]
+    },
     "test/message-group/message-retry-handler-wait-bound-spent.test.js": {
       "files": [
         "src/logging/wait-bound-spent.js"
@@ -12176,6 +12189,19 @@
         "src/rebalancer/replica-operation-repository.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/peer-admission-unparsable-address.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/query/sql-query-engine-provision-target-methods.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },

@@ -411,10 +411,15 @@ class SQLQueryEngineProvisionTargetMethods {
 }
 
 // The node each founder is placed on, read from the cohort's unified
-// addresses (the founding placement): the GENESIS stamp commits it.
+// addresses (the founding placement): the GENESIS stamp commits it. A row's
+// address that is not a unified address commits no node for that founder;
+// addressing that founder then refuses typed.
 function founderNodeIdsOf(addressManager, replicaIds, peerAddresses) {
   const founderNodeIds = {};
   for (const address of peerAddresses) {
+    if (!addressManager.validate(address).valid) {
+      continue;
+    }
     const parsed = addressManager.parse(address);
     if (replicaIds.includes(parsed.serviceId)) {
       founderNodeIds[parsed.serviceId] = parsed.nodeId;

@@ -1,0 +1,31 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "partition-admission-refuses-typed",
+      "passed": true,
+      "evidence": "Native partition leader reconcile refused malformed services address as WITHOUT_NODE_ID, retained voters, and admitted corrected row; follower stayed NOT_LEADER. test/partition/peer-admission-unparsable-address.test.js (3/3), source d26bcf63f33f96b92e8888711e0eeae86302dedb, Harnessd/Lab #2651 original log #2653 (full 2494B SHA256 53d27552f3f613779f1451fd09d5dfc6baec4440e0b0a796889589b64baa6336)."
+    },
+    {
+      "id": "message-group-admission-refuses-typed",
+      "passed": true,
+      "evidence": "Real MessageGroupService native raft-rs admission port received malformed services address, logged port-owned WITHOUT_NODE_ID refusal, admitted corrected peer after cache wake. test/message-group/message-group-unparsable-peer-address.test.js (6/6), source d26bcf63, original physical tv-dator log Harnessd/Lab #2651/#2653. Negative control changed accessor back to throwing getNodeId: 3/6 behavior assertions failed; restored correction: 6/6."
+    },
+    {
+      "id": "founding-cohort-does-not-throw",
+      "passed": true,
+      "evidence": "test/partition/peer-admission-unparsable-address.test.js (c), founding-cohort buildInitialPartitionBootstrapTopology keeps valid founderNodeIds and omits malformed founder; original #2653 log, source d26bcf63."
+    },
+    {
+      "id": "no-uncaught-failure-from-the-reconcile-hop",
+      "passed": true,
+      "evidence": "Both real native leader reconcile witnesses attach uncaughtException observers through the cache-triggered scheduled wake, require zero uncaught before and after corrected-row admission. Native message-group 6/6 + partition 3/3, original source-pinned Lab #2651/#2653 untruncated, test:static 33/33 green locally at equivalent committed tree c0c620ca67595c70fd8c515489a04b6f33b6c92d."
+    },
+    {
+      "id": "row-derived-parse-census-recorded",
+      "passed": true,
+      "evidence": "Independent census of PR #184's row-derived parses: partition src/partition/partition-service-raft-membership-administration.js:86 and message group src/message-group/message-group-service-raft-lifecycle.js:155 both call the single nonthrowing AddressManager.nodeIdOfProjectedAddress accessor at src/address/address-manager.js:440; founder src/query/sql-query-engine-provision-target-methods.js:417-429 separately validates then parses and omits invalid addresses. Exactly three sites, independently reviewed by verify_malformed_address_quest. Unrelated address readers are outside the sealed Quest scope."
+    }
+  ]
+}
