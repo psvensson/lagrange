@@ -4,72 +4,19 @@
  * Requirements: 1.1, 1.3, 1.4, 1.5, 10.1, 10.3, 10.4
  */
 
-import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {
+  createMockMessageRouter,
+  createMockSystemCache,
+  mockPartitionData,
+} from './sql-query-engine-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
-
-const mockPartitionData = new Map();
-
-function createMockMessageRouter() {
-  return {
-    deliver: async function(address, message) {
-      const parts = address.split('/');
-      const replicaId = parts[2];
-      if (message.type === 'QUERY') {
-        const data = mockPartitionData.get(replicaId) || [];
-        return buildDeliveryEnvelope({acknowledged: true}, {
-          success: true,
-          rows: data,
-          changes: 0,
-        });
-      }
-      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
-    },
-  };
-}
-
-function createMockSystemCache(tables, partitions) {
-  const canonicalPartitions = partitions.map((partition) => ({
-    ...partition,
-    leader_node_id: partition.leader_node_id || 'test-node',
-  }));
-  return {
-    tables,
-    partitions: canonicalPartitions,
-    services: canonicalPartitions.map((p) => ({
-      service_id: p.partition_id,
-      service_type: 'partition',
-      partition_id: p.partition_id,
-      node_id: 'test-node',
-      raft_role: 'leader',
-      address: `test-node/partition/${p.partition_id}`,
-      status: 'active',
-    })),
-    get(type, key) {
-      if (type === 'tables') {
-        return this.tables.find((t) => t.table_name === key);
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'partitions') return this.partitions.filter(predicate);
-      if (type === 'services') return this.services.filter(predicate);
-      return [];
-    },
-    getAll(type) {
-      if (type === 'partitions') return this.partitions;
-      if (type === 'tables') return this.tables;
-      if (type === 'services') return this.services;
-      return [];
-    },
-  };
-}
 
 function createEngine(cache) {
   return new SQLQueryEngine({

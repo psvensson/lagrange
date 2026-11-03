@@ -263,11 +263,10 @@ const RATCHET_TARGETS = [
     // deleted): tightened 649/24346 -> 648/24311 on the checker's hint.
     // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 648/24311 -> 647/24308 on the
     // checker's hint (shared fixture helpers in the routing tests).
-    // 2026-11-03 (composed-05-comparison-readiness): composed Stream B, PR #184,
-    // PR #189, Group B, Release Authority, Group A, Management v1, and PR #197;
-    // measured 653 clone group(s) and 24462 duplicated line(s) on the combined tree.
-    baselineCloneGroupCount: 653,
-    baselineDuplicatedLineCount: 24462,
+    // 2026-11-03 (composed-05-comparison-readiness): tightened 24308 -> 24291 on
+    // the checker's hint after deduplicating query and CDC test lifecycle fixtures.
+    baselineCloneGroupCount: 647,
+    baselineDuplicatedLineCount: 24291,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

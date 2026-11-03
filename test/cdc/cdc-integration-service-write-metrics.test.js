@@ -5,30 +5,18 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {
-  CDCIntegrationService,
-} from '../../src/cdc/cdc-integration-service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CDC_OPERATION, METRICS_LOG_TAG,
 } from '../../src/constants/index.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  createCDCServiceWithMockSql,
+  collectServiceInfoCalls as collectInfoCalls,
+  setupCDCTestLifecycle,
+} from './cdc-integration-service-test-support.js';
 
-beforeEach(() => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize({});
-  const logger = LoggingService.getInstance();
-  logger.initialize({level: 'error'});
-});
-
-afterEach(() => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-});
+setupCDCTestLifecycle(beforeEach, afterEach);
 
 function createMockSqlEngine() {
   return {
@@ -47,22 +35,9 @@ function createFailingSqlEngine() {
 }
 
 function createService(sqlEngine) {
-  const service = new CDCIntegrationService({
-    nodeId: 'test-node',
+  return createCDCServiceWithMockSql({
     sqlQueryEngine: sqlEngine || createMockSqlEngine(),
   });
-  service.initialize();
-  return service;
-}
-
-function collectInfoCalls(service) {
-  const calls = [];
-  const originalInfo = service.logger.info.bind(service.logger);
-  service.logger.info = function(tag, data) {
-    calls.push({tag, data});
-    return originalInfo(tag, data);
-  };
-  return calls;
 }
 
 function collectErrorCalls(service) {

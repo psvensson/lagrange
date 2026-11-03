@@ -28,7 +28,7 @@
   "censusSize": 2584,
   "digest": "fnv1a32-97e5c392",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2fe77977",
+  "observationDigest": "fnv1a32-9b256b10",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3962,7 +3962,6 @@
     "test/cdc/cdc-propagation-metrics.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/config/configuration-manager.js",
         "src/node/node-lifecycle-state-machine.js"
       ]
     },
@@ -13368,7 +13367,9 @@
     "test/query/select-no-from.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/projection-readiness-constants.js"
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/service-lifecycle-call-invocation.test.js": {
@@ -13451,7 +13452,9 @@
     "test/query/sql-query-engine-dispatch-metrics.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/projection-readiness-constants.js"
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/sql-query-engine-distributed-transactions.test.js": {
@@ -13496,7 +13499,9 @@
     "test/query/sql-query-engine-metrics.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/projection-readiness-constants.js"
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/sql-query-engine-partition-readiness-waits.test.js": {

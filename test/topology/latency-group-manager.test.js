@@ -1,7 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN, NODE_STATE, TABLES} from '../../src/constants/index.js';
 import {
   LATENCY_ASSIGNMENT_STATE,
@@ -13,33 +11,10 @@ import {
 import {
   LATENCY_GROUP_MANAGER_REASON,
 } from '../../src/topology/latency-group-manager-constants.js';
-
-function setupConfig(overrides = {}) {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize({
-    node: {id: 'node-a'},
-    logging: {level: 'error'},
-    latency: {
-      groupThresholdMs: 100,
-      recalcIntervalMs: 1000,
-      recalcJitterRatio: 0.1,
-      pingTimeoutMs: 50,
-      pingRetryCount: 2,
-      smoothingAlpha: 0.5,
-      propagationMode: 'safe',
-      ...overrides,
-    },
-  });
-  const logging = LoggingService.getInstance();
-  logging.initialize({level: 'error'});
-}
-
-function teardownConfig() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-}
+import {
+  setupLatencyTestConfig as setupConfig,
+  teardownLatencyTestConfig as teardownConfig,
+} from './latency-test-config.js';
 
 function createNodeRow(nodeId, groupId = null) {
   return {

@@ -12,9 +12,7 @@ import {
   CDC_OPERATION, METRICS_LOG_TAG,
 } from '../../src/constants/index.js';
 import {CDC_EPOCH_CONFIG_KEY} from '../../src/cdc/cdc-constants.js';
-import {ConfigurationManager} from
-  '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
+import {setupCDCTestLifecycle} from './cdc-integration-service-test-support.js';
 import {
   AssignmentEpochManager,
 } from '../../src/rebalancer/assignment-epoch-manager.js';
@@ -22,19 +20,7 @@ import {AssignmentEpoch} from '../../src/rebalancer/assignment-epoch.js';
 import {NodeState} from
   '../../src/node/node-lifecycle-state-machine.js';
 
-beforeEach(() => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize({});
-  const logger = LoggingService.getInstance();
-  logger.initialize({level: 'error'});
-});
-
-afterEach(() => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-});
+setupCDCTestLifecycle(beforeEach, afterEach);
 
 function createMockEventContext(overrides = {}) {
   const events = [];

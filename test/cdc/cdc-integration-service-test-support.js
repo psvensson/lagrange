@@ -6,10 +6,29 @@
  * parent and the re-enabled concern suites import a single semantic copy.
  */
 
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+
+export function setupCDCTestLifecycle(beforeEach, afterEach) {
+  beforeEach(() => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    const config = ConfigurationManager.getInstance();
+    config.initialize({});
+    const logger = LoggingService.getInstance();
+    logger.initialize({level: 'error'});
+  });
+
+  afterEach(() => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+}
 
 /**
  * Create a mock SQL query engine for testing.
@@ -131,4 +150,36 @@ export function createLocalSystemTablePartitionServices(
   return new Map([
     [partitionId, partitionService],
   ]);
+}
+
+/**
+ * Create a CDC integration service with a mock SQL query engine.
+ * @param {Object} [options]
+ * @return {Object}
+ */
+export function createCDCServiceWithMockSql({
+  nodeId = 'test-node',
+  sqlQueryEngine,
+} = {}) {
+  const service = new CDCIntegrationService({
+    nodeId,
+    sqlQueryEngine,
+  });
+  service.initialize();
+  return service;
+}
+
+/**
+ * Capture info log calls on a CDC integration service instance.
+ * @param {Object} service
+ * @return {Array<{tag: string, data: *}>}
+ */
+export function collectServiceInfoCalls(service) {
+  const calls = [];
+  const originalInfo = service.logger.info.bind(service.logger);
+  service.logger.info = function(tag, data) {
+    calls.push({tag, data});
+    return originalInfo(tag, data);
+  };
+  return calls;
 }
