@@ -338,7 +338,7 @@ function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
       dimensions[
         CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
       ] === true &&
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !== false
+      dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true
     );
   };
   if (!pendingAckNodeIds.every(isOwnerAckCompletionEligible)) {

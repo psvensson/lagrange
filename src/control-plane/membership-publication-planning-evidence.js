@@ -160,12 +160,8 @@ function mergePlanningEvidenceRows(tableName, authoritativeRows = [], projection
   ];
 }
 
-function shouldMergePlanningEvidenceRows(tableName, options = {}) {
-  return (
-    resolveMembershipPublicationReadProfile(options.readProfile) ===
-      MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING &&
-    Object.hasOwn(MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE, tableName)
-  );
+function shouldMergePlanningEvidenceRows(_tableName, _options = {}) {
+  return false;
 }
 
 function resolveControlPlanePublicationsOwner(options = {}) {

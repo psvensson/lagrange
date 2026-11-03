@@ -37,7 +37,7 @@ const controlPlaneReadinessRecoveryEpochSummaryMethods = {
       typeof snapshot.projectionReadinessContract === 'object' ?
         snapshot.projectionReadinessContract :
         null;
-    return projectionReadinessContract?.recoveryOpen !== false;
+    return projectionReadinessContract?.recoveryOpen === true;
   },
 
   /**
@@ -92,7 +92,7 @@ const controlPlaneReadinessRecoveryEpochSummaryMethods = {
         LOCAL_STR_ZERO,
       priorityReasonCodes,
       reasonCodes,
-      projectionReadinessContract?.recoveryOpen !== false ?
+      projectionReadinessContract?.recoveryOpen === true ?
         LOCAL_STR_ONE :
         LOCAL_STR_ZERO,
     ].join(LOCAL_STR_SIGNATURE_FIELD_SEPARATOR);
@@ -186,7 +186,7 @@ const controlPlaneReadinessRecoveryEpochSummaryMethods = {
           Object.freeze([]),
       reasonCodes: Object.freeze(reasonCodes),
       recoveryActive:
-        projectionReadinessContract?.recoveryOpen !== false,
+        projectionReadinessContract?.recoveryOpen === true,
     });
   },
 

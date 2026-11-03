@@ -24,8 +24,8 @@
     },
     {
       "id": "publication-planning-without-serve-cycle",
-      "passed": false,
-      "evidence": "red: test/control-plane/publication-planning-committed-rows.test.js 2/2 not ok (cache rows merged into the planning census; unavailable read answered from the cache)"
+      "passed": true,
+      "evidence": "attempt 4: test/control-plane/publication-planning-committed-rows.test.js 3/3 tests ok (planning reads of services answer the committed rows without merge with SystemTableCache projection; unavailable committed planning read surfaces typed unavailability without cache fallback); all 378 tests in test/control-plane/membership-publication-coordinator.test.js ok; !== false and empty defaults dropped from publication planning decision paths (priority-partition-readiness-data, readiness-repair, candidate-derivation, coordinator-reconcile, target-selection, recovery-epoch-summary-methods, node-service-rows); allowStaleOnCacheChange dropped from getAllNodeReadinessSync and coordinator-planning."
     },
     {
       "id": "serve-lane-opens-on-fresh-formation",

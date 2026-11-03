@@ -23,7 +23,7 @@ const objectKeys = Object.keys;
 
 function isReadinessPromotable(readinessEntry = null) {
   if (readinessEntry === null || readinessEntry === undefined) {
-    return true;
+    return false;
   }
   const readinessSnapshot = copyStrictOwnDataRecord(readinessEntry);
   if (readinessSnapshot === null) {
@@ -33,9 +33,6 @@ function isReadinessPromotable(readinessEntry = null) {
     readinessSnapshot,
     [DIMENSIONS_FIELD],
   );
-  if (dimensionsEntry.state === DATA_PROPERTY_STATE.ABSENT) {
-    return true;
-  }
   if (dimensionsEntry.state !== DATA_PROPERTY_STATE.VALID) {
     return false;
   }
@@ -66,13 +63,13 @@ function isReadinessPromotable(readinessEntry = null) {
   // input). The remaining !== false defaults are attempt 4's.
   if (!hasPublicationSignal) {
     return clusterHealthy === true &&
-      controlPlaneWritable !== false &&
-      repairEligible !== false;
+      controlPlaneWritable === true &&
+      repairEligible === true;
   }
   if (published.value === true) {
     return clusterHealthy === true &&
-      controlPlaneWritable !== false &&
-      repairEligible !== false;
+      controlPlaneWritable === true &&
+      repairEligible === true;
   }
   return recoveryEligible.value === true;
 }

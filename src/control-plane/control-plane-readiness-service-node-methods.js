@@ -337,10 +337,7 @@ const controlPlaneReadinessNodeMethods = {
       const cachedSnapshot = this.getCachedReadinessSnapshot(
         nodeId,
         maxCachedAgeMs,
-        {
-          ...options,
-          allowStaleOnCacheChange: true,
-        },
+        options,
       );
       if (cachedSnapshot) {
         readiness.push(cachedSnapshot);
