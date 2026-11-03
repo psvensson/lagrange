@@ -583,7 +583,16 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
   async ensureReplaceRemovalIntentRecorded(operation, stepMetadata) {
     const durable = await this.repository
       .queryReplicaOperationPersistenceAuthorityOperation(operation);
-    if (durable?.workflowStep !== WORKFLOW_STEP.STOPPING) {
+    if (!durable || this.repository.isOperationTerminal(durable)) {
+      return false;
+    }
+    if (durable.workflowStep !== WORKFLOW_STEP.STOPPING) {
+      if (await this.updateStep(durable, WORKFLOW_STEP.STOPPING,
+        undefined, {stepMetadata, requireDurable: true}) &&
+          replaceIntentEntryOf(durable)) {
+        adoptDurableReplaceIntent(operation, durable);
+        return true;
+      }
       return false;
     }
     if (replaceIntentEntryOf(durable)) {

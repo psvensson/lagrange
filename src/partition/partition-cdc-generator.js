@@ -387,7 +387,15 @@ class PartitionCDCGenerator {
     }
 
     if (isUpdateOperation && entry.whereClause) {
-      const authoritativeRow = this.fetchUpdatedRow(tableName, entry.whereClause);
+      const postUpdateWhere = {...entry.whereClause};
+      if (entry.data && typeof entry.data === 'object') {
+        for (const key of Object.keys(postUpdateWhere)) {
+          if (Object.prototype.hasOwnProperty.call(entry.data, key)) {
+            postUpdateWhere[key] = entry.data[key];
+          }
+        }
+      }
+      const authoritativeRow = this.fetchUpdatedRow(tableName, postUpdateWhere);
       if (authoritativeRow) {
         return authoritativeRow;
       }

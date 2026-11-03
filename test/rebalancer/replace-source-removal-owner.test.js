@@ -847,3 +847,57 @@ test('W15 (F-3, O1 round 2): an absence in a configuration applied below ' +
     await harness.coordinator.shutdown();
   }
 });
+
+test('ensureReplaceRemovalIntentRecorded transitions non-terminal pre-STOPPING durable row to STOPPING with intent',
+  async (t) => {
+    const harness = await createHarness();
+    try {
+      const initialDurable = await persistedOperation(harness);
+      t.equal(initialDurable.workflowStep, WORKFLOW_STEP.PENDING,
+        'durable row starts at pre-STOPPING step PENDING');
+
+      harness.operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+      const stepMetadata = {
+        replaceRemovalIntent: true,
+        replaceWitnessCommitIndex: INTENT_COMMIT_INDEX,
+        replaceWitnessReplicaId: TARGET_REPLICA_ID,
+      };
+
+      const recorded = await harness.owner.ensureReplaceRemovalIntentRecorded(
+        harness.operation,
+        stepMetadata,
+      );
+      t.equal(recorded, true,
+        'transition to STOPPING succeeds from pre-STOPPING durable row');
+
+      const updatedDurable = await persistedOperation(harness);
+      t.equal(updatedDurable.workflowStep, WORKFLOW_STEP.STOPPING,
+        'durable row transitioned to STOPPING');
+      const latestStep = updatedDurable.stepsHistory?.at(-1) || {};
+      t.equal(latestStep.replaceRemovalIntent, true,
+        'removal intent recorded on durable STOPPING step');
+      t.equal(latestStep.replaceWitnessCommitIndex, INTENT_COMMIT_INDEX,
+        'witness commit index recorded');
+
+      const recordedAgain = await harness.owner.ensureReplaceRemovalIntentRecorded(
+        harness.operation,
+        stepMetadata,
+      );
+      t.equal(recordedAgain, true, 'idempotent call returns true');
+
+      updatedDurable.workflowStep = WORKFLOW_STEP.REMOVED;
+      updatedDurable.status = ReplicaStatus.COMPLETED;
+      await harness.coordinator.repository.persistOperationUpdate(
+        updatedDurable,
+        {requireDurable: false},
+      );
+      const terminalResult = await harness.owner.ensureReplaceRemovalIntentRecorded(
+        harness.operation,
+        stepMetadata,
+      );
+      t.equal(terminalResult, false, 'terminal durable row refuses transition');
+    } finally {
+      await harness.coordinator.shutdown();
+    }
+  },
+);

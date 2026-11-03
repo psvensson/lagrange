@@ -1375,3 +1375,40 @@ test('CDCIntegrationService - both mutation builders share the null-sentinel con
     );
   },
 );
+
+test('CDCIntegrationService - concurrent updateSystemTableRow calls with same coalescingKey but different payloads both execute',
+  async (t) => {
+    let callCount = 0;
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const originalExecuteQuery = mockSqlEngine.executeQuery.bind(mockSqlEngine);
+    mockSqlEngine.executeQuery = async (sql, params, options) => {
+      callCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return originalExecuteQuery(sql, params, options);
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    const [r1, r2] = await Promise.all([
+      service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {node_id: 'n1'},
+        {status: 'active'},
+        {coalescingKey: 'shared-coalescing-key'},
+      ),
+      service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {node_id: 'n1'},
+        {status: 'draining'},
+        {coalescingKey: 'shared-coalescing-key'},
+      ),
+    ]);
+
+    t.ok(r1, 'first update completes');
+    t.ok(r2, 'second update completes');
+    t.equal(callCount, 2, 'both updates execute because payloads differ');
+  },
+);

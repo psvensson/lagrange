@@ -11,6 +11,7 @@ import {
   PARTITION_CDC_EVENT_BUILD_STATE,
   PartitionCDCGenerator,
 } from '../../src/partition/partition-cdc-generator.js';
+import {extractParamUpdateData} from '../../src/partition/partition-cdc-parameterized-sql.js';
 import {CDC_OPERATION} from '../../src/constants/index.js';
 import {EventEmitter} from 'events';
 
@@ -472,6 +473,100 @@ describe('PartitionCDCGenerator', () => {
       assert.strictEqual(receivedEvents[0].data.value, 300);
       assert.strictEqual(receivedEvents[0].data.id, 'upd-param-2');
       assert.strictEqual(receivedEvents[0].data.status, 'kept');
+    });
+
+    it('should fetch authoritative row for parameterized UPDATE when WHERE column is mutated by SET', async () => {
+      const receivedEvents = [];
+      generator.subscribe((event) => receivedEvents.push(event));
+      db.exec(
+        'ALTER TABLE test_table ADD COLUMN status TEXT DEFAULT \'syncing\'',
+      );
+      db.exec(
+        'ALTER TABLE test_table ADD COLUMN extra TEXT DEFAULT \'authoritative-column\'',
+      );
+      db.prepare(
+        'INSERT INTO test_table (id, name, value, status, extra) VALUES (?, ?, ?, ?, ?)',
+      ).run('upd-cas-1', 'test-name', 100, 'syncing', 'preserved');
+      db.prepare(
+        'UPDATE test_table SET status = ?, value = ? WHERE id = ? AND status = ?',
+      ).run('active', 200, 'upd-cas-1', 'syncing');
+
+      const entry = {
+        type: 'QUERY',
+        sql: 'UPDATE test_table SET status = ?, value = ? WHERE id = ? AND status = ?',
+        params: ['active', 200, 'upd-cas-1', 'syncing'],
+        timestamp: Date.now(),
+      };
+
+      await generator.generateEvent(entry);
+
+      assert.strictEqual(receivedEvents.length, 1);
+      assert.strictEqual(receivedEvents[0].data.id, 'upd-cas-1');
+      assert.strictEqual(receivedEvents[0].data.status, 'active');
+      assert.strictEqual(receivedEvents[0].data.value, 200);
+      assert.strictEqual(
+        receivedEvents[0].data.extra,
+        'preserved',
+        'authoritative row columns are preserved when CAS WHERE column was mutated by SET',
+      );
+    });
+
+    it('should fetch authoritative row for write-entry UPDATE when whereClause column is mutated by data', async () => {
+      const receivedEvents = [];
+      generator.subscribe((event) => receivedEvents.push(event));
+      db.exec(
+        'ALTER TABLE test_table ADD COLUMN status TEXT DEFAULT \'syncing\'',
+      );
+      db.exec(
+        'ALTER TABLE test_table ADD COLUMN extra TEXT DEFAULT \'authoritative-column\'',
+      );
+      db.prepare(
+        'INSERT INTO test_table (id, name, value, status, extra) VALUES (?, ?, ?, ?, ?)',
+      ).run('upd-cas-2', 'test-name', 100, 'syncing', 'preserved-entry');
+      db.prepare(
+        'UPDATE test_table SET status = ?, value = ? WHERE id = ? AND status = ?',
+      ).run('active', 300, 'upd-cas-2', 'syncing');
+
+      const entry = {
+        type: 'UPDATE',
+        tableName: 'test_table',
+        whereClause: {id: 'upd-cas-2', status: 'syncing'},
+        data: {status: 'active', value: 300},
+        timestamp: Date.now(),
+      };
+
+      await generator.generateEvent(entry);
+
+      assert.strictEqual(receivedEvents.length, 1);
+      assert.strictEqual(receivedEvents[0].data.id, 'upd-cas-2');
+      assert.strictEqual(receivedEvents[0].data.status, 'active');
+      assert.strictEqual(receivedEvents[0].data.value, 300);
+      assert.strictEqual(receivedEvents[0].data.extra, 'preserved-entry');
+    });
+
+    it('extractParamUpdateData passes mutated WHERE column value to fetchUpdatedRow', () => {
+      let passedWhereClause = null;
+      const extracted = extractParamUpdateData({
+        sql: 'UPDATE replica_operations SET status = ?, workflow_step = ? WHERE operation_id = ? AND workflow_step = ?',
+        params: ['active', 'ACTIVE', 'op-cas-1', 'CREATING'],
+        tableName: 'replica_operations',
+        logger: {debug() {}, warn() {}},
+        fetchUpdatedRow: (_tableName, whereClause) => {
+          passedWhereClause = whereClause;
+          return {
+            operation_id: 'op-cas-1',
+            status: 'active',
+            workflow_step: 'ACTIVE',
+            partition_id: 'p1',
+          };
+        },
+      });
+
+      assert.deepStrictEqual(passedWhereClause, {
+        operation_id: 'op-cas-1',
+        workflow_step: 'ACTIVE',
+      });
+      assert.strictEqual(extracted.partition_id, 'p1');
     });
 
     it('should extract data from parameterized DELETE', async () => {

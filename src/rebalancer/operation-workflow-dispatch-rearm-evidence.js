@@ -557,18 +557,25 @@ async function runDeferredSafetyRetryInLane(
   if (
     !currentOperation ||
     owner.repository.isOperationTerminal(currentOperation) ||
-    !owner.repository.isOperationLocallyOwned(currentOperation) ||
-    !owner.isSafetyDeferredRetryableOperation(currentOperation)
+    !owner.repository.isOperationLocallyOwned(currentOperation)
   ) {
     return;
   }
+  let retryOperation = currentOperation;
+  if (!owner.isSafetyDeferredRetryableOperation(currentOperation)) {
+    if (operation && owner.isSafetyDeferredRetryableOperation(operation)) {
+      retryOperation = operation;
+    } else {
+      return;
+    }
+  }
   await owner.runOperationOwnerAction(
     OPERATION_OWNER_ACTION.EXECUTE,
-    currentOperation,
+    retryOperation,
     {
       boundary,
-      workflowStep: currentOperation.workflowStep || null,
-      partitionId: currentOperation.partitionId || null,
+      workflowStep: retryOperation.workflowStep || null,
+      partitionId: retryOperation.partitionId || null,
       runInlineWhenOwnerLaneHeld: true,
     },
   );
