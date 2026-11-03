@@ -25,7 +25,8 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {TABLES} from '../../src/constants/tables.js';
-import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus} from
+  '../../src/rebalancer/replica-status.js';
 import {
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
@@ -80,7 +81,11 @@ function seedCache(operationId, replicaId) {
     partition_id: PARTITION_ID, replica_id: replicaId,
     source_node_id: NODE_ID, target_node_id: NODE_ID,
     status: ReplicaStatus.PENDING, workflow_step: 'SENDING',
-    created_at: now, updated_at: now, steps_history: '[]', completed_at: null,
+    created_at: now, updated_at: now, completed_at: null,
+    // The founding create carries its GENESIS stamp in its first step, as the
+    // provisioning owner writes it (the leader's release authority reads it).
+    steps_history: JSON.stringify([{[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]:
+      genesisStampFor([replicaId], {[replicaId]: NODE_ID})}]),
     create_admission_state: null, create_admission_token: null,
     create_admission_replica_created_at: null, create_admission_attempt_token: null,
     create_admission_previous_attempt_token: null, create_admission_attempt_seq: null,

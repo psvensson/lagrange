@@ -25,7 +25,7 @@ import {TRANSACTION_RELEASE_CENSUS_STATE} from
 import {TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_CUTOVER_BOUND as BOUND,
+  PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 
@@ -266,21 +266,48 @@ async function proveCurrentControlCohort(handler, service, request,
     {census: pausedCensus});
 }
 
-function localReleaseRefusal(handler, service, request) {
+// The founding facts include the committed configuration, read through the
+// release facts owner: a replaced founder leading the group still releases.
+async function freshCreateRefusal(handler, service, request) {
+  const own = await readParticipantReleaseFacts(handler, service,
+    COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS);
+  if (own.outcome !== OUTCOME.OBSERVED) return normalizeMemberRefusal(request, own);
+  const memberIds = releaseMemberIds(own.membership);
+  if (memberIds === null) {
+    return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+      {missingFact: MISSING_FACT.COMMITTED_MEMBERSHIP});
+  }
+  return handler.participantReleaseAuthorizationOwner.decideFreshCreateRelease(request,
+    {partitionId: service.partitionId, replicaId: service.replicaId, memberIds});
+}
+
+// NOT_LEADER first: a non-leader never grants or refuses on authority. A
+// partition with no write origin needs release authority: a node-local
+// FRESH_SEED or OPERATOR token of this handler, or - for a fresh CREATE - the
+// committed founding create operation, read by this (the answering) leader.
+async function localReleaseRefusal(handler, service, request) {
   const status = service.raft.readStatus();
   if (status.role !== RAFT_ROLE.LEADER) {
     return releaseAnswer(OUTCOME.NOT_LEADER, request,
       {leaderAddress: status.leaderAddress, leaderReplicaId: status.leaderId});
   }
-  if (readPartitionWriteOrigin(service.db) === null &&
-      !handler.participantReleaseAuthorizationOwner.validates(
-        request.authorization,
-        {partitionId: service.partitionId,
-          targetBuildDigest: request.targetBuildDigest})) {
-    return releaseAnswer(OUTCOME.OPERATOR_REQUIRED, request,
-      {missingFact: MISSING_FACT.FRESH_STORAGE_OR_OPERATOR_AUTHORITY});
+  if (readPartitionWriteOrigin(service.db) !== null) return null;
+  if (request.trigger === TRIGGER.FRESH_CREATE) {
+    return freshCreateRefusal(handler, service, request);
   }
-  return null;
+  return handler.participantReleaseAuthorizationOwner.validates(request.authorization,
+    {partitionId: service.partitionId, targetBuildDigest: request.targetBuildDigest}) ?
+    null : releaseAnswer(OUTCOME.OPERATOR_REQUIRED, request,
+      {missingFact: MISSING_FACT.FRESH_STORAGE_OR_OPERATOR_AUTHORITY});
+}
+
+// A fresh CREATE is decided per request, before any join: a run shares only the
+// cutover work, so a request never inherits another identity's answer and a
+// refusal reaches only the request it belongs to.
+async function freshCreateRequestRefusal(handler, request) {
+  if (request.trigger !== TRIGGER.FRESH_CREATE) return null;
+  const service = localLeader(handler, request);
+  return service === null ? null : localReleaseRefusal(handler, service, request);
 }
 
 async function runCutoverAttempt(handler, request) {
@@ -294,7 +321,8 @@ async function runCutoverAttempt(handler, request) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.HOSTED_PARTITION});
   }
-  const localRefusal = localReleaseRefusal(handler, service, request);
+  const localRefusal = request.trigger === TRIGGER.FRESH_CREATE ? null :
+    await localReleaseRefusal(handler, service, request);
   if (localRefusal !== null) return localRefusal;
   const controlOwner = await releaseControlOwnerFirst(handler, service, request);
   if (controlOwner !== null) return controlOwner;
@@ -403,14 +431,9 @@ async function joinParticipantCutover(handler, current) {
 }
 
 async function runParticipantCutover(handler, request) {
-  // A pending fresh CREATE authorization is confirmed by its create-admission
-  // authority before this attempt joins or starts any release work; while
-  // that authority is unavailable the attempt answers its typed UNAVAILABLE.
-  if (request.authorization !== undefined && request.authorization !== null) {
-    const unconfirmed = await handler.participantReleaseAuthorizationOwner
-      .confirmFreshCreate(request);
-    if (unconfirmed !== null) return unconfirmed;
-  }
+  const refusal = await freshCreateRequestRefusal(handler, request).catch((error) =>
+    attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
+  if (refusal !== null) return refusal;
   let runs = RUNS.get(handler);
   if (runs === undefined) {
     runs = new Map();

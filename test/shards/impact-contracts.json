@@ -1938,6 +1938,21 @@
         "test/node/replica-handler.test.js",
         "test/node/fresh-create-authority-unavailability-native.integration.test.js"
       ]
+    },
+    "fresh-create-release-authority": {
+      "description": "The release of a partition with no write origin by a fresh CREATE is authorized only by the committed founding create operation (open ADD of the partition whose first step carries a GENESIS stamp naming the answering leader), read by whichever leader answers; NOT_LEADER first; a refused read is the typed create_admission_authority unavailability; no node-local FRESH_CREATE token exists.",
+      "owners": [
+        "src/node/participant-release-authorization-owner.js",
+        "src/node/replica-handler-participant-cutover.js",
+        "src/node/replica-handler-release-recovery.js"
+      ],
+      "tests": [
+        "test/partition/fresh-create-release-authority-cross-node.integration.test.js",
+        "test/node/fresh-create-release-authority-no-token.test.js",
+        "test/node/fresh-create-release-decision.test.js",
+        "test/node/participant-release-fresh-create-completion.test.js",
+        "test/node/fresh-create-authority-unavailability-native.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {

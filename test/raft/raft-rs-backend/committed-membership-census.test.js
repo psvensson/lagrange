@@ -204,6 +204,11 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
     'src/rebalancer/operation-workflow-owner-ports.js',
     'src/rebalancer/replica-operation-repository-row-methods.js',
+    // Reader (quest fresh-create-release-authority-from-committed-operation):
+    // the answering leader reads the GENESIS founding stamp the provisioning
+    // owner wrote into the committed create operation's first step, as the
+    // fresh-create release authority; it never produces or re-derives one.
+    'src/node/participant-release-authorization-owner.js',
     // The target: request intake, validation, the partition, the port.
     'src/node/replica-handler-create-admission-methods.js',
     'src/node/replica-handler-create-methods.js',

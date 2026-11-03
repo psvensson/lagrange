@@ -8,7 +8,6 @@ import {createParticipantReleaseRecovery} from
   '../../src/node/replica-handler-release-recovery.js';
 import {createParticipantReleaseAuthorizationOwner} from
   '../../src/node/participant-release-authorization-owner.js';
-import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
@@ -46,10 +45,16 @@ function createClock({values = null, waitFailure = null} = {}) {
   };
 }
 
-function createHost({clock = createClock(), reply, admitted = true} = {}) {
+function createHost({clock = createClock(), reply} = {}) {
   const delivered = [];
-  const admissionCalls = [];
-  const createAdmissionEvidence = Object.freeze({partitionId: PARTITION_ID});
+  // R09 (quest fresh-create-release-authority-from-committed-operation): the
+  // release carries the create identity as a lookup key; the answering leader
+  // decides authority from the committed operation, so the creating node
+  // reads no admission and holds no token.
+  const createAdmissionEvidence = Object.freeze({partitionId: PARTITION_ID,
+    operationId: 'fresh-completion-op', replicaId: 'fresh-completion-replica',
+    targetNodeId: NODE_ID, admissionToken: 'fresh-completion-admission',
+    attemptToken: 'fresh-completion-attempt', attemptSeq: 1, replicaCreatedAt: 1000});
   const services = new Map();
   let releasedSubscriptions = 0;
   services.subscribeServiceChanges = () => () => {
@@ -59,11 +64,6 @@ function createHost({clock = createClock(), reply, admitted = true} = {}) {
     consensusEvents: {subscribe: () => () => {
       releasedSubscriptions += 1;
     }},
-    getReplicaCreateAdmissionOwner: () => ({async authorizeParticipantRelease(evidence) {
-      assert.equal(evidence, createAdmissionEvidence);
-      admissionCalls.push(evidence);
-      return admitted ? {admissionState: CREATE_ADMISSION_STATE.MATERIALIZED} : null;
-    }}),
     messageRouter: {async deliver(address, request, options) {
       const answer = reply(request, delivered.length);
       delivered.push({address, request, options, answer});
@@ -75,7 +75,7 @@ function createHost({clock = createClock(), reply, admitted = true} = {}) {
   handler.participantReleaseAuthorizationOwner =
     createParticipantReleaseAuthorizationOwner(handler);
   const recovery = createParticipantReleaseRecovery(handler);
-  return {clock, delivered, admissionCalls,
+  return {clock, delivered,
     run: (deadlineAtMs = 105, identityExisted = false) =>
       recovery.releaseFreshCreate(PARTITION_ID,
         {deadlineAtMs, identityExisted, createAdmissionEvidence}),
@@ -85,7 +85,6 @@ function createHost({clock = createClock(), reply, admitted = true} = {}) {
     },
     assertRequests(deadline = 105) {
       assert.ok(delivered.length > 0, 'the real release client delivered an attempt');
-      assert.equal(admissionCalls.length, 1, 'one create admission authorizes every attempt');
       const first = delivered[0].request;
       assert.match(first.targetBuildDigest, /^[a-f0-9]{64}$/u);
       for (const {address, request, options} of delivered) {
@@ -97,9 +96,10 @@ function createHost({clock = createClock(), reply, admitted = true} = {}) {
         assert.equal(request.trigger, TRIGGER.FRESH_CREATE);
         assert.equal(request.deadlineAtMs, deadline);
         assert.equal(request.targetBuildDigest, first.targetBuildDigest);
-        assert.equal(request.authorization, first.authorization);
-        assert.equal(handler.participantReleaseAuthorizationOwner.validates(
-          request.authorization, request), true, 'the actual token owner accepts the original authority');
+        assert.equal(request.createAdmissionIdentity, first.createAdmissionIdentity,
+          'one create identity is carried by every attempt');
+        assert.equal(request.createAdmissionIdentity.operationId, 'fresh-completion-op');
+        assert.equal(request.authorization, undefined, 'no node-local token is carried');
       }
     },
   };
@@ -209,12 +209,11 @@ test('fresh CREATE preserves prerequisite refusal and original wait rejection', 
     assert.equal(host.delivered.length, 1);
     assert.deepEqual(host.clock.waits, [1]);
   });
-  for (const [deadline, identityExisted, admitted, message] of [
-    [100, false, true, 'Fresh replica release deadline unavailable'],
-    [105, true, true, 'Fresh replica release authority unavailable'],
-    [105, false, false, 'Fresh replica release authority unavailable'],
+  for (const [deadline, identityExisted, message] of [
+    [100, false, 'Fresh replica release deadline unavailable'],
+    [105, true, 'Fresh replica release authority unavailable'],
   ]) {
-    const refused = createHost({admitted, reply: () => {
+    const refused = createHost({reply: () => {
       throw new Error('must not dispatch');
     }});
     await withHost(refused, async () => {

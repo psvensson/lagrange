@@ -121,16 +121,16 @@ const FRESH_CONTRACT = `({async releaseFreshCreate(partitionId, options = {}) {
   if (!Number.isSafeInteger(deadline) || deadline <= now()) {
     throw new Error(RELEASE_RECOVERY_ERROR.FRESH_DEADLINE);
   }
-  const authorization = await handler.participantReleaseAuthorizationOwner
-    .authorizeFreshCreate({partitionId, targetBuildDigest: build.digest,
+  const createAdmissionIdentity = handler.participantReleaseAuthorizationOwner
+    .freshCreateReleaseIdentity({partitionId,
       createAdmissionEvidence: options.createAdmissionEvidence,
       identityExisted: options.identityExisted});
-  if (authorization === null) {
+  if (createAdmissionIdentity === null) {
     throw new Error(RELEASE_RECOVERY_ERROR.FRESH_AUTHORITY);
   }
   const {answer, completed} = await completeParticipantRelease(handler, {partitionId,
     targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
-    deadlineAtMs: deadline, authorization}, {now, sleep});
+    deadlineAtMs: deadline, createAdmissionIdentity}, {now, sleep});
   if (completed) return answer;
   throw new Error(RELEASE_RECOVERY_ERROR.FRESH_FAILED + JSON.stringify({partitionId, answer}));
 }})`;
