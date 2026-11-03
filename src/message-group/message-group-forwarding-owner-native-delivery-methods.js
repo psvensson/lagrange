@@ -177,8 +177,7 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
 
     async deliverDurableCdcForwardTarget(target, payload, events, options) {
       const service = this.service;
-      const address = target.address ||
-        service.resolveCommittedPeerAddress(target.serviceId);
+      const address = service.resolveCommittedPeerAddress(target.serviceId);
       if (!address) throw cdcDeliveryBudgetError();
       this.assertDurableCdcForwardTarget(target, options, address);
       const terminal = this.isNativeCdcForwardTarget(target);

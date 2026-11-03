@@ -74,6 +74,9 @@ import {createSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {INITIAL_MESSAGE_GROUP_ID} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  buildDeliveryEnvelope,
+} from '../../src/transport/transport-semantic-outcome.js';
 import {reportingConsensusPort} from './message-group-service-test-support.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {TEST_BOOT_INCARNATION} from
@@ -365,6 +368,80 @@ test('(f) the forwarding leader is the live raft leader; a stale ' +
   t.equal(leaderless.canonicalLeaderIdentityState,
     MESSAGE_GROUP_LEADER_IDENTITY_STATE.NO_LEADER,
     'the absence is a named state');
+});
+
+test('(h) CDC forward targets selected from cache rows are delivered to their ' +
+  'committed peer address, never the row\'s address', async (t) => {
+  const liveLeader = 'mgf-r1';
+  const liveNode = 'node-committed';
+  const poisonNode = 'node-poisoned';
+  const delivered = [];
+  const sentMessages = [];
+  const service = new MessageGroupService(withTestDbPath({
+    groupId: 'mg-forwarding-delivery', replicaId: 'mgf-r2', nodeId: 'node-self',
+    replicaIds: [liveLeader, 'mgf-r2'],
+    transport: {
+      deliver: async (address) => {
+        delivered.push(address);
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
+      },
+      initialize: async () => {},
+      shutdown: async () => {},
+      getConnectionState: () => 'connected',
+      setServiceNodeResolver() {},
+    },
+  }));
+  t.teardown(() => service.shutdown());
+  service.initialized = true;
+  service.sendMessage = async (address) => {
+    sentMessages.push(address);
+  };
+  service.raft = reportingConsensusPort({
+    role: RaftRole.FOLLOWER,
+    groupId: 'mg-forwarding-delivery',
+    replicaIdentity: 'mgf-r2',
+    leaderId: null,
+    peers: [{
+      replicaIdentity: liveLeader,
+      address: mgAddress(liveNode, liveLeader),
+      addressStatus: PEER_ADDRESS_STATUS.RESOLVED,
+    }],
+  });
+  service.systemTableCache.applySystemTableChange(
+    TABLES.SERVICES,
+    CDC_OPERATION.INSERT,
+    {
+      [COLUMN.SERVICE_ID]: liveLeader,
+      replica_id: liveLeader,
+      [COLUMN.GROUP_ID]: 'mg-forwarding-delivery',
+      [COLUMN.NODE_ID]: poisonNode,
+      [COLUMN.ADDRESS]: mgAddress(poisonNode, liveLeader),
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    },
+  );
+
+  await service.forwardingOwner.forwardCDCPayloadToLeader(
+    {type: 'CDC_TEST', correlationId: 'c1'},
+    {tableName: TABLES.NODES, operation: CDC_OPERATION.UPSERT},
+  );
+  t.equal(delivered.length, 1, 'CDC event forward delivery was made');
+  t.equal(delivered[0], mgAddress(liveNode, liveLeader),
+    'CDC forward delivery reached the committed peer address, not the cache row');
+
+  await service.forwardingOwner.forwardMetadataIngressPayloadToLeader(
+    {type: 'META_TEST', correlationId: 'm1'},
+    {requiredTables: [TABLES.SERVICES]},
+  );
+  t.equal(sentMessages.length, 1, 'metadata forward delivery was made');
+  t.equal(sentMessages[0], mgAddress(liveNode, liveLeader),
+    'metadata forward reached the committed peer address, not the cache row');
+
+  t.equal(service.forwardingOwner.resolveForwardTargetNodeId({
+    serviceId: liveLeader,
+    address: mgAddress(poisonNode, liveLeader),
+  }), liveNode, 'target node ID resolved from committed configuration, not the row address');
 });
 
 // The body of a named method or function in a source text: from its

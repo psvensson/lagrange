@@ -2,13 +2,37 @@
   "schema": "test-receipt/1",
   "status": "fail",
   "receipts": [
-    {"id": "message-group-peer-address-from-committed-node", "passed": false, "evidence": "pending: red on the base"},
-    {"id": "founders-and-managed-learner-carry-node-id", "passed": false, "evidence": "pending: red on the base"},
-    {"id": "forwarding-leader-from-committed-status", "passed": false, "evidence": "pending: red on the base"},
-    {"id": "leader-address-from-raft-status-only", "passed": false, "evidence": "pending: attempt 2"},
-    {"id": "deletions-complete-no-fallback", "passed": false, "evidence": "pending"},
-    {"id": "independent-verification", "passed": false, "evidence": "pending"}
+    {
+      "id": "message-group-peer-address-from-committed-node",
+      "passed": true,
+      "evidence": "test/message-group/message-group-peer-address-committed-configuration.test.js subtests (a)-(c), (h): configured message-group peers resolve address on committed node; unplaced peer refuses typed peer_not_in_configuration; CDC change events and metadata ingress payloads forward to committed peer address via resolveCommittedPeerAddress even when services cache row is stale/poisoned"
+    },
+    {
+      "id": "founders-and-managed-learner-carry-node-id",
+      "passed": true,
+      "evidence": "test/message-group/message-group-peer-address-committed-configuration.test.js subtests (d), (e): message-group GENESIS stamp commits founderNodeIds from seed allocation; FreshMG managed ADD_LEARNER commits canonical {replicaIdentity, peerId, nodeId} context shape and decodes nodeId at apply; context without nodeId rejects as INVALID without legacy decoder fallback"
+    },
+    {
+      "id": "forwarding-leader-from-committed-status",
+      "passed": true,
+      "evidence": "test/message-group/message-group-peer-address-committed-configuration.test.js subtest (f): forwarding leader and canonical leader identity derive strictly from live raft status (observedNativeLeaderTarget); stale message_groups row ignored; join-convergence bootstrap forward targets live leader"
+    },
+    {
+      "id": "leader-address-from-raft-status-only",
+      "passed": true,
+      "evidence": "test/partition/partition-leader-address-from-raft-status.test.js (h)-(n): resolveLeaderAddress answers only from readOwnRaftStatus with typed NO_LEADER / LEADER_UNADDRESSED / STATUS_UNAVAILABLE; test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js scenarios A-D: pre-admission target asks committed stamp leader, follows NOT_LEADER hint for committed member, walks stamp members on re-read; mutants M7 and M8 red on real port"
+    },
+    {
+      "id": "deletions-complete-no-fallback",
+      "passed": true,
+      "evidence": "Static scans clean in test/message-group/message-group-peer-address-committed-configuration.test.js (g) and test/partition/partition-leader-address-from-raft-status.test.js (j): buildPeerAddress, partition and message-group resolvePeerAddressFromCache, PEER_ADDRESS_FROM_CACHE, resolveLiveRaftLeaderAddressForPeer, PEER_ADDRESS_FROM_LIVE_RAFT_LEADER, leaderAddressHint, resolveLeaderIdFromHint, resolveLeaderIdFromMetadata, and replica-handler leaderAddress plumbing completely deleted (0 occurrences across src/)"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "evidence": "pending: verifier final approval of attempt 3 and receipts"
+    }
   ],
   "evidence": [],
-  "applicability": "Red probe at quest start: no receipt is set."
+  "applicability": "All 5 functional receipts set with concrete evidence on HEAD; independent-verification pending verifier review of Attempt 3 and receipts."
 }

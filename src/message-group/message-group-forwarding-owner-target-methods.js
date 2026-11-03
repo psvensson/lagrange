@@ -87,10 +87,7 @@ function createMessageGroupForwardingOwnerTargetMethods(options = {}) {
       const service = this.service;
       let targetAddress;
       try {
-        targetAddress = typeof target?.address === typeofToken.STRING &&
-          target.address.length > num.ZERO ?
-          target.address :
-          service.resolveCommittedPeerAddress(target?.serviceId || null);
+        targetAddress = service.resolveCommittedPeerAddress(target?.serviceId || null);
         const nodeId = service.addressManager.parse(targetAddress)?.nodeId;
         return typeof nodeId === typeofToken.STRING &&
           nodeId.length > num.ZERO ? nodeId : null;

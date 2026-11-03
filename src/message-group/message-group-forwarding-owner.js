@@ -574,13 +574,9 @@ class MessageGroupForwardingOwner {
     for (const target of targets) {
       let targetAddress;
       try {
-        // A target without its own address is a configured peer: the
-        // committed configuration places it, or the typed refusal is this
-        // target's outcome.
-        targetAddress = typeof target?.address === 'string' &&
-          target.address.length > 0 ?
-          target.address :
-          service.resolveCommittedPeerAddress(target?.serviceId || null);
+        // Every forward target's delivery address comes from the committed peer
+        // resolver (never a cache row's address).
+        targetAddress = service.resolveCommittedPeerAddress(target?.serviceId || null);
       } catch (error) {
         lastError = error;
         continue;

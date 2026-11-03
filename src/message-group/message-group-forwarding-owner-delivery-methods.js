@@ -596,11 +596,9 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       let attemptedAddressedStrictConvergence = false;
 
       for (const target of forwardTargets) {
-        let leaderAddress = target.address;
+        let leaderAddress = null;
         try {
-          if (!leaderAddress) {
-            leaderAddress = service.resolveCommittedPeerAddress(target.serviceId);
-          }
+          leaderAddress = service.resolveCommittedPeerAddress(target.serviceId);
           if (!leaderAddress) {
             throw new Error(
               messageGroupCdcErrorMsg.FORWARD_LEADER_ADDRESS_UNRESOLVED,
