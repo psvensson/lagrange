@@ -30,7 +30,13 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {SYSTEM_TABLE_NAME} from
   '../bootstrap/system-table-schemas-constants.js';
-import {SERVICE_TYPE} from '../constants/index.js';
+import {ENTITY_TYPE, SERVICE_TYPE} from '../constants/index.js';
+import {validateBootstrapMembershipStamp} from
+  '../raft/raft-committed-membership-stamp.js';
+import {admissionLeaderHint, admissionLeaderTarget, admissionStampReads} from
+  '../raft/raft-rs-committed-peer-address.js';
+import {readCommittedMembershipStamp} from
+  '../rebalancer/committed-membership-bootstrap-read.js';
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -82,6 +88,9 @@ const REPLICA_ADMISSION_REASON = Object.freeze({
   OPERATION_TARGET_NODE: 'operation_target_node',
   OPERATION_STEP: 'operation_step',
   LEADER_NOT_DISCOVERED: 'leader_not_discovered',
+  // The committed-membership bootstrap read the target was created from
+  // could not be performed again (typed; re-tried on the next cadence).
+  STAMP_UNREADABLE: 'admission_stamp_unreadable',
   RESPONSE_BINDING_MISMATCH: 'response_binding_mismatch',
   REQUEST_SHAPE: 'request_shape',
   PARTITION_MISMATCH: 'partition_mismatch',
@@ -146,6 +155,12 @@ const SETTLING_ANSWERS = Object.freeze(new Set([
   REPLICA_ADMISSION_OUTCOME.OPERATION_NOT_ADMITTING,
   REPLICA_ADMISSION_OUTCOME.REFUSED,
   REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER,
+]));
+// Answers after which the target no longer knows whom to ask: no leader it
+// may follow, or none reached. It reads its committed membership again.
+const REREAD_STAMP_ANSWERS = Object.freeze(new Set([
+  REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
+  REPLICA_ADMISSION_OUTCOME.TRANSPORT_FAILED,
 ]));
 const COHORT_ANSWERS = Object.freeze(new Set([
   REPLICA_ADMISSION_OUTCOME.PROPOSED,
@@ -254,11 +269,11 @@ function settleAnswer(service, replicaIdentity, decided) {
   return decided;
 }
 
+// A replica that does not lead names the leader its own live raft status
+// names (U11 rule), never its cached leader id.
 function notLeaderAnswer(service) {
-  const leaderId = typeof service.normalizeLeaderReplicaId === 'function' ?
-    service.normalizeLeaderReplicaId(service.leaderId) : null;
   return answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
-    {leaderId: leaderId ?? null});
+    {leaderId: service.readLiveRaftLeaderId()});
 }
 
 /**
@@ -353,12 +368,13 @@ function requestRefusal(payload, service) {
     REPLICA_ADMISSION_REASON.REQUEST_SHAPE;
 }
 
-// The leader a NOT_LEADER answer names, or null so discovery runs again.
-// A stale hint is never kept: an unadmitted learner hears no raft leader
-// change, so this answer is how it follows a new leader.
-function leaderHintOf(admission) {
-  return admission.outcome === REPLICA_ADMISSION_OUTCOME.NOT_LEADER &&
-    nonEmptyString(admission.leaderId) ? admission.leaderId : null;
+// The leader a NOT_LEADER answer names, kept only when it is a member of the
+// committed configuration the target holds (addressed at its committed
+// node); otherwise none, and the target reads its committed membership again.
+function acceptedLeaderHint(request, admission) {
+  return admission.outcome === REPLICA_ADMISSION_OUTCOME.NOT_LEADER ?
+    admissionLeaderHint(ENTITY_TYPE.PARTITION, request.stamp,
+      admission.leaderId ?? null) : null;
 }
 
 // The answer a delivery carries, or a typed refusal of the delivery. A
@@ -381,18 +397,48 @@ function deliveredAdmission(service, request, delivery) {
       {reason: REPLICA_ADMISSION_REASON.RESPONSE_BINDING_MISMATCH});
 }
 
-// The leader's address, or the typed NOT_LEADER that sends the target back
-// to discovery.
-function leaderAddressOf(service) {
-  try {
-    const address = service.resolveLeaderAddress();
-    return nonEmptyString(address) ? {address} : {refusal: answer(
-      REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
-      {reason: REPLICA_ADMISSION_REASON.LEADER_NOT_DISCOVERED})};
-  } catch (error) {
-    return {refusal: answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
-      {reason: error?.message ?? REPLICA_ADMISSION_REASON.LEADER_NOT_DISCOVERED})};
+// The validated committed-membership stamp a replica was created from, or
+// null (a founder's GENESIS, a durable-record reopen: none names a leader).
+function committedStampOf(membership) {
+  const validation = validateBootstrapMembershipStamp(membership);
+  return validation.valid ? validation.stamp : null;
+}
+
+// The leader the target asks: an accepted NOT_LEADER hint, else the one
+// derivation of the committed-peer-address owner over its stamp and its own
+// live status; or the typed NOT_LEADER that has the target read its
+// committed membership again.
+function admissionLeaderOf(service, request) {
+  const target = request.leaderHint ??
+    admissionLeaderTarget(ENTITY_TYPE.PARTITION, request.stamp,
+      service.readOwnRaftStatus());
+  return target.refusal === undefined ? {address: target.address} :
+    {refusal: answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER,
+      {reason: target.refusal, leaderId: null})};
+}
+
+// The committed-membership bootstrap read the target was created from,
+// performed again by the same owner (readCommittedMembershipStamp), asked at
+// the held stamp's committed nodes in order, on this one cadence turn: the
+// stamp it now holds, or a typed unreadable answer kept for the next. No
+// cached row routes it.
+async function rereadCommittedStamp(service, request) {
+  let refusal = null;
+  for (const read of admissionStampReads(request.stamp)) {
+    try {
+      request.stamp = await readCommittedMembershipStamp({
+        messageRouter: service.transport, nodeId: service.nodeId},
+      service.partitionId, read);
+      request.leaderHint = null;
+      request.rereadStamp = false;
+      return null;
+    } catch (error) {
+      refusal = error;
+    }
   }
+  return answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER, {leaderId: null,
+    reason: REPLICA_ADMISSION_REASON.STAMP_UNREADABLE,
+    readRefusal: refusal?.code ?? null});
 }
 
 class PartitionServiceReplicaAdmissionMethods {
@@ -427,7 +473,9 @@ class PartitionServiceReplicaAdmissionMethods {
    */
   async requestReplicaAdmission(operationId) {
     this.replicaAdmissionRequest = {operationId,
-      state: REPLICA_ADMISSION_REQUEST_STATE.PENDING, lastOutcome: null};
+      state: REPLICA_ADMISSION_REQUEST_STATE.PENDING, lastOutcome: null,
+      stamp: committedStampOf(this.bootstrapMembership), leaderHint: null,
+      rereadStamp: false};
     return this.driveReplicaAdmission();
   }
 
@@ -443,11 +491,20 @@ class PartitionServiceReplicaAdmissionMethods {
         this.isShutdown === true) {
       return request;
     }
-    const admission = await this.sendReplicaAdmissionRequest(request);
+    const admission = (request.rereadStamp ?
+      await rereadCommittedStamp(this, request) : null) ??
+      await this.sendReplicaAdmissionRequest(request);
     request.lastOutcome = admission.outcome;
     request.state = requestStateAfter(admission.outcome);
-    if (admission.outcome === REPLICA_ADMISSION_OUTCOME.NOT_LEADER) {
-      this.leaderId = leaderHintOf(admission);
+    if (request.state === REPLICA_ADMISSION_REQUEST_STATE.PENDING) {
+      // A usable hint is followed; anything else (no hint, an unaddressed
+      // or unreachable leader) reads the committed membership again on the
+      // next cadence. A leader that deferred is asked again. Nothing is
+      // seeded from a cache.
+      if (REREAD_STAMP_ANSWERS.has(admission.outcome)) {
+        request.leaderHint = acceptedLeaderHint(request, admission);
+        request.rereadStamp = request.leaderHint === null;
+      }
     }
     this.logger.info(REPLICA_ADMISSION_LOG_MSG.ANSWERED, {
       partitionId: this.partitionId, replicaId: this.replicaId,
@@ -463,7 +520,7 @@ class PartitionServiceReplicaAdmissionMethods {
    * @private
    */
   async sendReplicaAdmissionRequest(request) {
-    const leader = leaderAddressOf(this);
+    const leader = admissionLeaderOf(this, request);
     if (leader.refusal) return leader.refusal;
     if (!this.transport) {
       return answer(REPLICA_ADMISSION_OUTCOME.TRANSPORT_FAILED,

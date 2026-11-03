@@ -318,9 +318,8 @@ function createRaftRsOperationPort(request) {
       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
     applyCommittedMembershipContext: (context, position) => {
       registry.reserveCommittedReplica(context.replicaIdentity, context.peerId);
-      if (context.nodeId !== undefined) {
-        registry.recordCommittedNodeId(context.replicaIdentity, context.nodeId);
-      }
+      // Every committed context carries the node (D-C3: one shape).
+      registry.recordCommittedNodeId(context.replicaIdentity, context.nodeId);
       if (context.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
         registry.recordCommittedLearnerAdmission(context.replicaIdentity,
           encodeCommittedLearnerAdmission({groupId, ...position, context}));

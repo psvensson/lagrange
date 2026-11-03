@@ -234,11 +234,11 @@ class MessageGroupService extends EventEmitter {
       [...options.replicaIds] :
       [this.replicaId];
     this.transport = options.transport;
-    // Peer addresses for cross-node communication
-    // Map of replicaId -> unified address (e.g., 'nodeId/message-group/replicaId')
-    // Used when joining an existing message group on a different node
-    this.peerAddresses = options.peerAddresses || [];
-    this.bootstrapHintFallbackLogged = new Set();
+    // The founding placement {replicaIdentity: nodeId} a GENESIS opening
+    // commits (seed allocation, self-hosted create). A replica built without
+    // one commits no founder node: its unplaced founders refuse
+    // peer_not_in_configuration, never resolve from a row or a hint.
+    this.founderNodeIds = Object.freeze({...options.founderNodeIds});
     // Get AddressManager instance for unified address operations
     // Requirements: 1.4
     this.addressManager = AddressManager.getInstance();

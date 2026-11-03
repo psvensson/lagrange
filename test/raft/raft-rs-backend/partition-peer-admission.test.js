@@ -45,6 +45,10 @@ import {RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from
 import {answerCommittedOperations, committedAddOperation} from
   '../../partition/committed-operation-gateway-fixture.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
+import {committedStampOfAnswer} from
+  '../../../src/raft/raft-committed-membership-stamp.js';
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
+  '../../../src/raft/raft-committed-membership-constants.js';
 
 const PARTITION_ID = 'f16-admission';
 const TABLE_NAME = 'f16_admission_table';
@@ -207,13 +211,18 @@ async () => {
     // The follower: created with its placement, admitted by the leader when
     // its row becomes visible, then its deferred election timer starts.
     const followerCache = placementCache([LEADER, FOLLOWER]);
+    // Created the way a CREATE target is: from the committed-membership
+    // stamp its leader served; it asks the leader that stamp names.
+    const creationStamp = async () => committedStampOfAnswer(
+      await leader.raft.readCommittedMembership({
+        purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP}));
     const follower = build(FOLLOWER, [LEADER, FOLLOWER], followerCache,
-      {deferElection: true});
+      {deferElection: true, isJoiningExistingGroup: true,
+        bootstrapMembership: await creationStamp()});
     const followerLog = recordLog(follower);
     await follower.initialize();
     leaderCache.applySystemTableChange(
       TABLES.SERVICES, CDCOperation.INSERT, serviceRow(FOLLOWER));
-    follower.leaderId = LEADER[0];
     await follower.requestReplicaAdmission(requestOf(FOLLOWER).operationId);
     follower.startElection();
     assert.equal(await waitFor(() => {
@@ -226,7 +235,8 @@ async () => {
     // The joiner: its row becomes visible to both replicas of the group.
     const joinerCache = placementCache([LEADER, FOLLOWER, JOINER]);
     const joiner = build(JOINER, [LEADER, FOLLOWER, JOINER], joinerCache,
-      {deferElection: true});
+      {deferElection: true, isJoiningExistingGroup: true,
+        bootstrapMembership: await creationStamp()});
     const joinerLog = recordLog(joiner);
     await joiner.initialize();
     for (const cache of [leaderCache, followerCache]) {
@@ -235,7 +245,6 @@ async () => {
     }
     const atFollower = await follower.handleReplicaAdmissionRequest(
       requestOf(JOINER));
-    joiner.leaderId = LEADER[0];
     await joiner.requestReplicaAdmission(requestOf(JOINER).operationId);
     joiner.startElection();
     const joinerPeerId = joiner.raft.readStatus().peerId;

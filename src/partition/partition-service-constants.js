@@ -386,12 +386,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   RAFT_TRANSITION_EVIDENCE: 'Raft leadership transition evidence',
   LEADER_CHANGED: 'Leader changed',
   JOINING_PEER_ADDRESS: 'Joining peer with fully qualified address',
-  // C4 only: the leader address for write forwarding still reads the
-  // services cache (resolvePeerAddressFromCache); no raft peer is addressed
-  // from it (quest learner-host-from-committed-admission).
-  PEER_ADDRESS_FROM_CACHE: 'Built peer address from cache',
-  PEER_ADDRESS_FROM_LIVE_RAFT_LEADER:
-    'Built peer address from the current live Raft leader',
   PEER_RETIRED_FROM_AUTHORITATIVE_SERVICE_CHANGE:
     'Retired Raft peer from authoritative service change',
   PEER_ADDRESS_FROM_NODE: 'Built peer address using local nodeId',
@@ -699,7 +693,18 @@ const PARTITION_STATEMENT_ADMISSION_LOG_MSG = Object.freeze({
   STATEMENT_REFUSED: 'Partition statement refused by the statement-admission owner',
 });
 
+// Why this replica has no leader address to forward to: its own live raft
+// status names no leader, names one without a committed address, or could
+// not be read. The leader address is never taken from a cached row, a
+// cached leader id or a leader-address hint.
+const PARTITION_LEADER_ADDRESS_REFUSAL = Object.freeze({
+  NO_LEADER: 'leader_address_no_leader',
+  LEADER_UNADDRESSED: 'leader_address_unaddressed',
+  STATUS_UNAVAILABLE: 'leader_address_status_unavailable',
+});
+
 export {
+  PARTITION_LEADER_ADDRESS_REFUSAL,
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,

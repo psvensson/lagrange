@@ -25,49 +25,6 @@ const {
   ReplicaStatus,
 } = PARTITION_SERVICE_SHARED;
 
-function resolveLiveRaftLeaderAddressForPeer(partitionService, peerId) {
-  const leaderAddress = partitionService.raft?.readStatus?.().leaderAddress;
-  if (
-    typeof peerId !== 'string' ||
-    peerId.length === 0 ||
-    typeof leaderAddress !== 'string' ||
-    leaderAddress.length === 0
-  ) {
-    return null;
-  }
-  const observedLeaderId = partitionService.normalizeLeaderReplicaId(
-    partitionService.leaderId,
-  );
-  if (observedLeaderId && observedLeaderId !== peerId) {
-    return null;
-  }
-  const addressManager = AddressManager.getInstance();
-  const validation = addressManager.validate(leaderAddress);
-  if (!validation.valid) {
-    return null;
-  }
-  try {
-    const parsed = addressManager.parse(leaderAddress);
-    if (
-      parsed.serviceType !== ENTITY_TYPE.PARTITION ||
-      parsed.serviceId !== peerId
-    ) {
-      return null;
-    }
-  } catch (_error) {
-    return null;
-  }
-  partitionService.logger.debug(
-    PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_LIVE_RAFT_LEADER,
-    {
-      peerId,
-      address: leaderAddress,
-      partitionId: partitionService.partitionId,
-    },
-  );
-  return leaderAddress;
-}
-
 function resolvePeerAddressFromService(addressManager, serviceRow, replicaId) {
   if (
     typeof serviceRow.address === 'string' &&
@@ -257,5 +214,4 @@ function redriveAdmissionsOnMembershipChange(partitionService) {
 export {
   redriveAdmissionsOnMembershipChange,
   retireRaftPeerFromAuthoritativeServiceChange,
-  resolveLiveRaftLeaderAddressForPeer,
 };

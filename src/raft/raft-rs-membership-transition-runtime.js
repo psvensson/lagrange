@@ -222,13 +222,11 @@ function transitionState(context) {
     return {refusal: membershipTransitionRefusal(
       RAFT_MEMBERSHIP_TRANSITION_REASON.STALE_CONFIGURATION)};
   }
-  let address;
-  try {
-    address = group.resolvePeerAddress(command.peerId);
-  } catch {
-    address = null;
-  }
-  if (address !== command.peerAddress) {
+  // The transition commits the node its replica lives on; a replica that
+  // already records another committed node for that identity refuses it
+  // (the identity record is written once from a committed fact).
+  const recordedNodeId = group.resolvePeerNodeId(command.replicaIdentity);
+  if (recordedNodeId !== null && recordedNodeId !== command.nodeId) {
     return {refusal: membershipTransitionRefusal(
       RAFT_MEMBERSHIP_TRANSITION_REASON.IDENTITY_MISMATCH)};
   }

@@ -24,6 +24,8 @@ import {loadRaftRsCore} from './raw-raft-rs-test-core.js';
 const GROUP = 'semantic-membership-group';
 const FOUNDERS = Object.freeze(['semantic-a', 'semantic-b', 'semantic-c']);
 const TARGET = 'semantic-fresh-target';
+// The node the transition commits for its target (D-C3).
+const TARGET_NODE = 'semantic-target-node';
 
 function assertMalformedStageSubprocess(stageExpression) {
   const script = `
@@ -48,7 +50,7 @@ function assertMalformedStageSubprocess(stageExpression) {
       permitSequence: 1,
       stage: ${stageExpression},
       replicaIdentity: 'malformed-stage-target',
-      peerAddress: 'raft-rs://malformed-stage-target',
+      nodeId: 'malformed-stage-node',
       replicaLifecycleIncarnation: 'malformed-stage-incarnation',
       runtimeGeneration: 1,
       leaderTerm: 1,
@@ -104,7 +106,7 @@ function permit(cluster, leader, stage, sequence, overrides = {}) {
     permitSequence: sequence,
     stage,
     replicaIdentity: TARGET,
-    peerAddress: cluster.addressOf(TARGET),
+    nodeId: TARGET_NODE,
     replicaLifecycleIncarnation: status.lifecycleIncarnation,
     runtimeGeneration: status.runtimeGeneration,
     leaderTerm: status.term,
@@ -177,7 +179,7 @@ test('the semantic port anchors ADD_LEARNER, keeps ordinary traffic out of ' +
     {operationId: 'fresh-membership-operation',
       transitionIdentity: 'fresh-membership-transition', permitSequence: 1,
       stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
-      replicaIdentity: TARGET, peerId: targetPeer},
+      replicaIdentity: TARGET, peerId: targetPeer, nodeId: TARGET_NODE},
     'the exact membership identity survives native ready/apply bytes');
 
   const parkedPromotion = propose(cluster, leader, permit(cluster, leader,
@@ -216,7 +218,7 @@ test('semantic REMOVE preserves the native last-voter refusal', (t) => {
   const answer = propose(cluster, leader, permit(cluster, leader,
     RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE, 1, {
       replicaIdentity: leader,
-      peerAddress: cluster.addressOf(leader),
+      nodeId: 'semantic-leader-node',
     }));
   assert.equal(answer.reason,
     RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LAST_VOTER);
@@ -236,8 +238,6 @@ test('same-turn runtime, lifecycle, term, configuration, address and stage ' +
       RAFT_MEMBERSHIP_TRANSITION_REASON.STALE_LIFECYCLE],
     [{leaderTerm: base.leaderTerm + 1},
       RAFT_MEMBERSHIP_TRANSITION_REASON.STALE_LEADERSHIP],
-    [{peerAddress: 'raft-rs://replica-wrong'},
-      RAFT_MEMBERSHIP_TRANSITION_REASON.IDENTITY_MISMATCH],
     [{leaderConfigurationStamp: {...base.leaderConfigurationStamp,
       membershipGenerationIndex:
         base.leaderConfigurationStamp.membershipGenerationIndex + 1}},
@@ -255,6 +255,9 @@ test('same-turn runtime, lifecycle, term, configuration, address and stage ' +
     .confState.learners.includes(targetPeer)));
   const remove = permit(cluster, leader,
     RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE, 2);
+  assert.equal(propose(cluster, leader, {...remove, nodeId: 'another-node'})
+    .reason, RAFT_MEMBERSHIP_TRANSITION_REASON.IDENTITY_MISMATCH,
+  'a transition naming another node than the committed one refuses');
   assert.equal(propose(cluster, leader, remove).reason,
     RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
   assert.ok(cluster.settle(() => !cluster.node(leader).readStatus()
@@ -528,6 +531,7 @@ test('committed context never treats an address as the replica identity', (t) =>
       stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
       replicaIdentity: cluster.addressOf(TARGET),
       peerId: targetPeer,
+      nodeId: TARGET_NODE,
     })).toString('base64'),
   });
   assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);

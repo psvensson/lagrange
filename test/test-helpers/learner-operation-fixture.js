@@ -28,7 +28,10 @@ const noLog = {debug() {}, info() {}, warn() {}, error() {}};
 
 async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = null,
   tempRoot = os.tmpdir()} = {}) {
+  // The founders' GENESIS stamp commits their node (the identity record's
+  // source node): every replica addresses them from the committed fact.
   const cluster = new PartitionNodeCluster({partitionId: GROUP, replicaIds: FOUNDERS, tempRoot,
+    founderNodeIds: Object.fromEntries(FOUNDERS.map((id) => [id, NODE])),
     substrateFor: nativeTimeSource === null ? null : () => ({timeSource: nativeTimeSource})});
   t.after(() => cluster.dispose());
   cluster.tickers = [FOUNDERS[0]];

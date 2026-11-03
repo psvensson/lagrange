@@ -200,7 +200,7 @@ async function exerciseSettlement(t, settlement,
   const nativeOrigin = JSON.parse(encodeCommittedLearnerAdmission({groupId: group,
     index: '5', term: '3', context: {operationId: id, transitionIdentity: `${id}-transition`,
       permitSequence: 1, stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
-      replicaIdentity: target, peerId: peerOf(target)}}));
+      replicaIdentity: target, peerId: peerOf(target), nodeId: NODE}}));
   const result = await repository.recordMessageGroupLearnerOutcome(
     {...initialInput, executionClaim: claimed.claim}, async (query) => {
       assert.equal(query.groupId, group);

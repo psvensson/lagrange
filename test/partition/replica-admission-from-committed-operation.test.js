@@ -53,6 +53,7 @@ import {
 import {buildDeliveryEnvelope} from
   '../../src/transport/transport-semantic-outcome.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {redriveAcceptedAdmissionRequests} from
   '../../src/partition/partition-replica-admission.js';
 
@@ -475,8 +476,28 @@ async (t) => {
   `a services-cache event triggers no admission (calls: ${calls.join(',')})`);
 });
 
+// The committed-membership stamp a CREATE target is created from: the
+// group leader's committed read at creation, naming that leader and every
+// member's committed node (quest peer-and-leader-address-from-committed-
+// configuration, attempt 2: the target asks the leader its stamp names).
+const STAMP_MEMBERS = Object.freeze({
+  [LEADER_REPLICA]: LEADER_NODE, 'sql_transactions-p1-r2': 'node-3'});
+function committedCreationStamp(leaderId = LEADER_REPLICA) {
+  const voters = Object.keys(STAMP_MEMBERS).map(deriveRaftRsPeerId).sort();
+  return {kind: 'committed', voters, votersOutgoing: [], learners: [],
+    learnersNext: [], appliedIndex: 5,
+    configurationKey: raftRsConfStateKey({voters, votersOutgoing: [],
+      learners: [], learnersNext: [], autoLeave: false}),
+    membershipGenerationIndex: 1, commitIndex: 5, term: 2, leaderId,
+    gateOpen: true,
+    identities: Object.fromEntries(Object.keys(STAMP_MEMBERS).map((id) =>
+      [deriveRaftRsPeerId(id), id])),
+    nodeIds: Object.fromEntries(Object.entries(STAMP_MEMBERS).map(
+      ([id, node]) => [deriveRaftRsPeerId(id), node]))};
+}
+
 // The target side: a learner partition service that recorded its SYNCING
-// fact asks its discovered leader to admit it.
+// fact asks the leader its committed-membership stamp names to admit it.
 function createTarget({answers}) {
   const partition = new PartitionService(withFoundingStamp({
     partitionId: PARTITION_ID,
@@ -485,6 +506,7 @@ function createTarget({answers}) {
     replicaIds: [TARGET_REPLICA],
     nodeId: TARGET_NODE,
     dbPath: ':memory:',
+    bootstrapMembership: committedCreationStamp(),
   }));
   const sent = [];
   partition.transport = {
@@ -496,15 +518,13 @@ function createTarget({answers}) {
         operationId: OPERATION_ID, admission});
     },
   };
-  partition.resolveLeaderAddress = () =>
-    partitionAddress(LEADER_NODE, LEADER_REPLICA);
   return {partition, sent};
 }
 
 test('(g) the target asks its leader with exactly the committed operation ' +
   'and keeps the request until an admitting answer', async (t) => {
   const {partition, sent} = createTarget({answers: [
-    {outcome: OUTCOME.NOT_LEADER},
+    {outcome: OUTCOME.NOT_LEADER, leaderId: LEADER_REPLICA},
     {outcome: OUTCOME.AUTHORITY_UNAVAILABLE, retryAfterMs: 100},
     {outcome: OUTCOME.PROPOSED}]});
   t.equal(typeof partition.requestReplicaAdmission, 'function',
@@ -514,7 +534,7 @@ test('(g) the target asks its leader with exactly the committed operation ' +
   t.same(sent[0]?.payload, admitRequest(),
     'the request names partition, replica identity and operation only');
   t.equal(sent[0]?.address, partitionAddress(LEADER_NODE, LEADER_REPLICA),
-    'it goes to the discovered leader');
+    'it goes to the leader its committed-membership stamp names');
   t.equal(partition.replicaAdmissionRequest?.state, 'pending',
     'NOT_LEADER leaves it pending');
   await partition.driveReplicaAdmission();
@@ -545,8 +565,9 @@ test('(h) a repeated request is idempotent: ALREADY_MEMBER, no second ' +
 // The target asks only once its SYNCING fact is committed (verifier N3: a
 // replica whose port-opened fact is not durable steps nothing, so it must
 // not be counted a member): in createReplicaAsync the request follows the
-// SYNCING commit (recordReplicaIdentity) and precedes the leader sync and
-// the voter-ready wait. This is the one point at which a partition
+// SYNCING commit (recordReplicaIdentity) and precedes the voter-ready wait
+// (the dead leader sync from a cached leader address is deleted, quest
+// peer-and-leader-address-from-committed-configuration attempt 2). This is the one point at which a partition
 // admission input first exists (Stream B2 binds its cleanup state to it).
 test('(i) static: the target requests admission right after its SYNCING ' +
   'commit and before it waits to become a voter', async (t) => {
@@ -558,13 +579,14 @@ test('(i) static: the target requests admission right after its SYNCING ' +
     const name = calleeName(node);
     if (['recordReplicaIdentity', 'requestReplicaAdmission', 'syncFromLeader',
       'waitForVoterReadyActivation'].includes(name)) {
+      // syncFromLeader stays in the list so a reintroduced call is seen.
       order.push([node.range[0], name]);
     }
   });
   t.same(order.sort((a, b) => a[0] - b[0]).map(([, name]) => name),
-    ['recordReplicaIdentity', 'requestReplicaAdmission', 'syncFromLeader',
+    ['recordReplicaIdentity', 'requestReplicaAdmission',
       'waitForVoterReadyActivation'],
-    'SYNCING commit, then the admission request, then sync and voter wait');
+    'SYNCING commit, then the admission request, then the voter wait');
 });
 
 // A request answered NOT_ADMITTING must not be admitted on a row that names
@@ -676,31 +698,42 @@ async (t) => {
     [TARGET_REPLICA], 'and only it is admitted');
 });
 
-test('(m) a NOT_LEADER answer moves the target to the leader it names; a ' +
-  'misrouted answer sends it back to discovery', async (t) => {
+test('(m) a NOT_LEADER answer moves the target to the committed member it ' +
+  'names; a misrouted answer sends it back to its committed membership',
+async (t) => {
   const NEW_LEADER = 'sql_transactions-p1-r2';
   const {partition, sent} = createTarget({answers: [
     {outcome: OUTCOME.NOT_LEADER, leaderId: NEW_LEADER},
     {outcome: OUTCOME.PROPOSED}]});
-  partition.leaderId = LEADER_REPLICA;
-  partition.resolveLeaderAddress = () =>
-    partitionAddress(LEADER_NODE, partition.leaderId);
   await partition.requestReplicaAdmission(OPERATION_ID);
-  t.equal(partition.leaderId, NEW_LEADER, 'the hint replaces the old leader');
+  t.equal(sent[0]?.address, partitionAddress(LEADER_NODE, LEADER_REPLICA),
+    'the first send goes to the stamp leader');
+  t.same({...partition.replicaAdmissionRequest?.leaderHint},
+    {replicaIdentity: NEW_LEADER, address: partitionAddress('node-3', NEW_LEADER)},
+    'the hint names a committed member and is followed at its committed node');
+  t.equal(partition.leaderId, null, 'no cached leader id is seeded from a hint');
   await partition.driveReplicaAdmission();
-  t.equal(sent[1]?.address, partitionAddress(LEADER_NODE, NEW_LEADER),
+  t.equal(sent[1]?.address, partitionAddress('node-3', NEW_LEADER),
     'the next send reaches the new leader within one cadence step');
   t.equal(partition.replicaAdmissionRequest?.state, 'admitted', 'admitted');
+
+  const stranger = createTarget({answers: [
+    {outcome: OUTCOME.NOT_LEADER, leaderId: 'sql_transactions-p1-r9'}]});
+  await stranger.partition.requestReplicaAdmission(OPERATION_ID);
+  t.equal(stranger.partition.replicaAdmissionRequest?.leaderHint, null,
+    'a hint naming a replica outside the committed configuration is ignored');
+  t.equal(stranger.partition.replicaAdmissionRequest?.rereadStamp, true,
+    'and the target reads its committed membership again on its next cadence');
 
   const misrouted = createTarget({answers: []});
   misrouted.partition.transport.deliver = async () => buildDeliveryEnvelope(
     {acknowledged: true}, {partitionId: 'other-p1',
       replicaIdentity: TARGET_REPLICA, operationId: OPERATION_ID,
       admission: {outcome: 'request_invalid', reason: 'partition_mismatch'}});
-  misrouted.partition.leaderId = LEADER_REPLICA;
   await misrouted.partition.requestReplicaAdmission(OPERATION_ID);
-  t.equal(misrouted.partition.leaderId, null,
-    'a response bound to another partition sends the target to discovery');
+  t.equal(misrouted.partition.replicaAdmissionRequest?.rereadStamp, true,
+    'a response bound to another partition sends the target back to its ' +
+    'committed membership');
   t.equal(misrouted.partition.replicaAdmissionRequest?.state, 'pending',
     'and the request stays pending');
 });

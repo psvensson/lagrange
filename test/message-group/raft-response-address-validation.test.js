@@ -13,6 +13,8 @@
  * consensus traffic over their unified addresses.
  */
 
+import {founderNodeIdsOfPlacement} from
+  '../../src/raft/raft-rs-committed-peer-address.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
@@ -125,18 +127,17 @@ test('Raft response address validation', async (t) => {
       const joiningUnifiedAddress =
         `${joiningNodeId}/${ENTITY_TYPE.MESSAGE_GROUP}/${joiningReplicaId}`;
 
-      // Peer addresses should be unified format
-      const peerAddresses = [
-        seedUnifiedAddress,
-        joiningUnifiedAddress,
-      ];
+      // The founding placement: each founder on its own node.
+      const founderNodeIds = founderNodeIdsOfPlacement(
+        [seedReplicaId, joiningReplicaId],
+        [seedUnifiedAddress, joiningUnifiedAddress]);
 
       joiningMessageGroup = new MessageGroupService(withTestDbPath({
         groupId: 'mg-1',
         replicaId: joiningReplicaId,
         nodeId: joiningNodeId,
         replicaIds: [seedReplicaId, joiningReplicaId],
-        peerAddresses: peerAddresses,
+        founderNodeIds,
         transport: joiningTransport.router,
         deferElection: true,
       }));

@@ -389,7 +389,7 @@ test('a poisoned process registry cannot move a message-group peer destination',
       replicaId: GROUP_SELF,
       nodeId: NODE_ID,
       replicaIds: [GROUP_SELF, GROUP_PEER],
-      peerAddresses: [GROUP_A],
+      founderNodeIds: {[GROUP_SELF]: NODE_ID, [GROUP_PEER]: NODE_ID},
       transport: router,
       deferElection: true,
     }));
@@ -397,14 +397,8 @@ test('a poisoned process registry cannot move a message-group peer destination',
       serviceRow(GROUP_SELF,
         `${NODE_ID}/${ENTITY_TYPE.MESSAGE_GROUP}/${GROUP_SELF}`,
         SERVICE_TYPE.MESSAGE_GROUP),
-      serviceRow(GROUP_PEER, GROUP_A, SERVICE_TYPE.MESSAGE_GROUP),
+      serviceRow(GROUP_PEER, GROUP_B, SERVICE_TYPE.MESSAGE_GROUP),
     ]);
-
-    poisonTowardB(GROUP_B);
-    t.equal(group.buildPeerAddress(GROUP_PEER), GROUP_A,
-      'the authoritative cache decides, not the registry');
-    t.equal(group.buildPeerAddress(GROUP_A), GROUP_A,
-      'an already-unified address is returned as given');
 
     // The group opens its operation port from its two founders without
     // scheduling; its one campaign sends the vote request to the peer at the
@@ -415,7 +409,9 @@ test('a poisoned process registry cannot move a message-group peer destination',
     t.equal(status.peers.length, ONE,
       'the operation-port snapshot exposes exactly the one remote peer');
     t.equal(status.peers[ZERO].address, GROUP_A,
-      'the peer projection carries the authoritative address');
+      'the peer is addressed on its committed node, not the registry or a row');
+    t.equal(group.resolveCommittedPeerAddress(GROUP_PEER), GROUP_A,
+      'the host-side resolver answers the same committed address');
     const before = sent.length;
     assertRaftOperationSucceeded(await group.raft.campaign());
     await waitForCondition(() => sent.length > before, ADMISSION_BUDGET_MS);
@@ -427,7 +423,7 @@ test('a poisoned process registry cannot move a message-group peer destination',
     await router.shutdown();
   });
 
-test('with no authoritative location a message group refuses rather than using the registry',
+test('with no committed node a message group refuses rather than using the registry',
   async (t) => {
     initializeProcess();
     const router = new MessageRouter({
@@ -442,10 +438,12 @@ test('with no authoritative location a message group refuses rather than using t
       transport: router,
       deferElection: true,
     }));
+    await group.initialize();
     poisonTowardB(GROUP_B);
-    t.throws(() => group.buildPeerAddress(GROUP_PEER),
-      /Unable to resolve unified peer address/u,
+    t.throws(() => group.resolveCommittedPeerAddress(GROUP_PEER),
+      /peer_not_in_configuration/u,
       'registry membership is never promoted into discovery authority');
+    await group.shutdown();
     await router.shutdown();
   });
 

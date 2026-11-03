@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import {createSeedOriginalAllocation, originalSeedPeerAddresses} from
+import {createSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsOriginalAllocationPreparation} from
   '../../src/raft/raft-rs-original-allocation-preparation.js';
@@ -297,9 +297,7 @@ test('observed completed handoff survives founder retirement only in its live cu
     const admitted = f.preparation.admitReplica({serviceType: member.serviceType,
       replicaId: member.replicaId, replicaIds: member.replicaIds,
       ...(member.tableName ? {partitionId: member.groupId, tableName: member.tableName} :
-        {groupId: member.groupId}),
-      peerAddresses: originalSeedPeerAddresses(f.declaration.nodeId,
-        member.serviceType, member.replicaIds), deferElection: true});
+        {groupId: member.groupId}), deferElection: true});
     const native = f.native(member, admitted.originalAllocationOpening);
     opened.push({member, db: native.db, port: native.open()});
   }

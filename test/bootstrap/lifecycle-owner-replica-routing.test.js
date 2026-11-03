@@ -1,7 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {createOwnedVirginSeedBootstrapService} from
   '../integration/helpers/cluster-test-helpers.js';
-import {originalSeedPeerAddresses} from
+import {seedFounderNodeIds} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {INITIAL_MESSAGE_GROUP_ID, INITIAL_MESSAGE_GROUP_REPLICA_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -66,8 +66,7 @@ test('BootstrapService routes replica lifecycle through unified adapters', async
       replicaId,
       replicaIds,
       replicaIndex: 0,
-      peerAddresses: originalSeedPeerAddresses(service.nodeId,
-        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP, replicaIds),
+      founderNodeIds: seedFounderNodeIds(replicaIds, service.nodeId),
       deferElection: true,
     });
 

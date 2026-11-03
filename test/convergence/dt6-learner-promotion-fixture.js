@@ -59,6 +59,8 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {PEER_ADDRESS_STATUS} from
+  '../../src/raft/raft-rs-runtime-owner-constants.js';
 import {forwardHandlerRegistry} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
@@ -513,6 +515,24 @@ export function observeLearnerTerm(learner, term) {
   };
 }
 
+// These witnesses are about the proof channel, not leader discovery. Before
+// any raft message reaches it a real learner's status names no leader, so it
+// defers at the leader gate (C4: the leader is the live status, never a row or
+// a hint). A learner removed from the configuration, or cut off after hearing
+// its leader, keeps that status: this models it, so the proof round trip, and
+// the leader's not_in_configuration and progress_behind refusals, stay
+// reachable. The real status wins as soon as it names a leader. The status is
+// replaced here and nowhere in production.
+function learnerHearsLeaderBeforeReplication(learner) {
+  const readOwnRaftStatus = learner.readOwnRaftStatus.bind(learner);
+  learner.readOwnRaftStatus = () => {
+    const status = readOwnRaftStatus();
+    return status === null || status.leaderId ? status : {...status,
+      leaderId: LEADER_REPLICA, leaderAddress: LEADER_ADDRESS,
+      leaderAddressStatus: PEER_ADDRESS_STATUS.RESOLVED};
+  };
+}
+
 async function createLearner(transport, cache, options = {}) {
   const learner = new PartitionService(withFoundingStamp({
     partitionId: PARTITION_ID,
@@ -527,12 +547,12 @@ async function createLearner(transport, cache, options = {}) {
     schema: TABLE_SCHEMA,
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
-    leaderAddress: LEADER_ADDRESS,
     learnerCatchUpCheckIntervalMs:
       options.retryIntervalMs || RETRY_INTERVAL_MS,
     replicaStateMachine: options.replicaStateMachine,
   }));
   await learner.initialize();
+  learnerHearsLeaderBeforeReplication(learner);
   return learner;
 }
 

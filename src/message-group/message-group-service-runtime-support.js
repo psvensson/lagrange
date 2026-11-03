@@ -19,11 +19,6 @@ const MESSAGE_GROUP_SERVICE_LITERAL = Object.freeze({
   FAILED_TO_FLUSH_DEFERRED_MESSAGE_GROUP_LEADER_UPDATE:
     'Failed to flush deferred message-group leader update',
   BACKGROUND: 'background',
-  PEER_ADDRESS_MUST_BE_IN_UNIFIED_FORMAT:
-    'Peer address must be in unified format',
-  USING_BOOTSTRAP_PEER_HINT_BECAUSE_SERVICES_CACHE_HAS_NO_PEER_LOCATION:
-    'Using bootstrap peer hint because services cache has no peer location',
-  BOOTSTRAP_HINT: 'bootstrap_hint',
   INITIALIZING_MESSAGE_GROUP_SERVICE: 'Initializing message group service',
   DEFERRING_ELECTION_START: 'Deferring election start',
   FAILED_DURING_INITIALIZE_CLEANING_UP_RAFT:

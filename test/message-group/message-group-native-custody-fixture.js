@@ -1,5 +1,7 @@
 // Test-owned transport schedule around real MessageGroupService replicas.
 // Membership, roles, readiness, proposal results and application are native.
+import {founderNodeIdsOfPlacement} from
+  '../../src/raft/raft-rs-committed-peer-address.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -110,7 +112,8 @@ async function recipientFixture(t, key, {replicaCount = REPLICAS.length} = {}) {
     const timeSource = new VirtualTimeSource({startMs: 1000});
     f.clocks.push(timeSource);
     const service = new MessageGroupService({groupId: GROUP_ID, replicaId,
-      replicaIds: replicas, peerAddresses: addresses, nodeId: NODE_ID,
+      replicaIds: replicas,
+      founderNodeIds: founderNodeIdsOfPlacement(replicas, addresses), nodeId: NODE_ID,
       transport: f.router, dbPath: path.join(f.directory, `${replicaId}.sqlite`),
       timeSource, nodeService: {getSystemTableCache: () => cache,
         getReadOnlySystemTableCache: () => cache}});

@@ -443,13 +443,6 @@ async function proposeAuthorizedGroupPromotion(port, group, request, observeAuth
     observed.admitExecution);
 }
 
-function removalPeerAddress(port, group, transition) {
-  const peers = port.readStatus()?.peers || [];
-  const configured = peers.find((peer) =>
-    peer.replicaIdentity === transition.replicaIdentity)?.address;
-  return configured || group?.peerAddress || transition.peerAddress;
-}
-
 async function proposeAuthorizedGroupRemoval(port, group, request, observeAuthorization,
   delivery) {
   if (typeof observeAuthorization !== 'function') {
@@ -459,9 +452,8 @@ async function proposeAuthorizedGroupRemoval(port, group, request, observeAuthor
     delivery, RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE);
   if (observed.refusal) return observed.refusal;
   if (!liveDelivery(observed.admitExecution)) return deliveryRefusal();
-  const peerAddress = removalPeerAddress(port, group, observed.transition);
   return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
-    {...observed.transition, peerAddress}, observed.admitExecution);
+    observed.transition, observed.admitExecution);
 }
 
 export {

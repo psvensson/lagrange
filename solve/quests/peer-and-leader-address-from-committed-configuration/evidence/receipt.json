@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "message-group-peer-address-from-committed-node",
+      "passed": true,
+      "evidence": "test/message-group/message-group-peer-address-committed-configuration.test.js subtests (a)-(c), (h): configured message-group peers resolve address on committed node; unplaced peer refuses typed peer_not_in_configuration; CDC change events and metadata ingress payloads forward to committed peer address via resolveCommittedPeerAddress even when services cache row is stale/poisoned"
+    },
+    {
+      "id": "founders-and-managed-learner-carry-node-id",
+      "passed": true,
+      "evidence": "test/message-group/message-group-peer-address-committed-configuration.test.js subtests (d), (e): message-group GENESIS stamp commits founderNodeIds from seed allocation; FreshMG managed ADD_LEARNER commits canonical {replicaIdentity, peerId, nodeId} context shape and decodes nodeId at apply; context without nodeId rejects as INVALID without legacy decoder fallback"
+    },
+    {
+      "id": "forwarding-leader-from-committed-status",
+      "passed": true,
+      "evidence": "test/message-group/message-group-peer-address-committed-configuration.test.js subtest (f): forwarding leader and canonical leader identity derive strictly from live raft status (observedNativeLeaderTarget); stale message_groups row ignored; join-convergence bootstrap forward targets live leader"
+    },
+    {
+      "id": "leader-address-from-raft-status-only",
+      "passed": true,
+      "evidence": "test/partition/partition-leader-address-from-raft-status.test.js (h)-(n): resolveLeaderAddress answers only from readOwnRaftStatus with typed NO_LEADER / LEADER_UNADDRESSED / STATUS_UNAVAILABLE; test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js scenarios A-D: pre-admission target asks committed stamp leader, follows NOT_LEADER hint for committed member, walks stamp members on re-read; mutants M7 and M8 red on real port"
+    },
+    {
+      "id": "deletions-complete-no-fallback",
+      "passed": true,
+      "evidence": "Static scans clean in test/message-group/message-group-peer-address-committed-configuration.test.js (g) and test/partition/partition-leader-address-from-raft-status.test.js (j): buildPeerAddress, partition and message-group resolvePeerAddressFromCache, PEER_ADDRESS_FROM_CACHE, resolveLiveRaftLeaderAddressForPeer, PEER_ADDRESS_FROM_LIVE_RAFT_LEADER, leaderAddressHint, resolveLeaderIdFromHint, resolveLeaderIdFromMetadata, and replica-handler leaderAddress plumbing completely deleted (0 occurrences across src/)"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "evidence": "subagent:d14a296e-d7fe-4a3e-aed4-62bbcb3f8343 approved Attempt 3b at c18bf9b68ad8f0c5603f8a50d502d1048e6a15f1 (sealedAt 77b5c76fa784418873a1428b42c28581dd2c4b1f, diff sha256 4779eaabad05577f8842afb83c8a808055893e7a52d83b6930f462cd95e44cdc; attempt-3..HEAD sha256 157aa30fa16064ceea63815866b2e65e9891a307ee35c89afcc7ce991c2b0a5f)"
+    }
+  ],
+  "evidence": [],
+  "applicability": "All 6 receipts satisfied and independently verified on candidate c18bf9b68ad8f0c5603f8a50d502d1048e6a15f1."
+}

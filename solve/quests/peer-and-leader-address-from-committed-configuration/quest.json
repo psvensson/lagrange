@@ -1,0 +1,52 @@
+{
+  "schema": "solve-quest/2",
+  "id": "peer-and-leader-address-from-committed-configuration",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A configured raft peer's address and the current leader's address are answered from the committed configuration and the live raft status, never from the CDC-fed services or message_groups cache or a bootstrap hint list. The message-group RESOLVE_PEER_ADDRESS binding formats the address on the peer's committed node (the port's second argument) or refuses typed peer_not_in_configuration; message-group founders commit founderNodeIds in their GENESIS stamp; every ADD (partition and message group ADD_PEER, and the FreshMG managed ADD_LEARNER) commits one context shape carrying {replicaIdentity, peerId, nodeId}, with no decoder for a context without nodeId; the message-group forwarding leader is the live raft leader; the partition leader address for write forwarding is answered from raft.readStatus() only, with typed NOT_LEADER/NO_LEADER. buildPeerAddress, the message-group and partition resolvePeerAddressFromCache, the bootstrap hint resolution, the peerAddresses hint plumbing, the leader-id hint and the cache-derived canonical leader identity are deleted.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/peer-and-leader-address-from-committed-configuration/evidence/receipt.json",
+      "requiredReceipts": [
+        "message-group-peer-address-from-committed-node",
+        "founders-and-managed-learner-carry-node-id",
+        "forwarding-leader-from-committed-status",
+        "leader-address-from-raft-status-only",
+        "deletions-complete-no-fallback",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "class-not-instance",
+      "statement": "Instances C3 (message-group half), C4 and U11 of the class 'a serve-gating decision consumes a projection as if it were committed authority' (census solve/epics/raft-rs-full-cutover/evidence/projection-authority-census-2026-11-02/CENSUS.md on origin/work/projection-authority-census-20261102; analysis docs/evidence/comparative-benchmark-evidence-repair-2026-11/systemic-analysis-serve-lane-2026-11-01.md). The repair moves each decision onto the committed fact; it adds no timer, retry, carve-out, cache wait, hint merge or alternate resolution path and deletes the existing ones for these decisions."
+    },
+    {
+      "id": "committed-read-direction",
+      "statement": "Continues owner decisions O1/A8 (design-committed-membership-bootstrap-read-2026-09-25.md) and the repaired partition half (quest learner-host-from-committed-admission): rows are discovery, never authority; expectedPeersFromServicesCache stays only as the A8 discovery trigger of a host-proposed ADD; the address of a configured peer is the committed node recorded at apply and read back through the raft-rs runtime owner."
+    },
+    {
+      "id": "one-shape",
+      "statement": "Lead decision D-C3 (R08): one canonical committed peer-context shape. Every ADD, partition and message group, ADD_PEER and the FreshMG managed ADD_LEARNER, commits {replicaIdentity, peerId, nodeId}; the FreshMG managed context gains nodeId as a managed key; no old-format decoder (in-place upgrade unsupported, ruling 2026-10-04). Supersedes the bounded ruling of the learner quest that the learner_admission codec stays untouched. A second entry carrying the context after ADD_LEARNER is rejected."
+    },
+    {
+      "id": "no-symptom-patches",
+      "statement": "Rejected remedies (census C3/C4) must not return: cache-first ordering as a correctness rule; merged bootstrap hints; waiting for the services row; any learner_address_unresolvable-style refusal asking a peer to re-assert a row; a bounded authoritative re-read; hint-derived leader identity."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Every src/ change lands only behind an independent subagent verification newer than the last attempt, naming the reviewed heads. Attempt 1 (message-group half, U11, D-C3) is verified before attempt 2 (C4) begins; attempt 2 starts only after merging the then-current head of origin/work/replica-admission-committed-operation-20261102 and stops if its hunks collide semantically with that stream."
+    },
+    {
+      "id": "lab-execution",
+      "statement": "Heavy suites and any scenario witness run on the lab (node scripts/lab.js) when the fleet is free, never concurrently with another load; local runs are one classified lane at a time behind the thermal headroom check."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating"
+  ],
+  "sealedAt": "77b5c76fa784418873a1428b42c28581dd2c4b1f"
+}

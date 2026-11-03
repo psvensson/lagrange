@@ -653,7 +653,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       return;
     }
 
-    const leaderAddress = mgService.buildPeerAddress(leaderId);
+    const leaderAddress = mgService.resolveCommittedPeerAddress(leaderId);
     const forwardedPayload = {
       ...payload,
       [ControlPlaneField.FORWARDED_BY]: [...forwardedBy, this.nodeId],

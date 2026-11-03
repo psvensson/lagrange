@@ -315,7 +315,7 @@ class MessageGroupForwardingOwner {
         strictForwarding,
         strictForwardRetryAfterMs,
         canonicalLeaderIdentity:
-          this.resolveCanonicalLeaderIdentityFromCache(),
+          this.resolveCanonicalLeaderIdentity(),
       });
     }
 
@@ -572,15 +572,13 @@ class MessageGroupForwardingOwner {
 
     let lastError = null;
     for (const target of targets) {
-      const targetAddress = typeof target?.address === 'string' &&
-        target.address.length > 0 ?
-        target.address :
-        service.buildPeerAddress(target?.serviceId || null);
-      if (typeof targetAddress !== 'string' ||
-          targetAddress.length === 0) {
-        lastError = new Error(
-          MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED,
-        );
+      let targetAddress;
+      try {
+        // Every forward target's delivery address comes from the committed peer
+        // resolver (never a cache row's address).
+        targetAddress = service.resolveCommittedPeerAddress(target?.serviceId || null);
+      } catch (error) {
+        lastError = error;
         continue;
       }
       try {
@@ -625,41 +623,17 @@ class MessageGroupForwardingOwner {
     return this.service.shouldSuppressJoinPhaseRaftParticipation();
   }
 
+  // While join convergence suppresses this replica's own participation,
+  // its strict CDC goes to the group's live raft leader at the address the
+  // committed configuration places it: never a bootstrap hint list.
   resolveJoinConvergenceBootstrapForwardTarget() {
     const service = this.service;
-    if (!Array.isArray(service.peerAddresses) ||
-        service.peerAddresses.length === 0) {
+    const leader = this.resolveCanonicalLeaderIdentity();
+    if (leader.state !== MESSAGE_GROUP_LEADER_IDENTITY_STATE.LIVE_LEADER ||
+        service.isLocalForwardTarget(leader.leaderId, leader.leaderAddress)) {
       return null;
     }
-
-    const leaderNodeId =
-      this.resolveCanonicalLeaderIdentityFromCache().leaderNodeId;
-    if (typeof leaderNodeId !== 'string' ||
-        leaderNodeId.length === 0) {
-      return null;
-    }
-
-    for (const address of service.peerAddresses) {
-      if (typeof address !== 'string' || address.length === 0) {
-        continue;
-      }
-      try {
-        const parsed = service.addressManager.parse(address);
-        if (parsed.serviceType !== ENTITY_TYPE.MESSAGE_GROUP ||
-            parsed.nodeId !== leaderNodeId ||
-            service.isLocalForwardTarget(parsed.serviceId, address)) {
-          continue;
-        }
-        return {
-          serviceId: parsed.serviceId,
-          address,
-        };
-      } catch (_error) {
-        continue;
-      }
-    }
-
-    return null;
+    return {serviceId: leader.leaderId, address: leader.leaderAddress};
   }
 }
 
@@ -705,7 +679,6 @@ export {
   MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION,
   MESSAGE_GROUP_CDC_INGRESS_STATE,
   MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD,
-  MESSAGE_GROUP_LEADER_IDENTITY_SOURCE,
   MESSAGE_GROUP_LEADER_IDENTITY_STATE,
   MessageGroupForwardingOwner,
 };

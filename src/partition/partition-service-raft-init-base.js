@@ -54,13 +54,9 @@ import {openParticipantTransactionStore} from
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 
 const {
-  AddressManager,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
-  COLUMN,
   CONFIG_KEY,
   ConfigurationManager,
   Database,
-  ENTITY_TYPE,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
@@ -71,14 +67,10 @@ const {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   RaftRole,
-  ReplicaStatus,
-  SERVICE_TYPE,
-  TABLES,
   assertCritical,
   computeReplicaElectionTimeouts,
   fs,
   path,
-  resolveCanonicalPartitionLeaderObservation,
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
@@ -104,123 +96,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     }
   }
 
-  /**
-   * Read one system table row from the local cache when present.
-   * @param {string} tableName
-   * @param {Function} predicate
-   * @return {Object|null}
-   * @private
-   */
-  getCachedSystemTableRow(tableName, predicate) {
-    if (!this.systemTableCache || typeof predicate !== 'function') {
-      return null;
-    }
-    if (typeof this.systemTableCache.filter === 'function') {
-      const rows = this.systemTableCache.filter(tableName, predicate);
-      return rows[0] || null;
-    }
-    if (typeof this.systemTableCache.getAll === 'function') {
-      const rows = this.systemTableCache.getAll(tableName) || [];
-      return rows.find(predicate) || null;
-    }
-    return null;
-  }
-  /**
-   * Read matching system table rows from the local cache when present.
-   * @param {string} tableName
-   * @param {Function} predicate
-   * @return {Array<Object>}
-   * @private
-   */
-  getCachedSystemTableRows(tableName, predicate) {
-    if (!this.systemTableCache || typeof predicate !== 'function') {
-      return [];
-    }
-    if (typeof this.systemTableCache.filter === 'function') {
-      return this.systemTableCache.filter(tableName, predicate);
-    }
-    if (typeof this.systemTableCache.getAll === 'function') {
-      const rows = this.systemTableCache.getAll(tableName) || [];
-      return rows.filter(predicate);
-    }
-    return [];
-  }
-  /**
-   * Resolve the current leader replica from canonical owner-row metadata.
-   * Owner rows are the only canonical leader truth for partition routing; if
-   * leader_node_id is missing or stale, fail closed instead of deriving from
-   * services.raft_role.
-   * @return {string|null}
-   * @private
-   */
-  resolveLeaderIdFromMetadata() {
-    const serviceRows = this.getCachedSystemTableRows(
-      TABLES.SERVICES,
-      (service) =>
-        service?.[COLUMN.PARTITION_ID] === this.partitionId &&
-        service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-        service?.[COLUMN.STATUS] !== ReplicaStatus.FAILED &&
-        service?.[COLUMN.STATUS] !== ReplicaStatus.REMOVED,
-    );
-    if (serviceRows.length === 0) {
-      return null;
-    }
-    const resolveLeaderReplicaId = (leaderNodeId) => {
-      if (
-        typeof leaderNodeId !== 'string' ||
-        leaderNodeId.length === 0
-      ) {
-        return null;
-      }
-      const leaderReplica = serviceRows.find(
-        (service) => service?.[COLUMN.NODE_ID] === leaderNodeId,
-      );
-      const leaderReplicaId =
-        leaderReplica?.[COLUMN.REPLICA_ID] ||
-        leaderReplica?.[COLUMN.SERVICE_ID] ||
-        null;
-      return typeof leaderReplicaId === 'string' &&
-        leaderReplicaId.length > 0 ?
-        leaderReplicaId :
-        null;
-    };
-    const partitionRow = this.getCachedSystemTableRow(
-      TABLES.PARTITIONS,
-      (partition) => partition?.[COLUMN.PARTITION_ID] === this.partitionId,
-    );
-    const leaderObservation = resolveCanonicalPartitionLeaderObservation({
-      partition: partitionRow,
-      partitionPresent: partitionRow !== null,
-      serviceRows,
-    });
-    if (
-      leaderObservation?.state !==
-      CANONICAL_PARTITION_LEADER_OBSERVATION_STATE.AVAILABLE
-    ) {
-      return null;
-    }
-    return resolveLeaderReplicaId(leaderObservation?.leaderNodeId);
-  }
-  /**
-   * Seed leader identity from the startup leader-address hint when joining
-   * an already-established group. Stable joins may not observe a fresh Raft
-   * leader-change event before learner promotion needs to run.
-   * @return {string|null}
-   * @private
-   */
-  resolveLeaderIdFromHint() {
-    if (!this.leaderAddressHint) {
-      return null;
-    }
-    try {
-      const parsed = AddressManager.getInstance().parse(this.leaderAddressHint);
-      return parsed.serviceType === ENTITY_TYPE.PARTITION ?
-        parsed.serviceId :
-        null;
-    } catch (_parseErr) {
-      return null;
-    }
-  }
+
   /**
    * Report partition initialization progress stage.
    * @param {string} stage - Initialization stage.

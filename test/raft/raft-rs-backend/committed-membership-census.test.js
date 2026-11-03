@@ -211,6 +211,10 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/node/replica-handler-runtime-metadata-methods.js',
     'src/partition/partition-service-core-base.js',
     'src/partition/partition-service-raft-init-base.js',
+    // A target not yet admitted asks the leader its stamp names (quest
+    // peer-and-leader-address-from-committed-configuration, C4): it reads
+    // the stamp it carries, never re-derives it.
+    'src/partition/partition-replica-admission.js',
     'src/raft/raft-rs-operation-port.js',
     'src/raft/raft-rs-original-allocation-preparation.js',
     // The field names' owners.

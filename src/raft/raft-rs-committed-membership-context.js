@@ -16,6 +16,10 @@ const CONTEXT_FIELD = Object.freeze({
   STAGE: 'stage',
   REPLICA_IDENTITY: 'replicaIdentity',
   PEER_ID: 'peerId',
+  // The node the transition's replica lives on (D-C3: one committed peer
+  // context shape). Every replica applying the entry records it with the
+  // identity; a context without it does not decode.
+  NODE_ID: 'nodeId',
 });
 const MANAGED_CONTEXT_KEYS = Object.freeze(Object.values(CONTEXT_FIELD));
 // The admission context of a host-proposed ADD (the partition and message
@@ -93,7 +97,8 @@ function validateContextShape(context) {
       context[CONTEXT_FIELD.PERMIT_SEQUENCE] < 1 ||
       !ownString(context, CONTEXT_FIELD.STAGE) ||
       !ownString(context, CONTEXT_FIELD.REPLICA_IDENTITY) ||
-      !ownString(context, CONTEXT_FIELD.PEER_ID)) {
+      !ownString(context, CONTEXT_FIELD.PEER_ID) ||
+      !ownString(context, CONTEXT_FIELD.NODE_ID)) {
     throw new Error(COMMITTED_MEMBERSHIP_CONTEXT_ERROR.MALFORMED);
   }
   if (!Object.hasOwn(STAGE_CHANGE_TYPE, context[CONTEXT_FIELD.STAGE])) {
@@ -138,6 +143,7 @@ function encodeCommittedMembershipContext(context) {
     [CONTEXT_FIELD.REPLICA_IDENTITY]:
       context[CONTEXT_FIELD.REPLICA_IDENTITY],
     [CONTEXT_FIELD.PEER_ID]: context[CONTEXT_FIELD.PEER_ID],
+    [CONTEXT_FIELD.NODE_ID]: context[CONTEXT_FIELD.NODE_ID],
   })).toString(CONTEXT_ENCODING);
 }
 
@@ -206,6 +212,7 @@ function committedMembershipContext(decoded) {
     stage: context[CONTEXT_FIELD.STAGE],
     replicaIdentity: context[CONTEXT_FIELD.REPLICA_IDENTITY],
     peerId: context[CONTEXT_FIELD.PEER_ID],
+    nodeId: context[CONTEXT_FIELD.NODE_ID],
   });
 }
 

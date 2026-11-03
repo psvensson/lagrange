@@ -438,7 +438,7 @@ test('selection refusals are typed and write nothing: no positive origin evidenc
   const committed = await leaderRead({purpose: 'learner-action', groupId: identity.groupId,
     action: {operationId: O, transitionIdentity: identity.transitionIdentity,
       permitSequence: JSON.parse(before[PERMIT_COLUMN]).permitSequence, stage: 'add-learner',
-      replicaIdentity: TARGET, peerId: TARGET_PEER}});
+      replicaIdentity: TARGET, peerId: TARGET_PEER, nodeId: identity.targetNodeId}});
   assert.equal(committed.kind, 'committed-action', 'positive control: the leader evidences it');
   const origins = {
     'no origin at the leader': async () => ({kind: 'unresolved-action',

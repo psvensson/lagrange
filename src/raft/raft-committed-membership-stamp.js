@@ -622,9 +622,9 @@ function committedStampOfAnswer(answer) {
  * The GENESIS stamp of a founding set.
  * @param {Array<string>} founders - The founding replica identities.
  * @param {Object} founderNodeIds - {replicaIdentity: nodeId}: the node each
- *   founder is placed on, as the founding provisioner placed it. A group
- *   whose provisioner states no placement (a message group, a WASM service:
- *   their own address owners) passes an empty record, explicitly.
+ *   founder is placed on, as the founding provisioner placed it (partition
+ *   and message-group founders alike). A founder left out has no committed
+ *   node: it is addressed only once a committed fact places it.
  * @return {Object} Frozen {kind: GENESIS, founders, founderNodeIds}.
  */
 function genesisStamp(founders, founderNodeIds) {

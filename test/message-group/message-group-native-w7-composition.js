@@ -1,5 +1,7 @@
 // Multi-router, multi-target native CDC composition for W1, W2, W7 and W9.
 // Reuses the single-target provisional-route helpers without duplicating code.
+import {founderNodeIdsOfPlacement} from
+  '../../src/raft/raft-rs-committed-peer-address.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -185,6 +187,13 @@ async function pumpMulti(f, rounds = 16) {
       const cut =
         cutPeer !== null &&
         (item.envelope.from === cutPeer || item.envelope.to === cutPeer);
+      // A reopened follower hears nothing from its group until released: it
+      // has no live leader yet (an election-time state), so no native leader
+      // route exists for it.
+      const unheardPeer = f.unheardPeers.get(item.envelope.groupId) ?? null;
+      if (unheardPeer !== null && item.envelope.to === unheardPeer) {
+        continue;
+      }
       if (cut) {
         if (f.heldNative.length < 32) f.heldNative.push(item);
       } else {
@@ -264,7 +273,7 @@ async function openMultiReplica(
     groupId,
     replicaId,
     replicaIds: replicas,
-    peerAddresses: hints,
+    founderNodeIds: founderNodeIdsOfPlacement(replicas, hints),
     nodeId,
     transport: router,
     dbPath: path.join(f.directory, `${replicaId}.sqlite`),
@@ -354,7 +363,7 @@ async function reopenMultiReplica(f, groupId, replicaId, replicas, nodeId, route
   assert.deepEqual(readRaftRsPeerIdentityReservations(service.db), before.reservations);
   assert.equal(service.raft.readStatus().peerId, before.status.peerId);
   assert.deepEqual(service.raft.readStatus().confState, before.status.confState);
-  assert.deepEqual(service.peerAddresses, []);
+  assert.deepEqual({...service.founderNodeIds}, {});
   return service;
 }
 
@@ -479,6 +488,8 @@ async function prepareOneTargetGroup(f, groupId) {
   );
   await first.raft.campaign();
   await pumpMulti(f, 8);
+  f.unheardPeers.set(groupId,
+    f.services.get(followerId).raft.readStatus().peerId);
   const follower = await reopenMultiReplica(
     f,
     groupId,
@@ -505,11 +516,6 @@ async function prepareOneTargetGroup(f, groupId) {
     });
     return Reflect.apply(reconcile, this, args);
   };
-  for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await leader.raft.tick();
-    await pumpMulti(f, 4);
-    if (follower.raft.readStatus().leaderId === leaderId) break;
-  }
   await pumpMulti(f, 8);
   const updatedBeforeStatus = follower.raft.readStatus();
   return {
@@ -586,6 +592,7 @@ async function prepareMultiTargetProvisionalFixture(t, {portA = 24371, portB = 2
     serviceRouters: new Map(),
     targetGroups: new Map(),
     cutPeers: new Map(),
+    unheardPeers: new Map(),
     events: [],
     native: [],
     heldNative: [],
@@ -646,7 +653,20 @@ async function prepareMultiTargetProvisionalFixture(t, {portA = 24371, portB = 2
   return f;
 }
 
+// Every reopened follower starts hearing its group again: the leader's next
+// heartbeat names it, at the address the committed configuration places it.
+async function releaseFollowers(f) {
+  f.unheardPeers.clear();
+  for (let round = 0; round < SETUP_ROUNDS; round += 1) {
+    for (const info of f.targetGroups.values()) await info.leader.raft.tick();
+    await pumpMulti(f, 4);
+    if ([...f.targetGroups.values()].every((info) =>
+      info.follower.raft.readStatus().leaderId === info.leaderId)) return;
+  }
+}
+
 export {
+  releaseFollowers,
   NODE_A,
   NODE_B,
   SOURCE_GROUP,

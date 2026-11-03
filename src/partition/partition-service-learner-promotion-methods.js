@@ -459,11 +459,16 @@ class PartitionServiceLearnerPromotionMethods {
     if (!isCatchupLearnerRaftRole(this.role)) {
       return;
     }
+    // A pending admission request rides this existing cadence: the
+    // learner asks its leader again until an admitting answer (quest
+    // replica-admission-from-committed-operation; no timer of its own). It
+    // runs before the leader gate: a replica not yet admitted hears no raft
+    // leader and asks the leader its committed-membership stamp names.
+    await drivePendingReplicaAdmission(this);
+    // The leader a learner proves itself to is the live raft leader its
+    // own status names (C4): never a cached row or a leader-address hint.
     if (!this.leaderId) {
-      this.leaderId =
-        this.resolveLeaderIdFromMetadata() ||
-        this.resolveLeaderIdFromHint() ||
-        null;
+      this.leaderId = this.readLiveRaftLeaderId();
     }
     if (!this.leaderId) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
@@ -476,10 +481,6 @@ class PartitionServiceLearnerPromotionMethods {
       );
       return;
     }
-    // A pending admission request rides this existing cadence: the
-    // learner asks its leader again until an admitting answer (quest
-    // replica-admission-from-committed-operation; no timer of its own).
-    await drivePendingReplicaAdmission(this);
     const observation = this.observeLearnerPromotionCountCheck();
     const decision = evaluateLearnerPromotionCountCheck(observation);
     const countFields = {

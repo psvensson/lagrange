@@ -232,11 +232,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
       const context = handler.resolveReplicaContext(partitionId, 'replica-1',
         {bootstrapMembership: genesisStampFor(['replica-1', 'replica-2', 'replica-3'])});
 
-      t.equal(
-        context.leaderAddress,
-        null,
-        'should not infer a leader from missing raft_role metadata',
-      );
+      t.notOk(Object.hasOwn(context, 'leaderAddress'),
+        'the context carries no leader address: rows never name the leader ' +
+        '(C4; the target asks the leader its committed stamp names)');
       t.equal(
         context.existingReplicaCount,
         0,
@@ -315,11 +313,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
         0,
         'fresh partitions without persisted leader metadata should keep the initial cohort in bootstrap mode',
       );
-      t.equal(
-        context.leaderAddress,
-        null,
-        'without canonical leader_node_id the handler should not invent a leader address',
-      );
+      t.notOk(Object.hasOwn(context, 'leaderAddress'),
+        'the handler never derives a leader address from rows (C4)');
 
       handler.shutdown();
     },
@@ -413,11 +408,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
       await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
-      t.equal(
-        capturedOptions.leaderAddress,
-        null,
-        'expired node readiness should suppress stale leader addresses',
-      );
+      t.notOk(Object.hasOwn(capturedOptions, 'leaderAddress'),
+        'the partition is created with no row-derived leader address (C4)');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         true,
@@ -559,11 +551,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
       await factoryCalled;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
-      t.equal(
-        capturedOptions.leaderAddress,
-        null,
-        'disconnected priority leader should not be used as a join target',
-      );
+      t.notOk(Object.hasOwn(capturedOptions, 'leaderAddress'),
+        'no row-derived join target is passed (C4)');
       t.equal(capturedOptions.peerAddresses, undefined,
         'the partition takes no address hint list: its peers are addressed ' +
           'from their committed nodes');
@@ -640,11 +629,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
       await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
-      t.equal(
-        capturedOptions.leaderAddress,
-        'leader-node/partition/leader-replica',
-        'ready leader metadata should still provide a join target',
-      );
+      t.notOk(Object.hasOwn(capturedOptions, 'leaderAddress'),
+        'ready leader rows provide no join target either: the target asks the ' +
+        'leader its committed stamp names (C4)');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         true,

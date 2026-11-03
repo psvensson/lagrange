@@ -207,8 +207,17 @@ class PartitionServiceMergeReplicationMethods {
    * @private
    */
   forwardStartMergeReplicationToLeader(payload, transitionMetadata) {
-    const leaderAddress = this.resolveLeaderAddress();
-    if (leaderAddress && this.transport) {
+    let leaderAddress;
+    try {
+      leaderAddress = this.resolveLeaderAddress();
+    } catch {
+      // No live leader at a committed address: the typed no-leader answer.
+      return Promise.resolve({
+        success: false,
+        error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+      });
+    }
+    if (this.transport) {
       // A forwarding hop answers with the leader's answer (or its refusal).
       return forwardSourceReplicationStart(this.transport, leaderAddress, {
         type: PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION,

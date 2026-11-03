@@ -88,7 +88,7 @@ function learnerQuery(f, permit) {
   return {purpose: 'learner-action', groupId: identity.groupId,
     action: {operationId: O, transitionIdentity: identity.transitionIdentity,
       permitSequence: permit.permitSequence, stage: permit.permitStage,
-      replicaIdentity: TARGET, peerId: TARGET_PEER}};
+      replicaIdentity: TARGET, peerId: TARGET_PEER, nodeId: identity.targetNodeId}};
 }
 
 // --- Guard-witness physics shared by the two promotion guard files ---------

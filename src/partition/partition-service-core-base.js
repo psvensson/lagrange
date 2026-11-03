@@ -7,8 +7,10 @@ import {
 } from './partition-service-metadata-mutation-helpers.js';
 import {
   retireRaftPeerFromAuthoritativeServiceChange,
-  resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
+import {PARTITION_LEADER_ADDRESS_REFUSAL} from './partition-service-constants.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {PEER_ADDRESS_STATUS} from '../raft/raft-rs-runtime-owner-constants.js';
 import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../raft/raft-operation-port-request.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
@@ -30,7 +32,6 @@ const {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
-  PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
   PARTITION_SUBSYSTEM,
   PartitionCDCDelivery,
@@ -91,11 +92,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
     this.transport = options.transport || null;
     this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
-    this.leaderAddressHint =
-      typeof options.leaderAddress === 'string' &&
-      options.leaderAddress.length > 0 ?
-        options.leaderAddress :
-        null;
     const addressManager = AddressManager.getInstance();
     this.unifiedAddress = addressManager.format(
       this.nodeId,
@@ -530,27 +526,53 @@ class PartitionServiceCoreBase extends EventEmitter {
     return this.unifiedAddress;
   }
   /**
-   * Resolve the leader's unified address for write forwarding.
-   * @return {string|null} Unified leader address or null if unavailable.
+   * This replica's own live raft status, when it is a usable observation of
+   * this replica in this group; else null.
+   * @return {Object|null}
    * @private
    */
+  readOwnRaftStatus() {
+    let status;
+    try {
+      status = this.raft?.readStatus?.();
+    } catch (error) {
+      // A status that could not be read is the port's host failure.
+      status = {outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE, error};
+    }
+    const usable = status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+      status.groupId === this.partitionId &&
+      status.replicaIdentity === this.replicaId;
+    return usable ? status : null;
+  }
+  /**
+   * The live raft leader's replica identity, or null without a live leader.
+   * @return {string|null}
+   */
+  readLiveRaftLeaderId() {
+    const leaderId = this.readOwnRaftStatus()?.leaderId;
+    return typeof leaderId === 'string' && leaderId.length > 0 ? leaderId : null;
+  }
+  /**
+   * The leader's unified address for write forwarding, redirects,
+   * split/merge forwarding, the learner promotion proof and the replica
+   * admission request: the live raft leader this replica's own status names,
+   * at the address its committed configuration places it. Never a cached
+   * row, a cached leader id or a hint.
+   * @return {string} The live leader's committed address.
+   * @throws {Error} PARTITION_LEADER_ADDRESS_REFUSAL (typed, as message and
+   *   code): STATUS_UNAVAILABLE, NO_LEADER or LEADER_UNADDRESSED.
+   */
   resolveLeaderAddress() {
-    const leaderReplicaId = this.normalizeLeaderReplicaId(this.leaderId);
-    if (!leaderReplicaId) {
-      return null;
+    const status = this.readOwnRaftStatus();
+    const refusal = status === null ?
+      PARTITION_LEADER_ADDRESS_REFUSAL.STATUS_UNAVAILABLE :
+      !status.leaderId ? PARTITION_LEADER_ADDRESS_REFUSAL.NO_LEADER :
+        status.leaderAddressStatus !== PEER_ADDRESS_STATUS.RESOLVED ?
+          PARTITION_LEADER_ADDRESS_REFUSAL.LEADER_UNADDRESSED : null;
+    if (refusal !== null) {
+      throw Object.assign(new Error(refusal), {code: refusal});
     }
-    const cacheAddress = this.resolvePeerAddressFromCache(leaderReplicaId);
-    if (cacheAddress) {
-      return cacheAddress;
-    }
-    const liveRaftLeaderAddress =
-      resolveLiveRaftLeaderAddressForPeer(this, leaderReplicaId);
-    if (liveRaftLeaderAddress) {
-      return liveRaftLeaderAddress;
-    }
-    throw new Error(
-      `Unable to resolve unified peer address for ${leaderReplicaId}`,
-    );
+    return status.leaderAddress;
   }
   /**
    * Normalize one raw leader identifier into the canonical replica ID.
@@ -580,39 +602,6 @@ class PartitionServiceCoreBase extends EventEmitter {
       // Ignore parse failures and keep the original candidate.
     }
     return candidate;
-  }
-  /**
-   * Resolve one peer address from the services cache. Its one remaining
-   * consumer is the leader address for write forwarding (C4, out of scope
-   * of quest learner-host-from-committed-admission and named there): no
-   * raft peer, learner or promotion-proof address is resolved here.
-   * @param {string} peerId
-   * @return {string|null}
-   * @private
-   */
-  resolvePeerAddressFromCache(peerId) {
-    if (
-      !this.systemTableCache ||
-      typeof this.systemTableCache.get !== PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return null;
-    }
-    const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-    if (!isLivePartitionServiceRow(service) || !service.node_id) {
-      return null;
-    }
-    const address = AddressManager.getInstance().format(
-      service.node_id,
-      ENTITY_TYPE.PARTITION,
-      peerId,
-    );
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_CACHE, {
-      peerId,
-      nodeId: service.node_id,
-      address,
-      partitionId: this.partitionId,
-    });
-    return address;
   }
   /**
    * React to authoritative services cache changes for this partition: a

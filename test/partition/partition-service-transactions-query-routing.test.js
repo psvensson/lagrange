@@ -4,6 +4,10 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
+import {committedStampOfAnswer} from
+  '../../src/raft/raft-committed-membership-stamp.js';
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
+  '../../src/raft/raft-committed-membership-constants.js';
 import {answerCommittedOperations, committedAddOperation} from
   './committed-operation-gateway-fixture.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
@@ -114,27 +118,29 @@ test(
       systemTableCache,
       dbPath: ':memory:',
     }));
-    const joiner = new PartitionService(withFoundingStamp({
+    // The joiner is created the way a CREATE target is: from the
+    // committed-membership stamp its leader served (it asks that leader).
+    const createJoiner = async () => new PartitionService(withFoundingStamp({
       partitionId: 'stable-join-partition',
       tableId: 'stable_join_table',
       tableName: 'stable_join_table',
       replicaId: 'replica-2',
       replicaIds: ['replica-1', 'replica-2'],
-      peerAddresses: [
-        'node-1/partition/replica-1',
-        'node-2/partition/replica-2',
-      ],
       nodeId: 'node-2',
       transport,
       systemTableCache,
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
-      leaderAddress: 'node-1/partition/replica-1',
+      bootstrapMembership: committedStampOfAnswer(
+        await leader.raft.readCommittedMembership({
+          purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP})),
       learnerCatchUpCheckIntervalMs: 25,
     }));
+    let joiner = null;
 
     try {
       await leader.initialize();
+      joiner = await createJoiner();
       await joiner.initialize();
 
       t.equal(
@@ -157,7 +163,6 @@ test(
       const operation = committedAddOperation('stable-join-partition',
         ['replica-2', 'node-2']);
       answerCommittedOperations(leader, [operation]);
-      joiner.leaderId = 'replica-1';
       await joiner.requestReplicaAdmission(operation.operation_id);
 
       const peerJoined = await waitForCondition(
@@ -194,14 +199,14 @@ test(
         'joiner should retain the reconciled leader replica identity after promotion',
       );
     } finally {
-      await joiner.shutdown();
+      await joiner?.shutdown();
       await leader.shutdown();
     }
   },
 );
 
 test(
-  'PartitionService - learner promotion resolves leader from canonical metadata when hint is absent',
+  'PartitionService - learner promotion takes its leader from its live status, never canonical metadata',
   async (t) => {
     const partitionPolicyRow = {
       partition_id: 'test-partition',
@@ -273,17 +278,34 @@ test(
       electionStarted = true;
     };
 
+    // Canonical metadata names a leader node, but the learner hears none:
+    // no cached row seeds its leader (C4), so promotion defers.
+    const status = {outcome: 'CORE_OK', groupId: 'test-partition',
+      replicaIdentity: 'replica-3', role: RaftRole.LEARNER, peers: [],
+      leaderId: null, leaderAddress: null, leaderAddressStatus: 'no-leader'};
+    partition.raft = {readStatus: () => status};
     await checkLearnerPromotionWithGrantedProof(partition);
+    t.equal(partition.leaderId, null,
+      'canonical leader metadata never seeds the leader replica');
+    t.equal(partition.role, RaftRole.LEARNER, 'promotion defers without a leader');
+    if (partition.learnerPromotionTimer) {
+      clearTimeout(partition.learnerPromotionTimer);
+      partition.learnerPromotionTimer = null;
+    }
 
+    // The learner hears its leader: its live status names it.
+    Object.assign(status, {leaderId: 'replica-1',
+      leaderAddress: 'node-1/partition/replica-1', leaderAddressStatus: 'resolved'});
+    await checkLearnerPromotionWithGrantedProof(partition);
     t.equal(
       partition.leaderId,
       'replica-1',
-      'canonical partition leader_node_id should resolve the leader replica',
+      'the live raft leader resolves the leader replica',
     );
     t.equal(
       partition.role,
       RaftRole.FOLLOWER,
-      'learner should promote once canonical metadata identifies the leader',
+      'learner promotes once its live status names the leader',
     );
     t.equal(electionStarted, true, 'promotion should start elections as a voter');
 

@@ -220,9 +220,14 @@ function createLearnerAgainst(leader, learnerCache, duringRoundTrip) {
   learner.role = RAFT_ROLE.LEARNER;
   learner.leaderId = LEADER_REPLICA;
   learner.systemTableCache = learnerCache;
+  // The learner hears its leader: its own live status names it at its
+  // committed address (the proof goes there, never to a cached row).
   learner.raft = {
     readStatus: () => Object.freeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-      role: RAFT_ROLE.LEARNER, term: TERM}),
+      groupId: PARTITION_ID, replicaIdentity: LEARNER_REPLICA,
+      role: RAFT_ROLE.LEARNER, term: TERM, leaderId: LEADER_REPLICA,
+      leaderAddress: `${LEADER_NODE}/partition/${LEADER_REPLICA}`,
+      leaderAddressStatus: 'resolved'}),
     close: () => Object.freeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK}),
   };
   learner.transport = {

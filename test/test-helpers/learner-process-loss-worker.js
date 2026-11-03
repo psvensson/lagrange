@@ -36,7 +36,8 @@ function query(request) {
   return {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION, groupId: GROUP,
     action: {operationId: O, transitionIdentity: identity.transitionIdentity,
       permitSequence: permit.permitSequence, stage: permit.permitStage,
-      replicaIdentity: TARGET, peerId: identity.targetPeerId}};
+      replicaIdentity: TARGET, peerId: identity.targetPeerId,
+      nodeId: identity.targetNodeId}};
 }
 function ordinaryAndDebt(row) {
   const result = {...row};

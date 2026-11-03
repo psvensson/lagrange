@@ -54,7 +54,8 @@ function learnerActionQuery(f, changes = {}) {
   return {purpose: membershipRead.COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION,
     groupId: GROUP, action: {operationId: O, transitionIdentity: identity.transitionIdentity,
       permitSequence: permit.permitSequence, stage: permit.permitStage,
-      replicaIdentity: identity.targetReplicaId, peerId: identity.targetPeerId, ...changes}};
+      replicaIdentity: identity.targetReplicaId, peerId: identity.targetPeerId,
+      nodeId: identity.targetNodeId, ...changes}};
 }
 function readLearnerAction(f, replicaId = f.leader, changes = {}) {
   return f.cluster.node(replicaId)[portContract.RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP](
@@ -142,7 +143,7 @@ function interveningLearnerTransition(f, replicaIdentity) {
   const status = f.port.readStatus();
   return {operationId: 'intervening-operation', transitionIdentity: 'intervening-transition',
     permitSequence: 1, stage: portContract.RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
-    replicaIdentity, peerAddress: f.cluster.addressOf(replicaIdentity),
+    replicaIdentity, nodeId: SUCCESSOR,
     replicaLifecycleIncarnation: status.lifecycleIncarnation,
     runtimeGeneration: status.runtimeGeneration, leaderTerm: status.term,
     leaderConfigurationStamp: {configurationKey: status.configurationKey,
@@ -167,7 +168,7 @@ function assertCommittedLearner(f, proposal) {
   const decoded = loadRaftRsCore().decode_conf_change_entry(entry.entryType, entry.data);
   assert.deepEqual(committedMembershipContext(decoded), {operationId: O,
     transitionIdentity: 'consumer-transition', permitSequence: 1,
-    stage: 'add-learner', replicaIdentity: TARGET, peerId: peer});
+    stage: 'add-learner', replicaIdentity: TARGET, peerId: peer, nodeId: SUCCESSOR});
   assert.equal(f.cluster.replicas.has(TARGET), false);
   assert.equal(f.row().message_group_membership_phase, 'learner_proposal_in_flight',
     'proposal/ConfState alone does not settle the separate operation obligation');

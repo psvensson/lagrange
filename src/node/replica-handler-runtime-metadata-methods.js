@@ -38,7 +38,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
   options = {},
 ) {
   const {
-    AddressManager,
     METADATA_RESOLUTION_POLL_INTERVAL_MS,
     PRESSURE_WORK_CLASS,
     PARTITION_METADATA_MISSING_PREFIX,
@@ -50,13 +49,11 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     REPLICA_HANDLER_LOG_MSG,
     REPLICA_HANDLER_SERVICE,
     REPLICA_HANDLER_TYPEOF,
-    ReplicaStatus,
     SYSTEM_TABLE_HYDRATION_SQL,
     SYSTEM_TABLE_NAME,
     TABLE_METADATA_MISSING_PREFIX,
     createControlPlaneRuntimeBundle,
     createSystemMetadataGatewayRequiredError,
-    isReplicaJoinNodeViable,
     partitionMetadataMissingError,
   } = options;
   class ReplicaHandlerRuntimeMetadataMethods {
@@ -204,8 +201,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         cachedServices,
         hydratedMetadata?.serviceRows || [],
       );
-      const now = Date.now();
-      const addressManager = AddressManager.getInstance();
       // The new replica's membership is its validated committed-membership
       // stamp alone (owner decision O1): the dispatched replica ids and this
       // node's services rows are an address book, never membership, and the
@@ -216,53 +211,11 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         bootstrapMembership: options.bootstrapMembership,
         observedServices,
       });
-      const services = observedServices;
-      const isViableJoinService = (service) => {
-        if (
-          !service?.node_id ||
-          typeof this.systemTableCache.get !== REPLICA_HANDLER_TYPEOF.FUNCTION
-        ) {
-          return true;
-        }
-        return isReplicaJoinNodeViable(
-          this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, service.node_id),
-          {
-            now,
-            nodeId: service.node_id,
-            localNodeId: this.nodeId,
-            messageRouter: this.messageRouter,
-          },
-        );
-      };
-      let leaderAddress = null;
-      const canonicalLeaderNodeId =
-        typeof partition.leader_node_id === 'string' &&
-        partition.leader_node_id.length > 0 ?
-          partition.leader_node_id :
-          null;
-      const leaderService = canonicalLeaderNodeId ?
-        services.find(
-          (service) =>
-            service.node_id === canonicalLeaderNodeId &&
-              service.status === ReplicaStatus.ACTIVE &&
-              isViableJoinService(service),
-        ) :
-        null;
-      if (leaderService) {
-        leaderAddress =
-          leaderService.address ||
-          addressManager.format(
-            leaderService.node_id,
-            REPLICA_HANDLER_SERVICE.TYPE,
-            leaderService.service_id,
-          );
-      }
       return {
         tableId: partition.table_id,
         tableName: table.table_name,
         schema,
         keyRange,
-        leaderAddress,
         replicaIds: stamped.replicaIds,
         existingReplicaCount: stamped.existingReplicaCount,
         bootstrapMembership: stamped.bootstrapMembership,

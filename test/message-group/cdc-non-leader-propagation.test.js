@@ -39,7 +39,7 @@ import {
 } from '../test-helpers/controllable-consensus-port.js';
 import {
   createControllableMessageGroupService,
-  seedConsensusPeersFromPeerAddresses,
+  seedCommittedConsensusPeers,
 } from './message-group-service-test-support.js';
 
 let testPortCounter = 27200;
@@ -122,9 +122,9 @@ test(
       // the forwarding branch fires instead
       consensus.role = RaftRole.FOLLOWER;
 
-      // Provide peer address so buildPeerAddress can resolve the leader
-      mg.peerAddresses = ['remote-node/message-group/mg-1-r2'];
-      seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
+      // The committed configuration places the leader (the port reports it)
+      const committedPeerAddresses = ['remote-node/message-group/mg-1-r2'];
+      seedCommittedConsensusPeers(consensus, committedPeerAddresses);
 
       // Track forwarding attempts via messageRouter.deliver
       const forwardedPayloads = [];
@@ -235,8 +235,8 @@ test(
       mg.isLeader = false;
       mg.role = 'follower';
       mg.leaderId = 'mg-retry-r2';
-      mg.peerAddresses = ['remote-node/message-group/mg-retry-r2'];
-      seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
+      const committedPeerAddresses = ['remote-node/message-group/mg-retry-r2'];
+      seedCommittedConsensusPeers(consensus, committedPeerAddresses);
       mg.retryInitialDelayMs = 20;
       mg.retryBackoffMultiplier = 1;
       mg.retryMaxAttempts = 2;
@@ -324,6 +324,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-1-r2';
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, ['remote-node/message-group/mg-1-r2']);
       mg.resolveCDCForwardSelection = () => ({
         strictForwarding: true,
         strictForwardRetryAfterMs: 250,
@@ -411,6 +412,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-1-r2';
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, ['remote-node/message-group/mg-1-r2']);
       mg.resolveCDCForwardSelection = () => ({
         strictForwarding: true,
         strictForwardRetryAfterMs: 250,
@@ -501,6 +503,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-replay-priority-r2';
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, ['seed-node/message-group/mg-replay-priority-r2']);
       mg.resolveCDCForwardSelection = () => ({
         strictForwarding: true,
         strictForwardRetryAfterMs: 250,
@@ -593,8 +596,8 @@ test(
       mg.isLeader = false;
       mg.role = 'follower';
       mg.leaderId = 'mg-retry-cause-id-r2';
-      mg.peerAddresses = ['remote-node/message-group/mg-retry-cause-id-r2'];
-      seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
+      const committedPeerAddresses = ['remote-node/message-group/mg-retry-cause-id-r2'];
+      seedCommittedConsensusPeers(consensus, committedPeerAddresses);
       mg.retryInitialDelayMs = 20;
       mg.retryBackoffMultiplier = 1;
       mg.retryMaxAttempts = 2;
@@ -688,8 +691,8 @@ test(
       mg.isLeader = false;
       mg.role = 'follower';
       mg.leaderId = null;
-      mg.peerAddresses = ['remote-node/message-group/mg-unknown-leader-retry-r2'];
-      seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
+      const committedPeerAddresses = ['remote-node/message-group/mg-unknown-leader-retry-r2'];
+      seedCommittedConsensusPeers(consensus, committedPeerAddresses);
       mg.retryInitialDelayMs = 20;
       mg.retryBackoffMultiplier = 1;
       mg.retryMaxAttempts = 5;
@@ -768,6 +771,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = null;
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, ['remote-node/message-group/mg-cache-leader-r2']);
 
       mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
         service_id: 'mg-cache-leader-r2',
@@ -852,6 +856,10 @@ test(
       mg.role = 'follower';
       mg.leaderId = null;
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, [
+        'stale-node/message-group/mg-stale-canonical-leader-r2',
+        'fresh-node/message-group/mg-stale-canonical-leader-r3',
+      ]);
 
       mg.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
@@ -955,6 +963,10 @@ test(
       mg.role = 'follower';
       mg.leaderId = null;
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, [
+        'remote-node-2/message-group/mg-lagging-leader-metadata-r2',
+        'remote-node-3/message-group/mg-lagging-leader-metadata-r3',
+      ]);
 
       mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
         service_id: 'mg-lagging-leader-metadata-r2',
@@ -1254,10 +1266,8 @@ test(
         'mg-bootstrap-peer-forward-r2',
         'mg-bootstrap-peer-forward-r3',
       ];
-      mg.peerAddresses = [
-        'remote-node-2/message-group/mg-bootstrap-peer-forward-r2',
-        'remote-node-3/message-group/mg-bootstrap-peer-forward-r3',
-      ];
+      // No hint list exists: a follower with no live leader in its
+      // committed configuration has no address to forward to.
       await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
 
       mg.isLeader = false;
@@ -1278,7 +1288,7 @@ test(
           {partition_id: 'p-bootstrap-peer-forward'},
           {timestamp: '1234567890:8'},
         ),
-        /leader address is unavailable|Unable to resolve unified peer address/i,
+        /leader address is unavailable|peer_not_in_configuration|peer_configuration_unavailable/i,
         'steady-state forwarding should fail closed when only bootstrap peer hints remain',
       );
 
@@ -1339,6 +1349,10 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-connected-relay-r2';
       consensus.role = RaftRole.FOLLOWER;
+      seedCommittedConsensusPeers(consensus, [
+        'node-leader/message-group/mg-connected-relay-r2',
+        'node-relay/message-group/mg-connected-relay-r3',
+      ]);
 
       mg.systemTableCache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
         group_id: 'mg-connected-relay',

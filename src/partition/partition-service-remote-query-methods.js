@@ -85,20 +85,25 @@ function writeRoutingRefusal(service, payload, isWriteOperation) {
     payload[QUERY_PAYLOAD_FIELD_EXPECTED_PARTITION_VERSION]);
   if (epochRejection !== null) return epochRejection;
   if (service.role === RaftRole.LEADER) return null;
-  const leaderAddress = service.resolveLeaderAddress();
-  if (leaderAddress) {
-    service.logger.debug(PARTITION_SERVICE_LOG_MSG.REDIRECTING_WRITE_TO_LEADER, {
-      partitionId: service.partitionId,
-      replicaId: service.replicaId,
-      leaderAddress,
-    });
+  let leaderAddress;
+  try {
+    leaderAddress = service.resolveLeaderAddress();
+  } catch (refusal) {
+    // No live leader at a committed address: this replica does not lead
+    // and has no one to redirect to (typed NOT_LEADER, cause attached).
     return {success: false,
-      redirect: PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT, leaderAddress,
+      error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+      leaderAddressRefusal: refusal.code ?? null,
       partitionId: service.partitionId};
   }
+  service.logger.debug(PARTITION_SERVICE_LOG_MSG.REDIRECTING_WRITE_TO_LEADER, {
+    partitionId: service.partitionId,
+    replicaId: service.replicaId,
+    leaderAddress,
+  });
   return {success: false,
-    error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-    failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    redirect: PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT, leaderAddress,
     partitionId: service.partitionId};
 }
 

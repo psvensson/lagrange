@@ -512,14 +512,19 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       this._attachCdcConfirmation(result, operation, options, entry);
       return result;
     }
-    if (this.leaderId && this.transport) {
+    if (this.transport) {
+      // The live raft leader at its committed address, or the typed
+      // no-leader answer (never a cached leader id or row).
+      let leaderAddress;
+      try {
+        leaderAddress = this.resolveLeaderAddress();
+      } catch (refusal) {
+        throw Object.assign(new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE),
+          {leaderAddressRefusal: refusal.code ?? null});
+      }
       const phaseTimings = {};
       const forwardDeliverStartMs = this.timeSource.now();
       try {
-        const leaderAddress = this.resolveLeaderAddress();
-        if (!leaderAddress) {
-          throw new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
-        }
         const delivery = await this.transport.deliver(leaderAddress, {
           type: PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE,
           operation: entry,

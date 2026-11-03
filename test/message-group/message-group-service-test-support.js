@@ -154,14 +154,14 @@ export function reportingConsensusPort(status = {}) {
 }
 
 /**
- * Configure the port double's peers the way the replica's peer address hints
- * name them: each address's replica identity, at that address (the
- * configuration a follower's consensus reports for its group).
+ * Configure the port double's peers as a committed configuration places them:
+ * each address's replica identity, at that address (the configuration a
+ * follower's consensus reports for its group).
  * @param {ControllableConsensusPort} controllablePort - The port double.
  * @param {string[]} peerAddresses - Unified peer addresses.
  * @return {void}
  */
-export function seedConsensusPeersFromPeerAddresses(controllablePort,
+export function seedCommittedConsensusPeers(controllablePort,
   peerAddresses) {
   controllablePort.peers = (Array.isArray(peerAddresses) ? peerAddresses : [])
     .filter((address) => typeof address === 'string' && address.length > 0)

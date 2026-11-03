@@ -17,10 +17,6 @@ import {
   RaftRole,
 } from '../../src/message-group/message-group-service.js';
 import {
-  MESSAGE_GROUP_LEADER_IDENTITY_SOURCE,
-  MESSAGE_GROUP_LEADER_IDENTITY_STATE,
-} from '../../src/message-group/message-group-forwarding-owner.js';
-import {
 } from '../../src/message-group/constants.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -514,81 +510,6 @@ test('MessageGroupService - flushes message-group leader update when local owner
         service.persistedLeaderNodeId,
         nodeId,
         'persisted leader update should track the published owner metadata',
-      );
-    } finally {
-      await cleanup();
-    }
-  },
-);
-
-test(
-  'MessageGroupService - join convergence forward targeting reuses pending ' +
-    'and persisted leader publication hints before cache catches up',
-  async (t) => {
-    const {router, nodeId, cleanup} = await createTestTransport();
-
-    try {
-      const service = new MessageGroupService(withTestDbPath({
-        groupId: 'mg-leader-hint-forward-target',
-        replicaId: 'mg-leader-hint-forward-target-r2',
-        nodeId,
-        replicaIds: [
-          'mg-leader-hint-forward-target-r1',
-          'mg-leader-hint-forward-target-r2',
-          'mg-leader-hint-forward-target-r3',
-        ],
-        peerAddresses: [
-          'seed-node/message-group/mg-leader-hint-forward-target-r1',
-          'seed-node/message-group/mg-leader-hint-forward-target-r2',
-          'seed-node/message-group/mg-leader-hint-forward-target-r3',
-        ],
-        transport: router,
-      }));
-
-      service.pendingLeaderNodeUpdate = 'seed-node';
-      service.persistedLeaderNodeId = null;
-      const pendingLeaderIdentity =
-        service.forwardingOwner.resolveCanonicalLeaderIdentityFromCache();
-
-      const pendingTarget =
-        service.resolveJoinConvergenceBootstrapForwardTarget();
-      t.equal(
-        pendingLeaderIdentity.state,
-        MESSAGE_GROUP_LEADER_IDENTITY_STATE.PUBLICATION_PENDING,
-        'pending leader publication should surface an explicit leader-identity state',
-      );
-      t.equal(
-        pendingLeaderIdentity.source,
-        MESSAGE_GROUP_LEADER_IDENTITY_SOURCE.PENDING_PUBLICATION,
-        'pending leader publication should surface an explicit leader-identity source',
-      );
-      t.equal(
-        pendingTarget?.address,
-        'seed-node/message-group/mg-leader-hint-forward-target-r1',
-        'join convergence should reuse the pending leader publication hint before the cache row catches up',
-      );
-
-      service.pendingLeaderNodeUpdate = null;
-      service.persistedLeaderNodeId = 'seed-node';
-      const persistedLeaderIdentity =
-        service.forwardingOwner.resolveCanonicalLeaderIdentityFromCache();
-
-      const persistedTarget =
-        service.resolveJoinConvergenceBootstrapForwardTarget();
-      t.equal(
-        persistedLeaderIdentity.state,
-        MESSAGE_GROUP_LEADER_IDENTITY_STATE.PUBLICATION_PERSISTED,
-        'persisted leader publication should surface an explicit leader-identity state',
-      );
-      t.equal(
-        persistedLeaderIdentity.source,
-        MESSAGE_GROUP_LEADER_IDENTITY_SOURCE.PERSISTED_PUBLICATION,
-        'persisted leader publication should surface an explicit leader-identity source',
-      );
-      t.equal(
-        persistedTarget?.address,
-        'seed-node/message-group/mg-leader-hint-forward-target-r1',
-        'join convergence should keep using the persisted leader publication hint when the cache still lags',
       );
     } finally {
       await cleanup();
